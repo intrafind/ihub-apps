@@ -656,14 +656,21 @@ test('approval: admins may answer regardless of the approver groups; agents stil
 });
 
 test('settled interactions leave memory after the retention grace; pending ones stay', async () => {
-  const { runLog, svc, runId } = await setup({ settledRetentionMs: 20 });
+  // The grace has to be long enough to still be running when the assertion
+  // below reads the interaction back. Eviction is a real `setTimeout` armed
+  // when the answer settles, and `answer()` itself does document I/O — at a
+  // 20 ms grace a loaded runner spent longer than that between the two lines,
+  // the timer fired first, and `get` answered null. Widened rather than made
+  // deterministic because what this pins is the timer, not a clock the service
+  // takes from its caller.
+  const { runLog, svc, runId } = await setup({ settledRetentionMs: 250 });
   const prompt = { message: 'Which region?', inputType: 'text' };
   const a = await svc.raise({ runId, kind: 'question', origin: 'tool', prompt });
   const b = await svc.raise({ runId, kind: 'question', origin: 'tool', prompt });
   await svc.answer(a.id, { value: 'EU' }, { user: { id: 'alice' } });
   assert.equal((await svc.get(a.id)).status, 'answered');
 
-  await new Promise(r => setTimeout(r, 60));
+  await new Promise(r => setTimeout(r, 700));
   assert.equal(await svc.get(a.id), null, 'the answered one was dropped from memory');
   assert.equal((await svc.get(b.id)).status, 'pending', 'the pending one stays');
   assert.deepEqual(

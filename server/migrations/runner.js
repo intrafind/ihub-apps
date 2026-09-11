@@ -109,6 +109,30 @@ const RENAMED_MIGRATIONS = [
     oldFile: 'V073__seed_voxtral_transcription_model.js',
     newVersion: '077',
     newFile: 'V077__seed_voxtral_transcription_model.js'
+  },
+  // The storage-provider migrations were written against V094-V096 while
+  // V094 (default iAssistant app) and V095 (LLM transport timeouts) landed on
+  // main in parallel. Both sides were self-consistent; merged, the runner saw
+  // two V094s and two V095s and refuses to start on a duplicate version. The
+  // storage set moved because the other two had already shipped. Anyone who
+  // ran the branch before the merge has the old numbers in their history.
+  {
+    oldVersion: '094',
+    oldFile: 'V094__add_storage_settings.js',
+    newVersion: '096',
+    newFile: 'V096__add_storage_settings.js'
+  },
+  {
+    oldVersion: '095',
+    oldFile: 'V095__add_chat_persistence.js',
+    newVersion: '097',
+    newFile: 'V097__add_chat_persistence.js'
+  },
+  {
+    oldVersion: '096',
+    oldFile: 'V096__add_workflow_state_retention.js',
+    newVersion: '098',
+    newFile: 'V098__add_workflow_state_retention.js'
   }
 ];
 

@@ -66,6 +66,12 @@ export function PlatformConfigProvider({ children }) {
         computedRefreshSalt: uiConfig.computedRefreshSalt,
         defaultLanguage: uiConfig.defaultLanguage,
 
+        // Durable chats: whether a conversation will actually be remembered.
+        // Resolved server-side from the feature flag, the platform switch and a
+        // storage provider that came up — `useChatPersistence()` gates the whole
+        // history UI on it, so it has to survive this hand-assembled object.
+        chats: platformCfg.chats,
+
         // Platform features and settings
         features: platformCfg.features,
         // Build a boolean lookup map from the resolved features array

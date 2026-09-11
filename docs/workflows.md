@@ -253,3 +253,73 @@ Several default workflows now ship in a second, container-based variant alongsid
 Like all defaults, these files live in `server/defaults/workflows/` and are copied into `contents/workflows/` at the next server start when missing.
 
 All of them run **sequentially** — none sets `concurrency`. Each round accumulates shared state (collected evidence records, the coverage counter, the merged corpus), and as described under **Parallel mode caveat** above, body state updates are not propagated in parallel mode. Raising `concurrency` on these loops would silently discard that accumulated state.
+
+## Execution records and retention
+
+Every run of a workflow leaves two records behind, and until this release
+nothing ever deleted either of them on a timer.
+
+| Record          | Where it lives                                                                                                | What reads it                                                          |
+| --------------- | ------------------------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------- |
+| The **state**   | the `workflow-state` namespace — on the filesystem provider `contents/data/workflow-state/<executionId>.json`  | the execution detail page, a resume from checkpoint, the orphan sweep  |
+| The **summary** | the `runs` namespace, owned by the user who started the run                                                     | *My Executions*, the admin execution list and its counts               |
+
+The state is the expensive one: it carries the whole workflow definition and
+every node result, so one finished run is tens to hundreds of kilobytes. Both
+records used to be removed only by **Delete** on an execution — and a
+sub-workflow (`wf-child-…`) has no delete button at all, so those simply
+accumulated for the life of the installation.
+
+Both records are shared across workers now rather than per-process, which is a
+visible improvement of its own: with more than one worker (four by default) an
+execution started on one worker could be missing from *My Executions* when the
+next request landed on another. It is not any more.
+
+### `workflowState.retentionDays`
+
+```json
+{
+  "workflowState": {
+    "retentionDays": 30,
+    "cleanupEnabled": true
+  }
+}
+```
+
+| Key              | Default | Meaning                                                                        |
+| ---------------- | ------- | ------------------------------------------------------------------------------ |
+| `retentionDays`  | `30`    | A **terminal** execution older than this is deleted, state and summary together |
+| `cleanupEnabled` | `true`  | Switches the sweep off without changing the window                             |
+
+Set `retentionDays` to **zero or less to keep terminal executions forever** —
+the behaviour every installation had before this release.
+
+What the sweep deletes, precisely:
+
+- **Only terminal executions**: `completed`, `failed` and `cancelled`. A
+  `paused` execution is waiting for a person to answer a checkpoint and is
+  never swept, however old; neither is one still `running` or `pending`.
+- **Both records** of each: the state — the document *and* the legacy
+  `<executionId>/latest.json` directory — and the run summary that lists it.
+- **`wf-child-…` sub-workflow states included**, which nothing has ever
+  deleted before.
+- Nothing whose age or status cannot be established. Where a delete is
+  concerned, an unreadable record is a reason to do nothing.
+
+Age is measured from when the state was **last stored**, which in the steady
+state is the moment the run finished: its last checkpoint is written as it
+ends. Two things move that clock forward — the one-time import of legacy state
+directories on the first boot after upgrading, and the orphan sweeper marking
+an interrupted run failed at boot — so a few runs are kept one window longer
+than their age suggests. The sweep never errs in the other direction.
+
+It runs once at startup, so a misconfigured window shows up in the log at boot
+rather than a day later, and then every 24 hours. Like the chat and run-ledger
+sweeps it runs on one worker only, and it re-reads `platform.workflowState` on
+every tick, so an admin's change takes effect without a restart. Migration
+V096 writes the section into an existing `platform.json`.
+
+Deleting an execution in the UI is unchanged and still removes it immediately.
+The execution's entry in the [run ledger](run-ledger.md) — the events of the
+run itself — is **not** deleted with its state: it ages out under the ledger's
+own, separate window (`platform.runLog.retentionDays`, 90 days by default).

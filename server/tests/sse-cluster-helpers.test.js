@@ -25,6 +25,7 @@ import {
   sendSSE
 } from '../sse.js';
 import { buildEnvelope, resetStream, RunStreamEmitter } from '../services/loop/RunStream.js';
+import { getBusStats } from '../clusterBus.js';
 
 let failed = false;
 function check(label, fn) {
@@ -87,6 +88,21 @@ function reset() {
 // ---- presence lookups ----
 
 reset();
+check('the durable-chat mark is declared as a counted presence kind', () => {
+  // Presence is exclusive by default and that is right for a stream or an
+  // abort controller: one worker, one owner. A durable mark is a count —
+  // `runTurn` supersedes rather than refuses, so two overlapping turns on one
+  // chat can sit in two workers. Declared exclusive, the second worker's
+  // retraction removes the cluster-wide mark while the first is still
+  // generating, and a third worker holding the browser's stream then relays an
+  // abort on disconnect and kills the answer. Nothing about that is visible
+  // in a single-process run, which is why it is asserted rather than assumed.
+  assert.ok(
+    getBusStats().sharedKinds.includes('chat-durable'),
+    'sse.js must create the chat-durable presence map with { shared: true }'
+  );
+});
+
 check('hasChatClient is false with no registration', () =>
   assert.strictEqual(hasChatClient('chat-1'), false)
 );

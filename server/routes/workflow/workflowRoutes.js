@@ -8,7 +8,6 @@
  * @module routes/workflow/workflowRoutes
  */
 
-import { promises as fs } from 'fs';
 import {
   translateInternalEvent,
   buildEnvelope,
@@ -16,23 +15,17 @@ import {
   stampSeq
 } from '../../services/loop/RunStream.js';
 import { SSE_V2_EVENTS } from '../../../shared/runEvents.js';
-import { join } from 'path';
 import { authRequired } from '../../middleware/authRequired.js';
 import { adminAuth } from '../../middleware/adminAuth.js';
 import { buildServerPath } from '../../utils/basePath.js';
 import { getWorkflowEngine } from '../../services/workflow/WorkflowEngine.js';
 import { getExecutionRegistry } from '../../services/workflow/ExecutionRegistry.js';
+import { isSchedulerOwner } from '../../services/workflow/triggers/schedulerLock.js';
 import { actionTracker } from '../../actionTracker.js';
 import { createSseChannel, startInactiveClientSweep } from '../../utils/sseChannel.js';
 import { workflowConfigSchema } from '../../validators/workflowConfigSchema.js';
-import { atomicWriteJSON } from '../../utils/atomicWrite.js';
-import { getRootDir } from '../../pathUtils.js';
-import {
-  isValidWorkflowVersion,
-  validateIdForPath,
-  resolveAndValidatePath,
-  resolveAndValidateRealPath
-} from '../../utils/pathSecurity.js';
+import configStore from '../../services/config/ConfigStore.js';
+import { isValidWorkflowVersion, validateIdForPath } from '../../utils/pathSecurity.js';
 import {
   sendNotFound,
   sendBadRequest,
@@ -48,6 +41,34 @@ import { requireFeature } from '../../featureRegistry.js';
 import { removeMarketplaceInstallation } from '../../utils/installationCleanup.js';
 
 const checkWorkflowsFeature = requireFeature('workflows');
+
+/** Where workflow definitions live, relative to `contents/`. */
+const WORKFLOWS_DIR = 'workflows';
+
+/**
+ * The file a workflow is created as, relative to `contents/`.
+ *
+ * @param {string} workflowId - Workflow id, already validated for path use
+ * @returns {string} Path relative to `contents/`
+ */
+function workflowPathFor(workflowId) {
+  return `${WORKFLOWS_DIR}/${workflowId}.json`;
+}
+
+/**
+ * The directory holding a workflow's published snapshots, relative to
+ * `contents/`.
+ *
+ * The snapshots sit inside the workflows directory but are not workflows: a
+ * dotted directory holds no `*.json` file of its own, so nothing that lists
+ * the directory ever loads a snapshot as a definition.
+ *
+ * @param {string} workflowId - Workflow id, already validated for path use
+ * @returns {string} Path relative to `contents/`
+ */
+function historyDirFor(workflowId) {
+  return `${WORKFLOWS_DIR}/.history/${workflowId}`;
+}
 
 /**
  * SSE clients map for workflow execution streaming
@@ -110,11 +131,11 @@ function isAdmin(user) {
  * @param {import('express').Request} req
  * @param {import('express').Response} res
  * @param {string} executionId
- * @returns {object|null}
+ * @returns {Promise<object|null>}
  */
-function authorizeExecutionAccess(req, res, executionId) {
+async function authorizeExecutionAccess(req, res, executionId) {
   const registry = getExecutionRegistry();
-  const execution = registry.get(executionId);
+  const execution = await registry.get(executionId);
 
   if (!execution) {
     sendNotFound(res, 'Execution');
@@ -208,102 +229,46 @@ function buildModelsList(workflow) {
 }
 
 /**
- * Loads all workflow definitions from the filesystem.
+ * Loads all workflow definitions.
  * Workflows are stored as individual JSON files in contents/workflows/
  *
  * @param {boolean} includeDisabled - Whether to include disabled workflows
  * @returns {Promise<Object[]>} Array of workflow definitions
  */
 async function loadWorkflows(includeDisabled = false) {
-  const rootDir = getRootDir();
-  const workflowsDir = join(rootDir, 'contents', 'workflows');
+  const documents = await configStore.listDocuments(WORKFLOWS_DIR);
+  const workflows = [];
 
-  try {
-    // Create directory if it doesn't exist
-    await fs.mkdir(workflowsDir, { recursive: true });
-
-    const files = await fs.readdir(workflowsDir);
-    const jsonFiles = files.filter(f => f.endsWith('.json'));
-
-    const workflows = [];
-    for (const file of jsonFiles) {
-      try {
-        const filePath = join(workflowsDir, file);
-        const content = await fs.readFile(filePath, 'utf8');
-        const workflow = JSON.parse(content);
-
-        // Skip disabled workflows unless explicitly requested
-        if (!includeDisabled && workflow.enabled === false) {
-          continue;
-        }
-
-        workflows.push(workflow);
-      } catch (error) {
-        logger.warn('Failed to load workflow file', {
-          component: 'WorkflowRoutes',
-          file,
-          error: error.message
-        });
-      }
-    }
-
-    return workflows;
-  } catch (error) {
-    logger.error('Failed to read workflows directory', {
-      component: 'WorkflowRoutes',
-      error: error.message
-    });
-    return [];
+  for (const { data } of documents) {
+    // A file holding something that is not an object is not a workflow; the
+    // directory scan this replaced skipped those files too.
+    if (!data || typeof data !== 'object') continue;
+    if (!includeDisabled && data.enabled === false) continue;
+    workflows.push(data);
   }
+
+  return workflows;
 }
 
 /**
- * Finds the actual filename for a workflow ID.
+ * Finds the file a workflow ID is stored in.
  * Handles cases where the filename doesn't match the workflow ID.
  *
  * @param {string} workflowId - The workflow ID to search for
- * @param {string} workflowsDir - The workflows directory path
- * @returns {Promise<string|null>} The filename if found, null otherwise
+ * @returns {Promise<string|null>} Path relative to `contents/` if a file holds
+ *   the workflow, null otherwise
  */
-async function findWorkflowFile(workflowId, workflowsDir) {
-  try {
-    const files = await fs.readdir(workflowsDir);
-    const jsonFiles = files.filter(f => f.endsWith('.json'));
+async function findWorkflowFile(workflowId) {
+  const documents = await configStore.listDocuments(WORKFLOWS_DIR);
 
-    // First try the expected filename
-    const expectedFilename = `${workflowId}.json`;
-    if (jsonFiles.includes(expectedFilename)) {
-      return expectedFilename;
-    }
+  // The expected file name wins, then the id inside a file: a workflow may be
+  // stored under any name, and writing to `<id>.json` regardless would fork
+  // such a workflow into two files.
+  const match =
+    documents.find(item => item.key === workflowId) ||
+    documents.find(item => item.data?.id === workflowId);
 
-    // If not found, search through all files to find one with matching ID
-    for (const file of jsonFiles) {
-      try {
-        const filePath = join(workflowsDir, file);
-        const content = await fs.readFile(filePath, 'utf8');
-        const workflow = JSON.parse(content);
-        if (workflow.id === workflowId) {
-          return file;
-        }
-      } catch (error) {
-        // Skip files that can't be read or parsed
-        logger.debug('Skipping malformed workflow file', {
-          component: 'WorkflowRoutes',
-          file,
-          error: error.message
-        });
-      }
-    }
-
-    return null;
-  } catch (error) {
-    logger.warn('Failed to read workflows directory', {
-      component: 'WorkflowRoutes',
-      workflowsDir,
-      error: error.message
-    });
-    return null;
-  }
+  return match ? match.path : null;
 }
 
 /**
@@ -334,6 +299,72 @@ function validateWorkflow(workflow) {
 }
 
 /**
+ * Recover executions that only exist as a checkpoint directory, then mark
+ * whatever is still `running` as failed — the previous process died holding
+ * it.
+ *
+ * Guarded by the scheduler lock, exactly like `resumeInterruptedRuns` and
+ * `sweepOrphanedExecutions`. Execution records are shared across workers now,
+ * so an ungated rescan is no longer merely wasteful: every worker would mark
+ * as failed the very runs the lock owner is resuming from checkpoint, and the
+ * result would be written to the record they all read.
+ *
+ * Called from `server.js`, not from route registration: the scheduler-lock
+ * heartbeat is only started by `triggerManager.setEngine`, so at registration
+ * time no process owns the lock and this would always skip. It runs in the
+ * same owner-gated boot phase as the resume manager and the orphan sweeper,
+ * and before both — a run that is resumable is set back to `running` by the
+ * engine moments later, which is the ordering this rescan has always had.
+ *
+ * @param {Object} [opts]
+ * @param {boolean} [opts.requireSchedulerOwner=true] - Only run if this
+ *   instance owns the scheduler lock.
+ * @returns {Promise<{recovered: boolean, marked: number}>}
+ */
+export async function markInterruptedExecutionsFailed({ requireSchedulerOwner = true } = {}) {
+  const registry = getExecutionRegistry();
+  // Without a store the registry is this worker's own memory, so recovering
+  // from the checkpoint directories is work every worker has to do for itself
+  // — gating it on the scheduler lock would leave every other worker with an
+  // empty execution list. With a store it is shared state, and exactly one
+  // process should write it.
+  const owned = !requireSchedulerOwner || isSchedulerOwner();
+  if (!owned && registry.isDurable) {
+    // Info, not debug: in a cluster this is the ordinary state of every worker
+    // but one, so it is not a warning — but it is the one line that says why a
+    // restart left executions marked `running`, and at debug it was invisible
+    // under the default level.
+    logger.info('Not the scheduler-lock owner — skipping the execution rescan', {
+      component: 'WorkflowRoutes'
+    });
+    return { recovered: false, marked: 0 };
+  }
+
+  let marked = 0;
+  try {
+    await registry.loadFromDisk();
+    // Marking a run failed is a claim about the whole installation, not about
+    // this worker, so it stays owner-gated even when the rescan above did not.
+    if (owned) {
+      // Mark previously-running executions as failed (server process died)
+      for (const exec of await registry.getActive()) {
+        if (exec.status === 'running') {
+          registry.updateStatus(exec.executionId, 'failed', { currentNode: null });
+          marked += 1;
+        }
+      }
+      await registry.flushWrites();
+    }
+  } catch (error) {
+    logger.error('Failed to recover the execution registry on startup', {
+      component: 'WorkflowRoutes',
+      error: error.message
+    });
+  }
+  return { recovered: true, marked };
+}
+
+/**
  * Registers all workflow-related API routes.
  *
  * @param {Express} app - Express application instance
@@ -343,25 +374,6 @@ function validateWorkflow(workflow) {
  */
 export default function registerWorkflowRoutes(app, deps = {}) {
   const workflowEngine = deps.workflowEngine || getWorkflowEngine();
-
-  // Recover persisted executions from disk on startup
-  const registry = getExecutionRegistry();
-  (async () => {
-    try {
-      await registry.loadFromDisk();
-      // Mark previously-running executions as failed (server process died)
-      for (const exec of registry.getActive()) {
-        if (exec.status === 'running') {
-          registry.updateStatus(exec.executionId, 'failed', { currentNode: null });
-        }
-      }
-    } catch (error) {
-      logger.error('Failed to load execution registry from disk', {
-        component: 'WorkflowRoutes',
-        error: error.message
-      });
-    }
-  })();
 
   // ============================================================================
   // Workflow Definition Endpoints
@@ -466,7 +478,7 @@ export default function registerWorkflowRoutes(app, deps = {}) {
         const { status, limit = 20, offset = 0, includeArchived } = req.query;
 
         const registry = getExecutionRegistry();
-        const executions = registry.getByUser(userId, {
+        const executions = await registry.getByUser(userId, {
           status,
           includeArchived: includeArchived === 'true' || includeArchived === '1',
           limit: parseInt(limit, 10),
@@ -602,18 +614,13 @@ export default function registerWorkflowRoutes(app, deps = {}) {
         }
 
         // Check if workflow already exists
-        const rootDir = getRootDir();
-        const workflowsDir = join(rootDir, 'contents', 'workflows');
-        await fs.mkdir(workflowsDir, { recursive: true });
-
-        const existingFile = await findWorkflowFile(workflowData.id, workflowsDir);
+        const existingFile = await findWorkflowFile(workflowData.id);
         if (existingFile) {
           return sendErrorResponse(res, 409, 'Workflow with this ID already exists');
         }
 
         // Write workflow file
-        const workflowPath = join(workflowsDir, `${workflowData.id}.json`);
-        await atomicWriteJSON(workflowPath, validation.data);
+        await configStore.writeJson(workflowPathFor(workflowData.id), validation.data);
 
         logger.info('Workflow created', {
           component: 'WorkflowRoutes',
@@ -702,17 +709,14 @@ export default function registerWorkflowRoutes(app, deps = {}) {
         }
 
         // Find existing workflow file
-        const rootDir = getRootDir();
-        const workflowsDir = join(rootDir, 'contents', 'workflows');
-        const filename = await findWorkflowFile(id, workflowsDir);
+        const workflowPath = await findWorkflowFile(id);
 
-        if (!filename) {
+        if (!workflowPath) {
           return sendNotFound(res, 'Workflow');
         }
 
         // Update workflow file
-        const workflowPath = join(workflowsDir, filename);
-        await atomicWriteJSON(workflowPath, validation.data);
+        await configStore.writeJson(workflowPath, validation.data);
 
         logger.info('Workflow updated', {
           component: 'WorkflowRoutes',
@@ -779,17 +783,14 @@ export default function registerWorkflowRoutes(app, deps = {}) {
         }
 
         // Find workflow file
-        const rootDir = getRootDir();
-        const workflowsDir = join(rootDir, 'contents', 'workflows');
-        const filename = await findWorkflowFile(id, workflowsDir);
+        const workflowPath = await findWorkflowFile(id);
 
-        if (!filename) {
+        if (!workflowPath) {
           return sendNotFound(res, 'Workflow');
         }
 
         // Delete workflow file
-        const workflowPath = join(workflowsDir, filename);
-        await fs.unlink(workflowPath);
+        await configStore.remove(workflowPath);
 
         logger.info('Workflow deleted', {
           component: 'WorkflowRoutes',
@@ -999,7 +1000,7 @@ export default function registerWorkflowRoutes(app, deps = {}) {
           return sendBadRequest(res, 'Invalid executionId');
         }
 
-        if (!authorizeExecutionAccess(req, res, executionId)) return;
+        if (!(await authorizeExecutionAccess(req, res, executionId))) return;
 
         const state = await workflowEngine.getState(executionId);
 
@@ -1112,7 +1113,7 @@ export default function registerWorkflowRoutes(app, deps = {}) {
           return sendBadRequest(res, 'Invalid executionId');
         }
 
-        if (!authorizeExecutionAccess(req, res, executionId)) return;
+        if (!(await authorizeExecutionAccess(req, res, executionId))) return;
 
         // Build resume data
         const resumeData = {
@@ -1197,7 +1198,7 @@ export default function registerWorkflowRoutes(app, deps = {}) {
           return sendBadRequest(res, 'Invalid executionId');
         }
 
-        if (!authorizeExecutionAccess(req, res, executionId)) return;
+        if (!(await authorizeExecutionAccess(req, res, executionId))) return;
 
         const state = await workflowEngine.resumeFromTerminated(executionId, {
           user: req.user
@@ -1286,7 +1287,7 @@ export default function registerWorkflowRoutes(app, deps = {}) {
           return sendBadRequest(res, 'Invalid executionId');
         }
 
-        if (!authorizeExecutionAccess(req, res, executionId)) return;
+        if (!(await authorizeExecutionAccess(req, res, executionId))) return;
 
         // The execution may run on another worker: the engine relays the cancel.
         const state = await workflowEngine.cancelAnywhere(executionId, reason);
@@ -1360,7 +1361,7 @@ export default function registerWorkflowRoutes(app, deps = {}) {
           return sendBadRequest(res, 'Invalid executionId');
         }
 
-        const execution = authorizeExecutionAccess(req, res, executionId);
+        const execution = await authorizeExecutionAccess(req, res, executionId);
         if (!execution) return;
 
         const registry = getExecutionRegistry();
@@ -1384,7 +1385,10 @@ export default function registerWorkflowRoutes(app, deps = {}) {
           throw error;
         }
 
-        registry.remove(executionId);
+        // Awaited: the client reloads its execution list straight after this
+        // responds, and that list now reads the shared record rather than
+        // this worker's memory.
+        await registry.remove(executionId);
 
         logger.info('Workflow execution deleted', {
           component: 'WorkflowRoutes',
@@ -1451,11 +1455,11 @@ export default function registerWorkflowRoutes(app, deps = {}) {
           return sendBadRequest(res, 'archived must be a boolean');
         }
 
-        const execution = authorizeExecutionAccess(req, res, executionId);
+        const execution = await authorizeExecutionAccess(req, res, executionId);
         if (!execution) return;
 
         const registry = getExecutionRegistry();
-        const updated = registry.setArchived(executionId, archived);
+        const updated = await registry.setArchived(executionId, archived);
 
         logger.info('Workflow execution archive toggled', {
           component: 'WorkflowRoutes',
@@ -1521,7 +1525,7 @@ export default function registerWorkflowRoutes(app, deps = {}) {
           return sendBadRequest(res, 'Invalid executionId');
         }
 
-        if (!authorizeExecutionAccess(req, res, executionId)) return;
+        if (!(await authorizeExecutionAccess(req, res, executionId))) return;
 
         const state = await workflowEngine.getState(executionId);
 
@@ -1629,10 +1633,12 @@ export default function registerWorkflowRoutes(app, deps = {}) {
     buildServerPath('/api/workflows/executions/:executionId/stream'),
     checkWorkflowsFeature,
     authRequired,
-    (req, res) => {
+    // Async only because the ownership check reads the shared execution
+    // record; the SSE channel is still set up in the same tick afterwards.
+    async (req, res) => {
       const { executionId } = req.params;
 
-      if (!authorizeExecutionAccess(req, res, executionId)) return;
+      if (!(await authorizeExecutionAccess(req, res, executionId))) return;
 
       const channel = createSseChannel({
         req,
@@ -1830,25 +1836,25 @@ export default function registerWorkflowRoutes(app, deps = {}) {
         }
 
         // Find workflow file
-        const rootDir = getRootDir();
-        const workflowsDir = join(rootDir, 'contents', 'workflows');
-        const filename = await findWorkflowFile(id, workflowsDir);
+        const workflowPath = await findWorkflowFile(id);
 
-        if (!filename) {
+        if (!workflowPath) {
           return sendNotFound(res, 'Workflow');
         }
 
-        // Read current workflow
-        const workflowPath = join(workflowsDir, filename);
-        const content = await fs.readFile(workflowPath, 'utf8');
-        const workflow = JSON.parse(content);
+        // Read current workflow. It was readable a moment ago, so null here
+        // means it has just been removed.
+        const workflow = await configStore.readJson(workflowPath);
+        if (!workflow) {
+          return sendNotFound(res, 'Workflow');
+        }
 
         // Toggle enabled status
         const newEnabledState = workflow.enabled === false;
         workflow.enabled = newEnabledState;
 
         // Save updated workflow
-        await atomicWriteJSON(workflowPath, workflow);
+        await configStore.writeJson(workflowPath, workflow);
 
         logger.info('Workflow toggled', {
           component: 'WorkflowRoutes',
@@ -1930,46 +1936,19 @@ export default function registerWorkflowRoutes(app, deps = {}) {
         const { status, search, limit = 100, offset = 0 } = req.query;
         const registry = getExecutionRegistry();
 
-        let executions;
-
         if (status === 'all' || status) {
-          // Get all executions from the registry
-          let allExecutions = Array.from(registry.executions.values()).map(e => ({ ...e }));
-
-          // Apply status filter (unless 'all')
-          if (status && status !== 'all') {
-            allExecutions = allExecutions.filter(e => e.status === status);
-          }
-
-          // Apply search filter on userId or workflowName
-          if (search) {
-            const searchLower = search.toLowerCase();
-            allExecutions = allExecutions.filter(e => {
-              const userId = (e.userId || '').toLowerCase();
-              const workflowName =
-                typeof e.workflowName === 'object'
-                  ? Object.values(e.workflowName).join(' ').toLowerCase()
-                  : (e.workflowName || '').toLowerCase();
-              const workflowId = (e.workflowId || '').toLowerCase();
-              return (
-                userId.includes(searchLower) ||
-                workflowName.includes(searchLower) ||
-                workflowId.includes(searchLower)
-              );
-            });
-          }
-
-          // Sort by startedAt descending (most recent first)
-          allExecutions.sort((a, b) => new Date(b.startedAt) - new Date(a.startedAt));
-
-          // Apply pagination
           const parsedOffset = parseInt(offset, 10) || 0;
           const parsedLimit = parseInt(limit, 10) || 100;
-          const total = allExecutions.length;
-          executions = allExecutions.slice(parsedOffset, parsedOffset + parsedLimit);
 
-          // Get stats from registry
-          const stats = registry.getStats();
+          // One listing call: the registry filters, searches, orders and
+          // pages the shared execution records, and reports the statistics
+          // over all of them rather than over the page.
+          const { executions, total, stats } = await registry.list({
+            status,
+            search,
+            limit: parsedLimit,
+            offset: parsedOffset
+          });
 
           res.json({
             executions,
@@ -1981,7 +1960,7 @@ export default function registerWorkflowRoutes(app, deps = {}) {
         } else {
           // Default behavior: return only active executions from WorkflowEngine
           const activeExecutions = await workflowEngine.listActiveExecutions();
-          const stats = registry.getStats();
+          const stats = await registry.getStats();
 
           res.json({
             executions: activeExecutions,
@@ -2039,50 +2018,17 @@ export default function registerWorkflowRoutes(app, deps = {}) {
       }
 
       try {
-        const rootDir = getRootDir();
-        const workflowsDir = join(rootDir, 'contents', 'workflows');
-        const historyRoot = join(workflowsDir, '.history');
-        // Defense-in-depth: resolve the per-workflow history dir and
-        // assert it stays inside .history. validateIdForPath already
-        // rejects path-traversal characters; this catches symlink/
-        // alternate-encoding bypasses that CodeQL flags.
-        const historyDir = await resolveAndValidatePath(id, historyRoot);
-        if (!historyDir) {
-          return res.status(400).json({ error: 'Invalid workflow ID' });
-        }
-
-        let versions = [];
-        try {
-          // lgtm[js/path-injection] -- `historyDir` is the result of
-          // resolveAndValidatePath(id, historyRoot) above (path.resolve +
-          // startsWith boundary check); `id` was already vetted by
-          // validateIdForPath() which rejects `..`, `/`, `\` and anything
-          // outside [A-Za-z0-9._-].
-          const files = await fs.readdir(historyDir);
-          for (const file of files) {
-            if (!file.endsWith('.json')) continue;
-            try {
-              const filePath = await resolveAndValidatePath(file, historyDir);
-              if (!filePath) continue;
-              // lgtm[js/path-injection] -- `filePath` is the result of
-              // resolveAndValidatePath(file, historyDir) which enforces a
-              // path.resolve + startsWith boundary against historyDir.
-              const content = await fs.readFile(filePath, 'utf8');
-              const data = JSON.parse(content);
-              versions.push({
-                version: data.version,
-                publishedAt: data._publishedAt,
-                publishedBy: data._publishedBy,
-                fileName: file
-              });
-            } catch {
-              // Skip malformed version files
-            }
-          }
-        } catch (err) {
-          if (err.code !== 'ENOENT') throw err;
-          // No history directory yet - return empty
-        }
+        // A workflow that was never published has no history directory and
+        // lists nothing; snapshots that do not parse are skipped, as before.
+        const snapshots = await configStore.listDocuments(historyDirFor(id));
+        const versions = snapshots
+          .filter(({ data }) => data && typeof data === 'object')
+          .map(({ key, data }) => ({
+            version: data.version,
+            publishedAt: data._publishedAt,
+            publishedBy: data._publishedBy,
+            fileName: `${key}.json`
+          }));
 
         // Sort by publish date descending
         versions.sort((a, b) => new Date(b.publishedAt || 0) - new Date(a.publishedAt || 0));
@@ -2140,18 +2086,16 @@ export default function registerWorkflowRoutes(app, deps = {}) {
       }
 
       try {
-        const rootDir = getRootDir();
-        const workflowsDir = join(rootDir, 'contents', 'workflows');
-
         // Load current workflow
-        const filename = await findWorkflowFile(id, workflowsDir);
-        if (!filename) {
+        const workflowPath = await findWorkflowFile(id);
+        if (!workflowPath) {
           return sendNotFound(res, 'Workflow');
         }
 
-        const workflowPath = join(workflowsDir, filename);
-        const content = await fs.readFile(workflowPath, 'utf8');
-        const workflow = JSON.parse(content);
+        const workflow = await configStore.readJson(workflowPath);
+        if (!workflow) {
+          return sendNotFound(res, 'Workflow');
+        }
 
         // Create snapshot
         const timestamp = new Date().toISOString().replace(/[:.]/g, '-');
@@ -2163,24 +2107,15 @@ export default function registerWorkflowRoutes(app, deps = {}) {
           _publishedBy: req.user?.name || req.user?.id || 'unknown'
         };
 
-        // Save to history (defense-in-depth path resolution)
-        const historyRoot = join(workflowsDir, '.history');
-        const historyDir = await resolveAndValidatePath(id, historyRoot);
-        if (!historyDir) {
-          return res.status(400).json({ error: 'Invalid workflow ID' });
-        }
-        // lgtm[js/path-injection] -- `historyDir` is resolveAndValidatePath's
-        // bounded result for an already validateIdForPath-checked id.
-        await fs.mkdir(historyDir, { recursive: true });
-
-        // version comes from workflow.version which is schema-validated as
-        // semver, so it's a safe filename component. timestamp is also safe.
-        const snapshotFile = join(historyDir, `${version}-${timestamp}.json`);
-        await atomicWriteJSON(snapshotFile, snapshot);
+        // Save to history. version comes from workflow.version which is
+        // schema-validated as semver, so it's a safe filename component;
+        // timestamp is generated above and id was checked by
+        // validateIdForPath. The store creates the directory on first write.
+        await configStore.writeJson(`${historyDirFor(id)}/${version}-${timestamp}.json`, snapshot);
 
         // Update workflow status
         workflow.status = 'published';
-        await atomicWriteJSON(workflowPath, workflow);
+        await configStore.writeJson(workflowPath, workflow);
 
         logger.info({
           component: 'workflowRoutes',
@@ -2253,52 +2188,35 @@ export default function registerWorkflowRoutes(app, deps = {}) {
       }
 
       try {
-        const rootDir = getRootDir();
-        const workflowsDir = join(rootDir, 'contents', 'workflows');
-        const historyRoot = join(workflowsDir, '.history');
-        const historyDir = await resolveAndValidatePath(id, historyRoot);
-        if (!historyDir) {
-          return res.status(400).json({ error: 'Invalid workflow ID' });
-        }
+        const historyDir = historyDirFor(id);
 
         // Find snapshot file by version prefix
-        let snapshotFileName = null;
-        try {
-          // lgtm[js/path-injection] -- `historyDir` is resolveAndValidatePath's
-          // bounded result for a validateIdForPath-checked id.
-          const files = await fs.readdir(historyDir);
-          snapshotFileName = files.find(
-            f => f.startsWith(`${versionParam}-`) && f.endsWith('.json')
-          );
-        } catch {
+        const snapshotKeys = await configStore.list(historyDir);
+        if (snapshotKeys.length === 0) {
           return res.status(404).json({ error: 'No version history found' });
         }
 
-        if (!snapshotFileName) {
+        const snapshotKey = snapshotKeys.find(key => key.startsWith(`${versionParam}-`));
+        if (!snapshotKey) {
           return res.status(404).json({ error: `Version ${versionParam} not found` });
         }
 
-        // Read snapshot (resolve+validate with realpath to prevent symlink traversal)
-        const snapshotPath = await resolveAndValidateRealPath(snapshotFileName, historyDir);
-        if (!snapshotPath) {
-          return res.status(400).json({ error: 'Invalid snapshot path' });
+        const snapshot = await configStore.readJson(`${historyDir}/${snapshotKey}.json`);
+        if (!snapshot) {
+          return res.status(404).json({ error: `Version ${versionParam} not found` });
         }
-        // snapshotPath is a realpath-bounded result constrained to historyDir.
-        const content = await fs.readFile(snapshotPath, 'utf8');
-        const snapshot = JSON.parse(content);
 
         // Strip metadata
         delete snapshot._publishedAt;
         delete snapshot._publishedBy;
 
         // Write as current workflow
-        const filename = await findWorkflowFile(id, workflowsDir);
-        if (!filename) {
+        const workflowPath = await findWorkflowFile(id);
+        if (!workflowPath) {
           return sendNotFound(res, 'Workflow');
         }
 
-        const workflowPath = join(workflowsDir, filename);
-        await atomicWriteJSON(workflowPath, snapshot);
+        await configStore.writeJson(workflowPath, snapshot);
 
         logger.info({
           component: 'workflowRoutes',

@@ -1,8 +1,4 @@
-import { readFileSync } from 'fs';
-import { promises as fs } from 'fs';
-import { join } from 'path';
-import { getRootDir } from '../../pathUtils.js';
-import { atomicWriteJSON } from '../../utils/atomicWrite.js';
+import configStore from '../../services/config/ConfigStore.js';
 import configCache from '../../configCache.js';
 import { contentAdminAuth } from '../../middleware/contentAdminAuth.js';
 import {
@@ -18,55 +14,6 @@ import logger from '../../utils/logger.js';
 import { removeMarketplaceInstallation } from '../../utils/installationCleanup.js';
 import { logAudit } from '../../services/AuditLogService.js';
 import { saveSnapshot } from '../../services/ChangeHistoryService.js';
-
-/**
- * Find the actual filename for an app ID
- * Handles cases where the filename doesn't match the app ID
- * @param {string} appId - The app ID to search for
- * @param {string} appsDir - The apps directory path
- * @returns {Promise<string|null>} The filename if found, null otherwise
- */
-async function findAppFile(appId, appsDir) {
-  try {
-    const files = await fs.readdir(appsDir);
-    const jsonFiles = files.filter(f => f.endsWith('.json'));
-
-    // First try the expected filename
-    const expectedFilename = `${appId}.json`;
-    if (jsonFiles.includes(expectedFilename)) {
-      return expectedFilename;
-    }
-
-    // If not found, search through all files to find one with matching ID
-    for (const file of jsonFiles) {
-      try {
-        const filePath = join(appsDir, file);
-        const content = await fs.readFile(filePath, 'utf8');
-        const app = JSON.parse(content);
-        if (app.id === appId) {
-          return file;
-        }
-      } catch (error) {
-        // Skip files that can't be read or parsed
-        logger.debug('Skipping malformed app file', {
-          component: 'AdminApps',
-          file,
-          error: error.message
-        });
-        continue;
-      }
-    }
-
-    return null;
-  } catch (error) {
-    logger.warn('Failed to read apps directory', {
-      component: 'AdminApps',
-      appsDir,
-      error: error.message
-    });
-    return null;
-  }
-}
 
 /**
  * @swagger
@@ -608,19 +555,16 @@ export default function registerAdminAppsRoutes(app) {
         return sendBadRequest(res, 'App ID cannot be changed');
       }
 
-      const rootDir = getRootDir();
-      const appsDir = join(rootDir, 'contents', 'apps');
-      // Ensure directory exists before writing
-      await fs.mkdir(appsDir, { recursive: true });
       // Find the actual file for this app ID (may not match ${appId}.json)
-      const filename = await findAppFile(appId, appsDir);
-      if (!filename) {
+      const appFilePath = await configStore.resolveIdToPath('apps', appId, {
+        createIfMissing: false
+      });
+      if (!appFilePath) {
         return sendNotFound(res, 'App file');
       }
-      const appFilePath = join(appsDir, filename);
       const { data: currentApps } = configCache.getApps(true);
       const oldApp = currentApps.find(a => a.id === appId);
-      await atomicWriteJSON(appFilePath, updatedApp);
+      await configStore.writeJson(appFilePath, updatedApp);
       await configCache.refreshAppsCache();
       if (oldApp) {
         await saveSnapshot({
@@ -732,23 +676,19 @@ export default function registerAdminAppsRoutes(app) {
         return;
       }
 
-      const rootDir = getRootDir();
-      const appsDir = join(rootDir, 'contents', 'apps');
       // Check for duplicate ID via configCache (covers filenames that differ from their ID)
       const { data: existingApps } = configCache.getApps(true);
       if (existingApps.some(a => a.id === newApp.id)) {
         return sendErrorResponse(res, 409, 'App with this ID already exists');
       }
-      const appFilePath = join(appsDir, `${newApp.id}.json`);
       try {
-        readFileSync(appFilePath, 'utf8');
+        // Create-only: the file-exists check and the write are one step, so two
+        // concurrent creates cannot both decide the name is free.
+        await configStore.createJson(`apps/${newApp.id}.json`, newApp);
+      } catch (error) {
+        if (error.code !== 'EEXIST') throw error;
         return sendErrorResponse(res, 409, 'App with this ID already exists');
-      } catch {
-        // file does not exist
       }
-      // Ensure directory exists before writing
-      await fs.mkdir(appsDir, { recursive: true });
-      await fs.writeFile(appFilePath, JSON.stringify(newApp, null, 2));
       await configCache.refreshAppsCache();
       await logAudit({
         req,
@@ -830,17 +770,14 @@ export default function registerAdminAppsRoutes(app) {
       }
       const newEnabledState = !app.enabled;
       app.enabled = newEnabledState;
-      const rootDir = getRootDir();
-      const appsDir = join(rootDir, 'contents', 'apps');
-      // Ensure directory exists before writing
-      await fs.mkdir(appsDir, { recursive: true });
       // Find the actual file for this app ID (may not match ${appId}.json)
-      const filename = await findAppFile(appId, appsDir);
-      if (!filename) {
+      const appFilePath = await configStore.resolveIdToPath('apps', appId, {
+        createIfMissing: false
+      });
+      if (!appFilePath) {
         return sendNotFound(res, 'App file');
       }
-      const appFilePath = join(appsDir, filename);
-      await fs.writeFile(appFilePath, JSON.stringify(app, null, 2));
+      await configStore.writeJson(appFilePath, app);
       await configCache.refreshAppsCache();
       await logAudit({
         req,
@@ -945,24 +882,28 @@ export default function registerAdminAppsRoutes(app) {
         return sendBadRequest(res, `Unknown app ids: ${unknown.join(', ')}`);
       }
 
-      const appsDir = join(getRootDir(), 'contents', 'apps');
       const updated = [];
 
       for (const [index, id] of ids.entries()) {
         const order = index + 1;
-        const filename = await findAppFile(id, appsDir);
-        if (!filename) {
+        const appFilePath = await configStore.resolveIdToPath('apps', id, {
+          createIfMissing: false
+        });
+        if (!appFilePath) {
           logger.warn('App file not found', { component: 'AdminApps', id });
           continue;
         }
-        const appFilePath = join(appsDir, filename);
-        // Read the file, not the cached entry: the cache holds inheritance
-        // already merged in, and writing that back would freeze a child app's
-        // inherited fields into its own config.
-        const stored = JSON.parse(await fs.readFile(appFilePath, 'utf8'));
+        // Read the stored document, not the cached entry: the cache holds
+        // inheritance already merged in, and writing that back would freeze a
+        // child app's inherited fields into its own config.
+        const stored = await configStore.readJson(appFilePath);
+        if (!stored) {
+          logger.warn('App file not readable', { component: 'AdminApps', id });
+          continue;
+        }
         if (stored.order === order) continue;
         stored.order = order;
-        await atomicWriteJSON(appFilePath, stored);
+        await configStore.writeJson(appFilePath, stored);
         updated.push(id);
       }
 
@@ -1068,24 +1009,20 @@ export default function registerAdminAppsRoutes(app) {
 
         const { data: apps } = configCache.getApps(true);
         const resolvedIds = ids.includes('*') ? apps.map(a => a.id) : ids;
-        const rootDir = getRootDir();
-        const appsDir = join(rootDir, 'contents', 'apps');
-        // Ensure directory exists before writing
-        await fs.mkdir(appsDir, { recursive: true });
-
         for (const id of resolvedIds) {
           const app = apps.find(a => a.id === id);
           if (!app) continue;
           if (app.enabled !== enabled) {
             app.enabled = enabled;
             // Find the actual file for this app ID (may not match ${id}.json)
-            const filename = await findAppFile(id, appsDir);
-            if (!filename) {
+            const appFilePath = await configStore.resolveIdToPath('apps', id, {
+              createIfMissing: false
+            });
+            if (!appFilePath) {
               logger.warn('App file not found', { component: 'AdminApps', id });
               continue;
             }
-            const appFilePath = join(appsDir, filename);
-            await fs.writeFile(appFilePath, JSON.stringify(app, null, 2));
+            await configStore.writeJson(appFilePath, app);
           }
         }
 
@@ -1171,13 +1108,12 @@ export default function registerAdminAppsRoutes(app) {
         return;
       }
 
-      const rootDir = getRootDir();
-      const appsDir = join(rootDir, 'contents', 'apps');
-      const filename = await findAppFile(appId, appsDir);
-      if (!filename) {
+      const appFilePath = await configStore.resolveIdToPath('apps', appId, {
+        createIfMissing: false
+      });
+      if (!appFilePath) {
         return sendNotFound(res, 'App');
       }
-      const appFilePath = join(appsDir, filename);
       const { data: currentApps } = configCache.getApps(true);
       const deletedApp = currentApps.find(a => a.id === appId);
       if (deletedApp) {
@@ -1189,7 +1125,7 @@ export default function registerAdminAppsRoutes(app) {
           admin: req.user?.username ?? req.user?.name ?? req.user?.id ?? 'unknown'
         });
       }
-      await fs.unlink(appFilePath);
+      await configStore.remove(appFilePath);
       await configCache.refreshAppsCache();
       await removeMarketplaceInstallation('app', appId);
       await logAudit({

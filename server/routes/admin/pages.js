@@ -1,8 +1,7 @@
-import { readFileSync } from 'fs';
-import { promises as fs } from 'fs';
 import { join } from 'path';
 import { getRootDir } from '../../pathUtils.js';
-import { atomicWriteFile, atomicWriteJSON } from '../../utils/atomicWrite.js';
+import serverConfig from '../../config.js';
+import configStore from '../../services/config/ConfigStore.js';
 import configCache from '../../configCache.js';
 import { adminAuth } from '../../middleware/adminAuth.js';
 import { buildServerPath } from '../../utils/basePath.js';
@@ -18,6 +17,32 @@ import {
   sendBadRequest,
   sendErrorResponse
 } from '../../utils/responseHelpers.js';
+
+/** The UI configuration, which carries the page registry. */
+const UI_FILE = 'config/ui.json';
+
+/**
+ * Whether a page body path recorded in `ui.json` stays inside `contents/`.
+ *
+ * The registry is admin-authored, so the stored path is checked before it is
+ * used rather than trusted. The store contains a traversing path by folding it
+ * onto its base name; a page whose registry entry escapes is skipped instead,
+ * which is what this route has always done.
+ *
+ * The base directory is the configured one, the same directory the store
+ * itself resolves against. A literal `contents` here would judge every path
+ * against a directory that need not exist on an installation with
+ * `CONTENTS_DIR` set, and `resolveAndValidatePath` answers null for a base it
+ * cannot canonicalize — so every page body would read as empty and a delete
+ * would drop the registry entry while leaving the files behind.
+ *
+ * @param {string} relPath - Path relative to `contents/`, from `page.filePath`
+ * @returns {Promise<boolean>} True when the path is contained
+ */
+async function isContainedPagePath(relPath) {
+  const contentsDir = join(getRootDir(), serverConfig.CONTENTS_DIR);
+  return (await resolveAndValidatePath(relPath, contentsDir)) !== null;
+}
 
 export default function registerAdminPagesRoutes(app) {
   app.get(buildServerPath('/api/admin/pages'), adminAuth, async (req, res) => {
@@ -51,24 +76,16 @@ export default function registerAdminPagesRoutes(app) {
         return sendNotFound(res, 'Page');
       }
       const content = {};
-      const rootDir = getRootDir();
-      const contentsBase = join(rootDir, 'contents');
       for (const [lang, relPath] of Object.entries(page.filePath || {})) {
-        try {
-          // Validate stored path stays within contents directory
-          const abs = await resolveAndValidatePath(relPath, contentsBase);
-          if (!abs) {
-            logger.warn('Skipping page file with invalid path', {
-              component: 'AdminPages',
-              relPath
-            });
-            content[lang] = '';
-            continue;
-          }
-          content[lang] = await fs.readFile(abs, 'utf8');
-        } catch {
+        if (!(await isContainedPagePath(relPath))) {
+          logger.warn('Skipping page file with invalid path', {
+            component: 'AdminPages',
+            relPath
+          });
           content[lang] = '';
+          continue;
         }
+        content[lang] = (await configStore.readText(relPath)) ?? '';
       }
       res.json({
         id: pageId,
@@ -102,9 +119,8 @@ export default function registerAdminPagesRoutes(app) {
         return;
       }
 
-      const rootDir = getRootDir();
-      const uiPath = join(rootDir, 'contents', 'config', 'ui.json');
-      const uiConfig = JSON.parse(readFileSync(uiPath, 'utf8'));
+      const uiConfig = await configStore.readJson(UI_FILE);
+      if (!uiConfig) throw new Error(`Unable to read ${UI_FILE}`);
       uiConfig.pages = uiConfig.pages || {};
       if (uiConfig.pages[id]) {
         return sendErrorResponse(res, 409, 'Page with this ID already exists');
@@ -120,13 +136,14 @@ export default function registerAdminPagesRoutes(app) {
       uiConfig.pages[id] = { title, filePath: {}, authRequired, allowedGroups, contentType };
       const fileExtension = contentType === 'react' ? 'jsx' : 'md';
       for (const [lang, contentText] of Object.entries(content)) {
-        const dir = join(rootDir, 'contents', 'pages', lang);
-        await fs.mkdir(dir, { recursive: true });
         const rel = `pages/${lang}/${id}.${fileExtension}`;
-        await atomicWriteFile(join(rootDir, 'contents', rel), contentText);
+        await configStore.writeText(rel, contentText);
         uiConfig.pages[id].filePath[lang] = rel;
       }
-      await atomicWriteJSON(uiPath, uiConfig);
+      // The body files land before the registry that names them: a crash
+      // between the two leaves an unreferenced file rather than a page whose
+      // content is missing.
+      await configStore.writeJson(UI_FILE, uiConfig);
       await configCache.refreshCacheEntry('config/ui.json');
       res.json({ message: 'Page created successfully', page: { id, title } });
     } catch (error) {
@@ -154,9 +171,8 @@ export default function registerAdminPagesRoutes(app) {
       if (!id || id !== pageId) {
         return sendBadRequest(res, 'Invalid page ID');
       }
-      const rootDir = getRootDir();
-      const uiPath = join(rootDir, 'contents', 'config', 'ui.json');
-      const uiConfig = JSON.parse(readFileSync(uiPath, 'utf8'));
+      const uiConfig = await configStore.readJson(UI_FILE);
+      if (!uiConfig) throw new Error(`Unable to read ${UI_FILE}`);
       const pageEntry = uiConfig.pages?.[pageId];
       if (!pageEntry) {
         return sendNotFound(res, 'Page');
@@ -176,13 +192,11 @@ export default function registerAdminPagesRoutes(app) {
       pageEntry.filePath = pageEntry.filePath || {};
       const fileExtension = contentType === 'react' ? 'jsx' : 'md';
       for (const [lang, contentText] of Object.entries(content)) {
-        const dir = join(rootDir, 'contents', 'pages', lang);
-        await fs.mkdir(dir, { recursive: true });
         const rel = pageEntry.filePath[lang] || `pages/${lang}/${pageId}.${fileExtension}`;
-        await atomicWriteFile(join(rootDir, 'contents', rel), contentText);
+        await configStore.writeText(rel, contentText);
         pageEntry.filePath[lang] = rel;
       }
-      await atomicWriteJSON(uiPath, uiConfig);
+      await configStore.writeJson(UI_FILE, uiConfig);
       await configCache.refreshCacheEntry('config/ui.json');
       res.json({ message: 'Page updated successfully', page: { id, title } });
     } catch (error) {
@@ -199,30 +213,34 @@ export default function registerAdminPagesRoutes(app) {
         return;
       }
 
-      const rootDir = getRootDir();
-      const uiPath = join(rootDir, 'contents', 'config', 'ui.json');
-      const uiConfig = JSON.parse(readFileSync(uiPath, 'utf8'));
+      const uiConfig = await configStore.readJson(UI_FILE);
+      if (!uiConfig) throw new Error(`Unable to read ${UI_FILE}`);
       const pageEntry = uiConfig.pages?.[pageId];
       if (!pageEntry) {
         return sendNotFound(res, 'Page');
       }
-      const contentsBase = join(rootDir, 'contents');
       for (const rel of Object.values(pageEntry.filePath || {})) {
+        if (!(await isContainedPagePath(rel))) {
+          logger.warn('Skipping deletion of page file with invalid path', {
+            component: 'AdminPages',
+            rel
+          });
+          continue;
+        }
+        // A body that will not go away must not block removing the registry
+        // entry — the page would stay listed and unopenable.
         try {
-          // Validate stored path stays within contents directory
-          const abs = await resolveAndValidatePath(rel, contentsBase);
-          if (!abs) {
-            logger.warn('Skipping deletion of page file with invalid path', {
-              component: 'AdminPages',
-              rel
-            });
-            continue;
-          }
-          await fs.unlink(abs);
-        } catch {}
+          await configStore.remove(rel);
+        } catch (error) {
+          logger.warn('Unable to delete page file', {
+            component: 'AdminPages',
+            rel,
+            error: error.message
+          });
+        }
       }
       delete uiConfig.pages[pageId];
-      await atomicWriteJSON(uiPath, uiConfig);
+      await configStore.writeJson(UI_FILE, uiConfig);
       await configCache.refreshCacheEntry('config/ui.json');
       res.json({ message: 'Page deleted successfully' });
     } catch (error) {

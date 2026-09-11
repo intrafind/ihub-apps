@@ -1,7 +1,5 @@
-import { promises as fs } from 'fs';
-import { join, basename } from 'path';
-import { getRootDir } from '../../pathUtils.js';
-import { atomicWriteJSON, atomicCreateJSON } from '../../utils/atomicWrite.js';
+import configStore from '../../services/config/ConfigStore.js';
+import { rawRelPath } from '../../storage/namespaces.js';
 import configCache from '../../configCache.js';
 import { adminAuth } from '../../middleware/adminAuth.js';
 import {
@@ -10,7 +8,7 @@ import {
   sendFailedOperationError
 } from '../../utils/responseHelpers.js';
 import { buildServerPath } from '../../utils/basePath.js';
-import { validateIdForPath, resolveAndValidatePath } from '../../utils/pathSecurity.js';
+import { validateIdForPath } from '../../utils/pathSecurity.js';
 import logger from '../../utils/logger.js';
 import { agentProfileSchema } from '../../validators/agentProfileSchema.js';
 import { serializeProfile } from '../../agents/profile/profileWorkflowSerializer.js';
@@ -20,7 +18,8 @@ import { resolveModelId } from '../../utils.js';
 import llmClient from '../../services/loop/LLMClient.js';
 import { sendLLMError } from '../../services/loop/llmHttpErrors.js';
 
-const PROFILES_DIR = 'contents/agents/profiles';
+/** Namespace holding the agent profiles (`contents/agents/profiles`). */
+const PROFILES_NS = 'agents';
 
 const SECTION_HEADING_RE = /^##\s+(.+?)\s*$/m;
 
@@ -141,24 +140,21 @@ async function shapeToolResultWithLLM(toolResult, { promptTemplate, modelId }) {
   return (result.content || '').trim();
 }
 
-function profilesDirPath() {
-  return join(getRootDir(), PROFILES_DIR);
-}
-
-async function profileFilePath(profileId) {
-  // validateIdForPath should have run upstream; this is a defense-in-depth
-  // canonicalization that prevents any path traversal even if a route forgets.
-  // path.basename is a CodeQL-recognized sanitizer for js/path-injection.
-  const safeFilename = basename(`${profileId}.json`);
-  const safe = await resolveAndValidatePath(safeFilename, profilesDirPath());
-  if (!safe) {
-    throw new Error(`Invalid profile path for: ${profileId}`);
-  }
-  return safe;
-}
-
-async function ensureProfilesDir() {
-  await fs.mkdir(profilesDirPath(), { recursive: true });
+/**
+ * The contents-relative path of one agent profile.
+ *
+ * `validateIdForPath` should have run upstream; going through `rawRelPath`
+ * keeps the defense-in-depth check that used to live in `profileFilePath`,
+ * and does it with the same key rules the store itself applies, so a route
+ * that forgets cannot address a file outside the namespace.
+ *
+ * @param {string} profileId - Agent profile id
+ * @returns {string} Path relative to `contents/`
+ * @throws {import('../../storage/errors.js').InvalidKeyError} When the id is
+ *   not usable as a file name
+ */
+function profileRelPath(profileId) {
+  return rawRelPath(PROFILES_NS, profileId);
 }
 
 export default function registerAdminAgentsRoutes(app) {
@@ -209,11 +205,8 @@ export default function registerAdminAgentsRoutes(app) {
       }
       const profile = serializeProfile(parseResult.data);
 
-      await ensureProfilesDir();
-      const target = await profileFilePath(profile.id);
       try {
-        // lgtm[js/path-injection] -- profile.id validated; path canonicalized.
-        await atomicCreateJSON(target, profile);
+        await configStore.createJson(profileRelPath(profile.id), profile);
       } catch (err) {
         if (err.code === 'EEXIST') {
           return res
@@ -251,10 +244,7 @@ export default function registerAdminAgentsRoutes(app) {
       }
       const profile = serializeProfile(parseResult.data);
 
-      await ensureProfilesDir();
-      const updatePath = await profileFilePath(profileId);
-      // lgtm[js/path-injection] -- profileId validated by validateIdForPath; path canonicalized.
-      await atomicWriteJSON(updatePath, profile);
+      await configStore.writeJson(profileRelPath(profileId), profile);
       await configCache.refreshAgentProfilesCache();
       logger.info('Updated agent profile', {
         component: 'AdminAgents',
@@ -280,9 +270,7 @@ export default function registerAdminAgentsRoutes(app) {
         if (!profile) return sendNotFound(res, `Profile ${profileId} not found`);
 
         const updated = { ...profile, enabled: !profile.enabled };
-        const togglePath = await profileFilePath(profileId);
-        // lgtm[js/path-injection] -- profileId validated by validateIdForPath; path canonicalized.
-        await atomicWriteJSON(togglePath, updated);
+        await configStore.writeJson(profileRelPath(profileId), updated);
         await configCache.refreshAgentProfilesCache();
         res.json({ ok: true, enabled: updated.enabled });
       } catch (error) {
@@ -299,15 +287,8 @@ export default function registerAdminAgentsRoutes(app) {
       try {
         const { profileId } = req.params;
         if (!validateIdForPath(profileId, 'profile', res)) return;
-        try {
-          const deletePath = await profileFilePath(profileId);
-          // lgtm[js/path-injection] -- profileId validated by validateIdForPath; path canonicalized by resolveAndValidatePath.
-          await fs.unlink(deletePath);
-        } catch (err) {
-          if (err.code === 'ENOENT') {
-            return sendNotFound(res, `Profile ${profileId} not found`);
-          }
-          throw err;
+        if (!(await configStore.remove(profileRelPath(profileId)))) {
+          return sendNotFound(res, `Profile ${profileId} not found`);
         }
         await configCache.refreshAgentProfilesCache();
         logger.info('Deleted agent profile', {

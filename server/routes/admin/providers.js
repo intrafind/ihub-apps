@@ -1,15 +1,14 @@
-import { promises as fs } from 'fs';
-import { existsSync } from 'fs';
-import { join } from 'path';
-import { getRootDir } from '../../pathUtils.js';
+import configStore from '../../services/config/ConfigStore.js';
 import configCache from '../../configCache.js';
 import { adminAuth } from '../../middleware/adminAuth.js';
 import { buildServerPath } from '../../utils/basePath.js';
 import { validateIdForPath } from '../../utils/pathSecurity.js';
 import tokenStorageService from '../../services/TokenStorageService.js';
 import { getProviderConfigSchema } from '../../adapters/index.js';
-import logger from '../../utils/logger.js';
 import { sendInternalError, sendNotFound, sendBadRequest } from '../../utils/responseHelpers.js';
+
+/** The provider configuration, as a path relative to `contents/`. */
+const PROVIDERS_FILE = 'config/providers.json';
 
 export default function registerAdminProvidersRoutes(app) {
   /**
@@ -127,10 +126,6 @@ export default function registerAdminProvidersRoutes(app) {
       }
 
       // Define paths once at the top
-      const rootDir = getRootDir();
-      const providersPath = join(rootDir, 'contents', 'config', 'providers.json');
-      const providersDir = join(rootDir, 'contents', 'config');
-
       // Handle API key encryption
       if (updatedProvider.apiKey) {
         // Check if this is a new key or unchanged masked value
@@ -143,29 +138,18 @@ export default function registerAdminProvidersRoutes(app) {
           }
         } else {
           // Masked value - need to preserve existing key
-          // CRITICAL FIX: Read from disk, not cache, to ensure we have the apiKey field
-          // The cache might not have the apiKey due to TTL expiration or race conditions
-          try {
-            if (existsSync(providersPath)) {
-              const providersFromDisk = JSON.parse(await fs.readFile(providersPath, 'utf8'));
-              const existingProvider = providersFromDisk.providers?.find(p => p.id === providerId);
-              if (existingProvider && existingProvider.apiKey) {
-                // Preserve the existing encrypted API key from disk
-                updatedProvider.apiKey = existingProvider.apiKey;
-              } else {
-                // No existing key on disk, remove the masked placeholder
-                delete updatedProvider.apiKey;
-              }
-            } else {
-              // File doesn't exist yet, remove the masked placeholder
-              delete updatedProvider.apiKey;
-            }
-          } catch (error) {
-            logger.error('Error reading existing providers from disk:', {
-              component: 'AdminProviders',
-              error
-            });
-            // Fallback to removing the masked placeholder
+          // CRITICAL FIX: Read the stored file, not the cache, to ensure we have
+          // the apiKey field. The cache might not have it due to TTL expiration
+          // or race conditions.
+          const stored = await configStore.readJson(PROVIDERS_FILE);
+          const existingProvider = Array.isArray(stored?.providers)
+            ? stored.providers.find(p => p.id === providerId)
+            : undefined;
+          if (existingProvider?.apiKey) {
+            // Preserve the existing encrypted API key
+            updatedProvider.apiKey = existingProvider.apiKey;
+          } else {
+            // Nothing stored to preserve, drop the masked placeholder
             delete updatedProvider.apiKey;
           }
         }
@@ -189,11 +173,8 @@ export default function registerAdminProvidersRoutes(app) {
 
       providers[index] = updatedProvider;
 
-      // Ensure the directory exists before writing
-      await fs.mkdir(providersDir, { recursive: true });
-
       // Save updated providers
-      await fs.writeFile(providersPath, JSON.stringify({ providers }, null, 2));
+      await configStore.writeJson(PROVIDERS_FILE, { providers });
       await configCache.refreshProvidersCache();
 
       res.json({ message: 'Provider updated successfully', provider: updatedProvider });
@@ -240,21 +221,10 @@ export default function registerAdminProvidersRoutes(app) {
         return;
       }
 
-      const rootDir = getRootDir();
-      const providersPath = join(rootDir, 'contents', 'config', 'providers.json');
-      const providersDir = join(rootDir, 'contents', 'config');
-
-      // Load current providers
-      let providers = [];
-      try {
-        if (existsSync(providersPath)) {
-          const providersFromDisk = JSON.parse(await fs.readFile(providersPath, 'utf8'));
-          providers = providersFromDisk.providers || [];
-        }
-      } catch (error) {
-        logger.error('Error reading providers file', { component: 'AdminProviders', error });
-        // Continue with empty array
-      }
+      // Load current providers. Nothing readable means nothing configured yet,
+      // which is the first-run case for a custom provider.
+      const storedProviders = await configStore.readJson(PROVIDERS_FILE);
+      const providers = Array.isArray(storedProviders?.providers) ? storedProviders.providers : [];
 
       // Check if provider with this ID already exists
       if (providers.find(p => p.id === newProvider.id)) {
@@ -287,11 +257,8 @@ export default function registerAdminProvidersRoutes(app) {
       // Add new provider
       providers.push(newProvider);
 
-      // Ensure the directory exists before writing
-      await fs.mkdir(providersDir, { recursive: true });
-
       // Save updated providers
-      await fs.writeFile(providersPath, JSON.stringify({ providers }, null, 2));
+      await configStore.writeJson(PROVIDERS_FILE, { providers });
       await configCache.refreshProvidersCache();
 
       res.status(201).json({ message: 'Provider created successfully', provider: newProvider });
@@ -347,19 +314,9 @@ export default function registerAdminProvidersRoutes(app) {
         );
       }
 
-      const rootDir = getRootDir();
-      const providersPath = join(rootDir, 'contents', 'config', 'providers.json');
-
       // Load current providers
-      let providers = [];
-      try {
-        if (existsSync(providersPath)) {
-          const providersFromDisk = JSON.parse(await fs.readFile(providersPath, 'utf8'));
-          providers = providersFromDisk.providers || [];
-        }
-      } catch (error) {
-        return sendInternalError(res, error, 'read providers configuration');
-      }
+      const storedProviders = await configStore.readJson(PROVIDERS_FILE);
+      const providers = Array.isArray(storedProviders?.providers) ? storedProviders.providers : [];
 
       // Find provider index
       const index = providers.findIndex(p => p.id === providerId);
@@ -371,7 +328,7 @@ export default function registerAdminProvidersRoutes(app) {
       providers.splice(index, 1);
 
       // Save updated providers
-      await fs.writeFile(providersPath, JSON.stringify({ providers }, null, 2));
+      await configStore.writeJson(PROVIDERS_FILE, { providers });
       await configCache.refreshProvidersCache();
 
       res.json({ message: 'Provider deleted successfully' });

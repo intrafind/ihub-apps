@@ -274,6 +274,63 @@ export const platformConfigSchema = z
       })
       .passthrough()
       .default({}),
+    // Durable chats: server-side chat history written through the storage
+    // abstraction. The feature itself is gated by features.chatPersistence;
+    // these are its settings. Both retention rules are switched off by a value
+    // of zero or less — chats are then kept until an owner deletes them.
+    chats: z
+      .object({
+        enabled: z.boolean().default(true),
+        retentionDays: z.number().default(90),
+        maxChatsPerUser: z.number().default(200)
+      })
+      .passthrough()
+      .default({}),
+    // Workflow execution state: the checkpoint a paused run resumes from and
+    // the record a finished one leaves behind. Nothing deleted these on a
+    // timer before, so a busy installation accumulated every state it ever
+    // wrote. Only terminal executions are swept; `retentionDays` of zero or
+    // less keeps them forever, and `cleanupEnabled: false` stops the sweep
+    // without changing the window.
+    workflowState: z
+      .object({
+        retentionDays: z.number().default(30),
+        cleanupEnabled: z.boolean().default(true)
+      })
+      .passthrough()
+      .default({}),
+    // Storage abstraction: which provider backs runtime data (documents,
+    // append-logs, locks, change events). Durable chats are its first consumer
+    // — `server/storage/bootstrap.js` brings this provider up at boot and the
+    // chat repository writes through it. `provider` is a free string rather than an
+    // enum so an install can be pre-configured for a provider a later release
+    // registers, without failing platform validation on the older one.
+    storage: z
+      .object({
+        provider: z
+          .string()
+          .default('filesystem')
+          .describe(
+            'Storage provider backing runtime data. Only "filesystem" ships today; override per environment with IHUB_STORAGE_PROVIDER. Changing it requires a restart.'
+          ),
+        filesystem: z
+          .object({
+            dataDir: z
+              .string()
+              .default('data')
+              .describe('Directory under contents/ holding storage data.'),
+            flushIntervalMs: z
+              .number()
+              .int()
+              .positive()
+              .default(2000)
+              .describe('Debounce for buffered append-log writes.')
+          })
+          .passthrough()
+          .default({})
+      })
+      .passthrough()
+      .default({}),
     // Realtime speech-to-text: the browser streams mic audio to iHub over a
     // WebSocket and iHub proxies it to a vLLM realtime endpoint (e.g. Voxtral
     // on /v1/realtime). The url/apiKey stay server-side. Apps opt in with

@@ -384,5 +384,22 @@
     "cleanupEnabled": true,
     "flushIntervalMs": 2000,
     "spillThresholdBytes": 65536
+  },
+  "chats": {
+    "enabled": true,
+    "retentionDays": 90,
+    "maxChatsPerUser": 200,
+    "maxMessagesPerChat": 2000
+  },
+  "workflowState": {
+    "retentionDays": 30,
+    "cleanupEnabled": true
+  },
+  "storage": {
+    "provider": "filesystem",
+    "filesystem": {
+      "dataDir": "data",
+      "flushIntervalMs": 2000
+    }
   }
 }

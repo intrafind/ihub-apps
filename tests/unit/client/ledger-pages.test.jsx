@@ -3,23 +3,54 @@
  */
 import { fetchAllLedgerEvents } from '../../../client/src/shared/run/ledgerPages';
 
-/** A raw ledger of n records; only records for which `projects(seq)` is true produce an envelope. */
-function serve(n, { lastSeq = n, projects = () => true } = {}) {
+/**
+ * A raw ledger of n records; only records for which `projects(seq)` is true produce an envelope.
+ *
+ * `omitLastSeq` serves the shape the route actually returns today. It stopped
+ * answering `lastSeq` per page because, on a provider whose append log cannot
+ * stop early, that was a second full parse of the run's stream for every page
+ * — double the reads for a whole re-sync, to save the one empty request at the
+ * end of it. Every other fixture here still sends it, since an older server
+ * does and the walk must keep honouring it.
+ */
+function serve(n, { lastSeq = n, projects = () => true, omitLastSeq = false } = {}) {
   const calls = [];
   const fetchPage = async (after, limit) => {
     calls.push([after, limit]);
     const raw = [];
     for (let seq = after + 1; seq <= n && raw.length < limit; seq++) raw.push(seq);
-    return {
+    const page = {
       events: raw.filter(projects).map(seq => ({ v: 2, seq, type: 'meta' })),
-      lastSeq,
       nextAfter: raw.length ? raw[raw.length - 1] : after
     };
+    if (!omitLastSeq) page.lastSeq = lastSeq;
+    return page;
   };
   return { fetchPage, calls };
 }
 
 describe('fetchAllLedgerEvents', () => {
+  test('completes against a server that never sends lastSeq', async () => {
+    // The current route. Without `lastSeq` the only thing that ends the walk
+    // is a page that makes no progress, so this is the case that keeps the
+    // re-sync from either stopping early or spinning to `maxPages`.
+    const { fetchPage, calls } = serve(2500, { omitLastSeq: true });
+    const { events, lastSeq, complete } = await fetchAllLedgerEvents(fetchPage, { pageSize: 1000 });
+
+    expect(events).toHaveLength(2500);
+    expect(events[2499].seq).toBe(2500);
+    expect(complete).toBe(true);
+    expect(lastSeq).toBeNull();
+    // Three full pages, then one empty page to learn there is no more — that
+    // last request is the entire cost of dropping the field.
+    expect(calls).toEqual([
+      [0, 1000],
+      [1000, 1000],
+      [2000, 1000],
+      [2500, 1000]
+    ]);
+  });
+
   test('walks every page on the raw cursor until the ledger end', async () => {
     const { fetchPage, calls } = serve(2500);
     const { events, lastSeq, complete } = await fetchAllLedgerEvents(fetchPage, { pageSize: 1000 });

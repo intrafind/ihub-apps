@@ -96,7 +96,10 @@ class IAssistantConversationAdapterClass extends BaseAdapter {
     }
 
     const config = this.resolveConfig(model, options);
-    let state = conversationStateManager.getState(chatId);
+    // The durable read, not the cache-only `getState`: a chat whose first turn
+    // landed on another worker (or before a restart) must thread onto the same
+    // remote conversation instead of silently starting a second one.
+    let state = await conversationStateManager.loadState(chatId, { ownerId: user.id });
 
     // Lazy conversation creation: create on first message if no conversation exists
     if (!state?.conversationId) {
@@ -153,7 +156,11 @@ class IAssistantConversationAdapterClass extends BaseAdapter {
         lastParentId: null,
         title: conversation.title || null,
         baseUrl: config.baseUrl,
-        profileId: config.profileId
+        profileId: config.profileId,
+        // Whose conversation this is. A chat id is a URL path segment, so
+        // without an owner on the state a user holding someone else's id
+        // would thread their turn onto that user's remote conversation.
+        ownerId: user.id
       };
       conversationStateManager.setState(chatId, state);
 

@@ -40,7 +40,19 @@ import registerSwaggerRoutes from './routes/swagger.js';
 import registerWorkflowRoutes from './routes/workflow/index.js';
 import registerAgentRoutes from './routes/agents/index.js';
 import registerRunRoutes from './routes/runs.js';
+// Aliased: `./routes/chat/index.js` above already claims `registerChatRoutes`.
+// That one is the live chat turn (`/api/apps/:appId/chat/:chatId`); this one is
+// the durable-chat surface at `/api/chats`.
+import registerStoredChatRoutes from './routes/chats.js';
 import runLog from './services/loop/RunLog.js';
+import { startChatRetentionSweep, stopChatRetentionSweep } from './services/chat/chatRetention.js';
+import {
+  startWorkflowStateRetention,
+  stopWorkflowStateRetention
+} from './services/workflow/workflowRetention.js';
+import { importLegacyWorkflowStates } from './services/workflow/WorkflowStateRepository.js';
+import { importLegacyRunSummaries } from './services/runtime/runSummaryImport.js';
+import conversationStateManager from './services/integrations/ConversationStateManager.js';
 import { registerCheckpointResume } from './services/workflow/checkpointResume.js';
 import { registerChatClarificationLifecycle } from './services/chat/chatClarificationLifecycle.js';
 import interactionService from './services/loop/InteractionService.js';
@@ -65,6 +77,7 @@ import nextcloudEmbedRoutes from './routes/integrations/nextcloudEmbed.js';
 import registerOfficeRoutes from './routes/office.js';
 import registerNextcloudEmbedPageRoutes from './routes/nextcloudEmbedPages.js';
 import { setDefaultLanguage } from '../shared/localize.js';
+import { bootstrapStorage, shutdownStorageBootstrap } from './storage/bootstrap.js';
 import { initTelemetry, shutdownTelemetry } from './telemetry.js';
 import { setupMiddleware } from './middleware/setup.js';
 import {
@@ -366,7 +379,16 @@ if (cluster.isPrimary && workerCount > 1) {
     await prepareContents();
   }
 
-  // Load platform configuration and initialize telemetry
+  // Load platform configuration and initialize telemetry.
+  //
+  // This is the one configuration read that cannot be served by the storage
+  // provider: `storage.provider` and its settings live in this very file, so
+  // the provider is constructed from what is read here and does not exist yet.
+  // The configuration store answers it from the contained filesystem path for
+  // exactly that reason — the same bootstrap exception `migrations/runner.js`
+  // makes when it reads its settings out of platform.json before configCache
+  // exists. Nothing above this line may read configuration through the
+  // provider, and moving `bootstrapStorage` above it would deadlock.
   let platformConfig = {};
   try {
     platformConfig = await loadJson('config/platform.json');
@@ -381,6 +403,12 @@ if (cluster.isPrimary && workerCount > 1) {
       stack: error.stack
     });
   }
+
+  // Bring the storage provider up in every worker, before anything that keeps
+  // durable state can be asked for it. It never throws: a broken `storage`
+  // block leaves `getStorage()` null and the features built on it degrade to
+  // their in-memory behaviour instead of taking the server down.
+  await bootstrapStorage(platformConfig);
 
   // Initialize OpenTelemetry SDK. We do this in its own try/catch because a
   // failure here (e.g. invalid OTLP endpoint, missing exporter package) must
@@ -437,7 +465,11 @@ if (cluster.isPrimary && workerCount > 1) {
     });
   }
 
-  // Initialize configuration cache for optimal performance
+  // Initialize configuration cache for optimal performance. This must stay
+  // after `bootstrapStorage`: the cache reads every config file through the
+  // provider and subscribes to the provider's change stream as it starts, and
+  // with no provider up it would fall back to the filesystem for the whole
+  // boot and follow nothing afterwards.
   try {
     await configCache.initialize();
     // Set configCache reference in logger after initialization
@@ -615,6 +647,7 @@ if (cluster.isPrimary && workerCount > 1) {
   registerTriggerRoutes(app, { authRequired, adminAuth });
   registerAgentRoutes(app);
   registerRunRoutes(app);
+  registerStoredChatRoutes(app);
   // An answered workflow checkpoint resumes its execution (one answer endpoint);
   // overdue interactions expire on a sweep (an expired checkpoint fails its run).
   registerCheckpointResume();
@@ -627,6 +660,17 @@ if (cluster.isPrimary && workerCount > 1) {
   if (ownsClusterSingletons) {
     interactionService.startExpirySweep();
     runLog.startCleanupScheduler();
+    // Durable chats age out on their own daily sweep rather than with the
+    // ledger's: deleting stored conversations and deleting the run ledger are
+    // separate admin decisions, so `platform.chats.retentionDays` is
+    // independent of `runLog.cleanupEnabled`. Same ownership guard, though —
+    // two workers sweeping in parallel would only race each other's deletes.
+    startChatRetentionSweep();
+    // Terminal workflow state accumulated forever before this: a completed
+    // run kept its full state document, its run summary and — for a
+    // sub-workflow — a state nothing ever deleted. Same daily cadence and the
+    // same ownership guard as the sweeps above.
+    startWorkflowStateRetention();
   }
   registerVoiceRoutes(app);
   registerSetupRoutes(app);
@@ -773,18 +817,59 @@ if (cluster.isPrimary && workerCount > 1) {
     });
   }
 
+  // Carry what an upgraded installation already has on disk — the ledger's
+  // per-day run index, the workflow execution registry and the
+  // `<executionId>/latest.json` state directories — into the namespaces that
+  // now hold them. Both are one-time, idempotent and non-destructive (the
+  // legacy files stay, and stay readable), both short-circuit on a marker
+  // document afterwards, and both take a storage lock so only one worker does
+  // the work. A failure here must not stop the server: the legacy paths are
+  // still the fallback for everything not yet carried over.
+  //
+  // After the worker is serving, not before. On the awaited boot path this was
+  // between the process starting and the port being answerable, and it is not a
+  // fast step: a 100k-run legacy index is seconds of scanning, and the write
+  // loop is serial locked writes, up to `MAX_IMPORT_RUNS` of them. On a network
+  // filesystem that is minutes of an unbound port, which a container health
+  // check answers by killing the worker — and the restart re-reads the same
+  // index and is killed again. Nothing on the request path needs it to have
+  // finished: `readRunSummary` falls back to the legacy records and
+  // `GET /api/runs` merges the namespace with the per-day index files.
+  //
+  // Still awaited here rather than fired and forgotten, because the workflow
+  // recovery below reads the execution records this carries over — a rescan
+  // that runs first would not see a legacy execution at all.
+  try {
+    await importLegacyRunSummaries();
+    await importLegacyWorkflowStates();
+  } catch (error) {
+    logger.error({
+      component: 'Server',
+      message: 'Legacy runtime store import failed; falling back to the legacy files',
+      error: error.message
+    });
+  }
+
   // Workflow recovery + trigger init on boot. Order matters:
   //   1. Attach the engine to the TriggerManager (this acquires the
   //      cross-process scheduler lock).
-  //   2. Resume runs interrupted by the previous process from their last
+  //   2. Rescan the execution records: recover anything that exists only as a
+  //      checkpoint and mark whatever the previous process left `running` as
+  //      failed. Before the resume in step 3, exactly as it has always been —
+  //      a run that resumes is set back to `running` by the engine. This used
+  //      to run un-gated in every worker, which is safe only while each
+  //      worker has its own registry; now the records are shared, so it is
+  //      owner-gated like the two steps below.
+  //   3. Resume runs interrupted by the previous process from their last
   //      checkpoint (only the scheduler-lock owner does this).
-  //   3. Orphan-sweep whatever could NOT be resumed, marking it failed. Also
+  //   4. Orphan-sweep whatever could NOT be resumed, marking it failed. Also
   //      owner-gated: resume + sweep run in the SAME process so the sweeper's
   //      in-memory activeStates guard authoritatively skips just-resumed runs.
   //      A non-owner worker must not sweep — it would clobber the owner's runs.
-  //   4. Register schedule/webhook triggers.
+  //   5. Register schedule/webhook triggers.
   try {
-    const { loadWorkflows } = await import('./routes/workflow/workflowRoutes.js');
+    const { loadWorkflows, markInterruptedExecutionsFailed } =
+      await import('./routes/workflow/workflowRoutes.js');
     const { getTriggerManager } = await import('./services/workflow/triggers/TriggerManager.js');
     const { getWorkflowEngine } = await import('./services/workflow/WorkflowEngine.js');
     const { resumeInterruptedRuns } = await import('./services/workflow/resumeManager.js');
@@ -798,6 +883,14 @@ if (cluster.isPrimary && workerCount > 1) {
     const triggerManager = getTriggerManager();
     triggerManager.setEngine(engine); // starts the scheduler-lock heartbeat
     triggerManager.setWorkflowLoader(loadWorkflows);
+
+    // Step 2: awaited, so the resume below observes the rescan's writes rather
+    // than racing them back to `failed`.
+    try {
+      await markInterruptedExecutionsFailed({ requireSchedulerOwner: true });
+    } catch (error) {
+      logger.warn({ component: 'Server', message: `Execution rescan skipped: ${error.message}` });
+    }
 
     // 30-minute node timeout for resumed runs, consistent with the agent-run
     // engine in routes/agents/runs.js — needed so resumed agent runs
@@ -906,6 +999,17 @@ if (cluster.isPrimary && workerCount > 1) {
     } catch {
       // Audit flush failures are logged within the service
     }
+    // Stop the retention sweeps before storage goes away, so a tick cannot
+    // start against a provider that is being torn down.
+    stopChatRetentionSweep();
+    stopWorkflowStateRetention();
+    // Conversation state coalesces its writes on a timer to keep document I/O
+    // off the streaming path; drain what is still buffered, or a chat resumes
+    // after the restart threaded onto a stale parent message.
+    await conversationStateManager.flush();
+    // Flush buffered storage writes (chat documents, append-log entries) and
+    // release the provider's handles before the process goes away.
+    await shutdownStorageBootstrap();
     await shutdownTelemetry();
     process.exit(0);
   };

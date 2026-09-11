@@ -3,7 +3,7 @@ import { promises as fs } from 'fs';
 import { ZipArchive } from 'archiver';
 import config from '../../config.js';
 import { getRootDir } from '../../pathUtils.js';
-import { atomicWriteJSON } from '../../utils/atomicWrite.js';
+import configStore from '../../services/config/ConfigStore.js';
 import configCache from '../../configCache.js';
 import { adminAuth } from '../../middleware/adminAuth.js';
 import { buildServerPath } from '../../utils/basePath.js';
@@ -34,12 +34,16 @@ function signingKeyPath() {
   return join(getRootDir(), 'contents', SIGNING_KEY_FILE);
 }
 
+/**
+ * Merge updates into the platform configuration and publish them.
+ *
+ * @param {Object} updates - Top-level platform keys to overwrite
+ * @returns {Promise<Object>} The merged configuration that was written
+ */
 async function savePlatformConfig(updates) {
-  const rootDir = getRootDir();
-  const platformConfigPath = join(rootDir, 'contents', 'config', 'platform.json');
   const existing = configCache.getPlatform() || {};
   const merged = { ...existing, ...updates };
-  await atomicWriteJSON(platformConfigPath, merged);
+  await configStore.writeJson('config/platform.json', merged);
   await configCache.refreshCacheEntry('config/platform.json');
   return merged;
 }

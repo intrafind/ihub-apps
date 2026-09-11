@@ -1,3 +1,22 @@
+/**
+ * Seeds an installation's contents directory from `server/defaults`.
+ *
+ * This is the one part of the configuration plumbing that stays on raw `fs`,
+ * for the same reason the bootstrap read of `platform.json` does: it runs
+ * inside `prepareContents()`, before the migration runner and long before
+ * `bootstrapStorage()`, so there is no storage provider to write through —
+ * and the files it copies may be the very `platform.json` the provider is
+ * configured from.
+ *
+ * Its shape is wrong for a document store besides. It walks two directory
+ * trees and copies whatever it finds — markdown sources, JSX renderers,
+ * nested skill packages, images — comparing raw bytes rather than parsed
+ * JSON, and it must not rewrite a file whose content already matches. A
+ * document API addresses one JSON document at a time and cannot express
+ * that. See the exclusion list in `docs/storage.md`.
+ *
+ * @module utils/setupUtils
+ */
 import fs from 'fs/promises';
 import path from 'path';
 import { getRootDir } from '../pathUtils.js';

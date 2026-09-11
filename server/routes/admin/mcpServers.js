@@ -1,4 +1,4 @@
-import { atomicWriteJSON } from '../../utils/atomicWrite.js';
+import configStore from '../../services/config/ConfigStore.js';
 import { buildServerPath } from '../../utils/basePath.js';
 import { adminAuth } from '../../middleware/adminAuth.js';
 import { validateIdForPath } from '../../utils/pathSecurity.js';
@@ -9,13 +9,8 @@ import {
 import mcpClientManager from '../../services/mcp/McpClientManager.js';
 import configCache from '../../configCache.js';
 import logger from '../../utils/logger.js';
-import path from 'path';
-import { fileURLToPath } from 'url';
 
-const __filename = fileURLToPath(import.meta.url);
-const __dirname = path.dirname(__filename);
-
-const MCP_FILE_PATH = path.join(__dirname, '../../../contents/config/mcpServers.json');
+const MCP_FILE = 'config/mcpServers.json';
 
 async function readConfig() {
   const { data } = configCache.getMcpServers();
@@ -31,9 +26,9 @@ async function writeConfig(updated) {
   }
   // Secrets live in the central credential store (referenced by *Ref fields);
   // the auth block is persisted verbatim.
-  await atomicWriteJSON(MCP_FILE_PATH, parsed.data);
+  await configStore.writeJson(MCP_FILE, parsed.data);
   // Refresh in-memory cache + reload manager.
-  await configCache.refreshCacheEntry?.('config/mcpServers.json');
+  await configCache.refreshCacheEntry?.(MCP_FILE);
   const { data: fresh } = configCache.getMcpServers();
   await mcpClientManager.initialize(fresh);
   return parsed.data;

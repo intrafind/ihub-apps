@@ -69,7 +69,16 @@ async function stopRun(runId, meta) {
     await cancelChatWorkflow(refs.chatId);
     return 'chat_aborted';
   }
-  if (meta?.kind === 'workflow' || meta?.kind === 'agent' || getExecutionRegistry().get(runId)) {
+  // The registry read is async now that execution records live in the shared
+  // `runs` namespace instead of a per-worker Map. Left inside the `||` chain
+  // unawaited it would be a promise — always truthy — and every chat run
+  // would try to cancel a workflow. `||` still short-circuits, so a run the
+  // metadata already identifies never pays for the read.
+  const targetsExecution =
+    meta?.kind === 'workflow' ||
+    meta?.kind === 'agent' ||
+    Boolean(await getExecutionRegistry().get(runId));
+  if (targetsExecution) {
     try {
       // The execution may run on another worker: the engine relays the
       // cancellation to whoever holds its abort controller.
@@ -141,22 +150,29 @@ export default function registerRunRoutes(app) {
       const after = Math.max(parseInt(req.query.after, 10) || 0, 0);
       const limit = Math.min(Math.max(parseInt(req.query.limit, 10) || 1000, 1), 5000);
       const events = await runLog.readEvents(runId, { afterSeq: after, limit });
-      const lastSeq = await runLog.lastSeq(runId);
       // The last raw ledger sequence this page read: the paging cursor. A
       // projected page can be empty (headers, budget events, compactions
       // produce no envelopes) while more of the ledger remains.
       const nextAfter = events.length ? events[events.length - 1].seq : after;
+      // No `lastSeq`. It used to be answered per page, and on a provider whose
+      // append log cannot stop early — the filesystem one cannot, since a
+      // record's position need not follow its sequence number — that was a
+      // second full parse of the stream on top of the one `readEvents` just
+      // did. Replaying a 20k-event run in 1000-event pages paid for it twenty
+      // times. The client only ever used it to stop one page early: the walk
+      // terminates on a page that makes no progress (`ledgerPages.js`), so
+      // dropping it costs one empty request at the end of a re-sync and halves
+      // the reads for the whole of it.
       if (req.query.view === 'sse') {
         // Client re-sync: the same envelopes the live stream would have carried.
         return res.json({
           runId,
           after,
           nextAfter,
-          events: events.flatMap(projectLedgerEvent),
-          lastSeq
+          events: events.flatMap(projectLedgerEvent)
         });
       }
-      res.json({ runId, after, nextAfter, events, lastSeq });
+      res.json({ runId, after, nextAfter, events });
     } catch (error) {
       sendFailedOperationError(res, 'read run events', error);
     }

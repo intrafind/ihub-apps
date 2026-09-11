@@ -1024,6 +1024,14 @@ test('segment planner: read-only calls run in parallel, overlapping writes run s
   let inFlight = 0;
   let maxInFlight = 0;
   const order = [];
+  // The second call finishes first because the first one waits for it, not
+  // because it was given a shorter sleep: two sleeps racing on a loaded
+  // machine decide nothing. The bound on that wait is only so a planner that
+  // ran the batch sequentially fails here instead of hanging.
+  let bFinished;
+  const bDone = new Promise(resolve => {
+    bFinished = resolve;
+  });
   const result = await loop.run({
     model,
     messages: baseMessages,
@@ -1031,9 +1039,14 @@ test('segment planner: read-only calls run in parallel, overlapping writes run s
     executeTool: async (call, { args }) => {
       inFlight += 1;
       maxInFlight = Math.max(maxInFlight, inFlight);
-      await new Promise(r => setTimeout(r, args.query === 'a' ? 20 : 1));
+      if (args.query === 'b') {
+        await new Promise(r => setTimeout(r, 1));
+      } else {
+        await Promise.race([bDone, new Promise(r => setTimeout(r, 500))]);
+      }
       inFlight -= 1;
       order.push(args.query);
+      if (args.query === 'b') bFinished();
       return args.query;
     }
   });

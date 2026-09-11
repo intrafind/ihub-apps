@@ -1,19 +1,13 @@
-import { atomicWriteJSON } from '../../utils/atomicWrite.js';
 import { deepMerge } from '../../utils/deepMerge.js';
-import path from 'path';
-import fs from 'fs/promises';
 import { v4 as uuidv4 } from 'uuid';
 import logger from '../../utils/logger.js';
-import { getRootDir } from '../../pathUtils.js';
-import config from '../../config.js';
 import { isValidId } from '../../utils/pathSecurity.js';
-
-/**
- * Default directory for workflow state persistence
- * Uses the canonical path: {rootDir}/{CONTENTS_DIR}/data/workflow-state
- * @constant {string}
- */
-const STATE_DIR = path.join(getRootDir(), config.CONTENTS_DIR, 'data', 'workflow-state');
+import {
+  DEFAULT_STATE_DIR as STATE_DIR,
+  getWorkflowStateRepository,
+  resolveWorkflowStateRepository,
+  workflowStateOwnerId
+} from './WorkflowStateRepository.js';
 
 /**
  * Maximum allowed size for workflow state in bytes (50MB)
@@ -84,6 +78,9 @@ export class StateManager {
    * Creates a new StateManager instance
    * @param {Object} options - Configuration options
    * @param {string} [options.stateDir] - Directory for persisting state checkpoints
+   * @param {import('./WorkflowStateRepository.js').WorkflowStateRepository} [options.repository]
+   *   Store to persist checkpoints through. Resolved from `stateDir` when
+   *   omitted; injected directly by tests that supply their own.
    */
   constructor(options = {}) {
     /**
@@ -98,6 +95,42 @@ export class StateManager {
      * @type {string}
      */
     this.stateDir = options.stateDir || STATE_DIR;
+
+    /**
+     * Caller-supplied store, which wins over anything derived from `stateDir`.
+     * @type {import('./WorkflowStateRepository.js').WorkflowStateRepository|null}
+     * @private
+     */
+    this._injectedRepository = options.repository || null;
+
+    /**
+     * Memo for the store serving a non-default `stateDir`. Resolved once and
+     * kept, because `get()` reaches for it on every cache miss.
+     * @type {import('./WorkflowStateRepository.js').WorkflowStateRepository|null}
+     * @private
+     */
+    this._boundRepository = null;
+  }
+
+  /**
+   * Where checkpoints are actually persisted.
+   *
+   * Memory stays the primary copy — every mutator writes only `activeStates`
+   * — and this is consulted on `checkpoint`, on a cache miss in `get`, on
+   * `restore` and on `cleanup`. Resolved per access rather than in the
+   * constructor: this manager is a module singleton that can be built before
+   * the storage provider has finished coming up, and a repository captured at
+   * that moment would keep writing to the legacy layout forever.
+   *
+   * @returns {import('./WorkflowStateRepository.js').WorkflowStateRepository}
+   */
+  get repository() {
+    if (this._injectedRepository) return this._injectedRepository;
+    if (!this.stateDir || this.stateDir === STATE_DIR) return getWorkflowStateRepository();
+    if (!this._boundRepository) {
+      this._boundRepository = resolveWorkflowStateRepository(this.stateDir);
+    }
+    return this._boundRepository;
   }
 
   /**
@@ -229,16 +262,16 @@ export class StateManager {
     const state = this.activeStates.get(executionId);
 
     if (!state) {
-      // Try to load from checkpoint file if not in memory
-      try {
-        const checkpointPath = path.join(this.stateDir, executionId, 'latest.json');
-        const checkpointData = await fs.readFile(checkpointPath, 'utf8');
-        const restoredState = JSON.parse(checkpointData);
-        this.activeStates.set(executionId, restoredState);
-        return { ...restoredState };
-      } catch {
-        return null;
-      }
+      // Fall back to the last checkpoint. Note that this read-through also
+      // *inserts* into activeStates, which is what makes a later mutation of
+      // the returned execution possible at all — and what the orphan sweeper's
+      // "live in memory" guard has always seen. Both behaviours are load
+      // bearing; this moved from a raw file read to the repository, nothing
+      // more.
+      const restoredState = await this.repository.read(executionId);
+      if (!restoredState) return null;
+      this.activeStates.set(executionId, restoredState);
+      return { ...restoredState };
     }
 
     return { ...state };
@@ -283,16 +316,14 @@ export class StateManager {
     state.checkpoints.push(checkpointMeta);
     state.updatedAt = timestamp;
 
-    // Ensure checkpoint directory exists
-    const checkpointDir = path.join(this.stateDir, executionId);
-    await fs.mkdir(checkpointDir, { recursive: true });
-
     // Validate state size before writing to disk
     this._validateStateSize(state);
 
-    // Write latest checkpoint file using atomic write
-    const latestPath = path.join(checkpointDir, 'latest.json');
-    await atomicWriteJSON(latestPath, state);
+    // The owner is written alongside the state so "this user's executions" is
+    // an indexed lookup rather than a scan of every run on the installation.
+    await this.repository.write(executionId, state, {
+      ownerId: workflowStateOwnerId(state)
+    });
 
     logger.info('Checkpoint saved', {
       component: 'StateManager',
@@ -322,11 +353,15 @@ export class StateManager {
       });
       return null;
     }
-    const checkpointPath = path.join(this.stateDir, executionId, 'latest.json');
 
     try {
-      const checkpointData = await fs.readFile(checkpointPath, 'utf8');
-      const restoredState = JSON.parse(checkpointData);
+      const restoredState = await this.repository.read(executionId);
+      if (!restoredState) {
+        // Kept as a throw: `WorkflowEngine.resumeFromCheckpoint` treats a
+        // throw and a null identically, and callers that catch this message
+        // predate the repository.
+        throw new Error('no checkpoint found');
+      }
 
       // Mark state as restored
       restoredState.restoredAt = new Date().toISOString();
@@ -574,23 +609,21 @@ export class StateManager {
     this.activeStates.delete(executionId);
 
     if (!keepCheckpoints) {
-      // Remove checkpoint files
-      const checkpointDir = path.join(this.stateDir, executionId);
       try {
-        await fs.rm(checkpointDir, { recursive: true, force: true });
+        // Removes both the stored document and any legacy checkpoint
+        // directory, so a delete cannot leave a copy behind for a later scan
+        // to resurrect.
+        await this.repository.remove(executionId);
         logger.info('Cleaned up execution state and checkpoints', {
           component: 'StateManager',
           executionId
         });
       } catch (error) {
-        // Directory might not exist, which is fine
-        if (error.code !== 'ENOENT') {
-          logger.warn('Failed to clean up checkpoint directory', {
-            component: 'StateManager',
-            executionId,
-            error
-          });
-        }
+        logger.warn('Failed to clean up checkpoint directory', {
+          component: 'StateManager',
+          executionId,
+          error
+        });
       }
     } else {
       logger.info('Cleaned up execution state (checkpoints preserved)', {

@@ -177,8 +177,13 @@ export default function registerFeedbackRoutes(app, { getLocalizedError }) {
         let ifinderFeedbackSent = false;
         if (conversationId && ifinderMessageId) {
           try {
-            // Get the conversation state to find baseUrl
-            const state = conversationStateManager.getState(chatId);
+            // The durable read, not the cache-only `getState`: with WORKERS>1
+            // in non-sticky mode the conversation may have been created on
+            // another worker, and a per-model `baseUrl` override would then
+            // route this feedback to the wrong endpoint.
+            const state = await conversationStateManager.loadState(chatId, {
+              ownerId: req.user?.id ?? null
+            });
             const serviceConfig = iAssistantService.getConfig();
             const baseUrl = state?.baseUrl || serviceConfig?.baseUrl;
 
@@ -253,8 +258,8 @@ export default function registerFeedbackRoutes(app, { getLocalizedError }) {
           conversationId,
           ifinderMessageId,
           baseUrl:
-            conversationStateManager.getState(chatId)?.baseUrl ||
-            iAssistantService.getConfig()?.baseUrl
+            (await conversationStateManager.loadState(chatId, { ownerId: req.user?.id ?? null }))
+              ?.baseUrl || iAssistantService.getConfig()?.baseUrl
         });
         await recordFeedback({
           userId: userSessionId,
