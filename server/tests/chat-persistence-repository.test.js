@@ -1082,3 +1082,130 @@ describe('ChatRepository: the delete cascade of a long chat', () => {
     });
   });
 });
+
+describe('ChatRepository: conditional writes', () => {
+  // The chat lock is meant to make a concurrent write impossible. It cannot
+  // quite: a lease whose holder goes quiet for longer than its TTL — a wedged
+  // event loop, a stalled disk — is evicted while that holder is still
+  // running, because nothing can tell it from a dead one. Renewal narrowed
+  // that to a genuine crash but could not close it. Every read-modify-write
+  // therefore writes against the etag its read returned, so the overlap costs
+  // a visible 409 instead of one update silently replacing the other.
+
+  it('refuses a write whose read is stale, rather than discarding the other one', async () => {
+    await withRepository(async ({ repository, provider }) => {
+      await seedChat(repository);
+
+      // The read half of a read-modify-write...
+      const { chat, etag } = await repository._loadChat(CHAT_ID);
+      // ...and another section writing in between, which is exactly what an
+      // evicted lease looks like from inside the one that lost it.
+      await provider.documents.put(
+        CHATS_NS,
+        CHAT_ID,
+        { ...chat, title: 'theirs' },
+        { ownerId: OWNER }
+      );
+
+      await assert.rejects(
+        () => repository._writeChat({ ...chat, title: 'ours' }, etag),
+        error => error instanceof StorageError && error.code === 'ETAG_MISMATCH'
+      );
+      assert.equal(
+        (await repository.getChat(CHAT_ID)).title,
+        'theirs',
+        'and the write that got there first still stands'
+      );
+    });
+  });
+
+  it('refuses a second create of the same chat', async () => {
+    await withRepository(async ({ repository, provider }) => {
+      // Both workers look, neither finds a chat, both create. Without
+      // create-only semantics the second silently overwrites the first —
+      // including its `runIds`, which is how a live turn loses its ledger.
+      const { chat, etag } = await repository._loadChat('chat-racing');
+      assert.equal(chat, null);
+      assert.equal(etag, null, 'an absent document reads as create-only');
+
+      await provider.documents.put(
+        CHATS_NS,
+        'chat-racing',
+        { id: 'chat-racing', ownerId: OWNER, runIds: ['run-theirs'] },
+        { ownerId: OWNER }
+      );
+
+      await assert.rejects(
+        () => repository._writeChat({ id: 'chat-racing', ownerId: OWNER, runIds: [] }, etag),
+        error => error instanceof StorageError && error.code === 'ETAG_MISMATCH'
+      );
+      assert.deepEqual((await repository.getChat('chat-racing')).runIds, ['run-theirs']);
+    });
+  });
+
+  it('refuses a transcript write whose read is stale', async () => {
+    // The transcript is the half that holds what was actually said, and it is
+    // rewritten whole on every append — so a lost update there drops messages,
+    // not just a flag.
+    await withRepository(async ({ repository, provider }) => {
+      await seedChat(repository);
+      await repository.appendMessage(CHAT_ID, { role: 'user', content: 'first' });
+
+      const { stored, etag } = await repository._loadMessages(CHAT_ID);
+      assert.equal(stored.messages.length, 1);
+
+      await provider.documents.put(
+        CHAT_MESSAGES_NS,
+        CHAT_ID,
+        { version: stored.version, messages: [...stored.messages, { id: 'theirs', role: 'user' }] },
+        { ownerId: OWNER }
+      );
+
+      await assert.rejects(
+        () =>
+          repository._writeMessages(CHAT_ID, {
+            ownerId: OWNER,
+            messages: stored.messages,
+            etag
+          }),
+        error => error instanceof StorageError && error.code === 'ETAG_MISMATCH'
+      );
+      const after = await repository.getMessages(CHAT_ID);
+      assert.equal(after.messages.length, 2, 'the message the other writer added is still there');
+    });
+  });
+
+  it('refuses to write at all without the etag its read returned', async () => {
+    // The failure this guards is silent: an omitted etag writes
+    // unconditionally, which looks exactly like a correct write until an
+    // update goes missing. A call site that forgets has to fail loudly and
+    // immediately instead.
+    await withRepository(async ({ repository }) => {
+      const chat = await seedChat(repository);
+
+      await assert.rejects(
+        () => repository._writeChat(chat),
+        error => error instanceof StorageError && error.code === 'INVALID_ARGUMENT'
+      );
+      await assert.rejects(
+        () => repository._writeMessages(CHAT_ID, { ownerId: OWNER, messages: [] }),
+        error => error instanceof StorageError && error.code === 'INVALID_ARGUMENT'
+      );
+    });
+  });
+
+  it('still lets an ordinary sequence of updates through', async () => {
+    // The counterweight: CAS must not make the normal path fail. Each update
+    // re-reads inside the lock, so each writes against a current etag.
+    await withRepository(async ({ repository }) => {
+      await seedChat(repository);
+      await repository.renameChat(CHAT_ID, 'first');
+      await repository.updateChat(CHAT_ID, { modelId: 'gpt-4o-mini' });
+      await repository.renameChat(CHAT_ID, 'second');
+
+      const chat = await repository.getChat(CHAT_ID);
+      assert.equal(chat.title, 'second');
+      assert.equal(chat.modelId, 'gpt-4o-mini');
+    });
+  });
+});

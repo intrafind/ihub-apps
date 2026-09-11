@@ -621,19 +621,50 @@ export class ChatRepository {
   }
 
   /**
+   * Read a chat together with the etag to write it back against.
+   *
+   * Every read-modify-write inside the chat lock goes through this rather than
+   * {@link ChatRepository#_readChat}, so the write can be conditional on the
+   * document not having moved since. The lock is meant to make that impossible;
+   * a lease whose holder went quiet for longer than its TTL is evicted while
+   * still running, and that is precisely when two sections overlap and the
+   * later write silently discards the earlier one.
+   *
+   * A chat that does not exist yields `null`, which `put` reads as create-only
+   * — so a concurrent create loses instead of being overwritten.
+   *
+   * @param {string} chatId - Chat id.
+   * @returns {Promise<{chat: Object|null, etag: string|null}>}
+   * @private
+   */
+  async _loadChat(chatId) {
+    const doc = await this.documents.get(CHATS_NAMESPACE, chatId);
+    return { chat: toChat(doc), etag: doc ? doc.etag : null };
+  }
+
+  /**
    * Write a chat without taking the lock — for use inside one.
    *
    * @param {Object} chat - Complete chat document.
    * @returns {Promise<Object>} The stored chat.
    * @private
    */
-  async _writeChat(chat) {
+  async _writeChat(chat, etag) {
+    // Required rather than defaulted: an omitted etag would write
+    // unconditionally, which is the exact failure this guards — silent, and
+    // indistinguishable from a correct write until an update goes missing.
+    if (etag === undefined) {
+      throw new StorageError('_writeChat needs the etag the matching read returned', {
+        code: 'INVALID_ARGUMENT'
+      });
+    }
     // Before the chat is shortened, not after: if this throws, `runIds` still
     // holds the ids and the next write tries again. The other order loses them.
     const retired = chat[RETIRED_RUN_IDS];
     if (retired?.length) await this._retireRunIds(chat.id, chat.ownerId, retired);
     const doc = await this.documents.put(CHATS_NAMESPACE, chat.id, chat, {
-      ownerId: chat.ownerId
+      ownerId: chat.ownerId,
+      etag
     });
     // The single funnel for every change a listing can show — create, rename,
     // a turn moving the chat to the top, the unseen flag — so the memo is
@@ -655,6 +686,19 @@ export class ChatRepository {
   }
 
   /**
+   * Read a transcript together with the etag to write it back against. Same
+   * reasoning as {@link ChatRepository#_loadChat}.
+   *
+   * @param {string} chatId - Chat id.
+   * @returns {Promise<{stored: Object, etag: string|null}>}
+   * @private
+   */
+  async _loadMessages(chatId) {
+    const doc = await this.documents.get(CHAT_MESSAGES_NAMESPACE, chatId);
+    return { stored: toMessages(doc?.data), etag: doc ? doc.etag : null };
+  }
+
+  /**
    * Write a transcript without taking the lock — for use inside one.
    *
    * @param {string} chatId - Chat id.
@@ -664,10 +708,15 @@ export class ChatRepository {
    * @returns {Promise<{version: number, messages: Object[]}>}
    * @private
    */
-  async _writeMessages(chatId, ownerId, messages, retiredRunIds) {
+  async _writeMessages(chatId, { ownerId, messages, retiredRunIds, etag }) {
+    if (etag === undefined) {
+      throw new StorageError('_writeMessages needs the etag the matching read returned', {
+        code: 'INVALID_ARGUMENT'
+      });
+    }
     const body = { version: CHAT_MESSAGES_VERSION, messages };
     if (retiredRunIds?.length) body.retiredRunIds = retiredRunIds;
-    await this.documents.put(CHAT_MESSAGES_NAMESPACE, chatId, body, { ownerId });
+    await this.documents.put(CHAT_MESSAGES_NAMESPACE, chatId, body, { ownerId, etag });
     return body;
   }
 
@@ -684,7 +733,7 @@ export class ChatRepository {
    * @private
    */
   async _retireRunIds(chatId, ownerId, retired) {
-    const stored = await this._readMessages(chatId);
+    const { stored, etag } = await this._loadMessages(chatId);
     const kept = [...stored.retiredRunIds];
     for (const runId of retired) {
       if (!kept.includes(runId)) kept.push(runId);
@@ -701,7 +750,12 @@ export class ChatRepository {
         cap: MAX_RETIRED_RUN_IDS
       });
     }
-    await this._writeMessages(chatId, ownerId, stored.messages, kept);
+    await this._writeMessages(chatId, {
+      ownerId,
+      messages: stored.messages,
+      retiredRunIds: kept,
+      etag
+    });
   }
 
   /**
@@ -872,26 +926,29 @@ export class ChatRepository {
   async ensureChat({ chatId, ownerId, identityMode, appId, modelId, settings, title } = {}) {
     if (!this._usable(chatId, 'ensureChat') || !ownerId) return null;
     return this._withChatLock(chatId, async () => {
-      const existing = await this._readChat(chatId);
+      const { chat: existing, etag } = await this._loadChat(chatId);
       if (existing) return existing;
       const now = new Date().toISOString();
-      return this._writeChat({
-        id: chatId,
-        ownerId: String(ownerId),
-        identityMode: identityMode || 'default',
-        appId: appId || null,
-        modelId: modelId || null,
-        settings: normalizeChatSettings(settings),
-        title: normalizeTitle(title),
-        titleSetByUser: false,
-        createdAt: now,
-        lastMessageAt: now,
-        messageCount: 0,
-        activeRunId: null,
-        hasUnseenActivity: false,
-        status: 'active',
-        runIds: []
-      });
+      return this._writeChat(
+        {
+          id: chatId,
+          ownerId: String(ownerId),
+          identityMode: identityMode || 'default',
+          appId: appId || null,
+          modelId: modelId || null,
+          settings: normalizeChatSettings(settings),
+          title: normalizeTitle(title),
+          titleSetByUser: false,
+          createdAt: now,
+          lastMessageAt: now,
+          messageCount: 0,
+          activeRunId: null,
+          hasUnseenActivity: false,
+          status: 'active',
+          runIds: []
+        },
+        etag
+      );
     });
   }
 
@@ -910,9 +967,9 @@ export class ChatRepository {
   async updateChat(chatId, patch = {}) {
     if (!this._usable(chatId, 'updateChat')) return null;
     return this._withChatLock(chatId, async () => {
-      const existing = await this._readChat(chatId);
+      const { chat: existing, etag } = await this._loadChat(chatId);
       if (!existing) return null;
-      return this._writeChat(applyChatPatch(existing, patch));
+      return this._writeChat(applyChatPatch(existing, patch), etag);
     });
   }
 
@@ -938,10 +995,13 @@ export class ChatRepository {
   async releaseRun(chatId, runId, patch = {}) {
     if (!this._usable(chatId, 'releaseRun')) return { chat: null, released: false };
     return this._withChatLock(chatId, async () => {
-      const existing = await this._readChat(chatId);
+      const { chat: existing, etag } = await this._loadChat(chatId);
       if (!existing) return { chat: null, released: false };
       if (existing.activeRunId !== runId) return { chat: existing, released: false };
-      return { chat: await this._writeChat(applyChatPatch(existing, patch)), released: true };
+      return {
+        chat: await this._writeChat(applyChatPatch(existing, patch), etag),
+        released: true
+      };
     });
   }
 
@@ -960,14 +1020,17 @@ export class ChatRepository {
   async renameChat(chatId, title) {
     if (!this._usable(chatId, 'renameChat')) return null;
     return this._withChatLock(chatId, async () => {
-      const existing = await this._readChat(chatId);
+      const { chat: existing, etag } = await this._loadChat(chatId);
       if (!existing) return null;
       const normalized = normalizeTitle(title);
-      return this._writeChat({
-        ...existing,
-        title: normalized,
-        titleSetByUser: normalized.length > 0
-      });
+      return this._writeChat(
+        {
+          ...existing,
+          title: normalized,
+          titleSetByUser: normalized.length > 0
+        },
+        etag
+      );
     });
   }
 
@@ -1063,7 +1126,7 @@ export class ChatRepository {
   ) {
     if (!this._usable(chatId, 'appendMessage')) return null;
     return this._withChatLock(chatId, async () => {
-      const chat = await this._readChat(chatId);
+      const { chat, etag: chatEtag } = await this._loadChat(chatId);
       if (!chat) {
         this.logger.warn('Cannot append to a chat that was never created', {
           component: COMPONENT,
@@ -1072,7 +1135,7 @@ export class ChatRepository {
         return null;
       }
 
-      const stored = await this._readMessages(chatId);
+      const { stored, etag: messagesEtag } = await this._loadMessages(chatId);
       let messages = stored.messages;
       if (replaceFromMessageId) {
         const index = messages.findIndex(entry => entry.id === replaceFromMessageId);
@@ -1115,7 +1178,12 @@ export class ChatRepository {
       // The retired list is carried through untouched: this write replaces the
       // whole transcript document, and dropping the field here would lose the
       // overflow the delete cascade depends on.
-      await this._writeMessages(chatId, chat.ownerId, messages, stored.retiredRunIds);
+      await this._writeMessages(chatId, {
+        ownerId: chat.ownerId,
+        messages,
+        retiredRunIds: stored.retiredRunIds,
+        etag: messagesEtag
+      });
 
       const patch = { lastMessageAt: entry.ts, messageCount: messages.length };
       if (entry.runId) {
@@ -1128,7 +1196,7 @@ export class ChatRepository {
         const derived = deriveChatTitle(entry.content);
         if (derived) patch.title = derived;
       }
-      await this._writeChat(applyChatPatch(chat, patch));
+      await this._writeChat(applyChatPatch(chat, patch), chatEtag);
 
       return { message: entry, messages };
     });
