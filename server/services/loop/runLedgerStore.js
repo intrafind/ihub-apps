@@ -377,6 +377,34 @@ export class RunLedgerStore {
   }
 
   /**
+   * The append-log facet for *blob* work, or null when the provider cannot
+   * store blobs.
+   *
+   * `blobs` is optional in the capability contract, exactly as `locking` is —
+   * and `_locks()` already checks its capability so callers can fall back. This
+   * did not, so a conformant `blobs: false` provider turned every spill into a
+   * `NotSupportedError` instead of taking the legacy `spill/<runId>/` path that
+   * is sitting right there. A spill is how a large tool payload stays out of
+   * the model's context; losing it fails the turn.
+   *
+   * @returns {Object|null}
+   * @private
+   */
+  _blobs() {
+    const logs = this._logs();
+    if (!logs) return null;
+    if (this._injectedLogs) return logs;
+    const provider = this._provider();
+    let blobs;
+    try {
+      blobs = provider?.getCapabilities?.().blobs ?? false;
+    } catch {
+      return null;
+    }
+    return blobs === true ? logs : null;
+  }
+
+  /**
    * The lock facet, or null when the per-run lock has to be a lock file.
    *
    * A provider may report `locking: 'none'` — it has the facet but the facet
@@ -568,7 +596,7 @@ export class RunLedgerStore {
    */
   async putSpill(runId, name, body, contentType) {
     const safeName = sanitizeSpillName(name);
-    const logs = this._logs();
+    const logs = this._blobs();
     if (logs) {
       const blob = await logs.putBlob(runStreamName(runId), safeName, body, { contentType });
       return {
@@ -600,7 +628,7 @@ export class RunLedgerStore {
    */
   async readSpill(runId, ref) {
     const name = spillNameFromRef(ref);
-    const logs = this._logs();
+    const logs = this._blobs();
     if (logs) {
       const blob = await logs.getBlob(runStreamName(runId), name);
       if (blob) return blob.toString('utf8');
@@ -729,9 +757,10 @@ export class RunLedgerStore {
    * @param {string} runId - Run id.
    * @returns {Promise<void>} Resolves once the record is written.
    */
-  async recordRunDeleted(runId) {
+  async recordRunDeleted(runId, { tombstone = true } = {}) {
     const summaries = this._summaries();
     if (summaries) await this._queueSummaryWrite(() => summaries.remove(runId));
+    if (!tombstone) return;
     if (summaries && !(await this._hasLegacyIndex())) return;
     this._indexAppender.append({ ts: new Date().toISOString(), runId, deleted: true });
     await this._indexAppender.flush();
@@ -790,7 +819,7 @@ export class RunLedgerStore {
    * @returns {Promise<{deleted: boolean, removed: string[]}>} What went, in the
    *   vocabulary `deleteRun`'s `cascaded` list uses.
    */
-  async deleteRun(runId) {
+  async deleteRun(runId, { tombstone = true } = {}) {
     const removed = [];
     let deleted = false;
     const logs = this._logs();
@@ -809,7 +838,7 @@ export class RunLedgerStore {
     if (deleted) removed.push('run-file');
     removed.push('spill');
 
-    await this.recordRunDeleted(runId);
+    await this.recordRunDeleted(runId, { tombstone });
     return { deleted, removed };
   }
 
@@ -842,7 +871,16 @@ export class RunLedgerStore {
         if (!Number.isFinite(touched) || touched >= cutoffMs) continue;
         // deleteRun drops the stream, the blobs, any legacy leftovers and the
         // summary itself, so the run cannot come back through either backend.
-        await this.deleteRun(summary.runId);
+        // No tombstone during retention. A tombstone masks a run that is still
+        // recorded in a legacy index file, and the run being swept here ended
+        // before the cutoff, so its index entry lives in a day-file the legacy
+        // pass below is removing in this same sweep. Writing one anyway put a
+        // fresh entry into `index/<today>.jsonl` for every run swept — a file
+        // the sweep will not touch for another retention period — so the
+        // directory never emptied, `_hasLegacyIndex()` stayed latched for the
+        // life of the installation, and every delete for ever after paid a
+        // write lock and a flush to add another one.
+        await this.deleteRun(summary.runId, { tombstone: false });
         cascadeIds.add(summary.runId);
         removed += 1;
       }
@@ -1145,7 +1183,13 @@ export class RunLedgerStore {
       try {
         files = await fs.readdir(runsDir);
       } catch {
-        return;
+        // No legacy run files. That says nothing about the legacy *index*,
+        // which is a separate directory with its own lifetime — an
+        // installation whose run files have all aged out can still have index
+        // files, and returning here left them to sit for ever, keeping
+        // `_hasLegacyIndex()` latched and every read paying for a merge with
+        // nothing in it.
+        files = [];
       }
       for (const file of files) {
         if (!file.endsWith('.jsonl')) continue;
@@ -1172,6 +1216,13 @@ export class RunLedgerStore {
           if (file.endsWith('.jsonl') && file.slice(0, 10) < cutoffDay) {
             await fs.unlink(path.join(indexDir, file)).catch(() => {});
           }
+        }
+        // An installation that has aged out every legacy index file is done
+        // with the legacy path. Leaving the empty directory keeps
+        // `_hasLegacyIndex()` true for ever, and with it a stat and a merge on
+        // every read that the data stopped justifying releases ago.
+        if ((await fs.readdir(indexDir)).length === 0) {
+          await fs.rmdir(indexDir).catch(() => {});
         }
       } catch {
         /* ignore */

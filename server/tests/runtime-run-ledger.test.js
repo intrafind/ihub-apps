@@ -675,6 +675,55 @@ describe('run ledger: deletion and retention', () => {
     });
   });
 
+  it('does not keep the legacy index alive by sweeping into it', async () => {
+    // The cycle: retention sweeps a run, the delete writes a tombstone into
+    // `index/<today>.jsonl`, and the legacy pass in the same sweep only
+    // removes files older than the cutoff — so the file it just created
+    // survives, the directory never empties, `_hasLegacyIndex()` stays latched
+    // for the life of the installation, and every delete from then on pays a
+    // write lock and a flush to add another tombstone nobody reads.
+    //
+    // A tombstone masks a run still recorded in a legacy index file. A run
+    // swept for age ended before the cutoff, so its index entry is in a
+    // day-file this same sweep is deleting: there is nothing left to mask.
+    await withLedger(async ({ runLog, legacyDir }) => {
+      const indexDir = path.join(legacyDir, 'index');
+      await fs.mkdir(indexDir, { recursive: true });
+      await fs.writeFile(
+        path.join(indexDir, '2020-01-01.jsonl'),
+        JSON.stringify({
+          ts: '2020-01-01T10:00:00.000Z',
+          runId: 'ancient-run',
+          kind: 'chat',
+          principalId: 'u1',
+          anonymous: false,
+          status: 'completed'
+        }) + '\n',
+        'utf8'
+      );
+
+      const { runId } = await runLog.startRun({ kind: 'chat', user: USER });
+      runLog.append(runId, RUN_LOG_EVENTS.RUN_END, { status: 'completed', finishReason: 'stop' });
+      await runLog.flush();
+      // A retention of almost zero days puts the cutoff at "now", so the run
+      // that just ended is already past it. The short wait is what makes
+      // `endedAt < cutoff` rather than equal to it.
+      await new Promise(resolve => setTimeout(resolve, 10));
+      await runLog.cleanup(1e-9);
+
+      // Gone, not merely empty: an empty directory keeps `_hasLegacyIndex()`
+      // true, and with it a stat and a merge on every read that the data
+      // stopped justifying releases ago.
+      assert.equal(
+        await exists(indexDir),
+        false,
+        `the aged-out legacy index is gone, and the sweep did not write itself a new one; ` +
+          `found ${JSON.stringify(await fs.readdir(indexDir).catch(() => null))}`
+      );
+      assert.deepEqual(await runLog.listRuns({}), []);
+    });
+  });
+
   it('sweeps an anonymous run: its summary goes and its cascade runs', async () => {
     // Anonymous runs are hidden from every listing, and the retention sweep
     // is driven by that same listing. Inheriting the filter would leave one
@@ -797,6 +846,45 @@ describe('run ledger: deletion and retention', () => {
 });
 
 describe('RunLedgerStore: the persistence half on its own', () => {
+  it('spills to disk when the provider cannot store blobs', async () => {
+    // `blobs` is optional in the capability contract, as `locking` is, and the
+    // lock facet already checks its capability so callers can fall back. The
+    // log facet did not, so a conformant `blobs: false` provider turned every
+    // spill into a NotSupportedError instead of taking the legacy
+    // `spill/<runId>/` path sitting right there. A spill is how a large tool
+    // payload stays out of the model's context; losing it fails the turn.
+    const root = await fs.mkdtemp(path.join(os.tmpdir(), 'ihub-run-blobs-'));
+    const refused = new Error('blobs are not supported');
+    const provider = {
+      name: 'no-blobs',
+      getCapabilities: () => ({ blobs: false, locking: 'none' }),
+      logs: {
+        putBlob: async () => {
+          throw refused;
+        },
+        getBlob: async () => {
+          throw refused;
+        }
+      }
+    };
+    const store = new RunLedgerStore({
+      baseDir: path.join(root, 'run-log'),
+      resolveProvider: () => provider
+    });
+    try {
+      const ref = await store.putSpill(
+        'chat-noblob',
+        'payload.json',
+        '{"a":1}',
+        'application/json'
+      );
+      assert.ok(ref.path, 'the spill landed somewhere');
+      assert.equal(await store.readSpill('chat-noblob', ref), '{"a":1}', 'and reads back');
+    } finally {
+      await fs.rm(root, { recursive: true, force: true });
+    }
+  });
+
   it('runs the critical section anyway when the run lock times out', async () => {
     // `utils/fileLock.js` warns and continues when it cannot take the lock,
     // and the recovery path has always had that behaviour: refusing to append
