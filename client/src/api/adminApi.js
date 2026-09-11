@@ -56,6 +56,12 @@ export const makeAdminApiCall = async (url, options = {}) => {
           delete axiosConfig.headers[headerKey];
         }
       });
+      // Deleting the key above only clears this per-request headers object, not
+      // apiClient's axios-instance default (Content-Type: application/json, set in
+      // client.js) — axios still merges that in and JSON-serializes the FormData
+      // instead of sending it as multipart. Set it to undefined to override the
+      // instance default and let axios/browser set the multipart boundary.
+      axiosConfig.headers['Content-Type'] = undefined;
     } else {
       axiosConfig.headers = {
         'Content-Type': 'application/json',
