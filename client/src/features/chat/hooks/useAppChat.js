@@ -136,6 +136,14 @@ function useAppChat({
     setClarificationPending(false);
     activeClarificationRef.current = null;
     lastMessageIdRef.current = null;
+    // The prompt of the chat being left. It used to survive the switch, and
+    // `reattachToRun` folds a ledger replay through the *live* `handleEvent` —
+    // so a replayed `run/ended` for the chat just opened reached
+    // `onMessageComplete(content, lastUserMessageRef.current)` carrying the
+    // previous chat's question. On a canvas-enabled app that is enough to
+    // navigate the user out of the chat they just opened, into canvas, with
+    // one chat's answer under another's prompt.
+    lastUserMessageRef.current = null;
     pendingMessageDataRef.current = null;
     isCancellingRef.current = false;
   }, [chatId]);
@@ -165,11 +173,19 @@ function useAppChat({
         // Edit and regenerate no longer speak through a truncated array: the
         // server forks its stored history here instead.
         ...(serverBacked && replaceFromMessageId ? { replaceFromMessageId } : {}),
-        // "Include chat history in requests", off. Every other mode says this by
+        // "Include chat history in requests". Every other mode says this by
         // posting a one-element array; a server-backed chat posts one message
         // whatever the setting, so without this field the server would keep
         // prepending the stored transcript and the opt-out would be inert.
-        ...(serverBacked && sendChatHistory === false ? { sendChatHistory: false } : {})
+        //
+        // Sent in *both* directions, not only when off. The chat document
+        // merges settings, so a turn that omits the key leaves the stored
+        // value alone — which meant the toggle could be turned off and never
+        // back on: every later reopen restored `false` from the document, and
+        // ticking it on again recorded nothing. `sessionRoutes` only tests
+        // `=== false`, so the wire behaviour is unchanged; only what gets
+        // recorded is fixed.
+        ...(serverBacked ? { sendChatHistory: sendChatHistory !== false } : {})
       };
     },
     [serverBacked]

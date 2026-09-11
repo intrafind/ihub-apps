@@ -523,7 +523,11 @@ describe('sendChatHistory', () => {
     expect(requestAt(0).params.sendChatHistory).toBe(false);
   });
 
-  test('leaving the toggle on says nothing — the stored transcript is the default', async () => {
+  test('leaving the toggle on says so, so the stored setting can be turned back on', async () => {
+    // The field used to be sent only when *off*. The chat document merges
+    // settings, so a turn that omits the key leaves the stored value alone —
+    // which meant the toggle could be turned off and never back on: every
+    // reopen restored `false`, and ticking it on again recorded nothing.
     const { result } = renderHook(() =>
       useAppChat({ appId: 'app1', chatId: 'chat-hist', serverBacked: true })
     );
@@ -532,7 +536,30 @@ describe('sendChatHistory', () => {
     send(result, 'a follow-up');
     await connect('chat-hist');
 
-    expect(requestAt(0).params.sendChatHistory).toBeUndefined();
+    // The server only tests `=== false`, so `true` changes no wire behaviour —
+    // it is the recorded value this fixes.
+    expect(requestAt(0).params.sendChatHistory).toBe(true);
+  });
+
+  test('off then on round-trips, rather than latching off for good', async () => {
+    // The whole point: a durable chat records what the toggle is, so a later
+    // reopen can restore it. Recording only `false` meant the stored value
+    // could go one way.
+    const { result } = renderHook(() =>
+      useAppChat({ appId: 'app1', chatId: 'chat-roundtrip', serverBacked: true })
+    );
+    hydrate(result);
+
+    send(result, 'without history', { sendChatHistory: false });
+    await connect('chat-roundtrip');
+    expect(requestAt(0).params.sendChatHistory).toBe(false);
+
+    act(() => {
+      result.current.updateAssistantMessage(result.current.messages[1].id, 'answered', false);
+    });
+    send(result, 'with history again');
+    await connect('chat-roundtrip');
+    expect(requestAt(1).params.sendChatHistory).toBe(true);
   });
 
   test('an ordinary chat keeps saying it with the array alone', async () => {

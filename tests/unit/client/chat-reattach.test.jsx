@@ -150,6 +150,55 @@ test('does not attach to a run that already ended, and settles instead', async (
   expect(result.current.processing).toBe(false);
 });
 
+test('a replayed run/ended does not report the previous chat s prompt', async () => {
+  // The replay runs through the *live* `handleEvent`, so a `run/ended` in it
+  // reaches `onMessageComplete(content, lastUserMessage)` exactly as a live one
+  // does. That reference used to survive a chat switch, so reopening a chat
+  // whose turn had already finished fired the callback with this chat's answer
+  // under the *previous* chat's question — enough, on a canvas-enabled app, to
+  // navigate the user out of the chat they just opened.
+  ledgerPages.push(
+    page([
+      envelope(1, 'run/started', { kind: 'chat', refs: {} }),
+      envelope(2, 'step/delta', { step: 0, kind: 'text', content: 'the answer for chat B' }),
+      envelope(3, 'run/ended', { status: 'completed', finishReason: 'stop' })
+    ])
+  );
+
+  const completed = [];
+  const { result, rerender } = renderHook(
+    ({ chatId }) =>
+      useAppChat({
+        appId: 'acme',
+        chatId,
+        serverBacked: true,
+        onMessageComplete: (content, prompt) => completed.push({ content, prompt })
+      }),
+    { initialProps: { chatId: 'chat-a' } }
+  );
+
+  // A turn in chat A, then the user opens chat B without answering anything in
+  // it — the ordinary "come back to a chat that finished while I was away".
+  await act(async () => {
+    result.current.sendMessage({
+      displayMessage: 'the question I asked in chat A',
+      apiMessage: { content: 'the question I asked in chat A' },
+      params: { modelId: 'model-x' }
+    });
+  });
+  await act(async () => {
+    rerender({ chatId: 'chat-b' });
+  });
+
+  await act(async () => {
+    await result.current.reattachToRun(RUN_ID);
+  });
+
+  for (const call of completed) {
+    expect(call.prompt).not.toBe('the question I asked in chat A');
+  }
+});
+
 test('a ledger that cannot be read still connects rather than giving up', async () => {
   fetchWithAuthRetry.mockImplementationOnce(async () => ({ ok: false, status: 503 }));
 
