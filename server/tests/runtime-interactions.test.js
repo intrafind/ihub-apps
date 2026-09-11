@@ -735,6 +735,40 @@ describe('interactions: the legacy import', () => {
     );
   });
 
+  it('scans the namespace once for a whole sweep, not once per run', async () => {
+    // The cascade's expensive half is a scan of the interactions namespace,
+    // and it costs the same whether it is looking for one run or five hundred.
+    // The retention sweep deletes them in bulk, so per-run this was roughly
+    // 150k envelope reads for 500 expired runs against 300 live interactions —
+    // where the in-memory store it replaced did one filter and one write.
+    await withInteractions(async ({ service, runLog, provider }) => {
+      const runIds = [];
+      for (let i = 0; i < 4; i += 1) {
+        const { runId } = await runLog.startRun({ kind: 'workflow', user: USER });
+        await raiseQuestion(service, runId);
+        runIds.push(runId);
+      }
+
+      let listCalls = 0;
+      const realList = provider.documents.list.bind(provider.documents);
+      provider.documents.list = async (ns, opts) => {
+        if (ns === INTERACTIONS_NAMESPACE) listCalls += 1;
+        return realList(ns, opts);
+      };
+
+      // What the retention sweep does: every expired run in one cascade.
+      await runLog._cascadeDeleteMany(runIds);
+      provider.documents.list = realList;
+
+      assert.ok(
+        listCalls <= 2,
+        `the namespace is scanned once for the batch, not once per run; saw ${listCalls} ` +
+          `list calls for ${runIds.length} runs`
+      );
+      assert.deepEqual(await service.listPending({}), [], 'and every interaction is gone');
+    });
+  });
+
   it('does not redo the scan on a worker that waited for the import lock', async () => {
     // Every worker boots at once, so they all see no marker, one takes the
     // lock and imports, and the rest wait. Checking the marker only *before*

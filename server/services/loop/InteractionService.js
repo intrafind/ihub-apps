@@ -259,7 +259,15 @@ export class InteractionService extends EventEmitter {
     this._answering = new Set();
     /** @type {Promise<void>|null} the one store load, awaited by every caller until it settles */
     this._loading = null;
-    this._unhookDelete = this.runLog.onDelete(runId => this._deleteForRun(runId));
+    // Batched: the cascade's expensive half is a scan of the interactions
+    // namespace, which costs the same for one run as for five hundred. The
+    // retention sweep deletes them in bulk, and per-run this paid that scan
+    // once per expired run — roughly 150k envelope reads for 500 runs against
+    // 300 live interactions, where the in-memory store it replaced did one
+    // filter and one write.
+    this._unhookDelete = this.runLog.onDelete(runIds => this._deleteForRuns(runIds), {
+      batched: true
+    });
     // Every worker keeps the same in-memory view: mutations made here are
     // published to the others, theirs are applied here (see _applyRemote).
     this._unsubscribeBus =
@@ -671,11 +679,13 @@ export class InteractionService extends EventEmitter {
     }
   }
 
-  async _deleteForRun(runId) {
+  async _deleteForRuns(runIds) {
+    const runs = new Set(Array.isArray(runIds) ? runIds : [runIds]);
+    if (runs.size === 0) return null;
     await this._ensureLoaded();
     let n = 0;
     for (const [id, it] of this._byId) {
-      if (it.runId === runId) {
+      if (runs.has(it.runId)) {
         this._byId.delete(id);
         this._clearEviction(id);
         const w = this._waiters.get(id);
@@ -690,21 +700,22 @@ export class InteractionService extends EventEmitter {
     if (this._persist() && this._documents) {
       // The mirror only holds what this worker saw, so the cascade pages the
       // namespace as well — the same reason the file rewrite below walks the
-      // whole store rather than the ids just deleted from memory.
+      // whole store rather than the ids just deleted from memory. One pass for
+      // every run in the batch.
       const { truncated } = await this._pageInteractions(async record => {
-        if (record.runId === runId) await this._removeDocument(record.id);
+        if (runs.has(record.runId)) await this._removeDocument(record.id);
       });
       if (truncated) {
         logger.warn('InteractionService: run cascade hit the namespace scan bound', {
           component: 'InteractionService',
-          runId,
+          runs: runs.size,
           bound: MAX_SCAN_INTERACTIONS
         });
       }
     } else if (this._persist()) {
       const data = await this._store.load();
       for (const [id, it] of Object.entries(data.interactions || {})) {
-        if (it.runId === runId) delete data.interactions[id];
+        if (runs.has(it.runId)) delete data.interactions[id];
       }
       this._store.markDirty();
       await this._store.flush();

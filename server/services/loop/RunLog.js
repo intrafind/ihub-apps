@@ -651,10 +651,25 @@ export class RunLog {
     return () => this._globalListeners.delete(fn);
   }
 
-  /** Register a cascade hook invoked on deleteRun(runId). */
-  onDelete(fn) {
-    this._deleteHooks.add(fn);
-    return () => this._deleteHooks.delete(fn);
+  /**
+   * Register a cascade hook invoked on `deleteRun(runId)`.
+   *
+   * `batched` changes the call shape, not when it runs: the hook is handed the
+   * whole array of run ids the caller is deleting, once, instead of being
+   * called per id. It exists because a hook whose cascade is a namespace scan
+   * costs the same whether it is looking for one run or five hundred — and the
+   * retention sweep deletes them in bulk, so per-id it paid that scan five
+   * hundred times over.
+   *
+   * @param {(runId: string|string[]) => any} fn - The hook.
+   * @param {Object} [options]
+   * @param {boolean} [options.batched=false] - Receive an array of ids at once.
+   * @returns {() => void} Unregister.
+   */
+  onDelete(fn, { batched = false } = {}) {
+    const entry = { fn, batched };
+    this._deleteHooks.add(entry);
+    return () => this._deleteHooks.delete(entry);
   }
 
   // ── persistence helpers ────────────────────────────────────────────────
@@ -764,20 +779,38 @@ export class RunLog {
    * @private
    */
   async _cascadeDelete(runId) {
+    return this._cascadeDeleteMany([runId]);
+  }
+
+  /**
+   * The same cascade for a whole set of runs, with each batched hook called
+   * once. The retention sweep uses it: a hook whose cascade is a namespace
+   * scan costs the same for five hundred runs as for one, and per-id it paid
+   * that cost five hundred times.
+   *
+   * @param {string[]} runIds - Runs being deleted.
+   * @returns {Promise<string[]>} what the hooks reported as cascaded
+   * @private
+   */
+  async _cascadeDeleteMany(runIds) {
     const cascaded = [];
-    for (const hook of this._deleteHooks) {
-      try {
-        const res = await hook(runId);
-        if (res) cascaded.push(typeof res === 'string' ? res : 'hook');
-      } catch (err) {
-        logger.warn('RunLog delete hook failed', {
-          component: 'RunLog',
-          runId,
-          error: err.message
-        });
+    if (runIds.length === 0) return cascaded;
+    for (const { fn, batched } of this._deleteHooks) {
+      const calls = batched ? [runIds] : runIds.map(id => id);
+      for (const arg of calls) {
+        try {
+          const res = await fn(arg);
+          if (res) cascaded.push(typeof res === 'string' ? res : 'hook');
+        } catch (err) {
+          logger.warn('RunLog delete hook failed', {
+            component: 'RunLog',
+            runId: Array.isArray(arg) ? `${arg.length} runs` : arg,
+            error: err.message
+          });
+        }
       }
     }
-    this._drop(runId);
+    for (const runId of runIds) this._drop(runId);
     return cascaded;
   }
 
@@ -795,9 +828,9 @@ export class RunLog {
     if (!this.isEnabled()) return { removed: 0 };
     const cutoff = Date.now() - retentionDays * DAY_MS;
     const { removed, cascadeIds } = await this._store.cleanup(cutoff);
-    for (const runId of cascadeIds) {
-      if (isValidRunId(runId)) await this._cascadeDelete(runId);
-    }
+    // One cascade for the whole sweep rather than one per run: a batched hook
+    // sees every id at once and pays its namespace scan once.
+    await this._cascadeDeleteMany(cascadeIds.filter(runId => isValidRunId(runId)));
     if (removed > 0) logger.info('RunLog retention cleanup', { component: 'RunLog', removed });
     return { removed };
   }
