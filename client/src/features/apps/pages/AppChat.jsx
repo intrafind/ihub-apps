@@ -210,6 +210,11 @@ function AppChat({ preloadedApp = null }) {
   const documentSource = searchParams.get('source');
   const [app, setApp] = useState(preloadedApp);
   const [input, setInput] = useState(prefillMessage);
+  // Set by handleResendMessage once the resend content/variables/files have
+  // been applied to state; the effect below fires the actual submit only
+  // after React has committed that state, so handleSubmit's closure reads
+  // the resent values instead of racing them (see handleResendMessage).
+  const [pendingAutoSubmit, setPendingAutoSubmit] = useState(false);
   const [loading, setLoading] = useState(!preloadedApp);
   const [error, setError] = useState(null);
   const [showConfig, setShowConfig] = useState(false);
@@ -1516,10 +1521,24 @@ function AppChat({ preloadedApp = null }) {
       }
     }
 
-    setTimeout(() => {
-      formRef.current?.requestSubmit();
-    }, 0);
+    // Submitting via a bare setTimeout races React's commit of the state set
+    // above: when this whole resend is itself already running inside a
+    // setTimeout (ChatMessage's edit-then-resend flow), the update can still
+    // be pending when the timer fires, so handleSubmit reads the stale
+    // (often empty) input and silently no-ops — the edited text is left
+    // sitting in the box instead of being resent. Flagging it here and
+    // submitting from the effect below guarantees the state is committed
+    // first.
+    setPendingAutoSubmit(true);
   };
+
+  // Fires the actual resubmission only after the state handleResendMessage
+  // just set (input/variables/files) has committed — see the comment there.
+  useEffect(() => {
+    if (!pendingAutoSubmit) return;
+    setPendingAutoSubmit(false);
+    formRef.current?.requestSubmit();
+  }, [pendingAutoSubmit]);
 
   /**
    * Handle clarification response submission.

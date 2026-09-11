@@ -692,6 +692,13 @@ treated as a different account. Login, admin user creation, and duplicate-userna
 match usernames and emails case-insensitively, and the same fix applies to how OIDC, LDAP, NTLM,
 and Teams sign-ins are matched against previously persisted accounts.
 
+## Editing an Earlier Message No Longer Requires a Second, Manual Send
+
+Once a conversation had more than one exchange, editing an earlier message updated it but did not
+resend it — the edited text was left sitting in the input box, and the only way to actually send it
+was to press Send again by hand. Editing a message now reliably resends it and continues the
+conversation from that point, no matter how long the conversation already is.
+
 ## A New Local Account Was Invisible to Every Other Worker
 
 Creating a user through **Admin → Users** (or the local-auth signup path) wrote `users.json`
