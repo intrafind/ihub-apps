@@ -49,6 +49,12 @@ import { isValidId } from '../../utils/pathSecurity.js';
 
 const DAY_MS = 24 * 60 * 60 * 1000;
 const DEFAULT_RETENTION_DAYS = 90;
+/**
+ * How many deleted run ids are remembered, so a late append cannot re-create
+ * one. See `RunLog#_deleted`.
+ */
+const MAX_TOMBSTONES = 5000;
+
 /** Cluster bus channel on which the owner of a run appends on behalf of other workers. */
 export const RUNLOG_APPEND_CHANNEL = 'runlog:append';
 /** Cluster bus channel on which the owner of a run describes it to other workers. */
@@ -120,6 +126,30 @@ export class RunLog {
     };
     /** Runs whose sequence this worker allocates, announced to the other workers. */
     this._owned = this._bus.createPresenceMap(RUN_PRESENCE_KIND);
+    /**
+     * Runs this worker has deleted, so a late append cannot put them back.
+     *
+     * Deleting a run unlinks its stream and its spill blobs, but the turn that
+     * was writing them does not necessarily stop at the same instant — the
+     * abort the delete route sends is answered asynchronously, and its own
+     * `run/end` lands afterwards. `append` re-registers an unknown run rather
+     * than dropping the event, which re-creates the stream file and the blob
+     * directory the delete had just removed: unreferenced and unreachable (no
+     * summary, so it is out of every listing, and `run/start` is gone so the
+     * events endpoint 404s), sitting on disk until the mtime sweep at
+     * `runLog.retentionDays` — 90 days by default — for a delete the UI
+     * described as removing the conversation for good.
+     *
+     * In-process, and deliberately so for now: it is checked only where a run
+     * is unknown to this worker, which costs nothing per event, and it closes
+     * the case where the delete and the turn are on the same worker. A delete
+     * that lands on one worker while the turn runs on another needs a durable
+     * tombstone with a lifetime of its own; that is a data-model decision, not
+     * a bug fix, and is raised on the PR.
+     *
+     * @type {Set<string>}
+     */
+    this._deleted = new Set();
     this._unrespond = this._bus.respond(RUNLOG_APPEND_CHANNEL, payload =>
       this._appendForRemote(payload)
     );
@@ -507,6 +537,15 @@ export class RunLog {
     }
     const parsed = parseRunLogEventData(type, data ?? {});
     if (!entry) {
+      if (this._deleted.has(runId)) {
+        // Deleted here, and this event would re-create it. See `_deleted`.
+        logger.debug('RunLog append on a deleted run — dropped', {
+          component: 'RunLog',
+          runId,
+          type
+        });
+        return null;
+      }
       // Unknown run (no startRun/resumeRun) — register lazily so we never lose
       // an event, but flag it: seq continuity after a restart requires resumeRun().
       logger.debug('RunLog append on unregistered run — registering lazily', {
@@ -810,8 +849,28 @@ export class RunLog {
         }
       }
     }
-    for (const runId of runIds) this._drop(runId);
+    for (const runId of runIds) {
+      this._drop(runId);
+      this._tombstone(runId);
+    }
     return cascaded;
+  }
+
+  /**
+   * Remember that a run was deleted here. Bounded: the retention sweep deletes
+   * in bulk, and the protection only has to outlive the turn that was writing
+   * — seconds, not the life of the process — so the oldest entries are evicted
+   * rather than accumulated.
+   *
+   * @param {string} runId - The run that was deleted.
+   * @private
+   */
+  _tombstone(runId) {
+    this._deleted.add(runId);
+    while (this._deleted.size > MAX_TOMBSTONES) {
+      const oldest = this._deleted.values().next().value;
+      this._deleted.delete(oldest);
+    }
   }
 
   /**

@@ -659,6 +659,38 @@ describe('run ledger: deletion and retention', () => {
     });
   });
 
+  it('a late append does not put a deleted run back on disk', async () => {
+    // Deleting a run unlinks its stream and its spill blobs, but the turn that
+    // was writing them does not stop at the same instant: the abort the delete
+    // route sends is answered asynchronously and its own `run/end` lands
+    // afterwards. `append` re-registers an unknown run rather than dropping
+    // the event, which re-created the stream file and the blob directory the
+    // delete had just removed — unreferenced and unreachable, and so beyond
+    // any later delete, until the 90-day mtime sweep. For a delete the UI
+    // describes as removing the conversation for good, that is the wrong
+    // postcondition.
+    await withLedger(async ({ runLog, provider }) => {
+      const { runId } = await runLog.startRun({ kind: 'chat', user: USER });
+      runLog.append(runId, 'message/assistant', { step: 0, content: 'half an answer' });
+      await runLog.flush();
+
+      await runLog.deleteRun(runId);
+      assert.deepEqual(await runLog.readEvents(runId), []);
+
+      // What the turn does on its way out, after the delete has landed.
+      runLog.append(runId, 'message/assistant', { step: 0, content: 'the rest of it' });
+      runLog.endRun(runId, { status: 'aborted', finishReason: 'aborted' });
+      await runLog.flush();
+
+      assert.deepEqual(await runLog.readEvents(runId), [], 'the stream stayed deleted');
+      assert.equal(
+        await provider.logs.getBlob(runStreamName(runId), 'payload.json'),
+        null,
+        'and so did its blobs'
+      );
+    });
+  });
+
   it('leaves a fresh installation without a per-day index after a delete', async () => {
     // The tombstone is the only way to hide a run recorded in an append-only
     // index file, so a delete writes one — but only where such files exist.
