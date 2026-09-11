@@ -132,6 +132,51 @@ describe('resolveStorageConfig', () => {
     // Callers spread and mutate this; it must never be a shared or inherited object.
     assert.equal(Object.keys(resolved.config).length, 0);
   });
+
+  it('resolves ${VAR} placeholders, which nothing else on this path does', () => {
+    // The rest of platform.json gets this from configCache. This block is read
+    // before the cache can exist — the provider the cache reads config through
+    // is built from it — so a placeholder used to reach the factory as literal
+    // text, and the filesystem provider would create a directory called
+    // `${IHUB_STORAGE_DIR}`.
+    process.env.IHUB_TEST_STORAGE_DIR = '/srv/ihub-data';
+    try {
+      const resolved = resolveStorageConfig(
+        {
+          storage: {
+            provider: 'filesystem',
+            filesystem: {
+              dataDir: '${IHUB_TEST_STORAGE_DIR}',
+              nested: { archiveDir: '${IHUB_TEST_STORAGE_DIR}/archive' },
+              flushIntervalMs: 2000
+            }
+          }
+        },
+        {}
+      );
+      assert.deepEqual(resolved.config, {
+        dataDir: '/srv/ihub-data',
+        nested: { archiveDir: '/srv/ihub-data/archive' },
+        flushIntervalMs: 2000
+      });
+    } finally {
+      delete process.env.IHUB_TEST_STORAGE_DIR;
+    }
+  });
+
+  it('honours the shell-style default when the variable is unset', () => {
+    delete process.env.IHUB_TEST_UNSET_DIR;
+    const resolved = resolveStorageConfig(
+      {
+        storage: {
+          provider: 'filesystem',
+          filesystem: { dataDir: '${IHUB_TEST_UNSET_DIR:-contents/data}' }
+        }
+      },
+      {}
+    );
+    assert.deepEqual(resolved.config, { dataDir: 'contents/data' });
+  });
 });
 
 describe('the capability baseline', () => {

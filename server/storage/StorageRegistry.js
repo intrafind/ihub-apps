@@ -16,6 +16,7 @@
  */
 import logger from '../utils/logger.js';
 import { StorageError, UnknownProviderError } from './errors.js';
+import { resolveEnvVarsInObject } from '../utils/envVars.js';
 
 const COMPONENT = 'StorageRegistry';
 
@@ -113,6 +114,14 @@ export function hasProvider(name) {
  * which beats `'filesystem'`. The environment wins so one image can be pointed
  * at a different backend per environment without editing configuration.
  *
+ * `${VAR}` and `${VAR:-default}` placeholders in the returned block are
+ * resolved here. Every other part of `platform.json` gets that from
+ * `configCache`, but this block is read before the cache can exist — the
+ * provider the cache reads config *through* is built from it — so a
+ * `baseDir` or a connection string written as a placeholder used to reach the
+ * provider factory as the literal text `${IHUB_STORAGE_DIR}`, and the
+ * filesystem provider would dutifully create a directory of that name.
+ *
  * @param {Object} [platformConfig={}] - Platform configuration.
  * @param {Object} [env=process.env] - Environment to read the override from.
  * @returns {{provider: string, config: Object}} Resolved provider name and its
@@ -125,7 +134,7 @@ export function resolveStorageConfig(platformConfig = {}, env = process.env) {
   // Own-property lookup only: the name may come from the environment, and
   // `storage['__proto__']` would otherwise hand back Object.prototype as config.
   const raw = Object.prototype.hasOwnProperty.call(storage, provider) ? storage[provider] : null;
-  return { provider, config: isPlainObject(raw) ? raw : {} };
+  return { provider, config: isPlainObject(raw) ? resolveEnvVarsInObject(raw) : {} };
 }
 
 /**
