@@ -75,9 +75,11 @@ The client learns the outcome from `GET /api/configs/platform`, which reports
 "is this installation actually storing chats", flag and platform switch and
 storage readiness together.
 
-V095 also carries a saved `chatHistoryPreview: true` over to `chatPersistence`,
-on the reasoning that an admin who asked for chat history asked for chat
-history. An explicit `chatPersistence` setting always wins.
+An installation that had the old `chatHistoryPreview` flag on does **not** get
+durable chats automatically. That flag gated a sidebar list drawn from sample
+data, so enabling it said nothing about storing real conversations on the
+server; the upgrade logs a warning naming this switch and leaves it off until
+an admin turns it on.
 
 ## The chat history UI
 

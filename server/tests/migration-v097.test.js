@@ -19,9 +19,15 @@ import { setDefault } from '../migrations/utils.js';
 
 function fakeCtx(files) {
   const logs = [];
+  // Warnings are kept apart from logs rather than folded in: the upgrade
+  // notice about durable chats staying off is the only thing an admin has to
+  // read, so a test that accepted it as an ordinary log line would pass on a
+  // migration that merely mentioned it in passing.
+  const warnings = [];
   return {
     files,
     logs,
+    warnings,
     fileExists: async p => p in files,
     readJson: async p => JSON.parse(JSON.stringify(files[p])),
     writeJson: async (p, d) => {
@@ -29,7 +35,10 @@ function fakeCtx(files) {
     },
     setDefault,
     log: m => logs.push(m),
-    warn: m => logs.push(m)
+    warn: m => {
+      warnings.push(m);
+      logs.push(m);
+    }
   };
 }
 
@@ -73,7 +82,14 @@ test("an admin's existing chats settings win over the defaults", async () => {
   assert.equal(chats.maxChatsPerUser, 200);
 });
 
-test('an enabled chat history preview is carried over to chatPersistence', async () => {
+test('an enabled chat history preview does not turn durable chats on', async () => {
+  // `chatHistoryPreview` gated a sidebar list and a /chats page drawn from
+  // `mockChats.js`; enabling it was a decision to look at sample data. The
+  // switch it would have been promoted to is the only one
+  // `isChatPersistenceConfigured` checks, and the other two conditions hold on
+  // a fresh install — so carrying it would start writing every authenticated
+  // user's prompts and answers to disk, kept 90 days, on the first boot after
+  // an upgrade, without anyone choosing that.
   const ctx = fakeCtx({
     'config/platform.json': {},
     'config/features.json': { chatHistoryPreview: true, runLog: true }
@@ -82,21 +98,26 @@ test('an enabled chat history preview is carried over to chatPersistence', async
   await up(ctx);
   const features = ctx.files['config/features.json'];
 
-  assert.equal(features.chatPersistence, true);
+  assert.equal('chatPersistence' in features, false, 'the storage decision stays unmade');
   // The old key is left alone. It no longer gates anything — this release
   // removed its last reader — but removing a value an admin set is not the
   // migration's business, and residue cannot turn a feature on.
   assert.equal(features.chatHistoryPreview, true);
   assert.equal(features.runLog, true);
+  assert.ok(
+    ctx.warnings.some(w => /Durable Chats/.test(w)),
+    'and the admin is told where the real thing lives, or the sidebar just goes quiet'
+  );
 });
 
-test('a disabled or absent preview flag carries nothing over', async () => {
+test('an install that never had the preview on is not warned at', async () => {
   const off = fakeCtx({
     'config/platform.json': {},
     'config/features.json': { chatHistoryPreview: false }
   });
   await up(off);
   assert.equal('chatPersistence' in off.files['config/features.json'], false);
+  assert.equal(off.warnings.length, 0);
 
   const absent = fakeCtx({
     'config/platform.json': {},
@@ -104,17 +125,34 @@ test('a disabled or absent preview flag carries nothing over', async () => {
   });
   await up(absent);
   assert.equal('chatPersistence' in absent.files['config/features.json'], false);
+  assert.equal(absent.warnings.length, 0);
 });
 
-test('an explicit chatPersistence choice survives the carry-over', async () => {
+test('an explicit chatPersistence choice is left exactly as it was', async () => {
+  for (const chosen of [true, false]) {
+    const ctx = fakeCtx({
+      'config/platform.json': {},
+      'config/features.json': { chatHistoryPreview: true, chatPersistence: chosen }
+    });
+
+    await up(ctx);
+
+    assert.equal(ctx.files['config/features.json'].chatPersistence, chosen);
+  }
+});
+
+test('the migration never writes features.json', async () => {
+  // The whole point of the change: the second half of this migration reads the
+  // old flag to decide what to say, and decides nothing on the admin's behalf.
   const ctx = fakeCtx({
     'config/platform.json': {},
-    'config/features.json': { chatHistoryPreview: true, chatPersistence: false }
+    'config/features.json': { chatHistoryPreview: true, runLog: true }
   });
+  const before = JSON.stringify(ctx.files['config/features.json']);
 
   await up(ctx);
 
-  assert.equal(ctx.files['config/features.json'].chatPersistence, false);
+  assert.equal(JSON.stringify(ctx.files['config/features.json']), before);
 });
 
 test('an install without features.json is untouched', async () => {

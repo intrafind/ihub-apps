@@ -1483,8 +1483,10 @@ on a test installation before turning it on in production.
   gets a new id on every request, so such a chat could never be listed or reloaded again.
 - `platform.json → chats` sets `enabled`, `retentionDays` (90) and `maxChatsPerUser` (200); a
   daily sweep deletes what falls outside either limit, and a value of zero or less switches that
-  rule off. A configuration migration adds the section to existing installations and carries a
-  saved Chat History preview choice over to the new flag.
+  rule off. A configuration migration adds the section to existing installations. It does **not**
+  turn durable chats on for installations that had the old Chat History preview enabled — that
+  preview showed sample data, so it never asked about storing real conversations; the upgrade
+  warns and leaves the new flag off.
 - New endpoints `GET/PATCH/DELETE /api/chats[/:id]` list, open, rename and erase a user's own
   chats; deleting one also erases its runs, their recorded events and their pending questions.
   Chat streams, chat posts and the stop endpoint now verify that the caller owns the chat id, not

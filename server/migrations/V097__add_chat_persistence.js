@@ -22,19 +22,28 @@
  * own — the section just becomes visible and editable in
  * Admin → Platform Configuration instead of appearing out of nowhere later.
  *
- * The second half is the flag carry-over. `chatHistoryPreview` gated the
- * sidebar chat list while it was still drawn from sample data; the same UI is
- * now backed by real stored chats behind `chatPersistence`. An admin who
- * enabled the preview asked for chat history, so their `true` is carried over
- * rather than silently turning the UI off under them. `setDefault` is what
- * makes this safe to re-run and makes an explicit `chatPersistence` choice
- * win: a value already in `features.json` is never overwritten.
+ * The second half deliberately carries nothing over. `chatHistoryPreview`
+ * gated a sidebar list and a `/chats` page drawn from `mockChats.js` — its own
+ * registry description said "currently uses sample data" — so enabling it was
+ * a decision to look at fixtures, not a decision about where real
+ * conversations are stored. `chatPersistence` is the single switch
+ * `isChatPersistenceConfigured` checks, and the other two conditions are
+ * already met on a fresh install: `chats.enabled` is seeded true just above,
+ * and the filesystem provider needs no configuration, so `isStorageReady()` is
+ * true out of the box. Promoting the old flag would therefore mean that from
+ * the first boot after an upgrade, every authenticated user's prompts and
+ * model answers are written to disk and kept for 90 days — because somebody
+ * once ticked a preview to see sample data. An admin has to ask for that.
  *
- * The old key is left in `features.json` but no longer does anything: this
+ * So an install that had the preview on gets a warning naming the switch, and
+ * durable chats stay off until someone turns them on. The cost is a sidebar
+ * that goes quiet on upgrade; it was showing fixtures, and the warning says
+ * where the real thing lives.
+ *
+ * The old key is left in `features.json`. It no longer does anything — this
  * release removed its last reader, and it is not in the feature registry, so
- * Admin → Features does not show it. It is residue, not a second switch —
- * removing a key an admin set is not this migration's business, and a value
- * left behind cannot turn anything on.
+ * Admin → Features does not show it. Removing a key an admin set is not this
+ * migration's business, and residue cannot turn anything on.
  */
 
 export const version = '097';
@@ -59,21 +68,20 @@ export async function up(ctx) {
   );
 
   // features.json is a sparse override map and only exists once something has
-  // been toggled — an install that never touched a feature has nothing to
-  // carry over.
+  // been toggled — an install that never touched a feature has nothing to say.
+  // Read only: nothing below writes it, because nothing below decides anything
+  // on the admin's behalf.
   if (!(await ctx.fileExists('config/features.json'))) {
-    ctx.log('No features.json; nothing to carry over to chatPersistence');
+    ctx.log('No features.json; durable chats stay off until an admin turns them on');
     return;
   }
 
   const features = await ctx.readJson('config/features.json');
   if (features.chatHistoryPreview !== true) return;
-  if (Object.prototype.hasOwnProperty.call(features, 'chatPersistence')) {
-    ctx.log('chatPersistence is already configured; leaving that choice alone');
-    return;
-  }
 
-  ctx.setDefault(features, 'chatPersistence', true);
-  await ctx.writeJson('config/features.json', features);
-  ctx.log('Carried chatHistoryPreview=true over to chatPersistence');
+  ctx.warn(
+    'chatHistoryPreview was enabled and is gone in this release. Durable chats are NOT ' +
+      'turned on automatically: storing real conversations server-side is a decision the ' +
+      'preview never asked for. Enable Durable Chats in Admin → Features when you want it.'
+  );
 }

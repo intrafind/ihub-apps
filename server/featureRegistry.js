@@ -106,7 +106,9 @@ export const featureRegistry = [
   // `chatHistoryPreview` lived here and gated a sidebar section and a /chats
   // page backed by fixtures. The history UI is now driven by the durable-chat
   // store, so `chatPersistence` is the single switch for both storing chats and
-  // showing them; V097 carries a saved `chatHistoryPreview: true` over to it.
+  // showing them. A saved `chatHistoryPreview: true` is deliberately *not*
+  // promoted to it — the preview showed sample data, and this one writes real
+  // conversations to disk — so V097 warns instead of deciding.
   {
     id: 'chatPersistence',
     name: { en: 'Durable Chats', de: 'Dauerhafte Chats' },
