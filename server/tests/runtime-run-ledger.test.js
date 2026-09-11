@@ -875,6 +875,62 @@ describe('run ledger: deletion and retention', () => {
       assert.ok(await provider.documents.get(RUNS_NAMESPACE, freshRun));
     });
   });
+
+  it('leaves an old execution that has not finished, and takes one that has', async () => {
+    // A workflow or agent summary *is* the execution registry record now, so
+    // sweeping it on age alone reclaims the execution. A run paused on a human
+    // node with no timeout never becomes terminal, so `workflowRetention`
+    // deliberately spares it at 30 days — and then this sweep deleted it at
+    // 90, cascading away its pending interaction, while its `workflow-state`
+    // document survived forever because nothing looks at a state that is not
+    // running. The run simply vanished, with nothing left to act on it.
+    await withLedger(async ({ runLog, provider }) => {
+      const aged = new Date(Date.now() - 100 * DAY_MS).toISOString();
+      for (const [runId, status] of [
+        ['wf-exec-paused', 'paused'],
+        ['wf-exec-running', 'running'],
+        ['wf-exec-done', 'completed'],
+        ['chat-aged', 'running']
+      ]) {
+        await provider.documents.put(
+          RUNS_NAMESPACE,
+          runId,
+          {
+            runId,
+            kind: runId.startsWith('wf-') ? 'workflow' : 'chat',
+            ownerId: 'u1',
+            anonymous: false,
+            status,
+            startedAt: aged,
+            updatedAt: aged,
+            endedAt: aged
+          },
+          { ownerId: 'u1' }
+        );
+      }
+
+      await runLog.cleanup(30);
+
+      assert.ok(
+        await provider.documents.get(RUNS_NAMESPACE, 'wf-exec-paused'),
+        "a paused execution is still somebody's to finish"
+      );
+      assert.ok(
+        await provider.documents.get(RUNS_NAMESPACE, 'wf-exec-running'),
+        'and so is a running one'
+      );
+      assert.equal(
+        await provider.documents.get(RUNS_NAMESPACE, 'wf-exec-done'),
+        null,
+        'a finished execution ages out as before'
+      );
+      assert.equal(
+        await provider.documents.get(RUNS_NAMESPACE, 'chat-aged'),
+        null,
+        'and a chat run is history, which ages out whatever its status says'
+      );
+    });
+  });
 });
 
 describe('RunLedgerStore: the persistence half on its own', () => {

@@ -61,6 +61,46 @@ import { RUN_LOG_EVENTS } from '../../../shared/runEvents.js';
 
 const COMPONENT = 'RunLedgerStore';
 
+/**
+ * Run kinds whose summary *is* the execution record, so age alone must not
+ * reclaim it. Since the registry moved into the `runs` namespace, deleting one
+ * of these deletes the execution.
+ */
+const EXECUTION_KINDS = new Set(['workflow', 'agent']);
+
+/**
+ * Statuses an execution can be swept at. Everything else — `running`,
+ * `paused`, `pending` — is still someone's to finish.
+ */
+const TERMINAL_EXECUTION_STATUSES = new Set(['completed', 'failed', 'cancelled']);
+
+/**
+ * Whether the retention sweep may reclaim this summary on age alone.
+ *
+ * A chat run's summary is history, and history ages out. A workflow or agent
+ * run's summary is the execution registry record, and since this stopped being
+ * a separate file the age sweep reclaims the execution itself: a run paused on
+ * a human node with no timeout is not terminal, so `workflowRetention`
+ * deliberately spares it at 30 days — and then the ledger sweep deleted it at
+ * 90, cascading away its pending interaction, while its `workflow-state`
+ * document survived forever because neither the orphan sweeper nor the resume
+ * manager looks at a state that is not running. The run vanished from
+ * `getByUser`, the admin list and `/pending`, and nothing was left to act on
+ * it.
+ *
+ * Reclaiming a long-paused run may well be wanted, but it has to be reclaimed
+ * whole — expire the interaction, let the engine fail the run, let workflow
+ * retention take the now-terminal state — not have its index removed from
+ * underneath it.
+ *
+ * @param {Object} summary - Stored run summary.
+ * @returns {boolean} Whether age is enough to delete it.
+ */
+function sweepableByAge(summary) {
+  if (!EXECUTION_KINDS.has(summary?.kind)) return true;
+  return TERMINAL_EXECUTION_STATUSES.has(summary?.status);
+}
+
 /** Debounce for buffered legacy writes when the platform config names none. */
 const DEFAULT_FLUSH_MS = 2000;
 
@@ -869,6 +909,7 @@ export class RunLedgerStore {
       for (const summary of await this._scanSummaries({ includeAnonymous: true })) {
         const touched = Date.parse(summary.endedAt || summary.updatedAt || summary.startedAt || '');
         if (!Number.isFinite(touched) || touched >= cutoffMs) continue;
+        if (!sweepableByAge(summary)) continue;
         // deleteRun drops the stream, the blobs, any legacy leftovers and the
         // summary itself, so the run cannot come back through either backend.
         // No tombstone during retention. A tombstone masks a run that is still
