@@ -11,6 +11,12 @@
  * - `chats.retentionDays`    — age after which a chat is swept; <= 0 keeps
  *                              chats forever.
  * - `chats.maxChatsPerUser`  — chats kept per owner; <= 0 removes the cap.
+ * - `chats.maxMessagesPerChat` — messages kept in one chat; <= 0 removes the
+ *                              cap. Enforced at write time rather than by the
+ *                              daily sweep: a transcript that has already
+ *                              grown too large to read back is not something a
+ *                              nightly job can undo for the person typing into
+ *                              it now.
  *
  * Every value is the built-in default, so an upgrade changes nothing on its
  * own — the section just becomes visible and editable in
@@ -44,9 +50,13 @@ export async function up(ctx) {
   ctx.setDefault(platform, 'chats.enabled', true);
   ctx.setDefault(platform, 'chats.retentionDays', 90);
   ctx.setDefault(platform, 'chats.maxChatsPerUser', 200);
+  ctx.setDefault(platform, 'chats.maxMessagesPerChat', 2000);
 
   await ctx.writeJson('config/platform.json', platform);
-  ctx.log('Added chats defaults (enabled=true, retentionDays=90, maxChatsPerUser=200)');
+  ctx.log(
+    'Added chats defaults (enabled=true, retentionDays=90, maxChatsPerUser=200, ' +
+      'maxMessagesPerChat=2000)'
+  );
 
   // features.json is a sparse override map and only exists once something has
   // been toggled — an install that never touched a feature has nothing to

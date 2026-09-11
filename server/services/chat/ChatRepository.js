@@ -31,6 +31,7 @@ import { isValidId } from '../../utils/pathSecurity.js';
 import { StorageError } from '../../storage/errors.js';
 import { getStorage } from '../../storage/bootstrap.js';
 import { RUNTIME_NAMESPACES } from '../../storage/namespaces.js';
+import { chatMessageCap } from './chatPersistence.js';
 
 const COMPONENT = 'ChatRepository';
 
@@ -433,10 +434,27 @@ export class ChatRepository {
    *   read-modify-write is not a degraded mode, it is data loss.
    * @param {Object} [options.logger] - Logger; defaults to the shared one.
    */
-  constructor({ documents = null, locks = null, logger: log } = {}) {
+  constructor({ documents = null, locks = null, logger: log, maxMessages = null } = {}) {
     this.documents = documents || null;
     this.locks = locks || null;
     this.logger = log || logger;
+    /**
+     * Messages one chat may keep, or null for "ask the platform config".
+     * Resolved per write rather than captured here, so an admin who lowers it
+     * does not have to restart the server for it to take effect.
+     */
+    this._maxMessages = maxMessages;
+  }
+
+  /**
+   * How many messages this chat may keep; `<= 0` means no cap.
+   *
+   * @returns {number}
+   * @private
+   */
+  _messageCap() {
+    if (this._maxMessages !== null) return this._maxMessages;
+    return chatMessageCap();
   }
 
   /**
@@ -871,6 +889,28 @@ export class ChatRepository {
         at === -1
           ? [...messages, entry]
           : [...messages.slice(0, at + 1), entry, ...messages.slice(at + 1)];
+
+      // Oldest first, after the insert rather than before it, so the message
+      // being written is never the one dropped.
+      //
+      // A transcript is one document: every append rewrites, re-serializes and
+      // re-hashes the whole thing, and opening the chat ships all of it back.
+      // Prompt replay usually makes a chat unusable long before that becomes a
+      // problem — but an app with `sendChatHistory: false` has no such
+      // backstop, so its chats grow for as long as somebody keeps typing, with
+      // nothing pushing back. Dropping the oldest is the only trim that leaves
+      // the conversation readable from where the reader is.
+      const cap = this._messageCap();
+      if (cap > 0 && messages.length > cap) {
+        const dropped = messages.length - cap;
+        messages = messages.slice(dropped);
+        this.logger.info('Trimmed the oldest messages of a chat at its cap', {
+          component: COMPONENT,
+          chatId,
+          dropped,
+          cap
+        });
+      }
       await this._writeMessages(chatId, chat.ownerId, messages);
 
       const patch = { lastMessageAt: entry.ts, messageCount: messages.length };

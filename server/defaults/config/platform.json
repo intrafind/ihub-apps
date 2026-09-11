@@ -388,7 +388,8 @@
   "chats": {
     "enabled": true,
     "retentionDays": 90,
-    "maxChatsPerUser": 200
+    "maxChatsPerUser": 200,
+    "maxMessagesPerChat": 2000
   },
   "workflowState": {
     "retentionDays": 30,

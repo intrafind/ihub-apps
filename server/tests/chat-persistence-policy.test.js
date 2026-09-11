@@ -316,34 +316,40 @@ describe('chat persistence policy: the real storage probe', () => {
 });
 
 describe('chat retention settings', () => {
-  it('defaults to 90 days and 200 chats per user', () => {
-    assert.deepEqual(chatRetentionSettings(undefined), { retentionDays: 90, maxChatsPerUser: 200 });
-    assert.deepEqual(chatRetentionSettings({}), { retentionDays: 90, maxChatsPerUser: 200 });
+  const DEFAULTS = { retentionDays: 90, maxChatsPerUser: 200, maxMessagesPerChat: 2000 };
+
+  it('defaults to 90 days, 200 chats per user and 2000 messages per chat', () => {
+    assert.deepEqual(chatRetentionSettings(undefined), DEFAULTS);
+    assert.deepEqual(chatRetentionSettings({}), DEFAULTS);
   });
 
   it('passes configured values through', () => {
-    assert.deepEqual(chatRetentionSettings({ chats: { retentionDays: 7, maxChatsPerUser: 5 } }), {
-      retentionDays: 7,
-      maxChatsPerUser: 5
-    });
+    assert.deepEqual(
+      chatRetentionSettings({
+        chats: { retentionDays: 7, maxChatsPerUser: 5, maxMessagesPerChat: 50 }
+      }),
+      { retentionDays: 7, maxChatsPerUser: 5, maxMessagesPerChat: 50 }
+    );
   });
 
   it('keeps zero and negative values — both mean "rule disabled"', () => {
-    assert.deepEqual(chatRetentionSettings({ chats: { retentionDays: 0, maxChatsPerUser: 0 } }), {
-      retentionDays: 0,
-      maxChatsPerUser: 0
-    });
-    assert.deepEqual(chatRetentionSettings({ chats: { retentionDays: -1, maxChatsPerUser: -5 } }), {
-      retentionDays: -1,
-      maxChatsPerUser: -5
-    });
+    assert.deepEqual(
+      chatRetentionSettings({
+        chats: { retentionDays: 0, maxChatsPerUser: 0, maxMessagesPerChat: 0 }
+      }),
+      { retentionDays: 0, maxChatsPerUser: 0, maxMessagesPerChat: 0 }
+    );
+    assert.deepEqual(
+      chatRetentionSettings({
+        chats: { retentionDays: -1, maxChatsPerUser: -5, maxMessagesPerChat: -2 }
+      }),
+      { retentionDays: -1, maxChatsPerUser: -5, maxMessagesPerChat: -2 }
+    );
   });
 
   it('falls back to the defaults for a value that is not a number', () => {
-    assert.deepEqual(chatRetentionSettings({ chats: { retentionDays: 'soon' } }), {
-      retentionDays: 90,
-      maxChatsPerUser: 200
-    });
+    assert.deepEqual(chatRetentionSettings({ chats: { retentionDays: 'soon' } }), DEFAULTS);
+    assert.deepEqual(chatRetentionSettings({ chats: { maxMessagesPerChat: 'lots' } }), DEFAULTS);
   });
 });
 

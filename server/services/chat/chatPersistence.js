@@ -19,6 +19,7 @@
 import { featureRegistry, isFeatureEnabled } from '../../featureRegistry.js';
 import { isAnonymousUser } from '../loop/runIdentity.js';
 import { isStorageReady } from '../../storage/bootstrap.js';
+import configCache from '../../configCache.js';
 
 /** Feature flag that gates durable chats. */
 export const CHAT_PERSISTENCE_FEATURE = 'chatPersistence';
@@ -28,6 +29,22 @@ export const DEFAULT_CHAT_RETENTION_DAYS = 90;
 
 /** Chats kept per owner when `platform.chats.maxChatsPerUser` says nothing. */
 export const DEFAULT_MAX_CHATS_PER_USER = 200;
+
+/**
+ * Messages kept in one chat when `platform.chats.maxMessagesPerChat` says
+ * nothing.
+ *
+ * A transcript is a single document: every message rewrites, re-serializes and
+ * re-hashes the whole thing, and `GET /api/chats/:id` ships all of it back
+ * when the chat is opened. Prompt replay usually makes a chat unusable long
+ * before the document becomes a problem — but an app with
+ * `sendChatHistory: false` has no such backstop, so its chats grow for as long
+ * as somebody keeps typing into them, with nothing anywhere pushing back.
+ *
+ * 2000 is far above any conversation a person has and far below where a
+ * document becomes slow to read.
+ */
+export const DEFAULT_MAX_MESSAGES_PER_CHAT = 2000;
 
 /**
  * Read a numeric setting, keeping zero and negative values — both are
@@ -113,19 +130,39 @@ export function isChatPersistenceActive({
 }
 
 /**
+ * The message cap in force right now, read from the live platform config.
+ *
+ * Resolved per write rather than captured at construction, so an admin who
+ * lowers it does not have to restart the server for it to take effect — and
+ * so the repository does not have to know where platform configuration comes
+ * from.
+ *
+ * @returns {number} Messages one chat may keep; `<= 0` means no cap.
+ */
+export function chatMessageCap() {
+  return chatRetentionSettings(configCache.getPlatform?.()?.data || {}).maxMessagesPerChat;
+}
+
+/**
  * Retention settings for stored chats.
  *
- * Both rules are disabled by a value of zero or less: `retentionDays <= 0`
+ * Every rule is disabled by a value of zero or less: `retentionDays <= 0`
  * keeps chats forever, `maxChatsPerUser <= 0` puts no cap on how many a single
- * owner keeps.
+ * owner keeps, and `maxMessagesPerChat <= 0` lets one chat grow without bound.
+ *
+ * The first two are enforced by the daily sweep; the third is enforced at
+ * write time, because a transcript that has already grown too large to read
+ * back is not something a nightly job can undo for the user who is typing into
+ * it now.
  *
  * @param {Object} [platformConfig] - Platform configuration.
- * @returns {{retentionDays: number, maxChatsPerUser: number}}
+ * @returns {{retentionDays: number, maxChatsPerUser: number, maxMessagesPerChat: number}}
  */
 export function chatRetentionSettings(platformConfig) {
   const chats = platformConfig?.chats || {};
   return {
     retentionDays: readNumber(chats.retentionDays, DEFAULT_CHAT_RETENTION_DAYS),
-    maxChatsPerUser: readNumber(chats.maxChatsPerUser, DEFAULT_MAX_CHATS_PER_USER)
+    maxChatsPerUser: readNumber(chats.maxChatsPerUser, DEFAULT_MAX_CHATS_PER_USER),
+    maxMessagesPerChat: readNumber(chats.maxMessagesPerChat, DEFAULT_MAX_MESSAGES_PER_CHAT)
   };
 }

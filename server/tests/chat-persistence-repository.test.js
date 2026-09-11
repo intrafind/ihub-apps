@@ -317,6 +317,63 @@ describe('ChatRepository: messages', () => {
   });
 });
 
+describe('ChatRepository: the message cap', () => {
+  it('drops the oldest messages once a chat is over its cap', async () => {
+    // A transcript is one document: every append rewrites, re-serializes and
+    // re-hashes the whole thing, and opening the chat ships all of it back.
+    // Prompt replay usually makes a chat unusable long before that matters —
+    // but an app with `sendChatHistory: false` has no such backstop, so its
+    // chats grow for as long as somebody keeps typing, with nothing pushing
+    // back.
+    await withRepository(async ({ provider }) => {
+      const { logger } = recordingLogger();
+      const repository = new ChatRepository({
+        documents: provider.documents,
+        locks: provider.locks,
+        logger,
+        maxMessages: 3
+      });
+      await seedChat(repository);
+
+      for (const n of [1, 2, 3, 4, 5]) {
+        await repository.appendMessage(CHAT_ID, { role: 'user', content: `m${n}` });
+      }
+
+      const stored = await repository.getMessages(CHAT_ID);
+      assert.deepEqual(
+        stored.messages.map(entry => entry.content),
+        ['m3', 'm4', 'm5'],
+        'the oldest go, so the conversation stays readable from where the reader is'
+      );
+      // The trim happens after the insert, so the message being written is
+      // never the one dropped — a cap of 1 would otherwise store nothing.
+      assert.equal(stored.messages.at(-1).content, 'm5');
+    });
+  });
+
+  it('keeps everything when the cap is disabled', async () => {
+    await withRepository(async ({ provider }) => {
+      const { logger } = recordingLogger();
+      const repository = new ChatRepository({
+        documents: provider.documents,
+        locks: provider.locks,
+        logger,
+        maxMessages: 0
+      });
+      await seedChat(repository);
+      for (const n of [1, 2, 3, 4]) {
+        await repository.appendMessage(CHAT_ID, { role: 'user', content: `m${n}` });
+      }
+
+      assert.equal(
+        (await repository.getMessages(CHAT_ID)).messages.length,
+        4,
+        'zero means "no cap", the same as every other retention rule'
+      );
+    });
+  });
+});
+
 describe('ChatRepository: title derivation', () => {
   it('names the chat after its first user message, whitespace collapsed', async () => {
     await withRepository(async ({ repository }) => {

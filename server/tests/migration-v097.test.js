@@ -50,7 +50,8 @@ test('a plain install gets the chats defaults', async () => {
   assert.deepEqual(ctx.files['config/platform.json'].chats, {
     enabled: true,
     retentionDays: 90,
-    maxChatsPerUser: 200
+    maxChatsPerUser: 200,
+    maxMessagesPerChat: 2000
   });
   assert.ok(ctx.logs.some(l => l.includes('chats')));
 });
