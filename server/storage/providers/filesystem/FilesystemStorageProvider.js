@@ -24,8 +24,9 @@
  * and `getCapabilities().multiInstance` says so rather than leaving callers to
  * guess.
  *
- * Nothing in the running server uses this yet; it is the foundation for
- * durable chats and ships inert.
+ * This is the default provider, and the one every installation runs today: it
+ * backs durable chats, the run ledger, workflow state, interactions and
+ * configuration, writing where each of those already wrote.
  *
  * @module storage/providers/filesystem/FilesystemStorageProvider
  */

@@ -5,10 +5,12 @@
  * one place that wires providers into the registry, so a caller that resolves
  * the configured provider always gets a fully populated registry.
  *
- * Nothing in the running server uses this yet. It is the foundation for
- * durable chats (issue stack in
- * `concepts/persistence-layer/2026-09-09 Storage Provider and Durable Chats Design.md`)
- * and ships inert: no existing code path was changed to go through it.
+ * The design is in
+ * `concepts/persistence-layer/2026-09-09 Storage Provider and Durable Chats Design.md`.
+ * Durable chats, the run ledger, workflow state, interactions and
+ * configuration all read and write through this seam; a provider that fails to
+ * come up is not fatal to any of them, because each keeps its previous on-disk
+ * layout as a supported fallback.
  *
  * @module storage
  */

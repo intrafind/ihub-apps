@@ -1445,8 +1445,10 @@ instead of carrying one fixed identity for everyone.
 
 Runtime data — chats, run ledgers, workflow state — is moving behind a **storage provider** so a
 later release can keep it in SQLite, PostgreSQL or OpenSearch instead of on disk. This release
-ships the abstraction and its filesystem provider only: nothing in the product reads or writes
-through it yet, and behaviour is unchanged.
+ships the abstraction and its filesystem provider, and moves the first consumers onto it: durable
+chats, the run ledger, workflow state, interactions and configuration. On an existing installation
+the on-disk layout and behaviour are unchanged — the filesystem provider writes what was already
+being written, in the same place.
 
 - `platform.json` gains a `storage` section: `storage.provider` (`filesystem`, the only provider
   that ships today) and `storage.filesystem` with `dataDir` (under `contents/`, default `data`)

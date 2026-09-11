@@ -82,7 +82,9 @@ test('an enabled chat history preview is carried over to chatPersistence', async
   const features = ctx.files['config/features.json'];
 
   assert.equal(features.chatPersistence, true);
-  // The old key still gates the preview UI in this release, so it stays.
+  // The old key is left alone. It no longer gates anything — this release
+  // removed its last reader — but removing a value an admin set is not the
+  // migration's business, and residue cannot turn a feature on.
   assert.equal(features.chatHistoryPreview, true);
   assert.equal(features.runLog, true);
 });

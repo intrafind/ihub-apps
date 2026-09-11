@@ -15,34 +15,9 @@
  * @module services/chat/chatMaterializer
  */
 import logger from '../../utils/logger.js';
+import { deriveChatTitle } from './ChatRepository.js';
 
 const COMPONENT = 'chatMaterializer';
-
-/**
- * Run ids kept on a chat document. They exist so deleting a chat can cascade
- * into the ledger — there is no chatId→runId index anywhere else in the tree —
- * and a long-lived chat would otherwise grow the document without bound.
- */
-const MAX_TRACKED_RUN_IDS = 200;
-
-/** Longest derived chat title, ellipsis included. */
-const TITLE_MAX_CHARS = 80;
-
-/**
- * A chat title derived from a user message: whitespace collapsed, trimmed and
- * elided at 80 characters. Returns `''` when there is nothing to derive from —
- * an auto-started turn sends an empty message — which leaves the chat untitled
- * rather than titled with a blank.
- *
- * @param {string} content - raw user message text
- * @returns {string} the title, possibly empty
- */
-export function deriveChatTitle(content) {
-  if (typeof content !== 'string') return '';
-  const collapsed = content.replace(/\s+/g, ' ').trim();
-  if (collapsed.length <= TITLE_MAX_CHARS) return collapsed;
-  return `${collapsed.slice(0, TITLE_MAX_CHARS - 1).trimEnd()}…`;
-}
 
 /**
  * Attachment descriptors for a stored message and for the `message/user`
@@ -82,17 +57,6 @@ function normalizeUsage(usage) {
   const totalTokens = Number(usage.totalTokens) || promptTokens + completionTokens;
   if (!promptTokens && !completionTokens && !totalTokens) return null;
   return { promptTokens, completionTokens, totalTokens };
-}
-
-/**
- * The chat's run ids with `runId` most recent. Deduplicated because `startRun`
- * adopts an already-running run id, so several turns can legitimately share
- * one run.
- */
-function trackRunId(runIds, runId) {
-  const kept = (Array.isArray(runIds) ? runIds : []).filter(id => id && id !== runId);
-  kept.push(runId);
-  return kept.slice(-MAX_TRACKED_RUN_IDS);
 }
 
 /**
@@ -187,8 +151,12 @@ export async function materializeUserTurn({
       ...(settings ? { settings } : {}),
       // A chat opened by an empty auto-start turn has no title yet; the first
       // message carrying text names it. A title the user set is never touched.
-      ...(!chat.title && title && !chat.titleSetByUser ? { title } : {}),
-      runIds: trackRunId(chat.runIds, runId)
+      ...(!chat.title && title && !chat.titleSetByUser ? { title } : {})
+      // No `runIds` here: the repository derives them from `activeRunId` on
+      // every patch, so that a run the delete cascade owes the ledger is
+      // recorded whether or not a message from it ever landed. Computing them
+      // here as well meant a second implementation of the same cap, and the
+      // two disagreed on where a repeated id lands in the list.
     });
     const appended = await repository.appendMessage(
       chatId,
@@ -221,9 +189,17 @@ export async function materializeUserTurn({
  * `run/end`, so every terminal shape — normal, aborted, error, passthrough
  * answer, malformed response — lands here with the same summary.
  *
- * The chat is released first: a null chat back from the release is also how we
- * learn the chat document is gone (its user turn never reached storage), and
- * appending an answer to a chat that does not exist would leave an orphan.
+ * The answer is appended first and the chat released after. `releaseRun`
+ * clears `activeRunId` and raises `hasUnseenActivity` — together, "this chat
+ * is idle and has an answer waiting" — and the two calls take the chat lock
+ * separately, so there is a window between them. Releasing first puts a reader
+ * in that window in front of a settled chat whose answer is not stored yet:
+ * `GET /api/chats/:id` clears the unseen flag, returns a transcript without
+ * the answer, and the flag never comes back. This order can only show a chat
+ * as briefly still running, which the next poll corrects.
+ *
+ * Appending to a chat whose document is gone is safe in this order:
+ * `appendMessage` warns and returns null rather than creating an orphan.
  *
  * "Released" is conditional on this run still owning the chat. A superseded
  * turn finishes after its replacement has already claimed the chat, and it

@@ -36,7 +36,7 @@ import { authorizeChat } from '../services/chat/chatAccess.js';
 import { ChatRepository } from '../services/chat/ChatRepository.js';
 import { resolvePrincipal } from '../services/loop/runIdentity.js';
 import { RunLog } from '../services/loop/RunLog.js';
-import { featureRegistry } from '../featureRegistry.js';
+import { featureCategories, featureRegistry } from '../featureRegistry.js';
 import {
   abortChatRequest,
   abortChatRequestOnDisconnect,
@@ -228,6 +228,14 @@ describe('chat persistence policy: the truth table', () => {
     const entry = featureRegistry.find(feature => feature.id === 'runLog');
     assert.ok(entry, 'runLog must exist in the feature registry');
     assert.ok(!entry.preview, 'runLog is no longer a preview feature');
+    // And is not filed under Preview either. Dropping the badge while leaving
+    // the category renders it under the Preview heading as the only row
+    // without one — the admin reads the heading, not the missing badge.
+    assert.notEqual(entry.category, 'preview');
+    assert.ok(
+      Object.prototype.hasOwnProperty.call(featureCategories, entry.category),
+      `runLog's category ${entry.category} must exist, or Admin → Features drops the row`
+    );
   });
 });
 

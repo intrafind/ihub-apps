@@ -22,8 +22,13 @@
  * enabled the preview asked for chat history, so their `true` is carried over
  * rather than silently turning the UI off under them. `setDefault` is what
  * makes this safe to re-run and makes an explicit `chatPersistence` choice
- * win: a value already in `features.json` is never overwritten. The old key is
- * left in place — it still gates the preview UI in this release.
+ * win: a value already in `features.json` is never overwritten.
+ *
+ * The old key is left in `features.json` but no longer does anything: this
+ * release removed its last reader, and it is not in the feature registry, so
+ * Admin → Features does not show it. It is residue, not a second switch —
+ * removing a key an admin set is not this migration's business, and a value
+ * left behind cannot turn anything on.
  */
 
 export const version = '097';

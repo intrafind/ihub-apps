@@ -3,9 +3,8 @@
 /**
  * Migration V096 specs — seeding the `storage` section in platform.json.
  *
- * The storage abstraction ships inert: only the filesystem provider exists and
- * no production code path reads the section yet. The migration therefore seeds
- * nothing but the built-in defaults, so an upgrade changes no behaviour — it
+ * Only the filesystem provider exists, and it is the default, so the migration
+ * seeds nothing but the built-in defaults: an upgrade changes no behaviour and
  * only makes the section visible in Admin → Platform Configuration. An admin
  * who already picked a provider (possibly one a later release registers) keeps
  * that choice.

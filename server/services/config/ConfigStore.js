@@ -91,23 +91,46 @@ function contentsDir() {
 /**
  * The raw namespaces a provider serves, read from its capabilities.
  *
+ * Returns the reason alongside the answer rather than logging it: the caller
+ * logs once, so a provider that is not serving configuration says why in the
+ * same line instead of in two warnings that read like two problems.
+ *
  * @param {Object} provider - An initialized storage provider
- * @returns {Set<string>|null} Namespace names, or null when the provider does
- *   not serve raw configuration at all
+ * @returns {{namespaces: Set<string>|null, hint: string|null}} Namespace names,
+ *   or null with the reason when the provider does not serve raw configuration
  */
 function readRawNamespaces(provider) {
   let capabilities;
   try {
     capabilities = provider.getCapabilities?.() || {};
   } catch (error) {
-    logger.warn('Storage provider capabilities could not be read', {
-      component: COMPONENT,
-      error: error.message
-    });
-    return null;
+    return { namespaces: null, hint: `capabilities could not be read: ${error.message}` };
   }
   const declared = capabilities.rawNamespaces;
-  return Array.isArray(declared) && declared.length > 0 ? new Set(declared) : null;
+  if (!Array.isArray(declared) || declared.length === 0) {
+    return { namespaces: null, hint: 'the provider declares no raw configuration namespaces' };
+  }
+
+  // `createJson()` promises create-or-fail, and three admin POST handlers map
+  // its EEXIST onto 409. On the document path that promise is the `etag: null`
+  // conditional write, which `conditionalWrites` makes explicitly optional —
+  // and the conformance suite skips the whole CAS group for a provider that
+  // declares it false. Such a provider would pass conformance and then answer
+  // 200 to the second admin creating an app id that already exists, having
+  // silently replaced the first.
+  //
+  // Declining to route is the safe half of that trade: the filesystem path
+  // still has `atomicCreateJSON`'s O_EXCL, so the guarantee survives intact
+  // and only the routing is lost.
+  if (capabilities.conditionalWrites !== true) {
+    return {
+      namespaces: null,
+      hint:
+        'the provider declares raw namespaces but not conditionalWrites, and create-or-fail ' +
+        'needs compare-and-set — without it two concurrent creates of one id both succeed'
+    };
+  }
+  return { namespaces: new Set(declared), hint: null };
 }
 
 /**
@@ -126,7 +149,8 @@ function documentsFor(ns) {
   if (!provider) return null;
   if (provider !== describedProvider) {
     describedProvider = provider;
-    describedNamespaces = readRawNamespaces(provider);
+    const described = readRawNamespaces(provider);
+    describedNamespaces = described.namespaces;
     if (describedNamespaces) {
       logger.info('Configuration is served by the storage provider', {
         component: COMPONENT,
@@ -134,9 +158,10 @@ function documentsFor(ns) {
         namespaces: [...describedNamespaces].sort().join(', ')
       });
     } else {
-      logger.warn('Storage provider serves no raw configuration namespaces', {
+      logger.warn('Storage provider does not serve raw configuration namespaces', {
         component: COMPONENT,
         provider: provider.name,
+        reason: described.hint,
         hint: 'Configuration is read and written on the filesystem path instead'
       });
     }

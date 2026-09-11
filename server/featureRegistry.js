@@ -106,7 +106,7 @@ export const featureRegistry = [
   // `chatHistoryPreview` lived here and gated a sidebar section and a /chats
   // page backed by fixtures. The history UI is now driven by the durable-chat
   // store, so `chatPersistence` is the single switch for both storing chats and
-  // showing them; V095 carries a saved `chatHistoryPreview: true` over to it.
+  // showing them; V097 carries a saved `chatHistoryPreview: true` over to it.
   {
     id: 'chatPersistence',
     name: { en: 'Durable Chats', de: 'Dauerhafte Chats' },
@@ -178,7 +178,11 @@ export const featureRegistry = [
       en: 'Persist an append-only per-run event ledger (chats, workflows, agents, inference) under contents/data/run-log for audit, replay and durable interactions',
       de: 'Ein anhängbares Ereignis-Ledger pro Lauf (Chats, Workflows, Agenten, Inferenz) unter contents/data/run-log für Audit, Replay und dauerhafte Interaktionen speichern'
     },
-    category: 'preview',
+    // Not `preview`: the ledger left preview when durable chats came to depend
+    // on it. Leaving the category behind after dropping `preview: true` put it
+    // under the Preview heading as the only row there without the badge, which
+    // reads as an oversight in the one place an admin decides what to trust.
+    category: 'platform',
     default: false
   }
 ];
@@ -187,7 +191,8 @@ export const featureCategories = {
   preview: { name: { en: 'Preview', de: 'Vorschau' }, order: 1 },
   ai: { name: { en: 'AI Capabilities', de: 'KI-Funktionen' }, order: 2 },
   content: { name: { en: 'Content', de: 'Inhalte' }, order: 3 },
-  analytics: { name: { en: 'Analytics', de: 'Analytik' }, order: 4 }
+  analytics: { name: { en: 'Analytics', de: 'Analytik' }, order: 4 },
+  platform: { name: { en: 'Platform', de: 'Plattform' }, order: 5 }
 };
 
 /**
