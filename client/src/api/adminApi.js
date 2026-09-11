@@ -50,12 +50,22 @@ export const makeAdminApiCall = async (url, options = {}) => {
 
     axiosConfig.data = body;
     if (isFormData) {
-      // Let axios/browser set the multipart boundary for FormData bodies
+      // Let axios/browser set the multipart boundary for FormData bodies.
+      //
+      // Deleting the key from this per-request object is NOT enough: the shared
+      // axios instance declares `Content-Type: application/json` as an *instance
+      // default* (see api/client.js), and that default still applies to a request
+      // whose own headers simply omit the key. Axios' default transformRequest
+      // then sees a JSON content type on a FormData payload and serialises the
+      // form to JSON (`{"backup":{}}`), so the file never leaves the browser and
+      // the server reports a missing upload. Setting the header to `undefined`
+      // overrides the instance default and tells axios to omit it entirely.
       Object.keys(axiosConfig.headers).forEach(headerKey => {
         if (headerKey.toLowerCase() === 'content-type') {
           delete axiosConfig.headers[headerKey];
         }
       });
+      axiosConfig.headers['Content-Type'] = undefined;
     } else {
       axiosConfig.headers = {
         'Content-Type': 'application/json',

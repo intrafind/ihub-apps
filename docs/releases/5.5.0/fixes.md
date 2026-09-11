@@ -661,3 +661,17 @@ Once a conversation had more than one exchange, editing an earlier message updat
 resend it — the edited text was left sitting in the input box, and the only way to actually send it
 was to press Send again by hand. Editing a message now reliably resends it and continues the
 conversation from that point, no matter how long the conversation already is.
+
+## Configuration Import and Other Admin File Uploads Work Again
+
+Importing a configuration backup failed immediately with "Failed to import configuration: HTTP 400"
+and the server log showed only "Starting configuration import" with no further detail. The selected
+file was never actually sent: the admin API helper left a JSON content type on the request, so the
+browser's HTTP client converted the upload into a short JSON object and discarded the file. The
+server correctly reported that no ZIP had arrived.
+
+- Affects every admin file upload, not just backup import: **System → Configuration Backup &
+  Import**, the UI **asset upload**, and **skill import** from a `.zip`.
+- Exporting a backup was never affected, and no backup created with an earlier version is damaged —
+  re-importing a previously exported ZIP now works.
+- No configuration change or admin action is required.
