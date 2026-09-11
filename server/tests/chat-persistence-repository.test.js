@@ -21,7 +21,11 @@ import { describe, it } from 'node:test';
 import assert from 'node:assert/strict';
 import { FilesystemStorageProvider } from '../storage/providers/filesystem/index.js';
 import { StorageError } from '../storage/errors.js';
-import { ChatRepository, MAX_MESSAGE_CHARS } from '../services/chat/ChatRepository.js';
+import {
+  ChatRepository,
+  MAX_MESSAGE_CHARS,
+  MAX_TRACKED_RUN_IDS
+} from '../services/chat/ChatRepository.js';
 
 /** Namespace holding the chat metadata documents, as the contract names it. */
 const CHATS_NS = 'chats';
@@ -1025,6 +1029,56 @@ describe('ChatRepository: what a listing costs', () => {
         renamed.items.some(chat => chat.title === 'renamed'),
         'and the listing shows it'
       );
+    });
+  });
+});
+
+describe('ChatRepository: the delete cascade of a long chat', () => {
+  it('reports every run, not just the newest the chat document can hold', async () => {
+    // One run is minted per turn and the chat document keeps only the newest
+    // `MAX_TRACKED_RUN_IDS`. The overflow used to be dropped, so a chat with
+    // more turns than that left ledger runs behind — each holding the verbatim
+    // question and the streamed answer — while the UI said the conversation
+    // was removed for good. "They age out of the ledger's own retention" is not
+    // an answer either: `runLog.cleanupEnabled: false` is supported, and the
+    // two retentions are deliberately independent.
+    await withRepository(async ({ repository }) => {
+      await seedChat(repository);
+
+      const turns = MAX_TRACKED_RUN_IDS + 25;
+      for (let n = 0; n < turns; n += 1) {
+        await repository.appendMessage(CHAT_ID, {
+          role: 'user',
+          content: `turn ${n}`,
+          runId: `run-${String(n).padStart(4, '0')}`
+        });
+      }
+
+      const chat = await repository.getChat(CHAT_ID);
+      assert.equal(chat.runIds.length, MAX_TRACKED_RUN_IDS, 'the chat document stays capped');
+      assert.ok(!chat.runIds.includes('run-0000'), 'and the oldest is no longer on it');
+
+      const { runIds } = await repository.deleteChat(CHAT_ID);
+      assert.equal(runIds.length, turns, 'but the cascade is owed all of them');
+      assert.ok(runIds.includes('run-0000'), 'including the very first');
+      assert.ok(runIds.includes(`run-${String(turns - 1).padStart(4, '0')}`), 'and the last');
+      assert.equal(new Set(runIds).size, runIds.length, 'with no id reported twice');
+    });
+  });
+
+  it('keeps the overflow out of what a client reads back', async () => {
+    await withRepository(async ({ repository }) => {
+      await seedChat(repository);
+      for (let n = 0; n < MAX_TRACKED_RUN_IDS + 2; n += 1) {
+        await repository.appendMessage(CHAT_ID, {
+          role: 'user',
+          content: `turn ${n}`,
+          runId: `run-${String(n).padStart(4, '0')}`
+        });
+      }
+
+      const stored = await repository.getMessages(CHAT_ID);
+      assert.deepEqual(Object.keys(stored).sort(), ['messages', 'version']);
     });
   });
 });

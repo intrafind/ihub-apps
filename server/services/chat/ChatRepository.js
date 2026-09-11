@@ -44,6 +44,13 @@ export const CHAT_MESSAGES_NAMESPACE = RUNTIME_NAMESPACES.chatMessages;
 /** Schema version stamped on a transcript document. */
 export const CHAT_MESSAGES_VERSION = 1;
 
+/**
+ * Transient key carrying run ids that fell off `runIds` and have not been
+ * written to the transcript yet. Never stored on the chat document —
+ * `_writeChat` consumes and removes it.
+ */
+const RETIRED_RUN_IDS = Symbol('retiredRunIds');
+
 /** Lifecycle states a chat document may carry. */
 export const CHAT_STATUSES = ['active', 'running', 'error'];
 
@@ -61,6 +68,27 @@ export const MAX_TITLE_LENGTH = 200;
  * the ledger's own retention anyway.
  */
 export const MAX_TRACKED_RUN_IDS = 200;
+
+/**
+ * Run ids the transcript document carries for a chat that has outgrown
+ * {@link MAX_TRACKED_RUN_IDS}.
+ *
+ * The cap on the chat document is right — the list view reads N of those on
+ * every page — but dropping the overflow made the delete cascade quietly
+ * partial: a 350-turn chat left 150 ledger runs behind, each holding the
+ * verbatim question and the streamed answer, while the UI said the
+ * conversation was removed for good. "The oldest runs age out of the ledger's
+ * own retention anyway" is not true either, because `runLog.cleanupEnabled:
+ * false` is a supported setting, and the two retentions are deliberately
+ * independent.
+ *
+ * So the overflow moves to the cold sibling: the transcript, which is already
+ * read and written by the same locked section and is not touched by a listing.
+ * Bounded in turn, because it is not free — 5000 ids is around 180 KB, and a
+ * chat with more turns than that has a cascade this design genuinely cannot
+ * complete. That case is logged rather than hidden.
+ */
+export const MAX_RETIRED_RUN_IDS = 5000;
 
 /** Page size of {@link ChatRepository#listChats} when the caller names none. */
 const DEFAULT_PAGE_SIZE = 30;
@@ -184,14 +212,21 @@ function normalizeRunIds(runIds) {
 /**
  * Add a run id to a chat's cascade list, keeping the most recent ones.
  *
+ * Whatever falls off the front is handed back rather than dropped: the delete
+ * cascade owes the ledger every run the chat ever had, and `_writeChat` moves
+ * these to the transcript document before the shortened list is stored.
+ *
  * @param {string[]} runIds - Current list.
  * @param {string} runId - Run to track.
- * @returns {string[]} A new list.
+ * @returns {{runIds: string[], retired: string[]}} The new list, and what it
+ *   no longer holds.
  */
 function trackRunId(runIds, runId) {
-  if (runIds.includes(runId)) return runIds;
+  if (runIds.includes(runId)) return { runIds, retired: [] };
   const next = [...runIds, runId];
-  return next.length > MAX_TRACKED_RUN_IDS ? next.slice(-MAX_TRACKED_RUN_IDS) : next;
+  if (next.length <= MAX_TRACKED_RUN_IDS) return { runIds: next, retired: [] };
+  const overflow = next.length - MAX_TRACKED_RUN_IDS;
+  return { runIds: next.slice(overflow), retired: next.slice(0, overflow) };
 }
 
 /**
@@ -314,6 +349,13 @@ function applyChatPatch(chat, patch) {
     if (PROTECTED_CHAT_FIELDS.has(key) || value === undefined) continue;
     next[key] = value;
   }
+  // `Object.entries` does not see symbol keys, so the retired ids need
+  // carrying by hand. A symbol rather than a field name precisely because it
+  // must never reach the stored document — `JSON.stringify` ignores it, so
+  // `_writeChat` can hand the object straight to `put`.
+  if (patch?.[RETIRED_RUN_IDS]?.length) {
+    next[RETIRED_RUN_IDS] = [...(next[RETIRED_RUN_IDS] || []), ...patch[RETIRED_RUN_IDS]];
+  }
   if ('title' in patch) next.title = normalizeTitle(next.title);
   // Settings merge rather than replace: a turn that mentioned only the
   // websearch toggle must not erase the style the chat was started with.
@@ -333,7 +375,13 @@ function applyChatPatch(chat, patch) {
   // A run that was ever active on this chat is a run the delete cascade owes
   // the ledger, whether or not a message from it ever landed.
   if (typeof next.activeRunId === 'string' && next.activeRunId) {
-    next.runIds = trackRunId(next.runIds, next.activeRunId);
+    const tracked = trackRunId(next.runIds, next.activeRunId);
+    next.runIds = tracked.runIds;
+    // Consumed and stripped by `_writeChat`; this function is pure, and the
+    // overflow has to be written somewhere that survives.
+    if (tracked.retired.length > 0) {
+      next[RETIRED_RUN_IDS] = [...(next[RETIRED_RUN_IDS] || []), ...tracked.retired];
+    }
   }
   return next;
 }
@@ -347,7 +395,12 @@ function applyChatPatch(chat, patch) {
 function toMessages(data) {
   const messages = Array.isArray(data?.messages) ? data.messages : [];
   const version = Number.isFinite(data?.version) ? data.version : CHAT_MESSAGES_VERSION;
-  return { version, messages };
+  // Run ids that outgrew the chat document's own list; the delete cascade owes
+  // the ledger these as much as the ones still on the chat.
+  const retiredRunIds = Array.isArray(data?.retiredRunIds)
+    ? data.retiredRunIds.filter(runId => typeof runId === 'string' && runId)
+    : [];
+  return { version, messages, retiredRunIds };
 }
 
 /**
@@ -575,6 +628,10 @@ export class ChatRepository {
    * @private
    */
   async _writeChat(chat) {
+    // Before the chat is shortened, not after: if this throws, `runIds` still
+    // holds the ids and the next write tries again. The other order loses them.
+    const retired = chat[RETIRED_RUN_IDS];
+    if (retired?.length) await this._retireRunIds(chat.id, chat.ownerId, retired);
     const doc = await this.documents.put(CHATS_NAMESPACE, chat.id, chat, {
       ownerId: chat.ownerId
     });
@@ -607,10 +664,44 @@ export class ChatRepository {
    * @returns {Promise<{version: number, messages: Object[]}>}
    * @private
    */
-  async _writeMessages(chatId, ownerId, messages) {
+  async _writeMessages(chatId, ownerId, messages, retiredRunIds) {
     const body = { version: CHAT_MESSAGES_VERSION, messages };
+    if (retiredRunIds?.length) body.retiredRunIds = retiredRunIds;
     await this.documents.put(CHAT_MESSAGES_NAMESPACE, chatId, body, { ownerId });
     return body;
+  }
+
+  /**
+   * Move run ids that fell off the chat document onto the transcript.
+   *
+   * Called from inside the chat lock, and only when something actually
+   * overflowed — a chat under {@link MAX_TRACKED_RUN_IDS} never pays for this.
+   *
+   * @param {string} chatId - Chat id.
+   * @param {string|null} ownerId - Owner, mirrored onto the transcript.
+   * @param {string[]} retired - Ids leaving the chat document.
+   * @returns {Promise<void>}
+   * @private
+   */
+  async _retireRunIds(chatId, ownerId, retired) {
+    const stored = await this._readMessages(chatId);
+    const kept = [...stored.retiredRunIds];
+    for (const runId of retired) {
+      if (!kept.includes(runId)) kept.push(runId);
+    }
+    if (kept.length > MAX_RETIRED_RUN_IDS) {
+      const dropped = kept.length - MAX_RETIRED_RUN_IDS;
+      kept.splice(0, dropped);
+      // Said out loud: past this point the cascade cannot reach those runs, and
+      // the ledger's own retention is the only thing that will.
+      this.logger.warn('Chat has more runs than its delete cascade can track', {
+        component: COMPONENT,
+        chatId,
+        dropped,
+        cap: MAX_RETIRED_RUN_IDS
+      });
+    }
+    await this._writeMessages(chatId, ownerId, stored.messages, kept);
   }
 
   /**
@@ -893,7 +984,10 @@ export class ChatRepository {
     if (!this._usable(chatId, 'deleteChat')) return { deleted: false, runIds: [] };
     return this._withChatLock(chatId, async () => {
       const existing = await this._readChat(chatId);
-      const runIds = normalizeRunIds(existing?.runIds);
+      // Both halves: the chat document's recent runs and whatever outgrew it
+      // and moved to the transcript. Read before either document is removed.
+      const retired = (await this._readMessages(chatId)).retiredRunIds;
+      const runIds = [...new Set([...retired, ...normalizeRunIds(existing?.runIds)])];
       // Unwind in reverse of the write order: the transcript first, the chat
       // document — the only thing that can reach it — last. These are two
       // non-transactional writes, and with the index removed first a failure
@@ -924,7 +1018,10 @@ export class ChatRepository {
     if (!this._usable(chatId, 'getMessages')) {
       return { version: CHAT_MESSAGES_VERSION, messages: [] };
     }
-    return this._readMessages(chatId);
+    // `retiredRunIds` is bookkeeping for the delete cascade, not transcript —
+    // this is what `GET /api/chats/:chatId` ships, so it stays out of it.
+    const { version, messages } = await this._readMessages(chatId);
+    return { version, messages };
   }
 
   /**
@@ -1015,10 +1112,17 @@ export class ChatRepository {
           cap
         });
       }
-      await this._writeMessages(chatId, chat.ownerId, messages);
+      // The retired list is carried through untouched: this write replaces the
+      // whole transcript document, and dropping the field here would lose the
+      // overflow the delete cascade depends on.
+      await this._writeMessages(chatId, chat.ownerId, messages, stored.retiredRunIds);
 
       const patch = { lastMessageAt: entry.ts, messageCount: messages.length };
-      if (entry.runId) patch.runIds = trackRunId(chat.runIds, entry.runId);
+      if (entry.runId) {
+        const tracked = trackRunId(chat.runIds, entry.runId);
+        patch.runIds = tracked.runIds;
+        if (tracked.retired.length > 0) patch[RETIRED_RUN_IDS] = tracked.retired;
+      }
       // The first user message names the chat, unless the user already did.
       if (!chat.titleSetByUser && !chat.title && entry.role === 'user') {
         const derived = deriveChatTitle(entry.content);
