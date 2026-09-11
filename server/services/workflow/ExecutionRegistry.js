@@ -75,6 +75,17 @@ const CHILD_EXECUTION_PREFIX = 'wf-child-';
  */
 const EXECUTION_KINDS = new Set(['workflow', 'agent']);
 
+/**
+ * How long a namespace scan's result is reused.
+ *
+ * Short enough that a listing is never visibly stale — the caller's own runs
+ * are re-merged from memory on every call regardless — and long enough that a
+ * burst of requests costs one walk of the `runs` namespace instead of one
+ * each. That is what makes `GET /api/agents/runs` safe to leave open to every
+ * signed-in user, which is what it has always been.
+ */
+const EXECUTION_SCAN_TTL_MS = 5000;
+
 /** Statuses after which an execution stops changing. */
 const TERMINAL_STATUSES = new Set([
   WorkflowStatus.COMPLETED,
@@ -306,6 +317,23 @@ export class ExecutionRegistry {
     this.executions = new Map();
 
     /**
+     * Last namespace scan, held for {@link EXECUTION_SCAN_TTL_MS}. The local
+     * executions are *not* in here — they are merged on every read, so this
+     * memo can never make a caller's own run look stale.
+     * @type {{at: number, records: Array<[string, Object]>}|null}
+     * @private
+     */
+    this._scanCache = null;
+
+    /**
+     * The scan currently running, so concurrent callers share one walk rather
+     * than starting one each.
+     * @type {Promise<Object[]>|null}
+     * @private
+     */
+    this._scanInFlight = null;
+
+    /**
      * User to executions mapping over {@link ExecutionRegistry#executions}.
      * @type {Map<string, Set<string>>}
      * @private
@@ -478,14 +506,59 @@ export class ExecutionRegistry {
   /**
    * Every execution in the store, plus the ones this process is running.
    *
-   * This is a scan of the `runs` namespace; the repository bounds it and logs
-   * when the bound truncates. It backs the admin listing and the statistics,
-   * both of which are administrator-initiated rather than per-request.
+   * This is a scan of the `runs` namespace, and the docstring here used to say
+   * it was "administrator-initiated rather than per-request". That was wrong:
+   * `GET /api/agents/runs` is `authRequired, authenticatedOnly`, so any
+   * signed-in user reaches it, and `/api/agents` is not behind the rate
+   * limiter. A namespace-sized scan was therefore something a signed-in user
+   * could ask for as often as they liked.
+   *
+   * The scan itself cannot be narrowed. What separates an execution from the
+   * chat and inference runs sharing the namespace is the stored `kind` field,
+   * not the key and not the owner: a key prefix would hide executions
+   * (`WorkflowEngine.start` accepts a caller-supplied `executionId`, and the
+   * legacy registry holds arbitrary ids), and the owner index cannot help
+   * because a summary's `ownerId` is `agent:<profileId>` while the question a
+   * non-admin asks is "runs *I* triggered".
+   *
+   * So the repetition is what is bounded here rather than the scan: results
+   * are held briefly and concurrent callers share one in-flight walk. A burst
+   * of requests costs one scan instead of one each. The first scan is still
+   * O(N) — the fix for that is an index on the discriminator, which is a
+   * change to the stored shape.
    *
    * @returns {Promise<Object[]>} Registry records, unsorted.
    * @private
    */
   async _allExecutions() {
+    const now = Date.now();
+    if (this._scanCache && now - this._scanCache.at < EXECUTION_SCAN_TTL_MS) {
+      // Re-merge the local executions: they change in this process between
+      // scans, and serving a stale view of *our own* runs would be a
+      // regression against the in-memory registry this replaced.
+      return this._mergeLocal(new Map(this._scanCache.records));
+    }
+    if (this._scanInFlight) return this._scanInFlight;
+
+    this._scanInFlight = this._scanExecutions()
+      .then(records => {
+        this._scanCache = { at: Date.now(), records: [...records] };
+        return this._mergeLocal(new Map(records));
+      })
+      .finally(() => {
+        this._scanInFlight = null;
+      });
+    return this._scanInFlight;
+  }
+
+  /**
+   * The store half of {@link ExecutionRegistry#_allExecutions}, without the
+   * local merge or the memo — split out so the memo has one thing to hold.
+   *
+   * @returns {Promise<Map<string, Object>>} Records by execution id.
+   * @private
+   */
+  async _scanExecutions() {
     const records = new Map();
     const store = this._store();
     if (store) {
@@ -505,7 +578,7 @@ export class ExecutionRegistry {
         });
       }
     }
-    return this._mergeLocal(records);
+    return records;
   }
 
   /**

@@ -269,6 +269,61 @@ describe('ExecutionRegistry: the runs namespace', () => {
   });
 });
 
+describe('ExecutionRegistry: the cost of a listing', () => {
+  it('serves a burst of listings from one walk of the namespace', async () => {
+    // `GET /api/agents/runs` is `authRequired, authenticatedOnly`, so any
+    // signed-in user reaches this, and `/api/agents` is not behind the rate
+    // limiter. The namespace is shared with every chat and inference run the
+    // ledger records, so a listing is a walk of all of them — and the
+    // docstring here used to call the scan "administrator-initiated rather
+    // than per-request".
+    //
+    // The scan cannot be narrowed: what separates an execution from a chat run
+    // is the stored `kind`, not the key and not the owner. So the repetition
+    // is what is bounded.
+    await withRegistry(async ({ registry, provider }) => {
+      let walks = 0;
+      const realScan = provider.documents.scan.bind(provider.documents);
+      provider.documents.scan = function scan(ns, opts) {
+        if (ns === 'runs') walks += 1;
+        return realScan(ns, opts);
+      };
+
+      await Promise.all([registry.getAll(), registry.getAll(), registry.getAll()]);
+      assert.equal(walks, 1, 'concurrent callers share one in-flight walk');
+
+      await registry.getAll();
+      assert.equal(walks, 1, 'and a later caller inside the window reuses it');
+
+      provider.documents.scan = realScan;
+    });
+  });
+
+  it('never serves a stale view of this process own runs', async () => {
+    // The memo holds the *store* half only. A caller's own run is merged from
+    // memory on every call, because serving a stale view of it would be a
+    // regression against the in-memory registry this replaced — the run the
+    // user just started has to appear immediately.
+    await withRegistry(async ({ registry }) => {
+      await registry.getAll();
+
+      registry.register('wf-exec-fresh', {
+        workflowId: 'wf-1',
+        userId: 'agent:analyst',
+        status: 'running',
+        startedAt: new Date().toISOString(),
+        source: 'agent'
+      });
+
+      const listed = await registry.getAll();
+      assert.ok(
+        listed.some(run => run.executionId === 'wf-exec-fresh'),
+        'a run started inside the memo window is listed at once'
+      );
+    });
+  });
+});
+
 describe('ExecutionRegistry: what belongs in an execution listing', () => {
   it('never lists the chat and inference runs that share the namespace', async () => {
     // The ledger writes a summary for every run on the installation. Without
