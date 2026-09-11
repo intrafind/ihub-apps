@@ -49,6 +49,8 @@
 import logger from '../../utils/logger.js';
 import { WorkflowStatus } from './StateManager.js';
 import { getRunSummaryRepository } from '../runtime/RunSummaryRepository.js';
+import runLog from '../loop/RunLog.js';
+import { resolvePrincipal } from '../loop/runIdentity.js';
 import { DEFAULT_STATE_DIR, resolveWorkflowStateRepository } from './WorkflowStateRepository.js';
 
 const COMPONENT = 'ExecutionRegistry';
@@ -151,10 +153,21 @@ function executionKind(userId) {
  * (`identityMode`, `parentRunId`, `model`, `usage`, `finishReason`, `refs`) a
  * merge in the other direction loses nothing either.
  *
- * `anonymous` is always false: an execution is authorized against the user id
- * the workflow routes compare, and on an installation with anonymous access
- * that id is the shared string `anonymous`. Recording the run as anonymous
- * would take it out of its own owner's execution list.
+ * `ownerId` and `anonymous` are **not** here, and that is the point: they are
+ * seeded once on create (see `register`) and never sent again. The registry
+ * used to write `ownerId: execution.userId` on every write, and since it is
+ * the last writer, a ledger running in `pseudonymized` mode — which had
+ * already resolved the principal to a salted hash — ended up with a document
+ * carrying the raw user id under `identityMode: 'pseudonymized'`. The raw id
+ * was then persisted in the namespace that mode exists to keep it out of, and
+ * the owner marker for the hash was retired, so listing by the principal id
+ * that appears in the run's own events returned nothing.
+ *
+ * When the registry does seed the pair, `anonymous` is false: an execution is
+ * authorized against the user id the workflow routes compare, and on an
+ * installation with anonymous access that id is the shared string `anonymous`.
+ * Recording the run as anonymous would take it out of its own owner's
+ * execution list.
  *
  * @param {Object} execution - Registry record.
  * @returns {Object} Fields to merge into the run summary.
@@ -163,8 +176,6 @@ function toSummaryFields(execution) {
   return {
     runId: execution.executionId,
     kind: executionKind(execution.userId),
-    ownerId: execution.userId,
-    anonymous: false,
     source: execution.source,
     status: execution.status,
     startedAt: execution.startedAt,
@@ -184,14 +195,23 @@ function toSummaryFields(execution) {
 /**
  * The document written when an execution has no summary yet.
  *
- * `refs.executionId` is added only here: on an update it would replace the
- * richer reference set the ledger records (chat id, profile id, workflow id).
+ * `refs.executionId` and the `(ownerId, anonymous)` pair are added only here,
+ * for the same reason: on an update both would replace what the ledger has
+ * already resolved — the richer reference set (chat id, profile id, workflow
+ * id), and the principal, which in `pseudonymized` mode is a salted hash the
+ * registry does not have. This is a create, so there is nothing to overwrite
+ * and a summary with no principal would belong to nobody.
  *
  * @param {Object} execution - Registry record.
  * @returns {Object} A complete run summary.
  */
 function toNewSummary(execution) {
-  return { ...toSummaryFields(execution), refs: { executionId: execution.executionId } };
+  return {
+    ...toSummaryFields(execution),
+    ownerId: execution.userId,
+    anonymous: false,
+    refs: { executionId: execution.executionId }
+  };
 }
 
 /**
@@ -676,9 +696,11 @@ export class ExecutionRegistry {
       // run, the model and the cross-references the ledger carries whenever
       // its write landed in between.
       await store.merge(executionId, toSummaryFields(execution), {
-        // Only on create: on a merge this would replace the richer reference
-        // set the ledger records (chat id, profile id, workflow id).
-        defaults: { refs: { executionId } }
+        // Only on create: on a merge these would replace what the ledger
+        // already resolved — the richer reference set (chat id, profile id,
+        // workflow id), and the principal, which in `pseudonymized` mode is a
+        // salted hash the registry does not have and must not overwrite.
+        defaults: { refs: { executionId }, ownerId: userId, anonymous: false }
       });
     });
 
@@ -851,6 +873,36 @@ export class ExecutionRegistry {
   }
 
   /**
+   * The owner ids a user's runs may be indexed under.
+   *
+   * One in `default` and `full` mode, where the ledger records the raw id. Two
+   * in `pseudonymized`, where it records a salted hash: the hash, and the raw
+   * id for summaries written before the registry stopped overwriting the
+   * principal the ledger had resolved.
+   *
+   * @param {string} userId - Raw user id.
+   * @returns {Promise<string[]>} Owner ids to query, most likely first.
+   * @private
+   */
+  async _ownerIdsFor(userId) {
+    try {
+      const mode = runLog.identityMode();
+      if (mode !== 'pseudonymized') return [userId];
+      const principal = await resolvePrincipal({ id: userId }, { mode });
+      return principal?.id && principal.id !== userId ? [principal.id, userId] : [userId];
+    } catch (error) {
+      // Resolution is a hash, not a lookup, so a failure here is a
+      // configuration problem rather than a transient one. The raw id is the
+      // answer for every other mode and the safe one here.
+      this.logger.warn('Could not resolve the ledger principal; listing by the raw id', {
+        component: COMPONENT,
+        error: error.message
+      });
+      return [userId];
+    }
+  }
+
+  /**
    * Gets all executions for a specific user
    *
    * @param {string} userId - The user identifier
@@ -871,18 +923,27 @@ export class ExecutionRegistry {
     const store = this._store();
     if (store && userId) {
       try {
-        // Everything for this owner: the archived rule below is the
-        // registry's own tri-state and is applied once, after the local
-        // executions have been merged in. `match` narrows inside the scan so
-        // the owner's chat runs — which share this namespace and sort before
-        // `wf-exec-…` — cannot consume the whole record bound and leave the
-        // listing empty.
-        const page = await store.listByOwner(userId, {
-          archived: 'all',
-          match: isExecutionSummary
-        });
-        for (const summary of page.items) {
-          records.set(summary.runId, fromSummary(summary));
+        // The owner ids to ask for. The ledger resolves a run's principal in
+        // the installation's identity mode, so under `pseudonymized` the
+        // summary is owned by a salted hash and the raw id finds nothing.
+        // Both are queried rather than only the resolved one: a run whose
+        // summary predates the registry leaving the principal alone is still
+        // indexed under the raw id, and dropping those would take a user's own
+        // history away from them at upgrade.
+        for (const ownerId of await this._ownerIdsFor(userId)) {
+          // Everything for this owner: the archived rule below is the
+          // registry's own tri-state and is applied once, after the local
+          // executions have been merged in. `match` narrows inside the scan so
+          // the owner's chat runs — which share this namespace and sort before
+          // `wf-exec-…` — cannot consume the whole record bound and leave the
+          // listing empty.
+          const page = await store.listByOwner(ownerId, {
+            archived: 'all',
+            match: isExecutionSummary
+          });
+          for (const summary of page.items) {
+            records.set(summary.runId, fromSummary(summary));
+          }
         }
       } catch (error) {
         this.logger.warn('Could not list executions for user; reporting local runs only', {

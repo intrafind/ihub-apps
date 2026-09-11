@@ -33,6 +33,8 @@ import { RunSummaryRepository, RUNS_NAMESPACE } from '../services/runtime/RunSum
 import { ExecutionRegistry } from '../services/workflow/ExecutionRegistry.js';
 import { WorkflowStatus } from '../services/workflow/StateManager.js';
 import { LEGACY_STATE_FILE } from '../services/workflow/WorkflowStateRepository.js';
+import runLog from '../services/loop/RunLog.js';
+import { resolvePrincipal } from '../services/loop/runIdentity.js';
 
 const OWNER = 'user-1';
 const OTHER_OWNER = 'user-2';
@@ -905,5 +907,112 @@ describe('ExecutionRegistry: recovery from checkpoints', () => {
     } finally {
       await fs.rm(stateDir, { recursive: true, force: true });
     }
+  });
+});
+
+describe('ExecutionRegistry: the principal the ledger resolved', () => {
+  /**
+   * Run `fn` with the ledger reporting one identity mode.
+   *
+   * @param {string} mode - Identity mode to report.
+   * @param {() => Promise<void>} fn - Test body.
+   * @returns {Promise<void>}
+   */
+  async function withIdentityMode(mode, fn) {
+    const original = runLog.identityMode;
+    runLog.identityMode = () => mode;
+    try {
+      await fn();
+    } finally {
+      runLog.identityMode = original;
+    }
+  }
+
+  it('does not overwrite a pseudonymized owner with the raw user id', async () => {
+    // The registry is the last writer on a document whose identity the ledger
+    // has already resolved. Sending `ownerId: execution.userId` on every write
+    // put the raw id into the namespace that `pseudonymized` exists to keep it
+    // out of — under `identityMode: 'pseudonymized'`, in the same document —
+    // and retired the owner marker for the hash, so listing by the principal
+    // id that appears in the run's own events returned nothing.
+    await withRegistry(async ({ registry, summaries }) => {
+      const hashed = await resolvePrincipal({ id: OWNER }, { mode: 'pseudonymized' });
+
+      // What the ledger writes at `run/start`.
+      await seedSummary(summaries, {
+        runId: 'wf-exec-pseudo',
+        kind: 'workflow',
+        ownerId: hashed.id,
+        identityMode: 'pseudonymized'
+      });
+
+      registry.register('wf-exec-pseudo', metadata());
+      await registry.flushWrites('wf-exec-pseudo');
+      registry.updateStatus('wf-exec-pseudo', WorkflowStatus.COMPLETED);
+      await registry.flushWrites('wf-exec-pseudo');
+
+      const stored = await summaries.get('wf-exec-pseudo');
+      assert.equal(stored.ownerId, hashed.id, 'the resolved principal survived');
+      assert.notEqual(stored.ownerId, OWNER, 'and the raw id was not written over it');
+      assert.equal(stored.identityMode, 'pseudonymized');
+      // The registry's own half still landed.
+      assert.equal(stored.status, WorkflowStatus.COMPLETED);
+      assert.equal(stored.workflowId, metadata().workflowId);
+    });
+  });
+
+  it('still seeds the owner when it is the one creating the document', async () => {
+    // No ledger write came first, so there is nothing to preserve and a
+    // summary with no principal would belong to nobody.
+    await withRegistry(async ({ registry, summaries }) => {
+      registry.register('wf-exec-seeded', metadata());
+      await registry.flushWrites('wf-exec-seeded');
+
+      const stored = await summaries.get('wf-exec-seeded');
+      assert.equal(stored.ownerId, OWNER);
+      assert.equal(stored.anonymous, false);
+    });
+  });
+
+  it('finds a pseudonymized run when listing by the raw user id', async () => {
+    // `getByUser` is handed the raw id every caller has; the document is owned
+    // by the hash. Resolving before the index read is what keeps a user's own
+    // history listable under that mode.
+    await withIdentityMode('pseudonymized', async () => {
+      await withRegistry(async ({ registry, summaries }) => {
+        const hashed = await resolvePrincipal({ id: OWNER }, { mode: 'pseudonymized' });
+        await seedSummary(summaries, {
+          runId: 'wf-exec-listed',
+          kind: 'workflow',
+          ownerId: hashed.id,
+          identityMode: 'pseudonymized'
+        });
+
+        const listed = await registry.getByUser(OWNER);
+        assert.deepEqual(
+          listed.map(execution => execution.executionId),
+          ['wf-exec-listed']
+        );
+      });
+    });
+  });
+
+  it('still finds a run indexed under the raw id, which older summaries are', async () => {
+    await withIdentityMode('pseudonymized', async () => {
+      await withRegistry(async ({ registry, summaries }) => {
+        await seedSummary(summaries, {
+          runId: 'wf-exec-legacy',
+          kind: 'workflow',
+          ownerId: OWNER,
+          identityMode: 'pseudonymized'
+        });
+
+        const listed = await registry.getByUser(OWNER);
+        assert.deepEqual(
+          listed.map(execution => execution.executionId),
+          ['wf-exec-legacy']
+        );
+      });
+    });
   });
 });
