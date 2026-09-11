@@ -1,8 +1,6 @@
-import path from 'path';
 import fs from 'fs';
 import bcrypt from 'bcryptjs';
 import { v4 as uuidv4 } from 'uuid';
-import { fileURLToPath } from 'url';
 import { atomicWriteJSON } from './atomicWrite.js';
 import configStore from '../services/config/ConfigStore.js';
 import configCache from '../configCache.js';
@@ -10,40 +8,18 @@ import { announceConfigChange } from '../configSync.js';
 import { mapExternalGroups, loadGroupsConfiguration } from './authorization.js';
 import logger from './logger.js';
 import { ensureFirstUserIsAdmin } from './adminRescue.js';
-
-const __filename = fileURLToPath(import.meta.url);
-const __dirname = path.dirname(__filename);
+import { locateConfigFile } from './configFileLocation.js';
 
 /**
- * Where a users file lives, as both a cache key and an absolute path.
- *
- * `localAuth.usersFile` is a path relative to the installation root, and the
- * cache is keyed on the same file's path relative to `contents/` — so
- * `contents/config/users.json` is the key `config/users.json`, which is also
- * how the configuration store addresses it.
- *
- * A `usersFile` pointing outside `contents/` is supported (the tests use a
- * temporary directory, and an operator may keep the file on a mounted secret
- * volume): such a path has no place in the store, so `relPath` is null and the
- * caller writes the absolute path directly. Relocating it into `contents/`
- * instead would silently strand every account in the file.
+ * Where the users file lives — see {@link locateConfigFile}, which both this
+ * module and `oauthClientManager` share so the read path and the write path
+ * cannot drift apart.
  *
  * @param {string} usersFilePath - Path to users.json as configured
  * @returns {{fullPath: string, cacheKey: string, relPath: string|null}}
  */
 function locateUsersFile(usersFilePath) {
-  const rootDir = path.join(__dirname, '../../');
-  const fullPath = path.isAbsolute(usersFilePath)
-    ? usersFilePath
-    : path.join(rootDir, usersFilePath);
-  let cacheKey = usersFilePath.startsWith('contents/')
-    ? usersFilePath.substring('contents/'.length)
-    : path.relative(rootDir, fullPath);
-  if (cacheKey.startsWith('contents/')) {
-    cacheKey = cacheKey.substring('contents/'.length);
-  }
-  const contained = !path.isAbsolute(cacheKey) && !cacheKey.startsWith('..');
-  return { fullPath, cacheKey, relPath: contained ? cacheKey : null };
+  return locateConfigFile(usersFilePath);
 }
 
 /**

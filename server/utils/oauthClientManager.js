@@ -1,16 +1,12 @@
-import path from 'path';
 import fs from 'fs';
 import { v4 as uuidv4 } from 'uuid';
-import { fileURLToPath } from 'url';
 import bcrypt from 'bcryptjs';
 import { atomicWriteJSON } from './atomicWrite.js';
 import configStore from '../services/config/ConfigStore.js';
 import configCache from '../configCache.js';
 import { announceConfigChange } from '../configSync.js';
 import logger from './logger.js';
-
-const __filename = fileURLToPath(import.meta.url);
-const __dirname = path.dirname(__filename);
+import { locateConfigFile } from './configFileLocation.js';
 
 /**
  * Where an OAuth clients file lives, as both a cache key and an absolute path.
@@ -28,18 +24,7 @@ const __dirname = path.dirname(__filename);
  * @returns {{fullPath: string, cacheKey: string, relPath: string|null}}
  */
 function locateClientsFile(clientsFilePath) {
-  const rootDir = path.join(__dirname, '../../');
-  const fullPath = path.isAbsolute(clientsFilePath)
-    ? clientsFilePath
-    : path.join(rootDir, clientsFilePath);
-  let cacheKey = clientsFilePath.startsWith('contents/')
-    ? clientsFilePath.substring('contents/'.length)
-    : path.relative(rootDir, fullPath);
-  if (cacheKey.startsWith('contents/')) {
-    cacheKey = cacheKey.substring('contents/'.length);
-  }
-  const contained = !path.isAbsolute(cacheKey) && !cacheKey.startsWith('..');
-  return { fullPath, cacheKey, relPath: contained ? cacheKey : null };
+  return locateConfigFile(clientsFilePath);
 }
 
 /**
