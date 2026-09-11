@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { saveAppSettings, loadAppSettings } from '../../utils/appSettings';
 import { fetchModels, fetchStyles } from '../../api';
 import { filterModelsForApp, pickInitialModelForApp } from '../../utils/modelFiltering';
@@ -20,6 +20,16 @@ import { useUIConfig } from '../contexts/UIConfigContext';
  * same effect as the other two, is what keeps it applied: the effect re-runs
  * whenever the app or the model list settles, and anything applied outside it
  * would be overwritten the next time it did.
+ *
+ * All three layers are applied **once per chat**, not on every re-run of the
+ * effect. The chat's snapshot is frozen at the moment the chat was hydrated, so
+ * a re-run re-applies a stale value on top of whatever the user has since
+ * chosen: switch the interface language mid-chat and the app is refetched, the
+ * effect re-runs on the new object, and the websearch toggle the user just
+ * turned off comes back on because the chat document still says it was on. The
+ * signature below is what stops that — a different app, leaving a chat that had
+ * stored settings, and those settings arriving are what re-initialize, and
+ * nothing else does.
  *
  * @param {string} appId - App id.
  * @param {Object} app - App configuration.
@@ -80,14 +90,51 @@ function useAppSettings(appId, app, { chatSettings = null } = {}) {
     loadModelsAndStyles();
   }, []);
 
+  // The app these settings belong to. `appId` is what was *asked* for, and
+  // following a link to another app changes it a render before the fetch that
+  // replaces `app` resolves — so for that gap the two disagree, and anything
+  // keyed on `appId` alone reads and writes the next app's settings while the
+  // values in hand are still the previous app's.
+  const settingsAppId = app?.id ?? appId;
+
+  // What the last initialization was for — see the signature note in the hook
+  // doc. A ref rather than state: nothing renders from it, and it has to be
+  // readable by the very effect run that sets it.
+  const initializedForRef = useRef(null);
+
   // Initialize settings from app data when app loads
   useEffect(() => {
     if (!app || modelsLoading) return;
 
-    // Set header color
+    // Set header color. Above the signature check on purpose: it is an
+    // idempotent side effect on a context another page may have changed, not
+    // part of resolving the user's settings.
     if (app.color) {
       setHeaderColor(app.color);
     }
+
+    // Keyed by the loaded app, not the requested one: initializing during the
+    // gap described above would resolve the next app's saved settings against
+    // the previous app's config, and then mark the app initialized so the real
+    // one never applied its own defaults when it arrived.
+    const initFor = {
+      appId: settingsAppId,
+      // The snapshot's *presence*, not its identity. Opening a chat runs this
+      // twice — once before its stored settings have arrived, once after — and
+      // both runs have to initialize. Re-reading the same chat afterwards (the
+      // incognito toggle re-hydrates it) hands back an equal snapshot under a
+      // new identity, and re-applying that is exactly the regression above.
+      hasChatSettings: Boolean(chatSettings)
+    };
+    const previous = initializedForRef.current;
+    if (
+      previous &&
+      previous.appId === initFor.appId &&
+      previous.hasChatSettings === initFor.hasChatSettings
+    ) {
+      return;
+    }
+    initializedForRef.current = initFor;
 
     // Pick the initial model from the set of models that are actually
     // compatible with the app (allowedModels, tools requirement, settings
@@ -132,7 +179,7 @@ function useAppSettings(appId, app, { chatSettings = null } = {}) {
     setImageQuality(initialState.imageQuality);
 
     // Load saved settings and override defaults if available
-    const savedSettings = loadAppSettings(appId);
+    const savedSettings = loadAppSettings(settingsAppId);
     if (savedSettings) {
       // Only restore the saved model if it's still compatible with the
       // current app config — otherwise we'd resurrect a stale selection
@@ -194,12 +241,12 @@ function useAppSettings(appId, app, { chatSettings = null } = {}) {
           setSelectedModel(chatSettings.modelId);
       }
     }
-  }, [app, appId, chatSettings, setHeaderColor, models, modelsLoading]);
+  }, [app, settingsAppId, chatSettings, setHeaderColor, models, modelsLoading]);
 
   // Save settings when they change
   useEffect(() => {
     if (app) {
-      saveAppSettings(appId, {
+      saveAppSettings(settingsAppId, {
         selectedModel,
         selectedStyle,
         selectedOutputFormat,
@@ -217,7 +264,7 @@ function useAppSettings(appId, app, { chatSettings = null } = {}) {
       });
     }
   }, [
-    appId,
+    settingsAppId,
     app,
     selectedModel,
     selectedStyle,
