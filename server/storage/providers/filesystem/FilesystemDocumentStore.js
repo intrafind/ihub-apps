@@ -25,13 +25,12 @@
  */
 import { promises as fs } from 'fs';
 import path from 'path';
-import crypto from 'crypto';
 import { atomicCreateJSON, atomicWriteJSON } from '../../../utils/atomicWrite.js';
 import { withFileLock, removeIfExists, tryCreateExclusive } from '../../../utils/fileLock.js';
 import { isValidId } from '../../../utils/pathSecurity.js';
 import logger from '../../../utils/logger.js';
 import { DocumentStore } from '../../DocumentStore.js';
-import { canonicalJson } from '../../canonicalJson.js';
+import { documentEtag, serializeDocument } from '../../etag.js';
 import {
   CorruptDocumentError,
   EtagMismatchError,
@@ -93,25 +92,6 @@ function isReservedEntry(entry) {
 }
 
 /**
- * sha256 hex of a serialized document body — the provider-independent etag.
- *
- * This is a content digest for cache validation and compare-and-set, not a
- * credential derivation: it is never compared against a user-supplied secret
- * and never authenticates anything. A fast hash is the right tool, and it has
- * to stay one so that the same document yields the same etag on every provider
- * — that is what lets a migration verify a copy (see docs/storage.md).
- *
- * CodeQL reaches this sink from config loaders that carry secret-shaped fields
- * and reads it as a password hash. It is not one. What *would* make it one:
- * handing a document's etag to a caller who could use it to confirm a guessed
- * secret. Re-examine this suppression if an etag ever becomes externally
- * visible for a document that stores credentials.
- */
-function etagOf(json) {
-  return crypto.createHash('sha256').update(json, 'utf8').digest('hex'); // lgtm[js/insufficient-password-hash] -- entity tag over a document body, not a stored password
-}
-
-/**
  * The stored body of an envelope together with its canonical JSON, the single
  * source for both `etag` and `size`.
  *
@@ -128,7 +108,7 @@ function etagOf(json) {
  */
 function envelopeBody(envelope) {
   const data = envelope.data === undefined ? null : envelope.data;
-  return { data, json: canonicalJson(data) };
+  return { data, json: serializeDocument(data) };
 }
 
 /** Serialize document data, rejecting anything JSON cannot represent. */
@@ -303,7 +283,7 @@ export class FilesystemDocumentStore extends DocumentStore {
           if (!existing) {
             throw new EtagMismatchError(`Document ${ns}/${key} does not exist`);
           }
-          if (etagOf(envelopeBody(existing).json) !== expectedEtag) {
+          if (documentEtag(envelopeBody(existing).json) !== expectedEtag) {
             throw new EtagMismatchError(`Etag mismatch for document ${ns}/${key}`);
           }
         }
@@ -776,7 +756,7 @@ export class FilesystemDocumentStore extends DocumentStore {
           : DEFAULT_CONTENT_TYPE,
       createdAt: envelope.createdAt,
       updatedAt: envelope.updatedAt,
-      etag: etagOf(json),
+      etag: documentEtag(json),
       size: Buffer.byteLength(json, 'utf8')
     };
     // Left off entirely rather than set to undefined, so a metadata-only page

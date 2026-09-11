@@ -38,12 +38,12 @@
  */
 import { promises as fs } from 'fs';
 import path from 'path';
-import crypto from 'crypto';
 import { atomicWriteFile } from '../../../utils/atomicWrite.js';
 import { withFileLock, removeIfExists } from '../../../utils/fileLock.js';
 import { isValidId } from '../../../utils/pathSecurity.js';
 import logger from '../../../utils/logger.js';
 import { DocumentStore } from '../../DocumentStore.js';
+import { documentEtag } from '../../etag.js';
 import { EtagMismatchError, NotSupportedError, StorageError } from '../../errors.js';
 import { CONFIG_NAMESPACES, RAW_DOC_EXT } from '../../namespaces.js';
 import { assertValidKey, containedPath } from './paths.js';
@@ -87,24 +87,6 @@ function serializeRaw(data) {
     throw new StorageError('Document data must be JSON-serializable', { code: 'INVALID_DATA' });
   }
   return json;
-}
-
-/**
- * sha256 hex of the file's bytes — the raw namespace's entity tag.
- *
- * A content digest for cache validation and compare-and-set, never a
- * credential derivation: it is not compared against a user-supplied secret and
- * authenticates nothing. CodeQL reaches this sink from platform config, which
- * carries secret-shaped fields, and reads it as a password hash; it is not
- * one. What would make it one is exposing a document's etag to a caller who
- * could use it to confirm a guessed secret — re-examine this suppression if
- * that ever becomes possible.
- *
- * @param {string} bytes - File content as read or as about to be written
- * @returns {string} Hex digest
- */
-function etagOfBytes(bytes) {
-  return crypto.createHash('sha256').update(bytes, 'utf8').digest('hex'); // lgtm[js/insufficient-password-hash] -- entity tag over a file body, not a stored password
 }
 
 /** Clamp a caller's page size into the supported range instead of throwing. */
@@ -337,7 +319,7 @@ export class RawDocumentStore extends DocumentStore {
           if (!existing) {
             throw new EtagMismatchError(`Document ${ns}/${key} does not exist`);
           }
-          if (etagOfBytes(existing.bytes) !== expectedEtag) {
+          if (documentEtag(existing.bytes) !== expectedEtag) {
             throw new EtagMismatchError(`Etag mismatch for document ${ns}/${key}`);
           }
         }
@@ -691,7 +673,7 @@ export class RawDocumentStore extends DocumentStore {
       // being a number that resets on every save.
       createdAt: modified,
       updatedAt: modified,
-      etag: etagOfBytes(file.bytes),
+      etag: documentEtag(file.bytes),
       size: Buffer.byteLength(file.bytes, 'utf8')
     };
     // Left off entirely rather than set to undefined, so a metadata-only page

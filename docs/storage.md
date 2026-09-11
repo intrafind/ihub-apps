@@ -604,6 +604,16 @@ The planned lineup, from the design:
 
 Only the filesystem provider ships today.
 
+**"Multi-instance" is a property of the provider, not of what runs on it.** A
+consumer whose correctness needs one writer at a time has to hold that itself,
+and swapping the provider does not supply it. The run ledger is the case in
+point: `AppendLog` sequence numbers are allocated by the caller, so two
+instances that each read `lastSeq` and allocate the next one are both making a
+legal call and no provider can reject it. Today the ledger holds the invariant
+with cluster-bus ownership routing plus the `runlog:<runId>` lease, both of
+which reach one machine — it becomes multi-instance safe when it takes a
+distributed lock, which is step 3, not when the row above turns green.
+
 ## Writing a provider
 
 1. Extend `StorageProvider` and the four facet base classes from

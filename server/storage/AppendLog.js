@@ -12,6 +12,28 @@
  * verbatim and answers `lastSeq()` for crash recovery. A provider never
  * allocates a sequence number.
  *
+ * **A stream has one writer at a time, and enforcing that is the consumer's
+ * job.** Caller-side allocation is only safe under that precondition, and no
+ * provider can supply it through this interface: two processes that each read
+ * `lastSeq('run:R') → 42` and allocate 43 are both making a legal call. Today
+ * the run ledger holds the invariant itself, with cluster-bus ownership
+ * routing plus the `runlog:<runId>` lease — Node cluster IPC and a lease the
+ * filesystem provider reports as `advisory-single-machine`, so the reach is
+ * one machine. **A provider that is multi-instance does not by itself make a
+ * consumer multi-instance**: the ledger needs a distributed lock before it can
+ * be, which is step 3, not a provider swap.
+ *
+ * If it happens anyway, a stream holding two records with one `seq` is a
+ * caller error, not a state the log repairs. `read` returns both, in the order
+ * they were persisted, because discarding one would hide the error and guess
+ * which write was meant. (The run ledger's `mergeEventsBySeq` does collapse a
+ * shared seq, but that is a different question — it merges two *backends*
+ * across the storage upgrade, where the same event legitimately exists in
+ * both, and it is not this contract.) A provider MAY reject a `seq` at or
+ * below `lastSeq` with a {@link StorageError} of code `SEQ_CONFLICT`; a caller
+ * that sees one re-reads `lastSeq` and re-allocates. The filesystem provider
+ * does not, because it cannot do the check and the write atomically.
+ *
  * This class is the written contract, not an implementation: every method
  * throws {@link NotSupportedError}. Providers extend it and prove they honour
  * the semantics documented here by passing the conformance suite in
@@ -75,9 +97,15 @@ export class AppendLog {
    * @param {string} stream - Stream identifier, e.g. `run:<runId>`.
    * @param {Object} entry - The record body; must be JSON-serializable.
    * @param {number} seq - Caller-allocated positive integer sequence number.
+   * The caller guarantees it is the stream's only writer (see the module
+   * header); `seq` is not checked against what the stream already holds.
+   *
    * @returns {Promise<{stream: string, seq: number}>} The accepted coordinates.
    * @throws {InvalidKeyError} When `stream` is not a usable identifier.
    * @throws {StorageError} Code `INVALID_SEQ` when `seq` is not a positive integer.
+   * @throws {StorageError} Code `SEQ_CONFLICT` — optional; a provider that can
+   *   check and write atomically may reject a `seq` at or below `lastSeq`
+   *   rather than persist a duplicate.
    */
   async append(_stream, _entry, _seq) {
     throw new NotSupportedError('AppendLog.append is not implemented');
