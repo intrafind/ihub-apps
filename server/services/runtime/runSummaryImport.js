@@ -189,6 +189,19 @@ async function readLedgerIndex(indexDir, log) {
     return { records: byRun, files: 0 };
   }
 
+  // Announced before the streaming starts, not after it finishes. On a 90-day
+  // retention this walks every day file, and until it is done the import logs
+  // nothing at all — so an operator watching a first boot after an upgrade
+  // cannot tell a slow scan from a hang. The file count is the number that
+  // says which of the two it is.
+  if (files.length > 0) {
+    log.info('Scanning legacy run records to import', {
+      component: COMPONENT,
+      indexDir,
+      indexFiles: files.length
+    });
+  }
+
   const deleted = new Set();
   for (const file of files) {
     const reader = createInterface({
@@ -367,6 +380,17 @@ export async function importLegacyRunSummaries({
       .sort((a, b) => (a.startedAt < b.startedAt ? 1 : -1));
     const truncated = ordered.length > maxRuns;
     const selected = truncated ? ordered.slice(0, maxRuns) : ordered;
+
+    // The second slow phase, and the one that does the writing: up to
+    // `maxRuns` sequential get+put, each put taking a lock. Logged separately
+    // from the scan so a long import says which half it is in.
+    if (selected.length > 0) {
+      log.info('Writing legacy run records into the runs namespace', {
+        component: COMPONENT,
+        runs: selected.length,
+        ...(truncated ? { candidates: ordered.length, bound: maxRuns } : {})
+      });
+    }
 
     let imported = 0;
     let skipped = 0;

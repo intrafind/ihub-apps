@@ -1042,6 +1042,76 @@ describe('importLegacyRunSummaries', () => {
     });
   });
 
+  it('says what it is about to do before each slow phase, not only after', async () => {
+    // Observability is the whole of this: the import walks every retained day
+    // file and then does one locked get+put per run, and it used to log
+    // nothing until both were finished. On a 90-day retention that is minutes
+    // of silence on the first boot after an upgrade, and an operator tailing
+    // logs cannot tell a slow scan from a hang. Both phases announce
+    // themselves now, in order, so the silence says which half it is in.
+    await withLegacyInstall(async ({ repository, indexDir, registryFile }) => {
+      await writeIndexFile(indexDir, '2026-05-01', [
+        {
+          ts: '2026-05-01T10:00:00.000Z',
+          runId: 'chat-logged',
+          kind: 'chat',
+          principalId: OWNER,
+          status: 'completed'
+        }
+      ]);
+      await writeRegistryFile(registryFile, []);
+
+      const recorder = recordingLogger();
+      await importLegacyRunSummaries({
+        repository,
+        indexDir,
+        registryFile,
+        logger: recorder.logger
+      });
+
+      const said = recorder.lines.map(line => line.message);
+      const scan = said.findIndex(m => /Scanning legacy run records/.test(m));
+      const write = said.findIndex(m => /Writing legacy run records/.test(m));
+      const done = said.findIndex(m => /Imported legacy run records/.test(m));
+
+      assert.ok(scan >= 0, 'the scan announces itself');
+      assert.ok(write > scan, 'then the write phase, so a stall is attributable');
+      assert.ok(done > write, 'and the completion line still comes last');
+      assert.equal(
+        recorder.lines[scan].meta.indexFiles,
+        1,
+        'with the file count, which is the number that says how long this will take'
+      );
+    });
+  });
+
+  it('stays quiet when there is a legacy index but nothing in it', async () => {
+    // The corollary: an installation with nothing to carry over must not
+    // announce a scan it never performs, or the line stops meaning anything.
+    //
+    // An index directory that *exists and is empty*, not a missing one: a
+    // missing one returns early on ENOENT and never reaches the decision, so
+    // it would pass however the guard were written. This is the shape a real
+    // installation has once retention has swept the day files away.
+    await withLegacyInstall(async ({ repository, indexDir, registryFile }) => {
+      await fs.mkdir(indexDir, { recursive: true });
+      await writeRegistryFile(registryFile, []);
+
+      const recorder = recordingLogger();
+      await importLegacyRunSummaries({
+        repository,
+        indexDir,
+        registryFile,
+        logger: recorder.logger
+      });
+
+      assert.deepEqual(
+        recorder.lines.filter(line => /Scanning|Writing/.test(line.message)).map(l => l.message),
+        []
+      );
+    });
+  });
+
   it('does nothing, and reports why, when there is nothing to read', async () => {
     await withLegacyInstall(async ({ repository, legacyDir }) => {
       const result = await importLegacyRunSummaries({
