@@ -113,8 +113,8 @@ export const featureRegistry = [
     id: 'chatPersistence',
     name: { en: 'Durable Chats', de: 'Dauerhafte Chats' },
     description: {
-      en: 'Store chats server-side so a conversation survives a reload, a new device and a lost connection — the run keeps going and its answer is waiting in the chat',
-      de: 'Chats serverseitig speichern, sodass eine Unterhaltung Neuladen, Gerätewechsel und Verbindungsabbruch übersteht — der Lauf läuft weiter und seine Antwort wartet im Chat'
+      en: 'Store chats server-side so a conversation survives a reload, a new device and a lost connection — the run keeps going and its answer is waiting in the chat. API clients then post only the new message instead of the whole history (or send ephemeral: true)',
+      de: 'Chats serverseitig speichern, sodass eine Unterhaltung Neuladen, Gerätewechsel und Verbindungsabbruch übersteht — der Lauf läuft weiter und seine Antwort wartet im Chat. API-Clients senden dann nur noch die neue Nachricht statt des gesamten Verlaufs (oder ephemeral: true)'
     },
     category: 'preview',
     default: false,

@@ -236,7 +236,14 @@ export default function registerSessionRoutes(app, { getLocalizedError, DEFAULT_
    *       properties:
    *         messages:
    *           type: array
-   *           description: Array of chat messages forming the conversation history
+   *           description: >-
+   *             The conversation to send. When the installation stores chats
+   *             server-side (the `chatPersistence` feature, for an
+   *             authenticated caller on a turn that is not `ephemeral`) the
+   *             server owns the history and this must hold exactly the new
+   *             message; more than one is refused with
+   *             `CLIENT_HISTORY_NOT_ALLOWED`. Otherwise it is the whole
+   *             conversation history, as before.
    *           items:
    *             $ref: '#/components/schemas/ChatMessage'
    *         modelId:
@@ -797,7 +804,11 @@ export default function registerSessionRoutes(app, { getLocalizedError, DEFAULT_
    *                   message: "Model not found"
    *                   code: "MODEL_NOT_FOUND"
    *       400:
-   *         description: Bad request (missing messages, invalid model, etc.)
+   *         description: >-
+   *           Bad request (missing messages, invalid model, etc.). Also
+   *           `CLIENT_HISTORY_NOT_ALLOWED` when the chat is stored
+   *           server-side and more than one message was posted — send only the
+   *           new message, or `ephemeral: true`.
    *         content:
    *           application/json:
    *             schema:
@@ -921,7 +932,15 @@ export default function registerSessionRoutes(app, { getLocalizedError, DEFAULT_
             ephemeral
           });
         if (persistTurn && messages.length > 1) {
-          return sendBadRequest(res, 'CLIENT_HISTORY_NOT_ALLOWED');
+          // The code alone tells an integrator nothing about what to do
+          // instead, and this is the one refusal they can hit by doing exactly
+          // what the documentation told them to do before the feature existed.
+          return sendBadRequest(res, 'CLIENT_HISTORY_NOT_ALLOWED', {
+            hint:
+              'This chat is stored server-side: post only the new message as a single-element ' +
+              'messages array, or send ephemeral: true to keep the turn out of the store and ' +
+              'post the whole conversation yourself.'
+          });
         }
 
         let conversation = messages;

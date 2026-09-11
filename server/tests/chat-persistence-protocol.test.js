@@ -329,8 +329,15 @@ describe('POST /api/apps/:appId/chat/:chatId: the server owns the history', () =
       });
 
       assert.equal(res.statusCode, 400);
-      assert.deepEqual(res.body, { error: 'CLIENT_HISTORY_NOT_ALLOWED' });
+      assert.equal(res.body.error, 'CLIENT_HISTORY_NOT_ALLOWED', 'the code integrators key on');
       assert.equal(calls.length, 0, 'nothing reached the request builder');
+
+      // The code alone tells an integrator nothing about what to do instead,
+      // and this is the one refusal reachable by doing exactly what the API
+      // docs said before the feature existed. Both ways forward have to be in
+      // the body, because that is the only place a third-party client looks.
+      assert.match(res.body.details.hint, /only the new message/i, 'names the persisted mode');
+      assert.match(res.body.details.hint, /\bephemeral\b/, 'and the way to keep the old shape');
     });
   });
 
