@@ -280,6 +280,76 @@ describe('useChats', () => {
     expect(result.current.loading).toBe(false);
   });
 
+  test('an invalidate keeps the pages the viewer has loaded, and refreshes the first', async () => {
+    // Renaming or deleting on a `/chats` that has been paged through used to
+    // replace every loaded row with the thirty of page one, under the user's
+    // hands and with the scroll position left pointing at nothing.
+    fetchChats
+      .mockResolvedValueOnce(page(CHATS, 'cursor-1'))
+      .mockResolvedValueOnce(page([{ id: 'chat-c' }], null));
+    const { result } = renderHook(() => useChats());
+    await waitFor(() => expect(result.current.loading).toBe(false));
+    await act(async () => {
+      await result.current.loadMore();
+    });
+    expect(result.current.chats.map(c => c.id)).toEqual(['chat-a', 'chat-b', 'chat-c']);
+
+    // The refreshed first page: `chat-a` has been renamed, and nothing else
+    // about the list has changed.
+    fetchChats.mockResolvedValueOnce(
+      page([{ ...CHATS[0], title: 'renamed' }, CHATS[1]], 'cursor-1')
+    );
+    await act(async () => {
+      invalidateChatsCache();
+    });
+
+    await waitFor(() => expect(result.current.chats[0].title).toBe('renamed'));
+    expect(result.current.chats.map(c => c.id)).toEqual(['chat-a', 'chat-b', 'chat-c']);
+    // The cursor that follows the *accumulated* list, not the one that follows
+    // page one — that would hand back rows already on screen.
+    expect(result.current.hasMore).toBe(false);
+  });
+
+  test('a row the refresh pulls up into page one is not also left in the tail', async () => {
+    fetchChats
+      .mockResolvedValueOnce(page(CHATS, 'cursor-1'))
+      .mockResolvedValueOnce(page([{ id: 'chat-c' }], null));
+    const { result } = renderHook(() => useChats());
+    await waitFor(() => expect(result.current.loading).toBe(false));
+    await act(async () => {
+      await result.current.loadMore();
+    });
+
+    // `chat-c` was answered, so it now sorts onto page one.
+    fetchChats.mockResolvedValueOnce(page([{ id: 'chat-c' }, CHATS[0], CHATS[1]], 'cursor-1'));
+    await act(async () => {
+      invalidateChatsCache();
+    });
+
+    await waitFor(() => expect(result.current.chats[0].id).toBe('chat-c'));
+    expect(result.current.chats.map(c => c.id)).toEqual(['chat-c', 'chat-a', 'chat-b']);
+  });
+
+  test('with nothing mounted an invalidate drops the list outright', async () => {
+    fetchChats
+      .mockResolvedValueOnce(page(CHATS, 'cursor-1'))
+      .mockResolvedValueOnce(page([{ id: 'chat-c' }], null));
+    const first = renderHook(() => useChats());
+    await waitFor(() => expect(first.result.current.loading).toBe(false));
+    await act(async () => {
+      await first.result.current.loadMore();
+    });
+    first.unmount();
+
+    // No list on screen to protect, so the next mount starts from a clean page
+    // one rather than inheriting a tail nobody was looking at.
+    invalidateChatsCache();
+    fetchChats.mockResolvedValueOnce(page([CHATS[0]], null));
+    const second = renderHook(() => useChats());
+    await waitFor(() => expect(second.result.current.loading).toBe(false));
+    expect(second.result.current.chats.map(c => c.id)).toEqual(['chat-a']);
+  });
+
   test('a different viewer gets their own list', async () => {
     fetchChats.mockResolvedValueOnce(page(CHATS)).mockResolvedValueOnce(page([{ id: 'other' }]));
     const { result, rerender } = renderHook(() => useChats());

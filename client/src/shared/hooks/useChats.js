@@ -18,7 +18,7 @@ const CACHE_TTL_MS = 30_000;
 /** Page size asked for; matches the server's own default. */
 export const CHATS_PAGE_SIZE = 30;
 
-let cache = null; // { key, promise, chats, nextCursor, at }
+let cache = null; // { key, promise, chats, nextCursor, pages, at }
 let morePromise = null; // in-flight `loadMore`, shared like the first page
 const listeners = new Set();
 
@@ -51,11 +51,11 @@ function loadChats(key) {
   const previous = cache && cache.key === key ? cache : null;
   const promise = fetchChats({ limit: CHATS_PAGE_SIZE })
     .then(data => {
-      const chats = Array.isArray(data?.items) ? data.items : [];
-      const nextCursor = data?.nextCursor || null;
-      cache = { key, chats, nextCursor, at: Date.now(), promise: null };
+      const head = Array.isArray(data?.items) ? data.items : [];
+      const merged = mergeHead(head, data?.nextCursor || null, previous);
+      cache = { key, ...merged, at: Date.now(), promise: null };
       notify();
-      return { chats, nextCursor };
+      return { chats: merged.chats, nextCursor: merged.nextCursor };
     })
     .catch(error => {
       if (cache && cache.promise === promise) cache = previous;
@@ -66,9 +66,43 @@ function loadChats(key) {
     promise,
     chats: previous?.chats ?? null,
     nextCursor: previous?.nextCursor ?? null,
+    pages: previous?.pages ?? 1,
     at: previous?.at ?? 0
   };
   return promise;
+}
+
+/**
+ * Fold a freshly read first page into the pages a consumer had already loaded.
+ *
+ * A refresh reads page one, because that is the only page whose cursor is
+ * known without walking there. On a list that was never paged that is the whole
+ * list and there is nothing to fold. On a list the user has paged through it is
+ * the first 30 of several hundred rows, and taking it as the new list drops
+ * everything below it: renaming a chat on `/chats` after scrolling for a while
+ * used to snap the page back to thirty rows under the user's hands, with the
+ * scroll position pointing at nothing.
+ *
+ * So the head is replaced and the tail is kept. A row the refresh moved up into
+ * page one is dropped from the tail rather than shown twice, and the cursor
+ * stays the one that describes the end of the accumulated list — page one's own
+ * cursor would hand `loadMore` rows the user is already looking at.
+ *
+ * The tail is not re-read, so a chat renamed in another tab keeps its old title
+ * down there until the list is loaded afresh. That is the cost, and it is the
+ * smaller one: before this the tail did not go stale, it disappeared.
+ *
+ * @param {Object[]} head - The freshly read first page.
+ * @param {string|null} headCursor - Cursor that follows the first page.
+ * @param {Object|null} previous - The cache entry being refreshed, if any.
+ * @returns {{chats: Object[], nextCursor: string|null, pages: number}}
+ */
+function mergeHead(head, headCursor, previous) {
+  const pages = previous?.pages ?? 1;
+  if (!previous?.chats || pages <= 1) return { chats: head, nextCursor: headCursor, pages: 1 };
+  const seen = new Set(head.map(chat => chat?.id));
+  const tail = previous.chats.filter(chat => chat?.id && !seen.has(chat.id));
+  return { chats: head.concat(tail), nextCursor: previous.nextCursor, pages };
 }
 
 /**
@@ -97,7 +131,14 @@ function appendPage(key) {
       const nextCursor = data?.nextCursor || null;
       // `at` moves with the append: the accumulated list is what consumers now
       // hold, and letting it expire would silently snap them back to page one.
-      cache = { key, chats, nextCursor, at: Date.now(), promise: null };
+      cache = {
+        key,
+        chats,
+        nextCursor,
+        pages: (cache.pages ?? 1) + 1,
+        at: Date.now(),
+        promise: null
+      };
       notify();
       return { chats, nextCursor };
     })
@@ -108,9 +149,21 @@ function appendPage(key) {
   return promise;
 }
 
-/** Drop the shared chat cache and make every mounted consumer refetch. */
+/**
+ * Mark the shared chat cache stale so every mounted consumer refetches.
+ *
+ * Stale rather than gone, as long as somebody is looking at it. A rename or a
+ * delete on a `/chats` the user has paged through used to replace several
+ * hundred rows with the thirty of page one, under their hands and with the
+ * scroll position left pointing at nothing. While a consumer is mounted the
+ * rows it is rendering are kept and what the refetch reads is folded back in by
+ * {@link mergeHead}.
+ *
+ * With no consumer mounted there is no list on screen to protect, so the entry
+ * is dropped outright and the next mount starts from a clean page one.
+ */
 export function invalidateChatsCache() {
-  cache = null;
+  cache = cache && listeners.size > 0 ? { ...cache, at: 0, promise: null } : null;
   morePromise = null;
   notify();
 }
