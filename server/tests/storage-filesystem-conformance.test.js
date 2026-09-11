@@ -413,7 +413,9 @@ describe('filesystem storage provider: lease takeover (filesystem-specific)', ()
     //
     // Here the taker is still inside its critical section when the stale
     // holder finishes, which is the ordinary shape of a takeover — the lease
-    // was taken *because* the holder was slow, so it is still running. Without
+    // was taken *because* the holder went quiet, and a holder that went quiet
+    // without dying (a wedged event loop, a stalled disk) is still running when
+    // it comes back. `renewMs: 0` is how that holder is produced. Without
     // the guard it unlinks the taker's lease on its way out, and a third
     // caller then acquires the same lock while the taker is still working:
     // two critical sections at once, which is the one thing this class exists
@@ -424,12 +426,17 @@ describe('filesystem storage provider: lease takeover (filesystem-specific)', ()
     try {
       const name = 'stale-holder';
 
-      // The stale holder: a section that outlives its own 50ms lease.
+      // The stale holder: a section that outlives its own 50ms lease without
+      // refreshing it.
       let finishStale;
       const staleDone = new Promise(resolve => {
         finishStale = resolve;
       });
-      const stale = provider.locks.withLock(name, () => staleDone, { ttlMs: 50, waitMs: 1000 });
+      const stale = provider.locks.withLock(name, () => staleDone, {
+        ttlMs: 50,
+        waitMs: 1000,
+        renewMs: 0
+      });
 
       // Long enough for the lease to age past its TTL.
       await delay(120);

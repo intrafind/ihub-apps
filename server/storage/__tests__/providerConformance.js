@@ -1695,12 +1695,17 @@ export function runProviderConformance({ name, createProvider, capabilities, raw
         }
       });
 
-      it('a lease older than its ttlMs is taken over', async () => {
+      it('a lease nobody is refreshing is taken over once it ages past its ttlMs', async () => {
         const lock = nextId('lock');
         const order = [];
         const entered = deferred();
         const release = deferred();
 
+        // `renewMs: 0` is how the suite produces a crashed holder: a lease
+        // nobody is refreshing is exactly what a process that died leaves
+        // behind, and it is the only thing a waiter can go on — no filesystem
+        // tells it whether the pid in the lease is still running, and with a
+        // shared volume the pid need not even be on this machine.
         const holder = shared.locks.withLock(
           lock,
           async () => {
@@ -1710,7 +1715,7 @@ export function runProviderConformance({ name, createProvider, capabilities, raw
             order.push('holder:exit');
             return 'holder';
           },
-          { ttlMs: 30, waitMs: 2000 }
+          { ttlMs: 30, waitMs: 2000, renewMs: 0 }
         );
         await entered.promise;
 
@@ -1739,6 +1744,137 @@ export function runProviderConformance({ name, createProvider, capabilities, raw
         }
       });
 
+      it('a section that outlives its ttlMs keeps the lease, and the waiter is told', async () => {
+        // The other half of the same rule, and the one that makes `ttlMs`
+        // mean something callers can size. A running holder refreshes its
+        // lease, so outliving the TTL no longer costs it the lock; a waiter
+        // that cannot get in is told so by `waitMs`, rather than being handed
+        // a lease that is still in use.
+        //
+        // Without renewal this test acquires: at 45ms the 30ms lease looks
+        // abandoned, the waiter evicts it, and both sections run — with
+        // nothing raised on either side. That silence is the whole problem.
+        const lock = nextId('lock');
+        let overlapped = false;
+        const entered = deferred();
+        const release = deferred();
+
+        const holder = shared.locks.withLock(
+          lock,
+          async () => {
+            entered.resolve();
+            await release.promise;
+            return 'holder';
+          },
+          { ttlMs: 30, waitMs: 2000 }
+        );
+        await entered.promise;
+
+        try {
+          await delay(SHORT_WAIT_MS);
+          await assert.rejects(
+            () =>
+              shared.locks.withLock(
+                lock,
+                async () => {
+                  overlapped = true;
+                },
+                { waitMs: SHORT_WAIT_MS }
+              ),
+            LockTimeoutError,
+            'a refreshed lease is held, not abandoned'
+          );
+          assert.equal(overlapped, false, 'and the waiting section never ran');
+
+          // Still the holder's to release, and released cleanly when it ends.
+          release.resolve();
+          assert.equal(await holder, 'holder');
+          assert.equal(
+            await shared.locks.withLock(lock, async () => 'after', { waitMs: 500 }),
+            'after',
+            'renewal does not leak the lease past the section'
+          );
+        } finally {
+          release.resolve();
+          await Promise.allSettled([holder]);
+        }
+      });
+
+      it('a holder that lost its lease stops refreshing it instead of stealing it back', async () => {
+        // Renewal narrows the overlap window but cannot close it: a holder
+        // wedged for longer than `ttlMs` — a blocked event loop, a stalled
+        // disk — misses its refresh, is taken over, and then comes back. Here
+        // that is arranged by refreshing more slowly than the lease lives.
+        //
+        // What it must not do on the way back is write its own token over the
+        // lease that replaced it. That single write costs the new holder its
+        // lock twice over: its own refresh then finds a foreign owner and gives
+        // up, so its lease ages out under it, and the returning holder's
+        // release finds its own token and unlinks a lease still in use.
+        const lock = nextId('lock');
+        const staleRelease = deferred();
+        const takerEntered = deferred();
+        const takerRelease = deferred();
+
+        const stale = shared.locks.withLock(lock, async () => staleRelease.promise, {
+          ttlMs: 30,
+          waitMs: 2000,
+          renewMs: 300
+        });
+        await delay(SHORT_WAIT_MS);
+
+        const taker = shared.locks.withLock(
+          lock,
+          async () => {
+            takerEntered.resolve();
+            await takerRelease.promise;
+            return 'taker';
+          },
+          { ttlMs: 5000, waitMs: 2000 }
+        );
+
+        try {
+          await takerEntered.promise;
+          // Past the stale holder's first refresh, which now lands on a lease
+          // that is no longer its own.
+          await delay(400);
+
+          let intruded = false;
+          await assert.rejects(
+            () =>
+              shared.locks.withLock(
+                lock,
+                async () => {
+                  intruded = true;
+                },
+                { waitMs: SHORT_WAIT_MS }
+              ),
+            LockTimeoutError,
+            "the taker's lease is intact and still young"
+          );
+          assert.equal(intruded, false);
+
+          staleRelease.resolve();
+          await stale;
+          await assert.rejects(
+            () => shared.locks.withLock(lock, async () => {}, { waitMs: SHORT_WAIT_MS }),
+            LockTimeoutError,
+            'and the stale holder leaving did not hand the lock away either'
+          );
+
+          takerRelease.resolve();
+          assert.equal(await taker, 'taker');
+          assert.equal(
+            await shared.locks.withLock(lock, async () => 'after', { waitMs: 500 }),
+            'after'
+          );
+        } finally {
+          staleRelease.resolve();
+          takerRelease.resolve();
+          await Promise.allSettled([stale, taker]);
+        }
+      });
+
       it('an expired lease under contention is taken over by one waiter at a time', async () => {
         const lock = nextId('lock');
         // A holder that outlives its own TTL: every waiter below finds a lease
@@ -1754,7 +1890,7 @@ export function runProviderConformance({ name, createProvider, capabilities, raw
             await release.promise;
             return 'holder';
           },
-          { ttlMs: 20, waitMs: 2000 }
+          { ttlMs: 20, waitMs: 2000, renewMs: 0 }
         );
         await entered.promise;
         await delay(SHORT_WAIT_MS);

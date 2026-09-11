@@ -528,6 +528,12 @@ describe('startChatRetentionSweep', () => {
           getPlatformConfig: () => ({ chats: { retentionDays: 90, maxChatsPerUser: 0 } }),
           intervalMs: 60_000
         });
+        // Counted before the first sweep runs, not after: the capture is a
+        // global `setInterval`, and the sweep's own deletes take storage locks,
+        // which keep their leases alive on an interval of their own. The claim
+        // is about what `startChatRetentionSweep` installs, and it installs it
+        // synchronously.
+        const installed = timers.length;
         try {
           await waitFor(
             async () => (await repository.getChat('chat-old')) === null,
@@ -535,7 +541,7 @@ describe('startChatRetentionSweep', () => {
           );
           assert.ok(await repository.getChat('chat-fresh'));
 
-          assert.equal(timers.length, 1, 'exactly one interval is installed');
+          assert.equal(installed, 1, 'exactly one interval is installed');
           assert.equal(
             timers[0].hasRef(),
             false,

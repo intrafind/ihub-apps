@@ -22,6 +22,13 @@
  * {@link FilesystemLockManager#_evictExpired} for why an `unlink` there is a
  * compare-and-set against nothing.
  *
+ * A held lease is refreshed while its section runs
+ * ({@link FilesystemLockManager#_startRenewal}), so `ttlMs` bounds only how
+ * long a *crashed* holder blocks the name. Without that it also bounded how
+ * long the section itself could take, and a section that overran it was evicted
+ * and carried on — two holders at once, with nothing logged on the side that
+ * lost.
+ *
  * @module storage/providers/filesystem/FilesystemLockManager
  */
 import { promises as fs } from 'fs';
@@ -131,6 +138,17 @@ function positiveNumber(value, fallback, label) {
   return value;
 }
 
+/** Same, but 0 is a meaningful value — it switches lease renewal off. */
+function nonNegativeNumber(value, fallback, label) {
+  if (value === undefined || value === null) return fallback;
+  if (typeof value !== 'number' || !Number.isFinite(value) || value < 0) {
+    throw new StorageError(`${label} must be zero or a positive number`, {
+      code: 'INVALID_LOCK_OPTIONS'
+    });
+  }
+  return value;
+}
+
 /**
  * Filesystem {@link LockManager}: exclusive named leases with TTL takeover.
  */
@@ -179,12 +197,15 @@ export class FilesystemLockManager extends LockManager {
    * @param {Object} [opts]
    * @param {number} [opts.ttlMs=30000] - Lease lifetime; an older lease is taken over
    * @param {number} [opts.waitMs=5000] - How long to wait for a held lease
+   * @param {number} [opts.renewMs] - Refresh interval while `fn` runs; defaults
+   *   to a third of `ttlMs`. 0 disables renewal, so the lease ages out under a
+   *   running holder
    * @returns {Promise<T>} Whatever `fn` returned
    * @throws {InvalidKeyError} When `name` is not a non-empty string
    * @throws {LockTimeoutError} When the lease could not be acquired within `waitMs`
    * @template T
    */
-  async withLock(name, fn, { ttlMs = DEFAULT_TTL_MS, waitMs = DEFAULT_WAIT_MS } = {}) {
+  async withLock(name, fn, { ttlMs = DEFAULT_TTL_MS, waitMs = DEFAULT_WAIT_MS, renewMs } = {}) {
     if (typeof name !== 'string' || name.length === 0) {
       throw new InvalidKeyError(`Invalid lock name: ${String(name).slice(0, 64)}`);
     }
@@ -195,6 +216,7 @@ export class FilesystemLockManager extends LockManager {
     }
     const ttl = positiveNumber(ttlMs, DEFAULT_TTL_MS, 'ttlMs');
     const wait = positiveNumber(waitMs, DEFAULT_WAIT_MS, 'waitMs');
+    const renew = nonNegativeNumber(renewMs, Math.max(1, Math.floor(ttl / 3)), 'renewMs');
 
     const lockPath = containedPath(this._baseDir, LOCKS_DIR, leaseFileName(name));
     // The owner token is what makes a takeover safe: only the holder that still
@@ -203,11 +225,143 @@ export class FilesystemLockManager extends LockManager {
     const owner = crypto.randomUUID();
     await this._acquire(lockPath, owner, ttl, wait, name);
     this._held.set(lockPath, { owner, name });
+    const stopRenewal = renew > 0 ? this._startRenewal(lockPath, owner, ttl, renew, name) : null;
     try {
       return await fn();
     } finally {
+      stopRenewal?.();
       this._held.delete(lockPath);
       await this._release(lockPath, owner, name);
+    }
+  }
+
+  /**
+   * Keep a held lease young while its critical section runs.
+   *
+   * Without this the TTL is doing two incompatible jobs: bounding how long a
+   * crashed holder blocks everyone, and bounding how long the section may take.
+   * Sized for the crash it is short, and a section that overruns it is evicted
+   * and keeps running — two critical sections at once, silently, which is the
+   * one thing the lock exists to prevent. Sized for the section it is long, and
+   * a crashed worker wedges the name for that whole time.
+   *
+   * Renewal separates them. `ttlMs` becomes only "how long after a holder stops
+   * reporting in is it presumed dead", and a live holder is never preempted
+   * however long it takes — the waiter gets its {@link LockTimeoutError} at
+   * `waitMs` instead, which is a failure the caller can see and handle, where
+   * an overlap is not. A process that dies stops renewing and its lease ages
+   * out exactly as before.
+   *
+   * The timer is unref'd: it must never be the reason the process stays alive.
+   *
+   * @param {string} lockPath - Absolute lease file path
+   * @param {string} owner - This holder's token
+   * @param {number} ttlMs - Lease lifetime rewritten on each refresh
+   * @param {number} renewMs - Interval between refreshes
+   * @param {string} name - Lock name, for the log message
+   * @returns {() => void} Stops the renewal; safe to call more than once
+   * @private
+   */
+  _startRenewal(lockPath, owner, ttlMs, renewMs, name) {
+    let stopped = false;
+    let inFlight = false;
+    const stop = () => {
+      stopped = true;
+      clearInterval(timer);
+    };
+    const timer = setInterval(() => {
+      // A refresh slower than the interval must not queue up behind itself; on
+      // a loaded disk that would spend the whole budget writing lease files.
+      if (stopped || inFlight) return;
+      inFlight = true;
+      void this._touch(lockPath, owner, ttlMs, name)
+        .then(kept => {
+          // Once the lease is gone it is not coming back, and the section can
+          // run for a long time yet: stop rather than re-open the file on
+          // every interval for the rest of it.
+          if (!kept) stop();
+        })
+        .finally(() => {
+          inFlight = false;
+        });
+    }, renewMs);
+    timer.unref?.();
+    return stop;
+  }
+
+  /**
+   * Rewrite our own lease's start time, and report whether we still hold it.
+   *
+   * Opened `r+` rather than written by path: a lease that has been evicted is
+   * gone from that path, and a plain write would put a file carrying our dead
+   * token back where the new holder is about to create theirs. `r+` fails with
+   * `ENOENT` instead, and we simply stop renewing.
+   *
+   * The payload is written before the truncate so the file is never briefly
+   * empty. A reader that catches a torn refresh mid-write judges the lease
+   * unparseable, which `_evictExpired` handles by putting it back — the right
+   * answer here, since a lease being refreshed has a holder that is alive.
+   *
+   * @param {string} lockPath - Absolute lease file path
+   * @param {string} owner - This holder's token
+   * @param {number} ttlMs - Lease lifetime to record
+   * @param {string} name - Lock name, for the log message
+   * @returns {Promise<boolean>} False once the lease is no longer ours
+   * @private
+   */
+  async _touch(lockPath, owner, ttlMs, name) {
+    let handle;
+    try {
+      handle = await fs.open(lockPath, 'r+');
+    } catch (err) {
+      if (err.code !== 'ENOENT') {
+        logger.warn('Could not refresh a storage lease', {
+          component: COMPONENT,
+          name: String(name).slice(0, 64),
+          error: err.message
+        });
+        // Transient — keep refreshing rather than abandoning a lease we hold.
+        return true;
+      }
+      logger.warn('Storage lease disappeared while it was held', {
+        component: COMPONENT,
+        name: String(name).slice(0, 64)
+      });
+      return false;
+    }
+    try {
+      const current = await handle.readFile('utf8');
+      let parsed = null;
+      try {
+        parsed = JSON.parse(current);
+      } catch {
+        parsed = null;
+      }
+      if (parsed?.owner !== owner) {
+        logger.warn('Storage lease was taken over while it was held', {
+          component: COMPONENT,
+          name: String(name).slice(0, 64)
+        });
+        return false;
+      }
+      const payload = JSON.stringify({
+        owner,
+        pid: process.pid,
+        at: new Date().toISOString(),
+        ttlMs
+      });
+      await handle.write(payload, 0, 'utf8');
+      await handle.truncate(Buffer.byteLength(payload, 'utf8'));
+      return true;
+    } catch (error) {
+      logger.warn('Could not refresh a storage lease', {
+        component: COMPONENT,
+        name: String(name).slice(0, 64),
+        error: error.message
+      });
+      return true;
+    } finally {
+      await handle.close().catch(() => {});
     }
   }
 

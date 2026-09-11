@@ -24,16 +24,20 @@ import { NotSupportedError } from './errors.js';
  * Options for {@link LockManager#withLock}.
  *
  * @typedef {Object} LockOptions
- * @property {number} [ttlMs=30000] - Lease lifetime. A lease older than this
- *   is treated as abandoned by a dead holder and taken over — including while
- *   its holder is still running, because nothing distinguishes a slow holder
- *   from a dead one. It is therefore also a ceiling on how long `fn` may take:
- *   pick a `ttlMs` that exceeds the worst case of the critical section, not
- *   just the time a crashed holder should block others for. A section that
- *   overruns it loses mutual exclusion silently, which is the failure the lock
- *   exists to prevent. There is no lease renewal; adding one is step 3.
+ * @property {number} [ttlMs=30000] - How long after a holder stops reporting in
+ *   it is presumed dead and its lease taken over. A live holder refreshes the
+ *   lease while `fn` runs (see `renewMs`), so this is **not** a ceiling on how
+ *   long the critical section may take — size it for how long a crashed worker
+ *   should be allowed to block the name, not for the worst case of `fn`.
  * @property {number} [waitMs=5000] - How long to wait for a held lock before
  *   giving up with a {@link LockTimeoutError}.
+ * @property {number} [renewMs] - How often the lease is refreshed while `fn`
+ *   runs; defaults to a third of `ttlMs`, so two refreshes may be missed before
+ *   anyone judges the holder dead. 0 turns renewal off, which restores the
+ *   older behaviour: the lease ages out under its running holder and is taken
+ *   over, leaving two critical sections running at once. That is what a crashed
+ *   holder looks like from outside, and it is how the conformance suite
+ *   produces one; it is not something a caller should want.
  */
 
 /**
@@ -52,11 +56,16 @@ export class LockManager {
    *   `utils/fileLock.js#withFileLock` deliberately does the opposite (it
    *   continues after its timeout with a warning), so it cannot back this
    *   method directly.
-   * - A lease older than `ttlMs` is taken over: its previous holder crashed —
-   *   or is simply slower than its own TTL, which looks identical from
-   *   outside. A holder whose lease was taken over must not release the new
-   *   one. See {@link LockOptions} on sizing `ttlMs` for the section, not just
-   *   for a crash.
+   * - A lease is refreshed while `fn` runs, so it only ages out once its holder
+   *   stops refreshing it — a crash, or an event loop wedged for longer than
+   *   `ttlMs`. A waiter that finds a lease older than `ttlMs` takes it over. A
+   *   holder whose lease was taken over must not release the new one, and must
+   *   stop refreshing it.
+   * - **The overlap is not gone, only narrowed to a crash.** A holder wedged
+   *   past `ttlMs` is still evicted while it runs, because nothing can tell it
+   *   from a dead one. Sections that would corrupt data if they ran twice need
+   *   their own guard — a conditional write, or idempotence — not just the
+   *   lock.
    * - **Reentrancy is not supported.** A nested `withLock` on the same name
    *   from inside `fn` deadlocks until `waitMs` expires and then throws
    *   {@link LockTimeoutError}; callers must not nest.
