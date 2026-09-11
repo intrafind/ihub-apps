@@ -109,6 +109,26 @@ export function getStorage() {
 }
 
 /**
+ * Read one facet of a provider without letting an accessor throw out of it.
+ *
+ * Four runtime stores had this verbatim, JSDoc included, because every one of
+ * them has to answer the same question: a provider that does not implement a
+ * facet is unavailable storage, which each of them already knows how to be —
+ * and a getter that throws on the way to finding that out is not.
+ *
+ * @param {Object|null} provider - Storage provider, or null.
+ * @param {string} facet - Facet name: `documents`, `logs`, `locks`, `notifier`.
+ * @returns {Object|null} The facet, or null when the provider has none.
+ */
+export function readFacet(provider, facet) {
+  try {
+    return provider?.[facet] || null;
+  } catch {
+    return null;
+  }
+}
+
+/**
  * Whether a storage provider is up and usable.
  *
  * @returns {boolean}

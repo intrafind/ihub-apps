@@ -290,6 +290,29 @@ describe('configuration store: preserved read and write semantics', () => {
       );
     });
 
+    it('answers null for a resource that exists nowhere when asked not to invent one', async () => {
+      // What a read wants. The admin routes carried their own copy of this
+      // whole resolution for exactly one reason: the fallback. Handed a path
+      // to a file that does not exist, an update creates it — so an app whose
+      // file was deleted underneath the UI would be silently recreated by the
+      // next save instead of answering 404.
+      assert.equal(
+        await configStore.resolveIdToPath('apps', 'about-to-be-created', {
+          createIfMissing: false
+        }),
+        null
+      );
+      // And it still finds one that does exist, by either route.
+      assert.equal(
+        await configStore.resolveIdToPath('apps', 'renamed-app', { createIfMissing: false }),
+        'apps/legacy-file-name.json'
+      );
+      assert.equal(
+        await configStore.resolveIdToPath('apps', 'plain', { createIfMissing: false }),
+        'apps/plain.json'
+      );
+    });
+
     it('accepts the directory form resourceLoader is configured with', async () => {
       await place(
         'agents/profiles/renamed-profile-file.json',

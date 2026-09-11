@@ -52,7 +52,7 @@ import { createDebouncedJsonStore } from '../../utils/debouncedJsonStore.js';
 import { tryCreateExclusive, readJsonMarker, removeIfExists } from '../../utils/fileLock.js';
 import { testRegexSafely, MAX_TESTED_INPUT_LENGTH } from '../../utils/safeRegex.js';
 import { isValidId } from '../../utils/pathSecurity.js';
-import { getStorage } from '../../storage/bootstrap.js';
+import { getStorage, readFacet } from '../../storage/bootstrap.js';
 import { resolveActorId, isAdminUser } from './runIdentity.js';
 import { publish as busPublish, subscribe as busSubscribe } from '../../clusterBus.js';
 import logger from '../../utils/logger.js';
@@ -143,22 +143,6 @@ const MAX_IMPORT_INTERACTIONS = 5000;
  * one thing the lock is here to prevent.
  */
 const IMPORT_LOCK_OPTIONS = { ttlMs: 300_000, waitMs: 1000 };
-
-/**
- * A facet of a storage provider, or null when there is no provider or the
- * provider does not offer that facet.
- *
- * @param {Object|null} provider - Storage provider, or null.
- * @param {string} facet - Facet name (`documents`, `locks`).
- * @returns {Object|null} The facet, or null.
- */
-function readFacet(provider, facet) {
-  try {
-    return provider?.[facet] || null;
-  } catch {
-    return null;
-  }
-}
 
 /**
  * Document key for an interaction id.

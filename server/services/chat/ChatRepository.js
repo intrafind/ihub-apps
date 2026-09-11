@@ -29,7 +29,7 @@ import { randomUUID } from 'crypto';
 import logger from '../../utils/logger.js';
 import { isValidId } from '../../utils/pathSecurity.js';
 import { StorageError } from '../../storage/errors.js';
-import { getStorage } from '../../storage/bootstrap.js';
+import { getStorage, readFacet } from '../../storage/bootstrap.js';
 import { RUNTIME_NAMESPACES } from '../../storage/namespaces.js';
 import { chatMessageCap } from './chatPersistence.js';
 
@@ -943,23 +943,6 @@ export class ChatRepository {
 let cachedRepository = null;
 /** @type {import('../../storage/StorageProvider.js').StorageProvider|null} */
 let cachedProvider = null;
-
-/**
- * Read a provider facet without letting a provider that does not implement it
- * throw out of the accessor — an unsupported facet is unavailable storage,
- * which the repository already knows how to be.
- *
- * @param {Object|null} provider - Storage provider.
- * @param {string} facet - Facet name.
- * @returns {Object|null}
- */
-function readFacet(provider, facet) {
-  try {
-    return provider?.[facet] || null;
-  } catch {
-    return null;
-  }
-}
 
 /**
  * The process-wide chat repository over the bootstrapped storage provider.

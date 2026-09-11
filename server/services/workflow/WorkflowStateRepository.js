@@ -43,7 +43,7 @@ import { getRootDir } from '../../pathUtils.js';
 import logger from '../../utils/logger.js';
 import { atomicWriteJSON } from '../../utils/atomicWrite.js';
 import { isValidId } from '../../utils/pathSecurity.js';
-import { getStorage } from '../../storage/bootstrap.js';
+import { getStorage, readFacet } from '../../storage/bootstrap.js';
 import { RUNTIME_NAMESPACES } from '../../storage/namespaces.js';
 
 const COMPONENT = 'WorkflowStateRepository';
@@ -113,21 +113,6 @@ const RESERVED_DIRS = new Set(['.owners', '.locks']);
  * entirely rather than racing it.
  */
 const IMPORT_LOCK_OPTIONS = { ttlMs: 300_000, waitMs: 1000 };
-
-/**
- * A facet of a provider, or null when there is no provider or no facet.
- *
- * @param {Object|null} provider - Storage provider.
- * @param {string} facet - Facet name.
- * @returns {Object|null}
- */
-function readFacet(provider, facet) {
-  try {
-    return provider?.[facet] || null;
-  } catch {
-    return null;
-  }
-}
 
 /**
  * Whether a parsed value looks like a workflow execution state.

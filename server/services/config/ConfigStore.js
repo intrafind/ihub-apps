@@ -714,17 +714,28 @@ export class ConfigStore {
    *
    * @param {string} nsOrDir - Namespace name, or a directory under `contents/`
    * @param {string} id - Resource id
+   * @param {Object} [options]
+   * @param {boolean} [options.createIfMissing=true] - Fall back to
+   *   `<id>.json` for a resource that exists nowhere. False answers null
+   *   instead, which is what a read wants: a 404, rather than a path to a file
+   *   that does not exist and an update that quietly creates it.
    * @returns {Promise<string|null>} Path relative to `contents/`, or null when
-   *   the namespace or the id is not usable as a file name
+   *   the namespace or the id is not usable as a file name — or when the
+   *   resource does not exist and `createIfMissing` is false
    */
-  async resolveIdToPath(nsOrDir, id) {
+  async resolveIdToPath(nsOrDir, id, { createIfMissing = true } = {}) {
     const target = resolveTarget(nsOrDir);
     if (!target || !isValidId(id)) return null;
     const expected = `${target.dir}/${id}${RAW_DOC_EXT}`;
     if ((await this.readJson(expected)) !== null) return expected;
     const documents = await this.listDocuments(target.ns || target.dir);
     const match = documents.find(item => item.data?.id === id);
-    return match ? match.path : expected;
+    if (match) return match.path;
+    // `createIfMissing: false` is what a *read* wants: null, so the caller can
+    // answer 404 rather than be handed a path to a file that does not exist
+    // and quietly create it. Writers want the opposite, which is why the
+    // default stays as it is.
+    return createIfMissing ? expected : null;
   }
 }
 

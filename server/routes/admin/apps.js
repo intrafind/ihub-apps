@@ -16,24 +16,6 @@ import { logAudit } from '../../services/AuditLogService.js';
 import { saveSnapshot } from '../../services/ChangeHistoryService.js';
 
 /**
- * Find the file an app ID actually lives in.
- *
- * A file name is allowed to diverge from the `id` inside it, so the expected
- * name is tried first and the namespace searched second. Null means the app
- * has no file at all; every caller turns that into a 404 rather than creating
- * one, which is what keeps an update from forking an app into two files.
- *
- * @param {string} appId - The app ID to search for
- * @returns {Promise<string|null>} Path relative to `contents/`, or null
- */
-async function findAppFile(appId) {
-  const expected = `apps/${appId}.json`;
-  if ((await configStore.readJson(expected)) !== null) return expected;
-  const documents = await configStore.listDocuments('apps');
-  return documents.find(item => item.data?.id === appId)?.path ?? null;
-}
-
-/**
  * @swagger
  * components:
  *   schemas:
@@ -574,7 +556,9 @@ export default function registerAdminAppsRoutes(app) {
       }
 
       // Find the actual file for this app ID (may not match ${appId}.json)
-      const appFilePath = await findAppFile(appId);
+      const appFilePath = await configStore.resolveIdToPath('apps', appId, {
+        createIfMissing: false
+      });
       if (!appFilePath) {
         return sendNotFound(res, 'App file');
       }
@@ -787,7 +771,9 @@ export default function registerAdminAppsRoutes(app) {
       const newEnabledState = !app.enabled;
       app.enabled = newEnabledState;
       // Find the actual file for this app ID (may not match ${appId}.json)
-      const appFilePath = await findAppFile(appId);
+      const appFilePath = await configStore.resolveIdToPath('apps', appId, {
+        createIfMissing: false
+      });
       if (!appFilePath) {
         return sendNotFound(res, 'App file');
       }
@@ -900,7 +886,9 @@ export default function registerAdminAppsRoutes(app) {
 
       for (const [index, id] of ids.entries()) {
         const order = index + 1;
-        const appFilePath = await findAppFile(id);
+        const appFilePath = await configStore.resolveIdToPath('apps', id, {
+          createIfMissing: false
+        });
         if (!appFilePath) {
           logger.warn('App file not found', { component: 'AdminApps', id });
           continue;
@@ -1027,7 +1015,9 @@ export default function registerAdminAppsRoutes(app) {
           if (app.enabled !== enabled) {
             app.enabled = enabled;
             // Find the actual file for this app ID (may not match ${id}.json)
-            const appFilePath = await findAppFile(id);
+            const appFilePath = await configStore.resolveIdToPath('apps', id, {
+              createIfMissing: false
+            });
             if (!appFilePath) {
               logger.warn('App file not found', { component: 'AdminApps', id });
               continue;
@@ -1118,7 +1108,9 @@ export default function registerAdminAppsRoutes(app) {
         return;
       }
 
-      const appFilePath = await findAppFile(appId);
+      const appFilePath = await configStore.resolveIdToPath('apps', appId, {
+        createIfMissing: false
+      });
       if (!appFilePath) {
         return sendNotFound(res, 'App');
       }
