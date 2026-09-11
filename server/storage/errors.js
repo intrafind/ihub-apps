@@ -113,6 +113,27 @@ export class UnknownProviderError extends StorageError {
  *
  * @property {number} httpStatus - 501 Not Implemented.
  */
+/**
+ * A facet was used after its provider shut down.
+ *
+ * The alternative is worse than an error: the filesystem append log buffers,
+ * so a record appended after the final flush is accepted, held in memory and
+ * then lost when the process exits — a run ledger that silently stops one
+ * record short of the event that mattered. Rejecting hands the caller
+ * something to log. Every consumer of the ledger already tolerates a failed
+ * append; none of them can tolerate one that succeeded and vanished.
+ */
+export class StorageShutDownError extends StorageError {
+  /**
+   * @param {string} message - What was attempted.
+   * @param {Object} [options] - Standard error options (`cause`, …).
+   */
+  constructor(message, options = {}) {
+    super(message, { ...options, code: 'STORAGE_SHUT_DOWN' });
+    this.name = 'StorageShutDownError';
+  }
+}
+
 export class NotSupportedError extends StorageError {
   /**
    * @param {string} message - Human-readable description.

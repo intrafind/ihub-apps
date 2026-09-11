@@ -192,7 +192,26 @@ export async function initializeStorage({ platformConfig, env } = {}) {
   pendingProviderName = name;
   pendingInit = (async () => {
     const provider = createProvider(name, config);
-    await provider.initialize?.();
+    try {
+      await provider.initialize?.();
+    } catch (error) {
+      // A half-initialized provider still has to be shut down. The filesystem
+      // one owns nothing worth reclaiming, but the contract tells implementers
+      // to open pools and connections here — and a backend that is down puts
+      // the server in a restart loop, which is precisely when a leak per
+      // attempt compounds. The original failure is what the caller needs, so a
+      // failing shutdown is logged and swallowed rather than replacing it.
+      try {
+        await provider.shutdown?.();
+      } catch (shutdownError) {
+        logger.warn('Shutdown of a provider that failed to initialize also failed', {
+          component: COMPONENT,
+          provider: name,
+          error: shutdownError.message
+        });
+      }
+      throw error;
+    }
     activeProvider = provider;
     activeProviderName = name;
     logger.info('Storage provider initialized', { component: COMPONENT, provider: name });

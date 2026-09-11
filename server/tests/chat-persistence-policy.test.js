@@ -24,6 +24,7 @@ import assert from 'node:assert/strict';
 import { FilesystemStorageProvider } from '../storage/providers/filesystem/index.js';
 import {
   bootstrapStorage,
+  getStorage,
   isStorageReady,
   shutdownStorageBootstrap
 } from '../storage/bootstrap.js';
@@ -263,6 +264,42 @@ describe('chat persistence policy: the real storage probe', () => {
 
     assert.equal(isStorageReady(), false, 'a shutdown puts the policy back to off');
     assert.equal(isChatPersistenceConfigured(FLAG_ON, {}), false);
+  });
+
+  it('keeps answering with the provider until its shutdown has finished', async () => {
+    // Forgetting the singleton before the flush left a window where
+    // `getStorage()` answered null while the provider was still draining. A
+    // consumer mid-request then silently switched to its legacy on-disk path
+    // halfway through a shutdown — one record to the old layout, the rest to
+    // the new, and nothing anywhere saying the destination changed.
+    //
+    // Shut down first, forget second: a caller that reaches the provider
+    // during the flush now gets either a completed write or a
+    // `STORAGE_SHUT_DOWN` rejection. Both are answerable.
+    const baseDir = await fs.mkdtemp(path.join(os.tmpdir(), 'ihub-shutdown-window-'));
+    try {
+      const provider = await bootstrapStorage({
+        storage: { provider: 'filesystem', filesystem: { baseDir, flushIntervalMs: 25 } }
+      });
+      assert.ok(provider, 'the provider came up');
+
+      const seen = [];
+      const realShutdown = provider.shutdown.bind(provider);
+      provider.shutdown = async () => {
+        seen.push({ ready: isStorageReady(), provider: getStorage() });
+        return realShutdown();
+      };
+
+      await shutdownStorageBootstrap();
+
+      assert.equal(seen.length, 1, 'shutdown ran once');
+      assert.equal(seen[0].ready, true, 'storage still reports ready while it drains');
+      assert.equal(seen[0].provider, provider, 'and getStorage() still hands out the provider');
+      assert.equal(isStorageReady(), false, 'and it is forgotten once the drain is done');
+    } finally {
+      await shutdownStorageBootstrap();
+      await fs.rm(baseDir, { recursive: true, force: true });
+    }
   });
 
   it('a broken storage configuration degrades instead of throwing', async () => {

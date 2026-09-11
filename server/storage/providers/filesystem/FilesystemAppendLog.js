@@ -35,7 +35,7 @@ import logger from '../../../utils/logger.js';
 import { createJsonlAppender } from '../../../utils/jsonlAppender.js';
 import { atomicWriteFile } from '../../../utils/atomicWrite.js';
 import { AppendLog } from '../../AppendLog.js';
-import { StorageError } from '../../errors.js';
+import { StorageError, StorageShutDownError } from '../../errors.js';
 import { containedPath, sanitizeBlobName, streamSegments } from './paths.js';
 
 const COMPONENT = 'FilesystemAppendLog';
@@ -208,6 +208,8 @@ export class FilesystemAppendLog extends AppendLog {
       maxQueueSize: MAX_QUEUE,
       component: COMPONENT
     });
+    /** Set by `stop()`; a stopped log refuses writes rather than buffering them. */
+    this._stopped = false;
   }
 
   /**
@@ -249,6 +251,7 @@ export class FilesystemAppendLog extends AppendLog {
    * @throws {StorageError} Code `INVALID_SEQ` or `INVALID_DATA`
    */
   async append(stream, entry, seq) {
+    this._assertRunning(`append to ${stream}`);
     const file = this.streamFilePath(stream);
     this._appender.append(this._record(entry, seq, file));
     return { stream, seq };
@@ -268,6 +271,7 @@ export class FilesystemAppendLog extends AppendLog {
    * @throws {StorageError} Code `INVALID_SEQ` or `INVALID_DATA`
    */
   async appendBatch(stream, items) {
+    this._assertRunning(`appendBatch to ${stream}`);
     const file = this.streamFilePath(stream);
     const list = Array.isArray(items) ? items : [];
     const records = list.map(item => this._record(item?.entry, item?.seq, file));
@@ -498,7 +502,27 @@ export class FilesystemAppendLog extends AppendLog {
    * @returns {void}
    */
   stop() {
+    this._stopped = true;
     this._appender.stop();
+  }
+
+  /**
+   * Refuse a write once the timers are gone.
+   *
+   * This log buffers: without the guard, a record appended after the final
+   * flush is queued into memory that nothing will ever drain, and the caller
+   * is told it was accepted. A run ledger then ends one record short of
+   * whatever the process was shutting down over, with nothing anywhere saying
+   * so. An error the caller can log is strictly better than a lie.
+   *
+   * @param {string} what - The attempted operation, for the message.
+   * @throws {StorageShutDownError} When the log has been stopped.
+   * @private
+   */
+  _assertRunning(what) {
+    if (this._stopped) {
+      throw new StorageShutDownError(`Storage has shut down; cannot ${what}`);
+    }
   }
 
   /**

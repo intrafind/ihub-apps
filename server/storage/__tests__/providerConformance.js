@@ -345,6 +345,31 @@ export function runProviderConformance({ name, createProvider, capabilities, raw
           await dispose();
         }
       });
+
+      it('append() after shutdown rejects instead of accepting the record', async () => {
+        // The one post-shutdown write the contract is strict about, because it
+        // is the one that can be accepted and then lost. A provider that
+        // buffers — the filesystem one does — otherwise queues the record into
+        // memory nothing will drain, tells the caller it landed, and exits. A
+        // run ledger then ends one record short of whatever the process was
+        // shutting down over, with nothing anywhere saying so.
+        //
+        // Every ledger consumer already handles a failed append. None of them
+        // can handle one that succeeded and vanished.
+        const { provider, dispose } = await startProvider(createProvider);
+        const stream = nextId('shutdown');
+        try {
+          await provider.logs.append(stream, { type: 'before' }, 1);
+          await provider.shutdown();
+          await assert.rejects(
+            () => provider.logs.append(stream, { type: 'after' }, 2),
+            error => error?.code === 'STORAGE_SHUT_DOWN',
+            'an append after shutdown must be refused, not buffered'
+          );
+        } finally {
+          await dispose();
+        }
+      });
     });
 
     describe('documents', () => {

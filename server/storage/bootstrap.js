@@ -133,10 +133,17 @@ export async function shutdownStorageBootstrap() {
     // provider moments after we cleared the singleton and leak it.
     await pendingBootstrap.catch(() => {});
   }
-  activeProvider = null;
+  // Shut down first, forget second. The other order left a window where
+  // `getStorage()` answered null while the provider was still flushing, so a
+  // consumer mid-request silently switched to its legacy on-disk path halfway
+  // through a shutdown — writing one record to the old layout and the rest to
+  // the new. Callers that reach the provider during the flush now get either a
+  // completed write or a `STORAGE_SHUT_DOWN` rejection, both of which are
+  // answerable; a silent change of destination is not.
   try {
     await shutdownStorage();
   } catch (error) {
     logger.error('Storage shutdown failed', { component: COMPONENT, error: error.message });
   }
+  activeProvider = null;
 }

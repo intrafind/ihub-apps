@@ -51,6 +51,28 @@ class StubProvider {
 
 registerProvider(STUB, config => new StubProvider(config));
 
+/** Registered under its own name so the failing case cannot affect the others. */
+const BROKEN = 'registry-test-broken';
+
+/** A provider whose backend is down: `initialize()` rejects after opening. */
+class BrokenProvider extends StubProvider {
+  get name() {
+    return BROKEN;
+  }
+
+  async initialize() {
+    this.initializeCount += 1;
+    throw new StorageError('backend unreachable', { code: 'INIT_FAILED' });
+  }
+}
+
+/** The last one built, so a test can inspect a provider the registry threw away. */
+let lastBroken = null;
+registerProvider(BROKEN, config => {
+  lastBroken = new BrokenProvider(config);
+  return lastBroken;
+});
+
 /** Platform config naming the stub, optionally with a config block. */
 function stubPlatform(config) {
   return { storage: { provider: STUB, ...(config ? { [STUB]: config } : {}) } };
@@ -217,6 +239,28 @@ describe('the storage singleton', () => {
       UnknownProviderError
     );
     assert.throws(() => getStorageProvider(), /not initialized/);
+  });
+
+  it('shuts down a provider whose initialize() rejected', async () => {
+    // The filesystem provider owns nothing worth reclaiming, but the contract
+    // tells implementers to open pools and connections in `initialize()` — and
+    // a backend that is down is exactly when the server ends up in a restart
+    // loop, so a leak per attempt compounds. The provider is discarded either
+    // way; the question is whether it is given the chance to close what it
+    // opened first.
+    lastBroken = null;
+    await assert.rejects(
+      () =>
+        initializeStorage({
+          platformConfig: { storage: { provider: BROKEN } },
+          env: {}
+        }),
+      error => error?.code === 'INIT_FAILED',
+      'the original failure is what the caller needs, not a shutdown error on top of it'
+    );
+    assert.ok(lastBroken, 'the factory ran');
+    assert.equal(lastBroken.shutdownCount, 1, 'and the half-built provider was shut down');
+    assert.throws(() => getStorageProvider(), /not initialized/, 'nothing was published');
   });
 
   it('shuts down idempotently, including when nothing is initialized', async () => {
