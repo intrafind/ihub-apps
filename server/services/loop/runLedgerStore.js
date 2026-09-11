@@ -573,10 +573,10 @@ export class RunLedgerStore {
   /**
    * The last persisted event of a run, or null.
    *
-   * Two full parses of the stream on the filesystem provider: `lastSeq` scans
-   * it for the maximum, and the `read` that fetches that one record scans it
-   * again. Neither can stop early — records reach the file in flush order, not
-   * sequence order, so the highest seq can sit anywhere in it. Not a hot path.
+   * One parse of the stream: `AppendLog.lastRecord` hands back the record it
+   * found the maximum in, where `lastSeq` followed by a `read` for that one
+   * record would scan the file twice — neither can stop early, because records
+   * reach the store in write order and the highest seq can sit anywhere.
    *
    * @param {string} runId - Run id.
    * @returns {Promise<Object|null>}
@@ -585,14 +585,11 @@ export class RunLedgerStore {
     const logs = this._logs();
     if (!logs) return this._legacyLastEvent(runId);
     const stream = runStreamName(runId);
-    const seq = await logs.lastSeq(stream);
+    const record = await logs.lastRecord(stream);
     const legacy = (await this._hasLegacyRunFile(runId))
       ? await this._legacyLastEvent(runId)
       : null;
-    if (seq > 0 && seq >= (legacy?.seq || 0)) {
-      const [event] = await logs.read(stream, { afterSeq: seq - 1, limit: 1 });
-      if (event) return event;
-    }
+    if (record && record.seq >= (legacy?.seq || 0)) return record;
     return legacy;
   }
 

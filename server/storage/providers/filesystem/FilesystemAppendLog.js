@@ -318,25 +318,40 @@ export class FilesystemAppendLog extends AppendLog {
   /**
    * Highest sequence number persisted for a stream, or 0 when it holds nothing.
    *
-   * The whole file is scanned for the maximum rather than trusting its last
-   * line: records reach the buffer from several call sites and a flush groups
-   * them per file, so the highest sequence number is not necessarily the last
-   * one written. Reading it from disk (never from memory) is what makes the
-   * value survive a restart.
-   *
    * @param {string} stream - Stream identifier
    * @returns {Promise<number>} The highest persisted sequence number, or 0
    * @throws {InvalidKeyError} When `stream` is not a usable identifier
    */
   async lastSeq(stream) {
+    return (await this.lastRecord(stream))?.seq || 0;
+  }
+
+  /**
+   * The record carrying the highest persisted sequence number, or null.
+   *
+   * The whole file is scanned rather than its last line trusted: records reach
+   * the buffer from several call sites and a flush groups them per file, so the
+   * highest sequence number is not necessarily the last one written. Reading it
+   * from disk (never from memory) is what makes the value survive a restart.
+   *
+   * That scan is also why this exists as its own method. It already holds the
+   * record it found the maximum in, so handing it back costs nothing, while a
+   * caller reconstructing it through `read({afterSeq: seq - 1, limit: 1})` pays
+   * for a second full pass — `read` cannot stop early either (see its comment).
+   *
+   * @param {string} stream - Stream identifier
+   * @returns {Promise<Object|null>} The record, or null when the stream is empty
+   * @throws {InvalidKeyError} When `stream` is not a usable identifier
+   */
+  async lastRecord(stream) {
     const file = this.streamFilePath(stream);
     await this._barrier();
-    let highest = 0;
+    let last = null;
     await this._eachRecord(file, record => {
-      if (Number.isFinite(record.seq) && record.seq > highest) highest = record.seq;
+      if (Number.isFinite(record.seq) && (!last || record.seq > last.seq)) last = record;
       return true;
     });
-    return highest;
+    return last;
   }
 
   /**

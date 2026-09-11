@@ -363,6 +363,62 @@ describe('run ledger: events through the provider', () => {
     });
   });
 
+  it('reads the last event of a split run from whichever half actually holds it', async () => {
+    // `lastEvent` is what answers `hasEnded` for a run no worker has in memory,
+    // and it has to agree with `lastSeq`: one says the run finished, the other
+    // says where to resume numbering, and a disagreement between them restarts
+    // a finished run or renumbers over events that exist.
+    //
+    // The stream is written directly here, below the legacy tail. Nothing in
+    // the code produces that today — `appendRecovered` continues the legacy
+    // sequence, so provider records land above it — which is exactly why the
+    // comparison guarding it is worth pinning: drop it and the two methods
+    // drift silently, with no test to notice.
+    await withLedger(async ({ runLog, legacyDir, provider }) => {
+      const runId = 'chat-legacy-holds-the-tail';
+      await writeLegacyRunFile(legacyDir, runId, [
+        {
+          seq: 1,
+          ts: '2026-01-01T10:00:00.000Z',
+          runId,
+          type: RUN_LOG_EVENTS.RUN_START,
+          data: { kind: 'chat', principal: { id: 'u1', mode: 'default', anonymous: false } }
+        },
+        {
+          seq: 2,
+          ts: '2026-01-01T10:00:01.000Z',
+          runId,
+          type: RUN_LOG_EVENTS.HUMAN_EVENT,
+          data: humanEvent('yesterday')
+        },
+        {
+          seq: 3,
+          ts: '2026-01-01T10:00:02.000Z',
+          runId,
+          type: RUN_LOG_EVENTS.RUN_END,
+          data: { status: 'completed', finishReason: 'stop' }
+        }
+      ]);
+      await provider.logs.append(
+        runStreamName(runId),
+        {
+          ts: '2026-01-01T10:00:01.500Z',
+          runId,
+          type: RUN_LOG_EVENTS.HUMAN_EVENT,
+          data: humanEvent('a lower seq on the stream')
+        },
+        2
+      );
+
+      assert.equal(await runLog.lastSeq(runId), 3, 'the highest across both halves');
+      assert.equal(
+        await runLog.hasEnded(runId),
+        true,
+        'the run/end in the legacy file is still the last event'
+      );
+    });
+  });
+
   it('behaves exactly as before when no provider is available', async () => {
     await withLedger(
       async ({ runLog, legacyDir }) => {

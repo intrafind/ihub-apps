@@ -145,6 +145,31 @@ export class AppendLog {
   }
 
   /**
+   * The record carrying the highest persisted sequence number, or null when the
+   * stream holds nothing.
+   *
+   * This exists because {@link AppendLog#read} cannot answer it cheaply. `read`
+   * returns the *lowest* sequence numbers above a cursor, and a record's
+   * position in the store need not follow its sequence number, so a provider
+   * has to consider the whole stream however small the limit. Asking for the
+   * last record as `lastSeq()` followed by `read({afterSeq: seq - 1, limit: 1})`
+   * therefore costs two passes to retrieve a record the first pass already had
+   * in hand.
+   *
+   * It answers under the same rules as {@link AppendLog#lastSeq} — durable
+   * storage, pending writes flushed first, no assumption that the last record
+   * written is the highest — and must agree with it: `(await lastRecord(s))?.seq
+   * ?? 0` equals `await lastSeq(s)` for every stream.
+   *
+   * @param {string} stream - Stream identifier.
+   * @returns {Promise<Object|null>} The record, carrying its `seq`, or null.
+   * @throws {InvalidKeyError} When `stream` is not a usable identifier.
+   */
+  async lastRecord(_stream) {
+    throw new NotSupportedError('AppendLog.lastRecord is not implemented');
+  }
+
+  /**
    * Delete a stream and every blob stored beside it.
    *
    * Pending buffered writes for the stream are flushed (or discarded) first so

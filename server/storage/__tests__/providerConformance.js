@@ -1177,6 +1177,7 @@ export function runProviderConformance({ name, createProvider, capabilities, raw
         const stream = nextId('log');
         assert.deepEqual(await shared.logs.read(stream), []);
         assert.equal(await shared.logs.lastSeq(stream), 0);
+        assert.equal(await shared.logs.lastRecord(stream), null);
       });
 
       it('append() then read() returns the entry with its sequence number', async () => {
@@ -1265,6 +1266,57 @@ export function runProviderConformance({ name, createProvider, capabilities, raw
           (await shared.logs.read(stream, { afterSeq: 3 })).map(record => record.seq),
           [7]
         );
+      });
+
+      it('lastRecord returns the highest-seq record, not the last one written', async () => {
+        // The reason this is on the facet rather than left to callers: `read`
+        // takes the *lowest* sequence numbers above a cursor (pinned by the
+        // test above), so nobody can ask for the newest record through it.
+        // `lastSeq` + `read({afterSeq: seq - 1, limit: 1})` gets there, but a
+        // provider that cannot stop early — the filesystem one cannot, since a
+        // record's position need not follow its sequence number — pays for two
+        // passes to fetch a record the first pass already held. Replaying a
+        // finished run made that the difference between one parse of its
+        // ledger per page and two.
+        const stream = nextId('log');
+        await shared.logs.append(stream, { n: 'high' }, 7);
+        await shared.logs.append(stream, { n: 'low' }, 3);
+
+        const last = await shared.logs.lastRecord(stream);
+        assert.deepEqual(last, { n: 'high', seq: 7 });
+        assert.equal(last.seq, await shared.logs.lastSeq(stream), 'the two never disagree');
+
+        // An append below the maximum does not become the last record.
+        await shared.logs.append(stream, { n: 'lower' }, 1);
+        assert.deepEqual(await shared.logs.lastRecord(stream), { n: 'high', seq: 7 });
+
+        // ...and one above it does.
+        await shared.logs.append(stream, { n: 'higher' }, 9);
+        assert.deepEqual(await shared.logs.lastRecord(stream), { n: 'higher', seq: 9 });
+      });
+
+      it('lastRecord comes from durable storage, like lastSeq', async () => {
+        // `RunLog.hasEnded` asks it about runs this worker never held, so an
+        // answer that only works while the writer is still in memory would
+        // report a finished run as still running after every restart.
+        const stream = nextId('log');
+        const first = await startProvider(createProvider);
+        try {
+          await first.provider.logs.appendBatch(stream, [
+            { entry: { n: 'a' }, seq: 1 },
+            { entry: { n: 'end' }, seq: 2 }
+          ]);
+          await first.provider.shutdown();
+
+          const second = await startProvider(createProvider, { reuse: true });
+          try {
+            assert.deepEqual(await second.provider.logs.lastRecord(stream), { n: 'end', seq: 2 });
+          } finally {
+            await second.dispose();
+          }
+        } finally {
+          await first.dispose();
+        }
       });
 
       it('a read sees an accepted append while a flush is already in flight', async () => {
