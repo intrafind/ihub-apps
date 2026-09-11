@@ -631,7 +631,11 @@ export class RunLog {
 
   /**
    * Whether the run has recorded `run/end`: memory first, then the last
-   * persisted event (a tail read, not the whole file).
+   * persisted event.
+   *
+   * The memory answer is free. The fallback — a run this worker never held, or
+   * one whose entry has since been dropped — costs `RunLedgerStore.lastEvent`,
+   * which is two full parses of the run's stream.
    */
   async hasEnded(runId) {
     const meta = this._runs.get(runId);
@@ -760,7 +764,10 @@ export class RunLog {
     return this._store.readEvents(runId, { afterSeq, limit });
   }
 
-  /** Highest seq known for a run (memory first, then the last persisted event). */
+  /**
+   * Highest seq known for a run: free from memory while the run is live,
+   * otherwise a full parse of its persisted stream.
+   */
   async lastSeq(runId) {
     const mem = this._runs.get(runId)?.seq;
     if (mem) return mem;
@@ -769,8 +776,9 @@ export class RunLog {
   }
 
   /**
-   * The run's `run/start` event as persisted, without reading the rest of it.
-   * `null` when persistence is off or the run has none.
+   * The run's `run/start` event as persisted. `null` when persistence is off
+   * or the run has none. Costs a full parse of the run's stream — the append
+   * log cannot stop early, see `RunLedgerStore.readStart`.
    * @param {string} runId
    * @returns {Promise<Object|null>}
    */

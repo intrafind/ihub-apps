@@ -573,6 +573,11 @@ export class RunLedgerStore {
   /**
    * The last persisted event of a run, or null.
    *
+   * Two full parses of the stream on the filesystem provider: `lastSeq` scans
+   * it for the maximum, and the `read` that fetches that one record scans it
+   * again. Neither can stop early — records reach the file in flush order, not
+   * sequence order, so the highest seq can sit anywhere in it. Not a hot path.
+   *
    * @param {string} runId - Run id.
    * @returns {Promise<Object|null>}
    */
@@ -592,7 +597,12 @@ export class RunLedgerStore {
   }
 
   /**
-   * A run's `run/start` event, without reading the rest of it.
+   * A run's `run/start` event.
+   *
+   * One record out, but not one record read: `AppendLog.read` returns the
+   * lowest sequence numbers above `afterSeq`, and a lower one can sit anywhere
+   * in the file, so the provider parses the whole stream whatever the limit
+   * (see {@link FilesystemAppendLog#read}). Costs a full parse of the run.
    *
    * For a run that spans the upgrade the stream's first record is whatever
    * was appended after it — never the start — so a provider read that does
