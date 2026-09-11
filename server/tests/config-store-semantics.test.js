@@ -366,6 +366,54 @@ describe('configuration store: preserved read and write semantics', () => {
       assert.equal(await configStore.readText('pages/en/widget.jsx'), jsx);
     });
 
+    it('serves an edit made behind the store, without a stale window', async () => {
+      // `loadText` used to sit behind a 60-second cache that nothing
+      // invalidated, so a page an admin had just saved could be served stale
+      // for up to a minute. Removing it left the page route doing a
+      // containment walk and a full read on every request instead, so the read
+      // is memoized again — but on mtime, not on a clock. An edit is visible
+      // on the very next request, however it was made.
+      const relPath = 'pages/en/cache-probe.md';
+      const original = '# Probe\n\nThe body as the store wrote it.\n';
+      await configStore.writeText(relPath, original);
+      assert.equal(await configStore.readText(relPath), original, 'the body is cached');
+
+      // A hand edit, a git checkout, a mounted volume changing underneath —
+      // none of them go through `writeText`, so none of them can invalidate
+      // anything. Only the file's own mtime can say.
+      const edited = '# FAQ\n\nEdited on disk.\n';
+      const absolute = path.join(CONTENTS, relPath);
+      await fs.writeFile(absolute, edited, 'utf8');
+      const later = new Date(Date.now() + 2000);
+      await fs.utimes(absolute, later, later);
+
+      assert.equal(await configStore.readText(relPath), edited, 'the next read sees it');
+
+      // And a write through the store is exact, not probable. The mtime check
+      // cannot see an edit that lands within the filesystem's timestamp
+      // resolution of the cached read and produces the same number of bytes —
+      // a one-word correction saved twice in a second on a filesystem with
+      // coarse timestamps. Pinning the timestamp back is how that is made
+      // reproducible rather than left to the disk.
+      const sameLength = edited.replace('Edited', 'Ed1ted');
+      assert.equal(sameLength.length, edited.length, 'the same number of bytes');
+      const stat = await fs.stat(absolute);
+      await configStore.writeText(relPath, sameLength);
+      await fs.utimes(absolute, stat.atime, stat.mtime);
+      assert.equal(
+        await configStore.readText(relPath),
+        sameLength,
+        'a write through the store is never served from a stale entry'
+      );
+
+      await configStore.writeText(relPath, original);
+      assert.equal(await configStore.readText(relPath), original);
+
+      // A removed page stops being served, cached or not.
+      await configStore.remove(relPath);
+      assert.equal(await configStore.readText(relPath), null);
+    });
+
     it('removing a language removes only that body file', async () => {
       assert.equal(await configStore.remove('pages/de/faq.md'), true);
       assert.equal(await configStore.remove('pages/de/faq.md'), false);

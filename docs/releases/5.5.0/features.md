@@ -1602,7 +1602,11 @@ boot and a save of every configuration type, and hashed again.
   nothing invalidated it: after saving a setting, the server could go on
   serving the previous value for up to a minute, with the correct value
   already on disk and nothing in the logs to explain it. That cache is gone —
-  `configCache` was always the cache that mattered.
+  `configCache` was always the cache that mattered. Page bodies (the markdown
+  and JSX behind custom pages) are still kept in memory between requests, but
+  on the file's modification time rather than on a clock: an edit is served on
+  the very next request, whether it came from the admin UI, a `git` checkout or
+  a mounted volume.
 - **A relocated `contents/` directory works for apps and models too.** The
   loader behind apps, models, prompts, tools, workflows and agents built a
   hardcoded `contents/` path and ignored the `CONTENTS_DIR` setting, so an

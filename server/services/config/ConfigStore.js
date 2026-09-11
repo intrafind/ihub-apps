@@ -254,6 +254,93 @@ async function resolveConfigPath(relPath) {
  * @param {string} kind - 'JSON' or 'text', for the failure message
  * @returns {Promise<string|null>} File contents, or null
  */
+/**
+ * Page bodies, keyed by their contents-relative path.
+ *
+ * `loadText` used to sit behind a 60-second cache in `configLoader`, and
+ * `configCache` never held page bodies, so removing that cache left its one
+ * caller — `GET /api/pages/:id`, which serves every markdown and JSX page —
+ * doing a containment walk and a full file read on every request.
+ *
+ * Validated by mtime and size rather than by a clock: a hit costs one `stat`,
+ * and an edit is picked up on the very next request instead of up to a minute
+ * later. That is what made the old cache worth removing — it could serve a
+ * page an admin had just saved — and this keeps the property while getting the
+ * work back.
+ *
+ * Bounded because the key comes from page configuration: an installation with
+ * more pages than this keeps the most recently read ones, and the rest simply
+ * pay what they paid before.
+ */
+const textCache = new Map();
+
+/** Most page bodies an installation caches at once. */
+const MAX_CACHED_TEXTS = 256;
+
+/**
+ * Forget one cached body. Called by every writer of `contents/` text, so a
+ * save is visible on the next read without waiting for the mtime check to
+ * disagree — which it would anyway, but only after the write has landed.
+ *
+ * @param {string} relPath - Path relative to `contents/`
+ */
+function invalidateText(relPath) {
+  textCache.delete(String(relPath));
+}
+
+/**
+ * Read a text file under `contents/`, reusing the last read while the file on
+ * disk has not changed.
+ *
+ * @param {string} relPath - Path relative to `contents/`
+ * @returns {Promise<string|null>} Contents, or null when unreadable
+ */
+async function readTextCached(relPath) {
+  const key = String(relPath);
+  const cached = textCache.get(key);
+  let filePath = cached?.filePath;
+  if (!filePath) filePath = await resolveConfigPath(relPath);
+
+  let stat;
+  try {
+    stat = await fs.stat(filePath);
+  } catch (error) {
+    textCache.delete(key);
+    if (error.code === 'ENOENT' || error.code === 'EISDIR' || error.code === 'ENOTDIR') {
+      logMissing(relPath);
+      return null;
+    }
+    logFailure(relPath, 'text', error);
+    return null;
+  }
+
+  if (cached && cached.mtimeMs === stat.mtimeMs && cached.size === stat.size) {
+    return cached.text;
+  }
+
+  let text;
+  try {
+    text = await fs.readFile(filePath, 'utf8');
+  } catch (error) {
+    textCache.delete(key);
+    if (error.code === 'ENOENT' || error.code === 'EISDIR') {
+      logMissing(relPath);
+      return null;
+    }
+    logFailure(relPath, 'text', error);
+    return null;
+  }
+
+  // Oldest out first. Map preserves insertion order, and re-setting a key
+  // that is already present does not move it — which is right here: a page
+  // read constantly should not keep displacing itself.
+  if (!textCache.has(key) && textCache.size >= MAX_CACHED_TEXTS) {
+    textCache.delete(textCache.keys().next().value);
+  }
+  textCache.set(key, { filePath, mtimeMs: stat.mtimeMs, size: stat.size, text });
+  return text;
+}
+
 async function readFromDisk(relPath, kind) {
   try {
     const filePath = await resolveConfigPath(relPath);
@@ -414,7 +501,7 @@ export class ConfigStore {
    * @returns {Promise<string|null>} File contents, or null when it cannot be read
    */
   async readText(relPath) {
-    return readFromDisk(relPath, 'text');
+    return readTextCached(relPath);
   }
 
   /**
@@ -484,6 +571,13 @@ export class ConfigStore {
     const filePath = await resolveConfigPath(relPath);
     await fs.mkdir(path.dirname(filePath), { recursive: true });
     await atomicWriteFile(filePath, text, 'utf8');
+    // The mtime check catches almost every edit on its own. What it cannot
+    // catch is a write that lands within the filesystem's mtime resolution of
+    // the cached read *and* produces the same number of bytes — a one-word
+    // correction saved twice in a second, on a filesystem with coarse
+    // timestamps. Dropping the entry outright makes the store's own writes
+    // exact rather than probable.
+    invalidateText(relPath);
   }
 
   /**
@@ -498,6 +592,9 @@ export class ConfigStore {
     const documents = location ? documentsFor(location.ns) : null;
     if (documents) return documents.delete(location.ns, location.key);
     const filePath = await resolveConfigPath(relPath);
+    // No `invalidateText` here: the next read's `stat` fails and drops the
+    // entry on that path already. A line that cannot be made to matter is a
+    // line the next reader has to work out is dead.
     try {
       await fs.unlink(filePath);
       return true;
