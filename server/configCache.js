@@ -575,11 +575,6 @@ class ConfigCache {
    * Set a cache entry with automatic refresh timer
    */
   setCacheEntry(key, data) {
-    // Clear existing timer if any
-    if (this.refreshTimers.has(key)) {
-      clearTimeout(this.refreshTimers.get(key));
-    }
-
     // Resolve environment variables in the data, opting specific fields out
     // when they contain user-data templates instead of env var references.
     const resolvedData = resolveEnvVarsInObject(data, {
@@ -599,9 +594,34 @@ class ConfigCache {
       timestamp: Date.now()
     });
 
-    // Set refresh timer. This uses the private reload so a periodic TTL refresh
-    // is not announced to the cluster — every worker runs its own timer, and
-    // announcing would turn a quiet re-read into N² bus messages and disk reads.
+    this._armRefreshTimer(key);
+  }
+
+  /**
+   * Schedule the next TTL re-read of one entry.
+   *
+   * Uses the private reload so a periodic refresh is not announced to the
+   * cluster — every worker runs its own timer, and announcing would turn a
+   * quiet re-read into N² bus messages and disk reads.
+   *
+   * Separate from {@link ConfigCache#setCacheEntry} because the chain has to
+   * continue when a re-read finds *nothing changed*, which is the common case.
+   * Several `_reloadEntry` branches — groups, platform, credentials, tools —
+   * only call `setCacheEntry` when the etag differs, and while the timer lived
+   * inside it, the first unchanged tick after boot armed nothing and the entry
+   * simply stopped refreshing for the life of the process. For `groups.json`
+   * that meant an edit made outside the admin UI — dropping `adminAccess` from
+   * a group, say — never took effect: `get()` is a plain map read with no
+   * timestamp check, and the provider's change stream only publishes writes
+   * that went through it, never an operator's editor.
+   *
+   * @param {string} key - Cache key to schedule.
+   * @private
+   */
+  _armRefreshTimer(key) {
+    if (this.refreshTimers.has(key)) {
+      clearTimeout(this.refreshTimers.get(key));
+    }
     const refreshTimer = setTimeout(() => {
       this._reloadEntry(key);
     }, this.cacheTTL);
@@ -749,6 +769,8 @@ class ConfigCache {
             configPath: key,
             count: expanded.length
           });
+        } else {
+          this._armRefreshTimer(key);
         }
         return;
       }
@@ -767,7 +789,11 @@ class ConfigCache {
               configPath: 'config/groups.json',
               count: Object.keys(resolvedConfig.groups || {}).length
             });
+          } else {
+            this._armRefreshTimer(key);
           }
+        } else {
+          this._armRefreshTimer(key);
         }
         return;
       }
@@ -780,7 +806,11 @@ class ConfigCache {
           const existing = this.cache.get(key);
           if (!existing || existing.etag !== newEtag) {
             this.setCacheEntry(key, platformData);
+          } else {
+            this._armRefreshTimer(key);
           }
+        } else {
+          this._armRefreshTimer(key);
         }
         return;
       }
@@ -794,6 +824,8 @@ class ConfigCache {
         const existing = this.cache.get(key);
         if (!existing || existing.etag !== newEtag) {
           this.setCacheEntry(key, resolved);
+        } else {
+          this._armRefreshTimer(key);
         }
         return;
       }
@@ -814,6 +846,10 @@ class ConfigCache {
       const data = await loadJson(key);
       if (data !== null) {
         this.setCacheEntry(key, data);
+      } else {
+        // Unreadable right now — a half-written save, a transient EACCES. The
+        // cached copy stays, and so must the chain that will try again.
+        this._armRefreshTimer(key);
       }
     } catch (error) {
       reloadError = error;
