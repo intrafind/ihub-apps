@@ -227,6 +227,28 @@ const CHAT_SETTING_TYPES = Object.freeze({
 
 /** Longest string a single setting may be, and the cap on `enabledTools`. */
 const MAX_SETTING_CHARS = 64;
+
+/**
+ * Longest message body a chat stores.
+ *
+ * The two user-controlled quantities on this path — how long a message is and
+ * how many there are — were the only ones with no bound, while every field
+ * beside them has one. The count is capped by `chats.maxMessagesPerChat`; this
+ * is the other half.
+ *
+ * What it costs without one: a transcript is a single document, so every later
+ * turn reads, re-serializes and re-hashes the whole of it under the chat's
+ * lock, and opening the chat ships all of it back. One 40 MB message —
+ * accepted, because the global body limit is megabytes — makes every
+ * subsequent turn on that chat pay for it, for as long as the chat exists.
+ * Retention is age and chat count, so nothing reclaims it, and prompt replay
+ * does not rescue it either: `microcompactMessages` deliberately skips user
+ * messages.
+ *
+ * 100k characters is roughly 25k tokens — past what a turn could usefully
+ * send, and far past anything a person types.
+ */
+export const MAX_MESSAGE_CHARS = 100_000;
 const MAX_ENABLED_TOOLS = 64;
 
 /**
@@ -324,13 +346,21 @@ function toMessages(data) {
  * @returns {Object} The message to store.
  */
 function buildMessage(message = {}) {
+  const content = typeof message.content === 'string' ? message.content : '';
   const stored = {
     id: typeof message.id === 'string' && message.id ? message.id : randomUUID(),
     role: typeof message.role === 'string' && message.role ? message.role : 'user',
-    content: typeof message.content === 'string' ? message.content : '',
+    content: content.slice(0, MAX_MESSAGE_CHARS),
     ts: typeof message.ts === 'string' && message.ts ? message.ts : new Date().toISOString(),
     runId: typeof message.runId === 'string' && message.runId ? message.runId : null
   };
+  // Said rather than done quietly: a reader that finds a message ending
+  // mid-sentence should be able to tell that from one the model actually cut
+  // short, and the original length is what makes the cap answerable to whoever
+  // has to explain it.
+  if (content.length > MAX_MESSAGE_CHARS) {
+    stored.truncated = { at: MAX_MESSAGE_CHARS, originalLength: content.length };
+  }
   // `messageId` is what the wire calls the client's exchange id; accept either
   // spelling so a caller holding the raw request field cannot lose it.
   const clientMessageId = message.clientMessageId ?? message.messageId;

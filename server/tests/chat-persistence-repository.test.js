@@ -21,7 +21,7 @@ import { describe, it } from 'node:test';
 import assert from 'node:assert/strict';
 import { FilesystemStorageProvider } from '../storage/providers/filesystem/index.js';
 import { StorageError } from '../storage/errors.js';
-import { ChatRepository } from '../services/chat/ChatRepository.js';
+import { ChatRepository, MAX_MESSAGE_CHARS } from '../services/chat/ChatRepository.js';
 
 /** Namespace holding the chat metadata documents, as the contract names it. */
 const CHATS_NS = 'chats';
@@ -348,6 +348,46 @@ describe('ChatRepository: the message cap', () => {
       // The trim happens after the insert, so the message being written is
       // never the one dropped — a cap of 1 would otherwise store nothing.
       assert.equal(stored.messages.at(-1).content, 'm5');
+    });
+  });
+
+  it('caps how long one stored message may be, and says it did', async () => {
+    // The other user-controlled quantity on this path, and the one with no
+    // bound. A transcript is a single document, so one oversized message makes
+    // every later turn on that chat read, re-serialize and re-hash it under the
+    // chat's lock — and nothing reclaims it, because retention is age and chat
+    // count, and `microcompactMessages` deliberately skips user messages.
+    await withRepository(async ({ repository }) => {
+      await seedChat(repository);
+      const huge = 'x'.repeat(MAX_MESSAGE_CHARS + 500);
+
+      const { message } = await repository.appendMessage(CHAT_ID, {
+        role: 'user',
+        content: huge
+      });
+
+      assert.equal(message.content.length, MAX_MESSAGE_CHARS);
+      assert.deepEqual(message.truncated, {
+        at: MAX_MESSAGE_CHARS,
+        originalLength: huge.length
+      });
+
+      const stored = await repository.getMessages(CHAT_ID);
+      assert.equal(stored.messages.at(-1).content.length, MAX_MESSAGE_CHARS);
+    });
+  });
+
+  it('leaves an ordinary message alone, and says nothing about it', async () => {
+    await withRepository(async ({ repository }) => {
+      await seedChat(repository);
+
+      const { message } = await repository.appendMessage(CHAT_ID, {
+        role: 'user',
+        content: 'a question of a normal size'
+      });
+
+      assert.equal(message.content, 'a question of a normal size');
+      assert.equal(message.truncated, undefined);
     });
   });
 
