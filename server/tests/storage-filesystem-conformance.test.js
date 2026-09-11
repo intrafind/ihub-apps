@@ -367,6 +367,79 @@ describe('filesystem storage provider: lease liveness (filesystem-specific)', ()
 });
 
 describe('filesystem storage provider: lease takeover (filesystem-specific)', () => {
+  it('a stale holder finishing does not release the lease that replaced it', async () => {
+    // `_release` re-reads the owner token before unlinking, and deleting that
+    // guard still passed both takeover cases above: each lets the taker settle
+    // before the stale holder releases, so by then there is no lease at the
+    // path, `readJsonMarker` answers null and the guard is never reached.
+    //
+    // Here the taker is still inside its critical section when the stale
+    // holder finishes, which is the ordinary shape of a takeover — the lease
+    // was taken *because* the holder was slow, so it is still running. Without
+    // the guard it unlinks the taker's lease on its way out, and a third
+    // caller then acquires the same lock while the taker is still working:
+    // two critical sections at once, which is the one thing this class exists
+    // to prevent.
+    const baseDir = await fs.mkdtemp(path.join(os.tmpdir(), 'ihub-stale-release-'));
+    const provider = new FilesystemStorageProvider({ baseDir, flushIntervalMs: 1000 });
+    await provider.initialize();
+    try {
+      const name = 'stale-holder';
+
+      // The stale holder: a section that outlives its own 50ms lease.
+      let finishStale;
+      const staleDone = new Promise(resolve => {
+        finishStale = resolve;
+      });
+      const stale = provider.locks.withLock(name, () => staleDone, { ttlMs: 50, waitMs: 1000 });
+
+      // Long enough for the lease to age past its TTL.
+      await delay(120);
+
+      // The taker, still inside its section when the stale holder finishes.
+      let finishTaker;
+      const takerDone = new Promise(resolve => {
+        finishTaker = resolve;
+      });
+      let takerRunning = false;
+      const taker = provider.locks.withLock(
+        name,
+        () => {
+          takerRunning = true;
+          return takerDone;
+        },
+        { ttlMs: 30_000, waitMs: 2000 }
+      );
+      await delay(80);
+      assert.equal(takerRunning, true, 'the taker took over the expired lease');
+
+      finishStale();
+      await stale;
+
+      // The question: is the taker still holding the lock?
+      let intruderRan = false;
+      await assert.rejects(
+        () =>
+          provider.locks.withLock(
+            name,
+            () => {
+              intruderRan = true;
+            },
+            { ttlMs: 30_000, waitMs: 100 }
+          ),
+        LockTimeoutError,
+        "the stale holder's release must not hand the lock to somebody else"
+      );
+      assert.equal(intruderRan, false, 'and no second critical section ran');
+
+      finishTaker();
+      await taker;
+    } finally {
+      await provider.shutdown();
+      await fs.rm(baseDir, { recursive: true, force: true });
+    }
+  });
+
   it('a waiter never removes a lease acquired after the one it judged abandoned', async () => {
     const baseDir = await fs.mkdtemp(path.join(os.tmpdir(), 'ihub-storage-lease-'));
     const provider = new FilesystemStorageProvider({ baseDir, flushIntervalMs: 1000 });

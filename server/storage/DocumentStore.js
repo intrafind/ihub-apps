@@ -156,9 +156,18 @@ export class DocumentStore {
   /**
    * List a namespace, one page at a time.
    *
-   * Ordering is **ascending by key**, compared with plain `<` on the string,
-   * and is provider-independent so that paging a namespace is reproducible
-   * across backends.
+   * Ordering is **ascending by key**, compared with plain `<` on the string —
+   * that is, by UTF-16 code unit — and is provider-independent so that paging
+   * a namespace is reproducible across backends.
+   *
+   * A SQL provider must say so explicitly: `ORDER BY key COLLATE "C"`, or the
+   * equivalent binary collation. A database's default is a *locale* collation,
+   * which weighs punctuation differently and orders `k-1`, `k.1`, `k1`, `k_1`
+   * in a different sequence from this one. Two consequences, and the second is
+   * the serious one: the same namespace pages differently on two backends, and
+   * a collation that is not a total order on distinct strings breaks keyset
+   * paging outright — `WHERE key > :cursor` can skip a document or return one
+   * twice, silently, in the middle of a listing.
    *
    * `limit` defaults to 100 and is clamped to 1000 rather than rejected — a
    * caller asking for too much gets a smaller page, not an error.

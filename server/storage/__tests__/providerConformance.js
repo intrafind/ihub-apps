@@ -630,6 +630,43 @@ export function runProviderConformance({ name, createProvider, capabilities, raw
         assert.equal(page.nextCursor, null, 'a complete page has no cursor');
       });
 
+      it('orders by code unit, not by a locale collation', async () => {
+        // Every other key set in this suite sorts identically under code-unit
+        // order and under an ICU or glibc locale collation, so a SQL provider
+        // that inherited its database's default collation would pass all of
+        // them while ordering differently. This set does not: a locale
+        // collation weighs punctuation at a lower level and reorders these
+        // four.
+        //
+        // The paging consequence is the serious one. Keyset paging asks
+        // `WHERE key > :cursor`, so if the provider's comparison and its
+        // ordering are not the same total order, a listing can skip a document
+        // or return one twice — in the middle of a page, with nothing to
+        // indicate it. `ORDER BY key COLLATE "C"`.
+        const ns = nextId('collate');
+        await seed(ns, { k1: {}, 'k-1': {}, 'k.1': {}, k_1: {} });
+
+        const page = await shared.documents.list(ns);
+        assert.deepEqual(
+          page.items.map(item => item.key),
+          ['k-1', 'k.1', 'k1', 'k_1'],
+          "'-' (0x2D) < '.' (0x2E) < '1' (0x31) < '_' (0x5F)"
+        );
+
+        // And the cursor agrees with that order rather than with another one.
+        const first = await shared.documents.list(ns, { limit: 2 });
+        assert.deepEqual(
+          first.items.map(item => item.key),
+          ['k-1', 'k.1']
+        );
+        const second = await shared.documents.list(ns, { limit: 2, cursor: first.nextCursor });
+        assert.deepEqual(
+          second.items.map(item => item.key),
+          ['k1', 'k_1'],
+          'paging loses nothing and repeats nothing across the punctuation boundary'
+        );
+      });
+
       it('scan walks the whole namespace in one pass, in key order', async () => {
         // `list` is the paged REST-facing API; `scan` is the walk every
         // whole-namespace consumer needs. A provider that implements it must
@@ -937,6 +974,52 @@ export function runProviderConformance({ name, createProvider, capabilities, raw
           [key],
           'an explicit null is "no filter", not an owner'
         );
+      });
+
+      it('pages a raw namespace in code-unit order', async () => {
+        // The generic documents group above runs against ordinary namespaces,
+        // which a routing provider sends to its *enveloped* store — so none of
+        // it reaches the raw store's own paging, and `ConfigStore.list()` is
+        // what pages through that. Ordering and cursors are asserted here
+        // directly, on keys that a locale collation would reorder: every other
+        // key set in this suite sorts the same either way, so a provider that
+        // inherited its database's default collation would pass them all.
+        const prefix = nextId('raw');
+        const suffixes = ['1', '-1', '.1', '_1'];
+        for (const suffix of suffixes) {
+          await shared.documents.put(ns, `${prefix}${suffix}`, { v: suffix });
+        }
+
+        const all = await shared.documents.list(ns, { prefix });
+        assert.deepEqual(
+          all.items.map(item => item.key),
+          [`${prefix}-1`, `${prefix}.1`, `${prefix}1`, `${prefix}_1`],
+          "'-' (0x2D) < '.' (0x2E) < '1' (0x31) < '_' (0x5F)"
+        );
+
+        // And the cursor agrees with that order. Keyset paging asks
+        // `WHERE key > :cursor`, so a comparison that disagrees with the
+        // ordering skips a document or repeats one, mid-listing, silently.
+        const first = await shared.documents.list(ns, { prefix, limit: 2 });
+        assert.deepEqual(
+          first.items.map(item => item.key),
+          [`${prefix}-1`, `${prefix}.1`],
+          'a limit is honoured'
+        );
+        assert.ok(first.nextCursor, 'and a partial page carries a cursor');
+        const second = await shared.documents.list(ns, {
+          prefix,
+          limit: 2,
+          cursor: first.nextCursor
+        });
+        assert.deepEqual(
+          second.items.map(item => item.key),
+          [`${prefix}1`, `${prefix}_1`],
+          'paging loses nothing and repeats nothing across the punctuation boundary'
+        );
+        assert.equal(second.nextCursor, null, 'and the last page says so');
+
+        for (const suffix of suffixes) await shared.documents.delete(ns, `${prefix}${suffix}`);
       });
 
       it('rejects a content type the file cannot carry', async () => {
