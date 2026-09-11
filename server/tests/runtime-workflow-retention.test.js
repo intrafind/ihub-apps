@@ -393,10 +393,14 @@ describe('startWorkflowStateRetention', () => {
         intervalMs: 60_000
       });
 
-      await until(async () => (await ctx.repository.read('wf-exec-ancient')) === null, {
+      // Wait on the *summary*, not the state. The sweep removes the state
+      // first and the summary second, with an await between them, so waiting
+      // on the state and then asserting the summary synchronously could land
+      // in that gap — which is what a loaded runner did.
+      await until(async () => (await ctx.runSummaries.get('wf-exec-ancient')) === null, {
         what: 'the boot sweep to remove the ancient execution'
       });
-      assert.equal(await ctx.runSummaries.get('wf-exec-ancient'), null);
+      assert.equal(await ctx.repository.read('wf-exec-ancient'), null);
       assert.equal(typeof stop, 'function');
       assert.equal(
         startWorkflowStateRetention({ repository: ctx.repository }),
