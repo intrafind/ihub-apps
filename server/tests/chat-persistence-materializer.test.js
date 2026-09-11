@@ -540,6 +540,30 @@ describe('chatMaterializer: nothing to write to', () => {
     });
   });
 
+  it('releases the run even when the answer cannot be stored', async () => {
+    // The append and the release used to share one try, so a rejecting
+    // `appendMessage` skipped `releaseRun` and left the chat claiming a run
+    // that had ended. Nothing else clears `activeRunId` — there is no
+    // equivalent of the workflow orphan sweeper — so the chat stayed
+    // `running` until the user sent another turn, and every open in between
+    // replayed a dead run and spun on an empty placeholder.
+    await withRepository(async ({ repository }) => {
+      await userTurn(repository);
+      assert.equal((await repository.getChat(CHAT_ID)).status, 'running');
+
+      const broken = Object.create(repository);
+      broken.appendMessage = async () => {
+        throw new Error('lock lease expired mid-write');
+      };
+
+      await assistantTurn(broken);
+
+      const chat = await repository.getChat(CHAT_ID);
+      assert.equal(chat.activeRunId, null, 'the run is released');
+      assert.notEqual(chat.status, 'running', 'and the chat is not left claiming it');
+    });
+  });
+
   it('a failure creating the chat is swallowed too', async () => {
     await withRepository(async ({ repository }) => {
       const broken = Object.create(repository);

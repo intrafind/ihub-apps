@@ -524,7 +524,7 @@ export default function registerSessionRoutes(app, { getLocalizedError, DEFAULT_
         // `chatAuthRequired` authorizes the app, never the chat id. A persisted
         // chat is a durable, guessable resource, so subscribing to its stream
         // has to be an ownership decision as well as an app one.
-        const access = await authorizeChat(chatId, req.user);
+        const access = await authorizeChat(chatId, req.user, { intent: 'read' });
         if (!access.ok) return sendNotFound(res, 'Chat session');
 
         const channel = createSseChannel({
@@ -857,7 +857,7 @@ export default function registerSessionRoutes(app, { getLocalizedError, DEFAULT_
         // `chatAuthRequired` authorizes the app, never the chat id. Once chats
         // are stored, anyone who guesses one could otherwise append a turn to
         // — and, through the stream, read back — another user's chat.
-        const access = await authorizeChat(chatId, req.user);
+        const access = await authorizeChat(chatId, req.user, { intent: 'write' });
         if (!access.ok) return sendNotFound(res, 'Chat session');
 
         const defaultLang = configCache.getPlatform()?.defaultLanguage || 'en';
@@ -1388,7 +1388,7 @@ export default function registerSessionRoutes(app, { getLocalizedError, DEFAULT_
       const { chatId } = req.params;
       // `chatAuthRequired` authorizes the app, never the chat id: stopping
       // someone else's turn must not be one guessed id away.
-      const access = await authorizeChat(chatId, req.user);
+      const access = await authorizeChat(chatId, req.user, { intent: 'write' });
       if (!access.ok) return sendNotFound(res, 'Chat session');
 
       // A live SSE client used to be the proof that there was something to
@@ -1519,19 +1519,30 @@ export default function registerSessionRoutes(app, { getLocalizedError, DEFAULT_
    *       401:
    *         description: Authentication required
    */
-  app.get(buildServerPath('/api/apps/:appId/chat/:chatId/status'), chatAuthRequired, (req, res) => {
-    const { chatId } = req.params;
-    if (hasChatClient(chatId)) {
-      // lastActivity lives with the response object, so it is only readable on
-      // the worker holding the stream. Rather than a bus round trip for a
-      // diagnostic field, report null when the stream is elsewhere — `active`
-      // and `processing` are the parts callers branch on.
-      return res.status(200).json({
-        active: true,
-        lastActivity: clients.get(chatId)?.lastActivity ?? null,
-        processing: hasActiveChatRequest(chatId)
-      });
+  app.get(
+    buildServerPath('/api/apps/:appId/chat/:chatId/status'),
+    chatAuthRequired,
+    async (req, res) => {
+      const { chatId } = req.params;
+      // `chatAuthRequired` authorizes the app, never the chat id — the same
+      // reason SSE connect, the turn POST and stop all add this. Durable chats
+      // put the id in the address bar, so ids reach history, referrers and
+      // pasted links; without this, anyone reaching the same app who holds
+      // another user's id can poll this route as an activity oracle.
+      const access = await authorizeChat(chatId, req.user, { intent: 'read' });
+      if (!access.ok) return sendNotFound(res, 'Chat session');
+      if (hasChatClient(chatId)) {
+        // lastActivity lives with the response object, so it is only readable
+        // on the worker holding the stream. Rather than a bus round trip for a
+        // diagnostic field, report null when the stream is elsewhere —
+        // `active` and `processing` are the parts callers branch on.
+        return res.status(200).json({
+          active: true,
+          lastActivity: clients.get(chatId)?.lastActivity ?? null,
+          processing: hasActiveChatRequest(chatId)
+        });
+      }
+      return res.status(200).json({ active: false });
     }
-    return res.status(200).json({ active: false });
-  });
+  );
 }

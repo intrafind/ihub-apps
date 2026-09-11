@@ -269,9 +269,19 @@ export async function materializeAssistantTurn({
     // a transcript without the answer, and the flag never comes back. This
     // order can only ever show a chat as briefly still running, which the next
     // poll corrects.
-    const appended = pausedWithoutAnswer
-      ? null
-      : await repository.appendMessage(
+    // The append gets its own catch so the release below is unconditional.
+    // Sharing one try meant a rejecting `appendMessage` skipped `releaseRun`
+    // entirely and landed in the outer catch, which only logs — leaving the
+    // chat claiming a run that has ended, with nothing in the tree to correct
+    // it. And it does reject: `appendMessage` runs under a 15 s lease with a
+    // 5 s wait budget, so a worker killed mid-write guarantees the next waiter
+    // times out. A chat stuck `running` then makes every later open replay a
+    // dead run and spin on an empty placeholder. Losing the answer is bad;
+    // losing the answer *and* wedging the chat is worse.
+    let appended = null;
+    if (!pausedWithoutAnswer) {
+      try {
+        appended = await repository.appendMessage(
           chatId,
           {
             role: 'assistant',
@@ -286,6 +296,15 @@ export async function materializeAssistantTurn({
           // right after this run's own question for a superseded one.
           { insertAfterRunId: runId }
         );
+      } catch (appendError) {
+        logger.error('Chat answer not stored; releasing the run anyway', {
+          component: COMPONENT,
+          chatId,
+          runId,
+          error: appendError.message
+        });
+      }
+    }
 
     const { chat } = await repository.releaseRun(chatId, runId, {
       activeRunId: null,

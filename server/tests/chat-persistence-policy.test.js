@@ -354,7 +354,7 @@ describe('authorizeChat', () => {
     });
   });
 
-  it('lets an admin read any chat', async () => {
+  it('lets an admin read any chat, and says the decision came from the bypass', async () => {
     await withRepository(async ({ repository }) => {
       const owner = await resolvePrincipal(USER, { mode: 'default' });
       await storeChat(repository, 'chat-1', owner.id, 'default');
@@ -362,6 +362,50 @@ describe('authorizeChat', () => {
       const result = await authorizeChat('chat-1', ADMIN, { repository });
       assert.equal(result.ok, true);
       assert.equal(result.chat.ownerId, owner.id);
+      // The caller needs to know: an admin read must not clear the owner's
+      // unseen badge, because the owner has not seen anything.
+      assert.equal(result.viaAdmin, true);
+    });
+  });
+
+  it('refuses an admin a write on a chat they do not own', async () => {
+    // The bypass is documented and tested as a *read* affordance, but the
+    // decision used to be one verb-less boolean and every write path
+    // authorizes through the same call — so an admin holding a chat id from a
+    // support ticket could append a turn to someone else's conversation
+    // (stored with no record of who sent it), rename it, or delete it and
+    // cascade its ledger, with no audit entry anywhere.
+    await withRepository(async ({ repository }) => {
+      const owner = await resolvePrincipal(USER, { mode: 'default' });
+      await storeChat(repository, 'chat-1', owner.id, 'default');
+
+      assert.deepEqual(await authorizeChat('chat-1', ADMIN, { repository, intent: 'write' }), {
+        ok: false,
+        status: 404
+      });
+    });
+  });
+
+  it('lets an admin write their own chat', async () => {
+    // The refusal above is about ownership, not about being an admin.
+    await withRepository(async ({ repository }) => {
+      const admin = await resolvePrincipal(ADMIN, { mode: 'default' });
+      await storeChat(repository, 'chat-admin-own', admin.id, 'default');
+
+      const result = await authorizeChat('chat-admin-own', ADMIN, {
+        repository,
+        intent: 'write'
+      });
+      assert.equal(result.ok, true);
+      assert.equal(result.chat.ownerId, admin.id);
+    });
+  });
+
+  it('defaults to read when no intent is given', async () => {
+    await withRepository(async ({ repository }) => {
+      const owner = await resolvePrincipal(USER, { mode: 'default' });
+      await storeChat(repository, 'chat-1', owner.id, 'default');
+      assert.equal((await authorizeChat('chat-1', ADMIN, { repository })).ok, true);
     });
   });
 

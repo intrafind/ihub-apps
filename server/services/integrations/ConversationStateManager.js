@@ -179,12 +179,24 @@ export class ConversationStateManager {
    * as absent, so the caller starts a fresh conversation exactly as it would
    * have before.
    *
+   * A caller that knows which principal it is acting for passes `ownerId`, and
+   * state belonging to someone else reads as absent. Chat ids travel in the
+   * URL path, so without this a user who holds another user's chat id could
+   * post a turn that threads onto that user's remote conversation — the state
+   * is keyed on the chat id alone and, before this, stored with no owner at
+   * all. Returning null is the degradation this module already documents: the
+   * adapter starts a fresh conversation.
+   *
    * @param {string} chatId
+   * @param {Object} [options]
+   * @param {string|null} [options.ownerId] - Principal the caller is acting
+   *   for. Omitted, any stored state matches — the pre-existing behaviour, for
+   *   callers with no principal in scope.
    * @returns {Promise<Object|null>} Conversation state or null
    */
-  async loadState(chatId) {
+  async loadState(chatId, { ownerId = null } = {}) {
     const cached = this.getState(chatId);
-    if (cached) return cached;
+    if (cached) return this._ownedOrNull(cached, ownerId, chatId);
     if (!chatId) return null;
 
     const documents = this._store();
@@ -208,7 +220,7 @@ export class ConversationStateManager {
 
       const entry = { ...data, createdAt };
       this.states.set(chatId, entry);
-      return entry;
+      return this._ownedOrNull(entry, ownerId, chatId);
     } catch (error) {
       // A conversation that cannot be read is one the adapter recreates —
       // worse than a cache hit, no worse than the in-memory-only behaviour.
@@ -219,6 +231,28 @@ export class ConversationStateManager {
       });
       return null;
     }
+  }
+
+  /**
+   * State, unless it belongs to a different principal.
+   *
+   * Unowned state (written before this field existed, or by a caller with no
+   * principal) matches anyone: refusing it would drop every conversation an
+   * upgrade inherits.
+   *
+   * @param {Object} entry - Stored conversation state
+   * @param {string|null} ownerId - Principal the caller is acting for
+   * @param {string} chatId - For the log line
+   * @returns {Object|null} The state, or null when it is someone else's
+   * @private
+   */
+  _ownedOrNull(entry, ownerId, chatId) {
+    if (!ownerId || !entry?.ownerId || entry.ownerId === ownerId) return entry;
+    logger.warn('Conversation state belongs to another principal; not reused', {
+      component: COMPONENT,
+      chatId
+    });
+    return null;
   }
 
   /**
@@ -328,7 +362,11 @@ export class ConversationStateManager {
       const entry = this.states.get(chatId);
       try {
         if (entry) {
-          await documents.put(INTEGRATION_CONVERSATIONS_NAMESPACE, chatId, entry);
+          // Owned, so the store's per-owner index can answer for it and a
+          // later reader can tell whose conversation this is.
+          await documents.put(INTEGRATION_CONVERSATIONS_NAMESPACE, chatId, entry, {
+            ownerId: entry.ownerId ?? null
+          });
         } else {
           await documents.delete(INTEGRATION_CONVERSATIONS_NAMESPACE, chatId);
         }

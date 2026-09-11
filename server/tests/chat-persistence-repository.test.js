@@ -564,6 +564,48 @@ describe('ChatRepository: delete', () => {
     });
   });
 
+  it('a delete that fails partway leaves the chat findable, not an invisible transcript', async () => {
+    // Two non-transactional writes. Removing the index first meant a failure
+    // between them stranded the full verbatim transcript with nothing
+    // pointing at it: `chat-messages` is never enumerated anywhere, so the
+    // list, the retention sweep and a retried delete all missed it — while
+    // the user had been told the chat was erased.
+    await withRepository(async ({ repository, provider }) => {
+      await seedChat(repository);
+      // A transcript to orphan: without one the assertion below is vacuous,
+      // which is exactly how the first version of this test passed against
+      // the order it was written to reject.
+      await repository.appendMessage(CHAT_ID, {
+        role: 'user',
+        content: 'something worth not losing',
+        runId: 'run-a'
+      });
+      assert.equal((await repository.getMessages(CHAT_ID)).messages.length, 1);
+
+      const realDelete = provider.documents.delete.bind(provider.documents);
+      provider.documents.delete = async (ns, key) => {
+        if (ns === CHATS_NS) throw new Error('storage went away mid-delete');
+        return realDelete(ns, key);
+      };
+      try {
+        await assert.rejects(() => repository.deleteChat(CHAT_ID));
+      } finally {
+        provider.documents.delete = realDelete;
+      }
+
+      assert.ok(
+        await repository.getChat(CHAT_ID),
+        'the chat is still listable, so the delete can be retried'
+      );
+      assert.deepEqual(
+        (await repository.getMessages(CHAT_ID)).messages,
+        [],
+        'and the transcript is already gone rather than orphaned'
+      );
+      assert.equal((await repository.deleteChat(CHAT_ID)).deleted, true, 'the retry finishes it');
+    });
+  });
+
   it('deleting twice is not an error and reports nothing to cascade', async () => {
     await withRepository(async ({ repository }) => {
       await seedChat(repository);

@@ -15,6 +15,15 @@
  * mode configured right now. An admin switching `platform.runLog.identityMode`
  * would otherwise orphan every chat written before the switch.
  *
+ * **The admin bypass is read-only.** It is documented and tested as a read
+ * affordance — admins see every run — but the decision it returns used to be a
+ * single verb-less boolean, and every write path authorizes through the same
+ * call. That meant an admin holding a chat id from a support ticket or a
+ * shared link could append a turn to someone else's conversation (stored with
+ * no record of who actually sent it), rename it, or delete it and cascade its
+ * ledger, with no audit entry anywhere. Callers now declare their intent and
+ * a write by a non-owner is refused like any other.
+ *
  * @module services/chat/chatAccess
  */
 import { resolvePrincipal, isAnonymousUser, isAdminUser } from '../loop/runIdentity.js';
@@ -33,11 +42,20 @@ import { getChatRepository, isPersistableChatId } from './ChatRepository.js';
  * @param {Object} [options]
  * @param {import('./ChatRepository.js').ChatRepository} [options.repository] -
  *   Repository to read through; defaults to the process-wide one.
- * @returns {Promise<{ok: true, chat: Object|null}|{ok: false, status: 404}>}
+ * @param {'read'|'write'} [options.intent='read'] - What the caller is about to
+ *   do. The admin bypass applies to `read` only; an admin acting on a chat
+ *   they do not own is refused a `write` exactly as any other non-owner is.
+ * @returns {Promise<{ok: true, chat: Object|null, viaAdmin?: boolean}|{ok: false, status: 404}>}
  *   `chat` is null when nothing is stored for this id — persistence is off,
- *   the id is not storable, or the chat is new.
+ *   the id is not storable, or the chat is new. `viaAdmin` marks a decision
+ *   that rests on the bypass rather than on ownership, so a caller can skip
+ *   the side effects that belong to the owner reading their own chat.
  */
-export async function authorizeChat(chatId, user, { repository = getChatRepository() } = {}) {
+export async function authorizeChat(
+  chatId,
+  user,
+  { repository = getChatRepository(), intent = 'read' } = {}
+) {
   // An id the store cannot key (a headless `agent:<runId>:<hex>` chat) has no
   // stored document by construction, so there is nothing to own.
   if (!repository || !isPersistableChatId(chatId)) return { ok: true, chat: null };
@@ -45,7 +63,11 @@ export async function authorizeChat(chatId, user, { repository = getChatReposito
   const chat = await repository.getChat(chatId);
   if (!chat) return { ok: true, chat: null };
 
-  if (isAdminUser(user)) return { ok: true, chat };
+  if (isAdminUser(user)) {
+    if (intent === 'read') return { ok: true, chat, viaAdmin: true };
+    // Falls through to the ownership test below: an admin who *is* the owner
+    // writes normally, and one who is not gets the same 404 as anyone else.
+  }
   // An anonymous caller never owns a stored chat: anonymous principals get a
   // fresh random id per resolution, so no comparison could ever match.
   if (isAnonymousUser(user)) return { ok: false, status: 404 };

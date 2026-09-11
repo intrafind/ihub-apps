@@ -186,6 +186,78 @@ describe('conversation state: durability', () => {
   });
 });
 
+describe('conversation state: ownership', () => {
+  it("does not hand one user's conversation to another", async () => {
+    // A chat id is a URL path segment, so it reaches history, referrers and
+    // pasted links. Keyed on the chat id alone and stored unowned, a user who
+    // held someone else's id could post a turn that threaded onto that user's
+    // remote conversation — durable and cross-worker for the full TTL.
+    await withManager(async ({ manager, provider }) => {
+      manager.setState(CHAT_ID, {
+        conversationId: 'conv-owned',
+        lastParentId: 'msg-9',
+        ownerId: 'user-a'
+      });
+      await manager.flush();
+
+      const doc = await provider.documents.get(INTEGRATION_CONVERSATIONS_NAMESPACE, CHAT_ID);
+      assert.equal(doc.ownerId, 'user-a', 'the document carries the owner');
+
+      // Same process, cache warm.
+      assert.equal(await manager.loadState(CHAT_ID, { ownerId: 'user-b' }), null);
+      assert.equal(
+        (await manager.loadState(CHAT_ID, { ownerId: 'user-a' }))?.conversationId,
+        'conv-owned'
+      );
+    });
+  });
+
+  it('refuses a cross-owner read from a cold cache too', async () => {
+    const first = await openManager();
+    try {
+      first.manager.setState(CHAT_ID, { conversationId: 'conv-owned', ownerId: 'user-a' });
+      await first.manager.flush();
+    } finally {
+      first.manager.stop();
+      await first.provider.shutdown();
+    }
+
+    const second = await openManager({ baseDir: first.baseDir });
+    try {
+      assert.equal(await second.manager.loadState(CHAT_ID, { ownerId: 'user-b' }), null);
+      assert.equal(
+        (await second.manager.loadState(CHAT_ID, { ownerId: 'user-a' }))?.conversationId,
+        'conv-owned'
+      );
+    } finally {
+      second.manager.stop();
+      await second.provider.shutdown();
+      await fs.rm(first.baseDir, { recursive: true, force: true });
+    }
+  });
+
+  it('still serves state written before it carried an owner', async () => {
+    // An upgrade inherits unowned documents; refusing them would drop every
+    // conversation in flight at the moment of the deploy.
+    await withManager(async ({ manager }) => {
+      manager.setState(CHAT_ID, { conversationId: 'conv-legacy' });
+      await manager.flush();
+      assert.equal(
+        (await manager.loadState(CHAT_ID, { ownerId: 'anyone' }))?.conversationId,
+        'conv-legacy'
+      );
+    });
+  });
+
+  it('matches any state when the caller names no owner', async () => {
+    await withManager(async ({ manager }) => {
+      manager.setState(CHAT_ID, { conversationId: 'conv-owned', ownerId: 'user-a' });
+      await manager.flush();
+      assert.equal((await manager.loadState(CHAT_ID))?.conversationId, 'conv-owned');
+    });
+  });
+});
+
 describe('conversation state: the streaming path', () => {
   it('never writes a document from updateParentId', async () => {
     await withManager(async ({ manager, calls, provider }) => {

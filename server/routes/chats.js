@@ -152,11 +152,16 @@ async function resolveOwnerId(user) {
  * @param {string} chatId - Chat id from the path.
  * @param {Object} user - `req.user`.
  * @param {import('../services/chat/ChatRepository.js').ChatRepository} repository - Repository.
- * @returns {Promise<Object|null>} The chat, or null once a 404 is due.
+ * @param {'read'|'write'} [intent='read'] - What the caller is about to do.
+ *   The admin bypass covers reads only, so a rename or a delete of someone
+ *   else's chat is refused even for an admin.
+ * @returns {Promise<{chat: Object, viaAdmin: boolean}|null>} The chat and how
+ *   it was authorized, or null once a 404 is due.
  */
-async function loadOwnedChat(chatId, user, repository) {
-  const auth = await authorizeChat(chatId, user, { repository });
-  return auth.ok ? auth.chat : null;
+async function loadOwnedChat(chatId, user, repository, intent = 'read') {
+  const auth = await authorizeChat(chatId, user, { repository, intent });
+  if (!auth.ok || !auth.chat) return null;
+  return { chat: auth.chat, viaAdmin: auth.viaAdmin === true };
 }
 
 /**
@@ -193,13 +198,18 @@ export default function registerChatRoutes(app) {
       if (!validateIdForPath(chatId, 'chat', res)) return;
       const repository = requireRepository(res);
       if (!repository) return;
-      const chat = await loadOwnedChat(chatId, req.user, repository);
-      if (!chat) return sendNotFound(res, 'Chat');
+      const access = await loadOwnedChat(chatId, req.user, repository, 'read');
+      if (!access) return sendNotFound(res, 'Chat');
+      const { chat, viaAdmin } = access;
       const stored = await repository.getMessages(chatId);
-      // Opening a chat is what "seen" means. Only write when the flag is
-      // actually set: the clear is a locked read-modify-write, and a plain
-      // read should not contend with a turn that is producing into this chat.
-      const seen = chat.hasUnseenActivity ? await repository.clearUnseen(chatId) : null;
+      // Opening a chat is what "seen" means — for its owner. Only write when
+      // the flag is actually set: the clear is a locked read-modify-write, and
+      // a plain read should not contend with a turn that is producing into
+      // this chat. An admin reading someone else's chat clears nothing: the
+      // owner has not seen the answer, and a support read should not tell them
+      // they have.
+      const seen =
+        chat.hasUnseenActivity && !viaAdmin ? await repository.clearUnseen(chatId) : null;
       // `messages` is the array, not the stored envelope — a hydrating client
       // should not have to reach through `messages.messages`. The document's
       // schema version rides alongside it so a future migration is visible.
@@ -219,8 +229,8 @@ export default function registerChatRoutes(app) {
       }
       const repository = requireRepository(res);
       if (!repository) return;
-      const chat = await loadOwnedChat(chatId, req.user, repository);
-      if (!chat) return sendNotFound(res, 'Chat');
+      const access = await loadOwnedChat(chatId, req.user, repository, 'write');
+      if (!access) return sendNotFound(res, 'Chat');
       // The repository caps and marks the title as user-set so no later turn
       // derives over it; an empty title clears that mark instead.
       const renamed = await repository.renameChat(chatId, title.slice(0, TITLE_INPUT_WINDOW));
@@ -237,8 +247,8 @@ export default function registerChatRoutes(app) {
       if (!validateIdForPath(chatId, 'chat', res)) return;
       const repository = requireRepository(res);
       if (!repository) return;
-      const chat = await loadOwnedChat(chatId, req.user, repository);
-      if (!chat) return sendNotFound(res, 'Chat');
+      const access = await loadOwnedChat(chatId, req.user, repository, 'write');
+      if (!access) return sendNotFound(res, 'Chat');
       // The chat document is the only place a chat's runs are recorded, so it
       // has to be read before it is removed — `deleteChat` returns them for
       // exactly this reason.

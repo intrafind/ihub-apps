@@ -774,8 +774,18 @@ export class ChatRepository {
     return this._withChatLock(chatId, async () => {
       const existing = await this._readChat(chatId);
       const runIds = normalizeRunIds(existing?.runIds);
-      const removedChat = await this.documents.delete(CHATS_NAMESPACE, chatId);
+      // Unwind in reverse of the write order: the transcript first, the chat
+      // document — the only thing that can reach it — last. These are two
+      // non-transactional writes, and with the index removed first a failure
+      // between them stranded the full verbatim transcript with nothing
+      // pointing at it: `chat-messages` is never enumerated anywhere, so
+      // neither the list, the retention sweep nor a retried delete could find
+      // it again, while the user had been told the chat was erased. This way
+      // a partial delete leaves a listable, re-deletable chat with an empty
+      // transcript. Same rule `put` states — invisible data is worse than a
+      // dangling index entry.
       const removedMessages = await this.documents.delete(CHAT_MESSAGES_NAMESPACE, chatId);
+      const removedChat = await this.documents.delete(CHATS_NAMESPACE, chatId);
       return { deleted: removedChat || removedMessages, runIds };
     });
   }
