@@ -31,6 +31,7 @@ import { withFileLock, removeIfExists, tryCreateExclusive } from '../../../utils
 import { isValidId } from '../../../utils/pathSecurity.js';
 import logger from '../../../utils/logger.js';
 import { DocumentStore } from '../../DocumentStore.js';
+import { canonicalJson } from '../../canonicalJson.js';
 import {
   CorruptDocumentError,
   EtagMismatchError,
@@ -113,10 +114,21 @@ function etagOf(json) {
 /**
  * The stored body of an envelope together with its canonical JSON, the single
  * source for both `etag` and `size`.
+ *
+ * Canonical rather than `JSON.stringify`: the etag is contracted to depend on
+ * the data alone, and `JSON.stringify` emits keys in insertion order, so this
+ * provider was reporting a digest that depended on the order the *writer*
+ * built the object in. It survived only because the JSON text is persisted and
+ * re-parsed, which preserves that order by accident — a backend that stores
+ * bodies structurally does not. See `storage/canonicalJson.js`.
+ *
+ * `size` follows the same bytes. Sorting keys cannot change the length, so the
+ * value is the same either way; taking both from one serialization is what
+ * stops them drifting apart later.
  */
 function envelopeBody(envelope) {
   const data = envelope.data === undefined ? null : envelope.data;
-  return { data, json: JSON.stringify(data) };
+  return { data, json: canonicalJson(data) };
 }
 
 /** Serialize document data, rejecting anything JSON cannot represent. */

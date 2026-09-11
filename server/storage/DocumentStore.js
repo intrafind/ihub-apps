@@ -24,6 +24,22 @@ import { NotSupportedError } from './errors.js';
  * the provider, so two providers holding the same data report the same etag —
  * a conditional write keeps working across a migration between backends.
  *
+ * "Derived from the data" is the whole of it: not from the storage layout, not
+ * from a write counter, and **not from the order the writer happened to build
+ * the object in**. The serialization is therefore canonical — object keys
+ * sorted at every depth, array order left alone, see
+ * `storage/canonicalJson.js` — because a provider that stores bodies
+ * structurally rather than as text hands them back in its own key order. A
+ * PostgreSQL `jsonb` column sorts keys by length then bytewise, so a
+ * `JSON.stringify` digest would differ on a byte-perfect copy.
+ *
+ * This is stated as a requirement on providers rather than as a property of
+ * one function, because canonical serialization on the way out cannot undo
+ * normalization on the way in. A backend that rewrites *values* — `jsonb`
+ * collapsing `1.0` to `1`, dropping duplicate keys, re-escaping unicode —
+ * meets the requirement by persisting the etag it minted at write time and
+ * reporting that. What it may not do is mint a fresh one per read.
+ *
  * @typedef {Object} Document
  * @property {string} ns - Namespace the document lives in.
  * @property {string} key - Key within the namespace.
@@ -33,8 +49,12 @@ import { NotSupportedError } from './errors.js';
  *   one.
  * @property {string} createdAt - ISO-8601 timestamp of the first write.
  * @property {string} updatedAt - ISO-8601 timestamp of the most recent write.
- * @property {string} etag - sha256 hex of `JSON.stringify(data)`.
- * @property {number} size - `Buffer.byteLength(JSON.stringify(data), 'utf8')`.
+ * @property {string} etag - sha256 hex of the canonical serialization of
+ *   `data`. **Raw namespaces are the exception**: there the file *is* the
+ *   document, so the etag is sha256 of its stored bytes and two files whose
+ *   parsed data is equal but whose formatting differs are different documents
+ *   — which is what lets a compare-and-set notice a hand edit.
+ * @property {number} size - Byte length of that same serialization.
  * @property {any} [data] - The document body; omitted (undefined) when the
  *   document came from a `list({ includeData: false })`.
  */

@@ -27,6 +27,7 @@
 import { after, before, describe, it } from 'node:test';
 import assert from 'node:assert/strict';
 import crypto from 'node:crypto';
+import { canonicalJson } from '../canonicalJson.js';
 import {
   EtagMismatchError,
   InvalidKeyError,
@@ -107,13 +108,18 @@ async function waitFor(predicate, description, timeoutMs = 2000) {
 }
 
 /**
- * The etag the contract prescribes: sha256 of the serialized data.
+ * The etag the contract prescribes: sha256 of the canonically serialized data.
+ *
+ * Canonical — keys sorted at every depth — rather than `JSON.stringify`,
+ * because the contract says the etag depends on the data and nothing else. Key
+ * order is the writer's incidental choice, and a provider that stores bodies
+ * structurally rather than as text does not preserve it.
  *
  * @param {any} data - Document body
  * @returns {string} Hex digest
  */
 function contractEtag(data) {
-  return crypto.createHash('sha256').update(JSON.stringify(data)).digest('hex');
+  return crypto.createHash('sha256').update(canonicalJson(data)).digest('hex');
 }
 
 /**
@@ -123,7 +129,7 @@ function contractEtag(data) {
  * @returns {number} Bytes
  */
 function contractSize(data) {
-  return Buffer.byteLength(JSON.stringify(data), 'utf8');
+  return Buffer.byteLength(canonicalJson(data), 'utf8');
 }
 
 /**
@@ -445,6 +451,37 @@ export function runProviderConformance({ name, createProvider, capabilities, raw
         assert.equal(one.size, contractSize(data), 'size is the serialized byte length');
         assert.equal(one.etag, two.etag, 'equal data has an equal etag regardless of metadata');
         assert.notEqual(one.etag, three.etag, 'different data has a different etag');
+      });
+
+      it('key order does not change the etag', async () => {
+        // What "derived from the data" has to mean if the etag is to survive a
+        // migration. `JSON.stringify` emits keys in insertion order, so a
+        // digest taken over it depends on the order the writer happened to
+        // build the object in — invisible on a provider that persists the JSON
+        // text and reads it back, which preserves that order by accident, and
+        // wrong on one that stores bodies structurally. A PostgreSQL `jsonb`
+        // column orders keys by length then bytewise, so it hands back the
+        // object below in the other spelling and a byte-perfect copy would
+        // recompute to a different etag — the migration check reporting total
+        // mismatch on a correct copy.
+        const ns = nextId('docs');
+        const written = await shared.documents.put(ns, 'one', { title: 'x', id: 'c1' });
+        const reordered = await shared.documents.put(ns, 'two', { id: 'c1', title: 'x' });
+        assert.equal(written.etag, reordered.etag);
+        assert.equal(written.size, reordered.size);
+
+        // Nested, and arrays keep their order — that is data, not spelling.
+        const deep = await shared.documents.put(ns, 'deep', { a: { y: 1, x: [1, 2] }, b: 2 });
+        const deepReordered = await shared.documents.put(ns, 'deep2', {
+          b: 2,
+          a: { x: [1, 2], y: 1 }
+        });
+        const swappedArray = await shared.documents.put(ns, 'arr', {
+          a: { x: [2, 1], y: 1 },
+          b: 2
+        });
+        assert.equal(deep.etag, deepReordered.etag, 'sorted at every depth');
+        assert.notEqual(deep.etag, swappedArray.etag, 'but array order is part of the document');
       });
 
       it('ownerId is echoed back on put and get', async () => {

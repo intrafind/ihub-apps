@@ -119,15 +119,24 @@ provider extends them and every method it does not implement throws
   contentType: string,   // default 'application/json'
   createdAt: string,     // ISO-8601, preserved across overwrites
   updatedAt: string,     // ISO-8601, always "now" on put
-  etag: string,          // sha256 hex of JSON.stringify(data)
-  size: number,          // Buffer.byteLength(JSON.stringify(data), 'utf8')
+  etag: string,          // sha256 hex of the canonical serialization of data
+  size: number,          // its byte length
   data: any              // undefined when list({ includeData: false })
 }
 ```
 
-`etag` and `size` are **derived from the data**, not stored and not
-provider-specific: the same document has the same etag on every provider, so a
-migration can verify a copy by comparing etags.
+`etag` and `size` are **derived from the data**, not from the storage layout
+and not from the order the writing code built the object in: the serialization
+sorts object keys at every depth (array order is data and is preserved), so the
+same document has the same etag on every provider and a migration can verify a
+copy by comparing etags.
+
+That is a requirement on providers, not a promise about one function. A backend
+that normalizes values on the way in — a PostgreSQL `jsonb` column collapsing
+`1.0` to `1`, dropping duplicate keys or re-escaping unicode — cannot recompute
+the digest from what it reads back, and meets the requirement by persisting the
+etag it minted at write time. Raw namespaces are their own exception, below:
+there the file is the document and the etag follows its bytes.
 
 `ns` and `key` are validated with `isValidId()` from
 `server/utils/pathSecurity.js` — `''`, `'a/b'` and `'../x'` all raise
