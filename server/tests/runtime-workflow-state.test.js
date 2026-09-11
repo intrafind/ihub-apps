@@ -27,8 +27,11 @@ import {
   IMPORT_STATE_NAMESPACE,
   IMPORT_STATE_KEY,
   importLegacyWorkflowStates,
-  workflowStateOwnerId
+  workflowStateOwnerId,
+  getWorkflowStateRepository,
+  resolveWorkflowStateRepository
 } from '../services/workflow/WorkflowStateRepository.js';
+import { StorageError } from '../storage/errors.js';
 import {
   StateManager,
   WorkflowStatus,
@@ -255,6 +258,9 @@ describe('WorkflowStateRepository', () => {
   });
 
   it('keeps using the legacy layout when no provider is available', async () => {
+    // A repository bound to a directory of its own — a test, or tooling that
+    // redirected its state. Legacy is its normal mode, not a degraded one, so
+    // the refusal below must not reach it.
     const stateDir = await fs.mkdtemp(path.join(os.tmpdir(), 'ihub-wf-legacy-'));
     const repository = new WorkflowStateRepository({
       stateDir,
@@ -279,6 +285,51 @@ describe('WorkflowStateRepository', () => {
     } finally {
       await fs.rm(stateDir, { recursive: true, force: true });
     }
+  });
+
+  it('refuses to checkpoint when the shared store has lost its provider', async () => {
+    // The shared store, provider down. Writing `latest.json` here is not a
+    // fallback but a fork: `read()` prefers the document unconditionally, so
+    // this checkpoint would be shadowed the moment the provider came back, and
+    // answering a human checkpoint would resume from the older document —
+    // re-running whatever side-effecting nodes lie between. Silently.
+    //
+    // Failing is the only outcome anyone sees. Nothing repairs this later,
+    // because the repair would have to run at boot and a boot is not something
+    // to design around.
+    const stateDir = await fs.mkdtemp(path.join(os.tmpdir(), 'ihub-wf-shared-down-'));
+    const repository = new WorkflowStateRepository({
+      stateDir,
+      shared: true,
+      logger: recordingLogger().logger
+    });
+    try {
+      assert.equal(repository.isAvailable(), false);
+
+      await assert.rejects(
+        () => repository.write('wf-exec-A', state('wf-exec-A'), { ownerId: OWNER }),
+        error => error instanceof StorageError && error.code === 'STORAGE_UNAVAILABLE'
+      );
+
+      assert.equal(
+        await fs
+          .access(path.join(stateDir, 'wf-exec-A', LEGACY_STATE_FILE))
+          .then(() => true)
+          .catch(() => false),
+        false,
+        'and it wrote nothing — a half-written fork is the same bug'
+      );
+    } finally {
+      await fs.rm(stateDir, { recursive: true, force: true });
+    }
+  });
+
+  it('the shared repository is the one built for this installation', async () => {
+    // The flag has to come from somewhere real: if `getWorkflowStateRepository`
+    // stopped setting it, the refusal above would never fire in production and
+    // every test here would still pass.
+    assert.equal(getWorkflowStateRepository().shared, true);
+    assert.equal(resolveWorkflowStateRepository('/tmp/somewhere-private').shared, false);
   });
 });
 

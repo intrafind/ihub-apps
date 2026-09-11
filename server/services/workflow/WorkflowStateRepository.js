@@ -26,13 +26,22 @@
  * the orphan sweeper — which would otherwise conclude that nothing is running
  * and, on the next boot, that everything failed.
  *
- * **No provider is a supported state.** With `documents: null` the repository
- * behaves exactly like the code it replaces: legacy directories, atomic
- * `latest.json` writes, nothing else. A `StateManager` pointed at a private
- * directory (tests, tooling) gets one of these deliberately — see
- * {@link resolveWorkflowStateRepository} — because a caller that redirected
- * its state to a directory of its own must not have its writes land in the
- * shared namespace.
+ * **A private directory with no provider is supported; the shared store losing
+ * its provider is not.** A `StateManager` pointed at a directory of its own
+ * (tests, tooling) deliberately gets a legacy-only repository — see
+ * {@link resolveWorkflowStateRepository} — because a caller that redirected its
+ * state must not have its writes land in the shared namespace. There, legacy
+ * directories and atomic `latest.json` writes are the whole story.
+ *
+ * The shared repository is different. Once its states are documents, a boot
+ * that cannot bring the provider up **refuses to write** rather than falling
+ * back to `latest.json`, because falling back forks the store: `read()` prefers
+ * the document unconditionally, so a checkpoint written to the legacy copy
+ * while the provider was away is shadowed the moment it returns. Answering a
+ * human checkpoint then resumes from several nodes back and re-runs
+ * side-effecting nodes, with nothing anywhere saying so. A workflow that cannot
+ * checkpoint fails where someone can see it; one that checkpoints into a copy
+ * nobody will read again does not.
  *
  * @module services/workflow/WorkflowStateRepository
  */
@@ -44,6 +53,7 @@ import logger from '../../utils/logger.js';
 import { atomicWriteJSON } from '../../utils/atomicWrite.js';
 import { isValidId } from '../../utils/pathSecurity.js';
 import { getStorage, readFacet } from '../../storage/bootstrap.js';
+import { StorageError } from '../../storage/errors.js';
 import { RUNTIME_NAMESPACES } from '../../storage/namespaces.js';
 
 const COMPONENT = 'WorkflowStateRepository';
@@ -189,10 +199,20 @@ export class WorkflowStateRepository {
    *   `<executionId>/latest.json` layout.
    * @param {Object} [options.logger] - Logger; defaults to the shared one.
    */
-  constructor({ documents = null, locks = null, stateDir = DEFAULT_STATE_DIR, logger: log } = {}) {
+  constructor({
+    documents = null,
+    locks = null,
+    stateDir = DEFAULT_STATE_DIR,
+    shared = false,
+    logger: log
+  } = {}) {
     this.documents = documents || null;
     this.locks = locks || null;
     this.stateDir = stateDir || DEFAULT_STATE_DIR;
+    // Set only by `getWorkflowStateRepository`. It is what separates "this
+    // installation's store, whose provider is missing" from "a caller that
+    // asked for a private directory", and only the first may not fall back.
+    this.shared = shared === true;
     this.logger = log || logger;
   }
 
@@ -266,6 +286,17 @@ export class WorkflowStateRepository {
         ownerId: typeof ownerId === 'string' && ownerId.length > 0 ? ownerId : null
       });
       return;
+    }
+
+    if (this.shared) {
+      // Not a fallback — a fork. See the module header: the legacy copy this
+      // would write is shadowed by the stale document as soon as the provider
+      // is back, and the run silently resumes from where the document left
+      // off. Failing here is the only outcome anybody notices.
+      throw new StorageError(
+        `Cannot checkpoint workflow state for ${executionId}: the storage provider is unavailable`,
+        { code: 'STORAGE_UNAVAILABLE' }
+      );
     }
 
     const dir = this._legacyDir(executionId);
@@ -556,6 +587,7 @@ export function getWorkflowStateRepository() {
     cachedRepository = new WorkflowStateRepository({
       documents: readFacet(provider, 'documents'),
       locks: readFacet(provider, 'locks'),
+      shared: true,
       logger
     });
   }
