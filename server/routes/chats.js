@@ -43,7 +43,10 @@ import { authorizeChat } from '../services/chat/chatAccess.js';
 import { getChatRepository, MAX_TITLE_LENGTH } from '../services/chat/ChatRepository.js';
 import { isChatPersistenceConfigured } from '../services/chat/chatPersistence.js';
 import { StorageError, storageHttpStatus } from '../storage/errors.js';
-import logger from '../utils/logger.js';
+import { abortChatRequest } from '../sse.js';
+import { cancelChatWorkflow } from '../tools/workflowRunner.js';
+import { getWorkflowStateRepository } from '../services/workflow/WorkflowStateRepository.js';
+import { deleteChatWithCascade } from '../services/chat/chatDeletion.js';
 
 const COMPONENT = 'ChatRoutes';
 
@@ -252,28 +255,24 @@ export default function registerChatRoutes(app) {
       if (!repository) return;
       const access = await loadOwnedChat(chatId, req.user, repository, 'write');
       if (!access) return sendNotFound(res, 'Chat');
-      // The chat document is the only place a chat's runs are recorded, so it
-      // has to be read before it is removed — `deleteChat` returns them for
-      // exactly this reason.
-      const { runIds } = await repository.deleteChat(chatId);
-      // `deleteRun` is the single entry point that cascades a run's ledger
-      // file, its spill directory and its pending interactions. One run that
-      // refuses to go must not strand the rest, so each is attempted on its
-      // own and a failure is logged rather than thrown: the chat itself is
-      // already gone, and reporting a 500 would invite a retry that can only
-      // 404.
-      for (const runId of runIds) {
-        try {
-          await runLog.deleteRun(runId);
-        } catch (error) {
-          logger.error('Failed to cascade a chat delete into one of its runs', {
-            component: COMPONENT,
-            chatId,
-            runId,
-            error: error.message
-          });
-        }
+      // Stop the turn before erasing what records it. The sidebar deletes
+      // without stopping first, so a generating chat left the model call
+      // running and billing — and its next `runLog.append` re-created the very
+      // stream the cascade below had just deleted, because appending to an
+      // unknown stream creates it. What survived was an event stream carrying
+      // the conversation with no run summary to find it by, reaped only by the
+      // ledger's own age sweep. The same pair `POST /api/runs/:id/stop` uses,
+      // and cluster-aware for the same reason: the turn may be producing on
+      // another worker.
+      if (access.chat?.status === 'running' || access.chat?.activeRunId) {
+        abortChatRequest(chatId);
+        await cancelChatWorkflow(chatId);
       }
+      await deleteChatWithCascade(repository, chatId, {
+        deleteRun: runId => runLog.deleteRun(runId),
+        removeWorkflowState: runId => getWorkflowStateRepository().remove(runId),
+        component: COMPONENT
+      });
       // True even when a concurrent delete won the race: the postcondition the
       // caller asked for — this chat no longer exists — holds either way.
       res.json({ deleted: true });

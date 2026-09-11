@@ -8,12 +8,13 @@
  *   - **count** — an owner keeps only their `maxChatsPerUser` most recent
  *     chats; the rest go, oldest first.
  *
- * A removal is the same cascade `DELETE /api/chats/:id` performs: the chat
- * document, its transcript, and then `runLog.deleteRun()` for every run the
- * chat recorded — which in turn takes the run's ledger file, its spill
- * directory and its pending interactions. The chat document is the only place
- * a chat's run ids are written down, so the cascade has to run here rather
- * than being left to the ledger's own retention.
+ * A removal is the same cascade `DELETE /api/chats/:id` performs, and through
+ * the same function: the chat document, its transcript, and then
+ * `deleteChatWithCascade` for every run the chat recorded — the run's ledger
+ * file, its spill directory, its pending interactions, and the workflow state
+ * of an `@mention` turn. The chat document is the only place a chat's run ids
+ * are written down, so the cascade has to run here rather than being left to
+ * the ledger's own retention.
  *
  * Scanning: `DocumentStore.list` is index-backed per owner and key-ordered
  * otherwise, so the sweep pages the whole `chats` namespace once and groups it
@@ -29,6 +30,8 @@ import runLog from '../loop/RunLog.js';
 import { CHATS_NAMESPACE, getChatRepository } from './ChatRepository.js';
 import { chatRetentionSettings, isChatPersistenceConfigured } from './chatPersistence.js';
 import { isStorageReady } from '../../storage/bootstrap.js';
+import { getWorkflowStateRepository } from '../workflow/WorkflowStateRepository.js';
+import { deleteChatWithCascade } from './chatDeletion.js';
 
 const COMPONENT = 'ChatRetention';
 
@@ -163,35 +166,6 @@ function overflowingChats(chats, maxChatsPerUser) {
 }
 
 /**
- * Delete one chat and cascade into the ledger runs it recorded.
- *
- * One stubborn run must not strand the rest of the sweep, so every step is
- * attempted on its own and a failure is logged: the chat itself is already
- * gone, and there is no caller to report to.
- *
- * @param {import('./ChatRepository.js').ChatRepository} repository
- * @param {string} chatId - Chat to remove.
- * @param {(runId: string) => Promise<unknown>} deleteRun - Ledger cascade.
- * @returns {Promise<boolean>} Whether something was actually removed.
- */
-async function removeChat(repository, chatId, deleteRun) {
-  const { deleted, runIds } = await repository.deleteChat(chatId);
-  for (const runId of runIds) {
-    try {
-      await deleteRun(runId);
-    } catch (error) {
-      logger.error('Chat retention failed to cascade a chat into one of its runs', {
-        component: COMPONENT,
-        chatId,
-        runId,
-        error: error.message
-      });
-    }
-  }
-  return deleted;
-}
-
-/**
  * Apply both retention rules once.
  *
  * @param {Object} options
@@ -204,6 +178,8 @@ async function removeChat(repository, chatId, deleteRun) {
  * @param {(runId: string) => Promise<unknown>} [options.deleteRun] - Ledger
  *   cascade for a removed chat's runs. Injectable so a test can observe it
  *   without a ledger on disk.
+ * @param {(runId: string) => Promise<unknown>} [options.removeWorkflowState] -
+ *   Workflow-state cascade, injectable for the same reason.
  * @param {() => number} [options.now] - Clock, for tests.
  * @returns {Promise<{removed: number}>} How many chats were removed.
  */
@@ -212,6 +188,7 @@ export async function sweepChats({
   retentionDays,
   maxChatsPerUser,
   deleteRun = runId => runLog.deleteRun(runId),
+  removeWorkflowState = runId => getWorkflowStateRepository().remove(runId),
   now = Date.now
 } = {}) {
   const documents = documentsOf(repository);
@@ -237,7 +214,12 @@ export async function sweepChats({
   let removed = 0;
   for (const chat of doomed) {
     try {
-      if (await removeChat(repository, chat.id, deleteRun)) removed += 1;
+      const { deleted } = await deleteChatWithCascade(repository, chat.id, {
+        deleteRun,
+        removeWorkflowState,
+        component: COMPONENT
+      });
+      if (deleted) removed += 1;
     } catch (error) {
       logger.error('Chat retention failed to remove a chat', {
         component: COMPONENT,
