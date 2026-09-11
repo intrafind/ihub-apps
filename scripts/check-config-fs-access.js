@@ -158,6 +158,24 @@ const CONTRACT_EXCLUSIONS = [
       'owns them.'
   },
   {
+    path: 'server/utils/userManager.js',
+    arg: /\bfullPath\b/,
+    symbol: /^readFileSync$/,
+    reason:
+      'loadUsers() is synchronous and cannot become async: localAuth resolves a user inside the ' +
+      'middleware path of every request. It reads configCache first — which is populated through ' +
+      'the store — and only falls back to disk for a cache that has not been initialized yet, ' +
+      'which the async store cannot serve. The same sync-middleware reason as ' +
+      'loadGroupsConfiguration, and a different reason from the write beside it, which is about ' +
+      'a usersFile pointing outside contents/.'
+  },
+  {
+    path: 'server/utils/oauthClientManager.js',
+    arg: /\bfullPath\b/,
+    symbol: /^readFileSync$/,
+    reason: 'Same synchronous cache-miss fallback as userManager.js, for oauth.clientsFile.'
+  },
+  {
     path: 'server/utils/authorization.js',
     arg: /\bconfigPath\b/,
     reason:
@@ -236,14 +254,16 @@ const NON_CONFIG_SITES = [
   {
     path: 'server/utils/userManager.js',
     arg: /\bfullPath\b/,
+    symbol: /^(atomicWriteJSON|atomicWriteFile|atomicCreateJSON)$/,
     reason:
       'localAuth.usersFile may point outside contents/ (a mounted secret volume, a test temp ' +
-      'dir). Such a path has no place in the store, so those reads and writes stay absolute; the ' +
-      'in-contents case goes through configStore.'
+      'dir). Such a path has no place in the store, so that write stays absolute; ' +
+      'locateUsersFile() decides, and the in-contents case goes through configStore.'
   },
   {
     path: 'server/utils/oauthClientManager.js',
     arg: /\bfullPath\b/,
+    symbol: /^(atomicWriteJSON|atomicWriteFile|atomicCreateJSON)$/,
     reason: 'Same out-of-contents escape hatch as userManager.js, for oauth.clientsFile.'
   }
 ];
@@ -629,14 +649,22 @@ function enclosingFunction(lines, lineIndex) {
 /**
  * Does an allowlist entry cover this call site?
  *
- * @param {{path: string, fn?: RegExp, arg?: RegExp}} entry - Allowlist entry
- * @param {{repoPath: string, arg: string, fn: string}} site - The call site
+ * `symbol` pins the operation. It exists because a reason is usually a reason
+ * about *one direction*: "this write may land outside contents/" says nothing
+ * about a read, and an entry keyed on the path expression alone silently
+ * covered both. Splitting them is what makes each reason answerable — and each
+ * entry is still checked for use, so a split that over-covers shows up as a
+ * stale exemption rather than as silence.
+ *
+ * @param {{path: string, fn?: RegExp, arg?: RegExp, symbol?: RegExp}} entry - Allowlist entry
+ * @param {{repoPath: string, arg: string, fn: string, symbol: string}} site - The call site
  * @returns {boolean}
  */
 function entryCovers(entry, site) {
   if (!matchesAny(site.repoPath, [entry.path])) return false;
   if (entry.fn && !entry.fn.test(site.fn)) return false;
   if (entry.arg && !entry.arg.test(site.arg)) return false;
+  if (entry.symbol && !entry.symbol.test(site.symbol)) return false;
   return true;
 }
 
@@ -798,7 +826,9 @@ function wrapReason(reason, indent) {
  * @returns {string}
  */
 function describeScope(entry) {
-  const qualifier = entry.fn?.source || entry.arg?.source;
+  const qualifier = [entry.fn?.source, entry.arg?.source, entry.symbol?.source]
+    .filter(Boolean)
+    .join(' ');
   return qualifier ? `${entry.path} (${qualifier})` : entry.path;
 }
 
@@ -822,7 +852,7 @@ function main() {
     console.log('');
     console.log('  Sites that are not configuration (uploads, scripts, key material, skills):');
     for (const entry of NON_CONFIG_SITES) {
-      console.log(`    - ${entry.path}`);
+      console.log(`    - ${describeScope(entry)}`);
       console.log(`      ${wrapReason(entry.reason, '      ')}`);
     }
     console.log('');

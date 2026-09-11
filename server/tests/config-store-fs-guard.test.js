@@ -385,6 +385,45 @@ describe('the config filesystem-access guard', () => {
     assert.equal(await fs.readFile(loaderPath, 'utf8'), original, 'restored byte for byte');
   });
 
+  it('does not let a write-shaped exemption cover a read, or the other way round', async () => {
+    // `userManager` and `oauthClientManager` each have two exempted calls on
+    // one path expression, and each direction has a different reason. The
+    // write may land outside `contents/` — `localAuth.usersFile` can point at
+    // a mounted secret volume — which says nothing about the read; the read is
+    // a synchronous cache-miss fallback in the middleware path, which says
+    // nothing about the write. Pinned on the path expression alone, one entry
+    // covered both, so a reason nobody had examined for the other direction
+    // was silently doing the work.
+    //
+    // The probe is the realistic drift: a plain `writeFileSync` where the
+    // atomic helper belongs. It is on the same `fullPath`, in the same file,
+    // so only the operation tells it apart.
+    const managerPath = path.join(REPO_ROOT, 'server/utils/userManager.js');
+    const original = await fs.readFile(managerPath, 'utf8');
+    const call = '      await atomicWriteJSON(fullPath, usersConfig);';
+    assert.ok(original.includes(call), 'the exempted write is where we expect');
+
+    let planted;
+    try {
+      await fs.writeFile(
+        managerPath,
+        original.replace(call, `${call}\n      fs.writeFileSync(fullPath, '{}');`),
+        'utf8'
+      );
+      planted = await runGuard();
+    } finally {
+      await fs.writeFile(managerPath, original, 'utf8');
+    }
+
+    assert.notEqual(
+      planted.code,
+      0,
+      'a non-atomic write of the users file is not what either exemption is for.\n' + planted.output
+    );
+    assert.match(planted.output, /userManager\.js/, 'and it names the file');
+    assert.equal(await fs.readFile(managerPath, 'utf8'), original, 'restored byte for byte');
+  });
+
   it('reports a dead namespace drift check instead of passing', async () => {
     // The drift check is what makes the guard's duplicated CONFIG_DIRS list
     // safe: add a raw namespace to the map and forget the guard, and writes

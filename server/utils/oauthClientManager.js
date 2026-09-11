@@ -49,21 +49,10 @@ function locateClientsFile(clientsFilePath) {
  */
 export function loadOAuthClients(clientsFilePath) {
   try {
-    // Convert file path to cache key format
-    let cacheKey;
-    if (clientsFilePath.startsWith('contents/')) {
-      cacheKey = clientsFilePath.substring('contents/'.length);
-    } else {
-      cacheKey = path.relative(
-        path.join(__dirname, '../../'),
-        path.isAbsolute(clientsFilePath)
-          ? clientsFilePath
-          : path.join(__dirname, '../../', clientsFilePath)
-      );
-      if (cacheKey.startsWith('contents/')) {
-        cacheKey = cacheKey.substring('contents/'.length);
-      }
-    }
+    // Through `locateClientsFile`, for the same reason as `loadUsers`: the read
+    // and the write have to agree on the cache key, and two copies of the rule
+    // are a coin toss on whether they keep agreeing.
+    const { fullPath, cacheKey } = locateClientsFile(clientsFilePath);
 
     // Try to get from cache first
     const cached = configCache.get(cacheKey);
@@ -76,10 +65,6 @@ export function loadOAuthClients(clientsFilePath) {
       component: 'OAuthClientManager',
       cacheKey
     });
-
-    const fullPath = path.isAbsolute(clientsFilePath)
-      ? clientsFilePath
-      : path.join(__dirname, '../../', clientsFilePath);
 
     // Check if file exists
     if (!fs.existsSync(fullPath)) {

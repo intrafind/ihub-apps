@@ -378,7 +378,13 @@ class ConfigCache {
       'config/installations.json',
       'config/mcpServers.json',
       'config/credentials.json',
-      'config/agents.json'
+      'config/agents.json',
+      // Alongside users.json, and for the same reason: `loadOAuthClients` is a
+      // synchronous middleware-path read that consults this cache first and
+      // falls back to disk on a miss. Left unpreloaded, every request that
+      // resolves an OAuth client took the fallback and logged a warning about
+      // it — a cache with a hole in exactly the shape of its hottest reader.
+      'config/oauth-clients.json'
     ];
 
     // Built-in locales that should always be preloaded (resolved dynamically during initialize())

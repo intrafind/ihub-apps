@@ -65,24 +65,12 @@ export async function hashPasswordWithUserId(password, userId) {
  */
 export function loadUsers(usersFilePath) {
   try {
-    // Convert file path to cache key format
-    // The cache stores keys without 'contents/' prefix, so we need to strip it
-    let cacheKey;
-    if (usersFilePath.startsWith('contents/')) {
-      // Remove 'contents/' prefix to match cache key format
-      cacheKey = usersFilePath.substring('contents/'.length);
-    } else {
-      cacheKey = path.relative(
-        path.join(__dirname, '../../'),
-        path.isAbsolute(usersFilePath)
-          ? usersFilePath
-          : path.join(__dirname, '../../', usersFilePath)
-      );
-      // Also remove contents/ prefix if it exists after path.relative
-      if (cacheKey.startsWith('contents/')) {
-        cacheKey = cacheKey.substring('contents/'.length);
-      }
-    }
+    // Through `locateUsersFile` so the read and the write derive the same cache
+    // key from the same path. They agreed when this was written twice; two
+    // copies of a rule with four branches is a coin toss on whether they still
+    // will, and a disagreement here is a permanent cache miss that only shows
+    // up as a warning nobody reads.
+    const { fullPath, cacheKey } = locateUsersFile(usersFilePath);
 
     // Try to get from cache first
     const cached = configCache.get(cacheKey);
@@ -95,10 +83,6 @@ export function loadUsers(usersFilePath) {
       component: 'Utils',
       cacheKey
     });
-
-    const fullPath = path.isAbsolute(usersFilePath)
-      ? usersFilePath
-      : path.join(__dirname, '../../', usersFilePath);
 
     // Check if file exists
     if (!fs.existsSync(fullPath)) {
