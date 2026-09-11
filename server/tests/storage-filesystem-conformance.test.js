@@ -189,6 +189,60 @@ describe('filesystem storage provider: create-only writes (filesystem-specific)'
   });
 });
 
+describe('filesystem storage provider: the owner index (filesystem-specific)', () => {
+  it('does not hand a document to an owner the envelope disagrees with', async () => {
+    const { provider, cleanup } = await createProvider();
+    await provider.initialize();
+    try {
+      await provider.documents.put('chats', 'moved', { secret: 'ann only' }, { ownerId: 'ann' });
+      await provider.documents.put('chats', 'moved', { secret: 'ann only' }, { ownerId: 'bob' });
+
+      // What a crash between the envelope write and the old marker's removal
+      // leaves behind. The change of owner is three steps and only the last
+      // one retires the previous index entry; lose it and Ann's index claims
+      // one of Bob's documents for good, because nothing else ever re-checks.
+      const annsMarker = path.join(
+        provider.baseDir,
+        'chats',
+        '.owners',
+        crypto.createHash('sha256').update('ann', 'utf8').digest('hex').slice(0, 40),
+        'moved'
+      );
+      await fs.mkdir(path.dirname(annsMarker), { recursive: true });
+      await fs.writeFile(annsMarker, '', 'utf8');
+
+      const anns = await provider.documents.list('chats', { ownerId: 'ann' });
+      assert.deepEqual(
+        anns.items.map(item => item.key),
+        [],
+        'the envelope is the authority on who owns a document, not the index'
+      );
+
+      // And the wrong entry is gone, rather than being re-answered every time.
+      // Safe only because the envelope exists and names somebody else: a
+      // *missing* envelope is a put in flight and must never be pruned.
+      assert.equal(
+        await fs
+          .access(annsMarker)
+          .then(() => true)
+          .catch(() => false),
+        false,
+        'the stale marker is pruned once it is known to be wrong'
+      );
+
+      const bobs = await provider.documents.list('chats', { ownerId: 'bob' });
+      assert.deepEqual(
+        bobs.items.map(item => item.key),
+        ['moved'],
+        'the real owner still sees it'
+      );
+    } finally {
+      await provider.shutdown();
+      await cleanup();
+    }
+  });
+});
+
 describe('filesystem storage provider: lease liveness (filesystem-specific)', () => {
   it('acquires the lock in the same call that evicted the dead lease', async () => {
     const { provider, cleanup } = await createProvider();

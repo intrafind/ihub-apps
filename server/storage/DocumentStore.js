@@ -60,7 +60,12 @@ import { NotSupportedError } from './errors.js';
  *
  * @typedef {Object} ListOptions
  * @property {string} [ownerId] - Restrict to one owner's documents. Must be
- *   served from an index, never by scanning the namespace.
+ *   served from an index, never by scanning the namespace — and the index is
+ *   not the authority on who owns what. A document whose own `ownerId` differs
+ *   is not returned, however it came to be indexed here: an index built on a
+ *   multi-step owner change has a step that can be lost, and the result is one
+ *   principal being handed another's documents and their contents. The
+ *   provider is free to prune the entry it just disproved.
  * @property {string} [prefix] - Keep only keys matching
  *   `String.prototype.startsWith(prefix)`.
  * @property {number} [limit=100] - Page size. Clamped to 1000, never rejected.

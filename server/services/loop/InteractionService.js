@@ -59,6 +59,7 @@ import logger from '../../utils/logger.js';
 import { RUN_LOG_EVENTS } from '../../../shared/runEvents.js';
 import { interactionSchema, interactionAnswerSchema } from './contracts/interaction.js';
 import defaultRunLog from './RunLog.js';
+import { RUNTIME_NAMESPACES } from '../../storage/namespaces.js';
 
 /** Cluster bus channel carrying every interaction mutation to the other workers. */
 export const INTERACTION_BUS_CHANNEL = 'interaction:mutation';
@@ -81,10 +82,10 @@ const SETTLED_RETENTION_MS = 60 * 1000;
 export const CLAIM_DIR_NAME = 'interaction-claims';
 
 /** Namespace holding one document per interaction (pending, or recently settled). */
-export const INTERACTIONS_NAMESPACE = 'interactions';
+export const INTERACTIONS_NAMESPACE = RUNTIME_NAMESPACES.interactions;
 
 /** Namespace the runtime stores keep their "this import already ran" markers in. */
-export const IMPORT_STATE_NAMESPACE = 'runtime-imports';
+export const IMPORT_STATE_NAMESPACE = RUNTIME_NAMESPACES.runtimeImports;
 
 /** Key of the interaction import marker within {@link IMPORT_STATE_NAMESPACE}. */
 export const IMPORT_STATE_KEY = 'interactions';

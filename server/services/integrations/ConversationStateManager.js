@@ -36,11 +36,12 @@
  */
 import logger from '../../utils/logger.js';
 import { getStorage } from '../../storage/bootstrap.js';
+import { RUNTIME_NAMESPACES } from '../../storage/namespaces.js';
 
 const COMPONENT = 'ConversationStateManager';
 
 /** Namespace holding one document per chat. */
-export const INTEGRATION_CONVERSATIONS_NAMESPACE = 'integration-conversations';
+export const INTEGRATION_CONVERSATIONS_NAMESPACE = RUNTIME_NAMESPACES.integrationConversations;
 
 const DEFAULT_TTL_MS = 24 * 60 * 60 * 1000; // 24 hours
 const CLEANUP_INTERVAL_MS = 60 * 60 * 1000; // 1 hour

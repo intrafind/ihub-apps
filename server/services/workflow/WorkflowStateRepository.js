@@ -44,11 +44,12 @@ import logger from '../../utils/logger.js';
 import { atomicWriteJSON } from '../../utils/atomicWrite.js';
 import { isValidId } from '../../utils/pathSecurity.js';
 import { getStorage } from '../../storage/bootstrap.js';
+import { RUNTIME_NAMESPACES } from '../../storage/namespaces.js';
 
 const COMPONENT = 'WorkflowStateRepository';
 
 /** Namespace holding one document per workflow execution state. */
-export const WORKFLOW_STATE_NAMESPACE = 'workflow-state';
+export const WORKFLOW_STATE_NAMESPACE = RUNTIME_NAMESPACES.workflowState;
 
 /** File a legacy execution directory keeps its newest checkpoint in. */
 export const LEGACY_STATE_FILE = 'latest.json';
@@ -68,7 +69,7 @@ export const DEFAULT_STATE_DIR = path.join(
 );
 
 /** Namespace holding the "this import already ran" markers. */
-export const IMPORT_STATE_NAMESPACE = 'runtime-imports';
+export const IMPORT_STATE_NAMESPACE = RUNTIME_NAMESPACES.runtimeImports;
 
 /** Key of the workflow-state import marker within {@link IMPORT_STATE_NAMESPACE}. */
 export const IMPORT_STATE_KEY = 'workflow-states';

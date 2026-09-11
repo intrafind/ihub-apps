@@ -36,11 +36,12 @@
 import logger from '../../utils/logger.js';
 import { isValidId } from '../../utils/pathSecurity.js';
 import { getStorage } from '../../storage/bootstrap.js';
+import { RUNTIME_NAMESPACES } from '../../storage/namespaces.js';
 
 const COMPONENT = 'RunSummaryRepository';
 
 /** Namespace holding one summary document per run. */
-export const RUNS_NAMESPACE = 'runs';
+export const RUNS_NAMESPACE = RUNTIME_NAMESPACES.runs;
 
 /**
  * Every field a run summary carries. The record shape is closed: a writer's

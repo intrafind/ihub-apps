@@ -80,6 +80,40 @@ export const CONFIG_NAMESPACES = Object.freeze({
 });
 
 /**
+ * Every namespace that holds runtime state rather than configuration.
+ *
+ * Declared here, next to the raw ones, because the distinction is a routing
+ * decision and routing is decided in this file. A raw namespace *is* an
+ * installation's `contents/<dir>/` tree — git-tracked, hand-edited, backed up —
+ * and a runtime namespace is the provider's own storage. Nothing stopped a
+ * later feature from picking a name that is already raw: `documents.put` would
+ * have routed it to `RawDocumentStore` and written runtime state into
+ * `contents/tools/`, where `resourceLoader` would then load it as a tool.
+ *
+ * It also gives `runtime-imports` one definition. It had three, in three
+ * modules that share the marker, which is one spelling mistake away from two
+ * importers each believing it has already run.
+ *
+ * @type {Readonly<Record<string, string>>}
+ */
+export const RUNTIME_NAMESPACES = Object.freeze({
+  /** Chat documents. */
+  chats: 'chats',
+  /** Chat transcripts, one document per chat. */
+  chatMessages: 'chat-messages',
+  /** Per-run summaries for the history and retention views. */
+  runs: 'runs',
+  /** Pending and recently settled human interactions. */
+  interactions: 'interactions',
+  /** Workflow execution state and checkpoints. */
+  workflowState: 'workflow-state',
+  /** Conversation state for the integration adapters. */
+  integrationConversations: 'integration-conversations',
+  /** One-time import markers, shared by every runtime store that has one. */
+  runtimeImports: 'runtime-imports'
+});
+
+/**
  * Namespace names in ascending order — what a provider reports as
  * `getCapabilities().rawNamespaces`.
  *
@@ -105,16 +139,6 @@ const NAMESPACE_BY_DIR = new Map(
 export function getRawNamespace(ns) {
   if (typeof ns !== 'string' || !Object.hasOwn(CONFIG_NAMESPACES, ns)) return null;
   return CONFIG_NAMESPACES[ns];
-}
-
-/**
- * Whether a namespace is a raw view over `contents/`.
- *
- * @param {string} ns - Namespace name
- * @returns {boolean} True when the namespace is declared raw
- */
-export function isRawNamespace(ns) {
-  return getRawNamespace(ns) !== null;
 }
 
 /**

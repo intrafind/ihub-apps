@@ -441,6 +441,7 @@ export class FilesystemDocumentStore extends DocumentStore {
       // marker whose put has not yet written its envelope looks exactly the
       // same, and removing that one would hide a live document from its owner.
       if (!envelope) continue;
+      if (await this._rejectForeign(ns, keys[index], envelope, ownerId)) continue;
       items.push(this._toDocument(ns, keys[index], envelope, includeData !== false));
     }
 
@@ -482,12 +483,52 @@ export class FilesystemDocumentStore extends DocumentStore {
       // or a document deleted mid-walk, and is skipped rather than removed.
       const envelope = await this._readEnvelope(ns, key);
       if (!envelope) continue;
+      if (await this._rejectForeign(ns, key, envelope, ownerId)) continue;
       yield this._toDocument(ns, key, envelope, includeData !== false);
     }
   }
 
   /** This store implements `scan`. @returns {boolean} true */
   get supportsScan() {
+    return true;
+  }
+
+  /**
+   * Does this document belong to somebody other than the owner being listed?
+   *
+   * The owner index is a set of empty marker files, and a change of owner is
+   * three steps: write the new marker, write the envelope, remove the old
+   * marker. Lose the third — a crash, a full disk — and the previous owner's
+   * index claims a document that is no longer theirs, forever. Nothing else
+   * re-checks, so `list(ns, {ownerId})` hands that owner the document and its
+   * contents.
+   *
+   * The envelope has already been read by the time this is asked, so the check
+   * costs a string comparison and closes it outright rather than leaving the
+   * index as the only authority on who owns what.
+   *
+   * Pruning is safe *here* and nowhere else in this walk: the envelope exists
+   * and names a different owner, so this marker is definitively wrong. A
+   * *missing* envelope is the case that must never be pruned — it looks
+   * identical to a put whose marker has landed and whose envelope has not, and
+   * removing that one would hide a live document from its owner.
+   *
+   * @param {string} ns - Namespace
+   * @param {string} key - Document key
+   * @param {Object} envelope - The envelope already read for this key
+   * @param {string|null|undefined} ownerId - Owner being listed, if any
+   * @returns {Promise<boolean>} True when the caller should skip this key
+   * @private
+   */
+  async _rejectForeign(ns, key, envelope, ownerId) {
+    if (ownerId === undefined || ownerId === null) return false;
+    if (storedOwnerId(envelope) === ownerId) return false;
+    logger.warn('Pruning an owner index entry for a document owned by somebody else', {
+      component: COMPONENT,
+      ns,
+      key
+    });
+    await removeIfExists(this._ownerMarkerPath(ns, ownerId, key));
     return true;
   }
 

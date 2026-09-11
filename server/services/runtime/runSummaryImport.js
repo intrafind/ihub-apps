@@ -40,11 +40,12 @@ import config from '../../config.js';
 import { getRootDir } from '../../pathUtils.js';
 import logger from '../../utils/logger.js';
 import { getRunSummaryRepository, normalizeRunSummary } from './RunSummaryRepository.js';
+import { RUNTIME_NAMESPACES } from '../../storage/namespaces.js';
 
 const COMPONENT = 'RunSummaryImport';
 
 /** Namespace holding the "this import already ran" markers. */
-export const IMPORT_STATE_NAMESPACE = 'runtime-imports';
+export const IMPORT_STATE_NAMESPACE = RUNTIME_NAMESPACES.runtimeImports;
 
 /** Key of this import's marker within {@link IMPORT_STATE_NAMESPACE}. */
 export const IMPORT_STATE_KEY = 'run-summaries';

@@ -2,8 +2,8 @@
  * Recency buckets for the chat history.
  *
  * `GET /api/chats` returns the stored chat documents and nothing else, so the
- * "Today / Yesterday / Last 7 days / Older" headings the history page and the
- * sidebar show are derived here from each chat's `lastMessageAt`.
+ * "Today / Yesterday / Last 7 days / Older" headings the history page shows are
+ * derived here from each chat's `lastMessageAt`.
  *
  * Buckets are **calendar days in the viewer's local time**, not rolling 24-hour
  * windows: a chat from 23:50 last night is "Yesterday" at 00:10, which is what
@@ -73,30 +73,4 @@ export function chatRecencyGroup(timestamp, now = new Date()) {
   if (days === 1) return 'yesterday';
   if (days < RECENT_WINDOW_DAYS) return 'last7days';
   return 'older';
-}
-
-/**
- * Bucket chats by recency, newest bucket first.
- *
- * Empty buckets are omitted so a caller can render the result directly, and the
- * order within a bucket is the order the chats came in — the API already sorts
- * by `lastMessageAt` descending.
- *
- * @param {Object[]} chats - Chats from `GET /api/chats`.
- * @param {Date|number|string} [now] - Injectable clock; one reading for the whole list.
- * @returns {Array<{ key: string, items: Object[] }>} Non-empty buckets in `CHAT_GROUPS` order.
- */
-export function groupChatsByRecency(chats, now = new Date()) {
-  const reference = toDate(now) || new Date();
-  const buckets = new Map(CHAT_GROUPS.map(key => [key, []]));
-
-  for (const chat of Array.isArray(chats) ? chats : []) {
-    if (!chat) continue;
-    buckets.get(chatRecencyGroup(chat.lastMessageAt, reference)).push(chat);
-  }
-
-  return CHAT_GROUPS.filter(key => buckets.get(key).length > 0).map(key => ({
-    key,
-    items: buckets.get(key)
-  }));
 }

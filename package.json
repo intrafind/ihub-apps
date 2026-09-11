@@ -101,7 +101,7 @@
     "test:prompts": "node server/tests/promptService.test.js && node server/tests/auto-source-addition.test.js && node server/tests/empty-prompt-bug-validation.test.js && node --test server/tests/iassistantConversationAdapter.test.js",
     "test:migrations": "node --test server/tests/migration-v086.test.js server/tests/migration-v087.test.js server/tests/migration-v088.test.js server/tests/migration-v089.test.js server/tests/migration-v090.test.js server/tests/migration-v091.test.js server/tests/migration-v092.test.js server/tests/migration-v093.test.js server/tests/migration-v094.test.js server/tests/migration-v096.test.js server/tests/migration-v097.test.js server/tests/migration-v098.test.js server/tests/migration-v099.test.js",
     "test:loop": "node --test server/tests/loop/*.test.js",
-    "test:storage": "node --test server/tests/storage-filesystem-conformance.test.js server/tests/storage-registry.test.js",
+    "test:storage": "node --test server/tests/storage-filesystem-conformance.test.js server/tests/storage-registry.test.js server/tests/storage-namespaces.test.js",
     "test:config-store": "node --test server/tests/config-store-*.test.js",
     "test:chat": "node --test server/tests/chat-persistence-*.test.js",
     "test:runtime": "node --test server/tests/runtime-*.test.js",

@@ -30,14 +30,15 @@ import logger from '../../utils/logger.js';
 import { isValidId } from '../../utils/pathSecurity.js';
 import { StorageError } from '../../storage/errors.js';
 import { getStorage } from '../../storage/bootstrap.js';
+import { RUNTIME_NAMESPACES } from '../../storage/namespaces.js';
 
 const COMPONENT = 'ChatRepository';
 
 /** Namespace holding the chat metadata documents. */
-export const CHATS_NAMESPACE = 'chats';
+export const CHATS_NAMESPACE = RUNTIME_NAMESPACES.chats;
 
 /** Namespace holding the chat transcript documents. */
-export const CHAT_MESSAGES_NAMESPACE = 'chat-messages';
+export const CHAT_MESSAGES_NAMESPACE = RUNTIME_NAMESPACES.chatMessages;
 
 /** Schema version stamped on a transcript document. */
 export const CHAT_MESSAGES_VERSION = 1;

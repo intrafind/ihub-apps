@@ -1,8 +1,4 @@
-import {
-  CHAT_GROUPS,
-  chatRecencyGroup,
-  groupChatsByRecency
-} from '../../../client/src/utils/chatGroups';
+import { CHAT_GROUPS, chatRecencyGroup } from '../../../client/src/utils/chatGroups';
 
 /**
  * The "Today / Yesterday / Last 7 days / Older" headings in the chat history.
@@ -94,58 +90,5 @@ describe('chatRecencyGroup', () => {
     expect(chatRecencyGroup(yesterday.toISOString(), NOW)).toBe('yesterday');
     expect(chatRecencyGroup(yesterday.getTime(), NOW)).toBe('yesterday');
     expect(chatRecencyGroup(yesterday, NOW)).toBe('yesterday');
-  });
-});
-
-describe('groupChatsByRecency', () => {
-  test('buckets the list newest bucket first and omits the empty ones', () => {
-    const chats = [
-      chat('now', at(2026, 3, 15, 9, 0)),
-      chat('long-ago', at(2026, 1, 2)),
-      chat('this-week', at(2026, 3, 11))
-    ];
-
-    expect(groupChatsByRecency(chats, NOW)).toEqual([
-      { key: 'today', items: [chats[0]] },
-      { key: 'last7days', items: [chats[2]] },
-      { key: 'older', items: [chats[1]] }
-    ]);
-  });
-
-  test('keeps the order the API returned inside a bucket', () => {
-    const chats = [
-      chat('a', at(2026, 3, 15, 9, 0)),
-      chat('b', at(2026, 3, 15, 8, 0)),
-      chat('c', at(2026, 3, 15, 10, 0))
-    ];
-
-    const [today] = groupChatsByRecency(chats, NOW);
-    expect(today.items.map(item => item.id)).toEqual(['a', 'b', 'c']);
-  });
-
-  test('one clock reading covers the whole list', () => {
-    // Rendered a hair before midnight: everything from that day stays "today"
-    // even though evaluating each row against its own `new Date()` could roll
-    // some of them over into "yesterday" mid-list.
-    const almostMidnight = at(2026, 3, 15, 23, 59);
-    const chats = [chat('a', at(2026, 3, 15, 23, 58)), chat('b', at(2026, 3, 15, 0, 1))];
-
-    expect(groupChatsByRecency(chats, almostMidnight)).toEqual([{ key: 'today', items: chats }]);
-  });
-
-  test('chats with no usable timestamp end up under older', () => {
-    const chats = [chat('a', at(2026, 3, 15, 9, 0)), { id: 'never-sent' }];
-
-    expect(groupChatsByRecency(chats, NOW)).toEqual([
-      { key: 'today', items: [chats[0]] },
-      { key: 'older', items: [chats[1]] }
-    ]);
-  });
-
-  test('an empty or unusable list renders nothing rather than empty headings', () => {
-    expect(groupChatsByRecency([], NOW)).toEqual([]);
-    expect(groupChatsByRecency(undefined, NOW)).toEqual([]);
-    expect(groupChatsByRecency(null, NOW)).toEqual([]);
-    expect(groupChatsByRecency([null, undefined], NOW)).toEqual([]);
   });
 });
