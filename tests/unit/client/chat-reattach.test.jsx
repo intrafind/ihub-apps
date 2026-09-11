@@ -63,7 +63,7 @@ jest.mock('../../../client/src/shared/utils/openSseStream', () => {
     }),
     fetchWithAuthRetry: jest.fn(async () => ({
       ok: true,
-      json: async () => ledgerPages.shift() || { events: [], lastSeq: 0, nextAfter: 0 }
+      json: async () => ledgerPages.shift() || { events: [], nextAfter: 0 }
     }))
   };
 });
@@ -84,10 +84,18 @@ const envelope = (seq, type, data = {}) => ({
   data
 });
 
-/** A ledger page holding `events`, with the paging cursors the walk needs. */
+/**
+ * A ledger page holding `events`, with the paging cursor the walk needs.
+ *
+ * Deliberately no `lastSeq`: the route stopped answering it per page, because
+ * on a provider whose append log cannot stop early that was a second full
+ * parse of the stream for every page. The walk therefore has to terminate on a
+ * page that makes no progress, which is what these fixtures exercise — a page
+ * factory that still sent `lastSeq` would take the early-exit branch instead
+ * and leave the real path untested.
+ */
 const page = events => ({
   events,
-  lastSeq: events.length ? events[events.length - 1].seq : 0,
   nextAfter: events.length ? events[events.length - 1].seq : 0
 });
 

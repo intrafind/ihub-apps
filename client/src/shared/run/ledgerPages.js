@@ -2,12 +2,17 @@
  * Paged fetch of a run's ledger projection (`GET /api/runs/:runId/events`).
  *
  * The endpoint pages by raw ledger sequence (`after`, `limit`, default 1000,
- * max 5000) and answers with the projected envelopes, `lastSeq` (the highest
- * sequence the server knows) and `nextAfter` (the last raw sequence the page
- * read). A projected page can be empty while more of the ledger remains —
- * request headers, budget events or compactions produce no envelopes — so the
- * walk advances on `nextAfter`, never on the envelopes, until it reaches
- * `lastSeq` or a page makes no progress.
+ * max 5000) and answers with the projected envelopes and `nextAfter` (the last
+ * raw sequence the page read). A projected page can be empty while more of the
+ * ledger remains — request headers, budget events or compactions produce no
+ * envelopes — so the walk advances on `nextAfter`, never on the envelopes,
+ * until a page makes no progress.
+ *
+ * `lastSeq` is still honoured when a server sends it, because it ends the walk
+ * one request early, but it is optional: answering it per page cost a second
+ * full parse of the run's stream on a provider whose append log cannot stop
+ * early, which doubled the reads for a whole re-sync to save one empty request
+ * at the end of it.
  *
  * @module shared/run/ledgerPages
  */
@@ -19,7 +24,7 @@ export const MAX_LEDGER_PAGES = 200;
 /**
  * @param {(after: number, limit: number) => Promise<{events?: Array, lastSeq?: number, nextAfter?: number}>} fetchPage
  *   Fetch one page: envelopes projected from the ledger events with `seq > after`, at most
- *   `limit` ledger events; `nextAfter` is the last raw sequence read.
+ *   `limit` ledger events; `nextAfter` is the last raw sequence read. `lastSeq` is optional.
  * @param {Object} [opts]
  * @param {number} [opts.pageSize=LEDGER_PAGE_SIZE]
  * @param {number} [opts.maxPages=MAX_LEDGER_PAGES]
@@ -44,7 +49,7 @@ export async function fetchAllLedgerEvents(
       : chunk.reduce((max, e) => (Number.isInteger(e?.seq) && e.seq > max ? e.seq : max), after);
     // No progress: the ledger has nothing more on disk.
     if (cursor <= after) return { events, lastSeq, complete: true };
-    // Reached the highest sequence the server knows.
+    // Reached the highest sequence the server knows — only when it said so.
     if (lastSeq !== null && cursor >= lastSeq) return { events, lastSeq, complete: true };
     after = cursor;
   }
