@@ -189,6 +189,129 @@ describe('filesystem storage provider: create-only writes (filesystem-specific)'
   });
 });
 
+describe('filesystem storage provider: lease liveness (filesystem-specific)', () => {
+  it('acquires the lock in the same call that evicted the dead lease', async () => {
+    const { provider, cleanup } = await createProvider();
+    await provider.initialize();
+    try {
+      const name = 'interaction:evict-then-take';
+      const digest = crypto.createHash('sha256').update(name, 'utf8').digest('hex').slice(0, 40);
+      const lockPath = path.join(provider.baseDir, 'locks', `${digest}.lock`);
+      await fs.mkdir(path.dirname(lockPath), { recursive: true });
+      // A lease from a process that is long gone: TTL 1ms, written now.
+      await fs.writeFile(
+        lockPath,
+        JSON.stringify({ owner: 'dead-worker', pid: 1, at: new Date(0).toISOString(), ttlMs: 1 })
+      );
+
+      // Eviction is a rename, a read and an unlink, so looping back to the
+      // deadline guard after it means the wait budget can already be spent —
+      // and the caller that cleared the dead lease is the one told the lock is
+      // busy. That surfaces as a 409 ANSWER_IN_PROGRESS against a run that
+      // finished whenever the dead holder died.
+      //
+      // `waitMs: 1` rather than the 50 ms `ANSWER_LOCK_OPTIONS` uses, because
+      // the defect is timing-dependent and 50 ms makes the test a race that a
+      // fast machine wins by accident. The budget is always spent by the first
+      // eviction here, so the assertion is about ordering — evict, then try,
+      // then check the clock — rather than about how quick the disk is. The
+      // first attempt is guaranteed regardless of budget, so a 1 ms wait is
+      // not a degenerate case.
+      let ran = false;
+      await provider.locks.withLock(
+        name,
+        async () => {
+          ran = true;
+        },
+        { ttlMs: 30_000, waitMs: 1 }
+      );
+      assert.equal(ran, true, 'the section ran rather than timing out on a lock it just freed');
+    } finally {
+      await provider.shutdown();
+      await cleanup();
+    }
+  });
+
+  it('expires a lease whose holder wrote a timestamp from the future', async () => {
+    const { provider, cleanup } = await createProvider();
+    await provider.initialize();
+    try {
+      const name = 'interaction:clock-skew';
+      const digest = crypto.createHash('sha256').update(name, 'utf8').digest('hex').slice(0, 40);
+      const lockPath = path.join(provider.baseDir, 'locks', `${digest}.lock`);
+      await fs.mkdir(path.dirname(lockPath), { recursive: true });
+      // One NTP correction, or two cluster hosts a minute apart: `at` is in
+      // this reader's future. Judged on the holder's word alone the age is
+      // negative, so the lease never expires and the lock is wedged for good —
+      // waiters get LockTimeoutError, the caller turns it into a 503, and the
+      // takeover warning that would name the lock is never reached. The file's
+      // own mtime cannot drift this way, so the earlier of the two decides.
+      await fs.writeFile(
+        lockPath,
+        JSON.stringify({
+          owner: 'skewed-worker',
+          pid: 1,
+          at: new Date(Date.now() + 3_600_000).toISOString(),
+          ttlMs: 1
+        })
+      );
+      const past = new Date(Date.now() - 60_000);
+      await fs.utimes(lockPath, past, past);
+
+      let ran = false;
+      await provider.locks.withLock(
+        name,
+        async () => {
+          ran = true;
+        },
+        { ttlMs: 30_000, waitMs: 200 }
+      );
+      assert.equal(ran, true, 'a lease older than its TTL by the filesystem clock is taken over');
+    } finally {
+      await provider.shutdown();
+      await cleanup();
+    }
+  });
+
+  it('hands back leases it still holds when the provider shuts down', async () => {
+    const { provider, cleanup } = await createProvider();
+    await provider.initialize();
+    const lockDir = path.join(provider.baseDir, 'locks');
+    try {
+      // A section that never settles, so the lease is still held when the
+      // process goes away — a SIGTERM mid-answer, which is the ordinary way a
+      // deploy ends a worker. Without a release the next worker waits out the
+      // whole TTL for a lock nobody holds: 30s of 409s on an interaction.
+      let release;
+      const blocked = new Promise(resolve => {
+        release = resolve;
+      });
+      const held = provider.locks.withLock('interaction:sigterm', () => blocked, {
+        ttlMs: 300_000,
+        waitMs: 1000
+      });
+      await delay(20);
+      assert.equal(
+        (await fs.readdir(lockDir)).filter(entry => entry.endsWith('.lock')).length,
+        1,
+        'the lease is on disk while the section runs'
+      );
+
+      await provider.shutdown();
+      assert.deepEqual(
+        (await fs.readdir(lockDir)).filter(entry => entry.endsWith('.lock')),
+        [],
+        'and shutdown handed it back rather than leaving it to time out'
+      );
+      release();
+      await held;
+    } finally {
+      await provider.shutdown();
+      await cleanup();
+    }
+  });
+});
+
 describe('filesystem storage provider: lease takeover (filesystem-specific)', () => {
   it('a waiter never removes a lease acquired after the one it judged abandoned', async () => {
     const baseDir = await fs.mkdtemp(path.join(os.tmpdir(), 'ihub-storage-lease-'));

@@ -370,6 +370,13 @@ an exclusive lease, releases it when `fn` settles either way, and rethrows
 `fn` without the lock. A lease older than its `ttlMs` is treated as abandoned
 by a dead process and taken over.
 
+`ttlMs` is therefore also a **ceiling on how long `fn` may run**: nothing
+distinguishes a slow holder from a dead one, so a critical section that
+overruns its TTL has its lease taken from underneath it and two holders run at
+once — silently. Size `ttlMs` against the worst case of the section, not only
+against how long a crashed holder should block others. There is no lease
+renewal; it arrives with distributed locks in step 3.
+
 Reentrancy is **not** supported: a nested `withLock` on the same name blocks
 until `waitMs` expires and then throws.
 

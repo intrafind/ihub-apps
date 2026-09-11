@@ -99,6 +99,17 @@ export const IMPORT_STATE_KEY = 'interactions';
  * client made to wait would only be told `NOT_PENDING` seconds later. It is
  * not zero because the lock manager rejects a non-positive budget, and because
  * a lease released between two attempts deserves one more try.
+ *
+ * `ttlMs` also bounds how long the section may run — a lease older than its
+ * TTL is taken over whether or not its holder is alive — so it is worth saying
+ * what the section actually does. It reads and writes the interaction record a
+ * few times and calls the answer handlers; the workflow handler waits at most
+ * `PAUSE_SETTLE_MS` (1.5 s) for the pause to land, resumes the checkpoint node
+ * and asks the engine to continue. `WorkflowEngine.resume` does not await the
+ * run — it starts `_runExecutionLoop` and returns — so the section does not
+ * hold the lease for the workflow, and 30 s sits far above its worst case. If
+ * a handler is ever added that awaits real work, this number has to be
+ * revisited with it, or a resubmitted answer can resume the same run twice.
  */
 const ANSWER_LOCK_OPTIONS = { ttlMs: ANSWER_CLAIM_TTL_MS, waitMs: 50 };
 

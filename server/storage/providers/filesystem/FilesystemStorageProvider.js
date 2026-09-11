@@ -379,6 +379,19 @@ export class FilesystemStorageProvider extends StorageProvider {
     } else if (typeof this._logs.close === 'function') {
       await this._logs.close();
     }
+    // After the flush, so a section that was still writing has landed, and
+    // before the notifier closes, so the release is not racing a teardown that
+    // has already taken the event bus away. A lease left behind is not lost
+    // data, but it does make the next worker wait out the full TTL for a lock
+    // nobody holds.
+    try {
+      await this._locks.releaseAll?.();
+    } catch (error) {
+      logger.error('Failed to release storage leases during shutdown', {
+        component: COMPONENT,
+        error
+      });
+    }
     await this._notifier.close();
   }
 

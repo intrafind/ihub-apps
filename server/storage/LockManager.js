@@ -25,7 +25,13 @@ import { NotSupportedError } from './errors.js';
  *
  * @typedef {Object} LockOptions
  * @property {number} [ttlMs=30000] - Lease lifetime. A lease older than this
- *   is treated as abandoned by a dead holder and taken over.
+ *   is treated as abandoned by a dead holder and taken over — including while
+ *   its holder is still running, because nothing distinguishes a slow holder
+ *   from a dead one. It is therefore also a ceiling on how long `fn` may take:
+ *   pick a `ttlMs` that exceeds the worst case of the critical section, not
+ *   just the time a crashed holder should block others for. A section that
+ *   overruns it loses mutual exclusion silently, which is the failure the lock
+ *   exists to prevent. There is no lease renewal; adding one is step 3.
  * @property {number} [waitMs=5000] - How long to wait for a held lock before
  *   giving up with a {@link LockTimeoutError}.
  */
@@ -46,8 +52,11 @@ export class LockManager {
    *   `utils/fileLock.js#withFileLock` deliberately does the opposite (it
    *   continues after its timeout with a warning), so it cannot back this
    *   method directly.
-   * - A lease older than `ttlMs` is taken over: its previous holder crashed.
-   *   A holder whose lease was taken over must not release the new one.
+   * - A lease older than `ttlMs` is taken over: its previous holder crashed —
+   *   or is simply slower than its own TTL, which looks identical from
+   *   outside. A holder whose lease was taken over must not release the new
+   *   one. See {@link LockOptions} on sizing `ttlMs` for the section, not just
+   *   for a crash.
    * - **Reentrancy is not supported.** A nested `withLock` on the same name
    *   from inside `fn` deadlocks until `waitMs` expires and then throws
    *   {@link LockTimeoutError}; callers must not nest.

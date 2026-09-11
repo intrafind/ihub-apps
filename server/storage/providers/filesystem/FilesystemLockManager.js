@@ -74,6 +74,21 @@ function leaseFileName(name) {
  * against the waiter's TTL instead — an unreadable lease must not be able to
  * wedge a lock name forever.
  *
+ * The start time is the *earlier* of what the holder wrote down and what the
+ * filesystem recorded, never the holder's word alone. `at` is a timestamp from
+ * whichever clock the holder had; `Date.now()` here is the reader's. One NTP
+ * correction or one clock skew between cluster hosts is enough to put `at` in
+ * the reader's future, and then the age is negative forever and a dead lease
+ * never expires. That failure is invisible: waiters get `LockTimeoutError` and
+ * the caller turns it into a 503, while the takeover warning — the one line
+ * that would name the lock — is never reached. mtime cannot drift from the
+ * reader this way, because both come from the same machine reading the same
+ * filesystem, and it is preserved by the `rename` in `_evictExpired`.
+ *
+ * The min is the safe direction of the two: it can only ever judge a lease
+ * older than the holder claimed, never younger, so a lock cannot be wedged —
+ * only taken over sooner than a skewed clock would have liked.
+ *
  * @param {{data: Object|null, mtimeMs: number}} marker - Result of `readJsonMarker`
  * @param {number} fallbackTtlMs - TTL to apply when the lease says nothing usable
  * @returns {boolean} True when the lease is older than its TTL
@@ -84,7 +99,9 @@ function isExpiredLease(marker, fallbackTtlMs) {
       ? marker.data.ttlMs
       : fallbackTtlMs;
   const recordedAt = Date.parse(marker.data?.at ?? '');
-  const startedAt = Number.isNaN(recordedAt) ? marker.mtimeMs : recordedAt;
+  const startedAt = Number.isNaN(recordedAt)
+    ? marker.mtimeMs
+    : Math.min(recordedAt, marker.mtimeMs);
   return Date.now() - startedAt > ttlMs;
 }
 
@@ -134,6 +151,11 @@ export class FilesystemLockManager extends LockManager {
     }
     this._baseDir = baseDir;
     this._pollMs = pollMs;
+    // Leases this process currently holds, so `releaseAll()` can hand them
+    // back at shutdown. `withLock`'s own `finally` covers the ordinary case;
+    // this covers the one where the process is going away and the `finally`
+    // will not get its turn.
+    this._held = new Map();
   }
 
   /**
@@ -180,11 +202,45 @@ export class FilesystemLockManager extends LockManager {
     // expired and was taken over cannot delete the new holder's lease.
     const owner = crypto.randomUUID();
     await this._acquire(lockPath, owner, ttl, wait, name);
+    this._held.set(lockPath, { owner, name });
     try {
       return await fn();
     } finally {
+      this._held.delete(lockPath);
       await this._release(lockPath, owner, name);
     }
+  }
+
+  /**
+   * Release every lease this process still holds.
+   *
+   * Called from the provider's shutdown, after the append log has flushed.
+   * Without it a SIGTERM leaves each held lease on disk with no holder, and
+   * the next worker to want that name waits out the whole TTL before it may
+   * take over — 30 seconds of 409s on an interaction, five minutes of skipped
+   * imports on a runtime lock. Nothing is wrong with the lease; there is
+   * simply nobody left to say so.
+   *
+   * Only leases still owned by this process are removed: `_release` re-reads
+   * the owner token, so a lease taken over while we were on our way out is
+   * left to its new holder. Never throws — shutdown must not be blocked by a
+   * lock directory that has become unwritable.
+   *
+   * @returns {Promise<number>} How many leases were handed back
+   */
+  async releaseAll() {
+    const held = [...this._held.entries()];
+    this._held.clear();
+    for (const [lockPath, { owner, name }] of held) {
+      await this._release(lockPath, owner, name);
+    }
+    if (held.length > 0) {
+      logger.info('Released storage leases still held at shutdown', {
+        component: COMPONENT,
+        count: held.length
+      });
+    }
+    return held.length;
   }
 
   /**
@@ -229,6 +285,14 @@ export class FilesystemLockManager extends LockManager {
           name: String(name).slice(0, 64)
         });
         await this._evictExpired(lockPath, owner, existing, name);
+        // Try immediately rather than looping back to the deadline guard.
+        // Eviction is a rename, a read and an unlink, so with a short `waitMs`
+        // — `ANSWER_LOCK_OPTIONS` uses 50ms — the budget can be gone by the
+        // time the path is free, and the very caller that cleared the dead
+        // lease is the one that gives up on it. That surfaces as a spurious
+        // 409 ANSWER_IN_PROGRESS against a run that has been finished for
+        // however long the TTL is.
+        if (await tryCreateExclusive(lockPath, payload)) return;
         continue;
       }
       if (Date.now() >= deadline) throw timedOut();
@@ -283,19 +347,25 @@ export class FilesystemLockManager extends LockManager {
       if (err.code === 'ENOENT') return;
       throw err;
     }
-    const moved = await readJsonMarker(evicted);
-    if (moved && leaseIdentity(moved) !== leaseIdentity(expected)) {
-      logger.warn('Restoring a storage lease acquired during a takeover', {
-        component: COMPONENT,
-        name: String(name).slice(0, 64)
-      });
-      try {
-        await fs.link(evicted, lockPath);
-      } catch (err) {
-        if (err.code !== 'EEXIST') throw err;
+    // The scratch file goes away whatever happens below. It is inert if it
+    // survives — only the exact lease path is ever acquired — but one left
+    // behind per takeover fills the lock directory with them.
+    try {
+      const moved = await readJsonMarker(evicted);
+      if (moved && leaseIdentity(moved) !== leaseIdentity(expected)) {
+        logger.warn('Restoring a storage lease acquired during a takeover', {
+          component: COMPONENT,
+          name: String(name).slice(0, 64)
+        });
+        // The bytes as they were, not `JSON.stringify(moved.data)`: a lease
+        // that did not parse has no `data` to re-serialize, and it is exactly
+        // the lease that most needs putting back.
+        const bytes = await fs.readFile(evicted, 'utf8').catch(() => null);
+        if (bytes !== null) await tryCreateExclusive(lockPath, bytes);
       }
+    } finally {
+      await removeIfExists(evicted);
     }
-    await removeIfExists(evicted);
   }
 
   /**
