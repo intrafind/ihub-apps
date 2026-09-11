@@ -114,12 +114,12 @@ const SEAM_PATHS = ['server/storage/', 'server/services/config/', 'server/utils/
  * go through the provider, and every reason is printed on every run — an
  * exception nobody can restate in six months is one nobody can re-examine.
  *
- * An entry without `fn` or `arg` exempts the whole file or directory; with
- * them it exempts only the matching call sites, so the rest of the file stays
+ * An entry without `arg` or `symbol` exempts the whole file or directory; with
+ * either it exempts only the matching call sites, so the rest of the file stays
  * guarded. Adding one here is an architectural claim and belongs in
  * `docs/storage.md` too.
  *
- * @type {Array<{path: string, fn?: RegExp, arg?: RegExp, reason: string}>}
+ * @type {Array<{path: string, arg?: RegExp, symbol?: RegExp, reason: string}>}
  */
 const CONTRACT_EXCLUSIONS = [
   {
@@ -192,13 +192,13 @@ const CONTRACT_EXCLUSIONS = [
  * These are not exceptions to the rule — they are outside its subject matter:
  * uploaded assets, tool implementation scripts, key material, skill directory
  * trees, shipped release notes, runtime data under the provider's own dataDir.
- * They are pinned by the path expression (or enclosing function) rather than
- * by line number, so the exemption does not silently widen when a genuine
- * config write is added to the same file later.
+ * They are pinned by the path expression rather than by line number, so the
+ * exemption does not silently widen when a genuine config write is added to
+ * the same file later.
  *
  * `arg` is matched (unanchored) against the call's first argument as written.
  *
- * @type {Array<{path: string, fn?: RegExp, arg?: RegExp, reason: string}>}
+ * @type {Array<{path: string, arg?: RegExp, symbol?: RegExp, reason: string}>}
  */
 const NON_CONFIG_SITES = [
   {
@@ -619,34 +619,6 @@ function firstArgument(source, openParenIndex) {
 }
 
 /**
- * Name of the function a line sits in, for allowlists that are clearer keyed
- * on the function than on the path expression.
- *
- * @param {string[]} lines - File split into lines
- * @param {number} lineIndex - Zero-based index of the call
- * @returns {string} Function name, or `''` when the call is in an anonymous scope
- */
-function enclosingFunction(lines, lineIndex) {
-  // `if (…) {`, `catch (…) {` and friends are shaped exactly like a class
-  // method declaration, so the method pattern has to rule them out by name.
-  const notKeyword = '(?!(?:if|for|while|switch|catch|do|else|return|with|function)\\b)';
-  const patterns = [
-    /^\s*(?:export\s+)?(?:async\s+)?function\s*\*?\s*([A-Za-z0-9_$]+)/,
-    /^\s*(?:export\s+)?(?:const|let|var)\s+([A-Za-z0-9_$]+)\s*=\s*(?:async\s*)?(?:function\b|\()/,
-    new RegExp(
-      `^\\s{2,}(?:static\\s+)?(?:async\\s+)?${notKeyword}([A-Za-z0-9_$]+)\\s*\\([^)]*\\)\\s*\\{\\s*$`
-    )
-  ];
-  for (let i = lineIndex; i >= 0; i -= 1) {
-    for (const pattern of patterns) {
-      const match = pattern.exec(lines[i]);
-      if (match) return match[1];
-    }
-  }
-  return '';
-}
-
-/**
  * Does an allowlist entry cover this call site?
  *
  * `symbol` pins the operation. It exists because a reason is usually a reason
@@ -656,13 +628,21 @@ function enclosingFunction(lines, lineIndex) {
  * entry is still checked for use, so a split that over-covers shows up as a
  * stale exemption rather than as silence.
  *
- * @param {{path: string, fn?: RegExp, arg?: RegExp, symbol?: RegExp}} entry - Allowlist entry
- * @param {{repoPath: string, arg: string, fn: string, symbol: string}} site - The call site
+ * Scope is decided by what the call *says* — its path expression and its
+ * operation — never by which function it appears to sit in. An earlier version
+ * offered an `fn` qualifier resolved by scanning upward for the nearest
+ * preceding declaration, which is not the lexical parent: a local arrow
+ * declared above an exempted call stole the scope and broke the exemption,
+ * while a module-level call placed after the exempted function's closing brace
+ * inherited it and was waved through. Both are silent, and the second is a
+ * hole in the guard rather than a false alarm.
+ *
+ * @param {{path: string, arg?: RegExp, symbol?: RegExp}} entry - Allowlist entry
+ * @param {{repoPath: string, arg: string, symbol: string}} site - The call site
  * @returns {boolean}
  */
 function entryCovers(entry, site) {
   if (!matchesAny(site.repoPath, [entry.path])) return false;
-  if (entry.fn && !entry.fn.test(site.fn)) return false;
   if (entry.arg && !entry.arg.test(site.arg)) return false;
   if (entry.symbol && !entry.symbol.test(site.symbol)) return false;
   return true;
@@ -673,7 +653,7 @@ function entryCovers(entry, site) {
  *
  * @param {string} repoPath - Repo-relative path
  * @param {string} source - File contents
- * @returns {Array<{repoPath: string, line: number, column: number, symbol: string, arg: string, fn: string, text: string}>}
+ * @returns {Array<{repoPath: string, line: number, column: number, symbol: string, arg: string, text: string}>}
  */
 function findFsCalls(repoPath, source) {
   const { namespaces, named } = findFsBindings(source);
@@ -718,7 +698,6 @@ function findFsCalls(repoPath, source) {
       column: index - lineStarts[lineIndex] + 1,
       symbol,
       arg: firstArgument(source, index + match[0].length - 1),
-      fn: enclosingFunction(lines, lineIndex),
       text: text.length > 110 ? `${text.slice(0, 107)}...` : text
     });
   }
@@ -747,7 +726,7 @@ function scan() {
     const inScope = matchesAny(repoPath, CONFIG_OWNING_PATHS);
     // Whole-file contract exclusions are read for nothing, so skip the I/O.
     const wholeFile = CONTRACT_EXCLUSIONS.find(
-      e => !e.fn && !e.arg && matchesAny(repoPath, [e.path])
+      e => !e.arg && !e.symbol && matchesAny(repoPath, [e.path])
     );
     if (inScope && wholeFile) {
       used.add(wholeFile);
@@ -817,18 +796,16 @@ function wrapReason(reason, indent) {
 }
 
 /**
- * How an allowlist entry is printed: the path, plus the qualifier that narrows
- * it to particular call sites. Both `fn` and `arg` narrow, so printing only
- * `fn` would have shown a per-argument exemption as if it covered the whole
- * file — which is the opposite of what the exception list is for.
+ * How an allowlist entry is printed: the path, plus every qualifier that
+ * narrows it to particular call sites. Both `arg` and `symbol` narrow, so
+ * printing one alone would show a per-argument exemption as if it covered the
+ * whole file — the opposite of what the exception list is for.
  *
- * @param {{path: string, fn?: RegExp, arg?: RegExp}} entry - Allowlist entry
+ * @param {{path: string, arg?: RegExp, symbol?: RegExp}} entry - Allowlist entry
  * @returns {string}
  */
 function describeScope(entry) {
-  const qualifier = [entry.fn?.source, entry.arg?.source, entry.symbol?.source]
-    .filter(Boolean)
-    .join(' ');
+  const qualifier = [entry.arg?.source, entry.symbol?.source].filter(Boolean).join(' ');
   return qualifier ? `${entry.path} (${qualifier})` : entry.path;
 }
 
@@ -868,9 +845,11 @@ function main() {
 
   if (unused.length) {
     console.error(`FAIL: ${unused.length} exception(s) no longer match any call site.`);
-    console.error('  The code they justified is gone. Delete the entry from');
+    console.error('  Either the code they justified is gone — delete the entry from');
     console.error('  scripts/check-config-fs-access.js rather than leaving a reason');
-    console.error('  standing for something that no longer happens:');
+    console.error('  standing for something that no longer happens — or it moved out');
+    console.error('  from under the entry, in which case the violations above are the');
+    console.error('  same call and the entry needs re-aiming, not deleting:');
     for (const entry of unused) {
       console.error(`    - ${describeScope(entry)}`);
     }

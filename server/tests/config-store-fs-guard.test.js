@@ -385,6 +385,42 @@ describe('the config filesystem-access guard', () => {
     assert.equal(await fs.readFile(loaderPath, 'utf8'), original, 'restored byte for byte');
   });
 
+  it('does not let an exemption spread to an unrelated call lower down the same file', async () => {
+    // The other direction of the same bug, and the worse one: it is a hole
+    // rather than a false alarm. Scope was resolved by scanning *upward* for
+    // the nearest preceding declaration, so a module-level config read
+    // appended after an exempted function's closing brace found that function
+    // on the way up, inherited its exemption, and passed in silence.
+    //
+    // Exemptions are decided by the call now — its path expression and its
+    // operation — so where it sits cannot change the answer. This probe is
+    // deliberately at top level, below everything, reading a config path the
+    // `configLoader` entry's argument names do not cover.
+    const loaderPath = path.join(REPO_ROOT, 'server/configLoader.js');
+    const original = await fs.readFile(loaderPath, 'utf8');
+    const stray =
+      "\nconst strayConfig = 'contents/config/platform.json';\n" +
+      "const strayPlatform = fs.readFileSync(strayConfig, 'utf8');\nvoid strayPlatform;\n";
+
+    let planted;
+    try {
+      await fs.writeFile(loaderPath, original + stray, 'utf8');
+      planted = await runGuard();
+    } finally {
+      await fs.writeFile(loaderPath, original, 'utf8');
+    }
+
+    assert.notEqual(
+      planted.code,
+      0,
+      'a module-level config read in an exempted file is not covered by an exemption ' +
+        'written for a different call.\n' +
+        planted.output
+    );
+    assert.match(planted.output, /configLoader\.js/, 'and it names the file');
+    assert.equal(await fs.readFile(loaderPath, 'utf8'), original, 'restored byte for byte');
+  });
+
   it('does not let a write-shaped exemption cover a read, or the other way round', async () => {
     // `userManager` and `oauthClientManager` each have two exempted calls on
     // one path expression, and each direction has a different reason. The
