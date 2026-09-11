@@ -40,9 +40,20 @@
  * document, because this process is the one driving that execution and its
  * queued write may not have landed yet.
  *
- * When no storage provider is available the map is the whole store and the
- * registry behaves as it always did, minus the file. That is a supported
- * state, not an error.
+ * When no storage provider is available the map is the whole store — and the
+ * map is memory. Nothing writes `execution-registry.json` any more, so this is
+ * *not* what it used to be: the file was the durability, and without a provider
+ * the execution index does not survive a restart and is not visible to another
+ * worker. A run started here is listable here and nowhere else, and gone when
+ * the process is.
+ *
+ * It is still a supported state rather than an error — a workflow that runs is
+ * more useful than one refused because storage is down — but it is a degraded
+ * one, and the way to find out you are in it is `/api/health`, which reports
+ * `storage.ready`. What remains recoverable without a provider is whatever the
+ * checkpoint directories hold, which {@link ExecutionRegistry#loadFromDisk}
+ * re-tracks into this worker's own map; that recovery is per-worker state, so
+ * unlike the shared marking beside it, it is not gated on the scheduler lock.
  *
  * @module services/workflow/ExecutionRegistry
  */
@@ -415,6 +426,20 @@ export class ExecutionRegistry {
     } catch {
       return null;
     }
+  }
+
+  /**
+   * Whether this registry has a durable store behind it.
+   *
+   * Exposed because the answer changes what a caller may assume: without one,
+   * the registry is this worker's memory, so recovery from the checkpoint
+   * directories is per-worker work that every worker has to do for itself,
+   * rather than shared state exactly one of them should write.
+   *
+   * @returns {boolean}
+   */
+  get isDurable() {
+    return this._store() !== null;
   }
 
   /**

@@ -322,7 +322,14 @@ function validateWorkflow(workflow) {
  * @returns {Promise<{recovered: boolean, marked: number}>}
  */
 export async function markInterruptedExecutionsFailed({ requireSchedulerOwner = true } = {}) {
-  if (requireSchedulerOwner && !isSchedulerOwner()) {
+  const registry = getExecutionRegistry();
+  // Without a store the registry is this worker's own memory, so recovering
+  // from the checkpoint directories is work every worker has to do for itself
+  // — gating it on the scheduler lock would leave every other worker with an
+  // empty execution list. With a store it is shared state, and exactly one
+  // process should write it.
+  const owned = !requireSchedulerOwner || isSchedulerOwner();
+  if (!owned && registry.isDurable) {
     // Info, not debug: in a cluster this is the ordinary state of every worker
     // but one, so it is not a warning — but it is the one line that says why a
     // restart left executions marked `running`, and at debug it was invisible
@@ -333,18 +340,21 @@ export async function markInterruptedExecutionsFailed({ requireSchedulerOwner = 
     return { recovered: false, marked: 0 };
   }
 
-  const registry = getExecutionRegistry();
   let marked = 0;
   try {
     await registry.loadFromDisk();
-    // Mark previously-running executions as failed (server process died)
-    for (const exec of await registry.getActive()) {
-      if (exec.status === 'running') {
-        registry.updateStatus(exec.executionId, 'failed', { currentNode: null });
-        marked += 1;
+    // Marking a run failed is a claim about the whole installation, not about
+    // this worker, so it stays owner-gated even when the rescan above did not.
+    if (owned) {
+      // Mark previously-running executions as failed (server process died)
+      for (const exec of await registry.getActive()) {
+        if (exec.status === 'running') {
+          registry.updateStatus(exec.executionId, 'failed', { currentNode: null });
+          marked += 1;
+        }
       }
+      await registry.flushWrites();
     }
-    await registry.flushWrites();
   } catch (error) {
     logger.error('Failed to recover the execution registry on startup', {
       component: 'WorkflowRoutes',

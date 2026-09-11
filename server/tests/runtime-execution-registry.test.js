@@ -1016,3 +1016,48 @@ describe('ExecutionRegistry: the principal the ledger resolved', () => {
     });
   });
 });
+
+describe('ExecutionRegistry: what a missing storage provider costs', () => {
+  it('reports itself as not durable, so a caller can tell', async () => {
+    await withRegistry(async ({ registry }) => {
+      assert.equal(registry.isDurable, true, 'with a provider behind it');
+    });
+
+    // No documents, no locks: what `bootstrapStorage` leaves after a misspelt
+    // provider name or an unwritable data directory.
+    const memoryOnly = new ExecutionRegistry({
+      summaries: { isAvailable: () => false },
+      logger: recordingLogger().logger
+    });
+    assert.equal(memoryOnly.isDurable, false);
+  });
+
+  it('recovers checkpoints into its own map when there is no store', async () => {
+    // The recovery is per-worker state without a provider, so every worker has
+    // to do it for itself — gating it on the scheduler lock, as the shared
+    // marking beside it is, would leave every other worker with an empty
+    // execution list and no way to ever fill it.
+    const stateDir = await fs.mkdtemp(path.join(os.tmpdir(), 'ihub-exec-nostore-'));
+    try {
+      await writeLegacyState(stateDir, 'wf-exec-memory', {
+        executionId: 'wf-exec-memory',
+        workflowId: 'quarterly-report',
+        status: WorkflowStatus.RUNNING,
+        data: { _workflow: { startedBy: OWNER } }
+      });
+
+      const registry = new ExecutionRegistry({
+        summaries: { isAvailable: () => false },
+        logger: recordingLogger().logger,
+        stateDir
+      });
+      await registry.loadFromDisk();
+
+      const recovered = await registry.get('wf-exec-memory');
+      assert.ok(recovered, 'the checkpoint was re-tracked');
+      assert.equal(recovered.userId, OWNER);
+    } finally {
+      await fs.rm(stateDir, { recursive: true, force: true });
+    }
+  });
+});
