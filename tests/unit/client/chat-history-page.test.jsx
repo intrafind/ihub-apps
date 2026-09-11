@@ -117,6 +117,30 @@ describe('the header count', () => {
     expect(screen.getByText('Show older chats')).toBeInTheDocument();
   });
 
+  test('a search with no matches can still widen itself', async () => {
+    // Search filters the chats that are paged in, and nothing else. The only
+    // control that fetches more used to live in the branch that renders when
+    // there *are* results, so a user looking for their two-hundredth chat was
+    // told "No chats match your search" with no way to look further — and the
+    // wording asserted that the search had covered everything.
+    mockApi.fetchChats.mockResolvedValue({
+      items: [chatDoc('chat-1', 'Q3 budget'), chatDoc('chat-2', 'Second chat')],
+      nextCursor: 'cursor-2'
+    });
+    await renderPage();
+    await waitFor(() => expect(screen.getByText('Q3 budget')).toBeInTheDocument());
+
+    const search = screen.getByLabelText('Search your chats…');
+    await act(async () => {
+      fireEvent.change(search, { target: { value: 'nothing matches this' } });
+    });
+
+    expect(
+      screen.getByText('No chats match your search in the ones loaded so far')
+    ).toBeInTheDocument();
+    expect(screen.getByText('Show older chats')).toBeInTheDocument();
+  });
+
   test('states the count plainly once there is nothing more to fetch', async () => {
     await renderPage();
 

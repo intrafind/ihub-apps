@@ -192,6 +192,60 @@ describe('deleting a chat from the sidebar', () => {
   });
 });
 
+describe('what a failed action tells the user', () => {
+  test('a failed delete is reported, and announced, from outside the Recents section', async () => {
+    // Deleting from the mobile drawer closes it before the confirmation opens
+    // — two focus traps on one Tab key is worse — which unmounts the Recents
+    // section. With the error rendered inside it, a failed delete told the
+    // mobile user nothing at all, and then replayed the stale banner the next
+    // time the drawer was opened.
+    const { container } = await renderSidebar();
+    await waitFor(() => expect(screen.getByText('First chat')).toBeInTheDocument());
+
+    mockApi.deleteChat.mockRejectedValue(new Error('offline'));
+
+    const remove = container.querySelector('[aria-label="Delete chat"]');
+    await act(async () => {
+      fireEvent.click(remove);
+    });
+    const dialog = screen.getByRole('alertdialog');
+    const confirm = Array.from(dialog.querySelectorAll('button')).find(
+      b => b.textContent === 'Delete'
+    );
+    await act(async () => {
+      fireEvent.click(confirm);
+    });
+
+    const alert = await screen.findByRole('alert');
+    expect(alert).toHaveTextContent('The chat could not be deleted. Please try again.');
+    // Outside the Recents list, so collapsing or closing the drawer cannot
+    // take it away before it has been read.
+    const recents = screen.getByText('Recents').closest('div');
+    expect(recents?.contains(alert)).toBe(false);
+  });
+
+  test('a successful delete is announced, not only rendered away', async () => {
+    // A row simply vanishing is nothing a screen reader reports. The history
+    // page already says so; the same action here was silent.
+    const { container } = await renderSidebar();
+    await waitFor(() => expect(screen.getByText('First chat')).toBeInTheDocument());
+
+    const remove = container.querySelector('[aria-label="Delete chat"]');
+    await act(async () => {
+      fireEvent.click(remove);
+    });
+    const dialog = screen.getByRole('alertdialog');
+    const confirm = Array.from(dialog.querySelectorAll('button')).find(
+      b => b.textContent === 'Delete'
+    );
+    await act(async () => {
+      fireEvent.click(confirm);
+    });
+
+    await waitFor(() => expect(screen.getByRole('status')).toHaveTextContent('Chat deleted'));
+  });
+});
+
 describe('which link says it is the current page', () => {
   test('only the chat row, not the app row it is nested under', async () => {
     // `/apps/acme/c/chat-1` matches the app row's prefix test as well. Two

@@ -142,6 +142,10 @@ export default function AppSidebar({ mobileOpen = false, onMobileClose = () => {
   // Rename/delete report through the same one-line slot the list already uses
   // for loading and empty states — the sidebar has no toast surface.
   const [chatActionError, setChatActionError] = useState(null);
+  // Success has to be said out loud too: a row simply vanishing is nothing a
+  // screen reader reports. `ChatHistoryPage` already announces both; the same
+  // action on the same chat was silent here.
+  const [chatActionStatus, setChatActionStatus] = useState(null);
   const [confirmDialog, setConfirmDialog] = useState(null);
   const drawerRef = useRef(null);
   const expandButtonRef = useRef(null);
@@ -353,6 +357,7 @@ export default function AppSidebar({ mobileOpen = false, onMobileClose = () => {
     async (chatId, title) => {
       setRenamingChatId(null);
       setChatActionError(null);
+      setChatActionStatus(null);
       patchChatInCache(chatId, { title, titleSetByUser: true });
       try {
         // The server normalizes the title (whitespace collapsed, length
@@ -361,6 +366,7 @@ export default function AppSidebar({ mobileOpen = false, onMobileClose = () => {
         if (typeof result?.chat?.title === 'string') {
           patchChatInCache(chatId, { title: result.chat.title });
         }
+        setChatActionStatus(t('chatHistory.renamed', 'Chat renamed'));
       } catch {
         setChatActionError(
           t('chatHistory.renameFailed', 'The chat could not be renamed. Please try again.')
@@ -390,9 +396,11 @@ export default function AppSidebar({ mobileOpen = false, onMobileClose = () => {
         onConfirm: async () => {
           setConfirmDialog(null);
           setChatActionError(null);
+          setChatActionStatus(null);
           removeChatFromCache(chat.id);
           try {
             await deleteChat(chat.id);
+            setChatActionStatus(t('chatHistory.deleted', 'Chat deleted'));
           } catch {
             setChatActionError(
               t('chatHistory.deleteFailed', 'The chat could not be deleted. Please try again.')
@@ -828,11 +836,6 @@ export default function AppSidebar({ mobileOpen = false, onMobileClose = () => {
             />
             {recentsOpen && (
               <div className="px-2 pb-2">
-                {chatActionError && (
-                  <p role="alert" className="text-xs text-red-600 dark:text-red-400 px-3 py-1">
-                    {chatActionError}
-                  </p>
-                )}
                 {recentChats.length === 0 && (
                   <p className="text-xs text-gray-500 dark:text-gray-400 px-3 py-1">
                     {chatsLoading
@@ -1006,6 +1009,23 @@ export default function AppSidebar({ mobileOpen = false, onMobileClose = () => {
         {...confirmDialog}
         onDeny={() => setConfirmDialog(null)}
       />
+
+      {/* Out here for the same reason. Deleting from the mobile drawer closes
+          it before the confirmation opens — two focus traps on one Tab key is
+          worse — so an error rendered inside the Recents section was unmounted
+          before it could ever be read, and then replayed the next time the
+          drawer opened. */}
+      <span role="status" aria-live="polite" className="sr-only">
+        {chatActionStatus}
+      </span>
+      {chatActionError && (
+        <div
+          role="alert"
+          className="fixed bottom-4 left-4 z-50 max-w-xs rounded-lg border border-red-200 dark:border-red-800 bg-red-50 dark:bg-red-900/20 px-3 py-2 text-xs text-red-800 dark:text-red-200 shadow-lg"
+        >
+          {chatActionError}
+        </div>
+      )}
     </>
   );
 }

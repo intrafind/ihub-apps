@@ -524,7 +524,14 @@ export default function ChatHistoryPage() {
           query ? (
             <EmptyState
               icon="chat-bubble"
-              title={t('chatHistory.noResults', 'No chats match your search')}
+              title={
+                hasMore
+                  ? t(
+                      'chatHistory.noResultsSoFar',
+                      'No chats match your search in the ones loaded so far'
+                    )
+                  : t('chatHistory.noResults', 'No chats match your search')
+              }
             >
               <button
                 onClick={handleClearSearch}
@@ -577,19 +584,25 @@ export default function ChatHistoryPage() {
                 </div>
               </div>
             ))}
-            {hasMore && (
-              <div className="flex justify-center mt-6">
-                <button
-                  onClick={loadMore}
-                  disabled={loading}
-                  className="px-4 py-2.5 rounded-xl border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800 text-sm font-semibold text-gray-700 dark:text-gray-200 hover:border-gray-300 dark:hover:border-gray-600 disabled:opacity-60"
-                >
-                  {loading
-                    ? t('common.loading', 'Loading…')
-                    : t('chatHistory.loadMore', 'Show older chats')}
-                </button>
-              </div>
-            )}
+          </div>
+        )}
+
+        {/* Outside the list branch. Search filters the chats that are paged in,
+            and nothing else — so a user looking for their two-hundredth chat
+            sees "No chats match your search" with no way to widen it, because
+            the only control that fetches more used to live in the branch that
+            renders when there *are* results. */}
+        {hasMore && (
+          <div className="flex justify-center mt-6">
+            <button
+              onClick={loadMore}
+              disabled={loading}
+              className="px-4 py-2.5 rounded-xl border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800 text-sm font-semibold text-gray-700 dark:text-gray-200 hover:border-gray-300 dark:hover:border-gray-600 disabled:opacity-60"
+            >
+              {loading
+                ? t('common.loading', 'Loading…')
+                : t('chatHistory.loadMore', 'Show older chats')}
+            </button>
           </div>
         )}
       </div>
