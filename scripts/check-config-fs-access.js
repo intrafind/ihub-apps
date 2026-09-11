@@ -144,7 +144,14 @@ const CONTRACT_EXCLUSIONS = [
   },
   {
     path: 'server/configLoader.js',
-    fn: /^(loadBuiltinLocaleJson|listBuiltinLocales)$/,
+    // Pinned on the path expression rather than the enclosing function. `fn`
+    // resolved scope by scanning upward for the nearest preceding declaration,
+    // which is not the lexical parent: adding any local arrow above an
+    // exempted call made the call a violation *and* reported the exemption as
+    // stale, while a module-level read placed after the exempted function's
+    // closing brace was silently exempted by it. An argument name is exact and
+    // needs no parser.
+    arg: /\b(filePath|i18nDir)\b/,
     reason:
       'The builtin locales live in shared/i18n/, which ships with the application rather than ' +
       'with an installation. They are outside contents/ entirely, so no configuration provider ' +
@@ -152,7 +159,7 @@ const CONTRACT_EXCLUSIONS = [
   },
   {
     path: 'server/utils/authorization.js',
-    fn: /^loadGroupsConfiguration$/,
+    arg: /\bconfigPath\b/,
     reason:
       'loadGroupsConfiguration() is synchronous and cannot become async: adminAuth and ' +
       'contentAdminAuth call it in the middleware path of every admin request. It reads ' +
@@ -205,7 +212,9 @@ const NON_CONFIG_SITES = [
   },
   {
     path: 'server/routes/admin/skills.js',
-    arg: /\b(destPath|skillPathResolved|targetPath|tempDir)\b/,
+    // `skillDir` is here because `fs.cp(skillDir, targetPath)` passes the
+    // source first, and the exemption matches the call's *first* argument.
+    arg: /\b(destPath|skillDir|skillPathResolved|targetPath|tempDir)\b/,
     reason:
       'Skills are whole markdown directory trees under contents/skills/, installed and removed ' +
       'as a unit. They are not a configuration namespace and have no document key.'
@@ -260,7 +269,23 @@ const FS_OPS = [
   'rename',
   'renameSync',
   'readdir',
-  'readdirSync'
+  'readdirSync',
+  // The copy and stream-open family. A config file written by copying one
+  // over it is written just the same, and this list is the only thing that
+  // produces a match — an op that is absent is invisible to both rules. Not
+  // hypothetical: `setupUtils.js` already seeds config with `fs.copyFile`,
+  // and `backup.js` and `skills.js` already use `fs.cp`, so the next
+  // "restore config from backup" written as a copy would have sailed through.
+  'copyFile',
+  'copyFileSync',
+  'cp',
+  'cpSync',
+  'createWriteStream',
+  'createReadStream',
+  'open',
+  'openSync',
+  'truncate',
+  'truncateSync'
 ];
 
 /**
@@ -291,7 +316,13 @@ const LITERAL_CONFIG_PATH = new RegExp(
     // contents/config, contents/apps, contents/agents/profiles, ...
     `contents[/\\\\](?:${CONFIG_DIRS.map(d => d.replace('/', '[/\\\\]')).join('|')})\\b`,
     // join(..., 'contents', 'config', ...) and join(..., CONTENTS_DIR, 'apps', ...)
-    `(?:['"\`]contents['"\`]|CONTENTS_DIR)\\s*,\\s*['"\`](?:${CONFIG_DIRS.map(d => d.split('/')[0]).join('|')})['"\`]`
+    `(?:['"\`]contents['"\`]|CONTENTS_DIR)\\s*,\\s*['"\`](?:${CONFIG_DIRS.map(d => d.split('/')[0]).join('|')})['"\`]`,
+    // join(contentsDir, 'config', …) and `${contentsDir}/config/…` — the idiom
+    // this codebase actually uses (`migrations/runner.js`, `ConfigStore`), and
+    // the one the header names as the regression to catch. Without it a config
+    // write in a file outside CONFIG_OWNING_PATHS passed in silence.
+    `contentsDir\\s*,\\s*['"\`](?:${CONFIG_DIRS.map(d => d.split('/')[0]).join('|')})['"\`]`,
+    `\\$\\{\\s*contentsDir\\s*\\}[/\\\\](?:${CONFIG_DIRS.map(d => d.replace('/', '[/\\\\]')).join('|')})\\b`
   ].join('|')
 );
 
@@ -374,8 +405,34 @@ function configPathBindings(source) {
  */
 function assertNamespacesInSync() {
   const source = readFileSync(join(rootDir, 'server/storage/namespaces.js'), 'utf8');
-  const body = source.slice(source.indexOf('CONFIG_NAMESPACES = Object.freeze({'));
+  // Fail closed on a marker that has moved. `indexOf` answers -1 for a
+  // declaration that has merely been reformatted, and slicing from -1 yields
+  // the file's last character: `declared` comes out empty and the check
+  // reports "in sync" having compared nothing. That is the same silent-matcher
+  // failure as CodeQL 640, forty lines up — a check that stops checking while
+  // still printing a pass is worse than no check, because the green is taken
+  // as evidence. The drift check is what makes the duplicated CONFIG_DIRS list
+  // safe; once it is dead, a new raw namespace is never added here and direct
+  // writes under that directory fall outside the scan.
+  const at = source.indexOf('CONFIG_NAMESPACES = Object.freeze({');
+  if (at === -1) {
+    return [
+      'scripts/check-config-fs-access.js can no longer find the CONFIG_NAMESPACES ' +
+        'declaration in server/storage/namespaces.js — the drift check is dead. Fix the ' +
+        'marker this guard looks for.'
+    ];
+  }
+  // Bounded at the declaration's close rather than running to EOF, so a later
+  // `dir: '…'` literal elsewhere in the file is not a phantom drift report.
+  const end = source.indexOf('\n});', at);
+  const body = source.slice(at, end === -1 ? undefined : end);
   const declared = new Set([...body.matchAll(/dir:\s*'([^']+)'/g)].map(m => m[1]));
+  if (declared.size === 0) {
+    return [
+      'CONFIG_NAMESPACES parsed to zero namespaces — the drift check is not checking ' +
+        'anything. Fix the parse in scripts/check-config-fs-access.js.'
+    ];
+  }
   const known = new Set(CONFIG_DIRS);
   const problems = [];
   for (const dir of declared) {
@@ -437,11 +494,19 @@ function matchesAny(repoPath, prefixes) {
  * namespace bindings (`fs.readFile(...)`) and named bindings (`readFile(...)`).
  *
  * @param {string} source - File contents
- * @returns {{namespaces: Set<string>, named: Set<string>}}
+ * `named` maps the **local** name to the **imported** name. Keeping only the
+ * local was a hole: the local is what appears at the call site, but the
+ * imported name is what says whether it is a filesystem operation, so
+ * `import { writeFileSync as wf }` matched nothing and the guard passed. The
+ * house style already renames — `import { promises as fs }` appears in about
+ * fourteen server files — so hitting a name collision and renaming around it
+ * is an ordinary thing for a contributor to do.
+ *
+ * @returns {{namespaces: Set<string>, named: Map<string, string>}}
  */
 function findFsBindings(source) {
   const namespaces = new Set();
-  const named = new Set();
+  const named = new Map();
   const importRe = /import\s+([^;'"]+?)\s+from\s+['"]([^'"]+)['"]/g;
   for (const match of source.matchAll(importRe)) {
     if (!FS_MODULES.has(match[2])) continue;
@@ -459,7 +524,7 @@ function findFsBindings(source) {
         // `{ promises as fs }` is a namespace; every other named import is a
         // bare callable in this file.
         if (imported === 'promises') namespaces.add(local || imported);
-        else named.add(local || imported);
+        else named.set(local || imported, imported);
       }
     }
   }
@@ -469,6 +534,26 @@ function findFsBindings(source) {
     /(?:const|let|var)\s+(?:\{\s*promises\s*:\s*)?([A-Za-z0-9_$]+)\s*\}?\s*=\s*(?:await\s+import|require)\(\s*['"]([^'"]+)['"]/g;
   for (const match of source.matchAll(dynamicRe)) {
     if (FS_MODULES.has(match[2])) namespaces.add(match[1]);
+  }
+
+  // `const { writeFile } = await import('fs/promises')` and
+  // `const { writeFileSync } = fs;` — both reach an fs call through a bare
+  // local the clauses above never see.
+  const destructuredRe =
+    /(?:const|let|var)\s*\{([^}]*)\}\s*=\s*(?:(?:await\s+import|require)\(\s*['"]([^'"]+)['"]\s*\)|([A-Za-z0-9_$]+)(?:\.promises)?)/g;
+  for (const match of source.matchAll(destructuredRe)) {
+    const fromModule = match[2];
+    const fromNamespace = match[3];
+    const isFs =
+      (fromModule && FS_MODULES.has(fromModule)) ||
+      (fromNamespace && namespaces.has(fromNamespace));
+    if (!isFs) continue;
+    for (const spec of match[1].split(',')) {
+      const [imported, local] = spec.split(':').map(part => part.trim());
+      if (!imported) continue;
+      if (imported === 'promises') namespaces.add(local || imported);
+      else named.set(local || imported, imported);
+    }
   }
   return { namespaces, named };
 }
@@ -577,7 +662,13 @@ function findFsCalls(repoPath, source) {
     const escaped = escapeRegExp(ns);
     alternatives.push(`${escaped}\\s*\\.\\s*(?:promises\\s*\\.\\s*)?(${FS_OPS.join('|')})\\s*\\(`);
   }
-  const bareNames = [...named].filter(n => FS_OPS.includes(n)).concat(ATOMIC_HELPERS);
+  // Filter on what was imported, match on what is called. `escapeRegExp` is
+  // load-bearing now that these are arbitrary local identifiers rather than a
+  // fixed list.
+  const bareNames = [...named.entries()]
+    .filter(([, imported]) => FS_OPS.includes(imported))
+    .map(([local]) => escapeRegExp(local))
+    .concat(ATOMIC_HELPERS);
   if (bareNames.length) {
     alternatives.push(`(?<![.\\w$])(${bareNames.join('|')})\\s*\\(`);
   }
@@ -697,6 +788,20 @@ function wrapReason(reason, indent) {
   return out.join(`\n${indent}`);
 }
 
+/**
+ * How an allowlist entry is printed: the path, plus the qualifier that narrows
+ * it to particular call sites. Both `fn` and `arg` narrow, so printing only
+ * `fn` would have shown a per-argument exemption as if it covered the whole
+ * file — which is the opposite of what the exception list is for.
+ *
+ * @param {{path: string, fn?: RegExp, arg?: RegExp}} entry - Allowlist entry
+ * @returns {string}
+ */
+function describeScope(entry) {
+  const qualifier = entry.fn?.source || entry.arg?.source;
+  return qualifier ? `${entry.path} (${qualifier})` : entry.path;
+}
+
 /** Run the guard and exit 0 (clean) or 1 (violations, drift or stale exceptions). */
 function main() {
   const quiet = process.argv.includes('--quiet');
@@ -711,8 +816,7 @@ function main() {
     console.log('');
     console.log('  Documented exceptions (contract #2307 section 1):');
     for (const entry of CONTRACT_EXCLUSIONS) {
-      const scope = entry.fn ? `${entry.path} (${entry.fn.source})` : entry.path;
-      console.log(`    - ${scope}`);
+      console.log(`    - ${describeScope(entry)}`);
       console.log(`      ${wrapReason(entry.reason, '      ')}`);
     }
     console.log('');
@@ -738,7 +842,7 @@ function main() {
     console.error('  scripts/check-config-fs-access.js rather than leaving a reason');
     console.error('  standing for something that no longer happens:');
     for (const entry of unused) {
-      console.error(`    - ${entry.path}${entry.fn ? ` (${entry.fn.source})` : ''}`);
+      console.error(`    - ${describeScope(entry)}`);
     }
     console.error('');
   }

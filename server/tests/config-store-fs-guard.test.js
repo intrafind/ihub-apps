@@ -112,6 +112,117 @@ async function runGuard() {
   }
 }
 
+/**
+ * Plant a probe file, run the guard, and take the probe away again whatever
+ * happens — a fixture left behind fails every later run in the working tree
+ * and is confusing to find.
+ *
+ * @param {string} repoPath - Repo-relative path to write the probe at
+ * @param {string} source - Probe file contents
+ * @returns {Promise<{code: number, output: string}>} The guard's verdict with
+ *   the probe in place
+ */
+async function withProbe(repoPath, source) {
+  const probePath = path.join(REPO_ROOT, repoPath);
+  await fs.writeFile(probePath, source, 'utf8');
+  try {
+    return await runGuard();
+  } finally {
+    await fs.rm(probePath, { force: true });
+  }
+}
+
+/**
+ * A probe body that leaks a config path through one filesystem call.
+ *
+ * Every one of these sits in `server/utils/`, outside the guard's list of
+ * config-owning paths, so the blanket "this file may not touch the filesystem"
+ * rule cannot carry the test. Only the tree-wide rules can catch them, which
+ * is the point: each probe is shaped like the one thing the guard could not
+ * see before, and the rest of the file is deliberately ordinary.
+ *
+ * @param {string} imports - Import lines
+ * @param {string} body - Function body, already indented
+ * @returns {string} A complete ES module
+ */
+function probeModule(imports, body) {
+  return `/**
+ * Temporary fixture written by server/tests/config-store-fs-guard.test.js.
+ * If this file is still here, a test run was killed between writing it and
+ * removing it again — delete it.
+ */
+${imports}
+
+/**
+ * @param {string} data - Serialized platform configuration
+ * @returns {Promise<void>|void}
+ */
+export function leakProbeConfig(data) {
+${body}
+}
+`;
+}
+
+/**
+ * The shapes that reached a configuration file without the guard noticing,
+ * one per hole. Each is a real idiom from this codebase, not a contrivance:
+ * renaming on import is how fourteen server files already spell
+ * `{ promises as fs }`; `const { writeFile } = await import(...)` is how a
+ * lazily-loaded helper avoids a top-level fs dependency; `fs.cp` is what
+ * `skills.js` and `backup.js` already call; and `join(contentsDir, 'config')`
+ * is how `ConfigStore` and the migration runner spell a config path.
+ */
+const BLIND_SPOT_PROBES = [
+  {
+    name: 'a renamed fs import',
+    file: 'server/utils/__config-access-renamed-probe__.js',
+    // The local name is not in FS_OPS; the imported name is. Matching on the
+    // local alone saw an unknown function and moved on.
+    source: probeModule(
+      "import { writeFileSync as persistBytes } from 'fs';\nimport { join } from 'path';",
+      "  const target = join('/srv', 'contents/config/platform.json');\n  persistBytes(target, data);"
+    )
+  },
+  {
+    name: 'a destructured fs binding',
+    file: 'server/utils/__config-access-destructured-probe__.js',
+    // Neither an import statement nor a namespace assignment, so both binding
+    // clauses missed it and the file produced no call sites at all.
+    source: probeModule(
+      "import fsPromises from 'fs/promises';\nimport { join } from 'path';",
+      '  const { writeFile } = fsPromises;\n' +
+        "  const target = join('/srv', 'contents/config/platform.json');\n" +
+        '  return writeFile(target, data);'
+    )
+  },
+  {
+    name: 'a config directory overwritten by fs.cp',
+    file: 'server/utils/__config-access-copy-probe__.js',
+    // `cp` was not in FS_OPS. An op that is absent from that list is invisible
+    // to both rules — the file scans clean, which reads as a pass.
+    source: probeModule(
+      "import fs from 'fs/promises';",
+      "  void data;\n  return fs.cp('/srv/restore/config', 'contents/config', { recursive: true });"
+    )
+  },
+  {
+    name: 'a config path built from contentsDir',
+    file: 'server/utils/__config-access-contentsdir-probe__.js',
+    // The literal-path pattern knew `'contents', 'config'` and `CONTENTS_DIR`
+    // but not the `contentsDir` variable this codebase actually uses, so the
+    // file failed the cheap pre-filter and was never tokenized.
+    source: probeModule(
+      "import { writeFileSync } from 'fs';\nimport { join } from 'path';",
+      "  const contentsDir = process.env.CONTENTS_DIR || 'data';\n" +
+        "  const target = join(contentsDir, 'config', 'platform.json');\n" +
+        '  writeFileSync(target, data);'
+    )
+  }
+];
+
+/** The namespace map the drift check parses. */
+const NAMESPACES_FILE = 'server/storage/namespaces.js';
+
 describe('the config filesystem-access guard', () => {
   it('exists and is wired into the scripts CI runs', async () => {
     await fs.access(path.join(REPO_ROOT, GUARD));
@@ -213,5 +324,181 @@ describe('the config filesystem-access guard', () => {
 
     const after = await runGuard();
     assert.doesNotMatch(after.output, /__config-access-dollar-probe__/, 'the probe is gone again');
+  });
+
+  for (const probe of BLIND_SPOT_PROBES) {
+    it(`sees a config write reached through ${probe.name}`, async () => {
+      const planted = await withProbe(probe.file, probe.source);
+      assert.notEqual(
+        planted.code,
+        0,
+        `${probe.name} must fail the build. The guard exited 0 with the probe in place at ` +
+          `${probe.file}, which is the failure mode that matters: it did not error, it passed. ` +
+          `A pattern that silently stops matching is indistinguishable from a clean tree.\n` +
+          planted.output
+      );
+      assert.match(
+        planted.output,
+        new RegExp(probe.file.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')),
+        'and it has to name the file, per file, so the failure is actionable'
+      );
+
+      const after = await runGuard();
+      assert.equal(after.code, 0, 'the probe is gone and the tree is clean again');
+    });
+  }
+
+  it('keeps an exemption pinned to its call site when a local helper moves in above it', async () => {
+    // The two narrowed contract exclusions are keyed on the argument name, not
+    // on the enclosing function. `fn` was resolved by scanning upward for the
+    // nearest preceding declaration, which is not the lexical parent — so a
+    // local arrow declared anywhere above an exempted call took over as "the
+    // enclosing function", and the exemption stopped covering the call it was
+    // written for. The guard then failed the build twice over: once for the
+    // call, once for the exemption now matching nothing. Neither has anything
+    // to do with configuration moving off the provider, which is the only
+    // thing this guard is for.
+    const loaderPath = path.join(REPO_ROOT, 'server/configLoader.js');
+    const original = await fs.readFile(loaderPath, 'utf8');
+    const call = "    const data = await fs.readFile(filePath, 'utf8');";
+    assert.ok(original.includes(call), 'the exempted builtin-locale read is where we expect');
+
+    const withLocal = original.replace(
+      call,
+      `    const trim = (value) => String(value).trim();\n    void trim;\n${call}`
+    );
+
+    let planted;
+    try {
+      await fs.writeFile(loaderPath, withLocal, 'utf8');
+      planted = await runGuard();
+    } finally {
+      await fs.writeFile(loaderPath, original, 'utf8');
+    }
+
+    assert.equal(
+      planted.code,
+      0,
+      'declaring a local helper above an exempted read is not a configuration leak.\n' +
+        planted.output
+    );
+    assert.equal(await fs.readFile(loaderPath, 'utf8'), original, 'restored byte for byte');
+  });
+
+  it('reports a dead namespace drift check instead of passing', async () => {
+    // The drift check is what makes the guard's duplicated CONFIG_DIRS list
+    // safe: add a raw namespace to the map and forget the guard, and writes
+    // under that directory fall outside the scan entirely. It found its
+    // marker with `indexOf`, which answers -1 for a declaration that has
+    // merely been reformatted — and slicing a string from -1 yields its last
+    // character, so zero namespaces parsed and the check reported agreement
+    // having compared nothing.
+    //
+    // Reformatting is the mutation because it is the realistic one: nobody
+    // deletes CONFIG_NAMESPACES, but Prettier rewrapping a long line, or a
+    // type annotation landing between the name and the call, both move the
+    // marker while leaving the map entirely intact.
+    const nsPath = path.join(REPO_ROOT, NAMESPACES_FILE);
+    const original = await fs.readFile(nsPath, 'utf8');
+    const marker = 'CONFIG_NAMESPACES = Object.freeze({';
+    assert.ok(original.includes(marker), 'the declaration is spelled the way the guard expects');
+
+    let planted;
+    try {
+      await fs.writeFile(
+        nsPath,
+        original.replace(marker, 'CONFIG_NAMESPACES = Object.freeze(\n  {'),
+        'utf8'
+      );
+      planted = await runGuard();
+    } finally {
+      await fs.writeFile(nsPath, original, 'utf8');
+    }
+
+    assert.notEqual(
+      planted.code,
+      0,
+      'a drift check that can no longer find what it parses has to say so.\n' + planted.output
+    );
+    // On the specific message, not merely on failing: the other fail-closed
+    // check catches this case too, and a guard that reports "the parse is
+    // broken" when the parse is fine and the marker moved sends the next
+    // maintainer to the wrong file.
+    assert.match(
+      planted.output,
+      /can no longer find the CONFIG_NAMESPACES declaration/,
+      'and it has to name the marker as the thing that moved'
+    );
+
+    const after = await runGuard();
+    assert.equal(after.code, 0, `${NAMESPACES_FILE} is restored byte for byte`);
+    assert.equal(await fs.readFile(nsPath, 'utf8'), original, 'restored byte for byte');
+  });
+
+  it('does not report drift for a dir descriptor outside the config map', async () => {
+    // The block is read to its own closing brace rather than to end of file.
+    // Unbounded, every `dir:` further down the module counted as a declared
+    // config namespace — and `namespaces.js` is exactly where a second map
+    // would go, since runtime namespaces (chats, runs, workflow state) are
+    // declared by the same shape. The guard would then fail the build over a
+    // directory it was never meant to cover, and the fix a maintainer reaches
+    // for is to widen CONFIG_DIRS, which quietly extends the scan to a tree
+    // that is not configuration.
+    const nsPath = path.join(REPO_ROOT, NAMESPACES_FILE);
+    const original = await fs.readFile(nsPath, 'utf8');
+    const unrelated = `${original}\nconst UNRELATED_NAMESPACES = Object.freeze({\n  runs: Object.freeze({ dir: 'runs', raw: false })\n});\nvoid UNRELATED_NAMESPACES;\n`;
+
+    let planted;
+    try {
+      await fs.writeFile(nsPath, unrelated, 'utf8');
+      planted = await runGuard();
+    } finally {
+      await fs.writeFile(nsPath, original, 'utf8');
+    }
+
+    assert.equal(
+      planted.code,
+      0,
+      `a 'dir' outside CONFIG_NAMESPACES is not a config namespace.\n${planted.output}`
+    );
+    assert.doesNotMatch(planted.output, /'runs'/, 'and it is not named as drift');
+    assert.equal(await fs.readFile(nsPath, 'utf8'), original, 'restored byte for byte');
+  });
+
+  it('reports a namespace map it can still find but can no longer parse', async () => {
+    // The sibling test above is caught by either fail-closed check on its own,
+    // so it does not tell the two apart. This one does: the marker is exactly
+    // where the guard expects it and the block is entirely intact — only the
+    // quoting of the `dir` values changed, which is what a contributor pasting
+    // from JSON produces. The marker check sees nothing wrong; only the
+    // "parsed to zero namespaces" check stands between that and a guard that
+    // reports agreement having compared nothing.
+    const nsPath = path.join(REPO_ROOT, NAMESPACES_FILE);
+    const original = await fs.readFile(nsPath, 'utf8');
+    const requoted = original.replace(/dir: '([^']+)'/g, 'dir: "$1"');
+    assert.notEqual(requoted, original, 'the namespace map still spells dir values in quotes');
+
+    let planted;
+    try {
+      await fs.writeFile(nsPath, requoted, 'utf8');
+      planted = await runGuard();
+    } finally {
+      await fs.writeFile(nsPath, original, 'utf8');
+    }
+
+    assert.notEqual(
+      planted.code,
+      0,
+      'a parse that yields no namespaces is a dead check, not an empty map.\n' + planted.output
+    );
+    assert.match(
+      planted.output,
+      /parsed to zero namespaces/,
+      'and it has to point at the parse, not at the marker it found exactly where it expected'
+    );
+
+    const after = await runGuard();
+    assert.equal(after.code, 0, `${NAMESPACES_FILE} is restored byte for byte`);
+    assert.equal(await fs.readFile(nsPath, 'utf8'), original, 'restored byte for byte');
   });
 });
