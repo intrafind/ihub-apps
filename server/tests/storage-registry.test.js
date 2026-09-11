@@ -14,6 +14,7 @@ import { afterEach, describe, it } from 'node:test';
 import assert from 'node:assert/strict';
 import {
   createProvider,
+  DEFAULT_CAPABILITIES,
   getRegisteredProviders,
   getStorageProvider,
   hasProvider,
@@ -130,6 +131,31 @@ describe('resolveStorageConfig', () => {
     assert.deepEqual(resolved.config, {});
     // Callers spread and mutate this; it must never be a shared or inherited object.
     assert.equal(Object.keys(resolved.config).length, 0);
+  });
+});
+
+describe('the capability baseline', () => {
+  it('declares every capability a caller branches on, including rawNamespaces', () => {
+    // The baseline is what a provider that overrides nothing reports, and
+    // "everything off, no reach" only holds if every key is present. An absent
+    // key reads as `undefined`, which is neither on nor off: `ConfigStore`
+    // asks for `rawNamespaces` and would see a provider serving no raw
+    // configuration and one that forgot to mention it as the same thing — the
+    // first a supported deployment, the second a bug.
+    for (const key of [
+      'notifications',
+      'locking',
+      'multiInstance',
+      'blobs',
+      'conditionalWrites',
+      'rawNamespaces'
+    ]) {
+      assert.ok(
+        Object.hasOwn(DEFAULT_CAPABILITIES, key),
+        `DEFAULT_CAPABILITIES is missing ${key}, so a provider inheriting it reports undefined`
+      );
+    }
+    assert.deepEqual(DEFAULT_CAPABILITIES.rawNamespaces, [], 'and the baseline serves none');
   });
 });
 

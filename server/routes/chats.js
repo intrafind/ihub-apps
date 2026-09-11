@@ -42,7 +42,7 @@ import { resolvePrincipal } from '../services/loop/runIdentity.js';
 import { authorizeChat } from '../services/chat/chatAccess.js';
 import { getChatRepository, MAX_TITLE_LENGTH } from '../services/chat/ChatRepository.js';
 import { isChatPersistenceConfigured } from '../services/chat/chatPersistence.js';
-import { StorageError } from '../storage/errors.js';
+import { StorageError, storageHttpStatus } from '../storage/errors.js';
 import logger from '../utils/logger.js';
 
 const COMPONENT = 'ChatRoutes';
@@ -93,7 +93,10 @@ function sendPersistenceUnavailable(res) {
  */
 function sendChatStorageError(res, error, operation) {
   if (error instanceof StorageError) {
-    const status = error.httpStatus || (error.code === 'INVALID_CURSOR' ? 400 : null);
+    // Through the errors module rather than re-deriving the mapping here. The
+    // `INVALID_CURSOR` special case this replaces was one route knowing a
+    // contract code's status because the error did not carry it.
+    const status = storageHttpStatus(error);
     if (status) {
       return sendErrorResponse(res, status, error.message, { details: { code: error.code } });
     }

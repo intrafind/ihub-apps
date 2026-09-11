@@ -22,20 +22,32 @@ import { NotSupportedError } from './errors.js';
  * name, so a new backend never needs a new special case upstream.
  *
  * @typedef {Object} Capabilities
- * @property {boolean} transactions - Multi-document writes can be atomic.
  * @property {'in-process'|'push'|'poll'|'none'} notifications - How far change
  *   events reach: this process only, pushed between instances, polled, or not
  *   at all.
  * @property {'none'|'advisory-single-machine'|'distributed'} locking - How far
  *   `locks.withLock()` excludes: nothing, cluster workers sharing one machine
  *   or volume, or every instance.
- * @property {boolean} search - Documents can be queried by content, not only
- *   by key, owner and prefix.
  * @property {boolean} multiInstance - Several server instances may run against
  *   the same storage safely.
  * @property {boolean} blobs - The append log can store blobs beside a stream.
  * @property {boolean} conditionalWrites - `documents.put()` honours the `etag`
- *   compare-and-set and create-only modes.
+ *   compare-and-set and create-only modes. A provider that declares this false
+ *   is not routed raw configuration, because create-or-fail is exactly this
+ *   capability.
+ * @property {string[]} rawNamespaces - Namespace names the provider serves as
+ *   a raw view over `contents/` — the JSON file *is* the document body.
+ *   `ConfigStore` reads this to decide what it may route; empty means it
+ *   serves none. It was missing from the typedef while two modules already
+ *   read it, so the one thing the contract had to name about configuration
+ *   routing was the one thing it did not.
+ * @property {boolean} [transactions] - **Reserved.** Multi-document atomic
+ *   writes. No API exposes them — there is no `withTransaction` — so nothing
+ *   can act on this either way; it is declared so a provider that gains them
+ *   has somewhere to say so.
+ * @property {boolean} [search] - **Reserved.** Documents queryable by content
+ *   rather than by key, owner and prefix. Also has no API behind it yet
+ *   (no `query()`), and the same applies.
  */
 
 /**
@@ -55,7 +67,11 @@ export const DEFAULT_CAPABILITIES = Object.freeze({
   search: false,
   multiInstance: false,
   blobs: false,
-  conditionalWrites: false
+  conditionalWrites: false,
+  // Empty, not absent: a provider that serves no raw configuration and one
+  // whose capabilities simply forgot to mention it must not read the same,
+  // because the first is a supported deployment and the second is a bug.
+  rawNamespaces: []
 });
 
 /**

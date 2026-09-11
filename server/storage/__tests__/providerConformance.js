@@ -333,6 +333,14 @@ export function runProviderConformance({ name, createProvider, capabilities, raw
         assert.equal(typeof caps.multiInstance, 'boolean');
         assert.equal(typeof caps.blobs, 'boolean');
         assert.equal(typeof caps.conditionalWrites, 'boolean');
+        // Declared, not merely present when a provider happens to serve raw
+        // namespaces: `ConfigStore` reads it to decide what it may route, and
+        // "absent" and "serves none" must not look the same — the first is a
+        // bug, the second a supported deployment.
+        assert.ok(
+          Array.isArray(caps.rawNamespaces),
+          'rawNamespaces is an array, empty when the provider serves no raw configuration'
+        );
       });
 
       it('shutdown() twice is safe', async () => {

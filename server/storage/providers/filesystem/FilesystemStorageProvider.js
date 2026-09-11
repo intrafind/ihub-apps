@@ -456,7 +456,7 @@ export class FilesystemStorageProvider extends StorageProvider {
    * know which namespaces follow the raw rules (no owner, etag over the file
    * bytes) instead of discovering it by having an owner-scoped call fail.
    *
-   * @returns {import('../../StorageProvider.js').Capabilities & {rawNamespaces: string[]}}
+   * @returns {import('../../StorageProvider.js').Capabilities}
    */
   getCapabilities() {
     return {

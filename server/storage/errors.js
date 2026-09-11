@@ -11,6 +11,47 @@
  */
 
 /**
+ * Failure codes the contract names, with the HTTP status each maps onto.
+ *
+ * `INVALID_CURSOR` is here rather than on a class of its own because every
+ * store raises it with a bare `StorageError` — which is why `routes/chats.js`
+ * had to special-case it to answer 400 instead of 500, re-deriving the mapping
+ * this module exists to own. A route can now ask the error.
+ *
+ * @type {Readonly<Record<string, number>>}
+ */
+export const STORAGE_CODE_STATUS = Object.freeze({
+  ETAG_MISMATCH: 409,
+  LOCK_TIMEOUT: 503,
+  INVALID_KEY: 400,
+  INVALID_CURSOR: 400,
+  INVALID_SEQ: 400,
+  INVALID_DATA: 400,
+  INVALID_ETAG: 400,
+  INVALID_LOCK_OPTIONS: 400,
+  NOT_SUPPORTED: 501,
+  STORAGE_SHUT_DOWN: 503,
+  UNKNOWN_PROVIDER: 500,
+  UNKNOWN_NAMESPACE: 400
+});
+
+/**
+ * The HTTP status a storage failure maps onto, or null when it has none.
+ *
+ * Prefers the status the error carries — a subclass sets it directly — and
+ * falls back to the code table, so a `StorageError` raised with a bare code
+ * still translates instead of reaching a client as a 500.
+ *
+ * @param {unknown} error - Any thrown value.
+ * @returns {number|null} The status, or null when nothing maps.
+ */
+export function storageHttpStatus(error) {
+  if (!error || typeof error !== 'object') return null;
+  if (Number.isInteger(error.httpStatus)) return error.httpStatus;
+  return STORAGE_CODE_STATUS[error.code] ?? null;
+}
+
+/**
  * Base class for every storage failure.
  *
  * @property {string} code - Stable, machine-readable failure code.

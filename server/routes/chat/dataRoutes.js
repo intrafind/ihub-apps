@@ -964,8 +964,15 @@ export default function registerDataRoutes(app) {
         // undefined-stripping below would otherwise hide it), but the client
         // must still treat an absent block as "no persistence" to stay
         // compatible with an older server.
+        //
+        // One field, because there is only one answer. `chats.enabled` was
+        // also sent and added nothing: `isChatPersistenceConfigured` already
+        // returns false whenever the platform switch is off, so
+        // `enabled: true, persistence: false` is the *ordinary* state — the
+        // flag off, or storage down — and a client that reached for the
+        // obvious-looking name would enable the UI in exactly the cases where
+        // nothing gets stored. Nothing read it.
         chats: {
-          enabled: platform.chats?.enabled !== false,
           persistence: isChatPersistenceConfigured(configCache.getFeatures(), platform)
         },
         rateLimit: platform.rateLimit,
