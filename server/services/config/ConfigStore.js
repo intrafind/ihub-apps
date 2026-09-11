@@ -380,11 +380,27 @@ async function listFromDisk(dir, prefix) {
     }
     return [];
   }
-  return entries
-    .filter(entry => entry.isFile() && entry.name.endsWith(RAW_DOC_EXT))
-    .map(entry => entry.name.slice(0, -RAW_DOC_EXT.length))
-    .filter(key => isValidId(key) && (!prefix || key.startsWith(prefix)))
-    .sort();
+  const keys = [];
+  for (const entry of entries) {
+    if (!entry.isFile() || !entry.name.endsWith(RAW_DOC_EXT)) continue;
+    const key = entry.name.slice(0, -RAW_DOC_EXT.length);
+    if (!isValidId(key)) {
+      // The same warning `RawDocumentStore._namespaceKeys` emits, for the same
+      // reason, so the two sides of the seam report a dropped file alike: the
+      // loader this replaced took every `*.json`, and a name that is not a
+      // usable document key now stops appearing with nothing naming it.
+      logger.warn('Configuration file name is not a usable document key; not listed', {
+        component: COMPONENT,
+        dir,
+        entry: entry.name,
+        hint: 'Rename it to letters, digits, dashes, dots and underscores'
+      });
+      continue;
+    }
+    if (prefix && !key.startsWith(prefix)) continue;
+    keys.push(key);
+  }
+  return keys.sort();
 }
 
 /**

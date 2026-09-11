@@ -338,6 +338,45 @@ describe('configuration store: preserved read and write semantics', () => {
     });
   });
 
+  describe('a file name that is not a usable key is dropped, but not in silence', () => {
+    it('names the file it is dropping, through the provider', async () => {
+      // The loader this store replaced took every `*.json` in the directory, so
+      // `apps/Zusammenfassung Übersicht.json` — or an admin's copy at
+      // `models/gpt-4 (eu).json` — used to load. It is not a usable document
+      // key now, so the app vanishes from every user's list; with nothing
+      // naming the file, the operator has nothing to grep for when a user
+      // reports it missing.
+      await place('apps/not a usable key.json', JSON.stringify({ id: 'hidden' }, null, 2));
+
+      const lines = await recordLogs(async () => {
+        const keys = await configStore.list('apps');
+        assert.ok(!keys.includes('not a usable key'), 'it is still not listed');
+      });
+
+      const warned = lines.filter(
+        line => line.level === 'warn' && /not a usable document key/.test(String(line.message))
+      );
+      assert.equal(warned.length, 1, 'warned exactly once');
+    });
+
+    it('and through the filesystem path, which answers when no provider serves the namespace', async () => {
+      // `listFromDisk` is the same listing for an installation whose provider
+      // does not serve raw configuration; the two sides of the seam have to
+      // report a dropped file alike or the answer depends on the deployment.
+      await place('renderers-unserved/not a usable key.json', '{}');
+
+      const lines = await recordLogs(async () => {
+        const keys = await configStore.list('renderers-unserved');
+        assert.deepEqual(keys, []);
+      });
+
+      const warned = lines.filter(
+        line => line.level === 'warn' && /not a usable document key/.test(String(line.message))
+      );
+      assert.equal(warned.length, 1, 'warned exactly once');
+    });
+  });
+
   describe('D5: a page keeps its per-language body files', () => {
     /** The registry entry `routes/admin/pages.js` builds in `config/ui.json`. */
     const registryEntry = {

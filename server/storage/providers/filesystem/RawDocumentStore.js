@@ -590,7 +590,23 @@ export class RawDocumentStore extends DocumentStore {
       const key = entry.slice(0, -RAW_DOC_EXT.length);
       // Only surface names this store would itself accept, so a file dropped
       // into the directory by hand can never reach containedPath().
-      if (isValidId(key)) keys.push(key);
+      if (isValidId(key)) {
+        keys.push(key);
+        continue;
+      }
+      // And say so. The loader this replaced took every `*.json` in the
+      // directory, so `apps/Zusammenfassung Übersicht.json` or an admin's copy
+      // at `models/gpt-4 (eu).json` used to load; now it is not a usable
+      // document key and the file simply stops appearing. Silently, with the
+      // count in the "Loading resource" line one lower and nothing naming the
+      // file — so the operator has nothing to grep for when a user reports a
+      // missing app. Warn, once per listing, with the name.
+      logger.warn('Configuration file name is not a usable document key; not listed', {
+        component: COMPONENT,
+        ns,
+        entry,
+        hint: 'Rename it to letters, digits, dashes, dots and underscores'
+      });
     }
     return keys;
   }
