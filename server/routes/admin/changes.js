@@ -123,8 +123,23 @@ export default function registerAdminChangesRoutes(app) {
             break;
           }
           case 'group': {
-            const { data: groupsConfig } = configCache.getGroups();
-            const config = groupsConfig || { groups: {} };
+            // The authored file, not `configCache.getGroups()`. The cache holds
+            // groups with inheritance already resolved — every child carries the
+            // union of its parents' permissions — so writing the cache back
+            // replaces the authored `groups.json` with its own expansion. The
+            // rolled-back group is not the damage: every *other* group in the
+            // file has its inherited permissions baked in as its own, and from
+            // then on editing a parent no longer reaches its children. Granting
+            // or revoking a permission at the top of the hierarchy would appear
+            // to work and change nothing, which is the wrong way for a
+            // permission system to fail.
+            //
+            // `beforeState` comes from a snapshot the groups routes take from
+            // this same authored file, so it merges back into it unchanged.
+            const config = (await configStore.readJsonStrict('config/groups.json')) || {
+              groups: {}
+            };
+            if (!config.groups || typeof config.groups !== 'object') config.groups = {};
             config.groups[id] = beforeState;
             await configStore.writeJson('config/groups.json', config);
             await configCache.refreshCacheEntry('config/groups.json');
