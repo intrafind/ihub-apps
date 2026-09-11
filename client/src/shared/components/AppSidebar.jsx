@@ -1,4 +1,4 @@
-import { useState, useEffect, useMemo, useCallback, useRef } from 'react';
+import { useState, useEffect, useLayoutEffect, useMemo, useCallback, useRef } from 'react';
 import { Link, useLocation } from 'react-router-dom';
 import { useAuth } from '../contexts/AuthContext';
 import { useUIConfig } from '../contexts/UIConfigContext';
@@ -146,6 +146,13 @@ export default function AppSidebar({ mobileOpen = false, onMobileClose = () => {
   // screen reader reports. `ChatHistoryPage` already announces both; the same
   // action on the same chat was silent here.
   const [chatActionStatus, setChatActionStatus] = useState(null);
+  // Deleting a row unmounts the button that was focused, in the same commit
+  // the confirmation is torn down — so the dialog's focus trap restores focus
+  // onto a detached node and the keyboard ends up on `<body>`, outside the
+  // sidebar entirely. `ChatHistoryPage` already solves this; the same three
+  // lines were missing here.
+  const recentsRef = useRef(null);
+  const restoreRecentsFocusRef = useRef(false);
   const [confirmDialog, setConfirmDialog] = useState(null);
   const drawerRef = useRef(null);
   const expandButtonRef = useRef(null);
@@ -377,6 +384,14 @@ export default function AppSidebar({ mobileOpen = false, onMobileClose = () => {
     [t]
   );
 
+  // Runs in the same commit that removes the row, so it wins the race against
+  // the focus trap's restore onto the now-detached button.
+  useLayoutEffect(() => {
+    if (!restoreRecentsFocusRef.current) return;
+    restoreRecentsFocusRef.current = false;
+    recentsRef.current?.focus();
+  });
+
   const requestDeleteChat = useCallback(
     (e, chat) => {
       e.preventDefault();
@@ -400,6 +415,7 @@ export default function AppSidebar({ mobileOpen = false, onMobileClose = () => {
           removeChatFromCache(chat.id);
           try {
             await deleteChat(chat.id);
+            restoreRecentsFocusRef.current = true;
             setChatActionStatus(t('chatHistory.deleted', 'Chat deleted'));
           } catch {
             setChatActionError(
@@ -835,7 +851,9 @@ export default function AppSidebar({ mobileOpen = false, onMobileClose = () => {
               onToggle={() => setRecentsOpen(o => !o)}
             />
             {recentsOpen && (
-              <div className="px-2 pb-2">
+              // `tabIndex={-1}` so deleting a row has somewhere to put the
+              // focus the removed button was holding.
+              <div ref={recentsRef} tabIndex={-1} className="px-2 pb-2 outline-hidden">
                 {recentChats.length === 0 && (
                   <p className="text-xs text-gray-500 dark:text-gray-400 px-3 py-1">
                     {chatsLoading

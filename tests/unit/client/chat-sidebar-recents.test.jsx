@@ -224,6 +224,39 @@ describe('what a failed action tells the user', () => {
     expect(recents?.contains(alert)).toBe(false);
   });
 
+  test('deleting a row keeps the keyboard inside the sidebar', async () => {
+    // The row unmounts in the same commit the confirmation is torn down, so
+    // the dialog's focus trap restores focus onto a detached button and the
+    // keyboard lands on <body> — outside the sidebar, with nothing to Tab back
+    // into. The history page already solves this; the sidebar did not.
+    const { container } = await renderSidebar();
+    await waitFor(() => expect(screen.getByText('First chat')).toBeInTheDocument());
+
+    // The refetch that follows the delete must agree that the chat is gone, or
+    // it puts the row straight back.
+    mockApi.fetchChats.mockResolvedValue({
+      items: [chatDoc('chat-2', 'Second chat', 'legal-review')],
+      nextCursor: null
+    });
+
+    const remove = container.querySelector('[aria-label="Delete chat"]');
+    await act(async () => {
+      fireEvent.click(remove);
+    });
+    const dialog = screen.getByRole('alertdialog');
+    const confirm = Array.from(dialog.querySelectorAll('button')).find(
+      b => b.textContent === 'Delete'
+    );
+    await act(async () => {
+      fireEvent.click(confirm);
+    });
+
+    await waitFor(() => expect(screen.queryByText('First chat')).toBeNull());
+    expect(document.activeElement).not.toBe(document.body);
+    expect(document.activeElement?.getAttribute('tabindex')).toBe('-1');
+    expect(document.activeElement?.contains(screen.getByText('Second chat'))).toBe(true);
+  });
+
   test('a successful delete is announced, not only rendered away', async () => {
     // A row simply vanishing is nothing a screen reader reports. The history
     // page already says so; the same action here was silent.

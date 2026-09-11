@@ -691,3 +691,22 @@ username and email lookups compared strings exactly, so any difference in capita
 treated as a different account. Login, admin user creation, and duplicate-username checks now all
 match usernames and emails case-insensitively, and the same fix applies to how OIDC, LDAP, NTLM,
 and Teams sign-ins are matched against previously persisted accounts.
+
+## A New Local Account Was Invisible to Every Other Worker
+
+Creating a user through **Admin → Users** (or the local-auth signup path) wrote `users.json`
+directly instead of going through the shared save path. In a clustered installation — which is the
+default — that left every *other* worker authenticating against a users file it still believed was
+current, so the new account could not log in on most requests. Worse, the next save from any of
+those workers rewrote the whole file from its stale snapshot, and the new user was dropped
+altogether.
+
+- User creation now goes through the same writer as every other change: it writes through the
+  configuration store, refreshes the cache entry, and tells the other workers to re-read the file.
+- The new account works on every worker immediately, and a later save from another worker no longer
+  removes it.
+
+**If you are upgrading from 5.4.x and run more than one worker**, it is worth checking that the
+accounts you created are still there. Anyone who was created and then reported "my login does not
+work" may have been silently removed by a later save; such an account has to be created again. A
+single-worker installation is unaffected.
