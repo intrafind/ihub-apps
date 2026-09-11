@@ -72,6 +72,16 @@ import { NotSupportedError } from './errors.js';
  * @property {string} [cursor] - Opaque cursor from a previous page.
  * @property {boolean} [includeData=true] - When false, `data` is omitted from
  *   every returned document while the metadata stays complete.
+ *
+ *   It saves the caller bytes, not the provider work. `etag` and `size` are
+ *   mandatory on every document, and both are derived from the body — so the
+ *   provider still reads, parses and hashes each one. On the filesystem
+ *   provider that means counting a thousand chats costs a thousand transcript
+ *   reads and a thousand sha256s, for an integer. A provider that can answer
+ *   `etag` and `size` from an index (a SQL column, object-store metadata) is
+ *   free to skip the read; none of them may skip the fields. A caller that
+ *   only wants keys is better served by a method that only returns keys, and
+ *   should say so rather than assume this flag is it.
  */
 
 /**

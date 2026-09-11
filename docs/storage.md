@@ -464,6 +464,25 @@ outside it: the [raw namespaces](#raw-namespaces-configuration-stays-where-it-is
 are views over `contents/config`, `contents/apps` and the rest, and their locks
 are kept here precisely so no sidecar ever appears next to a config file.
 
+### `contents/` is a trusted tree
+
+Every path this provider builds is checked to stay under its base directory,
+and the check is **lexical**: `..` and absolute segments are resolved and
+refused, and nothing asks the filesystem what a path really is. A symlink
+inside the tree that points out of it is followed.
+
+That is deliberate. `contents/` is the installation's own directory — mounted,
+hand-edited, sometimes deliberately symlinked at a secret volume or a shared
+configuration store — and an operator who puts a link there is configuring the
+server, not attacking it.
+
+The containment check exists for the *keys*, which arrive from requests. Those
+are validated as ids first (`[A-Za-z0-9_.~:@+-]`, no separators), and the path
+check is the second wall behind that. If a future consumer lets an untrusted
+principal choose a path segment that is not an id, containment has to become
+real: realpath the base and namespace directories once at `initialize()` and
+compare every resolved path against those.
+
 The envelope is written with `atomicWriteJSON`:
 
 ```

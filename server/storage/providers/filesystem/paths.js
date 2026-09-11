@@ -94,6 +94,20 @@ export function ownerSegment(ownerId) {
  * shape both reviewers and static analysis (CodeQL js/path-injection)
  * recognize, and the prefix check keeps the older, blunter assertion in place.
  *
+ * **The check is lexical.** It resolves `..` and absolute segments and nothing
+ * else — a symlink inside the tree pointing out of it is followed, because
+ * nothing here asks the filesystem what a path really is. That is a deliberate
+ * limit, not an oversight: the tree is the installation's own `contents/`
+ * directory, and an operator who puts a symlink in it is configuring the
+ * server, not attacking it. Several deployments do exactly that, which is why
+ * `docs/storage.md` describes `contents/` as a trusted tree.
+ *
+ * What the guard is for is the *keys*, which reach it from requests: ids are
+ * validated first, and this is the second wall behind that. Making containment
+ * real against symlinks needs the base and namespace directories realpathed at
+ * `initialize()` and every resolved path checked against those — worth doing
+ * the day an untrusted principal can choose a path segment that is not an id.
+ *
  * @param {string} rootDir - Directory the result must stay inside
  * @param {...string} segments - Path segments to append
  * @returns {string} The resolved absolute path
