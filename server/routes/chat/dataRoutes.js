@@ -1,8 +1,7 @@
 import configCache from '../../configCache.js';
 import {
   filterResourcesByPermissions,
-  isAnonymousAccessAllowed,
-  enhanceUserWithPermissions
+  isAnonymousAccessAllowed
 } from '../../utils/authorization.js';
 import { authRequired } from '../../middleware/authRequired.js';
 import { getAppVersion } from '../../utils/versionHelper.js';
@@ -382,18 +381,6 @@ export default function registerDataRoutes(app) {
             'load prompts configuration',
             new Error('prompts is null')
           );
-        }
-
-        // Force permission enhancement if not already done
-        if (req.user && !req.user.permissions) {
-          const authConfig = platformConfig.auth || {};
-          req.user = enhanceUserWithPermissions(req.user, authConfig, platformConfig);
-        }
-
-        // Create anonymous user if none exists and anonymous access is allowed
-        if (!req.user && isAnonymousAccessAllowed(platformConfig)) {
-          const authConfig = platformConfig.auth || {};
-          req.user = enhanceUserWithPermissions(null, authConfig, platformConfig);
         }
 
         // Apply group-based filtering if user is authenticated

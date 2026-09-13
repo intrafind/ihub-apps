@@ -4,7 +4,6 @@ import { authRequired } from '../middleware/authRequired.js';
 import validate from '../validators/validate.js';
 import { runToolSchema } from '../validators/index.js';
 import configCache from '../configCache.js';
-import { isAnonymousAccessAllowed, enhanceUserWithPermissions } from '../utils/authorization.js';
 import { buildServerPath } from '../utils/basePath.js';
 import { validateIdForPath } from '../utils/pathSecurity.js';
 import { requireFeature } from '../featureRegistry.js';
@@ -18,17 +17,6 @@ export default function registerToolRoutes(app) {
     async (req, res) => {
       try {
         const platformConfig = configCache.getPlatform() || {};
-        const authConfig = platformConfig.auth || {};
-
-        // Force permission enhancement if not already done
-        if (req.user && !req.user.permissions) {
-          req.user = enhanceUserWithPermissions(req.user, authConfig, platformConfig);
-        }
-
-        // Create anonymous user if none exists and anonymous access is allowed
-        if (!req.user && isAnonymousAccessAllowed(platformConfig)) {
-          req.user = enhanceUserWithPermissions(null, authConfig, platformConfig);
-        }
 
         // Get user language from query parameters or platform default
         const defaultLang = platformConfig?.defaultLanguage || 'en';
