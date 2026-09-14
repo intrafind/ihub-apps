@@ -293,6 +293,48 @@ callers with the matching scope.
   references, assets) are not yet enumerated individually; agents that
   need them can call the `read_skill_resource` tool.
 
+### Who sees which tool
+
+Scopes decide what a token may *do*; group permissions decide what it may
+*see*. Both have to line up, and the tool list is default-deny — a tool the
+caller has no grant for is never listed, even with `mcp:tools:read`.
+
+A caller sees a tool when either of these holds:
+
+- **An app they can access declares it.** Tool access is scoped through
+  apps: if `app.tools` contains `iFinder_getContent` and the caller may
+  use that app, the tool is visible. A disabled app grants nothing —
+  `configCache.getApps()` filters `enabled: false` before permissions are
+  computed.
+- **Their group grants it directly** via `permissions.tools` in
+  `groups.json`. This is the path for callers who need a tool over MCP or
+  A2A without an app in the way.
+
+```json
+{
+  "groups": {
+    "mcp-power-users": {
+      "permissions": {
+        "apps": [],
+        "tools": ["iFinder"]
+      }
+    }
+  }
+}
+```
+
+Granting the base id (`iFinder`) covers every function of that tool —
+`iFinder_search`, `iFinder_getContent`, `iFinder_getMetadata`,
+`iFinder_discover`. Granting `iFinder_search` covers only that one. `["*"]`
+grants every tool on the platform.
+
+`permissions.tools` is empty for every group after upgrade, so behaviour is
+unchanged until an operator opts a group in. Grant it deliberately: a direct
+tool grant lets an MCP client call integrations such as iFinder, Jira and
+Entra **as the user**, with no app prompt or system prompt mediating the
+call. It does not change which tools a chat app may use — that is still the
+app's own `tools` list.
+
 ### Session model
 
 By default the gateway is stateful: an `initialize` request receives a

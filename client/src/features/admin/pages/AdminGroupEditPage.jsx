@@ -21,7 +21,14 @@ function AdminGroupEditPage() {
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState(null);
   const [saveError, setSaveError] = useState(null);
-  const [resources, setResources] = useState({ apps: [], models: [], prompts: [] });
+  const [resources, setResources] = useState({
+    apps: [],
+    models: [],
+    prompts: [],
+    workflows: [],
+    skills: [],
+    tools: []
+  });
   const [jsonSchema, setJsonSchema] = useState(null);
 
   const { blocker, markSaved } = useUnsavedChanges(initialData, group);

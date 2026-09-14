@@ -504,6 +504,13 @@ Groups are hierarchical with inheritance:
 }
 ```
 
+Besides `apps`, `prompts` and `models`, a group may carry `workflows`,
+`skills` and `tools`. `tools` grants a tool directly over the MCP and A2A
+gateways without an app declaring it — see
+[MCP Integration](mcp-integration.md#who-sees-which-tool). It has no effect
+on chat, where an app's own `tools` list still decides what the model may
+call.
+
 ### Inheritance Resolution
 
 At server startup:
@@ -524,7 +531,7 @@ req.user = enhanceUserWithPermissions(req.user, authConfig, platformConfig);
 ```
 
 This adds to `req.user`:
-- `permissions`: { apps, prompts, models, tools, sources }
+- `permissions`: { apps, prompts, models, workflows, skills, tools }
 - `isAdmin`: true/false
 - Resolved group permissions
 
