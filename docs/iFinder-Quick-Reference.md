@@ -75,6 +75,27 @@ export IFINDER_PRIVATE_KEY="-----BEGIN PRIVATE KEY-----..."
 | Value distribution  | `returnFacets: ["sourceName.keyword"]`              |
 | Page 2 of 50        | `maxResults: 50, from: 50`                          |
 
+## IntraFind Operators
+
+Beyond Lucene, the query accepts IntraFind operators (in `query` and `filter`):
+
+| Operator                    | Does                                                    |
+| --------------------------- | ------------------------------------------------------- |
+| `NEAR/S(vertrag kündigung)` | Both terms in one sentence (`P` paragraph, `5` N tokens) |
+| `MODE/e&Müller`             | Exact — no lemma/compound/diacritic loosening            |
+| `MODE/c&Bundesligaspiel`    | Decompound — also matches "Liga"                         |
+| `THES/&Stiefel`             | Thesaurus synonyms, broader and narrower terms           |
+| `ENTITY/PERS`               | Any person name — also `LOC`, `ORG`, `EMAIL`, `PHONE`    |
+| `UNIT/>=(5 kg)`             | A weight over 5 kg in the text, units converted          |
+| `DATE/>=(2026-01-01)`       | A date in the text, however written                      |
+| `NUMBER/[10 TO 100]`        | A number in that range in the text                       |
+| `OR/2(a b c d)`             | OR group, at least 2 clauses must match                  |
+
+Booleans also accept `UND` / `ODER` / `NICHT`. A field prefix goes in front:
+`content:NEAR/S(ENTITY/PERS AND Kündigungsfrist)`. These are normally active,
+but a deployment can switch them off — an unknown operator becomes a literal
+term and matches nothing, so compare `totalFound` with and without it.
+
 **`.keyword` rule.** Plain name = analyzed, for relevance-ranked matching.
 `.keyword` = exact value, for filters, facets and sorting. Dates, numbers and
 booleans take no suffix; `title`, `content`, `url` and `subject` have no

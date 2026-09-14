@@ -6,14 +6,16 @@ description: >
   iFinder_getContent, iFinder_getMetadata, iFinder_listProfiles). Use this skill
   whenever a question has to be answered from iFinder documents, or when a
   search returns nothing, too much, or the wrong thing and the query needs
-  fixing. It covers Lucene query syntax, when a field needs a `.keyword` suffix,
-  filters versus query terms, facets, sorting, paging and the discovery loop for
-  an unfamiliar corpus. Do NOT use it for web search or for other document
-  sources.
+  fixing. It covers the IntraFind query syntax — Lucene plus the `MODE/`,
+  `THES/`, `ENTITY/`, `NEAR/`, `UNIT/`, `DATE/`, `NUMBER/` and `OR/` operators
+  for linguistic matching, thesaurus expansion, entity and proximity search —
+  when a field needs a `.keyword` suffix, filters versus query terms, facets,
+  sorting, paging and the discovery loop for an unfamiliar corpus. Do NOT use it
+  for web search or for other document sources.
 license: Apache-2.0
 metadata:
   author: IntraFind
-  version: '1.0'
+  version: '1.1'
 ---
 
 # Searching iFinder
@@ -72,7 +74,7 @@ named `cust.*` and differ per installation.
 
 ## Query syntax
 
-The `query` is a Lucene query string.
+The `query` takes Lucene syntax.
 
 ```
 annual report                          words, relevance-ranked
@@ -82,12 +84,47 @@ creators:john OR owners:john           either
 report NOT draft                       exclusion
 budget*                                prefix wildcard
 modificationDate:[2026-01-01 TO *]     open-ended range
+_exists_:cust.classification           the field is present
 *                                      everything
 ```
+
+Boolean operators also accept German aliases: `UND`, `ODER`, `NICHT`.
 
 Reserved characters (`+ - && || ! ( ) { } [ ] ^ " ~ * ? : \ /`) need escaping
 with `\` when they are part of a literal value. Quote any value containing
 spaces, commas or a colon.
+
+### IntraFind operators
+
+iFinder does not run a plain Lucene parser. The search service hands OpenSearch
+the query as `intrafind_query_string`, which adds operators plain Lucene has no
+equivalent for. They work in `query` and in `filter`:
+
+| Operator                    | Does                                                                    |
+| --------------------------- | ----------------------------------------------------------------------- |
+| `MODE/e&Müller`             | Exact — no lemma, compound or diacritic loosening                       |
+| `MODE/c&Bundesligaspiel`    | Decompound — also matches documents saying just "Liga"                  |
+| `THES/&Stiefel`             | Expand with thesaurus synonyms, broader and narrower terms              |
+| `ENTITY/PERS`               | Any person name, whatever it says — also `LOC`, `ORG`, `EMAIL`, `PHONE` |
+| `NEAR/S(vertrag kündigung)` | Both terms in the same sentence (`P` paragraph, `5` within 5 tokens)    |
+| `UNIT/>=(5 kg)`             | A weight over 5 kg written in the text, units converted                 |
+| `DATE/>=(2026-01-01)`       | A date in the text, however it is written                               |
+| `NUMBER/[10 TO 100]`        | A number in that range in the text                                      |
+| `OR/2(a b c d)`             | OR group where at least 2 clauses must match                            |
+
+`NEAR/S` is the one to reach for first: two terms in the same sentence is a far
+stronger signal than two terms in the same document, and it sharpens a vague
+query without guessing at field names.
+
+A field prefix goes in front: `content:NEAR/S(ENTITY/PERS AND Kündigungsfrist)`.
+
+These operators are normally active, but a deployment can have them switched
+off, and a parser that does not know an operator treats it as a literal term and
+quietly matches nothing. So when an operator matters, run the query with and
+without it and compare `totalFound` rather than trusting a zero.
+
+Full grammar, every option and worked examples:
+[references/intrafind-query-syntax.md](references/intrafind-query-syntax.md).
 
 ## Query or filter?
 
@@ -218,15 +255,18 @@ returns the long tail.
 
 ## When a search disappoints
 
-| Symptom                  | Likely cause                                    | Fix                                    |
-| ------------------------ | ----------------------------------------------- | -------------------------------------- |
-| 0 hits with a filter     | `.keyword` missing, or on a field that has none | `iFinder_getFields`, then re-filter    |
-| 0 hits, exact value      | wrong spelling or casing                        | `iFinder_getFacetValues` on that field |
-| 0 hits, plausible query  | wrong search profile                            | `iFinder_listProfiles`, then retry     |
-| far too many hits        | topic-only query                                | move criteria into `filter`            |
-| right topic, wrong docs  | ranking skewed by filter terms in the query     | move them to `filter`                  |
-| a known document missing | the user cannot read it                         | say so; do not retry                   |
-| sort ignored             | sorting on an analyzed text field               | use the `.keyword` variant             |
+| Symptom                                 | Likely cause                                    | Fix                                        |
+| --------------------------------------- | ----------------------------------------------- | ------------------------------------------ |
+| 0 hits with a filter                    | `.keyword` missing, or on a field that has none | `iFinder_getFields`, then re-filter        |
+| 0 hits, exact value                     | wrong spelling or casing                        | `iFinder_getFacetValues` on that field     |
+| 0 hits, plausible query                 | wrong search profile                            | `iFinder_listProfiles`, then retry         |
+| far too many hits                       | topic-only query                                | move criteria into `filter`                |
+| right topic, wrong docs                 | ranking skewed by filter terms in the query     | move them to `filter`                      |
+| a known document missing                | the user cannot read it                         | say so; do not retry                       |
+| sort ignored                            | sorting on an analyzed text field               | use the `.keyword` variant                 |
+| 0 hits with `THES/`, `NEAR/`, `ENTITY/` | operator inactive, or a typo in it              | re-run without it and compare `totalFound` |
+| a German compound finds nothing         | analyzer stopped at the surface form            | `MODE/c&` or `MODE/s&`                     |
+| a name or code matches too loosely      | lemma or compound expansion                     | `MODE/e&`                                  |
 
 Never report "there are no documents about X" after one failed query. Confirm
 the profile and the field names first — the common case is a query fault, not an
@@ -238,3 +278,6 @@ empty corpus.
   field catalog with types, `.keyword` availability and purposes.
 - [references/query-cookbook.md](references/query-cookbook.md) — worked queries
   for recurring tasks.
+- [references/intrafind-query-syntax.md](references/intrafind-query-syntax.md) —
+  the IntraFind operators (`MODE/`, `THES/`, `ENTITY/`, `NEAR/`, `UNIT/`,
+  `DATE/`, `NUMBER/`, `OR/`, `DISMAX/`) in full.

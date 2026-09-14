@@ -12,8 +12,8 @@
   "functions": {
     "search": {
       "description": {
-        "en": "Search documents in iFinder using Lucene query syntax. Field-qualified terms (title:budget, creators:\"DOE, John\") search the analyzed field; exact-value matching, faceting and sorting need the `.keyword` variant of a text field. Call iFinder_getFields first when unsure which name a field takes.",
-        "de": "Dokumente in iFinder mit Lucene-Syntax suchen. Feldbezogene Terme (title:budget, creators:\"DOE, John\") durchsuchen das analysierte Feld; exakte Werte, Facetten und Sortierung benötigen die `.keyword`-Variante eines Textfelds. Bei Unsicherheit zuerst iFinder_getFields aufrufen."
+        "en": "Search documents in iFinder using the IntraFind query syntax (Lucene plus NEAR/, MODE/, THES/, ENTITY/ and other operators). Field-qualified terms (title:budget, creators:\"DOE, John\") search the analyzed field; exact-value matching, faceting and sorting need the `.keyword` variant of a text field. Call iFinder_getFields first when unsure which name a field takes.",
+        "de": "Dokumente in iFinder mit der IntraFind-Syntax suchen (Lucene plus die Operatoren NEAR/, MODE/, THES/, ENTITY/ und weitere). Feldbezogene Terme (title:budget, creators:\"DOE, John\") durchsuchen das analysierte Feld; exakte Werte, Facetten und Sortierung benötigen die `.keyword`-Variante eines Textfelds. Bei Unsicherheit zuerst iFinder_getFields aufrufen."
       },
       "parameters": {
         "type": "object",
@@ -21,8 +21,8 @@
           "query": {
             "type": "string",
             "description": {
-              "en": "Lucene query string. Supports AND/OR/NOT, quoted phrases, field:value, wildcards and ranges — e.g. `title:\"annual report\" AND language:de`, `modificationDate:[2026-01-01 TO *]`. Use `*` to match everything.",
-              "de": "Lucene-Suchanfrage. Unterstützt AND/OR/NOT, Phrasen in Anführungszeichen, field:value, Wildcards und Bereiche — z. B. `title:\"Jahresbericht\" AND language:de`, `modificationDate:[2026-01-01 TO *]`. `*` trifft alles."
+              "en": "IntraFind query string: Lucene syntax (AND/OR/NOT, quoted phrases, field:value, wildcards, ranges) plus IntraFind operators — `NEAR/S(a b)` both terms in one sentence, `MODE/e&term` exact / `MODE/c&term` decompound, `THES/&term` thesaurus expansion, `ENTITY/PERS` any person name (also LOC, ORG, EMAIL, PHONE), `UNIT/>=(5 kg)`, `DATE/>=(2026-01-01)`, `NUMBER/[10 TO 100]`, `OR/2(a b c)`. Use `*` to match everything.",
+              "de": "IntraFind-Suchanfrage: Lucene-Syntax (AND/OR/NOT, Phrasen in Anführungszeichen, field:value, Wildcards, Bereiche) plus IntraFind-Operatoren — `NEAR/S(a b)` beide Begriffe in einem Satz, `MODE/e&term` exakt / `MODE/c&term` Dekomposition, `THES/&term` Thesaurus-Erweiterung, `ENTITY/PERS` beliebiger Personenname (auch LOC, ORG, EMAIL, PHONE), `UNIT/>=(5 kg)`, `DATE/>=(2026-01-01)`, `NUMBER/[10 TO 100]`, `OR/2(a b c)`. `*` trifft alles."
             }
           },
           "maxResults": {
@@ -67,8 +67,8 @@
               "type": "string"
             },
             "description": {
-              "en": "Lucene query strings ANDed with the query but excluded from relevance ranking — the right place for narrowing criteria. Use the `.keyword` variant for exact text matches, e.g. `creators.keyword:\"DOE, John\"`, `application.keyword:PDF`, `modificationDate:[2026-01-01 TO *]`.",
-              "de": "Lucene-Ausdrücke, die mit UND an die Anfrage gehängt werden, aber die Relevanz nicht beeinflussen — der richtige Ort für Einschränkungen. Für exakte Textwerte die `.keyword`-Variante nutzen, z. B. `creators.keyword:\"DOE, John\"`, `application.keyword:PDF`, `modificationDate:[2026-01-01 TO *]`."
+              "en": "Query strings ANDed with the query but excluded from relevance ranking — the right place for narrowing criteria. Same syntax as `query`. Use the `.keyword` variant for exact text matches, e.g. `creators.keyword:\"DOE, John\"`, `application.keyword:PDF`, `modificationDate:[2026-01-01 TO *]`.",
+              "de": "Ausdrücke, die mit UND an die Anfrage gehängt werden, aber die Relevanz nicht beeinflussen — der richtige Ort für Einschränkungen. Gleiche Syntax wie `query`. Für exakte Textwerte die `.keyword`-Variante nutzen, z. B. `creators.keyword:\"DOE, John\"`, `application.keyword:PDF`, `modificationDate:[2026-01-01 TO *]`."
             }
           },
           "returnFacets": {

@@ -22,6 +22,15 @@
  *
  * Existing values always win, so an admin's own descriptions, defaults and
  * added functions are preserved and only genuinely absent keys are added.
+ *
+ * Two descriptions are the exception, and a narrow one. `search` and its
+ * `query` parameter already exist everywhere, so the merge above would never
+ * touch them — and both used to describe a plain keyword search, with no hint
+ * that iFinder accepts the IntraFind operators (`NEAR/`, `MODE/`, `THES/`,
+ * `ENTITY/`, …) that are its whole advantage over a `query_string` search. They
+ * are refreshed, but ONLY where the stored text is still character-for-character
+ * the previously shipped default: an admin who reworded either keeps their
+ * wording untouched.
  */
 
 export const version = '101';
@@ -29,6 +38,40 @@ export const description = 'ifinder_discovery_functions';
 
 const NEW_FUNCTIONS = ['getFields', 'getFacetValues', 'listProfiles'];
 const NEW_SEARCH_PARAMS = ['filter', 'sort', 'returnFacets', 'from'];
+
+/**
+ * The descriptions as the last release shipped them. A stored description equal
+ * to one of these has never been edited, so replacing it loses nothing.
+ */
+const SUPERSEDED_DESCRIPTIONS = {
+  search: {
+    en: 'Search for documents in the iFinder system',
+    de: 'Nach Dokumenten im iFinder-System suchen'
+  },
+  query: {
+    en: "Search query to find documents in iFinder. Example: 'contract proposals' or 'technical documentation'",
+    de: "Suchanfrage zum Finden von Dokumenten in iFinder. Beispiel: 'Vertragsvorschläge' oder 'technische Dokumentation'"
+  }
+};
+
+/**
+ * True when `stored` is still the description this migration supersedes.
+ *
+ * Compares every language the superseded default declares. A description an
+ * admin translated into a further language, or reworded in any one of them, no
+ * longer matches and is left alone.
+ *
+ * @param {*} stored - The description currently on the tool.
+ * @param {Object} superseded - The previously shipped description.
+ * @returns {boolean}
+ */
+function isUnmodified(stored, superseded) {
+  if (!stored || typeof stored !== 'object') return false;
+  const storedKeys = Object.keys(stored).sort();
+  const supersededKeys = Object.keys(superseded).sort();
+  if (storedKeys.join() !== supersededKeys.join()) return false;
+  return supersededKeys.every(lang => stored[lang] === superseded[lang]);
+}
 
 /**
  * Merge the shipped default's iFinder functions and search parameters into an
@@ -64,6 +107,23 @@ function applyToolDefaults(tool, shipped, ctx) {
     }
   } else if (!searchProps) {
     ctx.warn('iFinder tool has no search parameter schema — skipping search parameters');
+  }
+
+  const search = tool.functions.search;
+  if (search && isUnmodified(search.description, SUPERSEDED_DESCRIPTIONS.search)) {
+    if (shipped.functions?.search?.description) {
+      search.description = shipped.functions.search.description;
+      added.push('search.description');
+    }
+  }
+  if (
+    searchProps?.query &&
+    isUnmodified(searchProps.query.description, SUPERSEDED_DESCRIPTIONS.query)
+  ) {
+    if (shippedSearchProps?.query?.description) {
+      searchProps.query.description = shippedSearchProps.query.description;
+      added.push('search.query.description');
+    }
   }
 
   return added;

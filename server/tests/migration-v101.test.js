@@ -28,11 +28,20 @@ function legacyIFinderTool() {
     script: 'iFinder.js',
     functions: {
       search: {
-        description: 'Search for documents in the iFinder system',
+        description: {
+          en: 'Search for documents in the iFinder system',
+          de: 'Nach Dokumenten im iFinder-System suchen'
+        },
         parameters: {
           type: 'object',
           properties: {
-            query: { type: 'string' },
+            query: {
+              type: 'string',
+              description: {
+                en: "Search query to find documents in iFinder. Example: 'contract proposals' or 'technical documentation'",
+                de: "Suchanfrage zum Finden von Dokumenten in iFinder. Beispiel: 'Vertragsvorschläge' oder 'technische Dokumentation'"
+              }
+            },
             maxResults: { type: 'integer', default: 10 },
             searchProfile: { type: 'string' },
             returnFields: { type: 'array', items: { type: 'string' } }
@@ -102,6 +111,60 @@ test('a drifted install gains the discovery functions and the search parameters'
   // `getFacetValues` is the one that carries the `.keyword` guidance a caller
   // needs to pick a valid facet id.
   assert.match(tool.functions.getFacetValues.parameters.properties.facet.description.en, /keyword/);
+});
+
+test('an untouched search description is refreshed with the IntraFind operators', async () => {
+  const ctx = fakeCtx({ 'tools/iFinder.json': legacyIFinderTool() });
+
+  await up(ctx);
+
+  const search = ctx.files['tools/iFinder.json'].functions.search;
+  // The old wording described a plain keyword search and never mentioned the
+  // operators that are iFinder's whole advantage over a query_string search.
+  assert.match(search.description.en, /IntraFind/);
+  assert.match(search.parameters.properties.query.description.en, /NEAR\//);
+  assert.match(search.parameters.properties.query.description.en, /THES\//);
+  assert.match(search.parameters.properties.query.description.de, /ENTITY\//);
+});
+
+test('a reworded description is never overwritten', async () => {
+  const tool = legacyIFinderTool();
+  tool.functions.search.description = { en: 'Our own search wording', de: 'Unsere Formulierung' };
+  tool.functions.search.parameters.properties.query.description.en = 'our own query wording';
+
+  const ctx = fakeCtx({ 'tools/iFinder.json': tool });
+  await up(ctx);
+
+  const search = ctx.files['tools/iFinder.json'].functions.search;
+  assert.equal(search.description.en, 'Our own search wording');
+  assert.equal(search.parameters.properties.query.description.en, 'our own query wording');
+});
+
+test('a description in an extra language is left alone', async () => {
+  const tool = legacyIFinderTool();
+  tool.functions.search.description.fr = 'Rechercher des documents';
+
+  const ctx = fakeCtx({ 'tools/iFinder.json': tool });
+  await up(ctx);
+
+  // An added translation is an edit: replacing the description would drop it.
+  assert.equal(
+    ctx.files['tools/iFinder.json'].functions.search.description.fr,
+    'Rechercher des documents'
+  );
+});
+
+test('a plain-string description is not mistaken for the shipped default', async () => {
+  const tool = legacyIFinderTool();
+  tool.functions.search.description = 'Search for documents in the iFinder system';
+
+  const ctx = fakeCtx({ 'tools/iFinder.json': tool });
+  await up(ctx);
+
+  assert.equal(
+    ctx.files['tools/iFinder.json'].functions.search.description,
+    'Search for documents in the iFinder system'
+  );
 });
 
 test('an admin-customised entry keeps its own values', async () => {

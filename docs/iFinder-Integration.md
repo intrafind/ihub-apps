@@ -198,6 +198,45 @@ iFinder.search({
 }
 ```
 
+### The IntraFind query syntax
+
+iFinder does not run a plain Lucene query parser. The search service hands
+OpenSearch the query as `intrafind_query_string` — a query type the IntraFind
+Insight plugin registers — instead of the built-in `query_string`. That parser
+takes all of Lucene's syntax plus a set of IntraFind operators, and they are
+available in `query` and in `filter` through the public API's `_search`
+endpoint:
+
+| Operator | Does |
+| --- | --- |
+| `MODE/e&Müller` | Exact — no lemma, compound or diacritic loosening |
+| `MODE/c&Bundesligaspiel` | Decompound — also matches documents saying just "Liga" |
+| `THES/&Stiefel` | Expand with thesaurus synonyms, broader and narrower terms |
+| `ENTITY/PERS` | Any person name, whatever it says — also `LOC`, `ORG`, `EMAIL`, `PHONE` |
+| `NEAR/S(vertrag kündigung)` | Both terms in the same sentence (`P` paragraph, `5` within 5 tokens) |
+| `UNIT/>=(5 kg)` | A weight over 5 kg written in the text, units converted |
+| `DATE/>=(2026-01-01)` | A date in the text, however it is written |
+| `NUMBER/[10 TO 100]` | A number in that range in the text |
+| `OR/2(a b c d)` | OR group where at least 2 clauses must match |
+
+Boolean operators also accept German aliases (`UND`, `ODER`, `NICHT`), and a
+field prefix goes in front of any operator:
+`content:NEAR/S(ENTITY/PERS AND Kündigungsfrist)`.
+
+Do not confuse these with the request body's `"query_type": "QueryStringQuery"`.
+That is the API's own discriminator for the *shape* of the query object; the
+engine-level query type is chosen server-side.
+
+The search service enables the IntraFind parser by default
+(`searchservice.use-intrafind-queryparser`), and a search profile can override
+the engine query type, so the operators are normally on but a deployment can
+have them off. A parser that does not know an operator treats it as a literal
+term and quietly matches nothing, so verify by running a query with and without
+the operator and comparing `totalFound`.
+
+The `ifinder-search` skill documents the full grammar, every option and worked
+examples in `references/intrafind-query-syntax.md`.
+
 ### iFinder.getContent
 
 Retrieve the full content of a specific document for analysis.

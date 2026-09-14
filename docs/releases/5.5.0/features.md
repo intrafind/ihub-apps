@@ -1687,15 +1687,26 @@ never declared, which meant a model calling it could not reach them at all:
 `returnFacets` and `from` for paging past the 100-hit cap.
 
 A new **`ifinder-search` skill** ships with the platform and teaches a client the
-whole surface — Lucene query syntax, the `.keyword` rule, filters versus query
+whole surface — the query syntax, the `.keyword` rule, filters versus query
 terms, facets, sorting, paging, and the discovery loop for an unfamiliar corpus
-— with a full field reference and a query cookbook beside it. Grant it to a group
-and MCP clients see it as a resource; grant the `iFinder` tool to the same group
-and a client such as Claude can search the index on its own.
+— with a full field reference, a query cookbook and a grammar reference beside
+it. Grant it to a group and MCP clients see it as a resource; grant the `iFinder`
+tool to the same group and a client such as Claude can search the index on its
+own.
+
+That includes the part of iFinder that a plain Lucene client never reaches.
+iFinder does not run a plain query parser: the search service hands OpenSearch
+the query as `intrafind_query_string`, which adds `NEAR/S(a b)` for two terms in
+one sentence, `MODE/e&` and `MODE/c&` for exact matching and German
+decompounding, `THES/&` for thesaurus expansion, `ENTITY/PERS` for any person
+name, `UNIT/`, `DATE/` and `NUMBER/` for values written in running text, and
+`OR/2(…)` for minimum-should-match control. The tool descriptions and the skill
+now document them, so a model can use them instead of guessing at keywords.
 
 Installations upgrade automatically: a migration adds the new functions and
-search parameters to an existing `tools/iFinder.json`, leaving any wording or
-defaults an admin changed exactly as they are.
+search parameters to an existing `tools/iFinder.json`, and refreshes the two
+descriptions that predate the operator documentation — but only where they are
+still the shipped text, so any wording an admin changed stays exactly as it is.
 
 See [iFinder Integration](../../iFinder-Integration.md) and the
 [iFinder Quick Reference](../../iFinder-Quick-Reference.md).
