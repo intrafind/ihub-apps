@@ -1,6 +1,12 @@
-import { createOAuthClient, loadOAuthClients } from '../utils/oauthClientManager.js';
-import { validateRegistrationRequest } from '../utils/dcrValidation.js';
+import {
+  createOAuthClient,
+  findDcrClientByFingerprint,
+  loadOAuthClients,
+  recordDcrReRegistration
+} from '../utils/oauthClientManager.js';
+import { computeClientFingerprint, validateRegistrationRequest } from '../utils/dcrValidation.js';
 import { buildServerPath } from '../utils/basePath.js';
+import { logAudit } from '../services/AuditLogService.js';
 import configCache from '../configCache.js';
 import logger from '../utils/logger.js';
 
@@ -23,6 +29,17 @@ import logger from '../utils/logger.js';
  * Registered clients always require user consent (consentRequired: true) and
  * are never trusted, so a user must still sign in and approve the requested
  * mcp:* scopes before any token is issued.
+ *
+ * De-duplication: a client that registers as *public* (no secret is minted)
+ * with byte-identical metadata gets the client_id it was already given rather
+ * than a fresh record. Claude re-registers on every fresh connection, so
+ * without this each user adds another indistinguishable row and the
+ * maxClients cap turns into a per-user cap. The returned id is useless to
+ * anyone who does not control the registered redirect URI and complete PKCE,
+ * which is why sharing it between registrations of the same software is safe.
+ * Confidential registrations receive their own secret and are never merged.
+ * The lasting fix is CIMD (utils/clientIdMetadata.js), where a client brings
+ * its own stable identity and registers nothing at all.
  */
 export default function registerOAuthRegisterRoutes(app) {
   /**
@@ -97,9 +114,6 @@ export default function registerOAuthRegisterRoutes(app) {
 
       const clientsFilePath = oauthConfig.clientsFile || 'contents/config/oauth-clients.json';
 
-      // Cap the number of auto-registered clients so an unauthenticated
-      // caller cannot grow the client store unboundedly.
-      const maxClients = Number.isInteger(dcrConfig.maxClients) ? dcrConfig.maxClients : 100;
       const clientsConfig = loadOAuthClients(clientsFilePath);
       if (clientsConfig?.metadata?.error) {
         return res.status(503).json({
@@ -107,6 +121,51 @@ export default function registerOAuthRegisterRoutes(app) {
           error_description: 'OAuth client store unavailable'
         });
       }
+
+      const meta = validation.clientMetadata;
+      const isPublic = meta.tokenEndpointAuthMethod === 'none';
+      const fingerprint = isPublic ? computeClientFingerprint(meta) : null;
+
+      // De-duplicate before the cap is consulted: an existing registration
+      // creates no record, so answering it must not fail once the store is
+      // full. That is the whole point — the cap counts distinct software, not
+      // connections.
+      const existing = isPublic ? findDcrClientByFingerprint(clientsConfig, fingerprint) : null;
+      if (existing) {
+        await recordDcrReRegistration(existing.clientId, clientsFilePath);
+
+        logger.info('[OAuth DCR] Registration de-duplicated', {
+          component: 'OAuthRegister',
+          clientId: existing.clientId,
+          clientName: meta.name,
+          registrationCount: (existing.metadata?.registrationCount || 1) + 1,
+          ip: req.ip
+        });
+        logAudit({
+          req,
+          action: 'create',
+          resource: 'oauthClient',
+          resourceId: existing.clientId,
+          summary: `Dynamic client registration de-duplicated onto "${existing.name}"`,
+          source: 'api',
+          actor: { id: 'dcr', username: 'dcr', groups: [], authenticated: false }
+        });
+
+        return res.status(201).json({
+          client_id: existing.clientId,
+          client_id_issued_at: Math.floor(Date.parse(existing.createdAt) / 1000),
+          client_name: existing.name,
+          redirect_uris: existing.redirectUris || meta.redirectUris,
+          grant_types: existing.grantTypes || meta.grantTypes,
+          response_types: ['code'],
+          token_endpoint_auth_method: meta.tokenEndpointAuthMethod,
+          scope: (existing.scopes || meta.scopes).join(' ')
+        });
+      }
+
+      // Cap the number of auto-registered clients so an unauthenticated
+      // caller cannot grow the client store unboundedly.
+      const maxClients = Number.isInteger(dcrConfig.maxClients) ? dcrConfig.maxClients : 100;
       const dcrClientCount = Object.values(clientsConfig.clients || {}).filter(
         c => c?.metadata?.dcr === true
       ).length;
@@ -123,9 +182,6 @@ export default function registerOAuthRegisterRoutes(app) {
         });
       }
 
-      const meta = validation.clientMetadata;
-      const isPublic = meta.tokenEndpointAuthMethod === 'none';
-
       const created = await createOAuthClient(
         {
           name: meta.name,
@@ -140,6 +196,7 @@ export default function registerOAuthRegisterRoutes(app) {
           metadata: {
             dcr: true,
             tokenEndpointAuthMethod: meta.tokenEndpointAuthMethod,
+            ...(fingerprint ? { fingerprint, registrationCount: 1 } : {}),
             ...(meta.softwareId ? { softwareId: meta.softwareId } : {}),
             ...(meta.softwareVersion ? { softwareVersion: meta.softwareVersion } : {})
           }
@@ -155,6 +212,15 @@ export default function registerOAuthRegisterRoutes(app) {
         clientType: isPublic ? 'public' : 'confidential',
         scopes: meta.scopes,
         ip: req.ip
+      });
+      logAudit({
+        req,
+        action: 'create',
+        resource: 'oauthClient',
+        resourceId: created.clientId,
+        summary: `Dynamic client registration created "${meta.name}" (${isPublic ? 'public' : 'confidential'})`,
+        source: 'api',
+        actor: { id: 'dcr', username: 'dcr', groups: [], authenticated: false }
       });
 
       // RFC 7591 §3.2.1 response. The plaintext secret is only returned for

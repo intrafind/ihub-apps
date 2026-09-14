@@ -834,7 +834,28 @@
           "allowedGroupsHint": "Comma-separated group IDs. Empty means every signed-in user may create keys.",
           "clientCredentials": "Offer client credentials",
           "clientCredentialsDesc": "Also hand out a client ID and secret so users can request short-lived tokens from the token endpoint."
-        }
+        },
+        "kind": {
+          "admin": "Admin",
+          "personal": "Personal",
+          "dynamic": "Dynamic",
+          "cimd": "Client metadata"
+        },
+        "kindFilter": {
+          "label": "Kind",
+          "standard": "Admin & personal",
+          "all": "All kinds"
+        },
+        "noClientsForKind": "No OAuth clients of this kind",
+        "dynamicHidden": "{{count}} dynamically registered client(s) are hidden. They are created by MCP clients such as Claude at /api/oauth/register — switch the kind filter to see them.",
+        "registrations": "Registrations",
+        "firstUser": "First user",
+        "pruneDynamic": "Remove unused dynamic clients",
+        "pruneDynamicDays": "Unused for (days)",
+        "pruneDynamicTitle": "Remove unused dynamic clients",
+        "pruneDynamicConfirm": "Delete every dynamically registered client that has not been used in the last {{days}} days? Anyone still connected through one of them has to sign in and consent again; nothing else is affected.",
+        "pruneDynamicSuccess": "Removed {{count}} unused dynamic client(s)",
+        "pruneDynamicError": "Failed to remove unused dynamic clients"
       }
     },
     "officeIntegration": {

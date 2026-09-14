@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useMemo } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
 import Icon from '../../../shared/components/Icon';
@@ -6,12 +6,35 @@ import { makeAdminApiCall } from '../../../api/adminApi';
 import LoadingSpinner from '../../../shared/components/LoadingSpinner';
 import ConfirmDialog from '../../../shared/components/ConfirmDialog';
 import OAuthTabsHeader from '../components/OAuthTabsHeader';
+import { useFilterState } from '../hooks/useFilterState';
+import { FilterSelect } from '../components/data-table';
+
+/**
+ * Which kind of client a record is, for the badge and the kind filter.
+ *
+ * `dynamic` records come from RFC 7591 registration and are the ones that
+ * arrive in bulk — one per piece of MCP client software since de-duplication,
+ * one per user before it — so the list hides them by default.
+ */
+function clientKind(client) {
+  if (client?.metadata?.dcr === true) return 'dynamic';
+  if (client?.personal === true) return 'personal';
+  return 'admin';
+}
+
+const KIND_BADGE_CLASSES = {
+  admin: 'bg-gray-100 dark:bg-gray-700 text-gray-700 dark:text-gray-300',
+  personal: 'bg-teal-100 dark:bg-teal-900/50 text-teal-800 dark:text-teal-300',
+  dynamic: 'bg-amber-100 dark:bg-amber-900/50 text-amber-800 dark:text-amber-300'
+};
 
 function AdminOAuthClientsPage() {
   const { t } = useTranslation();
   const navigate = useNavigate();
   const [loading, setLoading] = useState(true);
   const [clients, setClients] = useState([]);
+  const [kindFilter, setKindFilter] = useFilterState('kind', 'standard');
+  const [pruneDays, setPruneDays] = useState(90);
   const [message, setMessage] = useState('');
   const [clientsEnabled, setClientsEnabled] = useState(false);
   const [showTokenModal, setShowTokenModal] = useState(false);
@@ -106,6 +129,41 @@ function AdminOAuthClientsPage() {
     } finally {
       setLoading(false);
     }
+  };
+
+  const handlePruneDynamicClients = () => {
+    setConfirmDialog({
+      title: t('admin.auth.oauth.pruneDynamicTitle', 'Remove unused dynamic clients'),
+      message: t(
+        'admin.auth.oauth.pruneDynamicConfirm',
+        'Delete every dynamically registered client that has not been used in the last {{days}} days? Anyone still connected through one of them has to sign in and consent again; nothing else is affected.',
+        { days: pruneDays }
+      ),
+      danger: true,
+      onConfirm: async () => {
+        setConfirmDialog(null);
+        try {
+          const response = await makeAdminApiCall(
+            `/admin/oauth/clients/dynamic?unusedForDays=${pruneDays}`,
+            { method: 'DELETE' }
+          );
+          setMessage({
+            type: 'success',
+            text: t(
+              'admin.auth.oauth.pruneDynamicSuccess',
+              'Removed {{count}} unused dynamic client(s)',
+              { count: response.data?.deleted ?? 0 }
+            )
+          });
+          loadClients();
+        } catch (error) {
+          setMessage({
+            type: 'error',
+            text: `${t('admin.auth.oauth.pruneDynamicError', 'Failed to remove unused dynamic clients')}: ${error.message}`
+          });
+        }
+      }
+    });
   };
 
   const handleDeleteClient = clientId => {
@@ -256,6 +314,28 @@ function AdminOAuthClientsPage() {
     return new Date(dateString).toLocaleString();
   };
 
+  const dynamicCount = useMemo(
+    () => clients.filter(c => clientKind(c) === 'dynamic').length,
+    [clients]
+  );
+
+  // 'standard' is the default because a deployment with dynamic registration on
+  // accumulates one dynamic record per piece of MCP client software — and, for
+  // anything registered before de-duplication shipped, one per user.
+  const visibleClients = useMemo(() => {
+    if (kindFilter === 'all') return clients;
+    if (kindFilter === 'standard') return clients.filter(c => clientKind(c) !== 'dynamic');
+    return clients.filter(c => clientKind(c) === kindFilter);
+  }, [clients, kindFilter]);
+
+  const kindOptions = [
+    { value: 'standard', label: t('admin.auth.oauth.kindFilter.standard', 'Admin & personal') },
+    { value: 'all', label: t('admin.auth.oauth.kindFilter.all', 'All kinds') },
+    { value: 'admin', label: t('admin.auth.oauth.kind.admin', 'Admin') },
+    { value: 'personal', label: t('admin.auth.oauth.kind.personal', 'Personal') },
+    { value: 'dynamic', label: t('admin.auth.oauth.kind.dynamic', 'Dynamic') }
+  ];
+
   if (loading) {
     return (
       <div className="max-w-6xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
@@ -271,7 +351,37 @@ function AdminOAuthClientsPage() {
     <div className="max-w-6xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
       <OAuthTabsHeader clientCount={clients.length} />
       {clientsEnabled && (
-        <div className="mb-6 flex justify-end">
+        <div className="mb-6 flex flex-wrap items-center justify-between gap-3">
+          <div className="flex flex-wrap items-center gap-3">
+            <FilterSelect
+              label={t('admin.auth.oauth.kindFilter.label', 'Kind')}
+              value={kindFilter}
+              onChange={setKindFilter}
+              options={kindOptions}
+            />
+            {dynamicCount > 0 && (
+              <div className="flex items-center gap-2">
+                <label className="inline-flex items-center gap-2 text-sm text-gray-700 dark:text-gray-300">
+                  <span>{t('admin.auth.oauth.pruneDynamicDays', 'Unused for (days)')}</span>
+                  <input
+                    type="number"
+                    min="0"
+                    max="3650"
+                    value={pruneDays}
+                    onChange={e => setPruneDays(Number(e.target.value))}
+                    className="w-20 text-sm rounded-md border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-900 text-gray-900 dark:text-gray-100 px-2 py-2"
+                  />
+                </label>
+                <button
+                  onClick={handlePruneDynamicClients}
+                  className="inline-flex items-center px-3 py-2 border border-red-300 dark:border-red-700 text-sm font-medium rounded-md text-red-700 dark:text-red-400 bg-white dark:bg-gray-700 hover:bg-red-50 dark:hover:bg-red-900/50 focus:outline-hidden focus:ring-2 focus:ring-offset-2 focus:ring-red-500"
+                >
+                  <Icon name="trash" size="sm" className="mr-2" />
+                  {t('admin.auth.oauth.pruneDynamic', 'Remove unused dynamic clients')}
+                </button>
+              </div>
+            )}
+          </div>
           <button
             onClick={() => navigate('/admin/oauth/clients/new')}
             className="inline-flex items-center px-4 py-2 border border-transparent text-sm font-medium rounded-md shadow-xs text-white bg-blue-600 hover:bg-blue-700 focus:outline-hidden focus:ring-2 focus:ring-offset-2 focus:ring-blue-500"
@@ -356,11 +466,25 @@ function AdminOAuthClientsPage() {
           </div>
         )}
 
-        {clients.length === 0 ? (
+        {kindFilter === 'standard' && dynamicCount > 0 && (
+          <div className="mb-6 p-4 rounded-md bg-gray-50 dark:bg-gray-800 border border-gray-200 dark:border-gray-700">
+            <p className="text-sm text-gray-600 dark:text-gray-400">
+              {t(
+                'admin.auth.oauth.dynamicHidden',
+                '{{count}} dynamically registered client(s) are hidden. They are created by MCP clients such as Claude at /api/oauth/register — switch the kind filter to see them.',
+                { count: dynamicCount }
+              )}
+            </p>
+          </div>
+        )}
+
+        {visibleClients.length === 0 ? (
           <div className="text-center py-12 bg-white dark:bg-gray-800 rounded-lg shadow-sm">
             <Icon name="key" className="mx-auto h-12 w-12 text-gray-400" />
             <h3 className="mt-2 text-sm font-medium text-gray-900 dark:text-gray-100">
-              {t('admin.auth.oauth.noClients', 'No OAuth clients configured')}
+              {clients.length === 0
+                ? t('admin.auth.oauth.noClients', 'No OAuth clients configured')
+                : t('admin.auth.oauth.noClientsForKind', 'No OAuth clients of this kind')}
             </h3>
             {clientsEnabled && (
               <>
@@ -382,7 +506,7 @@ function AdminOAuthClientsPage() {
         ) : (
           <div className="bg-white dark:bg-gray-800 shadow-sm overflow-hidden sm:rounded-md">
             <ul className="divide-y divide-gray-200 dark:divide-gray-700">
-              {clients.map(client => (
+              {visibleClients.map(client => (
                 <li key={client.clientId}>
                   <div className="px-4 py-4 sm:px-6 hover:bg-gray-50 dark:hover:bg-gray-700">
                     <div className="flex items-center justify-between">
@@ -401,6 +525,18 @@ function AdminOAuthClientsPage() {
                             {client.active
                               ? t('admin.auth.oauth.active', 'Active')
                               : t('admin.auth.oauth.suspended', 'Suspended')}
+                          </span>
+                          <span
+                            className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${KIND_BADGE_CLASSES[clientKind(client)]}`}
+                          >
+                            {t(
+                              `admin.auth.oauth.kind.${clientKind(client)}`,
+                              clientKind(client) === 'dynamic'
+                                ? 'Dynamic'
+                                : clientKind(client) === 'personal'
+                                  ? 'Personal'
+                                  : 'Admin'
+                            )}
                           </span>
                           {client.clientType && (
                             <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-blue-100 dark:bg-blue-900/50 text-blue-800 dark:text-blue-300">
@@ -432,6 +568,24 @@ function AdminOAuthClientsPage() {
                             </span>{' '}
                             {formatDate(client.lastUsed)}
                           </div>
+                          {clientKind(client) === 'dynamic' && (
+                            <>
+                              <div>
+                                <span className="font-medium">
+                                  {t('admin.auth.oauth.registrations', 'Registrations')}:
+                                </span>{' '}
+                                {client.metadata?.registrationCount ?? 1}
+                              </div>
+                              <div>
+                                <span className="font-medium">
+                                  {t('admin.auth.oauth.firstUser', 'First user')}:
+                                </span>{' '}
+                                {client.metadata?.firstUserName ||
+                                  client.metadata?.firstUserId ||
+                                  t('common.notAvailable', 'N/A')}
+                              </div>
+                            </>
+                          )}
                         </div>
                       </div>
                       <div className="flex space-x-2 ml-4">

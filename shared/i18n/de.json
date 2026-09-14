@@ -1093,7 +1093,28 @@
           "allowedGroupsHint": "Kommagetrennte Gruppen-IDs. Leer bedeutet, dass jeder angemeldete Benutzer Schlüssel erstellen darf.",
           "clientCredentials": "Client-Zugangsdaten anbieten",
           "clientCredentialsDesc": "Zusätzlich Client-ID und Secret ausgeben, damit Benutzer kurzlebige Tokens am Token-Endpunkt anfordern können."
-        }
+        },
+        "kind": {
+          "admin": "Administrativ",
+          "personal": "Persönlich",
+          "dynamic": "Dynamisch",
+          "cimd": "Client-Metadaten"
+        },
+        "kindFilter": {
+          "label": "Art",
+          "standard": "Administrativ & persönlich",
+          "all": "Alle Arten"
+        },
+        "noClientsForKind": "Keine OAuth-Clients dieser Art",
+        "dynamicHidden": "{{count}} dynamisch registrierte Client(s) sind ausgeblendet. Sie werden von MCP-Clients wie Claude unter /api/oauth/register angelegt — wechseln Sie den Art-Filter, um sie anzuzeigen.",
+        "registrations": "Registrierungen",
+        "firstUser": "Erster Nutzer",
+        "pruneDynamic": "Ungenutzte dynamische Clients entfernen",
+        "pruneDynamicDays": "Ungenutzt seit (Tagen)",
+        "pruneDynamicTitle": "Ungenutzte dynamische Clients entfernen",
+        "pruneDynamicConfirm": "Alle dynamisch registrierten Clients löschen, die in den letzten {{days}} Tagen nicht genutzt wurden? Wer noch über einen davon verbunden ist, muss sich erneut anmelden und zustimmen; sonst ändert sich nichts.",
+        "pruneDynamicSuccess": "{{count}} ungenutzte dynamische Client(s) entfernt",
+        "pruneDynamicError": "Ungenutzte dynamische Clients konnten nicht entfernt werden"
       }
     },
     "officeIntegration": {

@@ -1,3 +1,4 @@
+import crypto from 'crypto';
 import { MCP_SCOPE_LIST } from '../services/mcp/scopes.js';
 
 /**
@@ -277,4 +278,27 @@ export function validateRegistrationRequest(body, options = {}) {
       softwareVersion: sanitizeDisplayString(body.software_version, MAX_NAME_LENGTH)
     }
   };
+}
+
+/**
+ * Compute a stable fingerprint over the registration metadata that identifies
+ * a piece of client software rather than an individual registration attempt.
+ *
+ * Claude (and every other DCR client) sends byte-identical metadata on every
+ * fresh connection, so the fingerprint collapses those repeat registrations
+ * onto one stored client — see `routes/oauthRegister.js`. Arrays are sorted so
+ * a reordered `redirect_uris` list is still the same software.
+ *
+ * @param {Object} meta - Normalized metadata from {@link validateRegistrationRequest}
+ * @returns {string} 64-char lowercase sha256 hex digest
+ */
+export function computeClientFingerprint(meta) {
+  const canonical = JSON.stringify({
+    redirectUris: [...(meta.redirectUris || [])].sort(),
+    name: meta.name || '',
+    softwareId: meta.softwareId || '',
+    grantTypes: [...(meta.grantTypes || [])].sort(),
+    scopes: [...(meta.scopes || [])].sort()
+  });
+  return crypto.createHash('sha256').update(canonical).digest('hex');
 }

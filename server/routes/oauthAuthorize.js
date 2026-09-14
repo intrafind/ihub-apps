@@ -1,4 +1,8 @@
-import { findClientById, loadOAuthClients } from '../utils/oauthClientManager.js';
+import {
+  findClientById,
+  loadOAuthClients,
+  stampDcrFirstUser
+} from '../utils/oauthClientManager.js';
 import { generateCode, storeCode } from '../utils/authorizationCodeStore.js';
 import { buildServerPath } from '../utils/basePath.js';
 import { verifyJwt } from '../utils/tokenService.js';
@@ -614,6 +618,19 @@ export default function registerOAuthAuthorizeRoutes(app) {
       grantConsent(client_id, currentUser.sub, requestedScopes, consentMemoryDays).catch(err => {
         logger.warn('Failed to store consent', { component: 'OAuthAuthorize', error: err });
       });
+
+      // A dynamically registered client has no owner — registration happens
+      // before anyone signs in. The first consent is the earliest point the
+      // server knows a person, so stamp them for display in the admin list.
+      // Fire-and-forget for the same reason as the consent write above.
+      if (client.metadata?.dcr === true && !client.metadata?.firstUserId) {
+        stampDcrFirstUser(client_id, currentUser, clientsFilePath).catch(err => {
+          logger.warn('Failed to stamp first consenting user', {
+            component: 'OAuthAuthorize',
+            error: err
+          });
+        });
+      }
 
       const callbackUrl = new URL(redirect_uri);
       callbackUrl.searchParams.set('code', code);

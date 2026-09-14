@@ -226,10 +226,56 @@ the MCP client ecosystem uses DCR), so the policy is deliberately narrow:
 
 Auto-registered clients appear in **Admin → OAuth clients** like any
 other client and can be narrowed (`allowedApps`, `allowedGroups`, …),
-suspended, or deleted there.
+suspended, or deleted there. They carry the *Dynamic* kind badge, and the
+list hides them behind the kind filter by default so hand-made service
+accounts stay readable.
 
 If DCR stays disabled, create the client manually at
 `/admin/oauth/clients` and configure its id/secret in the MCP client.
+
+##### De-duplication
+
+Claude — like most MCP clients — registers on **every fresh connection**
+rather than once per deployment. Without de-duplication each user adds
+another indistinguishable record and `maxClients` (default 100) becomes a
+cap on *users*: the 101st person to connect is told
+`Dynamic client registration limit reached`.
+
+A registration with `token_endpoint_auth_method: "none"` is therefore
+fingerprinted over its `redirect_uris`, `client_name`, `software_id`,
+`grant_types` and `scope`. If an active dynamic client with the same
+fingerprint exists, the endpoint answers `201` with that client's
+`client_id` and its original `client_id_issued_at`, and only bumps
+`metadata.registrationCount` / `metadata.lastRegisteredAt`. The
+`client_id` of a public client is not a credential — it is useless to
+anyone who does not also control the registered redirect URI and complete
+PKCE — which is what makes sharing it between registrations of the same
+software safe.
+
+Confidential registrations mint a secret and are never merged; each gets
+its own record. `maxClients` now counts distinct records, and a repeat
+registration still succeeds once the cap is reached.
+
+One caveat: Claude Code under DCR registers its ephemeral loopback port
+(`http://localhost:3118/callback`) literally, so every session is a
+distinct fingerprint. Only CIMD, whose document declares
+`http://localhost/callback` and is matched port-agnostically, fixes that.
+
+##### Attribution and clean-up of dynamic clients
+
+Registration is unauthenticated, so a dynamic record has no owner. The
+first user who completes the consent screen is stamped onto it
+(`metadata.firstUserId` / `firstUserName` / `firstConsentAt`) purely so
+the admin list can be read; a second user of the same registration does
+not overwrite it. For "who is connected to what", use
+**Admin → OAuth → Connections**, which is keyed on the grant rather than
+on the client.
+
+Nothing is pruned automatically — deleting a client invalidates its
+users' consent memory and refresh tokens. **Admin → OAuth → Clients**
+offers *Remove unused dynamic clients*, which deletes dynamic records
+whose `lastUsed` (or, when never used, `createdAt`) is older than the
+number of days you enter.
 
 ### Scopes
 
@@ -452,13 +498,30 @@ registers itself via DCR, and sends the user through iHub's sign-in and
 consent screen. Subsequent MCP calls run as that user with their normal
 group permissions.
 
-Without DCR, create the OAuth client manually at `/admin/oauth/clients`:
+### One pre-registered client per Claude organisation
 
-- `grant_types`: `["authorization_code", "refresh_token"]`
+A Claude Team or Enterprise organisation can pin a single OAuth client
+instead of relying on registration at all. This is the right answer when
+you want a stable, auditable client per organisation, and it needs no
+server-side feature — only a client and a setting on Claude's side.
+
+Create the client at `/admin/oauth/clients`:
+
+- **Client type**: `public` (Claude keeps no secret; PKCE binds the flow)
+- `grantTypes`: `["authorization_code", "refresh_token"]`
 - `redirectUris`: `["https://claude.ai/api/mcp/auth_callback"]`
 - `scopes`: the desired `mcp:*` scopes (plus `openid profile email`)
+- optionally `allowedGroups` / `allowedApps` to narrow who and what
 
-and enter its client id/secret in Claude's connector advanced settings.
+Then, in Claude, the organisation's admin enters that **client ID** under
+**Add custom connector → Advanced settings**. Every user in the
+organisation shares the one client and still goes through their own iHub
+sign-in and consent, which is exactly what the consent store keys on. A
+confidential client works too — enter the secret alongside the ID — but
+public + PKCE is the recommended shape.
+
+Limits: individual (Free/Pro) users have to paste the client ID
+themselves, and each Claude organisation is one manual setup.
 
 Other MCP clients (Cursor, VS Code, custom agents) follow the same
 pattern — point them at `https://your-ihub/mcp`; clients that only take
@@ -474,6 +537,11 @@ Troubleshooting:
 - Client fails right after registration → DCR disabled
   (`/api/oauth/register` is a hard 404 while off) and no manual client
   configured.
+- `400 invalid_client_metadata: Dynamic client registration limit reached`
+  → `oauth.dcr.maxClients` (default 100) is full. Repeat registrations of
+  software already on file still succeed; this only blocks a genuinely new
+  client. Raise the cap, or run *Remove unused dynamic clients* on
+  **Admin → OAuth → Clients**.
 - Consent screen loops or CSRF errors → server was not restarted after
   enabling OAuth (session middleware missing).
 - `403 insufficient_scope` on `/mcp` → the token carries no `mcp:*`
