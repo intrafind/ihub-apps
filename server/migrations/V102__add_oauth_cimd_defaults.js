@@ -1,5 +1,5 @@
 /**
- * Migration V101 — Add Client ID Metadata Document (CIMD) defaults
+ * Migration V102 — Add Client ID Metadata Document (CIMD) defaults
  *
  * A CIMD client identifies itself with an HTTPS URL that points at a metadata
  * document it hosts, instead of registering a client record here. It is what
@@ -16,7 +16,7 @@
  * is filled in individually so an operator who set only `enabled` keeps it.
  */
 
-export const version = '101';
+export const version = '102';
 export const description = 'Add OAuth Client ID Metadata Document (CIMD) defaults';
 
 const CIMD_DEFAULTS = {

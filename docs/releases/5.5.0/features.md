@@ -1716,3 +1716,54 @@ until it expires — both screens say so, with the actual number of minutes.
 Four new audit events (`oauthConnection` granted and revoked, `oauthClient`
 registered, `oauthCimd` rejected) record all of this under **Admin → Audit
 log**.
+
+## Discover an iFinder Index Instead of Guessing at It
+
+Searching iFinder well means knowing which fields exist and which of them need a
+`.keyword` suffix — a filter on `title.keyword`, which has no keyword variant,
+matches nothing and reports no error. Until now nothing in iHub could answer
+that question, so an app, agent or MCP client had to guess.
+
+Four functions now read the answer off the deployment:
+
+- **`iFinder_getFields`** — the index field catalog, straight from the live
+  mapping. Per field it reports the exact name to use for full-text search,
+  filtering, faceting and sorting, with `null` where the field serves no such
+  purpose. It is also the only way to see a deployment's custom `cust.*` fields.
+- **`iFinder_getFacetValues`** — enumerate the values of one facet with document
+  counts, far beyond the capped facet block a search returns. Use it to learn
+  the exact spelling of a source, author or application before filtering on it.
+- **`iFinder_listProfiles`** — the search profiles the user can reach, derived
+  from the iAssistants iFinder exposes plus the configured default.
+- **`iFinder_discover`** — now also returns the field catalog alongside the
+  totals, top facets and sample titles it already produced.
+
+`iFinder_search` gained the four parameters the integration always supported but
+never declared, which meant a model calling it could not reach them at all:
+`filter` (criteria ANDed with the query without skewing relevance), `sort`,
+`returnFacets` and `from` for paging past the 100-hit cap.
+
+A new **`ifinder-search` skill** ships with the platform and teaches a client the
+whole surface — the query syntax, the `.keyword` rule, filters versus query
+terms, facets, sorting, paging, and the discovery loop for an unfamiliar corpus
+— with a full field reference, a query cookbook and a grammar reference beside
+it. Grant it to a group and MCP clients see it as a resource; grant the `iFinder`
+tool to the same group and a client such as Claude can search the index on its
+own.
+
+That includes the part of iFinder that a plain Lucene client never reaches.
+iFinder does not run a plain query parser: the search service hands OpenSearch
+the query as `intrafind_query_string`, which adds `NEAR/S(a b)` for two terms in
+one sentence, `MODE/e&` and `MODE/c&` for exact matching and German
+decompounding, `THES/&` for thesaurus expansion, `ENTITY/PERS` for any person
+name, `UNIT/`, `DATE/` and `NUMBER/` for values written in running text, and
+`OR/2(…)` for minimum-should-match control. The tool descriptions and the skill
+now document them, so a model can use them instead of guessing at keywords.
+
+Installations upgrade automatically: a migration adds the new functions and
+search parameters to an existing `tools/iFinder.json`, and refreshes the two
+descriptions that predate the operator documentation — but only where they are
+still the shipped text, so any wording an admin changed stays exactly as it is.
+
+See [iFinder Integration](../../iFinder-Integration.md) and the
+[iFinder Quick Reference](../../iFinder-Quick-Reference.md).

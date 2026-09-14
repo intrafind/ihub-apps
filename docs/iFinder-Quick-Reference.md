@@ -50,12 +50,57 @@ export IFINDER_PRIVATE_KEY="-----BEGIN PRIVATE KEY-----..."
 
 ## Tool Methods
 
-| Method                | Purpose            | Required Params | Example                                  |
-| --------------------- | ------------------ | --------------- | ---------------------------------------- |
-| `iFinder.search`      | Find documents     | `query`         | `{query: "contracts 2024"}`              |
-| `iFinder.getContent`  | Get document text  | `documentId`    | `{documentId: "doc123"}`                 |
-| `iFinder.getMetadata` | Get document info  | `documentId`    | `{documentId: "doc123"}`                 |
-| `iFinder.download`    | Download/save docs | `documentId`    | `{documentId: "doc123", action: "save"}` |
+| Method                   | Purpose                  | Required Params | Example                                      |
+| ------------------------ | ------------------------ | --------------- | -------------------------------------------- |
+| `iFinder.search`         | Find documents           | `query`         | `{query: "contracts 2024"}`                  |
+| `iFinder.getContent`     | Get document text        | `documentId`    | `{documentId: "doc123"}`                     |
+| `iFinder.getMetadata`    | Get document info        | `documentId`    | `{documentId: "doc123"}`                     |
+| `iFinder.download`       | Download/save docs       | `documentId`    | `{documentId: "doc123", action: "save"}`     |
+| `iFinder.getFields`      | Field catalog            | —               | `{filterPrefix: "cust."}`                    |
+| `iFinder.getFacetValues` | Enumerate a facet        | `facet`         | `{facet: "application.keyword"}`             |
+| `iFinder.listProfiles`   | Reachable search profiles | —              | `{}`                                         |
+| `iFinder.discover`       | Probe a profile          | `searchProfile` | `{searchProfile: "searchprofile-standard"}`  |
+
+## Query Cheat Sheet
+
+| Task                | Write                                              |
+| ------------------- | -------------------------------------------------- |
+| Words, ranked       | `query: "annual report"`                            |
+| Exact phrase        | `query: '"annual report"'`                          |
+| One field           | `query: 'title:budget'`                             |
+| Exact value         | `filter: ['creators.keyword:"DOE, John"']`          |
+| Date range          | `filter: ['modificationDate:[2026-01-01 TO *]']`    |
+| Everything          | `query: "*"`                                        |
+| Newest first        | `sort: ["modificationDate:desc"]`                   |
+| Value distribution  | `returnFacets: ["sourceName.keyword"]`              |
+| Page 2 of 50        | `maxResults: 50, from: 50`                          |
+
+## IntraFind Operators
+
+Beyond Lucene, the query accepts IntraFind operators (in `query` and `filter`):
+
+| Operator                    | Does                                                    |
+| --------------------------- | ------------------------------------------------------- |
+| `NEAR/S(vertrag kündigung)` | Both terms in one sentence (`P` paragraph, `5` N tokens) |
+| `MODE/e&Müller`             | Exact — no lemma/compound/diacritic loosening            |
+| `MODE/c&Bundesligaspiel`    | Decompound — also matches "Liga"                         |
+| `THES/&Stiefel`             | Thesaurus synonyms, broader and narrower terms           |
+| `ENTITY/PERS`               | Any person name — also `LOC`, `ORG`, `EMAIL`, `PHONE`    |
+| `UNIT/>=(5 kg)`             | A weight over 5 kg in the text, units converted          |
+| `DATE/>=(2026-01-01)`       | A date in the text, however written                      |
+| `NUMBER/[10 TO 100]`        | A number in that range in the text                       |
+| `OR/2(a b c d)`             | OR group, at least 2 clauses must match                  |
+
+Booleans also accept `UND` / `ODER` / `NICHT`. A field prefix goes in front:
+`content:NEAR/S(ENTITY/PERS AND Kündigungsfrist)`. These are normally active,
+but a deployment can switch them off — an unknown operator becomes a literal
+term and matches nothing, so compare `totalFound` with and without it.
+
+**`.keyword` rule.** Plain name = analyzed, for relevance-ranked matching.
+`.keyword` = exact value, for filters, facets and sorting. Dates, numbers and
+booleans take no suffix; `title`, `content`, `url` and `subject` have no
+`.keyword` at all, so a filter on them silently matches nothing. Call
+`iFinder.getFields` when unsure — it reports the right name per purpose.
 
 ## Common Error Messages
 
