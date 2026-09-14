@@ -116,7 +116,22 @@ Users must be authenticated to use iFinder features. The system supports:
 
 ## Available Tools
 
-The iFinder integration provides four main tools accessible through the `iFinder.` namespace:
+The iFinder integration exposes these functions under the `iFinder.` namespace
+(`iFinder_<function>` when called over the MCP gateway):
+
+| Function | Purpose |
+| --- | --- |
+| `search` | Find documents with a Lucene query, filters, facets, sorting and paging |
+| `getContent` | Fetch a document's extracted text |
+| `getMetadata` | Fetch a document's metadata without its text |
+| `download` | Download or save a document's binary |
+| `getFields` | The index field catalog — which fields exist and which need `.keyword` |
+| `getFacetValues` | Enumerate the values of one facet |
+| `listProfiles` | The search profiles this user can reach |
+| `discover` | One probe returning totals, top facets, sample titles and the field catalog |
+
+The last four are the **discovery** surface; see
+[Discovering what is searchable](#discovering-what-is-searchable).
 
 ### iFinder.search
 
@@ -124,12 +139,24 @@ Search for documents using natural language queries.
 
 **Parameters:**
 
-- `query` (required): Search query string
+- `query` (required): Lucene query string — `AND`/`OR`/`NOT`, quoted phrases,
+  `field:value`, wildcards and ranges. `*` matches everything.
 - `maxResults` (optional): Maximum results to return (default: 10, max: 100)
+- `from` (optional): Offset of the first hit, for paging past the 100-hit cap
+- `filter` (optional): Array of Lucene query strings ANDed with the query but
+  excluded from relevance ranking — the right place for narrowing criteria
 - `searchProfile` (optional): Specific search profile ID
-- `returnFields` (optional): Array of specific fields to return
-- `returnFacets` (optional): Array of facets to include
-- `sort` (optional): Array of sort criteria
+- `returnFields` (optional): Array of specific fields to return (`*` for all)
+- `returnFacets` (optional): Array of facet fields to aggregate alongside the hits
+- `sort` (optional): Array of `field:asc` / `field:desc` criteria
+
+**Field names and `.keyword`.** Every text field is indexed twice: the plain
+name (`creators`) is analyzed for relevance-ranked matching, and the `.keyword`
+name (`creators.keyword`) holds the exact value used for filtering, faceting and
+sorting. Dates, numbers and booleans take no suffix, and some text fields
+(`title`, `content`, `url`, `subject`) have no `.keyword` variant at all — a
+filter on one of those matches nothing rather than erroring. `iFinder.getFields`
+reports the correct name per field per purpose.
 
 **Example Usage:**
 
@@ -141,8 +168,10 @@ iFinder.search({ query: 'contract proposals 2024' });
 iFinder.search({
   query: 'technical documentation',
   maxResults: 20,
-  returnFields: ['title', 'author', 'createdDate'],
-  sort: ['createdDate:desc']
+  filter: ['application.keyword:PDF', 'modificationDate:[2026-01-01 TO *]'],
+  returnFields: ['id', 'title', 'creators', 'modificationDate'],
+  returnFacets: ['sourceName.keyword', 'language.keyword'],
+  sort: ['modificationDate:desc']
 });
 ```
 
@@ -168,6 +197,45 @@ iFinder.search({
   "facets": {...}
 }
 ```
+
+### The IntraFind query syntax
+
+iFinder does not run a plain Lucene query parser. The search service hands
+OpenSearch the query as `intrafind_query_string` — a query type the IntraFind
+Insight plugin registers — instead of the built-in `query_string`. That parser
+takes all of Lucene's syntax plus a set of IntraFind operators, and they are
+available in `query` and in `filter` through the public API's `_search`
+endpoint:
+
+| Operator | Does |
+| --- | --- |
+| `MODE/e&Müller` | Exact — no lemma, compound or diacritic loosening |
+| `MODE/c&Bundesligaspiel` | Decompound — also matches documents saying just "Liga" |
+| `THES/&Stiefel` | Expand with thesaurus synonyms, broader and narrower terms |
+| `ENTITY/PERS` | Any person name, whatever it says — also `LOC`, `ORG`, `EMAIL`, `PHONE` |
+| `NEAR/S(vertrag kündigung)` | Both terms in the same sentence (`P` paragraph, `5` within 5 tokens) |
+| `UNIT/>=(5 kg)` | A weight over 5 kg written in the text, units converted |
+| `DATE/>=(2026-01-01)` | A date in the text, however it is written |
+| `NUMBER/[10 TO 100]` | A number in that range in the text |
+| `OR/2(a b c d)` | OR group where at least 2 clauses must match |
+
+Boolean operators also accept German aliases (`UND`, `ODER`, `NICHT`), and a
+field prefix goes in front of any operator:
+`content:NEAR/S(ENTITY/PERS AND Kündigungsfrist)`.
+
+Do not confuse these with the request body's `"query_type": "QueryStringQuery"`.
+That is the API's own discriminator for the *shape* of the query object; the
+engine-level query type is chosen server-side.
+
+The search service enables the IntraFind parser by default
+(`searchservice.use-intrafind-queryparser`), and a search profile can override
+the engine query type, so the operators are normally on but a deployment can
+have them off. A parser that does not know an operator treats it as a literal
+term and quietly matches nothing, so verify by running a query with and without
+the operator and comparing `totalFound`.
+
+The `ifinder-search` skill documents the full grammar, every option and worked
+examples in `references/intrafind-query-syntax.md`.
 
 ### iFinder.getContent
 
@@ -568,6 +636,135 @@ equal; when refinement filtering prunes candidates, lazy wins.
 Trigger via chat with `@workflow stellungnahmen-review-ifinder` and
 supply the focus prompt + search profile ID.
 
+## Discovering what is searchable
+
+A caller that has to guess field names gets silent empty result sets, because a
+filter on a field that carries no `.keyword` variant matches nothing rather than
+failing. These four functions let a client — an app, an agent, or an MCP client
+such as Claude — read the answer off the deployment instead.
+
+### iFinder.getFields
+
+Returns the index field catalog, straight from the live OpenSearch mapping via
+`GET /public-api/retrieval/api/v1/schema-types/{schemaType}/fields`.
+
+**Parameters:**
+
+- `schemaType` (optional): Schema type to describe, default `document`
+- `filterPrefix` (optional): Only return fields whose name starts with this
+  prefix, e.g. `file.` or `cust.`
+
+**Response:**
+
+```json
+{
+  "schemaType": "document",
+  "totalFields": 157,
+  "fields": {
+    "creators": {
+      "type": "text",
+      "fullTextSearch": "creators",
+      "filter": "creators.keyword",
+      "aggregation": "creators.keyword",
+      "sort": "creators.keyword"
+    },
+    "content": {
+      "type": "text",
+      "fullTextSearch": "content",
+      "filter": null,
+      "aggregation": null,
+      "sort": null
+    },
+    "modificationDate": {
+      "type": "date",
+      "fullTextSearch": null,
+      "filter": "modificationDate",
+      "aggregation": "modificationDate",
+      "sort": "modificationDate"
+    }
+  },
+  "fullTextSearchable": ["..."],
+  "filterable": ["..."],
+  "aggregatable": ["..."],
+  "sortable": ["..."]
+}
+```
+
+A `null` means the field does not serve that purpose. This is also the only way
+to learn a deployment's custom `cust.*` fields, which no static documentation
+can list.
+
+### iFinder.getFacetValues
+
+Enumerates the values of a single facet — which sources, authors, applications
+or languages actually exist — with a document count per value. Returns far more
+values than the capped facet block that rides along with a search response.
+
+**Parameters:**
+
+- `facet` (required): An aggregatable field name. Text fields need their
+  `.keyword` variant (`creators.keyword`).
+- `query` (optional): Scope query, default `*`
+- `filter` (optional): Additional Lucene filters narrowing what is counted
+- `maxValues` (optional): Default 50, max 1000
+- `sort` (optional): `count:desc` (default), `value:asc`, `value:desc`
+- `searchProfile` (optional)
+
+```javascript
+iFinder.getFacetValues({ facet: 'application.keyword', maxValues: 100 });
+// → { facet, values: [{ value: 'PDF', count: 4210 }, ...], hasMore: false }
+```
+
+Use it before filtering on a value: casing and spelling are deployment data, so
+`application.keyword:pdf` and `application.keyword:PDF` are not the same query.
+
+### iFinder.listProfiles
+
+Lists the search profiles the calling user can reach.
+
+The iFinder public API has no "list search profiles" endpoint — profile listing
+lives on the administration API, which an end-user token cannot reach. What the
+public API does expose is `GET /public-api/v0/assistants`, and every iAssistant
+names the search profile it is composed with, already filtered to the ones the
+caller may use. This function derives the profile list from there and always
+includes the configured default.
+
+A deployment with no iAssistants configured therefore reports only the
+configured default. That is a limit of the upstream API, not an error; the call
+degrades to the default rather than failing when the assistants endpoint is
+unavailable.
+
+### iFinder.discover
+
+One probe over a search profile, returning its document count, the top values of
+the main facets, sample document titles, the field catalog, and a ready-to-paste
+markdown summary.
+
+**Parameters:**
+
+- `searchProfile` (required)
+- `query` (optional): Scope query, default `*:*`
+- `facets` (optional): Facet fields to probe
+- `sampleSize` (optional): Sample documents to list, default 10
+- `includeFields` (optional): Also fetch the field catalog, default `true`
+
+Run it once against an unfamiliar profile before searching it. The `markdown`
+field is what the admin "build memory from tool" endpoint writes into an agent
+profile's long-term memory — see
+[Admin-driven corpus discovery](#admin-driven-corpus-discovery).
+
+### Using it from an MCP client
+
+Over the MCP gateway these are `iFinder_getFields`, `iFinder_getFacetValues`,
+`iFinder_listProfiles` and `iFinder_discover`, and they need the calling group
+to hold the `iFinder` tool permission (`permissions.tools` in `groups.json`).
+
+The **`ifinder-search` skill** shipped in `contents/skills/` teaches a client the
+whole surface — query syntax, the `.keyword` rule, filters versus query terms,
+facets, paging, and the discovery loop — with a full field reference and a query
+cookbook alongside it. Grant it to a group and it is offered over the gateway as
+an MCP resource (`ihub://skill/ifinder-search`).
+
 ## Admin-driven corpus discovery
 
 Some workflows benefit from a precomputed "corpus map" — which sources
@@ -599,4 +796,4 @@ significantly.
 
 ---
 
-_Last updated: June 2026_
+_Last updated: September 2026_

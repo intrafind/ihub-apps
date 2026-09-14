@@ -10,12 +10,27 @@ import iFinderService from '../services/integrations/iFinderService.js';
 describe('iFinderService.discover', () => {
   let originalSearch;
 
+  let originalGetFields;
+
   beforeEach(() => {
     originalSearch = iFinderService.search.bind(iFinderService);
+    // discover() also probes the field catalog; these cases are about the
+    // facet/sample pipeline, so answer it with an empty catalog.
+    originalGetFields = iFinderService.getFields.bind(iFinderService);
+    iFinderService.getFields = async () => ({
+      schemaType: 'document',
+      totalFields: 0,
+      fields: {},
+      fullTextSearchable: [],
+      filterable: [],
+      aggregatable: [],
+      sortable: []
+    });
   });
 
   afterEach(() => {
     iFinderService.search = originalSearch;
+    iFinderService.getFields = originalGetFields;
   });
 
   test('requires a searchProfile', async () => {
@@ -130,5 +145,95 @@ describe('iFinderService.discover', () => {
     expect(result.markdown).toContain('mediaType');
     expect(result.markdown).toContain('pdf');
     expect(result.markdown).toContain('docx');
+  });
+
+  test('renders the facet envelope the public API actually returns', async () => {
+    // `FacetsResult` — `{ metadata, results: [{ id, has_more, values }] }`. Read
+    // as a plain map this yields facets literally named `metadata` and
+    // `results`, and every value renders as `(unknown)`.
+    iFinderService.search = async () => ({
+      totalFound: 51,
+      facets: {
+        metadata: { took: '12ms' },
+        results: [
+          {
+            id: 'sourceName.keyword',
+            type: 'TERMS',
+            has_more: true,
+            values: [
+              { value: 'Intranet', count: 40 },
+              { value: 'Confluence', count: 11 }
+            ]
+          }
+        ]
+      },
+      results: []
+    });
+
+    const result = await iFinderService.discover({
+      searchProfile: 'p1',
+      chatId: 'c1',
+      user: { id: 'u1', email: 'u@example.com' },
+      includeFields: false
+    });
+
+    expect(result.facets).toEqual([
+      {
+        field: 'sourceName.keyword',
+        hasMore: true,
+        values: [
+          { value: 'Intranet', count: 40 },
+          { value: 'Confluence', count: 11 }
+        ]
+      }
+    ]);
+    expect(result.markdown).toContain('**sourceName.keyword**');
+    expect(result.markdown).toContain('Intranet — 40 docs');
+    expect(result.markdown).not.toContain('(unknown)');
+    // `has_more` means the block is truncated — point at the way to see the rest.
+    expect(result.markdown).toContain('getFacetValues');
+  });
+
+  test('includeFields: false skips the field catalog probe', async () => {
+    iFinderService.search = async () => ({ totalFound: 0, facets: null, results: [] });
+    let fieldCalls = 0;
+    const originalGetFields = iFinderService.getFields;
+    iFinderService.getFields = async () => {
+      fieldCalls += 1;
+      return {};
+    };
+
+    try {
+      const result = await iFinderService.discover({
+        searchProfile: 'p1',
+        chatId: 'c1',
+        user: { id: 'u1', email: 'u@example.com' },
+        includeFields: false
+      });
+      expect(fieldCalls).toBe(0);
+      expect(result.fields).toBeNull();
+    } finally {
+      iFinderService.getFields = originalGetFields;
+    }
+  });
+
+  test('a field catalog the deployment cannot serve does not fail the probe', async () => {
+    iFinderService.search = async () => ({ totalFound: 7, facets: null, results: [] });
+    const originalGetFields = iFinderService.getFields;
+    iFinderService.getFields = async () => {
+      throw new Error('iFinderFields failed with status 404: not found');
+    };
+
+    try {
+      const result = await iFinderService.discover({
+        searchProfile: 'p1',
+        chatId: 'c1',
+        user: { id: 'u1', email: 'u@example.com' }
+      });
+      expect(result.totalFound).toBe(7);
+      expect(result.fields).toBeNull();
+    } finally {
+      iFinderService.getFields = originalGetFields;
+    }
   });
 });
