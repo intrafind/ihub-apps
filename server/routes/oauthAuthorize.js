@@ -316,26 +316,6 @@ function escapeHtml(str) {
 }
 
 /**
- * Send an OAuth error as plain text.
- *
- * `res.send(string)` defaults to `text/html`, so every one of these bare error
- * strings was an HTML response — and one of them interpolates a reason that can
- * carry text from the far end of a client metadata fetch (a `Content-Type`
- * header, a hostname). Nothing here is markup, so typing the response
- * `text/plain` removes the reflected-XSS class outright rather than relying on
- * each call site to escape.
- *
- * @param {import('express').Response} res - Express response object.
- * @param {number} status - HTTP status code.
- * @param {string} message - Error text, as `error: description`.
- * @returns {import('express').Response} The response, for `return` at call sites.
- */
-function sendPlainError(res, status, message) {
-  res.type('text/plain');
-  return res.status(status).send(message);
-}
-
-/**
  * Primary language subtag for the HTML `lang` attribute (WCAG 3.1.1).
  *
  * Only a two-letter code is accepted, so an Accept-Language header cannot
@@ -402,7 +382,7 @@ export default function registerOAuthAuthorizeRoutes(app) {
       const oauthConfig = platform.oauth || {};
 
       if (!oauthConfig.enabled?.authz) {
-        return sendPlainError(res, 400, 'OAuth is not enabled on this server');
+        return res.status(400).send('OAuth is not enabled on this server');
       }
 
       // Extract and validate required parameters
@@ -419,12 +399,12 @@ export default function registerOAuthAuthorizeRoutes(app) {
 
       // Validate response_type — only "code" is supported (RFC 6749 §4.1)
       if (response_type !== 'code') {
-        return sendPlainError(res, 400, 'unsupported_response_type: only "code" is supported');
+        return res.status(400).send('unsupported_response_type: only "code" is supported');
       }
 
       // client_id is required before we can validate redirect_uri
       if (!client_id) {
-        return sendPlainError(res, 400, 'invalid_request: client_id is required');
+        return res.status(400).send('invalid_request: client_id is required');
       }
 
       // Resolve the client. A URL-shaped client_id is a Client ID Metadata
@@ -461,13 +441,26 @@ export default function registerOAuthAuthorizeRoutes(app) {
             })
           );
         }
-        return sendPlainError(res, 400, `${resolved.error}: ${resolved.reason}`);
+        // Only stored-client failures reach here — every CIMD failure carries a
+        // host and was answered by the page above. Their reasons are fixed
+        // strings, and they stay that way: the resolver's reason is written to
+        // the log, never echoed into the response, so no caller-influenced text
+        // can reach the body.
+        logger.warn('[OAuth Authorize] Client could not be resolved', {
+          component: 'OAuthAuthorize',
+          error: resolved.error,
+          reason: resolved.reason
+        });
+        if (resolved.error === 'server_error') {
+          return res.status(503).send('server_error: OAuth client store unavailable');
+        }
+        return res.status(400).send('invalid_client: unknown client_id');
       }
 
       const client = resolved.client;
 
       if (!client.active) {
-        return sendPlainError(res, 400, 'access_denied: client is suspended');
+        return res.status(400).send('access_denied: client is suspended');
       }
 
       // Verify the client is configured to use the authorization_code grant
@@ -479,15 +472,11 @@ export default function registerOAuthAuthorizeRoutes(app) {
 
       // redirect_uri is required and must exactly match a registered value
       if (!redirect_uri) {
-        return sendPlainError(res, 400, 'invalid_request: redirect_uri is required');
+        return res.status(400).send('invalid_request: redirect_uri is required');
       }
 
       if (!isValidRedirectUri(redirect_uri, client.redirectUris || [])) {
-        return sendPlainError(
-          res,
-          400,
-          'invalid_request: redirect_uri not registered for this client'
-        );
+        return res.status(400).send('invalid_request: redirect_uri not registered for this client');
       }
 
       // Public clients MUST use PKCE with S256 (RFC 7636 §4.4.1)
@@ -667,7 +656,7 @@ export default function registerOAuthAuthorizeRoutes(app) {
         component: 'OAuthAuthorize',
         error
       });
-      sendPlainError(res, 500, 'server_error: An internal error occurred');
+      res.status(500).send('server_error: An internal error occurred');
     }
   });
 
@@ -694,7 +683,7 @@ export default function registerOAuthAuthorizeRoutes(app) {
       const oauthConfig = platform.oauth || {};
 
       if (!oauthConfig.enabled?.authz) {
-        return sendPlainError(res, 400, 'OAuth is not enabled on this server');
+        return res.status(400).send('OAuth is not enabled on this server');
       }
 
       const { consent_ticket, decision } = req.body;
@@ -707,11 +696,7 @@ export default function registerOAuthAuthorizeRoutes(app) {
         logger.warn('[OAuth Authorize] Rejected consent decision with invalid ticket', {
           component: 'OAuthAuthorize'
         });
-        return sendPlainError(
-          res,
-          403,
-          'invalid_request: consent ticket missing, invalid or expired'
-        );
+        return res.status(403).send('invalid_request: consent ticket missing, invalid or expired');
       }
 
       const {
@@ -735,7 +720,7 @@ export default function registerOAuthAuthorizeRoutes(app) {
       }
 
       if (!currentUser) {
-        return sendPlainError(res, 401, 'login_required: Session expired during consent');
+        return res.status(401).send('login_required: Session expired during consent');
       }
 
       // The ticket is bound to the user it was issued for. This is what makes
@@ -747,11 +732,7 @@ export default function registerOAuthAuthorizeRoutes(app) {
           component: 'OAuthAuthorize',
           clientId: client_id
         });
-        return sendPlainError(
-          res,
-          403,
-          'invalid_request: consent ticket was issued for another user'
-        );
+        return res.status(403).send('invalid_request: consent ticket was issued for another user');
       }
 
       // Re-validate redirect_uri against the registered client allowlist — the
@@ -764,11 +745,11 @@ export default function registerOAuthAuthorizeRoutes(app) {
       const client = resolved.ok ? resolved.client : null;
 
       if (!client || !client.active) {
-        return sendPlainError(res, 400, 'invalid_client: unknown or suspended client_id');
+        return res.status(400).send('invalid_client: unknown or suspended client_id');
       }
 
       if (!isValidRedirectUri(redirect_uri, client.redirectUris || [])) {
-        return sendPlainError(res, 400, 'invalid_request: Invalid redirect_uri');
+        return res.status(400).send('invalid_request: Invalid redirect_uri');
       }
 
       // User denied access — redirect with error per RFC 6749 §4.1.2.1
@@ -866,7 +847,7 @@ export default function registerOAuthAuthorizeRoutes(app) {
         component: 'OAuthAuthorize',
         error
       });
-      sendPlainError(res, 500, 'server_error: An internal error occurred');
+      res.status(500).send('server_error: An internal error occurred');
     }
   });
 }

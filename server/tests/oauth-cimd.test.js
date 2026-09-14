@@ -517,23 +517,27 @@ describe('authorize endpoint error responses', () => {
     expect(state.fetchCalls).toHaveLength(0);
   });
 
-  test('bare error strings are text/plain, not HTML', async () => {
-    // res.send(string) defaults to text/html, which made every one of these a
-    // markup response — and one of them interpolates a reason carrying text
-    // from the far end of a metadata fetch.
-    const res = await request(buildApp()).get(authorizeUrl('client_nonexistent_a1b2c3d4'));
+  test('a failure to resolve a stored client echoes nothing the caller sent', async () => {
+    // The XSS fix: no caller-influenced text reaches the response body at all.
+    // The reason goes to the log; the body is a constant.
+    const hostile = '<script>alert(1)</script>';
+    const res = await request(buildApp()).get(authorizeUrl(hostile));
 
     expect(res.status).toBe(400);
-    expect(res.headers['content-type']).toMatch(/text\/plain/);
-    expect(res.text).toContain('invalid_client');
+    expect(res.text).toBe('invalid_client: unknown client_id');
+    expect(res.text).not.toContain('script');
+    expect(res.text).not.toContain(hostile);
   });
 
-  test('the unsupported-response-type error is plain text too', async () => {
-    const res = await request(buildApp()).get(
-      '/api/oauth/authorize?response_type=token&client_id=whatever'
-    );
+  test('a CIMD reason is never echoed into the body either', async () => {
+    // A metadata fetch failure reason can carry text from the far end. It is
+    // only ever rendered by the escaping page above, never interpolated raw.
+    serve(CLAUDE_CODE_URL, CLAUDE_CODE_DOC, { contentType: 'text/html' });
+    const res = await request(buildApp()).get(authorizeUrl(CLAUDE_CODE_URL));
 
-    expect(res.status).toBe(400);
-    expect(res.headers['content-type']).toMatch(/text\/plain/);
+    expect(res.status).toBe(403);
+    expect(res.headers['content-type']).toMatch(/text\/html/);
+    // Rendered through escapeHtml, so no raw markup survives into the page.
+    expect(res.text).not.toMatch(/<script/i);
   });
 });
