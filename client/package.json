@@ -14,7 +14,7 @@
     "@heroicons/react": "2.2.0",
     "@kenjiuno/decompressrtf": "^0.1.4",
     "@kenjiuno/msgreader": "^1.28.0",
-    "@microsoft/teams-js": "^2.53.1",
+    "@microsoft/teams-js": "^2.56.0",
     "@monaco-editor/react": "^4.7.0",
     "@tailwindcss/postcss": "^4.3.3",
     "@tailwindcss/typography": "^0.5.20",
