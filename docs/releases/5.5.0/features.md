@@ -1659,3 +1659,43 @@ boot and a save of every configuration type, and hashed again.
 
 See [Configuration Storage](../../configuration.md) and
 [Storage Providers](../../storage.md).
+
+## Discover an iFinder Index Instead of Guessing at It
+
+Searching iFinder well means knowing which fields exist and which of them need a
+`.keyword` suffix — a filter on `title.keyword`, which has no keyword variant,
+matches nothing and reports no error. Until now nothing in iHub could answer
+that question, so an app, agent or MCP client had to guess.
+
+Four functions now read the answer off the deployment:
+
+- **`iFinder_getFields`** — the index field catalog, straight from the live
+  mapping. Per field it reports the exact name to use for full-text search,
+  filtering, faceting and sorting, with `null` where the field serves no such
+  purpose. It is also the only way to see a deployment's custom `cust.*` fields.
+- **`iFinder_getFacetValues`** — enumerate the values of one facet with document
+  counts, far beyond the capped facet block a search returns. Use it to learn
+  the exact spelling of a source, author or application before filtering on it.
+- **`iFinder_listProfiles`** — the search profiles the user can reach, derived
+  from the iAssistants iFinder exposes plus the configured default.
+- **`iFinder_discover`** — now also returns the field catalog alongside the
+  totals, top facets and sample titles it already produced.
+
+`iFinder_search` gained the four parameters the integration always supported but
+never declared, which meant a model calling it could not reach them at all:
+`filter` (criteria ANDed with the query without skewing relevance), `sort`,
+`returnFacets` and `from` for paging past the 100-hit cap.
+
+A new **`ifinder-search` skill** ships with the platform and teaches a client the
+whole surface — Lucene query syntax, the `.keyword` rule, filters versus query
+terms, facets, sorting, paging, and the discovery loop for an unfamiliar corpus
+— with a full field reference and a query cookbook beside it. Grant it to a group
+and MCP clients see it as a resource; grant the `iFinder` tool to the same group
+and a client such as Claude can search the index on its own.
+
+Installations upgrade automatically: a migration adds the new functions and
+search parameters to an existing `tools/iFinder.json`, leaving any wording or
+defaults an admin changed exactly as they are.
+
+See [iFinder Integration](../../iFinder-Integration.md) and the
+[iFinder Quick Reference](../../iFinder-Quick-Reference.md).

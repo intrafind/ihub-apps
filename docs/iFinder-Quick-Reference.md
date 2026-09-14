@@ -50,12 +50,36 @@ export IFINDER_PRIVATE_KEY="-----BEGIN PRIVATE KEY-----..."
 
 ## Tool Methods
 
-| Method                | Purpose            | Required Params | Example                                  |
-| --------------------- | ------------------ | --------------- | ---------------------------------------- |
-| `iFinder.search`      | Find documents     | `query`         | `{query: "contracts 2024"}`              |
-| `iFinder.getContent`  | Get document text  | `documentId`    | `{documentId: "doc123"}`                 |
-| `iFinder.getMetadata` | Get document info  | `documentId`    | `{documentId: "doc123"}`                 |
-| `iFinder.download`    | Download/save docs | `documentId`    | `{documentId: "doc123", action: "save"}` |
+| Method                   | Purpose                  | Required Params | Example                                      |
+| ------------------------ | ------------------------ | --------------- | -------------------------------------------- |
+| `iFinder.search`         | Find documents           | `query`         | `{query: "contracts 2024"}`                  |
+| `iFinder.getContent`     | Get document text        | `documentId`    | `{documentId: "doc123"}`                     |
+| `iFinder.getMetadata`    | Get document info        | `documentId`    | `{documentId: "doc123"}`                     |
+| `iFinder.download`       | Download/save docs       | `documentId`    | `{documentId: "doc123", action: "save"}`     |
+| `iFinder.getFields`      | Field catalog            | —               | `{filterPrefix: "cust."}`                    |
+| `iFinder.getFacetValues` | Enumerate a facet        | `facet`         | `{facet: "application.keyword"}`             |
+| `iFinder.listProfiles`   | Reachable search profiles | —              | `{}`                                         |
+| `iFinder.discover`       | Probe a profile          | `searchProfile` | `{searchProfile: "searchprofile-standard"}`  |
+
+## Query Cheat Sheet
+
+| Task                | Write                                              |
+| ------------------- | -------------------------------------------------- |
+| Words, ranked       | `query: "annual report"`                            |
+| Exact phrase        | `query: '"annual report"'`                          |
+| One field           | `query: 'title:budget'`                             |
+| Exact value         | `filter: ['creators.keyword:"DOE, John"']`          |
+| Date range          | `filter: ['modificationDate:[2026-01-01 TO *]']`    |
+| Everything          | `query: "*"`                                        |
+| Newest first        | `sort: ["modificationDate:desc"]`                   |
+| Value distribution  | `returnFacets: ["sourceName.keyword"]`              |
+| Page 2 of 50        | `maxResults: 50, from: 50`                          |
+
+**`.keyword` rule.** Plain name = analyzed, for relevance-ranked matching.
+`.keyword` = exact value, for filters, facets and sorting. Dates, numbers and
+booleans take no suffix; `title`, `content`, `url` and `subject` have no
+`.keyword` at all, so a filter on them silently matches nothing. Call
+`iFinder.getFields` when unsure — it reports the right name per purpose.
 
 ## Common Error Messages
 

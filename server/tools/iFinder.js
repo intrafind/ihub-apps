@@ -46,10 +46,48 @@ export async function discover(params) {
   return iFinderService.discover(params);
 }
 
+/**
+ * Fetch the index field catalog: every field with the exact name to use for
+ * full-text search, filtering, faceting and sorting. This is the authoritative
+ * answer to "does this field need `.keyword`?" for a given deployment.
+ *
+ * @param {Object} params
+ * @returns {Promise<Object>} Field catalog
+ */
+export async function getFields(params) {
+  return iFinderService.getFields(params);
+}
+
+/**
+ * Enumerate the values of one facet (source, author, language, ...) far beyond
+ * the capped facet block that rides along with a search response.
+ *
+ * @param {Object} params
+ * @param {string} params.facet - Aggregatable field name, e.g. `creators.keyword`
+ * @returns {Promise<Object>} Facet values with counts
+ */
+export async function getFacetValues(params) {
+  return iFinderService.getFacetValues(params);
+}
+
+/**
+ * List the search profiles the calling user can reach, derived from the
+ * iAssistants the public API exposes plus the configured default.
+ *
+ * @param {Object} params
+ * @returns {Promise<Object>} Profiles and the iAssistants that reference them
+ */
+export async function listProfiles(params) {
+  return iFinderService.listProfiles(params);
+}
+
 // Export default with all methods
 export default {
   search,
   getContent,
   getMetadata,
-  discover
+  discover,
+  getFields,
+  getFacetValues,
+  listProfiles
 };
