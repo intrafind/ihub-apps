@@ -4,6 +4,8 @@ import {
   findClientById,
   updateClientLastUsed
 } from '../utils/oauthClientManager.js';
+import { buildPolicyCimdClient } from '../utils/oauthClientResolver.js';
+import { isClientIdUrl } from '../utils/clientIdMetadata.js';
 import { isPersonalKeyExpired, isPersonalKeysEnabled } from '../utils/personalApiKeyManager.js';
 import { enhanceUserWithPermissions } from '../utils/authorization.js';
 import { hasAnyScope, MCP_METHOD_SCOPES, MCP_SCOPES } from '../services/mcp/scopes.js';
@@ -79,22 +81,41 @@ export default async function mcpAuth(req, res, next) {
   // allowlist application) and client_credentials (service-account identity).
   const clientsFilePath = oauthConfig.clientsFile || 'contents/config/oauth-clients.json';
   let client = null;
-  try {
-    const clientsConfig = loadOAuthClients(clientsFilePath);
-    if (clientsConfig?.metadata?.error) {
-      logger.error('OAuth clients config unavailable for MCP auth', {
+
+  if (isClientIdUrl(decoded.client_id)) {
+    // A Client ID Metadata Document client has no stored record, so there is
+    // nothing to look up and — this being the request path — nothing to fetch.
+    // The client is built from policy, which makes the `active` check "CIMD
+    // still on and this host still allowed": turning the feature off or
+    // dropping a host is then an immediate kill switch for every token already
+    // issued to that client, exactly as suspending a stored client is.
+    client = buildPolicyCimdClient(decoded.client_id, platform);
+    if (!client) {
+      return sendUnauthorized(
+        req,
+        res,
+        'invalid_client',
+        'Client metadata documents are not accepted for this client'
+      );
+    }
+  } else {
+    try {
+      const clientsConfig = loadOAuthClients(clientsFilePath);
+      if (clientsConfig?.metadata?.error) {
+        logger.error('OAuth clients config unavailable for MCP auth', {
+          component: 'McpAuth',
+          loaderError: clientsConfig.metadata.error
+        });
+        return sendError(res, 503, 'service_unavailable', 'OAuth client store unavailable');
+      }
+      client = findClientById(clientsConfig, decoded.client_id);
+    } catch (err) {
+      logger.error('Failed to load OAuth clients for MCP auth', {
         component: 'McpAuth',
-        loaderError: clientsConfig.metadata.error
+        error: err.message
       });
       return sendError(res, 503, 'service_unavailable', 'OAuth client store unavailable');
     }
-    client = findClientById(clientsConfig, decoded.client_id);
-  } catch (err) {
-    logger.error('Failed to load OAuth clients for MCP auth', {
-      component: 'McpAuth',
-      error: err.message
-    });
-    return sendError(res, 503, 'service_unavailable', 'OAuth client store unavailable');
   }
 
   if (!client || !client.active) {

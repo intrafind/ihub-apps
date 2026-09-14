@@ -1469,10 +1469,18 @@
         "oauthWarning": "The gateway is enabled but the OAuth authorization server is off — MCP clients cannot obtain a token. Enable it below.",
         "oauthToggle": "OAuth authorization server",
         "oauthToggleDesc": "Serves /api/oauth/authorize and /api/oauth/token. Enabling this also switches on OAuth client management and the authorization_code + refresh_token grants. A server restart is required after enabling it for the first time.",
-        "dcrToggle": "Dynamic client registration (RFC 7591)",
-        "dcrToggleDesc": "Lets MCP clients such as Claude register their OAuth client automatically at /api/oauth/register — no manual client setup needed. Registered clients always go through user sign-in and consent, and only receive identity + mcp:* scopes.",
-        "claudeHintDcr": "Claude: Settings → Connectors → Add custom connector, then paste the endpoint URL above. Claude registers its OAuth client automatically; users sign in to iHub and consent to the requested mcp:* scopes.",
-        "claudeHintManual": "Claude: Settings → Connectors → Add custom connector, then paste the endpoint URL above and enter the client ID/secret of an OAuth client you created under /admin/oauth/clients (grant types authorization_code + refresh_token, redirect URI https://claude.ai/api/mcp/auth_callback, plus the desired mcp:* scopes). Enable dynamic client registration above to skip the manual client setup."
+        "dcrToggle": "Dynamic client registration (legacy fallback)",
+        "dcrToggleDesc": "Lets MCP clients register their OAuth client at /api/oauth/register (RFC 7591). Identical public registrations are de-duplicated onto one record, and registered clients always go through user sign-in and consent with identity + mcp:* scopes only.",
+        "claudeHintDcr": "Claude: Settings → Connectors → Add custom connector, then paste the endpoint URL above. Claude registers its OAuth client automatically; users sign in to iHub and consent to the requested mcp:* scopes. Turn on Client ID Metadata Documents above to stop it registering at all.",
+        "claudeHintManual": "Claude: Settings → Connectors → Add custom connector, then paste the endpoint URL above and enter the client ID of an OAuth client you created under /admin/oauth/clients (public client, grant types authorization_code + refresh_token, redirect URI https://claude.ai/api/mcp/auth_callback, plus the desired mcp:* scopes). Turn on Client ID Metadata Documents above to skip the manual client setup.",
+        "clientIdSection": "Client identification",
+        "clientIdSectionDesc": "How an MCP client tells iHub who it is. A client picks the first option it can use, so leaving both on gives clients that support metadata documents the stable identity and everything else the legacy path.",
+        "cimdToggle": "Client ID Metadata Documents (recommended)",
+        "cimdToggleDesc": "The client's ID is an HTTPS URL pointing at a metadata document it publishes, so nothing is stored here — one stable identity for every user instead of a new client record per connection. Only the trusted hosts below are accepted, and users always sign in and consent.",
+        "cimdHosts": "Trusted client hosts",
+        "cimdHostsDesc": "Comma-separated hostnames whose metadata documents are accepted. Supports *.example.com for subdomains. An empty list accepts nobody; \"*\" accepts any HTTPS client and is not recommended.",
+        "claudeHintCimd": "Claude: Settings → Connectors → Add custom connector, then paste the endpoint URL above. Claude identifies itself with its metadata document at claude.ai — no client record is created here — and users sign in to iHub and consent to the requested mcp:* scopes.",
+        "claudeHintEnterprise": "Claude Team/Enterprise: an organisation admin can instead pin one pre-registered client for everyone — create a public OAuth client with the callback URL above and have them enter its client ID under the connector’s advanced settings."
       }
     },
     "telemetry": {

@@ -67,6 +67,10 @@ function AdminMcpGatewayPage() {
   const oauth = platform?.oauth || {};
   const oauthAuthzEnabled = !!oauth.enabled?.authz;
   const dcrEnabled = !!oauth.dcr?.enabled;
+  const cimdEnabled = !!oauth.cimd?.enabled;
+  const cimdHosts = Array.isArray(oauth.cimd?.allowedClientHosts)
+    ? oauth.cimd.allowedClientHosts
+    : [];
 
   const update = patch => {
     setPlatform(prev => ({
@@ -112,6 +116,19 @@ function AdminMcpGatewayPage() {
         oauth: {
           ...prevOauth,
           dcr: { ...(prevOauth.dcr || {}), enabled }
+        }
+      };
+    });
+  };
+
+  const setCimd = patch => {
+    setPlatform(prev => {
+      const prevOauth = prev?.oauth || {};
+      return {
+        ...prev,
+        oauth: {
+          ...prevOauth,
+          cimd: { ...(prevOauth.cimd || {}), ...patch }
         }
       };
     });
@@ -224,13 +241,73 @@ function AdminMcpGatewayPage() {
                 'Serves /api/oauth/authorize and /api/oauth/token. Enabling this also switches on OAuth client management and the authorization_code + refresh_token grants. A server restart is required after enabling it for the first time.'
               )}
             />
+          </div>
+        </section>
+
+        <section className="bg-white dark:bg-gray-800 shadow-sm rounded-lg p-6">
+          <h2 className="text-lg font-medium text-gray-900 dark:text-gray-100 mb-1">
+            {t('admin.mcp.gateway.clientIdSection', 'Client identification')}
+          </h2>
+          <p className="text-sm text-gray-500 dark:text-gray-400 mb-3">
+            {t(
+              'admin.mcp.gateway.clientIdSectionDesc',
+              'How an MCP client tells iHub who it is. A client picks the first option it can use, so leaving both on gives clients that support metadata documents the stable identity and everything else the legacy path.'
+            )}
+          </p>
+          <div className="divide-y divide-gray-200 dark:divide-gray-700">
+            <Toggle
+              checked={cimdEnabled}
+              onChange={enabled => setCimd({ enabled })}
+              label={t(
+                'admin.mcp.gateway.cimdToggle',
+                'Client ID Metadata Documents (recommended)'
+              )}
+              description={t(
+                'admin.mcp.gateway.cimdToggleDesc',
+                "The client's ID is an HTTPS URL pointing at a metadata document it publishes, so nothing is stored here — one stable identity for every user instead of a new client record per connection. Only the trusted hosts below are accepted, and users always sign in and consent."
+              )}
+            />
+            {cimdEnabled && (
+              <div className="py-3">
+                <label
+                  htmlFor="cimd-hosts"
+                  className="block text-sm font-medium text-gray-900 dark:text-gray-100"
+                >
+                  {t('admin.mcp.gateway.cimdHosts', 'Trusted client hosts')}
+                </label>
+                <p className="text-xs text-gray-500 dark:text-gray-400 mt-0.5 mb-2">
+                  {t(
+                    'admin.mcp.gateway.cimdHostsDesc',
+                    'Comma-separated hostnames whose metadata documents are accepted. Supports *.example.com for subdomains. An empty list accepts nobody; "*" accepts any HTTPS client and is not recommended.'
+                  )}
+                </p>
+                <input
+                  id="cimd-hosts"
+                  type="text"
+                  placeholder="claude.ai"
+                  value={cimdHosts.join(', ')}
+                  onChange={e =>
+                    setCimd({
+                      allowedClientHosts: e.target.value
+                        .split(',')
+                        .map(host => host.trim())
+                        .filter(Boolean)
+                    })
+                  }
+                  className="w-full rounded-md border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100"
+                />
+              </div>
+            )}
             <Toggle
               checked={dcrEnabled}
               onChange={setDcr}
-              label={t('admin.mcp.gateway.dcrToggle', 'Dynamic client registration (RFC 7591)')}
+              label={t(
+                'admin.mcp.gateway.dcrToggle',
+                'Dynamic client registration (legacy fallback)'
+              )}
               description={t(
                 'admin.mcp.gateway.dcrToggleDesc',
-                'Lets MCP clients such as Claude register their OAuth client automatically at /api/oauth/register — no manual client setup needed. Registered clients always go through user sign-in and consent, and only receive identity + mcp:* scopes.'
+                'Lets MCP clients register their OAuth client at /api/oauth/register (RFC 7591). Identical public registrations are de-duplicated onto one record, and registered clients always go through user sign-in and consent with identity + mcp:* scopes only.'
               )}
             />
           </div>
@@ -396,16 +473,27 @@ function AdminMcpGatewayPage() {
                 'Authenticate with an OAuth client (see /admin/oauth/clients) that grants the relevant mcp:* scopes.'
               )}
             </p>
-            <p className="text-xs text-blue-700 dark:text-blue-300">
-              {dcrEnabled
+            <p className="text-xs text-blue-700 dark:text-blue-300 mb-2">
+              {cimdEnabled
                 ? t(
-                    'admin.mcp.gateway.claudeHintDcr',
-                    'Claude: Settings → Connectors → Add custom connector, then paste the endpoint URL above. Claude registers its OAuth client automatically; users sign in to iHub and consent to the requested mcp:* scopes.'
+                    'admin.mcp.gateway.claudeHintCimd',
+                    'Claude: Settings → Connectors → Add custom connector, then paste the endpoint URL above. Claude identifies itself with its metadata document at claude.ai — no client record is created here — and users sign in to iHub and consent to the requested mcp:* scopes.'
                   )
-                : t(
-                    'admin.mcp.gateway.claudeHintManual',
-                    'Claude: Settings → Connectors → Add custom connector, then paste the endpoint URL above and enter the client ID/secret of an OAuth client you created under /admin/oauth/clients (grant types authorization_code + refresh_token, redirect URI https://claude.ai/api/mcp/auth_callback, plus the desired mcp:* scopes). Enable dynamic client registration above to skip the manual client setup.'
-                  )}
+                : dcrEnabled
+                  ? t(
+                      'admin.mcp.gateway.claudeHintDcr',
+                      'Claude: Settings → Connectors → Add custom connector, then paste the endpoint URL above. Claude registers its OAuth client automatically; users sign in to iHub and consent to the requested mcp:* scopes. Turn on Client ID Metadata Documents above to stop it registering at all.'
+                    )
+                  : t(
+                      'admin.mcp.gateway.claudeHintManual',
+                      'Claude: Settings → Connectors → Add custom connector, then paste the endpoint URL above and enter the client ID of an OAuth client you created under /admin/oauth/clients (public client, grant types authorization_code + refresh_token, redirect URI https://claude.ai/api/mcp/auth_callback, plus the desired mcp:* scopes). Turn on Client ID Metadata Documents above to skip the manual client setup.'
+                    )}
+            </p>
+            <p className="text-xs text-blue-700 dark:text-blue-300">
+              {t(
+                'admin.mcp.gateway.claudeHintEnterprise',
+                'Claude Team/Enterprise: an organisation admin can instead pin one pre-registered client for everyone — create a public OAuth client with the callback URL above and have them enter its client ID under the connector’s advanced settings.'
+              )}
             </p>
           </section>
         )}

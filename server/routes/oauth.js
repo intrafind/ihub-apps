@@ -1,9 +1,6 @@
 import crypto from 'crypto';
-import {
-  validateClientCredentials,
-  findClientById,
-  loadOAuthClients
-} from '../utils/oauthClientManager.js';
+import { validateClientCredentials } from '../utils/oauthClientManager.js';
+import { buildPolicyCimdClient, resolveOAuthClient } from '../utils/oauthClientResolver.js';
 import {
   generateOAuthToken,
   introspectOAuthToken,
@@ -77,6 +74,29 @@ function sendOAuthError(res, status, error, description) {
     error: error,
     error_description: description
   });
+}
+
+/**
+ * Resolve the client behind a grant that is already bound to it.
+ *
+ * Deliberately never fetches. On the token endpoint the grant being presented
+ * carries the binding a metadata document would add: the authorization code
+ * pins `client_id`, `redirect_uri` and the PKCE challenge, and a refresh entry
+ * pins `client_id`. Making the exchange depend on the client's host being
+ * reachable would turn a hiccup at claude.ai into "sign in again" for every
+ * user mid-flow, so a CIMD client falls back to one built from policy alone —
+ * which still enforces the parts that must stay live: CIMD enabled, host still
+ * allowed. The draft's "abort when the document cannot be fetched" rule applies
+ * to the *authorization* request, where oauthAuthorize.js enforces it.
+ *
+ * @param {string} clientId - Client ID carried by the grant
+ * @param {Object} platform - Platform configuration
+ * @returns {Promise<Object|null>} Client object, or null when unknown/refused
+ */
+async function resolveGrantClient(clientId, platform) {
+  const resolved = await resolveOAuthClient(clientId, platform, { allowFetch: false });
+  if (resolved.ok) return resolved.client;
+  return buildPolicyCimdClient(clientId, platform);
 }
 
 /**
@@ -266,10 +286,9 @@ export default function registerOAuthRoutes(app) {
         // Validate client
         const authCodeClientsFilePath =
           oauthConfig.clientsFile || 'contents/config/oauth-clients.json';
-        const authCodeClientsConfig = loadOAuthClients(authCodeClientsFilePath);
-        const authClient = findClientById(
-          authCodeClientsConfig,
-          sanitizedClientId || codeData.clientId
+        const authClient = await resolveGrantClient(
+          sanitizedClientId || codeData.clientId,
+          platform
         );
 
         if (!authClient) {
@@ -335,7 +354,6 @@ export default function registerOAuthRoutes(app) {
           provider: 'oauth'
         };
 
-        const platform = configCache.getPlatform() || {};
         const authCodeExpiresInMinutes = authClient.tokenExpirationMinutes || 60;
 
         const { token: accessToken, expiresIn: authCodeExpiresIn } = generateJwt(userForAuthCode, {
@@ -428,10 +446,7 @@ export default function registerOAuthRoutes(app) {
         }
 
         // Validate client still exists and is active
-        const refreshClientsFilePath =
-          oauthConfig.clientsFile || 'contents/config/oauth-clients.json';
-        const refreshClientsConfig = loadOAuthClients(refreshClientsFilePath);
-        const refreshClient = findClientById(refreshClientsConfig, tokenData.clientId);
+        const refreshClient = await resolveGrantClient(tokenData.clientId, platform);
 
         if (!refreshClient || !refreshClient.active) {
           return sendOAuthError(res, 401, 'invalid_client', 'Client not found or suspended');
@@ -915,9 +930,10 @@ export default function registerOAuthRoutes(app) {
         }
 
         if (clientId) {
-          const clientsFilePath = oauthConfig.clientsFile || 'contents/config/oauth-clients.json';
-          const clientsConfig = loadOAuthClients(clientsFilePath);
-          const client = findClientById(clientsConfig, clientId);
+          // A metadata document declares no post-logout URIs, so a CIMD client
+          // resolves with an empty list and falls through to the local page —
+          // which is the correct outcome, not an oversight.
+          const client = await resolveGrantClient(clientId, platform);
 
           if (client && (client.postLogoutRedirectUris || []).includes(post_logout_redirect_uri)) {
             const redirectUrl = new URL(post_logout_redirect_uri);

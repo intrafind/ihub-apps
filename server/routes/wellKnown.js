@@ -94,6 +94,14 @@ function buildAuthServerMetadata(req) {
     ...(oauthConfig.dcr?.enabled && oauthConfig.enabled?.authz
       ? { registration_endpoint: `${baseUrl}/api/oauth/register` }
       : {}),
+    // Client ID Metadata Documents (draft-ietf-oauth-client-id-metadata-document).
+    // Claude reaches for CIMD only when this flag *and* 'none' in
+    // token_endpoint_auth_methods_supported (below) are both present, and
+    // falls through to dynamic registration otherwise — which is why this
+    // single line is what stops it registering a client per user.
+    ...(oauthConfig.cimd?.enabled && oauthConfig.enabled?.authz
+      ? { client_id_metadata_document_supported: true }
+      : {}),
     response_types_supported: ['code'],
     subject_types_supported: ['public'],
     id_token_signing_alg_values_supported: [algorithm],
