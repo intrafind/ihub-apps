@@ -45,6 +45,39 @@ function countAdminAccessGroups(groups, excludeGroupId = null) {
 }
 
 /**
+ * Normalize an incoming group `permissions` object.
+ *
+ * Both the create and update handlers rebuild this object field by field, so
+ * anything missing from the list is silently dropped on every admin save —
+ * that is how `skills` (and later `tools`) disappeared from groups that an
+ * admin merely opened and saved. Keep every permission the authorization layer
+ * reads (`utils/authorization.js`) in ONE place so adding the next one cannot
+ * regress the others.
+ *
+ * @param {object} incoming - `permissions` from the request body.
+ * @param {object} [existing] - Current permissions, used as the fallback for
+ *   list fields the caller omitted. Empty for newly created groups.
+ * @param {boolean} [adminAccess] - Resolved adminAccess (the update handler
+ *   computes it separately because of the last-admin-group guard).
+ */
+function normalizeGroupPermissions(incoming = {}, existing = {}, adminAccess = undefined) {
+  const list = key => (Array.isArray(incoming[key]) ? incoming[key] : existing[key] || []);
+  return {
+    apps: list('apps'),
+    prompts: list('prompts'),
+    models: list('models'),
+    workflows: list('workflows'),
+    skills: list('skills'),
+    tools: list('tools'),
+    adminAccess:
+      adminAccess !== undefined
+        ? adminAccess
+        : Boolean(incoming.adminAccess ?? existing.adminAccess),
+    contentAdmin: Boolean(incoming.contentAdmin ?? existing.contentAdmin)
+  };
+}
+
+/**
  * @swagger
  * components:
  *   schemas:
@@ -70,9 +103,35 @@ function countAdminAccessGroups(groups, excludeGroupId = null) {
  *           items:
  *             type: string
  *           example: ["gpt-4", "claude-3"]
+ *         workflows:
+ *           type: array
+ *           description: List of workflow IDs the group can run, or ['*'] for all workflows
+ *           items:
+ *             type: string
+ *           example: ["document-analysis"]
+ *         skills:
+ *           type: array
+ *           description: List of agent skill names the group can use, or ['*'] for all skills
+ *           items:
+ *             type: string
+ *           example: ["*"]
+ *         tools:
+ *           type: array
+ *           description: >
+ *             Tool IDs the group may call directly over the MCP/A2A gateways, or ['*'] for
+ *             all tools. Naming a tool (`iFinder`) grants every function of it; naming a
+ *             function (`iFinder_search`) grants only that one. Does not affect chat, where
+ *             an app's own `tools` list decides what the model may call.
+ *           items:
+ *             type: string
+ *           example: ["iFinder"]
  *         adminAccess:
  *           type: boolean
  *           description: Whether the group has administrative access
+ *           example: false
+ *         contentAdmin:
+ *           type: boolean
+ *           description: Whether the group can administer content without full admin access
  *           example: false
  *
  *     UserGroup:
@@ -504,13 +563,7 @@ export default function registerAdminGroupRoutes(app) {
         id,
         name,
         description: description || '',
-        permissions: {
-          apps: Array.isArray(permissions.apps) ? permissions.apps : [],
-          prompts: Array.isArray(permissions.prompts) ? permissions.prompts : [],
-          models: Array.isArray(permissions.models) ? permissions.models : [],
-          workflows: Array.isArray(permissions.workflows) ? permissions.workflows : [],
-          adminAccess: Boolean(permissions.adminAccess)
-        },
+        permissions: normalizeGroupPermissions(permissions),
         mappings: Array.isArray(mappings) ? mappings : [],
         inherits: Array.isArray(inherits) ? inherits : []
       };
@@ -653,19 +706,11 @@ export default function registerAdminGroupRoutes(app) {
           }
         }
 
-        group.permissions = {
-          apps: Array.isArray(permissions.apps) ? permissions.apps : group.permissions.apps || [],
-          prompts: Array.isArray(permissions.prompts)
-            ? permissions.prompts
-            : group.permissions.prompts || [],
-          models: Array.isArray(permissions.models)
-            ? permissions.models
-            : group.permissions.models || [],
-          workflows: Array.isArray(permissions.workflows)
-            ? permissions.workflows
-            : group.permissions.workflows || [],
-          adminAccess: newAdminAccess
-        };
+        group.permissions = normalizeGroupPermissions(
+          permissions,
+          group.permissions || {},
+          newAdminAccess
+        );
       }
 
       groupsData.metadata.lastModified = new Date().toISOString();
