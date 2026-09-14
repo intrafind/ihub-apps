@@ -1,5 +1,6 @@
 import registerAdminAuthRoutes from './admin/auth.js';
 import registerAdminOAuthRoutes from './admin/oauthClients.js';
+import registerAdminOAuthConnectionRoutes from './admin/oauthConnections.js';
 import registerAdminCacheRoutes from './admin/cache.js';
 import registerAdminConfigRoutes from './admin/configs.js';
 import registerAdminAppsRoutes from './admin/apps.js';
@@ -41,6 +42,7 @@ import registerAdminOverviewRoutes from './admin/overview.js';
 export default async function registerAdminRoutes(app) {
   registerAdminAuthRoutes(app);
   registerAdminOAuthRoutes(app);
+  registerAdminOAuthConnectionRoutes(app);
   registerAdminCacheRoutes(app);
   registerAdminConfigRoutes(app);
   registerAdminAppsRoutes(app);

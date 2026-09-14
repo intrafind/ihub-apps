@@ -148,6 +148,17 @@
       "enabled": false,
       "maxClients": 100
     },
+    "cimd": {
+      "enabled": false,
+      "allowedClientHosts": ["claude.ai"],
+      "allowedGroups": [],
+      "allowedScopes": [],
+      "allowedApps": [],
+      "allowedModels": [],
+      "allowedPrompts": [],
+      "cacheMaxSeconds": 86400,
+      "fetchTimeoutMs": 5000
+    },
     "personalKeys": {
       "enabled": false,
       "allowedGroups": [],

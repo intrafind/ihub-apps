@@ -278,3 +278,34 @@ export function validateRegistrationRequest(body, options = {}) {
     }
   };
 }
+
+/**
+ * Build a stable key over the registration metadata that identifies a piece of
+ * client software rather than an individual registration attempt.
+ *
+ * Claude (and every other DCR client) sends byte-identical metadata on every
+ * fresh connection, so the key collapses those repeat registrations onto one
+ * stored client — see `routes/oauthRegister.js`. Arrays are sorted so a
+ * reordered `redirect_uris` list is still the same software.
+ *
+ * It is deliberately the canonical JSON itself rather than a digest of it.
+ * Nothing here needs a hash: this is an equality key over metadata the client
+ * record already stores field by field (the same redirect URIs, name, scopes
+ * and grant types), so hashing bought nothing but an unreadable value — and a
+ * digest of registration data reads to a scanner as a weakly-hashed credential,
+ * which it is not. The registration policy in `validateRegistrationRequest`
+ * bounds every part of it: at most 10 redirect URIs of 2000 characters, a name
+ * of 100, scopes of 500.
+ *
+ * @param {Object} meta - Normalized metadata from {@link validateRegistrationRequest}
+ * @returns {string} Canonical JSON key, compared by exact string equality
+ */
+export function computeClientFingerprint(meta) {
+  return JSON.stringify({
+    redirectUris: [...(meta.redirectUris || [])].sort(),
+    name: meta.name || '',
+    softwareId: meta.softwareId || '',
+    grantTypes: [...(meta.grantTypes || [])].sort(),
+    scopes: [...(meta.scopes || [])].sort()
+  });
+}

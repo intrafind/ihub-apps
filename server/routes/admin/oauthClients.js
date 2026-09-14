@@ -2,12 +2,14 @@ import {
   createOAuthClient,
   updateOAuthClient,
   deleteOAuthClient,
+  deleteUnusedDynamicClients,
   rotateClientSecret,
   listOAuthClients,
   findClientById,
   loadOAuthClients
 } from '../../utils/oauthClientManager.js';
 import { generateStaticApiKey, introspectOAuthToken } from '../../utils/oauthTokenService.js';
+import { countByClient, listSeenCimdClients } from '../../services/oauth/ConnectionService.js';
 import { buildServerPath } from '../../utils/basePath.js';
 import { adminAuth } from '../../middleware/adminAuth.js';
 import configCache from '../../configCache.js';
@@ -64,9 +66,21 @@ export default function registerAdminOAuthRoutes(app) {
       const clientsFilePath = oauthConfig.clientsFile || 'contents/config/oauth-clients.json';
       const clients = listOAuthClients(clientsFilePath);
 
+      // How many people are actually connected through each client. A row with
+      // zero is a client nobody uses; a dynamic row with many is one worth
+      // keeping. Neither is visible from the client record alone.
+      const counts = countByClient();
+
       res.json({
         success: true,
-        clients
+        clients: clients.map(client => ({
+          ...client,
+          connectionCount: counts[client.clientId] || 0
+        })),
+        // CIMD clients are not stored, so they would be missing from this page
+        // entirely. These synthetic, read-only rows are derived from the
+        // connections that exist.
+        cimdClients: listSeenCimdClients()
       });
     } catch (error) {
       logger.error('[OAuth Admin] List clients error', { component: 'OAuthAdmin', error });
@@ -425,6 +439,83 @@ export default function registerAdminOAuthRoutes(app) {
    *       404:
    *         description: Client not found
    */
+  /**
+   * @swagger
+   * /api/admin/oauth/clients/dynamic:
+   *   delete:
+   *     summary: Remove unused dynamically registered OAuth clients
+   *     description: |
+   *       Deletes every client created by RFC 7591 dynamic client registration
+   *       whose last use (or, for a client never used, its registration) is
+   *       older than `unusedForDays`. Deleting a client invalidates the consent
+   *       memory and refresh tokens of everyone who connected through it — they
+   *       simply reconnect — which is why this is never done automatically.
+   *     tags:
+   *       - Admin
+   *       - OAuth
+   *     security:
+   *       - BearerAuth: []
+   *     parameters:
+   *       - name: unusedForDays
+   *         in: query
+   *         required: false
+   *         schema:
+   *           type: integer
+   *           default: 90
+   *     responses:
+   *       200:
+   *         description: Clients removed
+   *       400:
+   *         description: Invalid unusedForDays value, or OAuth clients are not enabled
+   */
+  app.delete(buildServerPath('/api/admin/oauth/clients/dynamic'), adminAuth, async (req, res) => {
+    try {
+      const platform = configCache.getPlatform() || {};
+      const oauthConfig = platform.oauth || {};
+
+      if (!oauthConfig.enabled?.clients) {
+        return res.status(400).json({
+          success: false,
+          error: 'OAuth clients are not enabled on this server'
+        });
+      }
+
+      const raw = req.query.unusedForDays;
+      const unusedForDays = raw === undefined || raw === '' ? 90 : Number(raw);
+      if (!Number.isInteger(unusedForDays) || unusedForDays < 0 || unusedForDays > 3650) {
+        return res.status(400).json({
+          success: false,
+          error: 'unusedForDays must be an integer between 0 and 3650'
+        });
+      }
+
+      const clientsFilePath = oauthConfig.clientsFile || 'contents/config/oauth-clients.json';
+      const deletedBy = req.user?.id || 'admin';
+
+      const { deleted, clientIds } = await deleteUnusedDynamicClients(
+        unusedForDays,
+        clientsFilePath,
+        deletedBy
+      );
+
+      logAudit({
+        req,
+        action: 'delete',
+        resource: 'oauthClient',
+        resourceId: 'dynamic',
+        summary: `Removed ${deleted} dynamic OAuth client(s) unused for ${unusedForDays} day(s)`
+      });
+
+      res.json({ success: true, deleted, clientIds });
+    } catch (error) {
+      logger.error('[OAuth Admin] Prune dynamic clients error', { component: 'OAuthAdmin', error });
+      res.status(500).json({
+        success: false,
+        error: 'Failed to remove unused dynamic OAuth clients'
+      });
+    }
+  });
+
   app.delete(buildServerPath('/api/admin/oauth/clients/:clientId'), adminAuth, async (req, res) => {
     try {
       const platform = configCache.getPlatform() || {};

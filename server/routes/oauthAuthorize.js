@@ -1,4 +1,6 @@
-import { findClientById, loadOAuthClients } from '../utils/oauthClientManager.js';
+import { stampDcrFirstUser } from '../utils/oauthClientManager.js';
+import { resolveOAuthClient } from '../utils/oauthClientResolver.js';
+import { logAudit } from '../services/AuditLogService.js';
 import { generateCode, storeCode } from '../utils/authorizationCodeStore.js';
 import { buildServerPath } from '../utils/basePath.js';
 import { verifyJwt } from '../utils/tokenService.js';
@@ -12,20 +14,96 @@ import { issueConsentTicket, verifyConsentTicket } from '../utils/consentTicket.
  * Implements RFC 6749 section 4.1 + RFC 7636 (PKCE)
  */
 
+const LOOPBACK_HOSTS = new Set(['localhost', '127.0.0.1', '[::1]', '::1']);
+
+/**
+ * Whether two loopback redirect URIs differ only in their port.
+ *
+ * RFC 8252 §7.3: a native app listening on the loopback interface cannot
+ * reserve a port in advance, so it registers `http://localhost/callback` and
+ * calls back on whatever ephemeral port it got. Claude Code does exactly this
+ * — its metadata document declares `http://localhost/callback` and
+ * `http://127.0.0.1/callback` — so an exact comparison rejects every one of
+ * its flows.
+ *
+ * The exception is narrow on purpose: same scheme, same loopback host, same
+ * path, and nothing else. It is not an open redirect, because reaching a
+ * loopback address at all requires already running code on the user's machine.
+ *
+ * @param {URL} registered - A registered redirect URI
+ * @param {URL} presented - The redirect URI in the request
+ * @returns {boolean} True when the two match under the loopback rule
+ */
+function loopbackMatches(registered, presented) {
+  if (registered.protocol !== 'http:' || presented.protocol !== 'http:') return false;
+  if (!LOOPBACK_HOSTS.has(registered.hostname) || !LOOPBACK_HOSTS.has(presented.hostname)) {
+    return false;
+  }
+  // `localhost` and `127.0.0.1` are not interchangeable: they are different
+  // hosts to the browser, and a client registers the forms it actually uses.
+  if (registered.hostname !== presented.hostname) return false;
+  return registered.pathname === presented.pathname && registered.search === presented.search;
+}
+
 /**
  * Validate redirect URI against client's allowed list.
- * Performs exact string matching only — no wildcards — to prevent open redirect attacks.
+ *
+ * Exact string matching — no wildcards — with the single RFC 8252 §7.3
+ * loopback-port exception described on {@link loopbackMatches}.
+ *
+ * Exported so the matching rule — the one place an open redirect could be
+ * introduced — can be unit-tested directly rather than only through a full
+ * authorization flow.
  *
  * @param {string} redirectUri - Submitted redirect URI from the OAuth request.
  * @param {Array<string>} allowedUris - Client's registered redirect URI allowlist.
  * @returns {boolean} True if the URI is in the allowlist.
  */
-function isValidRedirectUri(redirectUri, allowedUris) {
+export function isValidRedirectUri(redirectUri, allowedUris) {
   if (!redirectUri || !allowedUris || allowedUris.length === 0) {
     return false;
   }
-  // Exact match only - no wildcards for security
-  return allowedUris.includes(redirectUri);
+  if (allowedUris.includes(redirectUri)) return true;
+
+  let presented;
+  try {
+    presented = new URL(redirectUri);
+  } catch {
+    return false;
+  }
+  if (presented.protocol !== 'http:' || !LOOPBACK_HOSTS.has(presented.hostname)) return false;
+
+  return allowedUris.some(allowed => {
+    try {
+      return loopbackMatches(new URL(allowed), presented);
+    } catch {
+      return false;
+    }
+  });
+}
+
+/**
+ * Whether every registered redirect URI points at the user's own machine.
+ *
+ * The MCP specification asks authorization servers to warn on this: any local
+ * process can bind a loopback port, so the user is the only one who can tell
+ * whether the application asking is the one they started.
+ *
+ * Exported alongside {@link isValidRedirectUri} for the same reason.
+ *
+ * @param {Array<string>} allowedUris - Client's registered redirect URIs
+ * @returns {boolean} True when all of them are loopback
+ */
+export function allRedirectUrisAreLoopback(allowedUris) {
+  if (!Array.isArray(allowedUris) || allowedUris.length === 0) return false;
+  return allowedUris.every(uri => {
+    try {
+      const parsed = new URL(uri);
+      return parsed.protocol === 'http:' && LOOPBACK_HOSTS.has(parsed.hostname);
+    } catch {
+      return false;
+    }
+  });
 }
 
 /**
@@ -67,6 +145,41 @@ function renderGroupDeniedPage({ client, lang = 'en' }) {
   <div class="card">
     <h1>This account is not enabled for ${name}</h1>
     <p>Your iHub account does not belong to any of the groups required to use this application. Please contact your administrator to request access.</p>
+  </div>
+</body>
+</html>`;
+}
+
+/**
+ * Render a plain "this client is not allowed here" page.
+ *
+ * A CIMD `client_id` is an arbitrary URL supplied by whoever opened the
+ * authorization request, so the failure a user is most likely to hit is a host
+ * their administrator has not trusted. Naming the hostname is what makes that
+ * actionable — for the user, and for the administrator they forward it to.
+ */
+function renderClientNotAllowedPage({ host, reason, lang = 'en' }) {
+  const safeHost = escapeHtml(host || 'this application');
+  return `<!DOCTYPE html>
+<html lang="${lang}">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Client not allowed - iHub</title>
+  <style>
+    body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; background: #f3f4f6; display: flex; align-items: center; justify-content: center; min-height: 100vh; padding: 16px; }
+    .card { background: white; border-radius: 12px; box-shadow: 0 4px 24px rgba(0,0,0,0.12); max-width: 420px; width: 100%; padding: 32px; text-align: center; }
+    h1 { font-size: 20px; color: #111827; margin-bottom: 12px; }
+    p { font-size: 14px; color: #4b5563; line-height: 1.5; }
+    code { font-size: 13px; background: #f3f4f6; padding: 2px 6px; border-radius: 4px; }
+    .reason { margin-top: 16px; font-size: 12px; color: #9ca3af; }
+  </style>
+</head>
+<body>
+  <div class="card">
+    <h1>This client is not allowed on this server</h1>
+    <p>An application identifying itself as <code>${safeHost}</code> asked for access to your iHub account. Your administrator has not listed that host as a trusted client, so the request was refused.</p>
+    <p class="reason">${escapeHtml(reason || '')}</p>
   </div>
 </body>
 </html>`;
@@ -115,6 +228,18 @@ function renderConsentScreen({ client, scopes, consentTicket, baseUrl, lang = 'e
     })
     .join('');
 
+  // The hostname is the part of a CIMD identity a user can actually judge —
+  // "Claude" is a name anyone may publish, `claude.ai` is a host someone has
+  // to control — so it is shown next to the name rather than only in the
+  // footer.
+  const host = client.host || '';
+  const loopbackWarning = allRedirectUrisAreLoopback(client.redirectUris)
+    ? `
+    <p style="font-size:13px;color:#92400e;background:#fffbeb;border:1px solid #fde68a;border-radius:8px;padding:10px 12px;margin-bottom:16px;">
+      This application runs on your computer and will receive the authorization on a local port. Only continue if you started this sign-in yourself.
+    </p>`
+    : '';
+
   return `<!DOCTYPE html>
 <html lang="${lang}">
 <head>
@@ -141,13 +266,17 @@ function renderConsentScreen({ client, scopes, consentTicket, baseUrl, lang = 'e
     .btn-secondary { background: #f3f4f6; color: #374151; }
     .btn-secondary:hover { background: #e5e7eb; }
     .client-id { font-size: 12px; color: #9ca3af; text-align: center; margin-top: 16px; word-break: break-all; }
+    .client-host { font-size: 14px; color: #374151; text-align: center; margin-bottom: 4px; font-weight: 500; }
   </style>
 </head>
 <body>
   <div class="card">
     <div class="logo"><span class="logo-text">iHub</span></div>
     <h1 class="app-name">${escapeHtml(client.name)}</h1>
+    ${host ? `<p class="client-host">${escapeHtml(host)}</p>` : ''}
     <p class="subtitle">wants to access your account</p>
+
+    ${loopbackWarning}
 
     ${
       scopes.length > 0
@@ -184,6 +313,21 @@ function escapeHtml(str) {
     .replace(/>/g, '&gt;')
     .replace(/"/g, '&quot;')
     .replace(/'/g, '&#x27;');
+}
+
+/**
+ * Primary language subtag for the HTML `lang` attribute (WCAG 3.1.1).
+ *
+ * Only a two-letter code is accepted, so an Accept-Language header cannot
+ * inject markup into the pages rendered here.
+ *
+ * @param {import('express').Request} req - Express request object.
+ * @returns {string} A two-letter language code, defaulting to 'en'.
+ */
+function requestLang(req) {
+  const acceptLang = req.headers['accept-language'];
+  const raw = acceptLang ? acceptLang.split(',')[0].split('-')[0].trim() : 'en';
+  return /^[a-z]{2}$/.test(raw) ? raw : 'en';
 }
 
 /**
@@ -263,14 +407,57 @@ export default function registerOAuthAuthorizeRoutes(app) {
         return res.status(400).send('invalid_request: client_id is required');
       }
 
-      // Load client configuration
-      const clientsFilePath = oauthConfig.clientsFile || 'contents/config/oauth-clients.json';
-      const clientsConfig = loadOAuthClients(clientsFilePath);
-      const client = findClientById(clientsConfig, client_id);
+      // Resolve the client. A URL-shaped client_id is a Client ID Metadata
+      // Document and is fetched here — this is the one place a fetch is
+      // allowed, because it is the only step the draft requires to abort when
+      // the document is unavailable.
+      const resolved = await resolveOAuthClient(client_id, platform, { allowFetch: true });
 
-      if (!client) {
+      if (!resolved.ok) {
+        // A rejected CIMD host is the failure a user can act on, so it gets a
+        // page naming the host rather than a bare error string.
+        if (resolved.host) {
+          logger.warn('[OAuth Authorize] Client metadata client rejected', {
+            component: 'OAuthAuthorize',
+            host: resolved.host,
+            reason: resolved.reason
+          });
+          logAudit({
+            req,
+            action: 'delete',
+            resource: 'oauthCimd',
+            resourceId: resolved.host,
+            summary: `Rejected client metadata document from ${resolved.host}: ${resolved.reason}`,
+            result: 'failure',
+            source: 'api'
+          });
+          res.setHeader('Content-Type', 'text/html; charset=utf-8');
+          res.setHeader('Cache-Control', 'no-store');
+          return res.status(403).send(
+            renderClientNotAllowedPage({
+              host: resolved.host,
+              reason: resolved.reason,
+              lang: requestLang(req)
+            })
+          );
+        }
+        // Only stored-client failures reach here — every CIMD failure carries a
+        // host and was answered by the page above. Their reasons are fixed
+        // strings, and they stay that way: the resolver's reason is written to
+        // the log, never echoed into the response, so no caller-influenced text
+        // can reach the body.
+        logger.warn('[OAuth Authorize] Client could not be resolved', {
+          component: 'OAuthAuthorize',
+          error: resolved.error,
+          reason: resolved.reason
+        });
+        if (resolved.error === 'server_error') {
+          return res.status(503).send('server_error: OAuth client store unavailable');
+        }
         return res.status(400).send('invalid_client: unknown client_id');
       }
+
+      const client = resolved.client;
 
       if (!client.active) {
         return res.status(400).send('access_denied: client is suspended');
@@ -357,12 +544,9 @@ export default function registerOAuthAuthorizeRoutes(app) {
           clientId: client_id,
           userId: currentUser.sub
         });
-        const acceptLang = req.headers['accept-language'];
-        const rawLang = acceptLang ? acceptLang.split(',')[0].split('-')[0].trim() : 'en';
-        const safeLang = /^[a-z]{2}$/.test(rawLang) ? rawLang : 'en';
         res.setHeader('Content-Type', 'text/html; charset=utf-8');
         res.setHeader('Cache-Control', 'no-store');
-        return res.status(403).send(renderGroupDeniedPage({ client, lang: safeLang }));
+        return res.status(403).send(renderGroupDeniedPage({ client, lang: requestLang(req) }));
       }
 
       // When the request carries MCP scopes and the platform mandates
@@ -450,19 +634,13 @@ export default function registerOAuthAuthorizeRoutes(app) {
         userId: currentUser.sub
       });
 
-      // Extract primary language from Accept-Language for the HTML lang attribute (WCAG 3.1.1).
-      // Only allow a two-letter language code to prevent header injection.
-      const acceptLang = req.headers['accept-language'];
-      const rawLang = acceptLang ? acceptLang.split(',')[0].split('-')[0].trim() : 'en';
-      const safeLang = /^[a-z]{2}$/.test(rawLang) ? rawLang : 'en';
-
       const baseUrl = getBaseUrl(req);
       const html = renderConsentScreen({
         client,
         scopes: requestedScopes,
         consentTicket,
         baseUrl,
-        lang: safeLang
+        lang: requestLang(req)
       });
 
       logger.info('[OAuth Authorize] Showing consent screen', {
@@ -559,12 +737,18 @@ export default function registerOAuthAuthorizeRoutes(app) {
 
       // Re-validate redirect_uri against the registered client allowlist — the
       // ticket proves the URI passed at GET time, this catches a client whose
-      // registration changed since.
+      // registration (or metadata document) changed since. A fetch is allowed
+      // here for the same reason as on GET: in cluster mode this POST can land
+      // on a worker whose document cache is cold.
       const clientsFilePath = oauthConfig.clientsFile || 'contents/config/oauth-clients.json';
-      const clientsConfig = loadOAuthClients(clientsFilePath);
-      const client = findClientById(clientsConfig, client_id);
+      const resolved = await resolveOAuthClient(client_id, platform, { allowFetch: true });
+      const client = resolved.ok ? resolved.client : null;
 
-      if (!client || !isValidRedirectUri(redirect_uri, client.redirectUris || [])) {
+      if (!client || !client.active) {
+        return res.status(400).send('invalid_client: unknown or suspended client_id');
+      }
+
+      if (!isValidRedirectUri(redirect_uri, client.redirectUris || [])) {
         return res.status(400).send('invalid_request: Invalid redirect_uri');
       }
 
@@ -610,10 +794,43 @@ export default function registerOAuthAuthorizeRoutes(app) {
 
       // Persist consent so the user is not prompted again within the TTL window.
       // Fire-and-forget: a storage failure must not block the authorization response.
+      // The display snapshots travel with the grant because there is often
+      // nothing left to join against later: a CIMD client has no stored
+      // record, and an OIDC or proxy user has no local account.
       const consentMemoryDays = oauthConfig.consentMemoryDays || 90;
-      grantConsent(client_id, currentUser.sub, requestedScopes, consentMemoryDays).catch(err => {
+      grantConsent(client_id, currentUser.sub, requestedScopes, consentMemoryDays, {
+        clientName: client.name,
+        clientHost: client.host || '',
+        clientKind: client.kind || 'stored',
+        userName: currentUser.name || currentUser.username || '',
+        userEmail: currentUser.email || ''
+      }).catch(err => {
         logger.warn('Failed to store consent', { component: 'OAuthAuthorize', error: err });
       });
+
+      logAudit({
+        req,
+        action: 'create',
+        resource: 'oauthConnection',
+        resourceId: `${client_id}:${currentUser.sub}`,
+        summary: `${currentUser.name || currentUser.sub} granted ${client.name}${
+          client.host ? ` (${client.host})` : ''
+        } the scopes ${requestedScopes.join(' ')}`,
+        source: 'web'
+      });
+
+      // A dynamically registered client has no owner — registration happens
+      // before anyone signs in. The first consent is the earliest point the
+      // server knows a person, so stamp them for display in the admin list.
+      // Fire-and-forget for the same reason as the consent write above.
+      if (client.metadata?.dcr === true && !client.metadata?.firstUserId) {
+        stampDcrFirstUser(client_id, currentUser, clientsFilePath).catch(err => {
+          logger.warn('Failed to stamp first consenting user', {
+            component: 'OAuthAuthorize',
+            error: err
+          });
+        });
+      }
 
       const callbackUrl = new URL(redirect_uri);
       callbackUrl.searchParams.set('code', code);

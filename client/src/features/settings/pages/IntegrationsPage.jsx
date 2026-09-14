@@ -7,6 +7,7 @@ import Icon from '../../../shared/components/Icon';
 import ConfirmDialog from '../../../shared/components/ConfirmDialog';
 import IntegrationCard from '../components/IntegrationCard';
 import PersonalApiKeysCard from '../components/PersonalApiKeysCard';
+import ConnectedAppsCard from '../components/ConnectedAppsCard';
 import { getLocalizedContent } from '../../../utils/localizeContent';
 import { buildApiUrl } from '../../../utils/runtimeBasePath';
 
@@ -26,6 +27,11 @@ export default function IntegrationsPage() {
   const [apiKeySecrets, setApiKeySecrets] = useState(null);
   const [apiKeyBusy, setApiKeyBusy] = useState(false);
   const [keyPendingRevoke, setKeyPendingRevoke] = useState(null);
+  // Connected apps. Null until the server confirms the OAuth authorization
+  // server is on — without it there is nothing a user could have connected.
+  const [connectionOverview, setConnectionOverview] = useState(null);
+  const [connectionBusy, setConnectionBusy] = useState(false);
+  const [connectionPendingRevoke, setConnectionPendingRevoke] = useState(null);
 
   // Derive cloud storage providers from platform config
   const cloudStorage = platformConfig?.cloudStorage || { enabled: false, providers: [] };
@@ -126,6 +132,19 @@ export default function IntegrationsPage() {
           }
         } catch (err) {
           console.error('Error loading API keys:', err);
+        }
+
+        // Connected apps. A 404 means the OAuth authorization server is off,
+        // which is the normal case — the card simply stays hidden.
+        try {
+          const connectionResponse = await fetch(buildApiUrl('integrations/connections'), {
+            credentials: 'include'
+          });
+          if (connectionResponse.ok) {
+            setConnectionOverview(await connectionResponse.json());
+          }
+        } catch (err) {
+          console.error('Error loading connections:', err);
         }
 
         // Check cloud storage provider status dynamically
@@ -265,6 +284,54 @@ export default function IntegrationsPage() {
 
   const dismissMessage = () => {
     setMessage(null);
+  };
+
+  const refreshConnections = async () => {
+    const response = await fetch(buildApiUrl('integrations/connections'), {
+      credentials: 'include'
+    });
+    if (response.ok) {
+      setConnectionOverview(await response.json());
+    }
+  };
+
+  const handleDisconnectApp = async connection => {
+    setConnectionPendingRevoke(null);
+    if (!connection) return;
+
+    setConnectionBusy(true);
+    try {
+      const response = await fetch(
+        buildApiUrl(`integrations/connections/${encodeURIComponent(connection.clientId)}`),
+        { method: 'DELETE', credentials: 'include' }
+      );
+      const data = await response.json().catch(() => ({}));
+
+      if (!response.ok) {
+        setMessage({
+          type: 'error',
+          text: t('integrations.page.connections.disconnectFailed', {
+            message: data.error || response.statusText
+          })
+        });
+        return;
+      }
+
+      setMessage({
+        type: 'success',
+        text: t('integrations.page.connections.disconnected', 'Disconnected {{name}}', {
+          name: connection.clientName
+        })
+      });
+      await refreshConnections().catch(() => {});
+    } catch (error) {
+      setMessage({
+        type: 'error',
+        text: t('integrations.page.connections.disconnectFailed', { message: error.message })
+      });
+    } finally {
+      setConnectionBusy(false);
+    }
   };
 
   // Personal API keys. Create and rotate return the credentials once; everything
@@ -597,11 +664,22 @@ export default function IntegrationsPage() {
                   />
                 )}
 
+                {/* Connected apps — shown when the OAuth authorization server is on */}
+                {connectionOverview?.enabled && (
+                  <ConnectedAppsCard
+                    connections={connectionOverview.connections}
+                    tokenExpirationMinutes={connectionOverview.tokenExpirationMinutes}
+                    busy={connectionBusy}
+                    onDisconnect={setConnectionPendingRevoke}
+                  />
+                )}
+
                 {/* Empty state when no integrations are configured */}
                 {!jiraEnabled &&
                   cloudProviders.length === 0 &&
                   !officeEnabled &&
-                  !apiKeyOverview?.enabled && (
+                  !apiKeyOverview?.enabled &&
+                  !connectionOverview?.enabled && (
                     <div className="border border-dashed border-gray-300 dark:border-gray-600 rounded-lg p-6 text-center">
                       <Icon name="link" className="w-8 h-8 text-gray-400 mx-auto mb-2" />
                       <h3 className="text-lg font-medium text-gray-500 dark:text-gray-400 mb-1">
@@ -617,7 +695,8 @@ export default function IntegrationsPage() {
                 {(jiraEnabled ||
                   cloudProviders.length > 0 ||
                   officeEnabled ||
-                  apiKeyOverview?.enabled) && (
+                  apiKeyOverview?.enabled ||
+                  connectionOverview?.enabled) && (
                   <div className="border border-dashed border-gray-300 dark:border-gray-600 rounded-lg p-6 text-center">
                     <Icon name="plus" className="w-8 h-8 text-gray-400 mx-auto mb-2" />
                     <h3 className="text-lg font-medium text-gray-500 dark:text-gray-400 mb-1">
@@ -633,6 +712,18 @@ export default function IntegrationsPage() {
           </div>
         </div>
       </div>
+
+      <ConfirmDialog
+        isOpen={!!connectionPendingRevoke}
+        title={t('integrations.page.connections.disconnectTitle', 'Disconnect application')}
+        message={t('integrations.page.connections.disconnectConfirm', {
+          name: connectionPendingRevoke?.clientName || ''
+        })}
+        confirmLabel={t('integrations.page.connections.disconnect', 'Disconnect')}
+        danger
+        onConfirm={() => handleDisconnectApp(connectionPendingRevoke)}
+        onDeny={() => setConnectionPendingRevoke(null)}
+      />
 
       <ConfirmDialog
         isOpen={!!keyPendingRevoke}

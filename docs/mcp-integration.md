@@ -205,6 +205,80 @@ MCP clients discover everything from a single unauthenticated probe:
 5. Authorization Code + PKCE runs as usual: the user signs in, consents
    to the `mcp:*` scopes, and the client exchanges the code for tokens.
 
+#### Client ID Metadata Documents (CIMD)
+
+A CIMD client's `client_id` **is an HTTPS URL** pointing at a JSON
+document the client publishes. iHub fetches it, checks that the
+document's own `client_id` equals the URL, and takes `client_name`,
+`redirect_uris`, `grant_types` and `token_endpoint_auth_method` from it.
+**Nothing is stored** — the URL is the identity, and it is the same for
+every user.
+
+This is what stops Claude registering a client per connection. Claude
+picks its identity in a fixed order: pre-registered credentials → CIMD,
+but *only* when the authorization-server metadata advertises both
+`client_id_metadata_document_supported: true` and `none` in
+`token_endpoint_auth_methods_supported` → dynamic registration. The MCP
+specification (2025-11-25) makes CIMD a SHOULD and DCR a
+backwards-compatibility MAY.
+
+Claude Code's document, as a shape reference:
+
+```json
+{
+  "client_id": "https://claude.ai/oauth/claude-code-client-metadata",
+  "client_name": "Claude Code",
+  "client_uri": "https://claude.ai",
+  "redirect_uris": ["http://localhost/callback", "http://127.0.0.1/callback"],
+  "grant_types": ["authorization_code", "refresh_token"],
+  "response_types": ["code"],
+  "token_endpoint_auth_method": "none"
+}
+```
+
+Turn it on under **Admin → MCP gateway → Client identification**, or in
+`platform.oauth.cimd`:
+
+| Field | Default | Purpose |
+|-------|---------|---------|
+| `enabled` | `false` | Advertise and accept URL client IDs |
+| `allowedClientHosts` | `["claude.ai"]` | Trust policy; `*.example.com` for subdomains, `*` for any HTTPS client (not recommended) |
+| `allowedGroups` | `[]` | Who may connect such a client (empty = everyone) |
+| `allowedScopes` | `[]` | Grantable scopes (empty = the DCR default list) |
+| `allowedApps` / `allowedModels` / `allowedPrompts` | `[]` | Optional narrowing on top of the user's own permissions |
+| `tokenExpirationMinutes` | `oauth.defaultTokenExpirationMinutes` | Access-token lifetime for CIMD clients |
+| `cacheMaxSeconds` | `86400` | Upper bound for document caching |
+| `fetchTimeoutMs` | `5000` | Metadata fetch timeout |
+
+Guarantees worth knowing:
+
+- **CIMD clients are never trusted.** `consentRequired` is always true and
+  `trusted` can never be set, so every user signs in and consents.
+  `mcpServer.requireConsent` behaves exactly as before.
+- **The host allowlist is checked before any network call**, so an
+  unlisted `client_id` never causes an outbound request. The fetch itself
+  is SSRF-guarded (DNS-pinned, private targets refused), follows no
+  redirects, times out, caps the body at 8 KB, and requires JSON.
+  Documents are cached per worker with a TTL clamped to
+  `[300 s, cacheMaxSeconds]` and served stale for up to 24 h if a refresh
+  fails; failures are never cached.
+- **Disabling CIMD, or removing a host, is an immediate kill switch.**
+  The gateway rebuilds the client from policy on every request, so tokens
+  already issued to that client stop working at once — the same as
+  suspending a stored client.
+- **Loopback redirect URIs match port-agnostically** (RFC 8252 §7.3):
+  `http://localhost/callback` in the document accepts
+  `http://localhost:53421/callback` at authorize time, since a native app
+  cannot reserve a port in advance. Same scheme, same loopback host, same
+  path — nothing else is relaxed, and `localhost` and `127.0.0.1` are not
+  interchangeable. The consent screen warns when *every* registered
+  redirect URI is loopback.
+- **Token exchange and refresh never depend on a live fetch.** The
+  authorization code already binds `client_id`, `redirect_uri` and the
+  PKCE verifier, so an outage at the client's host cannot strand a user
+  mid-flow. Only the authorization request itself aborts when the
+  document cannot be resolved.
+
 #### Dynamic Client Registration (RFC 7591)
 
 `POST /api/oauth/register` is available when
@@ -226,10 +300,56 @@ the MCP client ecosystem uses DCR), so the policy is deliberately narrow:
 
 Auto-registered clients appear in **Admin → OAuth clients** like any
 other client and can be narrowed (`allowedApps`, `allowedGroups`, …),
-suspended, or deleted there.
+suspended, or deleted there. They carry the *Dynamic* kind badge, and the
+list hides them behind the kind filter by default so hand-made service
+accounts stay readable.
 
 If DCR stays disabled, create the client manually at
 `/admin/oauth/clients` and configure its id/secret in the MCP client.
+
+##### De-duplication
+
+Claude — like most MCP clients — registers on **every fresh connection**
+rather than once per deployment. Without de-duplication each user adds
+another indistinguishable record and `maxClients` (default 100) becomes a
+cap on *users*: the 101st person to connect is told
+`Dynamic client registration limit reached`.
+
+A registration with `token_endpoint_auth_method: "none"` is therefore
+fingerprinted over its `redirect_uris`, `client_name`, `software_id`,
+`grant_types` and `scope`. If an active dynamic client with the same
+fingerprint exists, the endpoint answers `201` with that client's
+`client_id` and its original `client_id_issued_at`, and only bumps
+`metadata.registrationCount` / `metadata.lastRegisteredAt`. The
+`client_id` of a public client is not a credential — it is useless to
+anyone who does not also control the registered redirect URI and complete
+PKCE — which is what makes sharing it between registrations of the same
+software safe.
+
+Confidential registrations mint a secret and are never merged; each gets
+its own record. `maxClients` now counts distinct records, and a repeat
+registration still succeeds once the cap is reached.
+
+One caveat: Claude Code under DCR registers its ephemeral loopback port
+(`http://localhost:3118/callback`) literally, so every session is a
+distinct fingerprint. Only CIMD, whose document declares
+`http://localhost/callback` and is matched port-agnostically, fixes that.
+
+##### Attribution and clean-up of dynamic clients
+
+Registration is unauthenticated, so a dynamic record has no owner. The
+first user who completes the consent screen is stamped onto it
+(`metadata.firstUserId` / `firstUserName` / `firstConsentAt`) purely so
+the admin list can be read; a second user of the same registration does
+not overwrite it. For "who is connected to what", use
+**Admin → OAuth → Connections**, which is keyed on the grant rather than
+on the client.
+
+Nothing is pruned automatically — deleting a client invalidates its
+users' consent memory and refresh tokens. **Admin → OAuth → Clients**
+offers *Remove unused dynamic clients*, which deletes dynamic records
+whose `lastUsed` (or, when never used, `createdAt`) is older than the
+number of days you enter.
 
 ### Scopes
 
@@ -418,12 +538,50 @@ curl https://ihub.example.com/mcp/.well-known
 # oauth_authorization_server link
 ```
 
+### Connections — who is connected to what
+
+A **connection** is a grant: *this user allowed this client these scopes
+on this date*. It is the unit that stays meaningful whatever the client
+did to identify itself — one client record can serve every user, and a
+CIMD client has no record at all.
+
+Connections are derived from the existing consent and refresh-token
+stores; nothing new is persisted.
+
+- **Users** see their own under **Settings → Integrations → Connected
+  apps**: client name and host, the scopes in plain language, when they
+  connected, when it was last used, and **Disconnect**.
+- **Admins** see all of them under **Admin → OAuth → Connections**, with
+  filters by user and client, and the same revoke action. **Admin →
+  OAuth → Clients** shows a connection count per client, and **Admin →
+  Users → (user)** lists that person's connections.
+
+Disconnecting deletes the consent record *and* revokes every refresh
+token for the pair, so the client has to send the user through sign-in
+and consent again. An access token it already holds is stateless and
+keeps working until it expires — at most `tokenExpirationMinutes`, which
+both UIs state.
+
+"Last used" is recorded on refresh-token rotation (throttled to once a
+minute): an access token is verified statelessly, so rotation is the only
+moment a long-lived connection makes itself known.
+
 ### Audit & usage attribution
 
 Every call dispatched through the gateway flows through the existing
 `actionTracker` event stream. The bearer-token claims (client id,
 subject, scopes, auth mode) are attached to `req._mcpToken` for
 downstream audit consumers.
+
+The authorization server records four events of its own through
+`logAudit`, visible under **Admin → Audit log**:
+
+| Resource | Action | When |
+|----------|--------|------|
+| `oauthConnection` | `create` | A user grants a client access on the consent screen |
+| `oauthConnection` | `delete` | A user or an admin revokes a connection |
+| `oauthClient` | `create` | A dynamic registration, whether new or de-duplicated |
+| `oauthCimd` | `delete` (`failure`) | A client metadata document was refused — host not allowed, or the document is invalid |
 
 ## Migration from MCP_SERVER_URL
 
@@ -441,24 +599,50 @@ Checklist on the iHub side (all on **Admin → MCP gateway**):
 
 1. Enable the MCP gateway.
 2. Enable the OAuth authorization server (restart once after first enable).
-3. Enable Dynamic client registration.
+3. Under **Client identification**, enable **Client ID Metadata
+   Documents** and leave `claude.ai` in the trusted hosts. Leave
+   **Dynamic client registration** on as well if other MCP clients that
+   do not support CIMD need to connect.
 4. If iHub runs behind a proxy, set the **Public URL** so discovery
    metadata advertises the externally reachable address. iHub must be
    reachable over HTTPS for claude.ai.
 
 Then in Claude: **Settings → Connectors → Add custom connector** and
 paste `https://your-ihub/mcp`. Claude walks the discovery chain,
-registers itself via DCR, and sends the user through iHub's sign-in and
-consent screen. Subsequent MCP calls run as that user with their normal
-group permissions.
+identifies itself with its metadata document on `claude.ai` — creating no
+record in `oauth-clients.json` — and sends the user through iHub's
+sign-in and consent screen, which shows the client name and the host.
+Subsequent MCP calls run as that user with their normal group
+permissions, and a reconnect within `consentMemoryDays` skips the consent
+screen because the client identity no longer changes between connections.
 
-Without DCR, create the OAuth client manually at `/admin/oauth/clients`:
+Claude Code works the same way, with the loopback callback described
+under [Client ID Metadata Documents](#client-id-metadata-documents-cimd).
 
-- `grant_types`: `["authorization_code", "refresh_token"]`
+### One pre-registered client per Claude organisation
+
+A Claude Team or Enterprise organisation can pin a single OAuth client
+instead of relying on registration at all. This is the right answer when
+you want a stable, auditable client per organisation, and it needs no
+server-side feature — only a client and a setting on Claude's side.
+
+Create the client at `/admin/oauth/clients`:
+
+- **Client type**: `public` (Claude keeps no secret; PKCE binds the flow)
+- `grantTypes`: `["authorization_code", "refresh_token"]`
 - `redirectUris`: `["https://claude.ai/api/mcp/auth_callback"]`
 - `scopes`: the desired `mcp:*` scopes (plus `openid profile email`)
+- optionally `allowedGroups` / `allowedApps` to narrow who and what
 
-and enter its client id/secret in Claude's connector advanced settings.
+Then, in Claude, the organisation's admin enters that **client ID** under
+**Add custom connector → Advanced settings**. Every user in the
+organisation shares the one client and still goes through their own iHub
+sign-in and consent, which is exactly what the consent store keys on. A
+confidential client works too — enter the secret alongside the ID — but
+public + PKCE is the recommended shape.
+
+Limits: individual (Free/Pro) users have to paste the client ID
+themselves, and each Claude organisation is one manual setup.
 
 Other MCP clients (Cursor, VS Code, custom agents) follow the same
 pattern — point them at `https://your-ihub/mcp`; clients that only take
@@ -474,6 +658,30 @@ Troubleshooting:
 - Client fails right after registration → DCR disabled
   (`/api/oauth/register` is a hard 404 while off) and no manual client
   configured.
+- Claude still calls `/api/oauth/register` with CIMD on → the discovery
+  document is not advertising the flag. Check
+  `/.well-known/oauth-authorization-server` for both
+  `client_id_metadata_document_supported: true` and `none` in
+  `token_endpoint_auth_methods_supported`; the flag only appears when
+  `oauth.cimd.enabled` **and** `oauth.enabled.authz` are both true.
+- "This client is not allowed on this server", naming a hostname → that
+  host is not in `oauth.cimd.allowedClientHosts`. Add it there (the page
+  prints the exact hostname to add) or leave it refused.
+- `invalid_client` on a URL `client_id` right after enabling CIMD →
+  the document failed validation. The `OAuthClientResolver` log line
+  carries the reason: a `client_id` that does not match the URL it was
+  served from, a `token_endpoint_auth_method` other than `none`, a
+  redirect URI with a rejected scheme, a redirect, a non-JSON response, or
+  a body over 8 KB. Nothing is cached, so fixing the document is enough.
+- `401` on `/mcp` for every existing connection right after an OAuth
+  change → CIMD was switched off, or a host was dropped from the
+  allowlist. That is the intended kill switch; users reconnect once it is
+  restored.
+- `400 invalid_client_metadata: Dynamic client registration limit reached`
+  → `oauth.dcr.maxClients` (default 100) is full. Repeat registrations of
+  software already on file still succeed; this only blocks a genuinely new
+  client. Raise the cap, or run *Remove unused dynamic clients* on
+  **Admin → OAuth → Clients**.
 - Consent screen loops or CSRF errors → server was not restarted after
   enabling OAuth (session middleware missing).
 - `403 insufficient_scope` on `/mcp` → the token carries no `mcp:*`

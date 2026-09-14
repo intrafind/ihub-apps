@@ -95,6 +95,9 @@ const AdminOAuthClientsPage = lazyWithRetry(
 const AdminOAuthClientEditPage = lazyWithRetry(
   () => import('./features/admin/pages/AdminOAuthClientEditPage')
 );
+const AdminOAuthConnectionsPage = lazyWithRetry(
+  () => import('./features/admin/pages/AdminOAuthConnectionsPage')
+);
 const AdminOAuthServerPage = lazyWithRetry(
   () => import('./features/admin/pages/AdminOAuthServerPage')
 );
@@ -616,6 +619,10 @@ function App() {
             <Route
               path="oauth/clients/:clientId"
               element={<LazyAdminRoute component={AdminOAuthClientEditPage} />}
+            />
+            <Route
+              path="oauth/connections"
+              element={<LazyAdminRoute component={AdminOAuthConnectionsPage} />}
             />
             <Route
               path="oauth/server"

@@ -5,15 +5,16 @@ import AdminTabs from './AdminTabs';
 /**
  * Shared header (title + description + tabs) for the OAuth admin surface.
  *
- * Renders the same tab bar across `/admin/oauth`, `/admin/oauth/server`, and
- * `/admin/oauth/clients` so the three pages read as one tabbed area. Each tab
- * is its own route, which keeps every tab deep-linkable and preserves the
- * existing standalone pages.
+ * Renders the same tab bar across `/admin/oauth`, `/admin/oauth/server`,
+ * `/admin/oauth/clients` and `/admin/oauth/connections` so the pages read as
+ * one tabbed area. Each tab is its own route, which keeps every tab
+ * deep-linkable and preserves the existing standalone pages.
  *
  * @param {Object} props
  * @param {number} [props.clientCount] Count badge for the Clients tab
+ * @param {number} [props.connectionCount] Count badge for the Connections tab
  */
-function OAuthTabsHeader({ clientCount }) {
+function OAuthTabsHeader({ clientCount, connectionCount }) {
   const { t } = useTranslation();
   const location = useLocation();
   const navigate = useNavigate();
@@ -25,14 +26,21 @@ function OAuthTabsHeader({ clientCount }) {
       id: 'clients',
       label: t('admin.auth.oauth.tabs.clients', 'Clients'),
       count: typeof clientCount === 'number' ? clientCount : undefined
+    },
+    {
+      id: 'connections',
+      label: t('admin.auth.oauth.tabs.connections', 'Connections'),
+      count: typeof connectionCount === 'number' ? connectionCount : undefined
     }
   ];
 
-  const activeId = location.pathname.endsWith('/clients')
-    ? 'clients'
-    : location.pathname.endsWith('/server')
-      ? 'server'
-      : 'overview';
+  const activeId = location.pathname.endsWith('/connections')
+    ? 'connections'
+    : location.pathname.endsWith('/clients')
+      ? 'clients'
+      : location.pathname.endsWith('/server')
+        ? 'server'
+        : 'overview';
 
   const handleChange = id => {
     if (id === activeId) return;
@@ -41,7 +49,9 @@ function OAuthTabsHeader({ clientCount }) {
         ? '/admin/oauth'
         : id === 'server'
           ? '/admin/oauth/server'
-          : '/admin/oauth/clients';
+          : id === 'clients'
+            ? '/admin/oauth/clients'
+            : '/admin/oauth/connections';
     navigate(target);
   };
 

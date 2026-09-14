@@ -1093,6 +1093,57 @@
           "allowedGroupsHint": "Kommagetrennte Gruppen-IDs. Leer bedeutet, dass jeder angemeldete Benutzer Schlüssel erstellen darf.",
           "clientCredentials": "Client-Zugangsdaten anbieten",
           "clientCredentialsDesc": "Zusätzlich Client-ID und Secret ausgeben, damit Benutzer kurzlebige Tokens am Token-Endpunkt anfordern können."
+        },
+        "kind": {
+          "admin": "Administrativ",
+          "personal": "Persönlich",
+          "dynamic": "Dynamisch",
+          "cimd": "Client-Metadaten"
+        },
+        "kindFilter": {
+          "label": "Art",
+          "standard": "Administrativ & persönlich",
+          "all": "Alle Arten"
+        },
+        "noClientsForKind": "Keine OAuth-Clients dieser Art",
+        "dynamicHidden": "{{count}} dynamisch registrierte Client(s) sind ausgeblendet. Sie werden von MCP-Clients wie Claude unter /api/oauth/register angelegt — wechseln Sie den Art-Filter, um sie anzuzeigen.",
+        "registrations": "Registrierungen",
+        "firstUser": "Erster Nutzer",
+        "pruneDynamic": "Ungenutzte dynamische Clients entfernen",
+        "pruneDynamicDays": "Ungenutzt seit (Tagen)",
+        "pruneDynamicTitle": "Ungenutzte dynamische Clients entfernen",
+        "pruneDynamicConfirm": "Alle dynamisch registrierten Clients löschen, die in den letzten {{days}} Tagen nicht genutzt wurden? Wer noch über einen davon verbunden ist, muss sich erneut anmelden und zustimmen; sonst ändert sich nichts.",
+        "pruneDynamicSuccess": "{{count}} ungenutzte dynamische Client(s) entfernt",
+        "pruneDynamicError": "Ungenutzte dynamische Clients konnten nicht entfernt werden",
+        "connectionsLabel": "Verbindungen",
+        "connectionsCount": "{{count}} Verbindungen",
+        "cimdTitle": "Über Metadaten-Dokument identifizierte Clients",
+        "cimdDesc": "Schreibgeschützt. Die Client-ID ist die URL eines vom Client veröffentlichten Dokuments — es gibt hier keinen Eintrag zum Bearbeiten. Die Rechte werden unter MCP-Gateway → Client-Identifikation festgelegt.",
+        "connections": {
+          "loadError": "Verbindungen konnten nicht geladen werden",
+          "revoke": "Widerrufen",
+          "revokeTitle": "Verbindung widerrufen",
+          "revokeConfirm": "{{client}} von {{user}} trennen? Die Anwendung muss die Person erneut durch Anmeldung und Zustimmung führen; ein bereits ausgestelltes Access-Token bleibt bis zum Ablauf gültig.",
+          "revokeSuccess": "Verbindung widerrufen",
+          "revokeError": "Verbindung konnte nicht widerrufen werden",
+          "none": "Bisher hat niemand eine Anwendung verbunden",
+          "noMatches": "Keine Verbindungen passen zu diesen Filtern",
+          "filterUser": "Nach Nutzer filtern",
+          "filterClient": "Nach Client filtern",
+          "user": "Nutzer",
+          "client": "Client",
+          "scopesLabel": "Scopes",
+          "granted": "Erteilt",
+          "lastUsed": "Zuletzt genutzt",
+          "count": "{{count}} Verbindungen",
+          "cimdTitle": "Über Metadaten-Dokument identifizierte Clients",
+          "cimdDesc": "Diese Clients haben keinen Eintrag in der Client-Liste — ihre ID ist die URL eines von ihnen veröffentlichten Dokuments. Sie erscheinen hier, weil Personen über sie verbunden sind."
+        },
+        "tabs": {
+          "connections": "Verbindungen"
+        },
+        "overview": {
+          "connectionsDesc": "Sehen Sie, welche Nutzer welchen Anwendungen Zugriff gewährt haben, und widerrufen Sie einzelne Freigaben."
         }
       }
     },
@@ -1533,7 +1584,9 @@
         "lastActive": "Zuletzt aktiv",
         "daysAgo": "Tage her",
         "never": "Nie",
-        "lastModified": "Zuletzt geändert"
+        "lastModified": "Zuletzt geändert",
+        "connections": "Verbundene Anwendungen",
+        "manageConnections": "Verwalten"
       },
       "edit": {
         "createTitle": "Neuen Benutzer erstellen",
@@ -1707,10 +1760,18 @@
         "oauthWarning": "Das Gateway ist aktiviert, aber der OAuth-Autorisierungsserver ist aus — MCP-Clients können kein Token erhalten. Bitte unten aktivieren.",
         "oauthToggle": "OAuth-Autorisierungsserver",
         "oauthToggleDesc": "Stellt /api/oauth/authorize und /api/oauth/token bereit. Beim Aktivieren werden auch die OAuth-Client-Verwaltung sowie die Grants authorization_code + refresh_token eingeschaltet. Nach dem erstmaligen Aktivieren ist ein Server-Neustart erforderlich.",
-        "dcrToggle": "Dynamische Client-Registrierung (RFC 7591)",
-        "dcrToggleDesc": "Erlaubt MCP-Clients wie Claude, ihren OAuth-Client automatisch unter /api/oauth/register zu registrieren — keine manuelle Client-Einrichtung nötig. Registrierte Clients durchlaufen immer Anmeldung und Zustimmung der Nutzenden und erhalten nur Identitäts- und mcp:*-Scopes.",
-        "claudeHintDcr": "Claude: Einstellungen → Connectors → Benutzerdefinierten Connector hinzufügen, dann die obige Endpoint-URL einfügen. Claude registriert seinen OAuth-Client automatisch; Nutzende melden sich bei iHub an und stimmen den angeforderten mcp:*-Scopes zu.",
-        "claudeHintManual": "Claude: Einstellungen → Connectors → Benutzerdefinierten Connector hinzufügen, dann die obige Endpoint-URL einfügen und Client-ID/Secret eines unter /admin/oauth/clients angelegten OAuth-Clients eintragen (Grant-Typen authorization_code + refresh_token, Redirect-URI https://claude.ai/api/mcp/auth_callback sowie die gewünschten mcp:*-Scopes). Aktivieren Sie oben die dynamische Client-Registrierung, um die manuelle Einrichtung zu überspringen."
+        "dcrToggle": "Dynamische Client-Registrierung (Legacy-Fallback)",
+        "dcrToggleDesc": "Erlaubt MCP-Clients, ihren OAuth-Client unter /api/oauth/register zu registrieren (RFC 7591). Identische öffentliche Registrierungen werden auf einen Eintrag zusammengeführt; registrierte Clients durchlaufen immer Anmeldung und Zustimmung und erhalten nur Identitäts- und mcp:*-Scopes.",
+        "claudeHintDcr": "Claude: Einstellungen → Connectors → Benutzerdefinierten Connector hinzufügen, dann die obige Endpunkt-URL einfügen. Claude registriert seinen OAuth-Client automatisch; die Nutzer melden sich bei iHub an und stimmen den angeforderten mcp:*-Scopes zu. Aktivieren Sie oben Client-ID-Metadaten-Dokumente, damit gar keine Registrierung mehr nötig ist.",
+        "claudeHintManual": "Claude: Einstellungen → Connectors → Benutzerdefinierten Connector hinzufügen, dann die obige Endpunkt-URL einfügen und die Client-ID eines unter /admin/oauth/clients angelegten OAuth-Clients eintragen (öffentlicher Client, Grant-Typen authorization_code + refresh_token, Redirect-URI https://claude.ai/api/mcp/auth_callback sowie die gewünschten mcp:*-Scopes). Aktivieren Sie oben Client-ID-Metadaten-Dokumente, um die manuelle Einrichtung zu sparen.",
+        "clientIdSection": "Client-Identifikation",
+        "clientIdSectionDesc": "Wie ein MCP-Client iHub mitteilt, wer er ist. Ein Client nimmt die erste Option, die er beherrscht — bleiben beide aktiv, erhalten Clients mit Metadaten-Dokument die stabile Identität, alle anderen den Legacy-Weg.",
+        "cimdToggle": "Client-ID-Metadaten-Dokumente (empfohlen)",
+        "cimdToggleDesc": "Die Client-ID ist eine HTTPS-URL, die auf ein vom Client veröffentlichtes Metadaten-Dokument zeigt. Hier wird nichts gespeichert — eine stabile Identität für alle Nutzer statt eines neuen Client-Eintrags pro Verbindung. Akzeptiert werden nur die unten vertrauten Hosts; Anmeldung und Zustimmung bleiben erforderlich.",
+        "cimdHosts": "Vertraute Client-Hosts",
+        "cimdHostsDesc": "Kommagetrennte Hostnamen, deren Metadaten-Dokumente akzeptiert werden. *.example.com steht für Subdomains. Eine leere Liste akzeptiert niemanden; \"*\" akzeptiert jeden HTTPS-Client und wird nicht empfohlen.",
+        "claudeHintCimd": "Claude: Einstellungen → Connectors → Benutzerdefinierten Connector hinzufügen, dann die obige Endpunkt-URL einfügen. Claude identifiziert sich über sein Metadaten-Dokument auf claude.ai — hier entsteht kein Client-Eintrag — und die Nutzer melden sich bei iHub an und stimmen den angeforderten mcp:*-Scopes zu.",
+        "claudeHintEnterprise": "Claude Team/Enterprise: Alternativ kann eine Organisations-Administration einen vorregistrierten Client für alle festlegen — legen Sie einen öffentlichen OAuth-Client mit der obigen Callback-URL an und lassen Sie dessen Client-ID in den erweiterten Einstellungen des Connectors eintragen."
       }
     },
     "telemetry": {
@@ -2521,6 +2582,30 @@
       "comingSoon": {
         "title": "Weitere Integrationen folgen in Kürze",
         "body": "Wir arbeiten daran, weitere Integrationen hinzuzufügen, um Ihre KI-Anwendungen zu erweitern"
+      },
+      "connections": {
+        "title": "Verbundene Apps",
+        "description": "Anwendungen, denen Sie Zugriff auf iHub Apps in Ihrem Namen erlaubt haben. Nach dem Trennen fragt die Anwendung erneut um Erlaubnis.",
+        "empty": "Sie haben noch keine Anwendungen verbunden.",
+        "disconnect": "Trennen",
+        "disconnectTitle": "Anwendung trennen",
+        "disconnectConfirm": "{{name}} trennen? Bei der nächsten Nutzung fragt die Anwendung erneut um Ihre Erlaubnis.",
+        "disconnected": "{{name}} getrennt",
+        "disconnectFailed": "Die Anwendung konnte nicht getrennt werden: {{message}}",
+        "granted": "Verbunden am {{date}}",
+        "lastUsed": "Zuletzt genutzt am {{date}}",
+        "tokenNote": "Ein bereits ausgestelltes Access-Token funktioniert nach dem Trennen noch bis zu {{minutes}} Minuten. Ein neues kann die Anwendung nicht mehr erhalten.",
+        "scopes": {
+          "openid": "Ihre Identität bestätigen",
+          "profile": "Auf Ihren Namen und Ihre Profildaten zugreifen",
+          "email": "Auf Ihre E-Mail-Adresse zugreifen",
+          "offline_access": "Auf Ressourcen zugreifen, während Sie die App nicht aktiv nutzen",
+          "mcpToolsRead": "Die für Sie verfügbaren iHub-Tools auflisten",
+          "mcpToolsCall": "iHub-Tools in Ihrem Namen ausführen",
+          "mcpAppsInvoke": "iHub-Apps in Ihrem Namen ausführen",
+          "mcpWorkflowsRun": "iHub-Workflows in Ihrem Namen ausführen",
+          "mcpResourcesRead": "Für Sie verfügbare iHub-Quellen und -Skills lesen"
+        }
       }
     }
   },

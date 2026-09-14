@@ -593,3 +593,148 @@ export async function validateClientCredentials(clientId, clientSecret, clientsF
   const { clientSecret: _, ...clientWithoutSecret } = client;
   return clientWithoutSecret;
 }
+
+/**
+ * Find an active, dynamically registered client by its metadata fingerprint.
+ *
+ * Only public (`token_endpoint_auth_method: "none"`) registrations are ever
+ * de-duplicated, so the caller filters on that before asking; confidential
+ * registrations mint a secret and must stay distinct records.
+ *
+ * @param {Object} clientsConfig - OAuth clients configuration
+ * @param {string} fingerprint - Fingerprint from `computeClientFingerprint`
+ * @returns {Object|null} Matching client, or null when none exists
+ */
+export function findDcrClientByFingerprint(clientsConfig, fingerprint) {
+  if (!fingerprint) return null;
+  const clients = clientsConfig.clients || {};
+  for (const client of Object.values(clients)) {
+    if (
+      client?.active === true &&
+      client?.metadata?.dcr === true &&
+      client?.metadata?.fingerprint === fingerprint
+    ) {
+      return { ...client };
+    }
+  }
+  return null;
+}
+
+/**
+ * Record that an existing dynamic registration was handed out again.
+ *
+ * Bookkeeping only — written without a cluster announce for the same reason
+ * `updateClientLastUsed` is: every worker re-reading the whole client file on
+ * a counter bump would be pure overhead.
+ *
+ * @param {string} clientId - Client ID that was returned to the registrant
+ * @param {string} clientsFilePath - Path to oauth-clients.json file
+ * @returns {Promise<void>}
+ */
+export async function recordDcrReRegistration(clientId, clientsFilePath) {
+  try {
+    const clientsConfig = loadOAuthClients(clientsFilePath);
+    const client = Object.hasOwn(clientsConfig.clients || {}, clientId)
+      ? clientsConfig.clients[clientId]
+      : undefined;
+    if (!client) return;
+
+    client.metadata = client.metadata || {};
+    client.metadata.registrationCount = (client.metadata.registrationCount || 1) + 1;
+    client.metadata.lastRegisteredAt = new Date().toISOString();
+
+    await saveOAuthClients(clientsConfig, clientsFilePath, { announce: false });
+  } catch (error) {
+    logger.error('OAuth failed to record repeat dynamic registration', {
+      component: 'OAuthClientManager',
+      clientId,
+      error
+    });
+    // Non-critical: the registration response is already correct without it.
+  }
+}
+
+/**
+ * Stamp the first user who consented to a dynamically registered client.
+ *
+ * Registration is unauthenticated, so a DCR record carries no owner. The
+ * earliest moment the server knows a person is the first consent, and that
+ * attribution is display-only: it is what turns an indistinguishable "Claude"
+ * row in the admin list into one an administrator can place. A second user of
+ * the same registration does not overwrite it.
+ *
+ * @param {string} clientId - Client ID that was just consented to
+ * @param {Object} user - Decoded JWT payload of the consenting user
+ * @param {string} clientsFilePath - Path to oauth-clients.json file
+ * @returns {Promise<void>}
+ */
+export async function stampDcrFirstUser(clientId, user, clientsFilePath) {
+  try {
+    const clientsConfig = loadOAuthClients(clientsFilePath);
+    const client = Object.hasOwn(clientsConfig.clients || {}, clientId)
+      ? clientsConfig.clients[clientId]
+      : undefined;
+    if (!client || client.metadata?.dcr !== true || client.metadata?.firstUserId) return;
+
+    client.metadata.firstUserId = user?.sub || '';
+    client.metadata.firstUserName = user?.name || user?.username || user?.sub || '';
+    client.metadata.firstConsentAt = new Date().toISOString();
+
+    await saveOAuthClients(clientsConfig, clientsFilePath, { announce: false });
+  } catch (error) {
+    logger.error('OAuth failed to stamp first consenting user', {
+      component: 'OAuthClientManager',
+      clientId,
+      error
+    });
+    // Non-critical: attribution is cosmetic, the authorization already happened.
+  }
+}
+
+/**
+ * Delete dynamically registered clients that have not been used recently.
+ *
+ * Only `metadata.dcr` records are considered, and only those whose `lastUsed`
+ * is older than `unusedForDays` or was never set. Deleting a client
+ * invalidates its users' consent memory and refresh tokens (they reconnect),
+ * which is why this is an explicit administrator action rather than a
+ * migration or a background job.
+ *
+ * @param {number} unusedForDays - Age threshold in days
+ * @param {string} clientsFilePath - Path to oauth-clients.json file
+ * @param {string} deletedBy - User ID performing the clean-up
+ * @returns {Promise<{deleted: number, clientIds: Array<string>}>} What was removed
+ */
+export async function deleteUnusedDynamicClients(unusedForDays, clientsFilePath, deletedBy) {
+  const clientsConfig = loadOAuthClients(clientsFilePath);
+  const cutoff = Date.now() - unusedForDays * 24 * 60 * 60 * 1000;
+  const clientIds = [];
+
+  for (const [clientId, client] of Object.entries(clientsConfig.clients || {})) {
+    if (client?.metadata?.dcr !== true) continue;
+
+    const lastUsed = client.lastUsed ? new Date(client.lastUsed).getTime() : null;
+    // A record that was never used is judged by when it was registered, so a
+    // connection someone started minutes ago is not swept away mid-flow.
+    const reference = lastUsed ?? (client.createdAt ? new Date(client.createdAt).getTime() : 0);
+    if (Number.isFinite(reference) && reference < cutoff) {
+      clientIds.push(clientId);
+    }
+  }
+
+  for (const clientId of clientIds) {
+    delete clientsConfig.clients[clientId];
+  }
+
+  if (clientIds.length > 0) {
+    await saveOAuthClients(clientsConfig, clientsFilePath);
+    logger.info('OAuth unused dynamic clients removed', {
+      component: 'OAuthClientManager',
+      count: clientIds.length,
+      unusedForDays,
+      deletedBy
+    });
+  }
+
+  return { deleted: clientIds.length, clientIds };
+}
