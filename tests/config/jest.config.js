@@ -49,6 +49,10 @@ export default {
     '**/tests/unit/server/**/*.test.js',
     '**/tests/unit/client/**/*.test.jsx'
   ],
+  // Fork the workers with a non-UTC clock: units specified in the viewer's
+  // local calendar (chat recency buckets) are indistinguishable from UTC ones
+  // when the container's zone *is* UTC, so the boundary tests cannot fail.
+  globalSetup: '<rootDir>/tests/config/jest.globalSetup.js',
   setupFilesAfterEnv: ['<rootDir>/tests/config/jest.setup.js'],
   collectCoverageFrom: [
     'server/**/*.js',

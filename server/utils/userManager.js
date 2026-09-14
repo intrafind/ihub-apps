@@ -1,17 +1,26 @@
-import path from 'path';
 import fs from 'fs';
 import bcrypt from 'bcryptjs';
 import { v4 as uuidv4 } from 'uuid';
-import { fileURLToPath } from 'url';
 import { atomicWriteJSON } from './atomicWrite.js';
+import configStore from '../services/config/ConfigStore.js';
 import configCache from '../configCache.js';
 import { announceConfigChange } from '../configSync.js';
 import { mapExternalGroups, loadGroupsConfiguration } from './authorization.js';
 import logger from './logger.js';
 import { ensureFirstUserIsAdmin } from './adminRescue.js';
+import { locateConfigFile } from './configFileLocation.js';
 
-const __filename = fileURLToPath(import.meta.url);
-const __dirname = path.dirname(__filename);
+/**
+ * Where the users file lives — see {@link locateConfigFile}, which both this
+ * module and `oauthClientManager` share so the read path and the write path
+ * cannot drift apart.
+ *
+ * @param {string} usersFilePath - Path to users.json as configured
+ * @returns {{fullPath: string, cacheKey: string, relPath: string|null}}
+ */
+function locateUsersFile(usersFilePath) {
+  return locateConfigFile(usersFilePath);
+}
 
 /**
  * Hash password with user ID as salt for unique hashes
@@ -32,24 +41,12 @@ export async function hashPasswordWithUserId(password, userId) {
  */
 export function loadUsers(usersFilePath) {
   try {
-    // Convert file path to cache key format
-    // The cache stores keys without 'contents/' prefix, so we need to strip it
-    let cacheKey;
-    if (usersFilePath.startsWith('contents/')) {
-      // Remove 'contents/' prefix to match cache key format
-      cacheKey = usersFilePath.substring('contents/'.length);
-    } else {
-      cacheKey = path.relative(
-        path.join(__dirname, '../../'),
-        path.isAbsolute(usersFilePath)
-          ? usersFilePath
-          : path.join(__dirname, '../../', usersFilePath)
-      );
-      // Also remove contents/ prefix if it exists after path.relative
-      if (cacheKey.startsWith('contents/')) {
-        cacheKey = cacheKey.substring('contents/'.length);
-      }
-    }
+    // Through `locateUsersFile` so the read and the write derive the same cache
+    // key from the same path. They agreed when this was written twice; two
+    // copies of a rule with four branches is a coin toss on whether they still
+    // will, and a disagreement here is a permanent cache miss that only shows
+    // up as a warning nobody reads.
+    const { fullPath, cacheKey } = locateUsersFile(usersFilePath);
 
     // Try to get from cache first
     const cached = configCache.get(cacheKey);
@@ -62,10 +59,6 @@ export function loadUsers(usersFilePath) {
       component: 'Utils',
       cacheKey
     });
-
-    const fullPath = path.isAbsolute(usersFilePath)
-      ? usersFilePath
-      : path.join(__dirname, '../../', usersFilePath);
 
     // Check if file exists
     if (!fs.existsSync(fullPath)) {
@@ -127,9 +120,7 @@ export function loadUsers(usersFilePath) {
  */
 export async function saveUsers(usersConfig, usersFilePath) {
   try {
-    const fullPath = path.isAbsolute(usersFilePath)
-      ? usersFilePath
-      : path.join(__dirname, '../../', usersFilePath);
+    const { fullPath, cacheKey, relPath } = locateUsersFile(usersFilePath);
 
     // Update metadata
     if (!usersConfig.metadata) {
@@ -137,21 +128,12 @@ export async function saveUsers(usersConfig, usersFilePath) {
     }
     usersConfig.metadata.lastUpdated = new Date().toISOString();
 
-    // Write to file atomically
-    await atomicWriteJSON(fullPath, usersConfig);
-
-    // Update cache with the new data
-    // The cache stores keys without 'contents/' prefix, so we need to strip it
-    let cacheKey;
-    if (usersFilePath.startsWith('contents/')) {
-      // Remove 'contents/' prefix to match cache key format
-      cacheKey = usersFilePath.substring('contents/'.length);
+    // Write to file atomically. The store writes what it is handed, so the
+    // password hashes in here are stored exactly as this module produced them.
+    if (relPath) {
+      await configStore.writeJson(relPath, usersConfig);
     } else {
-      cacheKey = path.relative(path.join(__dirname, '../../'), fullPath);
-      // Also remove contents/ prefix if it exists after path.relative
-      if (cacheKey.startsWith('contents/')) {
-        cacheKey = cacheKey.substring('contents/'.length);
-      }
+      await atomicWriteJSON(fullPath, usersConfig);
     }
 
     configCache.setCacheEntry(cacheKey, usersConfig);

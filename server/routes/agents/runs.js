@@ -94,13 +94,22 @@ export function applyReviewSettings(workflow, resolved) {
   return workflow;
 }
 
-function countRunningProfileRuns(profileId) {
+/**
+ * How many runs of one agent profile are still in flight.
+ *
+ * Reads the profile's own principal (`agent:<profileId>`) rather than every
+ * execution ever recorded: that principal is the owner of its runs, so this
+ * is an indexed lookup instead of a scan of the whole run namespace — and it
+ * sits on the run-start path, in front of the concurrency guard.
+ *
+ * @param {string} profileId - Agent profile id.
+ * @returns {Promise<number>} Runs currently running, pending or paused.
+ */
+async function countRunningProfileRuns(profileId) {
   try {
     const registry = getExecutionRegistry();
-    const all = registry.getAll ? registry.getAll() : [];
-    return all.filter(
-      r => r?.userId === `agent:${profileId}` && ['running', 'pending', 'paused'].includes(r.status)
-    ).length;
+    const runs = await registry.getByUser(`agent:${profileId}`, { includeArchived: true });
+    return runs.filter(r => ['running', 'pending', 'paused'].includes(r.status)).length;
   } catch {
     return 0;
   }
@@ -181,7 +190,7 @@ export default function registerAgentRunRoutes(app) {
 
         // Concurrency guard
         const maxConcurrent = profile.concurrency?.maxConcurrent ?? 1;
-        const running = countRunningProfileRuns(profileId);
+        const running = await countRunningProfileRuns(profileId);
         if (running >= maxConcurrent) {
           return res.status(409).json({
             error: 'CONCURRENCY_LIMIT',
@@ -398,7 +407,7 @@ export default function registerAgentRunRoutes(app) {
     async (req, res) => {
       try {
         const registry = getExecutionRegistry();
-        const all = registry.getAll ? registry.getAll() : [];
+        const all = registry.getAll ? await registry.getAll() : [];
         const { profileId, status } = req.query;
         let runs = all.filter(r => {
           if (typeof r?.userId !== 'string' || !r.userId.startsWith('agent:')) return false;
@@ -679,7 +688,7 @@ export default function registerAgentRunRoutes(app) {
         let profileId = state.data?._agent?.profileId;
         if (!profileId) {
           const registry = getExecutionRegistry();
-          const entry = registry.get ? registry.get(runId) : null;
+          const entry = registry.get ? await registry.get(runId) : null;
           if (typeof entry?.userId === 'string' && entry.userId.startsWith('agent:')) {
             profileId = entry.userId.slice('agent:'.length);
           }

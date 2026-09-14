@@ -144,6 +144,55 @@ async function runPrimary() {
       assert.deepStrictEqual(inboxes[2].inbox, ['orphan']);
     });
 
+    // ---- a shared key survives one holder letting go ----
+    // `chat-durable` marks "this turn must outlive its client", and turns on
+    // one chat overlap by design, so two workers hold the same key at once.
+    // Under the exclusive rule the second `set` took the key from the first and
+    // the second `delete` then retracted it outright — while the first worker
+    // was still generating. A third worker holding the browser's stream then
+    // sees an ephemeral chat and relays an abort on disconnect, killing the
+    // answer durability exists to protect. Nothing logs it.
+    await ask(workers[0], { step: 'share', key: 'chat-shared' });
+    await ask(workers[1], { step: 'share', key: 'chat-shared' });
+    await settle();
+
+    let shared = await askAll(() => ({ step: 'probe-shared', key: 'chat-shared' }));
+    check('a third worker sees a shared key held elsewhere', () =>
+      assert.strictEqual(shared[2].hasRemote, true)
+    );
+    check('a holder does not mirror itself as remote', () =>
+      assert.strictEqual(shared[0].hasRemote, false)
+    );
+
+    await ask(workers[1], { step: 'unshare', key: 'chat-shared' });
+    await settle();
+
+    shared = await askAll(() => ({ step: 'probe-shared', key: 'chat-shared' }));
+    check('one holder letting go does not retract a key another still holds', () => {
+      // The assertion that matters: every worker still answers "durable",
+      // including the one that let go (its own turn is over, worker 0's is
+      // not) and the one that never held it, which is the worker most likely
+      // to be holding the browser's stream when it disconnects.
+      assert.strictEqual(shared[0].held, true, 'worker 0 is still generating');
+      assert.strictEqual(shared[1].held, true, 'worker 1 let go but worker 0 has not');
+      assert.strictEqual(shared[2].held, true, 'worker 2 never held it and must still see it');
+      assert.strictEqual(shared[1].local, false, 'worker 1 really did let go locally');
+      assert.strictEqual(shared[2].local, false);
+    });
+
+    await ask(workers[0], { step: 'unshare', key: 'chat-shared' });
+    await settle();
+
+    shared = await askAll(() => ({ step: 'probe-shared', key: 'chat-shared' }));
+    check('the last holder letting go retracts it everywhere', () => {
+      assert.strictEqual(shared[2].hasRemote, false);
+      // Including on the workers that held it: worker 1's mirror was given an
+      // entry naming worker 0, and only a retraction sent to everyone clears
+      // it. An acquisition still skips the announcer, so this is not symmetric.
+      assert.strictEqual(shared[1].hasRemote, false);
+      assert.strictEqual(shared[0].held, false);
+    });
+
     // ---- a dead worker's registrations are retracted ----
     // Otherwise the survivors keep relaying into a process that no longer
     // exists, and every event for that chat is silently dropped.
@@ -197,6 +246,9 @@ function runWorker() {
   initWorkerBus();
 
   const presence = createPresenceMap('sse');
+  // A counted kind: several workers may hold one key at once, as two
+  // overlapping durable turns on one chat do.
+  const sharedPresence = createPresenceMap('chat-durable', { shared: true });
   const inbox = [];
   subscribe('test:channel', payload => inbox.push(payload.text));
 
@@ -218,6 +270,22 @@ function runWorker() {
         break;
       case 'probe':
         reply({ hasRemote: hasRemote('sse', msg.key) });
+        break;
+      case 'share':
+        sharedPresence.set(msg.key, { marker: true });
+        reply({ ok: true });
+        break;
+      case 'unshare':
+        sharedPresence.delete(msg.key);
+        reply({ ok: true });
+        break;
+      case 'probe-shared':
+        reply({
+          // What `isChatDurable` asks: is a durable turn running anywhere.
+          held: sharedPresence.has(msg.key) || hasRemote('chat-durable', msg.key),
+          local: sharedPresence.has(msg.key),
+          hasRemote: hasRemote('chat-durable', msg.key)
+        });
         break;
       case 'send':
         publish(

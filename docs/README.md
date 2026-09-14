@@ -26,6 +26,7 @@ This book contains configuration details and user instructions for the iHub Apps
 - [Mimetype Configuration](mimetypes.md) - File type mapping
 - [Configuration Validation](configuration-validation.md) - Config validation and troubleshooting
 - [Configuration Migrations](configuration-migrations.md) - Version migration system
+- [Configuration Storage](configuration.md) - How config files are read and written
 - [Localization](localization.md) - Multi-language support
 
 ## Authentication & Security

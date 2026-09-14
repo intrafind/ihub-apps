@@ -1,7 +1,5 @@
 import crypto from 'crypto';
-import { join } from 'path';
-import { getRootDir } from '../../pathUtils.js';
-import { atomicWriteJSON } from '../../utils/atomicWrite.js';
+import configStore from '../../services/config/ConfigStore.js';
 import configCache from '../../configCache.js';
 import { contentAdminAuth } from '../../middleware/contentAdminAuth.js';
 import {
@@ -2239,8 +2237,6 @@ export default function registerAdminSourcesRoutes(app) {
  * @param {Array} sources - Array of source configurations
  */
 async function saveSourcesConfig(sources) {
-  const sourcesPath = join(getRootDir(), 'contents', 'config', 'sources.json');
-
   // Validate entire array
   const validation = validateSourcesArray(sources);
   if (!validation.success) {
@@ -2249,7 +2245,7 @@ async function saveSourcesConfig(sources) {
     );
   }
 
-  await atomicWriteJSON(sourcesPath, validation.data);
+  await configStore.writeJson('config/sources.json', validation.data);
 }
 
 /**

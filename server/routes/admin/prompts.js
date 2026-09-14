@@ -1,8 +1,4 @@
-import { readFileSync, existsSync } from 'fs';
-import { promises as fs } from 'fs';
-import { join, resolve } from 'path';
-import path from 'path';
-import { getRootDir } from '../../pathUtils.js';
+import configStore from '../../services/config/ConfigStore.js';
 import configCache from '../../configCache.js';
 import { contentAdminAuth } from '../../middleware/contentAdminAuth.js';
 import { buildServerPath } from '../../utils/basePath.js';
@@ -10,11 +6,7 @@ import { logAudit } from '../../services/AuditLogService.js';
 import { saveSnapshot } from '../../services/ChangeHistoryService.js';
 import llmClient, { usageToOpenAI, isLLMError } from '../../services/loop/LLMClient.js';
 import { sendLLMError } from '../../services/loop/llmHttpErrors.js';
-import {
-  validateIdForPath,
-  validateIdsForPath,
-  resolveAndValidatePath
-} from '../../utils/pathSecurity.js';
+import { validateIdForPath, validateIdsForPath } from '../../utils/pathSecurity.js';
 import logger from '../../utils/logger.js';
 import { removeMarketplaceInstallation } from '../../utils/installationCleanup.js';
 import {
@@ -24,6 +16,22 @@ import {
   sendErrorResponse,
   sendFailedOperationError
 } from '../../utils/responseHelpers.js';
+
+/**
+ * The file a prompt id lives in.
+ *
+ * A prompt file's name is allowed to diverge from the `id` inside it, so the
+ * path is resolved instead of assumed: writing straight to `<id>.json` would
+ * fork such a prompt into two files. A prompt that exists nowhere resolves to
+ * `<id>.json`, which is the right answer when one is being created.
+ *
+ * @param {string} promptId - Prompt id
+ * @returns {Promise<string|null>} Path relative to `contents/`, or null when
+ *   the id is not usable as a file name
+ */
+function promptPath(promptId) {
+  return configStore.resolveIdToPath('prompts', promptId);
+}
 
 /**
  * @swagger
@@ -652,9 +660,7 @@ export default function registerAdminPromptsRoutes(app) {
       }
       const { data: currentPrompts } = configCache.getPrompts(true);
       const oldPrompt = currentPrompts.find(p => p.id === promptId);
-      const rootDir = getRootDir();
-      const promptFilePath = join(rootDir, 'contents', 'prompts', `${promptId}.json`);
-      await fs.writeFile(promptFilePath, JSON.stringify(updatedPrompt, null, 2));
+      await configStore.writeJson(await promptPath(promptId), updatedPrompt);
       await configCache.refreshPromptsCache();
       if (oldPrompt) {
         await saveSnapshot({
@@ -787,15 +793,14 @@ export default function registerAdminPromptsRoutes(app) {
         return;
       }
 
-      const rootDir = getRootDir();
-      const promptFilePath = join(rootDir, 'contents', 'prompts', `${newPrompt.id}.json`);
       try {
-        readFileSync(promptFilePath, 'utf8');
+        // Create-only: the file-exists check and the write are one step, so two
+        // concurrent creates cannot both decide the name is free.
+        await configStore.createJson(`prompts/${newPrompt.id}.json`, newPrompt);
+      } catch (error) {
+        if (error.code !== 'EEXIST') throw error;
         return sendErrorResponse(res, 409, 'Prompt with this ID already exists');
-      } catch {
-        // file not found
       }
-      await fs.writeFile(promptFilePath, JSON.stringify(newPrompt, null, 2));
       await configCache.refreshPromptsCache();
       await logAudit({
         req,
@@ -905,9 +910,7 @@ export default function registerAdminPromptsRoutes(app) {
         }
         const newEnabledState = !prompt.enabled;
         prompt.enabled = newEnabledState;
-        const rootDir = getRootDir();
-        const promptFilePath = join(rootDir, 'contents', 'prompts', `${promptId}.json`);
-        await fs.writeFile(promptFilePath, JSON.stringify(prompt, null, 2));
+        await configStore.writeJson(await promptPath(promptId), prompt);
         await configCache.refreshPromptsCache();
         await logAudit({
           req,
@@ -1051,15 +1054,13 @@ export default function registerAdminPromptsRoutes(app) {
 
         const { data: prompts } = configCache.getPrompts(true);
         const resolvedIds = ids.includes('*') ? prompts.map(p => p.id) : ids;
-        const rootDir = getRootDir();
 
         for (const id of resolvedIds) {
           const prompt = prompts.find(p => p.id === id);
           if (!prompt) continue;
           if (prompt.enabled !== enabled) {
             prompt.enabled = enabled;
-            const promptFilePath = join(rootDir, 'contents', 'prompts', `${id}.json`);
-            await fs.writeFile(promptFilePath, JSON.stringify(prompt, null, 2));
+            await configStore.writeJson(await promptPath(id), prompt);
           }
         }
 
@@ -1170,20 +1171,13 @@ export default function registerAdminPromptsRoutes(app) {
 
         const { data: currentPrompts } = configCache.getPrompts(true);
         const oldPrompt = currentPrompts.find(p => p.id === promptId);
-        const rootDir = getRootDir();
-        const promptsDir = join(rootDir, 'contents', 'prompts');
-        const normalizedPromptFilePath = await resolveAndValidatePath(
-          `${promptId}.json`,
-          promptsDir
-        );
-        if (!normalizedPromptFilePath) {
+        const promptFilePath = await promptPath(promptId);
+        if (!promptFilePath) {
           return sendBadRequest(res, 'Invalid prompt path');
         }
-
-        if (!existsSync(normalizedPromptFilePath)) {
+        if (!(await configStore.remove(promptFilePath))) {
           return sendNotFound(res, 'Prompt file');
         }
-        await fs.unlink(normalizedPromptFilePath);
         await configCache.refreshPromptsCache();
         await removeMarketplaceInstallation('prompt', promptId);
         if (oldPrompt) {

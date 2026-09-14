@@ -414,6 +414,14 @@ curl -s -X POST "$BASE_URL/api/apps/$APP_ID/chat/$CHAT_ID" \
 
 Include prior messages for context in follow-up requests:
 
+> **If the installation stores chats server-side** (the `chatPersistence`
+> feature, for an authenticated caller on a turn that is not `ephemeral`), the
+> server owns the history: post **only the new message** and it will read the
+> rest back out of the store. Sending more than one message is refused with
+> `CLIENT_HISTORY_NOT_ALLOWED`. To keep sending the whole conversation
+> yourself, add `"ephemeral": true` — that turn is then not stored. See
+> [Chat Persistence](chat-persistence.md).
+
 ```bash
 curl -s -X POST "$BASE_URL/api/apps/$APP_ID/chat/$CHAT_ID" \
   -H "Authorization: Bearer $TOKEN" \

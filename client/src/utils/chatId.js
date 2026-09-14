@@ -24,6 +24,27 @@ export const getOrCreateChatId = (appId, prefix = 'chat') => {
 };
 
 /**
+ * The chat id this tab already holds for an app, without minting one.
+ *
+ * `getOrCreateChatId` cannot tell a caller whether it read or created, and the
+ * difference matters: an id this tab just minted cannot exist in the durable
+ * chat store, so fetching it can only ever 404.
+ *
+ * @param {string} appId - The app identifier
+ * @param {string} [prefix='chat'] - Prefix the id was stored under
+ * @returns {string|null} The stored chat id, or null when there is none
+ */
+export const readChatId = (appId, prefix = 'chat') => {
+  const key = `ai_hub_${prefix}_id_${appId}`;
+  try {
+    return sessionStorage.getItem(key) || null;
+  } catch (err) {
+    console.error('Error accessing sessionStorage for chat id:', err);
+    return null;
+  }
+};
+
+/**
  * Get persisted conversation ID for an app from localStorage.
  * Used for iAssistant Conversation API to resume conversations across sessions.
  *

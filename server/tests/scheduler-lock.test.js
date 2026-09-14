@@ -63,15 +63,33 @@ async function run() {
 
   console.log('\n🧪 does NOT take a fresh foreign lock (live owner)\n');
   {
-    // Use our own (alive) pid so the dead-pid takeover path does NOT apply,
-    // and a fresh lockTime so it is not stale — a genuinely held foreign lock.
-    writeForeignLock({ pid: process.pid, lockTime: Date.now() });
+    // An alive pid that is not ours, so neither takeover path applies, and a
+    // fresh lockTime so it is not stale — a genuinely held foreign lock. PID 1
+    // always exists; `process.kill(1, 0)` either succeeds or raises EPERM, and
+    // the liveness probe reads both as alive.
+    writeForeignLock({ pid: 1, lockTime: Date.now() });
     const got = tryAcquireSchedulerLock({ lockPath });
     check('did not acquire', got === false && isSchedulerOwner() === false);
     check(
       'foreign lock untouched',
       JSON.parse(readFileSync(lockPath, 'utf8')).identity === 'someone-else'
     );
+  }
+
+  console.log('\n🧪 takes over a lock left under our own pid by a dead predecessor\n');
+  {
+    // The container restart: node is PID 1, the previous PID 1 was SIGKILLed
+    // without releasing the lock, and the supervisor restarted us inside the
+    // TTL. The liveness probe cannot see that — `process.kill(ourPid, 0)`
+    // succeeds against ourselves — so the restarted process used to wait out
+    // the full TTL, and every boot step gated on ownership, the
+    // interrupted-execution rescan among them, was skipped in exactly the
+    // crash it exists for. No live process can hold the pid we are running
+    // under, so a different identity recorded against it is provably gone.
+    writeForeignLock({ pid: process.pid, lockTime: Date.now() });
+    const got = tryAcquireSchedulerLock({ lockPath });
+    check("took over our dead predecessor's lock", got === true && isSchedulerOwner() === true);
+    check('now owned by us', JSON.parse(readFileSync(lockPath, 'utf8')).identity === _identity());
   }
 
   console.log('\n🧪 takes over a STALE foreign lock (past TTL)\n');

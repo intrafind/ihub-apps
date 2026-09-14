@@ -1,9 +1,9 @@
-import path from 'path';
-import { atomicWriteJSON } from './atomicWrite.js';
-import { getRootDir } from '../pathUtils.js';
-import config from '../config.js';
+import configStore from '../services/config/ConfigStore.js';
 import configCache from '../configCache.js';
 import logger from './logger.js';
+
+/** The marketplace installation manifest, relative to `contents/`. */
+const INSTALLATIONS_FILE = 'config/installations.json';
 
 /**
  * Removes marketplace installation tracking entry after an item is deleted via admin.
@@ -20,13 +20,7 @@ export async function removeMarketplaceInstallation(type, itemId) {
     const key = `${type}:${itemId}`;
     if (installations.installations[key]) {
       delete installations.installations[key];
-      const installationsPath = path.join(
-        getRootDir(),
-        config.CONTENTS_DIR,
-        'config',
-        'installations.json'
-      );
-      await atomicWriteJSON(installationsPath, installations);
+      await configStore.writeJson(INSTALLATIONS_FILE, installations);
       await configCache.refreshInstallationsCache();
     }
   } catch (error) {

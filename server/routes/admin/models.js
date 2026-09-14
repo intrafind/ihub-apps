@@ -1,8 +1,5 @@
-import { readFileSync, existsSync } from 'fs';
-import { promises as fs } from 'fs';
-import { join } from 'path';
-import { getRootDir } from '../../pathUtils.js';
 import { getLocalizedContent } from '../../../shared/localize.js';
+import configStore from '../../services/config/ConfigStore.js';
 import configCache from '../../configCache.js';
 import { adminAuth } from '../../middleware/adminAuth.js';
 import { buildServerPath } from '../../utils/basePath.js';
@@ -20,6 +17,22 @@ import { logAudit } from '../../services/AuditLogService.js';
 import { saveSnapshot } from '../../services/ChangeHistoryService.js';
 import llmClient, { isLLMError, LLM_ERROR_CODES } from '../../services/loop/LLMClient.js';
 import { llmErrorToHttpStatus, isMissingApiKeyError } from '../../services/loop/llmHttpErrors.js';
+
+/**
+ * The file a model id lives in.
+ *
+ * A model file's name is allowed to diverge from the `id` inside it, so the
+ * path is resolved instead of assumed: writing straight to `<id>.json` would
+ * fork such a model into two files. A model that exists nowhere resolves to
+ * `<id>.json`, which is the right answer when one is being created.
+ *
+ * @param {string} modelId - Model id
+ * @returns {Promise<string|null>} Path relative to `contents/`, or null when
+ *   the id is not usable as a file name
+ */
+function modelPath(modelId) {
+  return configStore.resolveIdToPath('models', modelId);
+}
 
 /** Prompt sent by the admin "test model" diagnostic. */
 const MODEL_TEST_MESSAGE = 'Hello, can you respond with a simple "Test successful" message?';
@@ -260,31 +273,15 @@ export default function registerAdminModelsRoutes(app) {
           }
         } else {
           // Masked value - need to preserve existing key
-          // CRITICAL FIX: Read from disk, not cache, to ensure we have the apiKey field
-          // The cache might not have the apiKey due to TTL expiration or race conditions
-          const rootDir = getRootDir();
-          const modelFilePath = join(rootDir, 'contents', 'models', `${modelId}.json`);
-
-          try {
-            if (existsSync(modelFilePath)) {
-              const existingModelFromDisk = JSON.parse(await fs.readFile(modelFilePath, 'utf8'));
-              if (existingModelFromDisk.apiKey) {
-                // Preserve the existing encrypted API key from disk
-                updatedModel.apiKey = existingModelFromDisk.apiKey;
-              } else {
-                // No existing key on disk, remove the masked placeholder
-                delete updatedModel.apiKey;
-              }
-            } else {
-              // File doesn't exist yet (shouldn't happen in update), remove placeholder
-              delete updatedModel.apiKey;
-            }
-          } catch (error) {
-            logger.error('Error reading existing model from disk', {
-              component: 'ModelsRoutes',
-              error
-            });
-            // Fallback to removing the masked placeholder
+          // CRITICAL FIX: Read the stored document, not the cache, to ensure we
+          // have the apiKey field. The cache might not have it due to TTL
+          // expiration or race conditions.
+          const storedModel = await configStore.readJson(await modelPath(modelId));
+          if (storedModel?.apiKey) {
+            // Preserve the existing encrypted API key
+            updatedModel.apiKey = storedModel.apiKey;
+          } else {
+            // Nothing stored to preserve, drop the masked placeholder
             delete updatedModel.apiKey;
           }
         }
@@ -299,9 +296,8 @@ export default function registerAdminModelsRoutes(app) {
         const allModels = modelsResponse.data || modelsResponse;
         for (const model of allModels) {
           if (model.id !== modelId && model.default === true) {
-            const otherModelPath = join(getRootDir(), 'contents', 'models', `${model.id}.json`);
             model.default = false;
-            await fs.writeFile(otherModelPath, JSON.stringify(model, null, 2));
+            await configStore.writeJson(await modelPath(model.id), model);
           }
         }
       }
@@ -309,9 +305,7 @@ export default function registerAdminModelsRoutes(app) {
       const { data: currentModels } = configCache.getModels(true);
       const oldModel = currentModels.find(m => m.id === modelId);
 
-      const rootDir = getRootDir();
-      const modelFilePath = join(rootDir, 'contents', 'models', `${modelId}.json`);
-      await fs.writeFile(modelFilePath, JSON.stringify(updatedModel, null, 2));
+      await configStore.writeJson(await modelPath(modelId), updatedModel);
       await configCache.refreshModelsCache();
       if (oldModel) {
         await saveSnapshot({
@@ -370,26 +364,23 @@ export default function registerAdminModelsRoutes(app) {
       delete newModel.apiKeySet;
       delete newModel.apiKeyMasked;
 
-      const rootDir = getRootDir();
-      const modelFilePath = join(rootDir, 'contents', 'models', `${newModel.id}.json`);
-      try {
-        readFileSync(modelFilePath, 'utf8');
+      // The duplicate check stays ahead of the default-demotion below: a 409
+      // must not leave every other model stripped of its default flag.
+      const newModelPath = `models/${newModel.id}.json`;
+      if ((await configStore.readJson(newModelPath)) !== null) {
         return sendErrorResponse(res, 409, 'Model with this ID already exists');
-      } catch {
-        // file not found, continue
       }
       if (newModel.default === true) {
         const modelsResponse = configCache.getModels(true);
         const allModels = modelsResponse.data || modelsResponse;
         for (const model of allModels) {
           if (model.default === true) {
-            const otherModelPath = join(getRootDir(), 'contents', 'models', `${model.id}.json`);
             model.default = false;
-            await fs.writeFile(otherModelPath, JSON.stringify(model, null, 2));
+            await configStore.writeJson(await modelPath(model.id), model);
           }
         }
       }
-      await fs.writeFile(modelFilePath, JSON.stringify(newModel, null, 2));
+      await configStore.writeJson(newModelPath, newModel);
       await configCache.refreshModelsCache();
       await logAudit({
         req,
@@ -424,19 +415,11 @@ export default function registerAdminModelsRoutes(app) {
         const enabledModels = models.filter(m => m.id !== modelId && m.enabled === true);
         if (enabledModels.length > 0) {
           enabledModels[0].default = true;
-          const newDefaultPath = join(
-            getRootDir(),
-            'contents',
-            'models',
-            `${enabledModels[0].id}.json`
-          );
-          await fs.writeFile(newDefaultPath, JSON.stringify(enabledModels[0], null, 2));
+          await configStore.writeJson(await modelPath(enabledModels[0].id), enabledModels[0]);
         }
         model.default = false;
       }
-      const rootDir = getRootDir();
-      const modelFilePath = join(rootDir, 'contents', 'models', `${modelId}.json`);
-      await fs.writeFile(modelFilePath, JSON.stringify(model, null, 2));
+      await configStore.writeJson(await modelPath(modelId), model);
       await configCache.refreshModelsCache();
       await logAudit({
         req,
@@ -471,7 +454,6 @@ export default function registerAdminModelsRoutes(app) {
 
       const { data: models } = configCache.getModels(true);
       const resolvedIds = ids.includes('*') ? models.map(m => m.id) : ids;
-      const rootDir = getRootDir();
 
       for (const id of resolvedIds) {
         const model = models.find(m => m.id === id);
@@ -480,16 +462,14 @@ export default function registerAdminModelsRoutes(app) {
         if (!enabled) {
           model.default = false;
         }
-        const modelFilePath = join(rootDir, 'contents', 'models', `${id}.json`);
-        await fs.writeFile(modelFilePath, JSON.stringify(model, null, 2));
+        await configStore.writeJson(await modelPath(id), model);
       }
 
       // ensure at least one enabled model has default=true
       const enabledModels = models.filter(m => m.enabled);
       if (enabledModels.length > 0 && !enabledModels.some(m => m.default)) {
         enabledModels[0].default = true;
-        const defaultPath = join(rootDir, 'contents', 'models', `${enabledModels[0].id}.json`);
-        await fs.writeFile(defaultPath, JSON.stringify(enabledModels[0], null, 2));
+        await configStore.writeJson(await modelPath(enabledModels[0].id), enabledModels[0]);
       }
 
       await configCache.refreshModelsCache();
@@ -528,21 +508,12 @@ export default function registerAdminModelsRoutes(app) {
         const otherModels = models.filter(m => m.id !== modelId && m.enabled === true);
         if (otherModels.length > 0) {
           otherModels[0].default = true;
-          const newDefaultPath = join(
-            getRootDir(),
-            'contents',
-            'models',
-            `${otherModels[0].id}.json`
-          );
-          await fs.writeFile(newDefaultPath, JSON.stringify(otherModels[0], null, 2));
+          await configStore.writeJson(await modelPath(otherModels[0].id), otherModels[0]);
         }
       }
-      const rootDir = getRootDir();
-      const modelFilePath = join(rootDir, 'contents', 'models', `${modelId}.json`);
-      if (!existsSync(modelFilePath)) {
+      if (!(await configStore.remove(await modelPath(modelId)))) {
         return sendNotFound(res, 'Model file');
       }
-      await fs.unlink(modelFilePath);
       await configCache.refreshModelsCache();
       await removeMarketplaceInstallation('model', modelId);
       if (model) {

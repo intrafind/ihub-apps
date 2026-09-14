@@ -3,13 +3,29 @@ import {
   useEstimatedTokenCount,
   useEstimatedTokensForFragments
 } from '../../../client/src/shared/hooks/useEstimatedTokenCount.js';
+import { ensureTokenizer } from '../../../client/src/shared/utils/tokenEstimatorClient.js';
 
 /**
  * The token-count hooks back the context-window indicator. Both share the same
  * lazy-tokenizer + debounce machinery, so both are exercised here: the text
  * hook for the pending message, the fragments hook for the system prompt and
  * the full chat history (issue #2283).
+ *
+ * The tokenizer is loaded once up front rather than by the first assertion.
+ * `ensureTokenizer()` dynamically imports `gpt-tokenizer`, a 30 MB package
+ * that takes ~440 ms to load on an idle machine — and `waitFor` allows 1000 ms.
+ * Whichever test happened to be first therefore raced a cold module load, and
+ * lost it whenever the rest of the suite was competing for the same CPU: the
+ * failure only ever appeared on the first test in this file, only ever under
+ * the full run, never in isolation. Warming it here makes each test assert
+ * what it is about — the hook's behaviour — instead of how fast a chunk
+ * loads.
  */
+
+beforeAll(async () => {
+  await ensureTokenizer();
+}, 30000);
+
 describe('useEstimatedTokenCount', () => {
   it('reports a count for text once the tokenizer resolves', async () => {
     const { result } = renderHook(() => useEstimatedTokenCount('hello world, how are you?'));

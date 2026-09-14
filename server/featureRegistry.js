@@ -103,12 +103,18 @@ export const featureRegistry = [
     category: 'ai',
     default: false
   },
+  // `chatHistoryPreview` lived here and gated a sidebar section and a /chats
+  // page backed by fixtures. The history UI is now driven by the durable-chat
+  // store, so `chatPersistence` is the single switch for both storing chats and
+  // showing them. A saved `chatHistoryPreview: true` is deliberately *not*
+  // promoted to it — the preview showed sample data, and this one writes real
+  // conversations to disk — so V097 warns instead of deciding.
   {
-    id: 'chatHistoryPreview',
-    name: { en: 'Chat History', de: 'Chat-Verlauf' },
+    id: 'chatPersistence',
+    name: { en: 'Durable Chats', de: 'Dauerhafte Chats' },
     description: {
-      en: 'Show recent chats in the sidebar and a dedicated chat history page (currently uses sample data)',
-      de: 'Zeigt letzte Chats in der Seitenleiste und eine eigene Chat-Verlaufsseite (nutzt derzeit Beispieldaten)'
+      en: 'Store chats server-side so a conversation survives a reload, a new device and a lost connection — the run keeps going and its answer is waiting in the chat. API clients then post only the new message instead of the whole history (or send ephemeral: true)',
+      de: 'Chats serverseitig speichern, sodass eine Unterhaltung Neuladen, Gerätewechsel und Verbindungsabbruch übersteht — der Lauf läuft weiter und seine Antwort wartet im Chat. API-Clients senden dann nur noch die neue Nachricht statt des gesamten Verlaufs (oder ephemeral: true)'
     },
     category: 'preview',
     default: false,
@@ -174,9 +180,12 @@ export const featureRegistry = [
       en: 'Persist an append-only per-run event ledger (chats, workflows, agents, inference) under contents/data/run-log for audit, replay and durable interactions',
       de: 'Ein anhängbares Ereignis-Ledger pro Lauf (Chats, Workflows, Agenten, Inferenz) unter contents/data/run-log für Audit, Replay und dauerhafte Interaktionen speichern'
     },
-    category: 'preview',
-    default: false,
-    preview: true
+    // Not `preview`: the ledger left preview when durable chats came to depend
+    // on it. Leaving the category behind after dropping `preview: true` put it
+    // under the Preview heading as the only row there without the badge, which
+    // reads as an oversight in the one place an admin decides what to trust.
+    category: 'platform',
+    default: false
   }
 ];
 
@@ -184,7 +193,8 @@ export const featureCategories = {
   preview: { name: { en: 'Preview', de: 'Vorschau' }, order: 1 },
   ai: { name: { en: 'AI Capabilities', de: 'KI-Funktionen' }, order: 2 },
   content: { name: { en: 'Content', de: 'Inhalte' }, order: 3 },
-  analytics: { name: { en: 'Analytics', de: 'Analytik' }, order: 4 }
+  analytics: { name: { en: 'Analytics', de: 'Analytik' }, order: 4 },
+  platform: { name: { en: 'Platform', de: 'Plattform' }, order: 5 }
 };
 
 /**

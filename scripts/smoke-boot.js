@@ -87,8 +87,21 @@ async function waitForHealth(port, child, deadline) {
       });
       if (response.ok) {
         const body = await response.json();
-        if (body?.status === 'OK') return { ok: true, body };
-        return { ok: false, reason: `unexpected health payload: ${JSON.stringify(body)}` };
+        if (body?.status !== 'OK') {
+          return { ok: false, reason: `unexpected health payload: ${JSON.stringify(body)}` };
+        }
+        // A failed storage bootstrap is non-fatal by design, so `status` stays
+        // OK and the server serves — which is exactly why a boot that quietly
+        // came up without a provider used to look identical to a good one
+        // here. The run ledger would record nothing, configuration would take
+        // the filesystem path, and chats would report persistence off.
+        if (body?.storage?.ready !== true) {
+          return {
+            ok: false,
+            reason: `booted without storage: ${JSON.stringify(body?.storage ?? null)}`
+          };
+        }
+        return { ok: true, body };
       }
     } catch {
       // not listening yet

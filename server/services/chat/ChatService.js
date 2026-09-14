@@ -16,7 +16,7 @@ import RequestBuilder from './RequestBuilder.js';
 import { processMessageTemplates } from '../../serverHelpers.js';
 import { logInteraction as defaultLogInteraction } from '../../utils.js';
 import { runTool as defaultRunTool } from '../../toolLoader.js';
-import { activeRequests } from '../../sse.js';
+import { activeRequests, hasChatClient } from '../../sse.js';
 import { isFailureFinishReason } from '../../adapters/toolCalling/index.js';
 import PromptService from '../PromptService.js';
 import logger from '../../utils/logger.js';
@@ -24,7 +24,7 @@ import defaultAgentLoop from '../loop/AgentLoop.js';
 import runLogSingleton, { newRunId, isValidRunId } from '../loop/RunLog.js';
 import interactionServiceSingleton from '../loop/InteractionService.js';
 import { RunStreamEmitter, bindStreamRun, unbindStreamRun } from '../loop/RunStream.js';
-import { SSE_V2_EVENTS } from '../../../shared/runEvents.js';
+import { RUN_LOG_EVENTS, SSE_V2_EVENTS } from '../../../shared/runEvents.js';
 import {
   imageLiftSeam,
   knowledgeSourceSeam,
@@ -33,6 +33,11 @@ import {
   questionSeam
 } from '../loop/seams/index.js';
 import { createChatChannel } from './chatChannel.js';
+import {
+  materializeAssistantTurn,
+  materializeUserTurn,
+  normalizeAttachments
+} from './chatMaterializer.js';
 import {
   chatTurnSeam,
   chatToolSeam,
@@ -46,6 +51,34 @@ const COMPONENT = 'ChatService';
 
 /** Tool rounds per chat turn (the loop forces a final answer on the last one). */
 export const CHAT_MAX_TOOL_ROUNDS = 10;
+
+/**
+ * Wall-clock ceiling on a durable chat turn.
+ *
+ * An interactive turn has an implicit one: the browser goes away and the
+ * disconnect aborts it. Durability removes exactly that, on purpose — the
+ * answer has to survive a closed tab — which also removes the only thing that
+ * ever ended a wedged turn. A tool that never returns then holds the request
+ * entry, the cluster-wide durable mark and the provider connection for the
+ * life of the process, and the chat stays `running` forever, so every reopen
+ * replays a dead run and spins on an empty placeholder. There is nobody left
+ * to press Stop.
+ *
+ * `invokeAppInternal`, the other path that runs without a client, already
+ * carries a deadline for the same reason; this is the chat path's.
+ *
+ * Half an hour rather than `invokeAppInternal`'s three minutes: a durable turn
+ * is meant to be waited out across a commute, and killing a legitimate long
+ * agentic turn is a worse failure than a wedged one taking thirty minutes to
+ * clear. When it does fire, the loop aborts with a budget error, the turn is
+ * stored as failed and the run is released — so the chat comes unstuck and
+ * says what happened, rather than spinning.
+ *
+ * It is deliberately not applied to interactive turns: those are bounded by
+ * their client, and a user watching a long tool chain must not have it cut
+ * short by a ceiling that exists for absent clients.
+ */
+export const DURABLE_TURN_WALL_CLOCK_MS = 30 * 60 * 1000;
 
 /**
  * Floor for the chat compaction threshold, and the share of a model's context
@@ -204,6 +237,34 @@ class ChatService {
     }
   }
 
+  /**
+   * Append the run's `message/user` event.
+   *
+   * Nothing else in the tree produces one for a real user turn — the only
+   * other emitter covers synthetic steer messages — so without this a run's
+   * ledger records every answer and none of the questions, and the turn cannot
+   * be replayed as a conversation. Appended only for durable turns: chat
+   * persistence implies the ledger is on, and off it there is nobody to read
+   * the event back.
+   * @private
+   */
+  _appendUserMessageEvent({ runId, messageId, content, attachments }) {
+    try {
+      this.runLog.append(runId, RUN_LOG_EVENTS.MESSAGE_USER, {
+        step: 0,
+        ...(messageId ? { messageId: String(messageId) } : {}),
+        content: typeof content === 'string' ? content : '',
+        ...(attachments.length > 0 ? { attachments } : {})
+      });
+    } catch (err) {
+      logger.warn('Run ledger user message failed', {
+        component: COMPONENT,
+        runId,
+        error: err.message
+      });
+    }
+  }
+
   _endLedgerRun(runId, { status, finishReason, usage, error, startedAt }) {
     try {
       this.runLog.endRun(runId, {
@@ -250,6 +311,14 @@ class ChatService {
    * @param {string} [params.language='en']
    * @param {Object} [params.user]
    * @param {string} [params.runId] - run id to use (default: minted)
+   * @param {Object} [params.persistence] - durable-chat context, supplied by the caller only
+   *   when `isChatPersistenceActive()` said yes for this request. Omitted (the default) the
+   *   turn is not stored and behaves exactly as it did before chat persistence existed.
+   *   `{ repository, ownerId, identityMode, content, clientMessageId?, attachments?,
+   *   replaceFromMessageId? }`, where `repository` is a `ChatRepository`, `ownerId`/
+   *   `identityMode` are the run principal resolved once by the caller, and `content` is the
+   *   raw text of the new user message (the stored history is never client-asserted, but the
+   *   message being sent comes from the request).
    * @returns {Promise<Object>} `{ runId, status, content, finishReason, usage, messages, knowledgeSources,
    *   pendingInteraction?, toolName?, error?, errorInfo? }`
    */
@@ -264,7 +333,8 @@ class ChatService {
     getLocalizedError,
     language = 'en',
     user,
-    runId: givenRunId
+    runId: givenRunId,
+    persistence = null
   }) {
     const {
       app,
@@ -286,8 +356,15 @@ class ChatService {
 
     // One in-flight request per chat: a new turn supersedes the previous one
     // and the stop endpoint / client disconnect abort through this controller.
+    //
+    // A durable turn is tracked even without a stream. It was started by a
+    // caller with no SSE connection — an integration, or a client whose stream
+    // has not come up — and it keeps running after any client goes away, so
+    // leaving it out of `activeRequests` would make it the one turn Stop can
+    // never reach: the endpoint would answer "stopped" while the model ran to
+    // completion and billed the tokens.
     const controller = new AbortController();
-    const trackRequest = streaming && !!chatId;
+    const trackRequest = !!chatId && (streaming || !!persistence?.repository);
     if (trackRequest) {
       if (activeRequests.has(chatId)) activeRequests.get(chatId).abort();
       activeRequests.set(chatId, controller);
@@ -311,6 +388,33 @@ class ChatService {
     });
 
     await this._startLedgerRun({ runId, kind: 'chat', user, refs, model, language });
+
+    // A durable turn records the human half twice: on the ledger, so the run
+    // can be replayed as a conversation, and in the chat store, which is what
+    // the history UI reads back. Both happen before the first client frame so
+    // the chat document exists by the time anything can ask for it.
+    const persist = persistence?.repository ? persistence : null;
+    if (persist) {
+      const attachments = normalizeAttachments(persist.attachments);
+      this._appendUserMessageEvent({ runId, messageId, content: persist.content, attachments });
+      await materializeUserTurn({
+        repository: persist.repository,
+        chatId,
+        ownerId: persist.ownerId,
+        identityMode: persist.identityMode,
+        appId: app?.id,
+        modelId: model?.id,
+        settings: persist.settings,
+        runId,
+        content: persist.content,
+        // The only client id on the wire is the exchange id of the assistant
+        // placeholder, which the client also puts on the message it sends.
+        clientMessageId: persist.clientMessageId ?? messageId ?? null,
+        attachments,
+        replaceFromMessageId: persist.replaceFromMessageId
+      });
+    }
+
     stream.emit(SSE_V2_EVENTS.RUN_STARTED, {
       kind: 'chat',
       ...(model?.id ? { model: model.id } : {}),
@@ -368,7 +472,11 @@ class ChatService {
         tools: loopTools,
         toolExecution: 'server',
         policies: {
-          budgets: { maxToolRounds: CHAT_MAX_TOOL_ROUNDS },
+          budgets: {
+            maxToolRounds: CHAT_MAX_TOOL_ROUNDS,
+            // Only for a turn that can outlive its client; see the constant.
+            ...(persist ? { maxWallClockMs: DURABLE_TURN_WALL_CLOCK_MS } : {})
+          },
           // Chat tools have side effects and the client renders tool frames in
           // order — run one call at a time.
           tools: { parallel: false },
@@ -401,6 +509,22 @@ class ChatService {
         language,
         channel
       });
+      // The ledger's terminal frame first, then the chat document.
+      //
+      // A client reopening a chat asks the document whether a turn is running
+      // and, if it is, replays the run's ledger to catch up. Materializing
+      // first opens a window between the answer being appended and the run
+      // being released — `materializeAssistantTurn` takes the chat lock for
+      // each separately — in which the document still says `running` and the
+      // ledger holds no `run/ended`. A client reopening inside it attaches to
+      // a run that is already over: nothing further arrives, so the placeholder
+      // spins and the composer stays behind a Stop button until the user
+      // presses it. Ending the ledger first means the replay always carries the
+      // terminal frame, and the reattach settles instead of latching.
+      //
+      // The reverse window — a released document while the ledger has not
+      // ended — costs nothing: a document that is not `running` is never
+      // reattached to in the first place.
       this._endLedgerRun(runId, {
         status: outcome.status,
         finishReason: outcome.finishReason,
@@ -408,6 +532,18 @@ class ChatService {
         error: outcome.error || (outcome.errorInfo ? outcome.errorInfo : undefined),
         startedAt
       });
+      // The single choke point: every terminal shape `_finishTurn` produces —
+      // normal, aborted, error, passthrough answer, malformed response —
+      // passes through here with the same summary.
+      if (persist) {
+        await materializeAssistantTurn({
+          repository: persist.repository,
+          chatId,
+          runId,
+          summary: outcome,
+          clientConnected: hasChatClient(chatId)
+        });
+      }
       return outcome;
     } catch (error) {
       // The loop never throws for model or tool failures; this is a bug path.
@@ -421,7 +557,24 @@ class ChatService {
         finishReason: 'error',
         error: { code: 'INTERNAL_ERROR', message: error.message || 'Internal error' }
       });
+      // Ledger first here too, for the reason above.
       this._endLedgerRun(runId, { status: 'error', finishReason: 'error', error, startedAt });
+      // `_finishTurn` never ran, so nothing else releases the chat: without
+      // this it stays `running` with a live `activeRunId` forever.
+      if (persist) {
+        await materializeAssistantTurn({
+          repository: persist.repository,
+          chatId,
+          runId,
+          summary: {
+            status: 'error',
+            content: '',
+            finishReason: 'error',
+            errorInfo: { code: 'INTERNAL_ERROR', message: error.message || 'Internal error' }
+          },
+          clientConnected: hasChatClient(chatId)
+        });
+      }
       throw error;
     } finally {
       // Never let a detected source leak into the next turn on this chatId.

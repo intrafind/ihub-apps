@@ -6,7 +6,10 @@
  *
  * All installation actions are tracked in config/installations.json so the
  * marketplace UI can display which items are managed and enable update/uninstall
- * flows. File writes use atomicWriteJSON to prevent partial-write corruption.
+ * flows. JSON content is read and written through the ConfigStore, which keeps
+ * the files byte-identical to what an admin edit produces. Skills are the
+ * exception: they are a directory of arbitrary files rather than one JSON
+ * document, so they stay on the filesystem.
  *
  * Content type dispatch table (CONTENT_CONFIG) maps each type to:
  * - dir: subdirectory under contents/ where files live
@@ -22,7 +25,7 @@
 
 import { promises as fs } from 'fs';
 import path from 'path';
-import { atomicWriteJSON } from '../../utils/atomicWrite.js';
+import configStore from '../../services/config/ConfigStore.js';
 import { isValidId, resolveAndValidatePath } from '../../utils/pathSecurity.js';
 import { getRootDir } from '../../pathUtils.js';
 import config from '../../config.js';
@@ -38,6 +41,22 @@ const COMPONENT = 'ContentInstaller';
  */
 function getContentsDir() {
   return path.join(getRootDir(), config.CONTENTS_DIR);
+}
+
+/**
+ * The path of one installed item, relative to `contents/`.
+ *
+ * The marketplace owns the file it installs, so the name it was installed
+ * under is the file name — this deliberately does not search the directory
+ * for a document whose `id` matches, the way the admin routes do for
+ * hand-edited files.
+ *
+ * @param {string} name - Item name (already validated as a safe id)
+ * @param {{ dir: string, ext: string|null }} typeConfig - Entry from CONTENT_CONFIG
+ * @returns {string} Path relative to `contents/`, e.g. `apps/my-app.json`
+ */
+function contentRelPath(name, typeConfig) {
+  return `${typeConfig.dir}/${name}${typeConfig.ext}`;
 }
 
 /**
@@ -97,6 +116,9 @@ const CONTENT_CONFIG = {
 // Installations manifest helpers
 // ---------------------------------------------------------------------------
 
+/** The installation manifest, relative to `contents/`. */
+const INSTALLATIONS_FILE = 'config/installations.json';
+
 /**
  * Get a reference to the singleton ConfigCache via dynamic import.
  * Avoids the circular dependency that would arise from a static import.
@@ -106,15 +128,6 @@ const CONTENT_CONFIG = {
 async function getConfigCache() {
   const mod = await import('../../configCache.js');
   return mod.default;
-}
-
-/**
- * Return the absolute file path for installations.json.
- *
- * @returns {string}
- */
-function getInstallationsPath() {
-  return path.join(getContentsDir(), 'config', 'installations.json');
 }
 
 /**
@@ -135,8 +148,7 @@ async function readInstallations() {
  * @returns {Promise<void>}
  */
 async function saveInstallations(data) {
-  const filePath = getInstallationsPath();
-  await atomicWriteJSON(filePath, data);
+  await configStore.writeJson(INSTALLATIONS_FILE, data);
   const cc = await getConfigCache();
   await cc.refreshInstallationsCache();
 }
@@ -520,10 +532,8 @@ class ContentInstaller {
    * @returns {Promise<void>}
    */
   async _writeContent(type, name, content, typeConfig) {
-    const contentsDir = getContentsDir();
-
     if (type === 'skill') {
-      const skillDir = path.join(contentsDir, typeConfig.dir, name);
+      const skillDir = path.join(getContentsDir(), typeConfig.dir, name);
       await fs.mkdir(skillDir, { recursive: true });
 
       if (typeof content === 'object' && content !== null && content.files) {
@@ -557,8 +567,7 @@ class ContentInstaller {
         safeContent = rest;
       }
 
-      const filePath = path.join(contentsDir, typeConfig.dir, `${name}${typeConfig.ext}`);
-      await atomicWriteJSON(filePath, safeContent);
+      await configStore.writeJson(contentRelPath(name, typeConfig), safeContent);
     }
   }
 
@@ -573,19 +582,13 @@ class ContentInstaller {
    * @returns {Promise<void>}
    */
   async _deleteContent(type, name, typeConfig) {
-    const contentsDir = getContentsDir();
-
     if (type === 'skill') {
-      const skillDir = path.join(contentsDir, typeConfig.dir, name);
+      const skillDir = path.join(getContentsDir(), typeConfig.dir, name);
       await fs.rm(skillDir, { recursive: true, force: true });
     } else {
-      const filePath = path.join(contentsDir, typeConfig.dir, `${name}${typeConfig.ext}`);
-      try {
-        await fs.unlink(filePath);
-      } catch (error) {
-        if (error.code !== 'ENOENT') throw error;
-        // File already gone — treat as success
-      }
+      // A missing file reports false rather than throwing, which is the
+      // "already gone — treat as success" this has always wanted.
+      await configStore.remove(contentRelPath(name, typeConfig));
     }
   }
 }

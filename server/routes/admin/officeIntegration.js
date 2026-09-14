@@ -1,6 +1,4 @@
-import { join } from 'path';
-import { getRootDir } from '../../pathUtils.js';
-import { atomicWriteJSON } from '../../utils/atomicWrite.js';
+import configStore from '../../services/config/ConfigStore.js';
 import configCache from '../../configCache.js';
 import { adminAuth } from '../../middleware/adminAuth.js';
 import { buildServerPath } from '../../utils/basePath.js';
@@ -9,12 +7,16 @@ import { createOAuthClient } from '../../utils/oauthClientManager.js';
 import logger from '../../utils/logger.js';
 import { sendInternalError, sendBadRequest } from '../../utils/responseHelpers.js';
 
+/**
+ * Merge updates into the platform configuration and publish them.
+ *
+ * @param {Object} updates - Top-level platform keys to overwrite
+ * @returns {Promise<Object>} The merged configuration that was written
+ */
 async function savePlatformConfig(updates) {
-  const rootDir = getRootDir();
-  const platformConfigPath = join(rootDir, 'contents', 'config', 'platform.json');
   const existing = configCache.getPlatform() || {};
   const merged = { ...existing, ...updates };
-  await atomicWriteJSON(platformConfigPath, merged);
+  await configStore.writeJson('config/platform.json', merged);
   await configCache.refreshCacheEntry('config/platform.json');
   return merged;
 }

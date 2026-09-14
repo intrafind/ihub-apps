@@ -12,6 +12,8 @@ import {
 } from './utils/authorization.js';
 import { loadTools } from './toolLoader.js';
 import { announceConfigChange, announceFullConfigReload, setConfigReloader } from './configSync.js';
+import { getStorage } from './storage/bootstrap.js';
+import { getRawNamespace } from './storage/namespaces.js';
 import { loadSkillsMetadata } from './services/skillLoader.js';
 import { validateSourceConfig } from './validators/sourceConfigSchema.js';
 import { createHash } from 'crypto';
@@ -21,88 +23,11 @@ import { SECRET_FIELDS_BY_TYPE } from './validators/credentialSchema.js';
 import logger from './utils/logger.js';
 import { getLocalizedString } from './utils/localize.js';
 import { findByIdCaseInsensitive } from './utils/resourceLookup.js';
+import { resolveEnvVarsInObject } from './utils/envVars.js';
 
-/**
- * Resolve environment variables in a string
- * Replaces ${VAR_NAME} with the value of process.env.VAR_NAME
- */
-function resolveEnvVars(value) {
-  if (typeof value !== 'string') return value;
-
-  // Support both ${VAR} and the shell-style ${VAR:-default}. The default form
-  // is what migrations like V031 write (`${OTEL_EXPORTER_OTLP_ENDPOINT:-http://localhost:4318}`)
-  // so without :-default support those placeholders pass through verbatim.
-  return value.replace(
-    /\$\{([A-Za-z_][A-Za-z0-9_]*)(?::-([^}]*))?\}/g,
-    (match, varName, fallback) => {
-      const envValue = process.env[varName];
-      if (envValue !== undefined && envValue !== '') {
-        return envValue;
-      }
-      if (fallback !== undefined) {
-        return fallback;
-      }
-      logger.warn('Environment variable not defined, keeping placeholder', {
-        component: 'ConfigCache',
-        varName,
-        placeholder: match
-      });
-      return match;
-    }
-  );
-}
-
-/**
- * Recursively resolve environment variables in an object. Exported so other
- * subsystems (e.g. server/telemetry.js) that read raw JSON before configCache
- * is up can perform the same `${VAR}` / `${VAR:-default}` substitution the
- * rest of the platform expects.
- *
- * Callers can pass `skipPaths` to opt out specific dot-paths from env var
- * substitution. This matters for fields that contain *user-data* templates
- * (e.g. `${user.username}` is a placeholder for the authenticated user's
- * username, NOT for `process.env.username`) — Windows automatically sets
- * `process.env.username` to the OS user running the process, so without an
- * opt-out the resolver would silently leak the service account into every
- * such template. The skip decision belongs to whoever owns the config
- * schema (e.g. `setCacheEntry` for platform.json); this function is just
- * the mechanism.
- *
- * @param {*} obj - Object/array/primitive to recursively resolve
- * @param {Object} [options]
- * @param {string[]|Set<string>} [options.skipPaths] - Dot-paths to leave verbatim
- * @param {string} [options.path] - Internal: current dot-path used for skip-list checks
- */
-export function resolveEnvVarsInObject(obj, options = {}) {
-  if (!obj || typeof obj !== 'object') return obj;
-
-  const path = options.path || '';
-  const skipPaths =
-    options.skipPaths instanceof Set ? options.skipPaths : new Set(options.skipPaths || []);
-
-  if (Array.isArray(obj)) {
-    return obj.map((item, idx) =>
-      resolveEnvVarsInObject(item, { skipPaths, path: `${path}[${idx}]` })
-    );
-  }
-
-  const resolved = {};
-  for (const [key, value] of Object.entries(obj)) {
-    const childPath = path ? `${path}.${key}` : key;
-    if (skipPaths.has(childPath)) {
-      resolved[key] = value;
-      continue;
-    }
-    if (typeof value === 'string') {
-      resolved[key] = resolveEnvVars(value);
-    } else if (typeof value === 'object') {
-      resolved[key] = resolveEnvVarsInObject(value, { skipPaths, path: childPath });
-    } else {
-      resolved[key] = value;
-    }
-  }
-  return resolved;
-}
+// Re-exported under the name it has always had here: `telemetry.js` and the
+// server tests import it from this module.
+export { resolveEnvVarsInObject };
 
 /**
  * Decrypt a single value if it has the ENC[...] format
@@ -270,6 +195,61 @@ function expandToolFunctions(tools = []) {
 }
 
 /**
+ * How long change events from the storage provider accumulate before the
+ * affected entries are reloaded. Same window as `configSync`'s, and for the
+ * same reason: one admin save frequently touches several files (a bulk app
+ * import writes one document per app), and reloading a key once per burst
+ * beats reloading it once per event.
+ */
+const STORAGE_CHANGE_COALESCE_MS = 25;
+
+/**
+ * Cache key holding the assembled contents of a raw configuration namespace.
+ *
+ * These six keys are the trap in mapping a storage change onto a cache entry:
+ * `config/apps.json` is *not* the file at that path, it is the array
+ * `loadAllApps()` builds out of every file under `contents/apps/`. A write to
+ * `apps/support-bot.json` therefore invalidates the aggregate, and the cache
+ * has never held — and must not start holding — a per-document entry beside
+ * it. The `config` and `locales` namespaces are the plain case: one file, one
+ * entry, keyed by the path it lives at.
+ *
+ * @type {Readonly<Object<string, string>>}
+ */
+const AGGREGATE_KEY_BY_NAMESPACE = Object.freeze({
+  apps: 'config/apps.json',
+  models: 'config/models.json',
+  prompts: 'config/prompts.json',
+  workflows: 'config/workflows.json',
+  tools: 'config/tools.json',
+  agents: 'config/agents.json'
+});
+
+/**
+ * The cache key a storage change event invalidates, or null when it
+ * invalidates nothing this cache could hold.
+ *
+ * @param {{type?: string, ns?: string, key?: string}} event - A change event
+ *   as published by the provider's document store
+ * @returns {string|null} Cache key, or null when the event is not a config
+ *   document change
+ */
+function cacheKeyForStorageChange(event) {
+  const type = event?.type;
+  if (typeof type !== 'string' || !type.startsWith('document.')) return null;
+  // Runtime namespaces (chats, runs, interactions) publish an event per
+  // message written, so the cheap "is this configuration at all" test runs
+  // first and rejects the overwhelming majority of traffic.
+  const namespace = getRawNamespace(event?.ns);
+  if (!namespace) return null;
+  const aggregate = AGGREGATE_KEY_BY_NAMESPACE[event.ns];
+  if (aggregate) return aggregate;
+  const key = event?.key;
+  if (typeof key !== 'string' || !key) return null;
+  return `${namespace.dir}/${key}.json`;
+}
+
+/**
  * Configuration Cache Service
  *
  * This service provides memory-based caching for frequently accessed configuration files
@@ -289,6 +269,14 @@ class ConfigCache {
     this.isInitialized = false;
     this.localeLoadingLocks = new Map();
     this.apiKeyVerifier = new ApiKeyVerifier();
+
+    // Inbound half of the storage provider's change stream; see
+    // _subscribeToStorageChanges().
+    this.storageChangeProvider = null;
+    this.storageChangeUnsubscribe = null;
+    this.pendingStorageChanges = new Set();
+    this.storageChangeTimer = null;
+    this.storageChangeDraining = false;
 
     // Cache TTL in milliseconds (default: 5 minutes for production, shorter for development)
     this.cacheTTL = process.env.NODE_ENV === 'production' ? 5 * 60 * 1000 : 60 * 1000;
@@ -313,7 +301,13 @@ class ConfigCache {
       'config/installations.json',
       'config/mcpServers.json',
       'config/credentials.json',
-      'config/agents.json'
+      'config/agents.json',
+      // Alongside users.json, and for the same reason: `loadOAuthClients` is a
+      // synchronous middleware-path read that consults this cache first and
+      // falls back to disk on a miss. Left unpreloaded, every request that
+      // resolves an OAuth client took the fallback and logged a warning about
+      // it — a cache with a hole in exactly the shape of its hottest reader.
+      'config/oauth-clients.json'
     ];
 
     // Built-in locales that should always be preloaded (resolved dynamically during initialize())
@@ -326,6 +320,11 @@ class ConfigCache {
    */
   async initialize() {
     logger.info('Initializing configuration cache', { component: 'ConfigCache' });
+
+    // The provider is brought up before this runs (`server/server.js`), so the
+    // subscription is attached here rather than at module load, where there is
+    // nothing to subscribe to yet.
+    this._subscribeToStorageChanges();
 
     // Discover supported languages from built-in locale files
     this.defaultLocales = await listBuiltinLocales();
@@ -576,11 +575,6 @@ class ConfigCache {
    * Set a cache entry with automatic refresh timer
    */
   setCacheEntry(key, data) {
-    // Clear existing timer if any
-    if (this.refreshTimers.has(key)) {
-      clearTimeout(this.refreshTimers.get(key));
-    }
-
     // Resolve environment variables in the data, opting specific fields out
     // when they contain user-data templates instead of env var references.
     const resolvedData = resolveEnvVarsInObject(data, {
@@ -600,9 +594,34 @@ class ConfigCache {
       timestamp: Date.now()
     });
 
-    // Set refresh timer. This uses the private reload so a periodic TTL refresh
-    // is not announced to the cluster — every worker runs its own timer, and
-    // announcing would turn a quiet re-read into N² bus messages and disk reads.
+    this._armRefreshTimer(key);
+  }
+
+  /**
+   * Schedule the next TTL re-read of one entry.
+   *
+   * Uses the private reload so a periodic refresh is not announced to the
+   * cluster — every worker runs its own timer, and announcing would turn a
+   * quiet re-read into N² bus messages and disk reads.
+   *
+   * Separate from {@link ConfigCache#setCacheEntry} because the chain has to
+   * continue when a re-read finds *nothing changed*, which is the common case.
+   * Several `_reloadEntry` branches — groups, platform, credentials, tools —
+   * only call `setCacheEntry` when the etag differs, and while the timer lived
+   * inside it, the first unchanged tick after boot armed nothing and the entry
+   * simply stopped refreshing for the life of the process. For `groups.json`
+   * that meant an edit made outside the admin UI — dropping `adminAccess` from
+   * a group, say — never took effect: `get()` is a plain map read with no
+   * timestamp check, and the provider's change stream only publishes writes
+   * that went through it, never an operator's editor.
+   *
+   * @param {string} key - Cache key to schedule.
+   * @private
+   */
+  _armRefreshTimer(key) {
+    if (this.refreshTimers.has(key)) {
+      clearTimeout(this.refreshTimers.get(key));
+    }
     const refreshTimer = setTimeout(() => {
       this._reloadEntry(key);
     }, this.cacheTTL);
@@ -620,6 +639,10 @@ class ConfigCache {
    * then call this, so the announcement is what stops the other workers from
    * serving the pre-write contents until their TTL happens to fire.
    *
+   * The announcement stays even though the storage provider now publishes a
+   * change event of its own for the same write — the two reach different
+   * places, see {@link ConfigCache#_subscribeToStorageChanges}.
+   *
    * @param {string} key - Cache key, e.g. `'config/platform.json'`.
    */
   async refreshCacheEntry(key) {
@@ -630,9 +653,15 @@ class ConfigCache {
   /**
    * Reload a single cache entry from disk without announcing it.
    *
-   * Used by the TTL timer and by anything applying a change another worker
-   * already announced — re-announcing there would bounce the invalidation
-   * around the cluster.
+   * Used by the TTL timer, by anything applying a change another worker
+   * already announced, and by the provider's change stream — re-announcing in
+   * any of those would bounce the invalidation around the cluster.
+   *
+   * Every read here is unconditionally fresh: the reads go through the
+   * configuration store, which no longer keeps a cache of its own below this
+   * one. The TTL cache `configLoader` used to hold was invisible to
+   * {@link ConfigCache#refreshCacheEntry} and gave an admin save up to a
+   * minute in which readers still saw the old value.
    *
    * @param {string} key - Cache key.
    */
@@ -740,13 +769,15 @@ class ConfigCache {
             configPath: key,
             count: expanded.length
           });
+        } else {
+          this._armRefreshTimer(key);
         }
         return;
       }
 
       // Special handling for groups.json - load and resolve inheritance
       if (key === 'config/groups.json') {
-        const groupsConfig = await loadJson(key, { useCache: false });
+        const groupsConfig = await loadJson(key);
         if (groupsConfig !== null) {
           const resolvedConfig = resolveGroupInheritance(groupsConfig);
           const newEtag = this.generateETag(resolvedConfig);
@@ -758,33 +789,43 @@ class ConfigCache {
               configPath: 'config/groups.json',
               count: Object.keys(resolvedConfig.groups || {}).length
             });
+          } else {
+            this._armRefreshTimer(key);
           }
+        } else {
+          this._armRefreshTimer(key);
         }
         return;
       }
 
       // Special handling for platform.json
       if (key === 'config/platform.json') {
-        const platformData = await loadJson(key, { useCache: false });
+        const platformData = await loadJson(key);
         if (platformData !== null) {
           const newEtag = this.generateETag(platformData);
           const existing = this.cache.get(key);
           if (!existing || existing.etag !== newEtag) {
             this.setCacheEntry(key, platformData);
+          } else {
+            this._armRefreshTimer(key);
           }
+        } else {
+          this._armRefreshTimer(key);
         }
         return;
       }
 
       // Special handling for credentials.json - decrypt secrets after loading
       if (key === 'config/credentials.json') {
-        const credentialsData = await loadJson(key, { useCache: false });
+        const credentialsData = await loadJson(key);
         const resolved = credentialsData !== null ? credentialsData : { credentials: {} };
         decryptCredentials(resolved);
         const newEtag = this.generateETag(resolved);
         const existing = this.cache.get(key);
         if (!existing || existing.etag !== newEtag) {
           this.setCacheEntry(key, resolved);
+        } else {
+          this._armRefreshTimer(key);
         }
         return;
       }
@@ -802,9 +843,13 @@ class ConfigCache {
         return;
       }
 
-      const data = await loadJson(key, { useCache: false });
+      const data = await loadJson(key);
       if (data !== null) {
         this.setCacheEntry(key, data);
+      } else {
+        // Unreadable right now — a half-written save, a transient EACCES. The
+        // cached copy stays, and so must the chain that will try again.
+        this._armRefreshTimer(key);
       }
     } catch (error) {
       reloadError = error;
@@ -823,6 +868,143 @@ class ConfigCache {
       } catch {
         // never break a reload because telemetry isn't ready yet
       }
+    }
+  }
+
+  /**
+   * Follow the storage provider's change stream into this cache.
+   *
+   * This runs **in addition to** the cluster announcement
+   * {@link ConfigCache#refreshCacheEntry} sends, never instead of it. The two
+   * carry the same invalidation over different distances, and neither covers
+   * the other's ground:
+   *
+   * - `announceConfigChange` goes over the cluster IPC bus and is the only
+   *   thing that reaches this machine's *other workers*. The filesystem
+   *   provider's notifier is a bare in-process `EventEmitter`
+   *   (`getCapabilities().notifications === 'in-process'`), so replacing the
+   *   announcement with it would silently undo the cross-worker invalidation
+   *   `server/configSync.js` exists to provide: an admin save would land on
+   *   one worker and every other worker would keep serving the pre-write
+   *   config until its TTL happened to fire.
+   * - The notifier, in turn, catches writes the announcement never sees — a
+   *   write from another instance once a push-capable provider lands, or one
+   *   from code that forgot its `refreshCacheEntry` call. On today's
+   *   single-instance provider the writer has already refreshed its own cache
+   *   by the time the event arrives, so this is a same-process no-op.
+   *
+   * The sink is `_reloadEntry`, not `refreshCacheEntry`, mirroring the
+   * reloader `configSync` injects at the bottom of this module: an
+   * invalidation that arrived from elsewhere must not be announced back out,
+   * or two workers bounce it between them forever.
+   *
+   * Idempotent, and re-subscribes when the provider instance changes (a test
+   * harness bringing a second one up), because a notifier that has been closed
+   * has dropped every handler it held.
+   *
+   * @returns {boolean} Whether this cache is now following a provider
+   */
+  _subscribeToStorageChanges() {
+    const provider = getStorage();
+    if (!provider) return false;
+    if (provider === this.storageChangeProvider) return true;
+
+    this.storageChangeUnsubscribe?.();
+    this.storageChangeUnsubscribe = null;
+    this.storageChangeProvider = null;
+
+    try {
+      const notifier = provider.notifier;
+      if (typeof notifier?.subscribe !== 'function') {
+        logger.warn('Storage provider publishes no change events', {
+          component: 'ConfigCache',
+          provider: provider.name
+        });
+        return false;
+      }
+      this.storageChangeUnsubscribe = notifier.subscribe(event => this._onStorageChange(event));
+      this.storageChangeProvider = provider;
+      logger.info('Following configuration changes from the storage provider', {
+        component: 'ConfigCache',
+        provider: provider.name,
+        reach: provider.getCapabilities?.().notifications
+      });
+      return true;
+    } catch (error) {
+      // A provider without a notifier facet is usable for everything else; the
+      // cluster announcement still invalidates, so this is a warning.
+      logger.warn('Unable to follow storage provider change events', {
+        component: 'ConfigCache',
+        error: error.message
+      });
+      return false;
+    }
+  }
+
+  /**
+   * Queue the cache entry a change event invalidates.
+   *
+   * @param {{type?: string, ns?: string, key?: string}} event - Change event
+   * @returns {void}
+   */
+  _onStorageChange(event) {
+    const key = cacheKeyForStorageChange(event);
+    // Only what is actually held: a write to a locale nobody loaded, or to a
+    // config file outside `criticalConfigs`, has nothing to invalidate here,
+    // and reloading it would put an entry in the cache that boot never chose.
+    if (!key || !this.cache.has(key)) return;
+    this.pendingStorageChanges.add(key);
+    this._scheduleStorageChangeDrain();
+  }
+
+  /**
+   * Arm the coalescing window, unless it is already armed.
+   *
+   * @returns {void}
+   */
+  _scheduleStorageChangeDrain() {
+    if (this.storageChangeTimer) return;
+    const timer = setTimeout(() => this._drainStorageChanges(), STORAGE_CHANGE_COALESCE_MS);
+    // A queued invalidation must never be the only thing keeping the process
+    // alive, exactly as the TTL timers above must not.
+    if (typeof timer.unref === 'function') timer.unref();
+    this.storageChangeTimer = timer;
+  }
+
+  /**
+   * Reload the entries queued by the change stream.
+   *
+   * @returns {Promise<void>}
+   */
+  async _drainStorageChanges() {
+    this.storageChangeTimer = null;
+
+    if (this.storageChangeDraining) {
+      // A drain in flight took its snapshot already; re-arm instead of running
+      // a second reload of the same key concurrently.
+      this._scheduleStorageChangeDrain();
+      return;
+    }
+
+    const keys = [...this.pendingStorageChanges];
+    this.pendingStorageChanges.clear();
+    if (keys.length === 0) return;
+
+    this.storageChangeDraining = true;
+    try {
+      // Sequential: a burst is a handful of keys, and reloading them one at a
+      // time keeps a config save from competing with request traffic for I/O.
+      // `_reloadEntry` handles its own failures and keeps the old data.
+      for (const key of keys) {
+        await this._reloadEntry(key);
+      }
+      logger.debug('Applied config change from the storage provider', {
+        component: 'ConfigCache',
+        keys
+      });
+    } finally {
+      this.storageChangeDraining = false;
+      if (this.pendingStorageChanges.size > 0) this._scheduleStorageChangeDrain();
     }
   }
 
@@ -1607,6 +1789,14 @@ class ConfigCache {
 
     this.refreshTimers.clear();
     this.cache.clear();
+
+    // Queued invalidations name entries that no longer exist. The subscription
+    // itself stays: the provider is still up, and `initialize()` re-attaching
+    // to the same one is a no-op.
+    if (this.storageChangeTimer) clearTimeout(this.storageChangeTimer);
+    this.storageChangeTimer = null;
+    this.pendingStorageChanges.clear();
+
     this.isInitialized = false;
     logger.info('Configuration cache cleared', { component: 'ConfigCache' });
   }

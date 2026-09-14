@@ -1,7 +1,4 @@
-import { promises as fs } from 'fs';
-import { join } from 'path';
-import { getRootDir } from '../../pathUtils.js';
-import { atomicWriteJSON } from '../../utils/atomicWrite.js';
+import configStore from '../../services/config/ConfigStore.js';
 import configCache from '../../configCache.js';
 import { adminAuth } from '../../middleware/adminAuth.js';
 import { buildServerPath } from '../../utils/basePath.js';
@@ -15,6 +12,27 @@ import {
 } from '../../utils/responseHelpers.js';
 import { logAudit } from '../../services/AuditLogService.js';
 import { saveSnapshot } from '../../services/ChangeHistoryService.js';
+
+/** The group configuration, as a path relative to `contents/`. */
+const GROUPS_FILE = 'config/groups.json';
+
+/**
+ * The `{ id, name }` summaries a resource namespace holds.
+ *
+ * A document that does not parse is skipped and a namespace with no directory
+ * yet reads as empty — both are how this endpoint has always behaved for
+ * prompts and workflows, and now for apps and models too.
+ *
+ * @param {string} ns - Configuration namespace: apps, models, prompts, workflows
+ * @returns {Promise<Array<{id: string, name: Object}>>} One summary per document
+ */
+async function listResourceSummaries(ns) {
+  const documents = await configStore.listDocuments(ns);
+  return documents.map(({ data }) => ({
+    id: data?.id,
+    name: data?.name || { en: data?.id, de: data?.id }
+  }));
+}
 
 /**
  * Count groups that grant adminAccess. Used to prevent removing/demoting the
@@ -231,17 +249,17 @@ export default function registerAdminGroupRoutes(app) {
    */
   app.get(buildServerPath('/api/admin/groups'), adminAuth, async (req, res) => {
     try {
-      const rootDir = getRootDir();
-      const groupsFilePath = join(rootDir, 'contents', 'config', 'groups.json');
-
-      let groupsData = { groups: {}, metadata: {} };
-      try {
-        const groupsFileData = await fs.readFile(groupsFilePath, 'utf8');
-        groupsData = JSON.parse(groupsFileData);
-      } catch {
-        logger.info('Groups file not found or invalid, returning empty list', {
+      // Strict, so an unreadable file is not rendered as an empty one. The
+      // write path already fails closed, but an admin page showing no groups
+      // over a `groups.json` with a trailing comma in it says the permissions
+      // are gone rather than that the file cannot be parsed — and the first
+      // thing it invites is a save.
+      let groupsData = await configStore.readJsonStrict(GROUPS_FILE);
+      if (!groupsData) {
+        logger.info('Groups file not found, returning empty list', {
           component: 'AdminGroups'
         });
+        groupsData = { groups: {}, metadata: {} };
       }
 
       res.json(groupsData);
@@ -305,111 +323,10 @@ export default function registerAdminGroupRoutes(app) {
    */
   app.get(buildServerPath('/api/admin/groups/resources'), adminAuth, async (req, res) => {
     try {
-      const rootDir = getRootDir();
-
-      // Get apps
-      const appsPath = join(rootDir, 'contents', 'apps');
-      const appFiles = await fs.readdir(appsPath);
-      const apps = [];
-
-      for (const file of appFiles) {
-        if (file.endsWith('.json')) {
-          try {
-            const appData = await fs.readFile(join(appsPath, file), 'utf8');
-            const app = JSON.parse(appData);
-            apps.push({
-              id: app.id,
-              name: app.name || { en: app.id, de: app.id }
-            });
-          } catch (error) {
-            logger.warn('Error reading app file', {
-              component: 'AdminGroups',
-              file,
-              error: error.message
-            });
-          }
-        }
-      }
-
-      // Get models
-      const modelsPath = join(rootDir, 'contents', 'models');
-      const modelFiles = await fs.readdir(modelsPath);
-      const models = [];
-
-      for (const file of modelFiles) {
-        if (file.endsWith('.json')) {
-          try {
-            const modelData = await fs.readFile(join(modelsPath, file), 'utf8');
-            const model = JSON.parse(modelData);
-            models.push({
-              id: model.id,
-              name: model.name || { en: model.id, de: model.id }
-            });
-          } catch (error) {
-            logger.warn('Error reading model file', {
-              component: 'AdminGroups',
-              file,
-              error: error.message
-            });
-          }
-        }
-      }
-
-      // Get prompts
-      const promptsPath = join(rootDir, 'contents', 'prompts');
-      const prompts = [];
-
-      try {
-        const promptFiles = await fs.readdir(promptsPath);
-        for (const file of promptFiles) {
-          if (file.endsWith('.json')) {
-            try {
-              const promptData = await fs.readFile(join(promptsPath, file), 'utf8');
-              const prompt = JSON.parse(promptData);
-              prompts.push({
-                id: prompt.id,
-                name: prompt.name || { en: prompt.id, de: prompt.id }
-              });
-            } catch (error) {
-              logger.warn('Error reading prompt file', {
-                component: 'AdminGroups',
-                file,
-                error: error.message
-              });
-            }
-          }
-        }
-      } catch {
-        logger.info('Prompts directory not found or empty', { component: 'AdminGroups' });
-      }
-
-      // Get workflows
-      const workflowsPath = join(rootDir, 'contents', 'workflows');
-      const workflows = [];
-
-      try {
-        const workflowFiles = await fs.readdir(workflowsPath);
-        for (const file of workflowFiles) {
-          if (file.endsWith('.json')) {
-            try {
-              const workflowData = await fs.readFile(join(workflowsPath, file), 'utf8');
-              const workflow = JSON.parse(workflowData);
-              workflows.push({
-                id: workflow.id,
-                name: workflow.name || { en: workflow.id, de: workflow.id }
-              });
-            } catch (error) {
-              logger.warn('Error reading workflow file', {
-                component: 'AdminGroups',
-                file,
-                error: error.message
-              });
-            }
-          }
-        }
-      } catch {
-        logger.info('Workflows directory not found or empty', { component: 'AdminGroups' });
-      }
+      const apps = await listResourceSummaries('apps');
+      const models = await listResourceSummaries('models');
+      const prompts = await listResourceSummaries('prompts');
+      const workflows = await listResourceSummaries('workflows');
 
       // Get skills
       const { data: allSkills } = configCache.getSkills();
@@ -547,25 +464,15 @@ export default function registerAdminGroupRoutes(app) {
         return sendBadRequest(res, 'Valid permissions object is required');
       }
 
-      const rootDir = getRootDir();
-      const groupsFilePath = join(rootDir, 'contents', 'config', 'groups.json');
-
-      // Load existing groups
-      let groupsData = { groups: {}, metadata: {} };
-      try {
-        const groupsFileData = await fs.readFile(groupsFilePath, 'utf8');
-        groupsData = JSON.parse(groupsFileData);
-      } catch {
-        // File doesn't exist, create new structure
-        groupsData = {
-          groups: {},
-          metadata: {
-            version: '1.0.0',
-            description: 'Unified group configuration with permissions and external mappings',
-            lastModified: new Date().toISOString()
-          }
-        };
-      }
+      // No group file yet is the first-run case: start the structure here.
+      const groupsData = (await configStore.readJsonStrict(GROUPS_FILE)) || {
+        groups: {},
+        metadata: {
+          version: '1.0.0',
+          description: 'Unified group configuration with permissions and external mappings',
+          lastModified: new Date().toISOString()
+        }
+      };
 
       // Check if group ID already exists (own-property check so names inherited
       // from Object.prototype, e.g. "hasOwnProperty", can't be mistaken for a group)
@@ -593,7 +500,7 @@ export default function registerAdminGroupRoutes(app) {
       groupsData.metadata.lastModified = new Date().toISOString();
 
       // Save to file
-      await atomicWriteJSON(groupsFilePath, groupsData);
+      await configStore.writeJson(GROUPS_FILE, groupsData);
 
       // Refresh cache
       await configCache.refreshCacheEntry('config/groups.json');
@@ -688,15 +595,8 @@ export default function registerAdminGroupRoutes(app) {
 
       const { name, description, permissions, mappings, inherits } = req.body;
 
-      const rootDir = getRootDir();
-      const groupsFilePath = join(rootDir, 'contents', 'config', 'groups.json');
-
-      // Load existing groups
-      let groupsData = { groups: {}, metadata: {} };
-      try {
-        const groupsFileData = await fs.readFile(groupsFilePath, 'utf8');
-        groupsData = JSON.parse(groupsFileData);
-      } catch {
+      const groupsData = await configStore.readJsonStrict(GROUPS_FILE);
+      if (!groupsData) {
         return sendNotFound(res, 'Groups file');
       }
 
@@ -752,7 +652,7 @@ export default function registerAdminGroupRoutes(app) {
       groupsData.metadata.lastModified = new Date().toISOString();
 
       // Save to file
-      await atomicWriteJSON(groupsFilePath, groupsData);
+      await configStore.writeJson(GROUPS_FILE, groupsData);
 
       // Refresh cache
       await configCache.refreshCacheEntry('config/groups.json');
@@ -861,15 +761,8 @@ export default function registerAdminGroupRoutes(app) {
         return sendBadRequest(res, `Cannot delete protected system group: ${groupId}`);
       }
 
-      const rootDir = getRootDir();
-      const groupsFilePath = join(rootDir, 'contents', 'config', 'groups.json');
-
-      // Load existing groups
-      let groupsData = { groups: {}, metadata: {} };
-      try {
-        const groupsFileData = await fs.readFile(groupsFilePath, 'utf8');
-        groupsData = JSON.parse(groupsFileData);
-      } catch {
+      const groupsData = await configStore.readJsonStrict(GROUPS_FILE);
+      if (!groupsData) {
         return sendNotFound(res, 'Groups file');
       }
 
@@ -908,7 +801,7 @@ export default function registerAdminGroupRoutes(app) {
       groupsData.metadata.lastModified = new Date().toISOString();
 
       // Save to file
-      await atomicWriteJSON(groupsFilePath, groupsData);
+      await configStore.writeJson(GROUPS_FILE, groupsData);
 
       // Refresh cache
       await configCache.refreshCacheEntry('config/groups.json');

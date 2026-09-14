@@ -14,17 +14,13 @@
  * @module services/marketplace/RegistryService
  */
 
-import { promises as fs } from 'fs';
-import path from 'path';
 import matter from 'gray-matter';
 import { throttledFetch } from '../../requestThrottler.js';
-import { atomicWriteJSON } from '../../utils/atomicWrite.js';
+import configStore from '../../services/config/ConfigStore.js';
 import { validateCatalog } from '../../validators/catalogSchema.js';
 import { validateRegistryConfig } from '../../validators/registryConfigSchema.js';
 import tokenStorageService from '../TokenStorageService.js';
 import logger from '../../utils/logger.js';
-import { getRootDir } from '../../pathUtils.js';
-import config from '../../config.js';
 
 const COMPONENT = 'RegistryService';
 
@@ -134,42 +130,22 @@ function buildAuthHeaders(auth) {
 // Helpers — paths
 // ---------------------------------------------------------------------------
 
-/**
- * Return the absolute path to the contents directory.
- *
- * @returns {string}
- */
-function getContentsDir() {
-  return path.join(getRootDir(), config.CONTENTS_DIR);
-}
+/** The registry list, relative to `contents/`. */
+const REGISTRIES_FILE = 'config/registries.json';
 
 /**
- * Return the absolute path to the registry catalog cache directory.
- * Directory is created on demand; see ensureCacheDir().
+ * Return the path of a registry's cached catalog, relative to `contents/`.
  *
- * @returns {string}
- */
-function getCacheDir() {
-  return path.join(getContentsDir(), '.registry-cache');
-}
-
-/**
- * Return the absolute path for a specific registry's cached catalog JSON.
+ * The cache is a fetched artefact rather than configuration, so it keeps its
+ * own dotted directory: nothing that scans a configuration directory can pick
+ * a catalog up as an app, a model or a prompt. The directory is created by the
+ * first write.
  *
  * @param {string} registryId
  * @returns {string}
  */
-function getCachePath(registryId) {
-  return path.join(getCacheDir(), `${registryId}.json`);
-}
-
-/**
- * Ensure the registry cache directory exists, creating it if necessary.
- *
- * @returns {Promise<void>}
- */
-async function ensureCacheDir() {
-  await fs.mkdir(getCacheDir(), { recursive: true });
+function getCacheRelPath(registryId) {
+  return `.registry-cache/${registryId}.json`;
 }
 
 // ---------------------------------------------------------------------------
@@ -668,8 +644,7 @@ class RegistryService {
    * @returns {Promise<void>}
    */
   async _saveRegistries(registriesData) {
-    const filePath = path.join(getContentsDir(), 'config', 'registries.json');
-    await atomicWriteJSON(filePath, registriesData);
+    await configStore.writeJson(REGISTRIES_FILE, registriesData);
     const cc = await this._getConfigCache();
     await cc.refreshRegistriesCache();
   }
@@ -742,8 +717,7 @@ class RegistryService {
 
     const catalog = await this.fetchCatalog(registry);
 
-    await ensureCacheDir();
-    await atomicWriteJSON(getCachePath(registryId), {
+    await configStore.writeJson(getCacheRelPath(registryId), {
       registryId,
       fetchedAt: new Date().toISOString(),
       catalog
@@ -801,13 +775,9 @@ class RegistryService {
    *   The cached entry, or null if the cache file does not exist or is unreadable
    */
   async getCachedCatalogAsync(registryId) {
-    try {
-      const cachePath = getCachePath(registryId);
-      const content = await fs.readFile(cachePath, 'utf8');
-      return JSON.parse(content);
-    } catch {
-      return null;
-    }
+    // Missing and unreadable both resolve to null here, which is what "not
+    // cached yet" has always meant to the callers.
+    return await configStore.readJson(getCacheRelPath(registryId));
   }
 
   /**
@@ -1074,12 +1044,9 @@ class RegistryService {
     data.registries.splice(idx, 1);
     await this._saveRegistries(data);
 
-    // Best-effort cache cleanup — ignore missing file errors
-    try {
-      await fs.unlink(getCachePath(id));
-    } catch {
-      // Cache file may not exist yet; nothing to clean up
-    }
+    // Best-effort cache cleanup — a cache file that was never written
+    // reports false rather than throwing
+    await configStore.remove(getCacheRelPath(id));
   }
 
   /**

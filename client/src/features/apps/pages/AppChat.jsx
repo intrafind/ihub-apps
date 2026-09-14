@@ -1,13 +1,14 @@
 import { useState, useEffect, useRef, useCallback, useMemo } from 'react';
 import {
   getOrCreateChatId,
+  readChatId,
   resetChatId,
   getConversationId,
   clearConversationId
 } from '../../../utils/chatId';
 import { getConversationMessages } from '../../../api/endpoints/apps';
 import { useParams, useNavigate, useSearchParams } from 'react-router-dom';
-import { fetchAppDetails } from '../../../api';
+import { fetchAppDetails, fetchChat } from '../../../api';
 import LoadingSpinner from '../../../shared/components/LoadingSpinner';
 import { useTranslation } from 'react-i18next';
 import { getLocalizedContent } from '../../../utils/localizeContent';
@@ -26,6 +27,11 @@ import useMagicPrompt from '../../../shared/hooks/useMagicPrompt';
 import { useIntegrationAuth } from '../../chat/hooks/useIntegrationAuth';
 import useNextcloudEmbedAttachments from '../../nextcloud-embed/hooks/useNextcloudEmbedAttachments';
 import useFeatureFlags from '../../../shared/hooks/useFeatureFlags';
+import {
+  invalidateChatsCache,
+  useChatPersistence,
+  useChatPersistenceResolving
+} from '../../../shared/hooks/useChats';
 import { ensureTokenizer, estimateTokensSync } from '../../../shared/utils/tokenEstimatorClient.js';
 import ChatInput from '../../chat/components/ChatInput';
 import ChatMessageList from '../../chat/components/ChatMessageList';
@@ -98,7 +104,30 @@ const getInitializedVariables = (app, currentLanguage) => {
   return initialVars;
 };
 
-const renderStartupState = (app, welcomeMessage, handleStarterPromptClick) => {
+const renderStartupState = (
+  app,
+  welcomeMessage,
+  handleStarterPromptClick,
+  hydrating,
+  modeResolving,
+  t
+) => {
+  // The app details can arrive before the platform config and the auth status
+  // do, and until both have, nothing here knows whether this chat is
+  // server-backed. Painting the greeting on that guess and correcting it a
+  // frame later is a visible flicker, so this window renders nothing at all —
+  // a spinner would only be a second flash for the installations that have no
+  // persistence to wait for.
+  if (modeResolving) return null;
+
+  // A server-backed chat starts with an empty `messages` whether it is brand
+  // new or holds a hundred turns — the difference only arrives with
+  // `GET /api/chats/:id`. Greeting the user as if this were a new chat and then
+  // swapping in the history a moment later is the flash this guard prevents.
+  if (hydrating) {
+    return <LoadingSpinner message={t('pages.appChat.loadingChat', 'Loading chat...')} />;
+  }
+
   const starterPrompts = app?.starterPrompts || [];
   if (starterPrompts.length > 0) {
     return (
@@ -171,7 +200,7 @@ const getTranscriptionErrorMessage = (err, t) => {
 function AppChat({ preloadedApp = null }) {
   const { t, i18n } = useTranslation();
   const currentLanguage = i18n.language;
-  const { appId } = useParams();
+  const { appId, chatId: routeChatId } = useParams();
   const navigate = useNavigate();
   const [searchParams] = useSearchParams();
   const featureFlags = useFeatureFlags();
@@ -213,6 +242,14 @@ function AppChat({ preloadedApp = null }) {
     });
   }, []);
 
+  // How the chat being opened was last answered — read from the stored chat
+  // document on hydrate and handed to `useAppSettings` as its last layer, so
+  // reopening a chat comes back with the websearch toggle, tools and style it
+  // was using rather than the app's defaults. Null for a new chat, and reset
+  // to null the moment the chat changes so one chat's setup never leaks into
+  // the next.
+  const [chatSettings, setChatSettings] = useState(null);
+
   // Shared app settings hook
   const {
     selectedModel,
@@ -244,7 +281,7 @@ function AppChat({ preloadedApp = null }) {
     setImageAspectRatio,
     setImageQuality,
     modelsLoading
-  } = useAppSettings(appId, app);
+  } = useAppSettings(appId, app, { chatSettings });
 
   // When tools feature is disabled platform-wide, hide tool UI entirely
   const toolsFeatureEnabled = featureFlags.isEnabled('tools', true);
@@ -459,14 +496,51 @@ function AppChat({ preloadedApp = null }) {
 
   const inputRef = useRef(null);
   const formRef = useRef(null);
-  const chatId = useRef(getOrCreateChatId(appId));
+  // The chat this page is showing. `/apps/:appId/c/:chatId` names one outright
+  // — that is how the history opens a stored conversation — while `/apps/:appId`
+  // falls back to the id this tab already holds for the app. State rather than a
+  // ref, because changing it has to re-run the message hook, the stream state
+  // and the hydration below.
+  // Chat ids this tab minted itself. Such an id cannot exist in the durable
+  // store by construction, so asking for it can only ever 404 — and that round
+  // trip is paid for with a "Loading chat…" spinner where the greeting and the
+  // starter prompts belong, plus a red `API Error` in the console every time.
+  const mintedChatIdsRef = useRef(new Set());
+  const resolveChatId = useCallback(() => {
+    if (routeChatId) return routeChatId;
+    const stored = readChatId(appId);
+    if (stored) return stored;
+    const minted = getOrCreateChatId(appId);
+    mintedChatIdsRef.current.add(minted);
+    return minted;
+  }, [appId, routeChatId]);
+  const [chatId, setChatId] = useState(resolveChatId);
   // Ref to store variables for resend operations to avoid race condition with state updates
   const pendingVariablesRef = useRef(null);
 
-  // Restore existing chat ID when the appId changes
+  // Follow the URL: another app, or another chat under the same app.
   useEffect(() => {
-    chatId.current = getOrCreateChatId(appId);
-  }, [appId]);
+    const next = resolveChatId();
+    setChatId(current => (current === next ? current : next));
+  }, [resolveChatId]);
+
+  /**
+   * Leave the current chat and start a fresh one for this app. A URL that names
+   * a stored chat has to be dropped along with it, or the effect above would
+   * immediately pin the chat that was just left. Nothing is lost when chats are
+   * persisted — the old one simply stays in the history.
+   *
+   * @returns {string} The new chat id.
+   */
+  const startNewChat = useCallback(() => {
+    const nextChatId = resetChatId(appId);
+    // Minted here, so the store has never heard of it: skip the hydration
+    // round trip that could only 404.
+    mintedChatIdsRef.current.add(nextChatId);
+    setChatId(nextChatId);
+    if (routeChatId) navigate(`/apps/${appId}`, { replace: true });
+    return nextChatId;
+  }, [appId, navigate, routeChatId]);
 
   /**
    * Determine if the response should trigger auto-redirect to canvas mode
@@ -531,8 +605,23 @@ function AppChat({ preloadedApp = null }) {
     [shouldAutoRedirectToCanvas, handleOpenInCanvas, app]
   );
 
+  // Durable chats: the server owns the transcript, so the browser copy is
+  // skipped, a turn posts only the new message, and a past conversation gets
+  // back on screen through the hydration below. Incognito switches it off for
+  // this chat; anonymous viewers and installations without the capability never
+  // had it, and keep exactly the behaviour they have today.
+  const chatPersistence = useChatPersistence();
+  const serverBackedChat = chatPersistence && !ephemeral;
+  // `chatPersistence` answers false until the platform config and the auth
+  // status have both landed, so an early false is "not known yet", not "no".
+  // The startup state has to wait it out, or a persisted chat greets the user
+  // for a frame before its history arrives.
+  const chatModeResolving = useChatPersistenceResolving() && !ephemeral;
+
   const {
     messages,
+    hydrating,
+    finishHydration,
     processing,
     clarificationPending,
     sendMessage: sendChatMessage,
@@ -545,24 +634,187 @@ function AppChat({ preloadedApp = null }) {
     submitClarificationResponse,
     conversationTitle,
     loadServerMessages,
+    reattachToRun,
     resetConversationState,
     addUserMessage,
     addAssistantMessage,
     updateAssistantMessage
   } = useAppChat({
     appId,
-    chatId: chatId.current,
+    chatId,
     onMessageComplete: handleMessageComplete,
     // Runtime-selectable: seeded from app.ephemeral but the user can toggle it in
     // the chat settings. When on, nothing is persisted to browser storage.
-    ephemeral
+    ephemeral,
+    serverBacked: serverBackedChat
   });
+
+  // Hydrate a server-backed chat from the durable store. That mode keeps no
+  // browser copy, so this fetch is the only thing that puts a stored transcript
+  // back on screen — both when the history opens a chat by URL and on a plain
+  // reload of `/apps/:appId`, where the id comes from sessionStorage. A chat
+  // this tab minted but never sent is not in the store yet: that 404 is the
+  // ordinary case for a new chat, not a failure worth reporting.
+  useEffect(() => {
+    // Switching chats drops the previous chat's setup immediately, rather than
+    // waiting for the new one's document to arrive. In the gap the app's own
+    // defaults apply, which is what a chat with no stored settings gets too —
+    // leaving the old ones in place would answer the new chat with the
+    // previous one's tools.
+    setChatSettings(null);
+  }, [chatId]);
+
+  // The hydration attempt that owns the transcript, as `<chatId>|<mode>`. Keyed
+  // on the mode too, because leaving and re-entering server-backed mode (the
+  // incognito toggle) is a second entry into the same chat — a chat-id-only
+  // guard would answer "already done" and then never fetch, never finish
+  // hydrating, and leave the surface spinning "Loading chat…" for good.
+  const chatHydratedRef = useRef(null);
+  // Whether the fetch below is still out. A re-run of the effect must not end
+  // hydration behind its back — that is the greeting flash all over again.
+  const hydrationPendingRef = useRef(false);
+  useEffect(() => {
+    if (!serverBackedChat || !app) return undefined;
+    const attempt = `${chatId}|${serverBackedChat}`;
+    if (chatHydratedRef.current === attempt) {
+      // This chat has already been fetched (or deliberately not fetched) in
+      // this mode. Nothing else clears the loading flag, so say so here.
+      if (!hydrationPendingRef.current) finishHydration();
+      return undefined;
+    }
+    // Already showing a conversation: the browser copy that becoming
+    // server-backed discards is cleared in the same commit, so a non-empty
+    // transcript here is one that belongs on screen — an incognito stretch, or
+    // a handoff that seeded it. Hydration is left alone rather than finished:
+    // the clearing case re-runs this effect a frame later with nothing on
+    // screen, and finishing here would uncover the greeting in between.
+    if (messages.length > 0) return undefined;
+    if (mintedChatIdsRef.current.has(chatId)) {
+      // This tab minted the id, so the store has never heard of it: asking
+      // would buy a guaranteed 404, a console error, and a spinner where the
+      // greeting and the starter prompts belong.
+      chatHydratedRef.current = attempt;
+      hydrationPendingRef.current = false;
+      finishHydration();
+      return undefined;
+    }
+    chatHydratedRef.current = attempt;
+    hydrationPendingRef.current = true;
+
+    // Superseded only by another attempt — a different chat, or a mode change
+    // — never by a re-render. A turn started during the round trip used to
+    // cancel this fetch through the effect's own cleanup and, because the
+    // guard above was already latched, the stored transcript was then lost for
+    // the rest of the chat's life.
+    const owns = () => chatHydratedRef.current === attempt;
+    (async () => {
+      try {
+        const result = await fetchChat(chatId);
+        if (!owns()) return;
+        // The store is the source of truth, so it replaces whatever is here —
+        // and an empty transcript still ends the loading state rather than
+        // letting the greeting appear a beat late. A turn started meanwhile is
+        // kept, with the stored history restored in front of it.
+        const storedMessages = Array.isArray(result?.messages) ? result.messages : [];
+        loadServerMessages(storedMessages, { preserveLocal: true });
+        // `modelId` lives on the chat document rather than inside `settings`,
+        // so it is folded in here; `useAppSettings` still checks the app
+        // allows it before selecting it.
+        const stored = result?.chat?.settings;
+        const storedModelId = result?.chat?.modelId;
+        setChatSettings(
+          stored || storedModelId
+            ? { ...(stored || {}), ...(storedModelId ? { modelId: storedModelId } : {}) }
+            : null
+        );
+        // Opening a chat is what "seen" means: this same GET cleared the
+        // chat's unseen flag server-side, so every list already on screen is
+        // now showing a badge the server no longer reports.
+        invalidateChatsCache();
+
+        // The turn may still be generating. A durable chat's run outlives the
+        // browser that started it, so reopening the chat has to re-attach to
+        // it — replay what the ledger already holds, then follow the stream —
+        // or the answer only appears after the turn ends and the page is
+        // loaded a second time. `onSettled` re-reads the transcript once it
+        // finishes, because the store, not this surface, is what the answer
+        // finally was.
+        // ...unless its answer is already in the transcript we just read.
+        // The server stores the answer *before* it releases the run — the two
+        // take the chat lock separately, and the other order lets a reader see
+        // a settled chat whose answer is not stored yet and clear the unseen
+        // flag on it permanently. The cost of the safe order is this window:
+        // `status` still says `running` while the reply is already here. Keying
+        // off the status alone, the client renders the stored answer and then
+        // mints a second bubble and replays the same tokens into it — and it
+        // never recovers on its own, because the run has ended and `onSettled`
+        // has no end to wait for, so `processing` sticks until a reload.
+        const activeRunId =
+          result?.chat?.status === 'running' ? result.chat.activeRunId || null : null;
+        const answered =
+          activeRunId !== null &&
+          storedMessages.some(
+            message => message.role === 'assistant' && message.runId === activeRunId
+          );
+        const runningRunId = answered ? null : activeRunId;
+        if (runningRunId) {
+          reattachToRun(runningRunId, {
+            onSettled: async () => {
+              if (!owns()) return;
+              try {
+                const settled = await fetchChat(chatId);
+                if (!owns()) return;
+                // Replaces the transcript outright, placeholder included: the
+                // store now holds the assistant message this surface was
+                // rendering live, and it is the version that survives a
+                // reload.
+                loadServerMessages(Array.isArray(settled?.messages) ? settled.messages : []);
+                invalidateChatsCache();
+              } catch (err) {
+                // The live projection stays on screen. It is very probably
+                // right — this re-read only exists to close the gap between
+                // the replay and the stream.
+                console.warn('Could not re-read the settled chat:', err.message);
+              }
+            }
+          });
+        }
+      } catch (err) {
+        if (!owns()) return;
+        if (err?.status !== 404) {
+          console.warn('Failed to load the stored chat, starting empty:', err.message);
+        }
+        finishHydration();
+      } finally {
+        if (owns()) hydrationPendingRef.current = false;
+      }
+    })();
+
+    return undefined;
+  }, [serverBackedChat, app, chatId, messages.length, loadServerMessages, finishHydration]);
+
+  // A finished turn is what changes the chat list: a brand-new chat appears in
+  // it, an existing one moves to the top and may have gained a derived title,
+  // and opening this chat cleared its unseen flag. The sidebar is mounted once
+  // in Layout for the whole session, so without this its Recents would keep
+  // showing the list it fetched when the page first loaded. Every terminal
+  // branch of a turn clears `processing`, so the transition covers a failed
+  // turn too — that one is stored as well.
+  const wasProcessingRef = useRef(false);
+  useEffect(() => {
+    const wasProcessing = wasProcessingRef.current;
+    wasProcessingRef.current = processing;
+    if (serverBackedChat && wasProcessing && !processing) invalidateChatsCache();
+  }, [processing, serverBackedChat]);
 
   // Resume conversation from conversation API on mount (iAssistant Conversation)
   const conversationResumed = useRef(false);
   useEffect(() => {
     if (conversationResumed.current || !app || messages.length > 0) return;
-    if (ephemeral) return;
+    // A server-backed chat hydrates from the durable store instead, and that
+    // store is the source of truth for it. Two loaders replacing the same array
+    // would race, and the loser would silently win on a slow network.
+    if (ephemeral || serverBackedChat) return;
 
     const existingConversationId = getConversationId(appId);
     if (!existingConversationId) return;
@@ -582,7 +834,7 @@ function AppChat({ preloadedApp = null }) {
         clearConversationId(appId);
       }
     })();
-  }, [app, appId, messages.length, loadServerMessages, ephemeral]);
+  }, [app, appId, messages.length, loadServerMessages, ephemeral, serverBackedChat]);
 
   // Auto-send message if send=true query parameter is present
   const autoSendTriggered = useRef(false);
@@ -738,13 +990,29 @@ function AppChat({ preloadedApp = null }) {
   // Reset auto-start trigger when appId or chatId changes
   useEffect(() => {
     autoStartTriggered.current = false;
-  }, [appId, chatId.current]);
+  }, [appId, chatId]);
+
+  // The latest values the delayed send below has to re-check. Hydration can
+  // land inside those 300 ms, and the timer closes over nothing else.
+  const autoStartGateRef = useRef(null);
+  autoStartGateRef.current = {
+    hydrating,
+    chatModeResolving,
+    messageCount: messages.length
+  };
 
   useEffect(() => {
     // Check if we should auto-start the conversation
     const shouldAutoStart =
       app?.autoStart === true && // App has autoStart enabled
       messages.length === 0 && // No messages yet
+      // …and an empty transcript really does mean "new chat". In server-backed
+      // mode it is also what a chat with a hundred stored turns looks like
+      // until `GET /api/chats/:id` answers, so firing here would append a
+      // blank turn — and re-prompt the model with the whole history — every
+      // single time the user opens that chat from the history.
+      !hydrating &&
+      !chatModeResolving &&
       !processing && // Not currently processing
       !autoStartTriggered.current && // Haven't triggered yet
       selectedModel && // Model is selected
@@ -757,6 +1025,13 @@ function AppChat({ preloadedApp = null }) {
       // Send an empty message to trigger the LLM
       // The empty user message will be filtered out in ChatMessageList
       setTimeout(() => {
+        // Re-check: the stored transcript may have landed while this timer
+        // was pending, and this was never a new chat after all.
+        const gate = autoStartGateRef.current;
+        if (gate.hydrating || gate.chatModeResolving || gate.messageCount > 0) {
+          debugLog('Auto-start abandoned: the chat is not empty after all');
+          return;
+        }
         const params = {
           modelId: selectedModel,
           style: selectedStyle,
@@ -825,6 +1100,8 @@ function AppChat({ preloadedApp = null }) {
   }, [
     app,
     messages.length,
+    hydrating,
+    chatModeResolving,
     processing,
     appId,
     selectedModel,
@@ -878,7 +1155,7 @@ function AppChat({ preloadedApp = null }) {
       cancelGeneration();
       clearMessages();
       resetConversationState();
-      chatId.current = resetChatId(appId);
+      startNewChat();
       clearConversationId(appId);
       conversationResumed.current = false;
 
@@ -1016,8 +1293,10 @@ function AppChat({ preloadedApp = null }) {
 
   // Calculate the welcome message to display (if any) - show greeting when configured
   const welcomeMessage = useMemo(() => {
-    // Don't show welcome message if there are any messages
-    if (!app || loading || messages.length > 0) return null;
+    // Don't show welcome message if there are any messages, while the chat mode
+    // is still unknown, or while a stored transcript is still on its way — see
+    // renderStartupState.
+    if (!app || loading || hydrating || chatModeResolving || messages.length > 0) return null;
 
     // Skip if starter prompts are configured - they take priority
     if (app.starterPrompts && app.starterPrompts.length > 0) {
@@ -1038,7 +1317,7 @@ function AppChat({ preloadedApp = null }) {
     }
 
     return greeting;
-  }, [app, loading, currentLanguage, messages.length]);
+  }, [app, loading, hydrating, chatModeResolving, currentLanguage, messages.length]);
 
   // Determine if input should be centered (only when showing example prompts)
   const shouldCenterInput = useMemo(() => {
@@ -1375,7 +1654,7 @@ function AppChat({ preloadedApp = null }) {
         // Clear regular chat
         clearMessages();
         resetConversationState();
-        chatId.current = resetChatId(appId);
+        startNewChat();
         clearConversationId(appId);
         conversationResumed.current = false;
       }
@@ -2093,7 +2372,7 @@ function AppChat({ preloadedApp = null }) {
       <SharedAppHeader
         app={app}
         appId={appId}
-        chatId={chatId.current}
+        chatId={chatId}
         mode="chat"
         messages={messages}
         variables={variables}
@@ -2229,7 +2508,7 @@ function AppChat({ preloadedApp = null }) {
                         onResend={handleResendMessage}
                         editable={true}
                         appId={appId}
-                        chatId={chatId.current}
+                        chatId={chatId}
                         modelId={selectedModel}
                         onOpenInCanvas={handleOpenInCanvas}
                         canvasEnabled={app?.features?.canvas === true}
@@ -2246,7 +2525,14 @@ function AppChat({ preloadedApp = null }) {
                     <div className="w-full h-full overflow-y-auto">
                       <div className="min-h-full flex items-center justify-center p-4">
                         <div className="w-full max-w-4xl">
-                          {renderStartupState(app, welcomeMessage, handleStarterPromptClick)}
+                          {renderStartupState(
+                            app,
+                            welcomeMessage,
+                            handleStarterPromptClick,
+                            hydrating,
+                            chatModeResolving,
+                            t
+                          )}
                         </div>
                       </div>
                     </div>
@@ -2270,7 +2556,7 @@ function AppChat({ preloadedApp = null }) {
                         onResend={handleResendMessage}
                         editable={true}
                         appId={appId}
-                        chatId={chatId.current}
+                        chatId={chatId}
                         modelId={selectedModel}
                         onOpenInCanvas={handleOpenInCanvas}
                         canvasEnabled={app?.features?.canvas === true}
@@ -2285,7 +2571,14 @@ function AppChat({ preloadedApp = null }) {
                     </div>
                   ) : (
                     <div className="mb-8">
-                      {renderStartupState(app, welcomeMessage, handleStarterPromptClick)}
+                      {renderStartupState(
+                        app,
+                        welcomeMessage,
+                        handleStarterPromptClick,
+                        hydrating,
+                        chatModeResolving,
+                        t
+                      )}
                     </div>
                   )}
                   <div>{renderChatInput()}</div>
@@ -2306,7 +2599,7 @@ function AppChat({ preloadedApp = null }) {
                     onResend={handleResendMessage}
                     editable={true}
                     appId={appId}
-                    chatId={chatId.current}
+                    chatId={chatId}
                     modelId={selectedModel}
                     starterPrompts={app?.starterPrompts || []}
                     onSelectPrompt={handleStarterPromptClick}
@@ -2336,7 +2629,7 @@ function AppChat({ preloadedApp = null }) {
                   onResend={handleResendMessage}
                   editable={true}
                   appId={appId}
-                  chatId={chatId.current}
+                  chatId={chatId}
                   modelId={selectedModel}
                   starterPrompts={app?.starterPrompts || []}
                   onSelectPrompt={handleStarterPromptClick}
@@ -2375,7 +2668,13 @@ function AppChat({ preloadedApp = null }) {
       {shareEnabled && showShare && (
         <AppShareModal
           appId={appId}
-          path={window.location.pathname}
+          // A share link points at the app, never at one stored chat: the
+          // recipient does not own it and could only ever get a 404 from it.
+          path={
+            routeChatId
+              ? window.location.pathname.replace(/\/c\/[^/]+$/, '')
+              : window.location.pathname
+          }
           params={{
             model: selectedModel,
             style: selectedStyle,

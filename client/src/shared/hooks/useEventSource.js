@@ -21,16 +21,32 @@ import { RUN_EVENTS } from '../run/runReducer';
  * Terminal frames: `run/ended` of the turn's run and `stream/error` close the
  * fetch (release the HTTP/1.1 connection slot) and flip processing to false.
  * Also includes connection timeout, the chat heartbeat (`checkAppChatStatus`)
- * and `stopAppChatStream` on cleanup.
+ * and, **on unmount of an ephemeral chat only**, `stopAppChatStream`.
+ * Switching `chatId` while the surface stays mounted merely detaches — see the
+ * teardown effect.
  *
  * @param {Object} options
  * @param {string} options.appId - App ID (used for heartbeat + cleanup)
  * @param {string} options.chatId - Chat session ID (stream id; heartbeat + cleanup)
+ * @param {boolean} [options.durable=false] - The chat is stored server-side, so a
+ *   turn in flight must survive this surface going away
  * @param {number} [options.timeoutDuration=60000] - Connection timeout in ms
  * @param {Function} options.onEvent - Called for each SSE v2 frame: ({ type, envelope })
  * @param {Function} [options.onProcessingChange] - Called with true/false as stream starts/stops
+ * @param {Function} [options.isFollowingExistingRun] - Whether this stream is
+ *   following a turn it did not start. Only then does the heartbeat treat "the
+ *   server is running nothing on this chat" as a reason to stop — see
+ *   {@link startHeartbeat}.
  */
-function useEventSource({ appId, chatId, timeoutDuration = 60000, onEvent, onProcessingChange }) {
+function useEventSource({
+  appId,
+  chatId,
+  durable = false,
+  timeoutDuration = 60000,
+  onEvent,
+  onProcessingChange,
+  isFollowingExistingRun
+}) {
   // Stores the AbortController for the active fetch stream — non-null == connected
   const abortControllerRef = useRef(null);
   // Exposed as eventSourceRef for backward-compatible isConnected check by callers
@@ -84,6 +100,24 @@ function useEventSource({ appId, chatId, timeoutDuration = 60000, onEvent, onPro
     }
   }, [appId, chatId, abortAndClearTimers]);
 
+  /**
+   * Poll the server for whether this chat's stream is still worth holding.
+   *
+   * `active` answers whether the server still has this client's stream, which
+   * is the original question. `processing` answers whether anything is
+   * actually producing on the chat, and it is only trustworthy as a stop
+   * signal for a stream that is *following* a turn it did not start.
+   *
+   * That distinction matters. A stream this surface opened for its own turn is
+   * briefly connected before the turn's POST reaches the server, and treating
+   * `processing: false` as terminal there would cancel the turn the user just
+   * sent. But a surface re-attached to a chat the store says is running has
+   * nothing of its own in flight, and "the server is running nothing" is then
+   * the whole answer: the turn ended in a process that died before it could
+   * write a terminal frame. Without this the SSE connects, no frame ever
+   * arrives, and the chat renders as generating — with the composer disabled
+   * behind a Stop button — on every single open, forever.
+   */
   const startHeartbeat = useCallback(() => {
     if (heartbeatIntervalRef.current) {
       clearInterval(heartbeatIntervalRef.current);
@@ -92,7 +126,9 @@ function useEventSource({ appId, chatId, timeoutDuration = 60000, onEvent, onPro
       if (!abortControllerRef.current || !appId || !chatId) return;
       try {
         const status = await checkAppChatStatus(appId, chatId);
-        if (!status || !status.active) {
+        const idle =
+          status?.active && status.processing === false && isFollowingExistingRun?.() === true;
+        if (!status || !status.active || idle) {
           cleanupEventSource();
           if (onProcessingChange) onProcessingChange(false);
         }
@@ -100,7 +136,7 @@ function useEventSource({ appId, chatId, timeoutDuration = 60000, onEvent, onPro
         console.warn('Error checking chat status:', err);
       }
     }, 60000);
-  }, [appId, chatId, cleanupEventSource, onProcessingChange]);
+  }, [appId, chatId, cleanupEventSource, onProcessingChange, isFollowingExistingRun]);
 
   /**
    * Open the SSE stream to the given URL.
@@ -254,12 +290,59 @@ function useEventSource({ appId, chatId, timeoutDuration = 60000, onEvent, onPro
     ]
   );
 
-  // Cleanup on unmount — release the slot synchronously, then notify the server
-  // in the background. Awaiting the public async cleanup here would race the
-  // browser navigation; abortAndClearTimers is enough to free the connection.
+  // Whether this hook is still mounted. Declared before the teardown effect so
+  // its cleanup runs first: React destroys effects in declaration order, so by
+  // the time the teardown below runs on a real unmount this is already false,
+  // while a mere dependency change leaves it true.
+  const mountedRef = useRef(true);
+  useEffect(() => {
+    mountedRef.current = true;
+    return () => {
+      mountedRef.current = false;
+    };
+  }, []);
+
+  // Read through a ref so the teardown below stays keyed on the stream's
+  // identity alone: an unstable callback in the dependency array would abort a
+  // live stream on an unrelated re-render.
+  const onProcessingChangeRef = useRef(onProcessingChange);
+  onProcessingChangeRef.current = onProcessingChange;
+
+  // `durable` for the same reason, and it is the sharper case of the two. It
+  // derives from platform config and from auth, so it can flip while a turn is
+  // running — and in the dependency array that flip runs the cleanup, whose
+  // very first act is `abortAndClearTimers()`. The guard it is read for sits
+  // three lines further down, so the stream is already gone by the time
+  // anything asks whether it was allowed to be. Nothing flips it mid-turn
+  // today; the effect is still keyed on the stream's identity alone, which is
+  // what its own comment above claims.
+  const durableRef = useRef(durable);
+  durableRef.current = durable;
+
+  // Teardown. This effect is keyed on the stream's identity, so it also runs
+  // when the surface stays mounted and simply switches to another chat —
+  // `/apps/:appId/c/:chatId` does exactly that.
+  //
+  // Switching chats only detaches: release the HTTP slot, drop the timers, and
+  // report the turn as no longer processing *here* so the composer of the chat
+  // just opened is not stuck behind a Stop button.
+  //
+  // A real unmount used to tell the server to stop unconditionally, and for a
+  // durable chat that was wrong in the one case durability exists for.
+  // `POST …/stop` is deliberately the unconditional abort — the Stop button
+  // has to work on a turn whose client is gone — so sending it on unmount
+  // killed the very answer the user was promised would finish, and stored it
+  // as an empty assistant message with an ABORTED error. A durable chat
+  // therefore never stops on unmount; only the Stop button does. An ephemeral
+  // one still must, or leaving the page bills a generation nobody will read.
   useEffect(() => {
     return () => {
-      abortAndClearTimers();
+      const wasActive = abortAndClearTimers();
+      if (mountedRef.current) {
+        if (wasActive) onProcessingChangeRef.current?.(false);
+        return;
+      }
+      if (durableRef.current) return;
       if (appId && chatId) {
         stopAppChatStream(appId, chatId).catch(() => {
           // server may be unreachable on tab close — best effort only

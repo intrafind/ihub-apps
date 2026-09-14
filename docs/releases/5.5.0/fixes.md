@@ -567,6 +567,43 @@ OpenAI-compatible servers are the usual culprits.
 - The wait *before* the first piece of an answer is unchanged, so a model that
   thinks for a long time before it starts writing is not cut off.
 
+## Reopening a Durable Chat Mid-Answer Now Picks the Answer Back Up
+
+Three defects, reported together from real use: start a chat with websearch,
+close the tab before the first text arrives, come back, and the chat was
+marked as having new activity but showed only the question — then, after a
+second reload, an empty assistant bubble.
+
+- **Leaving a durable chat no longer cancels its turn.** The page told the
+  server to stop whenever the chat surface unmounted for good. `POST …/stop`
+  is deliberately unconditional — the Stop button has to reach a turn whose
+  browser is gone — so closing the tab aborted the very answer durable chats
+  promise to finish, and stored it as an empty message with an `ABORTED`
+  error. Only the Stop button cancels a durable turn now. An ephemeral chat
+  still stops on leaving, or a generation nobody will read keeps running.
+- **Reopening a chat re-attaches to a turn that is still generating.** The
+  page replays what the run ledger already holds and then follows the live
+  stream, instead of showing the question and waiting for a frame that could
+  never arrive on a connection nobody had opened. When the turn ends the
+  transcript is re-read from the store.
+- **A stopped or failed turn says so.** Reconstructed from storage, both
+  rendered as a blank bubble: the "stopped" note is written into the message
+  as it happens live, and a failure that produced no text had only its reason,
+  which hydration was discarding. Both now render.
+
+## A Chat Reopens With the Settings It Was Using
+
+The websearch toggle, enabled tools, style, output format, temperature,
+thinking options and model are recorded on the chat and restored when it is
+reopened. They lived only in this browser's per-app storage, so the *app*
+remembered a preference and the *chat* remembered nothing: a chat you had
+turned websearch on for answered your next question without it.
+
+Only what a chat actually recorded is restored — everything else falls back to
+the app's defaults, and the model is re-selected only if the app still allows
+it. A turn merges its settings over the earlier ones rather than replacing
+them, because a surface only sends the toggles it shows.
+
 ## Start Page and Sidebar Settings Take Effect Without a Page Reload
 
 Changes saved under **UI Customization → Start Page** did not reach the running
@@ -675,3 +712,22 @@ server correctly reported that no ZIP had arrived.
 - Exporting a backup was never affected, and no backup created with an earlier version is damaged —
   re-importing a previously exported ZIP now works.
 - No configuration change or admin action is required.
+
+## A New Local Account Was Invisible to Every Other Worker
+
+Creating a user through **Admin → Users** (or the local-auth signup path) wrote `users.json`
+directly instead of going through the shared save path. In a clustered installation — which is the
+default — that left every *other* worker authenticating against a users file it still believed was
+current, so the new account could not log in on most requests. Worse, the next save from any of
+those workers rewrote the whole file from its stale snapshot, and the new user was dropped
+altogether.
+
+- User creation now goes through the same writer as every other change: it writes through the
+  configuration store, refreshes the cache entry, and tells the other workers to re-read the file.
+- The new account works on every worker immediately, and a later save from another worker no longer
+  removes it.
+
+**If you are upgrading from 5.4.x and run more than one worker**, it is worth checking that the
+accounts you created are still there. Anyone who was created and then reported "my login does not
+work" may have been silently removed by a later save; such an account has to be created again. A
+single-worker installation is unaffected.
