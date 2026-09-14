@@ -149,6 +149,18 @@ const schemaMetadata = {
 function generateEnhancedJsonSchema(schemaType, zodSchema) {
   const baseJsonSchema = z.toJSONSchema(zodSchema, {
     target: 'draft-7',
+    // These schemas validate what an admin TYPES into an editor, i.e. the
+    // input side of the Zod schema, so describe the input type.
+    //
+    // `z.toJSONSchema` defaults to `io: 'output'`, which describes the value a
+    // successful parse RETURNS: every `.prefault()`/`.default()` field is
+    // present there, so it lands in `required`, and a plain `z.object()` is
+    // emitted with `additionalProperties: false` because parsing strips the
+    // keys it does not know. Against a real config that rejects documents the
+    // server accepts — a group without `enabled` reads as "enabled is
+    // required", and `permissions.contentAdmin` as "must NOT have additional
+    // properties" — even though both round-trip through the schema fine.
+    io: 'input',
     // A handful of config fields (e.g. cloud storage driveId) normalize an
     // empty string to undefined via .transform() with no .pipe() target, so
     // there's no static type to describe — fall back to an unconstrained
