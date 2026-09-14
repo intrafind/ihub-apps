@@ -1,5 +1,19 @@
 # Fixes — 5.5.0
 
+## Saving a Group No Longer Wipes Its Skills and Tools Permissions
+
+Opening a group in **Admin → Groups** and saving it silently dropped that group's `skills`
+permission — and, on installations already using it, the new `tools` permission and the
+`contentAdmin` flag. Nothing in the UI indicated the loss; the group simply stopped granting agent
+skills, and users in it lost access to every skill until the permission was restored by hand.
+
+The cause was the create and update endpoints, which rebuilt the permission object from a fixed list
+of fields covering apps, prompts, models and workflows but nothing added since. Both now go through
+a single place that covers every permission, so a group keeps what it was granted.
+
+If a group has already lost its permissions this way, re-add them in **Admin → Groups** once on the
+upgraded version and they will persist.
+
 ## Apps Called Over MCP Now Honour Their Prompt and Variables
 
 An app invoked headlessly — through the MCP gateway, an A2A skill, or as a tool from another app —
