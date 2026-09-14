@@ -60,11 +60,11 @@ const SEMVER_PATTERN =
 const nodeExecutionSchema = z
   .object({
     /** Maximum execution time for this node in milliseconds */
-    timeout: z.number().int().min(1000).max(300000).optional().default(30000),
+    timeout: z.number().int().min(1000).max(300000).optional().prefault(30000),
     /** Number of retry attempts on failure (0 = no retries) */
-    retries: z.number().int().min(0).max(5).optional().default(0),
+    retries: z.number().int().min(0).max(5).optional().prefault(0),
     /** Delay between retry attempts in milliseconds */
-    retryDelay: z.number().int().min(100).max(60000).optional().default(1000),
+    retryDelay: z.number().int().min(100).max(60000).optional().prefault(1000),
     /** How to handle errors at this node */
     errorHandler: z.enum(['fail', 'continue', 'llm_recovery']).optional()
   })
@@ -292,7 +292,7 @@ const edgeConditionSchema = z
     type: z
       .enum(['always', 'never', 'expression', 'equals', 'contains', 'exists', 'llm'])
       .optional()
-      .default('always'),
+      .prefault('always'),
 
     /**
      * Expression for 'expression' type conditions
@@ -373,7 +373,7 @@ const workflowGlobalConfigSchema = z
      * - standard: Node transitions and key events
      * - full: Detailed logging including all inputs/outputs
      */
-    observability: z.enum(['minimal', 'standard', 'full']).optional().default('standard'),
+    observability: z.enum(['minimal', 'standard', 'full']).optional().prefault('standard'),
 
     /**
      * Data persistence strategy
@@ -381,7 +381,7 @@ const workflowGlobalConfigSchema = z
      * - session: Persist within session, cleared on session end
      * - long_term: Persist across sessions for future reference
      */
-    persistence: z.enum(['none', 'session', 'long_term']).optional().default('session'),
+    persistence: z.enum(['none', 'session', 'long_term']).optional().prefault('session'),
 
     /**
      * Default error handling strategy
@@ -389,7 +389,7 @@ const workflowGlobalConfigSchema = z
      * - retry: Retry failed node based on execution config
      * - llm_recovery: Use LLM to attempt error recovery
      */
-    errorHandling: z.enum(['fail', 'retry', 'llm_recovery']).optional().default('fail'),
+    errorHandling: z.enum(['fail', 'retry', 'llm_recovery']).optional().prefault('fail'),
 
     /**
      * Human-in-the-loop configuration
@@ -397,7 +397,7 @@ const workflowGlobalConfigSchema = z
      * - approval_gates: Human approval at designated nodes
      * - real_time: Real-time human intervention capability
      */
-    humanInLoop: z.enum(['none', 'approval_gates', 'real_time']).optional().default('none'),
+    humanInLoop: z.enum(['none', 'approval_gates', 'real_time']).optional().prefault('none'),
 
     /**
      * Maximum total execution time for the workflow in milliseconds.
@@ -405,13 +405,13 @@ const workflowGlobalConfigSchema = z
      * agentic workflows (multi-step research, large doc analysis) routinely
      * exceed the old 10-minute cap.
      */
-    maxExecutionTime: z.number().int().min(1000).max(3600000).optional().default(300000),
+    maxExecutionTime: z.number().int().min(1000).max(3600000).optional().prefault(300000),
 
     /**
      * Maximum number of nodes allowed in this workflow
      * Default: 20, Maximum: 50
      */
-    maxNodes: z.number().int().min(2).max(50).optional().default(20),
+    maxNodes: z.number().int().min(2).max(50).optional().prefault(20),
 
     /**
      * Maximum times any single node can be executed (for cycles/loops)
@@ -424,7 +424,7 @@ const workflowGlobalConfigSchema = z
      * decomposed (sub-question × per-doc) shape can multiply further.
      * The engine's per-node tracking still catches genuine infinite loops.
      */
-    maxIterations: z.number().int().min(1).max(1000).optional().default(10),
+    maxIterations: z.number().int().min(1).max(1000).optional().prefault(10),
 
     /**
      * Whether to allow cycles/loops in the workflow graph
@@ -432,7 +432,7 @@ const workflowGlobalConfigSchema = z
      * and iterative patterns. The maxIterations config protects against infinite loops.
      * When false, strict DAG validation is enforced and cycles are rejected at start.
      */
-    allowCycles: z.boolean().optional().default(true),
+    allowCycles: z.boolean().optional().prefault(true),
 
     /**
      * Default model ID for agent nodes that don't specify their own modelId.
@@ -496,7 +496,7 @@ const baseWorkflowConfigSchema = z.object({
   version: z.string().regex(SEMVER_PATTERN, 'Version must be in semver format (e.g., 1.0.0)'),
 
   /** Whether this workflow is active and can be executed */
-  enabled: z.boolean().optional().default(true),
+  enabled: z.boolean().optional().prefault(true),
 
   /** Global workflow configuration options */
   config: workflowGlobalConfigSchema,
@@ -530,9 +530,9 @@ const baseWorkflowConfigSchema = z.object({
   chatIntegration: z
     .object({
       /** Whether the workflow appears as a selectable tool in chat apps */
-      enabled: z.boolean().optional().default(false),
+      enabled: z.boolean().optional().prefault(false),
       /** If true, workflow output streams directly as chat answer; if false, LLM formats the result */
-      passthroughResult: z.boolean().optional().default(false),
+      passthroughResult: z.boolean().optional().prefault(false),
       /** Overrides workflow description for the LLM tool definition */
       toolDescription: localizedStringSchema.optional(),
       /** Which output field to display as the primary result (e.g., "finalReport") */
@@ -550,7 +550,7 @@ const baseWorkflowConfigSchema = z.object({
    * - draft: Work in progress, not yet available for execution
    * - published: Ready for execution by users
    */
-  status: z.enum(['draft', 'published']).optional().default('draft'),
+  status: z.enum(['draft', 'published']).optional().prefault('draft'),
 
   /**
    * Trigger definitions for automated workflow execution.

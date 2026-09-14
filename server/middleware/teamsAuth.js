@@ -1,5 +1,4 @@
 import jwt from 'jsonwebtoken';
-import jwksClient from 'jwks-rsa';
 import { promisify } from 'util';
 import configCache from '../configCache.js';
 import { enhanceUserGroups, mapExternalGroups } from '../utils/authorization.js';
@@ -10,15 +9,20 @@ import logger from '../utils/logger.js';
 import { getAuthCookieOptions } from '../utils/cookieSettings.js';
 import { clearOidcLogoutHint } from '../utils/oidcLogoutHint.js';
 
-// JWKS client for Microsoft public keys
-const createJwksClient = tenantId => {
+// jwks-rsa pulls in jose (pure ESM) internally via a synchronous require(), so
+// a static top-level import here would blow up as soon as anything imports
+// this file — e.g. for route registration — under Jest's CJS-style module
+// loading, even when Teams auth is never exercised. Deferred until a Teams
+// token actually needs verifying.
+async function createJwksClient(tenantId) {
+  const { default: jwksClient } = await import('jwks-rsa');
   return jwksClient({
     jwksUri: `https://login.microsoftonline.com/${tenantId}/discovery/v2.0/keys`,
     cache: true,
     cacheMaxEntries: 5,
     cacheMaxAge: 10 * 60 * 60 * 1000 // 10 hours
   });
-};
+}
 
 // Cache for JWKS clients per tenant
 const jwksClients = new Map();
@@ -34,7 +38,7 @@ function isAccountDisabledError(error) {
 /**
  * Get or create JWKS client for a tenant
  */
-function getJwksClient(tenantId) {
+async function getJwksClient(tenantId) {
   if (!jwksClients.has(tenantId)) {
     jwksClients.set(tenantId, createJwksClient(tenantId));
   }
@@ -61,7 +65,7 @@ async function verifyTeamsToken(token, teamsConfig) {
     }
 
     // Get JWKS client for this tenant
-    const client = getJwksClient(tenantId);
+    const client = await getJwksClient(tenantId);
     const getSigningKey = promisify(client.getSigningKey);
 
     // Get the signing key

@@ -57,7 +57,7 @@ export const interactionValidationSchema = z.object({
 export const interactionPromptSchema = z.object({
   message: z.string(),
   title: z.string().optional(),
-  inputType: interactionInputTypeSchema.default('text'),
+  inputType: interactionInputTypeSchema.prefault('text'),
   options: z.array(interactionOptionSchema).optional(),
   /** JSON schema for structured answers (human node `inputSchema`). */
   inputSchema: z.record(z.any()).nullable().optional(),
@@ -65,8 +65,8 @@ export const interactionPromptSchema = z.object({
   showData: z.array(z.string()).nullable().optional(),
   /** Resolved values for `showData`, or an arbitrary payload for `review`. */
   displayData: z.record(z.any()).optional(),
-  allowSkip: z.boolean().default(false),
-  allowOther: z.boolean().default(false),
+  allowSkip: z.boolean().prefault(false),
+  allowOther: z.boolean().prefault(false),
   placeholder: z.string().max(200).optional(),
   validation: interactionValidationSchema.optional(),
   /** Short context the model supplied with the question. */
@@ -82,12 +82,12 @@ export const interactionPolicySchema = z.object({
   onTimeout: z
     .string()
     .regex(/^(fail|deny|branch:.+)$/)
-    .default('fail'),
+    .prefault('fail'),
   /** 'park' | 'deny' | 'default:<value>' */
   fallback: z
     .string()
     .regex(/^(park|deny|default:.+)$/)
-    .default('park'),
+    .prefault('park'),
   /** Optional escalation channels for parked interactions. */
   notify: z.array(z.enum(['email', 'teams', 'webhook'])).optional()
 });
@@ -103,7 +103,7 @@ export const interactionAnswerSchema = z.object({
   skipped: z.boolean().optional(),
   by: z.string(),
   at: ts,
-  channel: z.enum(['chat', 'run_page', 'queue', 'api', 'system', 'headless']).default('api')
+  channel: z.enum(['chat', 'run_page', 'queue', 'api', 'system', 'headless']).prefault('api')
 });
 
 /** Where the interaction originated (for routing the answer back). */
@@ -128,13 +128,13 @@ export const interactionSourceSchema = z.object({
 export const interactionSchema = z.object({
   id: z.string().min(1),
   runId: z.string().min(1),
-  step: z.number().int().nonnegative().default(0),
+  step: z.number().int().nonnegative().prefault(0),
   kind: interactionKindSchema,
   origin: interactionOriginSchema,
   prompt: interactionPromptSchema,
-  policy: interactionPolicySchema.default({}),
-  status: interactionStatusSchema.default('pending'),
-  source: interactionSourceSchema.default({}),
+  policy: interactionPolicySchema.prefault({}),
+  status: interactionStatusSchema.prefault('pending'),
+  source: interactionSourceSchema.prefault({}),
   createdAt: ts,
   updatedAt: ts.optional(),
   answer: interactionAnswerSchema.optional(),

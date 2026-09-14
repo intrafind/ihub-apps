@@ -32,7 +32,7 @@ export default function validate(schemas = {}) {
       next();
     } catch (error) {
       if (error instanceof ZodError) {
-        return res.status(400).json({ error: 'Invalid request', details: error.errors });
+        return res.status(400).json({ error: 'Invalid request', details: error.issues });
       }
       return next(error);
     }

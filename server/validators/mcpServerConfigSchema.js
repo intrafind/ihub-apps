@@ -33,7 +33,7 @@ const authSchema = z
       scope: z.string().optional()
     })
   ])
-  .default({ type: 'none' });
+  .prefault({ type: 'none' });
 
 const transportSchema = z.discriminatedUnion('type', [
   z.object({
@@ -50,8 +50,8 @@ const transportSchema = z.discriminatedUnion('type', [
   z.object({
     type: z.literal('stdio'),
     command: z.string().min(1),
-    args: z.array(z.string()).default([]),
-    env: z.record(z.string(), z.string()).default({}),
+    args: z.array(z.string()).prefault([]),
+    env: z.record(z.string(), z.string()).prefault({}),
     cwd: z.string().optional()
   }),
   z.object({
@@ -64,7 +64,7 @@ export const mcpServerConfigSchema = z.object({
   id: idSchema,
   name: z.union([localizedStringSchema, z.string().min(1)]),
   description: z.union([localizedStringSchema, z.string()]).optional(),
-  enabled: z.boolean().default(true),
+  enabled: z.boolean().prefault(true),
   transport: transportSchema,
   auth: authSchema.optional(),
   // Tools surface with this prefix to keep multi-server names collision-free.
@@ -76,50 +76,50 @@ export const mcpServerConfigSchema = z.object({
     .max(32)
     .optional(),
   // Allowlist patterns; "*" means all tools. Otherwise exact match.
-  allowedTools: z.array(z.string()).default(['*']),
+  allowedTools: z.array(z.string()).prefault(['*']),
   // Hard timeout (ms) for `tools/call`; the client aborts past this.
-  timeoutMs: z.number().int().min(1000).max(600000).default(30000),
+  timeoutMs: z.number().int().min(1000).max(600000).prefault(30000),
   // Auto-reconnect window. After `maxRetries` failures the connection is
   // marked unhealthy and excluded from `tools/list` aggregation.
   reconnect: z
     .object({
-      enabled: z.boolean().default(true),
-      maxRetries: z.number().int().min(0).max(20).default(5),
-      initialDelayMs: z.number().int().min(100).max(60000).default(1000),
-      maxDelayMs: z.number().int().min(1000).max(120000).default(30000),
-      growthFactor: z.number().min(1).max(5).default(1.5)
+      enabled: z.boolean().prefault(true),
+      maxRetries: z.number().int().min(0).max(20).prefault(5),
+      initialDelayMs: z.number().int().min(100).max(60000).prefault(1000),
+      maxDelayMs: z.number().int().min(1000).max(120000).prefault(30000),
+      growthFactor: z.number().min(1).max(5).prefault(1.5)
     })
-    .default({})
+    .prefault({})
 });
 
 export const mcpServersFileSchema = z.object({
-  servers: z.array(mcpServerConfigSchema).default([]),
+  servers: z.array(mcpServerConfigSchema).prefault([]),
   security: z
     .object({
       // Block private/internal IPs even if hostname resolves to one. Default
       // true; operators can allow specific hostnames via `allowedHosts` when
       // they intentionally point at an internal MCP server.
-      blockPrivateIps: z.boolean().default(true),
-      allowedHosts: z.array(z.string()).default([])
+      blockPrivateIps: z.boolean().prefault(true),
+      allowedHosts: z.array(z.string()).prefault([])
     })
-    .default({})
+    .prefault({})
 });
 
 export const mcpGatewayConfigSchema = z.object({
-  enabled: z.boolean().default(false),
+  enabled: z.boolean().prefault(false),
   // Public URL announced in well-known metadata. Falls back to request origin
   // when empty.
-  publicUrl: z.string().url().optional().or(z.literal('')).default(''),
-  requireConsent: z.boolean().default(true),
-  defaultScopes: z.array(z.string()).default(['mcp:tools:read', 'mcp:tools:call']),
+  publicUrl: z.string().url().optional().or(z.literal('')).prefault(''),
+  requireConsent: z.boolean().prefault(true),
+  defaultScopes: z.array(z.string()).prefault(['mcp:tools:read', 'mcp:tools:call']),
   transports: z
     .object({
-      streamableHttp: z.object({ enabled: z.boolean().default(true) }).default({}),
+      streamableHttp: z.object({ enabled: z.boolean().prefault(true) }).prefault({}),
       sse: z
-        .object({ enabled: z.boolean().default(true), deprecated: z.boolean().default(true) })
-        .default({})
+        .object({ enabled: z.boolean().prefault(true), deprecated: z.boolean().prefault(true) })
+        .prefault({})
     })
-    .default({}),
+    .prefault({}),
   // Resource exposure flags. When false the corresponding adapter is skipped
   // even if the OAuth client has the scope.
   // Resource exposure is opt-in: sources/skills are only surfaced over MCP
@@ -127,19 +127,19 @@ export const mcpGatewayConfigSchema = z.object({
   // (apps the caller can access) also applies.
   expose: z
     .object({
-      tools: z.boolean().default(true),
-      apps: z.boolean().default(true),
-      workflows: z.boolean().default(true),
-      resources: z.boolean().default(false)
+      tools: z.boolean().prefault(true),
+      apps: z.boolean().prefault(true),
+      workflows: z.boolean().prefault(true),
+      resources: z.boolean().prefault(false)
     })
-    .default({}),
+    .prefault({}),
   // Optional Agent-to-Agent (A2A) endpoint alongside /mcp. The wire
   // protocol is still moving; iHub mounts an auth-gated stub today.
   a2a: z
     .object({
-      enabled: z.boolean().default(false)
+      enabled: z.boolean().prefault(false)
     })
-    .default({})
+    .prefault({})
 });
 
 export default mcpServerConfigSchema;

@@ -27,9 +27,9 @@ export const identityModeSchema = z.enum(LEDGER_IDENTITY_MODES);
 
 /** Canonical usage buckets (concept §5.2 "usage normalization"). */
 export const usageSchema = z.object({
-  promptTokens: z.number().int().nonnegative().default(0),
-  completionTokens: z.number().int().nonnegative().default(0),
-  totalTokens: z.number().int().nonnegative().default(0),
+  promptTokens: z.number().int().nonnegative().prefault(0),
+  completionTokens: z.number().int().nonnegative().prefault(0),
+  totalTokens: z.number().int().nonnegative().prefault(0),
   cacheReadTokens: z.number().int().nonnegative().optional(),
   cacheWriteTokens: z.number().int().nonnegative().optional(),
   reasoningTokens: z.number().int().nonnegative().optional(),
@@ -46,7 +46,7 @@ export const usageSchema = z.object({
 export const principalSchema = z.object({
   id: z.string().min(1),
   mode: identityModeSchema,
-  anonymous: z.boolean().default(false),
+  anonymous: z.boolean().prefault(false),
   isAgent: z.boolean().optional(),
   name: z.string().optional(),
   email: z.string().optional(),
@@ -59,10 +59,10 @@ export const principalSchema = z.object({
 export const toolCallRecordSchema = z.object({
   id: z.string().nullable(),
   index: z.number().int().nonnegative().optional(),
-  type: z.string().default('function'),
+  type: z.string().prefault('function'),
   name: z.string(),
   /** Raw JSON string as produced by the model (may be malformed). */
-  arguments: z.string().default(''),
+  arguments: z.string().prefault(''),
   /** Provider-specific metadata (e.g. Gemini thoughtSignature). */
   metadata: z.record(z.any()).optional()
 });
@@ -88,7 +88,7 @@ export const runStartData = z.object({
       type: z.enum(['user', 'api', 'schedule', 'webhook', 'tool', 'system', 'test']),
       source: z.string().optional()
     })
-    .default({ type: 'user' }),
+    .prefault({ type: 'user' }),
   /** Surface-specific correlation ids (never PII). */
   refs: z
     .object({
@@ -100,7 +100,7 @@ export const runStartData = z.object({
       nodeId: z.string().optional(),
       requestId: z.string().optional()
     })
-    .default({}),
+    .prefault({}),
   model: z.string().optional(),
   language: z.string().optional(),
   policies: z.record(z.any()).optional()
@@ -108,7 +108,7 @@ export const runStartData = z.object({
 
 export const runEndData = z.object({
   status: runStatusSchema,
-  finishReason: z.string().nullable().default(null),
+  finishReason: z.string().nullable().prefault(null),
   usage: usageSchema.optional(),
   cost: z.number().nonnegative().optional(),
   durationMs: z.number().int().nonnegative().optional(),
@@ -171,7 +171,7 @@ export const requestHeaderData = z.object({
   renderedSystemPrompt: z.string().optional(),
   toolSchemasHash: z.string().nullable(),
   toolSchemas: z.array(z.any()).optional(),
-  toolExecution: z.enum(['server', 'caller', 'none']).default('none'),
+  toolExecution: z.enum(['server', 'caller', 'none']).prefault('none'),
   /** Hash of { modelSnapshot, optionsSnapshot }; the snapshots themselves are recorded on change. */
   configHash: z.string().optional(),
   /** Request-shaping model fields (no secrets) the request was built from. */
@@ -189,9 +189,9 @@ export const requestHeaderData = z.object({
       thinking: z.record(z.any()).nullable().optional(),
       nativeWebSearch: z.any().nullable().optional(),
       toolChoice: z.any().optional(),
-      stream: z.boolean().default(true)
+      stream: z.boolean().prefault(true)
     })
-    .default({}),
+    .prefault({}),
   language: z.string().optional()
 });
 
@@ -207,7 +207,7 @@ export const requestRetryData = z.object({
 export const messageUserData = z.object({
   step: z.number().int().nonnegative(),
   messageId: z.string().optional(),
-  content: z.string().default(''),
+  content: z.string().prefault(''),
   attachments: z
     .array(
       z.object({ type: z.string(), name: z.string().optional(), bytes: z.number().optional() })
@@ -221,12 +221,12 @@ export const messageAssistantData = z.object({
   step: z.number().int().nonnegative(),
   requestId: z.string().optional(),
   messageId: z.string().optional(),
-  content: z.string().default(''),
+  content: z.string().prefault(''),
   contentSpill: spillRefSchema.optional(),
-  toolCalls: z.array(toolCallRecordSchema).default([]),
+  toolCalls: z.array(toolCallRecordSchema).prefault([]),
   thinkingChars: z.number().int().nonnegative().optional(),
   usage: usageSchema.optional(),
-  finishReason: z.string().nullable().default(null),
+  finishReason: z.string().nullable().prefault(null),
   hasImages: z.boolean().optional(),
   groundingMetadata: z.any().optional()
 });
@@ -239,7 +239,7 @@ export const toolCallData = z.object({
   args: z.any(),
   argsRepaired: z.boolean().optional(),
   /** Execution class decided by the segment planner. */
-  execution: z.enum(['server', 'caller', 'clarification', 'passthrough']).default('server'),
+  execution: z.enum(['server', 'caller', 'clarification', 'passthrough']).prefault('server'),
   parallelGroup: z.number().int().nonnegative().optional()
 });
 
@@ -294,14 +294,14 @@ export const budgetCheckpointData = z.object({
   step: z.number().int().nonnegative(),
   usage: usageSchema,
   runUsage: usageSchema,
-  limits: budgetLimitsSchema.default({})
+  limits: budgetLimitsSchema.prefault({})
 });
 
 export const budgetExhaustedData = z.object({
   step: z.number().int().nonnegative(),
   reason: z.enum(['tokens', 'rounds', 'tools_dead', 'questions']),
   runUsage: usageSchema.optional(),
-  limits: budgetLimitsSchema.default({})
+  limits: budgetLimitsSchema.prefault({})
 });
 
 export const contextCompactionData = z.object({
@@ -319,7 +319,7 @@ export const errorData = z.object({
   message: z.string(),
   providerCode: z.string().nullable().optional(),
   status: z.number().int().nullable().optional(),
-  recoverable: z.boolean().default(false)
+  recoverable: z.boolean().prefault(false)
 });
 
 // ── Envelope + discriminated union ─────────────────────────────────────────

@@ -47,7 +47,7 @@ export const credentialSchema = z.discriminatedUnion('type', [
     clientId: z.string().min(1),
     clientSecret: z.string().min(1),
     scope: z.string().optional(),
-    grantType: z.enum(['client_credentials', 'refresh_token']).default('client_credentials'),
+    grantType: z.enum(['client_credentials', 'refresh_token']).prefault('client_credentials'),
     refreshToken: z.string().optional()
   }),
   z.object({
@@ -81,7 +81,7 @@ export const credentialSchema = z.discriminatedUnion('type', [
 ]);
 
 export const credentialsFileSchema = z.object({
-  credentials: z.record(idSchema, credentialSchema).default({})
+  credentials: z.record(idSchema, credentialSchema).prefault({})
 });
 
 /**
@@ -106,7 +106,7 @@ export const SECRET_FIELDS_BY_TYPE = {
 export function validateCredential(data) {
   const result = credentialSchema.safeParse(data);
   if (result.success) return { success: true, data: result.data };
-  return { success: false, errors: result.error.errors };
+  return { success: false, errors: result.error.issues };
 }
 
 /**
@@ -117,7 +117,7 @@ export function validateCredential(data) {
 export function validateCredentialsFile(data) {
   const result = credentialsFileSchema.safeParse(data);
   if (result.success) return { success: true, data: result.data };
-  return { success: false, errors: result.error.errors };
+  return { success: false, errors: result.error.issues };
 }
 
 export default credentialSchema;

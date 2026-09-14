@@ -21,8 +21,8 @@ const ts = z.string().datetime({ offset: true });
 export const streamConnectedData = z.object({
   runId: z.string().optional(),
   /** Last sequence number the server has for this run (0 when new). */
-  lastSeq: z.number().int().nonnegative().default(0),
-  protocol: z.literal(2).default(2)
+  lastSeq: z.number().int().nonnegative().prefault(0),
+  protocol: z.literal(2).prefault(2)
 });
 
 export const streamErrorData = z.object({
@@ -30,7 +30,7 @@ export const streamErrorData = z.object({
   message: z.string(),
   details: z.any().optional(),
   /** True when the client may retry the whole turn. */
-  retryable: z.boolean().default(false),
+  retryable: z.boolean().prefault(false),
   isContextWindowError: z.boolean().optional()
 });
 
@@ -38,12 +38,12 @@ export const runStartedData = z.object({
   kind: z.enum(RUN_KINDS),
   parentRunId: z.string().optional(),
   model: z.string().optional(),
-  refs: z.record(z.any()).default({})
+  refs: z.record(z.any()).prefault({})
 });
 
 export const runEndedData = z.object({
   status: z.enum(RUN_STATUSES),
-  finishReason: z.string().nullable().default(null),
+  finishReason: z.string().nullable().prefault(null),
   usage: usageSchema.optional(),
   /** Surface hints preserved from the legacy `done` event. */
   toolName: z.string().optional(),
@@ -82,9 +82,9 @@ export const stepDeltaData = z.object({
 export const stepCompletedData = z.object({
   step: z.number().int().nonnegative(),
   messageId: z.string().optional(),
-  content: z.string().default(''),
-  toolCalls: z.array(toolCallRecordSchema).default([]),
-  finishReason: z.string().nullable().default(null),
+  content: z.string().prefault(''),
+  toolCalls: z.array(toolCallRecordSchema).prefault([]),
+  finishReason: z.string().nullable().prefault(null),
   usage: usageSchema.optional(),
   citations: z.any().optional(),
   sources: z.array(z.string()).optional(),
@@ -97,7 +97,7 @@ export const toolStartedData = z.object({
   toolId: z.string(),
   name: z.string(),
   args: z.any(),
-  execution: z.enum(['server', 'caller', 'clarification', 'passthrough']).default('server')
+  execution: z.enum(['server', 'caller', 'clarification', 'passthrough']).prefault('server')
 });
 
 export const toolProgressData = z.object({

@@ -50,9 +50,9 @@ const imageGenerationSchema = z
     aspectRatio: z
       .enum(['1:1', '16:9', '9:16', '5:4', '4:5', '3:2', '2:3', '3:4', '4:3', '21:9'])
       .optional()
-      .default('1:1'),
-    quality: z.enum(['Low', 'Medium', 'High']).optional().default('Medium'),
-    maxReferenceImages: z.number().int().min(1).max(14).optional().default(14)
+      .prefault('1:1'),
+    quality: z.enum(['Low', 'Medium', 'High']).optional().prefault('Medium'),
+    maxReferenceImages: z.number().int().min(1).max(14).optional().prefault(14)
   })
   .strict();
 
@@ -61,7 +61,7 @@ const hintSchema = z
   .object({
     message: localizedStringSchema, // Internationalized hint message
     level: z.enum(['hint', 'info', 'warning', 'alert']), // Severity levels
-    dismissible: z.boolean().optional().default(true) // Whether user can dismiss (only for hint/info)
+    dismissible: z.boolean().optional().prefault(true) // Whether user can dismiss (only for hint/info)
   })
   .strict();
 
@@ -133,17 +133,15 @@ const baseModelConfigSchema = z
         'google-transcribe'
       ],
       {
-        errorMap: () => ({
-          message:
-            'Provider must be one of: openai, openai-responses, anthropic, google, mistral, local, iassistant-conversation, bedrock, vllm-realtime, google-live, google-transcribe'
-        })
+        error:
+          'Provider must be one of: openai, openai-responses, anthropic, google, mistral, local, iassistant-conversation, bedrock, vllm-realtime, google-live, google-transcribe'
       }
     ),
     // Distinguishes chat models (routed through the LLM adapter pipeline) from
     // transcription models (routed through the transcription provider registry
     // and the realtime WebSocket proxy). Existing models default to 'chat', so
     // no migration is needed for the field itself.
-    modelType: z.enum(['chat', 'transcription']).optional().default('chat'),
+    modelType: z.enum(['chat', 'transcription']).optional().prefault('chat'),
     // Total input+output tokens the model supports. Used for fitting documents
     // and showing remaining capacity to the user — NOT sent to the provider.
     contextWindow: z
@@ -169,8 +167,8 @@ const baseModelConfigSchema = z
       .optional(),
 
     // Optional fields with validation
-    default: z.boolean().optional().default(false),
-    supportsTools: z.boolean().optional().default(false),
+    default: z.boolean().optional().prefault(false),
+    supportsTools: z.boolean().optional().prefault(false),
     concurrency: z
       .number()
       .int()
@@ -201,7 +199,7 @@ const baseModelConfigSchema = z
       .min(0, 'Stream idle timeout cannot be negative')
       .max(300000, 'Stream idle timeout cannot exceed 5 minutes')
       .optional(),
-    enabled: z.boolean().optional().default(true),
+    enabled: z.boolean().optional().prefault(true),
     thinking: thinkingSchema.optional(),
     nativeWebSearch: nativeWebSearchSchema.optional(),
 
@@ -217,7 +215,7 @@ const baseModelConfigSchema = z
     // request. Defaults to true (unset) so existing model configs are unchanged.
     supportsTemperature: z.boolean().optional(),
     supportsUsageTracking: z.boolean().optional(),
-    supportsImageGeneration: z.boolean().optional().default(false),
+    supportsImageGeneration: z.boolean().optional().prefault(false),
     imageGeneration: imageGenerationSchema.optional(),
     config: z.record(z.any()).optional(), // Allow provider-specific configuration
 
@@ -229,7 +227,7 @@ const baseModelConfigSchema = z
 
     // Model auto-discovery - automatically detect model ID from /v1/models endpoint
     // Useful for local LLM providers (vLLM, LM Studio, Jan.ai) where the active model can change
-    autoDiscovery: z.boolean().optional().default(false)
+    autoDiscovery: z.boolean().optional().prefault(false)
   })
   .strict(); // Use strict instead of passthrough for better validation
 

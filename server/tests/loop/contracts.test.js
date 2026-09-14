@@ -12,7 +12,7 @@ import assert from 'node:assert/strict';
 import fs from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { zodToJsonSchema } from 'zod-to-json-schema';
+import { z } from 'zod';
 import * as contracts from '../../services/loop/contracts/index.js';
 import {
   RUN_LOG_EVENT_LIST,
@@ -39,7 +39,7 @@ const SNAPSHOTTED = [
 function exportAll() {
   const out = {};
   for (const name of SNAPSHOTTED) {
-    out[name] = zodToJsonSchema(contracts[name], { name, $refStrategy: 'none' });
+    out[name] = z.toJSONSchema(contracts[name]);
   }
   out.LLM_ERROR_CODES = contracts.LLM_ERROR_CODE_LIST;
   out.RUN_LOG_EVENTS = RUN_LOG_EVENT_LIST;
