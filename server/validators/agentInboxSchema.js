@@ -13,13 +13,13 @@ export const agentInboxFrontmatterSchema = z.object({
     .max(64),
   updatedAt: z.string().optional(),
   updatedBy: z.string().optional(),
-  version: z.number().int().min(0).optional().default(0)
+  version: z.number().int().min(0).optional().prefault(0)
 });
 
 export const agentInboxItemSchema = z.object({
   line: z.number().int().min(0),
   raw: z.string(),
-  priority: z.enum(['p1', 'p2', 'p3', 'unprioritized']).optional().default('unprioritized'),
+  priority: z.enum(['p1', 'p2', 'p3', 'unprioritized']).optional().prefault('unprioritized'),
   text: z.string(),
   status: z.enum(['open', 'done']),
   note: z.string().optional()

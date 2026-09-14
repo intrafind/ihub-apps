@@ -26,7 +26,7 @@ export const quoteLocatorSchema = z
 export const quoteSchema = z.object({
   text: z.string().min(1, 'Quote text cannot be empty'),
   locator: quoteLocatorSchema,
-  validated: z.boolean().default(false),
+  validated: z.boolean().prefault(false),
   closestMatch: z.string().optional(),
   confidence: z.enum(['high', 'medium', 'low']).optional()
 });
@@ -51,9 +51,9 @@ export const structuredRecordSchema = z.object({
   iterationIndex: z.number().int().nonnegative().optional(),
   source: sourceSchema,
   data: z.record(z.unknown()),
-  quotes: z.array(quoteSchema).default([]),
-  status: z.enum(['ok', 'partial', 'failed']).default('ok'),
-  failures: z.array(failureSchema).default([])
+  quotes: z.array(quoteSchema).prefault([]),
+  status: z.enum(['ok', 'partial', 'failed']).prefault('ok'),
+  failures: z.array(failureSchema).prefault([])
 });
 
 export default structuredRecordSchema;

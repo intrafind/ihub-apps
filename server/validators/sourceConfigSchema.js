@@ -19,12 +19,12 @@ const baseSourceSchema = z.object({
   name: localizedStringSchema,
   description: localizedStringSchema.optional(),
   type: z.enum(['filesystem', 'url', 'ifinder', 'page'], {
-    errorMap: () => ({ message: 'Type must be filesystem, url, ifinder, or page' })
+    error: 'Type must be filesystem, url, ifinder, or page'
   }),
-  enabled: z.boolean().default(true),
-  exposeAs: z.enum(['prompt', 'tool']).default('prompt'),
+  enabled: z.boolean().prefault(true),
+  exposeAs: z.enum(['prompt', 'tool']).prefault('prompt'),
   category: z.string().optional(),
-  tags: z.array(z.string()).default([]),
+  tags: z.array(z.string()).prefault([]),
   created: z.string().optional(),
   updated: z.string().optional()
 });
@@ -36,7 +36,7 @@ const baseSourceSchema = z.object({
 const filesystemConfigSchema = z
   .object({
     path: z.string().min(1, 'File path is required'),
-    encoding: z.string().default('utf-8')
+    encoding: z.string().prefault('utf-8')
   })
   .strict();
 
@@ -47,14 +47,14 @@ const filesystemConfigSchema = z
 const urlConfigSchema = z
   .object({
     url: z.string().url('Valid URL is required'),
-    method: z.enum(['GET', 'POST']).default('GET'),
-    headers: z.record(z.string()).default({}),
-    timeout: z.number().min(1000).max(60000).default(10000),
-    followRedirects: z.boolean().default(true),
-    maxRedirects: z.number().min(0).max(10).default(5),
-    retries: z.number().min(0).max(10).default(3),
-    maxContentLength: z.number().positive().default(1048576),
-    cleanContent: z.boolean().default(true)
+    method: z.enum(['GET', 'POST']).prefault('GET'),
+    headers: z.record(z.string()).prefault({}),
+    timeout: z.number().min(1000).max(60000).prefault(10000),
+    followRedirects: z.boolean().prefault(true),
+    maxRedirects: z.number().min(0).max(10).prefault(5),
+    retries: z.number().min(0).max(10).prefault(3),
+    maxContentLength: z.number().positive().prefault(1048576),
+    cleanContent: z.boolean().prefault(true)
   })
   .strict();
 
@@ -75,8 +75,8 @@ const ifinderConfigSchema = z
     documentId: z.preprocess(emptyStringAsUndefined, z.string().optional()),
     query: z.preprocess(emptyStringAsUndefined, z.string().optional()),
     searchProfile: z.preprocess(emptyStringAsUndefined, z.string().optional()),
-    maxResults: z.number().min(1).max(100).default(10),
-    maxLength: z.number().positive().default(10000)
+    maxResults: z.number().min(1).max(100).prefault(10),
+    maxLength: z.number().positive().prefault(10000)
   })
   .strict();
 
@@ -87,7 +87,7 @@ const ifinderConfigSchema = z
 const pageConfigSchema = z
   .object({
     pageId: zSafeId.min(1, 'Page ID is required'),
-    language: z.string().default('en')
+    language: z.string().prefault('en')
   })
   .strict();
 
@@ -95,9 +95,9 @@ const pageConfigSchema = z
  * Caching configuration schema
  */
 const cachingConfigSchema = z.object({
-  ttl: z.number().positive().default(3600), // 1 hour in seconds
-  strategy: z.enum(['static', 'refresh']).default('static'),
-  enabled: z.boolean().default(true)
+  ttl: z.number().positive().prefault(3600), // 1 hour in seconds
+  strategy: z.enum(['static', 'refresh']).prefault('static'),
+  enabled: z.boolean().prefault(true)
 });
 
 /**
@@ -169,7 +169,7 @@ export function validateSourceConfig(source) {
     logger.error('Source validation error', { component: 'ConfigLoader', error });
     return {
       success: false,
-      errors: error.errors || [{ message: error.message }]
+      errors: error.issues || [{ message: error.message }]
     };
   }
 }
@@ -196,7 +196,7 @@ export function validateSourcesArray(sources) {
     logger.error('Sources array validation error', { component: 'ConfigLoader', error });
     return {
       success: false,
-      errors: error.errors || [{ message: error.message }]
+      errors: error.issues || [{ message: error.message }]
     };
   }
 }

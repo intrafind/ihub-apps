@@ -27,58 +27,58 @@ export const toolSpecSchema = z
 
 export const budgetPoliciesSchema = z.object({
   /** 0 = unlimited. Run-level token spend across every step/node. */
-  maxTokensPerRun: z.number().int().nonnegative().default(0),
+  maxTokensPerRun: z.number().int().nonnegative().prefault(0),
   /** Hard cap on tool rounds per loop invocation. */
-  maxToolRounds: z.number().int().positive().default(10),
+  maxToolRounds: z.number().int().positive().prefault(10),
   /** Wall-clock deadline for one invocation, suspended while paused. */
   maxWallClockMs: z.number().int().positive().optional()
 });
 
 export const toolPoliciesSchema = z.object({
-  maxRateLimitFailures: z.number().int().positive().default(2),
-  maxConsecutiveFailures: z.number().int().positive().default(3),
+  maxRateLimitFailures: z.number().int().positive().prefault(2),
+  maxConsecutiveFailures: z.number().int().positive().prefault(3),
   /** Run independent tool calls of one assistant turn concurrently. */
-  parallel: z.boolean().default(true),
-  maxParallel: z.number().int().positive().default(4),
+  parallel: z.boolean().prefault(true),
+  maxParallel: z.number().int().positive().prefault(4),
   /** Apply schema defaults to omitted arguments. */
-  applyDefaults: z.boolean().default(true)
+  applyDefaults: z.boolean().prefault(true)
 });
 
 export const contextPoliciesSchema = z.object({
-  compactThresholdTokens: z.number().int().positive().default(16000),
-  compactKeepRecent: z.number().int().nonnegative().default(6),
-  maxReactiveAttempts: z.number().int().nonnegative().default(2),
-  reactiveKeepRecent: z.number().int().nonnegative().default(4),
+  compactThresholdTokens: z.number().int().positive().prefault(16000),
+  compactKeepRecent: z.number().int().nonnegative().prefault(6),
+  maxReactiveAttempts: z.number().int().nonnegative().prefault(2),
+  reactiveKeepRecent: z.number().int().nonnegative().prefault(4),
   /** Bytes above which tool results are spilled to disk and previewed in the transcript. */
   spillThresholdBytes: z
     .number()
     .int()
     .positive()
-    .default(64 * 1024)
+    .prefault(64 * 1024)
 });
 
 export const interactionPoliciesSchema = z.object({
-  maxQuestions: z.number().int().nonnegative().default(10),
+  maxQuestions: z.number().int().nonnegative().prefault(10),
   /** Whether a raised question pauses the run (durable) or ends the turn (legacy chat). */
-  pauseOnQuestion: z.boolean().default(true),
+  pauseOnQuestion: z.boolean().prefault(true),
   questionTimeoutMs: z.number().int().positive().optional(),
-  headlessFallback: z.enum(['park', 'deny', 'fail']).default('park')
+  headlessFallback: z.enum(['park', 'deny', 'fail']).prefault('park')
 });
 
 export const approvalPoliciesSchema = z.object({
   /** Tool ids requiring an `approval` interaction before execution. */
-  requireApprovalFor: z.array(z.string()).default([]),
+  requireApprovalFor: z.array(z.string()).prefault([]),
   approverGroups: z.array(z.string()).optional(),
   timeoutMs: z.number().int().positive().optional(),
-  onTimeout: z.enum(['deny', 'fail']).default('deny')
+  onTimeout: z.enum(['deny', 'fail']).prefault('deny')
 });
 
 export const loopPoliciesSchema = z.object({
-  budgets: budgetPoliciesSchema.default({}),
-  tools: toolPoliciesSchema.default({}),
-  context: contextPoliciesSchema.default({}),
-  interactions: interactionPoliciesSchema.default({}),
-  approval: approvalPoliciesSchema.default({})
+  budgets: budgetPoliciesSchema.prefault({}),
+  tools: toolPoliciesSchema.prefault({}),
+  context: contextPoliciesSchema.prefault({}),
+  interactions: interactionPoliciesSchema.prefault({}),
+  approval: approvalPoliciesSchema.prefault({})
 });
 
 /** Provider-facing call options (the allowlist formerly in adapterOptions.js). */
@@ -120,34 +120,34 @@ export const llmRequestSchema = z.object({
   messages: z.array(z.any()).min(1),
   tools: z.array(toolSpecSchema).optional(),
   apiKey: z.string().nullable().optional(),
-  options: llmCallOptionsSchema.default({}),
-  telemetry: llmTelemetrySchema.default({}),
-  language: z.string().default('en'),
+  options: llmCallOptionsSchema.prefault({}),
+  telemetry: llmTelemetrySchema.prefault({}),
+  language: z.string().prefault('en'),
   /** Max transient retries; defaults to the client's configured value. */
   maxRetries: z.number().int().nonnegative().optional()
 });
 
 export const loopRequestSchema = z.object({
   runId: z.string().optional(),
-  kind: z.enum(RUN_KINDS).default('chat'),
+  kind: z.enum(RUN_KINDS).prefault('chat'),
   parentRunId: z.string().optional(),
   principal: principalSchema.partial({ mode: true }).optional(),
   model: z.union([z.string().min(1), z.record(z.any())]),
   messages: z.array(z.any()).min(1),
-  tools: z.array(toolSpecSchema).default([]),
+  tools: z.array(toolSpecSchema).prefault([]),
   /** 'server' executes tools; 'caller' terminates with tool_calls and never executes. */
-  toolExecution: z.enum(['server', 'caller']).default('server'),
-  policies: loopPoliciesSchema.default({}),
-  options: llmCallOptionsSchema.default({}),
-  language: z.string().default('en'),
+  toolExecution: z.enum(['server', 'caller']).prefault('server'),
+  policies: loopPoliciesSchema.prefault({}),
+  options: llmCallOptionsSchema.prefault({}),
+  language: z.string().prefault('en'),
   /** Free-form correlation refs (chatId, appId, executionId, nodeId, profileId …). */
-  refs: z.record(z.any()).default({}),
+  refs: z.record(z.any()).prefault({}),
   /** Resume from a paused step (interaction answered). */
   resume: z
     .object({
       interactionId: z.string(),
       step: z.number().int().nonnegative(),
-      completedCallIds: z.array(z.string()).default([])
+      completedCallIds: z.array(z.string()).prefault([])
     })
     .optional()
 });
@@ -165,22 +165,22 @@ export const citationSchema = z
 export const loopResultSchema = z.object({
   runId: z.string(),
   status: z.enum(RUN_STATUSES),
-  content: z.string().default(''),
+  content: z.string().prefault(''),
   structured: z.any().optional(),
-  finishReason: z.string().nullable().default(null),
+  finishReason: z.string().nullable().prefault(null),
   usage: usageSchema,
   runUsage: usageSchema.optional(),
   iterations: z.number().int().nonnegative(),
-  citations: z.array(citationSchema).default([]),
+  citations: z.array(citationSchema).prefault([]),
   /** Present when toolExecution === 'caller' and the model requested tools. */
   toolCalls: z.array(toolCallRecordSchema).optional(),
   thoughtSignatures: z.array(z.any()).optional(),
   pendingInteraction: interactionSchema.optional(),
-  disabledTools: z.array(z.string()).default([]),
-  budgetExhausted: z.boolean().default(false),
+  disabledTools: z.array(z.string()).prefault([]),
+  budgetExhausted: z.boolean().prefault(false),
   /** Final provider-valid transcript (for callers that persist it or continue). */
-  messages: z.array(z.any()).default([]),
-  knowledgeSources: z.array(z.string()).default([]),
+  messages: z.array(z.any()).prefault([]),
+  knowledgeSources: z.array(z.string()).prefault([]),
   error: z
     .object({
       code: z.string(),

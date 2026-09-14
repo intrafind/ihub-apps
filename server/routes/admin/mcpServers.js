@@ -21,7 +21,7 @@ async function writeConfig(updated) {
   const parsed = mcpServersFileSchema.safeParse(updated);
   if (!parsed.success) {
     const err = new Error('Invalid mcpServers configuration');
-    err.zod = parsed.error.errors;
+    err.zod = parsed.error.issues;
     throw err;
   }
   // Secrets live in the central credential store (referenced by *Ref fields);
@@ -63,7 +63,7 @@ export default function registerAdminMcpServersRoutes(app) {
         return res.status(400).json({
           success: false,
           error: 'Invalid server config',
-          details: parsed.error.errors
+          details: parsed.error.issues
         });
       }
       const cfg = await readConfig();
@@ -89,7 +89,7 @@ export default function registerAdminMcpServersRoutes(app) {
         return res.status(400).json({
           success: false,
           error: 'Invalid server config',
-          details: parsed.error.errors
+          details: parsed.error.issues
         });
       }
       const cfg = await readConfig();

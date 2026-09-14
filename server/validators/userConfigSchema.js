@@ -6,8 +6,8 @@ export const userConfigSchema = z
     username: z.string().min(1),
     email: z.string().email().nullish(), // Allow null, undefined, or valid email
     fullName: z.string().nullish(),
-    groups: z.array(z.string()).default([]),
-    enabled: z.boolean().default(true),
+    groups: z.array(z.string()).prefault([]),
+    enabled: z.boolean().prefault(true),
     lastLogin: z.string().datetime().nullish(),
     createdAt: z.string().datetime().nullish(),
     settings: z.record(z.any()).nullish(),

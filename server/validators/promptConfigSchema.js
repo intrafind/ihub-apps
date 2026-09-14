@@ -26,8 +26,8 @@ const variableSchema = z
         'Variable name must start with letter/underscore and contain only alphanumeric characters, underscores, and hyphens'
       ),
     label: localizedStringSchema,
-    type: z.enum(['string', 'number', 'boolean', 'select', 'textarea']).default('string'),
-    required: z.boolean().optional().default(false),
+    type: z.enum(['string', 'number', 'boolean', 'select', 'textarea']).prefault('string'),
+    required: z.boolean().optional().prefault(false),
     defaultValue: z.union([z.string(), z.number(), z.boolean()]).optional(),
     predefinedValues: z.array(predefinedValueSchema).optional()
   })
@@ -67,7 +67,7 @@ export const promptConfigSchema = z
 
     // Optional fields with validation
     icon: z.string().optional(),
-    enabled: z.boolean().optional().default(true),
+    enabled: z.boolean().optional().prefault(true),
     order: z.number().int().min(0).optional(),
     category: z.string().optional(),
     appId: z.string().optional(),

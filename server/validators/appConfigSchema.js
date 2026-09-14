@@ -31,7 +31,7 @@ const variableSchema = z.object({
     ),
   label: localizedStringSchema,
   type: z.enum(['string', 'text', 'number', 'boolean', 'date', 'select']),
-  required: z.boolean().optional().default(false),
+  required: z.boolean().optional().prefault(false),
   defaultValue: z
     .record(
       z.string().regex(LANGUAGE_CODE_PATTERN),
@@ -47,62 +47,62 @@ const starterPromptSchema = z.object({
   message: localizedStringSchema,
   description: localizedStringSchema.optional(),
   variables: z.record(z.any()).optional(),
-  autoSend: z.boolean().optional().default(false)
+  autoSend: z.boolean().optional().prefault(false)
 });
 
 // Web search configuration schema
 const websearchSchema = z
   .object({
-    enabled: z.boolean().optional().default(false),
-    provider: z.enum(['auto', 'brave']).optional().default('auto'),
-    useNativeSearch: z.boolean().optional().default(true),
-    maxResults: z.number().int().min(1).max(20).optional().default(5),
-    extractContent: z.boolean().optional().default(true),
-    contentMaxLength: z.number().int().min(500).max(50000).optional().default(3000),
-    enabledByDefault: z.boolean().optional().default(false),
+    enabled: z.boolean().optional().prefault(false),
+    provider: z.enum(['auto', 'brave']).optional().prefault('auto'),
+    useNativeSearch: z.boolean().optional().prefault(true),
+    maxResults: z.number().int().min(1).max(20).optional().prefault(5),
+    extractContent: z.boolean().optional().prefault(true),
+    contentMaxLength: z.number().int().min(500).max(50000).optional().prefault(3000),
+    enabledByDefault: z.boolean().optional().prefault(false),
     // Cap on provider-run searches per model call (Anthropic web search `max_uses`).
-    maxSearches: z.number().int().min(1).max(50).optional().default(5)
+    maxSearches: z.number().int().min(1).max(50).optional().prefault(5)
   })
   .optional();
 
 // Settings configuration schema
 const settingsSchema = z
   .object({
-    enabled: z.boolean().optional().default(true),
+    enabled: z.boolean().optional().prefault(true),
     model: z
       .object({
-        enabled: z.boolean().optional().default(true),
+        enabled: z.boolean().optional().prefault(true),
         filter: z.record(z.any()).optional() // Allow filtering models by any property
       })
       .optional(),
     temperature: z
       .object({
-        enabled: z.boolean().optional().default(true)
+        enabled: z.boolean().optional().prefault(true)
       })
       .optional(),
     outputFormat: z
       .object({
-        enabled: z.boolean().optional().default(true)
+        enabled: z.boolean().optional().prefault(true)
       })
       .optional(),
     chatHistory: z
       .object({
-        enabled: z.boolean().optional().default(true)
+        enabled: z.boolean().optional().prefault(true)
       })
       .optional(),
     ephemeral: z
       .object({
-        enabled: z.boolean().optional().default(true)
+        enabled: z.boolean().optional().prefault(true)
       })
       .optional(),
     style: z
       .object({
-        enabled: z.boolean().optional().default(true)
+        enabled: z.boolean().optional().prefault(true)
       })
       .optional(),
     imageGeneration: z
       .object({
-        enabled: z.boolean().optional().default(true)
+        enabled: z.boolean().optional().prefault(true)
       })
       .optional(),
     speechRecognition: z
@@ -110,7 +110,7 @@ const settingsSchema = z
         service: z
           .enum(['default', 'azure', 'custom', 'vllm-realtime'])
           .optional()
-          .default('default'),
+          .prefault('default'),
         host: z.string().url().optional()
       })
       .optional()
@@ -120,13 +120,13 @@ const settingsSchema = z
 // Input mode configuration schema
 const inputModeSchema = z
   .object({
-    type: z.enum(['singleline', 'multiline']).optional().default('multiline'),
-    rows: z.number().int().min(1).max(20).optional().default(5),
+    type: z.enum(['singleline', 'multiline']).optional().prefault('multiline'),
+    rows: z.number().int().min(1).max(20).optional().prefault(5),
     microphone: z
       .object({
-        enabled: z.boolean().optional().default(true),
-        mode: z.enum(['manual', 'automatic']).optional().default('manual'),
-        showTranscript: z.boolean().optional().default(true)
+        enabled: z.boolean().optional().prefault(true),
+        mode: z.enum(['manual', 'automatic']).optional().prefault('manual'),
+        showTranscript: z.boolean().optional().prefault(true)
       })
       .optional()
   })
@@ -135,27 +135,34 @@ const inputModeSchema = z
 // Upload configuration schema
 const uploadSchema = z
   .object({
-    enabled: z.boolean().optional().default(false),
-    allowMultiple: z.boolean().optional().default(false),
+    enabled: z.boolean().optional().prefault(false),
+    allowMultiple: z.boolean().optional().prefault(false),
     imageUpload: z
       .object({
-        enabled: z.boolean().optional().default(false),
-        resizeImages: z.boolean().optional().default(true),
-        maxFileSizeMB: z.number().int().min(1).max(100).optional().default(10),
+        enabled: z.boolean().optional().prefault(false),
+        resizeImages: z.boolean().optional().prefault(true),
+        maxFileSizeMB: z.number().int().min(1).max(100).optional().prefault(10),
         supportedFormats: z
           .array(z.string().regex(/^image\//))
           .optional()
-          .default(['image/jpeg', 'image/jpg', 'image/png', 'image/gif', 'image/webp'])
+          .prefault(['image/jpeg', 'image/jpg', 'image/png', 'image/gif', 'image/webp'])
       })
       .optional(),
     audioUpload: z
       .object({
-        enabled: z.boolean().optional().default(false),
-        maxFileSizeMB: z.number().int().min(1).max(2000).optional().default(20),
+        enabled: z.boolean().optional().prefault(false),
+        maxFileSizeMB: z.number().int().min(1).max(2000).optional().prefault(20),
         supportedFormats: z
           .array(z.string().regex(/^audio\//))
           .optional()
-          .default(['audio/mpeg', 'audio/wav', 'audio/mp3', 'audio/flac', 'audio/ogg', 'audio/mp4'])
+          .prefault([
+            'audio/mpeg',
+            'audio/wav',
+            'audio/mp3',
+            'audio/flac',
+            'audio/ogg',
+            'audio/mp4'
+          ])
       })
       .optional(),
     // Video upload — the client extracts the audio track (extractAudio) for
@@ -163,23 +170,23 @@ const uploadSchema = z
     // supported this but the schema silently stripped the block.
     videoUpload: z
       .object({
-        enabled: z.boolean().optional().default(false),
-        extractAudio: z.boolean().optional().default(true),
-        maxFileSizeMB: z.number().int().min(1).max(2000).optional().default(50),
+        enabled: z.boolean().optional().prefault(false),
+        extractAudio: z.boolean().optional().prefault(true),
+        maxFileSizeMB: z.number().int().min(1).max(2000).optional().prefault(50),
         supportedFormats: z
           .array(z.string().regex(/^video\//))
           .optional()
-          .default(['video/mp4', 'video/webm', 'video/quicktime'])
+          .prefault(['video/mp4', 'video/webm', 'video/quicktime'])
       })
       .optional(),
     fileUpload: z
       .object({
-        enabled: z.boolean().optional().default(false),
-        maxFileSizeMB: z.number().int().min(1).max(100).optional().default(5),
+        enabled: z.boolean().optional().prefault(false),
+        maxFileSizeMB: z.number().int().min(1).max(100).optional().prefault(5),
         supportedFormats: z
           .array(z.string())
           .optional()
-          .default([
+          .prefault([
             'text/plain',
             'text/markdown',
             'text/csv',
@@ -201,7 +208,7 @@ const uploadSchema = z
       .optional(),
     cloudStorageUpload: z
       .object({
-        enabled: z.boolean().optional().default(false)
+        enabled: z.boolean().optional().prefault(false)
       })
       .optional()
   })
@@ -216,25 +223,25 @@ const uploadSchema = z
 // with the multimodal `audioUpload` path; both never fire for one submission.
 const transcriptionSchema = z
   .object({
-    enabled: z.boolean().optional().default(false),
+    enabled: z.boolean().optional().prefault(false),
     // Whether the per-chat transcription toggle starts on. When on, audio/video
     // submissions are transcribed by the transcription model; when off they fall
     // through to the multimodal chat path. Users can flip it per conversation.
-    defaultEnabled: z.boolean().optional().default(true),
+    defaultEnabled: z.boolean().optional().prefault(true),
     // Id of the transcription model (modelType: 'transcription') to route to.
-    modelId: z.string().optional().default(''),
+    modelId: z.string().optional().prefault(''),
     inputs: z
       .object({
-        upload: z.boolean().optional().default(true),
-        record: z.boolean().optional().default(true),
-        video: z.boolean().optional().default(true)
+        upload: z.boolean().optional().prefault(true),
+        record: z.boolean().optional().prefault(true),
+        video: z.boolean().optional().prefault(true)
       })
       .optional()
-      .default({}),
+      .prefault({}),
     // Stream partial transcription deltas into the assistant bubble.
-    streaming: z.boolean().optional().default(true),
+    streaming: z.boolean().optional().prefault(true),
     // Client-enforced cap on decoded audio / recording length (seconds).
-    maxDurationSeconds: z.number().int().min(1).max(7200).optional().default(900)
+    maxDurationSeconds: z.number().int().min(1).max(7200).optional().prefault(900)
   })
   .optional();
 
@@ -253,12 +260,12 @@ const featuresSchema = z
   .object({
     magicPrompt: z
       .object({
-        enabled: z.boolean().optional().default(false),
-        model: z.string().optional().default('gpt-4'),
+        enabled: z.boolean().optional().prefault(false),
+        model: z.string().optional().prefault('gpt-4'),
         prompt: z
           .string()
           .optional()
-          .default(
+          .prefault(
             'You are a helpful assistant that improves user prompts to be more specific and effective. Improve this prompt: {{prompt}}'
           )
       })
@@ -267,7 +274,7 @@ const featuresSchema = z
       .object({
         // Compare mode is opt-out at the app level: if the object exists but `enabled` is
         // unset, treat it as enabled. The client uses `enabled !== false` for the same reason.
-        enabled: z.boolean().optional().default(true)
+        enabled: z.boolean().optional().prefault(true)
       })
       .optional()
   })
@@ -285,9 +292,9 @@ const localizedGreetingSchema = z.record(
 // Thinking configuration schema
 const thinkingSchema = z
   .object({
-    enabled: z.boolean().optional().default(false),
+    enabled: z.boolean().optional().prefault(false),
     budget: z.number().int().min(1).optional(),
-    thoughts: z.boolean().optional().default(false)
+    thoughts: z.boolean().optional().prefault(false)
   })
   .optional();
 
@@ -297,31 +304,31 @@ const sourceReferenceSchema = z.string().min(1, 'Source reference ID cannot be e
 // Redirect app configuration schema
 const redirectConfigSchema = z.object({
   url: z.string().url('Redirect URL must be a valid URL'),
-  openInNewTab: z.boolean().optional().default(true),
-  showWarning: z.boolean().optional().default(true)
+  openInNewTab: z.boolean().optional().prefault(true),
+  showWarning: z.boolean().optional().prefault(true)
 });
 
 // Iframe app configuration schema
 const iframeConfigSchema = z.object({
   url: z.string().url('Iframe URL must be a valid URL'),
-  allowFullscreen: z.boolean().optional().default(true),
+  allowFullscreen: z.boolean().optional().prefault(true),
   sandbox: z
     .array(z.string())
     .optional()
-    .default(['allow-scripts', 'allow-same-origin', 'allow-forms'])
+    .prefault(['allow-scripts', 'allow-same-origin', 'allow-forms'])
 });
 
 // iAssistant filter schema for app-specific iAssistant configuration
 const iAssistantFilterSchema = z.object({
   key: z.string().min(1, 'Filter key cannot be empty'),
   values: z.array(z.string()),
-  isNegated: z.boolean().optional().default(false)
+  isNegated: z.boolean().optional().prefault(false)
 });
 
 // iAssistant configuration schema for app-level settings
 const iAssistantConfigSchema = z
   .object({
-    enabled: z.boolean().optional().default(false),
+    enabled: z.boolean().optional().prefault(false),
 
     // Legacy fields (for backward compatibility)
     baseUrl: z.string().url('Base URL must be a valid URL').optional(),
@@ -364,7 +371,7 @@ const baseAppConfigSchema = z.object({
   icon: z.string().min(1, 'Icon cannot be empty'),
 
   // App type - defaults to 'chat' for backward compatibility
-  type: z.enum(['chat', 'redirect', 'iframe']).optional().default('chat'),
+  type: z.enum(['chat', 'redirect', 'iframe']).optional().prefault('chat'),
 
   // Type-specific configuration
   redirectConfig: redirectConfigSchema.optional(),
@@ -379,7 +386,7 @@ const baseAppConfigSchema = z.object({
   preferredOutputFormat: z.enum(['markdown', 'text', 'json', 'html']).optional(),
   preferredStyle: z.string().optional(),
   preferredTemperature: z.number().min(0).max(2).optional(),
-  sendChatHistory: z.boolean().optional().default(true),
+  sendChatHistory: z.boolean().optional().prefault(true),
   thinking: thinkingSchema.optional(),
   imageGeneration: imageGenerationConfigSchema,
   messagePlaceholder: localizedStringSchema.optional(),
@@ -394,10 +401,10 @@ const baseAppConfigSchema = z.object({
   starterPrompts: z.array(starterPromptSchema).optional(),
   sources: z.array(sourceReferenceSchema).optional(),
   allowedModels: z.array(z.string()).optional(),
-  disallowModelSelection: z.boolean().optional().default(false),
-  allowEmptyContent: z.boolean().optional().default(false),
-  autoStart: z.boolean().optional().default(false),
-  ephemeral: z.boolean().optional().default(false),
+  disallowModelSelection: z.boolean().optional().prefault(false),
+  allowEmptyContent: z.boolean().optional().prefault(false),
+  autoStart: z.boolean().optional().prefault(false),
+  ephemeral: z.boolean().optional().prefault(false),
   websearch: websearchSchema,
   tools: z.array(z.string()).optional(),
   workflows: z.array(z.string()).optional(),
@@ -415,13 +422,13 @@ const baseAppConfigSchema = z.object({
   customResponseRenderer: z.string().optional(),
   rendererConfig: z.object({}).passthrough().optional(),
   category: z.string().optional(),
-  enabled: z.boolean().optional().default(true),
+  enabled: z.boolean().optional().prefault(true),
 
   // Tool-specific configurations
   iassistant: iAssistantConfigSchema,
 
   // Inheritance fields
-  allowInheritance: z.boolean().optional().default(false),
+  allowInheritance: z.boolean().optional().prefault(false),
   parentId: z.string().optional(),
   inheritanceLevel: z.number().int().min(0).optional(),
   overriddenFields: z.array(z.string()).optional()

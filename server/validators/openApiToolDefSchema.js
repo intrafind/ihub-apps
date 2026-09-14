@@ -36,31 +36,31 @@ export const openApiBlockSchema = z.object({
   // store; the runner resolves the profile and applies the matching auth scheme.
   auth: z.object({ credentialRef: z.string().min(1) }).optional(),
   // Static extra request headers merged into every call.
-  headers: z.record(z.string()).default({}),
+  headers: z.record(z.string()).prefault({}),
   // Mirror astron's x-display: dot-paths (supporting `items[].field` wildcards)
   // stripped from the response before it is returned to the LLM.
   xDisplay: z
     .object({
-      hideFields: z.array(z.string()).default([])
+      hideFields: z.array(z.string()).prefault([])
     })
-    .default({ hideFields: [] }),
+    .prefault({ hideFields: [] }),
   // Hard response-size cap (bytes); oversized payloads are truncated.
   maxResponseBytes: z
     .number()
     .int()
     .min(1024)
     .max(5 * 1024 * 1024)
-    .default(262144),
-  timeoutMs: z.number().int().min(1000).max(120000).default(30000),
+    .prefault(262144),
+  timeoutMs: z.number().int().min(1000).max(120000).prefault(30000),
   // SSRF policy for outbound calls. Defaults to blocking private/internal IPs;
   // operators can allow specific hostnames when intentionally targeting an
   // internal API.
   security: z
     .object({
-      blockPrivateIps: z.boolean().default(true),
-      allowedHosts: z.array(z.string()).default([])
+      blockPrivateIps: z.boolean().prefault(true),
+      allowedHosts: z.array(z.string()).prefault([])
     })
-    .default({ blockPrivateIps: true, allowedHosts: [] })
+    .prefault({ blockPrivateIps: true, allowedHosts: [] })
 });
 
 export const openApiToolDefSchema = z.object({
@@ -68,7 +68,7 @@ export const openApiToolDefSchema = z.object({
   name: localizedOrPlainString,
   description: localizedOrPlainString.optional(),
   type: z.literal('openapi'),
-  enabled: z.boolean().default(true),
+  enabled: z.boolean().prefault(true),
   concurrency: z.number().int().min(1).max(100).optional(),
   requestDelayMs: z.number().int().min(0).optional(),
   openapi: openApiBlockSchema
@@ -82,7 +82,7 @@ export const openApiToolDefSchema = z.object({
 export function validateOpenApiToolDef(data) {
   const result = openApiToolDefSchema.safeParse(data);
   if (result.success) return { success: true, data: result.data };
-  return { success: false, errors: result.error.errors };
+  return { success: false, errors: result.error.issues };
 }
 
 export default openApiToolDefSchema;

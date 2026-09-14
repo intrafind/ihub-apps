@@ -45,13 +45,13 @@ export const registryConfigSchema = z.object({
   /** URL pointing to the registry's catalog.json (or its parent directory) */
   source: z.string().url(),
   /** Authentication configuration; defaults to none (public) */
-  auth: registryAuthSchema.optional().default({ type: 'none' }),
+  auth: registryAuthSchema.optional().prefault({ type: 'none' }),
   /** Whether this registry participates in marketplace browsing */
-  enabled: z.boolean().default(true),
+  enabled: z.boolean().prefault(true),
   /** Whether the server should periodically re-fetch this registry's catalog */
-  autoRefresh: z.boolean().default(false),
+  autoRefresh: z.boolean().prefault(false),
   /** How often (in hours) to auto-refresh when autoRefresh is enabled (1–168) */
-  refreshIntervalHours: z.number().int().min(1).max(168).optional().default(24)
+  refreshIntervalHours: z.number().int().min(1).max(168).optional().prefault(24)
 });
 
 /**
@@ -73,6 +73,6 @@ export function validateRegistryConfig(data) {
   }
   return {
     success: false,
-    errors: result.error.errors.map(e => `${e.path.join('.')}: ${e.message}`)
+    errors: result.error.issues.map(e => `${e.path.join('.')}: ${e.message}`)
   };
 }

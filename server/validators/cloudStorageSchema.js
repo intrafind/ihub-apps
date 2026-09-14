@@ -12,7 +12,7 @@ export const office365ProviderSchema = z.object({
   name: z.string(),
   displayName: z.string(),
   type: z.literal('office365'),
-  enabled: z.boolean().default(true),
+  enabled: z.boolean().prefault(true),
   tenantId: z.string(),
   clientId: z.string(),
   clientSecret: z.string(),
@@ -24,12 +24,12 @@ export const office365ProviderSchema = z.object({
   redirectUri: optionalUrlField.optional(),
   sources: z
     .object({
-      personalDrive: z.boolean().default(true),
-      followedSites: z.boolean().default(true),
-      teams: z.boolean().default(true)
+      personalDrive: z.boolean().prefault(true),
+      followedSites: z.boolean().prefault(true),
+      teams: z.boolean().prefault(true)
     })
     .optional()
-    .default({ personalDrive: true, followedSites: true, teams: true })
+    .prefault({ personalDrive: true, followedSites: true, teams: true })
 });
 
 // Google Drive provider configuration
@@ -38,18 +38,18 @@ export const googleDriveProviderSchema = z.object({
   name: z.string(),
   displayName: z.string(),
   type: z.literal('googledrive'),
-  enabled: z.boolean().default(true),
+  enabled: z.boolean().prefault(true),
   clientId: z.string(),
   clientSecret: z.string(),
   redirectUri: optionalUrlField.optional(),
   sources: z
     .object({
-      myDrive: z.boolean().default(true),
-      sharedDrives: z.boolean().default(true),
-      sharedWithMe: z.boolean().default(true)
+      myDrive: z.boolean().prefault(true),
+      sharedDrives: z.boolean().prefault(true),
+      sharedWithMe: z.boolean().prefault(true)
     })
     .optional()
-    .default({ myDrive: true, sharedDrives: true, sharedWithMe: true })
+    .prefault({ myDrive: true, sharedDrives: true, sharedWithMe: true })
 });
 
 // Nextcloud provider configuration.
@@ -63,7 +63,7 @@ export const nextcloudProviderSchema = z.object({
   name: z.string(),
   displayName: z.string(),
   type: z.literal('nextcloud'),
-  enabled: z.boolean().default(true),
+  enabled: z.boolean().prefault(true),
   // The Nextcloud instance URL (e.g. https://nextcloud.example.com).
   // Used as the base for OAuth, OCS, and WebDAV endpoints.
   //
@@ -100,6 +100,6 @@ export const cloudStorageProviderSchema = z.discriminatedUnion('type', [
 
 // Main cloud storage configuration
 export const cloudStorageConfigSchema = z.object({
-  enabled: z.boolean().default(false),
-  providers: z.array(cloudStorageProviderSchema).default([])
+  enabled: z.boolean().prefault(false),
+  providers: z.array(cloudStorageProviderSchema).prefault([])
 });

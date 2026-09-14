@@ -29,10 +29,10 @@ const mimeTypeDetailSchema = z.object({
  */
 export const mimetypeConfigSchema = z.object({
   // Categories organize MIME types into logical groups (images, audio, documents, text)
-  categories: z.record(z.string(), categorySchema).default({}),
+  categories: z.record(z.string(), categorySchema).prefault({}),
 
   // Detailed information for each MIME type
-  mimeTypes: z.record(z.string(), mimeTypeDetailSchema).default({})
+  mimeTypes: z.record(z.string(), mimeTypeDetailSchema).prefault({})
 });
 
 /**
@@ -91,7 +91,7 @@ export function validateMimetypeConfig(config) {
     logger.error('Mimetype validation error', { component: 'ConfigLoader', error });
     return {
       success: false,
-      errors: error.errors || [{ message: error.message }]
+      errors: error.issues || [{ message: error.message }]
     };
   }
 }

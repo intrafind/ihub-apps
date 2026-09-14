@@ -8,20 +8,20 @@ export const groupConfigSchema = z
     description: z.string().optional(),
     permissions: z
       .object({
-        apps: z.array(z.string()).default([]),
-        prompts: z.array(z.string()).default([]),
-        models: z.array(z.string()).default([]),
-        workflows: z.array(z.string()).default([]),
-        skills: z.array(z.string()).default([]),
+        apps: z.array(z.string()).prefault([]),
+        prompts: z.array(z.string()).prefault([]),
+        models: z.array(z.string()).prefault([]),
+        workflows: z.array(z.string()).prefault([]),
+        skills: z.array(z.string()).prefault([]),
         // Direct tool access over the MCP/A2A gateways. Empty by default:
         // a chat app's own `tools` list is what grants tool use in chat.
-        tools: z.array(z.string()).default([]),
-        adminAccess: z.boolean().default(false)
+        tools: z.array(z.string()).prefault([]),
+        adminAccess: z.boolean().prefault(false)
       })
-      .default({}),
-    mappings: z.array(z.string()).default([]),
+      .prefault({}),
+    mappings: z.array(z.string()).prefault([]),
     inherits: z.array(z.string()).optional(),
-    enabled: z.boolean().default(true)
+    enabled: z.boolean().prefault(true)
   })
   .passthrough();
 
