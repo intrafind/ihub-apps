@@ -67,7 +67,7 @@
     "winston": "^3.19.0",
     "ws": "^8.21.3",
     "yauzl": "^3.4.0",
-    "zod": "^3.25.74",
+    "zod": "^4.5.4",
     "zod-to-json-schema": "^3.25.2"
   },
   "devDependencies": {
