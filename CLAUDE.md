@@ -17,13 +17,7 @@ Docker: see `docs/DOCKER-QUICK-REFERENCE.md` and `npm run docker:*` scripts in `
 
 ## Architecture
 
-Full-stack app for AI-powered applications:
-
-- **`/server`**: Node.js Express backend — LLM adapters (`adapters/`), chat services (`services/chat/`), modular routes (`routes/`), config caching (`configCache.js`)
-- **`/client`**: React/Vite frontend, Tailwind CSS, feature-based layout (`client/src/features/`)
-- **`/contents`**: JSON config — `config/platform.json`, `apps/*.json`, `models/*.json`, `config/groups.json`, `config/ui.json`
-
-Details: `docs/architecture.md`. Request flow: Client → Express → Adapter → LLM Provider → Streaming Response.
+Details: `docs/architecture.md`.
 
 ### Authentication
 
@@ -67,8 +61,6 @@ Versioned, Flyway-style, in `server/migrations/` (`V{NNN}__{description}.js`), r
 
 ### Code Quality
 
-- ES modules throughout; no commented-out code; handle async errors.
-- Before committing: `npm run lint:fix && npm run format:fix`.
 - Batch similar lint fixes across files rather than file-by-file.
 
 ### Release Changelog
