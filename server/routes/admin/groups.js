@@ -335,12 +335,31 @@ export default function registerAdminGroupRoutes(app) {
         name: { en: skill.displayName || skill.name, de: skill.displayName || skill.name }
       }));
 
+      // Tools are offered per function (`iFinder_search`) as well as by base id
+      // (`iFinder`), because granting the base id covers every function of that
+      // tool — which is usually what an operator wants.
+      const { data: allTools } = configCache.getTools();
+      const toolsById = new Map();
+      for (const tool of allTools || []) {
+        if (!tool?.id) continue;
+        toolsById.set(tool.id, { id: tool.id, name: tool.name || { en: tool.id, de: tool.id } });
+        const baseId = tool.id.includes('_') ? tool.id.split('_')[0] : tool.id;
+        if (!toolsById.has(baseId)) {
+          toolsById.set(baseId, {
+            id: baseId,
+            name: { en: `${baseId} (all functions)`, de: `${baseId} (alle Funktionen)` }
+          });
+        }
+      }
+      const tools = Array.from(toolsById.values());
+
       res.json({
         apps: apps.sort((a, b) => a.id.localeCompare(b.id)),
         models: models.sort((a, b) => a.id.localeCompare(b.id)),
         prompts: prompts.sort((a, b) => a.id.localeCompare(b.id)),
         workflows: workflows.sort((a, b) => a.id.localeCompare(b.id)),
-        skills: skills.sort((a, b) => a.id.localeCompare(b.id))
+        skills: skills.sort((a, b) => a.id.localeCompare(b.id)),
+        tools: tools.sort((a, b) => a.id.localeCompare(b.id))
       });
     } catch (error) {
       return sendInternalError(res, error, 'get resources');

@@ -11,6 +11,11 @@ export const groupConfigSchema = z
         apps: z.array(z.string()).default([]),
         prompts: z.array(z.string()).default([]),
         models: z.array(z.string()).default([]),
+        workflows: z.array(z.string()).default([]),
+        skills: z.array(z.string()).default([]),
+        // Direct tool access over the MCP/A2A gateways. Empty by default:
+        // a chat app's own `tools` list is what grants tool use in chat.
+        tools: z.array(z.string()).default([]),
         adminAccess: z.boolean().default(false)
       })
       .default({}),

@@ -18,7 +18,7 @@ function GroupFormEditor({
   value: group,
   onChange,
   onValidationChange,
-  resources = { apps: [], models: [], prompts: [], workflows: [], skills: [] },
+  resources = { apps: [], models: [], prompts: [], workflows: [], skills: [], tools: [] },
   jsonSchema
 }) {
   const { t } = useTranslation();
@@ -361,6 +361,16 @@ function GroupFormEditor({
                   onSelectionChange={selected => handlePermissionChange('skills', selected)}
                   placeholder="Search skills to add..."
                   emptyMessage="No skills selected - users can't use any agent skills"
+                />
+
+                {/* Tools Permission */}
+                <ResourceSelector
+                  label="Tools (MCP / A2A direct access)"
+                  resources={resources.tools || []}
+                  selectedResources={group.permissions?.tools || []}
+                  onSelectionChange={selected => handlePermissionChange('tools', selected)}
+                  placeholder="Search tools to add..."
+                  emptyMessage="No tools selected - tools are only reachable through apps that declare them"
                 />
               </div>
             </div>
