@@ -78,6 +78,7 @@ const { buildPolicyCimdClient, resolveOAuthClient, getCimdConfig } =
 const { allRedirectUrisAreLoopback, isValidRedirectUri } =
   await import('../routes/oauthAuthorize.js');
 const { default: registerWellKnownRoutes } = await import('../routes/wellKnown.js');
+const { default: registerOAuthAuthorizeRoutes } = await import('../routes/oauthAuthorize.js');
 
 const CLAUDE_CODE_URL = 'https://claude.ai/oauth/claude-code-client-metadata';
 
@@ -493,5 +494,46 @@ describe('discovery metadata', () => {
     const doc = await metadata();
     expect(doc.registration_endpoint).toMatch(/\/api\/oauth\/register$/);
     expect(doc.client_id_metadata_document_supported).toBe(true);
+  });
+});
+
+describe('authorize endpoint error responses', () => {
+  function buildApp() {
+    const app = express();
+    registerOAuthAuthorizeRoutes(app);
+    return app;
+  }
+
+  function authorizeUrl(clientId) {
+    return `/api/oauth/authorize?response_type=code&client_id=${encodeURIComponent(clientId)}`;
+  }
+
+  test('a disallowed host gets an HTML page naming the host, and makes no request', async () => {
+    const res = await request(buildApp()).get(authorizeUrl('https://evil.example/x'));
+
+    expect(res.status).toBe(403);
+    expect(res.headers['content-type']).toMatch(/text\/html/);
+    expect(res.text).toContain('evil.example');
+    expect(state.fetchCalls).toHaveLength(0);
+  });
+
+  test('bare error strings are text/plain, not HTML', async () => {
+    // res.send(string) defaults to text/html, which made every one of these a
+    // markup response — and one of them interpolates a reason carrying text
+    // from the far end of a metadata fetch.
+    const res = await request(buildApp()).get(authorizeUrl('client_nonexistent_a1b2c3d4'));
+
+    expect(res.status).toBe(400);
+    expect(res.headers['content-type']).toMatch(/text\/plain/);
+    expect(res.text).toContain('invalid_client');
+  });
+
+  test('the unsupported-response-type error is plain text too', async () => {
+    const res = await request(buildApp()).get(
+      '/api/oauth/authorize?response_type=token&client_id=whatever'
+    );
+
+    expect(res.status).toBe(400);
+    expect(res.headers['content-type']).toMatch(/text\/plain/);
   });
 });

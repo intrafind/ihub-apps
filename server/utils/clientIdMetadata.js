@@ -341,7 +341,10 @@ export async function fetchClientMetadata(url, options = {}) {
 
   const contentType = response.headers.get('content-type') || '';
   if (!/^application\/(\w+\+)?json\b/i.test(contentType)) {
-    return serveStale(url, cached, `unexpected content type: ${contentType || 'none'}`);
+    // Bounded and stripped: this reason reaches a user-visible error page, and
+    // the header is whatever the far end chose to send.
+    const seen = sanitizeDisplayString(contentType, 60) || 'none';
+    return serveStale(url, cached, `unexpected content type: ${seen}`);
   }
 
   const body = await readBoundedBody(response);

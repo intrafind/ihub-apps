@@ -300,5 +300,13 @@ export function computeClientFingerprint(meta) {
     grantTypes: [...(meta.grantTypes || [])].sort(),
     scopes: [...(meta.scopes || [])].sort()
   });
-  return crypto.createHash('sha256').update(canonical).digest('hex');
+  // A fast hash is the right primitive and the only workable one: this is a
+  // lookup key over public registration metadata, not a stored credential.
+  // Nothing here is secret (redirect URIs, a client name, scopes), knowing the
+  // digest grants nothing — a client_id is useless without control of the
+  // registered redirect URI and a completed PKCE exchange — and a salted,
+  // deliberately slow hash would produce a different digest every time and
+  // defeat the comparison entirely. Same reasoning as `storage/etag.js` and
+  // `utils/pkceUtils.js`.
+  return crypto.createHash('sha256').update(canonical).digest('hex'); // lgtm[js/insufficient-password-hash] -- registration fingerprint over public metadata, not a stored password
 }
