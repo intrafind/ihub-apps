@@ -1114,7 +1114,37 @@
         "pruneDynamicTitle": "Ungenutzte dynamische Clients entfernen",
         "pruneDynamicConfirm": "Alle dynamisch registrierten Clients löschen, die in den letzten {{days}} Tagen nicht genutzt wurden? Wer noch über einen davon verbunden ist, muss sich erneut anmelden und zustimmen; sonst ändert sich nichts.",
         "pruneDynamicSuccess": "{{count}} ungenutzte dynamische Client(s) entfernt",
-        "pruneDynamicError": "Ungenutzte dynamische Clients konnten nicht entfernt werden"
+        "pruneDynamicError": "Ungenutzte dynamische Clients konnten nicht entfernt werden",
+        "connectionsLabel": "Verbindungen",
+        "connectionsCount": "{{count}} Verbindungen",
+        "cimdTitle": "Über Metadaten-Dokument identifizierte Clients",
+        "cimdDesc": "Schreibgeschützt. Die Client-ID ist die URL eines vom Client veröffentlichten Dokuments — es gibt hier keinen Eintrag zum Bearbeiten. Die Rechte werden unter MCP-Gateway → Client-Identifikation festgelegt.",
+        "connections": {
+          "loadError": "Verbindungen konnten nicht geladen werden",
+          "revoke": "Widerrufen",
+          "revokeTitle": "Verbindung widerrufen",
+          "revokeConfirm": "{{client}} von {{user}} trennen? Die Anwendung muss die Person erneut durch Anmeldung und Zustimmung führen; ein bereits ausgestelltes Access-Token bleibt bis zum Ablauf gültig.",
+          "revokeSuccess": "Verbindung widerrufen",
+          "revokeError": "Verbindung konnte nicht widerrufen werden",
+          "none": "Bisher hat niemand eine Anwendung verbunden",
+          "noMatches": "Keine Verbindungen passen zu diesen Filtern",
+          "filterUser": "Nach Nutzer filtern",
+          "filterClient": "Nach Client filtern",
+          "user": "Nutzer",
+          "client": "Client",
+          "scopesLabel": "Scopes",
+          "granted": "Erteilt",
+          "lastUsed": "Zuletzt genutzt",
+          "count": "{{count}} Verbindungen",
+          "cimdTitle": "Über Metadaten-Dokument identifizierte Clients",
+          "cimdDesc": "Diese Clients haben keinen Eintrag in der Client-Liste — ihre ID ist die URL eines von ihnen veröffentlichten Dokuments. Sie erscheinen hier, weil Personen über sie verbunden sind."
+        },
+        "tabs": {
+          "connections": "Verbindungen"
+        },
+        "overview": {
+          "connectionsDesc": "Sehen Sie, welche Nutzer welchen Anwendungen Zugriff gewährt haben, und widerrufen Sie einzelne Freigaben."
+        }
       }
     },
     "officeIntegration": {
@@ -1554,7 +1584,9 @@
         "lastActive": "Zuletzt aktiv",
         "daysAgo": "Tage her",
         "never": "Nie",
-        "lastModified": "Zuletzt geändert"
+        "lastModified": "Zuletzt geändert",
+        "connections": "Verbundene Anwendungen",
+        "manageConnections": "Verwalten"
       },
       "edit": {
         "createTitle": "Neuen Benutzer erstellen",
@@ -2550,6 +2582,30 @@
       "comingSoon": {
         "title": "Weitere Integrationen folgen in Kürze",
         "body": "Wir arbeiten daran, weitere Integrationen hinzuzufügen, um Ihre KI-Anwendungen zu erweitern"
+      },
+      "connections": {
+        "title": "Verbundene Apps",
+        "description": "Anwendungen, denen Sie Zugriff auf iHub Apps in Ihrem Namen erlaubt haben. Nach dem Trennen fragt die Anwendung erneut um Erlaubnis.",
+        "empty": "Sie haben noch keine Anwendungen verbunden.",
+        "disconnect": "Trennen",
+        "disconnectTitle": "Anwendung trennen",
+        "disconnectConfirm": "{{name}} trennen? Bei der nächsten Nutzung fragt die Anwendung erneut um Ihre Erlaubnis.",
+        "disconnected": "{{name}} getrennt",
+        "disconnectFailed": "Die Anwendung konnte nicht getrennt werden: {{message}}",
+        "granted": "Verbunden am {{date}}",
+        "lastUsed": "Zuletzt genutzt am {{date}}",
+        "tokenNote": "Ein bereits ausgestelltes Access-Token funktioniert nach dem Trennen noch bis zu {{minutes}} Minuten. Ein neues kann die Anwendung nicht mehr erhalten.",
+        "scopes": {
+          "openid": "Ihre Identität bestätigen",
+          "profile": "Auf Ihren Namen und Ihre Profildaten zugreifen",
+          "email": "Auf Ihre E-Mail-Adresse zugreifen",
+          "offline_access": "Auf Ressourcen zugreifen, während Sie die App nicht aktiv nutzen",
+          "mcpToolsRead": "Die für Sie verfügbaren iHub-Tools auflisten",
+          "mcpToolsCall": "iHub-Tools in Ihrem Namen ausführen",
+          "mcpAppsInvoke": "iHub-Apps in Ihrem Namen ausführen",
+          "mcpWorkflowsRun": "iHub-Workflows in Ihrem Namen ausführen",
+          "mcpResourcesRead": "Für Sie verfügbare iHub-Quellen und -Skills lesen"
+        }
       }
     }
   },

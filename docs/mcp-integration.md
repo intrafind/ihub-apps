@@ -538,12 +538,50 @@ curl https://ihub.example.com/mcp/.well-known
 # oauth_authorization_server link
 ```
 
+### Connections — who is connected to what
+
+A **connection** is a grant: *this user allowed this client these scopes
+on this date*. It is the unit that stays meaningful whatever the client
+did to identify itself — one client record can serve every user, and a
+CIMD client has no record at all.
+
+Connections are derived from the existing consent and refresh-token
+stores; nothing new is persisted.
+
+- **Users** see their own under **Settings → Integrations → Connected
+  apps**: client name and host, the scopes in plain language, when they
+  connected, when it was last used, and **Disconnect**.
+- **Admins** see all of them under **Admin → OAuth → Connections**, with
+  filters by user and client, and the same revoke action. **Admin →
+  OAuth → Clients** shows a connection count per client, and **Admin →
+  Users → (user)** lists that person's connections.
+
+Disconnecting deletes the consent record *and* revokes every refresh
+token for the pair, so the client has to send the user through sign-in
+and consent again. An access token it already holds is stateless and
+keeps working until it expires — at most `tokenExpirationMinutes`, which
+both UIs state.
+
+"Last used" is recorded on refresh-token rotation (throttled to once a
+minute): an access token is verified statelessly, so rotation is the only
+moment a long-lived connection makes itself known.
+
 ### Audit & usage attribution
 
 Every call dispatched through the gateway flows through the existing
 `actionTracker` event stream. The bearer-token claims (client id,
 subject, scopes, auth mode) are attached to `req._mcpToken` for
 downstream audit consumers.
+
+The authorization server records four events of its own through
+`logAudit`, visible under **Admin → Audit log**:
+
+| Resource | Action | When |
+|----------|--------|------|
+| `oauthConnection` | `create` | A user grants a client access on the consent screen |
+| `oauthConnection` | `delete` | A user or an admin revokes a connection |
+| `oauthClient` | `create` | A dynamic registration, whether new or de-duplicated |
+| `oauthCimd` | `delete` (`failure`) | A client metadata document was refused — host not allowed, or the document is invalid |
 
 ## Migration from MCP_SERVER_URL
 

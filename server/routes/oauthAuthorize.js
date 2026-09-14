@@ -781,9 +781,29 @@ export default function registerOAuthAuthorizeRoutes(app) {
 
       // Persist consent so the user is not prompted again within the TTL window.
       // Fire-and-forget: a storage failure must not block the authorization response.
+      // The display snapshots travel with the grant because there is often
+      // nothing left to join against later: a CIMD client has no stored
+      // record, and an OIDC or proxy user has no local account.
       const consentMemoryDays = oauthConfig.consentMemoryDays || 90;
-      grantConsent(client_id, currentUser.sub, requestedScopes, consentMemoryDays).catch(err => {
+      grantConsent(client_id, currentUser.sub, requestedScopes, consentMemoryDays, {
+        clientName: client.name,
+        clientHost: client.host || '',
+        clientKind: client.kind || 'stored',
+        userName: currentUser.name || currentUser.username || '',
+        userEmail: currentUser.email || ''
+      }).catch(err => {
         logger.warn('Failed to store consent', { component: 'OAuthAuthorize', error: err });
+      });
+
+      logAudit({
+        req,
+        action: 'create',
+        resource: 'oauthConnection',
+        resourceId: `${client_id}:${currentUser.sub}`,
+        summary: `${currentUser.name || currentUser.sub} granted ${client.name}${
+          client.host ? ` (${client.host})` : ''
+        } the scopes ${requestedScopes.join(' ')}`,
+        source: 'web'
       });
 
       // A dynamically registered client has no owner — registration happens

@@ -33,6 +33,9 @@ function AdminOAuthClientsPage() {
   const navigate = useNavigate();
   const [loading, setLoading] = useState(true);
   const [clients, setClients] = useState([]);
+  // Clients identified by a metadata document are not stored anywhere, so they
+  // are derived from the connections that exist rather than listed.
+  const [cimdClients, setCimdClients] = useState([]);
   const [kindFilter, setKindFilter] = useFilterState('kind', 'standard');
   const [pruneDays, setPruneDays] = useState(90);
   const [message, setMessage] = useState('');
@@ -111,6 +114,7 @@ function AdminOAuthClientsPage() {
       const response = await makeAdminApiCall('/admin/oauth/clients');
       const data = response.data;
       setClients(data.clients || []);
+      setCimdClients(data.cimdClients || []);
     } catch (error) {
       if (error.response?.data?.error?.includes('OAuth clients are not enabled')) {
         setMessage({
@@ -466,6 +470,44 @@ function AdminOAuthClientsPage() {
           </div>
         )}
 
+        {cimdClients.length > 0 && (
+          <div className="mb-6 bg-white dark:bg-gray-800 shadow-sm rounded-lg p-5">
+            <h2 className="text-sm font-semibold text-gray-900 dark:text-gray-100 mb-1">
+              {t('admin.auth.oauth.cimdTitle', 'Clients identified by metadata document')}
+            </h2>
+            <p className="text-xs text-gray-500 dark:text-gray-400 mb-3">
+              {t(
+                'admin.auth.oauth.cimdDesc',
+                'Read-only. Their client ID is the URL of a document they publish, so there is no record here to edit — what they may do is set under MCP gateway → Client identification.'
+              )}
+            </p>
+            <ul className="divide-y divide-gray-200 dark:divide-gray-700">
+              {cimdClients.map(client => (
+                <li key={client.clientId} className="py-2 flex items-center justify-between gap-4">
+                  <div className="min-w-0">
+                    <div className="flex items-center gap-2 flex-wrap">
+                      <span className="text-sm font-medium text-gray-900 dark:text-gray-100">
+                        {client.name}
+                      </span>
+                      <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-indigo-100 dark:bg-indigo-900/50 text-indigo-800 dark:text-indigo-300">
+                        {t('admin.auth.oauth.kind.cimd', 'Client metadata')}
+                      </span>
+                    </div>
+                    <code className="text-xs text-gray-500 dark:text-gray-400 break-all">
+                      {client.clientId}
+                    </code>
+                  </div>
+                  <span className="shrink-0 text-xs text-gray-500 dark:text-gray-400">
+                    {t('admin.auth.oauth.connectionsCount', '{{count}} connections', {
+                      count: client.connectionCount
+                    })}
+                  </span>
+                </li>
+              ))}
+            </ul>
+          </div>
+        )}
+
         {kindFilter === 'standard' && dynamicCount > 0 && (
           <div className="mb-6 p-4 rounded-md bg-gray-50 dark:bg-gray-800 border border-gray-200 dark:border-gray-700">
             <p className="text-sm text-gray-600 dark:text-gray-400">
@@ -567,6 +609,12 @@ function AdminOAuthClientsPage() {
                               {t('admin.auth.oauth.lastUsed', 'Last Used')}:
                             </span>{' '}
                             {formatDate(client.lastUsed)}
+                          </div>
+                          <div>
+                            <span className="font-medium">
+                              {t('admin.auth.oauth.connectionsLabel', 'Connections')}:
+                            </span>{' '}
+                            {client.connectionCount ?? 0}
                           </div>
                           {clientKind(client) === 'dynamic' && (
                             <>

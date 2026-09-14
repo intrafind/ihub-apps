@@ -14,6 +14,10 @@ function AdminUserViewPage() {
   const [error, setError] = useState(null);
   // Captured once per mount — the static "days ago" label needs no live clock
   const [now] = useState(() => Date.now());
+  // Which applications this user has granted access to. Best effort: OAuth
+  // clients can be switched off entirely, in which case there is nothing to
+  // show and the section stays hidden.
+  const [connections, setConnections] = useState([]);
 
   useEffect(() => {
     const loadUser = async () => {
@@ -37,6 +41,21 @@ function AdminUserViewPage() {
     };
 
     loadUser();
+  }, [userId]);
+
+  useEffect(() => {
+    const loadConnections = async () => {
+      try {
+        const response = await makeAdminApiCall(
+          `/admin/oauth/connections?userId=${encodeURIComponent(userId)}`
+        );
+        setConnections(response.data?.connections || []);
+      } catch {
+        setConnections([]);
+      }
+    };
+
+    loadConnections();
   }, [userId]);
 
   if (loading) {
@@ -314,6 +333,44 @@ function AdminUserViewPage() {
             </div>
           </dl>
         </div>
+
+        {/* Connected applications — the OAuth grants this user has given */}
+        {connections.length > 0 && (
+          <div className="px-6 py-6 border-t border-gray-200 dark:border-gray-700">
+            <div className="flex items-center justify-between mb-4">
+              <h3 className="text-lg font-medium text-gray-900 dark:text-gray-100">
+                {t('admin.users.view.connections', 'Connected applications')}
+              </h3>
+              <button
+                onClick={() =>
+                  navigate(`/admin/oauth/connections?user=${encodeURIComponent(userId)}`)
+                }
+                className="text-sm text-indigo-600 dark:text-indigo-400 hover:underline"
+              >
+                {t('admin.users.view.manageConnections', 'Manage')}
+              </button>
+            </div>
+            <ul className="divide-y divide-gray-200 dark:divide-gray-700">
+              {connections.map(connection => (
+                <li key={connection.clientId} className="py-3">
+                  <div className="flex items-center gap-2 flex-wrap">
+                    <span className="text-sm font-medium text-gray-900 dark:text-gray-100">
+                      {connection.clientName}
+                    </span>
+                    {connection.clientHost && (
+                      <span className="text-xs font-mono text-gray-500 dark:text-gray-400">
+                        {connection.clientHost}
+                      </span>
+                    )}
+                  </div>
+                  <p className="mt-1 text-xs text-gray-500 dark:text-gray-400 break-all">
+                    {connection.scopes.join(' ')}
+                  </p>
+                </li>
+              ))}
+            </ul>
+          </div>
+        )}
       </div>
     </div>
   );

@@ -12,6 +12,7 @@ import {
   isPersonalKeysEnabled
 } from '../utils/personalApiKeyManager.js';
 import { buildServerPath } from '../utils/basePath.js';
+import { touchConsentLastUsed } from '../utils/consentStore.js';
 import configCache from '../configCache.js';
 import logger from '../utils/logger.js';
 import { consumeCode } from '../utils/authorizationCodeStore.js';
@@ -489,6 +490,13 @@ export default function registerOAuthRoutes(app) {
           },
           refreshPlatform.oauth?.refreshTokenExpirationDays || 30
         );
+
+        // Rotation is the only moment a long-lived connection makes itself
+        // known — access tokens are verified statelessly and leave no trace —
+        // so it is where "last used" on the connections list comes from.
+        touchConsentLastUsed(tokenData.clientId, tokenData.userId).catch(err => {
+          logger.warn('Failed to record connection usage', { component: 'OAuth', error: err });
+        });
 
         logger.info('[OAuth] Refresh token rotated', {
           component: 'OAuth',

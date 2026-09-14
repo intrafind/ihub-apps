@@ -1659,3 +1659,60 @@ boot and a save of every configuration type, and hashed again.
 
 See [Configuration Storage](../../configuration.md) and
 [Storage Providers](../../storage.md).
+
+## One OAuth Client for Claude Instead of One Per User
+
+Adding iHub as a custom connector in Claude used to create a new OAuth client
+record every single time. Every user who connected added another
+indistinguishable "Claude" row to **Admin → OAuth → Clients**, and
+`oauth.dcr.maxClients` (default 100) quietly became a cap on *users* — the
+101st person to connect was told the registration limit had been reached.
+
+Two changes fix it, and they work together.
+
+**Client ID Metadata Documents (recommended).** Claude can identify itself with
+an HTTPS URL pointing at a metadata document it publishes, so nothing is stored
+on the iHub side at all — one stable identity for everyone. Turn it on under
+**Admin → MCP gateway → Client identification**; the trusted-hosts list ships
+with `claude.ai` and nothing else. Claude Code works too, on its loopback
+callback. A side benefit: because the client identity no longer changes between
+connections, remembered consent (`consentMemoryDays`) finally survives a
+reconnect.
+
+**Dynamic registration de-duplication (automatic).** For clients that do not
+support metadata documents, a repeat registration with identical public
+metadata now returns the client ID it was already given instead of creating
+another record. Nothing to configure, and the `maxClients` cliff is gone:
+a client already on file still connects once the cap is reached.
+
+Existing dynamically registered clients, consents and refresh tokens keep
+working, and nothing is deleted automatically. The clients list gains kind
+badges (admin / personal / dynamic), a filter that hides dynamic records by
+default, a registration count and first-user attribution on the ones it shows,
+and a **Remove unused dynamic clients** action for tidying up on your own
+schedule.
+
+Details, including the security posture around fetching a metadata document,
+are in `docs/mcp-integration.md`.
+
+## See and Revoke Who Is Connected
+
+**Admin → OAuth → Connections** is a new tab answering the question the client
+list never could: which user granted which application which scopes, and when.
+Filter by user or client, and revoke any grant. The clients list now shows a
+connection count per client, a user's detail page lists their connections, and
+applications identified by a metadata document appear as read-only rows even
+though they have no client record.
+
+Users get the same view of their own grants under **Settings → Integrations →
+Connected apps**, with the scopes spelled out in the same plain language as the
+consent screen, and a **Disconnect** button.
+
+Disconnecting deletes the consent *and* revokes the application's refresh
+tokens, so it has to ask for permission again rather than quietly carrying on
+with a token it already had. An access token it already holds keeps working
+until it expires — both screens say so, with the actual number of minutes.
+
+Four new audit events (`oauthConnection` granted and revoked, `oauthClient`
+registered, `oauthCimd` rejected) record all of this under **Admin → Audit
+log**.

@@ -9,6 +9,7 @@ import {
   loadOAuthClients
 } from '../../utils/oauthClientManager.js';
 import { generateStaticApiKey, introspectOAuthToken } from '../../utils/oauthTokenService.js';
+import { countByClient, listSeenCimdClients } from '../../services/oauth/ConnectionService.js';
 import { buildServerPath } from '../../utils/basePath.js';
 import { adminAuth } from '../../middleware/adminAuth.js';
 import configCache from '../../configCache.js';
@@ -65,9 +66,21 @@ export default function registerAdminOAuthRoutes(app) {
       const clientsFilePath = oauthConfig.clientsFile || 'contents/config/oauth-clients.json';
       const clients = listOAuthClients(clientsFilePath);
 
+      // How many people are actually connected through each client. A row with
+      // zero is a client nobody uses; a dynamic row with many is one worth
+      // keeping. Neither is visible from the client record alone.
+      const counts = countByClient();
+
       res.json({
         success: true,
-        clients
+        clients: clients.map(client => ({
+          ...client,
+          connectionCount: counts[client.clientId] || 0
+        })),
+        // CIMD clients are not stored, so they would be missing from this page
+        // entirely. These synthetic, read-only rows are derived from the
+        // connections that exist.
+        cimdClients: listSeenCimdClients()
       });
     } catch (error) {
       logger.error('[OAuth Admin] List clients error', { component: 'OAuthAdmin', error });
