@@ -743,3 +743,22 @@ altogether.
 accounts you created are still there. Anyone who was created and then reported "my login does not
 work" may have been silently removed by a later save; such an account has to be created again. A
 single-worker installation is unaffected.
+
+## The Docker Image Ships Without Known High-Severity Vulnerabilities
+
+A scan of the published container image reported nine high-severity findings, most of them in
+software the application never runs. The image is now built so those components are patched or
+absent.
+
+- Pending Alpine security updates are applied while the image is built, so OS libraries such as
+  `libssl3`/`libcrypto3` no longer lag behind fixes that Alpine has already published.
+- The npm CLI is removed from the production image. The container only ever runs `node`, and npm
+  brought its own bundled dependency tree (`tar`, `undici`, `brace-expansion`, `ip-address`) that
+  could not be patched from this repository. `docker exec` into the container therefore no longer
+  has `npm` or `npx` available; the development image still has both.
+- The bundled YAML parser used by the docs, OpenAPI and front-matter code paths is updated to a
+  patched release.
+
+The image scan in CI also reports severities correctly now: it previously counted every
+high-severity finding as critical, so release builds failed with a "critical vulnerabilities found"
+message even when there were none.

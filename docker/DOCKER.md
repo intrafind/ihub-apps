@@ -128,6 +128,12 @@ The Docker build process uses **multi-stage builds**:
 3. **Development Stage**: Includes dev dependencies and source code mounting
 4. **Production Stage**: Optimized build with only production dependencies
 
+Every stage applies the Alpine security updates published since the base image was built. The
+production stage additionally removes the npm CLI: the runtime only executes `node`, and npm's
+bundled dependency tree is a recurring source of image vulnerabilities. `npm` and `npx` are
+therefore not available inside a running production container — use the development image (or the
+host) for anything that needs them.
+
 ### Build Arguments
 
 ```bash
