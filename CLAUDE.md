@@ -86,6 +86,7 @@ Any change visible to admins or end users gets an entry in `docs/releases/` — 
 - `client/src/App.jsx` — routing; `client/src/shared/contexts/AuthContext.jsx` — auth state; `client/src/features/apps/pages/AppChat.jsx` — chat UI; `client/src/pages/UnifiedPage.jsx` + `client/src/shared/components/ReactComponentRenderer.jsx` — dynamic pages
 
 <!-- rtk-instructions v2 -->
+
 # Command output
 
 Command output here is condensed to save tokens, keeping every signal and
