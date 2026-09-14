@@ -16,6 +16,8 @@ import RequestBuilder from './RequestBuilder.js';
 import { processMessageTemplates } from '../../serverHelpers.js';
 import { logInteraction as defaultLogInteraction } from '../../utils.js';
 import { runTool as defaultRunTool } from '../../toolLoader.js';
+import configCache from '../../configCache.js';
+import { findByIdCaseInsensitive } from '../../utils/resourceLookup.js';
 import { activeRequests, hasChatClient } from '../../sse.js';
 import { isFailureFinishReason } from '../../adapters/toolCalling/index.js';
 import PromptService from '../PromptService.js';
@@ -116,10 +118,20 @@ export const APP_INVOKE_COLLECT_CAP_BYTES = 256 * 1024;
  */
 const MAX_CHAT_ENTRIES = 5000;
 
-/** Attach app variables to the last user message (where PromptService reads them). */
-function withVariables(messages, variables) {
+/**
+ * Attach app variables and the app's prompt template to the last user message
+ * (where PromptService reads them).
+ *
+ * `PromptService.processMessageTemplates` only interpolates an app's `prompt`
+ * when the message carries it as `promptTemplate` — the browser client puts it
+ * there. Headless callers (MCP gateway, A2A, app-as-tool) build their messages
+ * themselves, so without this the template and every declared variable were
+ * silently dropped and the model saw only the raw message.
+ */
+export function withAppPrompt(messages, variables, promptTemplate) {
   const list = Array.isArray(messages) ? messages : [];
-  if (!variables || Object.keys(variables).length === 0) return list;
+  const hasVariables = variables && Object.keys(variables).length > 0;
+  if (!hasVariables && !promptTemplate) return list;
   let lastUser = -1;
   for (let i = list.length - 1; i >= 0; i--) {
     if (list[i]?.role === 'user') {
@@ -129,7 +141,13 @@ function withVariables(messages, variables) {
   }
   if (lastUser < 0) return list;
   return list.map((m, i) =>
-    i === lastUser ? { ...m, variables: { ...(m.variables || {}), ...variables } } : m
+    i === lastUser
+      ? {
+          ...m,
+          variables: { ...(m.variables || {}), ...(variables || {}) },
+          ...(m.promptTemplate ? {} : { promptTemplate: promptTemplate || null })
+        }
+      : m
   );
 }
 
@@ -835,10 +853,13 @@ class ChatService {
     const collected = { toolCalls: [], citations: [] };
 
     try {
+      const { data: knownApps = [] } = configCache.getApps();
+      const appPrompt = findByIdCaseInsensitive(knownApps, appId)?.prompt || null;
+
       const prepResult = await this.prepareChatRequest({
         appId,
         modelId: modelOverride,
-        messages: withVariables(messages, variables),
+        messages: withAppPrompt(messages, variables, appPrompt),
         language,
         user,
         chatId

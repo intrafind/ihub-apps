@@ -1,5 +1,17 @@
 # Fixes — 5.5.0
 
+## Apps Called Over MCP Now Honour Their Prompt and Variables
+
+An app invoked headlessly — through the MCP gateway, an A2A skill, or as a tool from another app —
+ignored its own prompt template and every variable the caller passed. Only the system prompt and the
+raw message reached the model, so the Translator asked for German answered in Spanish, and the Email
+Composer received a recipient, subject and tone it never saw.
+
+The app's prompt is now attached to the outgoing message on these paths, the same way the web UI
+already did it, so `{{language}}`, `{{content}}` and every other placeholder are filled in. This
+affects every variable-driven app: Translator, Email Composer, Meeting Assistant, Social Media, and
+any app whose MCP tool schema advertises required arguments.
+
 ## More Room for the Conversation on Phones
 
 On a phone the chat gave the conversation less than half the screen: a 390x664 viewport spent 392px
