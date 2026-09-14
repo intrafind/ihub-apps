@@ -128,8 +128,8 @@
   ],
   "devDependencies": {
     "@axe-core/playwright": "^4.13.0",
-    "@babel/core": "^8.0.1",
-    "@babel/preset-env": "^8.0.2",
+    "@babel/core": "^8.0.5",
+    "@babel/preset-env": "^8.0.5",
     "@babel/preset-react": "^8.0.1",
     "@eslint-react/eslint-plugin": "^5.18.7",
     "@playwright/test": "^1.62.1",
