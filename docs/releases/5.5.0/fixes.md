@@ -776,3 +776,11 @@ absent.
 The image scan in CI also reports severities correctly now: it previously counted every
 high-severity finding as critical, so release builds failed with a "critical vulnerabilities found"
 message even when there were none.
+
+## The Admin "What's New" Changelog Is No Longer Empty
+
+The changelog page under **Admin → What's New** showed "No changelog entries yet." on every
+packaged deployment — the Docker image, a `dist/` production build, and the standalone binary.
+The release notes it reads live in `docs/releases/`, but that folder was never included in what
+those builds actually ship, so the page had nothing to display even though real entries existed.
+It now shows the same release history in every deployment as in local development.
