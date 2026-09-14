@@ -1,6 +1,7 @@
 # One OAuth Client for Claude: Replacing Per-User Dynamic Client Registration
 
 **Date:** 2026-09-14
+**Issue:** https://github.com/intrafind/ihub-apps/issues/2358
 **Status:** Proposal
 **Related:** [#1461](https://github.com/intrafind/ihub-apps/issues/1461) (MCP gateway),
 `docs/mcp-integration.md`, `concepts/2026-08-28 User-Specific OAuth API Keys in the Integration Section.md`
