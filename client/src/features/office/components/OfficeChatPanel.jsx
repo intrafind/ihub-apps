@@ -546,9 +546,9 @@ function OfficeChatPanel({ authData, selectedApp, setSelectedApp, onLogout }) {
   const hasMessages = adapter.messages.length > 0;
 
   return (
-    <div className="office-task-pane h-screen w-full flex flex-col p-0 bg-slate-50">
+    <div className="office-task-pane h-screen w-full flex flex-col p-0 bg-slate-50 dark:bg-slate-900">
       <div className="flex-1 min-h-0 flex flex-col w-full">
-        <div className="flex flex-col h-full min-h-0 w-full overflow-hidden bg-white">
+        <div className="flex flex-col h-full min-h-0 w-full overflow-hidden bg-white dark:bg-slate-900">
           <ChatHeader
             showCheckmark={false}
             selectedApp={{ name: appName || 'Select app' }}
@@ -561,17 +561,17 @@ function OfficeChatPanel({ authData, selectedApp, setSelectedApp, onLogout }) {
           <div className="flex-1 flex flex-col min-h-0">
             {/* Empty state: greeting + starter prompts */}
             {!hasMessages && (
-              <div className="office-greeting border-b border-slate-100 bg-slate-50/60">
+              <div className="office-greeting border-b border-slate-100 bg-slate-50/60 dark:border-slate-800 dark:bg-slate-800/40">
                 <div className="flex flex-col items-center office-greeting-header text-center">
                   {greetingTitle || greetingSubtitle ? (
                     <>
                       {greetingTitle && (
-                        <p className="office-greeting-title font-semibold text-slate-900">
+                        <p className="office-greeting-title font-semibold text-slate-900 dark:text-slate-100">
                           {greetingTitle}
                         </p>
                       )}
                       {greetingSubtitle && (
-                        <p className="office-greeting-subtitle text-slate-600">
+                        <p className="office-greeting-subtitle text-slate-600 dark:text-slate-400">
                           {greetingSubtitle}
                         </p>
                       )}
@@ -591,7 +591,7 @@ function OfficeChatPanel({ authData, selectedApp, setSelectedApp, onLogout }) {
                       key={prompt.key}
                       type="button"
                       onClick={() => handlePromptSelect(prompt)}
-                      className="office-starter-prompt w-full text-left rounded-lg border border-slate-200 bg-white hover:bg-slate-50 hover:border-slate-300 transition-colors text-slate-700"
+                      className="office-starter-prompt w-full text-left rounded-lg border border-slate-200 bg-white hover:bg-slate-50 hover:border-slate-300 transition-colors text-slate-700 dark:border-slate-700 dark:bg-slate-800 dark:hover:bg-slate-700 dark:hover:border-slate-600 dark:text-slate-200"
                     >
                       {prompt.label}
                     </button>
@@ -654,7 +654,7 @@ function OfficeChatPanel({ authData, selectedApp, setSelectedApp, onLogout }) {
             />
 
             {/* Input */}
-            <div className="border-t border-gray-200 bg-white shrink-0">
+            <div className="border-t border-gray-200 bg-white shrink-0 dark:border-slate-700 dark:bg-slate-900">
               <ChatInput
                 app={selectedApp}
                 value={inputValue}

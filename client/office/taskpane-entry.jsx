@@ -11,6 +11,7 @@ import OfficeApp from '../src/features/office/components/OfficeApp';
 import { installOfficeAuthInterceptor } from '../src/features/office/api/officeAuthBridge';
 import { openOfficeAuthDialog } from '../src/features/office/utilities/officeAuthDialog';
 import { fetchCurrentOutlookItemContext } from '../src/features/office/utilities/outlookMailContext';
+import { initOfficeTheme } from '../src/features/office/utilities/officeTheme';
 
 /**
  * Derive the base path from the current URL so the config fetch works
@@ -23,7 +24,15 @@ function detectBasePath() {
   return match ? match[1] : '';
 }
 
+// Apply the persisted light/dark preference (Settings → Appearance) before
+// Office.js finishes initialising so dark-mode users never see a white flash.
+// Re-run inside onReady: only then are Office.context.officeTheme and the
+// OfficeThemeChanged event available for "auto" mode.
+initOfficeTheme();
+
 Office.onReady(async () => {
+  initOfficeTheme();
+
   const basePath = detectBasePath();
 
   let config;

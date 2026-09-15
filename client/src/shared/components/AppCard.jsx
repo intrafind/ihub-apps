@@ -34,7 +34,7 @@ function AppCard({
   if (variant === 'compact') {
     return (
       <div
-        className="relative bg-white rounded-lg shadow-sm hover:shadow-md transition-shadow duration-200 w-full"
+        className="relative bg-white rounded-lg shadow-sm hover:shadow-md transition-shadow duration-200 w-full dark:bg-slate-800 dark:ring-1 dark:ring-slate-700"
         // rem (not px) so the row scales with the Office task pane's responsive
         // root font-size on small / high-DPI panes. 4.6875rem = 75px, 4.5rem = 72px
         // at the default 16px base — identical sizing in the main web app.
@@ -49,7 +49,7 @@ function AppCard({
               e.stopPropagation();
               onToggleFavorite(e, app.id);
             }}
-            className="absolute top-1 right-1 z-10 p-1 rounded-full hover:bg-slate-100 focus:outline-hidden focus:ring-2 focus:ring-indigo-300"
+            className="absolute top-1 right-1 z-10 p-1 rounded-full hover:bg-slate-100 focus:outline-hidden focus:ring-2 focus:ring-indigo-300 dark:hover:bg-slate-700"
             title={isFavorite ? t('pages.appsList.unfavorite') : t('pages.appsList.favorite')}
             aria-label={isFavorite ? t('pages.appsList.unfavorite') : t('pages.appsList.favorite')}
           >
@@ -79,10 +79,16 @@ function AppCard({
               onToggleFavorite ? 'pl-4 pr-9' : 'px-4'
             }`}
           >
-            <h4 className="font-semibold text-sm text-slate-900 truncate" title={name}>
+            <h4
+              className="font-semibold text-sm text-slate-900 truncate dark:text-slate-100"
+              title={name}
+            >
               {name}
             </h4>
-            <p className="text-slate-500 text-xs truncate mt-0.5" title={description}>
+            <p
+              className="text-slate-500 text-xs truncate mt-0.5 dark:text-slate-400"
+              title={description}
+            >
               {description}
             </p>
           </div>

@@ -1807,3 +1807,19 @@ The existing agent artifacts under `contents/data/agent-artifacts/` are a separa
 and are unchanged by this release.
 
 See [Artifacts](../../artifacts.md) and [Chat Persistence](../../chat-persistence.md).
+
+## Outlook Add-in: Dark Mode
+
+The Outlook task pane can now be switched to a dark appearance. Users open **☰ → Settings →
+Appearance** inside the add-in and choose **Light**, **Dark**, or **Automatic**; the choice is
+stored in the Outlook client and remembered across Outlook restarts. The browser-extension side
+panel, which uses the same chat shell, gets the same setting.
+
+- **Light** stays the default, so nothing changes for existing users until they opt in.
+- **Automatic** follows the Outlook theme on clients that expose it (Mailbox requirement set 1.14
+  and later — Outlook on the web, the new Outlook for Windows, current Microsoft 365 desktop
+  builds) and switches live when the user changes Outlook's theme. Older Outlook versions and the
+  browser extension follow the operating system's dark-mode setting instead.
+- Every add-in surface is covered: sign-in, app picker, chat, the email and meeting context strip,
+  pinned emails, and the app, variables and settings dialogs.
+- No admin configuration is involved; the preference is per user and per device.

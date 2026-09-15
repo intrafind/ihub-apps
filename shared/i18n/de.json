@@ -169,6 +169,12 @@
       "title": "Einstellungen",
       "account": "Konto",
       "language": "Sprache",
+      "appearance": "Darstellung",
+      "appearanceLight": "Hell",
+      "appearanceDark": "Dunkel",
+      "appearanceAuto": "Automatisch",
+      "appearanceHintOffice": "Automatisch folgt dem Outlook-Design (bzw. der Systemeinstellung bei älteren Outlook-Versionen).",
+      "appearanceHintSystem": "Automatisch folgt der Systemeinstellung.",
       "cancel": "Abbrechen",
       "save": "Speichern"
     }
