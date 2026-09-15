@@ -173,17 +173,17 @@ describe('the loading placeholder', () => {
 });
 
 describe('lazy loading a stored image', () => {
-  let intersectionCallbacks;
+  let intersectionInstances;
   const OriginalIntersectionObserver = global.IntersectionObserver;
 
   beforeEach(() => {
-    intersectionCallbacks = [];
+    intersectionInstances = [];
     // jsdom has no IntersectionObserver at all, so a minimal stub stands in
-    // for it here — just enough to capture the callback each instance was
-    // built with and let the test fire it by hand.
+    // for it here — just enough to capture the callback and options each
+    // instance was built with, and let the test fire the callback by hand.
     global.IntersectionObserver = class {
-      constructor(callback) {
-        intersectionCallbacks.push(callback);
+      constructor(callback, options) {
+        intersectionInstances.push({ callback, options });
       }
       observe() {}
       disconnect() {}
@@ -207,9 +207,12 @@ describe('lazy loading a stored image', () => {
     );
 
     expect(mockFetchChatArtifact).not.toHaveBeenCalled();
+    // The observer starts loading a little before the image is actually on
+    // screen, so it must have been built with a non-zero rootMargin.
+    expect(intersectionInstances[0].options).toMatchObject({ rootMargin: expect.any(String) });
 
     act(() => {
-      intersectionCallbacks[0]([{ isIntersecting: true }]);
+      intersectionInstances[0].callback([{ isIntersecting: true }]);
     });
 
     await waitFor(() => expect(mockFetchChatArtifact).toHaveBeenCalledWith('chat-1', 'art-1'));
