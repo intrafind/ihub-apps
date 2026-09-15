@@ -259,7 +259,7 @@ function AppChat({ preloadedApp = null }) {
     sendChatHistory,
     ephemeral,
     thinkingEnabled,
-    thinkingBudget,
+    thinkingLevel,
     thinkingThoughts,
     enabledTools,
     websearchEnabled,
@@ -274,7 +274,7 @@ function AppChat({ preloadedApp = null }) {
     setSendChatHistory,
     setEphemeral,
     setThinkingEnabled,
-    setThinkingBudget,
+    setThinkingLevel,
     setThinkingThoughts,
     setEnabledTools,
     setWebsearchEnabled,
@@ -1039,7 +1039,7 @@ function AppChat({ preloadedApp = null }) {
           outputFormat: selectedOutputFormat,
           language: currentLanguage,
           ...(thinkingEnabled !== null ? { thinkingEnabled } : {}),
-          ...(thinkingBudget !== null ? { thinkingBudget } : {}),
+          ...(thinkingLevel !== null ? { thinkingLevel } : {}),
           ...(thinkingThoughts !== null ? { thinkingThoughts } : {}),
           ...(effectiveEnabledTools !== null && effectiveEnabledTools !== undefined
             ? { enabledTools: effectiveEnabledTools }
@@ -1112,7 +1112,7 @@ function AppChat({ preloadedApp = null }) {
     currentLanguage,
     variables,
     thinkingEnabled,
-    thinkingBudget,
+    thinkingLevel,
     thinkingThoughts,
     effectiveEnabledTools,
     imageAspectRatio,
@@ -1355,7 +1355,7 @@ function AppChat({ preloadedApp = null }) {
         outputFormat: selectedOutputFormat,
         language: currentLanguage,
         ...(thinkingEnabled !== null ? { thinkingEnabled } : {}),
-        ...(thinkingBudget !== null ? { thinkingBudget } : {}),
+        ...(thinkingLevel !== null ? { thinkingLevel } : {}),
         ...(thinkingThoughts !== null ? { thinkingThoughts } : {}),
         ...(effectiveEnabledTools !== null && effectiveEnabledTools !== undefined
           ? { enabledTools: effectiveEnabledTools }
@@ -1397,7 +1397,7 @@ function AppChat({ preloadedApp = null }) {
       currentLanguage,
       sendChatHistory,
       thinkingEnabled,
-      thinkingBudget,
+      thinkingLevel,
       thinkingThoughts,
       effectiveEnabledTools,
       imageAspectRatio,
@@ -2053,7 +2053,7 @@ function AppChat({ preloadedApp = null }) {
       outputFormat: selectedOutputFormat,
       language: currentLanguage,
       ...(thinkingEnabled !== null ? { thinkingEnabled } : {}),
-      ...(thinkingBudget !== null ? { thinkingBudget } : {}),
+      ...(thinkingLevel !== null ? { thinkingLevel } : {}),
       ...(thinkingThoughts !== null ? { thinkingThoughts } : {}),
       ...(effectiveEnabledTools !== null && effectiveEnabledTools !== undefined
         ? { enabledTools: effectiveEnabledTools }
@@ -2386,7 +2386,7 @@ function AppChat({ preloadedApp = null }) {
         sendChatHistory={sendChatHistory}
         temperature={temperature}
         thinkingEnabled={thinkingEnabled}
-        thinkingBudget={thinkingBudget}
+        thinkingLevel={thinkingLevel}
         thinkingThoughts={thinkingThoughts}
         enabledTools={effectiveEnabledTools}
         imageAspectRatio={imageAspectRatio}
@@ -2397,7 +2397,7 @@ function AppChat({ preloadedApp = null }) {
         onSendChatHistoryChange={setSendChatHistory}
         onTemperatureChange={setTemperature}
         onThinkingEnabledChange={setThinkingEnabled}
-        onThinkingBudgetChange={setThinkingBudget}
+        onThinkingLevelChange={setThinkingLevel}
         onThinkingThoughtsChange={setThinkingThoughts}
         onEnabledToolsChange={setEnabledTools}
         onImageAspectRatioChange={setImageAspectRatio}

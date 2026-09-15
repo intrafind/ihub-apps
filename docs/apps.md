@@ -1005,7 +1005,7 @@ The `thinking` property enables extended thinking for models that support it (e.
 ```json
 "thinking": {
   "enabled": true,
-  "budget": 5000,
+  "level": "medium",
   "thoughts": true
 }
 ```
@@ -1013,8 +1013,11 @@ The `thinking` property enables extended thinking for models that support it (e.
 | Property           | Type    | Default | Description                                                                                             |
 | ------------------ | ------- | ------- | ------------------------------------------------------------------------------------------------------- |
 | `thinking.enabled` | Boolean | `false` | Enable extended thinking mode                                                                           |
-| `thinking.budget`  | Number  | -       | Token budget allocated for internal thinking steps. A positive integer sets a specific budget           |
+| `thinking.level`   | String  | `medium`| Reasoning effort: `minimal`, `low`, `medium` or `high`. More effort is slower and costs more tokens     |
 | `thinking.thoughts`| Boolean | `false` | When `true`, the model's internal thinking steps are included and displayed in the response             |
+
+An app's `thinking` block overrides the model's for that app. `thinking.budget`
+is no longer accepted — see [Models](models.md#model-thinking-configuration).
 
 #### Other Options
 

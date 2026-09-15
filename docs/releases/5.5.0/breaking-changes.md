@@ -1,5 +1,34 @@
 # Breaking Changes — 5.5.0
 
+## Reasoning Effort Is a Level, Not a Token Budget
+
+`thinking.budget` is removed from model, app and workflow-node configs, and `thinkingBudget` is
+removed from the chat/inference API. Reasoning effort is `thinking.level` — `minimal`, `low`,
+`medium` or `high` — everywhere.
+
+The number never meant what it looked like it meant. No adapter ever put it on the wire: every one
+bucketed it into one of those four levels first, and anything above 500 came out as `high`. A budget
+of `1024` and a budget of `32768` were the same request. The app settings panel made it worse by
+offering the number as a 0–32768 field labelled "Maximum tokens for thinking".
+
+- A configuration migration runs automatically on upgrade. `V105` converts every stored
+  `thinking.budget` — models, apps and workflow nodes — with the mapping the adapters already
+  applied: `0`→`minimal`, `-1`→`medium`, `1-100`→`low`, `101-500`→`medium`, `>500`→`high`. A
+  `thinking.level` you had already set is kept and the stale budget is dropped.
+- **Apps gain a level they never had.** The app `thinking` block previously accepted only `enabled`,
+  `budget` and `thoughts` — an app could not express a reasoning level at all, only spell one as a
+  number.
+- **The API field is gone.** A client sending `thinkingBudget` to the chat or inference endpoints now
+  gets a validation error; send `thinkingLevel` instead, which is enum-constrained to the four
+  levels. Chat settings saved in a browser with a budget lose that setting and fall back to the
+  app's level.
+- In the app settings panel, **Thinking Budget** is now **Reasoning Effort**, a four-way choice.
+- Telemetry records `thinking.level` in place of the `thinking.budget` attribute.
+
+**Before upgrading:** No action needed for stored configuration — the migration converts it. If you
+have external clients calling the chat or inference API with `thinkingBudget`, switch them to
+`thinkingLevel` before upgrading.
+
 ## Gemini Thinking Takes `thinking.level` Only
 
 iHub now speaks a single Gemini `thinkingConfig` shape — Gemini 3's `thinkingLevel` plus

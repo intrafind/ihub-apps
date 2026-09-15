@@ -1677,7 +1677,7 @@ export function snapshotOptions(adapterOptions, { principalId = null } = {}) {
 }
 
 function pickThinking(options) {
-  const keys = ['thinkingEnabled', 'thinkingLevel', 'thinkingBudget', 'thinkingThoughts'];
+  const keys = ['thinkingEnabled', 'thinkingLevel', 'thinkingThoughts'];
   const out = {};
   let any = false;
   for (const k of keys) {

@@ -145,23 +145,14 @@ class OpenAIResponsesAdapterClass extends BaseAdapter {
     // GPT-5 models use a fixed temperature of 1.0
     // Use verbosity and reasoning.effort parameters instead for control
 
-    // Configure reasoning effort based on thinking budget
+    // Reasoning effort comes from the level, through the same resolver the
+    // OpenAI and vLLM adapters use — this adapter used to carry its own copy of
+    // a budget-to-effort ladder, which is how the two could drift.
     const thinkingEnabled = options.thinkingEnabled ?? true;
-    const thinkingBudget = options.thinkingBudget ?? -1;
     const thinkingThoughts = options.thinkingThoughts ?? false;
-
-    let reasoningEffort = 'medium'; // default
-    if (!thinkingEnabled || thinkingBudget === 0) {
-      reasoningEffort = 'minimal';
-    } else if (thinkingBudget === -1) {
-      reasoningEffort = 'medium'; // dynamic budget defaults to medium
-    } else if (thinkingBudget > 0 && thinkingBudget <= 100) {
-      reasoningEffort = 'low';
-    } else if (thinkingBudget > 100 && thinkingBudget <= 500) {
-      reasoningEffort = 'medium';
-    } else if (thinkingBudget > 500) {
-      reasoningEffort = 'high';
-    }
+    const reasoningEffort = thinkingEnabled
+      ? this.resolveReasoningEffort(options, model)
+      : 'minimal';
 
     // Map thoughts flag to verbosity (controls detail level)
     const verbosity = thinkingThoughts ? 'high' : 'medium';

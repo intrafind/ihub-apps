@@ -2635,14 +2635,12 @@
           "thinkingEnabled": {
             "type": "boolean"
           },
-          "thinkingBudget": {
-            "type": "number"
+          "thinkingLevel": {
+            "type": "string",
+            "enum": ["minimal", "low", "medium", "high", "MINIMAL", "LOW", "MEDIUM", "HIGH"]
           },
           "thinkingThoughts": {
             "type": "boolean"
-          },
-          "thinkingLevel": {
-            "type": "string"
           },
           "nativeWebSearch": {
             "anyOf": [
@@ -3366,14 +3364,12 @@
           "thinkingEnabled": {
             "type": "boolean"
           },
-          "thinkingBudget": {
-            "type": "number"
+          "thinkingLevel": {
+            "type": "string",
+            "enum": ["minimal", "low", "medium", "high", "MINIMAL", "LOW", "MEDIUM", "HIGH"]
           },
           "thinkingThoughts": {
             "type": "boolean"
-          },
-          "thinkingLevel": {
-            "type": "string"
           },
           "nativeWebSearch": {
             "anyOf": [

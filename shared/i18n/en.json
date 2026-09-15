@@ -2243,7 +2243,13 @@
     "imageQualityHelp": "Select the quality level for generated images",
     "qualityLow": "Low (1K)",
     "qualityMedium": "Medium (2K)",
-    "qualityHigh": "High (4K)"
+    "qualityHigh": "High (4K)",
+    "thinkingLevel": "Reasoning Effort",
+    "thinkingLevelHelp": "How much the model reasons before answering. More effort is slower and costs more tokens.",
+    "thinkingLevelMinimal": "Minimal",
+    "thinkingLevelLow": "Low",
+    "thinkingLevelMedium": "Medium",
+    "thinkingLevelHigh": "High"
   },
   "citations": {
     "preview": "Preview (PDF)",

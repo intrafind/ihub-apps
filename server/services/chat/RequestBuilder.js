@@ -183,7 +183,7 @@ class RequestBuilder {
     language,
     bypassAppPrompts = false,
     thinkingEnabled,
-    thinkingBudget,
+    thinkingLevel,
     thinkingThoughts,
     enabledTools,
     websearchEnabled,
@@ -490,7 +490,7 @@ class RequestBuilder {
       const llmOptions = {
         nativeWebSearch,
         thinkingEnabled,
-        thinkingBudget,
+        thinkingLevel,
         thinkingThoughts,
         imageConfig,
         user,

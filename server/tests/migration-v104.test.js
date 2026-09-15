@@ -29,7 +29,6 @@ import { afterEach, beforeEach, describe, it } from 'node:test';
 import assert from 'node:assert/strict';
 
 import { up, version, description } from '../migrations/V104__gemini_3_only.js';
-import { BaseAdapter } from '../adapters/BaseAdapter.js';
 import { modelConfigSchema } from '../validators/modelConfigSchema.js';
 
 let dir;
@@ -120,14 +119,33 @@ describe('V104 — budget becomes level', () => {
     });
   }
 
-  it('maps every budget exactly as BaseAdapter does', async () => {
-    const base = new BaseAdapter();
-    for (const [budget, level] of cases) {
-      assert.equal(
-        base.resolveReasoningEffort({ thinkingBudget: budget }, {}),
-        level,
-        `BaseAdapter disagrees about budget ${budget}`
-      );
+  it('agrees with V105, which converts the same budgets for every other surface', async () => {
+    // Each migration carries its own copy of the ladder — a migration has to be
+    // self-contained, since editing a shared helper would change the behaviour
+    // of one already applied. So the copies are checked against each other.
+    const { up: v105 } = await import('../migrations/V105__thinking_level_not_budget.js');
+
+    for (const [budget] of cases) {
+      const other = await fs.mkdtemp(path.join(os.tmpdir(), 'ihub-v104-parity-'));
+      try {
+        await fs.mkdir(path.join(other, 'models'), { recursive: true });
+        await fs.writeFile(
+          path.join(other, 'models/gem.json'),
+          JSON.stringify(googleModel({ enabled: true, budget })),
+          'utf8'
+        );
+        await writeModel('gem', googleModel({ enabled: true, budget }));
+
+        await up(makeCtx(dir));
+        await v105(makeCtx(other));
+
+        const mine = (await readModel('gem')).thinking.level;
+        const theirs = JSON.parse(await fs.readFile(path.join(other, 'models/gem.json'), 'utf8'))
+          .thinking.level;
+        assert.equal(mine, theirs, `V104 and V105 disagree about budget ${budget}`);
+      } finally {
+        await fs.rm(other, { recursive: true, force: true });
+      }
     }
   });
 
@@ -154,7 +172,12 @@ describe('V104 — budget becomes level', () => {
     const result = modelConfigSchema.safeParse(googleModel({ enabled: true, budget: 8000 }));
 
     assert.equal(result.success, false);
-    assert.ok(result.error.issues.some(i => i.path.join('.') === 'thinking.budget'));
+    assert.ok(
+      result.error.issues.some(
+        i => /budget/.test(i.message) || i.path.join('.').includes('budget')
+      ),
+      JSON.stringify(result.error.issues)
+    );
   });
 });
 

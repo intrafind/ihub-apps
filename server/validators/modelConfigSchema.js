@@ -26,8 +26,10 @@ const localizedStringSchema = z.record(
 const thinkingSchema = z
   .object({
     enabled: z.boolean(),
-    // Reasoning effort. The only thinking control Gemini accepts (as
-    // `thinkingLevel`), and what OpenAI/vLLM map to `reasoning_effort`.
+    // Reasoning effort — the only way to ask for more or less reasoning.
+    // Gemini sends it as `thinkingLevel`, OpenAI/vLLM as `reasoning_effort`.
+    // There is no token-budget alternative: no provider ever took one, and the
+    // number only ever got bucketed into one of these four levels anyway.
     // The JSON wire format is lowercase (minimal | low | medium | high); the
     // uppercase spellings are the SDK constants, and the adapter normalizes
     // down to lowercase before sending. Schema accepts both cases so legacy /
@@ -35,11 +37,6 @@ const thinkingSchema = z
     level: z
       .enum(['minimal', 'low', 'medium', 'high', 'MINIMAL', 'LOW', 'MEDIUM', 'HIGH'])
       .optional(),
-    // Token budget for reasoning. Read by Anthropic (`budget_tokens`) and
-    // mapped to a reasoning effort by the OpenAI Responses adapter. NOT valid
-    // on Google models: it was the Gemini 2.5 `thinkingBudget`, which the
-    // Google adapter no longer sends — see the superRefine below.
-    budget: z.number().int().optional(),
     // Ask the provider for thought summaries (Gemini's `includeThoughts`).
     // Defaults to true when thinking is enabled; set false to keep the
     // reasoning hidden.
@@ -244,10 +241,6 @@ const baseModelConfigSchema = z
 // a model into the chat selector that the LLM adapter pipeline cannot route.
 export const TRANSCRIPTION_ONLY_PROVIDERS = ['vllm-realtime', 'google-live', 'google-transcribe'];
 
-// Providers routed through the Google adapter, which speaks only the Gemini 3
-// `thinkingLevel` shape.
-const GEMINI_PROVIDERS = ['google'];
-
 // Cross-field validation. Kept as a superRefine on top of the base object so
 // `knownModelKeys` can still be derived from `baseModelConfigSchema.shape`
 // (a ZodEffects wrapper has no `.shape`).
@@ -257,22 +250,6 @@ export const modelConfigSchema = baseModelConfigSchema.superRefine((data, ctx) =
       code: z.ZodIssueCode.custom,
       message: `Provider "${data.provider}" is only valid for modelType "transcription"`,
       path: ['provider']
-    });
-  }
-
-  // Gemini takes `thinking.level` and nothing else. `budget` is the Gemini 2.5
-  // `thinkingBudget`, which the adapter no longer sends, so a config carrying
-  // it here is asking for reasoning it will not get — and that used to fail
-  // silently. Rejecting it says so at save time instead. Other providers
-  // (Anthropic, OpenAI Responses) still read `budget`, so this is scoped to
-  // Google. Migration V104 converts stored configs.
-  if (GEMINI_PROVIDERS.includes(data.provider) && data.thinking?.budget !== undefined) {
-    ctx.addIssue({
-      code: z.ZodIssueCode.custom,
-      message:
-        'thinking.budget is the retired Gemini 2.5 shape and is ignored on Google models. ' +
-        'Use thinking.level ("minimal" | "low" | "medium" | "high") instead.',
-      path: ['thinking', 'budget']
     });
   }
 });

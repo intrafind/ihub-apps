@@ -28,11 +28,19 @@ describe('thinkingConfigToOptions', () => {
     });
   });
 
-  it('maps the Gemini 2.5 budget + thoughts shape', () => {
-    expect(thinkingConfigToOptions({ enabled: true, budget: 512, thoughts: false })).toEqual({
+  it('maps the thoughts flag alongside the level', () => {
+    expect(thinkingConfigToOptions({ enabled: true, level: 'low', thoughts: false })).toEqual({
       thinkingEnabled: true,
-      thinkingBudget: 512,
+      thinkingLevel: 'low',
       thinkingThoughts: false
+    });
+  });
+
+  it('never emits a thinkingBudget, even from a config that still carries one', () => {
+    // `budget` is retired: the schema rejects it and no adapter reads it. A
+    // stale node config must not smuggle it back into the request options.
+    expect(thinkingConfigToOptions({ enabled: true, budget: 512 })).toEqual({
+      thinkingEnabled: true
     });
   });
 

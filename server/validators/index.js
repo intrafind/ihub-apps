@@ -79,7 +79,9 @@ export const chatPostSchema = {
     language: z.string().optional(),
     bypassAppPrompts: z.any().optional(),
     thinkingEnabled: z.boolean().optional(),
-    thinkingBudget: z.number().optional(),
+    thinkingLevel: z
+      .enum(['minimal', 'low', 'medium', 'high', 'MINIMAL', 'LOW', 'MEDIUM', 'HIGH'])
+      .optional(),
     thinkingThoughts: z.boolean().optional(),
     enabledTools: z.array(z.string()).optional(),
     websearchEnabled: z.boolean().optional(),

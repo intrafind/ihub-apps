@@ -48,7 +48,7 @@ function useAppSettings(appId, app, { chatSettings = null } = {}) {
   const [sendChatHistory, setSendChatHistory] = useState(true);
   const [ephemeral, setEphemeral] = useState(false);
   const [thinkingEnabled, setThinkingEnabled] = useState(null);
-  const [thinkingBudget, setThinkingBudget] = useState(null);
+  const [thinkingLevel, setThinkingLevel] = useState(null);
   const [thinkingThoughts, setThinkingThoughts] = useState(null);
   const [enabledTools, setEnabledTools] = useState([]);
   const [websearchEnabled, setWebsearchEnabled] = useState(false);
@@ -155,7 +155,7 @@ function useAppSettings(appId, app, { chatSettings = null } = {}) {
       sendChatHistory: true,
       ephemeral: app.ephemeral ?? false,
       thinkingEnabled: app.thinking?.enabled ?? null,
-      thinkingBudget: app.thinking?.budget ?? null,
+      thinkingLevel: app.thinking?.level ?? null,
       thinkingThoughts: app.thinking?.thoughts ?? null,
       enabledTools: app.tools || [],
       websearchEnabled: app.websearch?.enabledByDefault ?? false,
@@ -171,7 +171,7 @@ function useAppSettings(appId, app, { chatSettings = null } = {}) {
     setSendChatHistory(initialState.sendChatHistory);
     setEphemeral(initialState.ephemeral);
     setThinkingEnabled(initialState.thinkingEnabled);
-    setThinkingBudget(initialState.thinkingBudget);
+    setThinkingLevel(initialState.thinkingLevel);
     setThinkingThoughts(initialState.thinkingThoughts);
     setEnabledTools(initialState.enabledTools);
     setWebsearchEnabled(initialState.websearchEnabled);
@@ -200,8 +200,7 @@ function useAppSettings(appId, app, { chatSettings = null } = {}) {
       if (savedSettings.ephemeral !== undefined) setEphemeral(savedSettings.ephemeral);
       if (savedSettings.thinkingEnabled !== undefined)
         setThinkingEnabled(savedSettings.thinkingEnabled);
-      if (savedSettings.thinkingBudget !== undefined)
-        setThinkingBudget(savedSettings.thinkingBudget);
+      if (savedSettings.thinkingLevel !== undefined) setThinkingLevel(savedSettings.thinkingLevel);
       if (savedSettings.thinkingThoughts !== undefined)
         setThinkingThoughts(savedSettings.thinkingThoughts);
       if (savedSettings.enabledTools !== undefined) setEnabledTools(savedSettings.enabledTools);
@@ -224,8 +223,8 @@ function useAppSettings(appId, app, { chatSettings = null } = {}) {
         setSendChatHistory(chatSettings.sendChatHistory);
       if (typeof chatSettings.thinkingEnabled === 'boolean')
         setThinkingEnabled(chatSettings.thinkingEnabled);
-      if (typeof chatSettings.thinkingBudget === 'number')
-        setThinkingBudget(chatSettings.thinkingBudget);
+      if (typeof chatSettings.thinkingLevel === 'string')
+        setThinkingLevel(chatSettings.thinkingLevel);
       if (typeof chatSettings.thinkingThoughts === 'boolean')
         setThinkingThoughts(chatSettings.thinkingThoughts);
       if (Array.isArray(chatSettings.enabledTools)) setEnabledTools(chatSettings.enabledTools);
@@ -254,7 +253,7 @@ function useAppSettings(appId, app, { chatSettings = null } = {}) {
         sendChatHistory,
         ephemeral,
         thinkingEnabled,
-        thinkingBudget,
+        thinkingLevel,
         thinkingThoughts,
         enabledTools,
         websearchEnabled,
@@ -273,7 +272,7 @@ function useAppSettings(appId, app, { chatSettings = null } = {}) {
     sendChatHistory,
     ephemeral,
     thinkingEnabled,
-    thinkingBudget,
+    thinkingLevel,
     thinkingThoughts,
     enabledTools,
     websearchEnabled,
@@ -291,7 +290,7 @@ function useAppSettings(appId, app, { chatSettings = null } = {}) {
     sendChatHistory,
     ephemeral,
     thinkingEnabled,
-    thinkingBudget,
+    thinkingLevel,
     thinkingThoughts,
     enabledTools,
     websearchEnabled,
@@ -309,7 +308,7 @@ function useAppSettings(appId, app, { chatSettings = null } = {}) {
     setSendChatHistory,
     setEphemeral,
     setThinkingEnabled,
-    setThinkingBudget,
+    setThinkingLevel,
     setThinkingThoughts,
     setEnabledTools,
     setWebsearchEnabled,

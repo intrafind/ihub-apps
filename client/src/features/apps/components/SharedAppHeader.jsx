@@ -30,7 +30,7 @@ function SharedAppHeader({
   sendChatHistory,
   temperature,
   thinkingEnabled,
-  thinkingBudget,
+  thinkingLevel,
   thinkingThoughts,
   enabledTools: _enabledTools,
   imageAspectRatio,
@@ -41,7 +41,7 @@ function SharedAppHeader({
   onSendChatHistoryChange,
   onTemperatureChange,
   onThinkingEnabledChange,
-  onThinkingBudgetChange,
+  onThinkingLevelChange,
   onThinkingThoughtsChange,
   onEnabledToolsChange: _onEnabledToolsChange,
   onImageAspectRatioChange,
@@ -171,7 +171,7 @@ function SharedAppHeader({
             sendChatHistory={sendChatHistory}
             temperature={temperature}
             thinkingEnabled={thinkingEnabled}
-            thinkingBudget={thinkingBudget}
+            thinkingLevel={thinkingLevel}
             thinkingThoughts={thinkingThoughts}
             imageAspectRatio={imageAspectRatio}
             imageQuality={imageQuality}
@@ -181,7 +181,7 @@ function SharedAppHeader({
             onSendChatHistoryChange={onSendChatHistoryChange}
             onTemperatureChange={onTemperatureChange}
             onThinkingEnabledChange={onThinkingEnabledChange}
-            onThinkingBudgetChange={onThinkingBudgetChange}
+            onThinkingLevelChange={onThinkingLevelChange}
             onThinkingThoughtsChange={onThinkingThoughtsChange}
             onImageAspectRatioChange={onImageAspectRatioChange}
             onImageQualityChange={onImageQualityChange}

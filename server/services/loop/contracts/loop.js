@@ -90,9 +90,10 @@ export const llmCallOptionsSchema = z
     responseSchema: z.record(z.any()).nullable().optional(),
     toolChoice: z.any().optional(),
     thinkingEnabled: z.boolean().optional(),
-    thinkingBudget: z.number().optional(),
+    thinkingLevel: z
+      .enum(['minimal', 'low', 'medium', 'high', 'MINIMAL', 'LOW', 'MEDIUM', 'HIGH'])
+      .optional(),
     thinkingThoughts: z.boolean().optional(),
-    thinkingLevel: z.string().optional(),
     nativeWebSearch: z.any().nullable().optional(),
     imageConfig: z.record(z.any()).nullable().optional(),
     stream: z.boolean().optional()

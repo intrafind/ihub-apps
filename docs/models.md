@@ -121,7 +121,7 @@ The system currently supports the following providers:
 4. **Google** (`provider: "google"`)
    - Compatible with the Google Gemini API format
    - Examples: Gemini 3.8 Flash, Gemini 3.1 Pro, Nano Banana Pro
-   - Gemini models need `thinking.level`; `thinking.budget` is rejected on `provider: "google"` (see [Thinking Configuration](#model-thinking-configuration))
+   - `thinking.budget` is rejected on every provider; reasoning effort is `thinking.level` (see [Thinking Configuration](#model-thinking-configuration))
 
 5. **Mistral** (`provider: "mistral"`)
    - Compatible with Mistral's La Plateforme API format
@@ -352,31 +352,33 @@ For models that support extended thinking (such as Claude claude-3-7-sonnet), th
 | Property           | Type    | Description                                                                                                                 |
 | ------------------ | ------- | --------------------------------------------------------------------------------------------------------------------------- |
 | `thinking.enabled` | Boolean | Enable extended thinking mode for this model                                                                                |
-| `thinking.budget`  | Number  | Token budget for internal thinking steps. `0` disables thinking, `-1` lets the model decide dynamically, positive values set a specific budget. **Not valid on `provider: "google"`** — see the note below |
 | `thinking.thoughts`| Boolean | Whether the model's internal thinking steps are returned and shown in the response. Defaults to `true` when thinking is enabled; set `false` to keep the reasoning hidden. On Gemini it maps to `includeThoughts` |
-| `thinking.level`   | String  | Reasoning effort: `minimal`, `low`, `medium`, or `high`. Used by OpenAI/vLLM `reasoning_effort` and Gemini `thinkingLevel`. The only reasoning control Gemini accepts |
+| `thinking.level`   | String  | Reasoning effort: `minimal`, `low`, `medium`, or `high`. Defaults to `medium`. The only way to ask for more or less reasoning — Gemini sends it as `thinkingLevel`, OpenAI/vLLM as `reasoning_effort` |
 | `thinking.chatTemplateKwargs` | Object | vLLM only: per-request chat-template knobs to toggle reasoning, e.g. `{ "enable_thinking": false }` (Qwen3) or `{ "thinking": true }` (Granite). When omitted, the vLLM adapter defaults to `{ "enable_thinking": <toggle> }` |
 
 App-level `thinking` settings override these model defaults for a specific app.
 
+> **Reasoning effort is a level, never a number.** `thinking.budget` is gone
+> from model, app and workflow-node configs alike, and from the API. It looked
+> like a token allowance and was nothing of the kind: no adapter ever put the
+> number on the wire — every one bucketed it into one of these four levels
+> first — so a budget of `1024` and a budget of `32768` were the same request
+> while looking like a considered choice.
+>
+> Migration `V105` converts everything stored, with the mapping the adapters
+> already applied: `0`→`minimal`, `-1`→`medium`, `1-100`→`low`,
+> `101-500`→`medium`, `>500`→`high`. A `thinking.level` you had already set is
+> kept. Apps gain a level they never had — the app `thinking` block only ever
+> accepted a number, which is how the confusion got in.
+>
 > **Gemini takes `thinking.level` only.** iHub speaks one Gemini
-> `thinkingConfig` shape — Gemini 3's `thinkingLevel` plus `includeThoughts` —
-> and the retired Gemini 2.5 `thinkingBudget` is no longer sent at all.
-> `thinking.budget` on a `provider: "google"` model is therefore rejected by
-> the model schema rather than silently ignored; use `thinking.level`.
->
-> Gemini's two `thinkingConfig` schemas were never interchangeable — each
-> returns a bare `400 INVALID_ARGUMENT`, naming no field, when handed the
-> other's — so supporting both meant every Gemini model config had to declare
-> which generation it belonged to, and one left on the old shape broke the
-> moment Google moved a `-latest` alias forward. Gemini 3 is the floor now.
->
-> Migration `V104` converts stored Google configs, mapping the old budget onto
-> the level the rest of the codebase already derived from it (`0`→`minimal`,
-> `-1`→`medium`, `1-100`→`low`, `101-500`→`medium`, `>500`→`high`). A level you
-> had already set is kept. Every other provider is untouched: Anthropic still
-> reads `budget` as `budget_tokens`, and the OpenAI Responses adapter still maps
-> it to a reasoning effort.
+> `thinkingConfig` shape — Gemini 3's `thinkingLevel` plus `includeThoughts`.
+> Gemini's two schemas were never interchangeable — each returns a bare
+> `400 INVALID_ARGUMENT`, naming no field, when handed the other's — so
+> supporting both meant every Gemini model config had to declare which
+> generation it belonged to, and one left on the old shape broke the moment
+> Google moved a `-latest` alias forward. Gemini 3 is the floor now, and
+> `V104` moves stored Gemini configs across on its way to retiring 2.x.
 >
 > **Gemini 2.x models are retired.** A 2.x endpoint rejects the only
 > `thinkingConfig` iHub now sends, so `V104` removes them, following the same

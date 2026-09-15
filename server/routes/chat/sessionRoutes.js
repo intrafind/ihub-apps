@@ -273,9 +273,10 @@ export default function registerSessionRoutes(app, { getLocalizedError, DEFAULT_
    *         thinkingEnabled:
    *           type: boolean
    *           description: Enable extended thinking for supported models
-   *         thinkingBudget:
-   *           type: number
-   *           description: Token budget for extended thinking
+   *         thinkingLevel:
+   *           type: string
+   *           enum: [minimal, low, medium, high]
+   *           description: Reasoning effort for extended thinking
    *         thinkingThoughts:
    *           type: boolean
    *           description: Include thinking steps in the response
@@ -852,7 +853,7 @@ export default function registerSessionRoutes(app, { getLocalizedError, DEFAULT_
           language,
           bypassAppPrompts,
           thinkingEnabled,
-          thinkingBudget,
+          thinkingLevel,
           thinkingThoughts,
           enabledTools,
           websearchEnabled,
@@ -1016,7 +1017,7 @@ export default function registerSessionRoutes(app, { getLocalizedError, DEFAULT_
               temperature,
               sendChatHistory,
               thinkingEnabled,
-              thinkingBudget,
+              thinkingLevel,
               thinkingThoughts,
               enabledTools,
               websearchEnabled,
@@ -1217,7 +1218,7 @@ export default function registerSessionRoutes(app, { getLocalizedError, DEFAULT_
             language: clientLanguage,
             bypassAppPrompts,
             thinkingEnabled,
-            thinkingBudget,
+            thinkingLevel,
             thinkingThoughts,
             enabledTools,
             websearchEnabled,
@@ -1283,7 +1284,7 @@ export default function registerSessionRoutes(app, { getLocalizedError, DEFAULT_
             language: clientLanguage,
             bypassAppPrompts,
             thinkingEnabled,
-            thinkingBudget,
+            thinkingLevel,
             thinkingThoughts,
             enabledTools,
             websearchEnabled,
