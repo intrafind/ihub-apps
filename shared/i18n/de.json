@@ -1677,7 +1677,8 @@
       "mcpGateway": "MCP-Gateway",
       "mcpServers": "MCP-Server",
       "telemetry": "Telemetrie",
-      "voiceInput": "Spracheingabe"
+      "voiceInput": "Spracheingabe",
+      "changelog": "Neuigkeiten"
     },
     "mcp": {
       "common": {
@@ -2302,6 +2303,29 @@
       "dragHandle": "Zum Sortieren ziehen",
       "moveUp": "{{name}} nach oben verschieben",
       "moveDown": "{{name}} nach unten verschieben"
+    },
+    "changelog": {
+      "title": "Neuigkeiten",
+      "subtitle": "Versionshinweise zu jeder iHub Apps-Version, neueste zuerst.",
+      "loading": "Änderungsprotokoll wird geladen …",
+      "loadingRelease": "Versionshinweise werden geladen …",
+      "loadError": "Änderungsprotokoll konnte nicht geladen werden",
+      "loadReleaseError": "Die Versionshinweise dieser Version konnten nicht geladen werden",
+      "retry": "Erneut versuchen",
+      "empty": "Noch keine Einträge.",
+      "versions": "Versionen",
+      "version": "Version {{version}}",
+      "unreleased": "Unveröffentlichte Änderungen",
+      "unreleasedShort": "Unveröffentlicht",
+      "unreleasedHint": "Änderungen in diesem Build, die noch nicht Teil einer getaggten Version sind.",
+      "new": "Neu",
+      "installed": "Installiert",
+      "contents": "In dieser Version",
+      "breakingChanges": "Breaking Changes",
+      "breakingChangesHint": "Vor oder nach dem Upgrade ist eine Aktion erforderlich.",
+      "features": "Neu & verbessert",
+      "fixes": "Fehlerbehebungen",
+      "backToContents": "Zurück zur Übersicht"
     }
   },
   "cloudStorage": {

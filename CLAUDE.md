@@ -65,7 +65,7 @@ Versioned, Flyway-style, in `server/migrations/` (`V{NNN}__{description}.js`), r
 
 ### Release Changelog
 
-Any change visible to admins or end users gets an entry in `docs/releases/` — use the `/document-feature` skill. Pure refactors, dependency bumps, and test-only changes do not.
+Any change visible to admins or end users gets an entry in `docs/releases/next/` — use the `/document-feature` skill, which also decides when _not_ to write one (a fix to a feature that has not shipped yet, a near-duplicate of an existing entry). Never write into a numbered `docs/releases/<version>/` directory: the release pipeline creates those from `next/` when a tag is cut. Pure refactors, dependency bumps, and test-only changes get no entry.
 
 ### Documentation
 
