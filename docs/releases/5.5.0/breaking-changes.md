@@ -1,5 +1,36 @@
 # Breaking Changes — 5.5.0
 
+## Gemini Thinking Takes `thinking.level` Only
+
+iHub now speaks a single Gemini `thinkingConfig` shape — Gemini 3's `thinkingLevel` plus
+`includeThoughts`. The Gemini 2.5 `thinkingBudget` is no longer sent, and `thinking.budget` on a
+`provider: "google"` model is rejected by the model schema instead of being silently ignored.
+
+Gemini's two thinking schemas were never interchangeable: each returns a bare `400
+INVALID_ARGUMENT`, naming no field, when handed the other's. Carrying both meant every Gemini model
+config had to declare which generation it belonged to, and one left on the old shape broke the
+moment Google moved a `-latest` alias forward — which is what migration `V089` already had to
+repair once.
+
+- A configuration migration runs automatically on upgrade. `V104` converts every
+  `provider: "google"` model that still carries `thinking.budget`, mapping it onto the level the
+  rest of the codebase already derived from a budget: `0`→`minimal`, `-1`→`medium`, `1-100`→`low`,
+  `101-500`→`medium`, `>500`→`high`. A `thinking.level` you had already set is kept and the stale
+  budget is dropped.
+- **Every other provider is unaffected.** Anthropic still reads `thinking.budget` as
+  `budget_tokens`, and the OpenAI Responses adapter still maps it to a reasoning effort. The
+  rejection is scoped to Google.
+- **Gemini 2.x endpoints no longer support thinking.** A `gemini-2.x` model with thinking enabled
+  will have `thinkingLevel` sent to an endpoint that rejects it. Repoint it at a Gemini 3 model, or
+  set `thinking.enabled: false`. `V104` names any such model in the migration log; it does not
+  delete or disable them, because a model file may point at your own endpoint.
+- The shipped Gemini 2.x example configs (`examples/models/gemini-2.0-flash.json`,
+  `gemini-2.5-flash.json`, `gemini-2.5-flash-lite.json`, `gemini-2.5-pro.json`,
+  `gemini-2.5-flash-image.json`) are removed. Models already in `contents/models/` are untouched.
+
+**Before upgrading:** No action needed for Gemini 3.x models. If you run a Gemini 2.x model with
+thinking enabled, move it to Gemini 3 or turn its thinking off.
+
 ## `config/tools.json` Is Removed
 
 Tool configuration no longer supports the shared `contents/config/tools.json` array. Every tool

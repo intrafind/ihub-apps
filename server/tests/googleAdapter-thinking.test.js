@@ -3,15 +3,16 @@
 /**
  * Google adapter thinkingConfig specs.
  *
- * Gemini has two incompatible thinking schemas — 2.5's `thinkingBudget` and
- * 3.x's `thinkingLevel`, which the API rejects if sent together — and one
- * field that belongs to both: `includeThoughts`, which asks for the thought
- * summaries the chat UI renders as the thinking panel.
+ * There is one shape: `thinkingLevel` plus `includeThoughts`. Gemini 2.5's
+ * `thinkingBudget` is retired, so the load-bearing assertion in most of these
+ * is a negative one — `thinkingBudget` never reaches the wire, whatever the
+ * model config or the request asks for, because a Gemini 3 endpoint answers a
+ * request carrying it with a bare 400 naming no field.
  *
- * The Gemini 3 branch used to send `thinkingLevel` alone, so every model moved
- * onto `thinking.level` silently stopped returning thoughts while still
- * spending reasoning tokens. These specs pin the field to both shapes, and pin
- * that the two level/budget keys never travel together.
+ * `includeThoughts` asks for the thought summaries the chat UI renders as the
+ * thinking panel. It is sent whenever thinking is on; omitting it was why
+ * models on `thinking.level` showed no reasoning while still being billed for
+ * it.
  */
 import { describe, it } from 'node:test';
 import assert from 'node:assert/strict';
@@ -49,11 +50,14 @@ describe('Gemini 3 shape (thinkingLevel)', () => {
     assert.equal(cfg.includeThoughts, true);
   });
 
-  it('never sends thinkingBudget with thinkingLevel', async () => {
-    const cfg = await thinkingConfigFor({ enabled: true, level: 'low', budget: -1 });
+  it('sends only the level and the thoughts flag', async () => {
+    const cfg = await thinkingConfigFor({ enabled: true, level: 'low' });
 
-    assert.equal(cfg.thinkingLevel, 'low');
-    assert.equal(cfg.thinkingBudget, undefined, 'Gemini 3 returns an error when both are present');
+    assert.deepEqual(
+      Object.keys(cfg).sort(),
+      ['includeThoughts', 'thinkingLevel'],
+      'anything else in thinkingConfig is a field Gemini 3 did not ask for'
+    );
   });
 
   it('honours thoughts: false', async () => {
@@ -91,19 +95,37 @@ describe('Gemini 3 shape (thinkingLevel)', () => {
   });
 });
 
-describe('Gemini 2.5 shape (thinkingBudget)', () => {
-  it('keeps sending budget and thoughts together', async () => {
+describe('the retired Gemini 2.5 budget', () => {
+  it('never sends thinkingBudget, even when the model config still has one', async () => {
     const cfg = await thinkingConfigFor({ enabled: true, budget: -1, thoughts: true });
 
-    assert.equal(cfg.thinkingBudget, -1);
-    assert.equal(cfg.includeThoughts, true);
-    assert.equal(cfg.thinkingLevel, undefined, 'thinkingLevel 400s on a 2.5 endpoint');
+    assert.equal(cfg.thinkingBudget, undefined, 'a Gemini 3 endpoint 400s on thinkingBudget');
+    assert.equal(cfg.includeThoughts, true, 'thoughts still work without a level');
   });
 
-  it('defaults thoughts on when the config does not say', async () => {
-    const cfg = await thinkingConfigFor({ enabled: true, budget: 1024 });
+  it('does not invent a level from a budget', async () => {
+    const cfg = await thinkingConfigFor({ enabled: true, budget: 8000 });
 
+    assert.equal(
+      cfg.thinkingLevel,
+      undefined,
+      'converting a budget here would be the second way this adapter no longer has'
+    );
     assert.equal(cfg.includeThoughts, true);
+  });
+
+  it('ignores a per-request thinkingBudget too', async () => {
+    const cfg = await thinkingConfigFor({ enabled: true, level: 'low' }, { thinkingBudget: 8000 });
+
+    assert.equal(cfg.thinkingBudget, undefined);
+    assert.equal(cfg.thinkingLevel, 'low', 'the level still decides');
+  });
+
+  it('prefers the level when a config carries both', async () => {
+    const cfg = await thinkingConfigFor({ enabled: true, level: 'minimal', budget: 8000 });
+
+    assert.equal(cfg.thinkingLevel, 'minimal');
+    assert.equal(cfg.thinkingBudget, undefined);
   });
 });
 

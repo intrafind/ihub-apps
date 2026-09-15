@@ -40,11 +40,13 @@ The aspect-ratio dropdown also gained `3:4`, `4:3` and `21:9`, which were valid 
 Models configured with `thinking.level` — every Gemini 3.x model iHub ships — stopped returning
 thought summaries, so the thinking panel stayed empty while the reasoning tokens were still billed.
 
-Gemini splits its thinking settings across two incompatible shapes, and the request builder handled
-the newer one by sending the reasoning level alone. The flag that asks for thought summaries is not
-part of that split: it pairs with the newer shape exactly as it did with the older one. It is now
-sent with both, and defaults on whenever thinking is enabled. Set `thinking.thoughts: false` on a
-model to keep its reasoning hidden.
+The request builder sent the reasoning level alone. The flag that asks for thought summaries,
+`includeThoughts`, is a separate field that pairs with the level perfectly well — it was simply
+never included. It is now sent whenever thinking is enabled, and defaults on. Set
+`thinking.thoughts: false` on a model to keep its reasoning hidden.
+
+(Gemini's older `thinkingBudget` shape is retired in the same release — see
+[Breaking Changes](breaking-changes.md).)
 
 ## Config Editors No Longer Reject Configuration They Just Opened
 

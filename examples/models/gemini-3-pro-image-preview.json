@@ -23,7 +23,7 @@
   },
   "thinking": {
     "enabled": true,
-    "budget": -1,
+    "level": "high",
     "thoughts": true
   },
   "enabled": true,
