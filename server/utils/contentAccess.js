@@ -258,10 +258,20 @@ export function applyContentAccessChanges({
     ...revoke.map(groupId => ({ groupId, action: 'revoke' }))
   ];
 
+  // Every group is checked, and looked up, before anything is written. The
+  // lookup happens here, next to the checks, and the write loop below only
+  // ever touches the group objects collected in `plan` — never `groups[id]`
+  // with an id from the request. `groups` is a plain object parsed from JSON,
+  // so `groups['__proto__']` would be Object.prototype; writing to that would
+  // change every object in the process.
   const grantSet = new Set(grant);
+  const plan = [];
   for (const { groupId, action } of requested) {
     if (typeof groupId !== 'string' || groupId.length === 0) {
       throw new ContentAccessError(400, 'Group ids must be non-empty strings');
+    }
+    if (groupId === '__proto__' || groupId === 'constructor' || groupId === 'prototype') {
+      throw new ContentAccessError(400, `Invalid group id '${groupId}'`);
     }
     if (action === 'revoke' && grantSet.has(groupId)) {
       throw new ContentAccessError(400, `Group '${groupId}' is listed under both grant and revoke`);
@@ -275,17 +285,18 @@ export function applyContentAccessChanges({
         `You cannot change access for group '${groupId}': it is not one of your groups`
       );
     }
-    if (action === 'revoke' && listHasWildcard(ownList(groups[groupId], key))) {
+    const group = groups[groupId];
+    if (action === 'revoke' && listHasWildcard(ownList(group, key))) {
       throw new ContentAccessError(
         400,
         `Group '${groupId}' can use all ${key} through a wildcard. To withdraw a single one, replace the wildcard with an explicit list in the group settings.`
       );
     }
+    plan.push({ groupId, action, group });
   }
 
   const changed = [];
-  for (const { groupId, action } of requested) {
-    const group = groups[groupId];
+  for (const { groupId, action, group } of plan) {
     const list = ownList(group, key);
     const hasIt = listGrants(list, contentId);
     if (action === 'grant' && (hasIt || listHasWildcard(list))) continue;

@@ -327,6 +327,15 @@ describe('PUT /api/admin/content-access/:type/:id', () => {
           .send({ grant: ['../etc'] })
       ).status
     ).toBe(400);
+    // Passes the id character check, but must never be looked up on the groups object.
+    expect(
+      (
+        await request(app)
+          .put('/api/admin/content-access/apps/chat')
+          .send({ grant: ['__proto__'] })
+      ).status
+    ).toBe(400);
+    expect(Object.prototype.permissions).toBeUndefined();
     expect(state.writes).toHaveLength(0);
   });
 

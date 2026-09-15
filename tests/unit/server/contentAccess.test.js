@@ -331,6 +331,30 @@ describe('applyContentAccessChanges', () => {
     expect(groups.sales.permissions).toEqual({ apps: [] });
   });
 
+  it.each(['__proto__', 'constructor', 'prototype'])(
+    'refuses the group id "%s" before looking it up',
+    groupId => {
+      const groups = fixture();
+      let status;
+      try {
+        applyContentAccessChanges({
+          groups,
+          type: 'apps',
+          contentId: 'chat',
+          grant: [groupId],
+          revoke: [],
+          // Even a scope that (wrongly) lists the id must not get through.
+          manageableIds: [groupId, 'sales']
+        });
+      } catch (error) {
+        status = error.status;
+      }
+      expect(status).toBe(400);
+      expect(Object.prototype.permissions).toBeUndefined();
+      expect(Object.getPrototypeOf({}).apps).toBeUndefined();
+    }
+  );
+
   it('treats a grant to a wildcard group as already satisfied', () => {
     const groups = fixture();
     const changes = applyContentAccessChanges({
