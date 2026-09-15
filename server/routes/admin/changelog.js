@@ -5,6 +5,7 @@ import { adminAuth } from '../../middleware/adminAuth.js';
 import { buildServerPath } from '../../utils/basePath.js';
 import { sendInternalError, sendNotFound } from '../../utils/responseHelpers.js';
 import { getAppVersion } from '../../utils/versionHelper.js';
+import { getInstalledVersionRecord, isWithinUpgrade } from '../../utils/installedVersionStore.js';
 import {
   RELEASE_SECTIONS,
   UNRELEASED_VERSION,
@@ -62,17 +63,30 @@ async function listReleaseVersionNames(releasesDir) {
  * without a single entry are left out, so the empty `next/` scaffold that follows a release
  * does not show up as an unreleased version with nothing in it.
  *
+ * `installed` marks the release this server is running. `isNew` marks the releases the last
+ * upgrade brought in — everything after the version that was installed before, up to and
+ * including the running one — so a jump from 5.4.3 to 5.5.1 flags all six releases in between,
+ * not just the one being run. Unreleased changes keep changing and are never new.
+ *
  * @param {string} releasesDir
- * @returns {Promise<Array<{ version: string, unreleased: boolean, counts: Record<string, number> }>>}
+ * @param {{ version?: string|null, previousVersion?: string|null }} [installedVersion]
+ * @returns {Promise<Array<{ version: string, unreleased: boolean, installed: boolean, isNew: boolean, counts: Record<string, number> }>>}
  */
-export async function loadChangelogIndex(releasesDir) {
+export async function loadChangelogIndex(releasesDir, installedVersion = {}) {
   const names = await listReleaseVersionNames(releasesDir);
 
   const releases = await Promise.all(
     sortVersionsNewestFirst(names).map(async version => {
       const versionDir = join(releasesDir, version);
       const counts = countEntries(await readReleaseSections(versionDir));
-      return { version, unreleased: version === UNRELEASED_VERSION, counts };
+      const unreleased = version === UNRELEASED_VERSION;
+      return {
+        version,
+        unreleased,
+        installed: !unreleased && version === installedVersion?.version,
+        isNew: !unreleased && isWithinUpgrade(version, installedVersion),
+        counts
+      };
     })
   );
   return releases.filter(release => release.counts.total > 0);
@@ -124,13 +138,25 @@ export default function registerAdminChangelogRoutes(
 ) {
   /**
    * GET /api/admin/changelog
-   * The list of releases that have release notes, newest first, with entry counts per section,
-   * plus the version this server is running so the UI can mark it.
+   * The list of releases that have release notes, newest first, with entry counts per section
+   * and the `installed` / `isNew` flags, plus the version this server is running and the one it
+   * was upgraded from so the UI can show the jump.
    */
   app.get(buildServerPath('/api/admin/changelog'), adminAuth, async (req, res) => {
     try {
-      const versions = await loadChangelogIndex(releasesDir);
-      res.json({ currentVersion: currentVersion(), versions });
+      // The running build is authoritative for the current version; the store only contributes
+      // what it replaced. They disagree for one boot on an installation whose `contents/data` is
+      // not writable, and the running build is the one to trust.
+      const installedVersion = {
+        ...(await getInstalledVersionRecord()),
+        version: currentVersion()
+      };
+      const versions = await loadChangelogIndex(releasesDir, installedVersion);
+      res.json({
+        currentVersion: installedVersion.version,
+        previousVersion: installedVersion.previousVersion || null,
+        versions
+      });
     } catch (error) {
       return sendInternalError(res, error, 'fetch changelog');
     }

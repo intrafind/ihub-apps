@@ -1,12 +1,13 @@
 /**
- * Admin → What's New: one release at a time, a table of contents per release, breaking changes
- * ahead of features and fixes, and release notes rendered as real Markdown.
+ * Admin → What's New: a grouped release switcher, one release at a time, a table of contents per
+ * release, breaking changes ahead of features and fixes, and release notes rendered as real
+ * Markdown.
  *
  * The page, the shared `marked` configuration and DOMPurify are real here; only the admin API
  * and the translation hook are stubbed.
  */
 import '@testing-library/jest-dom';
-import { fireEvent, render, screen, waitFor, within } from '@testing-library/react';
+import { fireEvent, render, screen, within } from '@testing-library/react';
 
 const mockMakeAdminApiCall = jest.fn();
 jest.mock('../../../client/src/api/adminApi', () => ({
@@ -29,21 +30,57 @@ jest.mock('react-i18next', () => ({
 import AdminChangelogPage from '../../../client/src/features/admin/pages/AdminChangelogPage';
 
 const INDEX = {
-  currentVersion: '5.5.6',
+  currentVersion: '5.5.7',
+  previousVersion: '5.5.5',
   versions: [
     {
       version: 'next',
       unreleased: true,
+      installed: false,
+      isNew: false,
       counts: { total: 1, breakingChanges: 0, features: 1, fixes: 0 }
     },
     {
       version: '5.5.7',
       unreleased: false,
+      installed: true,
+      isNew: true,
       counts: { total: 3, breakingChanges: 1, features: 1, fixes: 1 }
     },
     {
       version: '5.5.6',
       unreleased: false,
+      installed: false,
+      isNew: true,
+      counts: { total: 1, breakingChanges: 0, features: 1, fixes: 0 }
+    }
+  ]
+};
+
+/** A release per minor series, enough of them to hit the ten-per-group cap. */
+const LONG_INDEX = {
+  currentVersion: '5.5.12',
+  previousVersion: null,
+  versions: [
+    ...Array.from({ length: 13 }, (_, i) => ({
+      version: `5.5.${12 - i}`,
+      unreleased: false,
+      installed: i === 0,
+      isNew: false,
+      counts: { total: 1, breakingChanges: 0, features: 1, fixes: 0 }
+    })),
+    {
+      version: '5.4.1',
+      unreleased: false,
+      installed: false,
+      isNew: false,
+      counts: { total: 1, breakingChanges: 0, features: 1, fixes: 0 }
+    },
+    {
+      version: '4.9.0',
+      unreleased: false,
+      installed: false,
+      isNew: false,
       counts: { total: 1, breakingChanges: 0, features: 1, fixes: 0 }
     }
   ]
@@ -129,7 +166,6 @@ const detailCalls = () =>
 
 beforeEach(() => {
   mockMakeAdminApiCall.mockReset();
-  localStorage.clear();
 });
 
 describe('AdminChangelogPage', () => {
@@ -142,7 +178,7 @@ describe('AdminChangelogPage', () => {
       within(releases)
         .getAllByRole('button')
         .map(button => button.textContent)
-    ).toEqual(['Unreleased', '5.5.7New', '5.5.6InstalledNew']);
+    ).toEqual(['Unreleased', '5.x22 new', '5.5.x22 new', '5.5.7InstalledNew', '5.5.6New']);
 
     // Unreleased changes open first on a build that has them.
     expect(
@@ -206,25 +242,77 @@ describe('AdminChangelogPage', () => {
     expect(detailCalls()).toEqual(['/admin/changelog/next', '/admin/changelog/5.5.7']);
   });
 
-  test('marks releases as new until they have been listed once, never unreleased changes', async () => {
-    localStorage.setItem('admin_changelog_seen', JSON.stringify(['5.5.6']));
+  test('says what the upgrade brought in, and marks every release it spanned', async () => {
     mockApi();
     render(<AdminChangelogPage />);
 
-    const releases = await screen.findByRole('navigation', { name: 'Releases' });
-    const labels = within(releases)
-      .getAllByRole('button')
-      .map(button => button.textContent);
-    expect(labels[0]).toBe('Unreleased');
-    expect(labels[1]).toBe('5.5.7New');
-    expect(labels[2]).toBe('5.5.6Installed');
+    const notice = await screen.findByRole('region', { name: /Upgraded from/ });
+    expect(notice.textContent).toContain('Upgraded from 5.5.5 to 5.5.7');
+    expect(notice.textContent).toContain('2 releases are new to this installation');
 
-    await waitFor(() =>
-      expect(JSON.parse(localStorage.getItem('admin_changelog_seen')).sort()).toEqual([
-        '5.5.6',
-        '5.5.7'
-      ])
+    // Both releases since 5.5.5 carry the badge, not only the one being run.
+    const releases = screen.getByRole('navigation', { name: 'Releases' });
+    expect(within(releases).getByRole('button', { name: /^5\.5\.7/ }).textContent).toBe(
+      '5.5.7InstalledNew'
     );
+    expect(within(releases).getByRole('button', { name: /^5\.5\.6/ }).textContent).toBe('5.5.6New');
+  });
+
+  test('says nothing about an upgrade on an installation that never had one', async () => {
+    mockApi({ index: LONG_INDEX });
+    render(<AdminChangelogPage />);
+
+    await screen.findByRole('navigation', { name: 'Releases' });
+    expect(screen.queryByRole('region', { name: /Upgraded from/ })).toBeNull();
+  });
+
+  test('groups the releases by major and minor, and opens only what is worth opening', async () => {
+    mockApi({ index: LONG_INDEX });
+    render(<AdminChangelogPage />);
+
+    const releases = await screen.findByRole('navigation', { name: 'Releases' });
+    // The installed release's series is open; the others stay shut.
+    expect(
+      within(releases)
+        .getAllByRole('button')
+        .map(button => button.textContent)
+        .slice(0, 4)
+    ).toEqual(['5.x14', '5.5.x13', '5.5.12Installed', '5.5.11']);
+    expect(within(releases).queryByRole('button', { name: /^5\.4\.1/ })).toBeNull();
+
+    // Opening 5.4.x brings its release into the list.
+    fireEvent.click(within(releases).getByRole('button', { name: '5.4.x 1' }));
+    expect(within(releases).getByRole('button', { name: /^5\.4\.1/ })).toBeVisible();
+
+    // The 4.x major is collapsed, so its releases are not listed at all.
+    expect(within(releases).queryByRole('button', { name: /^4\.9\.0/ })).toBeNull();
+    fireEvent.click(within(releases).getByRole('button', { name: '4.x 1' }));
+    fireEvent.click(within(releases).getByRole('button', { name: '4.9.x 1' }));
+    expect(within(releases).getByRole('button', { name: /^4\.9\.0/ })).toBeVisible();
+
+    // Collapsing a group hides what it holds again.
+    fireEvent.click(within(releases).getByRole('button', { name: '5.5.x 13' }));
+    expect(within(releases).queryByRole('button', { name: /^5\.5\.12/ })).toBeNull();
+  });
+
+  test('shows the newest ten releases of a series and the rest on request', async () => {
+    mockApi({ index: LONG_INDEX });
+    render(<AdminChangelogPage />);
+
+    const releases = await screen.findByRole('navigation', { name: 'Releases' });
+    const listed = () =>
+      within(releases)
+        .getAllByRole('button')
+        .map(button => button.textContent)
+        .filter(text => /^5\.5\.\d/.test(text));
+
+    expect(listed()).toHaveLength(10);
+    expect(listed()[0]).toBe('5.5.12Installed');
+    expect(within(releases).queryByRole('button', { name: /^5\.5\.0/ })).toBeNull();
+
+    fireEvent.click(within(releases).getByRole('button', { name: 'Show 3 older' }));
+    expect(listed()).toHaveLength(13);
+    expect(within(releases).getByRole('button', { name: /^5\.5\.0/ })).toBeVisible();
   });
 
   test('links in the table of contents scroll to and focus their entry', async () => {
