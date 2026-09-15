@@ -2174,6 +2174,37 @@
       "externalMappingsEmpty": "Noch keine externen Zuordnungen",
       "externalMappingsHelp": "Geben Sie externe Gruppennamen ein, die dieser Gruppe zugeordnet werden sollen. Benutzer mit diesen externen Gruppen werden automatisch dieser internen Gruppe zugewiesen."
     },
+    "contentAccess": {
+      "title": "Gruppenzugriff",
+      "description": "Legen Sie fest, welche Gruppen {{subject}} verwenden dürfen. Änderungen werden sofort gespeichert.",
+      "descriptionTools": "Legen Sie fest, welche Gruppen dieses Tool direkt über die MCP- und A2A-Gateways aufrufen dürfen. Änderungen werden sofort gespeichert. Im Chat bestimmt die Tool-Liste der App, was das Modell aufrufen darf.",
+      "saveFirst": "Speichern Sie {{subject}} zuerst. Danach lässt sich festlegen, welche Gruppen Zugriff erhalten.",
+      "loading": "Gruppen werden geladen…",
+      "loadError": "Der Gruppenzugriff konnte nicht geladen werden.",
+      "retry": "Erneut versuchen",
+      "noGroups": "Es sind noch keine Gruppen definiert.",
+      "noManageableGroups": "Sie sind in keiner Gruppe, deren Zugriff Sie verwalten dürfen. Bitten Sie einen Administrator, Sie den Gruppen hinzuzufügen, für die Sie Inhalte verwalten sollen.",
+      "scopeNote": "Sie können den Zugriff für die Gruppen ändern, denen Sie angehören, sowie für Gruppen, die von diesen erben.",
+      "granted": "{{name}} darf {{subject}} verwenden",
+      "wildcardHint": "Darf alle {{subjectPlural}} über einen Platzhalter verwenden. Um einzelne zu entziehen, ersetzt ein Administrator den Platzhalter in den Gruppeneinstellungen durch eine explizite Liste.",
+      "inheritedHint": "Außerdem geerbt von: {{groups}}",
+      "saving": "Wird gespeichert…",
+      "updateError": "Der Zugriff konnte nicht aktualisiert werden.",
+      "subject": {
+        "apps": "diese App",
+        "prompts": "diesen Prompt",
+        "skills": "diesen Skill",
+        "tools": "dieses Tool",
+        "workflows": "diesen Workflow"
+      },
+      "subjectPlural": {
+        "apps": "Apps",
+        "prompts": "Prompts",
+        "skills": "Skills",
+        "tools": "Tools",
+        "workflows": "Workflows"
+      }
+    },
     "sources": {
       "ifinderConnectionInfo": "Die iFinder-Verbindung (URL und Authentifizierung) wird zentral in den iFinder-Integrationseinstellungen unter Admin → Provider verwaltet. Hier wählen Sie nur aus, welche Dokumente diese Quelle lädt: ein einzelnes Dokument per ID festlegen oder per Suchanfrage die am besten passenden Dokumente laden.",
       "ifinderDocumentId": "Dokument-ID",

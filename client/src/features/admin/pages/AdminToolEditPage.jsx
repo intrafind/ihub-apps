@@ -9,6 +9,7 @@ import ChangeHistoryDrawer from '../components/ChangeHistoryDrawer';
 import AdminBreadcrumb from '../components/AdminBreadcrumb';
 import { useUnsavedChanges } from '../hooks/useUnsavedChanges';
 import ConfirmDialog from '../../../shared/components/ConfirmDialog';
+import ContentAccessSection from '../components/ContentAccessSection';
 import {
   createTool,
   fetchAdminTools,
@@ -433,6 +434,13 @@ function AdminToolEditPage() {
             </button>
           </div>
         )}
+
+        {/* Group access — which groups may call this tool directly (groups.json) */}
+        {!isNewTool &&
+          ((activeTab === 'config' && !isOpenApiTool) ||
+            (activeTab === 'openapi' && isOpenApiTool)) && (
+            <ContentAccessSection resourceType="tools" resourceId={toolId} className="mt-6" />
+          )}
 
         {/* Script Editor Tab */}
         {activeTab === 'script' && !isNewTool && toolData.script && (

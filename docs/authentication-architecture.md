@@ -535,6 +535,28 @@ This adds to `req.user`:
 - `isAdmin`: true/false
 - Resolved group permissions
 
+### Content Admins and Group Access
+
+A group with `permissions.contentAdmin: true` may use the admin area for apps,
+prompts and sources (`middleware/contentAdminAuth.js`) without `adminAccess`.
+Content admins may also change which groups can use a piece of content — the
+`apps`, `prompts`, `skills`, `tools` and `workflows` lists above — through
+`GET`/`PUT /api/admin/content-access/:type/:id` (`routes/admin/contentAccess.js`,
+logic in `utils/contentAccess.js`), but only for the groups they belong to and
+for every group that inherits from one of those.
+
+- The seed is `req.user.groups` minus the implicit `authenticated` (or the
+  configured `auth.authenticatedGroup`) and `anonymous` groups. A content
+  admin in `sales` manages `sales` and every group whose `inherits` chain
+  reaches `sales`; `users`, which `sales` inherits from, is out of reach.
+- A full admin (`adminAccess`) manages every group.
+- Only the content lists are written. `models`, `adminAccess`,
+  `contentAdmin`, `mappings` and `inherits` are never touched by this endpoint.
+- A revoke from a group holding `"*"` for the type is refused; the wildcard has
+  to be replaced by an explicit list in the group editor.
+- Every changed group gets a change-history snapshot and an audit entry, the
+  same as an edit in **Admin → Groups**.
+
 ---
 
 ## Base Path & URL Handling
