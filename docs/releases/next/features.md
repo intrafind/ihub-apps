@@ -18,11 +18,13 @@ panel, which uses the same chat shell, gets the same setting.
 
 ## Content Admins Can Choose Which Groups Use Their Content
 
-Every app, prompt, skill, tool and workflow edit page now has a **Group access** card: one checkbox
-per group, ticked when that group's permission list names the item. Ticking grants, unticking
-withdraws, and each change is saved to `groups.json` immediately — with the same change-history
-snapshot and audit entry an edit in **Admin → Groups** would leave. Until now this meant opening
-each group in turn and editing its list by hand.
+Every app, prompt, skill, tool and workflow edit page now has a **Group access** card: groups that
+already have access are listed as chips, with a search box below to find and grant the rest — the
+same search-and-add pattern used to add apps, models or prompts to a group elsewhere in the admin
+area, so the card stays usable when there are many groups. Picking a group in the search results
+grants it, removing its chip withdraws it, and each change is saved to `groups.json` immediately —
+with the same change-history snapshot and audit entry an edit in **Admin → Groups** would leave.
+Until now this meant opening each group in turn and editing its list by hand.
 
 Members of the **Content Admins** group (`contentAdmin` without full admin access) get the card as
 well, scoped to the groups they are part of: a content admin in `sales` can grant or withdraw
@@ -36,7 +38,7 @@ Being in a parent group counts — someone in `users` also manages the groups th
   administrator has explicitly put them in such a group.
 - Only the content lists (`apps`, `prompts`, `skills`, `tools`, `workflows`) can be changed this
   way. Models, admin flags, external mappings and inheritance stay in the group editor.
-- A group that holds a wildcard (`"*"`) for the type is shown ticked and locked: a single item
+- A group that holds a wildcard (`"*"`) for the type is shown as a locked chip: a single item
   cannot be withdrawn from a wildcard. Replace the wildcard with an explicit list in
   **Admin → Groups** if such a group should lose one item.
 - For tools, the card grants direct MCP/A2A access, exactly like the `tools` permission itself;
