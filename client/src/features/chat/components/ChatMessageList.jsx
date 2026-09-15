@@ -26,6 +26,10 @@ function ChatMessageList({
   onInsertNew = null,
   insertAction = null,
   canvasEnabled = false,
+  // Whether this surface's chat stores the images its turns generate. Only the
+  // durable chat page does; the compare panels, the canvas and the Office pane
+  // all mint ephemeral chats, so the default is the honest one.
+  imagesPersisted = false,
   // Integration auth props
   requiredIntegrations = [],
   onConnectIntegration,
@@ -178,6 +182,7 @@ function ChatMessageList({
                 insertAction={insertAction}
                 isLatestAssistantMessage={index === lastAssistantIndex}
                 canvasEnabled={canvasEnabled}
+                imagesPersisted={imagesPersisted}
                 app={app}
                 models={models}
                 onClarificationSubmit={onClarificationSubmit}

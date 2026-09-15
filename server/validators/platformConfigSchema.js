@@ -282,7 +282,24 @@ export const platformConfigSchema = z
       .object({
         enabled: z.boolean().prefault(true),
         retentionDays: z.number().prefault(90),
-        maxChatsPerUser: z.number().prefault(200)
+        maxChatsPerUser: z.number().prefault(200),
+        maxMessagesPerChat: z.number().prefault(2000)
+      })
+      .passthrough()
+      .prefault({}),
+    // Artifacts: what a run produced that is worth keeping in its own right —
+    // a chat turn's generated image today, a workflow's report or an agent's
+    // output next. One store for every producer, so this block is not under
+    // `chats`. Artifacts are the one thing a run produces that is measured in
+    // megabytes, so an admin can switch them off without giving up stored
+    // transcripts, and the two caps (bytes per artifact, artifacts one
+    // producer records in one go) bound what a single step can write. Zero or
+    // less removes a cap, like the retention rules above.
+    artifacts: z
+      .object({
+        enabled: z.boolean().prefault(true),
+        maxBytes: z.number().prefault(10485760),
+        maxPerBatch: z.number().prefault(8)
       })
       .passthrough()
       .prefault({}),

@@ -51,19 +51,24 @@ client. There is no half-persisted state.
   "chats": {
     "enabled": true,
     "retentionDays": 90,
-    "maxChatsPerUser": 200
+    "maxChatsPerUser": 200,
+    "storeArtifacts": true,
+    "maxArtifactBytes": 10485760,
+    "maxArtifactsPerMessage": 8
   }
 }
 ```
 
-| Key               | Default | Meaning                                                                        |
-| ----------------- | ------- | ------------------------------------------------------------------------------ |
-| `enabled`         | `true`  | Second switch under the feature flag; `false` stops the write path entirely     |
-| `retentionDays`   | `90`    | Chats whose last message is older than this are deleted by the daily sweep      |
-| `maxChatsPerUser` | `200`   | Chats kept per owner; the oldest beyond the cap are deleted by the same sweep   |
+| Key                   | Default    | Meaning                                                                      |
+| --------------------- | ---------- | ---------------------------------------------------------------------------- |
+| `enabled`             | `true`     | Second switch under the feature flag; `false` stops the write path entirely   |
+| `retentionDays`       | `90`       | Chats whose last message is older than this are deleted by the daily sweep    |
+| `maxChatsPerUser`     | `200`      | Chats kept per owner; the oldest beyond the cap are deleted by the same sweep |
 
 Both retention rules are switched **off** by a value of zero or less — see
-[Retention](#retention).
+[Retention](#retention). What a turn *produced* is stored separately and
+configured separately, under `platform.artifacts` — see
+[Artifacts](artifacts.md).
 
 3. **Make sure storage is configured.** Durable chats are the first consumer of
    the storage abstraction. The default filesystem provider needs no
@@ -393,13 +398,15 @@ index can answer "list my chats" without scanning:
   version: 1,
   messages: [
     { id, role, content, ts, runId,
-      clientMessageId?, usage?, finishReason?, error?, attachments? }
+      clientMessageId?, usage?, finishReason?, error?, attachments?, artifacts? }
   ]
 }
 ```
 
 On the filesystem provider that is `contents/data/chats/<chatId>.json` and
 `contents/data/chat-messages/<chatId>.json`, with the owner index beside them.
+What a turn produced lives in its own store under the scope
+`{ type: 'chat', id: chatId }` — see [Artifacts](artifacts.md).
 
 They are split because the chat list reads N metadata documents and zero
 transcripts. Folding the messages in would make "show my chats" read every
@@ -425,6 +432,8 @@ Details that matter:
 - **Attachments are descriptors** — `{ type, name?, bytes? }`. The base64 payload
   of an upload stays in the request; it is never written into a document that is
   read back for as long as the chat lives.
+- **So is what a turn produced** — `{ id, kind, mimeType, bytes }`, with the
+  payload in the shared artifact store. See [Artifacts](artifacts.md).
 - **Failures are recorded.** An aborted turn stores its (possibly empty) answer
   with `error: { code: 'ABORTED', … }`, an errored turn with its error code, so a
   truncated answer never reads as a complete one. A turn that paused for a
@@ -442,15 +451,17 @@ Details that matter:
 
 ## API
 
-All four endpoints require a real authenticated user (`authenticatedOnly`). The
-three that address a chat validate the id before it reaches storage and answer
-404 for both an unknown chat and someone else's. All of them are rate limited
+Every endpoint requires a real authenticated user (`authenticatedOnly`). Those
+that address a chat validate the id before it reaches storage and answer 404 for
+both an unknown chat and someone else's. All of them are rate limited
 with the other public API prefixes (500 requests/minute/IP by default).
 
 | Method & path            | Purpose                                                                    |
 | ------------------------ | -------------------------------------------------------------------------- |
 | `GET /api/chats`         | The caller's chats, most recent activity first. `?limit` (default 30, max 100) and `?cursor` |
 | `GET /api/chats/:chatId` | `{ chat, messages, version }` — the transcript, and clears `hasUnseenActivity` |
+| `GET /api/chats/:chatId/artifacts` | What this chat's turns produced, newest first, as descriptors |
+| `GET /api/chats/:chatId/artifacts/:artifactId` | The bytes of one artifact, as its own media type |
 | `PATCH /api/chats/:chatId` | `{ title }` — rename; capped at 200 characters and marked as user-set     |
 | `DELETE /api/chats/:chatId` | Erase the chat, its transcript and its runs                             |
 
@@ -458,16 +469,61 @@ with the other public API prefixes (500 requests/minute/IP by default).
 and icon are joined on the client from the apps list it already holds, so the
 endpoint stays independent of app configuration.
 
-`DELETE` cascades: the two documents, then `runLog.deleteRun()` for every id in
-the chat's `runIds`, which in turn removes each run's ledger file, its spill
-directory and its pending interactions. The chat document is the only place a
-chat's runs are written down, which is why it is read before it is deleted.
+`DELETE` cascades: the two documents, every artifact of the chat, then
+`runLog.deleteRun()` for every id in the chat's `runIds`, which in turn removes
+each run's ledger file, its spill directory and its pending interactions. The
+chat document is the only place a chat's runs are written down, which is why it
+is read before it is deleted.
 
 When durable chats are unavailable — the flag is off, an admin set
 `chats.enabled: false`, or the storage provider did not come up — every endpoint
 answers `503` with `details.code = "CHAT_PERSISTENCE_UNAVAILABLE"` rather than
 404, so a client can tell "not configured" from "not found" and fall back to the
 ephemeral experience.
+
+## What a turn produced
+
+A picture the model drew used to survive nothing: the client stripped the
+payload before writing the transcript to `sessionStorage` — an image is
+megabytes and the quota is a few — so navigating away left the answer with an
+empty space where the image had been. A stored chat keeps them.
+
+It is not stored here. Anything a turn produces that is content in its own
+right goes to the shared **[artifact store](artifacts.md)** under the scope
+`{ type: 'chat', id: chatId }` — the same store a workflow's report or an
+agent's output belongs in — and the message keeps only a descriptor:
+
+```js
+{ id: '7f3c…', kind: 'image', mimeType: 'image/png', bytes: 1483204 }
+```
+
+That is what keeps opening a chat fast: the transcript a later turn re-reads
+and re-hashes carries descriptors, not megabytes, and the bytes are fetched per
+artifact when the message is rendered.
+
+What this chat is responsible for:
+
+- **Recording the descriptors.** `chatMaterializer.storeGeneratedArtifacts`
+  turns the loop's `summary.images` into artifacts of kind `image` and puts the
+  descriptors on the assistant message. One the policy refuses is still
+  described, as `{ kind, mimeType, bytes, unavailable }`, and the chat shows a
+  note in its place — dropping it silently would leave the viewer who watched
+  three pictures appear and came back to two unable to tell a discarded
+  artifact from one the model never produced.
+- **Saying when they go.** They are emptied with the chat, and dropped when the
+  messages naming them leave the transcript — an edit that rewrites history
+  from a message, or `maxMessagesPerChat` pushing one out.
+- **Authorizing them.** `GET /api/chats/:chatId/artifacts[/:artifactId]` runs
+  the same `authorizeChat` as the transcript, so an artifact id is never a
+  capability on its own.
+
+Caps, kinds, media types and the master switch are the store's, not the chat's:
+see [Artifacts](artifacts.md).
+
+Where a chat is not stored at all — an anonymous visitor, an incognito turn,
+the compare panels, the canvas — nothing changes: a generated image is visible
+for the session, the note under it still tells the user to download it, and it
+is gone on the way back.
 
 ## Retention
 
@@ -537,7 +593,8 @@ that is what you want.
 | ------------------------------------------- | ------------------------------------------------------------ |
 | `server/storage/bootstrap.js`               | Brings the provider up per worker; `getStorage()` may be null |
 | `server/services/chat/chatPersistence.js`   | The policy — the only module that decides "is this persisted" |
-| `server/services/chat/ChatRepository.js`    | The two documents, their locks, listing and the cascade       |
+| `server/services/chat/ChatRepository.js`    | The two chat documents, their locks, listing and the cascade  |
+| `server/services/artifacts/ArtifactRepository.js` | What a turn produced — see [Artifacts](artifacts.md)    |
 | `server/services/chat/chatMaterializer.js`  | The only module that writes chat turns                        |
 | `server/services/chat/chatAccess.js`        | `authorizeChat()` — 404 for unknown and not-yours             |
 | `server/services/chat/chatRetention.js`     | The daily sweep                                               |

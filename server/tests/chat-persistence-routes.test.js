@@ -23,6 +23,7 @@ import assert from 'node:assert/strict';
 import configCache from '../configCache.js';
 import { bootstrapStorage, shutdownStorageBootstrap } from '../storage/bootstrap.js';
 import { getChatRepository } from '../services/chat/ChatRepository.js';
+import { getArtifactRepository } from '../services/artifacts/ArtifactRepository.js';
 import runLog from '../services/loop/RunLog.js';
 import { getWorkflowStateRepository } from '../services/workflow/WorkflowStateRepository.js';
 import { activeRequests } from '../sse.js';
@@ -87,7 +88,16 @@ function makeResponse() {
     res.body = value;
     return res;
   };
-  res.setHeader = () => res;
+  res.headers = {};
+  res.setHeader = (name, value) => {
+    res.headers[String(name).toLowerCase()] = value;
+    return res;
+  };
+  // Binary answers (a stored image) go out through `send`, not `json`.
+  res.send = value => {
+    res.body = value;
+    return res;
+  };
   return res;
 }
 
@@ -120,6 +130,8 @@ const listHandlers = handlersFor('get', '/api/chats');
 const getHandlers = handlersFor('get', '/api/chats/:chatId');
 const patchHandlers = handlersFor('patch', '/api/chats/:chatId');
 const deleteHandlers = handlersFor('delete', '/api/chats/:chatId');
+const artifactHandlers = handlersFor('get', '/api/chats/:chatId/artifacts/:artifactId');
+const artifactListHandlers = handlersFor('get', '/api/chats/:chatId/artifacts');
 
 /**
  * Store one chat with a turn in it, owned by `user`.
@@ -205,6 +217,108 @@ describe('GET /api/chats lists only the caller', () => {
     const ids = res.body.items.map(chat => chat.id);
     assert.ok(ids.includes('chat-list-grace'));
     assert.ok(!ids.includes('chat-list-ada'), "Ada's chat stayed out of Grace's list");
+  });
+});
+
+describe('GET /api/chats/:chatId/artifacts/:artifactId', () => {
+  /** Store one artifact against a chat and return its descriptor. */
+  async function seedArtifact(chatId, data = Buffer.from('a tiny png').toString('base64')) {
+    return getArtifactRepository().put(getChatRepository().artifactScope(chatId), {
+      kind: 'image',
+      mimeType: 'image/png',
+      data,
+      runId: 'run-art'
+    });
+  }
+
+  it('serves the owner the bytes, as an image the browser may cache', async () => {
+    await seedChat(ADA, 'chat-artifact-own');
+    const data = Buffer.from('a tiny png').toString('base64');
+    const artifact = await seedArtifact('chat-artifact-own', data);
+
+    const res = await drive(artifactHandlers, {
+      params: { chatId: 'chat-artifact-own', artifactId: artifact.id },
+      user: ADA
+    });
+
+    assert.equal(res.statusCode, 200);
+    assert.ok(Buffer.isBuffer(res.body));
+    assert.equal(res.body.toString('base64'), data);
+    assert.equal(res.headers['content-type'], 'image/png');
+    assert.equal(res.headers['content-length'], String(res.body.length));
+    // An artifact document is written once and keyed by a fresh uuid, so the
+    // bytes cannot change; `private` because the response is owner-scoped.
+    assert.match(res.headers['cache-control'], /^private,/);
+    assert.equal(res.headers['x-content-type-options'], 'nosniff');
+  });
+
+  it('lists what a chat produced, as descriptors without payloads', async () => {
+    await seedChat(ADA, 'chat-artifact-list');
+    const artifact = await seedArtifact('chat-artifact-list');
+
+    const res = await drive(artifactListHandlers, {
+      params: { chatId: 'chat-artifact-list' },
+      user: ADA
+    });
+
+    assert.equal(res.statusCode, 200);
+    assert.deepEqual(
+      res.body.items.map(entry => entry.id),
+      [artifact.id]
+    );
+    // The index of what the conversation produced; the bytes are a separate
+    // request per entry.
+    assert.equal(res.body.items[0].data, undefined);
+    assert.equal(res.body.items[0].kind, 'image');
+  });
+
+  it("does not list another owner's chat", async () => {
+    await seedChat(ADA, 'chat-artifact-list-private');
+    await seedArtifact('chat-artifact-list-private');
+
+    const res = await drive(artifactListHandlers, {
+      params: { chatId: 'chat-artifact-list-private' },
+      user: GRACE
+    });
+
+    assert.equal(res.statusCode, 404);
+  });
+
+  it("does not serve another owner's artifact, and says nothing about its existence", async () => {
+    await seedChat(ADA, 'chat-artifact-private');
+    const artifact = await seedArtifact('chat-artifact-private');
+
+    const res = await drive(artifactHandlers, {
+      params: { chatId: 'chat-artifact-private', artifactId: artifact.id },
+      user: GRACE
+    });
+
+    // 404 rather than 403, like every other route here: an artifact id is
+    // minted server-side and is never a capability on its own — it is
+    // authorized through the chat that owns it.
+    assert.equal(res.statusCode, 404);
+  });
+
+  it('answers 404 for an artifact the chat does not have', async () => {
+    await seedChat(ADA, 'chat-artifact-missing');
+
+    const res = await drive(artifactHandlers, {
+      params: { chatId: 'chat-artifact-missing', artifactId: 'deadbeef' },
+      user: ADA
+    });
+
+    assert.equal(res.statusCode, 404);
+  });
+
+  it('refuses an artifact id that could address a path', async () => {
+    await seedChat(ADA, 'chat-artifact-traversal');
+
+    const res = await drive(artifactHandlers, {
+      params: { chatId: 'chat-artifact-traversal', artifactId: '../../secrets' },
+      user: ADA
+    });
+
+    assert.equal(res.statusCode, 400);
   });
 });
 

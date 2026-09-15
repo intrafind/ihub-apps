@@ -3,6 +3,8 @@
  *
  *   GET    /api/chats            ?limit&cursor   the caller's chats, newest activity first
  *   GET    /api/chats/:chatId                    chat metadata + stored transcript
+ *   GET    /api/chats/:chatId/artifacts             what this chat's turns produced
+ *   GET    /api/chats/:chatId/artifacts/:artifactId  the bytes of one of them
  *   PATCH  /api/chats/:chatId    { title }       rename a chat
  *   DELETE /api/chats/:chatId                    erase a chat, its transcript and its runs
  *
@@ -41,6 +43,7 @@ import runLog from '../services/loop/RunLog.js';
 import { resolvePrincipal } from '../services/loop/runIdentity.js';
 import { authorizeChat } from '../services/chat/chatAccess.js';
 import { getChatRepository, MAX_TITLE_LENGTH } from '../services/chat/ChatRepository.js';
+import { getArtifactRepository } from '../services/artifacts/ArtifactRepository.js';
 import { isChatPersistenceConfigured } from '../services/chat/chatPersistence.js';
 import { StorageError, storageHttpStatus } from '../storage/errors.js';
 import { abortChatRequest } from '../sse.js';
@@ -224,6 +227,66 @@ export default function registerChatRoutes(app) {
       sendChatStorageError(res, error, 'get chat');
     }
   });
+
+  app.get(buildServerPath('/api/chats/:chatId/artifacts'), authenticatedOnly, async (req, res) => {
+    try {
+      const { chatId } = req.params;
+      if (!validateIdForPath(chatId, 'chat', res)) return;
+      const repository = requireRepository(res);
+      if (!repository) return;
+      const access = await loadOwnedChat(chatId, req.user, repository, 'read');
+      if (!access) return sendNotFound(res, 'Chat');
+      // Descriptors, never payloads: this is the index of what the
+      // conversation produced, and the bytes are a separate request per entry.
+      // The listing walks the artifact keys rather than the transcript, so it
+      // also sees one whose descriptor never landed on a message.
+      const items = await getArtifactRepository().list(repository.artifactScope(chatId));
+      res.json({ items });
+    } catch (error) {
+      sendChatStorageError(res, error, 'list chat artifacts');
+    }
+  });
+
+  app.get(
+    buildServerPath('/api/chats/:chatId/artifacts/:artifactId'),
+    authenticatedOnly,
+    async (req, res) => {
+      try {
+        const { chatId, artifactId } = req.params;
+        if (!validateIdForPath(chatId, 'chat', res)) return;
+        if (!validateIdForPath(artifactId, 'artifact', res)) return;
+        const repository = requireRepository(res);
+        if (!repository) return;
+        // The artifact is authorized through the chat that owns it, exactly
+        // like the transcript that names it: an artifact id is minted
+        // server-side and is never a capability on its own.
+        const access = await loadOwnedChat(chatId, req.user, repository, 'read');
+        if (!access) return sendNotFound(res, 'Chat');
+        const artifact = await getArtifactRepository().get(
+          repository.artifactScope(chatId),
+          artifactId
+        );
+        if (!artifact) return sendNotFound(res, 'Artifact');
+        // Already the bytes: the store keeps payloads raw, so serving one is a
+        // read and a write, with no decode in between.
+        const body = artifact.data;
+        // An artifact document is written once and never modified, and its id
+        // is a fresh uuid, so the bytes behind this URL cannot change.
+        // `private` because the response is owner-scoped and a shared cache
+        // holding it would serve one user's content to another.
+        res.setHeader('Content-Type', artifact.mimeType);
+        res.setHeader('Content-Length', String(body.length));
+        res.setHeader('Cache-Control', 'private, max-age=31536000, immutable');
+        // Nothing here is a document to open in the browser's context; the
+        // client renders it from a blob it fetched itself.
+        res.setHeader('Content-Disposition', 'inline');
+        res.setHeader('X-Content-Type-Options', 'nosniff');
+        return res.send(body);
+      } catch (error) {
+        return sendChatStorageError(res, error, 'get chat artifact');
+      }
+    }
+  );
 
   app.patch(buildServerPath('/api/chats/:chatId'), authenticatedOnly, async (req, res) => {
     try {

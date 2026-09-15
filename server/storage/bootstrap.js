@@ -46,7 +46,12 @@ let pendingBootstrap = null;
 function describeCapabilities(provider) {
   try {
     const caps = provider.getCapabilities?.() || {};
-    return { locking: caps.locking, multiInstance: caps.multiInstance, blobs: caps.blobs };
+    return {
+      locking: caps.locking,
+      multiInstance: caps.multiInstance,
+      blobs: caps.blobs,
+      blobStore: caps.blobStore
+    };
   } catch {
     return {};
   }

@@ -6,11 +6,22 @@ import { debugLog } from '../../../utils/debugLog';
  *
  * Shape on the wire (`GET /api/chats/:chatId` → `messages[]`):
  * `{ id, role, content, ts, runId, clientMessageId?, usage?, finishReason?,
- * error?, attachments? }`.
+ * error?, attachments?, artifacts? }`.
  *
  * The stored id is adopted as the message id and kept a second time on
  * `serverId`: `replaceFromMessageId` addresses the server's history by that
  * id, and a locally minted `user-<ts>-<rand>` means nothing to the store.
+ *
+ * An artifact is anything the turn produced that is content in its own right —
+ * a generated image today. Its descriptor carries no payload:
+ * `{ id, kind, mimeType, bytes }`, or `{ kind, mimeType, bytes, unavailable }`
+ * for one the server declined to store. The bytes are fetched per artifact
+ * when the message is rendered, so a transcript with a dozen pictures in it
+ * still arrives in one small response.
+ *
+ * The image-kind artifacts are also surfaced as `images`, which is the field
+ * the chat bubble renders and the one a live turn fills from its own stream —
+ * so a reopened message and a just-answered one take the same render path.
  *
  * @param {Object} msg - Stored message.
  * @returns {Object} Chat message.
@@ -31,6 +42,11 @@ function transformStoredMessage(msg) {
   if (msg.finishReason) message.finishReason = msg.finishReason;
   if (Array.isArray(msg.attachments) && msg.attachments.length > 0) {
     message.attachments = msg.attachments;
+  }
+  if (Array.isArray(msg.artifacts) && msg.artifacts.length > 0) {
+    message.artifacts = msg.artifacts;
+    const images = msg.artifacts.filter(artifact => (artifact?.kind || 'image') === 'image');
+    if (images.length > 0) message.images = images;
   }
   if (msg.error) {
     // A stopped turn kept whatever it had already produced — that is a

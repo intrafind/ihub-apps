@@ -44,6 +44,7 @@ import { FilesystemChangeNotifier } from './FilesystemChangeNotifier.js';
 import { FilesystemDocumentStore } from './FilesystemDocumentStore.js';
 import { RawDocumentStore } from './RawDocumentStore.js';
 import { FilesystemAppendLog } from './FilesystemAppendLog.js';
+import { FilesystemBlobStore } from './FilesystemBlobStore.js';
 import { FilesystemLockManager } from './FilesystemLockManager.js';
 
 const COMPONENT = 'FilesystemStorageProvider';
@@ -256,6 +257,7 @@ export class FilesystemStorageProvider extends StorageProvider {
       raw: this._rawDocuments
     });
     this._logs = new FilesystemAppendLog({ baseDir: this._baseDir, flushIntervalMs });
+    this._blobs = new FilesystemBlobStore(this._baseDir);
     this._locks = new FilesystemLockManager({ baseDir: this._baseDir });
 
     this._initialized = false;
@@ -311,6 +313,15 @@ export class FilesystemStorageProvider extends StorageProvider {
    */
   get logs() {
     return this._logs;
+  }
+
+  /**
+   * The blob facet: payloads addressed by key, with no envelope and no
+   * encoding, under `<base>/blobs/<ns>/`.
+   * @returns {FilesystemBlobStore}
+   */
+  get blobs() {
+    return this._blobs;
   }
 
   /**
@@ -466,6 +477,7 @@ export class FilesystemStorageProvider extends StorageProvider {
       search: false,
       multiInstance: false,
       blobs: true,
+      blobStore: true,
       conditionalWrites: true,
       // A copy: the declaration is frozen, but a caller must not be able to
       // reach it through a capability object at all.

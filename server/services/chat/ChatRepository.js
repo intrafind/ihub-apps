@@ -6,6 +6,13 @@
  *   `chats/<chatId>`          the metadata a chat list needs, small and hot
  *   `chat-messages/<chatId>`  the transcript, read in one go when a chat opens
  *
+ * What a turn *produced* — a generated image today — is not stored here at
+ * all: it goes to `services/artifacts/ArtifactRepository` under the scope
+ * `{ type: 'chat', id: chatId }`, because a chat is one producer of artifacts
+ * among several and a workflow's report is the same kind of thing. This module
+ * only records the descriptors on the message and asks the artifact store to
+ * clean up when the messages naming them go.
+ *
  * They are split because the list view reads N chat documents and zero
  * transcripts; folding the messages in would make "show my chats" read every
  * message the user ever wrote.
@@ -32,6 +39,7 @@ import { StorageError } from '../../storage/errors.js';
 import { getStorage, readFacet } from '../../storage/bootstrap.js';
 import { RUNTIME_NAMESPACES } from '../../storage/namespaces.js';
 import { chatMessageCap } from './chatPersistence.js';
+import { getArtifactRepository } from '../artifacts/ArtifactRepository.js';
 
 const COMPONENT = 'ChatRepository';
 
@@ -149,7 +157,8 @@ const OPTIONAL_MESSAGE_FIELDS = [
   'usage',
   'error',
   'finishReason',
-  'attachments'
+  'attachments',
+  'artifacts'
 ];
 
 /**
@@ -443,6 +452,26 @@ function buildMessage(message = {}) {
 }
 
 /**
+ * Artifact ids referenced by a slice of the transcript.
+ *
+ * A message carries descriptors, not payloads, so this is what has to be
+ * removed from {@link CHAT_ARTIFACTS_NAMESPACE} when the messages themselves
+ * go — a truncating edit, the per-chat message cap, or a delete.
+ *
+ * @param {Object[]} messages - Stored messages.
+ * @returns {string[]} Artifact ids, without duplicates.
+ */
+export function artifactIdsOfMessages(messages) {
+  const ids = new Set();
+  for (const message of messages || []) {
+    for (const artifact of Array.isArray(message?.artifacts) ? message.artifacts : []) {
+      if (typeof artifact?.id === 'string' && artifact.id) ids.add(artifact.id);
+    }
+  }
+  return [...ids];
+}
+
+/**
  * Index of the last stored message belonging to a run, or -1 when it wrote
  * none.
  *
@@ -531,11 +560,22 @@ export class ChatRepository {
    *   Lock facet; null makes every method a no-op, because an unlocked
    *   read-modify-write is not a degraded mode, it is data loss.
    * @param {Object} [options.logger] - Logger; defaults to the shared one.
+   * @param {import('../artifacts/ArtifactRepository.js').ArtifactRepository} [options.artifacts]
+   *   Where what a turn produced is stored. Injected rather than imported at
+   *   use so a test can drive the transcript without a payload store, and
+   *   resolved lazily so this module does not fix the provider at construction.
    */
-  constructor({ documents = null, locks = null, logger: log, maxMessages = null } = {}) {
+  constructor({
+    documents = null,
+    locks = null,
+    logger: log,
+    maxMessages = null,
+    artifacts = null
+  } = {}) {
     this.documents = documents || null;
     this.locks = locks || null;
     this.logger = log || logger;
+    this._artifacts = artifacts;
     /**
      * Messages one chat may keep, or null for "ask the platform config".
      * Resolved per write rather than captured here, so an admin who lowers it
@@ -549,6 +589,29 @@ export class ChatRepository {
      * @type {Map<string, {at: number, chats: Object[], pending?: Promise<Object[]>}>}
      */
     this._ownerChats = new Map();
+  }
+
+  /**
+   * The artifact store this chat's payloads live in.
+   *
+   * Public because the materializer writes through it: one place decides
+   * which store a chat's artifacts use, and it is this repository.
+   *
+   * @returns {import('../artifacts/ArtifactRepository.js').ArtifactRepository}
+   */
+  artifactStore() {
+    return this._artifacts || getArtifactRepository();
+  }
+
+  /**
+   * The artifact scope of one chat — what everything its turns produced is
+   * filed under, and what a delete empties.
+   *
+   * @param {string} chatId - Chat id.
+   * @returns {{type: string, id: string}}
+   */
+  artifactScope(chatId) {
+    return { type: 'chat', id: chatId };
   }
 
   /**
@@ -1063,6 +1126,13 @@ export class ChatRepository {
       // dangling index entry.
       const removedMessages = await this.documents.delete(CHAT_MESSAGES_NAMESPACE, chatId);
       const removedChat = await this.documents.delete(CHATS_NAMESPACE, chatId);
+      // The artifacts the transcript referenced, and any it never got to
+      // reference. Last, for the same reason the transcript goes before the
+      // chat document: a payload whose index is gone is invisible data, and
+      // this sweep is driven by the key prefix, so it still finds them after a
+      // partial delete — a re-deleted chat sweeps whatever the first attempt
+      // left behind.
+      await this.artifactStore().deleteScope(this.artifactScope(chatId));
       // A delete is the other thing that changes a listing, and it does not go
       // through `_writeChat`.
       this._forgetOwnerChats(existing?.ownerId);
@@ -1137,6 +1207,10 @@ export class ChatRepository {
 
       const { stored, etag: messagesEtag } = await this._loadMessages(chatId);
       let messages = stored.messages;
+      // Messages this write removes from the transcript. Their artifact
+      // payloads live in their own documents, which nothing else would ever
+      // reach again: a descriptor is the only path to one.
+      const discarded = [];
       if (replaceFromMessageId) {
         const index = messages.findIndex(entry => entry.id === replaceFromMessageId);
         if (index === -1) {
@@ -1144,6 +1218,7 @@ export class ChatRepository {
             code: 'UNKNOWN_MESSAGE'
           });
         }
+        discarded.push(...messages.slice(index));
         messages = messages.slice(0, index);
       }
 
@@ -1167,6 +1242,7 @@ export class ChatRepository {
       const cap = this._messageCap();
       if (cap > 0 && messages.length > cap) {
         const dropped = messages.length - cap;
+        discarded.push(...messages.slice(0, dropped));
         messages = messages.slice(dropped);
         this.logger.info('Trimmed the oldest messages of a chat at its cap', {
           component: COMPONENT,
@@ -1197,6 +1273,15 @@ export class ChatRepository {
         if (derived) patch.title = derived;
       }
       await this._writeChat(applyChatPatch(chat, patch), chatEtag);
+
+      // After the transcript is written, never before: an artifact that is
+      // gone while the descriptor is still stored renders as a broken picture
+      // in a chat nobody edited, while the reverse — a payload nothing points
+      // at — is swept when the chat is deleted.
+      const orphaned = artifactIdsOfMessages(discarded);
+      if (orphaned.length > 0) {
+        await this.artifactStore().deleteMany(this.artifactScope(chatId), orphaned);
+      }
 
       return { message: entry, messages };
     });

@@ -20,6 +20,7 @@ import { registerProvider } from './StorageRegistry.js';
 export * from './errors.js';
 export * from './StorageProvider.js';
 export * from './DocumentStore.js';
+export * from './BlobStore.js';
 export * from './AppendLog.js';
 export * from './ChangeNotifier.js';
 export * from './LockManager.js';

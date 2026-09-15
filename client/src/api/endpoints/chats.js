@@ -49,7 +49,9 @@ export const fetchChats = async (options = {}) => {
  * @param {string} chatId - Chat id.
  * @returns {Promise<{ chat: Object, messages: Object[], version: number }>} the response body,
  *   where each message is `{ id, role, content, ts, runId, clientMessageId?, usage?, error?,
- *   finishReason?, attachments? }`
+ *   finishReason?, attachments?, artifacts? }`, and each artifact descriptor is
+ *   `{ id, kind, mimeType, bytes }` — the payload is fetched separately with
+ *   {@link fetchChatArtifact}
  */
 export const fetchChat = async chatId => {
   if (!chatId) {
@@ -61,6 +63,34 @@ export const fetchChat = async chatId => {
     null, // never cached — the transcript grows while the chat is open
     null
   );
+};
+
+/**
+ * One artifact a turn of a chat produced — a generated image today — as a blob.
+ *
+ * Fetched rather than inlined in the transcript: an artifact is megabytes, and
+ * opening a chat that produced a dozen of them would otherwise ship all of
+ * them before the first word of the conversation appears.
+ *
+ * Through `apiClient` rather than as an `<img src>`: the URL needs the caller's
+ * credentials, and not every authentication mode here puts those in a cookie —
+ * a bearer token in `localStorage` reaches the server only on a request the
+ * client makes itself.
+ *
+ * @param {string} chatId - Chat the artifact belongs to.
+ * @param {string} artifactId - Artifact id from a message descriptor.
+ * @returns {Promise<Blob>} the artifact bytes
+ */
+export const fetchChatArtifact = async (chatId, artifactId) => {
+  if (!chatId || !artifactId) {
+    throw new Error('Missing required parameters');
+  }
+
+  const response = await apiClient.get(
+    `/chats/${encodeURIComponent(chatId)}/artifacts/${encodeURIComponent(artifactId)}`,
+    { responseType: 'blob' }
+  );
+  return response.data;
 };
 
 /**

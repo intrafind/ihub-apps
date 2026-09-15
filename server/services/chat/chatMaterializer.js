@@ -16,6 +16,8 @@
  */
 import logger from '../../utils/logger.js';
 import { deriveChatTitle } from './ChatRepository.js';
+import { getArtifactRepository } from '../artifacts/ArtifactRepository.js';
+import { artifactPolicy } from '../artifacts/artifactPolicy.js';
 
 const COMPONENT = 'chatMaterializer';
 
@@ -47,6 +49,99 @@ export function normalizeAttachments(attachments) {
         ...(Number.isFinite(bytes) ? { bytes } : {})
       };
     });
+}
+
+/**
+ * Store the artifacts a turn produced and return the descriptors to record on
+ * the assistant message.
+ *
+ * An artifact is anything a run produced that is content in its own right — a
+ * generated image today. It is not a chat concept: the payloads go to the
+ * shared `ArtifactRepository` under the scope `{ type: 'chat', id: chatId }`,
+ * the same store a workflow's report or an agent's output belongs in. The
+ * message keeps `{ id, kind, mimeType, bytes }`, which is what
+ * `GET /api/chats/:chatId/artifacts/:artifactId` is addressed by.
+ *
+ * An artifact the policy refuses is still described, with `unavailable` saying
+ * why. Leaving it out would make the stored answer claim the turn produced
+ * less than it did, and the viewer who saw it live and comes back to a
+ * transcript missing it has no way to tell a dropped artifact from one that
+ * was never produced.
+ *
+ * Best effort, like everything else here: a storage failure costs the
+ * artifact, never the answer.
+ *
+ * @param {Object} params
+ * @param {string} params.chatId
+ * @param {string} params.runId
+ * @param {Array<{kind?: string, mimeType?: string, data?: string, name?: string}>} [params.artifacts]
+ *   Artifacts as the loop collected them.
+ * @param {import('../artifacts/ArtifactRepository.js').ArtifactRepository} [params.store]
+ *   Artifact store; defaults to the shared one.
+ * @param {Object} [params.policy] - Artifact policy; defaults to the live one.
+ * @returns {Promise<Array<Object>>} Descriptors, in the order they came.
+ */
+export async function storeGeneratedArtifacts({ chatId, runId, artifacts, store, policy }) {
+  const candidates = (Array.isArray(artifacts) ? artifacts : []).filter(
+    artifact => artifact && typeof artifact.data === 'string' && artifact.data.length > 0
+  );
+  if (candidates.length === 0) return [];
+  const { enabled, maxBytes, maxPerBatch } = policy || artifactPolicy();
+  if (!enabled) return [];
+  const repository = store || getArtifactRepository();
+  const scope = { type: 'chat', id: chatId };
+  const descriptors = [];
+  // Counted on what was actually written, not on how many descriptors exist:
+  // an artifact refused for its size is described too, and letting it consume
+  // a slot would turn one oversized file into a cap on all the others.
+  let stored = 0;
+  for (const artifact of candidates) {
+    const kind = typeof artifact.kind === 'string' && artifact.kind ? artifact.kind : 'image';
+    const mimeType =
+      typeof artifact.mimeType === 'string' && artifact.mimeType ? artifact.mimeType : 'image/png';
+    // What the picture actually weighs. The loop reports base64; the store
+    // keeps raw bytes, so the cap is measured on the decoded size — the same
+    // number a viewer sees and the same number the store records.
+    const bytes = Buffer.byteLength(artifact.data, 'base64');
+    const refused = { kind, mimeType, bytes };
+    if (maxPerBatch > 0 && stored >= maxPerBatch) {
+      descriptors.push({ ...refused, unavailable: 'too-many' });
+      continue;
+    }
+    if (maxBytes > 0 && bytes > maxBytes) {
+      logger.warn('Artifact not stored: over the configured size cap', {
+        component: COMPONENT,
+        chatId,
+        runId,
+        kind,
+        bytes,
+        maxBytes
+      });
+      descriptors.push({ ...refused, unavailable: 'too-large' });
+      continue;
+    }
+    try {
+      const descriptor = await repository.put(scope, {
+        kind,
+        mimeType,
+        data: artifact.data,
+        name: artifact.name,
+        runId
+      });
+      if (descriptor) stored += 1;
+      descriptors.push(descriptor || { ...refused, unavailable: 'not-stored' });
+    } catch (error) {
+      logger.error('Artifact not stored', {
+        component: COMPONENT,
+        chatId,
+        runId,
+        kind,
+        error: error.message
+      });
+      descriptors.push({ ...refused, unavailable: 'not-stored' });
+    }
+  }
+  return descriptors;
 }
 
 /** Usage as stored on a message: the three counters, nothing provider-specific. */
@@ -212,7 +307,8 @@ export async function materializeUserTurn({
  * @param {string} params.chatId
  * @param {string} params.runId
  * @param {Object} params.summary - the turn outcome: `status`, `content`, `finishReason`,
- *   `usage`, and `error`/`errorInfo` on a failure
+ *   `usage`, `images` (generated pictures, stored beside the transcript as
+ *   artifacts), and `error`/`errorInfo` on a failure
  * @param {boolean} params.clientConnected - whether an SSE client was attached when the
  *   turn ended, sampled with `hasChatClient()`; the emit result cannot tell you
  * @returns {Promise<Object|null>} the stored message, or null when nothing was written
@@ -235,6 +331,26 @@ export async function materializeAssistantTurn({
     // answer and an abort included, so the stored history says what happened.
     // The run is still released below either way, or the chat stays "running".
     const pausedWithoutAnswer = status === 'paused' && !content && !error;
+
+    // Before the append, because the descriptors it produces are part of the
+    // message. The reverse cost is a payload nothing points at when the append
+    // fails — swept when the chat is deleted — against a descriptor pointing
+    // at nothing, which renders as a broken picture for the life of the chat.
+    //
+    // The loop reports generated pictures on `summary.images`; they are stored
+    // as artifacts of kind `image`, which is the vocabulary the stored message
+    // and the artifact endpoints use.
+    const artifacts = pausedWithoutAnswer
+      ? []
+      : await storeGeneratedArtifacts({
+          chatId,
+          runId,
+          artifacts: (summary?.images || []).map(image => ({ ...image, kind: 'image' })),
+          // Through the chat's own store rather than the shared getter: one
+          // place decides where a chat's artifacts live, and it is the
+          // repository this turn is already writing through.
+          store: repository?.artifactStore?.()
+        });
 
     // Store the answer BEFORE announcing the run finished. `releaseRun` clears
     // `activeRunId` and raises `hasUnseenActivity` — together, "this chat is
@@ -266,7 +382,8 @@ export async function materializeAssistantTurn({
             runId,
             finishReason: summary?.finishReason ?? null,
             ...(usage ? { usage } : {}),
-            ...(error ? { error } : {})
+            ...(error ? { error } : {}),
+            ...(artifacts.length > 0 ? { artifacts } : {})
           },
           // The end of the transcript for an ordinary turn, and the position
           // right after this run's own question for a superseded one.
