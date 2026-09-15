@@ -38,7 +38,12 @@ function makeCtx(base) {
     listFiles: async (subdir, pattern) => {
       const entries = await fs.readdir(path.join(base, subdir)).catch(() => []);
       if (!pattern) return entries;
-      const regex = new RegExp(`^${pattern.replace(/\./g, '\\.').replace(/\*/g, '.*')}$`);
+      // Same glob→regex conversion the real runner does, escaping every regex
+      // metacharacter (the backslash included) before `*` becomes `.*`. Escaping
+      // only `.`, as this stub first did, leaves a backslash in the pattern free
+      // to alter the regex it lands in.
+      const escaped = pattern.replace(/[.+^${}()|[\]\\]/g, '\\$&').replace(/\*/g, '.*');
+      const regex = new RegExp(`^${escaped}$`);
       return entries.filter(e => regex.test(e));
     },
     setDefault: (obj, dotPath, value) => {
