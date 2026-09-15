@@ -6,11 +6,16 @@ import { debugLog } from '../../../utils/debugLog';
  *
  * Shape on the wire (`GET /api/chats/:chatId` → `messages[]`):
  * `{ id, role, content, ts, runId, clientMessageId?, usage?, finishReason?,
- * error?, attachments? }`.
+ * error?, attachments?, images? }`.
  *
  * The stored id is adopted as the message id and kept a second time on
  * `serverId`: `replaceFromMessageId` addresses the server's history by that
  * id, and a locally minted `user-<ts>-<rand>` means nothing to the store.
+ *
+ * An image descriptor carries no payload — `{ id, mimeType, bytes }`, or
+ * `{ mimeType, bytes, unavailable }` for one the server declined to store. The
+ * bytes are fetched per image when the message is rendered, so a transcript
+ * with a dozen pictures in it still arrives in one small response.
  *
  * @param {Object} msg - Stored message.
  * @returns {Object} Chat message.
@@ -31,6 +36,9 @@ function transformStoredMessage(msg) {
   if (msg.finishReason) message.finishReason = msg.finishReason;
   if (Array.isArray(msg.attachments) && msg.attachments.length > 0) {
     message.attachments = msg.attachments;
+  }
+  if (Array.isArray(msg.images) && msg.images.length > 0) {
+    message.images = msg.images;
   }
   if (msg.error) {
     // A stopped turn kept whatever it had already produced — that is a

@@ -282,7 +282,17 @@ export const platformConfigSchema = z
       .object({
         enabled: z.boolean().prefault(true),
         retentionDays: z.number().prefault(90),
-        maxChatsPerUser: z.number().prefault(200)
+        maxChatsPerUser: z.number().prefault(200),
+        maxMessagesPerChat: z.number().prefault(2000),
+        // Generated images are stored beside the transcript, one document per
+        // image, and fetched only when a viewer looks at one. They are the one
+        // thing a turn produces that is measured in megabytes, so an admin can
+        // switch them off without giving up stored transcripts, and the two
+        // caps (bytes per image, images per message) bound what one answer can
+        // write. Zero or less removes a cap, like the retention rules above.
+        storeImages: z.boolean().prefault(true),
+        maxImageBytes: z.number().prefault(10485760),
+        maxImagesPerMessage: z.number().prefault(8)
       })
       .passthrough()
       .prefault({}),

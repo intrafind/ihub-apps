@@ -3,6 +3,7 @@
  *
  *   GET    /api/chats            ?limit&cursor   the caller's chats, newest activity first
  *   GET    /api/chats/:chatId                    chat metadata + stored transcript
+ *   GET    /api/chats/:chatId/images/:imageId    one image a turn of that chat generated
  *   PATCH  /api/chats/:chatId    { title }       rename a chat
  *   DELETE /api/chats/:chatId                    erase a chat, its transcript and its runs
  *
@@ -224,6 +225,42 @@ export default function registerChatRoutes(app) {
       sendChatStorageError(res, error, 'get chat');
     }
   });
+
+  app.get(
+    buildServerPath('/api/chats/:chatId/images/:imageId'),
+    authenticatedOnly,
+    async (req, res) => {
+      try {
+        const { chatId, imageId } = req.params;
+        if (!validateIdForPath(chatId, 'chat', res)) return;
+        if (!validateIdForPath(imageId, 'image', res)) return;
+        const repository = requireRepository(res);
+        if (!repository) return;
+        // The image is authorized through the chat that owns it, exactly like
+        // the transcript that names it: an image id is minted server-side and
+        // is never a capability on its own.
+        const access = await loadOwnedChat(chatId, req.user, repository, 'read');
+        if (!access) return sendNotFound(res, 'Chat');
+        const image = await repository.getImage(chatId, imageId);
+        if (!image) return sendNotFound(res, 'Image');
+        const body = Buffer.from(image.data, 'base64');
+        // An image document is written once and never modified, and its id is
+        // a fresh uuid, so the bytes behind this URL cannot change. `private`
+        // because the response is owner-scoped and a shared cache holding it
+        // would serve one user's picture to another.
+        res.setHeader('Content-Type', image.mimeType);
+        res.setHeader('Content-Length', String(body.length));
+        res.setHeader('Cache-Control', 'private, max-age=31536000, immutable');
+        // Nothing here is a document to open in the browser's context; the
+        // client renders it in an <img> from a blob it fetched itself.
+        res.setHeader('Content-Disposition', 'inline');
+        res.setHeader('X-Content-Type-Options', 'nosniff');
+        return res.send(body);
+      } catch (error) {
+        return sendChatStorageError(res, error, 'get chat image');
+      }
+    }
+  );
 
   app.patch(buildServerPath('/api/chats/:chatId'), authenticatedOnly, async (req, res) => {
     try {

@@ -632,6 +632,12 @@ class ChatService {
       finishReason: result.finishReason,
       usage: result.usage,
       messages: result.messages,
+      // On the summary rather than only on the stream: a generated image is
+      // part of what the turn produced, and the materializer stores it beside
+      // the transcript so reopening the chat still shows it. Every terminal
+      // branch below spreads this object, so an aborted turn keeps the
+      // pictures it had already emitted.
+      images: result.images || [],
       knowledgeSources: this.getKnowledgeSources(chatId, loopSources)
     };
     const translate = async (key, params) => {

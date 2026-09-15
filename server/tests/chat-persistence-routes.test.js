@@ -87,7 +87,16 @@ function makeResponse() {
     res.body = value;
     return res;
   };
-  res.setHeader = () => res;
+  res.headers = {};
+  res.setHeader = (name, value) => {
+    res.headers[String(name).toLowerCase()] = value;
+    return res;
+  };
+  // Binary answers (a stored image) go out through `send`, not `json`.
+  res.send = value => {
+    res.body = value;
+    return res;
+  };
   return res;
 }
 
@@ -120,6 +129,7 @@ const listHandlers = handlersFor('get', '/api/chats');
 const getHandlers = handlersFor('get', '/api/chats/:chatId');
 const patchHandlers = handlersFor('patch', '/api/chats/:chatId');
 const deleteHandlers = handlersFor('delete', '/api/chats/:chatId');
+const imageHandlers = handlersFor('get', '/api/chats/:chatId/images/:imageId');
 
 /**
  * Store one chat with a turn in it, owned by `user`.
@@ -205,6 +215,71 @@ describe('GET /api/chats lists only the caller', () => {
     const ids = res.body.items.map(chat => chat.id);
     assert.ok(ids.includes('chat-list-grace'));
     assert.ok(!ids.includes('chat-list-ada'), "Ada's chat stayed out of Grace's list");
+  });
+});
+
+describe('GET /api/chats/:chatId/images/:imageId', () => {
+  /** Store one image against a chat and return its descriptor. */
+  async function seedImage(chatId, data = Buffer.from('a tiny png').toString('base64')) {
+    return getChatRepository().putImage(chatId, { mimeType: 'image/png', data, runId: 'run-img' });
+  }
+
+  it('serves the owner the bytes, as an image the browser may cache', async () => {
+    await seedChat(ADA, 'chat-image-own');
+    const data = Buffer.from('a tiny png').toString('base64');
+    const image = await seedImage('chat-image-own', data);
+
+    const res = await drive(imageHandlers, {
+      params: { chatId: 'chat-image-own', imageId: image.id },
+      user: ADA
+    });
+
+    assert.equal(res.statusCode, 200);
+    assert.ok(Buffer.isBuffer(res.body));
+    assert.equal(res.body.toString('base64'), data);
+    assert.equal(res.headers['content-type'], 'image/png');
+    assert.equal(res.headers['content-length'], String(res.body.length));
+    // An image document is written once and keyed by a fresh uuid, so the
+    // bytes cannot change; `private` because the response is owner-scoped.
+    assert.match(res.headers['cache-control'], /^private,/);
+    assert.equal(res.headers['x-content-type-options'], 'nosniff');
+  });
+
+  it("does not serve another owner's image, and says nothing about its existence", async () => {
+    await seedChat(ADA, 'chat-image-private');
+    const image = await seedImage('chat-image-private');
+
+    const res = await drive(imageHandlers, {
+      params: { chatId: 'chat-image-private', imageId: image.id },
+      user: GRACE
+    });
+
+    // 404 rather than 403, like every other route here: an image id is minted
+    // server-side and is never a capability on its own — it is authorized
+    // through the chat that owns it.
+    assert.equal(res.statusCode, 404);
+  });
+
+  it('answers 404 for an image the chat does not have', async () => {
+    await seedChat(ADA, 'chat-image-missing');
+
+    const res = await drive(imageHandlers, {
+      params: { chatId: 'chat-image-missing', imageId: 'deadbeef' },
+      user: ADA
+    });
+
+    assert.equal(res.statusCode, 404);
+  });
+
+  it('refuses an image id that could address a path', async () => {
+    await seedChat(ADA, 'chat-image-traversal');
+
+    const res = await drive(imageHandlers, {
+      params: { chatId: 'chat-image-traversal', imageId: '../../secrets' },
+      user: ADA
+    });
+
+    assert.equal(res.statusCode, 400);
   });
 });
 

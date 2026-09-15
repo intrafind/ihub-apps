@@ -51,19 +51,26 @@ client. There is no half-persisted state.
   "chats": {
     "enabled": true,
     "retentionDays": 90,
-    "maxChatsPerUser": 200
+    "maxChatsPerUser": 200,
+    "storeImages": true,
+    "maxImageBytes": 10485760,
+    "maxImagesPerMessage": 8
   }
 }
 ```
 
-| Key               | Default | Meaning                                                                        |
-| ----------------- | ------- | ------------------------------------------------------------------------------ |
-| `enabled`         | `true`  | Second switch under the feature flag; `false` stops the write path entirely     |
-| `retentionDays`   | `90`    | Chats whose last message is older than this are deleted by the daily sweep      |
-| `maxChatsPerUser` | `200`   | Chats kept per owner; the oldest beyond the cap are deleted by the same sweep   |
+| Key                   | Default    | Meaning                                                                      |
+| --------------------- | ---------- | ---------------------------------------------------------------------------- |
+| `enabled`             | `true`     | Second switch under the feature flag; `false` stops the write path entirely   |
+| `retentionDays`       | `90`       | Chats whose last message is older than this are deleted by the daily sweep    |
+| `maxChatsPerUser`     | `200`      | Chats kept per owner; the oldest beyond the cap are deleted by the same sweep |
+| `storeImages`         | `true`     | Whether generated images are stored with the chat                             |
+| `maxImageBytes`       | `10485760` | Largest single image stored, in bytes of base64                               |
+| `maxImagesPerMessage` | `8`        | Images one answer stores                                                      |
 
 Both retention rules are switched **off** by a value of zero or less — see
-[Retention](#retention).
+[Retention](#retention) — and so are the two image caps; see
+[Generated images](#generated-images).
 
 3. **Make sure storage is configured.** Durable chats are the first consumer of
    the storage abstraction. The default filesystem provider needs no
@@ -371,7 +378,8 @@ Two identity traps worth knowing before you switch a live installation on:
 ## Data model
 
 Two documents per chat, both carrying the owner id so the store's per-owner
-index can answer "list my chats" without scanning:
+index can answer "list my chats" without scanning, plus one document per
+generated image:
 
 ```js
 // chats/<chatId>
@@ -393,13 +401,22 @@ index can answer "list my chats" without scanning:
   version: 1,
   messages: [
     { id, role, content, ts, runId,
-      clientMessageId?, usage?, finishReason?, error?, attachments? }
+      clientMessageId?, usage?, finishReason?, error?, attachments?, images? }
   ]
+}
+
+// chat-images/<chatId>__<imageId>
+{
+  version: 1,
+  chatId, mimeType, bytes, runId?, createdAt,
+  data                  // base64, the only place a payload is ever written
 }
 ```
 
-On the filesystem provider that is `contents/data/chats/<chatId>.json` and
-`contents/data/chat-messages/<chatId>.json`, with the owner index beside them.
+On the filesystem provider that is `contents/data/chats/<chatId>.json`,
+`contents/data/chat-messages/<chatId>.json` and
+`contents/data/chat-images/<chatId>__<imageId>.json`, with the owner index
+beside them.
 
 They are split because the chat list reads N metadata documents and zero
 transcripts. Folding the messages in would make "show my chats" read every
@@ -425,6 +442,8 @@ Details that matter:
 - **Attachments are descriptors** — `{ type, name?, bytes? }`. The base64 payload
   of an upload stays in the request; it is never written into a document that is
   read back for as long as the chat lives.
+- **So are generated images** — `{ id, mimeType, bytes }`, with the payload in
+  its own `chat-images` document. See [Generated images](#generated-images).
 - **Failures are recorded.** An aborted turn stores its (possibly empty) answer
   with `error: { code: 'ABORTED', … }`, an errored turn with its error code, so a
   truncated answer never reads as a complete one. A turn that paused for a
@@ -442,15 +461,16 @@ Details that matter:
 
 ## API
 
-All four endpoints require a real authenticated user (`authenticatedOnly`). The
-three that address a chat validate the id before it reaches storage and answer
-404 for both an unknown chat and someone else's. All of them are rate limited
+Every endpoint requires a real authenticated user (`authenticatedOnly`). Those
+that address a chat validate the id before it reaches storage and answer 404 for
+both an unknown chat and someone else's. All of them are rate limited
 with the other public API prefixes (500 requests/minute/IP by default).
 
 | Method & path            | Purpose                                                                    |
 | ------------------------ | -------------------------------------------------------------------------- |
 | `GET /api/chats`         | The caller's chats, most recent activity first. `?limit` (default 30, max 100) and `?cursor` |
 | `GET /api/chats/:chatId` | `{ chat, messages, version }` — the transcript, and clears `hasUnseenActivity` |
+| `GET /api/chats/:chatId/images/:imageId` | The bytes of one generated image, as its own media type |
 | `PATCH /api/chats/:chatId` | `{ title }` — rename; capped at 200 characters and marked as user-set     |
 | `DELETE /api/chats/:chatId` | Erase the chat, its transcript and its runs                             |
 
@@ -458,16 +478,78 @@ with the other public API prefixes (500 requests/minute/IP by default).
 and icon are joined on the client from the apps list it already holds, so the
 endpoint stays independent of app configuration.
 
-`DELETE` cascades: the two documents, then `runLog.deleteRun()` for every id in
-the chat's `runIds`, which in turn removes each run's ledger file, its spill
-directory and its pending interactions. The chat document is the only place a
-chat's runs are written down, which is why it is read before it is deleted.
+`DELETE` cascades: the two documents, every image of the chat, then
+`runLog.deleteRun()` for every id in the chat's `runIds`, which in turn removes
+each run's ledger file, its spill directory and its pending interactions. The
+chat document is the only place a chat's runs are written down, which is why it
+is read before it is deleted.
 
 When durable chats are unavailable — the flag is off, an admin set
 `chats.enabled: false`, or the storage provider did not come up — every endpoint
 answers `503` with `details.code = "CHAT_PERSISTENCE_UNAVAILABLE"` rather than
 404, so a client can tell "not configured" from "not found" and fall back to the
 ephemeral experience.
+
+## Generated images
+
+A picture a turn draws is not part of its text, and before durable chats it was
+not part of anything that survived: the client stripped the payload before
+writing the transcript to `sessionStorage` — a generated image is megabytes and
+the quota is a few — so navigating away left the answer with an empty space
+where the image had been. A stored chat keeps them.
+
+**The payload never goes in the transcript.** A transcript is a single document
+that every later turn of the chat reads, re-serializes and re-hashes under the
+chat's lock, and `GET /api/chats/:chatId` ships all of it back when the chat is
+opened. One image inlined there would be paid for on every turn of that chat
+for as long as it exists. So each image is written to its own document and the
+message keeps a descriptor:
+
+```js
+{ id: '7f3c…', mimeType: 'image/png', bytes: 1483204 }
+```
+
+The client fetches the bytes per image from
+`GET /api/chats/:chatId/images/:imageId` when the message is rendered, through
+the API client rather than as a plain `<img src>`: the URL is credentialed, and
+a bearer token in `localStorage` only travels on a request the client makes
+itself. The response is `private, max-age=31536000, immutable` — an image
+document is written once, never modified, and keyed by a fresh uuid, so the
+bytes behind one URL cannot change.
+
+**An image is authorized through its chat.** The route runs the same
+`authorizeChat` as the transcript and answers 404 for a chat that is not the
+caller's, so an image id is never a capability on its own. The media type is
+allowlisted (`png`, `jpeg`, `webp`, `gif`, `avif`, `bmp`, `heic`, `heif`) and
+anything else is stored and served as `application/octet-stream` with
+`X-Content-Type-Options: nosniff` — the type comes from a model response and
+ends up in a `Content-Type` on a same-origin URL, and SVG is a document that
+runs script, not a picture.
+
+Three settings in `platform.json → chats`, read fresh per turn:
+
+| Key                   | Default    | Meaning                                                        |
+| --------------------- | ---------- | -------------------------------------------------------------- |
+| `storeImages`         | `true`     | `false` keeps transcripts and drops the pictures                |
+| `maxImageBytes`       | `10485760` | Largest single image, in bytes of base64; `<= 0` removes the cap |
+| `maxImagesPerMessage` | `8`        | Images one answer stores; `<= 0` removes the cap                 |
+
+An image a cap turns away is still described on the message, as
+`{ mimeType, bytes, unavailable: 'too-large' | 'too-many' | 'not-stored' }`, and
+the chat shows a note in its place. Dropping it silently would leave the viewer
+who watched three pictures appear and came back to two unable to tell a
+discarded image from one the model never drew.
+
+**Lifetime is the message's.** Images go when the chat is deleted — the sweep is
+driven by the key prefix, so a payload whose descriptor never landed (the
+answer's write failed after the image was stored) is collected too — and when
+the messages naming them leave the transcript, either through an edit that
+rewrites history from a message or through `maxMessagesPerChat`.
+
+Where a chat is not stored at all — an anonymous visitor, an incognito turn, the
+compare panels, the canvas — nothing changes: the image is visible for the
+session, the note under it still tells the user to download it, and it is gone
+on the way back.
 
 ## Retention
 
@@ -537,10 +619,11 @@ that is what you want.
 | ------------------------------------------- | ------------------------------------------------------------ |
 | `server/storage/bootstrap.js`               | Brings the provider up per worker; `getStorage()` may be null |
 | `server/services/chat/chatPersistence.js`   | The policy — the only module that decides "is this persisted" |
-| `server/services/chat/ChatRepository.js`    | The two documents, their locks, listing and the cascade       |
+| `server/services/chat/ChatRepository.js`    | The chat documents, image payloads, locks, listing, cascade   |
 | `server/services/chat/chatMaterializer.js`  | The only module that writes chat turns                        |
 | `server/services/chat/chatAccess.js`        | `authorizeChat()` — 404 for unknown and not-yours             |
 | `server/services/chat/chatRetention.js`     | The daily sweep                                               |
+| `client/src/features/chat/components/GeneratedImage.jsx` | Renders a live, a stored or an unavailable image |
 | `server/routes/chats.js`                    | The `/api/chats` surface                                      |
 | `server/sse.js`                             | The durable-chat registry and the disconnect guard            |
 

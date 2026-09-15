@@ -41,6 +41,21 @@ export const CHATS_NAMESPACE = RUNTIME_NAMESPACES.chats;
 /** Namespace holding the chat transcript documents. */
 export const CHAT_MESSAGES_NAMESPACE = RUNTIME_NAMESPACES.chatMessages;
 
+/** Namespace holding one document per image a chat's turns produced. */
+export const CHAT_IMAGES_NAMESPACE = RUNTIME_NAMESPACES.chatImages;
+
+/**
+ * Separator between the chat id and the image id in an image document key.
+ *
+ * The key is `<chatId>__<imageId>` so every image of one chat shares a prefix
+ * and the delete sweep is a prefix scan rather than a lookup that depends on
+ * the transcript still being readable. An image id never contains the
+ * separator, so a chat id that does (`a__b`, whose keys the prefix of chat `a`
+ * also matches) is told apart by counting it in the suffix; a read additionally
+ * checks the `chatId` recorded inside the document.
+ */
+const IMAGE_KEY_SEPARATOR = '__';
+
 /** Schema version stamped on a transcript document. */
 export const CHAT_MESSAGES_VERSION = 1;
 
@@ -149,7 +164,8 @@ const OPTIONAL_MESSAGE_FIELDS = [
   'usage',
   'error',
   'finishReason',
-  'attachments'
+  'attachments',
+  'images'
 ];
 
 /**
@@ -440,6 +456,90 @@ function buildMessage(message = {}) {
     if (message[field] !== undefined && message[field] !== null) stored[field] = message[field];
   }
   return stored;
+}
+
+/**
+ * Image media types a stored image may be served as.
+ *
+ * The type comes from a model response, and it ends up in a `Content-Type`
+ * header on a same-origin URL. An allowlist is what keeps a provider (or
+ * anything that can shape one's output) from having the server hand a browser
+ * `text/html`. SVG is deliberately absent: it is a document that can run
+ * script, not a picture.
+ */
+const STORABLE_IMAGE_TYPES = new Set([
+  'image/png',
+  'image/jpeg',
+  'image/webp',
+  'image/gif',
+  'image/avif',
+  'image/bmp',
+  'image/heic',
+  'image/heif'
+]);
+
+/**
+ * Spellings providers use that are not the registered media type. A `Map`
+ * rather than an object literal because the key comes from a model response,
+ * and a plain lookup of `constructor` on an object answers with something.
+ */
+const IMAGE_TYPE_ALIASES = new Map([['image/jpg', 'image/jpeg']]);
+
+/** Served instead of a type this server is not willing to name. */
+const OPAQUE_IMAGE_TYPE = 'application/octet-stream';
+
+/**
+ * The media type a stored image is written and served under.
+ *
+ * @param {unknown} mimeType - Type as the provider reported it.
+ * @returns {string} An allowlisted image type, or {@link OPAQUE_IMAGE_TYPE}.
+ */
+export function storableImageType(mimeType) {
+  if (typeof mimeType !== 'string') return OPAQUE_IMAGE_TYPE;
+  const declared = mimeType.split(';')[0].trim().toLowerCase();
+  const normalized = IMAGE_TYPE_ALIASES.get(declared) || declared;
+  return STORABLE_IMAGE_TYPES.has(normalized) ? normalized : OPAQUE_IMAGE_TYPE;
+}
+
+/**
+ * The document key one image is stored under.
+ *
+ * @param {string} chatId - Chat the image belongs to.
+ * @param {string} imageId - Image id.
+ * @returns {string} Key in {@link CHAT_IMAGES_NAMESPACE}.
+ */
+export function imageDocumentKey(chatId, imageId) {
+  return `${chatId}${IMAGE_KEY_SEPARATOR}${imageId}`;
+}
+
+/**
+ * The key prefix every image of one chat shares.
+ *
+ * @param {string} chatId - Chat id.
+ * @returns {string} Key prefix.
+ */
+function imageKeyPrefix(chatId) {
+  return `${chatId}${IMAGE_KEY_SEPARATOR}`;
+}
+
+/**
+ * Image ids referenced by a slice of the transcript.
+ *
+ * A message carries descriptors, not payloads, so this is what has to be
+ * removed from {@link CHAT_IMAGES_NAMESPACE} when the messages themselves go —
+ * a truncating edit, the per-chat message cap, or a delete.
+ *
+ * @param {Object[]} messages - Stored messages.
+ * @returns {string[]} Image ids, without duplicates.
+ */
+export function imageIdsOfMessages(messages) {
+  const ids = new Set();
+  for (const message of messages || []) {
+    for (const image of Array.isArray(message?.images) ? message.images : []) {
+      if (typeof image?.id === 'string' && image.id) ids.add(image.id);
+    }
+  }
+  return [...ids];
 }
 
 /**
@@ -1063,6 +1163,13 @@ export class ChatRepository {
       // dangling index entry.
       const removedMessages = await this.documents.delete(CHAT_MESSAGES_NAMESPACE, chatId);
       const removedChat = await this.documents.delete(CHATS_NAMESPACE, chatId);
+      // The images the transcript referenced, and any the transcript never got
+      // to reference. Last, for the same reason the transcript goes before the
+      // chat document: a payload whose index is gone is invisible data, and
+      // this sweep is driven by the key prefix, so it still finds them after a
+      // partial delete — a re-deleted chat sweeps whatever the first attempt
+      // left behind.
+      await this.deleteChatImages(chatId);
       // A delete is the other thing that changes a listing, and it does not go
       // through `_writeChat`.
       this._forgetOwnerChats(existing?.ownerId);
@@ -1085,6 +1192,189 @@ export class ChatRepository {
     // this is what `GET /api/chats/:chatId` ships, so it stays out of it.
     const { version, messages } = await this._readMessages(chatId);
     return { version, messages };
+  }
+
+  /**
+   * Store one generated image beside the transcript.
+   *
+   * Beside it, not in it: a transcript is a single document that every later
+   * turn of the chat reads, re-serializes and re-hashes under the chat's lock,
+   * and `GET /api/chats/:id` ships all of it back when the chat is opened. One
+   * generated image is a couple of megabytes of base64, so inlining it would
+   * make every subsequent turn of that chat pay for it forever. The message
+   * keeps a descriptor and the payload gets its own document, fetched only
+   * when a viewer actually looks at the image.
+   *
+   * No chat lock: an image document is written once, read many times and never
+   * modified, so there is nothing for two writers to lose. Taking the lock
+   * would only queue a multi-megabyte write in front of the turn that is
+   * trying to append the answer.
+   *
+   * @param {string} chatId - Chat the image belongs to.
+   * @param {Object} image
+   * @param {string} image.mimeType - Image mime type, e.g. `image/png`.
+   * @param {string} image.data - Base64 payload, without a data-URI prefix.
+   * @param {string} [image.runId] - Run that produced it, for forensics.
+   * @returns {Promise<{id: string, mimeType: string, bytes: number}|null>} The
+   *   descriptor to record on the message, or null when nothing was stored.
+   */
+  async putImage(chatId, { mimeType, data, runId } = {}) {
+    if (!this._usable(chatId, 'putImage')) return null;
+    if (typeof data !== 'string' || data.length === 0) return null;
+    const id = randomUUID().replace(/-/g, '');
+    const key = imageDocumentKey(chatId, id);
+    // `isValidId` caps a key at 100 characters. A uuid chat id leaves room to
+    // spare; an unusually long one does not, and a rejected key would throw
+    // out of the answer's write path for the sake of a picture.
+    if (!isValidId(key)) {
+      this.logger.warn('Chat image not stored: chat id leaves no room for an image key', {
+        component: COMPONENT,
+        chatId
+      });
+      return null;
+    }
+    const type = storableImageType(mimeType);
+    // What the payload weighs in storage — the base64 document — rather than
+    // what the decoded picture weighs. It is what the caps are measured in and
+    // what a reader needs to know before deciding to fetch, and it is *not*
+    // the response's `Content-Length`, which the route takes from the decoded
+    // bytes it actually sends.
+    const bytes = Buffer.byteLength(data, 'utf8');
+    await this.documents.put(CHAT_IMAGES_NAMESPACE, key, {
+      version: CHAT_MESSAGES_VERSION,
+      // The chat id is inside the document as well as in the key, so a read or
+      // a sweep can prove an image belongs to the chat asking for it rather
+      // than trusting a key prefix to be unambiguous.
+      chatId,
+      mimeType: type,
+      bytes,
+      data,
+      ...(typeof runId === 'string' && runId ? { runId } : {}),
+      createdAt: new Date().toISOString()
+    });
+    return { id, mimeType: type, bytes };
+  }
+
+  /**
+   * One stored image, payload included.
+   *
+   * @param {string} chatId - Chat the caller has already been authorized for.
+   * @param {string} imageId - Image id from a message descriptor.
+   * @returns {Promise<{id: string, mimeType: string, bytes: number, data: string}|null>}
+   *   The image, or null when there is none.
+   */
+  async getImage(chatId, imageId) {
+    if (!this._usable(chatId, 'getImage')) return null;
+    if (!isValidId(imageId)) return null;
+    const key = imageDocumentKey(chatId, imageId);
+    if (!isValidId(key)) return null;
+    const doc = await this.documents.get(CHAT_IMAGES_NAMESPACE, key);
+    const data = doc?.data;
+    if (!data || typeof data.data !== 'string') return null;
+    // The key already scopes the image to the chat; this is the second wall,
+    // and the one that does not depend on the separator being unambiguous.
+    if (data.chatId && data.chatId !== chatId) return null;
+    return {
+      id: imageId,
+      mimeType: storableImageType(data.mimeType),
+      bytes: Number.isFinite(data.bytes) ? data.bytes : Buffer.byteLength(data.data, 'utf8'),
+      data: data.data
+    };
+  }
+
+  /**
+   * Remove named images of a chat.
+   *
+   * Best effort: the messages that referenced them are already gone by the
+   * time this runs, so a failure here is a leftover to sweep rather than an
+   * outcome to report.
+   *
+   * @param {string} chatId - Chat id.
+   * @param {string[]} imageIds - Image ids to remove.
+   * @returns {Promise<number>} How many documents were removed.
+   */
+  async deleteImages(chatId, imageIds) {
+    if (!this._usable(chatId, 'deleteImages')) return 0;
+    let removed = 0;
+    for (const imageId of imageIds || []) {
+      if (!isValidId(imageId)) continue;
+      const key = imageDocumentKey(chatId, imageId);
+      if (!isValidId(key)) continue;
+      try {
+        if (await this.documents.delete(CHAT_IMAGES_NAMESPACE, key)) removed += 1;
+      } catch (error) {
+        this.logger.error('Failed to delete a chat image', {
+          component: COMPONENT,
+          chatId,
+          imageId,
+          error: error.message
+        });
+      }
+    }
+    return removed;
+  }
+
+  /**
+   * Remove every image of a chat.
+   *
+   * Driven by the key prefix rather than by the transcript: the transcript is
+   * deleted in the same cascade and an image whose descriptor never landed
+   * (the answer's write failed after the payload was stored) would otherwise
+   * have nothing left pointing at it, in a namespace nobody enumerates.
+   *
+   * @param {string} chatId - Chat id.
+   * @returns {Promise<number>} How many documents were removed.
+   */
+  async deleteChatImages(chatId) {
+    if (!this._usable(chatId, 'deleteChatImages')) return 0;
+    const prefix = imageKeyPrefix(chatId);
+    const keys = [];
+    try {
+      if (this.documents.supportsScan) {
+        for await (const doc of this.documents.scan(CHAT_IMAGES_NAMESPACE, {
+          prefix,
+          includeData: false
+        })) {
+          keys.push(doc.key);
+        }
+      } else {
+        let cursor = null;
+        do {
+          const page = await this.documents.list(CHAT_IMAGES_NAMESPACE, {
+            prefix,
+            includeData: false,
+            cursor
+          });
+          for (const doc of page.items || []) keys.push(doc.key);
+          cursor = page.nextCursor || null;
+        } while (cursor);
+      }
+    } catch (error) {
+      this.logger.error("Failed to enumerate a chat's images", {
+        component: COMPONENT,
+        chatId,
+        error: error.message
+      });
+      return 0;
+    }
+    let removed = 0;
+    for (const key of keys) {
+      // A chat id that itself contains the separator could make this prefix
+      // match another chat's keys. The suffix is an image id and never carries
+      // the separator, so anything with more than one is not ours.
+      if (key.slice(prefix.length).includes(IMAGE_KEY_SEPARATOR)) continue;
+      try {
+        if (await this.documents.delete(CHAT_IMAGES_NAMESPACE, key)) removed += 1;
+      } catch (error) {
+        this.logger.error('Failed to delete a chat image', {
+          component: COMPONENT,
+          chatId,
+          key,
+          error: error.message
+        });
+      }
+    }
+    return removed;
   }
 
   /**
@@ -1137,6 +1427,10 @@ export class ChatRepository {
 
       const { stored, etag: messagesEtag } = await this._loadMessages(chatId);
       let messages = stored.messages;
+      // Messages this write removes from the transcript. Their image payloads
+      // live in their own documents, which nothing else would ever reach
+      // again: a descriptor is the only path to one.
+      const discarded = [];
       if (replaceFromMessageId) {
         const index = messages.findIndex(entry => entry.id === replaceFromMessageId);
         if (index === -1) {
@@ -1144,6 +1438,7 @@ export class ChatRepository {
             code: 'UNKNOWN_MESSAGE'
           });
         }
+        discarded.push(...messages.slice(index));
         messages = messages.slice(0, index);
       }
 
@@ -1167,6 +1462,7 @@ export class ChatRepository {
       const cap = this._messageCap();
       if (cap > 0 && messages.length > cap) {
         const dropped = messages.length - cap;
+        discarded.push(...messages.slice(0, dropped));
         messages = messages.slice(dropped);
         this.logger.info('Trimmed the oldest messages of a chat at its cap', {
           component: COMPONENT,
@@ -1197,6 +1493,13 @@ export class ChatRepository {
         if (derived) patch.title = derived;
       }
       await this._writeChat(applyChatPatch(chat, patch), chatEtag);
+
+      // After the transcript is written, never before: an image that is gone
+      // while the descriptor is still stored renders as a broken picture in a
+      // chat nobody edited, while the reverse — a payload nothing points at —
+      // is swept when the chat is deleted.
+      const orphaned = imageIdsOfMessages(discarded);
+      if (orphaned.length > 0) await this.deleteImages(chatId, orphaned);
 
       return { message: entry, messages };
     });

@@ -47,6 +47,25 @@ export const DEFAULT_MAX_CHATS_PER_USER = 200;
 export const DEFAULT_MAX_MESSAGES_PER_CHAT = 2000;
 
 /**
+ * Largest single generated image a chat stores, in bytes of base64, when
+ * `platform.chats.maxImageBytes` says nothing.
+ *
+ * Images are the one thing a turn produces that is measured in megabytes
+ * rather than kilobytes, and an installation that switched durable chats on
+ * for the transcripts did not necessarily sign up for a picture gallery. Ten
+ * megabytes of base64 is roughly a 7.5 MB image — past anything the image
+ * models here return, so the cap only ever catches the pathological case.
+ */
+export const DEFAULT_MAX_IMAGE_BYTES = 10 * 1024 * 1024;
+
+/**
+ * Images one assistant message stores when `platform.chats.maxImagesPerMessage`
+ * says nothing. A turn that produced more than this asked for a contact sheet,
+ * not an answer.
+ */
+export const DEFAULT_MAX_IMAGES_PER_MESSAGE = 8;
+
+/**
  * Read a numeric setting, keeping zero and negative values — both are
  * meaningful ("disable this rule") and must survive as written.
  *
@@ -141,6 +160,40 @@ export function isChatPersistenceActive({
  */
 export function chatMessageCap() {
   return chatRetentionSettings(configCache.getPlatform?.()?.data || {}).maxMessagesPerChat;
+}
+
+/**
+ * How this installation stores the images a turn generates.
+ *
+ * `storeImages: false` turns the whole thing off — chats are still stored,
+ * their images are not, and an image is then exactly what it was before
+ * durable chats existed: visible for the session and gone on the way back.
+ * `maxImageBytes` and `maxImagesPerMessage` of zero or less remove their cap,
+ * matching the retention settings above.
+ *
+ * @param {Object} [platformConfig] - Platform configuration.
+ * @returns {{storeImages: boolean, maxImageBytes: number, maxImagesPerMessage: number}}
+ */
+export function chatImageSettings(platformConfig) {
+  const chats = platformConfig?.chats || {};
+  return {
+    storeImages: chats.storeImages !== false,
+    maxImageBytes: readNumber(chats.maxImageBytes, DEFAULT_MAX_IMAGE_BYTES),
+    maxImagesPerMessage: readNumber(chats.maxImagesPerMessage, DEFAULT_MAX_IMAGES_PER_MESSAGE)
+  };
+}
+
+/**
+ * The image policy in force right now, read from the live platform config.
+ *
+ * Resolved per turn rather than captured, for the same reason as
+ * {@link chatMessageCap}: an admin who switches image storage off should not
+ * have to restart the server for the next answer to honour it.
+ *
+ * @returns {{storeImages: boolean, maxImageBytes: number, maxImagesPerMessage: number}}
+ */
+export function chatImagePolicy() {
+  return chatImageSettings(configCache.getPlatform?.()?.data || {});
 }
 
 /**
