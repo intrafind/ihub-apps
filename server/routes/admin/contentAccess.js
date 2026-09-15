@@ -18,8 +18,8 @@ import {
   CONTENT_ACCESS_TYPES,
   ContentAccessError,
   applyContentAccessChanges,
+  canonicalContentAccessType,
   describeContentAccess,
-  isContentAccessType,
   resolveManageableGroups
 } from '../../utils/contentAccess.js';
 
@@ -66,11 +66,14 @@ function findContent(type, id) {
  * itself when something is wrong and returns null.
  */
 function resolveTarget(req, res) {
-  const { type, id } = req.params;
-  if (!isContentAccessType(type)) {
+  const { id } = req.params;
+  // The allowlist's own constant, never the URL's string, names the permission
+  // list from here on — see canonicalContentAccessType.
+  const type = canonicalContentAccessType(req.params.type);
+  if (type === undefined) {
     sendBadRequest(
       res,
-      `Unknown content type '${type}'. Expected one of: ${CONTENT_ACCESS_TYPES.join(', ')}`
+      `Unknown content type '${req.params.type}'. Expected one of: ${CONTENT_ACCESS_TYPES.join(', ')}`
     );
     return null;
   }

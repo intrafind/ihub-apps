@@ -205,6 +205,7 @@ describe('GET /api/admin/content-access/:type/:id', () => {
   it('rejects an unknown content type and an unknown id', async () => {
     const app = createTestApp(FULL_ADMIN);
     expect((await request(app).get('/api/admin/content-access/models/gpt')).status).toBe(400);
+    expect((await request(app).get('/api/admin/content-access/__proto__/chat')).status).toBe(400);
     expect((await request(app).get('/api/admin/content-access/apps/nope')).status).toBe(404);
   });
 

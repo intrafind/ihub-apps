@@ -315,6 +315,22 @@ describe('applyContentAccessChanges', () => {
     expect(status({ type: 'models', grant: ['sales'] })).toBe(400);
   });
 
+  it('never uses request input as a property name', () => {
+    const groups = fixture();
+    expect(() =>
+      applyContentAccessChanges({
+        groups,
+        type: '__proto__',
+        contentId: 'chat',
+        grant: ['sales'],
+        revoke: [],
+        manageableIds: ['sales']
+      })
+    ).toThrow(ContentAccessError);
+    expect(Object.prototype.polluted).toBeUndefined();
+    expect(groups.sales.permissions).toEqual({ apps: [] });
+  });
+
   it('treats a grant to a wildcard group as already satisfied', () => {
     const groups = fixture();
     const changes = applyContentAccessChanges({

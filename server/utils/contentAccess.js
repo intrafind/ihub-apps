@@ -47,12 +47,27 @@ export class ContentAccessError extends Error {
 }
 
 /**
+ * The allowlisted constant equal to `type`, or undefined.
+ *
+ * Callers use the returned element, not the string they were given, as the
+ * property name they read and write on `permissions`. The lists therefore
+ * only ever live under one of the five fixed keys above, and whatever a URL
+ * or request body said (`__proto__` included) never becomes a property name.
+ *
+ * @param {string} type
+ * @returns {string | undefined}
+ */
+export function canonicalContentAccessType(type) {
+  return CONTENT_ACCESS_TYPES.find(candidate => candidate === type);
+}
+
+/**
  * Whether `type` is one of the content permission lists.
  * @param {string} type
  * @returns {boolean}
  */
 export function isContentAccessType(type) {
-  return CONTENT_ACCESS_TYPES.includes(type);
+  return canonicalContentAccessType(type) !== undefined;
 }
 
 /**
@@ -177,13 +192,14 @@ export function resolveManageableGroups({
  *   wildcard: boolean, inheritedFrom: string[], effective: boolean}>}
  */
 export function describeContentAccess({ groups, type, contentId, groupIds }) {
+  const key = canonicalContentAccessType(type);
   return groupIds.map(groupId => {
     const group = groups[groupId];
-    const list = ownList(group, type);
+    const list = ownList(group, key);
     const granted = listGrants(list, contentId);
     const wildcard = listHasWildcard(list);
     const inheritedFrom = collectAncestorGroups(groups, groupId).filter(ancestorId => {
-      const ancestorList = ownList(groups[ancestorId], type);
+      const ancestorList = ownList(groups[ancestorId], key);
       return listHasWildcard(ancestorList) || listGrants(ancestorList, contentId);
     });
     return {
@@ -229,7 +245,8 @@ export function applyContentAccessChanges({
   revoke = [],
   manageableIds
 }) {
-  if (!isContentAccessType(type)) {
+  const key = canonicalContentAccessType(type);
+  if (key === undefined) {
     throw new ContentAccessError(400, `Unknown content type '${type}'`);
   }
   if (!Array.isArray(grant) || !Array.isArray(revoke)) {
@@ -258,10 +275,10 @@ export function applyContentAccessChanges({
         `You cannot change access for group '${groupId}': it is not one of your groups`
       );
     }
-    if (action === 'revoke' && listHasWildcard(ownList(groups[groupId], type))) {
+    if (action === 'revoke' && listHasWildcard(ownList(groups[groupId], key))) {
       throw new ContentAccessError(
         400,
-        `Group '${groupId}' can use all ${type} through a wildcard. To withdraw a single one, replace the wildcard with an explicit list in the group settings.`
+        `Group '${groupId}' can use all ${key} through a wildcard. To withdraw a single one, replace the wildcard with an explicit list in the group settings.`
       );
     }
   }
@@ -269,7 +286,7 @@ export function applyContentAccessChanges({
   const changed = [];
   for (const { groupId, action } of requested) {
     const group = groups[groupId];
-    const list = ownList(group, type);
+    const list = ownList(group, key);
     const hasIt = listGrants(list, contentId);
     if (action === 'grant' && (hasIt || listHasWildcard(list))) continue;
     if (action === 'revoke' && !hasIt) continue;
@@ -280,7 +297,7 @@ export function applyContentAccessChanges({
       action === 'grant'
         ? [...list, contentId]
         : list.filter(entry => typeof entry !== 'string' || entry.toLowerCase() !== target);
-    group.permissions = { ...(group.permissions || {}), [type]: after };
+    group.permissions = { ...(group.permissions || {}), [key]: after };
     changed.push({ groupId, action, before, after: group });
   }
 
