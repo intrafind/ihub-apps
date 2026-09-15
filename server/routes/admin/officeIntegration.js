@@ -6,6 +6,7 @@ import { buildPublicBaseUrl } from '../../utils/publicBaseUrl.js';
 import { createOAuthClient } from '../../utils/oauthClientManager.js';
 import logger from '../../utils/logger.js';
 import { sendInternalError, sendBadRequest } from '../../utils/responseHelpers.js';
+import { sanitizeOfficeStartPage, validateOfficeStartPage } from '../../utils/officeStartPage.js';
 
 /**
  * Merge updates into the platform configuration and publish them.
@@ -50,6 +51,8 @@ export default function registerAdminOfficeIntegrationRoutes(app) {
         de: 'KI-gestützter Assistent für Outlook'
       },
       starterPrompts: Array.isArray(officeConfig.starterPrompts) ? officeConfig.starterPrompts : [],
+      // Always complete, so the admin form has a value for every control.
+      startPage: sanitizeOfficeStartPage(officeConfig.startPage),
       useLocalOfficejs: officeConfig.useLocalOfficejs === true,
       manifestUrl: `${baseUrl}/api/integrations/office-addin/manifest.xml`,
       taskpaneUrl: `${baseUrl}/office/taskpane.html`
@@ -204,13 +207,22 @@ export default function registerAdminOfficeIntegrationRoutes(app) {
    *                 type: object
    *               description:
    *                 type: object
+   *               starterPrompts:
+   *                 type: array
+   *               useLocalOfficejs:
+   *                 type: boolean
+   *               startPage:
+   *                 type: object
+   *                 description: Which view the pane opens after sign-in (`defaultPage` — `start` or `apps`), the default chat app (`defaultAppId`) and the curated app shortcuts (`featuredAppIds`).
    *     responses:
    *       200:
    *         description: Config updated
+   *       400:
+   *         description: A field failed validation
    */
   app.put(buildServerPath('/api/admin/office-integration/config'), adminAuth, async (req, res) => {
     try {
-      const { displayName, description, starterPrompts, useLocalOfficejs } = req.body;
+      const { displayName, description, starterPrompts, useLocalOfficejs, startPage } = req.body;
       const platform = configCache.getPlatform();
 
       // Accept only `{ [lang: string]: string }` objects. Any non-string locale value
@@ -287,6 +299,13 @@ export default function registerAdminOfficeIntegrationRoutes(app) {
           return sendBadRequest(res, 'useLocalOfficejs must be a boolean');
         }
         allowed.useLocalOfficejs = useLocalOfficejs;
+      }
+      if (startPage !== undefined) {
+        // Replaces the whole block: the admin form always sends every field,
+        // and only the known ones are stored.
+        const result = validateOfficeStartPage(startPage);
+        if (result.error) return sendBadRequest(res, result.error);
+        allowed.startPage = result.value;
       }
 
       await savePlatformConfig({

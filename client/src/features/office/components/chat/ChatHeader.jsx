@@ -11,6 +11,7 @@ const ChatHeader = ({
   showCheckmark = true,
   onWriteClick,
   onBackClick,
+  backLabel = 'Back to app selection',
   menuItems = [],
   titleIcon,
   selectedApp,
@@ -37,7 +38,8 @@ const ChatHeader = ({
           <button
             type="button"
             onClick={onBackClick}
-            aria-label="Back to app selection"
+            aria-label={backLabel}
+            title={backLabel}
             className="rounded-full p-1 text-slate-600 hover:text-slate-900 hover:bg-slate-100 shrink-0 dark:text-slate-300 dark:hover:text-white dark:hover:bg-slate-800"
           >
             <ArrowLeftIcon className="h-4 w-4" aria-hidden />

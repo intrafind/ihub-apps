@@ -13,7 +13,7 @@ When the integration is enabled, iHub Apps exposes the following endpoints on yo
 | Endpoint | Purpose |
 |---|---|
 | `GET /api/integrations/office-addin/manifest.xml` | Office add-in manifest, generated dynamically with the deployment's URLs |
-| `GET /api/integrations/office-addin/config` | Runtime config (base URL, OAuth client ID, redirect URI, starter prompts) consumed by the task pane |
+| `GET /api/integrations/office-addin/config` | Runtime config (base URL, OAuth client ID, redirect URI, display name, starter prompts, start-page settings) consumed by the task pane |
 | `GET /office/taskpane.html` | Task-pane UI that loads inside Outlook |
 | `GET /office/commands.html` | Command surface used by Outlook ribbon buttons |
 | `GET /office/callback.html` | OAuth (PKCE) redirect target for sign-in |
@@ -69,15 +69,40 @@ After enabling, the page shows the OAuth client ID with a link to **View OAuth C
 
 ---
 
-## Step 3 — Customize display name, description, and starter prompts
+## Step 3 — Customize display name, description, starter prompts and the start page
 
 Still on the **Office Integration** admin page:
 
 - **Display Name** — appears as the add-in name in Outlook's ribbon and the M365 Admin Center listing. Localize for each language your users see (`en`, `de`, …). Required, max 250 chars per locale.
 - **Description** — short blurb shown alongside the name. Max 250 chars per locale.
 - **Starter Prompts** — up to 20 quick-action prompts displayed when the user opens the add-in on an email. Each has a **Title** (button label) and **Message** (the prompt sent on click, max 4000 chars). Prompts can be reordered with the up/down arrows. They are used as the default suggestions when the user-selected app does not declare its own starter prompts.
+- **Start Page** — what the pane shows after sign-in and which app answers there. See [The start page](#the-start-page) below.
 
 Click **Save**. Display Name and Description changes are picked up on the next manifest fetch — you do **not** need to redeploy the manifest unless the `<DisplayName>` text needs to change in M365 Admin Center listings (it is read at upload time).
+
+### The start page
+
+By default the task pane opens on a **start page** rather than the app list: a greeting, the chat input of a **default chat app** with the open email right above it (the same context strip the chat shows — **Add email(s)** collects further messages, attachments can be dropped, the body excluded), the app's starter prompts, and up to four **app shortcuts** followed by an **All apps** link. Typing a message or tapping a starter prompt opens the default app and sends the message right away, with the open email and every collected email as context — exactly as if it had been typed inside the app. Tapping a shortcut opens that app without a message; the back button in a chat returns to the start page.
+
+Three settings in the **Start Page** section control it. They are stored as `officeIntegration.startPage` in `platform.json` and are the add-in's own — the web app's start page is configured separately under **UI Customization → Start Page**.
+
+| Setting | Key | Description |
+|---|---|---|
+| **Landing view** | `defaultPage` | `start` (the start page, default) or `apps` (the app list — the pane's previous behaviour). Also decides where the back button in a chat leads. |
+| **Default chat app** | `defaultAppId` | The app whose chat input the start page shows. Only chat apps qualify. Unset (*First available app*) picks the top-ranked chat app the user can access: favorites first, then the default apps, then the app `order`. A configured app the user cannot access falls back the same way. |
+| **Default apps** | `featuredAppIds` | The shortcuts on the start page, in this order, right after each user's favorites. Apps the user cannot access are skipped, and the default chat app is not repeated as a shortcut. |
+
+```json
+"officeIntegration": {
+  "startPage": {
+    "defaultPage": "start",
+    "defaultAppId": "email-assistant",
+    "featuredAppIds": ["summarizer", "translator"]
+  }
+}
+```
+
+The start page is built for small panes: it scrolls as one column, drops the subtitle and the app descriptions below roughly 340 px of width and the starter prompts below roughly 480 px of height, and deliberately leaves the model selector, tools menu, uploads and voice input to the opened app. Existing installations receive `defaultPage: "start"` through configuration migration `V107`; pick **All apps** to restore the previous landing view.
 
 ---
 
@@ -136,7 +161,7 @@ Once Microsoft has propagated the deployment:
 2. Select an email. The add-in should appear in the message reading pane (look for your configured **Display Name** and icon).
 3. Click the add-in. The task pane opens and shows the **Sign in to iHub** screen.
 4. Click **Sign in**. A popup performs the PKCE OAuth flow against iHub and returns to `/office/callback.html`.
-5. After sign-in, the chat panel opens. Selecting different emails should reset the chat and load the new email's subject, body, and attachments as context.
+5. After sign-in, the start page opens (or the app list, if the **Landing view** is set to **All apps**). Type a message into the default app's input — the app opens and answers with the open email as context. Selecting different emails should reset the chat and load the new email's subject, body, and attachments as context.
 6. Send a starter prompt and confirm a streaming response appears.
 
 Watch the iHub server logs (`npm run logs`) during the first sign-in. The OAuth handshake and any token validation issues are logged with component `JwtAuth` or `OfficeAddinRoutes`.
@@ -161,7 +186,7 @@ Users open the task-pane menu (**☰**) → **Settings** to adjust two personal 
 | Change | Action required |
 |---|---|
 | Edit Display Name / Description in admin UI | None for users; Microsoft will refresh the manifest within ~24h. To force-refresh, re-link the manifest in M365 Admin Center. |
-| Edit starter prompts | None — prompts are fetched live by the task pane on every open. |
+| Edit starter prompts or start-page settings | None — both are fetched live by the task pane on every open. |
 | Change iHub deployment URL (e.g., move to a new domain) | The manifest auto-regenerates with the new host. In M365 Admin Center, **remove the old deployed add-in and re-upload from the new manifest URL** — Microsoft caches the URLs from the manifest at deploy time. |
 | Rotate the OAuth client | Click **Disable** then **Enable** on the Office Integration page. Existing user sessions need to sign in again. The manifest URL is unchanged. |
 | Upgrade iHub | No add-in action needed unless the manifest schema changes — release notes will call this out. |
@@ -235,6 +260,8 @@ Sideloading is per-user and ideal for QA, but does not survive mailbox moves and
   - [`server/routes/integrations/officeAddin.js`](../server/routes/integrations/officeAddin.js) — manifest + runtime config
   - [`server/routes/admin/officeIntegration.js`](../server/routes/admin/officeIntegration.js) — admin enable/disable/config
   - [`server/routes/office.js`](../server/routes/office.js) — task pane + asset serving
+  - [`server/utils/officeStartPage.js`](../server/utils/officeStartPage.js) — start-page settings: sanitized for the pane, validated for the admin API
+- **Task pane:** [`client/src/features/office/components/OfficeApp.jsx`](../client/src/features/office/components/OfficeApp.jsx) (routing — where "home" is), [`OfficeStartPage.jsx`](../client/src/features/office/components/OfficeStartPage.jsx) (the start page), [`OfficeChatPanel.jsx`](../client/src/features/office/components/OfficeChatPanel.jsx) (the chat, which sends a message handed over from the start page)
 - **Default config:** `officeIntegration` block in [`server/defaults/config/platform.json`](../server/defaults/config/platform.json)
-- **Migrations:** `V028__add_office_integration_config.js`, `V029__fix_empty_office_description.js`, `V030__add_office_integration_starter_prompts.js`
+- **Migrations:** `V028__add_office_integration_config.js`, `V029__fix_empty_office_description.js`, `V030__add_office_integration_starter_prompts.js`, `V107__add_office_start_page_config.js`
 - **Related docs:** [OAuth Authorization Code Flow](oauth-authorization-code.md), [Office 365 Integration](office365-integration.md), [Production Reverse Proxy Guide](production-reverse-proxy-guide.md), [SSL Certificates](ssl-certificates.md)

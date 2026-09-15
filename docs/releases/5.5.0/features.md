@@ -1808,6 +1808,7 @@ and are unchanged by this release.
 
 See [Artifacts](../../artifacts.md) and [Chat Persistence](../../chat-persistence.md).
 
+
 ## Outlook Add-in: Dark Mode
 
 The Outlook task pane can now be switched to a dark appearance. Users open **☰ → Settings →
@@ -1851,3 +1852,25 @@ Being in a parent group counts — someone in `users` also manages the groups th
   what the model may call in chat is still decided by the app.
 - No admin action is required. To let a content admin manage a group's access, make them a member
   of that group, or of a group it inherits from.
+
+## Outlook Add-in: Start Page with a Default App
+
+The Outlook task pane now opens on a start page instead of the app list: a greeting, the chat input
+of a default app with the open email right above it, the app's starter prompts, and a handful of
+app shortcuts. A user can collect a few emails with **Add email(s)**, type an instruction and send —
+the app opens and the message goes out immediately, with the open email and the collected emails as
+context, exactly as if it had been typed inside the app. Tapping a shortcut opens that app without
+a message; **All apps** leads to the full list.
+
+- Admins configure it under **Admin → Office Integration → Start Page**
+  (`platform.json → officeIntegration.startPage`): the **landing view** (start page or the app
+  list), the **default chat app** (unset picks the top-ranked chat app the user can access —
+  favorites first, then the default apps), and the **default apps** shown as shortcuts, in order,
+  right after each user's favorites. These settings are the add-in's own; the web start page keeps
+  its configuration under UI Customization.
+- The start page stays usable on very small panes: it scrolls as one column, hides the subtitle
+  and app descriptions on narrow panes and the starter prompts on short ones, and leaves the model
+  selector, tools menu and uploads to the opened app.
+- Existing installations receive `defaultPage: "start"` through configuration migration V107, so
+  the pane opens on the start page after the upgrade; switching the landing view back to **All
+  apps** restores the previous behaviour.
