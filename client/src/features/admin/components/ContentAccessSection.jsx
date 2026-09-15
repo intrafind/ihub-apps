@@ -118,7 +118,7 @@ function ContentAccessSection({ resourceType, resourceId, isNew = false, classNa
     applyChange(group.id, { revoke: [group.id] });
   };
 
-  const groups = Array.isArray(access?.groups) ? access.groups : [];
+  const groups = useMemo(() => (Array.isArray(access?.groups) ? access.groups : []), [access]);
 
   // Groups already granted (directly or via wildcard) are chips; the rest
   // are the pool the search box below picks from.
