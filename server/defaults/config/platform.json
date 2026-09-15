@@ -93,7 +93,7 @@
   },
   "requestConcurrency": 5,
   "llm": {
-    "connectTimeoutMs": 10000,
+    "connectTimeoutMs": 30000,
     "streamIdleTimeoutMs": 60000
   },
   "trustProxy": 1,

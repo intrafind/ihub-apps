@@ -1,5 +1,5 @@
 /**
- * Migration V103 — Seed the durable-chat artifact settings
+ * Migration V106 — Seed the durable-chat artifact settings
  *
  * An artifact is anything a chat turn produced that is content in its own
  * right. Today that is a generated image; the name is deliberately wider than
@@ -38,7 +38,7 @@
  * `maxMessagesPerChat` is not re-seeded here; V097 owns it.
  */
 
-export const version = '103';
+export const version = '106';
 export const description = 'Add durable-chat artifact storage defaults';
 
 export async function precondition(ctx) {

@@ -18,8 +18,9 @@ const env = cleanEnv(
     // attempt (see services/loop/LLMClient.js). Every provider call streams,
     // so that phase is reach rather than generation. 0 disables it.
     // Overridable per deployment via platform.json `llm` and per model via
-    // the model config's `connectTimeoutMs`.
-    LLM_CONNECT_TIMEOUT_MS: num({ default: 10000 }),
+    // the model config's `connectTimeoutMs` — image models set 60000 there,
+    // because they withhold their headers until the render is ready.
+    LLM_CONNECT_TIMEOUT_MS: num({ default: 30000 }),
     // Ceiling for the gap between two chunks of a stream that has already
     // produced one. 0 disables it.
     LLM_STREAM_IDLE_TIMEOUT_MS: num({ default: 60000 }),

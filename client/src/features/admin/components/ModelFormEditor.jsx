@@ -661,6 +661,58 @@ function ModelFormEditor({
                   )}
                 </div>
 
+                <div className="col-span-6 sm:col-span-2">
+                  <label
+                    htmlFor="connectTimeoutMs"
+                    className="block text-sm font-medium text-gray-700 dark:text-gray-300"
+                  >
+                    {t('admin.models.fields.connectTimeoutMs', 'Connect Timeout (ms)')}
+                  </label>
+                  <input
+                    type="number"
+                    name="connectTimeoutMs"
+                    id="connectTimeoutMs"
+                    value={data.connectTimeoutMs ?? ''}
+                    onChange={handleInputChange}
+                    min="0"
+                    max="300000"
+                    className={`mt-1 focus:ring-indigo-500 focus:border-indigo-500 block w-full shadow-xs sm:text-sm border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100 rounded-md ${
+                      errors.connectTimeoutMs ? 'border-red-300 text-red-900' : ''
+                    }`}
+                  />
+                  {errors.connectTimeoutMs && (
+                    <p className="mt-2 text-sm text-red-600 dark:text-red-400">
+                      {errors.connectTimeoutMs}
+                    </p>
+                  )}
+                </div>
+
+                <div className="col-span-6 sm:col-span-2">
+                  <label
+                    htmlFor="streamIdleTimeoutMs"
+                    className="block text-sm font-medium text-gray-700 dark:text-gray-300"
+                  >
+                    {t('admin.models.fields.streamIdleTimeoutMs', 'Stream Idle Timeout (ms)')}
+                  </label>
+                  <input
+                    type="number"
+                    name="streamIdleTimeoutMs"
+                    id="streamIdleTimeoutMs"
+                    value={data.streamIdleTimeoutMs ?? ''}
+                    onChange={handleInputChange}
+                    min="0"
+                    max="300000"
+                    className={`mt-1 focus:ring-indigo-500 focus:border-indigo-500 block w-full shadow-xs sm:text-sm border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100 rounded-md ${
+                      errors.streamIdleTimeoutMs ? 'border-red-300 text-red-900' : ''
+                    }`}
+                  />
+                  {errors.streamIdleTimeoutMs && (
+                    <p className="mt-2 text-sm text-red-600 dark:text-red-400">
+                      {errors.streamIdleTimeoutMs}
+                    </p>
+                  )}
+                </div>
+
                 <div className="col-span-6">
                   <fieldset>
                     <legend className="text-base font-medium text-gray-900 dark:text-gray-100">
@@ -1014,30 +1066,39 @@ function ModelFormEditor({
                             <option value="4:5">4:5</option>
                             <option value="3:2">3:2</option>
                             <option value="2:3">2:3</option>
+                            <option value="3:4">3:4</option>
+                            <option value="4:3">4:3</option>
+                            <option value="21:9">21:9 (Ultrawide)</option>
                           </select>
                         </div>
 
                         <div className="col-span-6 sm:col-span-3">
                           <label
-                            htmlFor="imageGeneration.imageSize"
+                            htmlFor="imageGeneration.quality"
                             className="block text-sm font-medium text-gray-700 dark:text-gray-300"
                           >
-                            {t('admin.models.fields.imageSize', 'Image Size')}
+                            {t('admin.models.fields.imageQuality', 'Image Quality')}
                           </label>
                           <select
-                            id="imageGeneration.imageSize"
-                            value={data.imageGeneration?.imageSize || '1K'}
+                            id="imageGeneration.quality"
+                            value={data.imageGeneration?.quality || 'Medium'}
                             onChange={e =>
                               handleChange('imageGeneration', {
                                 ...(data.imageGeneration || {}),
-                                imageSize: e.target.value
+                                quality: e.target.value
                               })
                             }
                             className="mt-1 block w-full py-2 px-3 border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100 rounded-md shadow-xs focus:outline-hidden focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm"
                           >
-                            <option value="1K">1K (1024px)</option>
-                            <option value="2K">2K (2048px)</option>
-                            <option value="4K">4K (4096px)</option>
+                            <option value="Low">
+                              {t('admin.models.imageQuality.low', 'Low (1K)')}
+                            </option>
+                            <option value="Medium">
+                              {t('admin.models.imageQuality.medium', 'Medium (2K)')}
+                            </option>
+                            <option value="High">
+                              {t('admin.models.imageQuality.high', 'High (4K)')}
+                            </option>
                           </select>
                         </div>
 

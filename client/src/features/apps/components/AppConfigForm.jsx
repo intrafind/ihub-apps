@@ -11,7 +11,7 @@ function AppConfigForm({
   sendChatHistory,
   temperature,
   thinkingEnabled,
-  thinkingBudget,
+  thinkingLevel,
   thinkingThoughts,
   imageAspectRatio: _imageAspectRatio,
   imageQuality: _imageQuality,
@@ -21,7 +21,7 @@ function AppConfigForm({
   onSendChatHistoryChange,
   onTemperatureChange,
   onThinkingEnabledChange,
-  onThinkingBudgetChange,
+  onThinkingLevelChange,
   onThinkingThoughtsChange,
   onImageAspectRatioChange: _onImageAspectRatioChange,
   onImageQualityChange: _onImageQualityChange,
@@ -207,29 +207,37 @@ function AppConfigForm({
             </label>
           </div>
 
-          {/* Thinking Budget */}
+          {/* Reasoning effort */}
           {(thinkingEnabled ?? app?.thinking?.enabled ?? true) && (
             <>
               <div>
-                <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
-                  {t('appConfig.thinkingBudget', 'Thinking Budget')}
+                <label
+                  htmlFor="thinkingLevel"
+                  className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1"
+                >
+                  {t('appConfig.thinkingLevel', 'Reasoning Effort')}
                 </label>
-                <input
-                  type="number"
-                  min="0"
-                  max="32768"
-                  step="1024"
+                <select
+                  id="thinkingLevel"
                   value={
-                    thinkingBudget ??
-                    app?.thinking?.budget ??
-                    selectedModelData?.thinking?.budget ??
-                    8192
+                    thinkingLevel ??
+                    app?.thinking?.level ??
+                    selectedModelData?.thinking?.level ??
+                    'medium'
                   }
-                  onChange={e => onThinkingBudgetChange?.(parseInt(e.target.value))}
+                  onChange={e => onThinkingLevelChange?.(e.target.value)}
                   className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100 rounded-md text-sm focus:outline-hidden focus:ring-1 focus:ring-indigo-500"
-                />
+                >
+                  <option value="minimal">{t('appConfig.thinkingLevelMinimal', 'Minimal')}</option>
+                  <option value="low">{t('appConfig.thinkingLevelLow', 'Low')}</option>
+                  <option value="medium">{t('appConfig.thinkingLevelMedium', 'Medium')}</option>
+                  <option value="high">{t('appConfig.thinkingLevelHigh', 'High')}</option>
+                </select>
                 <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">
-                  {t('appConfig.thinkingBudgetHelp', 'Maximum tokens for thinking (0 = unlimited)')}
+                  {t(
+                    'appConfig.thinkingLevelHelp',
+                    'How much the model reasons before answering. More effort is slower and costs more tokens.'
+                  )}
                 </p>
               </div>
 

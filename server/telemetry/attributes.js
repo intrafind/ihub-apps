@@ -265,8 +265,8 @@ export function buildCustomAttributes(context = {}) {
     attributes['thinking.enabled'] = context.thinkingEnabled;
   }
 
-  if (context.thinkingBudget !== undefined) {
-    attributes['thinking.budget'] = parseInt(context.thinkingBudget, 10);
+  if (context.thinkingLevel !== undefined) {
+    attributes['thinking.level'] = String(context.thinkingLevel);
   }
 
   // Tool usage

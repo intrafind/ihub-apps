@@ -816,15 +816,19 @@ handler.execute({
 
 ## LLM Provider Problems
 
-### "Sent no response headers within 10000 ms — endpoint unreachable"
+### "Sent no response headers within N ms — endpoint unreachable"
 
 **Symptoms:**
 
 - A call fails with `{"error":"Provider google sent no response headers within
-  10000 ms — endpoint unreachable","code":"TIMEOUT"}` (HTTP 504), for any
+  30000 ms — endpoint unreachable","code":"TIMEOUT"}` (HTTP 504), for any
   provider, while the same model answers fine from `curl`.
+- In chat, the same failure reads *"The google endpoint for model X could not be
+  reached: it did not answer the connection attempt."*
 - It hits longer jobs — a summary, a translation pass, a batch of them — and
   short chats through the web UI are unaffected.
+- Or it hits **one image model, every single time**, while every text model on
+  the same provider and API key is fine.
 
 **Cause:**
 
@@ -846,6 +850,15 @@ reach if the request streams, and two things broke that — both fixed:
   five requests in flight for one model, the ones still queued were timed as
   if they had been sent and ignored. The ceiling is now armed inside the slot.
 
+**The image-model case is different.** If the failure is confined to an image
+model, the ceiling is not misfiring — it is measuring the render. Google's
+image models (`gemini-3-pro-image`, the Nano Banana family) send nothing at all
+until the image is ready, headers included, so time-to-first-byte *is*
+generation time there however the request is sent. A 4K render at
+`thinkingLevel: high` needs well over the installation default. Those models
+ship with `connectTimeoutMs: 60000` of their own, and migration `V103` adds it
+to existing ones; raise it further for large renders on a slow link.
+
 **Solutions:**
 
 1. Upgrade to a build that carries both fixes. On an older build, setting
@@ -857,12 +870,15 @@ reach if the request streams, and two things broke that — both fixed:
    ceiling per installation or for the one model:
 
 ```json
-// contents/config/platform.json
-{ "llm": { "connectTimeoutMs": 30000 } }
+// contents/config/platform.json — the installation default (30000 as shipped)
+{ "llm": { "connectTimeoutMs": 45000 } }
 
-// contents/models/gemini-2.5-flash.json
-{ "connectTimeoutMs": 30000 }
+// contents/models/gemini-3-pro-image.json — just this model
+{ "connectTimeoutMs": 60000 }
 ```
+
+Both are editable in Admin → Models (Connect Timeout) and Admin → Platform
+Configuration, so neither needs a hand-edited file.
 
 Raise `platform.requestConcurrency` (or the model's own `concurrency`) if
 batches are queueing longer than you expect.

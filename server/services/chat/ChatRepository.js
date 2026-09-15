@@ -303,7 +303,7 @@ const CHAT_SETTING_TYPES = Object.freeze({
   temperature: 'number',
   sendChatHistory: 'boolean',
   thinkingEnabled: 'boolean',
-  thinkingBudget: 'number',
+  thinkingLevel: 'string',
   thinkingThoughts: 'boolean',
   enabledTools: 'stringArray',
   websearchEnabled: 'boolean',

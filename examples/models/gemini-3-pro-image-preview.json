@@ -18,12 +18,12 @@
   "supportsImageGeneration": true,
   "imageGeneration": {
     "aspectRatio": "1:1",
-    "imageSize": "1K",
+    "quality": "Low",
     "maxReferenceImages": 14
   },
   "thinking": {
     "enabled": true,
-    "budget": -1,
+    "level": "high",
     "thoughts": true
   },
   "enabled": true,

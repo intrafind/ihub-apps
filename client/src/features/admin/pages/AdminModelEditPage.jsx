@@ -143,6 +143,12 @@ function AdminModelEditPage() {
       if (model.requestDelayMs !== undefined) {
         formDataObj.requestDelayMs = model.requestDelayMs;
       }
+      if (model.connectTimeoutMs !== undefined) {
+        formDataObj.connectTimeoutMs = model.connectTimeoutMs;
+      }
+      if (model.streamIdleTimeoutMs !== undefined) {
+        formDataObj.streamIdleTimeoutMs = model.streamIdleTimeoutMs;
+      }
 
       // Handle API key display - show placeholder if key is set
       if (model.apiKeySet) {
@@ -204,6 +210,19 @@ function AdminModelEditPage() {
     await handleSave(formData);
   };
 
+  /**
+   * A number field that accepts 0. `''`/null/undefined mean "not set" and drop
+   * out of the payload; anything unparseable is left out rather than sent as
+   * NaN, which the Zod schema would reject with an unhelpful message.
+   * @param {string|number|null|undefined} value
+   * @returns {number|undefined}
+   */
+  const toOptionalInt = value => {
+    if (value === '' || value === null || value === undefined) return undefined;
+    const parsed = parseInt(value, 10);
+    return Number.isFinite(parsed) ? parsed : undefined;
+  };
+
   const handleSave = async data => {
     try {
       setSaving(true);
@@ -215,7 +234,11 @@ function AdminModelEditPage() {
         contextWindow: data.contextWindow ? parseInt(data.contextWindow) : undefined,
         maxOutputTokens: data.maxOutputTokens ? parseInt(data.maxOutputTokens) : undefined,
         concurrency: data.concurrency ? parseInt(data.concurrency) : undefined,
-        requestDelayMs: data.requestDelayMs ? parseInt(data.requestDelayMs) : undefined
+        requestDelayMs: data.requestDelayMs ? parseInt(data.requestDelayMs) : undefined,
+        // `0` is a meaningful value on both ceilings — it disables them — so
+        // these are emptiness-checked rather than truthiness-checked.
+        connectTimeoutMs: toOptionalInt(data.connectTimeoutMs),
+        streamIdleTimeoutMs: toOptionalInt(data.streamIdleTimeoutMs)
       };
 
       // Handle API key:
