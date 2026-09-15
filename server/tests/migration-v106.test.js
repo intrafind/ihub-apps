@@ -1,20 +1,20 @@
 #!/usr/bin/env node
 
 /**
- * Migration V106 specs — seeding the durable-chat artifact settings.
+ * Migration V106 specs — seeding the artifact store's settings.
  *
  * The seeded values are the built-in defaults, so the upgrade changes nothing
- * on its own: an installation with durable chats off stores no chats and
- * therefore no artifacts either. What matters is that an operator who already
- * decided one of these — switched artifact storage off, or lowered the size
- * cap — keeps their value, and that a zero is preserved rather than read as
- * "unset" and overwritten with the default, because zero is how a cap is
- * removed.
+ * on its own. What matters is that the block lands beside `chats` rather than
+ * inside it — artifacts are produced by workflows and agents too, and a
+ * setting buried under chats would be the wrong place for all of them to read
+ * — that an operator who already decided one of these keeps their value, and
+ * that a zero survives rather than being read as "unset" and overwritten,
+ * because zero is how a cap is removed.
  */
 
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { up, precondition, version } from '../migrations/V106__add_chat_artifact_storage.js';
+import { up, precondition, version } from '../migrations/V106__add_artifact_storage.js';
 import { setDefault } from '../migrations/utils.js';
 
 function fakeCtx(files) {
@@ -42,7 +42,7 @@ test('precondition is false when platform.json does not exist', async () => {
   assert.equal(await precondition(fakeCtx({ 'config/platform.json': {} })), true);
 });
 
-test('an install that already has the chats block gains the artifact settings', async () => {
+test('a plain install gets the artifact defaults, beside chats rather than inside it', async () => {
   const ctx = fakeCtx({
     'config/platform.json': {
       chats: { enabled: true, retentionDays: 90, maxChatsPerUser: 200, maxMessagesPerChat: 2000 }
@@ -51,39 +51,43 @@ test('an install that already has the chats block gains the artifact settings', 
 
   await up(ctx);
 
-  const { chats } = ctx.files['config/platform.json'];
-  assert.equal(chats.storeArtifacts, true);
-  assert.equal(chats.maxArtifactBytes, 10485760);
-  assert.equal(chats.maxArtifactsPerMessage, 8);
-  assert.equal(chats.retentionDays, 90, 'the settings V097 seeded are untouched');
-  assert.equal(chats.maxMessagesPerChat, 2000);
+  const platform = ctx.files['config/platform.json'];
+  assert.deepEqual(platform.artifacts, {
+    enabled: true,
+    maxBytes: 10485760,
+    maxPerBatch: 8
+  });
+  // A workflow or an agent reading its artifact limits must not have to reach
+  // into the chat settings to find them.
+  assert.equal(platform.chats.storeArtifacts, undefined);
+  assert.equal(platform.chats.retentionDays, 90, 'the settings V097 seeded are untouched');
+  assert.equal(platform.chats.maxMessagesPerChat, 2000);
 });
 
-test('an install without a chats block gets one carrying only these keys', async () => {
-  // V097 owns `enabled`, `retentionDays` and the two caps; re-seeding them
-  // here would mean two migrations claiming the same defaults.
+test('an install with no chats block at all still gets the artifact block', async () => {
   const ctx = fakeCtx({ 'config/platform.json': { defaultLanguage: 'en' } });
 
   await up(ctx);
 
-  assert.deepEqual(ctx.files['config/platform.json'].chats, {
-    storeArtifacts: true,
-    maxArtifactBytes: 10485760,
-    maxArtifactsPerMessage: 8
+  assert.deepEqual(ctx.files['config/platform.json'].artifacts, {
+    enabled: true,
+    maxBytes: 10485760,
+    maxPerBatch: 8
   });
+  assert.equal(ctx.files['config/platform.json'].chats, undefined, 'V097 owns the chats block');
 });
 
 test('an operator who already decided keeps their values, zero included', async () => {
   const ctx = fakeCtx({
     'config/platform.json': {
-      chats: { storeArtifacts: false, maxArtifactBytes: 0, maxArtifactsPerMessage: 2 }
+      artifacts: { enabled: false, maxBytes: 0, maxPerBatch: 2 }
     }
   });
 
   await up(ctx);
 
-  const { chats } = ctx.files['config/platform.json'];
-  assert.equal(chats.storeArtifacts, false, 'a deliberate opt-out is not undone');
-  assert.equal(chats.maxArtifactBytes, 0, 'zero removes the cap and must survive');
-  assert.equal(chats.maxArtifactsPerMessage, 2);
+  const { artifacts } = ctx.files['config/platform.json'];
+  assert.equal(artifacts.enabled, false, 'a deliberate opt-out is not undone');
+  assert.equal(artifacts.maxBytes, 0, 'zero removes the cap and must survive');
+  assert.equal(artifacts.maxPerBatch, 2);
 });

@@ -3,7 +3,8 @@
  *
  *   GET    /api/chats            ?limit&cursor   the caller's chats, newest activity first
  *   GET    /api/chats/:chatId                    chat metadata + stored transcript
- *   GET    /api/chats/:chatId/artifacts/:artifactId  one thing a turn of that chat produced
+ *   GET    /api/chats/:chatId/artifacts             what this chat's turns produced
+ *   GET    /api/chats/:chatId/artifacts/:artifactId  the bytes of one of them
  *   PATCH  /api/chats/:chatId    { title }       rename a chat
  *   DELETE /api/chats/:chatId                    erase a chat, its transcript and its runs
  *
@@ -42,6 +43,7 @@ import runLog from '../services/loop/RunLog.js';
 import { resolvePrincipal } from '../services/loop/runIdentity.js';
 import { authorizeChat } from '../services/chat/chatAccess.js';
 import { getChatRepository, MAX_TITLE_LENGTH } from '../services/chat/ChatRepository.js';
+import { getArtifactRepository } from '../services/artifacts/ArtifactRepository.js';
 import { isChatPersistenceConfigured } from '../services/chat/chatPersistence.js';
 import { StorageError, storageHttpStatus } from '../storage/errors.js';
 import { abortChatRequest } from '../sse.js';
@@ -226,6 +228,25 @@ export default function registerChatRoutes(app) {
     }
   });
 
+  app.get(buildServerPath('/api/chats/:chatId/artifacts'), authenticatedOnly, async (req, res) => {
+    try {
+      const { chatId } = req.params;
+      if (!validateIdForPath(chatId, 'chat', res)) return;
+      const repository = requireRepository(res);
+      if (!repository) return;
+      const access = await loadOwnedChat(chatId, req.user, repository, 'read');
+      if (!access) return sendNotFound(res, 'Chat');
+      // Descriptors, never payloads: this is the index of what the
+      // conversation produced, and the bytes are a separate request per entry.
+      // The listing walks the artifact keys rather than the transcript, so it
+      // also sees one whose descriptor never landed on a message.
+      const items = await getArtifactRepository().list(repository.artifactScope(chatId));
+      res.json({ items });
+    } catch (error) {
+      sendChatStorageError(res, error, 'list chat artifacts');
+    }
+  });
+
   app.get(
     buildServerPath('/api/chats/:chatId/artifacts/:artifactId'),
     authenticatedOnly,
@@ -241,7 +262,10 @@ export default function registerChatRoutes(app) {
         // server-side and is never a capability on its own.
         const access = await loadOwnedChat(chatId, req.user, repository, 'read');
         if (!access) return sendNotFound(res, 'Chat');
-        const artifact = await repository.getArtifact(chatId, artifactId);
+        const artifact = await getArtifactRepository().get(
+          repository.artifactScope(chatId),
+          artifactId
+        );
         if (!artifact) return sendNotFound(res, 'Artifact');
         const body = Buffer.from(artifact.data, 'base64');
         // An artifact document is written once and never modified, and its id

@@ -64,13 +64,11 @@ client. There is no half-persisted state.
 | `enabled`             | `true`     | Second switch under the feature flag; `false` stops the write path entirely   |
 | `retentionDays`       | `90`       | Chats whose last message is older than this are deleted by the daily sweep    |
 | `maxChatsPerUser`     | `200`      | Chats kept per owner; the oldest beyond the cap are deleted by the same sweep |
-| `storeArtifacts`         | `true`     | Whether what a turn produced is stored with the chat                       |
-| `maxArtifactBytes`       | `10485760` | Largest single artifact stored, in bytes of base64                         |
-| `maxArtifactsPerMessage` | `8`        | Artifacts one answer stores                                                |
 
 Both retention rules are switched **off** by a value of zero or less — see
-[Retention](#retention) — and so are the two artifact caps; see
-[Artifacts](#artifacts-what-a-turn-produced).
+[Retention](#retention). What a turn *produced* is stored separately and
+configured separately, under `platform.artifacts` — see
+[Artifacts](artifacts.md).
 
 3. **Make sure storage is configured.** Durable chats are the first consumer of
    the storage abstraction. The default filesystem provider needs no
@@ -378,8 +376,7 @@ Two identity traps worth knowing before you switch a live installation on:
 ## Data model
 
 Two documents per chat, both carrying the owner id so the store's per-owner
-index can answer "list my chats" without scanning, plus one document per
-artifact a turn produced:
+index can answer "list my chats" without scanning:
 
 ```js
 // chats/<chatId>
@@ -404,19 +401,12 @@ artifact a turn produced:
       clientMessageId?, usage?, finishReason?, error?, attachments?, artifacts? }
   ]
 }
-
-// chat-artifacts/<chatId>__<artifactId>
-{
-  version: 1,
-  chatId, kind, mimeType, bytes, name?, runId?, createdAt,
-  data                  // base64, the only place a payload is ever written
-}
 ```
 
-On the filesystem provider that is `contents/data/chats/<chatId>.json`,
-`contents/data/chat-messages/<chatId>.json` and
-`contents/data/chat-artifacts/<chatId>__<artifactId>.json`, with the owner
-index beside them.
+On the filesystem provider that is `contents/data/chats/<chatId>.json` and
+`contents/data/chat-messages/<chatId>.json`, with the owner index beside them.
+What a turn produced lives in its own store under the scope
+`{ type: 'chat', id: chatId }` — see [Artifacts](artifacts.md).
 
 They are split because the chat list reads N metadata documents and zero
 transcripts. Folding the messages in would make "show my chats" read every
@@ -443,8 +433,7 @@ Details that matter:
   of an upload stays in the request; it is never written into a document that is
   read back for as long as the chat lives.
 - **So is what a turn produced** — `{ id, kind, mimeType, bytes }`, with the
-  payload in its own `chat-artifacts` document. See
-  [Artifacts](#artifacts-what-a-turn-produced).
+  payload in the shared artifact store. See [Artifacts](artifacts.md).
 - **Failures are recorded.** An aborted turn stores its (possibly empty) answer
   with `error: { code: 'ABORTED', … }`, an errored turn with its error code, so a
   truncated answer never reads as a complete one. A turn that paused for a
@@ -471,6 +460,7 @@ with the other public API prefixes (500 requests/minute/IP by default).
 | ------------------------ | -------------------------------------------------------------------------- |
 | `GET /api/chats`         | The caller's chats, most recent activity first. `?limit` (default 30, max 100) and `?cursor` |
 | `GET /api/chats/:chatId` | `{ chat, messages, version }` — the transcript, and clears `hasUnseenActivity` |
+| `GET /api/chats/:chatId/artifacts` | What this chat's turns produced, newest first, as descriptors |
 | `GET /api/chats/:chatId/artifacts/:artifactId` | The bytes of one artifact, as its own media type |
 | `PATCH /api/chats/:chatId` | `{ title }` — rename; capped at 200 characters and marked as user-set     |
 | `DELETE /api/chats/:chatId` | Erase the chat, its transcript and its runs                             |
@@ -491,86 +481,49 @@ answers `503` with `details.code = "CHAT_PERSISTENCE_UNAVAILABLE"` rather than
 404, so a client can tell "not configured" from "not found" and fall back to the
 ephemeral experience.
 
-## Artifacts: what a turn produced
+## What a turn produced
 
-An **artifact** is anything a turn produced that is content in its own right.
-Today that is a generated image; the name is deliberately wider, because the
-same store is where a document, a chart or a file a tool wrote belongs, and
-because "everything this conversation produced" is a question about the chat
-rather than about any one message.
+A picture the model drew used to survive nothing: the client stripped the
+payload before writing the transcript to `sessionStorage` — an image is
+megabytes and the quota is a few — so navigating away left the answer with an
+empty space where the image had been. A stored chat keeps them.
 
-Before durable chats, a generated image did not survive anything: the client
-stripped the payload before writing the transcript to `sessionStorage` — a
-picture is megabytes and the quota is a few — so navigating away left the
-answer with an empty space where the image had been. A stored chat keeps them.
-
-**The payload never goes in the transcript.** A transcript is a single document
-that every later turn of the chat reads, re-serializes and re-hashes under the
-chat's lock, and `GET /api/chats/:chatId` ships all of it back when the chat is
-opened. One artifact inlined there would be paid for on every turn of that chat
-for as long as it exists. So each artifact is written to its own document,
-keyed `<chatId>__<artifactId>`, and the message keeps a descriptor:
+It is not stored here. Anything a turn produces that is content in its own
+right goes to the shared **[artifact store](artifacts.md)** under the scope
+`{ type: 'chat', id: chatId }` — the same store a workflow's report or an
+agent's output belongs in — and the message keeps only a descriptor:
 
 ```js
 { id: '7f3c…', kind: 'image', mimeType: 'image/png', bytes: 1483204 }
 ```
 
-The client fetches the bytes per artifact from
-`GET /api/chats/:chatId/artifacts/:artifactId` when the message is rendered,
-through the API client rather than as a plain `<img src>`: the URL is
-credentialed, and a bearer token in `localStorage` only travels on a request
-the client makes itself. The response is
-`private, max-age=31536000, immutable` — an artifact document is written once,
-never modified, and keyed by a fresh uuid, so the bytes behind one URL cannot
-change.
+That is what keeps opening a chat fast: the transcript a later turn re-reads
+and re-hashes carries descriptors, not megabytes, and the bytes are fetched per
+artifact when the message is rendered.
 
-**Keyed by chat, so a chat's artifacts can be listed.** Every artifact of one
-conversation shares a key prefix, which is what lets
-`ChatRepository.listArtifacts(chatId)` answer "what did this chat produce"
-without reading the transcript and without loading a payload per entry — the
-walk passes `includeData: false`. That listing is also how the delete sweep
-finds an artifact whose descriptor never landed.
+What this chat is responsible for:
 
-**An artifact is authorized through its chat.** The route runs the same
-`authorizeChat` as the transcript and answers 404 for a chat that is not the
-caller's, so an artifact id is never a capability on its own. The media type is
-allowlisted per kind — for `image`: `png`, `jpeg`, `webp`, `gif`, `avif`,
-`bmp`, `heic`, `heif` — and anything else is stored and served as
-`application/octet-stream` with `X-Content-Type-Options: nosniff`. The type
-comes from a model response and ends up in a `Content-Type` on a same-origin
-URL, and SVG is a document that runs script, not a picture.
+- **Recording the descriptors.** `chatMaterializer.storeGeneratedArtifacts`
+  turns the loop's `summary.images` into artifacts of kind `image` and puts the
+  descriptors on the assistant message. One the policy refuses is still
+  described, as `{ kind, mimeType, bytes, unavailable }`, and the chat shows a
+  note in its place — dropping it silently would leave the viewer who watched
+  three pictures appear and came back to two unable to tell a discarded
+  artifact from one the model never produced.
+- **Saying when they go.** They are emptied with the chat, and dropped when the
+  messages naming them leave the transcript — an edit that rewrites history
+  from a message, or `maxMessagesPerChat` pushing one out.
+- **Authorizing them.** `GET /api/chats/:chatId/artifacts[/:artifactId]` runs
+  the same `authorizeChat` as the transcript, so an artifact id is never a
+  capability on its own.
 
-Three settings in `platform.json → chats`, read fresh per turn:
-
-| Key                      | Default    | Meaning                                                     |
-| ------------------------ | ---------- | ----------------------------------------------------------- |
-| `storeArtifacts`         | `true`     | `false` keeps transcripts and drops what the turns produced  |
-| `maxArtifactBytes`       | `10485760` | Largest single artifact, in bytes of base64; `<= 0` uncapped |
-| `maxArtifactsPerMessage` | `8`        | Artifacts one answer stores; `<= 0` uncapped                 |
-
-An artifact a cap turns away is still described on the message, as
-`{ kind, mimeType, bytes, unavailable: 'too-large' | 'too-many' | 'not-stored' }`,
-and the chat shows a note in its place. Dropping it silently would leave the
-viewer who watched three pictures appear and came back to two unable to tell a
-discarded artifact from one the model never produced.
-
-**Lifetime is the message's.** Artifacts go when the chat is deleted — the
-sweep is driven by the key prefix, so a payload whose descriptor never landed
-(the answer's write failed after the artifact was stored) is collected too —
-and when the messages naming them leave the transcript, either through an edit
-that rewrites history from a message or through `maxMessagesPerChat`.
+Caps, kinds, media types and the master switch are the store's, not the chat's:
+see [Artifacts](artifacts.md).
 
 Where a chat is not stored at all — an anonymous visitor, an incognito turn,
 the compare panels, the canvas — nothing changes: a generated image is visible
 for the session, the note under it still tells the user to download it, and it
 is gone on the way back.
-
-### Adding a kind
-
-Two places know what an artifact *is*: `ARTIFACT_KIND_TYPES` in
-`ChatRepository.js`, which says which media types that kind may be served as,
-and the client renderer for it. Everything between — the store, the caps, the
-endpoint, the delete cascade, the listing — is kind-agnostic.
 
 ## Retention
 
@@ -640,11 +593,11 @@ that is what you want.
 | ------------------------------------------- | ------------------------------------------------------------ |
 | `server/storage/bootstrap.js`               | Brings the provider up per worker; `getStorage()` may be null |
 | `server/services/chat/chatPersistence.js`   | The policy — the only module that decides "is this persisted" |
-| `server/services/chat/ChatRepository.js`    | The chat documents, artifact payloads, locks, listing, cascade |
+| `server/services/chat/ChatRepository.js`    | The two chat documents, their locks, listing and the cascade  |
+| `server/services/artifacts/ArtifactRepository.js` | What a turn produced — see [Artifacts](artifacts.md)    |
 | `server/services/chat/chatMaterializer.js`  | The only module that writes chat turns                        |
 | `server/services/chat/chatAccess.js`        | `authorizeChat()` — 404 for unknown and not-yours             |
 | `server/services/chat/chatRetention.js`     | The daily sweep                                               |
-| `client/src/features/chat/components/GeneratedImage.jsx` | Renders a live, a stored or an unavailable image artifact |
 | `server/routes/chats.js`                    | The `/api/chats` surface                                      |
 | `server/sse.js`                             | The durable-chat registry and the disconnect guard            |
 

@@ -1768,30 +1768,38 @@ still the shipped text, so any wording an admin changed stays exactly as it is.
 See [iFinder Integration](../../iFinder-Integration.md) and the
 [iFinder Quick Reference](../../iFinder-Quick-Reference.md).
 
-## A Durable Chat Keeps What Its Turns Produced
+## Artifacts: What a Run Produced, Kept
 
 A picture the model drew used to exist only in the tab that asked for it. The browser could not
 hold it — a generated image is megabytes and `sessionStorage` is not — so the payload was dropped
 on the way out and the chat came back with the answer and an empty space where the image had been.
-With **Durable Chats** switched on, it is now stored with the conversation and is there when the
-chat is reopened, on any device.
+With **Durable Chats** switched on, it is now kept and is there when the chat is reopened, on any
+device.
 
-It is stored as an **artifact** rather than as an image. A generated picture is the first kind, not
-the only one: anything a turn produces that is content in its own right belongs in the same place,
-so that a future view can show everything one conversation produced.
+It is kept as an **artifact**: content a run produced that is worth keeping in its own right. A
+chat turn is the first producer, not the only conceivable one — a workflow's report and an agent's
+output are the same kind of thing — so there is one store for all of them, addressed by the scope
+that owns the content rather than by a chat id.
 
-- **Stored beside the transcript, not inside it.** Each artifact gets its own document and is
-  fetched only when somebody looks at it, so opening a chat that produced a dozen of them is still
-  as fast as opening any other. A new endpoint, `GET /api/chats/:chatId/artifacts/:artifactId`,
-  serves one; like every other chat endpoint it answers `404` to anyone but the owner.
-- **Three new settings in `platform.json → chats`**, added to existing installations by a
-  migration: `storeArtifacts` (`true`), `maxArtifactBytes` (`10485760`, base64 bytes of a single
-  artifact) and `maxArtifactsPerMessage` (`8`). Set `storeArtifacts` to `false` to keep transcripts
-  without them; a cap of zero or less removes that cap. An artifact a cap turns away is still
-  recorded in the transcript, saying why it is not available, rather than disappearing without
-  trace.
+- **Stored beside the producer, never inside it.** Each artifact is its own document and is fetched
+  only when somebody looks at it, so opening a chat that produced a dozen of them is still as fast
+  as opening any other. Two new endpoints: `GET /api/chats/:chatId/artifacts` lists what a
+  conversation produced (descriptors only, newest first) and
+  `GET /api/chats/:chatId/artifacts/:artifactId` serves one. Both answer `404` to anyone but the
+  owner, like every other chat endpoint.
+- **A new `platform.json → artifacts` block**, added to existing installations by a migration:
+  `enabled` (`true`), `maxBytes` (`10485760`, base64 bytes of a single artifact) and `maxPerBatch`
+  (`8`, how many one answer records). Set `enabled` to `false` to keep transcripts without them; a
+  cap of zero or less removes that cap. An artifact a cap turns away is still recorded, saying why
+  it is not available, rather than disappearing without trace.
+- **Media types are allowlisted per kind** — images and documents each bring their own list, and
+  anything else is served as an opaque download. SVG and HTML are deliberately excluded: they are
+  documents that can run script, not content.
 - **Nothing changes where chats are not stored.** Anonymous visitors, incognito turns, the compare
   panels and the canvas keep the old behaviour, and keep the note under each image telling the user
   to download it. That note is gone in a durable chat, where it is no longer true.
 
-See [Chat Persistence](../../chat-persistence.md).
+The existing agent artifacts under `contents/data/agent-artifacts/` are a separate, older mechanism
+and are unchanged by this release.
+
+See [Artifacts](../../artifacts.md) and [Chat Persistence](../../chat-persistence.md).

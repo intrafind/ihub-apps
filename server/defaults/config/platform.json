@@ -400,10 +400,12 @@
     "enabled": true,
     "retentionDays": 90,
     "maxChatsPerUser": 200,
-    "maxMessagesPerChat": 2000,
-    "storeArtifacts": true,
-    "maxArtifactBytes": 10485760,
-    "maxArtifactsPerMessage": 8
+    "maxMessagesPerChat": 2000
+  },
+  "artifacts": {
+    "enabled": true,
+    "maxBytes": 10485760,
+    "maxPerBatch": 8
   },
   "workflowState": {
     "retentionDays": 30,

@@ -102,15 +102,19 @@ export const RUNTIME_NAMESPACES = Object.freeze({
   /** Chat transcripts, one document per chat. */
   chatMessages: 'chat-messages',
   /**
-   * Content a chat's turns produced — a generated image today, other kinds
-   * later — one document per artifact.
+   * Artifacts — content a run produced that is worth keeping in its own
+   * right. One document per artifact, keyed `<scopeType>__<scopeId>__<id>`.
    *
-   * Beside the transcript rather than inside it: an artifact is megabytes of
-   * base64, and the transcript is re-read, re-serialized and re-hashed on
-   * every turn of the chat it belongs to. Keyed by chat so everything one
-   * conversation produced can be listed without reading its messages.
+   * Not `chat-artifacts`: a chat turn is one producer among several. A
+   * workflow's report and an agent's output are the same kind of thing and
+   * belong in the same store, which is why the scope is part of the key
+   * rather than the namespace.
+   *
+   * Beside the producer's own documents rather than inside them: an artifact
+   * is megabytes of base64, and a chat transcript (or a workflow state
+   * document) is re-read, re-serialized and re-hashed on every turn.
    */
-  chatArtifacts: 'chat-artifacts',
+  artifacts: 'artifacts',
   /** Per-run summaries for the history and retention views. */
   runs: 'runs',
   /** Pending and recently settled human interactions. */

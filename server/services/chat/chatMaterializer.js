@@ -16,7 +16,8 @@
  */
 import logger from '../../utils/logger.js';
 import { deriveChatTitle } from './ChatRepository.js';
-import { chatArtifactPolicy } from './chatPersistence.js';
+import { getArtifactRepository } from '../artifacts/ArtifactRepository.js';
+import { artifactPolicy } from '../artifacts/artifactPolicy.js';
 
 const COMPONENT = 'chatMaterializer';
 
@@ -54,15 +55,15 @@ export function normalizeAttachments(attachments) {
  * Store the artifacts a turn produced and return the descriptors to record on
  * the assistant message.
  *
- * An artifact is anything a turn produced that is content in its own right —
- * a generated image today, other kinds later. The payloads go to their own
- * documents — see `ChatRepository.putArtifact` for why they are not inlined in
- * the transcript — and the message keeps
- * `{ id, kind, mimeType, bytes }`, which is what
+ * An artifact is anything a run produced that is content in its own right — a
+ * generated image today. It is not a chat concept: the payloads go to the
+ * shared `ArtifactRepository` under the scope `{ type: 'chat', id: chatId }`,
+ * the same store a workflow's report or an agent's output belongs in. The
+ * message keeps `{ id, kind, mimeType, bytes }`, which is what
  * `GET /api/chats/:chatId/artifacts/:artifactId` is addressed by.
  *
  * An artifact the policy refuses is still described, with `unavailable` saying
- * why. Leaving it out would make the stored answer claim the model produced
+ * why. Leaving it out would make the stored answer claim the turn produced
  * less than it did, and the viewer who saw it live and comes back to a
  * transcript missing it has no way to tell a dropped artifact from one that
  * was never produced.
@@ -71,22 +72,24 @@ export function normalizeAttachments(attachments) {
  * artifact, never the answer.
  *
  * @param {Object} params
- * @param {import('./ChatRepository.js').default} params.repository
  * @param {string} params.chatId
  * @param {string} params.runId
  * @param {Array<{kind?: string, mimeType?: string, data?: string, name?: string}>} [params.artifacts]
  *   Artifacts as the loop collected them.
+ * @param {import('../artifacts/ArtifactRepository.js').ArtifactRepository} [params.store]
+ *   Artifact store; defaults to the shared one.
  * @param {Object} [params.policy] - Artifact policy; defaults to the live one.
  * @returns {Promise<Array<Object>>} Descriptors, in the order they came.
  */
-export async function storeGeneratedArtifacts({ repository, chatId, runId, artifacts, policy }) {
+export async function storeGeneratedArtifacts({ chatId, runId, artifacts, store, policy }) {
   const candidates = (Array.isArray(artifacts) ? artifacts : []).filter(
     artifact => artifact && typeof artifact.data === 'string' && artifact.data.length > 0
   );
-  if (!repository || candidates.length === 0) return [];
-  const { storeArtifacts, maxArtifactBytes, maxArtifactsPerMessage } =
-    policy || chatArtifactPolicy();
-  if (!storeArtifacts) return [];
+  if (candidates.length === 0) return [];
+  const { enabled, maxBytes, maxPerBatch } = policy || artifactPolicy();
+  if (!enabled) return [];
+  const repository = store || getArtifactRepository();
+  const scope = { type: 'chat', id: chatId };
   const descriptors = [];
   // Counted on what was actually written, not on how many descriptors exist:
   // an artifact refused for its size is described too, and letting it consume
@@ -98,24 +101,24 @@ export async function storeGeneratedArtifacts({ repository, chatId, runId, artif
       typeof artifact.mimeType === 'string' && artifact.mimeType ? artifact.mimeType : 'image/png';
     const bytes = Buffer.byteLength(artifact.data, 'utf8');
     const refused = { kind, mimeType, bytes };
-    if (maxArtifactsPerMessage > 0 && stored >= maxArtifactsPerMessage) {
+    if (maxPerBatch > 0 && stored >= maxPerBatch) {
       descriptors.push({ ...refused, unavailable: 'too-many' });
       continue;
     }
-    if (maxArtifactBytes > 0 && bytes > maxArtifactBytes) {
-      logger.warn('Chat artifact not stored: over the configured size cap', {
+    if (maxBytes > 0 && bytes > maxBytes) {
+      logger.warn('Artifact not stored: over the configured size cap', {
         component: COMPONENT,
         chatId,
         runId,
         kind,
         bytes,
-        maxArtifactBytes
+        maxBytes
       });
       descriptors.push({ ...refused, unavailable: 'too-large' });
       continue;
     }
     try {
-      const descriptor = await repository.putArtifact(chatId, {
+      const descriptor = await repository.put(scope, {
         kind,
         mimeType,
         data: artifact.data,
@@ -125,7 +128,7 @@ export async function storeGeneratedArtifacts({ repository, chatId, runId, artif
       if (descriptor) stored += 1;
       descriptors.push(descriptor || { ...refused, unavailable: 'not-stored' });
     } catch (error) {
-      logger.error('Chat artifact not stored', {
+      logger.error('Artifact not stored', {
         component: COMPONENT,
         chatId,
         runId,
@@ -337,10 +340,13 @@ export async function materializeAssistantTurn({
     const artifacts = pausedWithoutAnswer
       ? []
       : await storeGeneratedArtifacts({
-          repository,
           chatId,
           runId,
-          artifacts: (summary?.images || []).map(image => ({ ...image, kind: 'image' }))
+          artifacts: (summary?.images || []).map(image => ({ ...image, kind: 'image' })),
+          // Through the chat's own store rather than the shared getter: one
+          // place decides where a chat's artifacts live, and it is the
+          // repository this turn is already writing through.
+          store: repository?.artifactStore?.()
         });
 
     // Store the answer BEFORE announcing the run finished. `releaseRun` clears
