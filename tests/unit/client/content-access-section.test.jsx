@@ -4,7 +4,9 @@ import '@testing-library/jest-dom';
 /**
  * ContentAccessSection — the "Group access" card on the content editors
  * (issue #2365). The server decides which groups are listed; the component
- * shows them, locks wildcard groups, and saves each tick on its own.
+ * shows the granted ones as removable chips, offers a search box to grant
+ * more (issue #2377 — a plain checkbox list did not scale to many groups),
+ * locks wildcard groups, and saves each change on its own.
  */
 
 const mockFetchContentAccess = jest.fn();
@@ -74,36 +76,44 @@ const VIEW = {
   ]
 };
 
+const openSearch = async () => {
+  const search = await screen.findByRole('combobox', { name: 'Search groups to grant access' });
+  fireEvent.focus(search);
+  return search;
+};
+
 beforeEach(() => {
   mockFetchContentAccess.mockReset();
   mockUpdateContentAccess.mockReset();
 });
 
 describe('ContentAccessSection', () => {
-  test('renders the groups the server returns, with wildcard groups locked', async () => {
+  test('shows granted groups as chips, wildcard groups locked, and the rest in the search dropdown', async () => {
     mockFetchContentAccess.mockResolvedValue(VIEW);
 
     render(<ContentAccessSection resourceType="apps" resourceId="chat" />);
 
     expect(mockFetchContentAccess).toHaveBeenCalledWith('apps', 'chat');
 
-    const sales = await screen.findByRole('checkbox', { name: 'Sales can use this app' });
-    expect(sales).not.toBeChecked();
-    expect(sales).toBeEnabled();
-    expect(screen.getByText('Also inherited from: users')).toBeInTheDocument();
-
-    expect(screen.getByRole('checkbox', { name: 'EMEA Sales can use this app' })).toBeChecked();
-
-    const power = screen.getByRole('checkbox', { name: 'Power Users can use this app' });
-    expect(power).toBeChecked();
-    expect(power).toBeDisabled();
-    expect(screen.getByText(/Can use all apps through a wildcard/)).toBeInTheDocument();
+    // Granted groups render as chips, not in the search results.
+    expect(await screen.findByText('EMEA Sales')).toBeInTheDocument();
+    const power = screen.getByText('Power Users').closest('span');
+    expect(power).toHaveTextContent('Power Users');
+    // A wildcard chip has no remove button.
+    expect(screen.queryByRole('button', { name: 'Remove Power Users' })).not.toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Remove EMEA Sales' })).toBeInTheDocument();
 
     // A content admin is told why only some groups are listed.
     expect(screen.getByText(/groups you belong to/)).toBeInTheDocument();
+
+    // Sales is not yet granted, so it shows up in the search dropdown with
+    // its inherited-access hint instead of as a chip.
+    await openSearch();
+    const salesOption = await screen.findByRole('option', { name: /Sales/ });
+    expect(salesOption).toHaveTextContent('Also inherited from: users');
   });
 
-  test('ticking a group grants it and unticking revokes it, one request each', async () => {
+  test('picking a group in the search dropdown grants it, and removing its chip revokes it', async () => {
     mockFetchContentAccess.mockResolvedValue(VIEW);
     const granted = {
       ...VIEW,
@@ -113,12 +123,13 @@ describe('ContentAccessSection', () => {
 
     render(<ContentAccessSection resourceType="apps" resourceId="chat" />);
 
-    const sales = await screen.findByRole('checkbox', { name: 'Sales can use this app' });
-    fireEvent.click(sales);
+    const search = await openSearch();
+    fireEvent.change(search, { target: { value: 'sal' } });
+    fireEvent.click(await screen.findByRole('option', { name: /Sales/ }));
 
     expect(mockUpdateContentAccess).toHaveBeenCalledWith('apps', 'chat', { grant: ['sales'] });
     await waitFor(() =>
-      expect(screen.getByRole('checkbox', { name: 'Sales can use this app' })).toBeChecked()
+      expect(screen.getByRole('button', { name: 'Remove Sales' })).toBeInTheDocument()
     );
 
     const revoked = {
@@ -126,14 +137,12 @@ describe('ContentAccessSection', () => {
       groups: granted.groups.map(g => (g.id === 'emea-sales' ? { ...g, granted: false } : g))
     };
     mockUpdateContentAccess.mockResolvedValueOnce(revoked);
-    fireEvent.click(screen.getByRole('checkbox', { name: 'EMEA Sales can use this app' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Remove EMEA Sales' }));
     expect(mockUpdateContentAccess).toHaveBeenLastCalledWith('apps', 'chat', {
       revoke: ['emea-sales']
     });
     await waitFor(() =>
-      expect(
-        screen.getByRole('checkbox', { name: 'EMEA Sales can use this app' })
-      ).not.toBeChecked()
+      expect(screen.queryByRole('button', { name: 'Remove EMEA Sales' })).not.toBeInTheDocument()
     );
   });
 
@@ -145,13 +154,14 @@ describe('ContentAccessSection', () => {
 
     render(<ContentAccessSection resourceType="apps" resourceId="chat" />);
 
-    fireEvent.click(await screen.findByRole('checkbox', { name: 'Sales can use this app' }));
+    const search = await openSearch();
+    fireEvent.change(search, { target: { value: 'sal' } });
+    fireEvent.click(await screen.findByRole('option', { name: /Sales/ }));
 
     expect(await screen.findByRole('alert')).toHaveTextContent('not one of your groups');
-    const sales = screen.getByRole('checkbox', { name: 'Sales can use this app' });
-    expect(sales).not.toBeChecked();
-    // The row is usable again once the refused request has settled.
-    await waitFor(() => expect(sales).toBeEnabled());
+    // The refused grant never happened, so Sales is still in the search pool.
+    fireEvent.change(search, { target: { value: 'sal' } });
+    expect(await screen.findByRole('option', { name: /Sales/ })).toBeInTheDocument();
   });
 
   test('asks to save first for content that does not exist yet, without calling the API', () => {
@@ -180,7 +190,7 @@ describe('ContentAccessSection', () => {
     expect(await screen.findByText(/could not be loaded/)).toBeInTheDocument();
     fireEvent.click(screen.getByRole('button', { name: 'Retry' }));
 
-    expect(await screen.findByRole('checkbox', { name: 'Sales can use this app' })).toBeVisible();
+    expect(await screen.findByText('EMEA Sales')).toBeVisible();
     expect(mockFetchContentAccess).toHaveBeenCalledTimes(2);
   });
 });

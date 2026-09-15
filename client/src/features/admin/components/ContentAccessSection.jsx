@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import Icon from '../../../shared/components/Icon';
 import {
@@ -30,16 +30,19 @@ const FALLBACK_SUBJECT_PLURAL = {
 /**
  * ContentAccessSection - which groups can use one piece of content.
  *
- * Shown on the app, prompt, skill, tool and workflow editors. Every row is a
- * group the current admin may change: a full admin sees every group, a
- * content admin only the groups they belong to and the groups that inherit
- * from those (issue #2365). Ticking a group grants the content to it, unticking
- * withdraws it — each click is saved on its own, since it edits `groups.json`
- * rather than the content being edited.
+ * Shown on the app, prompt, skill, tool and workflow editors. Groups that
+ * already have access are listed as removable chips; a search box below
+ * finds the remaining groups to grant — the same search-and-add pattern used
+ * elsewhere in the admin area (e.g. `ResourceSelector`, `GroupMultiSelect`).
+ * This keeps the card usable when there are many groups (issue #2377): a
+ * full admin sees every group, a content admin only the groups they belong
+ * to and the groups that inherit from those (issue #2365). Each grant/revoke
+ * is saved on its own, since it edits `groups.json` rather than the content
+ * being edited.
  *
- * A group that holds a wildcard for the type is shown ticked and locked: a
- * single item cannot be withdrawn from `["*"]` here. A group that gets the
- * content through a parent group says so beneath its name.
+ * A group that holds a wildcard for the type is shown as a locked chip: a
+ * single item cannot be withdrawn from `["*"]` here. A group that would get
+ * the content through a parent group says so in the search results.
  *
  * @param {object} props
  * @param {'apps'|'prompts'|'skills'|'tools'|'workflows'} props.resourceType - Permission list the content lives in
@@ -49,11 +52,15 @@ const FALLBACK_SUBJECT_PLURAL = {
  */
 function ContentAccessSection({ resourceType, resourceId, isNew = false, className = '' }) {
   const { t } = useTranslation();
+  const inputRef = useRef(null);
   const [access, setAccess] = useState(null);
   const [loading, setLoading] = useState(false);
   const [loadError, setLoadError] = useState(null);
   const [saveError, setSaveError] = useState(null);
   const [pending, setPending] = useState(() => new Set());
+  const [searchTerm, setSearchTerm] = useState('');
+  const [showDropdown, setShowDropdown] = useState(false);
+  const [activeIndex, setActiveIndex] = useState(-1);
 
   const subject = t(
     `admin.contentAccess.subject.${resourceType}`,
@@ -83,10 +90,8 @@ function ContentAccessSection({ resourceType, resourceId, isNew = false, classNa
     load();
   }, [load]);
 
-  const toggle = async group => {
-    if (group.wildcard || pending.has(group.id)) return;
-    const change = group.granted ? { revoke: [group.id] } : { grant: [group.id] };
-    setPending(prev => new Set(prev).add(group.id));
+  const applyChange = async (groupId, change) => {
+    setPending(prev => new Set(prev).add(groupId));
     setSaveError(null);
     try {
       setAccess(await updateContentAccess(resourceType, resourceId, change));
@@ -95,9 +100,77 @@ function ContentAccessSection({ resourceType, resourceId, isNew = false, classNa
     } finally {
       setPending(prev => {
         const next = new Set(prev);
-        next.delete(group.id);
+        next.delete(groupId);
         return next;
       });
+    }
+  };
+
+  const grantGroup = group => {
+    if (group.wildcard || group.granted || pending.has(group.id)) return;
+    setSearchTerm('');
+    setActiveIndex(-1);
+    applyChange(group.id, { grant: [group.id] });
+  };
+
+  const revokeGroup = group => {
+    if (group.wildcard || pending.has(group.id)) return;
+    applyChange(group.id, { revoke: [group.id] });
+  };
+
+  const groups = useMemo(() => (Array.isArray(access?.groups) ? access.groups : []), [access]);
+
+  // Groups already granted (directly or via wildcard) are chips; the rest
+  // are the pool the search box below picks from.
+  const grantedGroups = useMemo(
+    () => groups.filter(group => group.granted || group.wildcard),
+    [groups]
+  );
+  const availableGroups = useMemo(
+    () => groups.filter(group => !group.granted && !group.wildcard),
+    [groups]
+  );
+  const filteredAvailable = useMemo(() => {
+    const term = searchTerm.trim().toLowerCase();
+    if (!term) return availableGroups;
+    return availableGroups.filter(
+      group => group.id.toLowerCase().includes(term) || group.name.toLowerCase().includes(term)
+    );
+  }, [availableGroups, searchTerm]);
+
+  const handleSelectOption = group => {
+    grantGroup(group);
+    inputRef.current?.focus();
+  };
+
+  const handleKeyDown = e => {
+    if (e.key === 'ArrowDown') {
+      e.preventDefault();
+      setShowDropdown(true);
+      setActiveIndex(prev =>
+        filteredAvailable.length === 0 ? -1 : (prev + 1) % filteredAvailable.length
+      );
+      return;
+    }
+    if (e.key === 'ArrowUp') {
+      e.preventDefault();
+      setActiveIndex(prev =>
+        filteredAvailable.length === 0
+          ? -1
+          : (prev - 1 + filteredAvailable.length) % filteredAvailable.length
+      );
+      return;
+    }
+    if (e.key === 'Enter') {
+      e.preventDefault();
+      if (activeIndex >= 0 && filteredAvailable[activeIndex]) {
+        handleSelectOption(filteredAvailable[activeIndex]);
+      }
+      return;
+    }
+    if (e.key === 'Escape') {
+      setShowDropdown(false);
+      setActiveIndex(-1);
     }
   };
 
@@ -154,7 +227,6 @@ function ContentAccessSection({ resourceType, resourceId, isNew = false, classNa
 
     if (!access) return null;
 
-    const groups = Array.isArray(access.groups) ? access.groups : [];
     const membershipScope = access.scope === 'membership';
 
     if (groups.length === 0) {
@@ -170,6 +242,8 @@ function ContentAccessSection({ resourceType, resourceId, isNew = false, classNa
       );
     }
 
+    const listboxId = 'content-access-listbox';
+
     return (
       <div className="space-y-3">
         {membershipScope && (
@@ -183,72 +257,182 @@ function ContentAccessSection({ resourceType, resourceId, isNew = false, classNa
             </span>
           </p>
         )}
-        <ul className="divide-y divide-gray-200 dark:divide-gray-700 rounded-md border border-gray-200 dark:border-gray-700">
-          {groups.map(group => {
-            const inputId = `content-access-${resourceType}-${group.id}`;
-            const hintId = `${inputId}-hint`;
-            const isPending = pending.has(group.id);
-            const inheritedFrom = Array.isArray(group.inheritedFrom) ? group.inheritedFrom : [];
-            const hasHint = group.wildcard || inheritedFrom.length > 0;
-            return (
-              <li key={group.id} className="flex items-start gap-3 px-4 py-3">
-                <input
-                  id={inputId}
-                  type="checkbox"
-                  className="mt-1 h-4 w-4 rounded-sm border-gray-300 dark:border-gray-600 text-indigo-600 focus:ring-indigo-500 disabled:opacity-50 disabled:cursor-not-allowed"
-                  checked={Boolean(group.granted || group.wildcard)}
-                  disabled={group.wildcard || isPending}
-                  aria-describedby={hasHint ? hintId : undefined}
-                  aria-label={t('admin.contentAccess.granted', '{{name}} can use {{subject}}', {
-                    name: group.name,
-                    subject
-                  })}
-                  onChange={() => toggle(group)}
-                />
-                <div className="min-w-0 flex-1">
-                  <label
-                    htmlFor={inputId}
-                    className="text-sm font-medium text-gray-900 dark:text-gray-100"
-                  >
-                    {group.name}
-                  </label>
-                  {group.name !== group.id && (
-                    <span className="ml-2 font-mono text-xs text-gray-500 dark:text-gray-400">
-                      {group.id}
-                    </span>
-                  )}
-                  {group.description && (
-                    <p className="text-sm text-gray-500 dark:text-gray-400">{group.description}</p>
-                  )}
-                  {hasHint && (
-                    <p id={hintId} className="mt-1 text-xs text-gray-500 dark:text-gray-400">
-                      {group.wildcard
+
+        {/* Groups that already have access, as removable chips */}
+        <div className="min-h-8">
+          {grantedGroups.length > 0 ? (
+            <div className="flex flex-wrap gap-2">
+              {grantedGroups.map(group => {
+                const isPending = pending.has(group.id);
+                return (
+                  <span
+                    key={group.id}
+                    title={
+                      group.wildcard
                         ? t(
                             'admin.contentAccess.wildcardHint',
                             'Can use all {{subjectPlural}} through a wildcard. To withdraw a single one, an administrator replaces the wildcard with an explicit list in the group settings.',
                             { subjectPlural }
                           )
-                        : t(
+                        : group.description || undefined
+                    }
+                    className={`inline-flex items-center px-3 py-1 rounded-full text-sm font-medium ${
+                      group.wildcard
+                        ? 'bg-amber-100 dark:bg-amber-900/50 text-amber-800 dark:text-amber-300'
+                        : 'bg-blue-100 dark:bg-blue-900/50 text-blue-800 dark:text-blue-300'
+                    }`}
+                  >
+                    <Icon name={group.wildcard ? 'lock' : 'users'} size="xs" className="mr-1" />
+                    {group.name}
+                    {group.name !== group.id && (
+                      <span className="ml-1 font-mono text-xs opacity-75">{group.id}</span>
+                    )}
+                    {isPending && (
+                      <Icon
+                        name="refresh"
+                        size="xs"
+                        className="ml-2 animate-spin"
+                        aria-label={t('admin.contentAccess.saving', 'Saving…')}
+                      />
+                    )}
+                    {!group.wildcard && !isPending && (
+                      <button
+                        type="button"
+                        onClick={() => revokeGroup(group)}
+                        className="ml-2 text-current hover:text-red-600 dark:hover:text-red-400 focus:outline-hidden"
+                        aria-label={t('admin.contentAccess.revoke', 'Remove {{name}}', {
+                          name: group.name
+                        })}
+                      >
+                        <Icon name="x" size="sm" />
+                      </button>
+                    )}
+                  </span>
+                );
+              })}
+            </div>
+          ) : (
+            <p className="text-sm text-gray-500 dark:text-gray-400 italic">
+              {t('admin.contentAccess.noneGranted', 'No groups can use {{subject}} yet', {
+                subject
+              })}
+            </p>
+          )}
+        </div>
+
+        {/* Search / add */}
+        <div className="relative">
+          <div className="relative">
+            <input
+              ref={inputRef}
+              type="text"
+              role="combobox"
+              aria-expanded={showDropdown}
+              aria-controls={showDropdown ? listboxId : undefined}
+              aria-activedescendant={
+                showDropdown && activeIndex >= 0 ? `${listboxId}-opt-${activeIndex}` : undefined
+              }
+              aria-autocomplete="list"
+              aria-label={t('admin.contentAccess.searchLabel', 'Search groups to grant access')}
+              autoComplete="off"
+              value={searchTerm}
+              onChange={e => {
+                setSearchTerm(e.target.value);
+                setShowDropdown(true);
+                setActiveIndex(-1);
+              }}
+              onFocus={() => setShowDropdown(true)}
+              onBlur={() => setShowDropdown(false)}
+              onKeyDown={handleKeyDown}
+              placeholder={t(
+                'admin.contentAccess.searchPlaceholder',
+                'Search groups to grant access…'
+              )}
+              className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md shadow-xs bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100 focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm placeholder-gray-400 dark:placeholder-gray-500"
+            />
+            <Icon
+              name="search"
+              size="sm"
+              className="absolute right-3 top-2.5 text-gray-400 dark:text-gray-500 pointer-events-none"
+            />
+          </div>
+
+          {showDropdown && (
+            <div
+              id={listboxId}
+              role="listbox"
+              className="absolute z-10 mt-1 w-full bg-white dark:bg-gray-800 shadow-lg max-h-60 rounded-md py-1 text-base ring-1 ring-black/5 dark:ring-gray-700/5 overflow-auto focus:outline-hidden sm:text-sm"
+            >
+              {filteredAvailable.length > 0 ? (
+                filteredAvailable.map((group, index) => {
+                  const active = index === activeIndex;
+                  const isPending = pending.has(group.id);
+                  const inheritedFrom = Array.isArray(group.inheritedFrom)
+                    ? group.inheritedFrom
+                    : [];
+                  return (
+                    <button
+                      key={group.id}
+                      id={`${listboxId}-opt-${index}`}
+                      type="button"
+                      role="option"
+                      aria-selected={active}
+                      disabled={isPending}
+                      onMouseDown={e => e.preventDefault()}
+                      onMouseEnter={() => setActiveIndex(index)}
+                      onClick={() => handleSelectOption(group)}
+                      className={`w-full text-left px-4 py-2 focus:outline-hidden disabled:opacity-50 ${
+                        active ? 'bg-gray-100 dark:bg-gray-700' : ''
+                      }`}
+                    >
+                      <div className="flex items-center">
+                        <Icon
+                          name={isPending ? 'refresh' : 'plus'}
+                          size="sm"
+                          className={`mr-2 shrink-0 ${
+                            isPending
+                              ? 'animate-spin text-gray-400 dark:text-gray-500'
+                              : 'text-green-600 dark:text-green-400'
+                          }`}
+                        />
+                        <span className="text-gray-900 dark:text-gray-100">{group.name}</span>
+                        {group.name !== group.id && (
+                          <span className="ml-2 text-xs text-gray-400 dark:text-gray-500">
+                            {group.id}
+                          </span>
+                        )}
+                      </div>
+                      {group.description && (
+                        <p className="mt-0.5 ml-6 text-xs text-gray-500 dark:text-gray-400 truncate">
+                          {group.description}
+                        </p>
+                      )}
+                      {inheritedFrom.length > 0 && (
+                        <p className="mt-0.5 ml-6 text-xs text-gray-400 dark:text-gray-500">
+                          {t(
                             'admin.contentAccess.inheritedHint',
                             'Also inherited from: {{groups}}',
-                            {
-                              groups: inheritedFrom.join(', ')
-                            }
+                            { groups: inheritedFrom.join(', ') }
                           )}
-                    </p>
-                  )}
+                        </p>
+                      )}
+                    </button>
+                  );
+                })
+              ) : (
+                <div className="px-4 py-2 text-sm text-gray-500 dark:text-gray-400">
+                  {searchTerm
+                    ? t('admin.contentAccess.noMatches', 'No matching groups')
+                    : t(
+                        'admin.contentAccess.allGranted',
+                        'Every group you can manage already has access'
+                      )}
                 </div>
-                {isPending && (
-                  <Icon
-                    name="refresh"
-                    className="mt-1 h-4 w-4 shrink-0 animate-spin text-gray-400"
-                    aria-label={t('admin.contentAccess.saving', 'Saving…')}
-                  />
-                )}
-              </li>
-            );
-          })}
-        </ul>
+              )}
+            </div>
+          )}
+        </div>
+
         {saveError && (
           <p className="text-sm text-red-700 dark:text-red-300" role="alert">
             {t('admin.contentAccess.updateError', 'Access could not be updated.')} {saveError}
@@ -270,7 +454,7 @@ function ContentAccessSection({ resourceType, resourceId, isNew = false, classNa
           </h3>
           <p className="mt-1 text-sm text-gray-500 dark:text-gray-400">{description}</p>
         </div>
-        <div className="mt-5 md:mt-0 md:col-span-2">{renderBody()}</div>
+        <div className="mt-5 md:col-span-2 md:mt-0">{renderBody()}</div>
       </div>
     </div>
   );
