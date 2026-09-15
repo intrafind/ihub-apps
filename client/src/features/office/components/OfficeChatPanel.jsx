@@ -640,7 +640,7 @@ function OfficeChatPanel({
             />
 
             {/* Input */}
-            <div className="border-t border-gray-200 bg-white shrink-0 dark:border-slate-700 dark:bg-slate-900">
+            <div className="office-chat-input border-t border-gray-200 bg-white shrink-0 dark:border-slate-700 dark:bg-slate-900">
               <ChatInput
                 app={selectedApp}
                 value={inputValue}

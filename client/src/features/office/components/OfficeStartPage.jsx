@@ -256,7 +256,7 @@ function OfficeStartPage({ user, onLogout, onSelectApp, onStartChat, onBrowseApp
                   }
                 />
 
-                <div className="bg-white shrink-0 dark:bg-slate-900">
+                <div className="office-start-input bg-white shrink-0 dark:bg-slate-900">
                   <ChatInput
                     app={defaultApp}
                     value={draft}
