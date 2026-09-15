@@ -192,6 +192,15 @@ jobs:
           fi
         shell: bash
 
+      # Release notes are written to docs/releases/next/ until a release is tagged. Publish them
+      # under this tag so the shipped binary's "What's New" lists the release by its number.
+      - name: Publish unreleased release notes under the release tag
+        run: |
+          if [ -n "${{ env.VERSION }}" ]; then
+            node scripts/finalize-release-notes.js "${{ env.VERSION }}"
+          fi
+        shell: bash
+
       - name: Build using Node.js SEA
         run: |
           # Use Node.js SEA (Single Executable Application) feature with platform-specific argument
@@ -293,7 +302,9 @@ jobs:
             ${{ env.VERSIONED_ARCHIVE_NAME }}.zip
             ${{ env.BASE64_FILE }}
 
-  # Commit version changes back to repository
+  # Commit the release version and the published release notes back to the default branch.
+  # The release event checks out the tag, so the branch to commit to is named explicitly —
+  # pushing to github.ref_name would try to move the tag itself and silently fail.
   commit-version:
     name: Commit Version Changes
     needs: build
@@ -304,10 +315,12 @@ jobs:
     permissions:
       contents: write
     steps:
-      - name: Checkout code
+      - name: Checkout default branch
         uses: actions/checkout@v7
         with:
+          ref: ${{ github.event.repository.default_branch }}
           token: ${{ secrets.GITHUB_TOKEN }}
+          # Full history and all tags: the release notes are read from the tag's commit.
           fetch-depth: 0
 
       - name: Set up Node.js
@@ -324,22 +337,41 @@ jobs:
           echo "VERSION=${GITHUB_REF#refs/tags/}" >> $GITHUB_ENV
         shell: bash
 
-      - name: Sync and commit version changes
+      - name: Sync version and publish release notes
         run: |
-          echo "Syncing and committing version changes for ${{ env.VERSION }}"
-          node scripts/sync-release-version.js ${{ env.VERSION }} --commit
-          
-          # Push changes back to the repository
-          git push origin HEAD:${{ github.ref_name }} || echo "No changes to push or push failed"
+          echo "Syncing version and publishing release notes for ${{ env.VERSION }}"
+          node scripts/sync-release-version.js "${{ env.VERSION }}" --commit
+          # Publish what docs/releases/next/ held at the tag under docs/releases/<version>/.
+          # Entries merged to the branch since the tag stay in next/.
+          node scripts/finalize-release-notes.js "${{ env.VERSION }}" --from-ref "${{ env.VERSION }}" --commit
         shell: bash
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Push to default branch
+        run: |
+          BRANCH="${{ github.event.repository.default_branch }}"
+          # Another merge may land on the branch while this job runs: rebase and retry.
+          for attempt in 1 2 3 4; do
+            if git push origin "HEAD:$BRANCH"; then
+              echo "Pushed to $BRANCH"
+              exit 0
+            fi
+            echo "Push attempt $attempt failed, rebasing onto the latest $BRANCH"
+            git fetch origin "$BRANCH"
+            git rebase "origin/$BRANCH"
+          done
+          echo "::error::Could not push the version and release-notes commits to $BRANCH"
+          exit 1
+        shell: bash
 
   release:
     name: Attach to Release
     needs: [build, commit-version]
     runs-on: ubuntu-latest
-    if: github.event_name == 'release' || github.event_name == 'workflow_dispatch'
+    # Runs after commit-version but does not depend on its outcome: a failed or skipped
+    # commit-back (workflow_dispatch skips it) must not keep the binaries off the release.
+    if: |
+      always() && needs.build.result == 'success' &&
+      (github.event_name == 'release' || github.event_name == 'workflow_dispatch')
     permissions:
       contents: write
     steps:

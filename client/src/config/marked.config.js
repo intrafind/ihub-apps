@@ -177,10 +177,10 @@ const createRenderer = t => {
   return renderer;
 };
 
-const createMarked = t =>
+const createMarked = (t, { breaks = true } = {}) =>
   new Marked({
     gfm: true,
-    breaks: true,
+    breaks,
     headerIds: true,
     mangle: false,
     pedantic: false,
@@ -191,23 +191,30 @@ const createMarked = t =>
   });
 
 const markedInstanceByTranslator = new WeakMap();
-let defaultMarkedInstance = null;
+const defaultMarkedInstances = {};
 
-// Cache parser instances by translation function so repeated renders avoid
-// rebuilding renderers. WeakMap ensures stale translator functions can be GC'd.
-// `defaultMarkedInstance` is used for call sites that don't pass `t`.
-const getMarkedInstance = t => {
+// Cache parser instances by translation function (and line-break mode) so repeated renders
+// avoid rebuilding renderers. WeakMap ensures stale translator functions can be GC'd.
+// `defaultMarkedInstances` serves call sites that don't pass `t`.
+const getMarkedInstance = (t, { breaks = true } = {}) => {
+  const variant = breaks ? 'breaks' : 'noBreaks';
+
   if (typeof t === 'function') {
-    if (!markedInstanceByTranslator.has(t)) {
-      markedInstanceByTranslator.set(t, createMarked(t));
+    let variants = markedInstanceByTranslator.get(t);
+    if (!variants) {
+      variants = {};
+      markedInstanceByTranslator.set(t, variants);
     }
-    return markedInstanceByTranslator.get(t);
+    if (!variants[variant]) {
+      variants[variant] = createMarked(t, { breaks });
+    }
+    return variants[variant];
   }
 
-  if (!defaultMarkedInstance) {
-    defaultMarkedInstance = createMarked();
+  if (!defaultMarkedInstances[variant]) {
+    defaultMarkedInstances[variant] = createMarked(undefined, { breaks });
   }
-  return defaultMarkedInstance;
+  return defaultMarkedInstances[variant];
 };
 
 /**
@@ -219,14 +226,17 @@ const getMarkedInstance = t => {
  * @param {Function} [options.transformHtml] - Optional post-parse HTML transform.
  *   The transformed HTML is still sanitized by DOMPurify afterwards.
  * @param {Object} [options.sanitizeOptions] - DOMPurify sanitize options.
+ * @param {boolean} [options.breaks=true] - Turn single newlines into `<br>` (chat-style text).
+ *   Pass `false` for hand-written, hard-wrapped Markdown such as release notes, where a line
+ *   break inside a paragraph is just wrapping.
  * @returns {string} Sanitized HTML string.
  */
 export const renderMarkdown = (markdown, options = {}) => {
-  const { t, transformHtml, sanitizeOptions } = options;
+  const { t, transformHtml, sanitizeOptions, breaks = true } = options;
   const source = String(markdown ?? '');
 
   try {
-    const marked = getMarkedInstance(t);
+    const marked = getMarkedInstance(t, { breaks });
     // Reset the per-document occurrence counter so diagram IDs depend only on
     // the document being parsed, never on how many parses happened before.
     mermaidIdScope = new Map();
@@ -236,6 +246,29 @@ export const renderMarkdown = (markdown, options = {}) => {
   } catch (error) {
     console.error('Error rendering markdown:', error);
     return DOMPurify.sanitize(`<pre>${escapeHtml(source)}</pre>`, sanitizeOptions);
+  }
+};
+
+/**
+ * Render a single line of Markdown — a heading, a table cell — to sanitized inline HTML: bold,
+ * italics, inline code and links, but no block wrapper (`<p>`) around the result.
+ *
+ * @param {string} markdown - Markdown source string, expected to be one line.
+ * @param {Object} [options] - Optional rendering behavior.
+ * @param {Function} [options.t] - Translation function for renderer labels.
+ * @param {Object} [options.sanitizeOptions] - DOMPurify sanitize options.
+ * @returns {string} Sanitized HTML string.
+ */
+export const renderInlineMarkdown = (markdown, options = {}) => {
+  const { t, sanitizeOptions } = options;
+  const source = String(markdown ?? '');
+
+  try {
+    const marked = getMarkedInstance(t);
+    return DOMPurify.sanitize(marked.parseInline(source), sanitizeOptions);
+  } catch (error) {
+    console.error('Error rendering inline markdown:', error);
+    return DOMPurify.sanitize(escapeHtml(source), sanitizeOptions);
   }
 };
 

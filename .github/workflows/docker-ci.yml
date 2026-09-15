@@ -109,6 +109,15 @@ jobs:
           node scripts/sync-release-version.js $RELEASE_TAG
         shell: bash
 
+      # Release notes are written to docs/releases/next/ until a release is tagged. Publish them
+      # under this tag so the image's "What's New" lists the release by its number.
+      - name: Publish unreleased release notes under the release tag
+        if: github.event_name == 'release' && github.event.release.tag_name != ''
+        env:
+          RELEASE_TAG: ${{ github.event.release.tag_name }}
+        run: node scripts/finalize-release-notes.js "$RELEASE_TAG"
+        shell: bash
+
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@v4
         with:

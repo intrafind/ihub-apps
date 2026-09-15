@@ -92,6 +92,18 @@ The dashboard (`/admin`) gives a real-time snapshot of your platform.
 
 ---
 
+## What's New
+
+**What's New** (`/admin/changelog`) is the in-product changelog. It lists every release that shipped something worth noting, newest first, and shows one release at a time.
+
+- **Release list** (left, or a row of chips on narrow screens): pick a release. The release you are running is marked **Installed**; releases you have not opened before are marked **New**. Builds from the main branch additionally list **Unreleased** — changes that are not part of a tagged release yet.
+- **In this release**: a table of contents linking to every entry, grouped into **Breaking changes**, **New & improved** and **Fixes** — in that order, so what needs action comes first. Each section ends with a link back to the contents.
+- **Entries** are full Markdown: nested and numbered lists, quoted error messages, tables, links and code blocks (with copy and download buttons).
+
+The content comes from `docs/releases/` in the repository and ships with every build; see [Release Process](release-process.md) for how entries get from `next/` to a numbered release.
+
+---
+
 ## Managing Apps
 
 Apps are the AI-powered tools your users interact with. Each app has its own system prompt, model preference, variables, and permissions.

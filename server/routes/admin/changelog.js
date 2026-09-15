@@ -1,67 +1,154 @@
 import { promises as fs } from 'fs';
 import { join } from 'path';
-import { fileURLToPath } from 'url';
-import { dirname } from 'path';
+import { getRootDir } from '../../pathUtils.js';
 import { adminAuth } from '../../middleware/adminAuth.js';
 import { buildServerPath } from '../../utils/basePath.js';
-import { sendInternalError } from '../../utils/responseHelpers.js';
+import { sendInternalError, sendNotFound } from '../../utils/responseHelpers.js';
+import { getAppVersion } from '../../utils/versionHelper.js';
+import {
+  RELEASE_SECTIONS,
+  UNRELEASED_VERSION,
+  countEntries,
+  isReleaseVersionName,
+  normalizeVersion,
+  parseReleaseSections,
+  sortVersionsNewestFirst
+} from '../../utils/releaseNotes.js';
 
-const __filename = fileURLToPath(import.meta.url);
-const __dirname = dirname(__filename);
-const releasesDir = join(__dirname, '../../../docs/releases');
+// Next to package.json / version.txt in every layout: the repo root in development, dist/ in a
+// production build (build:releases copies the notes there), the binary's directory when packaged.
+const defaultReleasesDir = join(getRootDir(), 'docs', 'releases');
 
 /**
- * Compare semantic version strings (e.g. "5.4.0" > "5.3.1").
+ * Read and parse the three section files of one release directory. A directory may lack any of
+ * them — a release with no breaking changes has no `breaking-changes.md`.
  */
-function compareVersions(a, b) {
-  const pa = a.split('.').map(Number);
-  const pb = b.split('.').map(Number);
-  for (let i = 0; i < Math.max(pa.length, pb.length); i++) {
-    const diff = (pb[i] || 0) - (pa[i] || 0);
-    if (diff !== 0) return diff;
-  }
-  return 0;
+async function readReleaseSections(versionDir) {
+  const files = {};
+  await Promise.all(
+    RELEASE_SECTIONS.map(async section => {
+      files[section.file] = await fs
+        .readFile(join(versionDir, section.file), 'utf8')
+        .catch(() => '');
+    })
+  );
+  return parseReleaseSections(files);
 }
 
-export default function registerAdminChangelogRoutes(app) {
+/**
+ * The release directories that exist: `next` and semver-named directories, nothing else.
+ * Every path this module opens is built from a name in this list — the filesystem's own
+ * listing — so a request can only ever select a directory, never spell one.
+ *
+ * @param {string} releasesDir
+ * @returns {Promise<string[]>} unsorted; empty when the directory does not exist
+ */
+async function listReleaseVersionNames(releasesDir) {
+  try {
+    const dirents = await fs.readdir(releasesDir, { withFileTypes: true });
+    return dirents
+      .filter(dirent => dirent.isDirectory() && isReleaseVersionName(dirent.name))
+      .map(dirent => dirent.name);
+  } catch {
+    // No docs/releases/ next to the server (a build that did not ship it): an empty changelog,
+    // not an error.
+    return [];
+  }
+}
+
+/**
+ * Every release that has at least one entry, newest first, with `next/` (the notes for changes
+ * that have not shipped in a tagged release yet) ahead of the numbered releases. Directories
+ * without a single entry are left out, so the empty `next/` scaffold that follows a release
+ * does not show up as an unreleased version with nothing in it.
+ *
+ * @param {string} releasesDir
+ * @returns {Promise<Array<{ version: string, unreleased: boolean, counts: Record<string, number> }>>}
+ */
+export async function loadChangelogIndex(releasesDir) {
+  const names = await listReleaseVersionNames(releasesDir);
+
+  const releases = await Promise.all(
+    sortVersionsNewestFirst(names).map(async version => {
+      const versionDir = join(releasesDir, version);
+      const counts = countEntries(await readReleaseSections(versionDir));
+      return { version, unreleased: version === UNRELEASED_VERSION, counts };
+    })
+  );
+  return releases.filter(release => release.counts.total > 0);
+}
+
+/**
+ * The entries of one release, per section. `null` when the name is not a release directory or the
+ * directory has no entries — the caller answers 404 either way. The requested name only selects
+ * one of the directories the listing found; the path is built from that listed name, so the
+ * request never contributes a path segment.
+ *
+ * @param {string} releasesDir
+ * @param {string} version directory name: `next` or a semver version
+ * @returns {Promise<null | { version: string, unreleased: boolean, sections: Record<string, Array<{ id: string, title: string, body: string }>> }>}
+ */
+export async function loadChangelogVersion(releasesDir, version) {
+  if (!isReleaseVersionName(version)) return null;
+
+  const known = (await listReleaseVersionNames(releasesDir)).find(name => name === version);
+  if (!known) return null;
+
+  const versionDir = join(releasesDir, known);
+  const parsed = await readReleaseSections(versionDir);
+  if (countEntries(parsed).total === 0) return null;
+
+  const sections = {};
+  for (const section of RELEASE_SECTIONS) {
+    sections[section.key] = parsed[section.key].entries.map(({ id, title, body }) => ({
+      id,
+      title,
+      body
+    }));
+  }
+  return { version: known, unreleased: known === UNRELEASED_VERSION, sections };
+}
+
+function currentVersion() {
+  try {
+    const version = normalizeVersion(getAppVersion());
+    return version && version !== 'unknown' ? version : null;
+  } catch {
+    return null;
+  }
+}
+
+export default function registerAdminChangelogRoutes(
+  app,
+  { releasesDir = defaultReleasesDir } = {}
+) {
   /**
    * GET /api/admin/changelog
-   * Returns the 5 most recent release changelogs parsed from docs/releases/.
+   * The list of releases that have release notes, newest first, with entry counts per section,
+   * plus the version this server is running so the UI can mark it.
    */
   app.get(buildServerPath('/api/admin/changelog'), adminAuth, async (req, res) => {
     try {
-      let versions;
-      try {
-        const entries = await fs.readdir(releasesDir, { withFileTypes: true });
-        versions = entries
-          .filter(e => e.isDirectory())
-          .map(e => e.name)
-          .sort(compareVersions)
-          .slice(0, 5);
-      } catch {
-        return res.json([]);
-      }
-
-      const changelog = [];
-      for (const version of versions) {
-        const versionDir = join(releasesDir, version);
-
-        // A release directory may be missing any of these — older ones predate
-        // the features/fixes split, so `fixes.md` in particular is often absent.
-        const [features, fixes, breakingChanges] = await Promise.all(
-          ['features.md', 'fixes.md', 'breaking-changes.md'].map(name =>
-            fs.readFile(join(versionDir, name), 'utf8').catch(() => '')
-          )
-        );
-
-        if (features || fixes || breakingChanges) {
-          changelog.push({ version, features, fixes, breakingChanges });
-        }
-      }
-
-      res.json(changelog);
+      const versions = await loadChangelogIndex(releasesDir);
+      res.json({ currentVersion: currentVersion(), versions });
     } catch (error) {
       return sendInternalError(res, error, 'fetch changelog');
+    }
+  });
+
+  /**
+   * GET /api/admin/changelog/:version
+   * The release notes of one release — `next` for unreleased changes — split into
+   * breaking changes, features and fixes, each an array of `{ id, title, body }` entries with the
+   * body as Markdown.
+   */
+  app.get(buildServerPath('/api/admin/changelog/:version'), adminAuth, async (req, res) => {
+    try {
+      const release = await loadChangelogVersion(releasesDir, req.params.version);
+      if (!release) return sendNotFound(res, 'Release');
+      res.json(release);
+    } catch (error) {
+      return sendInternalError(res, error, 'fetch changelog version');
     }
   });
 }
