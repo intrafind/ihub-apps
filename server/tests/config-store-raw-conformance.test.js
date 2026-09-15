@@ -146,6 +146,7 @@ runProviderConformance({
     search: false,
     multiInstance: false,
     blobs: true,
+    blobStore: true,
     conditionalWrites: true,
     rawNamespaces: [...RAW_NAMESPACE_NAMES]
   },

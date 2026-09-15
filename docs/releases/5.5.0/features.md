@@ -1795,6 +1795,10 @@ that owns the content rather than by a chat id.
 - **Media types are allowlisted per kind** — images and documents each bring their own list, and
   anything else is served as an opaque download. SVG and HTML are deliberately excluded: they are
   documents that can run script, not content.
+- **Payloads go through a new blob facet on the storage provider**, as raw bytes rather than base64
+  inside a document. The filesystem provider writes them under `contents/data/blobs/`. This is the
+  seam a future S3-compatible or database-backed store plugs into — four calls, no filesystem
+  assumptions — so artifacts will not be what pins a deployment to a single shared volume.
 - **Nothing changes where chats are not stored.** Anonymous visitors, incognito turns, the compare
   panels and the canvas keep the old behaviour, and keep the note under each image telling the user
   to download it. That note is gone in a durable chat, where it is no longer true.

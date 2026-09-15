@@ -30,7 +30,13 @@ import { NotSupportedError } from './errors.js';
  *   or volume, or every instance.
  * @property {boolean} multiInstance - Several server instances may run against
  *   the same storage safely.
- * @property {boolean} blobs - The append log can store blobs beside a stream.
+ * @property {boolean} blobs - The **append log** can store blobs beside a
+ *   stream (the run ledger's spill files). Unrelated to `blobStore`.
+ * @property {boolean} blobStore - The provider has a standalone `blobs` facet:
+ *   payloads addressed by `(namespace, key)`, with no envelope and no
+ *   encoding. This is the seam an S3-compatible or database-backed object
+ *   store slots into, so that uploads and artifacts stop needing a shared
+ *   volume.
  * @property {boolean} conditionalWrites - `documents.put()` honours the `etag`
  *   compare-and-set and create-only modes. A provider that declares this false
  *   is not routed raw configuration, because create-or-fail is exactly this
@@ -67,6 +73,7 @@ export const DEFAULT_CAPABILITIES = Object.freeze({
   search: false,
   multiInstance: false,
   blobs: false,
+  blobStore: false,
   conditionalWrites: false,
   // Empty, not absent: a provider that serves no raw configuration and one
   // whose capabilities simply forgot to mention it must not read the same,
@@ -115,6 +122,16 @@ export class StorageProvider {
    */
   get documents() {
     throw new NotSupportedError('StorageProvider.documents is not implemented');
+  }
+
+  /**
+   * The blob facet: payloads addressed by key, for content too large to live
+   * in a document. A provider that declares `blobStore: false` throws here.
+   *
+   * @returns {import('./BlobStore.js').BlobStore}
+   */
+  get blobs() {
+    throw new NotSupportedError('StorageProvider.blobs is not implemented');
   }
 
   /**

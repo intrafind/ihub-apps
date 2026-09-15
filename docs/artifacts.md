@@ -16,23 +16,30 @@ it.
 
 ## The model
 
+An artifact is **two things under one key**: a small metadata document and the
+payload itself, in two different storage facets.
+
 ```js
-// artifacts/<scopeType>__<scopeId>__<artifactId>
+// document — artifacts/<scopeType>__<scopeId>__<artifactId>
 {
   version: 1,
   scope: { type: 'chat', id: '7f3c…' },   // what it belongs to
   kind: 'image',                          // what it is
   mimeType: 'image/png',
-  bytes: 1483204,                         // of the base64 document
+  bytes: 1483204,                         // of the payload, decoded
+  sha256: '…',                            // integrity, recorded on write
   name: 'a cat.png',                      // when the producer gave one
   runId: 'run-…',                         // what made it
-  createdAt: '2026-09-15T09:00:00.000Z',
-  data: '…'                               // base64, the only place a payload lives
+  createdAt: '2026-09-15T09:00:00.000Z'
 }
+
+// blob — artifacts/<scopeType>__<scopeId>__<artifactId>
+//   the bytes, raw
 ```
 
 On the filesystem provider that is
-`contents/data/artifacts/<scopeType>__<scopeId>__<artifactId>.json`.
+`contents/data/artifacts/<key>.json` for the metadata and
+`contents/data/blobs/artifacts/<key>` for the payload.
 
 **The payload is never inlined in the producer's own documents.** A chat
 transcript and a workflow state document are single documents that their
@@ -42,9 +49,59 @@ every step for as long as the producer lives. The producer records a
 descriptor instead — `{ id, kind, mimeType, bytes }` — and the payload is
 fetched only when a viewer actually looks at it.
 
-**No locking.** An artifact document is written once, read many times and never
+**And it is not in the artifact's own document either.** Metadata is small,
+listable and filterable; a payload is megabytes written once and read whole.
+Keeping them apart is what lets `list()` answer "what did this produce" without
+touching a single byte of content — and it is what makes the payload store
+swappable, which is the subject of [the next section](#swapping-the-payload-backend).
+
+**No base64.** The bytes are stored raw. A producer may hand the store base64 —
+that is how a model reports a generated image — but it is decoded at the
+boundary, so the 33% encoding tax is paid once on the way in rather than on
+disk and again on every read. `bytes` is therefore the real size of the
+content, which is also what the caps are measured on.
+
+**No locking.** An artifact is written once, read many times and never
 modified, so there is nothing for two writers to lose — and a multi-megabyte
 write never queues behind the producer's own lock.
+
+## Swapping the payload backend
+
+The payload goes through the storage provider's **blob facet**
+(`provider.blobs`, the `BlobStore` contract) — the seam
+[#2318](https://github.com/intrafind/ihub-apps/issues/2318) exists for. It is
+deliberately the smallest surface every candidate backend already has:
+
+| Operation | Filesystem        | S3-compatible   | PostgreSQL           |
+| --------- | ----------------- | --------------- | -------------------- |
+| `put`     | atomic file write | `PutObject`     | large object/`bytea` |
+| `get`     | read file         | `GetObject`     | read                 |
+| `delete`  | unlink            | `DeleteObject`  | delete               |
+| `list`    | readdir + filter  | `ListObjectsV2` | `LIKE` on key        |
+
+No transactions, no locking, no streaming semantics, no filesystem
+assumptions. An S3 adapter implements those four calls, declares
+`blobStore: true`, and **nothing in `ArtifactRepository` or above it changes** —
+which is what takes uploads and artifacts off the shared-volume requirement
+that pins a deployment to one machine today.
+
+Two rules keep it that way, and the conformance suite enforces both:
+
+- **The blob facet stores bytes, not meaning.** Media type, display name,
+  producer and timestamps live in the metadata document. `put` accepts a
+  `contentType` hint so an object store can set it on the object (an S3
+  presigned URL needs it to serve correctly), but the document stays
+  authoritative and a backend that cannot persist it simply ignores it.
+- **Prefix listing is part of the contract.** It is how a scope is swept, and
+  the only way to reach a payload whose metadata document never landed.
+
+`server/storage/__tests__/providerConformance.js` runs the facet's contract
+against any provider that declares the capability, so a future backend is
+tested against the same expectations the filesystem one meets.
+
+> `blobStore` is a different capability from `blobs`, which says the *append
+> log* can park payloads beside a stream — the run ledger's spill files. The
+> two are unrelated stores.
 
 ## Scopes
 
@@ -98,7 +155,7 @@ takes effect without a restart:
 | Key           | Default    | Meaning                                                      |
 | ------------- | ---------- | ------------------------------------------------------------ |
 | `enabled`     | `true`     | Master switch for every producer; `false` stores nothing      |
-| `maxBytes`    | `10485760` | Largest single artifact, in bytes of base64; `<= 0` uncapped  |
+| `maxBytes`    | `10485760` | Largest single artifact, in bytes of content; `<= 0` uncapped |
 | `maxPerBatch` | `8`        | Artifacts one producer records in one go; `<= 0` uncapped     |
 
 Migration V106 seeds the block into existing installations at its defaults, so
@@ -201,6 +258,8 @@ is the only one that writes a file, and it writes into the agent tree.
 
 | File                                                | Responsibility                                         |
 | --------------------------------------------------- | ------------------------------------------------------ |
+| `server/storage/BlobStore.js`                       | The payload contract an S3 or database backend implements |
+| `server/storage/providers/filesystem/FilesystemBlobStore.js` | It, on files                                  |
 | `server/services/artifacts/ArtifactRepository.js`   | The store: scopes, keys, put/get/list/delete            |
 | `server/services/artifacts/artifactPolicy.js`       | Kinds, media-type allowlists, caps and the master switch |
 | `server/services/chat/chatMaterializer.js`          | The chat producer: a turn's images become artifacts     |
@@ -209,6 +268,7 @@ is the only one that writes a file, and it writes into the agent tree.
 
 ```bash
 node --test server/tests/artifact-repository.test.js
+npm run test:storage   # includes the blob facet's conformance tests
 ```
 
 See also [Chat Persistence](chat-persistence.md) and

@@ -40,9 +40,17 @@ function recordingLogger() {
   };
 }
 
-/** Base64 of `size` bytes of a recognizable filler. */
+/**
+ * Base64 of `size` bytes of a recognizable filler — the shape the loop reports
+ * a generated image in, and what a producer hands the store.
+ */
 function payload(size = 64) {
   return Buffer.alloc(size, 7).toString('base64');
+}
+
+/** The raw bytes `payload(size)` encodes, which is what the store keeps. */
+function rawPayload(size = 64) {
+  return Buffer.alloc(size, 7);
 }
 
 /** The artifact policy a test drives the materializer with, defaults included. */
@@ -64,7 +72,11 @@ async function withRepository(fn, { maxMessages = null } = {}) {
   const provider = new FilesystemStorageProvider({ baseDir, flushIntervalMs: 25 });
   await provider.initialize();
   const { lines, logger } = recordingLogger();
-  const artifacts = new ArtifactRepository({ documents: provider.documents, logger });
+  const artifacts = new ArtifactRepository({
+    documents: provider.documents,
+    blobs: provider.blobs,
+    logger
+  });
   const repository = new ChatRepository({
     documents: provider.documents,
     locks: provider.locks,
@@ -237,7 +249,7 @@ describe('the materializer records what the turn drew', () => {
         repository.artifactScope(CHAT_ID),
         answer.artifacts[0].id
       );
-      assert.equal(artifact.data, payload(128));
+      assert.ok(artifact.data.equals(rawPayload(128)), 'the payload is stored raw, not base64');
       assert.equal(artifact.mimeType, 'image/png');
     });
   });
@@ -275,7 +287,9 @@ describe('the materializer records what the turn drew', () => {
       // no way to tell a dropped artifact from one the model never drew.
       assert.equal(descriptors.length, 3);
       assert.equal(descriptors[0].unavailable, 'too-large');
-      assert.equal(descriptors[0].bytes, big.length);
+      // The decoded size, which is what the cap is measured on and what the
+      // store would have recorded had it been kept.
+      assert.equal(descriptors[0].bytes, 4096);
       assert.ok(descriptors[1].id, 'the one that fits is stored');
       assert.equal(descriptors[2].unavailable, 'too-many');
     });

@@ -22,7 +22,7 @@ startup. Durable chats were the first consumer; the runtime stores followed.
 | Namespace                   | Holds                                                       | Owner id                    | Documented in                            |
 | --------------------------- | ----------------------------------------------------------- | --------------------------- | ---------------------------------------- |
 | `chats`, `chat-messages`    | stored conversations and their transcripts (off by default)  | the chat's principal        | [Chat Persistence](chat-persistence.md)  |
-| `artifacts`                 | one document per artifact a run produced, keyed by its scope  | –                           | [Artifacts](artifacts.md)                |
+| `artifacts`                 | what a run produced: a metadata document and a blob per artifact | –                        | [Artifacts](artifacts.md)                |
 | `runs`                      | one summary per run — chats, workflow executions, agent runs | the run's principal         | [Run Ledger](run-ledger.md)              |
 | `interactions`              | pending and recently settled human interactions              | the raising run's principal | [Run Ledger](run-ledger.md)              |
 | `workflow-state`            | an execution's checkpoint, and what a resume reads           | the principal that started it | [Workflows](workflows.md)              |
@@ -62,13 +62,14 @@ imports that populate these namespaces never delete what they read — see
 The full plan is in
 `concepts/persistence-layer/2026-09-09 Storage Provider and Durable Chats Design.md`.
 
-## The four facets
+## The five facets
 
 A provider is a `StorageProvider` (`server/storage/StorageProvider.js`) with
-four getters and a lifecycle:
+five getters and a lifecycle:
 
 ```js
 provider.documents; // DocumentStore
+provider.blobs; // BlobStore
 provider.logs; // AppendLog
 provider.notifier; // ChangeNotifier
 provider.locks; // LockManager
@@ -85,6 +86,12 @@ get(ns, key)                       -> Promise<Document|null>
 put(ns, key, data, opts?)          -> Promise<Document>
 delete(ns, key)                    -> Promise<boolean>
 list(ns, opts?)                    -> Promise<{ items: Document[], nextCursor: string|null }>
+
+// BlobStore — payloads too large for a document, addressed by key
+put(ns, key, data, opts?)          -> Promise<{ key, bytes, sha256 }>
+get(ns, key)                       -> Promise<{ key, bytes, data: Buffer }|null>
+delete(ns, key)                    -> Promise<boolean>
+list(ns, opts?)                    -> Promise<{ items: [{ key, bytes }], nextCursor }>
 
 // AppendLog
 append(stream, entry, seq)         -> Promise<{ stream, seq }>
@@ -106,9 +113,19 @@ close()                            -> Promise<void>
 withLock(name, fn, opts?)          -> Promise<T>           // opts { ttlMs = 30000, waitMs = 5000 }
 ```
 
-The four abstract base classes carry the full contract in their JSDoc; a
-provider extends them and every method it does not implement throws
+The abstract base classes carry the full contract in their JSDoc; a provider
+extends them and every method it does not implement throws
 `NotSupportedError` rather than silently doing nothing.
+
+**Documents and blobs are split for a reason.** A document is small,
+structured and listable — the thing you filter and compare. A blob is
+megabytes written once and read whole. Putting a payload in a document forces
+base64 (a 33% tax), puts megabytes in a JSONB column, and makes an object store
+impossible to slot in, because S3 stores objects rather than rows. So the blob
+facet takes bytes under a key and nothing else, which is deliberately the
+smallest surface the filesystem, an S3-compatible store and PostgreSQL all
+have natively — see [Artifacts](artifacts.md#swapping-the-payload-backend)
+and issue #2318.
 
 ## Documents
 
@@ -578,14 +595,15 @@ special-case a provider by name:
   locking: 'none' | 'advisory-single-machine' | 'distributed',
   search: boolean,
   multiInstance: boolean,
-  blobs: boolean,
+  blobs: boolean,          // the APPEND LOG can park payloads beside a stream
+  blobStore: boolean,      // the provider has a `blobs` facet (key-addressed)
   conditionalWrites: boolean,
   rawNamespaces: string[]   // namespaces served in raw mode; [] when none
 }
 ```
 
 The filesystem provider reports
-`{ transactions: false, notifications: 'in-process', locking: 'advisory-single-machine', search: false, multiInstance: false, blobs: true, conditionalWrites: true }`,
+`{ transactions: false, notifications: 'in-process', locking: 'advisory-single-machine', search: false, multiInstance: false, blobs: true, blobStore: true, conditionalWrites: true }`,
 plus every namespace from `server/storage/namespaces.js` in `rawNamespaces`. A
 provider that leaves `rawNamespaces` empty serves no configuration, which is a
 supported answer: `ConfigStore` then reads and writes those files on the
@@ -617,7 +635,7 @@ distributed lock, which is step 3, not when the row above turns green.
 
 ## Writing a provider
 
-1. Extend `StorageProvider` and the four facet base classes from
+1. Extend `StorageProvider` and the facet base classes from
    `server/storage/`. Implement the lifecycle (`initialize` idempotent,
    `shutdown` leaves no timers or handles behind), and report the truth in
    `getCapabilities()`.

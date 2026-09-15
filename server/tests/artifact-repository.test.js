@@ -41,9 +41,17 @@ function recordingLogger() {
   };
 }
 
-/** Base64 of `size` bytes of a recognizable filler. */
+/**
+ * Base64 of `size` bytes of a recognizable filler — the shape a model reports
+ * a generated image in, and what a producer hands the store.
+ */
 function payload(size = 64) {
   return Buffer.alloc(size, 7).toString('base64');
+}
+
+/** The raw bytes `payload(size)` encodes, which is what the store keeps. */
+function rawPayload(size = 64) {
+  return Buffer.alloc(size, 7);
 }
 
 /** Run `fn` with a repository over a scratch directory, torn down after. */
@@ -54,11 +62,12 @@ async function withRepository(fn, { policy } = {}) {
   const { lines, logger } = recordingLogger();
   const repository = new ArtifactRepository({
     documents: provider.documents,
+    blobs: provider.blobs,
     logger,
     ...(policy ? { policy: () => policy } : {})
   });
   try {
-    await fn({ repository, documents: provider.documents, lines });
+    await fn({ repository, documents: provider.documents, blobs: provider.blobs, lines });
   } finally {
     await provider.shutdown();
     await fs.rm(baseDir, { recursive: true, force: true });
@@ -66,8 +75,8 @@ async function withRepository(fn, { policy } = {}) {
 }
 
 describe('an artifact belongs to a scope, not to a chat', () => {
-  it('stores a payload in its own document and hands back a descriptor', async () => {
-    await withRepository(async ({ repository, documents }) => {
+  it('splits metadata into a document and the payload into a blob', async () => {
+    await withRepository(async ({ repository, documents, blobs }) => {
       const data = payload(1024);
 
       const stored = await repository.put(RUN, {
@@ -81,13 +90,23 @@ describe('an artifact belongs to a scope, not to a chat', () => {
       assert.ok(stored.id);
       assert.equal(stored.kind, 'document');
       assert.equal(stored.mimeType, 'text/markdown');
-      assert.equal(stored.bytes, data.length);
+      // The decoded size, not the base64 size: the store keeps raw bytes, so
+      // this is the number a viewer sees and the caps are measured on.
+      assert.equal(stored.bytes, 1024);
       assert.equal(stored.name, 'report.md');
       assert.equal(stored.data, undefined, 'a descriptor never carries the payload');
 
+      // Metadata is a document; the payload is a blob. A `list()` must be able
+      // to answer without touching a single megabyte, which is only true while
+      // the document carries no payload.
       const doc = await documents.get(ARTIFACTS_NAMESPACE, artifactKey(RUN, stored.id));
-      assert.equal(doc.data.data, data);
+      assert.equal(doc.data.data, undefined, 'the document holds metadata only');
+      assert.equal(doc.data.bytes, 1024);
+      assert.equal(typeof doc.data.sha256, 'string');
       assert.deepEqual(doc.data.scope, RUN, 'the scope is in the document, not only the key');
+
+      const blob = await blobs.get(ARTIFACTS_NAMESPACE, artifactKey(RUN, stored.id));
+      assert.ok(blob.data.equals(rawPayload(1024)), 'the payload is stored raw, not base64');
     });
   });
 
@@ -95,7 +114,7 @@ describe('an artifact belongs to a scope, not to a chat', () => {
     await withRepository(async ({ repository }) => {
       const stored = await repository.put(CHAT, { mimeType: 'image/png', data: payload() });
 
-      assert.equal((await repository.get(CHAT, stored.id)).data, payload());
+      assert.ok((await repository.get(CHAT, stored.id)).data.equals(rawPayload()));
       // A run and a chat are different owners. The id alone is not a
       // capability: it is addressed under its scope, and the scope is what a
       // route authorizes.
@@ -228,6 +247,63 @@ describe('everything one scope produced can be listed and emptied', () => {
       assert.equal(await repository.deleteMany(CHAT, [gone.id, 'not-a-real-id']), 1);
       assert.equal(await repository.get(CHAT, gone.id), null);
       assert.ok(await repository.get(CHAT, kept.id));
+    });
+  });
+});
+
+describe('the payload seam is swappable', () => {
+  it('needs a blob facet, and is a no-op without one', async () => {
+    // A provider with documents but no blob store cannot take artifacts:
+    // putting megabytes back in documents is exactly what the split prevents,
+    // so this is a no-op rather than a silent fallback.
+    await withRepository(async ({ documents }) => {
+      const repository = new ArtifactRepository({ documents, blobs: null });
+      assert.equal(repository.isAvailable(), false);
+      assert.equal(await repository.put(CHAT, { mimeType: 'image/png', data: payload() }), null);
+    });
+  });
+
+  it('asks the blob facet for exactly the four calls an object store has', async () => {
+    // The point of issue #2318: an S3-compatible backend implements put, get,
+    // delete and a prefix list, and nothing above this line changes. This
+    // double is that contract and nothing else — no filesystem, no provider.
+    const objects = new Map();
+    const blobs = {
+      async put(ns, key, data) {
+        objects.set(`${ns}/${key}`, Buffer.from(data));
+        return { key, bytes: data.length, sha256: 'x'.repeat(64) };
+      },
+      async get(ns, key) {
+        const data = objects.get(`${ns}/${key}`);
+        return data ? { key, bytes: data.length, data } : null;
+      },
+      async delete(ns, key) {
+        return objects.delete(`${ns}/${key}`);
+      },
+      async list(ns, { prefix } = {}) {
+        const items = [...objects.entries()]
+          .filter(([id]) => id.startsWith(`${ns}/${prefix || ''}`))
+          .map(([id, data]) => ({ key: id.slice(ns.length + 1), bytes: data.length }));
+        return { items, nextCursor: null };
+      }
+    };
+    await withRepository(async ({ documents }) => {
+      const repository = new ArtifactRepository({ documents, blobs });
+
+      const stored = await repository.put(CHAT, { mimeType: 'image/png', data: payload(32) });
+      assert.equal(stored.bytes, 32);
+      assert.ok((await repository.get(CHAT, stored.id)).data.equals(rawPayload(32)));
+      assert.deepEqual(
+        (await repository.list(CHAT)).map(entry => entry.id),
+        [stored.id]
+      );
+
+      // Including the orphan sweep, which is the one call that needs a prefix
+      // listing rather than a lookup.
+      await blobs.put(ARTIFACTS_NAMESPACE, artifactKey(CHAT, 'orphan'), Buffer.from('x'));
+      await repository.deleteScope(CHAT);
+      assert.equal(objects.size, 0, 'payloads went, orphan included');
+      assert.equal(await repository.get(CHAT, stored.id), null);
     });
   });
 });

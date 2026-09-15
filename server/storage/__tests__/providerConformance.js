@@ -258,6 +258,7 @@ export function runProviderConformance({ name, createProvider, capabilities, raw
 
   /** Skip reasons for the facets a provider may legitimately not offer. */
   const skipWithoutBlobs = capabilities.blobs ? false : 'provider reports blobs: false';
+  const skipWithoutBlobStore = capabilities.blobStore ? false : 'provider reports blobStore: false';
   const skipWithoutLocks =
     capabilities.locking === 'none' ? "provider reports locking: 'none'" : false;
   const skipWithoutEvents =
@@ -338,6 +339,7 @@ export function runProviderConformance({ name, createProvider, capabilities, raw
         assert.equal(typeof caps.search, 'boolean');
         assert.equal(typeof caps.multiInstance, 'boolean');
         assert.equal(typeof caps.blobs, 'boolean');
+        assert.equal(typeof caps.blobStore, 'boolean');
         assert.equal(typeof caps.conditionalWrites, 'boolean');
         // Declared, not merely present when a provider happens to serve raw
         // namespaces: `ConfigStore` reads it to decide what it may route, and
@@ -1631,6 +1633,97 @@ export function runProviderConformance({ name, createProvider, capabilities, raw
         await shared.logs.putBlob(stream, 'payload.bin', Buffer.from('bytes'));
         assert.equal(await shared.logs.deleteStream(stream), true);
         assert.equal(await shared.logs.getBlob(stream, 'payload.bin'), null);
+      });
+    });
+
+    describe('the blob facet', { skip: skipWithoutBlobStore }, () => {
+      // The seam an S3-compatible or database-backed store slots into
+      // (issue #2318). Everything asserted here is something all of them can
+      // do natively — anything more would be a filesystem assumption that
+      // makes the facet unswappable, which is the whole point of having it.
+      const NS = 'conformance-blobs';
+
+      it('round-trips bytes with no envelope and no encoding', async () => {
+        const key = nextId('blob');
+        const bytes = Buffer.from([0x00, 0xff, 0x10, 0x89, 0x50, 0x4e, 0x47]);
+
+        const ref = await shared.blobs.put(NS, key, bytes);
+
+        assert.equal(ref.key, key);
+        assert.equal(ref.bytes, bytes.length);
+        assert.equal(ref.sha256, crypto.createHash('sha256').update(bytes).digest('hex'));
+        const read = await shared.blobs.get(NS, key);
+        assert.ok(Buffer.isBuffer(read.data), 'get returns a Buffer');
+        // Byte-for-byte, including the bytes that are not valid UTF-8: a store
+        // that round-trips text but mangles binary is not a blob store.
+        assert.deepEqual(read.data, bytes);
+        assert.equal(read.bytes, bytes.length);
+      });
+
+      it('accepts a string or a Uint8Array', async () => {
+        const text = nextId('blob');
+        await shared.blobs.put(NS, text, 'hello');
+        assert.deepEqual((await shared.blobs.get(NS, text)).data, Buffer.from('hello', 'utf8'));
+
+        const typed = nextId('blob');
+        await shared.blobs.put(NS, typed, new Uint8Array([1, 2, 3]));
+        assert.deepEqual((await shared.blobs.get(NS, typed)).data, Buffer.from([1, 2, 3]));
+      });
+
+      it('replaces on a second write to the same key', async () => {
+        const key = nextId('blob');
+        await shared.blobs.put(NS, key, Buffer.from('first'));
+        await shared.blobs.put(NS, key, Buffer.from('second'));
+        assert.deepEqual((await shared.blobs.get(NS, key)).data, Buffer.from('second'));
+      });
+
+      it('answers null for a key it does not have', async () => {
+        assert.equal(await shared.blobs.get(NS, nextId('missing')), null);
+      });
+
+      it('deletes idempotently', async () => {
+        const key = nextId('blob');
+        await shared.blobs.put(NS, key, Buffer.from('bye'));
+
+        assert.equal(await shared.blobs.delete(NS, key), true);
+        // Gone already is not an error: a cascade that runs twice, or races
+        // another, must not fail on the second pass.
+        assert.equal(await shared.blobs.delete(NS, key), false);
+        assert.equal(await shared.blobs.get(NS, key), null);
+      });
+
+      it('lists by prefix, without the payloads', async () => {
+        // The one call a caller cannot emulate: it is how everything belonging
+        // to one owner is swept, including a blob whose metadata never landed.
+        const prefix = `${nextId('scope')}__`;
+        const mine = [`${prefix}a`, `${prefix}b`];
+        for (const key of mine) await shared.blobs.put(NS, key, Buffer.from('x'.repeat(3)));
+        const other = nextId('elsewhere');
+        await shared.blobs.put(NS, other, Buffer.from('y'));
+
+        const page = await shared.blobs.list(NS, { prefix });
+
+        assert.deepEqual(
+          page.items.map(item => item.key).sort(),
+          mine,
+          'only the keys under the prefix'
+        );
+        assert.equal(page.items[0].bytes, 3, 'a listing reports the size');
+        assert.ok(
+          page.items.every(item => item.data === undefined),
+          'a listing never carries payloads'
+        );
+      });
+
+      it('reports an empty namespace as empty, not as an error', async () => {
+        const page = await shared.blobs.list('conformance-blobs-empty', {});
+        assert.deepEqual(page.items, []);
+        assert.equal(page.nextCursor, null);
+      });
+
+      it('refuses a key that could address a path', async () => {
+        await assert.rejects(() => shared.blobs.put(NS, '../escape', Buffer.from('x')));
+        await assert.rejects(() => shared.blobs.get(NS, '../escape'));
       });
     });
 

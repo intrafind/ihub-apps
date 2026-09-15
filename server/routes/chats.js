@@ -267,7 +267,9 @@ export default function registerChatRoutes(app) {
           artifactId
         );
         if (!artifact) return sendNotFound(res, 'Artifact');
-        const body = Buffer.from(artifact.data, 'base64');
+        // Already the bytes: the store keeps payloads raw, so serving one is a
+        // read and a write, with no decode in between.
+        const body = artifact.data;
         // An artifact document is written once and never modified, and its id
         // is a fresh uuid, so the bytes behind this URL cannot change.
         // `private` because the response is owner-scoped and a shared cache

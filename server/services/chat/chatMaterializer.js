@@ -99,7 +99,10 @@ export async function storeGeneratedArtifacts({ chatId, runId, artifacts, store,
     const kind = typeof artifact.kind === 'string' && artifact.kind ? artifact.kind : 'image';
     const mimeType =
       typeof artifact.mimeType === 'string' && artifact.mimeType ? artifact.mimeType : 'image/png';
-    const bytes = Buffer.byteLength(artifact.data, 'utf8');
+    // What the picture actually weighs. The loop reports base64; the store
+    // keeps raw bytes, so the cap is measured on the decoded size — the same
+    // number a viewer sees and the same number the store records.
+    const bytes = Buffer.byteLength(artifact.data, 'base64');
     const refused = { kind, mimeType, bytes };
     if (maxPerBatch > 0 && stored >= maxPerBatch) {
       descriptors.push({ ...refused, unavailable: 'too-many' });
