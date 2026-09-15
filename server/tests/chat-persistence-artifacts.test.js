@@ -1,16 +1,20 @@
 /**
- * Generated images survive a durable chat — #2362.
+ * What a durable chat's turns produced survives the chat — #2362.
  *
  * A picture the model produced used to live only in the tab that asked for it:
  * `sessionStorage` cannot hold megabytes, so the client stripped the payload
  * and the image was gone the moment the user navigated away. With durable
  * chats on, the transcript survives, and so must what the turn drew.
  *
+ * It is stored as an *artifact* rather than an image: a generated picture is
+ * the first kind, not the only one, and everything one conversation produced
+ * is meant to be listable together.
+ *
  * The two halves of that are tested here against a real filesystem provider:
  * the repository, which keeps a payload in its own document so the transcript
  * stays small, and the materializer, which turns a turn's images into the
  * descriptors an assistant message carries. What the route does with them —
- * who may read an image, and what happens to one nobody may — lives in
+ * who may read an artifact, and what happens to one nobody may — lives in
  * `chat-persistence-routes.test.js` beside the other access checks.
  */
 import fs from 'node:fs/promises';
@@ -20,17 +24,17 @@ import { describe, it } from 'node:test';
 import assert from 'node:assert/strict';
 
 import { FilesystemStorageProvider } from '../storage/providers/filesystem/index.js';
-import { ChatRepository, imageDocumentKey } from '../services/chat/ChatRepository.js';
+import { ChatRepository, artifactDocumentKey } from '../services/chat/ChatRepository.js';
 import {
   materializeAssistantTurn,
-  storeGeneratedImages
+  storeGeneratedArtifacts
 } from '../services/chat/chatMaterializer.js';
 
 /** Namespace the payloads land in, as the storage layer names it. */
-const CHAT_IMAGES_NS = 'chat-images';
+const CHAT_ARTIFACTS_NS = 'chat-artifacts';
 
 const OWNER = 'user-1';
-const CHAT_ID = 'chat-image-1';
+const CHAT_ID = 'chat-artifact-1';
 
 /** A logger that records instead of printing. */
 function recordingLogger() {
@@ -47,12 +51,12 @@ function payload(size = 64) {
   return Buffer.alloc(size, 7).toString('base64');
 }
 
-/** The image policy a test drives the materializer with, defaults included. */
+/** The artifact policy a test drives the materializer with, defaults included. */
 function policy(overrides = {}) {
   return {
-    storeImages: true,
-    maxImageBytes: 10 * 1024 * 1024,
-    maxImagesPerMessage: 8,
+    storeArtifacts: true,
+    maxArtifactBytes: 10 * 1024 * 1024,
+    maxArtifactsPerMessage: 8,
     ...overrides
   };
 }
@@ -64,7 +68,7 @@ function policy(overrides = {}) {
  * @returns {Promise<void>}
  */
 async function withRepository(fn) {
-  const baseDir = await fs.mkdtemp(path.join(os.tmpdir(), 'ihub-chat-images-'));
+  const baseDir = await fs.mkdtemp(path.join(os.tmpdir(), 'ihub-chat-artifacts-'));
   const provider = new FilesystemStorageProvider({ baseDir, flushIntervalMs: 25 });
   await provider.initialize();
   const { lines, logger } = recordingLogger();
@@ -81,13 +85,13 @@ async function withRepository(fn) {
   }
 }
 
-describe('a generated image is stored beside the transcript, not inside it', () => {
+describe('an artifact is stored beside the transcript, not inside it', () => {
   it('keeps the payload out of the transcript document and hands back a descriptor', async () => {
     await withRepository(async ({ repository, documents }) => {
       await repository.ensureChat({ chatId: CHAT_ID, ownerId: OWNER, appId: 'chat' });
       const data = payload(1024);
 
-      const stored = await repository.putImage(CHAT_ID, {
+      const stored = await repository.putArtifact(CHAT_ID, {
         mimeType: 'image/png',
         data,
         runId: 'run-1'
@@ -96,16 +100,17 @@ describe('a generated image is stored beside the transcript, not inside it', () 
         role: 'assistant',
         content: 'here it is',
         runId: 'run-1',
-        images: [stored]
+        artifacts: [stored]
       });
 
       assert.ok(stored.id, 'the descriptor carries the id the payload is addressed by');
+      assert.equal(stored.kind, 'image', 'an image is one kind of artifact, and says so');
       assert.equal(stored.mimeType, 'image/png');
       assert.equal(stored.bytes, data.length);
 
       const { messages } = await repository.getMessages(CHAT_ID);
       const answer = messages.at(-1);
-      assert.deepEqual(answer.images, [stored]);
+      assert.deepEqual(answer.artifacts, [stored]);
       // The point of the whole design: the transcript every later turn reads,
       // re-serializes and re-hashes must not carry a megabyte of base64.
       assert.equal(
@@ -114,9 +119,10 @@ describe('a generated image is stored beside the transcript, not inside it', () 
         'the payload is not inlined in the message'
       );
 
-      const doc = await documents.get(CHAT_IMAGES_NS, imageDocumentKey(CHAT_ID, stored.id));
+      const doc = await documents.get(CHAT_ARTIFACTS_NS, artifactDocumentKey(CHAT_ID, stored.id));
       assert.equal(doc.data.data, data);
       assert.equal(doc.data.chatId, CHAT_ID);
+      assert.equal(doc.data.kind, 'image');
       assert.equal(doc.data.runId, 'run-1');
     });
   });
@@ -125,14 +131,17 @@ describe('a generated image is stored beside the transcript, not inside it', () 
     await withRepository(async ({ repository }) => {
       await repository.ensureChat({ chatId: CHAT_ID, ownerId: OWNER, appId: 'chat' });
       await repository.ensureChat({ chatId: 'chat-other', ownerId: OWNER, appId: 'chat' });
-      const stored = await repository.putImage(CHAT_ID, { mimeType: 'image/png', data: payload() });
+      const stored = await repository.putArtifact(CHAT_ID, {
+        mimeType: 'image/png',
+        data: payload()
+      });
 
-      const own = await repository.getImage(CHAT_ID, stored.id);
+      const own = await repository.getArtifact(CHAT_ID, stored.id);
       assert.equal(own.data, payload());
       // The id alone is not a capability: it is addressed under the chat, and
       // the chat is what the route authorizes.
-      assert.equal(await repository.getImage('chat-other', stored.id), null);
-      assert.equal(await repository.getImage(CHAT_ID, 'no-such-image'), null);
+      assert.equal(await repository.getArtifact('chat-other', stored.id), null);
+      assert.equal(await repository.getArtifact(CHAT_ID, 'no-such-image'), null);
     });
   });
 
@@ -141,12 +150,15 @@ describe('a generated image is stored beside the transcript, not inside it', () 
       await repository.ensureChat({ chatId: CHAT_ID, ownerId: OWNER, appId: 'chat' });
       // The type comes from a model response and ends up in a `Content-Type`
       // header on a same-origin URL. `text/html` there is a stored XSS.
-      const html = await repository.putImage(CHAT_ID, { mimeType: 'text/html', data: payload() });
-      const svg = await repository.putImage(CHAT_ID, {
+      const html = await repository.putArtifact(CHAT_ID, {
+        mimeType: 'text/html',
+        data: payload()
+      });
+      const svg = await repository.putArtifact(CHAT_ID, {
         mimeType: 'image/svg+xml',
         data: payload()
       });
-      const jpeg = await repository.putImage(CHAT_ID, {
+      const jpeg = await repository.putArtifact(CHAT_ID, {
         mimeType: 'image/jpeg; charset=binary',
         data: payload()
       });
@@ -154,42 +166,105 @@ describe('a generated image is stored beside the transcript, not inside it', () 
       assert.equal(html.mimeType, 'application/octet-stream');
       assert.equal(svg.mimeType, 'application/octet-stream', 'svg is a document that runs script');
       assert.equal(jpeg.mimeType, 'image/jpeg', 'a parameterized type is still that type');
-      const jpg = await repository.putImage(CHAT_ID, { mimeType: 'IMAGE/JPG', data: payload() });
+      const jpg = await repository.putArtifact(CHAT_ID, { mimeType: 'IMAGE/JPG', data: payload() });
       assert.equal(jpg.mimeType, 'image/jpeg', 'the spelling providers use is normalized');
       assert.equal(
-        (await repository.getImage(CHAT_ID, html.id)).mimeType,
+        (await repository.getArtifact(CHAT_ID, html.id)).mimeType,
         'application/octet-stream'
       );
     });
   });
 });
 
-describe('an image lives exactly as long as the message that names it', () => {
+describe('everything one chat produced can be listed together', () => {
+  it("lists the chat's artifacts newest first, without their payloads", async () => {
+    // The reason the store is keyed by chat and named for artifacts rather
+    // than images: "what did this conversation produce" is a question about
+    // the chat, not about any one message, and answering it must not load a
+    // megabyte per entry.
+    await withRepository(async ({ repository }) => {
+      await repository.ensureChat({ chatId: CHAT_ID, ownerId: OWNER, appId: 'chat' });
+      const first = await repository.putArtifact(CHAT_ID, {
+        kind: 'image',
+        mimeType: 'image/png',
+        data: payload(),
+        name: 'a cat.png',
+        runId: 'run-1'
+      });
+      const second = await repository.putArtifact(CHAT_ID, {
+        kind: 'image',
+        mimeType: 'image/webp',
+        data: payload(128),
+        runId: 'run-2'
+      });
+
+      const listed = await repository.listArtifacts(CHAT_ID);
+
+      assert.deepEqual(
+        listed.map(entry => entry.id),
+        [second.id, first.id],
+        'newest first'
+      );
+      assert.equal(listed[1].name, 'a cat.png');
+      assert.equal(listed[1].runId, 'run-1', 'the run that produced it is on the entry');
+      assert.equal(listed[0].mimeType, 'image/webp');
+      assert.ok(
+        listed.every(entry => entry.data === undefined),
+        'no payloads in a listing'
+      );
+    });
+  });
+
+  it("does not list another chat's artifacts", async () => {
+    await withRepository(async ({ repository }) => {
+      await repository.ensureChat({ chatId: 'a', ownerId: OWNER, appId: 'chat' });
+      await repository.ensureChat({ chatId: 'a__b', ownerId: OWNER, appId: 'chat' });
+      const mine = await repository.putArtifact('a', { mimeType: 'image/png', data: payload() });
+      await repository.putArtifact('a__b', { mimeType: 'image/png', data: payload() });
+
+      // `a` and `a__b` share a key prefix, so the walk has to tell them apart
+      // by the separator count in the suffix — the same rule the sweep uses.
+      assert.deepEqual(
+        (await repository.listArtifacts('a')).map(entry => entry.id),
+        [mine.id]
+      );
+      assert.equal((await repository.listArtifacts('a__b')).length, 1);
+    });
+  });
+});
+
+describe('an artifact lives exactly as long as the message that names it', () => {
   it('goes with the chat, including a payload no message ever referenced', async () => {
     await withRepository(async ({ repository, documents }) => {
       await repository.ensureChat({ chatId: CHAT_ID, ownerId: OWNER, appId: 'chat' });
-      const referenced = await repository.putImage(CHAT_ID, {
+      const referenced = await repository.putArtifact(CHAT_ID, {
         mimeType: 'image/png',
         data: payload()
       });
       // The answer's write can fail after the payload is stored. Nothing else
       // in the tree enumerates this namespace, so the cascade has to be driven
       // by the key prefix rather than by the transcript.
-      const orphan = await repository.putImage(CHAT_ID, { mimeType: 'image/png', data: payload() });
+      const orphan = await repository.putArtifact(CHAT_ID, {
+        mimeType: 'image/png',
+        data: payload()
+      });
       await repository.appendMessage(CHAT_ID, {
         role: 'assistant',
         content: 'here it is',
         runId: 'run-1',
-        images: [referenced]
+        artifacts: [referenced]
       });
 
       await repository.deleteChat(CHAT_ID);
 
       assert.equal(
-        await documents.get(CHAT_IMAGES_NS, imageDocumentKey(CHAT_ID, referenced.id)),
+        await documents.get(CHAT_ARTIFACTS_NS, artifactDocumentKey(CHAT_ID, referenced.id)),
         null
       );
-      assert.equal(await documents.get(CHAT_IMAGES_NS, imageDocumentKey(CHAT_ID, orphan.id)), null);
+      assert.equal(
+        await documents.get(CHAT_ARTIFACTS_NS, artifactDocumentKey(CHAT_ID, orphan.id)),
+        null
+      );
     });
   });
 
@@ -198,14 +273,17 @@ describe('an image lives exactly as long as the message that names it', () => {
       // `a` and `a__b` share a key prefix. Sweeping `a` must not reach `a__b`.
       await repository.ensureChat({ chatId: 'a', ownerId: OWNER, appId: 'chat' });
       await repository.ensureChat({ chatId: 'a__b', ownerId: OWNER, appId: 'chat' });
-      const mine = await repository.putImage('a', { mimeType: 'image/png', data: payload() });
-      const theirs = await repository.putImage('a__b', { mimeType: 'image/png', data: payload() });
+      const mine = await repository.putArtifact('a', { mimeType: 'image/png', data: payload() });
+      const theirs = await repository.putArtifact('a__b', {
+        mimeType: 'image/png',
+        data: payload()
+      });
 
       await repository.deleteChat('a');
 
-      assert.equal(await documents.get(CHAT_IMAGES_NS, imageDocumentKey('a', mine.id)), null);
+      assert.equal(await documents.get(CHAT_ARTIFACTS_NS, artifactDocumentKey('a', mine.id)), null);
       assert.ok(
-        await documents.get(CHAT_IMAGES_NS, imageDocumentKey('a__b', theirs.id)),
+        await documents.get(CHAT_ARTIFACTS_NS, artifactDocumentKey('a__b', theirs.id)),
         "the other chat's image survived"
       );
     });
@@ -219,7 +297,7 @@ describe('an image lives exactly as long as the message that names it', () => {
         content: 'draw me a cat',
         runId: 'run-1'
       });
-      const superseded = await repository.putImage(CHAT_ID, {
+      const superseded = await repository.putArtifact(CHAT_ID, {
         mimeType: 'image/png',
         data: payload()
       });
@@ -227,7 +305,7 @@ describe('an image lives exactly as long as the message that names it', () => {
         role: 'assistant',
         content: 'a cat',
         runId: 'run-1',
-        images: [superseded]
+        artifacts: [superseded]
       });
 
       // Editing the question and sending it again truncates the stored history
@@ -239,7 +317,7 @@ describe('an image lives exactly as long as the message that names it', () => {
       );
 
       assert.equal(
-        await documents.get(CHAT_IMAGES_NS, imageDocumentKey(CHAT_ID, superseded.id)),
+        await documents.get(CHAT_ARTIFACTS_NS, artifactDocumentKey(CHAT_ID, superseded.id)),
         null
       );
     });
@@ -255,7 +333,7 @@ describe('an image lives exactly as long as the message that names it', () => {
         maxMessages: 2
       });
       await repository.ensureChat({ chatId: 'chat-capped', ownerId: OWNER, appId: 'chat' });
-      const dropped = await repository.putImage('chat-capped', {
+      const dropped = await repository.putArtifact('chat-capped', {
         mimeType: 'image/png',
         data: payload()
       });
@@ -263,7 +341,7 @@ describe('an image lives exactly as long as the message that names it', () => {
         role: 'assistant',
         content: 'one',
         runId: 'run-1',
-        images: [dropped]
+        artifacts: [dropped]
       });
       await repository.appendMessage('chat-capped', { role: 'user', content: 'two' });
       await repository.appendMessage('chat-capped', { role: 'user', content: 'three' });
@@ -271,7 +349,10 @@ describe('an image lives exactly as long as the message that names it', () => {
       const { messages } = await repository.getMessages('chat-capped');
       assert.equal(messages.length, 2, 'the cap held');
       assert.equal(
-        await provider.documents.get(CHAT_IMAGES_NS, imageDocumentKey('chat-capped', dropped.id)),
+        await provider.documents.get(
+          CHAT_ARTIFACTS_NS,
+          artifactDocumentKey('chat-capped', dropped.id)
+        ),
         null
       );
     });
@@ -303,42 +384,42 @@ describe('the materializer records what the turn drew', () => {
 
       const { messages } = await repository.getMessages(CHAT_ID);
       const answer = messages.at(-1);
-      assert.equal(answer.images.length, 1);
-      assert.ok(answer.images[0].id);
-      const image = await repository.getImage(CHAT_ID, answer.images[0].id);
+      assert.equal(answer.artifacts.length, 1);
+      assert.ok(answer.artifacts[0].id);
+      const image = await repository.getArtifact(CHAT_ID, answer.artifacts[0].id);
       assert.equal(image.data, payload(128));
       assert.equal(image.mimeType, 'image/png');
     });
   });
 
-  it('stores nothing when the installation has image storage switched off', async () => {
+  it('stores nothing when the installation has artifact storage switched off', async () => {
     await withRepository(async ({ repository }) => {
-      const descriptors = await storeGeneratedImages({
+      const descriptors = await storeGeneratedArtifacts({
         repository,
         chatId: CHAT_ID,
         runId: 'run-1',
-        images: [{ mimeType: 'image/png', data: payload() }],
-        policy: policy({ storeImages: false })
+        artifacts: [{ kind: 'image', mimeType: 'image/png', data: payload() }],
+        policy: policy({ storeArtifacts: false })
       });
       assert.deepEqual(descriptors, [], 'an admin who said no gets the old behaviour back');
     });
   });
 
-  it('describes an image it refused rather than pretending it was never drawn', async () => {
+  it('describes an artifact it refused rather than pretending it was never produced', async () => {
     await withRepository(async ({ repository }) => {
       await repository.ensureChat({ chatId: CHAT_ID, ownerId: OWNER, appId: 'chat' });
       const big = payload(4096);
 
-      const descriptors = await storeGeneratedImages({
+      const descriptors = await storeGeneratedArtifacts({
         repository,
         chatId: CHAT_ID,
         runId: 'run-1',
-        images: [
-          { mimeType: 'image/png', data: big },
-          { mimeType: 'image/png', data: payload(16) },
-          { mimeType: 'image/png', data: payload(16) }
+        artifacts: [
+          { kind: 'image', mimeType: 'image/png', data: big },
+          { kind: 'image', mimeType: 'image/png', data: payload(16) },
+          { kind: 'image', mimeType: 'image/png', data: payload(16) }
         ],
-        policy: policy({ maxImageBytes: 64, maxImagesPerMessage: 1 })
+        policy: policy({ maxArtifactBytes: 64, maxArtifactsPerMessage: 1 })
       });
 
       // A viewer who watched three pictures appear and comes back to two has
@@ -354,7 +435,7 @@ describe('the materializer records what the turn drew', () => {
   it('keeps the answer when the payload cannot be written', async () => {
     await withRepository(async ({ repository, lines }) => {
       await repository.ensureChat({ chatId: CHAT_ID, ownerId: OWNER, appId: 'chat' });
-      repository.putImage = async () => {
+      repository.putArtifact = async () => {
         throw new Error('disk full');
       };
 
@@ -374,7 +455,7 @@ describe('the materializer records what the turn drew', () => {
       const { messages } = await repository.getMessages(CHAT_ID);
       const answer = messages.at(-1);
       assert.equal(answer.content, 'here you go', 'losing a picture never costs the answer');
-      assert.equal(answer.images[0].unavailable, 'not-stored');
+      assert.equal(answer.artifacts[0].unavailable, 'not-stored');
       assert.equal(
         lines.some(line => line.level === 'error'),
         false,

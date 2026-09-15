@@ -22,7 +22,7 @@ startup. Durable chats were the first consumer; the runtime stores followed.
 | Namespace                   | Holds                                                       | Owner id                    | Documented in                            |
 | --------------------------- | ----------------------------------------------------------- | --------------------------- | ---------------------------------------- |
 | `chats`, `chat-messages`    | stored conversations and their transcripts (off by default)  | the chat's principal        | [Chat Persistence](chat-persistence.md)  |
-| `chat-images`               | one document per image a stored chat's turns generated       | –                           | [Chat Persistence](chat-persistence.md)  |
+| `chat-artifacts`            | one document per artifact a stored chat's turns produced      | –                           | [Chat Persistence](chat-persistence.md)  |
 | `runs`                      | one summary per run — chats, workflow executions, agent runs | the run's principal         | [Run Ledger](run-ledger.md)              |
 | `interactions`              | pending and recently settled human interactions              | the raising run's principal | [Run Ledger](run-ledger.md)              |
 | `workflow-state`            | an execution's checkpoint, and what a resume reads           | the principal that started it | [Workflows](workflows.md)              |

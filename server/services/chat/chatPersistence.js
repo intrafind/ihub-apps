@@ -47,23 +47,24 @@ export const DEFAULT_MAX_CHATS_PER_USER = 200;
 export const DEFAULT_MAX_MESSAGES_PER_CHAT = 2000;
 
 /**
- * Largest single generated image a chat stores, in bytes of base64, when
- * `platform.chats.maxImageBytes` says nothing.
+ * Largest single artifact a chat stores, in bytes of base64, when
+ * `platform.chats.maxArtifactBytes` says nothing.
  *
- * Images are the one thing a turn produces that is measured in megabytes
- * rather than kilobytes, and an installation that switched durable chats on
- * for the transcripts did not necessarily sign up for a picture gallery. Ten
- * megabytes of base64 is roughly a 7.5 MB image — past anything the image
- * models here return, so the cap only ever catches the pathological case.
+ * An artifact — a generated image today — is the one thing a turn produces
+ * that is measured in megabytes rather than kilobytes, and an installation
+ * that switched durable chats on for the transcripts did not necessarily sign
+ * up for a media library. Ten megabytes of base64 is roughly a 7.5 MB file —
+ * past anything the image models here return, so the cap only ever catches the
+ * pathological case.
  */
-export const DEFAULT_MAX_IMAGE_BYTES = 10 * 1024 * 1024;
+export const DEFAULT_MAX_ARTIFACT_BYTES = 10 * 1024 * 1024;
 
 /**
- * Images one assistant message stores when `platform.chats.maxImagesPerMessage`
- * says nothing. A turn that produced more than this asked for a contact sheet,
- * not an answer.
+ * Artifacts one assistant message stores when
+ * `platform.chats.maxArtifactsPerMessage` says nothing. A turn that produced
+ * more than this asked for a contact sheet, not an answer.
  */
-export const DEFAULT_MAX_IMAGES_PER_MESSAGE = 8;
+export const DEFAULT_MAX_ARTIFACTS_PER_MESSAGE = 8;
 
 /**
  * Read a numeric setting, keeping zero and negative values — both are
@@ -163,37 +164,41 @@ export function chatMessageCap() {
 }
 
 /**
- * How this installation stores the images a turn generates.
+ * How this installation stores the artifacts a turn produces — a generated
+ * image today, other kinds later.
  *
- * `storeImages: false` turns the whole thing off — chats are still stored,
- * their images are not, and an image is then exactly what it was before
- * durable chats existed: visible for the session and gone on the way back.
- * `maxImageBytes` and `maxImagesPerMessage` of zero or less remove their cap,
- * matching the retention settings above.
+ * `storeArtifacts: false` turns the whole thing off — chats are still stored,
+ * what their turns produced is not, and a generated image is then exactly what
+ * it was before durable chats existed: visible for the session and gone on the
+ * way back. `maxArtifactBytes` and `maxArtifactsPerMessage` of zero or less
+ * remove their cap, matching the retention settings above.
  *
  * @param {Object} [platformConfig] - Platform configuration.
- * @returns {{storeImages: boolean, maxImageBytes: number, maxImagesPerMessage: number}}
+ * @returns {{storeArtifacts: boolean, maxArtifactBytes: number, maxArtifactsPerMessage: number}}
  */
-export function chatImageSettings(platformConfig) {
+export function chatArtifactSettings(platformConfig) {
   const chats = platformConfig?.chats || {};
   return {
-    storeImages: chats.storeImages !== false,
-    maxImageBytes: readNumber(chats.maxImageBytes, DEFAULT_MAX_IMAGE_BYTES),
-    maxImagesPerMessage: readNumber(chats.maxImagesPerMessage, DEFAULT_MAX_IMAGES_PER_MESSAGE)
+    storeArtifacts: chats.storeArtifacts !== false,
+    maxArtifactBytes: readNumber(chats.maxArtifactBytes, DEFAULT_MAX_ARTIFACT_BYTES),
+    maxArtifactsPerMessage: readNumber(
+      chats.maxArtifactsPerMessage,
+      DEFAULT_MAX_ARTIFACTS_PER_MESSAGE
+    )
   };
 }
 
 /**
- * The image policy in force right now, read from the live platform config.
+ * The artifact policy in force right now, read from the live platform config.
  *
  * Resolved per turn rather than captured, for the same reason as
- * {@link chatMessageCap}: an admin who switches image storage off should not
- * have to restart the server for the next answer to honour it.
+ * {@link chatMessageCap}: an admin who switches artifact storage off should
+ * not have to restart the server for the next answer to honour it.
  *
- * @returns {{storeImages: boolean, maxImageBytes: number, maxImagesPerMessage: number}}
+ * @returns {{storeArtifacts: boolean, maxArtifactBytes: number, maxArtifactsPerMessage: number}}
  */
-export function chatImagePolicy() {
-  return chatImageSettings(configCache.getPlatform?.()?.data || {});
+export function chatArtifactPolicy() {
+  return chatArtifactSettings(configCache.getPlatform?.()?.data || {});
 }
 
 /**

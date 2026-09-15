@@ -6,6 +6,10 @@
  *   `chats/<chatId>`          the metadata a chat list needs, small and hot
  *   `chat-messages/<chatId>`  the transcript, read in one go when a chat opens
  *
+ * plus one `chat-artifacts/<chatId>__<artifactId>` per thing a turn produced —
+ * a generated image today — kept out of the transcript because it is megabytes
+ * and the transcript is re-read on every turn.
+ *
  * They are split because the list view reads N chat documents and zero
  * transcripts; folding the messages in would make "show my chats" read every
  * message the user ever wrote.
@@ -41,20 +45,29 @@ export const CHATS_NAMESPACE = RUNTIME_NAMESPACES.chats;
 /** Namespace holding the chat transcript documents. */
 export const CHAT_MESSAGES_NAMESPACE = RUNTIME_NAMESPACES.chatMessages;
 
-/** Namespace holding one document per image a chat's turns produced. */
-export const CHAT_IMAGES_NAMESPACE = RUNTIME_NAMESPACES.chatImages;
+/**
+ * Namespace holding one document per artifact a chat's turns produced.
+ *
+ * "Artifact" rather than "image" because a generated picture is only the first
+ * kind: anything a turn produces that is content in its own right — a
+ * document, a chart, a file a tool wrote — belongs here rather than inline in
+ * the transcript, and everything one chat produced is meant to be listable
+ * together.
+ */
+export const CHAT_ARTIFACTS_NAMESPACE = RUNTIME_NAMESPACES.chatArtifacts;
 
 /**
- * Separator between the chat id and the image id in an image document key.
+ * Separator between the chat id and the artifact id in an artifact key.
  *
- * The key is `<chatId>__<imageId>` so every image of one chat shares a prefix
- * and the delete sweep is a prefix scan rather than a lookup that depends on
- * the transcript still being readable. An image id never contains the
+ * The key is `<chatId>__<artifactId>` so every artifact of one chat shares a
+ * prefix: listing what a conversation produced, and sweeping it when the chat
+ * is deleted, are both prefix scans rather than lookups that depend on the
+ * transcript still being readable. An artifact id never contains the
  * separator, so a chat id that does (`a__b`, whose keys the prefix of chat `a`
- * also matches) is told apart by counting it in the suffix; a read additionally
- * checks the `chatId` recorded inside the document.
+ * also matches) is told apart by counting it in the suffix; a read
+ * additionally checks the `chatId` recorded inside the document.
  */
-const IMAGE_KEY_SEPARATOR = '__';
+const ARTIFACT_KEY_SEPARATOR = '__';
 
 /** Schema version stamped on a transcript document. */
 export const CHAT_MESSAGES_VERSION = 1;
@@ -74,6 +87,13 @@ export const MAX_DERIVED_TITLE_LENGTH = 80;
 
 /** Longest title accepted from a rename. */
 export const MAX_TITLE_LENGTH = 200;
+
+/**
+ * Longest display name stored on an artifact. The name comes from whatever
+ * produced the artifact — a model, a tool — and is rendered in a list, so it
+ * is bounded like every other caller-supplied string here.
+ */
+export const MAX_ARTIFACT_NAME_CHARS = 200;
 
 /**
  * Run ids kept on a chat for the delete cascade. There is no chatId→runId
@@ -165,7 +185,7 @@ const OPTIONAL_MESSAGE_FIELDS = [
   'error',
   'finishReason',
   'attachments',
-  'images'
+  'artifacts'
 ];
 
 /**
@@ -459,84 +479,107 @@ function buildMessage(message = {}) {
 }
 
 /**
- * Image media types a stored image may be served as.
+ * Artifact kinds a chat may store, and the media types each may be served as.
  *
  * The type comes from a model response, and it ends up in a `Content-Type`
- * header on a same-origin URL. An allowlist is what keeps a provider (or
- * anything that can shape one's output) from having the server hand a browser
- * `text/html`. SVG is deliberately absent: it is a document that can run
- * script, not a picture.
+ * header on a same-origin URL. An allowlist per kind is what keeps a provider
+ * (or anything that can shape one's output) from having the server hand a
+ * browser `text/html`. `image/svg+xml` is deliberately absent from the image
+ * kind: SVG is a document that can run script, not a picture.
+ *
+ * A new kind is a new entry here plus a renderer on the client; nothing else
+ * in the storage path is kind-specific.
  */
-const STORABLE_IMAGE_TYPES = new Set([
-  'image/png',
-  'image/jpeg',
-  'image/webp',
-  'image/gif',
-  'image/avif',
-  'image/bmp',
-  'image/heic',
-  'image/heif'
+const ARTIFACT_KIND_TYPES = new Map([
+  [
+    'image',
+    new Set([
+      'image/png',
+      'image/jpeg',
+      'image/webp',
+      'image/gif',
+      'image/avif',
+      'image/bmp',
+      'image/heic',
+      'image/heif'
+    ])
+  ]
 ]);
+
+/** The kind an artifact is stored as when the caller names none. */
+export const DEFAULT_ARTIFACT_KIND = 'image';
 
 /**
  * Spellings providers use that are not the registered media type. A `Map`
  * rather than an object literal because the key comes from a model response,
  * and a plain lookup of `constructor` on an object answers with something.
  */
-const IMAGE_TYPE_ALIASES = new Map([['image/jpg', 'image/jpeg']]);
+const MEDIA_TYPE_ALIASES = new Map([['image/jpg', 'image/jpeg']]);
 
 /** Served instead of a type this server is not willing to name. */
-const OPAQUE_IMAGE_TYPE = 'application/octet-stream';
+const OPAQUE_MEDIA_TYPE = 'application/octet-stream';
 
 /**
- * The media type a stored image is written and served under.
+ * The kind an artifact is filed under — one of {@link ARTIFACT_KIND_TYPES}.
  *
+ * @param {unknown} kind - Kind as the caller named it.
+ * @returns {string} A known kind, or the default one.
+ */
+export function artifactKind(kind) {
+  return typeof kind === 'string' && ARTIFACT_KIND_TYPES.has(kind) ? kind : DEFAULT_ARTIFACT_KIND;
+}
+
+/**
+ * The media type an artifact of this kind is written and served under.
+ *
+ * @param {unknown} kind - Artifact kind.
  * @param {unknown} mimeType - Type as the provider reported it.
- * @returns {string} An allowlisted image type, or {@link OPAQUE_IMAGE_TYPE}.
+ * @returns {string} An allowlisted type for the kind, or {@link OPAQUE_MEDIA_TYPE}.
  */
-export function storableImageType(mimeType) {
-  if (typeof mimeType !== 'string') return OPAQUE_IMAGE_TYPE;
+export function artifactMediaType(kind, mimeType) {
+  const allowed = ARTIFACT_KIND_TYPES.get(artifactKind(kind));
+  if (!allowed || typeof mimeType !== 'string') return OPAQUE_MEDIA_TYPE;
   const declared = mimeType.split(';')[0].trim().toLowerCase();
-  const normalized = IMAGE_TYPE_ALIASES.get(declared) || declared;
-  return STORABLE_IMAGE_TYPES.has(normalized) ? normalized : OPAQUE_IMAGE_TYPE;
+  const normalized = MEDIA_TYPE_ALIASES.get(declared) || declared;
+  return allowed.has(normalized) ? normalized : OPAQUE_MEDIA_TYPE;
 }
 
 /**
- * The document key one image is stored under.
+ * The document key one artifact is stored under.
  *
- * @param {string} chatId - Chat the image belongs to.
- * @param {string} imageId - Image id.
- * @returns {string} Key in {@link CHAT_IMAGES_NAMESPACE}.
+ * @param {string} chatId - Chat the artifact belongs to.
+ * @param {string} artifactId - Artifact id.
+ * @returns {string} Key in {@link CHAT_ARTIFACTS_NAMESPACE}.
  */
-export function imageDocumentKey(chatId, imageId) {
-  return `${chatId}${IMAGE_KEY_SEPARATOR}${imageId}`;
+export function artifactDocumentKey(chatId, artifactId) {
+  return `${chatId}${ARTIFACT_KEY_SEPARATOR}${artifactId}`;
 }
 
 /**
- * The key prefix every image of one chat shares.
+ * The key prefix every artifact of one chat shares.
  *
  * @param {string} chatId - Chat id.
  * @returns {string} Key prefix.
  */
-function imageKeyPrefix(chatId) {
-  return `${chatId}${IMAGE_KEY_SEPARATOR}`;
+function artifactKeyPrefix(chatId) {
+  return `${chatId}${ARTIFACT_KEY_SEPARATOR}`;
 }
 
 /**
- * Image ids referenced by a slice of the transcript.
+ * Artifact ids referenced by a slice of the transcript.
  *
  * A message carries descriptors, not payloads, so this is what has to be
- * removed from {@link CHAT_IMAGES_NAMESPACE} when the messages themselves go —
- * a truncating edit, the per-chat message cap, or a delete.
+ * removed from {@link CHAT_ARTIFACTS_NAMESPACE} when the messages themselves
+ * go — a truncating edit, the per-chat message cap, or a delete.
  *
  * @param {Object[]} messages - Stored messages.
- * @returns {string[]} Image ids, without duplicates.
+ * @returns {string[]} Artifact ids, without duplicates.
  */
-export function imageIdsOfMessages(messages) {
+export function artifactIdsOfMessages(messages) {
   const ids = new Set();
   for (const message of messages || []) {
-    for (const image of Array.isArray(message?.images) ? message.images : []) {
-      if (typeof image?.id === 'string' && image.id) ids.add(image.id);
+    for (const artifact of Array.isArray(message?.artifacts) ? message.artifacts : []) {
+      if (typeof artifact?.id === 'string' && artifact.id) ids.add(artifact.id);
     }
   }
   return [...ids];
@@ -1163,13 +1206,13 @@ export class ChatRepository {
       // dangling index entry.
       const removedMessages = await this.documents.delete(CHAT_MESSAGES_NAMESPACE, chatId);
       const removedChat = await this.documents.delete(CHATS_NAMESPACE, chatId);
-      // The images the transcript referenced, and any the transcript never got
-      // to reference. Last, for the same reason the transcript goes before the
+      // The artifacts the transcript referenced, and any it never got to
+      // reference. Last, for the same reason the transcript goes before the
       // chat document: a payload whose index is gone is invisible data, and
       // this sweep is driven by the key prefix, so it still finds them after a
       // partial delete — a re-deleted chat sweeps whatever the first attempt
       // left behind.
-      await this.deleteChatImages(chatId);
+      await this.deleteChatArtifacts(chatId);
       // A delete is the other thing that changes a listing, and it does not go
       // through `_writeChat`.
       this._forgetOwnerChats(existing?.ownerId);
@@ -1195,7 +1238,7 @@ export class ChatRepository {
   }
 
   /**
-   * Store one generated image beside the transcript.
+   * Store one artifact a turn produced, beside the transcript.
    *
    * Beside it, not in it: a transcript is a single document that every later
    * turn of the chat reads, re-serializes and re-hashes under the chat's lock,
@@ -1203,110 +1246,151 @@ export class ChatRepository {
    * generated image is a couple of megabytes of base64, so inlining it would
    * make every subsequent turn of that chat pay for it forever. The message
    * keeps a descriptor and the payload gets its own document, fetched only
-   * when a viewer actually looks at the image.
+   * when a viewer actually looks at it.
    *
-   * No chat lock: an image document is written once, read many times and never
-   * modified, so there is nothing for two writers to lose. Taking the lock
-   * would only queue a multi-megabyte write in front of the turn that is
+   * No chat lock: an artifact document is written once, read many times and
+   * never modified, so there is nothing for two writers to lose. Taking the
+   * lock would only queue a multi-megabyte write in front of the turn that is
    * trying to append the answer.
    *
-   * @param {string} chatId - Chat the image belongs to.
-   * @param {Object} image
-   * @param {string} image.mimeType - Image mime type, e.g. `image/png`.
-   * @param {string} image.data - Base64 payload, without a data-URI prefix.
-   * @param {string} [image.runId] - Run that produced it, for forensics.
-   * @returns {Promise<{id: string, mimeType: string, bytes: number}|null>} The
-   *   descriptor to record on the message, or null when nothing was stored.
+   * @param {string} chatId - Chat the artifact belongs to.
+   * @param {Object} artifact
+   * @param {string} [artifact.kind='image'] - What this is; see {@link artifactKind}.
+   * @param {string} artifact.mimeType - Media type, e.g. `image/png`.
+   * @param {string} artifact.data - Base64 payload, without a data-URI prefix.
+   * @param {string} [artifact.name] - Display name, when the producer gave one.
+   * @param {string} [artifact.runId] - Run that produced it, for forensics.
+   * @returns {Promise<{id: string, kind: string, mimeType: string, bytes: number, name?: string}|null>}
+   *   The descriptor to record on the message, or null when nothing was stored.
    */
-  async putImage(chatId, { mimeType, data, runId } = {}) {
-    if (!this._usable(chatId, 'putImage')) return null;
+  async putArtifact(chatId, { kind, mimeType, data, name, runId } = {}) {
+    if (!this._usable(chatId, 'putArtifact')) return null;
     if (typeof data !== 'string' || data.length === 0) return null;
     const id = randomUUID().replace(/-/g, '');
-    const key = imageDocumentKey(chatId, id);
+    const key = artifactDocumentKey(chatId, id);
     // `isValidId` caps a key at 100 characters. A uuid chat id leaves room to
     // spare; an unusually long one does not, and a rejected key would throw
-    // out of the answer's write path for the sake of a picture.
+    // out of the answer's write path for the sake of an attachment.
     if (!isValidId(key)) {
-      this.logger.warn('Chat image not stored: chat id leaves no room for an image key', {
+      this.logger.warn('Chat artifact not stored: chat id leaves no room for an artifact key', {
         component: COMPONENT,
         chatId
       });
       return null;
     }
-    const type = storableImageType(mimeType);
+    const storedKind = artifactKind(kind);
+    const type = artifactMediaType(storedKind, mimeType);
     // What the payload weighs in storage — the base64 document — rather than
-    // what the decoded picture weighs. It is what the caps are measured in and
+    // what the decoded content weighs. It is what the caps are measured in and
     // what a reader needs to know before deciding to fetch, and it is *not*
     // the response's `Content-Length`, which the route takes from the decoded
     // bytes it actually sends.
     const bytes = Buffer.byteLength(data, 'utf8');
-    await this.documents.put(CHAT_IMAGES_NAMESPACE, key, {
+    const label = typeof name === 'string' && name ? name.slice(0, MAX_ARTIFACT_NAME_CHARS) : null;
+    await this.documents.put(CHAT_ARTIFACTS_NAMESPACE, key, {
       version: CHAT_MESSAGES_VERSION,
       // The chat id is inside the document as well as in the key, so a read or
-      // a sweep can prove an image belongs to the chat asking for it rather
+      // a sweep can prove an artifact belongs to the chat asking for it rather
       // than trusting a key prefix to be unambiguous.
       chatId,
+      kind: storedKind,
       mimeType: type,
       bytes,
+      ...(label ? { name: label } : {}),
       data,
       ...(typeof runId === 'string' && runId ? { runId } : {}),
       createdAt: new Date().toISOString()
     });
-    return { id, mimeType: type, bytes };
+    return { id, kind: storedKind, mimeType: type, bytes, ...(label ? { name: label } : {}) };
   }
 
   /**
-   * One stored image, payload included.
+   * One stored artifact, payload included.
    *
    * @param {string} chatId - Chat the caller has already been authorized for.
-   * @param {string} imageId - Image id from a message descriptor.
-   * @returns {Promise<{id: string, mimeType: string, bytes: number, data: string}|null>}
-   *   The image, or null when there is none.
+   * @param {string} artifactId - Artifact id from a message descriptor.
+   * @returns {Promise<{id: string, kind: string, mimeType: string, bytes: number, name?: string, data: string}|null>}
+   *   The artifact, or null when there is none.
    */
-  async getImage(chatId, imageId) {
-    if (!this._usable(chatId, 'getImage')) return null;
-    if (!isValidId(imageId)) return null;
-    const key = imageDocumentKey(chatId, imageId);
+  async getArtifact(chatId, artifactId) {
+    if (!this._usable(chatId, 'getArtifact')) return null;
+    if (!isValidId(artifactId)) return null;
+    const key = artifactDocumentKey(chatId, artifactId);
     if (!isValidId(key)) return null;
-    const doc = await this.documents.get(CHAT_IMAGES_NAMESPACE, key);
+    const doc = await this.documents.get(CHAT_ARTIFACTS_NAMESPACE, key);
     const data = doc?.data;
     if (!data || typeof data.data !== 'string') return null;
-    // The key already scopes the image to the chat; this is the second wall,
-    // and the one that does not depend on the separator being unambiguous.
+    // The key already scopes the artifact to the chat; this is the second
+    // wall, and the one that does not depend on the separator being
+    // unambiguous.
     if (data.chatId && data.chatId !== chatId) return null;
+    const kind = artifactKind(data.kind);
     return {
-      id: imageId,
-      mimeType: storableImageType(data.mimeType),
+      id: artifactId,
+      kind,
+      mimeType: artifactMediaType(kind, data.mimeType),
       bytes: Number.isFinite(data.bytes) ? data.bytes : Buffer.byteLength(data.data, 'utf8'),
+      ...(typeof data.name === 'string' && data.name ? { name: data.name } : {}),
       data: data.data
     };
   }
 
   /**
-   * Remove named images of a chat.
+   * Every artifact of one chat, newest first, as descriptors without payloads.
+   *
+   * This is what a "what did this conversation produce" view reads: the walk
+   * is over the artifact keys, so it does not depend on the transcript, and
+   * `includeData: false` keeps it from loading a megabyte per entry.
+   *
+   * @param {string} chatId - Chat id.
+   * @returns {Promise<Array<{id: string, kind: string, mimeType: string, bytes: number, name?: string, runId?: string, createdAt?: string}>>}
+   */
+  async listArtifacts(chatId) {
+    if (!this._usable(chatId, 'listArtifacts')) return [];
+    const entries = [];
+    for (const doc of await this._scanArtifacts(chatId, { includeData: true })) {
+      const data = doc.data;
+      if (!data || (data.chatId && data.chatId !== chatId)) continue;
+      const kind = artifactKind(data.kind);
+      entries.push({
+        id: doc.key.slice(artifactKeyPrefix(chatId).length),
+        kind,
+        mimeType: artifactMediaType(kind, data.mimeType),
+        bytes: Number.isFinite(data.bytes) ? data.bytes : 0,
+        ...(typeof data.name === 'string' && data.name ? { name: data.name } : {}),
+        ...(typeof data.runId === 'string' && data.runId ? { runId: data.runId } : {}),
+        ...(typeof data.createdAt === 'string' ? { createdAt: data.createdAt } : {})
+      });
+    }
+    entries.sort((a, b) => ((a.createdAt || '') < (b.createdAt || '') ? 1 : -1));
+    return entries;
+  }
+
+  /**
+   * Remove named artifacts of a chat.
    *
    * Best effort: the messages that referenced them are already gone by the
    * time this runs, so a failure here is a leftover to sweep rather than an
    * outcome to report.
    *
    * @param {string} chatId - Chat id.
-   * @param {string[]} imageIds - Image ids to remove.
+   * @param {string[]} artifactIds - Artifact ids to remove.
    * @returns {Promise<number>} How many documents were removed.
    */
-  async deleteImages(chatId, imageIds) {
-    if (!this._usable(chatId, 'deleteImages')) return 0;
+  async deleteArtifacts(chatId, artifactIds) {
+    if (!this._usable(chatId, 'deleteArtifacts')) return 0;
     let removed = 0;
-    for (const imageId of imageIds || []) {
-      if (!isValidId(imageId)) continue;
-      const key = imageDocumentKey(chatId, imageId);
+    for (const artifactId of artifactIds || []) {
+      if (!isValidId(artifactId)) continue;
+      const key = artifactDocumentKey(chatId, artifactId);
       if (!isValidId(key)) continue;
       try {
-        if (await this.documents.delete(CHAT_IMAGES_NAMESPACE, key)) removed += 1;
+        if (await this.documents.delete(CHAT_ARTIFACTS_NAMESPACE, key)) removed += 1;
       } catch (error) {
-        this.logger.error('Failed to delete a chat image', {
+        this.logger.error('Failed to delete a chat artifact', {
           component: COMPONENT,
           chatId,
-          imageId,
+          artifactId,
           error: error.message
         });
       }
@@ -1315,66 +1399,80 @@ export class ChatRepository {
   }
 
   /**
-   * Remove every image of a chat.
+   * Remove every artifact of a chat.
    *
    * Driven by the key prefix rather than by the transcript: the transcript is
-   * deleted in the same cascade and an image whose descriptor never landed
+   * deleted in the same cascade and an artifact whose descriptor never landed
    * (the answer's write failed after the payload was stored) would otherwise
    * have nothing left pointing at it, in a namespace nobody enumerates.
    *
    * @param {string} chatId - Chat id.
    * @returns {Promise<number>} How many documents were removed.
    */
-  async deleteChatImages(chatId) {
-    if (!this._usable(chatId, 'deleteChatImages')) return 0;
-    const prefix = imageKeyPrefix(chatId);
-    const keys = [];
-    try {
-      if (this.documents.supportsScan) {
-        for await (const doc of this.documents.scan(CHAT_IMAGES_NAMESPACE, {
-          prefix,
-          includeData: false
-        })) {
-          keys.push(doc.key);
-        }
-      } else {
-        let cursor = null;
-        do {
-          const page = await this.documents.list(CHAT_IMAGES_NAMESPACE, {
-            prefix,
-            includeData: false,
-            cursor
-          });
-          for (const doc of page.items || []) keys.push(doc.key);
-          cursor = page.nextCursor || null;
-        } while (cursor);
-      }
-    } catch (error) {
-      this.logger.error("Failed to enumerate a chat's images", {
-        component: COMPONENT,
-        chatId,
-        error: error.message
-      });
-      return 0;
-    }
+  async deleteChatArtifacts(chatId) {
+    if (!this._usable(chatId, 'deleteChatArtifacts')) return 0;
     let removed = 0;
-    for (const key of keys) {
-      // A chat id that itself contains the separator could make this prefix
-      // match another chat's keys. The suffix is an image id and never carries
-      // the separator, so anything with more than one is not ours.
-      if (key.slice(prefix.length).includes(IMAGE_KEY_SEPARATOR)) continue;
+    for (const doc of await this._scanArtifacts(chatId, { includeData: false })) {
       try {
-        if (await this.documents.delete(CHAT_IMAGES_NAMESPACE, key)) removed += 1;
+        if (await this.documents.delete(CHAT_ARTIFACTS_NAMESPACE, doc.key)) removed += 1;
       } catch (error) {
-        this.logger.error('Failed to delete a chat image', {
+        this.logger.error('Failed to delete a chat artifact', {
           component: COMPONENT,
           chatId,
-          key,
+          key: doc.key,
           error: error.message
         });
       }
     }
     return removed;
+  }
+
+  /**
+   * The artifact documents of one chat, by key prefix.
+   *
+   * A chat id that itself contains the key separator would make this prefix
+   * match another chat's keys (`a` matching `a__b`'s). The suffix is an
+   * artifact id and never carries the separator, so anything with more than
+   * one is somebody else's and is dropped here rather than in each caller.
+   *
+   * @param {string} chatId - Chat id.
+   * @param {Object} [options]
+   * @param {boolean} [options.includeData=false] - Load the payloads too.
+   * @returns {Promise<Array<Object>>} Documents, empty when the walk failed.
+   * @private
+   */
+  async _scanArtifacts(chatId, { includeData = false } = {}) {
+    const prefix = artifactKeyPrefix(chatId);
+    const docs = [];
+    try {
+      if (this.documents.supportsScan) {
+        for await (const doc of this.documents.scan(CHAT_ARTIFACTS_NAMESPACE, {
+          prefix,
+          includeData
+        })) {
+          docs.push(doc);
+        }
+      } else {
+        let cursor = null;
+        do {
+          const page = await this.documents.list(CHAT_ARTIFACTS_NAMESPACE, {
+            prefix,
+            includeData,
+            cursor
+          });
+          for (const doc of page.items || []) docs.push(doc);
+          cursor = page.nextCursor || null;
+        } while (cursor);
+      }
+    } catch (error) {
+      this.logger.error("Failed to enumerate a chat's artifacts", {
+        component: COMPONENT,
+        chatId,
+        error: error.message
+      });
+      return [];
+    }
+    return docs.filter(doc => !doc.key.slice(prefix.length).includes(ARTIFACT_KEY_SEPARATOR));
   }
 
   /**
@@ -1427,9 +1525,9 @@ export class ChatRepository {
 
       const { stored, etag: messagesEtag } = await this._loadMessages(chatId);
       let messages = stored.messages;
-      // Messages this write removes from the transcript. Their image payloads
-      // live in their own documents, which nothing else would ever reach
-      // again: a descriptor is the only path to one.
+      // Messages this write removes from the transcript. Their artifact
+      // payloads live in their own documents, which nothing else would ever
+      // reach again: a descriptor is the only path to one.
       const discarded = [];
       if (replaceFromMessageId) {
         const index = messages.findIndex(entry => entry.id === replaceFromMessageId);
@@ -1494,12 +1592,12 @@ export class ChatRepository {
       }
       await this._writeChat(applyChatPatch(chat, patch), chatEtag);
 
-      // After the transcript is written, never before: an image that is gone
-      // while the descriptor is still stored renders as a broken picture in a
-      // chat nobody edited, while the reverse — a payload nothing points at —
-      // is swept when the chat is deleted.
-      const orphaned = imageIdsOfMessages(discarded);
-      if (orphaned.length > 0) await this.deleteImages(chatId, orphaned);
+      // After the transcript is written, never before: an artifact that is
+      // gone while the descriptor is still stored renders as a broken picture
+      // in a chat nobody edited, while the reverse — a payload nothing points
+      // at — is swept when the chat is deleted.
+      const orphaned = artifactIdsOfMessages(discarded);
+      if (orphaned.length > 0) await this.deleteArtifacts(chatId, orphaned);
 
       return { message: entry, messages };
     });

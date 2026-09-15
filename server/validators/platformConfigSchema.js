@@ -284,15 +284,16 @@ export const platformConfigSchema = z
         retentionDays: z.number().prefault(90),
         maxChatsPerUser: z.number().prefault(200),
         maxMessagesPerChat: z.number().prefault(2000),
-        // Generated images are stored beside the transcript, one document per
-        // image, and fetched only when a viewer looks at one. They are the one
-        // thing a turn produces that is measured in megabytes, so an admin can
-        // switch them off without giving up stored transcripts, and the two
-        // caps (bytes per image, images per message) bound what one answer can
+        // What a turn produced — a generated image today, other kinds later —
+        // is stored beside the transcript, one document per artifact, and
+        // fetched only when a viewer looks at one. Artifacts are the one thing
+        // a turn produces that is measured in megabytes, so an admin can switch
+        // them off without giving up stored transcripts, and the two caps
+        // (bytes per artifact, artifacts per message) bound what one answer can
         // write. Zero or less removes a cap, like the retention rules above.
-        storeImages: z.boolean().prefault(true),
-        maxImageBytes: z.number().prefault(10485760),
-        maxImagesPerMessage: z.number().prefault(8)
+        storeArtifacts: z.boolean().prefault(true),
+        maxArtifactBytes: z.number().prefault(10485760),
+        maxArtifactsPerMessage: z.number().prefault(8)
       })
       .passthrough()
       .prefault({}),

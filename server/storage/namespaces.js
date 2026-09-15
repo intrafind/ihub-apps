@@ -102,13 +102,15 @@ export const RUNTIME_NAMESPACES = Object.freeze({
   /** Chat transcripts, one document per chat. */
   chatMessages: 'chat-messages',
   /**
-   * Images a chat's turns produced, one document per image.
+   * Content a chat's turns produced — a generated image today, other kinds
+   * later — one document per artifact.
    *
-   * Beside the transcript rather than inside it: a generated image is
-   * megabytes of base64, and the transcript is re-read, re-serialized and
-   * re-hashed on every turn of the chat it belongs to.
+   * Beside the transcript rather than inside it: an artifact is megabytes of
+   * base64, and the transcript is re-read, re-serialized and re-hashed on
+   * every turn of the chat it belongs to. Keyed by chat so everything one
+   * conversation produced can be listed without reading its messages.
    */
-  chatImages: 'chat-images',
+  chatArtifacts: 'chat-artifacts',
   /** Per-run summaries for the history and retention views. */
   runs: 'runs',
   /** Pending and recently settled human interactions. */

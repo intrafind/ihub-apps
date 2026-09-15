@@ -1768,23 +1768,28 @@ still the shipped text, so any wording an admin changed stays exactly as it is.
 See [iFinder Integration](../../iFinder-Integration.md) and the
 [iFinder Quick Reference](../../iFinder-Quick-Reference.md).
 
-## Generated Images Are Kept in a Durable Chat
+## A Durable Chat Keeps What Its Turns Produced
 
 A picture the model drew used to exist only in the tab that asked for it. The browser could not
 hold it — a generated image is megabytes and `sessionStorage` is not — so the payload was dropped
 on the way out and the chat came back with the answer and an empty space where the image had been.
-With **Durable Chats** switched on, images are now stored with the conversation and are there when
-it is reopened, on any device.
+With **Durable Chats** switched on, it is now stored with the conversation and is there when the
+chat is reopened, on any device.
 
-- **Stored beside the transcript, not inside it.** Each image gets its own document and is fetched
-  only when somebody looks at it, so opening a chat that produced a dozen of them is still as fast
-  as opening any other. A new endpoint, `GET /api/chats/:chatId/images/:imageId`, serves one; like
-  every other chat endpoint it answers `404` to anyone but the owner.
+It is stored as an **artifact** rather than as an image. A generated picture is the first kind, not
+the only one: anything a turn produces that is content in its own right belongs in the same place,
+so that a future view can show everything one conversation produced.
+
+- **Stored beside the transcript, not inside it.** Each artifact gets its own document and is
+  fetched only when somebody looks at it, so opening a chat that produced a dozen of them is still
+  as fast as opening any other. A new endpoint, `GET /api/chats/:chatId/artifacts/:artifactId`,
+  serves one; like every other chat endpoint it answers `404` to anyone but the owner.
 - **Three new settings in `platform.json → chats`**, added to existing installations by a
-  migration: `storeImages` (`true`), `maxImageBytes` (`10485760`, base64 bytes of a single image)
-  and `maxImagesPerMessage` (`8`). Set `storeImages` to `false` to keep transcripts without the
-  pictures; a cap of zero or less removes that cap. An image a cap turns away is still recorded in
-  the transcript, saying why it is not available, rather than disappearing without trace.
+  migration: `storeArtifacts` (`true`), `maxArtifactBytes` (`10485760`, base64 bytes of a single
+  artifact) and `maxArtifactsPerMessage` (`8`). Set `storeArtifacts` to `false` to keep transcripts
+  without them; a cap of zero or less removes that cap. An artifact a cap turns away is still
+  recorded in the transcript, saying why it is not available, rather than disappearing without
+  trace.
 - **Nothing changes where chats are not stored.** Anonymous visitors, incognito turns, the compare
   panels and the canvas keep the old behaviour, and keep the note under each image telling the user
   to download it. That note is gone in a durable chat, where it is no longer true.

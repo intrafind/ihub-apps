@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import Icon from '../../../shared/components/Icon';
-import { fetchChatImage } from '../../../api';
+import { fetchChatArtifact } from '../../../api';
 
 /**
  * One image an assistant turn produced.
@@ -11,11 +11,12 @@ import { fetchChatImage } from '../../../api';
  *
  * - **Live** — `{ mimeType, data }`, base64 straight off the run's stream. It
  *   is already in memory, so it renders from a data URI with no request.
- * - **Stored** — `{ id, mimeType, bytes }`, the descriptor a durable chat keeps
- *   on the message. The payload lives in its own document server-side and is
- *   fetched here, once, when the message is rendered. That is the whole reason
- *   opening a chat is fast even when it produced a dozen pictures: the
- *   transcript carries descriptors, not megabytes.
+ * - **Stored** — `{ id, kind: 'image', mimeType, bytes }`, the artifact
+ *   descriptor a durable chat keeps on the message. The payload lives in its
+ *   own document server-side and is fetched here, once, when the message is
+ *   rendered. That is the whole reason opening a chat is fast even when it
+ *   produced a dozen pictures: the transcript carries descriptors, not
+ *   megabytes.
  * - **Unavailable** — a descriptor with `unavailable`, or the `_hadImageData`
  *   marker the browser-storage path leaves behind. There is nothing to show,
  *   so the component says so rather than rendering a broken picture.
@@ -25,7 +26,8 @@ import { fetchChatImage } from '../../../api';
  * request the client makes itself.
  *
  * @param {Object} props
- * @param {Object} props.image - Image as the message carries it.
+ * @param {Object} props.image - Image as the message carries it: a live payload,
+ *   a stored artifact descriptor, or one marked unavailable.
  * @param {string} [props.chatId] - Chat the image belongs to; required to fetch a stored one.
  * @param {number} props.index - Position in the message, for the alt text.
  * @param {boolean} [props.persisted] - Whether this chat stores its images. Drives the
@@ -48,7 +50,7 @@ function GeneratedImage({ image, chatId, index, persisted = false }) {
     let active = true;
     (async () => {
       try {
-        const blob = await fetchChatImage(chatId, storedId);
+        const blob = await fetchChatArtifact(chatId, storedId);
         // Revoked in the cleanup below — but only once it has been handed to
         // the element. Revoking a URL the browser has not loaded yet is what
         // turns a slow render into a broken image.

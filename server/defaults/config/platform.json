@@ -401,9 +401,9 @@
     "retentionDays": 90,
     "maxChatsPerUser": 200,
     "maxMessagesPerChat": 2000,
-    "storeImages": true,
-    "maxImageBytes": 10485760,
-    "maxImagesPerMessage": 8
+    "storeArtifacts": true,
+    "maxArtifactBytes": 10485760,
+    "maxArtifactsPerMessage": 8
   },
   "workflowState": {
     "retentionDays": 30,

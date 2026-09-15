@@ -16,7 +16,7 @@
  */
 import logger from '../../utils/logger.js';
 import { deriveChatTitle } from './ChatRepository.js';
-import { chatImagePolicy } from './chatPersistence.js';
+import { chatArtifactPolicy } from './chatPersistence.js';
 
 const COMPONENT = 'chatMaterializer';
 
@@ -51,75 +51,88 @@ export function normalizeAttachments(attachments) {
 }
 
 /**
- * Store the images a turn generated and return the descriptors to record on
+ * Store the artifacts a turn produced and return the descriptors to record on
  * the assistant message.
  *
- * The payloads go to their own documents — see `ChatRepository.putImage` for
- * why they are not inlined in the transcript — and the message keeps
- * `{ id, mimeType, bytes }`, which is what `GET /api/chats/:chatId/images/:id`
- * is addressed by.
+ * An artifact is anything a turn produced that is content in its own right —
+ * a generated image today, other kinds later. The payloads go to their own
+ * documents — see `ChatRepository.putArtifact` for why they are not inlined in
+ * the transcript — and the message keeps
+ * `{ id, kind, mimeType, bytes }`, which is what
+ * `GET /api/chats/:chatId/artifacts/:artifactId` is addressed by.
  *
- * An image the policy refuses is still described, with `unavailable` saying
+ * An artifact the policy refuses is still described, with `unavailable` saying
  * why. Leaving it out would make the stored answer claim the model produced
- * fewer pictures than it did, and the viewer who saw it live and comes back to
- * a transcript missing it has no way to tell a dropped image from one that was
- * never generated.
+ * less than it did, and the viewer who saw it live and comes back to a
+ * transcript missing it has no way to tell a dropped artifact from one that
+ * was never produced.
  *
- * Best effort, like everything else here: a storage failure costs the picture,
- * never the answer.
+ * Best effort, like everything else here: a storage failure costs the
+ * artifact, never the answer.
  *
  * @param {Object} params
  * @param {import('./ChatRepository.js').default} params.repository
  * @param {string} params.chatId
  * @param {string} params.runId
- * @param {Array<{mimeType?: string, data?: string}>} [params.images] - Images as
- *   the loop collected them.
- * @param {Object} [params.policy] - Image policy; defaults to the live one.
- * @returns {Promise<Array<Object>>} Descriptors, in the order the images came.
+ * @param {Array<{kind?: string, mimeType?: string, data?: string, name?: string}>} [params.artifacts]
+ *   Artifacts as the loop collected them.
+ * @param {Object} [params.policy] - Artifact policy; defaults to the live one.
+ * @returns {Promise<Array<Object>>} Descriptors, in the order they came.
  */
-export async function storeGeneratedImages({ repository, chatId, runId, images, policy }) {
-  const candidates = (Array.isArray(images) ? images : []).filter(
-    image => image && typeof image.data === 'string' && image.data.length > 0
+export async function storeGeneratedArtifacts({ repository, chatId, runId, artifacts, policy }) {
+  const candidates = (Array.isArray(artifacts) ? artifacts : []).filter(
+    artifact => artifact && typeof artifact.data === 'string' && artifact.data.length > 0
   );
   if (!repository || candidates.length === 0) return [];
-  const { storeImages, maxImageBytes, maxImagesPerMessage } = policy || chatImagePolicy();
-  if (!storeImages) return [];
+  const { storeArtifacts, maxArtifactBytes, maxArtifactsPerMessage } =
+    policy || chatArtifactPolicy();
+  if (!storeArtifacts) return [];
   const descriptors = [];
   // Counted on what was actually written, not on how many descriptors exist:
-  // an image refused for its size is described too, and letting it consume a
-  // slot would turn one oversized picture into a cap on all the others.
+  // an artifact refused for its size is described too, and letting it consume
+  // a slot would turn one oversized file into a cap on all the others.
   let stored = 0;
-  for (const image of candidates) {
+  for (const artifact of candidates) {
+    const kind = typeof artifact.kind === 'string' && artifact.kind ? artifact.kind : 'image';
     const mimeType =
-      typeof image.mimeType === 'string' && image.mimeType ? image.mimeType : 'image/png';
-    const bytes = Buffer.byteLength(image.data, 'utf8');
-    if (maxImagesPerMessage > 0 && stored >= maxImagesPerMessage) {
-      descriptors.push({ mimeType, bytes, unavailable: 'too-many' });
+      typeof artifact.mimeType === 'string' && artifact.mimeType ? artifact.mimeType : 'image/png';
+    const bytes = Buffer.byteLength(artifact.data, 'utf8');
+    const refused = { kind, mimeType, bytes };
+    if (maxArtifactsPerMessage > 0 && stored >= maxArtifactsPerMessage) {
+      descriptors.push({ ...refused, unavailable: 'too-many' });
       continue;
     }
-    if (maxImageBytes > 0 && bytes > maxImageBytes) {
-      logger.warn('Generated image not stored: over the configured size cap', {
+    if (maxArtifactBytes > 0 && bytes > maxArtifactBytes) {
+      logger.warn('Chat artifact not stored: over the configured size cap', {
         component: COMPONENT,
         chatId,
         runId,
+        kind,
         bytes,
-        maxImageBytes
+        maxArtifactBytes
       });
-      descriptors.push({ mimeType, bytes, unavailable: 'too-large' });
+      descriptors.push({ ...refused, unavailable: 'too-large' });
       continue;
     }
     try {
-      const descriptor = await repository.putImage(chatId, { mimeType, data: image.data, runId });
+      const descriptor = await repository.putArtifact(chatId, {
+        kind,
+        mimeType,
+        data: artifact.data,
+        name: artifact.name,
+        runId
+      });
       if (descriptor) stored += 1;
-      descriptors.push(descriptor || { mimeType, bytes, unavailable: 'not-stored' });
+      descriptors.push(descriptor || { ...refused, unavailable: 'not-stored' });
     } catch (error) {
-      logger.error('Generated image not stored', {
+      logger.error('Chat artifact not stored', {
         component: COMPONENT,
         chatId,
         runId,
+        kind,
         error: error.message
       });
-      descriptors.push({ mimeType, bytes, unavailable: 'not-stored' });
+      descriptors.push({ ...refused, unavailable: 'not-stored' });
     }
   }
   return descriptors;
@@ -288,8 +301,8 @@ export async function materializeUserTurn({
  * @param {string} params.chatId
  * @param {string} params.runId
  * @param {Object} params.summary - the turn outcome: `status`, `content`, `finishReason`,
- *   `usage`, `images` (generated pictures, stored beside the transcript), and
- *   `error`/`errorInfo` on a failure
+ *   `usage`, `images` (generated pictures, stored beside the transcript as
+ *   artifacts), and `error`/`errorInfo` on a failure
  * @param {boolean} params.clientConnected - whether an SSE client was attached when the
  *   turn ended, sampled with `hasChatClient()`; the emit result cannot tell you
  * @returns {Promise<Object|null>} the stored message, or null when nothing was written
@@ -317,9 +330,18 @@ export async function materializeAssistantTurn({
     // message. The reverse cost is a payload nothing points at when the append
     // fails — swept when the chat is deleted — against a descriptor pointing
     // at nothing, which renders as a broken picture for the life of the chat.
-    const images = pausedWithoutAnswer
+    //
+    // The loop reports generated pictures on `summary.images`; they are stored
+    // as artifacts of kind `image`, which is the vocabulary the stored message
+    // and the artifact endpoints use.
+    const artifacts = pausedWithoutAnswer
       ? []
-      : await storeGeneratedImages({ repository, chatId, runId, images: summary?.images });
+      : await storeGeneratedArtifacts({
+          repository,
+          chatId,
+          runId,
+          artifacts: (summary?.images || []).map(image => ({ ...image, kind: 'image' }))
+        });
 
     // Store the answer BEFORE announcing the run finished. `releaseRun` clears
     // `activeRunId` and raises `hasUnseenActivity` — together, "this chat is
@@ -352,7 +374,7 @@ export async function materializeAssistantTurn({
             finishReason: summary?.finishReason ?? null,
             ...(usage ? { usage } : {}),
             ...(error ? { error } : {}),
-            ...(images.length > 0 ? { images } : {})
+            ...(artifacts.length > 0 ? { artifacts } : {})
           },
           // The end of the transcript for an ordinary turn, and the position
           // right after this run's own question for a superseded one.

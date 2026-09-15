@@ -129,7 +129,7 @@ const listHandlers = handlersFor('get', '/api/chats');
 const getHandlers = handlersFor('get', '/api/chats/:chatId');
 const patchHandlers = handlersFor('patch', '/api/chats/:chatId');
 const deleteHandlers = handlersFor('delete', '/api/chats/:chatId');
-const imageHandlers = handlersFor('get', '/api/chats/:chatId/images/:imageId');
+const artifactHandlers = handlersFor('get', '/api/chats/:chatId/artifacts/:artifactId');
 
 /**
  * Store one chat with a turn in it, owned by `user`.
@@ -218,19 +218,24 @@ describe('GET /api/chats lists only the caller', () => {
   });
 });
 
-describe('GET /api/chats/:chatId/images/:imageId', () => {
-  /** Store one image against a chat and return its descriptor. */
-  async function seedImage(chatId, data = Buffer.from('a tiny png').toString('base64')) {
-    return getChatRepository().putImage(chatId, { mimeType: 'image/png', data, runId: 'run-img' });
+describe('GET /api/chats/:chatId/artifacts/:artifactId', () => {
+  /** Store one artifact against a chat and return its descriptor. */
+  async function seedArtifact(chatId, data = Buffer.from('a tiny png').toString('base64')) {
+    return getChatRepository().putArtifact(chatId, {
+      kind: 'image',
+      mimeType: 'image/png',
+      data,
+      runId: 'run-art'
+    });
   }
 
   it('serves the owner the bytes, as an image the browser may cache', async () => {
-    await seedChat(ADA, 'chat-image-own');
+    await seedChat(ADA, 'chat-artifact-own');
     const data = Buffer.from('a tiny png').toString('base64');
-    const image = await seedImage('chat-image-own', data);
+    const artifact = await seedArtifact('chat-artifact-own', data);
 
-    const res = await drive(imageHandlers, {
-      params: { chatId: 'chat-image-own', imageId: image.id },
+    const res = await drive(artifactHandlers, {
+      params: { chatId: 'chat-artifact-own', artifactId: artifact.id },
       user: ADA
     });
 
@@ -239,43 +244,43 @@ describe('GET /api/chats/:chatId/images/:imageId', () => {
     assert.equal(res.body.toString('base64'), data);
     assert.equal(res.headers['content-type'], 'image/png');
     assert.equal(res.headers['content-length'], String(res.body.length));
-    // An image document is written once and keyed by a fresh uuid, so the
+    // An artifact document is written once and keyed by a fresh uuid, so the
     // bytes cannot change; `private` because the response is owner-scoped.
     assert.match(res.headers['cache-control'], /^private,/);
     assert.equal(res.headers['x-content-type-options'], 'nosniff');
   });
 
-  it("does not serve another owner's image, and says nothing about its existence", async () => {
-    await seedChat(ADA, 'chat-image-private');
-    const image = await seedImage('chat-image-private');
+  it("does not serve another owner's artifact, and says nothing about its existence", async () => {
+    await seedChat(ADA, 'chat-artifact-private');
+    const artifact = await seedArtifact('chat-artifact-private');
 
-    const res = await drive(imageHandlers, {
-      params: { chatId: 'chat-image-private', imageId: image.id },
+    const res = await drive(artifactHandlers, {
+      params: { chatId: 'chat-artifact-private', artifactId: artifact.id },
       user: GRACE
     });
 
-    // 404 rather than 403, like every other route here: an image id is minted
-    // server-side and is never a capability on its own — it is authorized
-    // through the chat that owns it.
+    // 404 rather than 403, like every other route here: an artifact id is
+    // minted server-side and is never a capability on its own — it is
+    // authorized through the chat that owns it.
     assert.equal(res.statusCode, 404);
   });
 
-  it('answers 404 for an image the chat does not have', async () => {
-    await seedChat(ADA, 'chat-image-missing');
+  it('answers 404 for an artifact the chat does not have', async () => {
+    await seedChat(ADA, 'chat-artifact-missing');
 
-    const res = await drive(imageHandlers, {
-      params: { chatId: 'chat-image-missing', imageId: 'deadbeef' },
+    const res = await drive(artifactHandlers, {
+      params: { chatId: 'chat-artifact-missing', artifactId: 'deadbeef' },
       user: ADA
     });
 
     assert.equal(res.statusCode, 404);
   });
 
-  it('refuses an image id that could address a path', async () => {
-    await seedChat(ADA, 'chat-image-traversal');
+  it('refuses an artifact id that could address a path', async () => {
+    await seedChat(ADA, 'chat-artifact-traversal');
 
-    const res = await drive(imageHandlers, {
-      params: { chatId: 'chat-image-traversal', imageId: '../../secrets' },
+    const res = await drive(artifactHandlers, {
+      params: { chatId: 'chat-artifact-traversal', artifactId: '../../secrets' },
       user: ADA
     });
 

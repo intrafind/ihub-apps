@@ -7,14 +7,14 @@ import { renderHook, act } from '@testing-library/react';
  *
  * The picture reaches the chat bubble in two shapes and only one of them
  * carries pixels. Live, it is base64 off the run's stream and renders with no
- * request. Reopened from a durable chat, the message carries a descriptor —
- * `{ id, mimeType, bytes }` — and the bytes are fetched per image, which is
- * what keeps opening a chat that produced a dozen of them from shipping
- * megabytes before the first word appears.
+ * request. Reopened from a durable chat, the message carries an artifact
+ * descriptor — `{ id, kind: 'image', mimeType, bytes }` — and the bytes are
+ * fetched per artifact, which is what keeps opening a chat that produced a
+ * dozen of them from shipping megabytes before the first word appears.
  *
- * So there are three things to hold: hydration keeps the descriptors, the
- * component fetches a descriptor's bytes, and the "download it or you will
- * lose it" note appears only where it is still true.
+ * So there are three things to hold: hydration turns the stored artifacts into
+ * what the bubble renders, the component fetches a descriptor's bytes, and the
+ * "download it or you will lose it" note appears only where it is still true.
  */
 
 jest.mock('react-i18next', () => ({
@@ -27,10 +27,10 @@ jest.mock('../../../client/src/utils/debugLog', () => ({
   debugLog: () => {}
 }));
 
-const mockFetchChatImage = jest.fn();
+const mockFetchChatArtifact = jest.fn();
 jest.mock('../../../client/src/api', () => ({
   __esModule: true,
-  fetchChatImage: (...args) => mockFetchChatImage(...args),
+  fetchChatArtifact: (...args) => mockFetchChatArtifact(...args),
   sendAppChatMessage: jest.fn().mockResolvedValue({})
 }));
 
@@ -44,13 +44,13 @@ const GeneratedImage =
 const useChatMessages = require('../../../client/src/features/chat/hooks/useChatMessages').default;
 
 beforeEach(() => {
-  mockFetchChatImage.mockReset();
+  mockFetchChatArtifact.mockReset();
   global.URL.createObjectURL = jest.fn(() => 'blob:stored-image');
   global.URL.revokeObjectURL = jest.fn();
 });
 
 describe('hydrating a stored chat', () => {
-  it('keeps the image descriptors on the assistant message', () => {
+  it('renders the stored image artifacts as the images of the message', () => {
     const { result } = renderHook(() => useChatMessages('chat-1', { serverBacked: true }));
 
     act(() => {
@@ -60,14 +60,18 @@ describe('hydrating a stored chat', () => {
           id: 'srv-2',
           role: 'assistant',
           content: 'here you go',
-          images: [{ id: 'img-1', mimeType: 'image/png', bytes: 1024 }]
+          artifacts: [{ id: 'art-1', kind: 'image', mimeType: 'image/png', bytes: 1024 }]
         }
       ]);
     });
 
     const answer = result.current.messages.at(-1);
+    const descriptor = { id: 'art-1', kind: 'image', mimeType: 'image/png', bytes: 1024 };
     // The descriptor, not a payload: the transcript endpoint never ships one.
-    expect(answer.images).toEqual([{ id: 'img-1', mimeType: 'image/png', bytes: 1024 }]);
+    expect(answer.artifacts).toEqual([descriptor]);
+    // …and the image-kind ones reach the field the bubble already renders, so
+    // a reopened message and a just-answered one take the same path.
+    expect(answer.images).toEqual([descriptor]);
   });
 });
 
@@ -78,15 +82,15 @@ describe('rendering one image', () => {
     );
 
     expect(screen.getByRole('img')).toHaveAttribute('src', 'data:image/png;base64,AAAA');
-    expect(mockFetchChatImage).not.toHaveBeenCalled();
+    expect(mockFetchChatArtifact).not.toHaveBeenCalled();
   });
 
   it('fetches the bytes of a stored image and renders them', async () => {
-    mockFetchChatImage.mockResolvedValue(new Blob(['png bytes']));
+    mockFetchChatArtifact.mockResolvedValue(new Blob(['png bytes']));
 
     render(
       <GeneratedImage
-        image={{ id: 'img-1', mimeType: 'image/png', bytes: 9 }}
+        image={{ id: 'art-1', kind: 'image', mimeType: 'image/png', bytes: 9 }}
         chatId="chat-1"
         index={0}
         persisted
@@ -96,16 +100,16 @@ describe('rendering one image', () => {
     await waitFor(() =>
       expect(screen.getByRole('img')).toHaveAttribute('src', 'blob:stored-image')
     );
-    expect(mockFetchChatImage).toHaveBeenCalledWith('chat-1', 'img-1');
+    expect(mockFetchChatArtifact).toHaveBeenCalledWith('chat-1', 'art-1');
   });
 
   it('says so rather than showing a broken picture when the fetch fails', async () => {
     const warn = jest.spyOn(console, 'warn').mockImplementation(() => {});
-    mockFetchChatImage.mockRejectedValue(new Error('gone'));
+    mockFetchChatArtifact.mockRejectedValue(new Error('gone'));
 
     render(
       <GeneratedImage
-        image={{ id: 'img-1', mimeType: 'image/png', bytes: 9 }}
+        image={{ id: 'art-1', kind: 'image', mimeType: 'image/png', bytes: 9 }}
         chatId="chat-1"
         index={0}
         persisted
@@ -122,7 +126,12 @@ describe('rendering one image', () => {
     // be able to tell a dropped image from one the model never drew.
     render(
       <GeneratedImage
-        image={{ mimeType: 'image/png', bytes: 40_000_000, unavailable: 'too-large' }}
+        image={{
+          kind: 'image',
+          mimeType: 'image/png',
+          bytes: 40_000_000,
+          unavailable: 'too-large'
+        }}
         chatId="chat-1"
         index={0}
         persisted

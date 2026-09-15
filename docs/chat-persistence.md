@@ -52,9 +52,9 @@ client. There is no half-persisted state.
     "enabled": true,
     "retentionDays": 90,
     "maxChatsPerUser": 200,
-    "storeImages": true,
-    "maxImageBytes": 10485760,
-    "maxImagesPerMessage": 8
+    "storeArtifacts": true,
+    "maxArtifactBytes": 10485760,
+    "maxArtifactsPerMessage": 8
   }
 }
 ```
@@ -64,13 +64,13 @@ client. There is no half-persisted state.
 | `enabled`             | `true`     | Second switch under the feature flag; `false` stops the write path entirely   |
 | `retentionDays`       | `90`       | Chats whose last message is older than this are deleted by the daily sweep    |
 | `maxChatsPerUser`     | `200`      | Chats kept per owner; the oldest beyond the cap are deleted by the same sweep |
-| `storeImages`         | `true`     | Whether generated images are stored with the chat                             |
-| `maxImageBytes`       | `10485760` | Largest single image stored, in bytes of base64                               |
-| `maxImagesPerMessage` | `8`        | Images one answer stores                                                      |
+| `storeArtifacts`         | `true`     | Whether what a turn produced is stored with the chat                       |
+| `maxArtifactBytes`       | `10485760` | Largest single artifact stored, in bytes of base64                         |
+| `maxArtifactsPerMessage` | `8`        | Artifacts one answer stores                                                |
 
 Both retention rules are switched **off** by a value of zero or less — see
-[Retention](#retention) — and so are the two image caps; see
-[Generated images](#generated-images).
+[Retention](#retention) — and so are the two artifact caps; see
+[Artifacts](#artifacts-what-a-turn-produced).
 
 3. **Make sure storage is configured.** Durable chats are the first consumer of
    the storage abstraction. The default filesystem provider needs no
@@ -379,7 +379,7 @@ Two identity traps worth knowing before you switch a live installation on:
 
 Two documents per chat, both carrying the owner id so the store's per-owner
 index can answer "list my chats" without scanning, plus one document per
-generated image:
+artifact a turn produced:
 
 ```js
 // chats/<chatId>
@@ -401,22 +401,22 @@ generated image:
   version: 1,
   messages: [
     { id, role, content, ts, runId,
-      clientMessageId?, usage?, finishReason?, error?, attachments?, images? }
+      clientMessageId?, usage?, finishReason?, error?, attachments?, artifacts? }
   ]
 }
 
-// chat-images/<chatId>__<imageId>
+// chat-artifacts/<chatId>__<artifactId>
 {
   version: 1,
-  chatId, mimeType, bytes, runId?, createdAt,
+  chatId, kind, mimeType, bytes, name?, runId?, createdAt,
   data                  // base64, the only place a payload is ever written
 }
 ```
 
 On the filesystem provider that is `contents/data/chats/<chatId>.json`,
 `contents/data/chat-messages/<chatId>.json` and
-`contents/data/chat-images/<chatId>__<imageId>.json`, with the owner index
-beside them.
+`contents/data/chat-artifacts/<chatId>__<artifactId>.json`, with the owner
+index beside them.
 
 They are split because the chat list reads N metadata documents and zero
 transcripts. Folding the messages in would make "show my chats" read every
@@ -442,8 +442,9 @@ Details that matter:
 - **Attachments are descriptors** — `{ type, name?, bytes? }`. The base64 payload
   of an upload stays in the request; it is never written into a document that is
   read back for as long as the chat lives.
-- **So are generated images** — `{ id, mimeType, bytes }`, with the payload in
-  its own `chat-images` document. See [Generated images](#generated-images).
+- **So is what a turn produced** — `{ id, kind, mimeType, bytes }`, with the
+  payload in its own `chat-artifacts` document. See
+  [Artifacts](#artifacts-what-a-turn-produced).
 - **Failures are recorded.** An aborted turn stores its (possibly empty) answer
   with `error: { code: 'ABORTED', … }`, an errored turn with its error code, so a
   truncated answer never reads as a complete one. A turn that paused for a
@@ -470,7 +471,7 @@ with the other public API prefixes (500 requests/minute/IP by default).
 | ------------------------ | -------------------------------------------------------------------------- |
 | `GET /api/chats`         | The caller's chats, most recent activity first. `?limit` (default 30, max 100) and `?cursor` |
 | `GET /api/chats/:chatId` | `{ chat, messages, version }` — the transcript, and clears `hasUnseenActivity` |
-| `GET /api/chats/:chatId/images/:imageId` | The bytes of one generated image, as its own media type |
+| `GET /api/chats/:chatId/artifacts/:artifactId` | The bytes of one artifact, as its own media type |
 | `PATCH /api/chats/:chatId` | `{ title }` — rename; capped at 200 characters and marked as user-set     |
 | `DELETE /api/chats/:chatId` | Erase the chat, its transcript and its runs                             |
 
@@ -478,7 +479,7 @@ with the other public API prefixes (500 requests/minute/IP by default).
 and icon are joined on the client from the apps list it already holds, so the
 endpoint stays independent of app configuration.
 
-`DELETE` cascades: the two documents, every image of the chat, then
+`DELETE` cascades: the two documents, every artifact of the chat, then
 `runLog.deleteRun()` for every id in the chat's `runIds`, which in turn removes
 each run's ledger file, its spill directory and its pending interactions. The
 chat document is the only place a chat's runs are written down, which is why it
@@ -490,66 +491,86 @@ answers `503` with `details.code = "CHAT_PERSISTENCE_UNAVAILABLE"` rather than
 404, so a client can tell "not configured" from "not found" and fall back to the
 ephemeral experience.
 
-## Generated images
+## Artifacts: what a turn produced
 
-A picture a turn draws is not part of its text, and before durable chats it was
-not part of anything that survived: the client stripped the payload before
-writing the transcript to `sessionStorage` — a generated image is megabytes and
-the quota is a few — so navigating away left the answer with an empty space
-where the image had been. A stored chat keeps them.
+An **artifact** is anything a turn produced that is content in its own right.
+Today that is a generated image; the name is deliberately wider, because the
+same store is where a document, a chart or a file a tool wrote belongs, and
+because "everything this conversation produced" is a question about the chat
+rather than about any one message.
+
+Before durable chats, a generated image did not survive anything: the client
+stripped the payload before writing the transcript to `sessionStorage` — a
+picture is megabytes and the quota is a few — so navigating away left the
+answer with an empty space where the image had been. A stored chat keeps them.
 
 **The payload never goes in the transcript.** A transcript is a single document
 that every later turn of the chat reads, re-serializes and re-hashes under the
 chat's lock, and `GET /api/chats/:chatId` ships all of it back when the chat is
-opened. One image inlined there would be paid for on every turn of that chat
-for as long as it exists. So each image is written to its own document and the
-message keeps a descriptor:
+opened. One artifact inlined there would be paid for on every turn of that chat
+for as long as it exists. So each artifact is written to its own document,
+keyed `<chatId>__<artifactId>`, and the message keeps a descriptor:
 
 ```js
-{ id: '7f3c…', mimeType: 'image/png', bytes: 1483204 }
+{ id: '7f3c…', kind: 'image', mimeType: 'image/png', bytes: 1483204 }
 ```
 
-The client fetches the bytes per image from
-`GET /api/chats/:chatId/images/:imageId` when the message is rendered, through
-the API client rather than as a plain `<img src>`: the URL is credentialed, and
-a bearer token in `localStorage` only travels on a request the client makes
-itself. The response is `private, max-age=31536000, immutable` — an image
-document is written once, never modified, and keyed by a fresh uuid, so the
-bytes behind one URL cannot change.
+The client fetches the bytes per artifact from
+`GET /api/chats/:chatId/artifacts/:artifactId` when the message is rendered,
+through the API client rather than as a plain `<img src>`: the URL is
+credentialed, and a bearer token in `localStorage` only travels on a request
+the client makes itself. The response is
+`private, max-age=31536000, immutable` — an artifact document is written once,
+never modified, and keyed by a fresh uuid, so the bytes behind one URL cannot
+change.
 
-**An image is authorized through its chat.** The route runs the same
+**Keyed by chat, so a chat's artifacts can be listed.** Every artifact of one
+conversation shares a key prefix, which is what lets
+`ChatRepository.listArtifacts(chatId)` answer "what did this chat produce"
+without reading the transcript and without loading a payload per entry — the
+walk passes `includeData: false`. That listing is also how the delete sweep
+finds an artifact whose descriptor never landed.
+
+**An artifact is authorized through its chat.** The route runs the same
 `authorizeChat` as the transcript and answers 404 for a chat that is not the
-caller's, so an image id is never a capability on its own. The media type is
-allowlisted (`png`, `jpeg`, `webp`, `gif`, `avif`, `bmp`, `heic`, `heif`) and
-anything else is stored and served as `application/octet-stream` with
-`X-Content-Type-Options: nosniff` — the type comes from a model response and
-ends up in a `Content-Type` on a same-origin URL, and SVG is a document that
-runs script, not a picture.
+caller's, so an artifact id is never a capability on its own. The media type is
+allowlisted per kind — for `image`: `png`, `jpeg`, `webp`, `gif`, `avif`,
+`bmp`, `heic`, `heif` — and anything else is stored and served as
+`application/octet-stream` with `X-Content-Type-Options: nosniff`. The type
+comes from a model response and ends up in a `Content-Type` on a same-origin
+URL, and SVG is a document that runs script, not a picture.
 
 Three settings in `platform.json → chats`, read fresh per turn:
 
-| Key                   | Default    | Meaning                                                        |
-| --------------------- | ---------- | -------------------------------------------------------------- |
-| `storeImages`         | `true`     | `false` keeps transcripts and drops the pictures                |
-| `maxImageBytes`       | `10485760` | Largest single image, in bytes of base64; `<= 0` removes the cap |
-| `maxImagesPerMessage` | `8`        | Images one answer stores; `<= 0` removes the cap                 |
+| Key                      | Default    | Meaning                                                     |
+| ------------------------ | ---------- | ----------------------------------------------------------- |
+| `storeArtifacts`         | `true`     | `false` keeps transcripts and drops what the turns produced  |
+| `maxArtifactBytes`       | `10485760` | Largest single artifact, in bytes of base64; `<= 0` uncapped |
+| `maxArtifactsPerMessage` | `8`        | Artifacts one answer stores; `<= 0` uncapped                 |
 
-An image a cap turns away is still described on the message, as
-`{ mimeType, bytes, unavailable: 'too-large' | 'too-many' | 'not-stored' }`, and
-the chat shows a note in its place. Dropping it silently would leave the viewer
-who watched three pictures appear and came back to two unable to tell a
-discarded image from one the model never drew.
+An artifact a cap turns away is still described on the message, as
+`{ kind, mimeType, bytes, unavailable: 'too-large' | 'too-many' | 'not-stored' }`,
+and the chat shows a note in its place. Dropping it silently would leave the
+viewer who watched three pictures appear and came back to two unable to tell a
+discarded artifact from one the model never produced.
 
-**Lifetime is the message's.** Images go when the chat is deleted — the sweep is
-driven by the key prefix, so a payload whose descriptor never landed (the
-answer's write failed after the image was stored) is collected too — and when
-the messages naming them leave the transcript, either through an edit that
-rewrites history from a message or through `maxMessagesPerChat`.
+**Lifetime is the message's.** Artifacts go when the chat is deleted — the
+sweep is driven by the key prefix, so a payload whose descriptor never landed
+(the answer's write failed after the artifact was stored) is collected too —
+and when the messages naming them leave the transcript, either through an edit
+that rewrites history from a message or through `maxMessagesPerChat`.
 
-Where a chat is not stored at all — an anonymous visitor, an incognito turn, the
-compare panels, the canvas — nothing changes: the image is visible for the
-session, the note under it still tells the user to download it, and it is gone
-on the way back.
+Where a chat is not stored at all — an anonymous visitor, an incognito turn,
+the compare panels, the canvas — nothing changes: a generated image is visible
+for the session, the note under it still tells the user to download it, and it
+is gone on the way back.
+
+### Adding a kind
+
+Two places know what an artifact *is*: `ARTIFACT_KIND_TYPES` in
+`ChatRepository.js`, which says which media types that kind may be served as,
+and the client renderer for it. Everything between — the store, the caps, the
+endpoint, the delete cascade, the listing — is kind-agnostic.
 
 ## Retention
 
@@ -619,11 +640,11 @@ that is what you want.
 | ------------------------------------------- | ------------------------------------------------------------ |
 | `server/storage/bootstrap.js`               | Brings the provider up per worker; `getStorage()` may be null |
 | `server/services/chat/chatPersistence.js`   | The policy — the only module that decides "is this persisted" |
-| `server/services/chat/ChatRepository.js`    | The chat documents, image payloads, locks, listing, cascade   |
+| `server/services/chat/ChatRepository.js`    | The chat documents, artifact payloads, locks, listing, cascade |
 | `server/services/chat/chatMaterializer.js`  | The only module that writes chat turns                        |
 | `server/services/chat/chatAccess.js`        | `authorizeChat()` — 404 for unknown and not-yours             |
 | `server/services/chat/chatRetention.js`     | The daily sweep                                               |
-| `client/src/features/chat/components/GeneratedImage.jsx` | Renders a live, a stored or an unavailable image |
+| `client/src/features/chat/components/GeneratedImage.jsx` | Renders a live, a stored or an unavailable image artifact |
 | `server/routes/chats.js`                    | The `/api/chats` surface                                      |
 | `server/sse.js`                             | The durable-chat registry and the disconnect guard            |
 
