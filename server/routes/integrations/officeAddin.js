@@ -9,6 +9,7 @@ import { requireFeature } from '../../featureRegistry.js';
 import { buildPublicBaseUrl } from '../../utils/publicBaseUrl.js';
 import configCache from '../../configCache.js';
 import { getLocalizedContent } from '../../../shared/localize.js';
+import { sanitizeOfficeStartPage } from '../../utils/officeStartPage.js';
 import logger from '../../utils/logger.js';
 
 const __filename = fileURLToPath(import.meta.url);
@@ -57,7 +58,7 @@ function sanitizeStarterPrompts(value) {
  * /api/integrations/office-addin/config:
  *   get:
  *     summary: Get Office add-in runtime configuration
- *     description: Returns runtime configuration needed by the Outlook add-in before it can authenticate. No authentication required.
+ *     description: Returns runtime configuration needed by the Outlook add-in before it can authenticate — OAuth client, redirect URI, display name, starter prompts and the start-page settings (which view the pane opens after sign-in, the default chat app, the curated app shortcuts). No authentication required.
  *     tags:
  *       - Integrations - Office Add-in
  *     responses:
@@ -80,8 +81,13 @@ router.get('/config', (req, res) => {
     baseUrl,
     clientId: officeConfig.oauthClientId || '',
     redirectUri: `${baseUrl}/office/callback.html`,
+    // The add-in's name as the admin configured it, for the pane's header.
+    displayName: sanitizeLocalizedObject(officeConfig.displayName),
     starterPrompts: sanitizeStarterPrompts(officeConfig.starterPrompts),
-    calendarStarterPrompts: sanitizeStarterPrompts(officeConfig.calendarStarterPrompts)
+    calendarStarterPrompts: sanitizeStarterPrompts(officeConfig.calendarStarterPrompts),
+    // Where the pane lands after sign-in and what its start page shows.
+    // Sanitized, not validated: a hand-edited value must not break the pane.
+    startPage: sanitizeOfficeStartPage(officeConfig.startPage)
   });
 });
 

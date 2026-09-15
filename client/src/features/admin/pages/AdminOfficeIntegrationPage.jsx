@@ -1,12 +1,31 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
 import { Link } from 'react-router-dom';
 import DynamicLanguageEditor from '../../../shared/components/DynamicLanguageEditor';
+import Icon from '../../../shared/components/Icon';
+import ReorderableList from '../components/ReorderableList';
 import { makeAdminApiCall } from '../../../api/adminApi';
+import { fetchAdminApps } from '../../../api';
 import { buildApiUrl } from '../../../utils/runtimeBasePath';
+import { getLocalizedContent } from '../../../utils/localizeContent';
+
+/** The values the task pane's landing view accepts; mirrored in server/utils/officeStartPage.js. */
+const START_PAGE_CHOICES = ['start', 'apps'];
+
+const DEFAULT_START_PAGE = { defaultPage: 'start', defaultAppId: '', featuredAppIds: [] };
+
+// Only the known fields, each well-formed, whatever the server sent.
+const readStartPage = value => ({
+  defaultPage: START_PAGE_CHOICES.includes(value?.defaultPage) ? value.defaultPage : 'start',
+  defaultAppId: typeof value?.defaultAppId === 'string' ? value.defaultAppId : '',
+  featuredAppIds: Array.isArray(value?.featuredAppIds)
+    ? value.featuredAppIds.filter(id => typeof id === 'string' && id.length > 0)
+    : []
+});
 
 function AdminOfficeIntegrationPage() {
-  const { t } = useTranslation();
+  const { t, i18n } = useTranslation();
+  const currentLanguage = i18n.language;
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [toggling, setToggling] = useState(false);
@@ -17,6 +36,12 @@ function AdminOfficeIntegrationPage() {
   const [description, setDescription] = useState({});
   const [starterPrompts, setStarterPrompts] = useState([]);
   const [useLocalOfficejs, setUseLocalOfficejs] = useState(false);
+  // The task pane's landing view: which view opens after sign-in, the app
+  // whose chat input the start page shows, and the curated app shortcuts.
+  const [startPage, setStartPage] = useState(DEFAULT_START_PAGE);
+  // Every configured app (admin endpoint), for the two app pickers below.
+  const [apps, setApps] = useState([]);
+  const [appsLoading, setAppsLoading] = useState(true);
 
   // Stable client-side ids are used as React keys while the prompt list is edited.
   // They are stripped before persisting so the server never sees them.
@@ -46,6 +71,7 @@ function AdminOfficeIntegrationPage() {
       setDisplayName(sanitizeLocalized(data.displayName));
       setDescription(sanitizeLocalized(data.description));
       setUseLocalOfficejs(data.useLocalOfficejs === true);
+      setStartPage(readStartPage(data.startPage));
       setStarterPrompts(
         Array.isArray(data.starterPrompts)
           ? data.starterPrompts.map(p => ({
@@ -69,6 +95,50 @@ function AdminOfficeIntegrationPage() {
     loadStatus();
     // eslint-disable-next-line @eslint-react/exhaustive-deps
   }, []);
+
+  useEffect(() => {
+    let mounted = true;
+    fetchAdminApps()
+      .then(data => {
+        const list = Array.isArray(data) ? data : Array.isArray(data?.apps) ? data.apps : [];
+        if (mounted) setApps(list);
+      })
+      .catch(() => {})
+      .finally(() => {
+        if (mounted) setAppsLoading(false);
+      });
+    return () => {
+      mounted = false;
+    };
+  }, []);
+
+  // The start page needs a chat to send the message to — iframe/redirect
+  // apps cannot be its default app. Any app may be a shortcut.
+  const chatApps = useMemo(() => apps.filter(app => (app.type || 'chat') === 'chat'), [apps]);
+
+  const appLabel = app =>
+    `${getLocalizedContent(app.name, currentLanguage) || app.id}${
+      app.enabled === false ? ` (${t('admin.officeIntegration.disabledApp', 'disabled')})` : ''
+    }`;
+
+  const updateStartPage = patch => setStartPage(prev => ({ ...prev, ...patch }));
+
+  // Keep ids that no longer resolve to an app in the list so they stay
+  // removable instead of silently occupying a slot.
+  const featuredItems = startPage.featuredAppIds.map(id => ({
+    id,
+    app: apps.find(app => app.id === id) || null
+  }));
+  const addableApps = apps.filter(app => !startPage.featuredAppIds.includes(app.id));
+  const featuredLabel = item =>
+    item.app ? getLocalizedContent(item.app.name, currentLanguage) || item.id : item.id;
+  const addFeaturedApp = id => {
+    if (!id || startPage.featuredAppIds.includes(id)) return;
+    updateStartPage({ featuredAppIds: [...startPage.featuredAppIds, id] });
+  };
+  const removeFeaturedApp = id => {
+    updateStartPage({ featuredAppIds: startPage.featuredAppIds.filter(entry => entry !== id) });
+  };
 
   const handleToggle = async () => {
     if (!status) return;
@@ -128,7 +198,13 @@ function AdminOfficeIntegrationPage() {
           displayName: trimLocalized(displayName),
           description: trimLocalized(description),
           starterPrompts: cleanedPrompts,
-          useLocalOfficejs
+          useLocalOfficejs,
+          startPage: {
+            defaultPage: startPage.defaultPage,
+            // '' means "automatic"; the server stores no id for it.
+            defaultAppId: startPage.defaultAppId || '',
+            featuredAppIds: startPage.featuredAppIds
+          }
         }
       });
       await loadStatus();
@@ -176,6 +252,11 @@ function AdminOfficeIntegrationPage() {
       return next;
     });
   };
+
+  const selectClass =
+    'block w-full rounded-md border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 dark:text-gray-100 px-3 py-2 text-sm focus:outline-hidden focus:ring-2 focus:ring-indigo-500 disabled:opacity-50 disabled:cursor-not-allowed';
+  const labelClass = 'block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1';
+  const helpClass = 'mt-2 text-xs text-gray-500 dark:text-gray-400';
 
   const manifestUrl = status?.manifestUrl || buildApiUrl('integrations/office-addin/manifest.xml');
   const manifestApiPath = buildApiUrl('integrations/office-addin/manifest.xml');
@@ -384,6 +465,182 @@ function AdminOfficeIntegrationPage() {
                   )}
                 </div>
               )}
+            </div>
+
+            {/* Start page: the pane's landing view */}
+            <div className="bg-white dark:bg-gray-800 rounded-xl shadow-xs border border-gray-200 dark:border-gray-700 p-6">
+              <h2 className="text-lg font-semibold text-gray-900 dark:text-gray-100 mb-1">
+                {t('admin.officeIntegration.startPageTitle', 'Start Page')}
+              </h2>
+              <p className="text-sm text-gray-500 dark:text-gray-400 mb-4">
+                {t(
+                  'admin.officeIntegration.startPageDesc',
+                  'What the task pane shows after sign-in — and which app answers there. Messages typed on the start page open that app and are sent right away, with the open email and any collected emails as context.'
+                )}
+              </p>
+
+              <div className="max-w-lg space-y-5">
+                <div>
+                  <label htmlFor="office-startPage-defaultPage" className={labelClass}>
+                    {t('admin.officeIntegration.defaultPage', 'Landing view')}
+                  </label>
+                  <select
+                    id="office-startPage-defaultPage"
+                    value={startPage.defaultPage}
+                    onChange={e => updateStartPage({ defaultPage: e.target.value })}
+                    className={selectClass}
+                  >
+                    <option value="start">
+                      {t(
+                        'admin.officeIntegration.defaultPageStart',
+                        'Start page (greeting, chat input and app shortcuts)'
+                      )}
+                    </option>
+                    <option value="apps">
+                      {t('admin.officeIntegration.defaultPageApps', 'All apps (the app list)')}
+                    </option>
+                  </select>
+                  <p className={helpClass}>
+                    {t(
+                      'admin.officeIntegration.defaultPageHelp',
+                      'Where the pane lands after sign-in and where the back button in a chat leads. The app list stays one tap away from the start page either way.'
+                    )}
+                  </p>
+                </div>
+
+                <div>
+                  <label htmlFor="office-startPage-defaultAppId" className={labelClass}>
+                    {t('admin.officeIntegration.defaultApp', 'Default chat app')}
+                  </label>
+                  <select
+                    id="office-startPage-defaultAppId"
+                    value={startPage.defaultAppId}
+                    disabled={appsLoading || startPage.defaultPage !== 'start'}
+                    onChange={e => updateStartPage({ defaultAppId: e.target.value })}
+                    className={selectClass}
+                  >
+                    <option value="">
+                      {t(
+                        'admin.officeIntegration.defaultAppAutomatic',
+                        'First available app (automatic)'
+                      )}
+                    </option>
+                    {chatApps.map(app => (
+                      <option key={app.id} value={app.id}>
+                        {appLabel(app)}
+                      </option>
+                    ))}
+                    {/* Keep a stored id visible even if the app no longer exists. */}
+                    {!appsLoading &&
+                      startPage.defaultAppId &&
+                      !chatApps.some(app => app.id === startPage.defaultAppId) && (
+                        <option value={startPage.defaultAppId}>
+                          {startPage.defaultAppId} (
+                          {t('admin.officeIntegration.unknownApp', 'not found')})
+                        </option>
+                      )}
+                  </select>
+                  <p className={helpClass}>
+                    {t(
+                      'admin.officeIntegration.defaultAppHelp',
+                      'The app whose chat input the start page shows. When unset — or when a user cannot access it — the top-ranked chat app that user can access is used: favorites first, then the default apps below.'
+                    )}
+                  </p>
+                </div>
+
+                <div>
+                  <span className={labelClass}>
+                    {t('admin.officeIntegration.featuredApps', 'Default apps')}
+                  </span>
+                  {featuredItems.length === 0 ? (
+                    <p className="rounded-md border border-dashed border-gray-300 dark:border-gray-600 px-3 py-4 text-xs text-gray-500 dark:text-gray-400">
+                      {t(
+                        'admin.officeIntegration.featuredAppsEmpty',
+                        'No default apps yet — the start page lists apps in their configured order, favorites first.'
+                      )}
+                    </p>
+                  ) : (
+                    <ReorderableList
+                      items={featuredItems}
+                      onReorder={items =>
+                        updateStartPage({ featuredAppIds: items.map(item => item.id) })
+                      }
+                      getKey={item => item.id}
+                      getLabel={featuredLabel}
+                      renderItem={(item, index) => (
+                        <span className="flex min-w-0 items-center gap-2">
+                          <span className="w-5 shrink-0 text-xs font-semibold text-gray-400 dark:text-gray-500">
+                            {index + 1}.
+                          </span>
+                          {item.app && (
+                            <span
+                              className="flex h-6 w-6 shrink-0 items-center justify-center rounded-md text-white"
+                              style={{ backgroundColor: item.app.color || '#4f46e5' }}
+                            >
+                              <Icon name={item.app.icon} size="sm" className="h-3.5 w-3.5" />
+                            </span>
+                          )}
+                          <span className="min-w-0 flex-1 truncate text-sm text-gray-900 dark:text-gray-100">
+                            {featuredLabel(item)}
+                            {!item.app && !appsLoading && (
+                              <span className="ml-1 text-xs text-amber-600 dark:text-amber-400">
+                                ({t('admin.officeIntegration.unknownApp', 'not found')})
+                              </span>
+                            )}
+                            {item.app?.enabled === false && (
+                              <span className="ml-1 text-xs text-gray-500 dark:text-gray-400">
+                                ({t('admin.officeIntegration.disabledApp', 'disabled')})
+                              </span>
+                            )}
+                          </span>
+                        </span>
+                      )}
+                      renderActions={item => (
+                        <button
+                          type="button"
+                          onClick={() => removeFeaturedApp(item.id)}
+                          aria-label={t(
+                            'admin.officeIntegration.removeFeaturedApp',
+                            'Remove {{name}}',
+                            {
+                              name: featuredLabel(item)
+                            }
+                          )}
+                          title={t('admin.officeIntegration.removeFeaturedApp', 'Remove {{name}}', {
+                            name: featuredLabel(item)
+                          })}
+                          className="rounded-md p-1 text-gray-400 hover:bg-red-50 hover:text-red-600 dark:hover:bg-red-900/30"
+                        >
+                          <Icon name="trash" size="sm" />
+                        </button>
+                      )}
+                    />
+                  )}
+                  <select
+                    id="office-startPage-addFeaturedApp"
+                    value=""
+                    disabled={appsLoading || addableApps.length === 0}
+                    onChange={e => addFeaturedApp(e.target.value)}
+                    aria-label={t('admin.officeIntegration.addFeaturedApp', 'Add a default app')}
+                    className={`${selectClass} mt-2`}
+                  >
+                    <option value="">
+                      {t('admin.officeIntegration.addFeaturedApp', 'Add a default app')}
+                    </option>
+                    {addableApps.map(app => (
+                      <option key={app.id} value={app.id}>
+                        {appLabel(app)}
+                      </option>
+                    ))}
+                  </select>
+                  <p className={helpClass}>
+                    {t(
+                      'admin.officeIntegration.featuredAppsHelp',
+                      "Shown on the start page in this order, right after each user's favorites. Users who cannot access an app never see it. Drag a row or use the arrows to reorder."
+                    )}
+                  </p>
+                </div>
+              </div>
             </div>
 
             {/* Starter Prompts */}

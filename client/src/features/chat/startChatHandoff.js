@@ -10,6 +10,11 @@
 // Those are per-chat choices rather than shareable link state, so they ride
 // along here instead of bloating the query string — AppChat applies them once
 // its own settings have been seeded from the app config.
+//
+// The Outlook task pane's start page uses the same channel to open its default
+// app: there is no URL to carry anything, so the message text itself, the
+// emails the user collected and the edited snapshot of the open email all ride
+// here and OfficeChatPanel sends them on mount (issue #2368).
 
 let pending = null;
 
@@ -21,7 +26,15 @@ let pending = null;
  *   transcriptionEnabled?: boolean,
  *   imageAspectRatio?: string,
  *   imageQuality?: string
- * } }} data
+ * },
+ *   text?: string,
+ *   autoSend?: boolean,
+ *   pinnedEmails?: Array<object>,
+ *   hostContextOverride?: object|null,
+ *   starterPrompt?: object|null
+ * }} data - `text` onwards are the Outlook start page's fields: the message,
+ *   whether to send it or only prefill it, the collected emails, the edited
+ *   snapshot of the open email and the starter prompt it came from, if any.
  */
 export function setPendingChatStart(data) {
   pending = data || null;

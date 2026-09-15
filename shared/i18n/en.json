@@ -150,6 +150,20 @@
       "language": "Language",
       "cancel": "Cancel",
       "save": "Save"
+    },
+    "menu": {
+      "settings": "Settings",
+      "logout": "Logout",
+      "variables": "Show variables"
+    },
+    "startPage": {
+      "openApp": "Open app",
+      "allApps": "All apps",
+      "backToStart": "Back to start page",
+      "backToApps": "Back to app selection"
+    },
+    "selectApp": {
+      "title": "Select App"
     }
   },
   "pages": {
@@ -937,7 +951,23 @@
       "step2": "Go to Microsoft 365 Admin Center → Settings → Integrated apps.",
       "step3": "Choose 'Upload custom apps' and paste the manifest URL or upload the file.",
       "step4": "Assign the add-in to users or the entire organization.",
-      "step5": "Users will find the add-in in Outlook under Get Add-ins or My Add-ins."
+      "step5": "Users will find the add-in in Outlook under Get Add-ins or My Add-ins.",
+      "startPageTitle": "Start Page",
+      "startPageDesc": "What the task pane shows after sign-in — and which app answers there. Messages typed on the start page open that app and are sent right away, with the open email and any collected emails as context.",
+      "defaultPage": "Landing view",
+      "defaultPageStart": "Start page (greeting, chat input and app shortcuts)",
+      "defaultPageApps": "All apps (the app list)",
+      "defaultPageHelp": "Where the pane lands after sign-in and where the back button in a chat leads. The app list stays one tap away from the start page either way.",
+      "defaultApp": "Default chat app",
+      "defaultAppAutomatic": "First available app (automatic)",
+      "defaultAppHelp": "The app whose chat input the start page shows. When unset — or when a user cannot access it — the top-ranked chat app that user can access is used: favorites first, then the default apps below.",
+      "featuredApps": "Default apps",
+      "featuredAppsEmpty": "No default apps yet — the start page lists apps in their configured order, favorites first.",
+      "featuredAppsHelp": "Shown on the start page in this order, right after each user's favorites. Users who cannot access an app never see it. Drag a row or use the arrows to reorder.",
+      "addFeaturedApp": "Add a default app",
+      "removeFeaturedApp": "Remove {{name}}",
+      "unknownApp": "not found",
+      "disabledApp": "disabled"
     },
     "nextcloudEmbed": {
       "title": "Nextcloud Embed",

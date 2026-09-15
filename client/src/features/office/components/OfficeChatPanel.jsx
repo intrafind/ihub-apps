@@ -1,5 +1,6 @@
 import { useState, useRef, useCallback, useEffect, useMemo } from 'react';
 import { useNavigate, Navigate } from 'react-router-dom';
+import { useTranslation } from 'react-i18next';
 import { v4 as uuidv4 } from 'uuid';
 import ChatMessageList from '../../chat/components/ChatMessageList';
 import ChatInput from '../../chat/components/ChatInput';
@@ -28,14 +29,11 @@ import {
   collectAttachmentsForSend,
   formatFileDataAsPromptText
 } from '../utilities/buildChatApiMessages';
-import {
-  fetchCurrentMailContext,
-  fetchSelectedItemsContext
-} from '../utilities/outlookMailContext';
-import {
-  isMultiSelectBodySupported,
-  isOutlookAppointmentMode
-} from '../utilities/officeCapabilities';
+import { isOutlookAppointmentMode } from '../utilities/officeCapabilities';
+import { buildOfficeStarterPrompts } from '../utilities/officeStarterPrompts';
+import { OFFICE_APPS_PAGE_PATH } from '../utilities/officeStartPage';
+import usePinnedEmails from '../hooks/usePinnedEmails';
+import { consumePendingChatStart } from '../../chat/startChatHandoff';
 import { getLocalizedContent } from '../../../utils/localizeContent';
 import { officeLocale } from '../utilities/officeLocale';
 import { fetchApps } from '../../../api';
@@ -53,7 +51,19 @@ function buildParamsFromApp(app) {
   return params;
 }
 
-function OfficeChatPanel({ authData, selectedApp, setSelectedApp, onLogout }) {
+/**
+ * @param {object} props
+ * @param {string} [props.homePath] - Where the back button leads: the start page
+ *   or the apps list, whichever the admin made the pane's home.
+ */
+function OfficeChatPanel({
+  authData,
+  selectedApp,
+  setSelectedApp,
+  onLogout,
+  homePath = OFFICE_APPS_PAGE_PATH
+}) {
+  const { t } = useTranslation();
   const navigate = useNavigate();
   const officeConfig = useOfficeConfig();
   const embeddedHost = useEmbeddedHost();
@@ -80,7 +90,8 @@ function OfficeChatPanel({ authData, selectedApp, setSelectedApp, onLogout }) {
     websearchEnabled,
     setWebsearchEnabled,
     hostContextFlags,
-    setHostContextFlags
+    setHostContextFlags,
+    modelsLoading
   } = useAppSettings(selectedApp?.id, selectedApp);
   const fileUploadHandler = useFileUploadHandler();
   const mailSnapshot = useOutlookMailContextSnapshot();
@@ -97,9 +108,17 @@ function OfficeChatPanel({ authData, selectedApp, setSelectedApp, onLogout }) {
   // Emails the user has explicitly attached to this chat (pin/collect mode,
   // or bulk-pulled via Mailbox 1.15+ multi-select). Survives ItemChanged so
   // the user can navigate between emails while building up a context set;
-  // wiped on new-chat / app-switch alongside the chat history.
-  const [pinnedEmails, setPinnedEmails] = useState([]);
-  const [addEmailsLoading, setAddEmailsLoading] = useState(false);
+  // wiped on new-chat / app-switch alongside the chat history. Shared with
+  // the start page, which hands its collected emails over via the handoff.
+  const {
+    pinnedEmails,
+    setPinnedEmails,
+    addEmails: handleAddEmails,
+    unpin: handleUnpin,
+    clearPinned: handleClearPinned,
+    addEmailsLoading,
+    multiSelectSupported
+  } = usePinnedEmails();
 
   // Build the email-context text that will be appended to the outgoing message
   // so ChatInput can include it in the live token-count estimate. This mirrors
@@ -169,7 +188,6 @@ function OfficeChatPanel({ authData, selectedApp, setSelectedApp, onLogout }) {
   const isAppointment = mailSnapshot.ctx
     ? mailSnapshot.ctx.itemKind === 'appointment'
     : isOutlookAppointmentMode();
-  const multiSelectSupported = isMultiSelectBodySupported();
   // Incremented each time a message is sent (manual submit or starter prompt)
   // to trigger auto-collapse of the OfficeContextStrip, giving the user more
   // reading space for the assistant's response. The strip listens to changes
@@ -231,96 +249,6 @@ function OfficeChatPanel({ authData, selectedApp, setSelectedApp, onLogout }) {
     };
   }, []);
 
-  const handleUnpin = useCallback(itemId => {
-    setPinnedEmails(prev => {
-      if (!itemId) return prev;
-      return prev.filter(p => p.itemId !== itemId);
-    });
-  }, []);
-
-  const handleClearPinned = useCallback(() => {
-    setPinnedEmails([]);
-  }, []);
-
-  // Single "Add email(s)" entry point (issue #1553). Attaches every email
-  // the user has Ctrl-selected in Outlook (Mailbox 1.15+) AND/OR the email
-  // currently open in the reading pane. Replaces the old split
-  // "Add this email" / "Add selected emails" buttons which (a) confused
-  // users by always showing both and (b) silently no-op'd when the
-  // multi-select reader returned nothing.
-  const handleAddEmails = useCallback(async () => {
-    setAddEmailsLoading(true);
-    try {
-      const collected = [];
-      const seenIds = new Set();
-      const pushEntry = entry => {
-        if (entry.itemId && seenIds.has(entry.itemId)) return;
-        if (entry.itemId) seenIds.add(entry.itemId);
-        collected.push(entry);
-      };
-
-      // 1. Pull every email the user has multi-selected in Outlook. On a
-      //    single selection this returns just the open email; on no
-      //    selection it returns nothing — both handled by the fallback
-      //    below. Errors are logged, not swallowed, so a failing host API
-      //    no longer leaves the user staring at an unresponsive button.
-      if (multiSelectSupported) {
-        try {
-          const items = await fetchSelectedItemsContext();
-          if (Array.isArray(items)) {
-            for (const it of items) {
-              pushEntry({
-                itemId: it.itemId ?? null,
-                subject: it.subject ?? null,
-                bodyText: it.bodyText ?? null,
-                attachments: []
-              });
-            }
-          }
-        } catch (err) {
-          console.warn('[office] reading selected emails failed', err);
-        }
-      }
-
-      // 2. When the user has a single email open — either because
-      //    multi-select isn't supported, or only one message is selected —
-      //    pull the full current-mail context. This guarantees the open
-      //    email is always added (the core fix for "nothing happened") and
-      //    captures its attachments, which the lightweight multi-select
-      //    reader deliberately skips.
-      if (collected.length <= 1) {
-        try {
-          const ctx = await fetchCurrentMailContext();
-          if (ctx?.available && (ctx.itemId || ctx.subject || ctx.bodyText)) {
-            const entry = {
-              itemId: ctx.itemId ?? null,
-              subject: ctx.subject ?? null,
-              bodyText: ctx.bodyText ?? null,
-              attachments: ctx.attachments ?? []
-            };
-            // Upgrade the matching multi-select stub with attachments rather
-            // than adding a duplicate of the same email.
-            const idx = ctx.itemId ? collected.findIndex(c => c.itemId === ctx.itemId) : -1;
-            if (idx >= 0) collected[idx] = entry;
-            else pushEntry(entry);
-          }
-        } catch (err) {
-          console.warn('[office] reading current email failed', err);
-        }
-      }
-
-      if (collected.length === 0) return;
-
-      setPinnedEmails(prev => {
-        const seen = new Set(prev.map(p => p.itemId).filter(Boolean));
-        const additions = collected.filter(c => !(c.itemId && seen.has(c.itemId)));
-        return additions.length ? [...prev, ...additions] : prev;
-      });
-    } finally {
-      setAddEmailsLoading(false);
-    }
-  }, [multiSelectSupported]);
-
   const handleInsert = useCallback(content => {
     displayReplyFormWithAssistantResponse(content);
   }, []);
@@ -350,7 +278,11 @@ function OfficeChatPanel({ authData, selectedApp, setSelectedApp, onLogout }) {
       // mode or bulk-pulled via native multi-select. Stripped from the
       // outgoing server payload inside useOfficeChatAdapter once their
       // bodies have been merged into apiMessage.content.
-      params.pinnedEmails = pinnedEmails;
+      // The start page's collected emails arrive with the handed-over message,
+      // before this panel's own pin state has caught up.
+      params.pinnedEmails = Array.isArray(overrides.pinnedEmails)
+        ? overrides.pinnedEmails
+        : pinnedEmails;
 
       // Mail context snapshot — the user can drop individual attachments
       // and toggle the body off via OfficeContextStrip / its embedded
@@ -359,7 +291,12 @@ function OfficeChatPanel({ authData, selectedApp, setSelectedApp, onLogout }) {
       // inside the adapter and ensures the user's removals (and body
       // opt-out) are honored. Null falls back to the adapter's own fetch
       // (extension side panel, no-context routes).
-      const snapshotOverride = mailSnapshot.buildSnapshotOverride();
+      // The start page passes the snapshot the user edited there — this
+      // panel's own snapshot is still loading when a handed-over message goes out.
+      const snapshotOverride =
+        'hostContextOverride' in overrides
+          ? overrides.hostContextOverride
+          : mailSnapshot.buildSnapshotOverride();
       if (snapshotOverride) params.hostContextOverride = snapshotOverride;
 
       // Resend can pass a `selectedFile` override to bypass async state updates;
@@ -374,7 +311,7 @@ function OfficeChatPanel({ authData, selectedApp, setSelectedApp, onLogout }) {
         apiMessage: {
           content: text,
           promptTemplate,
-          variables: appPromptVariables,
+          variables: overrides.variables ?? appPromptVariables,
           imageData,
           fileData
         },
@@ -471,6 +408,62 @@ function OfficeChatPanel({ authData, selectedApp, setSelectedApp, onLogout }) {
     [selectedApp, submitMessage]
   );
 
+  // Start-page handoff (issue #2368): the user collected emails, edited the
+  // open email's context and typed (or picked) a message on the start page,
+  // then this app opened. Send it as soon as the panel is ready — once the
+  // model list has settled, so the app's preferred model rides along — with
+  // the state prepared there, which this panel's own snapshot and pins do not
+  // have yet. An app prompt that does not auto-send, or an app whose required
+  // variables are still missing (the variables dialog opens for them), gets
+  // the text placed in the input instead so the user finishes it here.
+  const submitMessageRef = useRef(submitMessage);
+  useEffect(() => {
+    submitMessageRef.current = submitMessage;
+  });
+  const handoffAppliedRef = useRef(false);
+  useEffect(() => {
+    if (handoffAppliedRef.current || !selectedApp?.id || modelsLoading) return;
+    handoffAppliedRef.current = true;
+    const handoff = consumePendingChatStart(selectedApp.id);
+    if (!handoff) return;
+
+    const pins = Array.isArray(handoff.pinnedEmails) ? handoff.pinnedEmails : [];
+    if (pins.length > 0) setPinnedEmails(pins);
+
+    // A starter prompt brings its own system prompt and variable presets,
+    // exactly as picking it inside the panel would.
+    const starterPrompt = handoff.starterPrompt ?? null;
+    selectedStarterPromptRef.current = starterPrompt;
+    const initialVariables = buildInitialVariablesMap(selectedApp.variables);
+    const presets = starterPrompt?.variables;
+    const variables =
+      presets && typeof presets === 'object' && selectedApp.variables?.length
+        ? mergeStarterPromptVariablesIntoValues(selectedApp.variables, presets, initialVariables)
+        : initialVariables;
+    if (variables !== initialVariables) setAppPromptVariables(variables);
+
+    const text = typeof handoff.text === 'string' ? handoff.text : '';
+    const missingRequired = missingRequiredVariableNames(
+      getValidVariableDefinitions(selectedApp.variables),
+      variables
+    );
+    const canSend =
+      handoff.autoSend !== false &&
+      (text.trim().length > 0 || selectedApp.allowEmptyContent === true) &&
+      missingRequired.length === 0;
+
+    if (canSend) {
+      submitMessageRef.current(text, {
+        pinnedEmails: pins,
+        hostContextOverride: handoff.hostContextOverride ?? null,
+        variables
+      });
+    } else {
+      setInputValue(text);
+    }
+    // eslint-disable-next-line @eslint-react/exhaustive-deps
+  }, [selectedApp?.id, modelsLoading]);
+
   const handleOpenSelector = useCallback(() => {
     fetchApps()
       .then(data => {
@@ -490,7 +483,7 @@ function OfficeChatPanel({ authData, selectedApp, setSelectedApp, onLogout }) {
       setSelectedApp(newApp);
       setIsSelectorOpen(false);
     },
-    [adapter, setSelectedApp]
+    [adapter, setSelectedApp, setPinnedEmails]
   );
 
   const handleNewChat = useCallback(() => {
@@ -499,48 +492,36 @@ function OfficeChatPanel({ authData, selectedApp, setSelectedApp, onLogout }) {
     adapter.clearMessages();
     setInputValue('');
     setPinnedEmails([]);
-  }, [adapter]);
+  }, [adapter, setPinnedEmails]);
 
   if (!authData) return null;
-  if (!selectedApp) return <Navigate to="/select" replace />;
+  if (!selectedApp) return <Navigate to={homePath} replace />;
 
-  // Calendar items get their own starter-prompt set so users don't see
-  // mail prompts like "Summarize this email" inside a meeting. Falls back
-  // to the mail prompts when the admin hasn't configured calendar prompts
-  // yet so an upgrade with no admin action still shows _something_.
-  const configuredDefaults = Array.isArray(
-    isAppointment ? officeConfig?.calendarStarterPrompts : officeConfig?.starterPrompts
-  )
-    ? isAppointment
-      ? officeConfig.calendarStarterPrompts
-      : officeConfig.starterPrompts
-    : [];
-
-  const defaultPrompts = configuredDefaults.map((p, idx) => ({
-    key: `office-${idx}`,
-    label: getLocalizedContent(p?.title, officeLocale),
-    message: getLocalizedContent(p?.message, officeLocale),
-    // Default Outlook prompts should fire directly on click per product requirements.
-    autoSend: true
-  }));
-
-  const starterPrompts = selectedApp?.starterPrompts?.length
-    ? selectedApp.starterPrompts.map((p, idx) => ({
-        key: p?.id ?? `${idx}`,
-        label: getLocalizedContent(p?.title, officeLocale),
-        subtitle: getLocalizedContent(p?.description, officeLocale),
-        message: getLocalizedContent(p?.message, officeLocale),
-        autoSend: p?.autoSend === true,
-        raw: p
-      }))
-    : defaultPrompts;
+  // The app's own starter prompts, or the admin's Outlook defaults (the
+  // calendar set inside a meeting) — the same list the start page offers.
+  const starterPrompts = buildOfficeStarterPrompts({
+    app: selectedApp,
+    officeConfig,
+    isAppointment,
+    language: officeLocale
+  });
 
   const menuItems = [
     ...(getValidVariableDefinitions(selectedApp?.variables).length > 0
-      ? [{ key: 'variables', label: 'Show variables', onClick: () => setIsVariablesOpen(true) }]
+      ? [
+          {
+            key: 'variables',
+            label: t('office.menu.variables', 'Show variables'),
+            onClick: () => setIsVariablesOpen(true)
+          }
+        ]
       : []),
-    { key: 'settings', label: 'Settings', onClick: () => setIsSettingsOpen(true) },
-    { key: 'logout', label: 'Logout', onClick: onLogout }
+    {
+      key: 'settings',
+      label: t('office.menu.settings', 'Settings'),
+      onClick: () => setIsSettingsOpen(true)
+    },
+    { key: 'logout', label: t('office.menu.logout', 'Logout'), onClick: onLogout }
   ];
 
   const hasMessages = adapter.messages.length > 0;
@@ -554,7 +535,12 @@ function OfficeChatPanel({ authData, selectedApp, setSelectedApp, onLogout }) {
             selectedApp={{ name: appName || 'Select app' }}
             onItemClick={handleOpenSelector}
             onWriteClick={handleNewChat}
-            onBackClick={() => navigate('/select', { replace: true })}
+            onBackClick={() => navigate(homePath, { replace: true })}
+            backLabel={
+              homePath === OFFICE_APPS_PAGE_PATH
+                ? t('office.startPage.backToApps', 'Back to app selection')
+                : t('office.startPage.backToStart', 'Back to start page')
+            }
             menuItems={menuItems}
           />
 
@@ -721,7 +707,7 @@ function OfficeChatPanel({ authData, selectedApp, setSelectedApp, onLogout }) {
           setIsVariablesOpen(false);
           const defs = getValidVariableDefinitions(selectedApp?.variables);
           const missing = missingRequiredVariableNames(defs, appPromptVariables);
-          if (missing.length > 0) navigate('/select', { replace: true });
+          if (missing.length > 0) navigate(homePath, { replace: true });
         }}
         onSave={setAppPromptVariables}
       />
