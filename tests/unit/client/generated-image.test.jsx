@@ -3,7 +3,7 @@ import { render, screen, waitFor } from '@testing-library/react';
 import { renderHook, act } from '@testing-library/react';
 
 /**
- * A generated image, reopened — #2362.
+ * A generated image, reopened — #2362, #2371.
  *
  * The picture reaches the chat bubble in two shapes and only one of them
  * carries pixels. Live, it is base64 off the run's stream and renders with no
@@ -12,9 +12,13 @@ import { renderHook, act } from '@testing-library/react';
  * fetched per artifact, which is what keeps opening a chat that produced a
  * dozen of them from shipping megabytes before the first word appears.
  *
- * So there are three things to hold: hydration turns the stored artifacts into
- * what the bubble renders, the component fetches a descriptor's bytes, and the
- * "download it or you will lose it" note appears only where it is still true.
+ * A stored image also waits for its own visibility before it fetches
+ * anything, and shows a placeholder rather than empty space while it waits or
+ * the fetch is in flight — so there are five things to hold: hydration turns
+ * the stored artifacts into what the bubble renders, the component fetches a
+ * descriptor's bytes, it only does so once scrolled near the viewport, a
+ * placeholder fills the gap until then, and the "download it or you will lose
+ * it" note appears only where it is still true.
  */
 
 jest.mock('react-i18next', () => ({
@@ -139,6 +143,76 @@ describe('rendering one image', () => {
     );
 
     expect(screen.getByText(/larger than this installation stores/i)).toBeInTheDocument();
+  });
+});
+
+describe('the loading placeholder', () => {
+  it('shows a spinner instead of empty space while a stored image is being fetched', async () => {
+    let resolveFetch;
+    mockFetchChatArtifact.mockReturnValue(
+      new Promise(resolve => {
+        resolveFetch = resolve;
+      })
+    );
+
+    render(
+      <GeneratedImage
+        image={{ id: 'art-1', kind: 'image', mimeType: 'image/png', bytes: 9 }}
+        chatId="chat-1"
+        index={0}
+        persisted
+      />
+    );
+
+    expect(screen.getByRole('status')).toBeInTheDocument();
+    expect(screen.queryByRole('img')).not.toBeInTheDocument();
+
+    resolveFetch(new Blob(['png bytes']));
+    await waitFor(() => expect(screen.getByRole('img')).toBeInTheDocument());
+  });
+});
+
+describe('lazy loading a stored image', () => {
+  let intersectionCallbacks;
+  const OriginalIntersectionObserver = global.IntersectionObserver;
+
+  beforeEach(() => {
+    intersectionCallbacks = [];
+    // jsdom has no IntersectionObserver at all, so a minimal stub stands in
+    // for it here — just enough to capture the callback each instance was
+    // built with and let the test fire it by hand.
+    global.IntersectionObserver = class {
+      constructor(callback) {
+        intersectionCallbacks.push(callback);
+      }
+      observe() {}
+      disconnect() {}
+    };
+  });
+
+  afterEach(() => {
+    global.IntersectionObserver = OriginalIntersectionObserver;
+  });
+
+  it('does not fetch a stored image until it is scrolled near the viewport', async () => {
+    mockFetchChatArtifact.mockResolvedValue(new Blob(['png bytes']));
+
+    render(
+      <GeneratedImage
+        image={{ id: 'art-1', kind: 'image', mimeType: 'image/png', bytes: 9 }}
+        chatId="chat-1"
+        index={0}
+        persisted
+      />
+    );
+
+    expect(mockFetchChatArtifact).not.toHaveBeenCalled();
+
+    act(() => {
+      intersectionCallbacks[0]([{ isIntersecting: true }]);
+    });
+
+    await waitFor(() => expect(mockFetchChatArtifact).toHaveBeenCalledWith('chat-1', 'art-1'));
   });
 });
 

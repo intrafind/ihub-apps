@@ -12,3 +12,13 @@ fell back to requesting a standalone SVG file that was never shipped.
   including the info, lock, photograph, workflow, and close-icon variants.
 - No configuration change is needed — the icons are now resolved from the app's existing icon
   library instead of a missing file.
+
+## Reopening a Chat No Longer Fetches Every Generated Image at Once
+
+Reopening a chat that had produced several generated images fetched all of them immediately, even
+the ones further up in the conversation, and showed an empty gap in the chat bubble for however
+long each fetch took.
+
+- A generated image is now only fetched once it scrolls near the visible area, so a long,
+  image-heavy chat no longer pulls every picture it ever produced the moment it is opened.
+- A loading placeholder appears in its place until the image arrives, instead of empty space.

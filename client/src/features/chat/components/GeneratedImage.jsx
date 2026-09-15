@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import Icon from '../../../shared/components/Icon';
 import { fetchChatArtifact } from '../../../api';
@@ -13,10 +13,11 @@ import { fetchChatArtifact } from '../../../api';
  *   is already in memory, so it renders from a data URI with no request.
  * - **Stored** — `{ id, kind: 'image', mimeType, bytes }`, the artifact
  *   descriptor a durable chat keeps on the message. The payload lives in its
- *   own document server-side and is fetched here, once, when the message is
- *   rendered. That is the whole reason opening a chat is fast even when it
- *   produced a dozen pictures: the transcript carries descriptors, not
- *   megabytes.
+ *   own document server-side and is fetched here, once the message is both
+ *   rendered and scrolled near the viewport. That is the whole reason opening
+ *   a chat is fast even when it produced a dozen pictures: the transcript
+ *   carries descriptors, not megabytes, and a picture below the fold does not
+ *   compete with the ones the viewer is actually looking at.
  * - **Unavailable** — a descriptor with `unavailable`, or the `_hadImageData`
  *   marker the browser-storage path leaves behind. There is nothing to show,
  *   so the component says so rather than rendering a broken picture.
@@ -37,6 +38,11 @@ import { fetchChatArtifact } from '../../../api';
 function GeneratedImage({ image, chatId, index, persisted = false }) {
   const { t } = useTranslation();
   const storedId = !image?.data && !image?.unavailable ? image?.id : null;
+  const containerRef = useRef(null);
+  // Seeded rather than set from an effect: where IntersectionObserver does
+  // not exist (older browsers, this test environment), there is nothing to
+  // wait on, so the image is visible from the start instead of forever.
+  const [isVisible, setIsVisible] = useState(() => typeof IntersectionObserver === 'undefined');
   const [objectUrl, setObjectUrl] = useState(null);
   // Which image failed, rather than a bare boolean: the flag then resets by
   // itself when the descriptor changes, instead of needing a write on every
@@ -44,8 +50,31 @@ function GeneratedImage({ image, chatId, index, persisted = false }) {
   const [failedId, setFailedId] = useState(null);
   const failed = failedId !== null && failedId === storedId;
 
+  // A stored image waits for its own visibility before it fetches anything:
+  // reopening a chat mounts every message — and every image in it — at once,
+  // so without this a long, image-heavy chat would fetch all of them before
+  // the viewer scrolled near most of them. `rootMargin` starts the fetch a
+  // little before the picture is actually on screen, so it is usually there
+  // by the time scrolling reaches it.
   useEffect(() => {
-    if (!storedId || !chatId) return undefined;
+    if (!storedId || isVisible) return undefined;
+    const node = containerRef.current;
+    if (!node) return undefined;
+    const observer = new IntersectionObserver(
+      entries => {
+        if (entries.some(entry => entry.isIntersecting)) {
+          setIsVisible(true);
+          observer.disconnect();
+        }
+      },
+      { rootMargin: '200px 0px' }
+    );
+    observer.observe(node);
+    return () => observer.disconnect();
+  }, [storedId, isVisible]);
+
+  useEffect(() => {
+    if (!storedId || !chatId || !isVisible) return undefined;
     let url = null;
     let active = true;
     (async () => {
@@ -71,11 +100,30 @@ function GeneratedImage({ image, chatId, index, persisted = false }) {
       if (url) URL.revokeObjectURL(url);
       setObjectUrl(null);
     };
-  }, [chatId, storedId]);
+  }, [chatId, storedId, isVisible]);
 
   const src = image?.data
     ? `data:${image.mimeType || 'image/png'};base64,${image.data}`
     : objectUrl;
+
+  // Waiting to scroll into view, or the fetch is in flight: either way a
+  // picture is coming, so a placeholder takes its place instead of the gap
+  // `return null` used to leave for the whole time it takes to arrive.
+  if (storedId && !src && !failed) {
+    return (
+      <div
+        ref={containerRef}
+        className="mt-3 flex h-48 w-64 max-w-full items-center justify-center rounded-lg bg-gray-100 dark:bg-gray-800"
+        role="status"
+        aria-label={t('chatMessage.loadingImage', 'Loading image…')}
+      >
+        <div
+          className="h-8 w-8 animate-spin rounded-full border-b-2 border-blue-600"
+          aria-hidden="true"
+        ></div>
+      </div>
+    );
+  }
 
   if (!src) {
     // Nothing to render: the descriptor says the image was never stored, the
