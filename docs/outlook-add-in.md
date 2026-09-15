@@ -168,6 +168,19 @@ Watch the iHub server logs (`npm run logs`) during the first sign-in. The OAuth 
 
 ---
 
+## End-user settings
+
+Users open the task-pane menu (**☰**) → **Settings** to adjust two personal preferences. Both are stored in the Outlook client's local storage: they survive Outlook restarts and are kept per user and per device. Nothing is stored on the iHub server and there is no admin-side configuration for them.
+
+| Setting | Options | Notes |
+|---|---|---|
+| **Language** | English, German | Defaults to the Outlook display language. Changing it reloads the task pane. |
+| **Appearance** | **Light** (default), **Dark**, **Automatic** | Applies immediately, no reload. *Automatic* follows the Outlook theme on clients that expose it (Mailbox requirement set 1.14+ — Outlook on the web, the new Outlook for Windows, current Microsoft 365 desktop builds) and switches live when the user changes Outlook's theme; older clients fall back to the operating system's dark-mode setting. |
+
+> Because these preferences live in the Outlook client's storage, clearing the add-in's site data or moving to another machine resets them to the defaults.
+
+---
+
 ## Updating an existing deployment
 
 | Change | Action required |

@@ -4,6 +4,9 @@
  * One scrolling column. The compose block (the default app's chat input with
  * the email context right above it) follows the greeting so it is on screen
  * without scrolling even on a 600 px-tall pane; the app shortcuts come after.
+ *
+ * Layout and type only — colours live on the elements as Tailwind classes so
+ * the pane's dark mode (`dark:` variants, Settings → Appearance) applies.
  * Sizes are in rem so they follow the pane's fluid root font-size (office.css).
  * The container queries key off the pane width — `.office-task-pane` is the
  * container, see OfficeChatPanel.css — the height rules off the viewport,
@@ -26,7 +29,6 @@
   font-size: 0.9375rem;
   line-height: 1.3rem;
   font-weight: 600;
-  color: #0f172a; /* slate-900 */
   overflow-wrap: anywhere;
 }
 
@@ -34,7 +36,6 @@
   margin-top: 0.125rem;
   font-size: 0.75rem;
   line-height: 1rem;
-  color: #475569; /* slate-600 */
 }
 
 .office-start-compose {
@@ -65,12 +66,7 @@
   flex: none;
   font-size: 0.75rem;
   font-weight: 500;
-  color: #4f46e5; /* indigo-600 */
   white-space: nowrap;
-}
-
-.office-start-link:hover {
-  text-decoration: underline;
 }
 
 .office-start-prompts {
@@ -89,7 +85,6 @@
   font-weight: 700;
   letter-spacing: 0.08em;
   text-transform: uppercase;
-  color: #64748b; /* slate-500 */
 }
 
 .office-start-shortcuts {
@@ -104,18 +99,8 @@
   gap: 0.625rem;
   width: 100%;
   padding: 0.5rem 0.625rem;
-  border: 1px solid #e2e8f0; /* slate-200 */
   border-radius: 0.625rem;
-  background: #fff;
   text-align: left;
-  transition:
-    border-color 0.15s,
-    box-shadow 0.15s;
-}
-
-.office-start-shortcut:hover {
-  border-color: #cbd5e1; /* slate-300 */
-  box-shadow: 0 1px 2px rgba(15, 23, 42, 0.06);
 }
 
 .office-start-shortcut-icon {
@@ -133,19 +118,16 @@
   display: block;
   font-size: 0.8125rem;
   font-weight: 600;
-  color: #0f172a;
 }
 
 .office-start-shortcut-desc {
   display: block;
   font-size: 0.6875rem;
-  color: #64748b;
 }
 
 .office-start-status {
   padding: 0.5rem 0.75rem;
   font-size: 0.75rem;
-  color: #64748b;
   text-align: center;
 }
 

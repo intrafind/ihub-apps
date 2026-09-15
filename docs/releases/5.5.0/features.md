@@ -1808,6 +1808,51 @@ and are unchanged by this release.
 
 See [Artifacts](../../artifacts.md) and [Chat Persistence](../../chat-persistence.md).
 
+
+## Outlook Add-in: Dark Mode
+
+The Outlook task pane can now be switched to a dark appearance. Users open **☰ → Settings →
+Appearance** inside the add-in and choose **Light**, **Dark**, or **Automatic**; the choice is
+stored in the Outlook client and remembered across Outlook restarts. The browser-extension side
+panel, which uses the same chat shell, gets the same setting.
+
+- **Light** stays the default, so nothing changes for existing users until they opt in.
+- **Automatic** follows the Outlook theme on clients that expose it (Mailbox requirement set 1.14
+  and later — Outlook on the web, the new Outlook for Windows, current Microsoft 365 desktop
+  builds) and switches live when the user changes Outlook's theme. Older Outlook versions and the
+  browser extension follow the operating system's dark-mode setting instead.
+- Every add-in surface is covered: sign-in, app picker, chat, the email and meeting context strip,
+  pinned emails, and the app, variables and settings dialogs.
+- No admin configuration is involved; the preference is per user and per device.
+
+## Content Admins Can Choose Which Groups Use Their Content
+
+Every app, prompt, skill, tool and workflow edit page now has a **Group access** card: one checkbox
+per group, ticked when that group's permission list names the item. Ticking grants, unticking
+withdraws, and each change is saved to `groups.json` immediately — with the same change-history
+snapshot and audit entry an edit in **Admin → Groups** would leave. Until now this meant opening
+each group in turn and editing its list by hand.
+
+Members of the **Content Admins** group (`contentAdmin` without full admin access) get the card as
+well, scoped to the groups they are part of: a content admin in `sales` can grant or withdraw
+content for `sales` and for every group that inherits from `sales`, and sees no other groups.
+Being in a parent group counts — someone in `users` also manages the groups that inherit from
+`users`.
+
+- Full admins see every group; content admins only the groups they belong to plus the groups
+  inheriting from those. The `authenticated` and `anonymous` groups every user carries implicitly
+  do not count as membership, so a content admin cannot publish to everyone unless an
+  administrator has explicitly put them in such a group.
+- Only the content lists (`apps`, `prompts`, `skills`, `tools`, `workflows`) can be changed this
+  way. Models, admin flags, external mappings and inheritance stay in the group editor.
+- A group that holds a wildcard (`"*"`) for the type is shown ticked and locked: a single item
+  cannot be withdrawn from a wildcard. Replace the wildcard with an explicit list in
+  **Admin → Groups** if such a group should lose one item.
+- For tools, the card grants direct MCP/A2A access, exactly like the `tools` permission itself;
+  what the model may call in chat is still decided by the app.
+- No admin action is required. To let a content admin manage a group's access, make them a member
+  of that group, or of a group it inherits from.
+
 ## Outlook Add-in: Start Page with a Default App
 
 The Outlook task pane now opens on a start page instead of the app list: a greeting, the chat input

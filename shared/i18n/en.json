@@ -148,6 +148,12 @@
       "title": "Settings",
       "account": "Account",
       "language": "Language",
+      "appearance": "Appearance",
+      "appearanceLight": "Light",
+      "appearanceDark": "Dark",
+      "appearanceAuto": "Automatic",
+      "appearanceHintOffice": "Automatic follows the Outlook theme (or the system setting on older Outlook versions).",
+      "appearanceHintSystem": "Automatic follows the system setting.",
       "cancel": "Cancel",
       "save": "Save"
     },
@@ -1928,6 +1934,37 @@
       "externalMappingsPlaceholder": "Type a group name and press Enter…",
       "externalMappingsEmpty": "No external mappings yet",
       "externalMappingsHelp": "Enter external group names that should be mapped to this group. Users with these external groups will automatically be assigned to this internal group."
+    },
+    "contentAccess": {
+      "title": "Group access",
+      "description": "Choose which groups can use {{subject}}. Changes are saved immediately.",
+      "descriptionTools": "Choose which groups may call this tool directly over the MCP and A2A gateways. Changes are saved immediately. In chat, an app's own tool list decides what the model may call.",
+      "saveFirst": "Save {{subject}} first. Afterwards you can choose which groups may use it.",
+      "loading": "Loading groups…",
+      "loadError": "Group access could not be loaded.",
+      "retry": "Retry",
+      "noGroups": "No groups are defined yet.",
+      "noManageableGroups": "You are not a member of any group whose access you may manage. Ask an administrator to add you to the groups you should manage content for.",
+      "scopeNote": "You can change access for the groups you belong to and for the groups that inherit from them.",
+      "granted": "{{name}} can use {{subject}}",
+      "wildcardHint": "Can use all {{subjectPlural}} through a wildcard. To withdraw a single one, an administrator replaces the wildcard with an explicit list in the group settings.",
+      "inheritedHint": "Also inherited from: {{groups}}",
+      "saving": "Saving…",
+      "updateError": "Access could not be updated.",
+      "subject": {
+        "apps": "this app",
+        "prompts": "this prompt",
+        "skills": "this skill",
+        "tools": "this tool",
+        "workflows": "this workflow"
+      },
+      "subjectPlural": {
+        "apps": "apps",
+        "prompts": "prompts",
+        "skills": "skills",
+        "tools": "tools",
+        "workflows": "workflows"
+      }
     },
     "sources": {
       "ifinderConnectionInfo": "The iFinder connection (URL and authentication) is managed centrally in the iFinder integration settings under Admin → Providers. Here you only choose which documents this source loads: pin a single document by ID, or use a search query to load the top matching documents.",

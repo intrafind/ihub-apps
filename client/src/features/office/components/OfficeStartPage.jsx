@@ -23,6 +23,17 @@ import { fetchApps } from '../../../api';
 import './OfficeChatPanel.css';
 import './OfficeStartPage.css';
 
+/** The text links ("Open app", "All apps"). */
+const LINK_CLASS = 'office-start-link text-indigo-600 hover:underline dark:text-indigo-400';
+
+/** Same look as the chat panel's starter prompts (OfficeChatPanel.jsx). */
+const STARTER_PROMPT_CLASS =
+  'office-starter-prompt w-full text-left rounded-lg border border-slate-200 bg-white hover:bg-slate-50 hover:border-slate-300 transition-colors text-slate-700 dark:border-slate-700 dark:bg-slate-800 dark:hover:bg-slate-700 dark:hover:border-slate-600 dark:text-slate-200';
+
+/** An app shortcut row; colours match the compact AppCard the apps list uses. */
+const SHORTCUT_CLASS =
+  'office-start-shortcut border border-slate-200 bg-white hover:border-slate-300 hover:shadow-xs transition-colors dark:border-slate-700 dark:bg-slate-800 dark:hover:border-slate-600';
+
 /**
  * The task pane's landing view — the Outlook counterpart of the web app's
  * start page (features/apps/pages/StartPage.jsx).
@@ -180,16 +191,16 @@ function OfficeStartPage({ user, onLogout, onSelectApp, onStartChat, onBrowseApp
   const showNoApps = !loading && apps.length === 0;
 
   return (
-    <div className="office-task-pane h-screen w-full flex flex-col p-0 bg-slate-50">
+    <div className="office-task-pane h-screen w-full flex flex-col p-0 bg-slate-50 dark:bg-slate-900">
       <div className="flex-1 min-h-0 flex flex-col w-full">
-        <div className="flex flex-col h-full min-h-0 w-full overflow-hidden bg-white">
+        <div className="flex flex-col h-full min-h-0 w-full overflow-hidden bg-white dark:bg-slate-900">
           <ChatHeader title={paneTitle} showCheckmark={false} menuItems={menuItems} />
 
           <div className="office-start flex-1 min-h-0 overflow-y-auto">
             <div className="office-start-greeting">
               {/* The pane title in the header is the h1; the greeting heads the content. */}
-              <h2 className="office-start-title">{greeting}</h2>
-              <p className="office-start-subtitle">
+              <h2 className="office-start-title text-slate-900 dark:text-slate-100">{greeting}</h2>
+              <p className="office-start-subtitle text-slate-600 dark:text-slate-400">
                 {t('startPage.subtitle', 'How can I help you today?')}
               </p>
             </div>
@@ -209,7 +220,7 @@ function OfficeStartPage({ user, onLogout, onSelectApp, onStartChat, onBrowseApp
                     </span>
                     <span
                       id="office-start-app-name"
-                      className="truncate text-xs font-medium text-slate-600"
+                      className="truncate text-xs font-medium text-slate-600 dark:text-slate-400"
                     >
                       {defaultAppName}
                     </span>
@@ -217,7 +228,7 @@ function OfficeStartPage({ user, onLogout, onSelectApp, onStartChat, onBrowseApp
                   <button
                     type="button"
                     onClick={() => onSelectApp(defaultApp)}
-                    className="office-start-link"
+                    className={LINK_CLASS}
                   >
                     {t('office.startPage.openApp', 'Open app')} →
                   </button>
@@ -245,7 +256,7 @@ function OfficeStartPage({ user, onLogout, onSelectApp, onStartChat, onBrowseApp
                   }
                 />
 
-                <div className="bg-white shrink-0">
+                <div className="bg-white shrink-0 dark:bg-slate-900">
                   <ChatInput
                     app={defaultApp}
                     value={draft}
@@ -268,7 +279,7 @@ function OfficeStartPage({ user, onLogout, onSelectApp, onStartChat, onBrowseApp
                         key={prompt.key}
                         type="button"
                         onClick={() => handlePromptSelect(prompt)}
-                        className="office-starter-prompt w-full text-left rounded-lg border border-slate-200 bg-white hover:bg-slate-50 hover:border-slate-300 transition-colors text-slate-700"
+                        className={STARTER_PROMPT_CLASS}
                       >
                         {prompt.label}
                       </button>
@@ -280,11 +291,11 @@ function OfficeStartPage({ user, onLogout, onSelectApp, onStartChat, onBrowseApp
 
             {loading && (
               <div
-                className="office-start-status flex items-center justify-center gap-2"
+                className="office-start-status flex items-center justify-center gap-2 text-slate-500 dark:text-slate-400"
                 role="status"
               >
                 <span
-                  className="h-4 w-4 rounded-full border-2 border-slate-300 border-t-slate-700 animate-spin"
+                  className="h-4 w-4 rounded-full border-2 border-slate-300 border-t-slate-700 animate-spin dark:border-slate-600 dark:border-t-slate-300"
                   aria-hidden
                 />
                 {t('pages.appsList.loading', 'Loading…')}
@@ -292,7 +303,7 @@ function OfficeStartPage({ user, onLogout, onSelectApp, onStartChat, onBrowseApp
             )}
 
             {showNoApps && (
-              <p className="office-start-status" role="status">
+              <p className="office-start-status text-slate-500 dark:text-slate-400" role="status">
                 {error
                   ? t(
                       'startPage.appsUnavailable',
@@ -306,10 +317,13 @@ function OfficeStartPage({ user, onLogout, onSelectApp, onStartChat, onBrowseApp
             {!loading && apps.length > 0 && (
               <section className="office-start-apps" aria-labelledby="office-start-apps-heading">
                 <div className="flex items-center justify-between gap-2 mb-1.5">
-                  <h3 id="office-start-apps-heading" className="office-start-heading">
+                  <h3
+                    id="office-start-apps-heading"
+                    className="office-start-heading text-slate-500 dark:text-slate-400"
+                  >
                     {t('startPage.jumpIntoApp', 'Jump into an app')}
                   </h3>
-                  <button type="button" onClick={onBrowseApps} className="office-start-link">
+                  <button type="button" onClick={onBrowseApps} className={LINK_CLASS}>
                     {t('office.startPage.allApps', 'All apps')} →
                   </button>
                 </div>
@@ -323,7 +337,7 @@ function OfficeStartPage({ user, onLogout, onSelectApp, onStartChat, onBrowseApp
                           <button
                             type="button"
                             onClick={() => onSelectApp(app)}
-                            className="office-start-shortcut"
+                            className={SHORTCUT_CLASS}
                             title={description || name}
                           >
                             <span
@@ -334,9 +348,11 @@ function OfficeStartPage({ user, onLogout, onSelectApp, onStartChat, onBrowseApp
                               <Icon name={app.icon} size="sm" />
                             </span>
                             <span className="min-w-0 flex-1">
-                              <span className="office-start-shortcut-name truncate">{name}</span>
+                              <span className="office-start-shortcut-name truncate text-slate-900 dark:text-slate-100">
+                                {name}
+                              </span>
                               {description && (
-                                <span className="office-start-shortcut-desc truncate">
+                                <span className="office-start-shortcut-desc truncate text-slate-500 dark:text-slate-400">
                                   {description}
                                 </span>
                               )}
@@ -344,7 +360,7 @@ function OfficeStartPage({ user, onLogout, onSelectApp, onStartChat, onBrowseApp
                             <Icon
                               name="chevron-right"
                               size="sm"
-                              className="shrink-0 text-slate-400"
+                              className="shrink-0 text-slate-400 dark:text-slate-500"
                               aria-hidden
                             />
                           </button>
