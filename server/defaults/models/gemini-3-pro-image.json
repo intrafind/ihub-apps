@@ -13,6 +13,7 @@
   "provider": "google",
   "contextWindow": 32768,
   "maxOutputTokens": 8192,
+  "connectTimeoutMs": 60000,
   "supportsTools": true,
   "supportsVision": true,
   "supportsAudio": true,

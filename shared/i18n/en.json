@@ -612,7 +612,9 @@
         "defaultModel": "Default Model",
         "supportsImageGeneration": "Supports Image Generation",
         "aspectRatio": "Aspect Ratio",
-        "imageSize": "Image Size",
+        "imageQuality": "Image Quality",
+        "connectTimeoutMs": "Connect Timeout (ms)",
+        "streamIdleTimeoutMs": "Stream Idle Timeout (ms)",
         "maxReferenceImages": "Max Reference Images",
         "modelType": "Model Type",
         "nativeWebSearchEnabled": "Use native web search",
@@ -657,6 +659,11 @@
       "modelType": {
         "chat": "Chat",
         "transcription": "Transcription"
+      },
+      "imageQuality": {
+        "low": "Low (1K)",
+        "medium": "Medium (2K)",
+        "high": "High (4K)"
       }
     },
     "auth": {

@@ -845,7 +845,9 @@
         "defaultModel": "Standardmodell",
         "supportsImageGeneration": "Unterstützt Bilderzeugung",
         "aspectRatio": "Seitenverhältnis",
-        "imageSize": "Bildgröße",
+        "imageQuality": "Bildqualität",
+        "connectTimeoutMs": "Verbindungs-Timeout (ms)",
+        "streamIdleTimeoutMs": "Stream-Leerlauf-Timeout (ms)",
         "maxReferenceImages": "Max. Referenzbilder",
         "modelType": "Modelltyp",
         "nativeWebSearchEnabled": "Native Websuche verwenden",
@@ -890,6 +892,11 @@
       "modelType": {
         "chat": "Chat",
         "transcription": "Transkription"
+      },
+      "imageQuality": {
+        "low": "Niedrig (1K)",
+        "medium": "Mittel (2K)",
+        "high": "Hoch (4K)"
       }
     },
     "chat": {

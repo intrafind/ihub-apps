@@ -27,14 +27,18 @@ const thinkingSchema = z
   .object({
     enabled: z.boolean(),
     // Gemini 3.x (preferred for newer / aliased "latest" models).
-    // Google's API enum is uppercase (MINIMAL | LOW | MEDIUM | HIGH); the
-    // adapter normalizes to uppercase before sending. Schema accepts both
-    // cases so legacy / hand-edited configs don't fail validation.
+    // The JSON wire format is lowercase (minimal | low | medium | high); the
+    // uppercase spellings are the SDK constants, and the adapter normalizes
+    // down to lowercase before sending. Schema accepts both cases so legacy /
+    // hand-edited configs don't fail validation.
     level: z
       .enum(['minimal', 'low', 'medium', 'high', 'MINIMAL', 'LOW', 'MEDIUM', 'HIGH'])
       .optional(),
     // Gemini 2.5 (legacy)
     budget: z.number().int().optional(),
+    // Ask the provider for thought summaries. Applies to both Gemini schemas —
+    // it pairs with `level` as well as with `budget`. Defaults to true when
+    // thinking is enabled; set false to keep the reasoning hidden.
     thoughts: z.boolean().optional(),
     // vLLM (provider: "local", or "openai" pointed at a vLLM server): per-request
     // chat-template knobs that toggle reasoning. Model-specific keys, e.g.

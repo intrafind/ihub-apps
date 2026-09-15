@@ -47,7 +47,7 @@ Each model is defined with the following properties:
 | `config`                       | Object  | -        | Provider-specific configuration options passed directly to the adapter (record of any key-value pairs) |
 | `concurrency`                  | Number  | -        | Maximum number of concurrent in-flight requests to this model (1-100). Use to prevent rate-limit errors on low-quota plans |
 | `requestDelayMs`               | Number  | -        | Optional delay in milliseconds between API requests for this model (0-10000)                  |
-| `connectTimeoutMs`             | Number  | -        | Override the connect/headers ceiling for this model (0-300000, `0` disables). Raise it for an endpoint that is reachable but slow to accept a request. See [Stream deadlines](llm-client.md#stream-deadlines) |
+| `connectTimeoutMs`             | Number  | -        | Override the connect/headers ceiling for this model (0-300000, `0` disables); the installation default is `30000`. Raise it for an endpoint that is reachable but slow to accept a request, and for image models, which withhold their headers until the render is ready — see [Connect ceiling and image models](#connect-ceiling-and-image-models) and [Stream deadlines](llm-client.md#stream-deadlines) |
 | `streamIdleTimeoutMs`          | Number  | -        | Override the maximum gap between two chunks of a live stream for this model (0-300000, `0` disables)                     |
 | `thinking`                     | Object  | -        | Extended thinking configuration for models that support it. See [Thinking Configuration](#model-thinking-configuration) below |
 | `nativeWebSearch`              | Object  | -        | Native (provider-run) web search settings for this model. See [Native Web Search](#native-web-search) below |
@@ -294,6 +294,47 @@ For models with `supportsImageGeneration: true`, the `imageGeneration` object se
 
 App-level `imageGeneration` settings (see [Apps documentation](apps.md)) override these model defaults.
 
+> **Upgrading from `imageGeneration.imageSize`.** Image size used to be
+> configured in Google's own units (`"1K"`, `"2K"`, `"4K"`) and passed straight
+> through. It is now `quality`, which the Google adapter translates into the
+> provider's `imageConfig.imageSize`. The model schema is strict, so a config
+> still carrying `imageSize` fails validation with *"Property imageSize is not
+> allowed"*. Migration `V103` converts stored configs (`1K`→`Low`, `2K`→`Medium`,
+> `4K`→`High`); update hand-written ones the same way.
+
+#### Connect ceiling and image models
+
+The [connect ceiling](llm-client.md#stream-deadlines) bounds the phase before a
+provider's first response byte, so an endpoint that never answers fails in
+seconds instead of holding a browser connection for the whole five-minute
+request deadline. That works because a streamed text request gets its headers
+the moment the provider accepts it.
+
+Image models break the assumption. Google's `gemini-3-pro-image` and the Nano
+Banana family send nothing — headers included — until the render is ready, so
+time-to-first-byte *is* generation time there, and a 4K image at
+`thinkingLevel: high` takes far longer than the 30 s installation default. The
+symptom is a chat error blaming the network for a perfectly reachable endpoint:
+
+```
+The google endpoint for model gemini-3-pro-image could not be reached: it did
+not answer the connection attempt.
+```
+
+The shipped image models therefore carry their own ceiling:
+
+```json
+{
+  "id": "gemini-3-pro-image",
+  "supportsImageGeneration": true,
+  "connectTimeoutMs": 60000
+}
+```
+
+Raise it further for large renders on a slow link; `0` disables the ceiling for
+that model and leaves the call to `REQUEST_TIMEOUT`. Migration `V103` adds
+`60000` to existing image models that do not already set one.
+
 ### Model Thinking Configuration
 
 For models that support extended thinking (such as Claude claude-3-7-sonnet), the `thinking` object configures the reasoning mode:
@@ -312,7 +353,7 @@ For models that support extended thinking (such as Claude claude-3-7-sonnet), th
 | ------------------ | ------- | --------------------------------------------------------------------------------------------------------------------------- |
 | `thinking.enabled` | Boolean | Enable extended thinking mode for this model                                                                                |
 | `thinking.budget`  | Number  | Token budget for internal thinking steps. `0` disables thinking, `-1` lets the model decide dynamically, positive values set a specific budget |
-| `thinking.thoughts`| Boolean | When `true`, the model's internal thinking steps are returned and shown in the response                                     |
+| `thinking.thoughts`| Boolean | Whether the model's internal thinking steps are returned and shown in the response. Defaults to `true` when thinking is enabled; set `false` to keep the reasoning hidden. On Gemini it maps to `includeThoughts`, which pairs with `level` and with `budget` alike |
 | `thinking.level`   | String  | Reasoning effort: `minimal`, `low`, `medium`, or `high`. Used by OpenAI/vLLM `reasoning_effort` and Gemini 3 `thinkingLevel` |
 | `thinking.chatTemplateKwargs` | Object | vLLM only: per-request chat-template knobs to toggle reasoning, e.g. `{ "enable_thinking": false }` (Qwen3) or `{ "thinking": true }` (Granite). When omitted, the vLLM adapter defaults to `{ "enable_thinking": <toggle> }` |
 
@@ -327,6 +368,14 @@ App-level `thinking` settings override these model defaults for a specific app.
 > generation, a model config carrying the old shape starts failing every request.
 > Migration `V089` rewrote the shipped Gemini defaults to `thinking.level`; check
 > your own model files if you cloned them.
+>
+> `thoughts` is the exception to that split — it is not part of the
+> incompatible pair. It maps to `includeThoughts`, which Gemini 3 accepts
+> alongside `thinkingLevel` exactly as Gemini 2.5 accepts it alongside
+> `thinkingBudget`; only `thinkingLevel` and `thinkingBudget` together are
+> rejected. Requests built from a `level` config used to omit it, so models
+> moved onto the Gemini 3 shape returned no thought summaries while still
+> spending reasoning tokens. Both shapes now send it.
 
 #### Provider-specific behavior
 
