@@ -80,6 +80,23 @@
   }
 }
 
+/* ---- Chat input ----
+ *
+ * Same horizontal inset as the starter prompts in `.office-greeting` above,
+ * so the input lines up with them instead of running edge-to-edge across
+ * the pane (issue #2378).
+ */
+
+.office-chat-input {
+  padding: 0 0.75rem;
+}
+
+@container office-pane (min-width: 400px) {
+  .office-chat-input {
+    padding: 0 1rem;
+  }
+}
+
 /* ---- Header (ChatHeader scopes itself via .office-chat-header) ---- */
 
 .office-chat-header .office-chat-header-title {
