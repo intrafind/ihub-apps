@@ -302,7 +302,9 @@ jobs:
             ${{ env.VERSIONED_ARCHIVE_NAME }}.zip
             ${{ env.BASE64_FILE }}
 
-  # Commit the release version and the published release notes back to the default branch.
+  # Commit the release version and the published release notes, then land them on the default
+  # branch through a pull request — a ruleset on main rejects direct pushes ("Changes must be
+  # made through a pull request", GH013), so this can't push straight to it like it used to.
   # The release event checks out the tag, so the branch to commit to is named explicitly —
   # pushing to github.ref_name would try to move the tag itself and silently fail.
   commit-version:
@@ -314,6 +316,7 @@ jobs:
     if: github.event_name == 'release'
     permissions:
       contents: write
+      pull-requests: write
     steps:
       - name: Checkout default branch
         uses: actions/checkout@v7
@@ -346,21 +349,37 @@ jobs:
           node scripts/finalize-release-notes.js "${{ env.VERSION }}" --from-ref "${{ env.VERSION }}" --commit
         shell: bash
 
-      - name: Push to default branch
+      - name: Open a pull request with the version and release-notes commits
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
-          BRANCH="${{ github.event.repository.default_branch }}"
-          # Another merge may land on the branch while this job runs: rebase and retry.
-          for attempt in 1 2 3 4; do
-            if git push origin "HEAD:$BRANCH"; then
-              echo "Pushed to $BRANCH"
-              exit 0
-            fi
-            echo "Push attempt $attempt failed, rebasing onto the latest $BRANCH"
-            git fetch origin "$BRANCH"
-            git rebase "origin/$BRANCH"
-          done
-          echo "::error::Could not push the version and release-notes commits to $BRANCH"
-          exit 1
+          BASE_BRANCH="${{ github.event.repository.default_branch }}"
+          RELEASE_BRANCH="release/${{ env.VERSION }}-version-bump"
+
+          # Own branch, so a plain force-push is fine even if a previous attempt for the same
+          # tag already pushed commits here.
+          git push --force origin "HEAD:refs/heads/$RELEASE_BRANCH"
+
+          if PR_URL=$(gh pr view "$RELEASE_BRANCH" --json url --jq .url 2>/dev/null); then
+            echo "Updated existing PR: $PR_URL"
+          else
+            BODY=$(printf 'Automated version bump and published release notes for `%s`.\n\nOpened as a pull request because `%s` requires changes to go through one. Merging (or enabling auto-merge on) this PR brings them back onto `%s`.' \
+              "${{ env.VERSION }}" "$BASE_BRANCH" "$BASE_BRANCH")
+            PR_URL=$(gh pr create \
+              --base "$BASE_BRANCH" \
+              --head "$RELEASE_BRANCH" \
+              --title "chore: update version to ${{ env.VERSION }} for release ${{ env.VERSION }}" \
+              --body "$BODY")
+            echo "Opened PR: $PR_URL"
+          fi
+
+          # Restores the previous fully-automatic behavior when the branch has no other
+          # required checks/reviews; otherwise the PR simply waits for them.
+          if gh pr merge "$RELEASE_BRANCH" --auto --squash; then
+            echo "Auto-merge enabled for $PR_URL"
+          else
+            echo "::warning::Could not enable auto-merge on $PR_URL — merge it manually to land the ${{ env.VERSION }} version bump and release notes on $BASE_BRANCH."
+          fi
         shell: bash
 
   release:
