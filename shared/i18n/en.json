@@ -148,8 +148,28 @@
       "title": "Settings",
       "account": "Account",
       "language": "Language",
+      "appearance": "Appearance",
+      "appearanceLight": "Light",
+      "appearanceDark": "Dark",
+      "appearanceAuto": "Automatic",
+      "appearanceHintOffice": "Automatic follows the Outlook theme (or the system setting on older Outlook versions).",
+      "appearanceHintSystem": "Automatic follows the system setting.",
       "cancel": "Cancel",
       "save": "Save"
+    },
+    "menu": {
+      "settings": "Settings",
+      "logout": "Logout",
+      "variables": "Show variables"
+    },
+    "startPage": {
+      "openApp": "Open app",
+      "allApps": "All apps",
+      "backToStart": "Back to start page",
+      "backToApps": "Back to app selection"
+    },
+    "selectApp": {
+      "title": "Select App"
     }
   },
   "pages": {
@@ -937,7 +957,23 @@
       "step2": "Go to Microsoft 365 Admin Center → Settings → Integrated apps.",
       "step3": "Choose 'Upload custom apps' and paste the manifest URL or upload the file.",
       "step4": "Assign the add-in to users or the entire organization.",
-      "step5": "Users will find the add-in in Outlook under Get Add-ins or My Add-ins."
+      "step5": "Users will find the add-in in Outlook under Get Add-ins or My Add-ins.",
+      "startPageTitle": "Start Page",
+      "startPageDesc": "What the task pane shows after sign-in — and which app answers there. Messages typed on the start page open that app and are sent right away, with the open email and any collected emails as context.",
+      "defaultPage": "Landing view",
+      "defaultPageStart": "Start page (greeting, chat input and app shortcuts)",
+      "defaultPageApps": "All apps (the app list)",
+      "defaultPageHelp": "Where the pane lands after sign-in and where the back button in a chat leads. The app list stays one tap away from the start page either way.",
+      "defaultApp": "Default chat app",
+      "defaultAppAutomatic": "First available app (automatic)",
+      "defaultAppHelp": "The app whose chat input the start page shows. When unset — or when a user cannot access it — the top-ranked chat app that user can access is used: favorites first, then the default apps below.",
+      "featuredApps": "Default apps",
+      "featuredAppsEmpty": "No default apps yet — the start page lists apps in their configured order, favorites first.",
+      "featuredAppsHelp": "Shown on the start page in this order, right after each user's favorites. Users who cannot access an app never see it. Drag a row or use the arrows to reorder.",
+      "addFeaturedApp": "Add a default app",
+      "removeFeaturedApp": "Remove {{name}}",
+      "unknownApp": "not found",
+      "disabledApp": "disabled"
     },
     "nextcloudEmbed": {
       "title": "Nextcloud Embed",
@@ -1899,6 +1935,37 @@
       "externalMappingsPlaceholder": "Type a group name and press Enter…",
       "externalMappingsEmpty": "No external mappings yet",
       "externalMappingsHelp": "Enter external group names that should be mapped to this group. Users with these external groups will automatically be assigned to this internal group."
+    },
+    "contentAccess": {
+      "title": "Group access",
+      "description": "Choose which groups can use {{subject}}. Changes are saved immediately.",
+      "descriptionTools": "Choose which groups may call this tool directly over the MCP and A2A gateways. Changes are saved immediately. In chat, an app's own tool list decides what the model may call.",
+      "saveFirst": "Save {{subject}} first. Afterwards you can choose which groups may use it.",
+      "loading": "Loading groups…",
+      "loadError": "Group access could not be loaded.",
+      "retry": "Retry",
+      "noGroups": "No groups are defined yet.",
+      "noManageableGroups": "You are not a member of any group whose access you may manage. Ask an administrator to add you to the groups you should manage content for.",
+      "scopeNote": "You can change access for the groups you belong to and for the groups that inherit from them.",
+      "granted": "{{name}} can use {{subject}}",
+      "wildcardHint": "Can use all {{subjectPlural}} through a wildcard. To withdraw a single one, an administrator replaces the wildcard with an explicit list in the group settings.",
+      "inheritedHint": "Also inherited from: {{groups}}",
+      "saving": "Saving…",
+      "updateError": "Access could not be updated.",
+      "subject": {
+        "apps": "this app",
+        "prompts": "this prompt",
+        "skills": "this skill",
+        "tools": "this tool",
+        "workflows": "this workflow"
+      },
+      "subjectPlural": {
+        "apps": "apps",
+        "prompts": "prompts",
+        "skills": "skills",
+        "tools": "tools",
+        "workflows": "workflows"
+      }
     },
     "sources": {
       "ifinderConnectionInfo": "The iFinder connection (URL and authentication) is managed centrally in the iFinder integration settings under Admin → Providers. Here you only choose which documents this source loads: pin a single document by ID, or use a search query to load the top matching documents.",

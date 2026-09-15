@@ -169,8 +169,28 @@
       "title": "Einstellungen",
       "account": "Konto",
       "language": "Sprache",
+      "appearance": "Darstellung",
+      "appearanceLight": "Hell",
+      "appearanceDark": "Dunkel",
+      "appearanceAuto": "Automatisch",
+      "appearanceHintOffice": "Automatisch folgt dem Outlook-Design (bzw. der Systemeinstellung bei älteren Outlook-Versionen).",
+      "appearanceHintSystem": "Automatisch folgt der Systemeinstellung.",
       "cancel": "Abbrechen",
       "save": "Speichern"
+    },
+    "menu": {
+      "settings": "Einstellungen",
+      "logout": "Abmelden",
+      "variables": "Variablen anzeigen"
+    },
+    "startPage": {
+      "openApp": "App öffnen",
+      "allApps": "Alle Apps",
+      "backToStart": "Zurück zur Startseite",
+      "backToApps": "Zurück zur App-Auswahl"
+    },
+    "selectApp": {
+      "title": "App auswählen"
     }
   },
   "pages": {
@@ -1206,7 +1226,23 @@
       "step2": "Gehen Sie zum Microsoft 365 Admin Center → Einstellungen → Integrierte Apps.",
       "step3": "Wählen Sie „Benutzerdefinierte Apps hochladen“ und fügen Sie die Manifest-URL ein oder laden Sie die Datei hoch.",
       "step4": "Weisen Sie das Add-in Benutzern oder der gesamten Organisation zu.",
-      "step5": "Benutzer finden das Add-in in Outlook unter „Add-Ins abrufen“ oder „Meine Add-Ins“."
+      "step5": "Benutzer finden das Add-in in Outlook unter „Add-Ins abrufen“ oder „Meine Add-Ins“.",
+      "startPageTitle": "Startseite",
+      "startPageDesc": "Was der Aufgabenbereich nach der Anmeldung zeigt – und welche App dort antwortet. Nachrichten, die auf der Startseite eingegeben werden, öffnen diese App und werden sofort gesendet, mit der geöffneten E-Mail und allen gesammelten E-Mails als Kontext.",
+      "defaultPage": "Startansicht",
+      "defaultPageStart": "Startseite (Begrüßung, Chat-Eingabe und App-Verknüpfungen)",
+      "defaultPageApps": "Alle Apps (die App-Liste)",
+      "defaultPageHelp": "Wo der Aufgabenbereich nach der Anmeldung landet und wohin die Zurück-Schaltfläche in einem Chat führt. Die App-Liste ist von der Startseite aus in jedem Fall einen Klick entfernt.",
+      "defaultApp": "Standard-Chat-App",
+      "defaultAppAutomatic": "Erste verfügbare App (automatisch)",
+      "defaultAppHelp": "Die App, deren Chat-Eingabe die Startseite zeigt. Ist nichts gewählt – oder hat ein Benutzer keinen Zugriff darauf –, wird die bestplatzierte Chat-App verwendet, auf die dieser Benutzer zugreifen kann: zuerst Favoriten, dann die Standard-Apps unten.",
+      "featuredApps": "Standard-Apps",
+      "featuredAppsEmpty": "Noch keine Standard-Apps – die Startseite listet die Apps in ihrer konfigurierten Reihenfolge, Favoriten zuerst.",
+      "featuredAppsHelp": "Werden auf der Startseite in dieser Reihenfolge direkt nach den Favoriten des jeweiligen Benutzers angezeigt. Benutzer ohne Zugriff auf eine App sehen sie nie. Zeile ziehen oder Pfeile nutzen, um die Reihenfolge zu ändern.",
+      "addFeaturedApp": "Standard-App hinzufügen",
+      "removeFeaturedApp": "{{name}} entfernen",
+      "unknownApp": "nicht gefunden",
+      "disabledApp": "deaktiviert"
     },
     "nextcloudEmbed": {
       "title": "Nextcloud-Embed",
@@ -2168,6 +2204,37 @@
       "externalMappingsPlaceholder": "Gruppennamen eingeben und Enter drücken…",
       "externalMappingsEmpty": "Noch keine externen Zuordnungen",
       "externalMappingsHelp": "Geben Sie externe Gruppennamen ein, die dieser Gruppe zugeordnet werden sollen. Benutzer mit diesen externen Gruppen werden automatisch dieser internen Gruppe zugewiesen."
+    },
+    "contentAccess": {
+      "title": "Gruppenzugriff",
+      "description": "Legen Sie fest, welche Gruppen {{subject}} verwenden dürfen. Änderungen werden sofort gespeichert.",
+      "descriptionTools": "Legen Sie fest, welche Gruppen dieses Tool direkt über die MCP- und A2A-Gateways aufrufen dürfen. Änderungen werden sofort gespeichert. Im Chat bestimmt die Tool-Liste der App, was das Modell aufrufen darf.",
+      "saveFirst": "Speichern Sie {{subject}} zuerst. Danach lässt sich festlegen, welche Gruppen Zugriff erhalten.",
+      "loading": "Gruppen werden geladen…",
+      "loadError": "Der Gruppenzugriff konnte nicht geladen werden.",
+      "retry": "Erneut versuchen",
+      "noGroups": "Es sind noch keine Gruppen definiert.",
+      "noManageableGroups": "Sie sind in keiner Gruppe, deren Zugriff Sie verwalten dürfen. Bitten Sie einen Administrator, Sie den Gruppen hinzuzufügen, für die Sie Inhalte verwalten sollen.",
+      "scopeNote": "Sie können den Zugriff für die Gruppen ändern, denen Sie angehören, sowie für Gruppen, die von diesen erben.",
+      "granted": "{{name}} darf {{subject}} verwenden",
+      "wildcardHint": "Darf alle {{subjectPlural}} über einen Platzhalter verwenden. Um einzelne zu entziehen, ersetzt ein Administrator den Platzhalter in den Gruppeneinstellungen durch eine explizite Liste.",
+      "inheritedHint": "Außerdem geerbt von: {{groups}}",
+      "saving": "Wird gespeichert…",
+      "updateError": "Der Zugriff konnte nicht aktualisiert werden.",
+      "subject": {
+        "apps": "diese App",
+        "prompts": "diesen Prompt",
+        "skills": "diesen Skill",
+        "tools": "dieses Tool",
+        "workflows": "diesen Workflow"
+      },
+      "subjectPlural": {
+        "apps": "Apps",
+        "prompts": "Prompts",
+        "skills": "Skills",
+        "tools": "Tools",
+        "workflows": "Workflows"
+      }
     },
     "sources": {
       "ifinderConnectionInfo": "Die iFinder-Verbindung (URL und Authentifizierung) wird zentral in den iFinder-Integrationseinstellungen unter Admin → Provider verwaltet. Hier wählen Sie nur aus, welche Dokumente diese Quelle lädt: ein einzelnes Dokument per ID festlegen oder per Suchanfrage die am besten passenden Dokumente laden.",

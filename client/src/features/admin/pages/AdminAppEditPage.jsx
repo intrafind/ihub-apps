@@ -11,6 +11,7 @@ import ChangeHistoryDrawer from '../components/ChangeHistoryDrawer';
 import AdminBreadcrumb from '../components/AdminBreadcrumb';
 import { useUnsavedChanges } from '../hooks/useUnsavedChanges';
 import ConfirmDialog from '../../../shared/components/ConfirmDialog';
+import ContentAccessSection from '../components/ContentAccessSection';
 
 function AdminAppEditPage() {
   const { t } = useTranslation();
@@ -509,6 +510,14 @@ function AdminAppEditPage() {
                 )
           }
           showValidationSummary={true}
+          className="mb-6"
+        />
+
+        {/* Group access — which groups may use this app (groups.json) */}
+        <ContentAccessSection
+          resourceType="apps"
+          resourceId={appId}
+          isNew={appId === 'new'}
           className="mb-6"
         />
 

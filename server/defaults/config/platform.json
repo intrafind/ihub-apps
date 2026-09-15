@@ -386,6 +386,10 @@
         }
       }
     ],
+    "startPage": {
+      "defaultPage": "start",
+      "featuredAppIds": []
+    },
     "useLocalOfficejs": false
   },
   "runLog": {

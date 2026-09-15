@@ -5,6 +5,7 @@ import Icon from '../../../shared/components/Icon';
 import AdminBreadcrumb from '../components/AdminBreadcrumb';
 import { useUnsavedChanges } from '../hooks/useUnsavedChanges';
 import ConfirmDialog from '../../../shared/components/ConfirmDialog';
+import ContentAccessSection from '../components/ContentAccessSection';
 import {
   createPrompt,
   fetchAdminApps,
@@ -297,6 +298,9 @@ function AdminPromptEditPage() {
                 : t('admin.prompts.edit.editTitle', 'Edit Prompt')
             }
           />
+
+          {/* Group access — which groups may use this prompt (groups.json) */}
+          <ContentAccessSection resourceType="prompts" resourceId={promptId} isNew={isNewPrompt} />
 
           {/* Save buttons */}
           <div className="flex justify-end space-x-4">

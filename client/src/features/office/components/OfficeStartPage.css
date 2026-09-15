@@ -1,0 +1,186 @@
+/*
+ * Start page — the task pane's landing view (see OfficeStartPage.jsx).
+ *
+ * One scrolling column. The compose block (the default app's chat input with
+ * the email context right above it) follows the greeting so it is on screen
+ * without scrolling even on a 600 px-tall pane; the app shortcuts come after.
+ *
+ * Layout and type only — colours live on the elements as Tailwind classes so
+ * the pane's dark mode (`dark:` variants, Settings → Appearance) applies.
+ * Sizes are in rem so they follow the pane's fluid root font-size (office.css).
+ * The container queries key off the pane width — `.office-task-pane` is the
+ * container, see OfficeChatPanel.css — the height rules off the viewport,
+ * which inside the pane is the pane itself.
+ */
+
+.office-start {
+  display: flex;
+  flex-direction: column;
+  gap: 0.625rem;
+  padding: 0.5rem 0 1rem;
+}
+
+.office-start-greeting {
+  padding: 0.375rem 0.75rem 0;
+  text-align: center;
+}
+
+.office-start-title {
+  font-size: 0.9375rem;
+  line-height: 1.3rem;
+  font-weight: 600;
+  overflow-wrap: anywhere;
+}
+
+.office-start-subtitle {
+  margin-top: 0.125rem;
+  font-size: 0.75rem;
+  line-height: 1rem;
+}
+
+.office-start-compose {
+  display: flex;
+  flex-direction: column;
+}
+
+.office-start-app-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.5rem;
+  padding: 0 0.75rem;
+}
+
+.office-start-app-badge {
+  display: inline-flex;
+  flex: none;
+  align-items: center;
+  justify-content: center;
+  width: 1.25rem;
+  height: 1.25rem;
+  border-radius: 0.375rem;
+  color: #fff;
+}
+
+.office-start-link {
+  flex: none;
+  font-size: 0.75rem;
+  font-weight: 500;
+  white-space: nowrap;
+}
+
+.office-start-prompts {
+  display: flex;
+  flex-direction: column;
+  gap: 0.375rem;
+  padding: 0.25rem 0.75rem 0;
+}
+
+.office-start-apps {
+  padding: 0 0.75rem;
+}
+
+.office-start-heading {
+  font-size: 0.6875rem;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.office-start-shortcuts {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  gap: 0.375rem;
+}
+
+.office-start-shortcut {
+  display: flex;
+  align-items: center;
+  gap: 0.625rem;
+  width: 100%;
+  padding: 0.5rem 0.625rem;
+  border-radius: 0.625rem;
+  text-align: left;
+}
+
+.office-start-shortcut-icon {
+  display: inline-flex;
+  flex: none;
+  align-items: center;
+  justify-content: center;
+  width: 2rem;
+  height: 2rem;
+  border-radius: 0.5rem;
+  color: #fff;
+}
+
+.office-start-shortcut-name {
+  display: block;
+  font-size: 0.8125rem;
+  font-weight: 600;
+}
+
+.office-start-shortcut-desc {
+  display: block;
+  font-size: 0.6875rem;
+}
+
+.office-start-status {
+  padding: 0.5rem 0.75rem;
+  font-size: 0.75rem;
+  text-align: center;
+}
+
+/* Narrow pane (~280 px, or a small high-DPI laptop): keep the controls, drop
+   what only explains them. */
+@container office-pane (max-width: 340px) {
+  .office-start-subtitle,
+  .office-start-shortcut-desc {
+    display: none;
+  }
+
+  .office-start-shortcut {
+    gap: 0.5rem;
+    padding: 0.375rem 0.5rem;
+  }
+
+  .office-start-shortcut-icon {
+    width: 1.75rem;
+    height: 1.75rem;
+  }
+}
+
+/* Wide pane: two columns of shortcuts and the web start page's type scale. */
+@container office-pane (min-width: 400px) {
+  .office-start {
+    gap: 0.875rem;
+    padding-top: 0.75rem;
+  }
+
+  .office-start-title {
+    font-size: 1.125rem;
+    line-height: 1.5rem;
+  }
+
+  .office-start-subtitle {
+    font-size: 0.875rem;
+    line-height: 1.25rem;
+  }
+
+  .office-start-shortcuts {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+
+/* Short pane: the chat input is what matters. The subtitle and the starter
+   prompts wait until the app is open, where the chat panel shows them. */
+@media (max-height: 480px) {
+  .office-start-greeting {
+    padding-top: 0;
+  }
+
+  .office-start-subtitle,
+  .office-start-prompts {
+    display: none;
+  }
+}

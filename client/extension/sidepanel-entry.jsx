@@ -5,6 +5,7 @@ import './extension.css';
 import { OfficeConfigContext } from '../src/features/office/contexts/OfficeConfigContext';
 import { EmbeddedHostProvider } from '../src/features/office/contexts/EmbeddedHostContext';
 import OfficeApp from '../src/features/office/components/OfficeApp';
+import { initOfficeTheme } from '../src/features/office/utilities/officeTheme';
 import { installExtensionAuth } from '../src/features/extension/installExtensionAuth';
 import {
   runChromeIdentityAuth,
@@ -76,6 +77,11 @@ function renderError(rootEl, message) {
   rootEl.textContent = message;
   rootEl.style.cssText = 'padding:16px;font-family:sans-serif;color:#b91c1c;line-height:1.5;';
 }
+
+// Apply the persisted light/dark preference (Settings → Appearance) before
+// anything renders. No network involved, so this is safe ahead of the auth
+// bootstrap below.
+initOfficeTheme();
 
 (async () => {
   const rootEl = document.getElementById('extension-root');
