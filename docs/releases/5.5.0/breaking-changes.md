@@ -20,16 +20,25 @@ repair once.
 - **Every other provider is unaffected.** Anthropic still reads `thinking.budget` as
   `budget_tokens`, and the OpenAI Responses adapter still maps it to a reasoning effort. The
   rejection is scoped to Google.
-- **Gemini 2.x endpoints no longer support thinking.** A `gemini-2.x` model with thinking enabled
-  will have `thinkingLevel` sent to an endpoint that rejects it. Repoint it at a Gemini 3 model, or
-  set `thinking.enabled: false`. `V104` names any such model in the migration log; it does not
-  delete or disable them, because a model file may point at your own endpoint.
+- **Gemini 2.x models are retired.** A 2.x endpoint rejects the only `thinkingConfig` iHub now
+  sends, so `V104` removes them, following the same rules `V089` used for retired models:
+  - A model file still matching the Gemini 2.x example iHub shipped is **deleted**.
+  - A model file you had edited is **disabled** instead, not deleted — it may point at your own
+    Vertex or proxy endpoint, and its url, headers and per-model key exist nowhere else. The reason
+    is written to the migration log. Re-enable it in **Admin → Models** if you still need it.
+  - Either way the model leaves every selector, and apps are repointed onto the Gemini 3
+    equivalent: `gemini-2.5-pro` → `gemini-3.1-pro`, `gemini-2.5-flash` and `gemini-2.0-flash` →
+    `gemini-3.8-flash`, `gemini-2.5-flash-lite` → `gemini-3.5-flash-lite`,
+    `gemini-2.5-flash-image` → `gemini-3.1-flash-image`. Both `preferredModel` and `allowedModels`
+    are rewritten.
 - The shipped Gemini 2.x example configs (`examples/models/gemini-2.0-flash.json`,
   `gemini-2.5-flash.json`, `gemini-2.5-flash-lite.json`, `gemini-2.5-pro.json`,
-  `gemini-2.5-flash-image.json`) are removed. Models already in `contents/models/` are untouched.
+  `gemini-2.5-flash-image.json`) are removed.
 
-**Before upgrading:** No action needed for Gemini 3.x models. If you run a Gemini 2.x model with
-thinking enabled, move it to Gemini 3 or turn its thinking off.
+**Before upgrading:** If you run a Gemini 2.x model, move the work to a Gemini 3 model. If one of
+them is your **system-wide default**, no replacement is promoted automatically — the migration logs
+a warning and you pick a new default in **Admin → Models**. No action is needed for Gemini 3.x
+models.
 
 ## `config/tools.json` Is Removed
 

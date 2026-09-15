@@ -378,11 +378,21 @@ App-level `thinking` settings override these model defaults for a specific app.
 > reads `budget` as `budget_tokens`, and the OpenAI Responses adapter still maps
 > it to a reasoning effort.
 >
-> **Gemini 2.x endpoints are no longer supported for thinking.** A `gemini-2.x`
-> model with thinking enabled will have `thinkingLevel` sent to an endpoint that
-> rejects it. Repoint it at a Gemini 3 model, or set `thinking.enabled: false`.
-> V104 names any such model in the migration log; it does not delete or disable
-> them, since a model file may point at your own endpoint.
+> **Gemini 2.x models are retired.** A 2.x endpoint rejects the only
+> `thinkingConfig` iHub now sends, so `V104` removes them, following the same
+> rules V089 used: a model file still matching the Gemini 2.x example iHub
+> shipped is **deleted**, while one you had edited — your own Vertex or proxy
+> endpoint, whose url, headers and per-model key exist nowhere else — is
+> **disabled** instead, with the reason in the migration log. Either way it
+> leaves every model selector. Re-enable a disabled one in Admin → Models if you
+> still need it.
+>
+> Apps are repointed onto the Gemini 3 equivalent (`gemini-2.5-pro` →
+> `gemini-3.1-pro`, `gemini-2.5-flash` and `gemini-2.0-flash` →
+> `gemini-3.8-flash`, `gemini-2.5-flash-lite` → `gemini-3.5-flash-lite`,
+> `gemini-2.5-flash-image` → `gemini-3.1-flash-image`), so an app whose
+> `preferredModel` just went away still has one. If a retired model was your
+> system-wide default, the migration says so — pick a new one in Admin → Models.
 
 #### Provider-specific behavior
 
