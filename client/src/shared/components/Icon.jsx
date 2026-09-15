@@ -94,7 +94,22 @@ import {
   ShieldCheckIcon as OutlineShieldCheckIcon,
   CloudArrowUpIcon as OutlineCloudArrowUpIcon,
   ArchiveBoxIcon as OutlineArchiveBoxIcon,
-  PlusIcon as OutlinePlusIcon
+  PlusIcon as OutlinePlusIcon,
+  PhotoIcon,
+  MusicalNoteIcon,
+  LockClosedIcon,
+  NoSymbolIcon,
+  BookOpenIcon,
+  DocumentChartBarIcon,
+  HandRaisedIcon,
+  ArrowsRightLeftIcon,
+  CubeIcon,
+  Squares2X2Icon,
+  StopCircleIcon,
+  UserGroupIcon,
+  PrinterIcon,
+  BoltIcon,
+  CursorArrowRaysIcon
 } from '@heroicons/react/24/outline';
 
 import {
@@ -173,7 +188,22 @@ import {
   ShieldCheckIcon as SolidShieldCheckIcon,
   CloudArrowUpIcon as SolidCloudArrowUpIcon,
   ArchiveBoxIcon as SolidArchiveBoxIcon,
-  PlusIcon as SolidPlusIcon
+  PlusIcon as SolidPlusIcon,
+  PhotoIcon as SolidPhotoIcon,
+  MusicalNoteIcon as SolidMusicalNoteIcon,
+  LockClosedIcon as SolidLockClosedIcon,
+  NoSymbolIcon as SolidNoSymbolIcon,
+  BookOpenIcon as SolidBookOpenIcon,
+  DocumentChartBarIcon as SolidDocumentChartBarIcon,
+  HandRaisedIcon as SolidHandRaisedIcon,
+  ArrowsRightLeftIcon as SolidArrowsRightLeftIcon,
+  CubeIcon as SolidCubeIcon,
+  Squares2X2Icon as SolidSquares2X2Icon,
+  StopCircleIcon as SolidStopCircleIcon,
+  UserGroupIcon as SolidUserGroupIcon,
+  PrinterIcon as SolidPrinterIcon,
+  BoltIcon as SolidBoltIcon,
+  CursorArrowRaysIcon as SolidCursorArrowRaysIcon
 } from '@heroicons/react/24/solid';
 
 // Custom icons not available in Heroicons. They mirror the Heroicons component
@@ -408,7 +438,45 @@ const iconMap = {
   'archive-box': { outline: OutlineArchiveBoxIcon, solid: SolidArchiveBoxIcon },
   MagnifyingGlassIcon: { outline: MagnifyingGlassIcon, solid: MagnifyingGlassIcon },
   PlusIcon: { outline: OutlinePlusIcon, solid: SolidPlusIcon },
-  KeyIcon: { outline: OutlineKeyIcon, solid: SolidKeyIcon }
+  KeyIcon: { outline: OutlineKeyIcon, solid: SolidKeyIcon },
+  // Additional aliases resolved locally instead of falling back to a
+  // (nonexistent) /icons/{name}.svg request
+  informationCircle: { outline: OutlineInformationCircleIcon, solid: SolidInformationCircleIcon },
+  xMark: { outline: XMarkIcon, solid: XMarkIcon },
+  'x-mark': { outline: XMarkIcon, solid: XMarkIcon },
+  'x-circle': { outline: XCircleIcon, solid: XCircleIcon },
+  GlobeAltIcon: { outline: GlobeAltIcon, solid: SolidGlobeAltIcon },
+  'globe-alt': { outline: GlobeAltIcon, solid: SolidGlobeAltIcon },
+  'shield-exclamation': {
+    outline: OutlineShieldExclamationIcon,
+    solid: SolidShieldExclamationIcon
+  },
+  server: { outline: ServerIcon, solid: SolidServerIcon },
+  cpu: { outline: CpuChipIcon, solid: SolidCpuChipIcon },
+  'alert-triangle': {
+    outline: OutlineExclamationTriangleIcon,
+    solid: SolidExclamationTriangleIcon
+  },
+  loader: { outline: ArrowPathIcon, solid: ArrowPathIcon },
+  spinner: { outline: ArrowPathIcon, solid: ArrowPathIcon },
+  envelope: { outline: OutlineEnvelopeIcon, solid: SolidEnvelopeIcon },
+  photograph: { outline: PhotoIcon, solid: SolidPhotoIcon },
+  'musical-note': { outline: MusicalNoteIcon, solid: SolidMusicalNoteIcon },
+  MusicalNoteIcon: { outline: MusicalNoteIcon, solid: SolidMusicalNoteIcon },
+  lock: { outline: LockClosedIcon, solid: SolidLockClosedIcon },
+  'lock-closed': { outline: LockClosedIcon, solid: SolidLockClosedIcon },
+  ban: { outline: NoSymbolIcon, solid: SolidNoSymbolIcon },
+  'book-open': { outline: BookOpenIcon, solid: SolidBookOpenIcon },
+  'document-chart-bar': { outline: DocumentChartBarIcon, solid: SolidDocumentChartBarIcon },
+  'hand-raised': { outline: HandRaisedIcon, solid: SolidHandRaisedIcon },
+  'arrows-right-left': { outline: ArrowsRightLeftIcon, solid: SolidArrowsRightLeftIcon },
+  cube: { outline: CubeIcon, solid: SolidCubeIcon },
+  'squares-2x2': { outline: Squares2X2Icon, solid: SolidSquares2X2Icon },
+  'stop-circle': { outline: StopCircleIcon, solid: SolidStopCircleIcon },
+  'user-group': { outline: UserGroupIcon, solid: SolidUserGroupIcon },
+  printer: { outline: PrinterIcon, solid: SolidPrinterIcon },
+  workflow: { outline: BoltIcon, solid: SolidBoltIcon },
+  'cursor-text': { outline: CursorArrowRaysIcon, solid: SolidCursorArrowRaysIcon }
 };
 
 const sizeClasses = {
