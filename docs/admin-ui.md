@@ -119,7 +119,7 @@ Apps are the AI-powered tools your users interact with. Each app has its own sys
 - **Preferred model** — override the platform default for this app.
 - **Token limit** — maximum tokens per request.
 - **Variables** — user-facing input fields shown before the chat starts (text, date, select, etc.).
-- **Permissions** — which groups can access this app. The **Group access** card on the edit page lists the groups you may change, one checkbox each, and saves every tick immediately; see [Managing Groups](#managing-groups).
+- **Permissions** — which groups can access this app. The **Group access** card on the edit page shows the groups that already have access as chips, with a search box to grant more; every change saves immediately; see [Managing Groups](#managing-groups).
 
 **Enabling/disabling:** Use the toggle in the app list or the Enabled field on the edit page.
 
@@ -176,7 +176,7 @@ Groups control what users can access. Go to **Access & Identity → Groups**.
 - Whether admin access is granted (`adminAccess: true`)
 - External group mappings (for OIDC/LDAP — maps an external group name to this internal group)
 
-**Group access from the content side:** Every app, prompt, skill, tool and workflow edit page has a **Group access** card showing the same permission lists per group, with one checkbox per group. Ticking a group adds the item to that group's list in `groups.json`; unticking removes it. Each change is saved immediately and recorded in the change history and audit log like an edit of the group itself. A group that holds a wildcard (`"*"`) for the type is shown ticked and locked, because a single item cannot be withdrawn from a wildcard — replace the wildcard with an explicit list in the group editor instead.
+**Group access from the content side:** Every app, prompt, skill, tool and workflow edit page has a **Group access** card showing the same permission lists per group, as a search-and-add list rather than a long list of every group: groups that already have access appear as chips, and a search box finds the rest by name — the same pattern used to add apps, models or prompts to a group elsewhere in the admin area. Picking a group in the search results adds the item to that group's list in `groups.json`; removing its chip takes it off. Each change is saved immediately and recorded in the change history and audit log like an edit of the group itself. A group that holds a wildcard (`"*"`) for the type is shown as a locked chip, because a single item cannot be withdrawn from a wildcard — replace the wildcard with an explicit list in the group editor instead.
 
 **Content admins:** Members of a group with `contentAdmin: true` (the shipped `content-admins` group) can use the **Group access** card too, but only for the groups they belong to and for the groups that inherit from those. A content admin who is in `sales` can grant or withdraw content for `sales` and for every group with `sales` in its `inherits` chain, and sees no other groups. The `authenticated` and `anonymous` groups every user carries implicitly do not count as membership, so a content admin cannot publish to all users unless an administrator has explicitly made them a member of such a group. Everything else about a group — name, inheritance, models, external mappings, admin flags — stays with full administrators.
 
