@@ -60,7 +60,7 @@ describe('normalizeChatSettings', () => {
       temperature: 0.3,
       sendChatHistory: false,
       thinkingEnabled: true,
-      thinkingBudget: 2048,
+      thinkingLevel: 'high',
       thinkingThoughts: false,
       enabledTools: ['webSearch', 'calculator'],
       websearchEnabled: true,
@@ -73,13 +73,21 @@ describe('normalizeChatSettings', () => {
       temperature: 0.3,
       sendChatHistory: false,
       thinkingEnabled: true,
-      thinkingBudget: 2048,
+      thinkingLevel: 'high',
       thinkingThoughts: false,
       enabledTools: ['webSearch', 'calculator'],
       websearchEnabled: true,
       imageAspectRatio: '16:9',
       imageQuality: 'High'
     });
+  });
+
+  it('drops the retired thinkingBudget', () => {
+    // Reasoning effort is a level now. A chat saved before the change carries a
+    // budget, which is undeclared and must not survive the round trip.
+    const settings = normalizeChatSettings({ thinkingEnabled: true, thinkingBudget: 2048 });
+
+    assert.deepEqual(settings, { thinkingEnabled: true });
   });
 
   it('drops keys it does not declare', () => {

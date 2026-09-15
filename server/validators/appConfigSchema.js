@@ -289,11 +289,15 @@ const localizedGreetingSchema = z.record(
   })
 );
 
-// Thinking configuration schema
+// Thinking configuration schema. Mirrors the model config block
+// (`server/validators/modelConfigSchema.js`): reasoning effort is a level, and
+// there is no token-budget alternative — no provider ever accepted one.
 const thinkingSchema = z
   .object({
     enabled: z.boolean().optional().prefault(false),
-    budget: z.number().int().min(1).optional(),
+    level: z
+      .enum(['minimal', 'low', 'medium', 'high', 'MINIMAL', 'LOW', 'MEDIUM', 'HIGH'])
+      .optional(),
     thoughts: z.boolean().optional().prefault(false)
   })
   .optional();

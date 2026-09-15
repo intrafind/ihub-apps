@@ -115,10 +115,19 @@ const STREAM_IDLE_REASON = Symbol('llm-stream-idle');
  *     let alone ignored. `_connect` arms the ceiling inside its throttle slot
  *     for that reason.
  *
+ * Ten seconds was the first value, and it was too tight for two real cases: a
+ * gateway that authenticates before forwarding, and an image model. Google's
+ * image models (`gemini-3-pro-image` and the Nano Banana family) do not flush
+ * their SSE headers when they accept the request — nothing arrives until the
+ * first image parts are ready — so time-to-first-byte is generation time there
+ * however the request is sent, and a 4K render at `thinkingLevel: high` blew
+ * through ten seconds every time. The default is therefore 30 s, and those
+ * models carry `connectTimeoutMs: 60000` in their own config.
+ *
  * Operators can override the default per deployment (platform.json `llm` or
  * LLM_CONNECT_TIMEOUT_MS) and per model (`connectTimeoutMs`).
  */
-const DEFAULT_CONNECT_TIMEOUT_MS = 10_000;
+const DEFAULT_CONNECT_TIMEOUT_MS = 30_000;
 
 /**
  * Ceiling for the gap between two chunks of a stream that has already started
@@ -1668,7 +1677,7 @@ export function snapshotOptions(adapterOptions, { principalId = null } = {}) {
 }
 
 function pickThinking(options) {
-  const keys = ['thinkingEnabled', 'thinkingLevel', 'thinkingBudget', 'thinkingThoughts'];
+  const keys = ['thinkingEnabled', 'thinkingLevel', 'thinkingThoughts'];
   const out = {};
   let any = false;
   for (const k of keys) {

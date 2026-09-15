@@ -146,8 +146,7 @@ const nodeTypeEnum = z.enum([
  * `server/services/workflow/thinkingOptions.js`. `.strict()` catches typos
  * (e.g. `enabld`) instead of silently ignoring them.
  *
- *   - Gemini 3.x: { enabled, level: "minimal"|"low"|"medium"|"high" }
- *   - Gemini 2.5: { enabled, budget, thoughts }
+ *   { enabled, level: "minimal"|"low"|"medium"|"high", thoughts }
  */
 const nodeThinkingSchema = z
   .object({
@@ -155,7 +154,6 @@ const nodeThinkingSchema = z
     level: z
       .enum(['minimal', 'low', 'medium', 'high', 'MINIMAL', 'LOW', 'MEDIUM', 'HIGH'])
       .optional(),
-    budget: z.number().int().optional(),
     thoughts: z.boolean().optional(),
     chatTemplateKwargs: z.record(z.any()).optional()
   })

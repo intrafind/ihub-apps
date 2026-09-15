@@ -4,11 +4,10 @@
  *
  * Node config mirrors the model config `thinking` shape (see
  * `server/validators/modelConfigSchema.js`):
- *   - Gemini 3.x: { enabled, level: "minimal"|"low"|"medium"|"high" }
- *   - Gemini 2.5: { enabled, budget, thoughts }
+ *   { enabled, level: "minimal"|"low"|"medium"|"high", thoughts }
  *
  * The returned object uses the same option keys the chat path forwards
- * (`thinkingEnabled` / `thinkingLevel` / `thinkingBudget` / `thinkingThoughts`)
+ * (`thinkingEnabled` / `thinkingLevel` / `thinkingThoughts`)
  * and that the Google adapter reads (`server/adapters/google.js`). Only keys
  * actually present in the node config are emitted, so a node override never
  * clobbers a model default it didn't mean to set. An empty object means
@@ -19,7 +18,7 @@
  * it on a model whose config has thinking off.
  *
  * @param {Object|undefined|null} thinking - Node config `thinking` block
- * @returns {{thinkingEnabled?: boolean, thinkingLevel?: string, thinkingBudget?: number, thinkingThoughts?: boolean}}
+ * @returns {{thinkingEnabled?: boolean, thinkingLevel?: string, thinkingThoughts?: boolean}}
  */
 export function thinkingConfigToOptions(thinking) {
   if (!thinking || typeof thinking !== 'object') return {};
@@ -27,7 +26,6 @@ export function thinkingConfigToOptions(thinking) {
   const options = {};
   if (typeof thinking.enabled === 'boolean') options.thinkingEnabled = thinking.enabled;
   if (thinking.level !== undefined) options.thinkingLevel = thinking.level;
-  if (thinking.budget !== undefined) options.thinkingBudget = thinking.budget;
   if (typeof thinking.thoughts === 'boolean') options.thinkingThoughts = thinking.thoughts;
   return options;
 }

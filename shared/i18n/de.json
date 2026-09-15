@@ -433,7 +433,13 @@
     "imageQualityHelp": "Wählen Sie die Qualitätsstufe für generierte Bilder",
     "qualityLow": "Niedrig (1K)",
     "qualityMedium": "Mittel (2K)",
-    "qualityHigh": "Hoch (4K)"
+    "qualityHigh": "Hoch (4K)",
+    "thinkingLevel": "Denkaufwand",
+    "thinkingLevelHelp": "Wie viel das Modell vor der Antwort nachdenkt. Mehr Aufwand ist langsamer und kostet mehr Token.",
+    "thinkingLevelMinimal": "Minimal",
+    "thinkingLevelLow": "Niedrig",
+    "thinkingLevelMedium": "Mittel",
+    "thinkingLevelHigh": "Hoch"
   },
   "citations": {
     "preview": "Vorschau (PDF)",
@@ -845,7 +851,9 @@
         "defaultModel": "Standardmodell",
         "supportsImageGeneration": "Unterstützt Bilderzeugung",
         "aspectRatio": "Seitenverhältnis",
-        "imageSize": "Bildgröße",
+        "imageQuality": "Bildqualität",
+        "connectTimeoutMs": "Verbindungs-Timeout (ms)",
+        "streamIdleTimeoutMs": "Stream-Leerlauf-Timeout (ms)",
         "maxReferenceImages": "Max. Referenzbilder",
         "modelType": "Modelltyp",
         "nativeWebSearchEnabled": "Native Websuche verwenden",
@@ -890,6 +898,11 @@
       "modelType": {
         "chat": "Chat",
         "transcription": "Transkription"
+      },
+      "imageQuality": {
+        "low": "Niedrig (1K)",
+        "medium": "Mittel (2K)",
+        "high": "Hoch (4K)"
       }
     },
     "chat": {

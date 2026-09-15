@@ -369,7 +369,7 @@ the call to the whole-call deadline (`REQUEST_TIMEOUT`, 5 minutes).
 
 ```json
 "llm": {
-  "connectTimeoutMs": 10000,
+  "connectTimeoutMs": 30000,
   "streamIdleTimeoutMs": 60000
 }
 ```
@@ -377,7 +377,10 @@ the call to the whole-call deadline (`REQUEST_TIMEOUT`, 5 minutes).
 - **connectTimeoutMs** (number) – Longest a provider call waits for the
   response headers, per attempt, before failing as unreachable. Every provider
   call streams, so those headers arrive as soon as the request is accepted;
-  time spent queued in the per-model throttle does not count. Default: `10000`
+  time spent queued in the per-model throttle does not count. Default: `30000`.
+  Image models are the exception to "headers arrive on accept" — they withhold
+  them until the render is ready — so they carry a longer `connectTimeoutMs` of
+  their own (see [Models](models.md#connect-ceiling-and-image-models))
 - **streamIdleTimeoutMs** (number) – Longest gap between two chunks of a
   stream that has already produced one. Armed only after the first chunk, so a
   model that thinks for minutes before answering is not cut off.

@@ -47,7 +47,7 @@ Each model is defined with the following properties:
 | `config`                       | Object  | -        | Provider-specific configuration options passed directly to the adapter (record of any key-value pairs) |
 | `concurrency`                  | Number  | -        | Maximum number of concurrent in-flight requests to this model (1-100). Use to prevent rate-limit errors on low-quota plans |
 | `requestDelayMs`               | Number  | -        | Optional delay in milliseconds between API requests for this model (0-10000)                  |
-| `connectTimeoutMs`             | Number  | -        | Override the connect/headers ceiling for this model (0-300000, `0` disables). Raise it for an endpoint that is reachable but slow to accept a request. See [Stream deadlines](llm-client.md#stream-deadlines) |
+| `connectTimeoutMs`             | Number  | -        | Override the connect/headers ceiling for this model (0-300000, `0` disables); the installation default is `30000`. Raise it for an endpoint that is reachable but slow to accept a request, and for image models, which withhold their headers until the render is ready — see [Connect ceiling and image models](#connect-ceiling-and-image-models) and [Stream deadlines](llm-client.md#stream-deadlines) |
 | `streamIdleTimeoutMs`          | Number  | -        | Override the maximum gap between two chunks of a live stream for this model (0-300000, `0` disables)                     |
 | `thinking`                     | Object  | -        | Extended thinking configuration for models that support it. See [Thinking Configuration](#model-thinking-configuration) below |
 | `nativeWebSearch`              | Object  | -        | Native (provider-run) web search settings for this model. See [Native Web Search](#native-web-search) below |
@@ -121,7 +121,7 @@ The system currently supports the following providers:
 4. **Google** (`provider: "google"`)
    - Compatible with the Google Gemini API format
    - Examples: Gemini 3.8 Flash, Gemini 3.1 Pro, Nano Banana Pro
-   - Gemini 3.x models need the `thinking.level` shape; the Gemini 2.5 `thinking.budget` fields are rejected with a bare `400` (see [Thinking Configuration](#model-thinking-configuration))
+   - `thinking.budget` is rejected on every provider; reasoning effort is `thinking.level` (see [Thinking Configuration](#model-thinking-configuration))
 
 5. **Mistral** (`provider: "mistral"`)
    - Compatible with Mistral's La Plateforme API format
@@ -294,6 +294,47 @@ For models with `supportsImageGeneration: true`, the `imageGeneration` object se
 
 App-level `imageGeneration` settings (see [Apps documentation](apps.md)) override these model defaults.
 
+> **Upgrading from `imageGeneration.imageSize`.** Image size used to be
+> configured in Google's own units (`"1K"`, `"2K"`, `"4K"`) and passed straight
+> through. It is now `quality`, which the Google adapter translates into the
+> provider's `imageConfig.imageSize`. The model schema is strict, so a config
+> still carrying `imageSize` fails validation with *"Property imageSize is not
+> allowed"*. Migration `V103` converts stored configs (`1K`→`Low`, `2K`→`Medium`,
+> `4K`→`High`); update hand-written ones the same way.
+
+#### Connect ceiling and image models
+
+The [connect ceiling](llm-client.md#stream-deadlines) bounds the phase before a
+provider's first response byte, so an endpoint that never answers fails in
+seconds instead of holding a browser connection for the whole five-minute
+request deadline. That works because a streamed text request gets its headers
+the moment the provider accepts it.
+
+Image models break the assumption. Google's `gemini-3-pro-image` and the Nano
+Banana family send nothing — headers included — until the render is ready, so
+time-to-first-byte *is* generation time there, and a 4K image at
+`thinkingLevel: high` takes far longer than the 30 s installation default. The
+symptom is a chat error blaming the network for a perfectly reachable endpoint:
+
+```
+The google endpoint for model gemini-3-pro-image could not be reached: it did
+not answer the connection attempt.
+```
+
+The shipped image models therefore carry their own ceiling:
+
+```json
+{
+  "id": "gemini-3-pro-image",
+  "supportsImageGeneration": true,
+  "connectTimeoutMs": 60000
+}
+```
+
+Raise it further for large renders on a slow link; `0` disables the ceiling for
+that model and leaves the call to `REQUEST_TIMEOUT`. Migration `V103` adds
+`60000` to existing image models that do not already set one.
+
 ### Model Thinking Configuration
 
 For models that support extended thinking (such as Claude claude-3-7-sonnet), the `thinking` object configures the reasoning mode:
@@ -302,8 +343,8 @@ For models that support extended thinking (such as Claude claude-3-7-sonnet), th
 {
   "thinking": {
     "enabled": true,
-    "budget": 8000,
-    "thoughts": false
+    "level": "medium",
+    "thoughts": true
   }
 }
 ```
@@ -311,30 +352,57 @@ For models that support extended thinking (such as Claude claude-3-7-sonnet), th
 | Property           | Type    | Description                                                                                                                 |
 | ------------------ | ------- | --------------------------------------------------------------------------------------------------------------------------- |
 | `thinking.enabled` | Boolean | Enable extended thinking mode for this model                                                                                |
-| `thinking.budget`  | Number  | Token budget for internal thinking steps. `0` disables thinking, `-1` lets the model decide dynamically, positive values set a specific budget |
-| `thinking.thoughts`| Boolean | When `true`, the model's internal thinking steps are returned and shown in the response                                     |
-| `thinking.level`   | String  | Reasoning effort: `minimal`, `low`, `medium`, or `high`. Used by OpenAI/vLLM `reasoning_effort` and Gemini 3 `thinkingLevel` |
+| `thinking.thoughts`| Boolean | Whether the model's internal thinking steps are returned and shown in the response. Defaults to `true` when thinking is enabled; set `false` to keep the reasoning hidden. On Gemini it maps to `includeThoughts` |
+| `thinking.level`   | String  | Reasoning effort: `minimal`, `low`, `medium`, or `high`. Defaults to `medium`. The only way to ask for more or less reasoning — Gemini sends it as `thinkingLevel`, OpenAI/vLLM as `reasoning_effort` |
 | `thinking.chatTemplateKwargs` | Object | vLLM only: per-request chat-template knobs to toggle reasoning, e.g. `{ "enable_thinking": false }` (Qwen3) or `{ "thinking": true }` (Granite). When omitted, the vLLM adapter defaults to `{ "enable_thinking": <toggle> }` |
 
 App-level `thinking` settings override these model defaults for a specific app.
 
-> **Gemini 3.x needs `thinking.level`, not `thinking.budget`.** The two Gemini
-> `thinkingConfig` schemas are not interchangeable: sending the Gemini 2.5
-> fields (`budget`/`thoughts`) to a Gemini 3 endpoint returns a bare
-> `400 INVALID_ARGUMENT` with no indication of which field is at fault, and
-> sending `level` to a Gemini 2.5 endpoint fails the same way. This matters most
-> for the `-latest` aliases: when Google hot-swaps `gemini-flash-latest` to a new
-> generation, a model config carrying the old shape starts failing every request.
-> Migration `V089` rewrote the shipped Gemini defaults to `thinking.level`; check
-> your own model files if you cloned them.
+> **Reasoning effort is a level, never a number.** `thinking.budget` is gone
+> from model, app and workflow-node configs alike, and from the API. It looked
+> like a token allowance and was nothing of the kind: no adapter ever put the
+> number on the wire — every one bucketed it into one of these four levels
+> first — so a budget of `1024` and a budget of `32768` were the same request
+> while looking like a considered choice.
+>
+> Migration `V105` converts everything stored, with the mapping the adapters
+> already applied: `0`→`minimal`, `-1`→`medium`, `1-100`→`low`,
+> `101-500`→`medium`, `>500`→`high`. A `thinking.level` you had already set is
+> kept. Apps gain a level they never had — the app `thinking` block only ever
+> accepted a number, which is how the confusion got in.
+>
+> **Gemini takes `thinking.level` only.** iHub speaks one Gemini
+> `thinkingConfig` shape — Gemini 3's `thinkingLevel` plus `includeThoughts`.
+> Gemini's two schemas were never interchangeable — each returns a bare
+> `400 INVALID_ARGUMENT`, naming no field, when handed the other's — so
+> supporting both meant every Gemini model config had to declare which
+> generation it belonged to, and one left on the old shape broke the moment
+> Google moved a `-latest` alias forward. Gemini 3 is the floor now, and
+> `V104` moves stored Gemini configs across on its way to retiring 2.x.
+>
+> **Gemini 2.x models are retired.** A 2.x endpoint rejects the only
+> `thinkingConfig` iHub now sends, so `V104` removes them, following the same
+> rules V089 used: a model file still matching the Gemini 2.x example iHub
+> shipped is **deleted**, while one you had edited — your own Vertex or proxy
+> endpoint, whose url, headers and per-model key exist nowhere else — is
+> **disabled** instead, with the reason in the migration log. Either way it
+> leaves every model selector. Re-enable a disabled one in Admin → Models if you
+> still need it.
+>
+> Apps are repointed onto the Gemini 3 equivalent (`gemini-2.5-pro` →
+> `gemini-3.1-pro`, `gemini-2.5-flash` and `gemini-2.0-flash` →
+> `gemini-3.8-flash`, `gemini-2.5-flash-lite` → `gemini-3.5-flash-lite`,
+> `gemini-2.5-flash-image` → `gemini-3.1-flash-image`), so an app whose
+> `preferredModel` just went away still has one. If a retired model was your
+> system-wide default, the migration says so — pick a new one in Admin → Models.
 
 #### Provider-specific behavior
 
 Each adapter keeps its own provider-specific request/response handling, but they all
 surface reasoning the same way in the UI (a separate "thinking" stream):
 
-- **Google (Gemini):** `thinkingConfig` (Gemini 3 `thinkingLevel`, or Gemini 2.5
-  `thinkingBudget`/`includeThoughts`). Reasoning returned in dedicated `thought` parts.
+- **Google (Gemini):** `thinkingConfig` (`thinkingLevel` + `includeThoughts`).
+  Reasoning returned in dedicated `thought` parts.
   Function calls additionally carry a **thought signature** that Gemini 3 requires back in
   the conversation history; iHub preserves it automatically for in-product chats, workflows
   and agents. External callers of the
@@ -390,11 +458,11 @@ The iHub provides a flexible system for selecting which AI model an app uses. Th
 
     ```json
     {
-      "id": "gemini-2.5-flash-preview-05-20",
-      "modelId": "gemini-2.5-flash-preview-05-20",
-      "name": "Gemini 2.5",
+      "id": "gemini-3.8-flash",
+      "modelId": "gemini-3.8-flash",
+      "name": "Gemini 3.8 Flash",
       "description": "Google's versatile model optimized for text and code tasks",
-      "url": "https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash-preview-05-20:streamGenerateContent",
+      "url": "https://generativelanguage.googleapis.com/v1beta/models/gemini-3.8-flash:streamGenerateContent",
       "provider": "google",
       "contextWindow": 1000000,
       "maxOutputTokens": 8192,

@@ -87,16 +87,16 @@ config **for that node's LLM call only**. It mirrors the model-config
   "thinking": { "enabled": false }
 }
 
-// Gemini 3.x — dial reasoning down instead of off:
+// Gemini — dial reasoning down instead of off:
 "config": { "thinking": { "enabled": true, "level": "low" } }
 
-// Gemini 2.5 — explicit token budget:
-"config": { "thinking": { "enabled": true, "budget": 512, "thoughts": false } }
+// ...and keep the reasoning out of the response:
+"config": { "thinking": { "enabled": true, "level": "low", "thoughts": false } }
 ```
 
 Why it matters: thinking models (e.g. the `gemini-flash-latest` alias) count
 reasoning tokens against `maxTokens`. On a node that only needs to emit a small
-JSON verdict, unbounded thinking (`budget: -1`) is both slow (tens of seconds
+JSON verdict, unbounded thinking (`level: "high"`) is both slow (tens of seconds
 per call) and prone to runaway repetition that truncates the JSON. Setting
 `thinking: { enabled: false }` on such a node makes it fast and reliable.
 

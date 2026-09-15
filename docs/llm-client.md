@@ -139,7 +139,7 @@ different failures and only the middle one deserves patience:
 
 | Phase                                   | Deadline                       | `providerCode` on expiry |
 | --------------------------------------- | ------------------------------ | ------------------------ |
-| Connect + response headers, per attempt | 10 s                           | `CONNECT_TIMEOUT`        |
+| Connect + response headers, per attempt | 30 s (60 s on image models)    | `CONNECT_TIMEOUT`        |
 | Headers → first stream chunk            | the call's `timeoutMs` (5 min) | `TIMEOUT`                |
 | Gap between two stream chunks           | 60 s                           | `STREAM_IDLE_TIMEOUT`    |
 
@@ -195,14 +195,14 @@ ceiling and leaves the call to the whole-call deadline:
 | `connectTimeoutMs` / `streamIdleTimeoutMs` in a model's config   | that model         |
 | `llm.connectTimeoutMs` / `llm.streamIdleTimeoutMs` in `platform.json` | the installation |
 | `LLM_CONNECT_TIMEOUT_MS` / `LLM_STREAM_IDLE_TIMEOUT_MS`          | the process        |
-| built-in defaults (10 s / 60 s)                                  | —                  |
+| built-in defaults (30 s / 60 s)                                  | —                  |
 
 Raise the connect ceiling for an endpoint that is reachable but slow to accept
 a request — a VPN-only host, or a gateway that authenticates before it
 forwards. A `CONNECT_TIMEOUT` names both knobs in its message:
 
 ```
-Provider google sent no response headers within 10000 ms — endpoint
+Provider google sent no response headers within 30000 ms — endpoint
 unreachable. Raise llm.connectTimeoutMs in platform.json, or connectTimeoutMs
 on model gemini-2.5-flash, if this endpoint is reachable but slow to answer.
 ```
