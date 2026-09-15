@@ -1,5 +1,9 @@
 # OAuth2 Multi-Tenancy Final Concept
 
+> **Superseded (2026-09-15):** the organization/membership model and the OAuth2 flow are
+> re-decided in `concepts/2026-09-15 SaaS Readiness — Multi-Tenant Platform Plan.md`
+> (§5.6 identity via a broker, D3, D8). Kept for history.
+
 This document finalizes the approach for implementing multi-tenancy in **iHub**.
 It incorporates lessons learned from Airweave's Auth0 based design and expands on
 our earlier `multi-tenancy.md` concept.

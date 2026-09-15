@@ -1,5 +1,9 @@
 # Multi-Tenancy Concept
 
+> **Superseded (2026-09-15):** the open questions below are answered in
+> `concepts/2026-09-15 SaaS Readiness — Multi-Tenant Platform Plan.md` (§5 target architecture, §7 decisions).
+> Kept for history.
+
 This document outlines a simple approach to introduce multi-tenancy to the application. The goal is to allow configuration on a per-tenant basis while keeping the system easy to manage.
 
 ## Overview
