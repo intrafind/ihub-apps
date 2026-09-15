@@ -77,7 +77,7 @@ function OfficeMailContextBanner({
       <div
         role="status"
         aria-live="polite"
-        className="mx-3 mt-2 mb-1 flex items-center gap-2 rounded-md border border-slate-200 bg-slate-50 px-3 py-2 text-xs text-slate-600"
+        className="mx-3 mt-2 mb-1 flex items-center gap-2 rounded-md border border-slate-200 bg-slate-50 px-3 py-2 text-xs text-slate-600 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-300"
       >
         <svg className="animate-spin h-3 w-3 text-slate-400" fill="none" viewBox="0 0 24 24">
           <circle
@@ -112,16 +112,16 @@ function OfficeMailContextBanner({
   // section, so we render without our own rounded card / margins.
   const outerClassName = embedded
     ? ''
-    : 'mx-3 mt-2 mb-1 rounded-lg border border-slate-200 bg-white shadow-xs';
+    : 'mx-3 mt-2 mb-1 rounded-lg border border-slate-200 bg-white shadow-xs dark:border-slate-700 dark:bg-slate-800';
 
   return (
     <div className={outerClassName}>
       {removedCount > 0 && (
-        <div className="flex items-center justify-end px-3 py-1.5 border-b border-slate-100 bg-slate-50/60">
+        <div className="flex items-center justify-end px-3 py-1.5 border-b border-slate-100 bg-slate-50/60 dark:border-slate-700 dark:bg-slate-900/40">
           <button
             type="button"
             onClick={onRestoreAttachments}
-            className="text-xs text-indigo-600 hover:text-indigo-800 font-medium"
+            className="text-xs text-indigo-600 hover:text-indigo-800 font-medium dark:text-indigo-400 dark:hover:text-indigo-300"
             title="Restore removed attachments"
           >
             Restore {removedCount}
@@ -133,23 +133,26 @@ function OfficeMailContextBanner({
       {hasBody && (
         <div
           className={`flex items-start gap-2 px-3 py-2 ${
-            hasAttachments ? 'border-b border-slate-100' : ''
+            hasAttachments ? 'border-b border-slate-100 dark:border-slate-700' : ''
           }`}
         >
-          <div className="shrink-0 mt-0.5 text-slate-500">
+          <div className="shrink-0 mt-0.5 text-slate-500 dark:text-slate-400">
             <Icon name="mail" size="sm" />
           </div>
           <div className="flex-1 min-w-0">
             <div className="flex items-center justify-between gap-2">
-              <div className="text-sm font-medium text-slate-900 truncate" title={subject}>
+              <div
+                className="text-sm font-medium text-slate-900 truncate dark:text-slate-100"
+                title={subject}
+              >
                 {subject}
               </div>
-              <label className="flex items-center gap-1.5 text-xs text-slate-600 select-none cursor-pointer shrink-0">
+              <label className="flex items-center gap-1.5 text-xs text-slate-600 select-none cursor-pointer shrink-0 dark:text-slate-300">
                 <input
                   type="checkbox"
                   checked={bodySent}
                   onChange={e => onToggleBody?.(e.target.checked)}
-                  className="h-3.5 w-3.5 rounded-sm border-slate-300 text-indigo-600 focus:ring-indigo-500"
+                  className="h-3.5 w-3.5 rounded-sm border-slate-300 text-indigo-600 focus:ring-indigo-500 dark:border-slate-600 dark:bg-slate-900"
                 />
                 Include body
               </label>
@@ -157,7 +160,9 @@ function OfficeMailContextBanner({
             {bodyPreview && (
               <div
                 className={`mt-0.5 text-xs ${
-                  bodySent ? 'text-slate-500' : 'text-slate-400 italic line-through'
+                  bodySent
+                    ? 'text-slate-500 dark:text-slate-400'
+                    : 'text-slate-400 italic line-through dark:text-slate-500'
                 } line-clamp-2`}
                 title={bodyPreview}
               >
@@ -165,7 +170,9 @@ function OfficeMailContextBanner({
               </div>
             )}
             {!bodySent && (
-              <div className="mt-0.5 text-[11px] text-amber-600">Email body will not be sent.</div>
+              <div className="mt-0.5 text-[11px] text-amber-600 dark:text-amber-400">
+                Email body will not be sent.
+              </div>
             )}
           </div>
         </div>
@@ -173,9 +180,9 @@ function OfficeMailContextBanner({
 
       {/* Attachments list */}
       {hasAttachments && remainingAttachments.length > 0 && (
-        <div className="divide-y divide-slate-100">
+        <div className="divide-y divide-slate-100 dark:divide-slate-700">
           {attachmentApiUnavailable && (
-            <div className="flex items-start gap-2 px-3 py-1.5 bg-amber-50 text-[11px] text-amber-700">
+            <div className="flex items-start gap-2 px-3 py-1.5 bg-amber-50 text-[11px] text-amber-700 dark:bg-amber-950/40 dark:text-amber-300">
               <Icon name="information-circle" size="sm" />
               <span>
                 Attachments can&apos;t be read on this version of Outlook (requires Mailbox 1.8+).
@@ -188,24 +195,24 @@ function OfficeMailContextBanner({
             return (
               <div
                 key={att.id || att.name}
-                className="flex items-center gap-2 px-3 py-1.5 hover:bg-slate-50 transition-colors"
+                className="flex items-center gap-2 px-3 py-1.5 hover:bg-slate-50 transition-colors dark:hover:bg-slate-700/60"
               >
-                <div className="shrink-0 text-slate-500">
+                <div className="shrink-0 text-slate-500 dark:text-slate-400">
                   <Icon name={isImage ? 'camera' : 'paper-clip'} size="sm" />
                 </div>
                 <div className="flex-1 min-w-0">
                   <div
-                    className="text-sm font-medium text-slate-900 truncate"
+                    className="text-sm font-medium text-slate-900 truncate dark:text-slate-100"
                     title={att.name || 'Attachment'}
                   >
                     {att.name || 'Attachment'}
                   </div>
-                  <div className="text-[11px] text-slate-500 flex items-center gap-1.5">
+                  <div className="text-[11px] text-slate-500 flex items-center gap-1.5 dark:text-slate-400">
                     <span>{formatFileSize(Number(att.size) || 0)}</span>
                     {status.kind === 'failed' && !attachmentApiUnavailable && (
                       <>
                         <span aria-hidden>•</span>
-                        <span className="text-rose-600" title={status.label}>
+                        <span className="text-rose-600 dark:text-rose-400" title={status.label}>
                           Failed
                         </span>
                       </>
@@ -213,7 +220,7 @@ function OfficeMailContextBanner({
                     {status.kind === 'pending' && (
                       <>
                         <span aria-hidden>•</span>
-                        <span className="text-slate-500">{status.label}</span>
+                        <span className="text-slate-500 dark:text-slate-400">{status.label}</span>
                       </>
                     )}
                   </div>
@@ -221,7 +228,7 @@ function OfficeMailContextBanner({
                 <button
                   type="button"
                   onClick={() => onRemoveAttachment?.(att.id)}
-                  className="shrink-0 text-slate-400 hover:text-rose-600 transition-colors p-1"
+                  className="shrink-0 text-slate-400 hover:text-rose-600 transition-colors p-1 dark:text-slate-500 dark:hover:text-rose-400"
                   title="Remove attachment from this message"
                   aria-label={`Remove ${att.name || 'attachment'} from this message`}
                 >
