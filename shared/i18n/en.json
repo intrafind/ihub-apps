@@ -2408,7 +2408,8 @@
     "imageTooLargeToStore": "This image was larger than this installation stores, so it was not kept.",
     "imageTooManyToStore": "This turn produced more images than this installation stores, so this one was not kept.",
     "imageLoadFailed": "The stored image could not be loaded.",
-    "imageNotStored": "This image could not be stored and is no longer available."
+    "imageNotStored": "This image could not be stored and is no longer available.",
+    "loadingImage": "Loading image…"
   },
   "serverErrors": {
     "appNotFound": "Application not found",

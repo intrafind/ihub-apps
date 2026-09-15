@@ -527,7 +527,8 @@
     "imageTooLargeToStore": "Dieses Bild war größer als von dieser Installation gespeichert wird und wurde daher nicht aufbewahrt.",
     "imageTooManyToStore": "Diese Antwort hat mehr Bilder erzeugt, als diese Installation speichert; dieses wurde daher nicht aufbewahrt.",
     "imageLoadFailed": "Das gespeicherte Bild konnte nicht geladen werden.",
-    "imageNotStored": "Dieses Bild konnte nicht gespeichert werden und ist nicht mehr verfügbar."
+    "imageNotStored": "Dieses Bild konnte nicht gespeichert werden und ist nicht mehr verfügbar.",
+    "loadingImage": "Bild wird geladen…"
   },
   "errors": {
     "componentError": "Komponenten-Fehler",
