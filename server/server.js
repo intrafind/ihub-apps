@@ -446,6 +446,12 @@ if (cluster.isPrimary && workerCount > 1) {
   const { logVersionInfo } = await import('./utils/versionHelper.js');
   logVersionInfo();
 
+  // Write down which version is running and keep the one it replaced, so What's New can mark
+  // every release an upgrade brought in — not just the one being run. Idempotent and never
+  // throws, so every worker may call it (see installedVersionStore).
+  const { recordInstalledVersion } = await import('./utils/installedVersionStore.js');
+  await recordInstalledVersion();
+
   // Initialize encryption key and JWT secret for secure storage and token signing
   try {
     const tokenStorageService = (await import('./services/TokenStorageService.js')).default;

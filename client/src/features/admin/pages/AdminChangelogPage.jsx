@@ -1,23 +1,32 @@
 import { useEffect, useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
-import { ExclamationTriangleIcon } from '@heroicons/react/24/outline';
+import { ChevronRightIcon, ExclamationTriangleIcon } from '@heroicons/react/24/outline';
 import { makeAdminApiCall } from '../../../api/adminApi';
 import { renderInlineMarkdown, renderMarkdown } from '../../../config/marked.config';
 import { useCodeBlockInteractions } from '../../../hooks/useCodeBlockInteractions';
 import LoadingSpinner from '../../../shared/components/LoadingSpinner';
+import {
+  buildReleaseTree,
+  defaultExpandedGroups,
+  visibleReleases
+} from '../utils/changelogReleaseTree';
 
 /**
  * Admin → What's New.
  *
  * `GET /admin/changelog` lists every release that has release notes (newest first, unreleased
- * changes ahead of them, with entry counts); `GET /admin/changelog/:version` returns one
- * release's entries per section, bodies as Markdown. One release is shown at a time: a switcher
- * on the left, and on the right the release with a table of contents followed by its breaking
- * changes, new & improved entries and fixes — in that order, because breaking changes are what
- * an admin has to act on.
+ * changes ahead of them, with entry counts, and the `installed` / `isNew` flags the server
+ * derives from the version this installation was upgraded from); `GET /admin/changelog/:version`
+ * returns one release's entries per section, bodies as Markdown. One release is shown at a time:
+ * a switcher on the left, and on the right the release with a table of contents followed by its
+ * breaking changes, new & improved entries and fixes — in that order, because breaking changes
+ * are what an admin has to act on.
+ *
+ * The switcher is a tree — `5.x` → `5.5.x` → the releases — because an installation that has been
+ * running for a while has more releases than a flat list can show. Only the groups that hold the
+ * selected release, the installed one or something the last upgrade brought in start open, and a
+ * group longer than ten releases shows the newest ten until asked for the rest.
  */
-
-const STORAGE_KEY = 'admin_changelog_seen';
 
 /** Reading order. The keys match the sections the server returns. */
 const SECTIONS = [
@@ -25,24 +34,6 @@ const SECTIONS = [
   { key: 'features', i18nKey: 'admin.changelog.features', label: 'New & improved' },
   { key: 'fixes', i18nKey: 'admin.changelog.fixes', label: 'Fixes' }
 ];
-
-function readSeenVersions() {
-  try {
-    const parsed = JSON.parse(localStorage.getItem(STORAGE_KEY) || '[]');
-    return new Set(Array.isArray(parsed) ? parsed : []);
-  } catch {
-    // Corrupt or unavailable storage — treat as a first visit.
-    return new Set();
-  }
-}
-
-function rememberSeenVersions(versions) {
-  try {
-    localStorage.setItem(STORAGE_KEY, JSON.stringify([...versions]));
-  } catch {
-    // Storage unavailable (private mode, quota) — the badge simply shows again next time.
-  }
-}
 
 /** A DOM id from arbitrary parts: version numbers contain dots, titles anything. */
 const domId = (...parts) => parts.join('-').replace(/[^A-Za-z0-9_-]+/g, '-');
@@ -80,7 +71,7 @@ const BADGE_TONES = {
 function Badge({ tone, children }) {
   return (
     <span
-      className={`inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium ${BADGE_TONES[tone]}`}
+      className={`inline-flex shrink-0 items-center px-2 py-0.5 rounded-full text-xs font-medium ${BADGE_TONES[tone]}`}
     >
       {children}
     </span>
@@ -119,38 +110,192 @@ function ErrorBox({ message, onRetry, retryLabel }) {
   );
 }
 
-function ReleaseSwitcher({ releases, selected, onSelect, isNew, isInstalled, shortLabel, t }) {
+function ReleaseButton({ release, selected, onSelect, shortLabel, t }) {
+  const active = release.version === selected;
+  return (
+    <button
+      type="button"
+      onClick={() => onSelect(release.version)}
+      aria-current={active ? 'page' : undefined}
+      className={`w-full flex flex-wrap items-center gap-x-2 gap-y-1 rounded-md px-3 py-1.5 text-sm text-left transition-colors ${
+        active
+          ? 'bg-indigo-50 text-indigo-700 font-semibold dark:bg-indigo-900/40 dark:text-indigo-200'
+          : 'text-gray-700 hover:bg-gray-100 dark:text-gray-300 dark:hover:bg-gray-800'
+      }`}
+    >
+      <span className="shrink-0">{shortLabel(release)}</span>
+      {release.installed && (
+        <Badge tone="green">{t('admin.changelog.installed', 'Installed')}</Badge>
+      )}
+      {release.isNew && <Badge tone="indigo">{t('admin.changelog.new', 'New')}</Badge>}
+    </button>
+  );
+}
+
+/**
+ * One level of the switcher tree. The chevron rotates instead of swapping icons so the control
+ * keeps its place while a group opens.
+ */
+function GroupToggle({ open, label, count, newCount, controls, onToggle, className = '', t }) {
+  return (
+    <button
+      type="button"
+      onClick={onToggle}
+      aria-expanded={open}
+      aria-controls={controls}
+      className={`w-full flex flex-wrap items-center gap-x-1.5 gap-y-1 rounded-md px-2 py-1.5 text-sm text-left text-gray-700 hover:bg-gray-100 dark:text-gray-300 dark:hover:bg-gray-800 ${className}`}
+    >
+      <ChevronRightIcon
+        className={`h-4 w-4 shrink-0 text-gray-400 transition-transform ${open ? 'rotate-90' : ''}`}
+        aria-hidden="true"
+      />
+      <span className="truncate">{label}</span>
+      <span className="text-xs text-gray-400 dark:text-gray-500">{count}</span>
+      {newCount > 0 && (
+        <Badge tone="indigo">
+          {t('admin.changelog.newCount', '{{count}} new', { count: newCount })}
+        </Badge>
+      )}
+    </button>
+  );
+}
+
+function MinorGroup({ minor, selected, onSelect, expanded, onToggleGroup, shortLabel, t }) {
+  const [showAll, setShowAll] = useState(false);
+  const open = expanded.has(minor.key);
+  const listId = domId('release-group', minor.key);
+  const { releases, hidden } = visibleReleases(minor, { showAll, selected });
+
+  return (
+    <li>
+      <GroupToggle
+        open={open}
+        label={t('admin.changelog.series', '{{series}}.x', { series: minor.key })}
+        count={minor.count}
+        newCount={minor.newCount}
+        controls={listId}
+        onToggle={() => onToggleGroup(minor.key)}
+        t={t}
+      />
+      {open && (
+        <ul id={listId} className="mt-0.5 space-y-0.5 pl-3">
+          {releases.map(release => (
+            <li key={release.version}>
+              <ReleaseButton
+                release={release}
+                selected={selected}
+                onSelect={onSelect}
+                shortLabel={shortLabel}
+                t={t}
+              />
+            </li>
+          ))}
+          {hidden > 0 && (
+            <li>
+              <button
+                type="button"
+                onClick={() => setShowAll(true)}
+                className="w-full rounded-md px-3 py-1.5 text-left text-xs font-medium text-indigo-600 hover:bg-gray-100 hover:underline dark:text-indigo-400 dark:hover:bg-gray-800"
+              >
+                {t('admin.changelog.showOlder', 'Show {{count}} older', { count: hidden })}
+              </button>
+            </li>
+          )}
+        </ul>
+      )}
+    </li>
+  );
+}
+
+function ReleaseSwitcher({ tree, selected, onSelect, expanded, onToggleGroup, shortLabel, t }) {
   return (
     <nav
       aria-label={t('admin.changelog.versions', 'Releases')}
       className="lg:sticky lg:top-6 lg:self-start lg:max-h-[calc(100vh-6rem)] lg:overflow-y-auto"
     >
-      <ul className="flex gap-2 overflow-x-auto pb-2 -mx-1 px-1 lg:flex-col lg:gap-1 lg:overflow-visible lg:pb-0">
-        {releases.map(release => {
-          const active = release.version === selected;
+      <ul className="space-y-0.5">
+        {tree.unreleased.map(release => (
+          <li key={release.version}>
+            <ReleaseButton
+              release={release}
+              selected={selected}
+              onSelect={onSelect}
+              shortLabel={shortLabel}
+              t={t}
+            />
+          </li>
+        ))}
+        {tree.majors.map(major => {
+          const open = expanded.has(major.key);
+          const listId = domId('release-group', major.key);
           return (
-            <li key={release.version} className="shrink-0 lg:shrink lg:w-full">
-              <button
-                type="button"
-                onClick={() => onSelect(release.version)}
-                aria-current={active ? 'page' : undefined}
-                className={`w-full flex items-center gap-2 rounded-md px-3 py-1.5 text-sm text-left transition-colors ${
-                  active
-                    ? 'bg-indigo-50 text-indigo-700 font-semibold dark:bg-indigo-900/40 dark:text-indigo-200'
-                    : 'text-gray-700 hover:bg-gray-100 dark:text-gray-300 dark:hover:bg-gray-800'
-                }`}
-              >
-                <span className="truncate">{shortLabel(release)}</span>
-                {isInstalled(release) && (
-                  <Badge tone="green">{t('admin.changelog.installed', 'Installed')}</Badge>
-                )}
-                {isNew(release) && <Badge tone="indigo">{t('admin.changelog.new', 'New')}</Badge>}
-              </button>
+            <li key={major.key}>
+              <GroupToggle
+                open={open}
+                label={t('admin.changelog.series', '{{series}}.x', { series: major.major })}
+                count={major.count}
+                newCount={major.newCount}
+                controls={listId}
+                onToggle={() => onToggleGroup(major.key)}
+                className="font-medium"
+                t={t}
+              />
+              {open && (
+                <ul
+                  id={listId}
+                  className="mt-0.5 space-y-0.5 pl-2 ml-3 border-l border-gray-200 dark:border-gray-700"
+                >
+                  {major.minors.map(minor => (
+                    <MinorGroup
+                      key={minor.key}
+                      minor={minor}
+                      selected={selected}
+                      onSelect={onSelect}
+                      expanded={expanded}
+                      onToggleGroup={onToggleGroup}
+                      shortLabel={shortLabel}
+                      t={t}
+                    />
+                  ))}
+                </ul>
+              )}
             </li>
           );
         })}
       </ul>
     </nav>
+  );
+}
+
+/**
+ * What the last upgrade brought in. Only shown when this installation remembers a previous
+ * version and at least one release since then has notes — on a fresh installation, or when the
+ * jump crossed no documented release, there is nothing to point at.
+ */
+function UpgradeNotice({ previousVersion, currentVersion, newCount, t }) {
+  if (!previousVersion || !currentVersion || newCount === 0) return null;
+  return (
+    <section
+      aria-labelledby="changelog-upgrade-notice"
+      className="mb-6 rounded-lg border border-indigo-200 bg-indigo-50 p-4 dark:border-indigo-800 dark:bg-indigo-900/20"
+    >
+      <p
+        id="changelog-upgrade-notice"
+        className="text-sm font-semibold text-indigo-900 dark:text-indigo-200"
+      >
+        {t('admin.changelog.upgradedFrom', 'Upgraded from {{previousVersion}} to {{version}}', {
+          previousVersion,
+          version: currentVersion
+        })}
+      </p>
+      <p className="mt-1 text-sm text-indigo-800 dark:text-indigo-300">
+        {t(
+          'admin.changelog.upgradedReleases',
+          '{{count}} releases are new to this installation — every one of them is marked New.',
+          { count: newCount }
+        )}
+      </p>
+    </section>
   );
 }
 
@@ -295,7 +440,7 @@ function AdminChangelogPage() {
   const [releases, setReleases] = useState({});
   const [releaseErrors, setReleaseErrors] = useState({});
   const [retryToken, setRetryToken] = useState(0);
-  const [previouslySeen] = useState(readSeenVersions);
+  const [expandedGroups, setExpandedGroups] = useState(null);
 
   // The list of releases, once.
   useEffect(() => {
@@ -306,16 +451,12 @@ function AdminChangelogPage() {
         const data = response.data || {};
         const versions = Array.isArray(data.versions) ? data.versions : [];
         if (!active) return;
-        setIndex({ currentVersion: data.currentVersion || null, versions });
+        setIndex({
+          currentVersion: data.currentVersion || null,
+          previousVersion: data.previousVersion || null,
+          versions
+        });
         setSelected(versions[0]?.version ?? null);
-        // Everything listed now counts as seen on the next visit. Unreleased changes keep
-        // changing, so they are never "new".
-        rememberSeenVersions(
-          new Set([
-            ...previouslySeen,
-            ...versions.filter(release => !release.unreleased).map(release => release.version)
-          ])
-        );
       } catch (err) {
         if (active) {
           setIndexError(err.message || t('admin.changelog.loadError', 'Failed to load changelog'));
@@ -326,7 +467,7 @@ function AdminChangelogPage() {
     return () => {
       active = false;
     };
-  }, [previouslySeen, t]);
+  }, [t]);
 
   // The selected release's entries, fetched on first selection and kept.
   useEffect(() => {
@@ -363,6 +504,25 @@ function AdminChangelogPage() {
   const selectedMeta = index?.versions.find(release => release.version === selected) ?? null;
   const release = selected ? releases[selected] : null;
 
+  const tree = useMemo(() => buildReleaseTree(index?.versions ?? []), [index]);
+  const newCount = (index?.versions ?? []).filter(item => item.isNew).length;
+
+  // Which groups start open is derived, not stored — until the admin touches the tree, at which
+  // point their set takes over for the rest of the visit. Recomputing it on every click would
+  // keep re-opening what they closed.
+  const defaultExpanded = useMemo(
+    () => defaultExpandedGroups(tree, { selected: index?.versions?.[0]?.version ?? null }),
+    [tree, index]
+  );
+  const expanded = expandedGroups ?? defaultExpanded;
+
+  const toggleGroup = key =>
+    setExpandedGroups(prev => {
+      const next = new Set(prev ?? defaultExpanded);
+      if (!next.delete(key)) next.add(key);
+      return next;
+    });
+
   // Render Markdown once per release, not on every state change.
   const prepared = useMemo(() => {
     if (!release) return null;
@@ -382,8 +542,6 @@ function AdminChangelogPage() {
     return { ...release, sections };
   }, [release, t]);
 
-  const isNew = item => !item.unreleased && !previouslySeen.has(item.version);
-  const isInstalled = item => !!index?.currentVersion && item.version === index.currentVersion;
   const shortLabel = item =>
     item.unreleased ? t('admin.changelog.unreleasedShort', 'Unreleased') : item.version;
   const fullLabel = item =>
@@ -431,13 +589,19 @@ function AdminChangelogPage() {
 
   return (
     <PageFrame title={title} subtitle={subtitle}>
-      <div className="lg:grid lg:grid-cols-[11rem_minmax(0,1fr)] lg:gap-10">
+      <UpgradeNotice
+        previousVersion={index.previousVersion}
+        currentVersion={index.currentVersion}
+        newCount={newCount}
+        t={t}
+      />
+      <div className="lg:grid lg:grid-cols-[15rem_minmax(0,1fr)] lg:gap-10">
         <ReleaseSwitcher
-          releases={index.versions}
+          tree={tree}
           selected={selected}
           onSelect={setSelected}
-          isNew={isNew}
-          isInstalled={isInstalled}
+          expanded={expanded}
+          onToggleGroup={toggleGroup}
           shortLabel={shortLabel}
           t={t}
         />
@@ -449,10 +613,10 @@ function AdminChangelogPage() {
                 <h2 className="text-xl font-semibold text-gray-900 dark:text-gray-100">
                   {fullLabel(selectedMeta)}
                 </h2>
-                {isInstalled(selectedMeta) && (
+                {selectedMeta.installed && (
                   <Badge tone="green">{t('admin.changelog.installed', 'Installed')}</Badge>
                 )}
-                {isNew(selectedMeta) && (
+                {selectedMeta.isNew && (
                   <Badge tone="indigo">{t('admin.changelog.new', 'New')}</Badge>
                 )}
               </div>

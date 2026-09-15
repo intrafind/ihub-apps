@@ -4,12 +4,14 @@
 
 /**
  * The admin changelog endpoints read `docs/releases/` and hand the page a structured view of it:
- * which releases have notes (unreleased `next/` first, then newest first, counts per section) and,
- * per release, the entries of each section. What they must get right: skip directories without
- * entries, ignore anything that is not a release directory, and never let a request parameter
- * pick a path outside the releases directory.
+ * which releases have notes (unreleased `next/` first, then newest first, counts per section,
+ * which one is installed and which ones the last upgrade brought in) and, per release, the entries
+ * of each section. What they must get right: skip directories without entries, ignore anything
+ * that is not a release directory, mark the whole range an upgrade spanned rather than only the
+ * version being run, and never let a request parameter pick a path outside the releases
+ * directory.
  */
-import { afterAll, beforeAll, describe, expect, jest, test } from '@jest/globals';
+import { afterAll, beforeAll, beforeEach, describe, expect, jest, test } from '@jest/globals';
 import express from 'express';
 import request from 'supertest';
 import { mkdtempSync, mkdirSync, rmSync, writeFileSync } from 'fs';
@@ -32,6 +34,14 @@ jest.mock('../../../server/middleware/adminAuth.js', () => ({
 jest.mock('../../../server/utils/versionHelper.js', () => ({
   getAppVersion: () => 'v5.5.7'
 }));
+
+// What this installation was upgraded from is read off disk at startup; the range it produces is
+// the real thing (`isWithinUpgrade` is not mocked), only the record itself is supplied here.
+let mockInstalledRecord = { version: null, previousVersion: null };
+jest.mock('../../../server/utils/installedVersionStore.js', () => {
+  const actual = jest.requireActual('../../../server/utils/installedVersionStore.js');
+  return { ...actual, getInstalledVersionRecord: async () => mockInstalledRecord };
+});
 
 import registerAdminChangelogRoutes, {
   loadChangelogIndex
@@ -81,6 +91,10 @@ afterAll(() => {
 });
 
 describe('GET /api/admin/changelog', () => {
+  beforeEach(() => {
+    mockInstalledRecord = { version: null, previousVersion: null };
+  });
+
   test('lists releases with entries, next first, newest first, with counts and the running version', async () => {
     const response = await request(app).get('/api/admin/changelog');
 
@@ -99,6 +113,32 @@ describe('GET /api/admin/changelog', () => {
     expect(next.counts).toEqual({ total: 1, breakingChanges: 0, features: 1, fixes: 0 });
     expect(latest.unreleased).toBe(false);
     expect(latest.counts).toEqual({ total: 4, breakingChanges: 1, features: 2, fixes: 1 });
+  });
+
+  test('marks the installed release, and nothing as new, on an installation that never upgraded', async () => {
+    const response = await request(app).get('/api/admin/changelog');
+
+    expect(response.body.previousVersion).toBeNull();
+    expect(response.body.versions.filter(release => release.installed).map(r => r.version)).toEqual(
+      ['5.5.7']
+    );
+    expect(response.body.versions.every(release => release.isNew === false)).toBe(true);
+  });
+
+  test('marks every release an upgrade spanned as new, not just the one being run', async () => {
+    // The route takes the running version from the build, not from this record.
+    mockInstalledRecord = { version: '5.4.0-RC1', previousVersion: '5.4.0-RC1' };
+
+    const response = await request(app).get('/api/admin/changelog');
+
+    expect(response.body.previousVersion).toBe('5.4.0-RC1');
+    // Running 5.5.7 after 5.4.0-RC1: everything in between is new, the release that was already
+    // installed is not, and unreleased changes never are.
+    expect(response.body.versions.filter(release => release.isNew).map(r => r.version)).toEqual([
+      '5.5.7',
+      '5.4.10',
+      '5.4.9'
+    ]);
   });
 
   test('answers with an empty list when the releases directory is missing', async () => {
