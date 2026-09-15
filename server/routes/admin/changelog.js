@@ -36,6 +36,27 @@ async function readReleaseSections(versionDir) {
 }
 
 /**
+ * The release directories that exist: `next` and semver-named directories, nothing else.
+ * Every path this module opens is built from a name in this list — the filesystem's own
+ * listing — so a request can only ever select a directory, never spell one.
+ *
+ * @param {string} releasesDir
+ * @returns {Promise<string[]>} unsorted; empty when the directory does not exist
+ */
+async function listReleaseVersionNames(releasesDir) {
+  try {
+    const dirents = await fs.readdir(releasesDir, { withFileTypes: true });
+    return dirents
+      .filter(dirent => dirent.isDirectory() && isReleaseVersionName(dirent.name))
+      .map(dirent => dirent.name);
+  } catch {
+    // No docs/releases/ next to the server (a build that did not ship it): an empty changelog,
+    // not an error.
+    return [];
+  }
+}
+
+/**
  * Every release that has at least one entry, newest first, with `next/` (the notes for changes
  * that have not shipped in a tagged release yet) ahead of the numbered releases. Directories
  * without a single entry are left out, so the empty `next/` scaffold that follows a release
@@ -45,17 +66,7 @@ async function readReleaseSections(versionDir) {
  * @returns {Promise<Array<{ version: string, unreleased: boolean, counts: Record<string, number> }>>}
  */
 export async function loadChangelogIndex(releasesDir) {
-  let names;
-  try {
-    const dirents = await fs.readdir(releasesDir, { withFileTypes: true });
-    names = dirents
-      .filter(dirent => dirent.isDirectory() && isReleaseVersionName(dirent.name))
-      .map(dirent => dirent.name);
-  } catch {
-    // No docs/releases/ next to the server (a build that did not ship it): an empty changelog,
-    // not an error.
-    return [];
-  }
+  const names = await listReleaseVersionNames(releasesDir);
 
   const releases = await Promise.all(
     sortVersionsNewestFirst(names).map(async version => {
@@ -69,8 +80,9 @@ export async function loadChangelogIndex(releasesDir) {
 
 /**
  * The entries of one release, per section. `null` when the name is not a release directory or the
- * directory has no entries — the caller answers 404 either way, and a name that is not a version
- * never reaches the filesystem.
+ * directory has no entries — the caller answers 404 either way. The requested name only selects
+ * one of the directories the listing found; the path is built from that listed name, so the
+ * request never contributes a path segment.
  *
  * @param {string} releasesDir
  * @param {string} version directory name: `next` or a semver version
@@ -79,7 +91,10 @@ export async function loadChangelogIndex(releasesDir) {
 export async function loadChangelogVersion(releasesDir, version) {
   if (!isReleaseVersionName(version)) return null;
 
-  const versionDir = join(releasesDir, version);
+  const known = (await listReleaseVersionNames(releasesDir)).find(name => name === version);
+  if (!known) return null;
+
+  const versionDir = join(releasesDir, known);
   const parsed = await readReleaseSections(versionDir);
   if (countEntries(parsed).total === 0) return null;
 
@@ -91,7 +106,7 @@ export async function loadChangelogVersion(releasesDir, version) {
       body
     }));
   }
-  return { version, unreleased: version === UNRELEASED_VERSION, sections };
+  return { version: known, unreleased: known === UNRELEASED_VERSION, sections };
 }
 
 function currentVersion() {
