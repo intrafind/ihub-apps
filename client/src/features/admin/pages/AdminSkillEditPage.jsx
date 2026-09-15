@@ -7,6 +7,7 @@ import Icon from '../../../shared/components/Icon';
 import AdminBreadcrumb from '../components/AdminBreadcrumb';
 import { useUnsavedChanges } from '../hooks/useUnsavedChanges';
 import ConfirmDialog from '../../../shared/components/ConfirmDialog';
+import ContentAccessSection from '../components/ContentAccessSection';
 import {
   deleteSkill,
   exportSkill,
@@ -601,68 +602,73 @@ function AdminSkillEditPage() {
         {/*  TAB: Configuration overrides                                    */}
         {/* ================================================================ */}
         {activeTab === 'config' && (
-          <div className="bg-white dark:bg-gray-800 shadow-sm rounded-lg overflow-hidden">
-            <div className="px-6 py-4 border-b border-gray-200 dark:border-gray-700">
-              <h2 className="text-lg font-medium text-gray-900 dark:text-gray-100">
-                {t('admin.skills.configOverrides', 'Configuration Overrides')}
-              </h2>
-              <p className="mt-1 text-sm text-gray-500 dark:text-gray-400">
-                {t(
-                  'admin.skills.configOverridesDescription',
-                  'Override default skill settings. These values take precedence over the packaged defaults.'
-                )}
-              </p>
-            </div>
-            <div className="px-6 py-4 space-y-4">
-              {/* Custom description */}
-              <div>
-                <label
-                  htmlFor="override-description"
-                  className="block text-sm font-medium text-gray-700 dark:text-gray-300"
-                >
-                  {t('admin.skills.field.customDescription', 'Custom Description')}
-                </label>
-                <textarea
-                  id="override-description"
-                  rows={3}
-                  className="mt-1 block w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md shadow-xs bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100 placeholder-gray-400 dark:placeholder-gray-500 focus:outline-hidden focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm"
-                  placeholder={t(
-                    'admin.skills.field.customDescriptionPlaceholder',
-                    'Enter a custom description to override the default...'
+          <>
+            {/* Group access — which groups may use this skill (groups.json) */}
+            <ContentAccessSection resourceType="skills" resourceId={skill.name} className="mb-6" />
+
+            <div className="bg-white dark:bg-gray-800 shadow-sm rounded-lg overflow-hidden">
+              <div className="px-6 py-4 border-b border-gray-200 dark:border-gray-700">
+                <h2 className="text-lg font-medium text-gray-900 dark:text-gray-100">
+                  {t('admin.skills.configOverrides', 'Configuration Overrides')}
+                </h2>
+                <p className="mt-1 text-sm text-gray-500 dark:text-gray-400">
+                  {t(
+                    'admin.skills.configOverridesDescription',
+                    'Override default skill settings. These values take precedence over the packaged defaults.'
                   )}
-                  value={overrides.description}
-                  onChange={e => setOverrides(prev => ({ ...prev, description: e.target.value }))}
-                />
+                </p>
+              </div>
+              <div className="px-6 py-4 space-y-4">
+                {/* Custom description */}
+                <div>
+                  <label
+                    htmlFor="override-description"
+                    className="block text-sm font-medium text-gray-700 dark:text-gray-300"
+                  >
+                    {t('admin.skills.field.customDescription', 'Custom Description')}
+                  </label>
+                  <textarea
+                    id="override-description"
+                    rows={3}
+                    className="mt-1 block w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md shadow-xs bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100 placeholder-gray-400 dark:placeholder-gray-500 focus:outline-hidden focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm"
+                    placeholder={t(
+                      'admin.skills.field.customDescriptionPlaceholder',
+                      'Enter a custom description to override the default...'
+                    )}
+                    value={overrides.description}
+                    onChange={e => setOverrides(prev => ({ ...prev, description: e.target.value }))}
+                  />
+                </div>
+              </div>
+
+              {/* Save / Cancel bar */}
+              <div className="px-6 py-4 border-t border-gray-200 dark:border-gray-700 flex justify-end space-x-3">
+                <button
+                  onClick={() => navigate('/admin/skills')}
+                  className="px-4 py-2 border border-gray-300 dark:border-gray-600 rounded-md shadow-xs text-sm font-medium text-gray-700 dark:text-gray-200 bg-white dark:bg-gray-800 hover:bg-gray-50 dark:hover:bg-gray-700 focus:outline-hidden focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500"
+                >
+                  {t('common.cancel', 'Cancel')}
+                </button>
+                <button
+                  onClick={handleSaveOverrides}
+                  disabled={saving}
+                  className="inline-flex items-center px-4 py-2 border border-transparent rounded-md shadow-xs text-sm font-medium text-white bg-indigo-600 hover:bg-indigo-700 focus:outline-hidden focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500 disabled:opacity-50"
+                >
+                  {saving ? (
+                    <>
+                      <Icon name="refresh" className="animate-spin h-4 w-4 mr-2" />
+                      {t('common.saving', 'Saving...')}
+                    </>
+                  ) : (
+                    <>
+                      <Icon name="check" className="h-4 w-4 mr-2" />
+                      {t('common.save', 'Save')}
+                    </>
+                  )}
+                </button>
               </div>
             </div>
-
-            {/* Save / Cancel bar */}
-            <div className="px-6 py-4 border-t border-gray-200 dark:border-gray-700 flex justify-end space-x-3">
-              <button
-                onClick={() => navigate('/admin/skills')}
-                className="px-4 py-2 border border-gray-300 dark:border-gray-600 rounded-md shadow-xs text-sm font-medium text-gray-700 dark:text-gray-200 bg-white dark:bg-gray-800 hover:bg-gray-50 dark:hover:bg-gray-700 focus:outline-hidden focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500"
-              >
-                {t('common.cancel', 'Cancel')}
-              </button>
-              <button
-                onClick={handleSaveOverrides}
-                disabled={saving}
-                className="inline-flex items-center px-4 py-2 border border-transparent rounded-md shadow-xs text-sm font-medium text-white bg-indigo-600 hover:bg-indigo-700 focus:outline-hidden focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500 disabled:opacity-50"
-              >
-                {saving ? (
-                  <>
-                    <Icon name="refresh" className="animate-spin h-4 w-4 mr-2" />
-                    {t('common.saving', 'Saving...')}
-                  </>
-                ) : (
-                  <>
-                    <Icon name="check" className="h-4 w-4 mr-2" />
-                    {t('common.save', 'Save')}
-                  </>
-                )}
-              </button>
-            </div>
-          </div>
+          </>
         )}
       </div>
 

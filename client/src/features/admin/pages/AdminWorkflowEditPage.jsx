@@ -6,6 +6,7 @@ import DynamicLanguageEditor from '../../../shared/components/DynamicLanguageEdi
 import AdminBreadcrumb from '../components/AdminBreadcrumb';
 import { useUnsavedChanges } from '../hooks/useUnsavedChanges';
 import ConfirmDialog from '../../../shared/components/ConfirmDialog';
+import ContentAccessSection from '../components/ContentAccessSection';
 import {
   createAdminWorkflow,
   deleteAdminWorkflow,
@@ -479,6 +480,11 @@ function AdminWorkflowEditPage() {
                 spellCheck={false}
               />
             </div>
+
+            {/* Group access — which groups may run this workflow (groups.json) */}
+            {!isNewWorkflow && (
+              <ContentAccessSection resourceType="workflows" resourceId={id} className="mb-6" />
+            )}
 
             {/* Action Buttons */}
             <div className="flex justify-end space-x-3">

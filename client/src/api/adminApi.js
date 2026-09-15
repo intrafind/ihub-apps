@@ -412,6 +412,27 @@ export const fetchAdminGroups = async () => {
   return response.data;
 };
 
+// Content access: which groups may use one app / prompt / skill / tool /
+// workflow. Content admins get only the groups they belong to (and the groups
+// inheriting from those); full admins get every group.
+export const fetchContentAccess = async (type, id) => {
+  const response = await makeAdminApiCall(
+    `/admin/content-access/${encodeURIComponent(type)}/${encodeURIComponent(id)}`
+  );
+  return response.data;
+};
+
+export const updateContentAccess = async (type, id, { grant = [], revoke = [] } = {}) => {
+  const response = await makeAdminApiCall(
+    `/admin/content-access/${encodeURIComponent(type)}/${encodeURIComponent(id)}`,
+    {
+      method: 'PUT',
+      body: { grant, revoke }
+    }
+  );
+  return response.data;
+};
+
 // Tools API functions
 export const fetchAdminTools = async () => {
   try {
@@ -1001,6 +1022,10 @@ export const adminApi = {
   deleteAdminWorkflow,
   toggleAdminWorkflow,
   fetchAdminGroups,
+
+  // Content access functions
+  fetchContentAccess,
+  updateContentAccess,
 
   // Workflow Execution functions
   fetchAdminExecutions,
