@@ -49,6 +49,18 @@ body {
   min-height: 100vh;
 }
 
+/*
+ * Dark mode (Settings → Appearance). The preference is applied as
+ * `data-theme="dark"` on <html> before React mounts; painting the root here
+ * (rather than a React container) keeps the pane dark while the add-in is
+ * still loading, and `color-scheme` switches native controls (select
+ * dropdowns, checkboxes, scrollbars) to their dark rendering.
+ */
+html[data-theme='dark'] {
+  color-scheme: dark;
+  background-color: #0f172a; /* slate-900 */
+}
+
 /* Loading dots animation */
 @keyframes chat-loading-dot {
   0%,

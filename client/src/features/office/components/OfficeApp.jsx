@@ -70,9 +70,9 @@ function SelectPage({ user, onLogout, onSelect }) {
   );
 
   return (
-    <div className="office-task-pane h-screen w-full flex flex-col p-0 bg-slate-50">
+    <div className="office-task-pane h-screen w-full flex flex-col p-0 bg-slate-50 dark:bg-slate-900">
       <div className="flex-1 min-h-0 flex flex-col w-full">
-        <div className="flex flex-col h-full min-h-0 w-full overflow-hidden bg-white">
+        <div className="flex flex-col h-full min-h-0 w-full overflow-hidden bg-white dark:bg-slate-900">
           <AppListPanel
             onSelect={onSelect}
             language={officeLocale}
