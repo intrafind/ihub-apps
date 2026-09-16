@@ -171,7 +171,7 @@ class PromptService {
           const strValue = String(value);
           platformContext = platformContext.replace(
             new RegExp(`\\{\\{${key}\\}\\}`, 'g'),
-            strValue
+            () => strValue
           );
         }
       }
@@ -264,17 +264,25 @@ class PromptService {
             ? getLocalizedContent(msg.promptTemplate, lang)
             : msg.promptTemplate || msg.content;
         if (typeof processedContent !== 'string') processedContent = String(processedContent || '');
-        // Combine user-defined variables with global prompt variables (user variables take precedence)
-        const variables = { ...globalPromptVariables, ...msg.variables, content: msg.content };
-        if (variables && Object.keys(variables).length > 0) {
-          for (const [key, value] of Object.entries(variables)) {
-            const strValue = typeof value === 'string' ? value : String(value || '');
-            processedContent = processedContent.replace(
-              new RegExp(`\\{\\{${key}\\}\\}`, 'g'),
-              strValue
-            );
-          }
+        // Combine user-defined variables with global prompt variables (user
+        // variables take precedence). The user's content goes in last and
+        // through a function replacer: "{{...}}" placeholders and dollar
+        // patterns inside an email body or a pasted document are literal
+        // text — never re-expanded, never interpreted by String.replace.
+        const { content: _contentVariable, ...variables } = {
+          ...globalPromptVariables,
+          ...msg.variables
+        };
+        for (const [key, value] of Object.entries(variables)) {
+          const strValue = typeof value === 'string' ? value : String(value || '');
+          processedContent = processedContent.replace(
+            new RegExp(`\\{\\{${key}\\}\\}`, 'g'),
+            () => strValue
+          );
         }
+        const userContent =
+          typeof msg.content === 'string' ? msg.content : String(msg.content || '');
+        processedContent = processedContent.replace(/\{\{content\}\}/g, () => userContent);
         // Ensure user content is always included: if template is empty or doesn't contain {{content}},
         // append the user's actual content to make sure it's not lost
         if (msg.content && msg.content.trim()) {
@@ -315,7 +323,7 @@ class PromptService {
           const strValue = typeof value === 'string' ? value : String(value || '');
           processedContent = processedContent.replace(
             new RegExp(`\\{\\{${key}\\}\\}`, 'g'),
-            strValue
+            () => strValue
           );
         }
       }
@@ -350,7 +358,10 @@ class PromptService {
           if (typeof value === 'function' || (typeof value === 'object' && value !== null))
             continue;
           const strValue = String(value || '');
-          systemPrompt = systemPrompt.replace(new RegExp(`\\{\\{${key}\\}\\}`, 'g'), strValue);
+          systemPrompt = systemPrompt.replace(
+            new RegExp(`\\{\\{${key}\\}\\}`, 'g'),
+            () => strValue
+          );
         }
       }
 

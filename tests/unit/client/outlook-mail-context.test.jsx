@@ -109,6 +109,88 @@ afterEach(() => {
 });
 
 describe('fetchCurrentMailContext', () => {
+  test('re-reads the item when every attachment fetch fails with an unknown id (stale item right after ItemChanged)', async () => {
+    // The host already serves email B, but Office.context.mailbox.item still
+    // hands out A's cached attachment list under B's id. Without the re-read
+    // the pane shows A's attachments, each marked as failed, next to B's body.
+    const freshB = makeMailItem({
+      itemId: 'B',
+      subject: 'Mail B',
+      bodyText: 'body of B',
+      attachments: [{ id: 'b1', name: 'invoice.pdf' }]
+    });
+    const staleB = makeMailItem({
+      itemId: 'B',
+      subject: 'Mail A',
+      bodyText: 'body of B',
+      attachments: [{ id: 'a1', name: 'report.pdf' }]
+    });
+    staleB.getAttachmentContentAsync = (_id, cb) =>
+      setTimeout(
+        () =>
+          cb({ status: FAILED, error: { message: 'The attachment identifier does not exist.' } }),
+        0
+      );
+    Office.context.mailbox.item = staleB;
+    // The framework refreshes its cached item a moment later.
+    setTimeout(() => {
+      global.Office.context.mailbox.item = freshB;
+    }, 50);
+
+    const ctx = await fetchCurrentMailContext();
+
+    expect(ctx.available).toBe(true);
+    expect(ctx.subject).toBe('Mail B');
+    expect(ctx.attachments).toHaveLength(1);
+    expect(ctx.attachments[0]).toMatchObject({
+      id: 'b1',
+      content: { format: 'base64', content: 'CONTENT(b1)' }
+    });
+  });
+
+  test('a genuine per-attachment failure is reported after a single read, not retried', async () => {
+    let bodyReads = 0;
+    const itemA = makeMailItem({
+      itemId: 'A',
+      subject: 'Mail A',
+      bodyText: 'body of A',
+      attachments: [{ id: 'a1', name: 'note.msg' }],
+      onBodyRead: () => {
+        bodyReads++;
+      }
+    });
+    itemA.getAttachmentContentAsync = (_id, cb) =>
+      setTimeout(() => cb({ status: FAILED, error: { message: 'AttachmentTypeNotSupported' } }), 0);
+    Office.context.mailbox.item = itemA;
+
+    const ctx = await fetchCurrentMailContext();
+
+    expect(ctx.attachments[0].error).toBe('AttachmentTypeNotSupported');
+    expect(bodyReads).toBe(1);
+  });
+
+  test('a torn read that never settles still returns the email on the last attempt', async () => {
+    const staleB = makeMailItem({
+      itemId: 'B',
+      subject: 'Mail B',
+      bodyText: 'body of B',
+      attachments: [{ id: 'a1', name: 'report.pdf' }]
+    });
+    staleB.getAttachmentContentAsync = (_id, cb) =>
+      setTimeout(
+        () =>
+          cb({ status: FAILED, error: { message: 'The attachment identifier does not exist.' } }),
+        0
+      );
+    Office.context.mailbox.item = staleB;
+
+    const ctx = await fetchCurrentMailContext();
+
+    expect(ctx.available).toBe(true);
+    expect(ctx.bodyText).toBe('body of B');
+    expect(ctx.attachments[0].error).toMatch(/does not exist/);
+  });
+
   test('returns a full snapshot (subject, headers, body, attachment content) for a stable item', async () => {
     const itemA = makeMailItem({
       itemId: 'A',

@@ -21,8 +21,8 @@ describe('combineStarterPromptWithTypedText', () => {
   });
 
   test('keeps the typed note under the prompt message', () => {
-    expect(combineStarterPromptWithTypedText('Generate a reply', '  Jörg soll das machen. ')).toBe(
-      'Generate a reply\n\nJörg soll das machen.'
+    expect(combineStarterPromptWithTypedText('Generate a reply', '  Jonas soll das machen. ')).toBe(
+      'Generate a reply\n\nJonas soll das machen.'
     );
   });
 

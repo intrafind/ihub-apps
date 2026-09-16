@@ -260,7 +260,7 @@ test('a starter prompt keeps the note the user has already typed', async () => {
   });
 
   fireEvent.change(screen.getByLabelText('message'), {
-    target: { value: 'Jörg soll das machen.' }
+    target: { value: 'Jonas soll das machen.' }
   });
   fireEvent.click(screen.getByRole('button', { name: 'Generate a reply' }));
 
@@ -268,8 +268,8 @@ test('a starter prompt keeps the note the user has already typed', async () => {
   const call = mockSendMessage.mock.calls[0][0];
   // The prompt's message first, the note underneath — nothing is dropped, and
   // the chat shows exactly what went out.
-  expect(call.apiMessage.content).toBe('Generate a reply to this email.\n\nJörg soll das machen.');
+  expect(call.apiMessage.content).toBe('Generate a reply to this email.\n\nJonas soll das machen.');
   expect(call.displayMessage).toEqual({
-    content: 'Generate a reply to this email.\n\nJörg soll das machen.'
+    content: 'Generate a reply to this email.\n\nJonas soll das machen.'
   });
 });
