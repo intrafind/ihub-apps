@@ -4,6 +4,7 @@ import {
   fetchCurrentAppointmentContext,
   isOutlookAppointmentItemAvailable
 } from './outlookCalendarContext';
+import { readMailboxUserProfile, readMessageHeaders } from './outlookItemFields';
 
 export function isOutlookMailItemAvailable() {
   try {
@@ -184,6 +185,12 @@ export async function fetchCurrentOutlookItemContext() {
 // ItemChanged, which triggers a fresh fetch anyway — this just bounds one
 // call.
 const MAX_SNAPSHOT_ATTEMPTS = 3;
+// Pause before re-reading a torn snapshot, so the host can finish swapping
+// Office.context.mailbox.item to the newly selected email.
+const SNAPSHOT_RETRY_DELAY_MS = 200;
+// The host's error for an attachment id that does not belong to the item it
+// currently serves — the signature of a descriptor list read from a stale item.
+const INVALID_ATTACHMENT_ID_RE = /does not exist|InvalidAttachmentId|not part of this item/i;
 
 export async function fetchCurrentMailContext() {
   return withMailboxLock(fetchCurrentMailContextLocked);
@@ -204,7 +211,7 @@ async function fetchCurrentMailContextLocked() {
     const item = Office.context.mailbox.item;
     const itemId = item.itemId ?? null;
 
-    const { snapshot, aborted } = await readMailSnapshot(item, itemId);
+    const { snapshot, aborted, torn } = await readMailSnapshot(item, itemId);
 
     // Body and attachment content are host round-trips — the user may have
     // selected a different email while we were reading. A torn snapshot
@@ -213,6 +220,22 @@ async function fetchCurrentMailContextLocked() {
     // covers the switch-away-and-back case, where the live itemId matches
     // again by the time we check but the attachment list was cut short.
     if (aborted || getLiveItemId() !== itemId) continue;
+
+    // Right after ItemChanged the host can still hand out the previous
+    // email's cached fields (id, subject, attachment list) while the async
+    // body and attachment calls already run against the new one. The
+    // tell-tale sign is every attachment fetch failing with "attachment
+    // identifier does not exist": the descriptors and the served item
+    // disagree, and the pane would show the old attachments, each marked as
+    // failed, next to the new body. Re-read after a short pause; the last
+    // attempt returns what it got so the user still sees the email.
+    if (torn && attempt < MAX_SNAPSHOT_ATTEMPTS - 1) {
+      console.warn(
+        '[office] mail snapshot looks torn (every attachment fetch failed with an unknown id) — re-reading the item'
+      );
+      await new Promise(resolve => setTimeout(resolve, SNAPSHOT_RETRY_DELAY_MS));
+      continue;
+    }
     return snapshot;
   }
 
@@ -223,6 +246,13 @@ async function fetchCurrentMailContextLocked() {
   };
 }
 
+/**
+ * One atomic read of the item the user has open. The snapshot carries the
+ * body, the attachments and the headers the reply apps need — sender,
+ * recipients, creation time — plus the signed-in mailbox user, so the model
+ * can tell the user's own contributions in a quoted thread from everyone
+ * else's. Every header degrades to null / [] on its own.
+ */
 async function readMailSnapshot(item, itemId) {
   let bodyText = null;
   try {
@@ -233,6 +263,12 @@ async function readMailSnapshot(item, itemId) {
   try {
     subject = await getSubjectAsync(item);
   } catch {}
+
+  let headers = { from: null, to: [], cc: [], dateTimeCreated: null };
+  try {
+    headers = await readMessageHeaders(item);
+  } catch {}
+  const mailboxUser = readMailboxUserProfile();
 
   const descriptors = getAttachmentDescriptors(item);
   const attachments = [];
@@ -274,11 +310,22 @@ async function readMailSnapshot(item, itemId) {
     }
   }
 
+  const torn =
+    !aborted &&
+    attachments.length > 0 &&
+    attachments.every(a => a.error && INVALID_ATTACHMENT_ID_RE.test(String(a.error)));
+
   return {
+    torn,
     snapshot: {
       available: true,
       subject,
       itemId,
+      from: headers.from,
+      to: headers.to,
+      cc: headers.cc,
+      dateTimeCreated: headers.dateTimeCreated,
+      mailboxUser,
       bodyText,
       attachments
     },
@@ -378,8 +425,8 @@ async function unloadItemWithRetry(loadedItem) {
 }
 
 /**
- * Read body + subject for every email the user has currently selected in
- * Outlook (Ctrl-click multi-select). Requires Mailbox 1.15+ — callers should
+ * Read body, subject and headers for every email the user has currently
+ * selected in Outlook (Ctrl-click multi-select). Requires Mailbox 1.15+ — callers should
  * gate this behind `isMultiSelectBodySupported()` from officeCapabilities.js.
  *
  * Attachments are intentionally NOT pulled here: loadItemByIdAsync's loaded
@@ -416,11 +463,15 @@ async function fetchSelectedItemsContextLocked() {
     let loaded = null;
     try {
       loaded = await loadItemByIdAsync(stub.itemId);
-      const bodyText = await getLoadedItemBodyTextAsync(loaded);
+      const [bodyText, headers] = await Promise.all([
+        getLoadedItemBodyTextAsync(loaded),
+        readMessageHeaders(loaded)
+      ]);
       out.push({
         available: true,
         subject: stub.subject ?? null,
         itemId: stub.itemId,
+        ...headers,
         bodyText,
         attachments: []
       });

@@ -17,6 +17,15 @@ import { isMultiSelectBodySupported } from '../utilities/officeCapabilities';
  * attaches every email the user has Ctrl-selected in Outlook (Mailbox 1.15+)
  * and/or the email open in the reading pane, de-duplicated by item id.
  */
+// Sender / recipients / creation time as read by outlookMailContext — kept on
+// the pinned entry so the model sees who wrote each collected email.
+const headerFields = src => ({
+  from: src.from ?? null,
+  to: Array.isArray(src.to) ? src.to : [],
+  cc: Array.isArray(src.cc) ? src.cc : [],
+  dateTimeCreated: src.dateTimeCreated ?? null
+});
+
 export default function usePinnedEmails() {
   const [pinnedEmails, setPinnedEmails] = useState([]);
   const [addEmailsLoading, setAddEmailsLoading] = useState(false);
@@ -46,6 +55,7 @@ export default function usePinnedEmails() {
               pushEntry({
                 itemId: it.itemId ?? null,
                 subject: it.subject ?? null,
+                ...headerFields(it),
                 bodyText: it.bodyText ?? null,
                 attachments: []
               });
@@ -68,6 +78,7 @@ export default function usePinnedEmails() {
             const entry = {
               itemId: ctx.itemId ?? null,
               subject: ctx.subject ?? null,
+              ...headerFields(ctx),
               bodyText: ctx.bodyText ?? null,
               attachments: ctx.attachments ?? []
             };

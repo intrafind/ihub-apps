@@ -1,5 +1,7 @@
 /* global Office */
 
+import { getAsyncOrValue, normalizeRecipient, readRecipients, toIso } from './outlookItemFields';
+
 /**
  * Calendar / appointment counterpart to outlookMailContext.js.
  *
@@ -54,75 +56,6 @@ export function isOutlookAppointmentItemAvailable() {
   } catch {
     return false;
   }
-}
-
-function toIso(value) {
-  if (!value) return null;
-  try {
-    if (value instanceof Date) return value.toISOString();
-    if (typeof value === 'string') {
-      const d = new Date(value);
-      if (Number.isNaN(d.getTime())) return null;
-      return d.toISOString();
-    }
-    if (typeof value === 'number') {
-      const d = new Date(value);
-      return Number.isNaN(d.getTime()) ? null : d.toISOString();
-    }
-  } catch {
-    return null;
-  }
-  return null;
-}
-
-function normalizeRecipient(r) {
-  if (!r) return null;
-  const name = typeof r.displayName === 'string' ? r.displayName : null;
-  const email = typeof r.emailAddress === 'string' ? r.emailAddress : null;
-  if (!name && !email) return null;
-  return { name: name || email, email };
-}
-
-function normalizeRecipientList(list) {
-  if (!Array.isArray(list)) return [];
-  return list.map(normalizeRecipient).filter(Boolean);
-}
-
-/**
- * In read mode (AppointmentRead) most fields are plain values. In compose
- * mode (AppointmentCompose) the same fields are `Recipients` / async
- * objects and need `getAsync`. We feature-detect and resolve in both.
- */
-function getAsyncOrValue(maybeAsync) {
-  return new Promise(resolve => {
-    if (maybeAsync == null) {
-      resolve(null);
-      return;
-    }
-    if (typeof maybeAsync === 'string' || typeof maybeAsync === 'number') {
-      resolve(maybeAsync);
-      return;
-    }
-    if (maybeAsync instanceof Date) {
-      resolve(maybeAsync);
-      return;
-    }
-    if (typeof maybeAsync.getAsync === 'function') {
-      try {
-        maybeAsync.getAsync(result => {
-          if (result && result.status === Office.AsyncResultStatus.Succeeded) {
-            resolve(result.value);
-          } else {
-            resolve(null);
-          }
-        });
-      } catch {
-        resolve(null);
-      }
-      return;
-    }
-    resolve(maybeAsync);
-  });
 }
 
 function getBodyTextAsync() {
@@ -183,18 +116,6 @@ async function readOrganizer(item) {
     return null;
   }
   return normalizeRecipient(item.organizer);
-}
-
-async function readRecipients(recipients) {
-  if (!recipients) return [];
-  // Read mode: already an Array<EmailAddressDetails>.
-  if (Array.isArray(recipients)) return normalizeRecipientList(recipients);
-  // Compose mode: Recipients object with getAsync.
-  if (typeof recipients.getAsync === 'function') {
-    const val = await getAsyncOrValue(recipients);
-    return normalizeRecipientList(val);
-  }
-  return [];
 }
 
 export async function fetchCurrentAppointmentContext() {
