@@ -99,11 +99,11 @@ function useOfficeChatAdapter({ appId, chatId, onMessageComplete }) {
       // so this list will be empty when itemKind === 'appointment'.
       const pinnedEmails = Array.isArray(params?.pinnedEmails) ? params.pinnedEmails : [];
 
-      // Appointment surfaces inject a structured "Current meeting" block
+      // Appointment surfaces inject a structured <current_meeting> block
       // (subject, time, organizer, attendees, location, description)
-      // instead of the email-body block. The downstream prompt for the
+      // instead of the <current_email> block. The downstream prompt for the
       // meeting-agenda-generator / meeting-briefing apps references this
-      // section by name in its system prompt.
+      // block by its tag name in its system prompt.
       const isAppointment = ctx?.itemKind === 'appointment';
       const enrichedContent = isAppointment
         ? combineUserTextWithAppointmentContext({
@@ -112,7 +112,7 @@ function useOfficeChatAdapter({ appId, chatId, onMessageComplete }) {
           })
         : combineUserTextWithEmailContext({
             userText: apiMessage.content,
-            currentBodyText: ctx.bodyText,
+            currentEmail: ctx,
             currentItemId: ctx.itemId ?? null,
             pinned: pinnedEmails
           });

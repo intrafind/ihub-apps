@@ -52,10 +52,13 @@ export function getExtensionRedirectUri() {
  * preferred over the full page. Shape matches what `useOfficeChatAdapter`
  * expects from `host.readMessageContext()`:
  *
- *   { available, bodyText, attachments }
+ *   { available, itemKind: 'page', title, url, subject, bodyText, attachments }
  *
- * `attachments` is always an empty array in the extension because we don't
- * surface page resources as separate attachments today.
+ * `itemKind: 'page'` makes the adapter render the context as a
+ * <current_page> block with <title> and <url> tags instead of the Outlook
+ * <current_email> block. `attachments` is always an empty array in the
+ * extension because we don't surface page resources as separate attachments
+ * today.
  */
 export async function readActiveTabContext() {
   const empty = { available: false, bodyText: null, attachments: [] };
@@ -119,10 +122,14 @@ export async function readActiveTabContext() {
       console.info('[iHub] readActiveTabContext: extractor returned empty text', tab.url);
       return empty;
     }
-    const header = `# ${result.title || result.url}\n\nSource: ${result.url}\n\n`;
     return {
       available: true,
-      bodyText: header + result.text,
+      itemKind: 'page',
+      title: result.title || null,
+      url: result.url,
+      // The context banner shows `subject` as the card title.
+      subject: result.title || result.url,
+      bodyText: result.text,
       attachments: []
     };
   } catch (err) {

@@ -11,7 +11,10 @@ import { useOfficeFavoriteApps } from '../utilities/officeFavorites';
 import { useOfficeConfig } from '../contexts/OfficeConfigContext';
 import { officeLocale } from '../utilities/officeLocale';
 import { isOutlookAppointmentMode } from '../utilities/officeCapabilities';
-import { buildOfficeStarterPrompts } from '../utilities/officeStarterPrompts';
+import {
+  buildOfficeStarterPrompts,
+  combineStarterPromptWithTypedText
+} from '../utilities/officeStarterPrompts';
 import {
   OFFICE_START_PAGE_APPS_COUNT,
   pickOfficeDefaultApp,
@@ -169,12 +172,14 @@ function OfficeStartPage({ user, onLogout, onSelectApp, onStartChat, onBrowseApp
   // says so — otherwise the chat opens with the text ready to edit.
   const handlePromptSelect = useCallback(
     prompt => {
-      startChat(prompt.message, {
+      // A note the user has already typed rides along under the prompt's
+      // message instead of being dropped.
+      startChat(combineStarterPromptWithTypedText(prompt.message, draft), {
         starterPrompt: prompt.raw ?? null,
         autoSend: prompt.autoSend === true
       });
     },
-    [startChat]
+    [startChat, draft]
   );
 
   const currentItemId = mailSnapshot.ctx?.itemId ?? null;

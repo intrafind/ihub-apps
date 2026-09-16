@@ -30,7 +30,10 @@ import {
   formatFileDataAsPromptText
 } from '../utilities/buildChatApiMessages';
 import { isOutlookAppointmentMode } from '../utilities/officeCapabilities';
-import { buildOfficeStarterPrompts } from '../utilities/officeStarterPrompts';
+import {
+  buildOfficeStarterPrompts,
+  combineStarterPromptWithTypedText
+} from '../utilities/officeStarterPrompts';
 import { OFFICE_APPS_PAGE_PATH } from '../utilities/officeStartPage';
 import usePinnedEmails from '../hooks/usePinnedEmails';
 import { consumePendingChatStart } from '../../chat/startChatHandoff';
@@ -122,18 +125,21 @@ function OfficeChatPanel({
 
   // Build the email-context text that will be appended to the outgoing message
   // so ChatInput can include it in the live token-count estimate. This mirrors
-  // what combineUserTextWithEmailContext does at send time but with an empty
-  // userText so we only get the email blocks (the typed text is already counted
-  // separately by ChatInput).
-  const emailContextText = useMemo(() => {
-    const currentBodyText = mailSnapshot.includeBody ? mailSnapshot.ctx?.bodyText || '' : '';
-    return combineUserTextWithEmailContext({
-      userText: '',
-      currentBodyText,
-      currentItemId: mailSnapshot.ctx?.itemId,
-      pinned: pinnedEmails
-    });
-  }, [mailSnapshot.includeBody, mailSnapshot.ctx, pinnedEmails]);
+  // what combineUserTextWithEmailContext does at send time — the snapshot
+  // override already carries the user's body opt-out and attachment removals —
+  // but with an empty userText so we only get the email blocks (the typed text
+  // is already counted separately by ChatInput).
+  const { buildSnapshotOverride, ctx: mailCtx } = mailSnapshot;
+  const emailContextText = useMemo(
+    () =>
+      combineUserTextWithEmailContext({
+        userText: '',
+        currentEmail: buildSnapshotOverride(),
+        currentItemId: mailCtx?.itemId,
+        pinned: pinnedEmails
+      }),
+    [buildSnapshotOverride, mailCtx, pinnedEmails]
+  );
 
   // Attachment text for the live token estimate. The adapter extracts document
   // attachments (current email + pinned emails) into fileData at send time and
@@ -396,16 +402,20 @@ function OfficeChatPanel({
         );
       }
 
+      // A note the user has already typed rides along under the prompt's
+      // message instead of being replaced by it — otherwise "Generate a
+      // reply" silently threw the note away and the model answered without it.
+      const message = combineStarterPromptWithTypedText(prompt.message, inputValue);
       // If the selected prompt supports autoSend (or it's a default Outlook prompt which
       // always auto-sends), fire it directly without requiring the user to press send.
       if (prompt.autoSend) {
-        setInputValue(prompt.message);
-        submitMessage(prompt.message);
+        setInputValue(message);
+        submitMessage(message);
       } else {
-        setInputValue(prompt.message);
+        setInputValue(message);
       }
     },
-    [selectedApp, submitMessage]
+    [selectedApp, submitMessage, inputValue]
   );
 
   // Start-page handoff (issue #2368): the user collected emails, edited the

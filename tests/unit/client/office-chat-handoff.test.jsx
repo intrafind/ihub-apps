@@ -1,4 +1,4 @@
-import { render, screen, waitFor } from '@testing-library/react';
+import { fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { MemoryRouter } from 'react-router-dom';
 import '@testing-library/jest-dom';
 
@@ -114,7 +114,9 @@ jest.mock('../../../client/src/features/chat/components/ChatMessageList', () => 
 
 jest.mock('../../../client/src/features/chat/components/ChatInput', () => ({
   __esModule: true,
-  default: ({ value }) => <textarea aria-label="message" value={value} readOnly />
+  default: ({ value, onChange }) => (
+    <textarea aria-label="message" value={value} onChange={e => onChange?.(e)} />
+  )
 }));
 
 jest.mock('../../../client/src/features/office/components/chat/OfficeContextStrip', () => ({
@@ -243,4 +245,31 @@ test('a handoff for another app is left alone', async () => {
   await waitFor(() => expect(screen.getByLabelText('message')).toHaveValue(''));
   expect(mockSendMessage).not.toHaveBeenCalled();
   expect(consumePendingChatStart('other-app')).not.toBeNull();
+});
+
+test('a starter prompt keeps the note the user has already typed', async () => {
+  renderPanel({
+    ...app,
+    starterPrompts: [
+      {
+        title: { en: 'Generate a reply' },
+        message: { en: 'Generate a reply to this email.' },
+        autoSend: true
+      }
+    ]
+  });
+
+  fireEvent.change(screen.getByLabelText('message'), {
+    target: { value: 'Jörg soll das machen.' }
+  });
+  fireEvent.click(screen.getByRole('button', { name: 'Generate a reply' }));
+
+  await waitFor(() => expect(mockSendMessage).toHaveBeenCalledTimes(1));
+  const call = mockSendMessage.mock.calls[0][0];
+  // The prompt's message first, the note underneath — nothing is dropped, and
+  // the chat shows exactly what went out.
+  expect(call.apiMessage.content).toBe('Generate a reply to this email.\n\nJörg soll das machen.');
+  expect(call.displayMessage).toEqual({
+    content: 'Generate a reply to this email.\n\nJörg soll das machen.'
+  });
 });

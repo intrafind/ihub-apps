@@ -265,25 +265,45 @@ export function collectAttachmentsForSend(currentAttachments, pinnedEmails, curr
   return merged;
 }
 
-export function combineUserTextWithEmailBody(userText, emailBodyText) {
-  const u = (userText || '').trim();
-  const e = (emailBodyText || '').trim();
-  if (!e) return u;
-  if (!u) return `--- Current email ---\n${e}`;
-  return `${u}\n\n--- Current email ---\n${e}`;
+/**
+ * Tag names of the context blocks stitched into the outgoing message. App
+ * prompts refer to them by name ("the email in <current_email>", "the note in
+ * <user_instruction>"), so a rename is a breaking change for every
+ * Outlook-aware app prompt — see docs/outlook-add-in.md, "What the model
+ * receives".
+ */
+export const CONTEXT_TAGS = Object.freeze({
+  userInstruction: 'user_instruction',
+  currentEmail: 'current_email',
+  currentPage: 'current_page',
+  pinnedEmails: 'pinned_emails',
+  currentMeeting: 'current_meeting'
+});
+
+function wrapTag(tag, content) {
+  return `<${tag}>\n${content}\n</${tag}>`;
 }
 
-function formatAttendeesForPrompt(list) {
+function inlineTag(tag, value) {
+  return `<${tag}>${value}</${tag}>`;
+}
+
+/**
+ * `{ name, email }` → "Name (email)", or whichever part exists. Parentheses
+ * rather than the RFC 5322 "Name <email>" form so no stray angle brackets end
+ * up inside the tagged blocks.
+ */
+function formatIdentity(person) {
+  if (!person) return '';
+  const name = (person.name || '').trim();
+  const email = (person.email || '').trim();
+  if (name && email && name !== email) return `${name} (${email})`;
+  return name || email;
+}
+
+function formatIdentityList(list) {
   if (!Array.isArray(list) || list.length === 0) return '';
-  return list
-    .map(a => {
-      const name = (a?.name || '').trim();
-      const email = (a?.email || '').trim();
-      if (name && email && name !== email) return `${name} <${email}>`;
-      return name || email;
-    })
-    .filter(Boolean)
-    .join(', ');
+  return list.map(formatIdentity).filter(Boolean).join(', ');
 }
 
 function formatIsoForPrompt(iso) {
@@ -304,115 +324,180 @@ function formatIsoForPrompt(iso) {
 }
 
 /**
- * Build the calendar block stitched into the outgoing chat message when
- * the user is on an appointment surface. Mirrors `combineUserTextWith*`
- * for email: produces a labeled section that the system prompt can refer
- * to without us having to update every meeting-related app's prompt
- * template separately.
+ * Header lines shared by the current email and pinned emails. Each header is
+ * emitted only when the host delivered it — older Outlook builds or the
+ * lightweight multi-select reader may leave some of them empty.
  */
-export function combineUserTextWithAppointmentContext({ userText, appointmentCtx }) {
-  const u = (userText || '').trim();
-  if (!appointmentCtx || appointmentCtx.available === false) return u;
-
+function formatEmailHeaderLines(email) {
   const lines = [];
-  if (appointmentCtx.subject) lines.push(`Subject: ${appointmentCtx.subject}`);
-  if (appointmentCtx.isOrganizer) lines.push(`Your role: Organizer`);
-  else if (appointmentCtx.organizer?.email) lines.push(`Your role: Attendee`);
-
-  const start = formatIsoForPrompt(appointmentCtx.start);
-  const end = formatIsoForPrompt(appointmentCtx.end);
-  if (start && end) lines.push(`When: ${start} – ${end}`);
-  else if (start) lines.push(`When: ${start}`);
-
-  if (appointmentCtx.location) lines.push(`Location: ${appointmentCtx.location}`);
-
-  if (appointmentCtx.organizer) {
-    const o = appointmentCtx.organizer;
-    const display =
-      o.name && o.email && o.name !== o.email ? `${o.name} <${o.email}>` : o.name || o.email;
-    if (display) lines.push(`Organizer: ${display}`);
-  }
-
-  const required = formatAttendeesForPrompt(appointmentCtx.requiredAttendees);
-  if (required) lines.push(`Required attendees: ${required}`);
-  const optional = formatAttendeesForPrompt(appointmentCtx.optionalAttendees);
-  if (optional) lines.push(`Optional attendees: ${optional}`);
-
-  const body = (appointmentCtx.bodyText || '').trim();
-  if (body) {
-    lines.push('');
-    lines.push('Description:');
-    lines.push(body);
-  }
-
-  if (lines.length === 0) return u;
-  const meetingBlock = `--- Current meeting ---\n${lines.join('\n')}`;
-  if (!u) return meetingBlock;
-  return `${u}\n\n${meetingBlock}`;
-}
-
-function formatPinnedEmail(p, idx) {
-  const subject = (p?.subject || '').trim();
-  const body = (p?.bodyText || '').trim();
-  const header = `[${idx + 1}]${subject ? ` Subject: ${subject}` : ''}`;
-  return body ? `${header}\n${body}` : header;
+  const from = formatIdentity(email?.from);
+  if (from) lines.push(inlineTag('from', from));
+  const to = formatIdentityList(email?.to);
+  if (to) lines.push(inlineTag('to', to));
+  const cc = formatIdentityList(email?.cc);
+  if (cc) lines.push(inlineTag('cc', cc));
+  const date = formatIsoForPrompt(email?.dateTimeCreated);
+  if (date) lines.push(inlineTag('date', date));
+  const subject = (email?.subject || '').trim();
+  if (subject) lines.push(inlineTag('subject', subject));
+  return lines;
 }
 
 /**
- * Stitch user text together with the current Outlook mail item and any
- * pinned-from-other-emails context. Output shape stays identical to
- * `combineUserTextWithEmailBody` when `pinned` is empty so the
- * single-email flow is a strict no-op regression-wise.
+ * The current Outlook email — or, in the browser extension, the active tab —
+ * as one tagged block. Email headers ride along even when the user excluded
+ * the body via the context strip: the strip still shows the subject, and a
+ * reply has to know who it is answering. A page without text is dropped
+ * entirely; its title and URL are not context on their own.
  *
- * @param {Object}    args
- * @param {string}    args.userText                 What the user typed.
- * @param {string|null} args.currentBodyText        Body of Office.context.mailbox.item
- *                                                  (already stripped by the user's
- *                                                  context-toggle if they turned it off).
- * @param {string|null} [args.currentItemId]        itemId of the current Outlook item —
- *                                                  used to dedupe against pinned[].
- * @param {Array<{subject?: string, bodyText?: string|null, itemId?: string|null}>} [args.pinned]
- *                                                  Emails the user explicitly attached to this
- *                                                  message (pin/collect mode, or bulk-pulled via
- *                                                  native multi-select).
+ * Returns '' when there is nothing to send.
  */
-export function combineUserTextWithEmailContext({
-  userText,
-  currentBodyText,
-  currentItemId,
-  pinned
-}) {
-  const list = Array.isArray(pinned) ? pinned : [];
-  if (list.length === 0) {
-    return combineUserTextWithEmailBody(userText, currentBodyText);
+export function formatCurrentEmailBlock(email) {
+  if (!email || email.available === false) return '';
+  const body = (email.bodyText || '').trim();
+
+  if (email.itemKind === 'page') {
+    if (!body) return '';
+    const lines = [];
+    const title = (email.title || '').trim();
+    if (title) lines.push(inlineTag('title', title));
+    const url = (email.url || '').trim();
+    if (url) lines.push(inlineTag('url', url));
+    lines.push(wrapTag('body', body));
+    return wrapTag(CONTEXT_TAGS.currentPage, lines.join('\n'));
   }
 
-  const u = (userText || '').trim();
+  const lines = formatEmailHeaderLines(email);
+  const me = formatIdentity(email.mailboxUser);
+  if (me) lines.push(inlineTag('mailbox_user', me));
+  if (body) lines.push(wrapTag('body', body));
+  if (lines.length === 0) return '';
+  return wrapTag(CONTEXT_TAGS.currentEmail, lines.join('\n'));
+}
+
+function formatPinnedEmail(p, idx) {
+  const lines = formatEmailHeaderLines(p);
+  const body = (p?.bodyText || '').trim();
+  if (body) lines.push(wrapTag('body', body));
+  return `<email index="${idx + 1}">\n${lines.join('\n')}\n</email>`;
+}
+
+/**
+ * Emails the user pinned or bulk-selected, de-duplicated against each other
+ * and against the current item. Returns '' when none survive.
+ */
+export function formatPinnedEmailsBlock(pinned, currentItemId) {
+  const list = Array.isArray(pinned) ? pinned : [];
   const seen = new Set();
-  const dedupedPinned = [];
+  const deduped = [];
   for (const p of list) {
     const id = p?.itemId;
     if (id && currentItemId && id === currentItemId) continue;
     if (id && seen.has(id)) continue;
     if (id) seen.add(id);
     if (!(p?.subject || '').trim() && !(p?.bodyText || '').trim()) continue;
-    dedupedPinned.push(p);
+    deduped.push(p);
   }
+  if (deduped.length === 0) return '';
+  return wrapTag(
+    CONTEXT_TAGS.pinnedEmails,
+    deduped.map((p, i) => formatPinnedEmail(p, i)).join('\n')
+  );
+}
 
+function formatUserInstructionBlock(userText) {
+  const u = (userText || '').trim();
+  return u ? wrapTag(CONTEXT_TAGS.userInstruction, u) : '';
+}
+
+/**
+ * Stitch what the user typed together with the current Outlook item and any
+ * pinned emails into the message the model sees:
+ *
+ *   <pinned_emails>…</pinned_emails>        only when something is pinned
+ *
+ *   <current_email>                         <current_page> in the extension
+ *   <from>…</from> <to>…</to> <cc>…</cc> <date>…</date> <subject>…</subject>
+ *   <mailbox_user>…</mailbox_user>
+ *   <body>…</body>
+ *   </current_email>
+ *
+ *   <user_instruction>…</user_instruction>
+ *
+ * Source material comes first and the user's own words last, right where the
+ * app's prompt template continues, so the model cannot mistake the note for
+ * one more quoted paragraph of the thread and never has to find it behind a
+ * long conversation. Without any host context the typed text goes out
+ * untouched, exactly as in the regular web app.
+ *
+ * @param {Object} args
+ * @param {string} args.userText             What the user typed.
+ * @param {Object|null} args.currentEmail    Host context of the current item: the
+ *                                           snapshot from `readMessageContext`, with the
+ *                                           user's body opt-out and attachment removals
+ *                                           already applied.
+ * @param {string|null} [args.currentItemId] itemId of the current item — used to dedupe
+ *                                           `pinned` against it.
+ * @param {Array<{subject?: string, bodyText?: string|null, itemId?: string|null}>} [args.pinned]
+ *                                           Emails the user explicitly attached (pin/collect
+ *                                           mode, or bulk-pulled via native multi-select).
+ */
+export function combineUserTextWithEmailContext({ userText, currentEmail, currentItemId, pinned }) {
   const segments = [];
-  if (u) segments.push(u);
+  const pinnedBlock = formatPinnedEmailsBlock(
+    pinned,
+    currentItemId ?? currentEmail?.itemId ?? null
+  );
+  if (pinnedBlock) segments.push(pinnedBlock);
+  const currentBlock = formatCurrentEmailBlock(currentEmail);
+  if (currentBlock) segments.push(currentBlock);
 
-  if (dedupedPinned.length > 0) {
-    const pinnedBlock = dedupedPinned.map((p, i) => formatPinnedEmail(p, i)).join('\n\n');
-    segments.push(`--- Pinned emails (${dedupedPinned.length}) ---\n${pinnedBlock}`);
-  }
-
-  const currentBody = (currentBodyText || '').trim();
-  if (currentBody) {
-    segments.push(`--- Current email ---\n${currentBody}`);
-  }
-
+  const u = (userText || '').trim();
+  if (segments.length === 0) return u;
+  const instruction = formatUserInstructionBlock(u);
+  if (instruction) segments.push(instruction);
   return segments.join('\n\n');
+}
+
+/**
+ * Calendar counterpart of `combineUserTextWithEmailContext`: the appointment
+ * the user is looking at as a <current_meeting> block, followed by the typed
+ * text in <user_instruction>. The meeting-agenda-generator and
+ * meeting-briefing apps reference the block by its tag name.
+ */
+export function combineUserTextWithAppointmentContext({ userText, appointmentCtx }) {
+  const u = (userText || '').trim();
+  if (!appointmentCtx || appointmentCtx.available === false) return u;
+
+  const lines = [];
+  const subject = (appointmentCtx.subject || '').trim();
+  if (subject) lines.push(inlineTag('subject', subject));
+  if (appointmentCtx.isOrganizer) lines.push(inlineTag('your_role', 'Organizer'));
+  else if (appointmentCtx.organizer?.email) lines.push(inlineTag('your_role', 'Attendee'));
+
+  const start = formatIsoForPrompt(appointmentCtx.start);
+  const end = formatIsoForPrompt(appointmentCtx.end);
+  if (start && end) lines.push(inlineTag('when', `${start} – ${end}`));
+  else if (start) lines.push(inlineTag('when', start));
+
+  const location = (appointmentCtx.location || '').trim();
+  if (location) lines.push(inlineTag('location', location));
+
+  const organizer = formatIdentity(appointmentCtx.organizer);
+  if (organizer) lines.push(inlineTag('organizer', organizer));
+
+  const required = formatIdentityList(appointmentCtx.requiredAttendees);
+  if (required) lines.push(inlineTag('required_attendees', required));
+  const optional = formatIdentityList(appointmentCtx.optionalAttendees);
+  if (optional) lines.push(inlineTag('optional_attendees', optional));
+
+  const body = (appointmentCtx.bodyText || '').trim();
+  if (body) lines.push(wrapTag('description', body));
+
+  if (lines.length === 0) return u;
+  const meetingBlock = wrapTag(CONTEXT_TAGS.currentMeeting, lines.join('\n'));
+  const instruction = formatUserInstructionBlock(u);
+  return instruction ? `${meetingBlock}\n\n${instruction}` : meetingBlock;
 }
 
 export function buildPromptTemplate(selectedStarterPrompt, selectedApp) {

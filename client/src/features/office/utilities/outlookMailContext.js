@@ -4,6 +4,7 @@ import {
   fetchCurrentAppointmentContext,
   isOutlookAppointmentItemAvailable
 } from './outlookCalendarContext';
+import { readMailboxUserProfile, readMessageHeaders } from './outlookItemFields';
 
 export function isOutlookMailItemAvailable() {
   try {
@@ -223,6 +224,13 @@ async function fetchCurrentMailContextLocked() {
   };
 }
 
+/**
+ * One atomic read of the item the user has open. The snapshot carries the
+ * body, the attachments and the headers the reply apps need — sender,
+ * recipients, creation time — plus the signed-in mailbox user, so the model
+ * can tell the user's own contributions in a quoted thread from everyone
+ * else's. Every header degrades to null / [] on its own.
+ */
 async function readMailSnapshot(item, itemId) {
   let bodyText = null;
   try {
@@ -233,6 +241,12 @@ async function readMailSnapshot(item, itemId) {
   try {
     subject = await getSubjectAsync(item);
   } catch {}
+
+  let headers = { from: null, to: [], cc: [], dateTimeCreated: null };
+  try {
+    headers = await readMessageHeaders(item);
+  } catch {}
+  const mailboxUser = readMailboxUserProfile();
 
   const descriptors = getAttachmentDescriptors(item);
   const attachments = [];
@@ -279,6 +293,11 @@ async function readMailSnapshot(item, itemId) {
       available: true,
       subject,
       itemId,
+      from: headers.from,
+      to: headers.to,
+      cc: headers.cc,
+      dateTimeCreated: headers.dateTimeCreated,
+      mailboxUser,
       bodyText,
       attachments
     },
@@ -378,8 +397,8 @@ async function unloadItemWithRetry(loadedItem) {
 }
 
 /**
- * Read body + subject for every email the user has currently selected in
- * Outlook (Ctrl-click multi-select). Requires Mailbox 1.15+ — callers should
+ * Read body, subject and headers for every email the user has currently
+ * selected in Outlook (Ctrl-click multi-select). Requires Mailbox 1.15+ — callers should
  * gate this behind `isMultiSelectBodySupported()` from officeCapabilities.js.
  *
  * Attachments are intentionally NOT pulled here: loadItemByIdAsync's loaded
@@ -416,11 +435,15 @@ async function fetchSelectedItemsContextLocked() {
     let loaded = null;
     try {
       loaded = await loadItemByIdAsync(stub.itemId);
-      const bodyText = await getLoadedItemBodyTextAsync(loaded);
+      const [bodyText, headers] = await Promise.all([
+        getLoadedItemBodyTextAsync(loaded),
+        readMessageHeaders(loaded)
+      ]);
       out.push({
         available: true,
         subject: stub.subject ?? null,
         itemId: stub.itemId,
+        ...headers,
         bodyText,
         attachments: []
       });

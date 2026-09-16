@@ -52,7 +52,9 @@ const {
   buildImageDataFromMailAttachments,
   buildFileDataFromMailAttachments,
   collectAttachmentsForSend,
-  formatFileDataAsPromptText
+  formatFileDataAsPromptText,
+  combineUserTextWithEmailContext,
+  combineUserTextWithAppointmentContext
 } = require('../../../client/src/features/office/utilities/buildChatApiMessages');
 
 // JSDom doesn't implement createObjectURL by default — stub it so the
@@ -473,5 +475,186 @@ describe('formatFileDataAsPromptText', () => {
     expect(formatFileDataAsPromptText(null)).toBe('');
     expect(formatFileDataAsPromptText([])).toBe('');
     expect(formatFileDataAsPromptText(undefined)).toBe('');
+  });
+});
+
+describe('combineUserTextWithEmailContext', () => {
+  const email = {
+    available: true,
+    itemKind: 'message',
+    itemId: 'ITEM-1',
+    subject: 'AW: Demo',
+    from: { name: 'Daniel Lieckfeldt', email: 'daniel.lieckfeldt@example.com' },
+    to: [
+      { name: 'Jörg Issel', email: 'joerg@example.com' },
+      { name: 'Daniel Manzke', email: 'daniel.manzke@example.com' }
+    ],
+    cc: [{ name: 'Nelson', email: 'nelson@example.com' }],
+    dateTimeCreated: '2026-09-15T15:02:00.000Z',
+    mailboxUser: { name: 'Daniel Manzke', email: 'daniel.manzke@example.com' },
+    bodyText: 'Hey zusammen,\n\nbitte passt die Laufzeiten an.',
+    attachments: []
+  };
+
+  test('tags the email with its headers first and the typed note last in <user_instruction>', () => {
+    const out = combineUserTextWithEmailContext({
+      userText: 'Jörg soll das machen.',
+      currentEmail: email,
+      currentItemId: 'ITEM-1',
+      pinned: []
+    });
+
+    expect(out.startsWith('<current_email>\n')).toBe(true);
+    expect(out).toContain('<from>Daniel Lieckfeldt (daniel.lieckfeldt@example.com)</from>');
+    expect(out).toContain(
+      '<to>Jörg Issel (joerg@example.com), Daniel Manzke (daniel.manzke@example.com)</to>'
+    );
+    expect(out).toContain('<cc>Nelson (nelson@example.com)</cc>');
+    expect(out).toMatch(/<date>[^<]*2026[^<]*<\/date>/);
+    expect(out).toContain('<subject>AW: Demo</subject>');
+    expect(out).toContain('<mailbox_user>Daniel Manzke (daniel.manzke@example.com)</mailbox_user>');
+    expect(out).toContain(
+      '<body>\nHey zusammen,\n\nbitte passt die Laufzeiten an.\n</body>\n</current_email>'
+    );
+    expect(out.endsWith('\n\n<user_instruction>\nJörg soll das machen.\n</user_instruction>')).toBe(
+      true
+    );
+    // The note comes after the source material, never in front of it.
+    expect(out.indexOf('</current_email>')).toBeLessThan(out.indexOf('<user_instruction>'));
+    expect(out).not.toContain('--- Current email ---');
+  });
+
+  test('sends the typed text untouched when there is no host context', () => {
+    expect(
+      combineUserTextWithEmailContext({ userText: 'Hello', currentEmail: null, pinned: [] })
+    ).toBe('Hello');
+    expect(
+      combineUserTextWithEmailContext({
+        userText: 'Hello',
+        currentEmail: { available: false, bodyText: null, attachments: [] },
+        pinned: []
+      })
+    ).toBe('Hello');
+  });
+
+  test('keeps the headers when the user excluded the body', () => {
+    const out = combineUserTextWithEmailContext({
+      userText: '',
+      currentEmail: { ...email, bodyText: null },
+      pinned: []
+    });
+
+    expect(out).toContain('<from>Daniel Lieckfeldt');
+    expect(out).toContain('<subject>AW: Demo</subject>');
+    expect(out).not.toContain('<body>');
+    expect(out).not.toContain('<user_instruction>');
+  });
+
+  test('omits headers the host did not deliver', () => {
+    const out = combineUserTextWithEmailContext({
+      userText: 'x',
+      currentEmail: { available: true, bodyText: 'Body only', attachments: [] },
+      pinned: []
+    });
+
+    expect(out).toBe(
+      '<current_email>\n<body>\nBody only\n</body>\n</current_email>\n\n<user_instruction>\nx\n</user_instruction>'
+    );
+  });
+
+  test('pinned emails come first, deduplicated against the current item and each other', () => {
+    const pinned = [
+      { itemId: 'ITEM-1', subject: 'AW: Demo', bodyText: 'dup of current' },
+      {
+        itemId: 'P-1',
+        subject: 'Budget',
+        bodyText: 'Budget ok',
+        from: { name: 'Phil', email: 'phil@example.com' }
+      },
+      { itemId: 'P-1', subject: 'Budget', bodyText: 'Budget ok' },
+      { itemId: 'P-2', subject: '', bodyText: '' }
+    ];
+
+    const out = combineUserTextWithEmailContext({
+      userText: 'Summarize',
+      currentEmail: email,
+      currentItemId: 'ITEM-1',
+      pinned
+    });
+
+    expect(
+      out.startsWith(
+        '<pinned_emails>\n<email index="1">\n<from>Phil (phil@example.com)</from>\n<subject>Budget</subject>\n<body>\nBudget ok\n</body>\n</email>\n</pinned_emails>\n\n<current_email>'
+      )
+    ).toBe(true);
+    expect(out).not.toContain('index="2"');
+    expect(out).not.toContain('dup of current');
+    expect(out.endsWith('<user_instruction>\nSummarize\n</user_instruction>')).toBe(true);
+  });
+
+  test('renders the browser extension page as <current_page> and drops it without text', () => {
+    const page = {
+      available: true,
+      itemKind: 'page',
+      title: 'Docs',
+      url: 'https://example.com/docs',
+      subject: 'Docs',
+      bodyText: 'Page text',
+      attachments: []
+    };
+
+    expect(
+      combineUserTextWithEmailContext({ userText: 'Summarize', currentEmail: page, pinned: [] })
+    ).toBe(
+      '<current_page>\n<title>Docs</title>\n<url>https://example.com/docs</url>\n<body>\nPage text\n</body>\n</current_page>\n\n<user_instruction>\nSummarize\n</user_instruction>'
+    );
+    expect(
+      combineUserTextWithEmailContext({
+        userText: 'Summarize',
+        currentEmail: { ...page, bodyText: null },
+        pinned: []
+      })
+    ).toBe('Summarize');
+  });
+});
+
+describe('combineUserTextWithAppointmentContext', () => {
+  test('renders the meeting as <current_meeting> followed by the typed note', () => {
+    const out = combineUserTextWithAppointmentContext({
+      userText: 'Draft an agenda',
+      appointmentCtx: {
+        available: true,
+        itemKind: 'appointment',
+        subject: 'Planning',
+        isOrganizer: true,
+        start: '2026-09-15T08:00:00.000Z',
+        end: '2026-09-15T09:00:00.000Z',
+        location: 'Room A',
+        organizer: { name: 'Ada', email: 'ada@example.com' },
+        requiredAttendees: [{ name: 'Bob', email: 'bob@example.com' }],
+        optionalAttendees: [],
+        bodyText: 'Quarterly planning'
+      }
+    });
+
+    expect(
+      out.startsWith(
+        '<current_meeting>\n<subject>Planning</subject>\n<your_role>Organizer</your_role>\n<when>'
+      )
+    ).toBe(true);
+    expect(out).toContain(
+      '<location>Room A</location>\n<organizer>Ada (ada@example.com)</organizer>\n<required_attendees>Bob (bob@example.com)</required_attendees>\n<description>\nQuarterly planning\n</description>\n</current_meeting>'
+    );
+    expect(out.endsWith('\n\n<user_instruction>\nDraft an agenda\n</user_instruction>')).toBe(true);
+    expect(out).not.toContain('--- Current meeting ---');
+  });
+
+  test('returns the typed text alone without an appointment', () => {
+    expect(
+      combineUserTextWithAppointmentContext({
+        userText: 'Hi',
+        appointmentCtx: { available: false }
+      })
+    ).toBe('Hi');
   });
 });

@@ -30,7 +30,12 @@ function installOfficeMock() {
   global.Office = {
     AsyncResultStatus: { Succeeded: SUCCEEDED, Failed: FAILED },
     CoercionType: { Text: 'text' },
-    context: { mailbox: { item: null } }
+    context: {
+      mailbox: {
+        item: null,
+        userProfile: { displayName: 'Ada Lovelace', emailAddress: 'ada@example.com' }
+      }
+    }
   };
   return global.Office;
 }
@@ -42,11 +47,25 @@ function installOfficeMock() {
  * proxy the call went through — foreign ids fail with the canonical
  * InvalidAttachmentId message.
  */
-function makeMailItem({ itemId, subject, bodyText, attachments = [], onBodyRead }) {
+function makeMailItem({
+  itemId,
+  subject,
+  bodyText,
+  attachments = [],
+  onBodyRead,
+  from,
+  to,
+  cc,
+  dateTimeCreated
+}) {
   const item = {
     itemId,
     itemType: 'message',
     subject,
+    from,
+    to,
+    cc,
+    dateTimeCreated,
     attachments: attachments.map(a => ({
       id: a.id,
       name: a.name,
@@ -90,11 +109,15 @@ afterEach(() => {
 });
 
 describe('fetchCurrentMailContext', () => {
-  test('returns a full snapshot (subject, body, attachment content) for a stable item', async () => {
+  test('returns a full snapshot (subject, headers, body, attachment content) for a stable item', async () => {
     const itemA = makeMailItem({
       itemId: 'A',
       subject: 'Mail A',
       bodyText: 'body of A',
+      from: { displayName: 'Grace Hopper', emailAddress: 'grace@example.com' },
+      to: [{ displayName: 'Ada Lovelace', emailAddress: 'ada@example.com' }],
+      cc: [{ displayName: 'Linus', emailAddress: 'linus@example.com' }],
+      dateTimeCreated: new Date('2026-09-15T15:02:00Z'),
       attachments: [
         { id: 'a1', name: 'report.pdf' },
         { id: 'a2', name: 'logo.png', contentType: 'image/png', isInline: true }
@@ -108,6 +131,11 @@ describe('fetchCurrentMailContext', () => {
     expect(ctx.itemId).toBe('A');
     expect(ctx.subject).toBe('Mail A');
     expect(ctx.bodyText).toBe('body of A');
+    expect(ctx.from).toEqual({ name: 'Grace Hopper', email: 'grace@example.com' });
+    expect(ctx.to).toEqual([{ name: 'Ada Lovelace', email: 'ada@example.com' }]);
+    expect(ctx.cc).toEqual([{ name: 'Linus', email: 'linus@example.com' }]);
+    expect(ctx.dateTimeCreated).toBe('2026-09-15T15:02:00.000Z');
+    expect(ctx.mailboxUser).toEqual({ name: 'Ada Lovelace', email: 'ada@example.com' });
     expect(ctx.attachments).toHaveLength(2);
     expect(ctx.attachments[0]).toMatchObject({
       id: 'a1',
@@ -255,7 +283,12 @@ describe('fetchCurrentMailContext', () => {
 });
 
 describe('fetchSelectedItemsContext', () => {
-  function installMultiSelectMocks({ stubs, loadedBodies = {}, unloadFailures = {} }) {
+  function installMultiSelectMocks({
+    stubs,
+    loadedBodies = {},
+    loadedHeaders = {},
+    unloadFailures = {}
+  }) {
     const calls = { load: [], unload: [] };
     Office.context.mailbox.getSelectedItemsAsync = cb => {
       setTimeout(() => cb({ status: SUCCEEDED, value: stubs }), 0);
@@ -263,6 +296,8 @@ describe('fetchSelectedItemsContext', () => {
     Office.context.mailbox.loadItemByIdAsync = (itemId, cb) => {
       calls.load.push(itemId);
       const loaded = {
+        // LoadedMessageRead exposes from/to/cc/dateTimeCreated as plain values.
+        ...(loadedHeaders[itemId] ?? {}),
         body: {
           getAsync: (_c, bodyCb) =>
             setTimeout(() => bodyCb({ status: SUCCEEDED, value: loadedBodies[itemId] ?? null }), 0)
@@ -303,14 +338,42 @@ describe('fetchSelectedItemsContext', () => {
         { itemId: 'A', subject: 'Mail A' },
         { itemId: 'B', subject: 'Mail B' }
       ],
-      loadedBodies: { A: 'body A', B: 'body B' }
+      loadedBodies: { A: 'body A', B: 'body B' },
+      loadedHeaders: {
+        A: {
+          from: { displayName: 'Grace Hopper', emailAddress: 'grace@example.com' },
+          dateTimeCreated: new Date('2026-09-15T15:02:00Z')
+        }
+      }
     });
 
     const out = await fetchSelectedItemsContext();
 
+    // Headers ride along from the loaded item; fields a host does not expose
+    // degrade to null / [] instead of failing the read.
     expect(out).toEqual([
-      { available: true, subject: 'Mail A', itemId: 'A', bodyText: 'body A', attachments: [] },
-      { available: true, subject: 'Mail B', itemId: 'B', bodyText: 'body B', attachments: [] }
+      {
+        available: true,
+        subject: 'Mail A',
+        itemId: 'A',
+        from: { name: 'Grace Hopper', email: 'grace@example.com' },
+        to: [],
+        cc: [],
+        dateTimeCreated: '2026-09-15T15:02:00.000Z',
+        bodyText: 'body A',
+        attachments: []
+      },
+      {
+        available: true,
+        subject: 'Mail B',
+        itemId: 'B',
+        from: null,
+        to: [],
+        cc: [],
+        dateTimeCreated: null,
+        bodyText: 'body B',
+        attachments: []
+      }
     ]);
     expect(calls.load).toEqual(['A', 'B']);
     expect(calls.unload).toEqual(['A', 'B']);
@@ -345,7 +408,17 @@ describe('fetchSelectedItemsContext', () => {
     const out = await fetchSelectedItemsContext();
 
     expect(out).toEqual([
-      { available: true, subject: 'Mail A', itemId: 'A', bodyText: 'body A', attachments: [] }
+      {
+        available: true,
+        subject: 'Mail A',
+        itemId: 'A',
+        from: null,
+        to: [],
+        cc: [],
+        dateTimeCreated: null,
+        bodyText: 'body A',
+        attachments: []
+      }
     ]);
     expect(calls.load).toEqual(['A']);
     expect(calls.unload).toEqual(['A']);

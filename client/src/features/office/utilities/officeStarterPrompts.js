@@ -42,3 +42,24 @@ export function buildOfficeStarterPrompts({ app, officeConfig, isAppointment = f
     autoSend: true
   }));
 }
+
+/**
+ * The message a starter prompt sends when the user has already typed
+ * something. Clicking "Generate a reply" used to replace the typed text with
+ * the prompt's message and drop it silently — the model then answered the
+ * email without the note the user had written for it. Now the typed text
+ * rides along under the prompt's message, so the button acts on the note
+ * instead of discarding it. Returns the prompt message alone when nothing was
+ * typed.
+ *
+ * @param {string} starterMessage - The prompt's configured message.
+ * @param {string} typedText - What the user has in the input.
+ * @returns {string}
+ */
+export function combineStarterPromptWithTypedText(starterMessage, typedText) {
+  const starter = (starterMessage || '').trim();
+  const typed = (typedText || '').trim();
+  if (!typed) return starter;
+  if (!starter) return typed;
+  return `${starter}\n\n${typed}`;
+}
