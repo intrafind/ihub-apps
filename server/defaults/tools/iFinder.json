@@ -12,8 +12,8 @@
   "functions": {
     "search": {
       "description": {
-        "en": "Search documents in iFinder using the IntraFind query syntax (Lucene plus NEAR/, MODE/, THES/, ENTITY/ and other operators). Field-qualified terms (title:budget, creators:\"DOE, John\") search the analyzed field; exact-value matching, faceting and sorting need the `.keyword` variant of a text field. Call iFinder_getFields first when unsure which name a field takes.",
-        "de": "Dokumente in iFinder mit der IntraFind-Syntax suchen (Lucene plus die Operatoren NEAR/, MODE/, THES/, ENTITY/ und weitere). Feldbezogene Terme (title:budget, creators:\"DOE, John\") durchsuchen das analysierte Feld; exakte Werte, Facetten und Sortierung benötigen die `.keyword`-Variante eines Textfelds. Bei Unsicherheit zuerst iFinder_getFields aufrufen."
+        "en": "Search documents in iFinder using the IntraFind query syntax (Lucene plus NEAR/, MODE/, THES/, ENTITY/ and other operators). Field-qualified terms (title:budget, creators:\"DOE, John\") search the analyzed field; exact-value matching, faceting and sorting need the `.keyword` variant of a text field. Call iFinder_getFields first when unsure which name a field takes. The `ifinder-search` skill — MCP resource `ihub://skill/ifinder-search`, with its references as resources of their own — carries the full query syntax, the discovery loop and the fixes for a search that returns nothing or the wrong thing.",
+        "de": "Dokumente in iFinder mit der IntraFind-Syntax suchen (Lucene plus die Operatoren NEAR/, MODE/, THES/, ENTITY/ und weitere). Feldbezogene Terme (title:budget, creators:\"DOE, John\") durchsuchen das analysierte Feld; exakte Werte, Facetten und Sortierung benötigen die `.keyword`-Variante eines Textfelds. Bei Unsicherheit zuerst iFinder_getFields aufrufen. Das Skill `ifinder-search` — MCP-Ressource `ihub://skill/ifinder-search`, dessen Referenzdateien eigene Ressourcen sind — enthält die vollständige Query-Syntax, den Discovery-Loop und die Korrekturen für Suchen, die nichts oder das Falsche liefern."
       },
       "parameters": {
         "type": "object",

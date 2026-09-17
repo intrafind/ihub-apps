@@ -29,3 +29,20 @@ in the email is never confirmed unless the user says so.
 - Knows today's date and the signed-in user, so it can tell whether a deadline in the email has
   passed and which messages in the thread are the user's own
 - Recommended as the default chat app of the task pane's start page
+
+## MCP: a skill's reference files are readable, and the iFinder tools point at theirs
+
+Skills reach external agents as MCP resources (`ihub://skill/<name>`), but only the `SKILL.md` body
+did — every "see references/…" link inside it was a dead end, because the tools that read those
+files wrap filesystem access and are deliberately kept out of the gateway. The bundled files are
+now resources of their own.
+
+- `ihub://skill/ifinder-search/references/query-cookbook.md` and every other file a skill ships
+  under `references/`, `scripts/` or `assets/` appear in `resources/list` and can be read
+- A read resolves only paths the skill loader itself enumerated, so a crafted `../` never reaches
+  the filesystem
+- The `iFinder_search` description now names the `ifinder-search` skill and its resource URI — MCP
+  resources are passive, so a caller that only sees the tools would never learn the skill exists.
+  An admin who reworded that description keeps their wording; only the untouched default is
+  refreshed
+- Requires `mcpServer.expose.resources` (off by default) and the `mcp:resources:read` scope

@@ -1,7 +1,11 @@
 import path from 'path';
 import configCache from '../../configCache.js';
 import { createSourceManager } from '../../sources/index.js';
-import { getSkillContent, validateSkillName } from '../../services/skillLoader.js';
+import {
+  getSkillContent,
+  getSkillResource,
+  validateSkillName
+} from '../../services/skillLoader.js';
 import { isValidId } from '../../utils/pathSecurity.js';
 import { getVisibleSourceIds } from './permissions.js';
 import logger from '../../utils/logger.js';
@@ -13,6 +17,8 @@ import { getLocalizedString } from '../../utils/localize.js';
  * URI scheme:
  *   ihub://source/<sourceId>      – static + dynamic source content
  *   ihub://skill/<skillName>      – skill SKILL.md body
+ *   ihub://skill/<skillName>/<path> – a file the skill bundles, e.g.
+ *                                   references/query-cookbook.md
  *
  * The MCP SDK's `McpServer.registerResource` requires a fixed URI per call;
  * we register each visible source/skill individually at gateway build time.
@@ -43,6 +49,21 @@ function isSourceVisible(source, visibleSourceIds) {
   return visibleSourceIds.has('*') || visibleSourceIds.has(source.id);
 }
 
+/** The files a skill bundles next to its SKILL.md, as the loader reports them. */
+function skillResourceEntries(content) {
+  return [...(content?.references || []), ...(content?.scripts || []), ...(content?.assets || [])];
+}
+
+function resourceMimeType(relativePath) {
+  return relativePath.endsWith('.md') ? 'text/markdown' : 'text/plain';
+}
+
+/** `ihub://skill/<name>/<relative/path>`, each segment encoded on its own. */
+function skillResourceUri(skillName, relativePath) {
+  const encodedPath = relativePath.split('/').map(encodeURIComponent).join('/');
+  return `ihub://skill/${encodeURIComponent(skillName)}/${encodedPath}`;
+}
+
 function isSkillVisible(skill, user) {
   if (!skill) return false;
   if (skill.enabled === false) return false;
@@ -56,7 +77,7 @@ function isSkillVisible(skill, user) {
 /**
  * Enumerate resources for the per-request McpServer construction. Returns
  * an array of { uri, name, description, mimeType, kind, ref } where:
- *   - kind: 'source' | 'skill'
+ *   - kind: 'source' | 'skill' | 'skill-resource'
  *   - ref: the underlying source / skill object (so the read callback
  *     can use it without re-resolving by id)
  */
@@ -98,6 +119,25 @@ export async function listMcpResources({ user, platform, expose }) {
         kind: 'skill',
         ref: skill
       });
+
+      // List the files the SKILL.md points at as resources of their own.
+      // Internally an agent reaches these through `read_skill_resource`, but
+      // that tool wraps filesystem access and is deliberately kept out of the
+      // gateway — without this, every "see references/…" link in a skill is a
+      // dead end for an external caller.
+      // ponytail: one SKILL.md read per visible skill per gateway build.
+      // Cache in skillLoader if a deployment ever ships enough skills to notice.
+      const content = await getSkillContent(skill.name);
+      for (const entry of skillResourceEntries(content)) {
+        resources.push({
+          uri: skillResourceUri(skill.name, entry),
+          name: `${skill.name}/${entry}`,
+          description: `Reference bundled with the ${skill.name} skill: ${entry}`,
+          mimeType: resourceMimeType(entry),
+          kind: 'skill-resource',
+          ref: skill
+        });
+      }
     }
   } catch (err) {
     logger.warn('listMcpResources: skill enumeration failed', {
@@ -124,7 +164,14 @@ export async function readMcpResource(uri, { user, platform, language = 'en' }) 
   if (slash <= 0) throw new Error(`Malformed resource URI: ${uri}`);
 
   const kind = rest.slice(0, slash);
-  const rawId = decodeURIComponent(rest.slice(slash + 1));
+  // Split on the literal separators *before* decoding, so an id carrying an
+  // encoded slash stays one segment and still fails the basename check below
+  // instead of silently becoming a path.
+  const [encodedId, ...encodedPathSegments] = rest.slice(slash + 1).split('/');
+  const rawId = decodeURIComponent(encodedId);
+  const relativePath = encodedPathSegments.length
+    ? encodedPathSegments.map(decodeURIComponent).join('/')
+    : null;
   // path.basename strips any directory components and is the canonical
   // CodeQL-recognised sanitiser for path injection. Combined with the
   // exact-match check below, anything containing /, \, or .. fails closed.
@@ -134,6 +181,10 @@ export async function readMcpResource(uri, { user, platform, language = 'en' }) 
   }
 
   if (kind === 'source') {
+    // Sources are single documents; nothing addresses a path inside one.
+    if (relativePath !== null) {
+      throw new Error(`Source not found: ${safeId}/${relativePath}`);
+    }
     // Reject anything outside the source-id charset before any path build.
     if (!isValidId(safeId)) {
       throw new Error(`Source not found: ${safeId}`);
@@ -177,6 +228,27 @@ export async function readMcpResource(uri, { user, platform, language = 'en' }) 
     // must come from the trusted side of that lookup.
     const content = await getSkillContent(skill.name);
     if (!content) throw new Error(`Skill not readable: ${skill.name}`);
+
+    if (relativePath !== null) {
+      // A SKILL.md that says "see references/x.md" is a dead end unless the
+      // bundled file is readable too. The caller-supplied path is only ever
+      // used after it matches an entry the loader itself enumerated — the
+      // same "the lookup certifies it" rule the source branch follows, and
+      // the reason a `../` never reaches the filesystem.
+      const bundled = skillResourceEntries(content);
+      const entry = bundled.find(e => e === relativePath);
+      if (!entry) {
+        throw new Error(`Skill resource not found: ${skill.name}/${relativePath}`);
+      }
+      const text = await getSkillResource(skill.name, entry);
+      if (text === null) {
+        throw new Error(`Skill resource not readable: ${skill.name}/${entry}`);
+      }
+      return {
+        contents: [{ uri, mimeType: resourceMimeType(entry), text }]
+      };
+    }
+
     return {
       contents: [
         {
