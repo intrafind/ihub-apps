@@ -86,8 +86,11 @@ for (const name of PROXY_ENV_VARS) {
   delete process.env[name];
 }
 
-const { default: registerAdminProxyRoutes, classifyProxyTestResult } =
-  await import('../routes/admin/proxy.js');
+const {
+  default: registerAdminProxyRoutes,
+  classifyProxyTestResult,
+  clampTestTimeout
+} = await import('../routes/admin/proxy.js');
 
 function createTestApp() {
   const app = express();
@@ -325,6 +328,28 @@ describe('POST /api/admin/proxy/test', () => {
     expect(response.body.routing.decision).toBe('proxied');
     expect(JSON.stringify(response.body)).not.toContain('s3cr3t');
   }, 15000);
+});
+
+describe('clampTestTimeout', () => {
+  // The value arrives in a request body and becomes a timer duration and a socket
+  // timeout, so it never reaches either unbounded.
+  test('keeps a value inside the allowed range', () => {
+    expect(clampTestTimeout(5000)).toBe(5000);
+    expect(clampTestTimeout('5000')).toBe(5000);
+  });
+
+  test('caps a value above the ceiling', () => {
+    expect(clampTestTimeout(10 * 60 * 1000)).toBe(30000);
+    expect(clampTestTimeout(Number.MAX_SAFE_INTEGER)).toBe(30000);
+  });
+
+  test('falls back to the default below the floor or when unparseable', () => {
+    expect(clampTestTimeout(0)).toBe(10000);
+    expect(clampTestTimeout(-1)).toBe(10000);
+    expect(clampTestTimeout('nonsense')).toBe(10000);
+    expect(clampTestTimeout(undefined)).toBe(10000);
+    expect(clampTestTimeout(Infinity)).toBe(10000);
+  });
 });
 
 describe('classifyProxyTestResult', () => {

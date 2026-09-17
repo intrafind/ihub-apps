@@ -586,12 +586,20 @@ function guardedDirectAgent(isHttps, shouldIgnoreSSL, lookup = null) {
  * @param {boolean} [forceIgnoreSSL] - Force ignore SSL (overrides global setting)
  * @param {Function} [lookup] - Optional dns.lookup-compatible function to pin DNS resolution
  *   for direct connections (used by the SSRF guard). Ignored for proxied requests.
+ * @param {Object} [proxyConfigOverride] - Evaluate against this proxy config instead of the
+ *   live one. Used by the admin proxy test so an unsaved draft can be probed through the
+ *   very same agent construction real traffic uses, rather than a copy that can drift.
  * @returns {http.Agent|https.Agent|HttpProxyAgent|HttpsProxyAgent|undefined} Agent with appropriate configuration
  */
-export function createAgent(url = '', forceIgnoreSSL = null, lookup = null) {
+export function createAgent(
+  url = '',
+  forceIgnoreSSL = null,
+  lookup = null,
+  proxyConfigOverride = null
+) {
   // Always call getSSLConfig() to ensure configuration is loaded
   const sslConfig = getSSLConfig();
-  const proxyConfig = getProxyConfig();
+  const proxyConfig = proxyConfigOverride || getProxyConfig();
 
   const isHttps = url.startsWith('https://');
 

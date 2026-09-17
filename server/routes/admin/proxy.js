@@ -25,10 +25,8 @@ import { proxyConfigSchema } from '../../validators/platformConfigSchema.js';
 import { resolveEnvVars } from '../../utils/envVars.js';
 import { isCertificateError } from '../../services/integrations/integrationDiagnostics.js';
 import { assertSafeHost } from '../../services/mcp/safeFetch.js';
-import https from 'node:https';
-import { HttpProxyAgent } from 'http-proxy-agent';
 import {
-  TlsForwardingHttpsProxyAgent,
+  createAgent,
   describeProxyRouting,
   getProxyProvenance,
   getSSLConfig,
@@ -48,6 +46,24 @@ const SECRET_MASK = '***REDACTED***';
 const DEFAULT_TEST_TIMEOUT_MS = 10000;
 const MIN_TEST_TIMEOUT_MS = 1000;
 const MAX_TEST_TIMEOUT_MS = 30000;
+
+/**
+ * Bound the caller-supplied test timeout to a fixed range.
+ *
+ * The value arrives in a request body and ends up as a timer duration and a
+ * socket timeout, so it is clamped with explicit comparisons rather than left to
+ * flow: anything unparseable or below the floor falls back to the default, and
+ * anything above the ceiling is capped.
+ *
+ * @param {*} value - Raw `timeoutMs` from the request body
+ * @returns {number} Milliseconds within [MIN_TEST_TIMEOUT_MS, MAX_TEST_TIMEOUT_MS]
+ */
+export function clampTestTimeout(value) {
+  const parsed = Number.parseInt(value, 10);
+  if (!Number.isFinite(parsed) || parsed < MIN_TEST_TIMEOUT_MS) return DEFAULT_TEST_TIMEOUT_MS;
+  if (parsed > MAX_TEST_TIMEOUT_MS) return MAX_TEST_TIMEOUT_MS;
+  return parsed;
+}
 
 /**
  * Decrypt a stored proxy URL if it is an `ENC[...]` value. Returns the input
@@ -615,10 +631,7 @@ export default function registerAdminProxyRoutes(app) {
         // itself produce the classified error.
       }
 
-      const timeout = Math.min(
-        MAX_TEST_TIMEOUT_MS,
-        Math.max(MIN_TEST_TIMEOUT_MS, Number(timeoutMs) || DEFAULT_TEST_TIMEOUT_MS)
-      );
+      const timeout = clampTestTimeout(timeoutMs);
 
       let proxyProbe;
       if (viaProxy) {
@@ -638,25 +651,14 @@ export default function registerAdminProxyRoutes(app) {
             };
       }
 
-      // Built here rather than via createAgent() so a draft config can be tested
-      // without saving it first — but with the same SSL decision the real request
-      // would make, so a host the admin whitelisted in ssl.domainWhitelist is not
-      // reported as a TLS failure the live traffic never sees.
-      const isHttps = targetUrl.protocol === 'https:';
+      // The agent comes from createAgent() — the same call every outbound request
+      // makes — with the draft config passed as an override so an unsaved draft can
+      // be probed without a second copy of the agent rules drifting from the real
+      // one. It also means the test applies the SSL decision live traffic would, so
+      // a host covered by ssl.domainWhitelist is not reported as a TLS failure that
+      // never actually happens.
       const ignoreInvalidCertificates = shouldIgnoreSSLForURL(targetUrl.toString(), getSSLConfig());
-      // Reached only when ssl.ignoreInvalidCertificates is on AND the host matches
-      // an explicit ssl.domainWhitelist entry — the same admin opt-in createAgent()
-      // requires. codeql[js/disabling-certificate-validation]
-      const agentOptions = ignoreInvalidCertificates ? { rejectUnauthorized: false } : {};
-
-      let agent;
-      if (viaProxy) {
-        agent = isHttps
-          ? new TlsForwardingHttpsProxyAgent(routing.proxyUrl, agentOptions)
-          : new HttpProxyAgent(routing.proxyUrl, agentOptions);
-      } else if (isHttps && ignoreInvalidCertificates) {
-        agent = new https.Agent(agentOptions);
-      }
+      const agent = createAgent(targetUrl.toString(), null, null, proxyConfig || undefined);
 
       const controller = new AbortController();
       const timer = setTimeout(() => controller.abort(), timeout);
@@ -666,6 +668,12 @@ export default function registerAdminProxyRoutes(app) {
       let redirectLocation;
       let requestError;
       try {
+        // The target URL is admin-supplied by design — probing one is what this
+        // endpoint is for. It is constrained before it gets here: the scheme must be
+        // http(s), assertSafeHost() refuses anything resolving into a private range
+        // unless an admin listed it in ssrf.allowedHosts, redirects are not followed
+        // and the response body is never read or returned.
+        // codeql[js/request-forgery]
         const response = await nodeFetch(targetUrl.toString(), {
           method: 'GET',
           // No redirect following: the point is what *this* URL does, and a
