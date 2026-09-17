@@ -18,6 +18,7 @@ import {
   rollback,
   getUpdateStatus,
   isBinaryInstallation,
+  isContainerInstallation,
   checkDiskSpace,
   checkWritePermissions
 } from '../services/updateService.js';
@@ -59,6 +60,12 @@ async function handleCheck() {
   const result = await checkForUpdate();
 
   console.log(`\n  Current version: ${BOLD}${result.currentVersion}${NC}`);
+
+  if (result.versionCheckDisabled) {
+    warn('Version checks are disabled (NO_VERSION_CHECK is set).');
+    console.log('');
+    return null;
+  }
 
   if (result.updateAvailable) {
     console.log(`  Latest version:  ${BOLD}${GREEN}${result.latestVersion}${NC}`);
@@ -150,6 +157,12 @@ export async function runUpdateCLI(subcommand, force = false) {
   const currentVersion = getAppVersion();
   console.log(`\n${BOLD}iHub Apps Updater${NC} (current: v${currentVersion})\n`);
 
+  if (isContainerInstallation()) {
+    warn('In-place updates are disabled when running in a container.');
+    warn('Pull a new container image and restart the container to update.');
+    process.exit(1);
+  }
+
   if (!isBinaryInstallation()) {
     warn('In-place updates are only available for binary installations.');
     warn('For development mode, use git pull. For Docker, use docker pull.');
@@ -215,8 +228,8 @@ export async function runUpdateCLI(subcommand, force = false) {
         process.exit(0);
       }
     }
-  } catch (error) {
-    error(error.message);
+  } catch (err) {
+    error(err.message);
     process.exit(1);
   }
 }

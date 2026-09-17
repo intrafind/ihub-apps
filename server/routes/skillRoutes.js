@@ -17,7 +17,7 @@ export default function registerSkillRoutes(app) {
     requireFeature('skills'),
     async (req, res) => {
       try {
-        const platformConfig = req.app.get('platform') || {};
+        const platformConfig = configCache.getPlatform() || {};
         const authConfig = platformConfig.auth || {};
 
         if (req.user && !req.user.permissions) {
@@ -60,7 +60,7 @@ export default function registerSkillRoutes(app) {
       try {
         if (!validateIdForPath(req.params.name, 'skill', res)) return;
 
-        const platformConfig = req.app.get('platform') || {};
+        const platformConfig = configCache.getPlatform() || {};
         const authConfig = platformConfig.auth || {};
 
         if (req.user && !req.user.permissions) {
@@ -93,7 +93,7 @@ export default function registerSkillRoutes(app) {
       try {
         if (!validateIdForPath(req.params.name, 'skill', res)) return;
 
-        const platformConfig = req.app.get('platform') || {};
+        const platformConfig = configCache.getPlatform() || {};
         const authConfig = platformConfig.auth || {};
 
         if (req.user && !req.user.permissions) {
@@ -131,19 +131,22 @@ export default function registerSkillRoutes(app) {
    * GET /api/skills/:name/files/* - Read a skill resource file
    */
   app.get(
-    buildServerPath('/api/skills/:name/files/*'),
+    buildServerPath('/api/skills/:name/files/*filePath'),
     authRequired,
     requireFeature('skills'),
     async (req, res) => {
       try {
         if (!validateIdForPath(req.params.name, 'skill', res)) return;
 
-        const filePath = req.params[0];
+        // Express 5 named wildcards arrive as an array of path segments
+        const filePath = Array.isArray(req.params.filePath)
+          ? req.params.filePath.join('/')
+          : req.params.filePath;
         if (!filePath) {
           return sendBadRequest(res, 'File path is required');
         }
 
-        const platformConfig = req.app.get('platform') || {};
+        const platformConfig = configCache.getPlatform() || {};
         const authConfig = platformConfig.auth || {};
 
         if (req.user && !req.user.permissions) {

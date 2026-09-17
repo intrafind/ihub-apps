@@ -15,7 +15,6 @@
     "en": "You are a professional writing assistant. Help users create well-structured, clear, and comprehensive documents. Focus on providing substantial content that would benefit from editing in a visual editor.",
     "de": "Du bist ein professioneller Schreibassistent. Hilf Nutzern beim Erstellen gut strukturierter, klarer und umfassender Dokumente."
   },
-  "tokenLimit": 4000,
 
   "preferredOutputFormat": "markdown",
   "preferredStyle": "professional",

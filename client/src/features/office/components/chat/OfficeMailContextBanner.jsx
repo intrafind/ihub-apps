@@ -1,0 +1,246 @@
+import { useMemo } from 'react';
+import Icon from '../../../../shared/components/Icon';
+import { formatFileSize } from '../../../upload/utils/cloudFileProcessing';
+import { MAILBOX_ATTACHMENT_API_UNAVAILABLE_MESSAGE } from '../../utilities/outlookMailContext';
+
+const IMAGE_EXT = /\.(png|jpe?g|gif|webp|bmp|svg)$/i;
+
+function isImageAttachment(att) {
+  if (!att) return false;
+  const ct = (att.contentType || '').toLowerCase();
+  if (ct.startsWith('image/')) return true;
+  const name = (att.name || '').toLowerCase();
+  return IMAGE_EXT.test(name);
+}
+
+function getAttachmentStatus(att) {
+  if (att?.error) return { kind: 'failed', label: att.error };
+  if (att?.content) return { kind: 'attached', label: 'Will be sent' };
+  return { kind: 'pending', label: 'Loading...' };
+}
+
+function shortenBody(text, max = 140) {
+  if (!text) return '';
+  const cleaned = String(text).replace(/\s+/g, ' ').trim();
+  if (cleaned.length <= max) return cleaned;
+  return `${cleaned.slice(0, max - 1).trimEnd()}…`;
+}
+
+/**
+ * Banner showing the email body + each attachment as a removable file
+ * card so users can review — and trim — what's about to be sent to the
+ * model. Always rendered as the expanded section inside an
+ * `OfficeContextStrip` (issue #1467): the strip owns the collapse
+ * chevron, the outer rounded container, and the page-level margins, so
+ * the banner only needs to render its body card + attachment list.
+ *
+ * Empty state (no live mail context, body and attachments both absent)
+ * collapses the banner entirely so the strip stays compact.
+ *
+ * @param {boolean} [embedded] When `true` (the OfficeContextStrip usage),
+ *   render without the outer rounded container — the strip wraps the
+ *   banner alongside the pinned-emails toolbar so the chrome belongs to
+ *   the parent. Defaults to `false` for any future standalone usage.
+ */
+function OfficeMailContextBanner({
+  ctx,
+  loading,
+  visibleAttachments,
+  removedAttachmentIds,
+  onRemoveAttachment,
+  onRestoreAttachments,
+  includeBody,
+  onToggleBody,
+  embedded = false
+}) {
+  const attachments = useMemo(
+    () => (Array.isArray(visibleAttachments) ? visibleAttachments : []),
+    [visibleAttachments]
+  );
+  const remainingAttachments = useMemo(
+    () => attachments.filter(a => !removedAttachmentIds?.has(a?.id)),
+    [attachments, removedAttachmentIds]
+  );
+  const removedCount = removedAttachmentIds?.size || 0;
+
+  const hasBody = Boolean(ctx?.bodyText && ctx.bodyText.trim().length > 0);
+  const hasAttachments = attachments.length > 0;
+  // Older Outlook hosts (pre-Mailbox 1.8) fail every attachment fetch with
+  // the same "API not available" error — show one explanation instead of
+  // repeating it on every row.
+  const attachmentApiUnavailable =
+    hasAttachments &&
+    attachments.every(a => a?.error === MAILBOX_ATTACHMENT_API_UNAVAILABLE_MESSAGE);
+
+  if (loading) {
+    return (
+      <div
+        role="status"
+        aria-live="polite"
+        className="mx-3 mt-2 mb-1 flex items-center gap-2 rounded-md border border-slate-200 bg-slate-50 px-3 py-2 text-xs text-slate-600 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-300"
+      >
+        <svg className="animate-spin h-3 w-3 text-slate-400" fill="none" viewBox="0 0 24 24">
+          <circle
+            className="opacity-25"
+            cx="12"
+            cy="12"
+            r="10"
+            stroke="currentColor"
+            strokeWidth="4"
+          />
+          <path
+            className="opacity-75"
+            fill="currentColor"
+            d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z"
+          />
+        </svg>
+        Reading current email…
+      </div>
+    );
+  }
+
+  if (!hasBody && !hasAttachments) {
+    return null;
+  }
+
+  const subject = (ctx?.subject || '').trim() || 'Current email';
+  const bodyPreview = shortenBody(ctx?.bodyText);
+  const bodySent = includeBody !== false && hasBody;
+
+  // The outer container is only emitted in standalone mode — when this
+  // banner lives inside OfficeContextStrip the strip already wraps the
+  // section, so we render without our own rounded card / margins.
+  const outerClassName = embedded
+    ? ''
+    : 'mx-3 mt-2 mb-1 rounded-lg border border-slate-200 bg-white shadow-xs dark:border-slate-700 dark:bg-slate-800';
+
+  return (
+    <div className={outerClassName}>
+      {removedCount > 0 && (
+        <div className="flex items-center justify-end px-3 py-1.5 border-b border-slate-100 bg-slate-50/60 dark:border-slate-700 dark:bg-slate-900/40">
+          <button
+            type="button"
+            onClick={onRestoreAttachments}
+            className="text-xs text-indigo-600 hover:text-indigo-800 font-medium dark:text-indigo-400 dark:hover:text-indigo-300"
+            title="Restore removed attachments"
+          >
+            Restore {removedCount}
+          </button>
+        </div>
+      )}
+
+      {/* Email body card */}
+      {hasBody && (
+        <div
+          className={`flex items-start gap-2 px-3 py-2 ${
+            hasAttachments ? 'border-b border-slate-100 dark:border-slate-700' : ''
+          }`}
+        >
+          <div className="shrink-0 mt-0.5 text-slate-500 dark:text-slate-400">
+            <Icon name="mail" size="sm" />
+          </div>
+          <div className="flex-1 min-w-0">
+            <div className="flex items-center justify-between gap-2">
+              <div
+                className="text-sm font-medium text-slate-900 truncate dark:text-slate-100"
+                title={subject}
+              >
+                {subject}
+              </div>
+              <label className="flex items-center gap-1.5 text-xs text-slate-600 select-none cursor-pointer shrink-0 dark:text-slate-300">
+                <input
+                  type="checkbox"
+                  checked={bodySent}
+                  onChange={e => onToggleBody?.(e.target.checked)}
+                  className="h-3.5 w-3.5 rounded-sm border-slate-300 text-indigo-600 focus:ring-indigo-500 dark:border-slate-600 dark:bg-slate-900"
+                />
+                Include body
+              </label>
+            </div>
+            {bodyPreview && (
+              <div
+                className={`mt-0.5 text-xs ${
+                  bodySent
+                    ? 'text-slate-500 dark:text-slate-400'
+                    : 'text-slate-400 italic line-through dark:text-slate-500'
+                } line-clamp-2`}
+                title={bodyPreview}
+              >
+                {bodyPreview}
+              </div>
+            )}
+            {!bodySent && (
+              <div className="mt-0.5 text-[11px] text-amber-600 dark:text-amber-400">
+                Email body will not be sent.
+              </div>
+            )}
+          </div>
+        </div>
+      )}
+
+      {/* Attachments list */}
+      {hasAttachments && remainingAttachments.length > 0 && (
+        <div className="divide-y divide-slate-100 dark:divide-slate-700">
+          {attachmentApiUnavailable && (
+            <div className="flex items-start gap-2 px-3 py-1.5 bg-amber-50 text-[11px] text-amber-700 dark:bg-amber-950/40 dark:text-amber-300">
+              <Icon name="information-circle" size="sm" />
+              <span>
+                Attachments can&apos;t be read on this version of Outlook (requires Mailbox 1.8+).
+              </span>
+            </div>
+          )}
+          {remainingAttachments.map(att => {
+            const status = getAttachmentStatus(att);
+            const isImage = isImageAttachment(att);
+            return (
+              <div
+                key={att.id || att.name}
+                className="flex items-center gap-2 px-3 py-1.5 hover:bg-slate-50 transition-colors dark:hover:bg-slate-700/60"
+              >
+                <div className="shrink-0 text-slate-500 dark:text-slate-400">
+                  <Icon name={isImage ? 'camera' : 'paper-clip'} size="sm" />
+                </div>
+                <div className="flex-1 min-w-0">
+                  <div
+                    className="text-sm font-medium text-slate-900 truncate dark:text-slate-100"
+                    title={att.name || 'Attachment'}
+                  >
+                    {att.name || 'Attachment'}
+                  </div>
+                  <div className="text-[11px] text-slate-500 flex items-center gap-1.5 dark:text-slate-400">
+                    <span>{formatFileSize(Number(att.size) || 0)}</span>
+                    {status.kind === 'failed' && !attachmentApiUnavailable && (
+                      <>
+                        <span aria-hidden>•</span>
+                        <span className="text-rose-600 dark:text-rose-400" title={status.label}>
+                          Failed
+                        </span>
+                      </>
+                    )}
+                    {status.kind === 'pending' && (
+                      <>
+                        <span aria-hidden>•</span>
+                        <span className="text-slate-500 dark:text-slate-400">{status.label}</span>
+                      </>
+                    )}
+                  </div>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => onRemoveAttachment?.(att.id)}
+                  className="shrink-0 text-slate-400 hover:text-rose-600 transition-colors p-1 dark:text-slate-500 dark:hover:text-rose-400"
+                  title="Remove attachment from this message"
+                  aria-label={`Remove ${att.name || 'attachment'} from this message`}
+                >
+                  <Icon name="x" size="sm" />
+                </button>
+              </div>
+            );
+          })}
+        </div>
+      )}
+    </div>
+  );
+}
+
+export default OfficeMailContextBanner;

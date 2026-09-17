@@ -1,0 +1,24 @@
+{
+  "id": "list_tasks",
+  "name": {
+    "en": "List Tasks"
+  },
+  "description": {
+    "en": "List tasks currently on the queue. Filter by status / limit."
+  },
+  "script": "agentTools.js",
+  "method": "listTasks",
+  "isAgentTool": true,
+  "parameters": {
+    "type": "object",
+    "properties": {
+      "status": {
+        "type": "string",
+        "enum": ["open", "in_progress", "done", "failed"]
+      },
+      "limit": {
+        "type": "integer"
+      }
+    }
+  }
+}

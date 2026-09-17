@@ -1,0 +1,132 @@
+{
+  "id": "todo-worker",
+  "name": {
+    "en": "TODO Worker",
+    "de": "TODO-Worker"
+  },
+  "description": {
+    "en": "Reads the engineering-todos inbox, picks the highest-priority open item, may decompose into sub-tasks via createTask, writes an artifact, and marks the inbox item done. Asks for human approval before sending email."
+  },
+  "color": "#6366F1",
+  "icon": "robot",
+  "workflow": {
+    "ref": "embedded",
+    "definition": {
+      "nodes": [
+        {
+          "id": "start",
+          "type": "start"
+        },
+        {
+          "id": "seed",
+          "type": "prompt",
+          "config": {
+            "system": {
+              "en": "You are the TODO Worker. On each wake: call read_inbox to fetch open items, pick the highest-priority one, and either work it directly or call create_task with brief sub-tasks. When you finish, write a useful artifact via write_artifact and mark the inbox item done via write_inbox(mode=markDone). Append a one-line note to your memory."
+            },
+            "maxIterations": 8,
+            "tools": [],
+            "apps": [],
+            "dynamicTasks": {
+              "enabled": true,
+              "maxDepth": 2
+            }
+          }
+        },
+        {
+          "id": "drain",
+          "type": "loop",
+          "config": {
+            "mode": "drain",
+            "queueKey": "_taskQueue",
+            "maxIterations": 30,
+            "body": [
+              {
+                "id": "task_runner",
+                "type": "prompt",
+                "config": {
+                  "system": {
+                    "en": "Process the current task (state.data._currentTask). Use your tools to do the work, then call write_artifact and (when appropriate) write_inbox(mode=markDone). If you need to decompose further, call create_task — your depth limit is enforced by the runtime."
+                  },
+                  "maxIterations": 10,
+                  "tools": [],
+                  "apps": [],
+                  "dynamicTasks": {
+                    "enabled": true,
+                    "maxDepth": 2
+                  }
+                }
+              }
+            ]
+          }
+        },
+        {
+          "id": "end",
+          "type": "end"
+        }
+      ],
+      "edges": [
+        {
+          "from": "start",
+          "to": "seed"
+        },
+        {
+          "from": "seed",
+          "to": "drain"
+        },
+        {
+          "from": "drain",
+          "to": "end"
+        }
+      ],
+      "triggers": [
+        {
+          "type": "schedule",
+          "config": {
+            "cron": "*/15 * * * *",
+            "timezone": "Europe/Berlin"
+          }
+        }
+      ]
+    }
+  },
+  "memory": {
+    "enabled": true,
+    "autoInclude": true,
+    "maxBytes": 8192
+  },
+  "inboxId": "engineering-todos",
+  "hitl": {
+    "approverGroups": [
+      "agent-operators"
+    ]
+  },
+  "planner": {
+    "enabled": false,
+    "maxTasks": 10
+  },
+  "dynamicTasks": {
+    "enabled": true,
+    "maxDepth": 2
+  },
+  "budgets": {
+    "maxWallTimeSec": 600
+  },
+  "concurrency": {
+    "maxConcurrent": 1
+  },
+  "artifacts": {
+    "outputDir": "auto",
+    "primary": "report.md"
+  },
+  "groups": [
+    "agent-operators"
+  ],
+  "serviceAccount": {
+    "groups": [
+      "agents",
+      "authenticated"
+    ]
+  },
+  "enabled": true
+}

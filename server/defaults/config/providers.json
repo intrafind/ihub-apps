@@ -61,17 +61,17 @@
       "enabled": true
     },
     {
-      "id": "tavily",
+      "id": "bedrock",
       "name": {
-        "en": "Tavily Search",
-        "de": "Tavily Suche"
+        "en": "AWS Bedrock",
+        "de": "AWS Bedrock"
       },
       "description": {
-        "en": "Tavily web search API for real-time information retrieval",
-        "de": "Tavily Websuche-API für Echtzeit-Informationsabruf"
+        "en": "AWS Bedrock foundation models via the Converse API",
+        "de": "AWS Bedrock Foundation Models über die Converse-API"
       },
       "enabled": true,
-      "category": "websearch"
+      "category": "llm"
     },
     {
       "id": "brave",

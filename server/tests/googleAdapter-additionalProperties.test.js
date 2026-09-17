@@ -21,7 +21,7 @@ const schemaWithAdditionalProps = {
   additionalProperties: false
 };
 
-const req1 = GoogleAdapter.createCompletionRequest(model, messages, 'key', {
+const req1 = await GoogleAdapter.createCompletionRequest(model, messages, 'key', {
   responseFormat: 'json',
   responseSchema: schemaWithAdditionalProps
 });
@@ -56,7 +56,7 @@ const schemaWithNestedAdditionalProps = {
   additionalProperties: false
 };
 
-const req2 = GoogleAdapter.createCompletionRequest(model, messages, 'key', {
+const req2 = await GoogleAdapter.createCompletionRequest(model, messages, 'key', {
   responseFormat: 'json',
   responseSchema: schemaWithNestedAdditionalProps
 });
@@ -79,7 +79,7 @@ const originalSchema = {
   additionalProperties: false
 };
 
-const req3 = GoogleAdapter.createCompletionRequest(model, messages, 'key', {
+const req3 = await GoogleAdapter.createCompletionRequest(model, messages, 'key', {
   responseFormat: 'json',
   responseSchema: originalSchema
 });
@@ -100,7 +100,7 @@ const schemaWithoutAdditionalProps = {
   required: ['bar']
 };
 
-const req4 = GoogleAdapter.createCompletionRequest(model, messages, 'key', {
+const req4 = await GoogleAdapter.createCompletionRequest(model, messages, 'key', {
   responseFormat: 'json',
   responseSchema: schemaWithoutAdditionalProps
 });

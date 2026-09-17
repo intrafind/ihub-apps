@@ -227,3 +227,44 @@ export async function revokeRefreshToken(token) {
   logger.info('Token revoked', { component: 'RefreshTokenStore' });
   return true;
 }
+
+/**
+ * Revoke every refresh token issued to one client for one user.
+ *
+ * This is the other half of disconnecting a connection: deleting the consent
+ * entry alone only means the next authorization shows the consent screen
+ * again, while the client's existing refresh token would keep minting access
+ * tokens for another 30 days. Outstanding *access* tokens are stateless and
+ * live out their (much shorter) lifetime — which is why the UI says so.
+ *
+ * The store is scanned rather than indexed: it holds one entry per live
+ * connection, and a second index keyed by `clientId:userId` would be one more
+ * thing to keep consistent with the rotation path.
+ *
+ * @param {string} clientId - OAuth client identifier.
+ * @param {string} userId - User subject identifier.
+ * @returns {Promise<number>} How many tokens were revoked.
+ */
+export async function revokeRefreshTokensFor(clientId, userId) {
+  if (!clientId || !userId) return 0;
+
+  const store = loadStore();
+  const doomed = Object.entries(store.tokens || {})
+    .filter(([, entry]) => entry?.clientId === clientId && entry?.userId === userId)
+    .map(([key]) => key);
+
+  if (doomed.length === 0) return 0;
+
+  for (const key of doomed) {
+    delete store.tokens[key];
+  }
+  await saveStore(store);
+
+  logger.info('Refresh tokens revoked for connection', {
+    component: 'RefreshTokenStore',
+    clientId,
+    userId,
+    count: doomed.length
+  });
+  return doomed.length;
+}

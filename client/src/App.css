@@ -1,10 +1,31 @@
 /* Microsoft Teams Integration */
-@import './features/teams/teams.css';
+@import './features/teams/teams.css' layer(base);
 
 /* Base Styles */
-@tailwind base;
-@tailwind components;
-@tailwind utilities;
+@import 'tailwindcss' source(none);
+@import '../tailwind.css';
+
+@layer base {
+  html,
+  body,
+  #root {
+    height: 100%;
+    margin: 0;
+  }
+}
+
+/* Persistent visual marker for admin form fields that have a validation error.
+   Applied imperatively by AdminFormErrorSummary so it survives React re-renders
+   without each editor having to plumb per-language error state. */
+.admin-form-error-field {
+  border-color: rgb(239 68 68) !important; /* red-500 */
+  box-shadow: 0 0 0 1px rgb(239 68 68) !important;
+}
+.admin-form-error-field:focus,
+.admin-form-error-field:focus-visible {
+  outline: none !important;
+  box-shadow: 0 0 0 2px rgb(239 68 68) !important;
+}
 
 /* Custom scrollbar */
 ::-webkit-scrollbar {
@@ -36,6 +57,34 @@
 
 [data-theme='dark'] ::-webkit-scrollbar-thumb:hover {
   background: #6b7280;
+}
+
+/* Auto-hiding scrollbar: invisible until hovered */
+.scrollbar-thin {
+  scrollbar-width: thin;
+  scrollbar-color: transparent transparent;
+}
+.scrollbar-thin:hover {
+  scrollbar-color: #d1d5db transparent;
+}
+[data-theme='dark'] .scrollbar-thin:hover {
+  scrollbar-color: #4b5563 transparent;
+}
+.scrollbar-thin::-webkit-scrollbar {
+  width: 4px;
+}
+.scrollbar-thin::-webkit-scrollbar-track {
+  background: transparent;
+}
+.scrollbar-thin::-webkit-scrollbar-thumb {
+  background: transparent;
+  border-radius: 4px;
+}
+.scrollbar-thin:hover::-webkit-scrollbar-thumb {
+  background: #d1d5db;
+}
+[data-theme='dark'] .scrollbar-thin:hover::-webkit-scrollbar-thumb {
+  background: #4b5563;
 }
 
 /* Animation for chat bubble typing */
@@ -270,7 +319,7 @@ div .markdown-content .code-block-toolbar > div,
 }
 
 .rendered-html-content img {
-  @apply max-w-full h-auto my-4 rounded;
+  @apply max-w-full h-auto my-4 rounded-sm;
 }
 
 .rendered-html-content div {
@@ -288,7 +337,7 @@ div .markdown-content .code-block-toolbar > div,
 .rendered-html-content input,
 .rendered-html-content select,
 .rendered-html-content textarea {
-  @apply border border-gray-300 rounded px-3 py-2 mb-2 w-full;
+  @apply border border-gray-300 rounded-sm px-3 py-2 mb-2 w-full;
 }
 
 [data-theme='dark'] .rendered-html-content input,
@@ -354,6 +403,23 @@ div .markdown-content .code-block-toolbar > div,
 }
 
 /* ============================================
+   Admin UI: Micro-interactions
+   ============================================ */
+
+/* Smooth color transitions on all interactive elements inside the admin panel */
+#admin-main-content button:not(:disabled),
+#admin-main-content a[role='button']:not([aria-disabled='true']) {
+  transition-property: color, background-color, border-color, box-shadow, transform;
+  transition-duration: 150ms;
+  transition-timing-function: cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+#admin-main-content button:not(:disabled):active,
+#admin-main-content a[role='button']:not([aria-disabled='true']):active {
+  transform: scale(0.97);
+}
+
+/* ============================================
    Accessibility: Motion & Contrast Preferences
    ============================================ */
 
@@ -400,5 +466,36 @@ div .markdown-content .code-block-toolbar > div,
   textarea,
   select {
     border: 1px solid ButtonText;
+  }
+}
+
+/* ============================================
+   Print Styles: Hide Interactive UI Elements
+   ============================================ */
+
+/* Hide all interactive UI elements when printing */
+@media print {
+  /* Hide code block toolbars (contains copy/download buttons and language labels) */
+  .code-block-toolbar,
+  .markdown-content .code-block-toolbar {
+    display: none !important;
+  }
+
+  /* Hide mermaid diagram controls */
+  .mermaid-diagram-controls {
+    display: none !important;
+  }
+
+  /* Hide all buttons within markdown and rendered HTML content */
+  .markdown-content button,
+  .rendered-html-content button,
+  .streaming-markdown button {
+    display: none !important;
+  }
+
+  /* Hide copy/download buttons explicitly */
+  .code-copy-btn,
+  .code-download-btn {
+    display: none !important;
   }
 }

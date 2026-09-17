@@ -1,12 +1,13 @@
-import config from './config.js';
 import configCache from './configCache.js';
-import { throttledFetch } from './requestThrottler.js';
 import { createSourceManager } from './sources/index.js';
 import { getSkillContent, getSkillResource } from './services/skillLoader.js';
 import { actionTracker } from './actionTracker.js';
+import { emitToolProgress } from './services/loop/RunStream.js';
 import { isFeatureEnabled } from './featureRegistry.js';
 import { isValidId } from './utils/pathSecurity.js';
+import mcpClientManager from './services/mcp/McpClientManager.js';
 import logger from './utils/logger.js';
+import { getLocalizedString } from './utils/localize.js';
 
 /**
  * Build JSON Schema parameters from a workflow's start node inputVariables
@@ -66,7 +67,7 @@ function buildWorkflowToolParams(workflow, language = 'en') {
           description:
             typeof descriptionRaw === 'string'
               ? descriptionRaw
-              : extractLanguageValue(descriptionRaw, language)
+              : getLocalizedString(descriptionRaw, language)
         };
 
         // Enrich select types with enum values so the LLM knows valid choices
@@ -89,39 +90,6 @@ function buildWorkflowToolParams(workflow, language = 'en') {
     properties,
     required
   };
-}
-
-/**
- * Extract language-specific value from a multilingual object or return the value as-is
- * @param {any} value - Value that might be a multilingual object {en: "...", de: "..."}
- * @param {string} language - Target language (e.g., 'en', 'de')
- * @param {string} fallbackLanguage - Fallback language (default: 'en')
- * @returns {any} - Language-specific value or original value
- */
-function extractLanguageValue(value, language = 'en', fallbackLanguage = null) {
-  // Get platform default language if not provided
-  if (!fallbackLanguage) {
-    const platformConfig = configCache.getPlatform() || {};
-    fallbackLanguage = platformConfig?.defaultLanguage || 'en';
-  }
-  if (value && typeof value === 'object' && !Array.isArray(value)) {
-    // Check if this looks like a multilingual object
-    if (value[language] !== undefined) {
-      return value[language];
-    }
-    if (value[fallbackLanguage] !== undefined) {
-      return value[fallbackLanguage];
-    }
-    // If it has language keys but not the requested one, try first available
-    const availableLanguages = Object.keys(value).filter(
-      key => typeof value[key] === 'string' && key.length === 2
-    );
-    if (availableLanguages.length > 0) {
-      return value[availableLanguages[0]];
-    }
-  }
-
-  return value;
 }
 
 /**
@@ -155,7 +123,7 @@ function extractLanguageFromObject(obj, language = 'en', fallbackLanguage = null
         Object.keys(value).some(k => k.length === 2 && typeof value[k] === 'string')
       ) {
         // This is a multilingual field - an object with language codes as keys
-        result[key] = extractLanguageValue(value, language, fallbackLanguage);
+        result[key] = getLocalizedString(value, language, fallbackLanguage);
       } else {
         result[key] = extractLanguageFromObject(value, language, fallbackLanguage);
       }
@@ -179,7 +147,7 @@ function localizeTools(tools, language = 'en') {
 }
 
 /**
- * Load tools defined locally in config/tools.json
+ * Load tools defined locally in contents/tools/
  * @param {string} language - Optional language for localization
  */
 export async function loadConfiguredTools(language = null) {
@@ -194,34 +162,49 @@ export async function loadConfiguredTools(language = null) {
   // are converted to strings. Use provided language or fall back to platform default.
   const platformConfig = configCache.getPlatform() || {};
   const effectiveLanguage = language || platformConfig?.defaultLanguage || 'en';
-  return localizeTools(tools, effectiveLanguage);
+  const localized = localizeTools(tools, effectiveLanguage);
+
+  // Derive LLM-facing parameters for OpenAPI tools from the referenced operation
+  // so the model sees the correct argument schema. A broken/unreachable spec
+  // disables the tool rather than crashing tool discovery.
+  const openApiTools = localized.filter(t => t.type === 'openapi' && !t.parameters);
+  if (openApiTools.length > 0) {
+    const { getOpenApiToolParameters } = await import('./services/tools/OpenApiToolRunner.js');
+    await Promise.all(
+      openApiTools.map(async t => {
+        try {
+          t.parameters = await getOpenApiToolParameters(t);
+        } catch (error) {
+          logger.error('Failed to derive OpenAPI tool parameters; disabling tool', {
+            component: 'ToolLoader',
+            toolId: t.id,
+            error: error?.message
+          });
+          t.enabled = false;
+        }
+      })
+    );
+  }
+
+  return localized;
 }
 
 /**
- * Discover tools from an MCP (Model Context Protocol) server if configured
+ * Discover tools from all configured MCP servers via McpClientManager.
+ * Replaces the legacy single-server MCP_SERVER_URL stub; multi-server
+ * support, transport choice, and SSRF guards live in the manager.
  */
 export async function discoverMcpTools() {
-  const mcpUrl = config.MCP_SERVER_URL;
-  if (!mcpUrl) return [];
-
   try {
-    const response = await throttledFetch('mcp', `${mcpUrl.replace(/\/$/, '')}/tools`);
-    if (!response.ok) {
-      logger.error('Failed to fetch tools from MCP server', {
-        component: 'ToolLoader',
-        status: response.status
-      });
-      return [];
-    }
-    return await response.json();
+    return await mcpClientManager.listAllTools();
   } catch (error) {
-    logger.error('Error fetching tools from MCP server', { component: 'ToolLoader', error });
+    logger.error('Error discovering MCP tools', { component: 'ToolLoader', error });
     return [];
   }
 }
 
 /**
- * Load tools from local configuration and MCP server
+ * Load tools from local configuration and MCP servers.
  * @param {string} language - Optional language for localization
  */
 export async function loadTools(language = null) {
@@ -237,57 +220,159 @@ export async function loadTools(language = null) {
 }
 
 /**
- * Resolve the appropriate websearch tool based on app config and model provider.
- * Overrides tool parameter defaults with the values from app.websearch config.
+ * Model providers that can run web search themselves (server-side), without
+ * a script-backed tool. Native search is a request-time capability the
+ * adapter enables directly on the provider request — never a "tool" the
+ * generic tool-calling pipeline has to know about or convert.
+ * @type {Set<string>}
+ */
+const NATIVE_WEB_SEARCH_PROVIDERS = new Set(['google', 'openai-responses', 'anthropic']);
+
+/**
+ * Default cap on provider-run searches per model call. Anthropic bills every
+ * search separately, so an uncapped research prompt can fan out into dozens of
+ * billable searches for one answer. Overridable per app
+ * (`websearch.maxSearches`) and per workflow node (`maxWebSearches`).
+ */
+export const DEFAULT_NATIVE_WEB_SEARCH_MAX_USES = 5;
+
+/** Script-backed search tool offered when native search cannot be used. */
+export const NATIVE_WEB_SEARCH_FALLBACK_TOOL_ID = 'braveSearch';
+
+function normalizeMaxUses(value) {
+  const n = Number(value);
+  return Number.isInteger(n) && n > 0 ? n : DEFAULT_NATIVE_WEB_SEARCH_MAX_USES;
+}
+
+/**
+ * Resolve the native web search directive for a model.
+ *
+ * Native search is a request-time capability the adapter enables directly on
+ * the provider request — never a "tool" the generic tool-calling pipeline has
+ * to know about. A model config can opt out with `nativeWebSearch.enabled:
+ * false` (an Anthropic-compatible gateway without the server tool, an older
+ * model); callers then fall back to the script-backed braveSearch tool, the
+ * same tool the loop switches to when the provider rejects the directive.
+ *
+ * @param {string} modelProvider - Provider of the selected model
+ * @param {Object} [options]
+ * @param {Object} [options.model] - Full model config (per-model opt-out)
+ * @param {number} [options.maxUses] - Per-call search cap (Anthropic `max_uses`)
+ * @returns {{provider: string, maxUses: number, fallback: string} | null}
+ */
+export function resolveNativeWebSearchProvider(modelProvider, { model, maxUses } = {}) {
+  if (!NATIVE_WEB_SEARCH_PROVIDERS.has(modelProvider)) return null;
+  if (model?.nativeWebSearch?.enabled === false) return null;
+  return {
+    provider: modelProvider,
+    maxUses: normalizeMaxUses(maxUses),
+    fallback: NATIVE_WEB_SEARCH_FALLBACK_TOOL_ID
+  };
+}
+
+/**
+ * Resolve native web search for an app's unified `websearch` config + model provider.
+ * Returns null when native search doesn't apply — the caller (getToolsForApp) falls
+ * back to the script-backed `braveSearch` tool in that case.
  * @param {Object} app - App configuration with optional websearch field
  * @param {string} modelProvider - Provider of the selected model (e.g. 'google', 'openai-responses')
- * @param {Array} allTools - All available tool definitions
  * @param {boolean|undefined} websearchEnabled - User toggle: undefined = use enabledByDefault, false = disabled
- * @returns {Array} Zero or one tool definition to inject
+ * @param {Object} [model] - Full model config (per-model opt-out)
+ * @returns {{provider: string, maxUses: number, fallback: string} | null}
  */
-function resolveWebsearchTool(app, modelProvider, allTools, websearchEnabled) {
-  if (!app.websearch?.enabled) return [];
+export function resolveAppNativeWebSearch(app, modelProvider, websearchEnabled, model) {
+  if (!app?.websearch?.enabled) return null;
 
-  const {
-    enabledByDefault = false,
-    provider = 'auto',
-    useNativeSearch = true,
-    maxResults = 5,
-    extractContent = true,
-    contentMaxLength = 3000
-  } = app.websearch;
+  const { enabledByDefault = false, useNativeSearch = true } = app.websearch;
 
   // When websearchEnabled is undefined (client didn't send a toggle value),
   // fall back to the admin-configured enabledByDefault setting.
   const effectiveEnabled = websearchEnabled !== undefined ? websearchEnabled : enabledByDefault;
-  if (!effectiveEnabled) return [];
+  if (!effectiveEnabled || !useNativeSearch) return null;
 
-  let toolId;
-  if (useNativeSearch && modelProvider === 'google') {
-    toolId = 'googleSearch';
-  } else if (useNativeSearch && modelProvider === 'openai-responses') {
-    toolId = 'webSearch';
-  } else {
-    toolId = provider === 'tavily' ? 'tavilySearch' : 'braveSearch';
-  }
+  return resolveNativeWebSearchProvider(modelProvider, {
+    model,
+    maxUses: app.websearch.maxSearches
+  });
+}
 
-  const toolDef = allTools.find(t => t.id === toolId);
-  if (!toolDef) {
-    logger.warn('Websearch tool definition not found', { component: 'ToolLoader', toolId });
-    return [];
-  }
-
-  // Deep-clone so we don't mutate the cached tool definition
+/**
+ * Clone the braveSearch tool definition with an app's `websearch` parameter
+ * defaults applied (never mutates the cached definition).
+ * @param {Object} toolDef - braveSearch tool definition
+ * @param {Object} [websearch] - app.websearch config
+ * @returns {Object} tool definition ready to offer to the model
+ */
+function buildBraveSearchTool(toolDef, websearch = {}) {
+  const { maxResults = 5, extractContent = true, contentMaxLength = 3000 } = websearch || {};
   const cloned = JSON.parse(JSON.stringify(toolDef));
   const props = cloned.parameters?.properties || {};
 
   // Override parameter defaults with admin-configured websearch values
   if (props.maxResults) props.maxResults.default = maxResults;
-  if (props.max_results) props.max_results.default = maxResults; // tavily uses snake_case
   if (props.extractContent) props.extractContent.default = extractContent;
   if (props.contentMaxLength) props.contentMaxLength.default = contentMaxLength;
 
-  return [cloned];
+  return cloned;
+}
+
+/**
+ * Tools to offer instead of a native web search directive the provider turned
+ * down (see services/loop/nativeWebSearchFallback.js). Empty when the fallback
+ * tool is not installed.
+ * @param {{fallback?: string}|null} directive - the rejected directive
+ * @param {{app?: Object, language?: string}} [context]
+ * @returns {Promise<Object[]>}
+ */
+export async function resolveNativeWebSearchFallbackTools(directive, { app, language } = {}) {
+  const toolId = directive?.fallback || NATIVE_WEB_SEARCH_FALLBACK_TOOL_ID;
+  const allTools = await loadTools(language);
+  const toolDef = allTools.find(t => t.id === toolId);
+  if (!toolDef) {
+    logger.warn('Native web search fallback tool not found', { component: 'ToolLoader', toolId });
+    return [];
+  }
+  return [
+    toolId === NATIVE_WEB_SEARCH_FALLBACK_TOOL_ID
+      ? buildBraveSearchTool(toolDef, app?.websearch)
+      : toolDef
+  ];
+}
+
+/**
+ * Resolve the braveSearch tool to inject based on app config and model provider.
+ * Only used as a fallback when native search doesn't apply — native search
+ * (Google/OpenAI/Anthropic) is resolved separately by resolveAppNativeWebSearch
+ * and passed straight to the adapter, not through the tools pipeline.
+ * Overrides tool parameter defaults with the values from app.websearch config.
+ * @param {Object} app - App configuration with optional websearch field
+ * @param {string} modelProvider - Provider of the selected model
+ * @param {Array} allTools - All available tool definitions
+ * @param {boolean|undefined} websearchEnabled - User toggle: undefined = use enabledByDefault, false = disabled
+ * @param {Object} [model] - Full model config (per-model native search opt-out)
+ * @returns {Array} Zero or one tool definition to inject
+ */
+function resolveWebsearchTool(app, modelProvider, allTools, websearchEnabled, model) {
+  if (!app.websearch?.enabled) return [];
+
+  const { enabledByDefault = false } = app.websearch;
+
+  const effectiveEnabled = websearchEnabled !== undefined ? websearchEnabled : enabledByDefault;
+  if (!effectiveEnabled) return [];
+
+  // Native search handles this app/model combination — no tool needed.
+  if (resolveAppNativeWebSearch(app, modelProvider, websearchEnabled, model)) return [];
+
+  const toolDef = allTools.find(t => t.id === 'braveSearch');
+  if (!toolDef) {
+    logger.warn('Websearch tool definition not found', {
+      component: 'ToolLoader',
+      toolId: 'braveSearch'
+    });
+    return [];
+  }
+
+  return [buildBraveSearchTool(toolDef, app.websearch)];
 }
 
 /**
@@ -335,7 +420,8 @@ export async function getToolsForApp(app, language = null, context = {}) {
     app,
     context.modelProvider,
     allTools,
-    context.websearchEnabled
+    context.websearchEnabled,
+    context.model
   );
   appTools = appTools.concat(websearchTools);
 
@@ -348,25 +434,7 @@ export async function getToolsForApp(app, language = null, context = {}) {
         const appSources = sourcesConfig.filter(
           source => app.sources.includes(source.id) && source.enabled
         );
-        let sourceTools = sourceManager.generateTools(appSources, context);
-
-        // Filter source tools by enabledTools if provided in context
-        if (
-          context.enabledTools !== undefined &&
-          context.enabledTools !== null &&
-          Array.isArray(context.enabledTools)
-        ) {
-          sourceTools = sourceTools.filter(t => {
-            // Check if tool ID is in enabledTools
-            if (context.enabledTools.includes(t.id)) {
-              return true;
-            }
-            // For function-based tools, check if base tool is enabled
-            const baseToolId = t.id.includes('_') ? t.id.split('_')[0] : t.id;
-            return context.enabledTools.includes(baseToolId);
-          });
-        }
-
+        const sourceTools = sourceManager.generateTools(appSources, context);
         appTools = appTools.concat(sourceTools);
       }
     } catch (error) {
@@ -374,22 +442,19 @@ export async function getToolsForApp(app, language = null, context = {}) {
     }
   }
 
-  // Add workflow tools (entries like "workflow:<id>" in app.tools)
-  if (Array.isArray(app.tools)) {
-    const workflowToolIds = app.tools.filter(
-      t => typeof t === 'string' && t.startsWith('workflow:')
-    );
-    for (const ref of workflowToolIds) {
+  // Add workflow tools (from dedicated app.workflows array)
+  if (Array.isArray(app.workflows)) {
+    for (const wfId of app.workflows) {
       try {
-        const wfId = ref.replace('workflow:', '');
+        if (typeof wfId !== 'string' || !wfId) continue;
         const wf = configCache.getWorkflowById(wfId);
         if (!wf || wf.enabled === false || !wf.chatIntegration?.enabled) continue;
 
-        let toolDescription = extractLanguageValue(
+        let toolDescription = getLocalizedString(
           wf.chatIntegration?.toolDescription || wf.description,
           language || 'en'
         );
-        const toolName = extractLanguageValue(wf.name, language || 'en');
+        const toolName = getLocalizedString(wf.name, language || 'en');
 
         // If the workflow has file/image input variables, hint that attached files
         // are passed automatically so the LLM knows to call this tool
@@ -413,8 +478,39 @@ export async function getToolsForApp(app, language = null, context = {}) {
           parameters: buildWorkflowToolParams(wf, language || 'en')
         });
       } catch (error) {
-        logger.error('Error generating workflow tool', { component: 'ToolLoader', ref, error });
+        logger.error('Error generating workflow tool', {
+          component: 'ToolLoader',
+          workflowId: wfId,
+          error
+        });
       }
+    }
+  }
+
+  // App-as-tool: surface other apps as synthetic `app__<id>` tools (the
+  // "concierge" pattern — a bot delegating to specialist bots). Skipped for
+  // principals that are themselves serving an app-as-tool call, so App→App
+  // chains stop at one level of nesting.
+  if (
+    Array.isArray(app.apps) &&
+    app.apps.length > 0 &&
+    context.user?.isInvokedViaAppAsTool !== true &&
+    isFeatureEnabled('appAsTool', configCache.getFeatures())
+  ) {
+    try {
+      const { getAppAsTools } = await import('./services/chat/appToolsGateway.js');
+      // Never expose an app to itself — a direct self-call can only loop.
+      const targetAppIds = app.apps.filter(id => typeof id === 'string' && id && id !== app.id);
+      const appAsTools = await getAppAsTools(targetAppIds, language || 'en', {
+        user: context.user
+      });
+      appTools = appTools.concat(appAsTools);
+    } catch (error) {
+      logger.error('Error generating app-as-tool tools', {
+        component: 'ToolLoader',
+        appId: app.id,
+        error
+      });
     }
   }
 
@@ -436,8 +532,8 @@ export async function getToolsForApp(app, language = null, context = {}) {
 
     appTools.push({
       id: 'activate_skill',
-      name: extractLanguageValue({ en: 'Activate Skill', de: 'Skill aktivieren' }, lang),
-      description: extractLanguageValue(activateDesc, lang),
+      name: getLocalizedString({ en: 'Activate Skill', de: 'Skill aktivieren' }, lang),
+      description: getLocalizedString(activateDesc, lang),
       isInternalTool: true,
       parameters: {
         type: 'object',
@@ -453,8 +549,8 @@ export async function getToolsForApp(app, language = null, context = {}) {
 
     appTools.push({
       id: 'read_skill_resource',
-      name: extractLanguageValue({ en: 'Read Skill Resource', de: 'Skill-Ressource lesen' }, lang),
-      description: extractLanguageValue(readDesc, lang),
+      name: getLocalizedString({ en: 'Read Skill Resource', de: 'Skill-Ressource lesen' }, lang),
+      description: getLocalizedString(readDesc, lang),
       isInternalTool: true,
       parameters: {
         type: 'object',
@@ -512,11 +608,40 @@ export async function runTool(toolId, params = {}) {
     // Emit skill activation SSE event for UI indicators
     const chatId = params.chatId;
     if (chatId) {
-      actionTracker.trackSkillActivation(chatId, {
-        skillName,
-        description: content.description || ''
+      emitToolProgress(chatId, {
+        phase: 'skill.activation',
+        message: skillName,
+        data: { skillName, description: content.description || '' }
       });
     }
+
+    // Agent runs: persist the activated skill body to workflow state so
+    // subsequent prompt nodes (planner re-iterations, task workers, the
+    // synthesizer) automatically see it via the <active_skill> block.
+    // Apps that aren't running under an agent workflow keep the existing
+    // ephemeral tool-result-only behavior.
+    const workflowState = params.appConfig?._workflowState;
+    if (workflowState && workflowState.data) {
+      workflowState.data._activatedSkills = workflowState.data._activatedSkills || {};
+      workflowState.data._activatedSkills[skillName] = {
+        body: content.body,
+        description: content.description || '',
+        activatedAt: new Date().toISOString(),
+        activatedBy: params.user?.isAgent ? `agent:${params.user.profileId || 'unknown'}` : 'llm'
+      };
+      try {
+        actionTracker.emit('fire-sse', {
+          event: 'agent.skill.activated',
+          chatId,
+          skillName,
+          description: content.description || '',
+          activatedBy: 'llm'
+        });
+      } catch {
+        // Best effort.
+      }
+    }
+
     let result = content.body;
     // Include list of available resources if any exist
     const allResources = [...content.references, ...content.scripts, ...content.assets];
@@ -538,6 +663,22 @@ export async function runTool(toolId, params = {}) {
       return `Resource '${filePath}' not found in skill '${skillName}' or access denied.`;
     }
     return content;
+  }
+
+  // App-as-tool (`app__<appId>`): invoke another iHub app through the shared
+  // gateway. Runs the callee's full chat pipeline in-process (no REST hop);
+  // permission, feature-flag, and nesting guards live in the gateway.
+  if (toolId.startsWith('app__')) {
+    const { invokeAppTool } = await import('./services/chat/appToolsGateway.js');
+    const { chatId, user, appConfig, language, ...args } = params;
+    return await invokeAppTool({
+      toolId,
+      args,
+      user,
+      chatId,
+      language,
+      callerAppId: appConfig?.id
+    });
   }
 
   // Check if this is a workflow tool (starts with 'workflow_')
@@ -565,6 +706,24 @@ export async function runTool(toolId, params = {}) {
   const tool = allTools.find(t => t.id === toolId);
   if (!tool) {
     throw new Error(`Tool ${toolId} not found`);
+  }
+
+  // MCP tools are dispatched through McpClientManager.callTool.
+  if (tool._mcp) {
+    logger.info('Dispatching MCP tool call', {
+      component: 'ToolLoader',
+      toolId,
+      serverId: tool._mcp.serverId
+    });
+    return await mcpClientManager.callTool(toolId, params);
+  }
+
+  // OpenAPI tools are dispatched through the OpenApiToolRunner.
+  if (tool.type === 'openapi') {
+    logger.info('Dispatching OpenAPI tool call', { component: 'ToolLoader', toolId });
+    const { runOpenApiTool } = await import('./services/tools/OpenApiToolRunner.js');
+    const { chatId, user, appConfig, ...args } = params;
+    return await runOpenApiTool(tool, args, { chatId, user, appConfig });
   }
 
   // Check if this is a special tool (like Google Search) that doesn't have a script
@@ -600,7 +759,15 @@ export async function runTool(toolId, params = {}) {
 
     return await fn(params);
   } catch (error) {
-    logger.error('Failed to execute tool', { component: 'ToolLoader', toolId, error: err });
-    throw err;
+    logger.error('Failed to execute tool', {
+      component: 'ToolLoader',
+      toolId,
+      errorName: error?.name,
+      errorMessage: error?.message,
+      errorCode: error?.code,
+      errorCause: error?.cause?.message || error?.cause,
+      error
+    });
+    throw error;
   }
 }

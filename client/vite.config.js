@@ -1,10 +1,44 @@
 import { defineConfig } from 'vite';
+import { resolve } from 'path';
+import fs from 'fs';
+import os from 'os';
 import react from '@vitejs/plugin-react';
 import authGatePlugin from './vite-plugins/vite-plugin-auth-gate.js';
 
+// Plugin that copies @microsoft/office-js/dist to dist/office/office-js after build.
+// This makes the full Office.js library available locally so that deployments that
+// block appsforoffice.microsoft.com can serve it from their own origin.
+function copyOfficeJsPlugin() {
+  return {
+    name: 'copy-office-js',
+    closeBundle() {
+      const src = resolve(__dirname, 'node_modules/@microsoft/office-js/dist');
+      const dest = resolve(__dirname, 'dist/office/office-js');
+      if (!fs.existsSync(src)) return;
+      fs.mkdirSync(dest, { recursive: true });
+      fs.cpSync(src, dest, { recursive: true });
+    }
+  };
+}
+
+// Use office-addin-dev-certs if available — these are OS-trusted and required for
+// Office add-in development (WebView2/WKWebView rejects untrusted self-signed certs).
+// Run `npx office-addin-dev-certs install` once to generate and trust them.
+function loadOfficeDevCerts() {
+  const certDir = `${os.homedir()}/.office-addin-dev-certs`;
+  try {
+    return {
+      key: fs.readFileSync(`${certDir}/localhost.key`),
+      cert: fs.readFileSync(`${certDir}/localhost.crt`)
+    };
+  } catch {
+    return undefined;
+  }
+}
+
 // https://vitejs.dev/config/
 export default defineConfig({
-  plugins: [react(), authGatePlugin()],
+  plugins: [react(), authGatePlugin(), copyOfficeJsPlugin()],
   base: './', // Use relative paths for all assets - works with dynamic base tag
   envDir: '../',
   build: {
@@ -13,37 +47,88 @@ export default defineConfig({
         // Only preload critical vendor chunks needed on initial render.
         // Heavy lazy-loaded chunks (mermaid, teams, pdf, babel, monaco, vendor-forms)
         // will load on-demand when actually needed.
-        const lazyChunks = ['mermaid', 'teams', 'pdf', 'babel', 'monaco', 'vendor-forms'];
+        const lazyChunks = ['mermaid', 'teams', 'pdf', 'babel', 'monaco', 'vendor-forms', 'xlsx'];
         return deps.filter(dep => !lazyChunks.some(chunk => dep.includes(chunk)));
       }
     },
     rollupOptions: {
+      input: {
+        main: resolve(__dirname, 'index.html'),
+        'office-taskpane': resolve(__dirname, 'office/taskpane.html'),
+        'office-commands': resolve(__dirname, 'office/commands.html'),
+        // Browser-extension surfaces — built into client/dist/extension/
+        // and packaged by /api/admin/browser-extension/download.{zip,crx}.
+        'extension-sidepanel': resolve(__dirname, 'extension/sidepanel.html'),
+        'extension-options': resolve(__dirname, 'extension/options.html'),
+        // Nextcloud embed — built into client/dist/nextcloud/ and served by
+        // server/routes/nextcloudEmbedPages.js with a frame-ancestors CSP
+        // derived from the admin-configured allowedHostOrigins. The
+        // Nextcloud-side scaffold (`nextcloud-app/src/shared.ts::buildEmbedUrl`)
+        // points users at this entry, which mounts the standard <App /> with
+        // an OAuth gate in front of it.
+        'nextcloud-full-embed': resolve(__dirname, 'nextcloud/full-embed.html')
+      },
       output: {
-        manualChunks: {
-          // Vendor chunks
-          'vendor-react': ['react', 'react-dom', 'react-router-dom'],
-          'vendor-ui': ['@heroicons/react', 'react-icons', 'tailwindcss'],
-          'vendor-forms': ['react-quill', 'ajv', 'ajv-formats'],
-          'vendor-utils': ['axios', 'uuid', 'file-saver', 'fuse.js', 'marked', 'turndown'],
+        // Function form (object form is rejected by the rolldown-based Vite 8).
+        // Maps a module id to its vendor chunk by package name; anything not
+        // listed falls through to the default chunking.
+        manualChunks(id) {
+          if (!id.includes('node_modules')) return undefined;
+          const chunkMap = {
+            // Vendor chunks
+            'vendor-react': ['react', 'react-dom', 'react-router-dom'],
+            'vendor-ui': ['@heroicons/react', 'react-icons', 'tailwindcss'],
+            'vendor-forms': ['react-quill-new', 'ajv', 'ajv-formats'],
+            'vendor-utils': ['axios', 'uuid', 'file-saver', 'fuse.js', 'marked', 'turndown'],
 
-          // Heavy dependencies that should be separate
-          mermaid: ['mermaid'],
-          monaco: ['@monaco-editor/react'],
-          teams: ['@microsoft/teams-js', 'microsoft-cognitiveservices-speech-sdk'],
-          pdf: ['pdfjs-dist'],
-          babel: ['@babel/standalone']
+            // Heavy dependencies that should be separate
+            mermaid: ['mermaid'],
+            monaco: ['@monaco-editor/react'],
+            teams: ['@microsoft/teams-js', 'microsoft-cognitiveservices-speech-sdk'],
+            pdf: ['pdfjs-dist'],
+            babel: ['@babel/standalone'],
+            office: ['react-markdown'],
+            xlsx: ['xlsx']
+          };
+          for (const [chunk, pkgs] of Object.entries(chunkMap)) {
+            if (pkgs.some(pkg => id.includes(`node_modules/${pkg}/`))) {
+              return chunk;
+            }
+          }
+          return undefined;
         }
       }
     },
     chunkSizeWarningLimit: 1000
   },
   server: {
+    https: loadOfficeDevCerts(),
+    // Disable Vite's built-in CORS middleware. Otherwise Vite intercepts
+    // every cross-origin OPTIONS preflight and answers it itself with a
+    // wildcard "Access-Control-Allow-Methods: GET,HEAD,PUT,PATCH,POST,DELETE"
+    // and no Access-Control-Allow-Credentials — which silently breaks any
+    // request whose preflight isn't covered by Vite's defaults (e.g. POST
+    // /api/oauth/token from a chrome-extension:// origin). With cors: false
+    // Vite forwards OPTIONS through the proxy to Express on :3000, where
+    // our configurable CORS middleware (driven by /api/admin/cors/config)
+    // is the single source of truth.
+    cors: false,
     proxy: (() => {
       const basePath = process.env.VITE_BASE_PATH || '';
       const proxyConfig = {};
 
       // Define the paths that need proxying
-      const pathsToProxy = ['/api/', '/s/', '/docs', '/uploads', '/manifest.json', '/sw.js'];
+      const pathsToProxy = [
+        '/api/',
+        '/s/',
+        '/docs',
+        '/uploads',
+        '/manifest.json',
+        '/sw.js'
+        // /office/ is intentionally NOT proxied:
+        // Vite serves office HTML entries (taskpane.html, commands.html) as MPA pages
+        // and serves client/public/office/assets/* from its public dir in dev mode.
+      ];
 
       pathsToProxy.forEach(path => {
         // Handle both root paths and subpath
@@ -53,6 +138,30 @@ export default defineConfig({
           proxyConfig[pattern] = {
             target: 'http://localhost:3000',
             changeOrigin: true,
+            xfwd: true,
+            // Proxy WebSocket upgrades for the API (e.g. the realtime
+            // speech-to-text endpoint at /api/voice/realtime). Scoped to /api
+            // so Vite's own HMR socket is untouched.
+            ws: path === '/api/',
+            configure: proxy => {
+              // xfwd adds X-Forwarded-For/Port/Proto but NOT X-Forwarded-Host.
+              // changeOrigin replaces Host with the target, so Express can't see
+              // the original browser-facing host without this header.
+              proxy.on('proxyReq', (proxyReq, req) => {
+                if (req.headers.host) {
+                  proxyReq.setHeader('X-Forwarded-Host', req.headers.host);
+                }
+              });
+              // The proxyReq handler above fires for HTTP only. WebSocket
+              // upgrades (e.g. /api/voice/realtime) need the same header set via
+              // proxyReqWs, otherwise the server sees the rewritten target host
+              // and can't verify the browser-facing origin.
+              proxy.on('proxyReqWs', (proxyReq, req) => {
+                if (req.headers.host) {
+                  proxyReq.setHeader('X-Forwarded-Host', req.headers.host);
+                }
+              });
+            },
             rewrite: requestPath => {
               // For subpath requests like /ihub/api/..., rewrite to /ihub/api/...
               // For root requests like /api/..., rewrite to /ihub/api/... (if basePath is set)

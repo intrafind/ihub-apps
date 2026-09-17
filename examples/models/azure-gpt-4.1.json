@@ -11,6 +11,7 @@
   },
   "url": "https://${AZURE_OPENAI_ENDPOINT}.openai.azure.com/openai/deployments/gpt-4.1/chat/completions?api-version=2025-01-01-preview",
   "provider": "openai",
-  "tokenLimit": 8192,
+  "contextWindow": 8192,
+  "maxOutputTokens": 4096,
   "supportsTools": true
 }

@@ -1,0 +1,26 @@
+{
+  "id": "gemini-3.8-flash",
+  "modelId": "gemini-3.8-flash",
+  "name": {
+    "en": "Gemini 3.8 Flash",
+    "de": "Gemini 3.8 Flash"
+  },
+  "description": {
+    "en": "Google's current stable Flash model, pinned to a specific version. Strong quality-per-cost for text, code, images, audio and video.",
+    "de": "Googles aktuelles stabiles Flash-Modell, auf eine feste Version fixiert. Starkes Preis-Leistungs-Verhältnis für Text, Code, Bilder, Audio und Video."
+  },
+  "url": "https://generativelanguage.googleapis.com/v1beta/models/gemini-3.8-flash:streamGenerateContent",
+  "provider": "google",
+  "contextWindow": 1048576,
+  "maxOutputTokens": 65536,
+  "supportsTools": true,
+  "supportsVision": true,
+  "supportsAudio": true,
+  "supportsImageGeneration": false,
+  "enabled": true,
+  "default": false,
+  "thinking": {
+    "enabled": true,
+    "level": "medium"
+  }
+}

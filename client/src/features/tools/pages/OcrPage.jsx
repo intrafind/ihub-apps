@@ -1,10 +1,19 @@
 import { useState, useEffect, useRef, useCallback } from 'react';
 import { Link } from 'react-router-dom';
 import { buildApiUrl } from '../../../utils/runtimeBasePath';
+import { openSseStream } from '../../../shared/utils/openSseStream';
 import { apiClient } from '../../../api/client';
+import { useEstimatedTokenCount } from '../../../shared/hooks/useEstimatedTokenCount.js';
+import StatusBadge from '../../../shared/components/StatusBadge';
+import ProgressBar from '../../../shared/components/ProgressBar';
 
 const ACCEPTED_TYPES = ['application/pdf', 'image/jpeg', 'image/png', 'image/tiff', 'image/webp'];
 const ACCEPTED_EXTENSIONS = ['pdf', 'jpg', 'jpeg', 'png', 'tiff', 'tif', 'webp'];
+
+// Custom prompt is bounded by tokens (using the same estimator as the chat),
+// not raw characters. Keep this in sync with MAX_PROMPT_TOKENS in
+// server/routes/toolsService/ocrRoutes.js.
+const MAX_PROMPT_TOKENS = 4096;
 
 const OCR_MODES = [
   { value: 'full', label: 'Full VLM', description: 'Every page analyzed by AI (best quality)' },
@@ -26,76 +35,72 @@ function isAcceptedFile(file) {
   return ACCEPTED_EXTENSIONS.includes(ext);
 }
 
-function ProgressBar({ value, max, label }) {
-  const pct = max > 0 ? Math.round((value / max) * 100) : 0;
-  return (
-    <div className="w-full">
-      {label && <div className="text-sm text-gray-600 dark:text-gray-400 mb-1">{label}</div>}
-      <div className="w-full bg-gray-200 dark:bg-gray-700 rounded-full h-3 overflow-hidden">
-        <div
-          className="bg-blue-600 h-3 rounded-full transition-all duration-300"
-          style={{ width: `${pct}%` }}
-        />
-      </div>
-      <div className="text-xs text-gray-500 dark:text-gray-400 mt-1 text-right">
-        {value} / {max} ({pct}%)
-      </div>
-    </div>
-  );
-}
-
-function StatusBadge({ status }) {
-  const colors = {
-    queued: 'bg-gray-100 text-gray-800 dark:bg-gray-700 dark:text-gray-300',
-    processing: 'bg-blue-100 text-blue-800 dark:bg-blue-900/30 dark:text-blue-300',
-    building: 'bg-blue-100 text-blue-800 dark:bg-blue-900/30 dark:text-blue-300',
-    completed: 'bg-green-100 text-green-800 dark:bg-green-900/30 dark:text-green-300',
-    error: 'bg-red-100 text-red-800 dark:bg-red-900/30 dark:text-red-300',
-    cancelled: 'bg-yellow-100 text-yellow-800 dark:bg-yellow-900/30 dark:text-yellow-300'
-  };
-
-  return (
-    <span
-      className={`inline-flex px-2 py-0.5 text-xs font-medium rounded-full ${colors[status] || colors.queued}`}
-    >
-      {status}
-    </span>
-  );
-}
+const TERMINAL_JOB_STATUSES = ['completed', 'error', 'cancelled'];
+/** Reconnect attempts for the progress stream (1s, 2s, 4s, 8s, 16s). */
+const MAX_PROGRESS_RECONNECTS = 5;
+const reconnectDelayMs = attempt => Math.min(16000, 1000 * 2 ** attempt);
 
 function JobCard({ job, onCancel }) {
-  const eventSourceRef = useRef(null);
+  const abortRef = useRef(null);
   const [progress, setProgress] = useState(job.progress || { current: 0, total: 0 });
   const [status, setStatus] = useState(job.status || 'queued');
   const [error, setError] = useState(job.error || null);
 
   useEffect(() => {
-    if (status === 'completed' || status === 'error' || status === 'cancelled') return;
+    if (TERMINAL_JOB_STATUSES.includes(status)) return;
 
+    // Progress frames are default (`message`) SSE events carrying
+    // `{ progress?, status?, error? }`. Shared fetch-based transport so the
+    // Bearer header / 401 refresh apply here too (no native EventSource).
     const progressUrl = buildApiUrl(`/tools-service/jobs/${job.jobId}/progress`);
-    const es = new EventSource(progressUrl, { withCredentials: true });
-    eventSourceRef.current = es;
+    const ac = new AbortController();
+    abortRef.current = ac;
+    let terminal = false;
+    let retryTimer = null;
 
-    es.onmessage = event => {
-      const data = JSON.parse(event.data);
-      if (data.progress) setProgress(data.progress);
-      if (data.status) setStatus(data.status);
-      if (data.error) setError(data.error);
+    // The fetch-based stream is one-shot: a transient close before the job
+    // finished reconnects with bounded backoff (the job keeps running server
+    // side and the next frames catch the card up).
+    const connect = attempt => {
+      if (ac.signal.aborted || terminal) return;
+      openSseStream(progressUrl, {
+        signal: ac.signal,
+        onEvent: (name, data) => {
+          if (name !== 'message' || !data || typeof data !== 'object' || 'raw' in data) return;
+          if (data.progress) setProgress(data.progress);
+          if (data.status) setStatus(data.status);
+          if (data.error) setError(data.error);
 
-      if (data.status === 'completed' || data.status === 'error' || data.status === 'cancelled') {
-        es.close();
-        eventSourceRef.current = null;
+          if (TERMINAL_JOB_STATUSES.includes(data.status)) {
+            terminal = true;
+            ac.abort();
+            if (abortRef.current === ac) abortRef.current = null;
+          }
+        }
+      })
+        .then(() => {
+          if (!terminal && !ac.signal.aborted) scheduleRetry(attempt);
+        })
+        .catch(err => {
+          if (err.name === 'AbortError' || ac.signal.aborted) return;
+          console.warn('OCR progress stream error:', err);
+          scheduleRetry(attempt);
+        });
+    };
+    const scheduleRetry = attempt => {
+      if (attempt >= MAX_PROGRESS_RECONNECTS) {
+        console.warn('OCR progress stream gave up reconnecting', job.jobId);
+        if (abortRef.current === ac) abortRef.current = null;
+        return;
       }
+      retryTimer = setTimeout(() => connect(attempt + 1), reconnectDelayMs(attempt));
     };
-
-    es.onerror = () => {
-      es.close();
-      eventSourceRef.current = null;
-    };
+    connect(0);
 
     return () => {
-      es.close();
-      eventSourceRef.current = null;
+      if (retryTimer) clearTimeout(retryTimer);
+      ac.abort();
+      if (abortRef.current === ac) abortRef.current = null;
     };
   }, [job.jobId, status]);
 
@@ -134,7 +139,7 @@ function JobCard({ job, onCancel }) {
         {status === 'completed' && (
           <button
             onClick={handleDownload}
-            className="px-3 py-1 text-xs bg-green-600 text-white rounded hover:bg-green-700 transition-colors font-medium"
+            className="px-3 py-1 text-xs bg-green-600 text-white rounded-sm hover:bg-green-700 transition-colors font-medium"
           >
             Download
           </button>
@@ -142,7 +147,7 @@ function JobCard({ job, onCancel }) {
         {isProcessing && (
           <button
             onClick={() => onCancel(job.jobId)}
-            className="px-3 py-1 text-xs bg-red-100 text-red-700 dark:bg-red-900/30 dark:text-red-300 rounded hover:bg-red-200 dark:hover:bg-red-900/50 transition-colors font-medium"
+            className="px-3 py-1 text-xs bg-red-100 text-red-700 dark:bg-red-900/30 dark:text-red-300 rounded-sm hover:bg-red-200 dark:hover:bg-red-900/50 transition-colors font-medium"
           >
             Cancel
           </button>
@@ -165,6 +170,9 @@ export default function OcrPage() {
   const [activeJobs, setActiveJobs] = useState([]);
   const [dragOver, setDragOver] = useState(false);
   const fileInputRef = useRef(null);
+
+  const promptTokens = useEstimatedTokenCount(customPrompt, { debounceMs: 300 });
+  const promptTooLong = promptTokens > MAX_PROMPT_TOKENS;
 
   // Fetch available models on mount
   useEffect(() => {
@@ -214,6 +222,11 @@ export default function OcrPage() {
 
   const startOcr = async () => {
     if (files.length === 0) return;
+    if (promptTooLong) {
+      setStatus('error');
+      setErrorMessage(`Custom prompt must be at most ${MAX_PROMPT_TOKENS} tokens`);
+      return;
+    }
     setErrorMessage('');
     setStatus('uploading');
 
@@ -366,12 +379,21 @@ export default function OcrPage() {
                   onChange={e => setCustomPrompt(e.target.value)}
                   disabled={isProcessing}
                   rows={4}
-                  maxLength={2000}
                   placeholder="Leave empty to use the default prompt (handles tables, charts, diagrams, and mixed content)..."
-                  className="w-full rounded-lg border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-800 text-gray-900 dark:text-white px-3 py-2 text-sm focus:ring-2 focus:ring-blue-500 focus:border-blue-500 disabled:opacity-50 resize-y"
+                  className={`w-full rounded-lg border bg-white dark:bg-gray-800 text-gray-900 dark:text-white px-3 py-2 text-sm focus:ring-2 focus:border-blue-500 disabled:opacity-50 resize-y ${
+                    promptTooLong
+                      ? 'border-red-500 focus:ring-red-500'
+                      : 'border-gray-300 dark:border-gray-600 focus:ring-blue-500'
+                  }`}
                 />
-                <div className="text-xs text-gray-400 dark:text-gray-500 mt-1 text-right">
-                  {customPrompt.length} / 2000
+                <div
+                  className={`text-xs mt-1 text-right ${
+                    promptTooLong
+                      ? 'text-red-600 dark:text-red-400'
+                      : 'text-gray-400 dark:text-gray-500'
+                  }`}
+                >
+                  {promptTokens} / {MAX_PROMPT_TOKENS} tokens
                 </div>
               </div>
             )}
@@ -381,7 +403,7 @@ export default function OcrPage() {
                 checked={debugMode}
                 onChange={e => setDebugMode(e.target.checked)}
                 disabled={isProcessing}
-                className="rounded border-gray-300 dark:border-gray-600 text-blue-600 focus:ring-blue-500"
+                className="rounded-sm border-gray-300 dark:border-gray-600 text-blue-600 focus:ring-blue-500"
               />
               Debug mode — add visible text pages
             </label>
@@ -462,7 +484,8 @@ export default function OcrPage() {
         {status === 'idle' && files.length > 0 && (
           <button
             onClick={startOcr}
-            className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors font-medium text-sm"
+            disabled={promptTooLong}
+            className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors font-medium text-sm disabled:opacity-50 disabled:cursor-not-allowed"
           >
             Start OCR
           </button>

@@ -93,10 +93,25 @@ export class ToolNodeExecutor extends BaseNodeExecutor {
       hasParameters: Object.keys(parameters).length > 0
     });
 
+    // Resolve parameters from state up-front so we can attach them to BOTH
+    // success and failure results — that's what makes the execution UI
+    // useful when a tool call blows up (e.g. shows which documentId was
+    // missing).
+    let resolvedParams = {};
     try {
-      // Resolve parameters from state
-      const resolvedParams = this.resolveParameters(parameters, state);
+      resolvedParams = this.resolveParameters(parameters, state);
+    } catch (resolveErr) {
+      // Parameter resolution itself failed — propagate as a node failure
+      // with the unresolved template so the user can see what we tried.
+      return this.createErrorResult(`Failed to resolve tool parameters: ${resolveErr.message}`, {
+        toolId,
+        nodeId: node.id,
+        resolvedInputs: { toolId, parameters }
+      });
+    }
+    const inputsForUi = { toolId, parameters: resolvedParams, outputVariable, timeout };
 
+    try {
       this.logger.debug('Resolved parameters for tool', {
         component: 'ToolNodeExecutor',
         toolId,
@@ -126,9 +141,9 @@ export class ToolNodeExecutor extends BaseNodeExecutor {
       // Build state updates if outputVariable is configured
       const stateUpdates = outputVariable ? { [outputVariable]: result } : undefined;
 
-      return this.createSuccessResult(result, { stateUpdates });
+      return this.createSuccessResult(result, { stateUpdates, resolvedInputs: inputsForUi });
     } catch (error) {
-      return this.handleToolError(error, node, config, optional);
+      return this.handleToolError(error, node, config, optional, inputsForUi);
     }
   }
 
@@ -184,7 +199,7 @@ export class ToolNodeExecutor extends BaseNodeExecutor {
    * @returns {Object} Error result or optional fallback
    * @private
    */
-  handleToolError(error, node, config, optional) {
+  handleToolError(error, node, config, optional, resolvedInputs) {
     const errorMessage = error.message || 'Unknown tool error';
 
     this.logger.error('Tool execution failed for node', {
@@ -215,20 +230,23 @@ export class ToolNodeExecutor extends BaseNodeExecutor {
           return this.createSuccessResult(mappedOutput, {
             stateUpdates: config.outputVariable
               ? { [config.outputVariable]: mappedOutput }
-              : undefined
+              : undefined,
+            resolvedInputs
           });
         }
       }
 
       return this.createSuccessResult(errorOutput, {
-        stateUpdates: config.outputVariable ? { [config.outputVariable]: errorOutput } : undefined
+        stateUpdates: config.outputVariable ? { [config.outputVariable]: errorOutput } : undefined,
+        resolvedInputs
       });
     }
 
     return this.createErrorResult(`Tool '${config.toolId}' failed: ${errorMessage}`, {
       toolId: config.toolId,
       nodeId: node.id,
-      originalError: error.message
+      originalError: error.message,
+      resolvedInputs
     });
   }
 

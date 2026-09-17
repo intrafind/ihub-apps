@@ -11,7 +11,8 @@
   },
   "url": "https://generativelanguage.googleapis.com/v1beta/models/gemini-pro:generateContent",
   "provider": "google",
-  "tokenLimit": 32760,
+  "contextWindow": 32760,
+  "maxOutputTokens": 8192,
   "supportsTools": false,
   "enabled": false,
   "hint": {

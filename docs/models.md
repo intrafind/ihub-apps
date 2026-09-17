@@ -14,7 +14,8 @@ Each model is defined with the following properties:
   "description": { "en": "Fast and efficient model for most everyday tasks and conversations" },
   "url": "https://api.openai.com/v1/chat/completions",
   "provider": "openai",
-  "tokenLimit": 4096
+  "contextWindow": 16385,
+  "maxOutputTokens": 4096
 }
 ```
 
@@ -27,8 +28,10 @@ Each model is defined with the following properties:
 | `name`                         | Object  | -        | **Required.** Localized display name (e.g., `{"en": "GPT-4"}`) shown in the user interface    |
 | `description`                  | Object  | -        | **Required.** Localized short description (e.g., `{"en": "..."}`) of the model's capabilities |
 | `provider`                     | String  | -        | **Required.** Provider identifier. See [Providers](#providers) for valid values                |
-| `url`                          | String  | -        | API endpoint URL for the model. Supports environment variable references like `${MY_URL}`      |
-| `tokenLimit`                   | Number  | -        | Maximum token capacity of the model's context window (nullable)                                |
+| `modelType`                    | String  | `chat`   | `chat` (routed through the LLM adapter pipeline) or `transcription` (speech-to-text, routed through the transcription provider registry). See [Transcription Models](#transcription-models) |
+| `url`                          | String  | -        | API endpoint URL for the model. Supports environment variable references like `${MY_URL}`. Transcription models use a `ws://` / `wss://` realtime URL |
+| `contextWindow`                | Number  | -        | Total input+output token capacity of the model's context window (nullable). Used for fitting documents and showing the user how much capacity is left |
+| `maxOutputTokens`              | Number  | -        | Maximum tokens the model may generate in a response, sent to the provider as `max_tokens` / `maxOutputTokens` (nullable). Defaults to 4096 at runtime if unset |
 | `default`                      | Boolean | `false`  | Mark this model as the system-wide default. Only one model should have this set to `true`. See [Model Selection in Apps](#model-selection-in-apps) |
 | `enabled`                      | Boolean | `true`   | Whether the model is visible and selectable. Set to `false` to hide without deleting           |
 | `supportsTools`                | Boolean | `false`  | Whether the model supports tool/function calling                                               |
@@ -37,22 +40,48 @@ Each model is defined with the following properties:
 | `supportsAudio`                | Boolean | -        | Whether the model can process audio input                                                      |
 | `supportsStructuredOutput`     | Boolean | -        | Whether the model natively supports structured JSON output schemas                             |
 | `supportsUsageTracking`        | Boolean | -        | Whether the model reports token usage in its responses                                         |
+| `supportsTemperature`          | Boolean | `true`   | Whether the provider accepts sampling parameters for this model. Set `false` for models that reject them — Claude Opus 5, Sonnet 5 and Fable 5.x return a `400` for `temperature`, so the adapter omits the field instead of failing every request. See [Sampling Parameters](#sampling-parameters) |
 | `supportsImageGeneration`      | Boolean | `false`  | Whether the model can generate images                                                          |
 | `imageGeneration`              | Object  | -        | Default image generation parameters for this model. See [Image Generation Defaults](#image-generation-defaults) below |
 | `apiKey`                       | String  | -        | Per-model API key stored encrypted on the server. Overrides the environment-level API key for this model only |
 | `config`                       | Object  | -        | Provider-specific configuration options passed directly to the adapter (record of any key-value pairs) |
 | `concurrency`                  | Number  | -        | Maximum number of concurrent in-flight requests to this model (1-100). Use to prevent rate-limit errors on low-quota plans |
 | `requestDelayMs`               | Number  | -        | Optional delay in milliseconds between API requests for this model (0-10000)                  |
+| `connectTimeoutMs`             | Number  | -        | Override the connect/headers ceiling for this model (0-300000, `0` disables); the installation default is `30000`. Raise it for an endpoint that is reachable but slow to accept a request, and for image models, which withhold their headers until the render is ready — see [Connect ceiling and image models](#connect-ceiling-and-image-models) and [Stream deadlines](llm-client.md#stream-deadlines) |
+| `streamIdleTimeoutMs`          | Number  | -        | Override the maximum gap between two chunks of a live stream for this model (0-300000, `0` disables)                     |
 | `thinking`                     | Object  | -        | Extended thinking configuration for models that support it. See [Thinking Configuration](#model-thinking-configuration) below |
+| `nativeWebSearch`              | Object  | -        | Native (provider-run) web search settings for this model. See [Native Web Search](#native-web-search) below |
 | `hint`                         | Object  | -        | Message displayed when this model is selected. See [Model Hints](#model-hints) for full documentation |
+
+### Sampling Parameters
+
+Anthropic removed sampling parameters from its newer reasoning models. On Claude
+Opus 5, Claude Sonnet 5, Claude Fable 5.x and Claude Opus 4.7/4.8, sending
+`temperature` returns a `400` and the request fails outright — there is no
+graceful degradation. Set `supportsTemperature: false` on those model configs and
+the Anthropic adapter omits the field:
+
+```json
+{
+  "id": "claude-opus-5",
+  "modelId": "claude-opus-5",
+  "provider": "anthropic",
+  "supportsTemperature": false
+}
+```
+
+The app's temperature setting (and `preferredStyle`, which maps onto it) is then
+simply ignored for that model — the model decides its own sampling. Older models
+(Claude Haiku 4.5 and earlier, and every other provider) still accept
+`temperature`, so leave the flag unset for them.
 
 ### Tools
 
 Apps can optionally specify a list of tool identifiers via the `tools` property.
-Tool definitions are loaded from `contents/config/tools.json` or discovered from a Model Context Protocol (MCP) server via the `MCP_SERVER_URL` environment variable. Each tool includes a JSON schema for its parameters and the name of the implementation script in `server/tools`. Tools are executed by calling `/api/tools/{id}` with the required parameters. A common example is the built-in `webSearch` tool, which performs a provider-configured web search. Additional tools provide direct access to specific search providers such as Brave (`braveSearch`) and Tavily (`tavilySearch`) when the corresponding API keys are configured.
+Tool definitions are loaded from individual JSON files under `contents/tools/` (one file per tool, named `<toolId>.json`) or discovered from one or more Model Context Protocol (MCP) servers configured in `contents/config/mcpServers.json` (see [MCP Integration](mcp-integration.md)). Each tool includes a JSON schema for its parameters and the name of the implementation script in `server/tools`. Tools are executed by calling `/api/tools/{id}` with the required parameters. A common example is the built-in `webSearch` tool, which performs a provider-configured web search. Additional tools provide direct access to specific search providers such as Brave (`braveSearch`) when the corresponding API key is configured.
 For example, an app configured for web browsing can enable the `webSearch` tool for its prompts.
 
-Each entry in `contents/config/tools.json` uses the following fields:
+Each tool file in `contents/tools/` uses the following fields:
 
 | Field         | Description                                             |
 | ------------- | ------------------------------------------------------- |
@@ -86,15 +115,17 @@ The system currently supports the following providers:
 
 3. **Anthropic** (`provider: "anthropic"`)
    - Compatible with the Anthropic Messages API format
-   - Examples: Claude 3 Opus, Claude 3 Sonnet
+   - Examples: Claude Opus 5, Claude Sonnet 5, Claude Haiku 4.5, Claude Fable 5.1
+   - Models from Claude Opus 4.7 onwards reject `temperature`; set `supportsTemperature: false` on those configs (see [Sampling Parameters](#sampling-parameters))
 
 4. **Google** (`provider: "google"`)
    - Compatible with the Google Gemini API format
-   - Examples: Gemini 1.5 Flash
+   - Examples: Gemini 3.8 Flash, Gemini 3.1 Pro, Nano Banana Pro
+   - `thinking.budget` is rejected on every provider; reasoning effort is `thinking.level` (see [Thinking Configuration](#model-thinking-configuration))
 
 5. **Mistral** (`provider: "mistral"`)
    - Compatible with Mistral's La Plateforme API format
-   - Examples: Mistral Small, Mixtral 8x7B
+   - Examples: Mistral Large 3, Mistral Medium 3.5, Mistral Small 4
 
 6. **Local Models** (can use any provider format they're compatible with)
    - Self-hosted models accessible via localhost or network
@@ -104,6 +135,141 @@ The system currently supports the following providers:
    - Connects to an IntraFind iAssistant service for retrieval-augmented conversations
    - Requires `iAssistant.baseUrl` configured in `platform.json`
    - Uses the iAssistant profile and search settings defined at the platform or app level
+
+8. **AWS Bedrock** (`provider: "bedrock"`)
+   - Calls the unified [Bedrock Converse / ConverseStream API](https://docs.aws.amazon.com/bedrock/latest/userguide/conversation-inference.html)
+   - Authentication uses a long-lived **Bedrock API key** as `Authorization: Bearer …` (no AWS SDK or SigV4 signing required)
+   - Region is configured per-model via `config.region` (default `eu-central-1`); the value `global` selects the cross-region inference profile prefix
+   - Model IDs accept either bare foundation IDs (`anthropic.claude-3-5-sonnet-20241022-v2:0`) or pre-prefixed inference profile IDs (`us.…`, `eu.…`, `apac.…`, `global.…`); the adapter auto-prepends the cluster prefix when the chosen region requires it
+   - Supports text, vision (`png/jpeg/gif/webp`), tool calling, parallel tool use, streaming, and reasoning (extended thinking)
+   - Bedrock service limits are enforced by the server-side adapter before each request: max 5 documents per request and a strict filename character allowlist (alphanumerics, single spaces, `-`, `()`, `[]`)
+   - See [AWS Bedrock](#aws-bedrock) below for full setup instructions
+
+### AWS Bedrock
+
+#### Authentication
+
+The adapter uses Bedrock's long-lived API key feature. Mint a key in the AWS console (Bedrock → API keys → Create API key) and configure it via any of:
+
+- **Per-model:** encrypted `apiKey` field on the model JSON (set via Admin → Models → Edit)
+- **Per-provider:** encrypted `apiKey` field on the `bedrock` provider in `providers.json` (set via Admin → Providers)
+- **Environment:** `BEDROCK_API_KEY=<key>`
+
+Resolution order matches every other provider: model.apiKey → providers.json → env. Keys configured via the admin UI are encrypted at rest using AES-256-GCM.
+
+#### Region configuration
+
+Each model can override the AWS Region via `config.region`. The Admin Model Editor renders a "Region" field with autocomplete suggestions. Supported values:
+
+| Value | Behavior |
+| --- | --- |
+| `eu-central-1`, `eu-west-1`, `eu-west-3` | Frankfurt / Ireland / Paris. Auto-prepends `eu.` for inference-profile-required models. |
+| `us-east-1`, `us-west-2` | Auto-prepends `us.` for inference-profile-required models. |
+| `apac-northeast-1`, `ap-…` | Auto-prepends `apac.`. |
+| `global` | Auto-prepends `global.` and routes to a supported source region. Supported by the Anthropic Claude Sonnet 4 family. |
+
+If you write the modelId with an explicit prefix (e.g., `us.anthropic.claude-sonnet-4-6`) the adapter honors it as-is.
+
+Fallback order: `model.config.region` → `providers.json` `bedrock.config.region` → env `AWS_REGION` / `AWS_DEFAULT_REGION` → default `eu-central-1`.
+
+#### Supported models (Converse-compatible families)
+
+| Model family | Vision | Documents | Tools | Notes |
+| --- | --- | --- | --- | --- |
+| Anthropic Claude 3 / 3.5 / 3.7 / 4.x (Sonnet, Haiku, Opus) | yes | yes | yes | PDF size cap waived on Claude 4+ |
+| Amazon Nova Pro / Lite / Premier | yes | yes | yes | PDF/DOCX size cap waived |
+| Amazon Nova Micro | no | yes | yes | text-only |
+| Meta Llama 3.3 70B Instruct | no | yes | yes | requires inference profile |
+| Meta Llama 4 Scout / Maverick | yes | yes | yes | requires inference profile |
+| Mistral Large / Mistral Large 2 | no | yes | yes | text-only |
+| Mistral Pixtral Large | yes | yes | yes | |
+| Cohere Command R / R+ | no | yes | yes | RAG-optimized |
+| AI21 Jamba 1.5 Mini / Large | no | yes | partial | |
+| DeepSeek R1 / V3.x | no | yes | yes (V3.1+) | |
+
+#### Limits enforced by the adapter
+
+- **Documents per request:** Bedrock caps at 5; the adapter rejects requests with more.
+- **Document filename:** Bedrock requires `^[A-Za-z0-9\-()[\] ]{1,200}$` with no consecutive whitespace. The adapter sanitizes upstream filenames automatically (strips disallowed chars, removes extensions, collapses spaces).
+- **Image format:** restricted to `png`, `jpeg`, `gif`, `webp`. Other formats are dropped with a warning.
+- **Empty content blocks** (`{ text: '' }`) are stripped before sending — Bedrock rejects them.
+
+#### Ready-to-import example models
+
+Example configurations for the most common Bedrock models live in `examples/models/bedrock/` and are exposed through the **iHub Examples** marketplace registry. Open Admin → Marketplace → "iHub Examples" to browse and one-click install. All examples ship `enabled: false` so you can opt-in selectively.
+
+### Transcription Models
+
+Models with `modelType: "transcription"` are **speech-to-text** models, not chat models. They convert a complete audio buffer — from an uploaded audio file, an uploaded video (audio track extracted client-side), or a browser recording — into text that is rendered as an assistant chat answer. See [Realtime Voice & Transcription](voice-transcription.md) for the full deployment guide (vLLM setup, reverse proxy, limits, security) and [Audio File Support](audio-file-support.md) for how apps use them.
+
+Transcription models are **not** routed through the LLM adapter pipeline. They use a parallel transcription provider registry (`server/transcription/`) and are streamed over the same authenticated realtime WebSocket (`/api/voice/realtime`) that dictation uses.
+
+Three transcription providers ship. All three speak the same browser-facing protocol, so switching a model changes nothing in the app or the UI:
+
+| Provider | Model | Shape | Use it for |
+| --- | --- | --- | --- |
+| `vllm-realtime` | `voxtral-mini-realtime` | Streaming (WebSocket) | Self-hosted, fully private transcription |
+| `google-live` | `gemini-3.5-transcribe-live` | Streaming (Gemini Live API) | Hosted realtime transcription, recordings up to 10 min |
+| `google-transcribe` | `gemini-3.5-transcribe` | Batch (one request) | Hosted transcription of complete recordings, up to 1 h |
+
+- **vLLM Realtime** (`provider: "vllm-realtime"`) — a self-hosted vLLM `/v1/realtime` endpoint (e.g. Voxtral). The `url` is a `ws://` / `wss://` WebSocket URL and stays server-side.
+- **Gemini Live** (`provider: "google-live"`) — Google's hosted realtime speech-to-text over the Gemini Live API (`wss://…BidiGenerateContent`). Streams a transcript while the audio is still arriving, auto-detects 85+ languages and handles code-switching. **A Live API session runs for at most 10 minutes**, so longer recordings need the batch provider. Pin languages with `config.languageCodes` (BCP-47, empty means auto-detect).
+- **Gemini Batch** (`provider: "google-transcribe"`) — Google's hosted transcription for complete recordings, up to one hour of audio. It transcribes in a single request rather than streaming, so the transcript appears at the end instead of word by word. The audio is uploaded to Google's Files API first and deleted again afterwards. `config` accepts `mode` (`"smart"`, the default, or `"verbatim"`), `languageCodes`, and `customVocabulary` (up to 1,000 phrases that bias recognition toward domain terms).
+
+Both Gemini providers reuse the same credential as the Google chat models: a per-model `apiKey`, the `google` entry in `providers.json`, or `GOOGLE_API_KEY`.
+
+```json
+{
+  "id": "voxtral-mini-realtime",
+  "modelId": "mistralai/Voxtral-Mini-4B-Realtime-2602",
+  "name": { "en": "Voxtral Mini (Transcription)" },
+  "description": { "en": "Self-hosted Voxtral realtime speech-to-text." },
+  "url": "ws://localhost:8080/v1/realtime",
+  "provider": "vllm-realtime",
+  "modelType": "transcription",
+  "apiKey": "",
+  "enabled": false
+}
+```
+
+Key points:
+
+- **Credentials stay server-side.** The public `GET /api/models` endpoint strips `apiKey` from every model and strips `url` from transcription models, so the vLLM URL and API key never reach the browser. `GET /api/models` returns chat models by default; `GET /api/models?type=transcription` returns permitted transcription models (sanitized) for the app editor's model picker.
+- **Permissions** are enforced the same way as chat models — a user must be permitted to use the transcription model.
+- **Selection.** Apps reference a transcription model via the `transcription.modelId` app-config field (Admin → Apps → Transcription), not the chat model selector. Transcription models are hidden from the chat model selector, magic prompt, and compare mode.
+- **Dictation** (`platform.speech.realtime`, `settings.speechRecognition.service: "vllm-realtime"`) is a separate feature and continues to work unchanged. When a realtime session carries no `modelId` it falls back to the platform dictation backend.
+
+```json
+{
+  "id": "gemini-3.5-transcribe-live",
+  "modelId": "gemini-3.5-transcribe-live",
+  "name": { "en": "Gemini 3.5 Transcribe Live" },
+  "description": { "en": "Google's hosted realtime speech-to-text." },
+  "url": "wss://generativelanguage.googleapis.com/ws/google.ai.generativelanguage.v1beta.GenerativeService.BidiGenerateContent",
+  "provider": "google-live",
+  "modelType": "transcription",
+  "config": { "languageCodes": [] },
+  "enabled": false
+}
+```
+
+Every transcription model file ships **disabled**. Enable the one you want:
+
+- `voxtral-mini-realtime` — point its `url` at your vLLM realtime endpoint (migration `V073` seeds it for existing installations, carrying over any configured `platform.speech.realtime` settings).
+- `gemini-3.5-transcribe-live` / `gemini-3.5-transcribe` — set `GOOGLE_API_KEY` (or a per-model key) and enable. **Enabling either sends user audio to Google**, and the batch model additionally stores it in Google's Files API (48 h retention) for the duration of the request; that is why neither is on by default. Migration `V089` seeds both, disabled.
+
+#### Batch providers and memory
+
+A batch provider has no upstream socket to stream into, so the server holds the
+whole recording in memory until the client stops. Two caps bound that, both
+under `platform.speech.realtime`:
+
+| Setting | Default | Meaning |
+| --- | --- | --- |
+| `maxBufferedAudioBytes` | 33554432 (32 MB, ≈17 min) | Per connection. Exceeding it fails the session with `audio-too-long`. |
+| `maxBufferedAudioBytesTotal` | 268435456 (256 MB) | Across the whole process. Exceeding it fails the session with `server-busy`. |
+
+Raise `maxBufferedAudioBytes` for hour-long recordings (one hour of 16 kHz PCM16 is ≈115 MB) and size `maxBufferedAudioBytesTotal` against the memory the instance can spare — `maxConnections` × `maxBufferedAudioBytes` is the theoretical worst case.
 
 ### Image Generation Defaults
 
@@ -128,6 +294,47 @@ For models with `supportsImageGeneration: true`, the `imageGeneration` object se
 
 App-level `imageGeneration` settings (see [Apps documentation](apps.md)) override these model defaults.
 
+> **Upgrading from `imageGeneration.imageSize`.** Image size used to be
+> configured in Google's own units (`"1K"`, `"2K"`, `"4K"`) and passed straight
+> through. It is now `quality`, which the Google adapter translates into the
+> provider's `imageConfig.imageSize`. The model schema is strict, so a config
+> still carrying `imageSize` fails validation with *"Property imageSize is not
+> allowed"*. Migration `V103` converts stored configs (`1K`→`Low`, `2K`→`Medium`,
+> `4K`→`High`); update hand-written ones the same way.
+
+#### Connect ceiling and image models
+
+The [connect ceiling](llm-client.md#stream-deadlines) bounds the phase before a
+provider's first response byte, so an endpoint that never answers fails in
+seconds instead of holding a browser connection for the whole five-minute
+request deadline. That works because a streamed text request gets its headers
+the moment the provider accepts it.
+
+Image models break the assumption. Google's `gemini-3-pro-image` and the Nano
+Banana family send nothing — headers included — until the render is ready, so
+time-to-first-byte *is* generation time there, and a 4K image at
+`thinkingLevel: high` takes far longer than the 30 s installation default. The
+symptom is a chat error blaming the network for a perfectly reachable endpoint:
+
+```
+The google endpoint for model gemini-3-pro-image could not be reached: it did
+not answer the connection attempt.
+```
+
+The shipped image models therefore carry their own ceiling:
+
+```json
+{
+  "id": "gemini-3-pro-image",
+  "supportsImageGeneration": true,
+  "connectTimeoutMs": 60000
+}
+```
+
+Raise it further for large renders on a slow link; `0` disables the ceiling for
+that model and leaves the call to `REQUEST_TIMEOUT`. Migration `V103` adds
+`60000` to existing image models that do not already set one.
+
 ### Model Thinking Configuration
 
 For models that support extended thinking (such as Claude claude-3-7-sonnet), the `thinking` object configures the reasoning mode:
@@ -136,8 +343,8 @@ For models that support extended thinking (such as Claude claude-3-7-sonnet), th
 {
   "thinking": {
     "enabled": true,
-    "budget": 8000,
-    "thoughts": false
+    "level": "medium",
+    "thoughts": true
   }
 }
 ```
@@ -145,10 +352,95 @@ For models that support extended thinking (such as Claude claude-3-7-sonnet), th
 | Property           | Type    | Description                                                                                                                 |
 | ------------------ | ------- | --------------------------------------------------------------------------------------------------------------------------- |
 | `thinking.enabled` | Boolean | Enable extended thinking mode for this model                                                                                |
-| `thinking.budget`  | Number  | Token budget for internal thinking steps. `0` disables thinking, `-1` lets the model decide dynamically, positive values set a specific budget |
-| `thinking.thoughts`| Boolean | When `true`, the model's internal thinking steps are returned and shown in the response                                     |
+| `thinking.thoughts`| Boolean | Whether the model's internal thinking steps are returned and shown in the response. Defaults to `true` when thinking is enabled; set `false` to keep the reasoning hidden. On Gemini it maps to `includeThoughts` |
+| `thinking.level`   | String  | Reasoning effort: `minimal`, `low`, `medium`, or `high`. Defaults to `medium`. The only way to ask for more or less reasoning — Gemini sends it as `thinkingLevel`, OpenAI/vLLM as `reasoning_effort` |
+| `thinking.chatTemplateKwargs` | Object | vLLM only: per-request chat-template knobs to toggle reasoning, e.g. `{ "enable_thinking": false }` (Qwen3) or `{ "thinking": true }` (Granite). When omitted, the vLLM adapter defaults to `{ "enable_thinking": <toggle> }` |
 
 App-level `thinking` settings override these model defaults for a specific app.
+
+> **Reasoning effort is a level, never a number.** `thinking.budget` is gone
+> from model, app and workflow-node configs alike, and from the API. It looked
+> like a token allowance and was nothing of the kind: no adapter ever put the
+> number on the wire — every one bucketed it into one of these four levels
+> first — so a budget of `1024` and a budget of `32768` were the same request
+> while looking like a considered choice.
+>
+> Migration `V105` converts everything stored, with the mapping the adapters
+> already applied: `0`→`minimal`, `-1`→`medium`, `1-100`→`low`,
+> `101-500`→`medium`, `>500`→`high`. A `thinking.level` you had already set is
+> kept. Apps gain a level they never had — the app `thinking` block only ever
+> accepted a number, which is how the confusion got in.
+>
+> **Gemini takes `thinking.level` only.** iHub speaks one Gemini
+> `thinkingConfig` shape — Gemini 3's `thinkingLevel` plus `includeThoughts`.
+> Gemini's two schemas were never interchangeable — each returns a bare
+> `400 INVALID_ARGUMENT`, naming no field, when handed the other's — so
+> supporting both meant every Gemini model config had to declare which
+> generation it belonged to, and one left on the old shape broke the moment
+> Google moved a `-latest` alias forward. Gemini 3 is the floor now, and
+> `V104` moves stored Gemini configs across on its way to retiring 2.x.
+>
+> **Gemini 2.x models are retired.** A 2.x endpoint rejects the only
+> `thinkingConfig` iHub now sends, so `V104` removes them, following the same
+> rules V089 used: a model file still matching the Gemini 2.x example iHub
+> shipped is **deleted**, while one you had edited — your own Vertex or proxy
+> endpoint, whose url, headers and per-model key exist nowhere else — is
+> **disabled** instead, with the reason in the migration log. Either way it
+> leaves every model selector. Re-enable a disabled one in Admin → Models if you
+> still need it.
+>
+> Apps are repointed onto the Gemini 3 equivalent (`gemini-2.5-pro` →
+> `gemini-3.1-pro`, `gemini-2.5-flash` and `gemini-2.0-flash` →
+> `gemini-3.8-flash`, `gemini-2.5-flash-lite` → `gemini-3.5-flash-lite`,
+> `gemini-2.5-flash-image` → `gemini-3.1-flash-image`), so an app whose
+> `preferredModel` just went away still has one. If a retired model was your
+> system-wide default, the migration says so — pick a new one in Admin → Models.
+
+#### Provider-specific behavior
+
+Each adapter keeps its own provider-specific request/response handling, but they all
+surface reasoning the same way in the UI (a separate "thinking" stream):
+
+- **Google (Gemini):** `thinkingConfig` (`thinkingLevel` + `includeThoughts`).
+  Reasoning returned in dedicated `thought` parts.
+  Function calls additionally carry a **thought signature** that Gemini 3 requires back in
+  the conversation history; iHub preserves it automatically for in-product chats, workflows
+  and agents. External callers of the
+  [Inference API](openai-compatible-api.md#tool-calling-with-gemini--thought-signatures) must
+  echo it back with the tool call.
+- **OpenAI (`openai`) and OpenAI Responses (`openai-responses`):** map thinking to
+  `reasoning_effort` (`minimal`/`low`/`medium`/`high`). True OpenAI reasoning models hide
+  their reasoning text, but OpenAI-compatible endpoints (vLLM, DeepSeek, OpenRouter) reached
+  via the `openai` provider return it in a `reasoning`/`reasoning_content` field, which iHub
+  surfaces as thinking. The `openai` adapter is conservative — it adds `reasoning_effort`
+  only and leaves `max_tokens`/`temperature` untouched so non-reasoning compatible endpoints
+  keep working.
+- **vLLM (`local`):** sends `chat_template_kwargs` to enable/disable reasoning and reads
+  reasoning text from the response's `reasoning` (current) or `reasoning_content` (legacy)
+  field. Requires the vLLM server to be started with a matching `--reasoning-parser`.
+  See [Local LLM Providers](local-llm-providers.md#reasoning-thinking-output).
+
+### Native Web Search
+
+Apps with `websearch.useNativeSearch` (the default) use the provider's built-in search on models from the `anthropic`, `google` and `openai-responses` providers — see [Web Tools → Native Search Providers](web-tools.md#native-search-providers). The optional `nativeWebSearch` object tunes this per model:
+
+| Property           | Type    | Default               | Description                                                                                                                                                                                                                       |
+| ------------------ | ------- | --------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `enabled`          | Boolean | `true`                | Set to `false` to never request native search on this model (for example an Anthropic-compatible gateway without the server tool). Apps then use Brave Search on this model                                                        |
+| `toolVersion`      | String  | `web_search_20250305` | Anthropic only. `web_search_20250305` (basic — every Claude model, Vertex AI, Foundry), `web_search_20260209` (dynamic filtering, Claude 4.6 and later), `web_search_20260318` (dynamic filtering plus response inclusion)          |
+| `dynamicFiltering` | Boolean | `false`               | Anthropic only. Let Claude filter search results in code before they enter the context window (Claude 4.6 and later on the Claude API). When off, newer tool versions are called directly (`allowed_callers: ["direct"]`)             |
+
+```json
+{
+  "id": "claude-sonnet",
+  "modelId": "claude-sonnet-4-6",
+  "provider": "anthropic",
+  "url": "https://api.anthropic.com/v1/messages",
+  "nativeWebSearch": { "toolVersion": "web_search_20260209", "dynamicFiltering": true }
+}
+```
+
+The number of searches per call is capped by the app (`websearch.maxSearches`) or the workflow node (`maxWebSearches`), not by the model.
 
 ### Model Selection in Apps
 
@@ -166,13 +458,14 @@ The iHub provides a flexible system for selecting which AI model an app uses. Th
 
     ```json
     {
-      "id": "gemini-2.5-flash-preview-05-20",
-      "modelId": "gemini-2.5-flash-preview-05-20",
-      "name": "Gemini 2.5",
+      "id": "gemini-3.8-flash",
+      "modelId": "gemini-3.8-flash",
+      "name": "Gemini 3.8 Flash",
       "description": "Google's versatile model optimized for text and code tasks",
-      "url": "https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash-preview-05-20:streamGenerateContent",
+      "url": "https://generativelanguage.googleapis.com/v1beta/models/gemini-3.8-flash:streamGenerateContent",
       "provider": "google",
-      "tokenLimit": 32768,
+      "contextWindow": 1000000,
+      "maxOutputTokens": 8192,
       "default": true,
       "supportsTools": true
     }
@@ -214,7 +507,8 @@ To add a new model:
   },
   "url": "https://api.openai.com/v1/responses",
   "provider": "openai-responses",
-  "tokenLimit": 128000,
+  "contextWindow": 400000,
+  "maxOutputTokens": 32000,
   "supportsTools": true,
   "enabled": true,
   "default": false

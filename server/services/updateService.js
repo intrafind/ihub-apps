@@ -21,11 +21,15 @@ import { promisify } from 'util';
 import { getRootDir } from '../pathUtils.js';
 import { getAppVersion } from '../utils/versionHelper.js';
 import { httpFetch } from '../utils/httpConfig.js';
+import {
+  buildUpdateInfo,
+  isVersionCheckDisabled,
+  refreshVersionCheck
+} from './versionCheckService.js';
 import logger from '../utils/logger.js';
 
 const execAsync = promisify(execFile);
 
-const GITHUB_REPO = 'intrafind/ihub-apps';
 const UPDATE_TMP_DIR = '.update-tmp';
 const UPDATE_STAGING_DIR = '.update-staging';
 const UPDATE_BACKUP_DIR = '.update-backup';
@@ -76,6 +80,56 @@ export function isBinaryInstallation() {
   return hasVersionFile && !hasPackageJson;
 }
 
+/**
+ * Check if running inside a container (Docker, Podman, Kubernetes, etc.).
+ *
+ * Auto-updates must be disabled in containers: a successful update writes to
+ * the container's ephemeral filesystem and is lost on restart, while any
+ * data-migration side effects (config, indexes, etc.) persist on volumes —
+ * leaving the next container start running an older binary against migrated
+ * state. Cached so the filesystem checks only run once per process.
+ */
+let containerDetectionCache = null;
+export function isContainerInstallation() {
+  if (containerDetectionCache !== null) return containerDetectionCache;
+
+  // Explicit override — set by our Dockerfile and useful for custom images
+  // or non-Docker container runtimes that we can't auto-detect.
+  const explicit = process.env.IHUB_CONTAINER || process.env.CONTAINER;
+  if (explicit && /^(1|true|yes|docker|podman|kubernetes|k8s)$/i.test(explicit)) {
+    containerDetectionCache = true;
+    return true;
+  }
+
+  // Kubernetes injects this into every pod
+  if (process.env.KUBERNETES_SERVICE_HOST) {
+    containerDetectionCache = true;
+    return true;
+  }
+
+  // Docker creates /.dockerenv; Podman creates /run/.containerenv
+  if (existsSync('/.dockerenv') || existsSync('/run/.containerenv')) {
+    containerDetectionCache = true;
+    return true;
+  }
+
+  // Inspect cgroup membership — works for most container runtimes on Linux
+  try {
+    if (existsSync('/proc/1/cgroup')) {
+      const cgroup = readFileSync('/proc/1/cgroup', 'utf8');
+      if (/docker|kubepods|containerd|libpod|lxc|garden/i.test(cgroup)) {
+        containerDetectionCache = true;
+        return true;
+      }
+    }
+  } catch {
+    // ignore — cgroup file may not be readable on non-Linux platforms
+  }
+
+  containerDetectionCache = false;
+  return false;
+}
+
 // In-memory update state
 let updateState = {
   status: 'idle', // idle | checking | downloading | extracting | staging | applying | restarting | error
@@ -118,9 +172,15 @@ export function getUpdateStatus() {
 
   const hasStaged = existsSync(join(rootDir, UPDATE_STAGING_DIR));
 
+  const isContainer = isContainerInstallation();
+  const versionCheckDisabled = isVersionCheckDisabled();
+
   return {
     ...updateState,
     isBinary: isBinaryInstallation(),
+    isContainer,
+    updatesEnabled: !isContainer,
+    versionCheckEnabled: !versionCheckDisabled,
     hasBackup,
     backupVersion,
     hasStaged,
@@ -164,94 +224,58 @@ async function releaseLock() {
 }
 
 /**
- * Compare two semantic versions
- * Returns: 1 if v1 > v2, -1 if v1 < v2, 0 if equal
+ * Check for available updates from GitHub Releases, resolving the download
+ * assets for this platform.
+ *
+ * The GitHub lookup runs through versionCheckService, so it is bounded by the
+ * version-check timeout and shares that service's cache — a download started
+ * right after a check therefore reuses the release the admin was shown.
+ *
+ * @param {Object} [options]
+ * @param {boolean} [options.force] - Bypass the cached release and re-query GitHub.
  */
-export function compareVersions(v1, v2) {
-  if (!v1 || !v2) return 0;
-
-  const cleanV1 = v1.split('-')[0];
-  const cleanV2 = v2.split('-')[0];
-
-  const parts1 = cleanV1.split('.').map(p => parseInt(p, 10) || 0);
-  const parts2 = cleanV2.split('.').map(p => parseInt(p, 10) || 0);
-
-  for (let i = 0; i < Math.max(parts1.length, parts2.length); i++) {
-    const p1 = parts1[i] || 0;
-    const p2 = parts2[i] || 0;
-    if (p1 > p2) return 1;
-    if (p1 < p2) return -1;
-  }
-  return 0;
-}
-
-/**
- * Check for available updates from GitHub Releases
- */
-export async function checkForUpdate() {
+export async function checkForUpdate({ force = false } = {}) {
   setState({ status: 'checking', error: null });
 
-  try {
-    const currentVersion = getAppVersion();
-    const platform = detectPlatform();
+  const currentVersion = getAppVersion();
 
-    const response = await httpFetch(
-      `https://api.github.com/repos/${GITHUB_REPO}/releases/latest`,
-      {
-        headers: {
-          Accept: 'application/vnd.github.v3+json',
-          'User-Agent': 'ihub-apps-updater'
-        }
-      }
-    );
-
-    if (!response.ok) {
-      setState({ status: 'idle' });
-      return {
-        updateAvailable: false,
-        currentVersion,
-        error:
-          response.status === 404 ? 'No releases found' : `GitHub API error: ${response.status}`
-      };
-    }
-
-    const releaseData = await response.json();
-    if (!releaseData.tag_name) {
-      setState({ status: 'idle' });
-      return { updateAvailable: false, currentVersion, error: 'Invalid release data' };
-    }
-
-    const latestVersion = releaseData.tag_name.replace(/^v/, '');
-    const updateAvailable = compareVersions(latestVersion, currentVersion) > 0;
-
-    // Find the matching asset for this platform
-    const archiveName = `ihub-apps-${releaseData.tag_name}-${platform}.tar.gz`;
-    const asset = releaseData.assets?.find(a => a.name === archiveName);
-    const checksumsAsset = releaseData.assets?.find(a => a.name === 'checksums.sha256');
-
+  if (isVersionCheckDisabled()) {
     setState({ status: 'idle' });
-
-    return {
-      updateAvailable,
-      currentVersion,
-      latestVersion,
-      releaseUrl: releaseData.html_url,
-      releaseName: releaseData.name,
-      publishedAt: releaseData.published_at,
-      platform,
-      assetUrl: asset?.browser_download_url || null,
-      assetSize: asset?.size || null,
-      checksumsUrl: checksumsAsset?.browser_download_url || null,
-      tagName: releaseData.tag_name
-    };
-  } catch (error) {
-    setState({ status: 'idle', error: error.message });
     return {
       updateAvailable: false,
-      currentVersion: getAppVersion(),
-      error: 'Failed to check for updates: ' + error.message
+      currentVersion,
+      versionCheckDisabled: true
     };
   }
+
+  const entry = await refreshVersionCheck({ force });
+  const info = buildUpdateInfo(entry, currentVersion);
+
+  setState({ status: 'idle', error: info.error ?? null });
+
+  if (info.error || !entry.release) {
+    return {
+      updateAvailable: false,
+      currentVersion,
+      error: info.error ?? 'No release information available'
+    };
+  }
+
+  // Find the matching asset for this platform
+  const platform = detectPlatform();
+  const tagName = entry.release.tag_name;
+  const archiveName = `ihub-apps-${tagName}-${platform}.tar.gz`;
+  const asset = entry.release.assets?.find(a => a.name === archiveName);
+  const checksumsAsset = entry.release.assets?.find(a => a.name === 'checksums.sha256');
+
+  return {
+    ...info,
+    platform,
+    assetUrl: asset?.browser_download_url || null,
+    assetSize: asset?.size || null,
+    checksumsUrl: checksumsAsset?.browser_download_url || null,
+    tagName
+  };
 }
 
 /**

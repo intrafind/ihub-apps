@@ -2,6 +2,7 @@ import { useState, useEffect } from 'react';
 import { useTranslation } from 'react-i18next';
 import Icon from '../../../shared/components/Icon';
 import { makeAdminApiCall } from '../../../api/adminApi';
+import { CredentialRefSelect } from './OpenApiToolEditor';
 
 function JiraConfig() {
   const { t } = useTranslation();
@@ -9,7 +10,7 @@ function JiraConfig() {
     enabled: false,
     baseUrl: '',
     clientId: '',
-    clientSecret: '',
+    clientSecretRef: '',
     redirectUri: ''
   });
   const [loading, setLoading] = useState(true);
@@ -27,7 +28,7 @@ function JiraConfig() {
           enabled: false,
           baseUrl: '',
           clientId: '',
-          clientSecret: '',
+          clientSecretRef: '',
           redirectUri: ''
         };
         setConfig(jira);
@@ -78,7 +79,7 @@ function JiraConfig() {
       // Save the updated platform config
       await makeAdminApiCall('/admin/configs/platform', {
         method: 'POST',
-        data: updatedPlatformConfig
+        body: updatedPlatformConfig
       });
 
       setMessage({
@@ -97,7 +98,7 @@ function JiraConfig() {
 
   if (loading) {
     return (
-      <div className="bg-white dark:bg-gray-800 rounded-lg shadow-sm border border-gray-200 dark:border-gray-700 p-6">
+      <div className="bg-white dark:bg-gray-800 rounded-lg shadow-xs border border-gray-200 dark:border-gray-700 p-6">
         <div className="flex items-center justify-center">
           <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600"></div>
         </div>
@@ -106,9 +107,9 @@ function JiraConfig() {
   }
 
   return (
-    <div className="bg-white dark:bg-gray-800 rounded-lg shadow-sm border border-gray-200 dark:border-gray-700 p-6">
+    <div className="bg-white dark:bg-gray-800 rounded-lg shadow-xs border border-gray-200 dark:border-gray-700 p-6">
       <div className="flex items-start space-x-4">
-        <div className="flex-shrink-0 mt-1">
+        <div className="shrink-0 mt-1">
           <div className="p-3 rounded-full bg-blue-100 dark:bg-blue-900/50">
             <Icon name="ticket" size="lg" className="text-blue-600 dark:text-blue-400" />
           </div>
@@ -149,7 +150,7 @@ function JiraConfig() {
               id="jiraEnabled"
               checked={config.enabled}
               onChange={handleToggleEnabled}
-              className="h-4 w-4 text-blue-600 focus:ring-blue-500 border-gray-300 dark:border-gray-600 rounded"
+              className="h-4 w-4 text-blue-600 focus:ring-blue-500 border-gray-300 dark:border-gray-600 rounded-sm"
             />
             <label
               htmlFor="jiraEnabled"
@@ -172,7 +173,7 @@ function JiraConfig() {
                   type="url"
                   value={config.baseUrl}
                   onChange={e => handleFieldChange('baseUrl', e.target.value)}
-                  className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md shadow-sm focus:outline-none focus:ring-blue-500 focus:border-blue-500 bg-white dark:bg-gray-900 text-gray-900 dark:text-gray-100"
+                  className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md shadow-xs focus:outline-hidden focus:ring-blue-500 focus:border-blue-500 bg-white dark:bg-gray-900 text-gray-900 dark:text-gray-100"
                   placeholder="https://your-company.atlassian.net"
                 />
                 <p className="mt-1 text-xs text-gray-500 dark:text-gray-400">
@@ -188,23 +189,21 @@ function JiraConfig() {
                   type="text"
                   value={config.clientId}
                   onChange={e => handleFieldChange('clientId', e.target.value)}
-                  className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md shadow-sm focus:outline-none focus:ring-blue-500 focus:border-blue-500 bg-white dark:bg-gray-900 text-gray-900 dark:text-gray-100"
+                  className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md shadow-xs focus:outline-hidden focus:ring-blue-500 focus:border-blue-500 bg-white dark:bg-gray-900 text-gray-900 dark:text-gray-100"
                   placeholder="your-oauth-client-id"
                 />
               </div>
 
-              <div>
-                <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
-                  {t('admin.jira.clientSecret', 'Client Secret')} *
-                </label>
-                <input
-                  type="password"
-                  value={config.clientSecret}
-                  onChange={e => handleFieldChange('clientSecret', e.target.value)}
-                  className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md shadow-sm focus:outline-none focus:ring-blue-500 focus:border-blue-500 bg-white dark:bg-gray-900 text-gray-900 dark:text-gray-100"
-                  placeholder="your-oauth-client-secret"
-                />
-              </div>
+              <CredentialRefSelect
+                value={config.clientSecretRef}
+                onChange={id => handleFieldChange('clientSecretRef', id)}
+                types={['secret', 'oauth2']}
+                label={`${t('admin.jira.clientSecret', 'Client Secret')} *`}
+                help={t(
+                  'admin.jira.clientSecretHelp',
+                  'Select a stored credential profile holding the OAuth client secret.'
+                )}
+              />
 
               <div>
                 <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
@@ -214,7 +213,7 @@ function JiraConfig() {
                   type="url"
                   value={config.redirectUri}
                   onChange={e => handleFieldChange('redirectUri', e.target.value)}
-                  className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md shadow-sm focus:outline-none focus:ring-blue-500 focus:border-blue-500 bg-white dark:bg-gray-900 text-gray-900 dark:text-gray-100"
+                  className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md shadow-xs focus:outline-hidden focus:ring-blue-500 focus:border-blue-500 bg-white dark:bg-gray-900 text-gray-900 dark:text-gray-100"
                   placeholder="https://your-app.com/api/integrations/jira/callback"
                 />
                 <p className="mt-1 text-xs text-gray-500 dark:text-gray-400">
@@ -263,11 +262,11 @@ function JiraConfig() {
             disabled={saving}
             className={`
               inline-flex items-center px-4 py-2 border border-transparent text-sm font-medium
-              rounded-md shadow-sm text-white
+              rounded-md shadow-xs text-white
               ${
                 saving
                   ? 'bg-gray-400 cursor-not-allowed'
-                  : 'bg-blue-600 hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500'
+                  : 'bg-blue-600 hover:bg-blue-700 focus:outline-hidden focus:ring-2 focus:ring-offset-2 focus:ring-blue-500'
               }
             `}
           >

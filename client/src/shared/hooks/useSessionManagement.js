@@ -1,6 +1,6 @@
 import { useEffect } from 'react';
 import { getSessionId, renewSession, getSessionInfo } from '../../utils/sessionManager.js';
-import { sendSessionStart } from '../../api/api';
+import { sendSessionStart } from '../../api';
 
 /**
  * Custom hook to handle session initialization and renewal

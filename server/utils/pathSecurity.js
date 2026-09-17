@@ -17,7 +17,7 @@ import { promises as fs } from 'fs';
  * - Hyphens (-)
  * - Dots (.) - for version numbers like "2.5" in model names
  */
-const SAFE_ID_PATTERN = /^[a-zA-Z0-9._-]+$/;
+export const SAFE_ID_PATTERN = /^[a-zA-Z0-9._-]+$/;
 
 /**
  * Property names that must be rejected to prevent prototype pollution.
@@ -57,6 +57,12 @@ export function isValidId(id) {
     return false;
   }
 
+  // `.` is the directory itself, never an id: joined onto a data root it would
+  // address the root (and a delete would empty it)
+  if (id === '.') {
+    return false;
+  }
+
   return SAFE_ID_PATTERN.test(id);
 }
 
@@ -79,6 +85,45 @@ export function validateIdForPath(id, idType, res) {
     return false;
   }
   return true;
+}
+
+/**
+ * Validates browser extension IDs (safe chars + integration-specific length bounds).
+ *
+ * @param {string} id - Extension ID to validate
+ * @returns {boolean} - True if valid
+ */
+export function isValidExtensionId(id) {
+  if (!id || typeof id !== 'string') {
+    return false;
+  }
+  if (id.length < 8 || id.length > 128) {
+    return false;
+  }
+  if (id.includes('..') || id.includes('/') || id.includes('\\')) {
+    return false;
+  }
+  if (DANGEROUS_KEYS.has(id)) {
+    return false;
+  }
+  return SAFE_ID_PATTERN.test(id);
+}
+
+/**
+ * Validates workflow version strings used in path contexts.
+ * Must be a valid safe ID and start/end with an alphanumeric character.
+ *
+ * @param {string} version - Workflow version string
+ * @returns {boolean} - True if valid
+ */
+export function isValidWorkflowVersion(version) {
+  return (
+    typeof version === 'string' &&
+    version.length <= 64 &&
+    isValidId(version) &&
+    /^[a-zA-Z0-9]/.test(version) &&
+    /[a-zA-Z0-9]$/.test(version)
+  );
 }
 
 /**
@@ -154,27 +199,58 @@ export function sanitizeLanguageCode(lang, fallback = 'en') {
 
 /**
  * Validates that a resolved file path stays within the expected base directory.
- * Prevents path traversal by ensuring the resolved path starts with the base.
+ * Prevents path traversal by ensuring the canonical path starts with the canonical base.
  *
  * @param {string} filePath - The file path to validate (can be relative)
  * @param {string} baseDir - The base directory that the path must stay within
- * @returns {string|null} - The resolved absolute path if safe, null if traversal detected
+ * @returns {Promise<string|null>} - The resolved absolute path if safe, null if traversal detected
  */
-export function resolveAndValidatePath(filePath, baseDir) {
+export async function resolveAndValidatePath(filePath, baseDir) {
   if (!filePath || typeof filePath !== 'string') {
     return null;
   }
 
-  const resolvedBase = path.resolve(baseDir);
-  const resolvedFull = path.resolve(resolvedBase, filePath);
+  try {
+    const resolvedBase = path.resolve(baseDir);
 
-  // Ensure the resolved path is within the base directory
-  const baseWithSep = resolvedBase.endsWith(path.sep) ? resolvedBase : resolvedBase + path.sep;
-  if (resolvedFull !== resolvedBase && !resolvedFull.startsWith(baseWithSep)) {
+    // Lexical boundary check before any filesystem work. The relative-path
+    // guard (no '..' escape, not absolute) is the sanitizer shape that both
+    // humans and static analysis (CodeQL js/path-injection) can verify.
+    const relative = path.relative(resolvedBase, path.resolve(resolvedBase, filePath));
+    if (relative.startsWith('..') || path.isAbsolute(relative)) {
+      return null;
+    }
+    const resolvedFull = path.join(resolvedBase, relative);
+
+    const canonicalBase = await fs.realpath(resolvedBase);
+
+    // Canonicalize via the nearest existing parent so we can validate paths
+    // that may not exist yet. The walk never probes above the validated base.
+    let existingPath = resolvedFull;
+    while (existingPath !== resolvedBase && existingPath !== path.dirname(existingPath)) {
+      try {
+        await fs.access(existingPath);
+        break;
+      } catch {
+        existingPath = path.dirname(existingPath);
+      }
+    }
+
+    const canonicalExisting = await fs.realpath(existingPath);
+    const relativeFromExisting = path.relative(existingPath, resolvedFull);
+    const canonicalFull = path.resolve(canonicalExisting, relativeFromExisting);
+
+    const canonicalBaseWithSep = canonicalBase.endsWith(path.sep)
+      ? canonicalBase
+      : canonicalBase + path.sep;
+    if (canonicalFull !== canonicalBase && !canonicalFull.startsWith(canonicalBaseWithSep)) {
+      return null;
+    }
+
+    return canonicalFull;
+  } catch {
     return null;
   }
-
-  return resolvedFull;
 }
 
 /**
@@ -205,7 +281,15 @@ export async function resolveAndValidateRealPath(filePath, baseDir) {
   }
 
   const resolvedBase = path.resolve(baseDir);
-  const resolvedFull = path.resolve(resolvedBase, filePath);
+
+  // Lexical boundary check before touching the filesystem, so realpath() is
+  // never invoked on a path that already escapes the base lexically. Uses the
+  // relative-path sanitizer shape recognized by CodeQL (js/path-injection).
+  const relative = path.relative(resolvedBase, path.resolve(resolvedBase, filePath));
+  if (relative.startsWith('..') || path.isAbsolute(relative)) {
+    return null;
+  }
+  const resolvedFull = path.join(resolvedBase, relative);
 
   let realBase;
   let realFull;

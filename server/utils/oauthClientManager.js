@@ -1,14 +1,31 @@
-import path from 'path';
 import fs from 'fs';
 import { v4 as uuidv4 } from 'uuid';
-import { fileURLToPath } from 'url';
 import bcrypt from 'bcryptjs';
 import { atomicWriteJSON } from './atomicWrite.js';
+import configStore from '../services/config/ConfigStore.js';
 import configCache from '../configCache.js';
+import { announceConfigChange } from '../configSync.js';
 import logger from './logger.js';
+import { locateConfigFile } from './configFileLocation.js';
 
-const __filename = fileURLToPath(import.meta.url);
-const __dirname = path.dirname(__filename);
+/**
+ * Where an OAuth clients file lives, as both a cache key and an absolute path.
+ *
+ * `oauth.clientsFile` is a path relative to the installation root and the
+ * cache is keyed on the same file's path relative to `contents/`, which is
+ * also how the configuration store addresses it: `contents/config/
+ * oauth-clients.json` is the key `config/oauth-clients.json`.
+ *
+ * A `clientsFile` pointing outside `contents/` is supported and has no place
+ * in the store, so `relPath` is null and the caller writes the absolute path
+ * directly rather than relocating the file into `contents/`.
+ *
+ * @param {string} clientsFilePath - Path to oauth-clients.json as configured
+ * @returns {{fullPath: string, cacheKey: string, relPath: string|null}}
+ */
+function locateClientsFile(clientsFilePath) {
+  return locateConfigFile(clientsFilePath);
+}
 
 /**
  * Load OAuth clients from the OAuth clients file
@@ -17,21 +34,10 @@ const __dirname = path.dirname(__filename);
  */
 export function loadOAuthClients(clientsFilePath) {
   try {
-    // Convert file path to cache key format
-    let cacheKey;
-    if (clientsFilePath.startsWith('contents/')) {
-      cacheKey = clientsFilePath.substring('contents/'.length);
-    } else {
-      cacheKey = path.relative(
-        path.join(__dirname, '../../'),
-        path.isAbsolute(clientsFilePath)
-          ? clientsFilePath
-          : path.join(__dirname, '../../', clientsFilePath)
-      );
-      if (cacheKey.startsWith('contents/')) {
-        cacheKey = cacheKey.substring('contents/'.length);
-      }
-    }
+    // Through `locateClientsFile`, for the same reason as `loadUsers`: the read
+    // and the write have to agree on the cache key, and two copies of the rule
+    // are a coin toss on whether they keep agreeing.
+    const { fullPath, cacheKey } = locateClientsFile(clientsFilePath);
 
     // Try to get from cache first
     const cached = configCache.get(cacheKey);
@@ -44,10 +50,6 @@ export function loadOAuthClients(clientsFilePath) {
       component: 'OAuthClientManager',
       cacheKey
     });
-
-    const fullPath = path.isAbsolute(clientsFilePath)
-      ? clientsFilePath
-      : path.join(__dirname, '../../', clientsFilePath);
 
     // Check if file exists
     if (!fs.existsSync(fullPath)) {
@@ -111,12 +113,14 @@ export function loadOAuthClients(clientsFilePath) {
  * Save OAuth clients to the OAuth clients file
  * @param {Object} clientsConfig - OAuth clients configuration object
  * @param {string} clientsFilePath - Path to oauth-clients.json file
+ * @param {Object} [options]
+ * @param {boolean} [options.announce=true] - Tell the other cluster workers to
+ *   re-read the file. Pass false for writes that only record usage metadata, so
+ *   a per-minute `lastUsed` touch does not make every worker reload the file.
  */
-export async function saveOAuthClients(clientsConfig, clientsFilePath) {
+export async function saveOAuthClients(clientsConfig, clientsFilePath, { announce = true } = {}) {
   try {
-    const fullPath = path.isAbsolute(clientsFilePath)
-      ? clientsFilePath
-      : path.join(__dirname, '../../', clientsFilePath);
+    const { fullPath, cacheKey, relPath } = locateClientsFile(clientsFilePath);
 
     // Update metadata
     if (!clientsConfig.metadata) {
@@ -124,21 +128,19 @@ export async function saveOAuthClients(clientsConfig, clientsFilePath) {
     }
     clientsConfig.metadata.lastUpdated = new Date().toISOString();
 
-    // Write to file atomically
-    await atomicWriteJSON(fullPath, clientsConfig);
-
-    // Update cache with the new data
-    let cacheKey;
-    if (clientsFilePath.startsWith('contents/')) {
-      cacheKey = clientsFilePath.substring('contents/'.length);
+    // Write to file atomically. The store writes what it is handed, so the
+    // hashed client secrets in here are stored exactly as generated.
+    if (relPath) {
+      await configStore.writeJson(relPath, clientsConfig);
     } else {
-      cacheKey = path.relative(path.join(__dirname, '../../'), fullPath);
-      if (cacheKey.startsWith('contents/')) {
-        cacheKey = cacheKey.substring('contents/'.length);
-      }
+      await atomicWriteJSON(fullPath, clientsConfig);
     }
 
     configCache.setCacheEntry(cacheKey, clientsConfig);
+
+    // Otherwise a client registered on one worker cannot authenticate against
+    // the others until their cache TTL expires.
+    if (announce) announceConfigChange(cacheKey);
   } catch (error) {
     logger.error('Could not save OAuth clients configuration', {
       component: 'OAuthClientManager',
@@ -240,6 +242,13 @@ export async function createOAuthClient(clientData, clientsFilePath, createdBy) 
     scopes: clientData.scopes || [],
     allowedApps: clientData.allowedApps || [],
     allowedModels: clientData.allowedModels || [],
+    allowedPrompts: clientData.allowedPrompts || [],
+    // allowedGroups: optional allowlist of internal iHub group IDs. When set
+    //   (non-empty array) the user authenticating via this client must be a
+    //   member of at least one of these groups; otherwise the authorize flow
+    //   rejects the request with access_denied. Empty array (default) means
+    //   any group is acceptable.
+    allowedGroups: clientData.allowedGroups || [],
     tokenExpirationMinutes: clientData.tokenExpirationMinutes || 60,
     active: true,
     createdAt: now,
@@ -267,9 +276,19 @@ export async function createOAuthClient(clientData, clientsFilePath, createdBy) 
     consentRequired: clientData.consentRequired !== false,
     // trusted: when true the client is pre-approved and bypasses the consent
     //   screen even when consentRequired is true at the platform level.
-    trusted: clientData.trusted || false
+    trusted: clientData.trusted || false,
+    // personal / owner*: set for clients a user created for themselves from the
+    //   integrations page. Tokens issued for a personal client authenticate as
+    //   the owner instead of as a standalone service account, and the owner
+    //   snapshot below is what jwtAuth/mcpAuth resolve the identity from on
+    //   every request.
+    personal: clientData.personal === true,
+    ownerUserId: clientData.ownerUserId || null,
+    ownerUsername: clientData.ownerUsername || null,
+    ownerName: clientData.ownerName || null,
+    ownerEmail: clientData.ownerEmail || null,
+    ownerGroups: clientData.ownerGroups || []
   };
-
   clientsConfig.clients[clientId] = newClient;
   await saveOAuthClients(clientsConfig, clientsFilePath);
 
@@ -315,6 +334,8 @@ export async function updateOAuthClient(clientId, updates, clientsFilePath, upda
     'scopes',
     'allowedApps',
     'allowedModels',
+    'allowedPrompts',
+    'allowedGroups',
     'tokenExpirationMinutes',
     'active',
     'metadata',
@@ -435,6 +456,61 @@ export function listOAuthClients(clientsFilePath) {
 }
 
 /**
+ * List the personal OAuth clients owned by a user (without secrets)
+ * @param {string} clientsFilePath - Path to oauth-clients.json file
+ * @param {string} ownerUserId - Owner user ID
+ * @returns {Array<Object>} Array of the user's personal clients, newest first
+ */
+export function listPersonalClientsByOwner(clientsFilePath, ownerUserId) {
+  if (!ownerUserId) return [];
+
+  const clientsConfig = loadOAuthClients(clientsFilePath);
+  const clients = clientsConfig.clients || {};
+
+  return Object.values(clients)
+    .filter(client => client.personal === true && client.ownerUserId === ownerUserId)
+    .map(client => {
+      const { clientSecret: _clientSecret, ...clientWithoutSecret } = client;
+      return clientWithoutSecret;
+    })
+    .sort((a, b) => String(b.createdAt || '').localeCompare(String(a.createdAt || '')));
+}
+
+/**
+ * Refresh the owner identity snapshot stored on a personal OAuth client.
+ *
+ * jwtAuth resolves the acting user from this snapshot on every request, so
+ * refreshing it (on key rotation, for instance) is what propagates a group
+ * change to keys that were issued earlier.
+ *
+ * @param {string} clientId - Client ID
+ * @param {Object} owner - Current owner details
+ * @param {string} clientsFilePath - Path to oauth-clients.json file
+ * @returns {Promise<Object|null>} Updated client without secret, or null if not found
+ */
+export async function updatePersonalClientOwner(clientId, owner, clientsFilePath) {
+  const clientsConfig = loadOAuthClients(clientsFilePath);
+  const client = Object.hasOwn(clientsConfig.clients || {}, clientId)
+    ? clientsConfig.clients[clientId]
+    : undefined;
+
+  if (!client || client.personal !== true || client.ownerUserId !== owner?.id) {
+    return null;
+  }
+
+  client.ownerUsername = owner.username || client.ownerUsername || null;
+  client.ownerName = owner.name || client.ownerName || null;
+  client.ownerEmail = owner.email || client.ownerEmail || null;
+  client.ownerGroups = Array.isArray(owner.groups) ? owner.groups : client.ownerGroups || [];
+  client.updatedAt = new Date().toISOString();
+
+  await saveOAuthClients(clientsConfig, clientsFilePath);
+
+  const { clientSecret: _clientSecret, ...clientWithoutSecret } = client;
+  return clientWithoutSecret;
+}
+
+/**
  * Update last used timestamp for a client
  * @param {string} clientId - Client ID
  * @param {string} clientsFilePath - Path to oauth-clients.json file
@@ -455,7 +531,7 @@ export async function updateClientLastUsed(clientId, clientsFilePath) {
     // Only update if it's been more than 1 minute since last update (reduce writes)
     if (!client.lastUsed || new Date(now) - new Date(client.lastUsed) > 60000) {
       client.lastUsed = now;
-      await saveOAuthClients(clientsConfig, clientsFilePath);
+      await saveOAuthClients(clientsConfig, clientsFilePath, { announce: false });
     }
   } catch (error) {
     logger.error('OAuth failed to update last used for client', {
@@ -516,4 +592,149 @@ export async function validateClientCredentials(clientId, clientSecret, clientsF
 
   const { clientSecret: _, ...clientWithoutSecret } = client;
   return clientWithoutSecret;
+}
+
+/**
+ * Find an active, dynamically registered client by its metadata fingerprint.
+ *
+ * Only public (`token_endpoint_auth_method: "none"`) registrations are ever
+ * de-duplicated, so the caller filters on that before asking; confidential
+ * registrations mint a secret and must stay distinct records.
+ *
+ * @param {Object} clientsConfig - OAuth clients configuration
+ * @param {string} fingerprint - Fingerprint from `computeClientFingerprint`
+ * @returns {Object|null} Matching client, or null when none exists
+ */
+export function findDcrClientByFingerprint(clientsConfig, fingerprint) {
+  if (!fingerprint) return null;
+  const clients = clientsConfig.clients || {};
+  for (const client of Object.values(clients)) {
+    if (
+      client?.active === true &&
+      client?.metadata?.dcr === true &&
+      client?.metadata?.fingerprint === fingerprint
+    ) {
+      return { ...client };
+    }
+  }
+  return null;
+}
+
+/**
+ * Record that an existing dynamic registration was handed out again.
+ *
+ * Bookkeeping only — written without a cluster announce for the same reason
+ * `updateClientLastUsed` is: every worker re-reading the whole client file on
+ * a counter bump would be pure overhead.
+ *
+ * @param {string} clientId - Client ID that was returned to the registrant
+ * @param {string} clientsFilePath - Path to oauth-clients.json file
+ * @returns {Promise<void>}
+ */
+export async function recordDcrReRegistration(clientId, clientsFilePath) {
+  try {
+    const clientsConfig = loadOAuthClients(clientsFilePath);
+    const client = Object.hasOwn(clientsConfig.clients || {}, clientId)
+      ? clientsConfig.clients[clientId]
+      : undefined;
+    if (!client) return;
+
+    client.metadata = client.metadata || {};
+    client.metadata.registrationCount = (client.metadata.registrationCount || 1) + 1;
+    client.metadata.lastRegisteredAt = new Date().toISOString();
+
+    await saveOAuthClients(clientsConfig, clientsFilePath, { announce: false });
+  } catch (error) {
+    logger.error('OAuth failed to record repeat dynamic registration', {
+      component: 'OAuthClientManager',
+      clientId,
+      error
+    });
+    // Non-critical: the registration response is already correct without it.
+  }
+}
+
+/**
+ * Stamp the first user who consented to a dynamically registered client.
+ *
+ * Registration is unauthenticated, so a DCR record carries no owner. The
+ * earliest moment the server knows a person is the first consent, and that
+ * attribution is display-only: it is what turns an indistinguishable "Claude"
+ * row in the admin list into one an administrator can place. A second user of
+ * the same registration does not overwrite it.
+ *
+ * @param {string} clientId - Client ID that was just consented to
+ * @param {Object} user - Decoded JWT payload of the consenting user
+ * @param {string} clientsFilePath - Path to oauth-clients.json file
+ * @returns {Promise<void>}
+ */
+export async function stampDcrFirstUser(clientId, user, clientsFilePath) {
+  try {
+    const clientsConfig = loadOAuthClients(clientsFilePath);
+    const client = Object.hasOwn(clientsConfig.clients || {}, clientId)
+      ? clientsConfig.clients[clientId]
+      : undefined;
+    if (!client || client.metadata?.dcr !== true || client.metadata?.firstUserId) return;
+
+    client.metadata.firstUserId = user?.sub || '';
+    client.metadata.firstUserName = user?.name || user?.username || user?.sub || '';
+    client.metadata.firstConsentAt = new Date().toISOString();
+
+    await saveOAuthClients(clientsConfig, clientsFilePath, { announce: false });
+  } catch (error) {
+    logger.error('OAuth failed to stamp first consenting user', {
+      component: 'OAuthClientManager',
+      clientId,
+      error
+    });
+    // Non-critical: attribution is cosmetic, the authorization already happened.
+  }
+}
+
+/**
+ * Delete dynamically registered clients that have not been used recently.
+ *
+ * Only `metadata.dcr` records are considered, and only those whose `lastUsed`
+ * is older than `unusedForDays` or was never set. Deleting a client
+ * invalidates its users' consent memory and refresh tokens (they reconnect),
+ * which is why this is an explicit administrator action rather than a
+ * migration or a background job.
+ *
+ * @param {number} unusedForDays - Age threshold in days
+ * @param {string} clientsFilePath - Path to oauth-clients.json file
+ * @param {string} deletedBy - User ID performing the clean-up
+ * @returns {Promise<{deleted: number, clientIds: Array<string>}>} What was removed
+ */
+export async function deleteUnusedDynamicClients(unusedForDays, clientsFilePath, deletedBy) {
+  const clientsConfig = loadOAuthClients(clientsFilePath);
+  const cutoff = Date.now() - unusedForDays * 24 * 60 * 60 * 1000;
+  const clientIds = [];
+
+  for (const [clientId, client] of Object.entries(clientsConfig.clients || {})) {
+    if (client?.metadata?.dcr !== true) continue;
+
+    const lastUsed = client.lastUsed ? new Date(client.lastUsed).getTime() : null;
+    // A record that was never used is judged by when it was registered, so a
+    // connection someone started minutes ago is not swept away mid-flow.
+    const reference = lastUsed ?? (client.createdAt ? new Date(client.createdAt).getTime() : 0);
+    if (Number.isFinite(reference) && reference < cutoff) {
+      clientIds.push(clientId);
+    }
+  }
+
+  for (const clientId of clientIds) {
+    delete clientsConfig.clients[clientId];
+  }
+
+  if (clientIds.length > 0) {
+    await saveOAuthClients(clientsConfig, clientsFilePath);
+    logger.info('OAuth unused dynamic clients removed', {
+      component: 'OAuthClientManager',
+      count: clientIds.length,
+      unusedForDays,
+      deletedBy
+    });
+  }
+
+  return { deleted: clientIds.length, clientIds };
 }

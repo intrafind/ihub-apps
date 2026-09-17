@@ -14,6 +14,7 @@
  * before DOM insertion. Only static template strings and escaped values
  * are used with innerHTML for rendering the login UI.
  */
+/* global __authGateI18n */
 (function authGate() {
   'use strict';
 
@@ -23,12 +24,18 @@
   var DATA_ID = 'auth-gate-data';
   var IS_DEV = !!window.__AUTH_GATE_DEV_MODE__;
 
+  // localStorage key for the last successfully logged-in username, used to
+  // pre-fill the field when the user opted into "Remember me". Shared with the
+  // React LoginForm so the preference carries across both surfaces.
+  var REMEMBERED_USERNAME_KEY = 'ihub_rememberedUsername';
+
   // --- State ---
   var authConfig = null;
   var gateUI = null;
   var currentError = null;
   var isSubmitting = false;
   var selectedAuthMethod = null; // 'local' | 'ldap' | null
+  var isOverlayMode = false; // Track if gate is shown as overlay
 
   // --- Public API ---
   window.__authGate = {
@@ -47,6 +54,13 @@
     // where React fires tokenExpired while gate is already showing login form)
     if (window.__authGate.isVisible()) return;
     showGate({ overlay: true, reason: detail.reason });
+  });
+
+  // --- ESC Key Listener for Overlay Mode ---
+  window.addEventListener('keydown', function (e) {
+    if (e.key === 'Escape' && isOverlayMode && window.__authGate.isVisible()) {
+      hideGate();
+    }
   });
 
   // --- Bootstrap ---
@@ -107,7 +121,7 @@
         if (data.autoRedirect && !isLogoutPage) {
           if (shouldAutoRedirect(data.autoRedirect.provider)) {
             markAutoRedirectAttempt(data.autoRedirect.provider);
-            var returnUrl = window.location.href.split('?')[0];
+            var returnUrl = getEffectiveReturnUrl();
             var sep = data.autoRedirect.url.indexOf('?') !== -1 ? '&' : '?';
             window.location.href =
               data.autoRedirect.url + sep + 'returnUrl=' + encodeURIComponent(returnUrl);
@@ -327,6 +341,9 @@
 
     if (options.overlay) {
       root.classList.add('ag-overlay');
+      isOverlayMode = true;
+    } else {
+      isOverlayMode = false;
     }
 
     // Re-fetch auth status and show UI
@@ -356,6 +373,7 @@
       root.classList.add('ag-hidden');
       root.classList.remove('ag-overlay');
       root.textContent = '';
+      isOverlayMode = false;
     }, 200);
   }
 
@@ -403,6 +421,18 @@
     var logoUrl = gateUI && gateUI.logoUrl;
 
     var header = createElement('div', 'ag-header');
+
+    // Close button (only in overlay mode)
+    if (isOverlayMode) {
+      var closeBtn = createElement('button', 'ag-close-btn');
+      closeBtn.setAttribute('type', 'button');
+      closeBtn.setAttribute('aria-label', t('close', 'Close'));
+      closeBtn.textContent = '\u00D7'; // × symbol
+      closeBtn.addEventListener('click', function () {
+        hideGate();
+      });
+      header.appendChild(closeBtn);
+    }
 
     // Logo — use configured logo or fall back to app icon
     // Prepend base path for root-relative logo URLs so they work behind a subpath proxy
@@ -605,6 +635,11 @@
         usernameInput.placeholder = t('usernamePlaceholder');
         usernameInput.required = true;
         usernameInput.autocomplete = 'username';
+        // Pre-fill from the remembered username when "Remember me" was used.
+        var rememberedUsername = getRememberedUsername();
+        if (rememberedUsername) {
+          usernameInput.value = rememberedUsername;
+        }
         usernameGroup.appendChild(usernameInput);
         form.appendChild(usernameGroup);
 
@@ -625,6 +660,21 @@
         passwordInput.autocomplete = 'current-password';
         passwordGroup.appendChild(passwordInput);
         form.appendChild(passwordGroup);
+
+        // Remember me — pre-fills the username on the next visit (checked by default)
+        var rememberGroup = createElement('div', 'ag-checkbox-row');
+        var rememberInput = document.createElement('input');
+        rememberInput.className = 'ag-checkbox';
+        rememberInput.type = 'checkbox';
+        rememberInput.id = 'ag-remember';
+        rememberInput.name = 'rememberMe';
+        rememberInput.checked = true;
+        var rememberLabel = createElement('label', 'ag-checkbox-label');
+        rememberLabel.setAttribute('for', 'ag-remember');
+        rememberLabel.textContent = t('rememberMe');
+        rememberGroup.appendChild(rememberInput);
+        rememberGroup.appendChild(rememberLabel);
+        form.appendChild(rememberGroup);
 
         // Submit button
         var submitBtn = createElement('button', 'ag-btn ag-btn-primary');
@@ -655,9 +705,14 @@
           card.appendChild(demo);
         }
 
-        // Auto-focus username after render
+        // Auto-focus: jump to the password when the username was pre-filled
+        // from "Remember me", otherwise focus the username field.
         setTimeout(function () {
-          usernameInput.focus();
+          if (usernameInput.value && passwordInput) {
+            passwordInput.focus();
+          } else {
+            usernameInput.focus();
+          }
         }, 50);
       }
     }
@@ -705,10 +760,14 @@
     var usernameEl = root.querySelector('#ag-username');
     var passwordEl = root.querySelector('#ag-password');
     var providerEl = root.querySelector('#ag-provider');
+    var rememberEl = root.querySelector('#ag-remember');
 
     var username = usernameEl ? usernameEl.value.trim() : '';
     var password = passwordEl ? passwordEl.value : '';
     var provider = providerEl ? providerEl.value : '';
+    // Default to remembering when the checkbox isn't rendered (mirrors the
+    // checked-by-default behavior of the form).
+    var rememberMe = rememberEl ? rememberEl.checked : true;
 
     if (!username || !password) return;
 
@@ -749,6 +808,9 @@
           }
           currentError = null;
 
+          // Persist (or clear) the remembered username per the checkbox.
+          saveRememberedUsername(rememberMe ? username : '');
+
           // Clean ?logout=true from URL so the app doesn't think we just logged out
           cleanUrlParams(['logout']);
 
@@ -774,7 +836,7 @@
 
   function handleOidcLogin(providerName) {
     // Store return URL
-    var returnUrl = window.location.href.split('?')[0];
+    var returnUrl = getEffectiveReturnUrl();
     try {
       sessionStorage.setItem('authReturnUrl', returnUrl);
     } catch (e) {
@@ -791,7 +853,7 @@
   }
 
   function handleNtlmLogin() {
-    var returnUrl = window.location.href.split('?')[0];
+    var returnUrl = getEffectiveReturnUrl();
     var url = API_BASE + '/auth/ntlm/login?returnUrl=' + encodeURIComponent(returnUrl);
     window.location.href = url;
   }
@@ -818,6 +880,33 @@
     } catch (e) {
       /* ignore */
     }
+  }
+
+  // Resolve the returnUrl to forward to OIDC/NTLM. If the current URL already
+  // carries a returnUrl query parameter (e.g. from /api/oauth/authorize
+  // redirecting to /login?returnUrl=...), preserve it so the post-auth flow
+  // lands back on the original request. Otherwise falls back to the current
+  // URL including its query string, so params like ?prefill=...&send=true
+  // (auto-send links) survive an OIDC/NTLM round trip for logged-out users.
+  // Same-origin only to avoid open-redirect via the auth provider.
+  function getEffectiveReturnUrl() {
+    try {
+      var params = new URLSearchParams(window.location.search);
+      var existing = params.get('returnUrl');
+      if (existing) {
+        try {
+          var resolved = new URL(existing, window.location.origin);
+          if (resolved.origin === window.location.origin) {
+            return resolved.toString();
+          }
+        } catch (e) {
+          /* invalid URL — fall through */
+        }
+      }
+    } catch (e) {
+      /* ignore */
+    }
+    return window.location.href;
   }
 
   // =========================================================================
@@ -848,6 +937,26 @@
     }
   }
 
+  function getRememberedUsername() {
+    try {
+      return localStorage.getItem(REMEMBERED_USERNAME_KEY) || '';
+    } catch (e) {
+      return '';
+    }
+  }
+
+  function saveRememberedUsername(username) {
+    try {
+      if (username) {
+        localStorage.setItem(REMEMBERED_USERNAME_KEY, username);
+      } else {
+        localStorage.removeItem(REMEMBERED_USERNAME_KEY);
+      }
+    } catch (e) {
+      // Storage may be unavailable (e.g. privacy mode); silently degrade.
+    }
+  }
+
   // =========================================================================
   // Utilities
   // =========================================================================
@@ -862,7 +971,7 @@
   }
 
   function setFormDisabled(root, disabled) {
-    var inputs = root.querySelectorAll('.ag-input, .ag-select, .ag-btn');
+    var inputs = root.querySelectorAll('.ag-input, .ag-select, .ag-btn, .ag-checkbox');
     inputs.forEach(function (el) {
       el.disabled = disabled;
     });

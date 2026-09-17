@@ -122,7 +122,7 @@ function IconPicker({ value, onChange, className = '', error }) {
       <button
         type="button"
         onClick={() => setIsOpen(!isOpen)}
-        className={`w-full flex items-center justify-between px-3 py-2 border rounded-md shadow-sm text-sm bg-white hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-indigo-500 ${
+        className={`w-full flex items-center justify-between px-3 py-2 border rounded-md shadow-xs text-sm bg-white hover:bg-gray-50 focus:outline-hidden focus:ring-2 focus:ring-indigo-500 ${
           error ? 'border-red-300' : 'border-gray-300'
         }`}
       >
@@ -161,7 +161,7 @@ function IconPicker({ value, onChange, className = '', error }) {
                 value={searchTerm}
                 onChange={e => setSearchTerm(e.target.value)}
                 placeholder={t('admin.apps.edit.searchIcons', 'Search icons...')}
-                className="w-full pl-8 pr-3 py-2 border border-gray-300 rounded-md text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500"
+                className="w-full pl-8 pr-3 py-2 border border-gray-300 rounded-md text-sm focus:outline-hidden focus:ring-2 focus:ring-indigo-500"
               />
             </div>
           </div>

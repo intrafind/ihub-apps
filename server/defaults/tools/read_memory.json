@@ -1,0 +1,16 @@
+{
+  "id": "read_memory",
+  "name": {
+    "en": "Read Memory"
+  },
+  "description": {
+    "en": "Read your long-term memory file. Returns the full body and current version."
+  },
+  "script": "agentTools.js",
+  "method": "readMemory",
+  "isAgentTool": true,
+  "parameters": {
+    "type": "object",
+    "properties": {}
+  }
+}

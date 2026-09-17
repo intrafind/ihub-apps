@@ -1,4 +1,6 @@
 import winston from 'winston';
+import { getContext } from './requestContext.js';
+import { anonymizeIp } from './ipAnonymizer.js';
 
 // Default log level and format (fallback if not configured)
 const DEFAULT_LOG_LEVEL = 'info';
@@ -113,6 +115,41 @@ function getComponentFilter() {
   }
 }
 
+// Components that emit authentication traces. When auth debug is explicitly
+// enabled these must never be suppressed by component filtering — otherwise the
+// single auth-debug toggle would silently do nothing whenever an admin has a
+// component filter active that happens to exclude them.
+const AUTH_COMPONENTS = new Set([
+  'AuthService',
+  'OidcAuth',
+  'NtlmAuth',
+  'JwtAuth',
+  'LdapAuth',
+  'LdapGroupLookup',
+  'ProxyAuth',
+  'TeamsAuth',
+  'McpAuth',
+  'Authorization',
+  'Auth',
+  'EntraService'
+]);
+
+/**
+ * Whether authentication debug logging is enabled in platform config.
+ * @returns {boolean}
+ */
+function isAuthDebugEnabled() {
+  try {
+    if (configCacheRef) {
+      const platformConfig = configCacheRef.getPlatform();
+      return platformConfig?.auth?.debug?.enabled === true;
+    }
+    return false;
+  } catch {
+    return false;
+  }
+}
+
 /**
  * Custom filter format to filter logs by component
  */
@@ -131,6 +168,12 @@ const componentFilterFormat = winston.format(info => {
 
   // If log has a component and it's in the filter list, allow it
   if (info.component && componentFilter.filter.includes(info.component)) {
+    return info;
+  }
+
+  // Never let component filtering hide authentication logs while auth debug is
+  // switched on, so the single toggle reliably surfaces auth traces.
+  if (info.component && AUTH_COMPONENTS.has(info.component) && isAuthDebugEnabled()) {
     return info;
   }
 
@@ -286,8 +329,64 @@ function processLogArgs(args) {
     }
   }
 
+  // Merge per-request context (userId, oauthClientId, ip) so logs are
+  // attributable without each call site having to pass them through.
+  // Caller-provided fields always win.
+  logData = mergeRequestContext(logData);
+
   // Redact sensitive information from the log data
   return redactSensitiveData(logData);
+}
+
+/**
+ * Merge fields from the active request context into the log data without
+ * overriding fields explicitly set by the caller. Returns the data unchanged
+ * when called outside a request (e.g. server startup, background jobs).
+ *
+ * @param {Object} logData - Structured log data.
+ * @returns {Object} Log data with request context fields merged in.
+ */
+function mergeRequestContext(logData) {
+  const ctx = getContext();
+  if (!ctx) return logData;
+
+  const merged = { ...logData };
+  if (ctx.userId !== undefined && merged.userId === undefined) {
+    merged.userId = ctx.userId;
+  }
+  if (ctx.oauthClientId !== undefined && merged.oauthClientId === undefined) {
+    merged.oauthClientId = ctx.oauthClientId;
+  }
+  if (ctx.ip !== undefined && merged.ip === undefined) {
+    const mode = getIpAnonymizationMode();
+    if (mode === 'drop') {
+      // omit the field entirely
+    } else if (mode === 'mask') {
+      merged.ip = anonymizeIp(ctx.ip);
+    } else {
+      merged.ip = ctx.ip;
+    }
+  }
+  return merged;
+}
+
+/**
+ * Read logging.anonymizeIp from platform config and normalize it to
+ * 'off' | 'mask' | 'drop'. Accepts boolean (true => mask) for ergonomics.
+ * Returns 'off' when config is unavailable so we never accidentally hide IPs
+ * before config has loaded.
+ */
+function getIpAnonymizationMode() {
+  try {
+    if (!configCacheRef) return 'off';
+    const platformConfig = configCacheRef.getPlatform();
+    const v = platformConfig?.logging?.anonymizeIp;
+    if (v === 'drop') return 'drop';
+    if (v === true || v === 'mask') return 'mask';
+    return 'off';
+  } catch {
+    return 'off';
+  }
 }
 
 /**
@@ -358,7 +457,13 @@ function redactSensitiveData(data) {
     'sessionId',
     'refreshtoken',
     'refresh_token',
-    'refreshToken'
+    'refreshToken',
+    // A raw Cookie header (or a single cookie value) carries the authToken JWT
+    // and, on OIDC deployments with RP-Initiated Logout enabled, the provider's
+    // ID token. Only string values are redacted, so a deliberate
+    // `cookies: Object.keys(req.cookies)` array still logs the names.
+    'cookie',
+    'cookies'
   ];
 
   const redacted = {};

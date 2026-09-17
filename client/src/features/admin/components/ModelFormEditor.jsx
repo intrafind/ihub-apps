@@ -8,6 +8,75 @@ import {
   isFieldRequired
 } from '../../../utils/schemaValidation';
 import Icon from '../../../shared/components/Icon';
+import { getAdminApiErrorMessage, makeAdminApiCall } from '../../../api/adminApi';
+import AdminFormErrorSummary from './AdminFormErrorSummary';
+import { FormValidationProvider } from './formValidationContext';
+
+/**
+ * Editor for a JSON-typed provider config field. Keeps the raw textarea contents in
+ * local state so admins can type intermediate (invalid) JSON without those characters
+ * being persisted into `model.config`. The parent only ever receives the parsed
+ * object/null when the input is valid; while invalid, `model.config[field.key]` keeps
+ * its previous value and an inline error is shown.
+ */
+function JsonConfigField({ id, value, onChange, className }) {
+  const { t } = useTranslation();
+  const initialDraft = useMemo(() => {
+    if (value === undefined || value === null) return '';
+    if (typeof value === 'string') return value;
+    try {
+      return JSON.stringify(value, null, 2);
+    } catch {
+      return '';
+    }
+  }, [value]);
+
+  const [draft, setDraft] = useState(initialDraft);
+  const [error, setError] = useState(null);
+
+  // Keep local draft in sync when the upstream value changes from elsewhere
+  // (model load, programmatic reset, switching providers).
+  useEffect(() => {
+    setDraft(initialDraft);
+    setError(null);
+  }, [initialDraft]);
+
+  const handleChange = e => {
+    const raw = e.target.value;
+    setDraft(raw);
+    if (!raw.trim()) {
+      setError(null);
+      onChange(null);
+      return;
+    }
+    try {
+      const parsed = JSON.parse(raw);
+      setError(null);
+      onChange(parsed);
+    } catch (err) {
+      setError(getAdminApiErrorMessage(err));
+      // Intentionally do NOT call onChange — keep last valid value in model.config.
+    }
+  };
+
+  return (
+    <>
+      <textarea
+        id={id}
+        rows={3}
+        value={draft}
+        onChange={handleChange}
+        aria-invalid={!!error}
+        className={className}
+      />
+      {error && (
+        <p className="mt-1 text-xs text-red-600 dark:text-red-400">
+          {t('admin.models.errors.invalidJson', 'Invalid JSON')}: {error}
+        </p>
+      )}
+    </>
+  );
+}
 
 /**
  * Generate list of environment variable names that can be used for a model's API key
@@ -34,15 +103,22 @@ const getEnvironmentVariableNames = model => {
     anthropic: 'ANTHROPIC_API_KEY',
     mistral: 'MISTRAL_API_KEY',
     google: 'GOOGLE_API_KEY',
+    // Gemini transcription models reuse the same Google key as the chat models.
+    'google-live': 'GOOGLE_API_KEY',
+    'google-transcribe': 'GOOGLE_API_KEY',
     local: 'LOCAL_API_KEY'
     // Note: iAssistant uses JWT tokens (not static API keys), handled below
   };
+
+  // Providers with no provider-wide key: a self-hosted realtime endpoint is
+  // per-model (and often needs no auth at all), and iAssistant uses JWTs.
+  const noProviderWideKey = ['iassistant', 'iassistant-conversation', 'vllm-realtime'];
 
   const providerVar = providerMap[model.provider];
   if (providerVar) {
     // Known provider - show its env var
     envVars.push(providerVar);
-  } else if (model.provider !== 'iassistant' && model.provider !== 'iassistant-conversation') {
+  } else if (!noProviderWideKey.includes(model.provider)) {
     // Unknown provider - show generic pattern and default fallback
     envVars.push(`${model.provider.toUpperCase()}_API_KEY`);
     envVars.push('DEFAULT_API_KEY');
@@ -116,14 +192,52 @@ function ModelFormEditor({
     // eslint-disable-next-line @eslint-react/exhaustive-deps
   }, [data, jsonSchema]);
 
+  // Adapter-declared provider config schema (e.g. AWS Bedrock region).
+  // Drives dynamic field rendering in the Configuration section.
+  const [providerSchema, setProviderSchema] = useState(null);
+  useEffect(() => {
+    let cancelled = false;
+    if (!data?.provider) {
+      setProviderSchema(null);
+      return () => {
+        cancelled = true;
+      };
+    }
+    (async () => {
+      try {
+        // makeAdminApiCall returns an axios response object: `{ data, status, ... }`,
+        // not a fetch Response. Read schema via `response.data`.
+        const response = await makeAdminApiCall(
+          `/admin/providers/${encodeURIComponent(data.provider)}/schema`
+        );
+        if (cancelled) return;
+        setProviderSchema(response?.data || null);
+      } catch {
+        if (!cancelled) setProviderSchema(null);
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [data?.provider]);
+
   const handleChange = (field, value) => {
     onChange({ ...data, [field]: value });
+  };
+
+  const handleConfigChange = (key, value) => {
+    onChange({
+      ...data,
+      config: { ...(data.config || {}), [key]: value }
+    });
   };
 
   const handleInputChange = e => {
     const { name, value, type, checked } = e.target;
     handleChange(name, type === 'checkbox' ? checked : value);
   };
+
+  const isTranscription = data.modelType === 'transcription';
 
   const providerOptions = [
     { value: 'openai', label: 'OpenAI' },
@@ -133,7 +247,11 @@ function ModelFormEditor({
     { value: 'mistral', label: 'Mistral' },
     { value: 'local', label: 'Local' },
     { value: 'iassistant', label: 'iAssistant' },
-    { value: 'iassistant-conversation', label: 'iAssistant Conversation' }
+    { value: 'iassistant-conversation', label: 'iAssistant Conversation' },
+    { value: 'bedrock', label: 'AWS Bedrock' },
+    { value: 'vllm-realtime', label: 'vLLM Realtime (Transcription)' },
+    { value: 'google-live', label: 'Google Gemini Live (Transcription)' },
+    { value: 'google-transcribe', label: 'Google Gemini Batch (Transcription)' }
   ];
 
   // Memoize environment variables tooltip text for API Key field
@@ -151,549 +269,957 @@ function ModelFormEditor({
     );
   }, [data.id, data.provider, t]);
 
+  const mergedErrors = { ...errors, ...validationErrors };
+  const errorLabels = {
+    id: t('admin.models.fields.id', 'Model ID'),
+    name: t('admin.models.fields.name', 'Name'),
+    description: t('admin.models.fields.description', 'Description'),
+    provider: t('admin.models.fields.provider', 'Provider'),
+    modelId: t('admin.models.fields.modelId', 'Model'),
+    url: t('admin.models.fields.url', 'URL'),
+    contextWindow: t('admin.models.fields.contextWindow', 'Context Window'),
+    maxOutputTokens: t('admin.models.fields.maxOutputTokens', 'Max Output Tokens')
+  };
+
   return (
-    <div className="space-y-6">
-      {/* Basic Information */}
-      <div className="bg-white dark:bg-gray-800 shadow px-4 py-5 sm:rounded-lg sm:p-6">
-        <div className="md:grid md:grid-cols-3 md:gap-6">
-          <div className="md:col-span-1">
-            <h3 className="text-lg font-medium leading-6 text-gray-900 dark:text-gray-100">
-              {t('admin.models.edit.basicInfo')}
-            </h3>
-            <p className="mt-1 text-sm text-gray-500 dark:text-gray-400">
-              {t('admin.models.edit.basicInfoDesc', 'Basic information about the model')}
-            </p>
-          </div>
-          <div className="mt-5 md:mt-0 md:col-span-2">
-            <div className="grid grid-cols-6 gap-6">
-              <div className="col-span-6 sm:col-span-3">
-                <label
-                  htmlFor="id"
-                  className="block text-sm font-medium text-gray-700 dark:text-gray-300"
-                >
-                  {t('admin.models.fields.id')}
-                  {isFieldRequired('id', jsonSchema) && <span className="text-red-500"> *</span>}
-                </label>
-                <input
-                  type="text"
-                  name="id"
-                  id="id"
-                  value={data.id || ''}
-                  onChange={handleInputChange}
-                  disabled={!isNewModel}
-                  className={`mt-1 focus:ring-indigo-500 focus:border-indigo-500 block w-full shadow-sm sm:text-sm border-gray-300 dark:border-gray-600 rounded-md disabled:bg-gray-100 dark:disabled:bg-gray-700 bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100 ${
-                    validationErrors.id || errors.id
-                      ? 'border-red-300 text-red-900 placeholder-red-300'
-                      : ''
-                  }`}
-                  required={isFieldRequired('id', jsonSchema)}
-                />
-                {(validationErrors.id || errors.id) && (
-                  <p className="mt-2 text-sm text-red-600 dark:text-red-400">
-                    {validationErrors.id || errors.id}
-                  </p>
-                )}
-                <p className="mt-2 text-sm text-gray-500 dark:text-gray-400">
-                  {t('admin.models.hints.modelId')}
-                </p>
-              </div>
-
-              <div className="col-span-6 sm:col-span-3">
-                <DynamicLanguageEditor
-                  label={`${t('admin.models.fields.name')} *`}
-                  value={data.name || { [DEFAULT_LANGUAGE]: '' }}
-                  onChange={value => handleChange('name', value)}
-                  required={true}
-                  error={errors.name}
-                />
-              </div>
-
-              <div className="col-span-6">
-                <DynamicLanguageEditor
-                  label={`${t('admin.models.fields.description')} *`}
-                  value={data.description || { [DEFAULT_LANGUAGE]: '' }}
-                  onChange={value => handleChange('description', value)}
-                  required={true}
-                  type="textarea"
-                  error={errors.description}
-                />
-              </div>
-
-              <div className="col-span-6 sm:col-span-3">
-                <label
-                  htmlFor="provider"
-                  className="block text-sm font-medium text-gray-700 dark:text-gray-300"
-                >
-                  {t('admin.models.fields.provider')} <span className="text-red-500">*</span>
-                </label>
-                <select
-                  id="provider"
-                  name="provider"
-                  value={data.provider || ''}
-                  onChange={handleInputChange}
-                  className={`mt-1 block w-full py-2 px-3 border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100 rounded-md shadow-sm focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm ${
-                    errors.provider ? 'border-red-300 text-red-900' : ''
-                  }`}
-                  required
-                >
-                  <option value="">{t('admin.models.placeholders.selectProvider')}</option>
-                  {providerOptions.map(option => (
-                    <option key={option.value} value={option.value}>
-                      {option.label}
-                    </option>
-                  ))}
-                </select>
-                {errors.provider && (
-                  <p className="mt-2 text-sm text-red-600 dark:text-red-400">{errors.provider}</p>
-                )}
-              </div>
-
-              <div className="col-span-6 sm:col-span-3">
-                <label
-                  htmlFor="modelId"
-                  className="block text-sm font-medium text-gray-700 dark:text-gray-300"
-                >
-                  {t('admin.models.fields.modelId')}
-                </label>
-                <input
-                  type="text"
-                  name="modelId"
-                  id="modelId"
-                  value={data.modelId || ''}
-                  onChange={handleInputChange}
-                  placeholder={t('admin.models.placeholders.apiModelId')}
-                  className={`mt-1 focus:ring-indigo-500 focus:border-indigo-500 block w-full shadow-sm sm:text-sm border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100 rounded-md ${
-                    errors.modelId ? 'border-red-300 text-red-900 placeholder-red-300' : ''
-                  }`}
-                />
-                {errors.modelId && (
-                  <p className="mt-2 text-sm text-red-600 dark:text-red-400">{errors.modelId}</p>
-                )}
-                <p className="mt-2 text-sm text-gray-500 dark:text-gray-400">
-                  {t('admin.models.hints.apiModelId')}
-                </p>
-              </div>
-
-              <div className="col-span-6">
-                <label
-                  htmlFor="url"
-                  className="block text-sm font-medium text-gray-700 dark:text-gray-300"
-                >
-                  {t('admin.models.fields.url')} <span className="text-red-500">*</span>
-                </label>
-                <input
-                  type="url"
-                  name="url"
-                  id="url"
-                  value={data.url || ''}
-                  onChange={handleInputChange}
-                  placeholder={t('admin.models.placeholders.apiUrl')}
-                  className={`mt-1 focus:ring-indigo-500 focus:border-indigo-500 block w-full shadow-sm sm:text-sm border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100 rounded-md ${
-                    errors.url ? 'border-red-300 text-red-900 placeholder-red-300' : ''
-                  }`}
-                  required
-                />
-                {errors.url && (
-                  <p className="mt-2 text-sm text-red-600 dark:text-red-400">{errors.url}</p>
-                )}
-              </div>
-
-              <div className="col-span-6">
-                <div className="flex items-center gap-2">
+    <FormValidationProvider errors={mergedErrors}>
+      <div className="space-y-6">
+        <AdminFormErrorSummary
+          errors={mergedErrors}
+          labels={errorLabels}
+          title={t('admin.models.edit.fixErrors', 'Please fix the following errors')}
+        />
+        {/* Basic Information */}
+        <div className="bg-white dark:bg-gray-800 shadow-sm px-4 py-5 sm:rounded-lg sm:p-6">
+          <div className="md:grid md:grid-cols-3 md:gap-6">
+            <div className="md:col-span-1">
+              <h3 className="text-lg font-medium leading-6 text-gray-900 dark:text-gray-100">
+                {t('admin.models.edit.basicInfo')}
+              </h3>
+              <p className="mt-1 text-sm text-gray-500 dark:text-gray-400">
+                {t('admin.models.edit.basicInfoDesc', 'Basic information about the model')}
+              </p>
+            </div>
+            <div className="mt-5 md:mt-0 md:col-span-2">
+              <div className="grid grid-cols-6 gap-6">
+                <div className="col-span-6 sm:col-span-3">
                   <label
-                    htmlFor="apiKey"
+                    htmlFor="id"
                     className="block text-sm font-medium text-gray-700 dark:text-gray-300"
                   >
-                    {t('admin.models.fields.apiKey', 'API Key')}
+                    {t('admin.models.fields.id')}
+                    {isFieldRequired('id', jsonSchema) && <span className="text-red-500"> *</span>}
                   </label>
-                  {apiKeyTooltip && (
-                    <Icon
-                      name="information-circle"
-                      size="sm"
-                      className="text-gray-400 dark:text-gray-500 cursor-help"
-                      title={apiKeyTooltip}
-                    />
-                  )}
-                </div>
-                <div className="mt-1 relative rounded-md shadow-sm">
                   <input
-                    type="password"
-                    name="apiKey"
-                    id="apiKey"
-                    value={data.apiKey || ''}
+                    type="text"
+                    name="id"
+                    id="id"
+                    value={data.id || ''}
                     onChange={handleInputChange}
-                    placeholder={
-                      data.apiKeySet
-                        ? t(
-                            'admin.models.placeholders.apiKeySet',
-                            'API key is set (leave blank to keep current)'
-                          )
-                        : t(
-                            'admin.models.placeholders.apiKey',
-                            'Enter API key (optional - will use environment variable if not set)'
-                          )
-                    }
-                    className="focus:ring-indigo-500 focus:border-indigo-500 block w-full pr-10 sm:text-sm border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100 rounded-md"
+                    disabled={!isNewModel}
+                    className={`mt-1 focus:ring-indigo-500 focus:border-indigo-500 block w-full shadow-xs sm:text-sm border-gray-300 dark:border-gray-600 rounded-md disabled:bg-gray-100 dark:disabled:bg-gray-700 bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100 ${
+                      validationErrors.id || errors.id
+                        ? 'border-red-300 text-red-900 placeholder-red-300'
+                        : ''
+                    }`}
+                    required={isFieldRequired('id', jsonSchema)}
+                  />
+                  {(validationErrors.id || errors.id) && (
+                    <p className="mt-2 text-sm text-red-600 dark:text-red-400">
+                      {validationErrors.id || errors.id}
+                    </p>
+                  )}
+                  <p className="mt-2 text-sm text-gray-500 dark:text-gray-400">
+                    {t('admin.models.hints.modelId')}
+                  </p>
+                </div>
+
+                <div className="col-span-6 sm:col-span-3">
+                  <DynamicLanguageEditor
+                    label={`${t('admin.models.fields.name')} *`}
+                    value={data.name || { [DEFAULT_LANGUAGE]: '' }}
+                    onChange={value => handleChange('name', value)}
+                    required={true}
+                    error={errors.name}
                   />
                 </div>
-                <p className="mt-2 text-sm text-gray-500 dark:text-gray-400">
-                  {t(
-                    'admin.models.hints.apiKey',
-                    'API key for this model. If not provided, the system will use the environment variable for the provider. Keys are stored encrypted.'
-                  )}
-                </p>
-                {data.apiKeySet && (
-                  <p className="mt-2 text-sm text-blue-600 dark:text-blue-400">
-                    {t('admin.models.hints.apiKeySet', '✓ API key is configured for this model')}
+
+                <div className="col-span-6">
+                  <DynamicLanguageEditor
+                    label={`${t('admin.models.fields.description')} *`}
+                    value={data.description || { [DEFAULT_LANGUAGE]: '' }}
+                    onChange={value => handleChange('description', value)}
+                    required={true}
+                    type="textarea"
+                    error={errors.description}
+                  />
+                </div>
+
+                <div className="col-span-6 sm:col-span-3">
+                  <label
+                    htmlFor="modelType"
+                    className="block text-sm font-medium text-gray-700 dark:text-gray-300"
+                  >
+                    {t('admin.models.fields.modelType', 'Model Type')}
+                  </label>
+                  <select
+                    id="modelType"
+                    name="modelType"
+                    value={data.modelType || 'chat'}
+                    onChange={handleInputChange}
+                    className="mt-1 block w-full py-2 px-3 border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100 rounded-md shadow-xs focus:outline-hidden focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm"
+                  >
+                    <option value="chat">{t('admin.models.modelType.chat', 'Chat')}</option>
+                    <option value="transcription">
+                      {t('admin.models.modelType.transcription', 'Transcription')}
+                    </option>
+                  </select>
+                  <p className="mt-2 text-sm text-gray-500 dark:text-gray-400">
+                    {t(
+                      'admin.models.hints.modelType',
+                      'Chat models answer prompts. Transcription models convert audio to text via a realtime endpoint (e.g. Voxtral).'
+                    )}
                   </p>
+                </div>
+
+                <div className="col-span-6 sm:col-span-3">
+                  <label
+                    htmlFor="provider"
+                    className="block text-sm font-medium text-gray-700 dark:text-gray-300"
+                  >
+                    {t('admin.models.fields.provider')} <span className="text-red-500">*</span>
+                  </label>
+                  <select
+                    id="provider"
+                    name="provider"
+                    value={data.provider || ''}
+                    onChange={handleInputChange}
+                    className={`mt-1 block w-full py-2 px-3 border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100 rounded-md shadow-xs focus:outline-hidden focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm ${
+                      errors.provider ? 'border-red-300 text-red-900' : ''
+                    }`}
+                    required
+                  >
+                    <option value="">{t('admin.models.placeholders.selectProvider')}</option>
+                    {providerOptions.map(option => (
+                      <option key={option.value} value={option.value}>
+                        {option.label}
+                      </option>
+                    ))}
+                  </select>
+                  {errors.provider && (
+                    <p className="mt-2 text-sm text-red-600 dark:text-red-400">{errors.provider}</p>
+                  )}
+                </div>
+
+                <div className="col-span-6 sm:col-span-3">
+                  <label
+                    htmlFor="modelId"
+                    className="block text-sm font-medium text-gray-700 dark:text-gray-300"
+                  >
+                    {t('admin.models.fields.modelId')}
+                  </label>
+                  <input
+                    type="text"
+                    name="modelId"
+                    id="modelId"
+                    value={data.modelId || ''}
+                    onChange={handleInputChange}
+                    placeholder={t('admin.models.placeholders.apiModelId')}
+                    className={`mt-1 focus:ring-indigo-500 focus:border-indigo-500 block w-full shadow-xs sm:text-sm border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100 rounded-md ${
+                      errors.modelId ? 'border-red-300 text-red-900 placeholder-red-300' : ''
+                    }`}
+                  />
+                  {errors.modelId && (
+                    <p className="mt-2 text-sm text-red-600 dark:text-red-400">{errors.modelId}</p>
+                  )}
+                  <p className="mt-2 text-sm text-gray-500 dark:text-gray-400">
+                    {t('admin.models.hints.apiModelId')}
+                  </p>
+                </div>
+
+                {/*
+                Bedrock builds its endpoint URL from `region` + `modelId` at request time, so
+                a URL field would only confuse admins. Hide the field entirely for Bedrock.
+              */}
+                {data.provider !== 'bedrock' && (
+                  <div className="col-span-6">
+                    <label
+                      htmlFor="url"
+                      className="block text-sm font-medium text-gray-700 dark:text-gray-300"
+                    >
+                      {t('admin.models.fields.url')} <span className="text-red-500">*</span>
+                    </label>
+                    <input
+                      type={isTranscription ? 'text' : 'url'}
+                      name="url"
+                      id="url"
+                      value={data.url || ''}
+                      onChange={handleInputChange}
+                      placeholder={
+                        isTranscription
+                          ? t('admin.models.placeholders.realtimeUrl', 'ws://host:8080/v1/realtime')
+                          : t('admin.models.placeholders.apiUrl')
+                      }
+                      className={`mt-1 focus:ring-indigo-500 focus:border-indigo-500 block w-full shadow-xs sm:text-sm border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100 rounded-md ${
+                        errors.url ? 'border-red-300 text-red-900 placeholder-red-300' : ''
+                      }`}
+                      required
+                    />
+                    {isTranscription && (
+                      <p className="mt-2 text-sm text-gray-500 dark:text-gray-400">
+                        {t(
+                          'admin.models.hints.realtimeUrl',
+                          'WebSocket URL of the vLLM realtime endpoint. It stays server-side and never reaches the browser.'
+                        )}
+                      </p>
+                    )}
+                    {errors.url && (
+                      <p className="mt-2 text-sm text-red-600 dark:text-red-400">{errors.url}</p>
+                    )}
+                  </div>
                 )}
+
+                <div className="col-span-6">
+                  <div className="flex items-center gap-2">
+                    <label
+                      htmlFor="apiKey"
+                      className="block text-sm font-medium text-gray-700 dark:text-gray-300"
+                    >
+                      {t('admin.models.fields.apiKey', 'API Key')}
+                    </label>
+                    {apiKeyTooltip && (
+                      <Icon
+                        name="information-circle"
+                        size="sm"
+                        className="text-gray-400 dark:text-gray-500 cursor-help"
+                        title={apiKeyTooltip}
+                      />
+                    )}
+                  </div>
+                  <div className="mt-1 relative rounded-md shadow-xs">
+                    <input
+                      type="password"
+                      name="apiKey"
+                      id="apiKey"
+                      value={data.apiKey || ''}
+                      onChange={handleInputChange}
+                      placeholder={
+                        data.apiKeySet
+                          ? t(
+                              'admin.models.placeholders.apiKeySet',
+                              'API key is set (leave blank to keep current)'
+                            )
+                          : t(
+                              'admin.models.placeholders.apiKey',
+                              'Enter API key (optional - will use environment variable if not set)'
+                            )
+                      }
+                      className="focus:ring-indigo-500 focus:border-indigo-500 block w-full pr-10 sm:text-sm border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100 rounded-md"
+                    />
+                  </div>
+                  <p className="mt-2 text-sm text-gray-500 dark:text-gray-400">
+                    {t(
+                      'admin.models.hints.apiKey',
+                      'API key for this model. If not provided, the system will use the environment variable for the provider. Keys are stored encrypted.'
+                    )}
+                  </p>
+                  {data.apiKeySet && (
+                    <p className="mt-2 text-sm text-blue-600 dark:text-blue-400">
+                      {t('admin.models.hints.apiKeySet', '✓ API key is configured for this model')}
+                    </p>
+                  )}
+                </div>
               </div>
             </div>
           </div>
         </div>
-      </div>
 
-      {/* Configuration */}
-      <div className="bg-white dark:bg-gray-800 shadow px-4 py-5 sm:rounded-lg sm:p-6">
-        <div className="md:grid md:grid-cols-3 md:gap-6">
-          <div className="md:col-span-1">
-            <h3 className="text-lg font-medium leading-6 text-gray-900 dark:text-gray-100">
-              {t('admin.models.edit.configuration')}
-            </h3>
-            <p className="mt-1 text-sm text-gray-500 dark:text-gray-400">
-              {t(
-                'admin.models.edit.configurationDesc',
-                'Advanced configuration options for the model'
-              )}
-            </p>
-          </div>
-          <div className="mt-5 md:mt-0 md:col-span-2">
-            <div className="grid grid-cols-6 gap-6">
-              <div className="col-span-6 sm:col-span-2">
-                <label
-                  htmlFor="tokenLimit"
-                  className="block text-sm font-medium text-gray-700 dark:text-gray-300"
-                >
-                  {t('admin.models.fields.tokenLimit')}
-                  {isFieldRequired('tokenLimit', jsonSchema) && (
-                    <span className="text-red-500"> *</span>
+        {/* Configuration */}
+        <div className="bg-white dark:bg-gray-800 shadow-sm px-4 py-5 sm:rounded-lg sm:p-6">
+          <div className="md:grid md:grid-cols-3 md:gap-6">
+            <div className="md:col-span-1">
+              <h3 className="text-lg font-medium leading-6 text-gray-900 dark:text-gray-100">
+                {t('admin.models.edit.configuration')}
+              </h3>
+              <p className="mt-1 text-sm text-gray-500 dark:text-gray-400">
+                {t(
+                  'admin.models.edit.configurationDesc',
+                  'Advanced configuration options for the model'
+                )}
+              </p>
+            </div>
+            <div className="mt-5 md:mt-0 md:col-span-2">
+              <div className="grid grid-cols-6 gap-6">
+                {!isTranscription && (
+                  <>
+                    <div className="col-span-6 sm:col-span-2">
+                      <label
+                        htmlFor="contextWindow"
+                        className="block text-sm font-medium text-gray-700 dark:text-gray-300"
+                      >
+                        {t('admin.models.fields.contextWindow', 'Context Window')}
+                        {isFieldRequired('contextWindow', jsonSchema) && (
+                          <span className="text-red-500"> *</span>
+                        )}
+                      </label>
+                      <input
+                        type="number"
+                        name="contextWindow"
+                        id="contextWindow"
+                        value={data.contextWindow || ''}
+                        onChange={handleInputChange}
+                        min="1"
+                        className={`mt-1 focus:ring-indigo-500 focus:border-indigo-500 block w-full shadow-xs sm:text-sm border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100 rounded-md ${
+                          errors.contextWindow ? 'border-red-300 text-red-900' : ''
+                        }`}
+                        required={isFieldRequired('contextWindow', jsonSchema)}
+                      />
+                      {errors.contextWindow && (
+                        <p className="mt-2 text-sm text-red-600 dark:text-red-400">
+                          {errors.contextWindow}
+                        </p>
+                      )}
+                    </div>
+                    <div className="col-span-6 sm:col-span-2">
+                      <label
+                        htmlFor="maxOutputTokens"
+                        className="block text-sm font-medium text-gray-700 dark:text-gray-300"
+                      >
+                        {t('admin.models.fields.maxOutputTokens', 'Max Output Tokens')}
+                        {isFieldRequired('maxOutputTokens', jsonSchema) && (
+                          <span className="text-red-500"> *</span>
+                        )}
+                      </label>
+                      <input
+                        type="number"
+                        name="maxOutputTokens"
+                        id="maxOutputTokens"
+                        value={data.maxOutputTokens || ''}
+                        onChange={handleInputChange}
+                        min="1"
+                        className={`mt-1 focus:ring-indigo-500 focus:border-indigo-500 block w-full shadow-xs sm:text-sm border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100 rounded-md ${
+                          errors.maxOutputTokens ? 'border-red-300 text-red-900' : ''
+                        }`}
+                        required={isFieldRequired('maxOutputTokens', jsonSchema)}
+                      />
+                      {errors.maxOutputTokens && (
+                        <p className="mt-2 text-sm text-red-600 dark:text-red-400">
+                          {errors.maxOutputTokens}
+                        </p>
+                      )}
+                    </div>
+                  </>
+                )}
+
+                <div className="col-span-6 sm:col-span-2">
+                  <label
+                    htmlFor="concurrency"
+                    className="block text-sm font-medium text-gray-700 dark:text-gray-300"
+                  >
+                    {t('admin.models.fields.concurrency')}
+                  </label>
+                  <input
+                    type="number"
+                    name="concurrency"
+                    id="concurrency"
+                    value={data.concurrency || ''}
+                    onChange={handleInputChange}
+                    min="1"
+                    className={`mt-1 focus:ring-indigo-500 focus:border-indigo-500 block w-full shadow-xs sm:text-sm border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100 rounded-md ${
+                      errors.concurrency ? 'border-red-300 text-red-900' : ''
+                    }`}
+                  />
+                  {errors.concurrency && (
+                    <p className="mt-2 text-sm text-red-600 dark:text-red-400">
+                      {errors.concurrency}
+                    </p>
                   )}
-                </label>
-                <input
-                  type="number"
-                  name="tokenLimit"
-                  id="tokenLimit"
-                  value={data.tokenLimit || ''}
-                  onChange={handleInputChange}
-                  min="1"
-                  className={`mt-1 focus:ring-indigo-500 focus:border-indigo-500 block w-full shadow-sm sm:text-sm border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100 rounded-md ${
-                    errors.tokenLimit ? 'border-red-300 text-red-900' : ''
-                  }`}
-                  required={isFieldRequired('tokenLimit', jsonSchema)}
-                />
-                {errors.tokenLimit && (
-                  <p className="mt-2 text-sm text-red-600 dark:text-red-400">{errors.tokenLimit}</p>
-                )}
-              </div>
+                </div>
 
-              <div className="col-span-6 sm:col-span-2">
-                <label
-                  htmlFor="concurrency"
-                  className="block text-sm font-medium text-gray-700 dark:text-gray-300"
-                >
-                  {t('admin.models.fields.concurrency')}
-                </label>
-                <input
-                  type="number"
-                  name="concurrency"
-                  id="concurrency"
-                  value={data.concurrency || ''}
-                  onChange={handleInputChange}
-                  min="1"
-                  className={`mt-1 focus:ring-indigo-500 focus:border-indigo-500 block w-full shadow-sm sm:text-sm border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100 rounded-md ${
-                    errors.concurrency ? 'border-red-300 text-red-900' : ''
-                  }`}
-                />
-                {errors.concurrency && (
-                  <p className="mt-2 text-sm text-red-600 dark:text-red-400">
-                    {errors.concurrency}
-                  </p>
-                )}
-              </div>
+                <div className="col-span-6 sm:col-span-2">
+                  <label
+                    htmlFor="requestDelayMs"
+                    className="block text-sm font-medium text-gray-700 dark:text-gray-300"
+                  >
+                    {t('admin.models.fields.requestDelay')}
+                  </label>
+                  <input
+                    type="number"
+                    name="requestDelayMs"
+                    id="requestDelayMs"
+                    value={data.requestDelayMs || ''}
+                    onChange={handleInputChange}
+                    min="0"
+                    className={`mt-1 focus:ring-indigo-500 focus:border-indigo-500 block w-full shadow-xs sm:text-sm border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100 rounded-md ${
+                      errors.requestDelayMs ? 'border-red-300 text-red-900' : ''
+                    }`}
+                  />
+                  {errors.requestDelayMs && (
+                    <p className="mt-2 text-sm text-red-600 dark:text-red-400">
+                      {errors.requestDelayMs}
+                    </p>
+                  )}
+                </div>
 
-              <div className="col-span-6 sm:col-span-2">
-                <label
-                  htmlFor="requestDelayMs"
-                  className="block text-sm font-medium text-gray-700 dark:text-gray-300"
-                >
-                  {t('admin.models.fields.requestDelay')}
-                </label>
-                <input
-                  type="number"
-                  name="requestDelayMs"
-                  id="requestDelayMs"
-                  value={data.requestDelayMs || ''}
-                  onChange={handleInputChange}
-                  min="0"
-                  className={`mt-1 focus:ring-indigo-500 focus:border-indigo-500 block w-full shadow-sm sm:text-sm border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100 rounded-md ${
-                    errors.requestDelayMs ? 'border-red-300 text-red-900' : ''
-                  }`}
-                />
-                {errors.requestDelayMs && (
-                  <p className="mt-2 text-sm text-red-600 dark:text-red-400">
-                    {errors.requestDelayMs}
-                  </p>
-                )}
-              </div>
+                <div className="col-span-6 sm:col-span-2">
+                  <label
+                    htmlFor="connectTimeoutMs"
+                    className="block text-sm font-medium text-gray-700 dark:text-gray-300"
+                  >
+                    {t('admin.models.fields.connectTimeoutMs', 'Connect Timeout (ms)')}
+                  </label>
+                  <input
+                    type="number"
+                    name="connectTimeoutMs"
+                    id="connectTimeoutMs"
+                    value={data.connectTimeoutMs ?? ''}
+                    onChange={handleInputChange}
+                    min="0"
+                    max="300000"
+                    className={`mt-1 focus:ring-indigo-500 focus:border-indigo-500 block w-full shadow-xs sm:text-sm border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100 rounded-md ${
+                      errors.connectTimeoutMs ? 'border-red-300 text-red-900' : ''
+                    }`}
+                  />
+                  {errors.connectTimeoutMs && (
+                    <p className="mt-2 text-sm text-red-600 dark:text-red-400">
+                      {errors.connectTimeoutMs}
+                    </p>
+                  )}
+                </div>
 
-              <div className="col-span-6">
-                <fieldset>
-                  <legend className="text-base font-medium text-gray-900 dark:text-gray-100">
-                    Options
-                  </legend>
-                  <div className="mt-4 space-y-4">
-                    <div className="flex items-start">
-                      <div className="flex items-center h-5">
-                        <input
-                          id="supportsTools"
-                          name="supportsTools"
-                          type="checkbox"
-                          checked={data.supportsTools || false}
-                          onChange={handleInputChange}
-                          className="focus:ring-indigo-500 h-4 w-4 text-indigo-600 border-gray-300 dark:border-gray-600 rounded"
-                        />
-                      </div>
-                      <div className="ml-3 text-sm">
-                        <label
-                          htmlFor="supportsTools"
-                          className="font-medium text-gray-700 dark:text-gray-300"
-                        >
-                          {t('admin.models.fields.supportsTools')}
-                        </label>
-                      </div>
-                    </div>
-                    <div className="flex items-start">
-                      <div className="flex items-center h-5">
-                        <input
-                          id="supportsVision"
-                          name="supportsVision"
-                          type="checkbox"
-                          checked={data.supportsVision || false}
-                          onChange={handleInputChange}
-                          className="focus:ring-indigo-500 h-4 w-4 text-indigo-600 border-gray-300 dark:border-gray-600 rounded"
-                        />
-                      </div>
-                      <div className="ml-3 text-sm">
-                        <label
-                          htmlFor="supportsVision"
-                          className="font-medium text-gray-700 dark:text-gray-300"
-                        >
-                          {t('admin.models.fields.supportsVision', 'Supports Vision')}
-                        </label>
-                        <p className="text-gray-500 dark:text-gray-400">
-                          {t(
-                            'admin.models.hints.supportsVision',
-                            'Enable if this model can process image inputs'
-                          )}
-                        </p>
-                      </div>
-                    </div>
-                    <div className="flex items-start">
-                      <div className="flex items-center h-5">
-                        <input
-                          id="supportsAudio"
-                          name="supportsAudio"
-                          type="checkbox"
-                          checked={data.supportsAudio || false}
-                          onChange={handleInputChange}
-                          className="focus:ring-indigo-500 h-4 w-4 text-indigo-600 border-gray-300 dark:border-gray-600 rounded"
-                        />
-                      </div>
-                      <div className="ml-3 text-sm">
-                        <label
-                          htmlFor="supportsAudio"
-                          className="font-medium text-gray-700 dark:text-gray-300"
-                        >
-                          {t('admin.models.fields.supportsAudio', 'Supports Audio')}
-                        </label>
-                        <p className="text-gray-500 dark:text-gray-400">
-                          {t(
-                            'admin.models.hints.supportsAudio',
-                            'Enable if this model can process audio inputs'
-                          )}
-                        </p>
-                      </div>
-                    </div>
-                    <div className="flex items-start">
-                      <div className="flex items-center h-5">
-                        <input
-                          id="enabled"
-                          name="enabled"
-                          type="checkbox"
-                          checked={data.enabled !== false}
-                          onChange={handleInputChange}
-                          className="focus:ring-indigo-500 h-4 w-4 text-indigo-600 border-gray-300 dark:border-gray-600 rounded"
-                        />
-                      </div>
-                      <div className="ml-3 text-sm">
-                        <label
-                          htmlFor="enabled"
-                          className="font-medium text-gray-700 dark:text-gray-300"
-                        >
-                          {t('admin.models.fields.enabled')}
-                        </label>
-                      </div>
-                    </div>
-                    <div className="flex items-start">
-                      <div className="flex items-center h-5">
-                        <input
-                          id="default"
-                          name="default"
-                          type="checkbox"
-                          checked={data.default || false}
-                          onChange={handleInputChange}
-                          className="focus:ring-indigo-500 h-4 w-4 text-indigo-600 border-gray-300 dark:border-gray-600 rounded"
-                        />
-                      </div>
-                      <div className="ml-3 text-sm">
-                        <label
-                          htmlFor="default"
-                          className="font-medium text-gray-700 dark:text-gray-300"
-                        >
-                          {t('admin.models.fields.defaultModel')}
-                        </label>
-                      </div>
-                    </div>
-                    <div className="flex items-start">
-                      <div className="flex items-center h-5">
-                        <input
-                          id="supportsImageGeneration"
-                          name="supportsImageGeneration"
-                          type="checkbox"
-                          checked={data.supportsImageGeneration || false}
-                          onChange={handleInputChange}
-                          className="focus:ring-indigo-500 h-4 w-4 text-indigo-600 border-gray-300 dark:border-gray-600 rounded"
-                        />
-                      </div>
-                      <div className="ml-3 text-sm">
-                        <label
-                          htmlFor="supportsImageGeneration"
-                          className="font-medium text-gray-700 dark:text-gray-300"
-                        >
-                          {t(
-                            'admin.models.fields.supportsImageGeneration',
-                            'Supports Image Generation'
-                          )}
-                        </label>
-                        <p className="text-gray-500 dark:text-gray-400">
-                          {t(
-                            'admin.models.hints.supportsImageGeneration',
-                            'Enable if this model can generate images (e.g., Gemini Image models)'
-                          )}
-                        </p>
-                      </div>
-                    </div>
-                  </div>
-                </fieldset>
-              </div>
+                <div className="col-span-6 sm:col-span-2">
+                  <label
+                    htmlFor="streamIdleTimeoutMs"
+                    className="block text-sm font-medium text-gray-700 dark:text-gray-300"
+                  >
+                    {t('admin.models.fields.streamIdleTimeoutMs', 'Stream Idle Timeout (ms)')}
+                  </label>
+                  <input
+                    type="number"
+                    name="streamIdleTimeoutMs"
+                    id="streamIdleTimeoutMs"
+                    value={data.streamIdleTimeoutMs ?? ''}
+                    onChange={handleInputChange}
+                    min="0"
+                    max="300000"
+                    className={`mt-1 focus:ring-indigo-500 focus:border-indigo-500 block w-full shadow-xs sm:text-sm border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100 rounded-md ${
+                      errors.streamIdleTimeoutMs ? 'border-red-300 text-red-900' : ''
+                    }`}
+                  />
+                  {errors.streamIdleTimeoutMs && (
+                    <p className="mt-2 text-sm text-red-600 dark:text-red-400">
+                      {errors.streamIdleTimeoutMs}
+                    </p>
+                  )}
+                </div>
 
-              {/* Image Generation Configuration */}
-              {data.supportsImageGeneration && (
                 <div className="col-span-6">
                   <fieldset>
                     <legend className="text-base font-medium text-gray-900 dark:text-gray-100">
-                      {t('admin.models.sections.imageGeneration', 'Image Generation Settings')}
+                      Options
                     </legend>
-                    <div className="mt-4 grid grid-cols-6 gap-6">
-                      <div className="col-span-6 sm:col-span-3">
-                        <label
-                          htmlFor="imageGeneration.aspectRatio"
-                          className="block text-sm font-medium text-gray-700 dark:text-gray-300"
-                        >
-                          {t('admin.models.fields.aspectRatio', 'Aspect Ratio')}
-                        </label>
-                        <select
-                          id="imageGeneration.aspectRatio"
-                          value={data.imageGeneration?.aspectRatio || '1:1'}
-                          onChange={e =>
-                            handleChange('imageGeneration', {
-                              ...(data.imageGeneration || {}),
-                              aspectRatio: e.target.value
-                            })
-                          }
-                          className="mt-1 block w-full py-2 px-3 border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100 rounded-md shadow-sm focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm"
-                        >
-                          <option value="1:1">1:1 (Square)</option>
-                          <option value="16:9">16:9 (Landscape)</option>
-                          <option value="9:16">9:16 (Portrait)</option>
-                          <option value="5:4">5:4</option>
-                          <option value="4:5">4:5</option>
-                          <option value="3:2">3:2</option>
-                          <option value="2:3">2:3</option>
-                        </select>
+                    <div className="mt-4 space-y-4">
+                      <div className="flex items-start">
+                        <div className="flex items-center h-5">
+                          <input
+                            id="supportsTools"
+                            name="supportsTools"
+                            type="checkbox"
+                            checked={data.supportsTools || false}
+                            onChange={handleInputChange}
+                            className="focus:ring-indigo-500 h-4 w-4 text-indigo-600 border-gray-300 dark:border-gray-600 rounded-sm"
+                          />
+                        </div>
+                        <div className="ml-3 text-sm">
+                          <label
+                            htmlFor="supportsTools"
+                            className="font-medium text-gray-700 dark:text-gray-300"
+                          >
+                            {t('admin.models.fields.supportsTools')}
+                          </label>
+                        </div>
                       </div>
-
-                      <div className="col-span-6 sm:col-span-3">
-                        <label
-                          htmlFor="imageGeneration.imageSize"
-                          className="block text-sm font-medium text-gray-700 dark:text-gray-300"
-                        >
-                          {t('admin.models.fields.imageSize', 'Image Size')}
-                        </label>
-                        <select
-                          id="imageGeneration.imageSize"
-                          value={data.imageGeneration?.imageSize || '1K'}
-                          onChange={e =>
-                            handleChange('imageGeneration', {
-                              ...(data.imageGeneration || {}),
-                              imageSize: e.target.value
-                            })
-                          }
-                          className="mt-1 block w-full py-2 px-3 border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100 rounded-md shadow-sm focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm"
-                        >
-                          <option value="1K">1K (1024px)</option>
-                          <option value="2K">2K (2048px)</option>
-                          <option value="4K">4K (4096px)</option>
-                        </select>
+                      <div className="flex items-start">
+                        <div className="flex items-center h-5">
+                          <input
+                            id="supportsVision"
+                            name="supportsVision"
+                            type="checkbox"
+                            checked={data.supportsVision || false}
+                            onChange={handleInputChange}
+                            className="focus:ring-indigo-500 h-4 w-4 text-indigo-600 border-gray-300 dark:border-gray-600 rounded-sm"
+                          />
+                        </div>
+                        <div className="ml-3 text-sm">
+                          <label
+                            htmlFor="supportsVision"
+                            className="font-medium text-gray-700 dark:text-gray-300"
+                          >
+                            {t('admin.models.fields.supportsVision', 'Supports Vision')}
+                          </label>
+                          <p className="text-gray-500 dark:text-gray-400">
+                            {t(
+                              'admin.models.hints.supportsVision',
+                              'Enable if this model can process image inputs'
+                            )}
+                          </p>
+                        </div>
                       </div>
-
-                      <div className="col-span-6 sm:col-span-3">
-                        <label
-                          htmlFor="imageGeneration.maxReferenceImages"
-                          className="block text-sm font-medium text-gray-700 dark:text-gray-300"
-                        >
-                          {t('admin.models.fields.maxReferenceImages', 'Max Reference Images')}
-                        </label>
-                        <input
-                          type="number"
-                          id="imageGeneration.maxReferenceImages"
-                          value={data.imageGeneration?.maxReferenceImages || 14}
-                          onChange={e =>
-                            handleChange('imageGeneration', {
-                              ...(data.imageGeneration || {}),
-                              maxReferenceImages: parseInt(e.target.value, 10)
-                            })
-                          }
-                          min="1"
-                          max="14"
-                          className="mt-1 focus:ring-indigo-500 focus:border-indigo-500 block w-full shadow-sm sm:text-sm border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100 rounded-md"
-                        />
-                        <p className="mt-2 text-sm text-gray-500 dark:text-gray-400">
-                          {t(
-                            'admin.models.hints.maxReferenceImages',
-                            'Maximum number of reference images (1-14)'
-                          )}
-                        </p>
+                      <div className="flex items-start">
+                        <div className="flex items-center h-5">
+                          <input
+                            id="supportsAudio"
+                            name="supportsAudio"
+                            type="checkbox"
+                            checked={data.supportsAudio || false}
+                            onChange={handleInputChange}
+                            className="focus:ring-indigo-500 h-4 w-4 text-indigo-600 border-gray-300 dark:border-gray-600 rounded-sm"
+                          />
+                        </div>
+                        <div className="ml-3 text-sm">
+                          <label
+                            htmlFor="supportsAudio"
+                            className="font-medium text-gray-700 dark:text-gray-300"
+                          >
+                            {t('admin.models.fields.supportsAudio', 'Supports Audio')}
+                          </label>
+                          <p className="text-gray-500 dark:text-gray-400">
+                            {t(
+                              'admin.models.hints.supportsAudio',
+                              'Enable if this model can process audio inputs'
+                            )}
+                          </p>
+                        </div>
+                      </div>
+                      <div className="flex items-start">
+                        <div className="flex items-center h-5">
+                          <input
+                            id="enabled"
+                            name="enabled"
+                            type="checkbox"
+                            checked={data.enabled !== false}
+                            onChange={handleInputChange}
+                            className="focus:ring-indigo-500 h-4 w-4 text-indigo-600 border-gray-300 dark:border-gray-600 rounded-sm"
+                          />
+                        </div>
+                        <div className="ml-3 text-sm">
+                          <label
+                            htmlFor="enabled"
+                            className="font-medium text-gray-700 dark:text-gray-300"
+                          >
+                            {t('admin.models.fields.enabled')}
+                          </label>
+                        </div>
+                      </div>
+                      <div className="flex items-start">
+                        <div className="flex items-center h-5">
+                          <input
+                            id="default"
+                            name="default"
+                            type="checkbox"
+                            checked={data.default || false}
+                            onChange={handleInputChange}
+                            className="focus:ring-indigo-500 h-4 w-4 text-indigo-600 border-gray-300 dark:border-gray-600 rounded-sm"
+                          />
+                        </div>
+                        <div className="ml-3 text-sm">
+                          <label
+                            htmlFor="default"
+                            className="font-medium text-gray-700 dark:text-gray-300"
+                          >
+                            {t('admin.models.fields.defaultModel')}
+                          </label>
+                        </div>
+                      </div>
+                      <div className="flex items-start">
+                        <div className="flex items-center h-5">
+                          <input
+                            id="supportsImageGeneration"
+                            name="supportsImageGeneration"
+                            type="checkbox"
+                            checked={data.supportsImageGeneration || false}
+                            onChange={handleInputChange}
+                            className="focus:ring-indigo-500 h-4 w-4 text-indigo-600 border-gray-300 dark:border-gray-600 rounded-sm"
+                          />
+                        </div>
+                        <div className="ml-3 text-sm">
+                          <label
+                            htmlFor="supportsImageGeneration"
+                            className="font-medium text-gray-700 dark:text-gray-300"
+                          >
+                            {t(
+                              'admin.models.fields.supportsImageGeneration',
+                              'Supports Image Generation'
+                            )}
+                          </label>
+                          <p className="text-gray-500 dark:text-gray-400">
+                            {t(
+                              'admin.models.hints.supportsImageGeneration',
+                              'Enable if this model can generate images (e.g., Gemini Image models)'
+                            )}
+                          </p>
+                        </div>
+                      </div>
+                      <div className="flex items-start">
+                        <div className="flex items-center h-5">
+                          <input
+                            id="autoDiscovery"
+                            name="autoDiscovery"
+                            type="checkbox"
+                            checked={data.autoDiscovery || false}
+                            onChange={handleInputChange}
+                            disabled={!(data.provider === 'openai' || data.provider === 'local')}
+                            className="focus:ring-indigo-500 h-4 w-4 text-indigo-600 border-gray-300 dark:border-gray-600 rounded-sm disabled:opacity-50 disabled:cursor-not-allowed"
+                          />
+                        </div>
+                        <div className="ml-3 text-sm">
+                          <label
+                            htmlFor="autoDiscovery"
+                            className={`font-medium ${
+                              data.provider === 'openai' || data.provider === 'local'
+                                ? 'text-gray-700 dark:text-gray-300'
+                                : 'text-gray-400 dark:text-gray-600'
+                            }`}
+                          >
+                            {t('admin.models.fields.autoDiscovery', 'Auto Discovery')}
+                          </label>
+                          <p className="text-gray-500 dark:text-gray-400">
+                            {t(
+                              'admin.models.hints.autoDiscovery',
+                              'Automatically detect the active model from the /v1/models endpoint. Useful for local LLM providers (vLLM, LM Studio, Jan.ai) where the model can change. Only available for OpenAI-compatible providers.'
+                            )}
+                          </p>
+                        </div>
                       </div>
                     </div>
                   </fieldset>
                 </div>
-              )}
+
+                {/* Image Generation Configuration */}
+                {['anthropic', 'google', 'openai-responses'].includes(data.provider) && (
+                  <div className="col-span-6">
+                    <fieldset>
+                      <legend className="text-base font-medium text-gray-900 dark:text-gray-100">
+                        {t('admin.models.sections.nativeWebSearch', 'Native Web Search')}
+                      </legend>
+                      <p className="mt-1 text-sm text-gray-500 dark:text-gray-400">
+                        {t(
+                          'admin.models.hints.nativeWebSearch',
+                          "Apps with web search use the provider's built-in search on this model. Turn it off for models or gateways that do not support it; they fall back to Brave Search."
+                        )}
+                      </p>
+                      <div className="mt-4 space-y-4">
+                        <div className="flex items-start">
+                          <div className="flex items-center h-5">
+                            <input
+                              id="nativeWebSearch.enabled"
+                              type="checkbox"
+                              checked={data.nativeWebSearch?.enabled !== false}
+                              onChange={e =>
+                                handleChange('nativeWebSearch', {
+                                  ...(data.nativeWebSearch || {}),
+                                  enabled: e.target.checked
+                                })
+                              }
+                              className="focus:ring-indigo-500 h-4 w-4 text-indigo-600 border-gray-300 dark:border-gray-600 rounded-sm"
+                            />
+                          </div>
+                          <div className="ml-3 text-sm">
+                            <label
+                              htmlFor="nativeWebSearch.enabled"
+                              className="font-medium text-gray-700 dark:text-gray-300"
+                            >
+                              {t(
+                                'admin.models.fields.nativeWebSearchEnabled',
+                                'Use native web search'
+                              )}
+                            </label>
+                          </div>
+                        </div>
+
+                        {data.provider === 'anthropic' &&
+                          data.nativeWebSearch?.enabled !== false && (
+                            <>
+                              <div>
+                                <label
+                                  htmlFor="nativeWebSearch.toolVersion"
+                                  className="block text-sm font-medium text-gray-700 dark:text-gray-300"
+                                >
+                                  {t(
+                                    'admin.models.fields.nativeWebSearchToolVersion',
+                                    'Web search tool version'
+                                  )}
+                                </label>
+                                <select
+                                  id="nativeWebSearch.toolVersion"
+                                  value={data.nativeWebSearch?.toolVersion || 'web_search_20250305'}
+                                  onChange={e =>
+                                    handleChange('nativeWebSearch', {
+                                      ...(data.nativeWebSearch || {}),
+                                      toolVersion: e.target.value
+                                    })
+                                  }
+                                  className="mt-1 block w-full py-2 px-3 border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100 rounded-md shadow-xs focus:outline-hidden focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm"
+                                >
+                                  <option value="web_search_20250305">
+                                    web_search_20250305 —{' '}
+                                    {t(
+                                      'admin.models.fields.nativeWebSearchVersionBasic',
+                                      'basic (all Claude models, Vertex AI, Foundry)'
+                                    )}
+                                  </option>
+                                  <option value="web_search_20260209">
+                                    web_search_20260209 —{' '}
+                                    {t(
+                                      'admin.models.fields.nativeWebSearchVersionFiltering',
+                                      'dynamic filtering (Claude 4.6 and later)'
+                                    )}
+                                  </option>
+                                  <option value="web_search_20260318">
+                                    web_search_20260318 —{' '}
+                                    {t(
+                                      'admin.models.fields.nativeWebSearchVersionInclusion',
+                                      'dynamic filtering + response inclusion (Claude 4.6 and later)'
+                                    )}
+                                  </option>
+                                </select>
+                                <p className="mt-2 text-sm text-gray-500 dark:text-gray-400">
+                                  {t(
+                                    'admin.models.hints.nativeWebSearchToolVersion',
+                                    'Newer versions let Claude filter search results in code before they reach the context window, which saves tokens on search-heavy prompts. Google Cloud and Azure-hosted Foundry only offer the basic version.'
+                                  )}
+                                </p>
+                              </div>
+                              <div className="flex items-start">
+                                <div className="flex items-center h-5">
+                                  <input
+                                    id="nativeWebSearch.dynamicFiltering"
+                                    type="checkbox"
+                                    disabled={
+                                      (data.nativeWebSearch?.toolVersion ||
+                                        'web_search_20250305') === 'web_search_20250305'
+                                    }
+                                    checked={data.nativeWebSearch?.dynamicFiltering === true}
+                                    onChange={e =>
+                                      handleChange('nativeWebSearch', {
+                                        ...(data.nativeWebSearch || {}),
+                                        dynamicFiltering: e.target.checked
+                                      })
+                                    }
+                                    className="focus:ring-indigo-500 h-4 w-4 text-indigo-600 border-gray-300 dark:border-gray-600 rounded-sm disabled:opacity-50"
+                                  />
+                                </div>
+                                <div className="ml-3 text-sm">
+                                  <label
+                                    htmlFor="nativeWebSearch.dynamicFiltering"
+                                    className="font-medium text-gray-700 dark:text-gray-300"
+                                  >
+                                    {t(
+                                      'admin.models.fields.nativeWebSearchDynamicFiltering',
+                                      'Enable dynamic filtering'
+                                    )}
+                                  </label>
+                                  <p className="text-gray-500 dark:text-gray-400">
+                                    {t(
+                                      'admin.models.hints.nativeWebSearchDynamicFiltering',
+                                      'Runs web search from code execution (Claude 4.6 or later on the Claude API). When off, the newer tool version is called directly.'
+                                    )}
+                                  </p>
+                                </div>
+                              </div>
+                            </>
+                          )}
+                      </div>
+                    </fieldset>
+                  </div>
+                )}
+
+                {data.supportsImageGeneration && (
+                  <div className="col-span-6">
+                    <fieldset>
+                      <legend className="text-base font-medium text-gray-900 dark:text-gray-100">
+                        {t('admin.models.sections.imageGeneration', 'Image Generation Settings')}
+                      </legend>
+                      <div className="mt-4 grid grid-cols-6 gap-6">
+                        <div className="col-span-6 sm:col-span-3">
+                          <label
+                            htmlFor="imageGeneration.aspectRatio"
+                            className="block text-sm font-medium text-gray-700 dark:text-gray-300"
+                          >
+                            {t('admin.models.fields.aspectRatio', 'Aspect Ratio')}
+                          </label>
+                          <select
+                            id="imageGeneration.aspectRatio"
+                            value={data.imageGeneration?.aspectRatio || '1:1'}
+                            onChange={e =>
+                              handleChange('imageGeneration', {
+                                ...(data.imageGeneration || {}),
+                                aspectRatio: e.target.value
+                              })
+                            }
+                            className="mt-1 block w-full py-2 px-3 border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100 rounded-md shadow-xs focus:outline-hidden focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm"
+                          >
+                            <option value="1:1">1:1 (Square)</option>
+                            <option value="16:9">16:9 (Landscape)</option>
+                            <option value="9:16">9:16 (Portrait)</option>
+                            <option value="5:4">5:4</option>
+                            <option value="4:5">4:5</option>
+                            <option value="3:2">3:2</option>
+                            <option value="2:3">2:3</option>
+                            <option value="3:4">3:4</option>
+                            <option value="4:3">4:3</option>
+                            <option value="21:9">21:9 (Ultrawide)</option>
+                          </select>
+                        </div>
+
+                        <div className="col-span-6 sm:col-span-3">
+                          <label
+                            htmlFor="imageGeneration.quality"
+                            className="block text-sm font-medium text-gray-700 dark:text-gray-300"
+                          >
+                            {t('admin.models.fields.imageQuality', 'Image Quality')}
+                          </label>
+                          <select
+                            id="imageGeneration.quality"
+                            value={data.imageGeneration?.quality || 'Medium'}
+                            onChange={e =>
+                              handleChange('imageGeneration', {
+                                ...(data.imageGeneration || {}),
+                                quality: e.target.value
+                              })
+                            }
+                            className="mt-1 block w-full py-2 px-3 border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100 rounded-md shadow-xs focus:outline-hidden focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm"
+                          >
+                            <option value="Low">
+                              {t('admin.models.imageQuality.low', 'Low (1K)')}
+                            </option>
+                            <option value="Medium">
+                              {t('admin.models.imageQuality.medium', 'Medium (2K)')}
+                            </option>
+                            <option value="High">
+                              {t('admin.models.imageQuality.high', 'High (4K)')}
+                            </option>
+                          </select>
+                        </div>
+
+                        <div className="col-span-6 sm:col-span-3">
+                          <label
+                            htmlFor="imageGeneration.maxReferenceImages"
+                            className="block text-sm font-medium text-gray-700 dark:text-gray-300"
+                          >
+                            {t('admin.models.fields.maxReferenceImages', 'Max Reference Images')}
+                          </label>
+                          <input
+                            type="number"
+                            id="imageGeneration.maxReferenceImages"
+                            value={data.imageGeneration?.maxReferenceImages || 14}
+                            onChange={e =>
+                              handleChange('imageGeneration', {
+                                ...(data.imageGeneration || {}),
+                                maxReferenceImages: parseInt(e.target.value, 10)
+                              })
+                            }
+                            min="1"
+                            max="14"
+                            className="mt-1 focus:ring-indigo-500 focus:border-indigo-500 block w-full shadow-xs sm:text-sm border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100 rounded-md"
+                          />
+                          <p className="mt-2 text-sm text-gray-500 dark:text-gray-400">
+                            {t(
+                              'admin.models.hints.maxReferenceImages',
+                              'Maximum number of reference images (1-14)'
+                            )}
+                          </p>
+                        </div>
+                      </div>
+                    </fieldset>
+                  </div>
+                )}
+
+                {/* Provider-specific configuration (adapter-declared schema). */}
+                {providerSchema?.fields?.length > 0 && (
+                  <div className="col-span-6">
+                    <fieldset>
+                      <legend className="text-base font-medium text-gray-900 dark:text-gray-100">
+                        {t('admin.models.sections.providerConfig')}
+                      </legend>
+                      <div className="mt-4 grid grid-cols-6 gap-6">
+                        {providerSchema.fields.map(field => {
+                          const value =
+                            data.config?.[field.key] ??
+                            (field.default !== undefined ? field.default : '');
+                          const label =
+                            (field.label && (field.label[DEFAULT_LANGUAGE] || field.label.en)) ||
+                            field.key;
+                          const description =
+                            field.description &&
+                            (field.description[DEFAULT_LANGUAGE] || field.description.en);
+                          const inputId = `config.${field.key}`;
+                          return (
+                            <div key={field.key} className="col-span-6 sm:col-span-3">
+                              <label
+                                htmlFor={inputId}
+                                className="block text-sm font-medium text-gray-700 dark:text-gray-300"
+                              >
+                                {label}
+                                {field.required && <span className="text-red-500"> *</span>}
+                              </label>
+                              {field.type === 'json' ? (
+                                <JsonConfigField
+                                  id={inputId}
+                                  value={data.config?.[field.key]}
+                                  onChange={parsed => handleConfigChange(field.key, parsed)}
+                                  className="mt-1 focus:ring-indigo-500 focus:border-indigo-500 block w-full font-mono text-xs shadow-xs sm:text-sm border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100 rounded-md"
+                                />
+                              ) : Array.isArray(field.enumHint) && field.enumHint.length > 0 ? (
+                                <input
+                                  id={inputId}
+                                  list={`${inputId}-options`}
+                                  type="text"
+                                  value={value}
+                                  onChange={e => handleConfigChange(field.key, e.target.value)}
+                                  className="mt-1 focus:ring-indigo-500 focus:border-indigo-500 block w-full shadow-xs sm:text-sm border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100 rounded-md"
+                                />
+                              ) : (
+                                <input
+                                  id={inputId}
+                                  type={field.type === 'number' ? 'number' : 'text'}
+                                  value={value}
+                                  onChange={e =>
+                                    handleConfigChange(
+                                      field.key,
+                                      field.type === 'number'
+                                        ? Number(e.target.value)
+                                        : e.target.value
+                                    )
+                                  }
+                                  className="mt-1 focus:ring-indigo-500 focus:border-indigo-500 block w-full shadow-xs sm:text-sm border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100 rounded-md"
+                                />
+                              )}
+                              {Array.isArray(field.enumHint) && field.enumHint.length > 0 && (
+                                <datalist id={`${inputId}-options`}>
+                                  {field.enumHint.map(opt => (
+                                    <option key={opt} value={opt} />
+                                  ))}
+                                </datalist>
+                              )}
+                              {description && (
+                                <p className="mt-2 text-sm text-gray-500 dark:text-gray-400">
+                                  {description}
+                                </p>
+                              )}
+                            </div>
+                          );
+                        })}
+                      </div>
+                    </fieldset>
+                  </div>
+                )}
+              </div>
             </div>
           </div>
         </div>
       </div>
-    </div>
+    </FormValidationProvider>
   );
 }
 

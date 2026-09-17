@@ -12,10 +12,15 @@ import { teamsAuthMiddleware } from './teamsAuth.js';
 import ntlmAuthMiddleware from './ntlmAuth.js';
 import { enhanceUserWithPermissions } from '../utils/authorization.js';
 import { createRateLimiters } from './rateLimiting.js';
-import { buildApiPath, buildServerPath } from '../utils/basePath.js';
+import { buildApiPath } from '../utils/basePath.js';
 import config from '../config.js';
+import configCache from '../configCache.js';
 import tokenStorageService from '../services/TokenStorageService.js';
 import logger from '../utils/logger.js';
+import { runWithContext, setContext } from '../utils/requestContext.js';
+import activityTracker from '../telemetry/ActivityTracker.js';
+import { auditLogger } from './auditLogger.js';
+import { randomUUID } from 'crypto';
 
 /**
  * Middleware to verify the Content-Length header before parsing the body.
@@ -160,6 +165,71 @@ function processCorsOrigins(origins) {
 }
 
 /**
+ * Strip a trailing slash and any path component from an origin string so the
+ * comparison is "scheme + host (+ port)" — the form the browser actually sends
+ * in the Origin header. Idempotent on already-clean origins.
+ *
+ *   "chrome-extension://abc/options.html"  -> "chrome-extension://abc"
+ *   "chrome-extension://abc/"              -> "chrome-extension://abc"
+ *   "https://app.example.com/"             -> "https://app.example.com"
+ *   "https://app.example.com:8080"         -> "https://app.example.com:8080"
+ */
+function normalizeOriginForMatch(origin) {
+  if (typeof origin !== 'string') return origin;
+  const trimmed = origin.trim();
+  // Find the start of the path: the first "/" *after* the "://"
+  const schemeEnd = trimmed.indexOf('://');
+  if (schemeEnd === -1) return trimmed.replace(/\/+$/, '');
+  const pathStart = trimmed.indexOf('/', schemeEnd + 3);
+  return pathStart === -1 ? trimmed : trimmed.slice(0, pathStart);
+}
+
+/**
+ * Build the cors() `origin` callback used per-request. Performs forgiving
+ * matching (normalizes trailing slash + path) and logs a structured debug
+ * line on every mismatch so admins can see the exact comparison that failed.
+ *
+ * Returns either:
+ *   - a (origin, callback) function that decides allow/deny per origin, or
+ *   - the original `false` / `[]` value when nothing is configured (cors()
+ *     will skip setting Access-Control-Allow-Origin entirely).
+ */
+function makeForgivingOriginMatcher(resolvedOrigin, req) {
+  // Empty / disallowed config — preserve cors()'s default behaviour
+  if (!resolvedOrigin) return false;
+
+  const list = Array.isArray(resolvedOrigin) ? resolvedOrigin : [resolvedOrigin];
+  const normalized = list.map(normalizeOriginForMatch).filter(Boolean);
+  if (normalized.length === 0) return false;
+
+  return (requestOrigin, callback) => {
+    if (!requestOrigin) {
+      // Same-origin / non-browser caller — allow.
+      return callback(null, true);
+    }
+    const normalizedRequest = normalizeOriginForMatch(requestOrigin);
+    if (normalized.includes(normalizedRequest)) {
+      return callback(null, true);
+    }
+    // Don't log on every health-probe / static asset miss in production —
+    // only log when this looks like an extension or unexpected origin so
+    // admins notice configuration mistakes.
+    logger.debug(
+      'CORS: request origin not in allowlist; response will omit Access-Control-Allow-Origin',
+      {
+        component: 'CORS',
+        requestOrigin,
+        normalizedRequest,
+        configuredOrigins: normalized,
+        method: req?.method,
+        url: req?.url
+      }
+    );
+    return callback(null, false);
+  };
+}
+
+/**
  * Setup session middleware for different authentication flows
  * @param {import('express').Application} app - Express application
  * @param {Object} platformConfig - Platform configuration
@@ -208,7 +278,13 @@ function setupSessionMiddleware(app, platformConfig) {
           httpOnly: true,
           maxAge: oidcMaxAge,
           sameSite: 'lax',
-          path: '/api/auth/oidc'
+          // Session middleware is configured at startup, but the base path is
+          // request-scoped (X-Forwarded-Prefix). A scoped cookie path like
+          // '/api/auth/oidc' would not match '/ihub/api/auth/oidc/...' under
+          // a subpath deployment, so the OIDC callback would lose its
+          // returnUrl/state. Use '/' to make the cookie reach the callback
+          // regardless of deployment layout. The cookie is httpOnly + signed.
+          path: '/'
         }
       })
     );
@@ -241,7 +317,7 @@ function setupSessionMiddleware(app, platformConfig) {
         httpOnly: true,
         maxAge: integrationMaxAge,
         sameSite: 'lax',
-        path: '/api/integrations'
+        path: '/'
       }
     })
   );
@@ -266,7 +342,7 @@ function setupSessionMiddleware(app, platformConfig) {
           httpOnly: true,
           maxAge: oauthMaxAge,
           sameSite: 'lax',
-          path: '/api/oauth'
+          path: '/'
         }
       })
     );
@@ -301,6 +377,35 @@ function setupSessionMiddleware(app, platformConfig) {
 }
 
 /**
+ * Resolve the Express `trust proxy` setting from `platform.trustProxy`.
+ *
+ * Defaults to `1` (one proxy hop) to keep existing deployments unchanged.
+ * Numeric strings are coerced so the value can also come from an
+ * `IHUB_PLATFORM__trustProxy` environment override.
+ *
+ * @param {Object} platformConfig - Platform configuration
+ * @returns {number|boolean|string} Value for `app.set('trust proxy', …)`
+ */
+export function resolveTrustProxy(platformConfig = {}) {
+  const configured = platformConfig.trustProxy;
+  if (configured === undefined || configured === null || configured === '') return 1;
+  if (typeof configured === 'number' || typeof configured === 'boolean') return configured;
+  if (typeof configured === 'string') {
+    const trimmed = configured.trim();
+    if (trimmed === 'true') return true;
+    if (trimmed === 'false') return false;
+    if (/^\d+$/.test(trimmed)) return parseInt(trimmed, 10);
+    // Address / subnet list (e.g. "loopback, 10.0.0.0/8") — hand through verbatim.
+    return trimmed;
+  }
+  logger.warn('Ignoring unsupported trustProxy value; falling back to 1', {
+    component: 'Middleware',
+    trustProxy: typeof configured
+  });
+  return 1;
+}
+
+/**
  * Configure Express middleware.
  * Body parser limits are controlled by the `requestBodyLimitMB` option in
  * `platform.json`.
@@ -322,32 +427,130 @@ export function setupMiddleware(app, platformConfig = {}) {
     });
   }
 
-  // Trust proxy for proper IP and protocol detection
-  app.set('trust proxy', 1);
+  // Trust proxy for proper IP and protocol detection.
+  //
+  // The number is the count of proxy hops in front of iHub, and it decides what
+  // `req.ip` resolves to — which in turn is the rate-limit key and the audit-log
+  // client address. A value that is too low makes every caller behind the inner
+  // proxy share one identity: with `1` and two hops (ingress + internal LB) all
+  // users collapse onto the ingress IP and therefore onto a single rate-limit
+  // counter, so one busy client can exhaust the auth/OAuth window for everyone.
+  //
+  // Accepts anything Express accepts: a hop count, `true`, `false`, or a
+  // comma-separated list of trusted addresses/subnets.
+  app.set('trust proxy', resolveTrustProxy(platformConfig));
 
-  // Configure CORS with platform configuration
-  const corsConfig = platformConfig.cors || {};
-  const corsOptions = {
-    origin: processCorsOrigins(corsConfig.origin),
-    methods: corsConfig.methods || ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS', 'HEAD', 'PATCH'],
-    allowedHeaders: corsConfig.allowedHeaders || [
+  // Open the per-request logging context. Subsequent middleware and route
+  // handlers run inside an AsyncLocalStorage scope, so every logger call on
+  // the request's async chain gets userId / oauthClientId / ip merged in
+  // automatically. The store is a mutable object: the auth chain below
+  // mutates it with user/client info once authentication has resolved.
+  app.use((req, res, next) => {
+    runWithContext(
+      {
+        ip: req.ip,
+        userId: undefined,
+        oauthClientId: undefined,
+        requestId: randomUUID()
+      },
+      () => next()
+    );
+  });
+
+  // CORS options are resolved per-request from the live platform config so
+  // changes saved via /api/admin/cors/config take effect without a server
+  // restart. The cors() middleware accepts a (req, callback) -> options
+  // function for exactly this reason.
+  //
+  // Two behaviours we apply on top of the admin's saved config:
+  //
+  //   1. Spec fix for "*" + credentials: true
+  //      The CORS spec forbids Access-Control-Allow-Origin: * when the
+  //      response also carries Access-Control-Allow-Credentials: true.
+  //      Browsers detect the violation at preflight time. Symptom: simple
+  //      GETs work (no preflight) but anything that preflights (POST +
+  //      JSON body, custom headers like Authorization, etc.) fails with a
+  //      CORS error. When the admin saved cors.origin = "*" (or an array
+  //      containing "*") AND credentials are enabled, swap the literal
+  //      "*" for `true` so cors() echoes the request's Origin header —
+  //      the spec-compliant equivalent of "allow any origin with
+  //      credentials".
+  //
+  //   2. One-shot warning when (1) kicks in, so admins notice their
+  //      saved config got auto-upgraded.
+  let warnedAboutWildcard = false;
+  const dynamicCorsOptions = (req, callback) => {
+    const live = configCache.getPlatform() || platformConfig || {};
+    const corsConfig = live.cors || {};
+    const credentials = corsConfig.credentials !== undefined ? corsConfig.credentials : true;
+    let resolvedOrigin = processCorsOrigins(corsConfig.origin);
+
+    const isWildcard =
+      resolvedOrigin === '*' || (Array.isArray(resolvedOrigin) && resolvedOrigin.includes('*'));
+    if (isWildcard && credentials) {
+      if (!warnedAboutWildcard) {
+        warnedAboutWildcard = true;
+        logger.warn(
+          'CORS configured with origin: "*" and credentials: true — echoing ' +
+            'the request origin instead, because the browser blocks responses ' +
+            'with both headers at the same time. Set credentials: false to ' +
+            'keep the literal "*", or replace "*" with an explicit allowlist.',
+          { component: 'CORS' }
+        );
+      }
+      resolvedOrigin = true; // cors() echoes req.headers.origin
+    } else {
+      // Match the request's Origin against the configured allowlist with
+      // forgiving normalization (strip trailing slash + path component).
+      // The cors() package does strict `===` matching, which silently fails
+      // when the admin has pasted "chrome-extension://<id>/" (with trailing
+      // slash) or a full URL like "chrome-extension://<id>/options.html"
+      // — the browser only sends "chrome-extension://<id>" as the Origin
+      // header. We expand the allowlist into a custom function that handles
+      // these common admin mistakes and emits a debug log on miss.
+      resolvedOrigin = makeForgivingOriginMatcher(resolvedOrigin, req);
+    }
+
+    // Headers the iHub Axios client always sends. Unioned with the admin's
+    // saved allowedHeaders so that a config saved before a new client header
+    // landed (e.g. X-Session-ID) doesn't break cross-origin requests until
+    // an admin re-saves the page. Compared case-insensitively because that's
+    // how browsers compare Access-Control-Request-Headers entries.
+    const REQUIRED_ALLOWED_HEADERS = [
       'Content-Type',
       'Authorization',
       'X-Requested-With',
       'X-Forwarded-User',
       'X-Forwarded-Groups',
+      'X-Session-ID',
       'Accept',
       'Origin',
       'Cache-Control',
       'X-File-Name'
-    ],
-    credentials: corsConfig.credentials !== undefined ? corsConfig.credentials : true,
-    optionsSuccessStatus: corsConfig.optionsSuccessStatus || 200,
-    maxAge: corsConfig.maxAge || 86400,
-    preflightContinue: corsConfig.preflightContinue || false
+    ];
+    let allowedHeaders;
+    if (Array.isArray(corsConfig.allowedHeaders) && corsConfig.allowedHeaders.length > 0) {
+      const seen = new Set(corsConfig.allowedHeaders.map(h => String(h).toLowerCase()));
+      allowedHeaders = [
+        ...corsConfig.allowedHeaders,
+        ...REQUIRED_ALLOWED_HEADERS.filter(h => !seen.has(h.toLowerCase()))
+      ];
+    } else {
+      allowedHeaders = REQUIRED_ALLOWED_HEADERS;
+    }
+
+    callback(null, {
+      origin: resolvedOrigin,
+      methods: corsConfig.methods || ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS', 'HEAD', 'PATCH'],
+      allowedHeaders,
+      credentials,
+      optionsSuccessStatus: corsConfig.optionsSuccessStatus || 200,
+      maxAge: corsConfig.maxAge || 86400,
+      preflightContinue: corsConfig.preflightContinue || false
+    });
   };
 
-  app.use(cors(corsOptions));
+  app.use(cors(dynamicCorsOptions));
 
   // Content-Language header for accessibility (WCAG 3.1.1)
   // Validate against a strict allowlist to prevent header injection from
@@ -381,7 +584,13 @@ export function setupMiddleware(app, platformConfig = {}) {
   app.use(express.urlencoded({ limit: `${limitMb}mb`, extended: true }));
   app.use(cookieParser()); // Add cookie parser middleware
 
-  // Set platform config on app for middleware access
+  // Store the boot-time platform config for backward compatibility.
+  // NOTE: body-size limit, rate limiters, session store, and the NTLM static-asset
+  // bypass are all wired from this snapshot and are truly restart-only — they rely
+  // on Express middleware objects that cannot be hot-swapped at runtime.
+  // All per-request auth and permission decisions (authRequired, enhanceUser…) read
+  // configCache.getPlatform() so they pick up admin saves and IHUB_* overrides
+  // without a restart.
   app.set('platform', platformConfig);
 
   // Create configurable rate limiters based on platform configuration
@@ -390,6 +599,7 @@ export function setupMiddleware(app, platformConfig = {}) {
   // Rate limiting middleware - apply early to protect all endpoints
   // Public API rate limiter for general endpoints
   app.use(buildApiPath('/apps'), rateLimiters.publicApiLimiter);
+  app.use(buildApiPath('/chats'), rateLimiters.publicApiLimiter);
   app.use(buildApiPath('/tools'), rateLimiters.publicApiLimiter);
   app.use(buildApiPath('/models'), rateLimiters.publicApiLimiter);
   app.use(buildApiPath('/prompts'), rateLimiters.publicApiLimiter);
@@ -402,11 +612,17 @@ export function setupMiddleware(app, platformConfig = {}) {
   app.use(buildApiPath('/short-links'), rateLimiters.publicApiLimiter);
   app.use(buildApiPath('/integrations'), rateLimiters.publicApiLimiter);
 
-  // Auth API rate limiter for authentication endpoints
-  app.use(buildServerPath('/auth'), rateLimiters.authApiLimiter);
+  // Auth API rate limiters. Two layers, deliberately:
+  //   1. the public limiter bounds the whole namespace generously, and
+  //   2. the strict credential limiter covers only the endpoints that verify
+  //      credentials — it skips read-only ones such as /api/auth/status, which
+  //      the SPA fetches on every boot and operators use as a health probe
+  //      (see isReadOnlyAuthRequest in ./rateLimiting.js).
+  app.use(buildApiPath('/auth'), rateLimiters.publicApiLimiter);
+  app.use(buildApiPath('/auth'), rateLimiters.authApiLimiter);
 
   // Inference API rate limiter for AI inference endpoints
-  app.use(buildServerPath('/inference'), rateLimiters.inferenceApiLimiter);
+  app.use(buildApiPath('/inference'), rateLimiters.inferenceApiLimiter);
 
   // Admin API rate limiter for administrative endpoints (most restrictive)
   app.use(buildApiPath('/admin'), rateLimiters.adminApiLimiter);
@@ -441,12 +657,33 @@ export function setupMiddleware(app, platformConfig = {}) {
     )
   );
 
-  // Enhance user with permissions after authentication
+  // Populate the request logging context with the authenticated identity so
+  // every subsequent log line carries userId / oauthClientId. The store was
+  // opened earlier in the middleware chain (right after trust proxy) with a
+  // mutable object — see runWithContext above.
+  app.use((req, res, next) => {
+    if (req.user) {
+      const updates = { userId: req.user.id };
+      // OAuth client_credentials / static API key: req.user.id IS the client id.
+      // OAuth authorization_code (user-delegated): req.user.clientId is set.
+      if (req.user.isOAuthClient) {
+        updates.oauthClientId = req.user.id;
+      } else if (req.user.clientId) {
+        updates.oauthClientId = req.user.clientId;
+      }
+      setContext(updates);
+    }
+    next();
+  });
+
+  // Enhance user with permissions after authentication.
+  // Read platform config from configCache per-request so that admin saves and
+  // IHUB_PLATFORM__* overrides take effect without a server restart.
   app.use((req, res, next) => {
     if (req.user && !req.user.permissions) {
-      // Use auth config from platform config
-      const authConfig = platformConfig.auth || {};
-      req.user = enhanceUserWithPermissions(req.user, authConfig, platformConfig);
+      const livePlatform = configCache.getPlatform() || platformConfig;
+      const authConfig = livePlatform.auth || {};
+      req.user = enhanceUserWithPermissions(req.user, authConfig, livePlatform);
 
       // logger.info('🔍 User permissions enhanced:', {
       //   userId: req.user.id,
@@ -459,4 +696,22 @@ export function setupMiddleware(app, platformConfig = {}) {
     }
     next();
   });
+
+  // Track every authenticated request for the activity-summary log line and
+  // the ihub.active.users observable gauge. Active *chats* are still only
+  // bumped from the chat / inference call sites because that is the only
+  // place we have a chatId. Anonymous traffic is excluded so dashboards
+  // measure real users; flip to track 'anonymous' if you want public-only
+  // load instead.
+  app.use((req, res, next) => {
+    if (req.user && req.user.id && req.user.id !== 'anonymous') {
+      activityTracker.recordActivity({ userId: req.user.id });
+    }
+    next();
+  });
+
+  // Global audit safety net. Registered after authentication so req.user is
+  // available; records mutating HTTP requests not covered by an explicit
+  // logAudit() call (which sets req._auditLogged to suppress duplicates).
+  app.use(auditLogger());
 }

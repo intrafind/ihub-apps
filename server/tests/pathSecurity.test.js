@@ -1,7 +1,6 @@
 import { describe, it } from 'node:test';
 import assert from 'node:assert';
-import { isValidId } from '../utils/pathSecurity.js';
-import logger from '../utils/logger.js';
+import { isValidId, isValidExtensionId, isValidWorkflowVersion } from '../utils/pathSecurity.js';
 
 describe('pathSecurity', () => {
   describe('isValidId', () => {
@@ -21,6 +20,7 @@ describe('pathSecurity', () => {
 
     it('should reject IDs with double dots (path traversal)', () => {
       assert.strictEqual(isValidId('..'), false);
+      assert.strictEqual(isValidId('.'), false);
       assert.strictEqual(isValidId('model..id'), false);
       assert.strictEqual(isValidId('..config'), false);
       assert.strictEqual(isValidId('model/../other'), false);
@@ -55,6 +55,26 @@ describe('pathSecurity', () => {
     it('should accept IDs at exactly 100 characters', () => {
       const maxId = 'a'.repeat(100);
       assert.strictEqual(isValidId(maxId), true);
+    });
+  });
+
+  describe('isValidExtensionId', () => {
+    it('should enforce integration-specific extension ID length bounds', () => {
+      assert.strictEqual(isValidExtensionId('short7a'), false);
+      assert.strictEqual(isValidExtensionId('valid-id8'), true);
+      assert.strictEqual(isValidExtensionId('a'.repeat(128)), true);
+      assert.strictEqual(isValidExtensionId('a'.repeat(129)), false);
+    });
+  });
+
+  describe('isValidWorkflowVersion', () => {
+    it('should require safe IDs with alphanumeric boundaries', () => {
+      assert.strictEqual(isValidWorkflowVersion('v1.2.3'), true);
+      assert.strictEqual(isValidWorkflowVersion('1-release'), true);
+      assert.strictEqual(isValidWorkflowVersion('-starts-with-symbol'), false);
+      assert.strictEqual(isValidWorkflowVersion('ends-with-symbol-'), false);
+      assert.strictEqual(isValidWorkflowVersion('version..1'), false);
+      assert.strictEqual(isValidWorkflowVersion('a'.repeat(65)), false);
     });
   });
 });

@@ -13,7 +13,6 @@ This guide provides comprehensive installation instructions for iHub Apps across
   - [Method 1: Binary Installation (Recommended for Evaluation)](#method-1-binary-installation-recommended-for-evaluation)
   - [Method 2: Docker Installation (Recommended for Production)](#method-2-docker-installation-recommended-for-production)
   - [Method 3: npm Installation (For Development)](#method-3-npm-installation-for-development)
-  - [Method 4: Electron Desktop Application](#method-4-electron-desktop-application)
 - [Post-Installation Setup](#post-installation-setup)
 - [Configuration](#configuration)
 - [Update Procedures](#update-procedures)
@@ -33,7 +32,7 @@ That's it! No dependencies, no complex setup required.
 
 ## Installation Methods Overview
 
-iHub Apps offers four installation methods designed for different use cases:
+iHub Apps offers three installation methods designed for different use cases:
 
 ### Method Comparison
 
@@ -42,7 +41,6 @@ iHub Apps offers four installation methods designed for different use cases:
 | **🚀 Binary** | Quick evaluation, demos | 2 minutes | None | Manual download | OS-level | Limited |
 | **🐳 Docker** | Production, CI/CD | 3 minutes | Docker Engine | Container restart | Full isolation | Via volumes |
 | **📦 npm** | Development, contributions | 5 minutes | Node.js, npm | Git pull | None | Full access |
-| **🖥️ Electron** | Desktop app, offline use | 5 minutes | Node.js (build) | Manual rebuild | App sandbox | Build-time |
 
 ### When to Choose Each Method
 
@@ -66,12 +64,6 @@ iHub Apps offers four installation methods designed for different use cases:
 - Want hot reloading during development
 - Are comfortable with Node.js development
 - Need access to the full source code
-
-**Choose Electron if you:**
-- Want a native desktop application experience
-- Need offline capability
-- Require system integration (notifications, file associations)
-- Prefer desktop app UX over web interface
 
 ## System Requirements
 
@@ -104,11 +96,6 @@ iHub Apps offers four installation methods designed for different use cases:
 - **Python**: 3.8+ (for some native dependencies)
 - **Build tools**: Platform-specific C++ compiler
 - **Git**: For cloning repository and updates
-
-#### Electron Application
-- **Build requirements**: Same as npm installation
-- **Runtime**: Packaged app has no external dependencies
-- **Platforms**: Windows 10+, macOS 10.15+, Ubuntu 18.04+
 
 ### Network Requirements
 
@@ -472,65 +459,6 @@ npm run prod:build    # Complete production build
 npm run build:binary  # Build standalone binary (Node.js 20+ required)
 ```
 
-### Method 4: Electron Desktop Application
-
-**Perfect for:** Desktop app experience, offline usage, system integration
-
-#### Prerequisites
-
-- Node.js 24.0+ and npm 8.0+ (same as npm installation)
-- Platform-specific build tools
-
-#### Installation Steps
-
-1. **Clone and install dependencies:**
-```bash
-git clone https://github.com/intrafind/ihub-apps.git
-cd ihub-apps
-npm run install:all
-```
-
-2. **Configure environment:**
-```bash
-cp .env.example .env
-# Edit .env with your API keys and configuration
-```
-
-3. **Run in development mode:**
-```bash
-# Start Electron app with local server
-npm run electron:dev
-```
-
-4. **Build desktop installers:**
-```bash
-# Create platform-specific installers
-npm run electron:build
-
-# Find installers in dist-electron/ directory
-ls dist-electron/
-```
-
-#### Electron Features
-
-✅ **Native desktop experience** - System tray, notifications  
-✅ **Offline capable** - Local processing when possible  
-✅ **Cross-platform** - Windows, macOS, Linux applications  
-✅ **Remote server support** - Connect to existing deployments  
-✅ **Auto-updater** - Built-in update mechanism  
-✅ **System integration** - File associations, protocol handlers  
-
-#### Remote Server Connection
-
-Connect to existing iHub Apps deployment:
-```bash
-# Set remote server URL
-export REMOTE_SERVER_URL=https://your-ihub-server.com
-
-# Start Electron app connected to remote server
-npm run electron:dev
-```
-
 ## Post-Installation Setup
 
 ### Initial Configuration
@@ -716,8 +644,56 @@ For detailed configuration documentation, see the main README.md Configuration s
 - Write permissions on the installation directory
 - At least 500 MB free disk space
 - Only available for binary installations (not Docker or npm)
+- Disabled automatically when running in a container (Docker, Podman, Kubernetes)
+
+**Behaviour when GitHub is unreachable:**
+
+The version check is bounded and never blocks the Admin UI. Where outbound
+traffic to `api.github.com` is dropped rather than refused, the request would
+otherwise hang until the operating system's TCP timeout and leave the admin
+start page on its loading placeholders (issue #2150).
+
+- The request aborts after 1 second. Override with `VERSION_CHECK_TIMEOUT_MS`
+  (or `IHUB_VERSION_CHECK_TIMEOUT_MS`), in milliseconds, for slow links or
+  strict proxies. Values are clamped to 500 ms – 60 s.
+- Results and failures are both cached for 5 minutes, so opening the Admin UI
+  does not trigger a fresh request to GitHub every time.
+- `GET /api/admin/version/check-update` answers from that cache and refreshes in
+  the background, so it never waits on the network. A cold cache responds with
+  `checking: true` and no result yet; the Admin UI re-requests shortly after to
+  pick up the outcome. A failed check is reported in the response's `error`
+  field, and the rest of the page renders as usual.
+
+```bash
+# Allow 15 seconds for the release lookup (default: 1000)
+export VERSION_CHECK_TIMEOUT_MS=15000
+```
+
+**Disabling the version check entirely:**
+
+Set `NO_VERSION_CHECK=true` (or `IHUB_NO_VERSION_CHECK=true`) to prevent the
+server from contacting `api.github.com` to look for newer releases. Useful
+for air-gapped deployments or environments where outbound traffic is
+blocked. The variable is not set by default; both the Admin UI banner and
+the `--update=check` CLI command will report that version checks are
+disabled when it is set. Accepted truthy values: `1`, `true`, `yes`, `on`.
+
+```bash
+# Disable the periodic check for newer releases
+export NO_VERSION_CHECK=true
+```
 
 ### Docker Installation Updates
+
+> **Note:** In-place updates via the Admin UI or `--update` CLI flag are
+> automatically disabled inside containers. Updates would write to the
+> container's ephemeral filesystem and be lost on restart, while any
+> migrated configuration on mounted volumes would persist — leaving the
+> next container start running an older binary against migrated state.
+> Always update containerised installs by pulling a new image. Detection
+> uses the `IHUB_CONTAINER` environment variable (set by the official
+> Dockerfile), `KUBERNETES_SERVICE_HOST`, `/.dockerenv`,
+> `/run/.containerenv`, or `/proc/1/cgroup` membership.
 
 **Update with data preservation:**
 
@@ -752,19 +728,6 @@ npm run install:all
 
 # Restart development server
 npm run dev
-```
-
-### Electron Application Updates
-
-```bash
-# Update source code
-git pull origin main
-
-# Update dependencies
-npm run install:all
-
-# Rebuild application
-npm run electron:build
 ```
 
 ### Version Management
@@ -1127,7 +1090,6 @@ This installation guide provides comprehensive instructions for deploying iHub A
 - **Binary** for quick evaluation and simple deployments
 - **Docker** for production environments and containerized deployments  
 - **npm** for development and customization
-- **Electron** for desktop application experience
 
 For additional help, consult the method-specific documentation or create an issue on GitHub.
 

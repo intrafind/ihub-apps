@@ -1,14 +1,17 @@
-import { promises as fs } from 'fs';
-import { join } from 'path';
-import { getRootDir } from '../../pathUtils.js';
-import { atomicWriteJSON } from '../../utils/atomicWrite.js';
+import configStore from '../../services/config/ConfigStore.js';
 import configCache from '../../configCache.js';
 import { adminAuth } from '../../middleware/adminAuth.js';
 import { reconfigureOidcProviders } from '../../middleware/oidcAuth.js';
-import { buildServerPath } from '../../utils/basePath.js';
 import tokenStorageService from '../../services/TokenStorageService.js';
+import { testRealtimeConnection } from '../../websocket/realtimeTranscription.js';
+import { buildServerPath } from '../../utils/basePath.js';
 import logger from '../../utils/logger.js';
 import { sendInternalError, sendBadRequest } from '../../utils/responseHelpers.js';
+import { logAudit } from '../../services/AuditLogService.js';
+import { saveSnapshot } from '../../services/ChangeHistoryService.js';
+
+/** The platform configuration, as a path relative to `contents/`. */
+const PLATFORM_FILE = 'config/platform.json';
 
 /**
  * Check if a value is an environment variable placeholder
@@ -53,140 +56,16 @@ function restoreSecretIfRedacted(newValue, existingValue) {
 }
 
 /**
- * Decrypt a value if it is encrypted (ENC[...] format)
- * Used to decrypt secrets read from disk before sanitization or runtime use
- * @param {string} value - Value to check and potentially decrypt
- * @returns {string} - Decrypted value, or original if not encrypted
+ * Encrypt a secret string for storage, unless it is an env var placeholder or
+ * already encrypted. Mirrors the guard pattern used for model API keys.
+ * @param {string} value
+ * @returns {string}
  */
-function decryptIfNeeded(value) {
-  if (!value || typeof value !== 'string') return value;
-  if (tokenStorageService.isEncrypted(value)) {
-    try {
-      return tokenStorageService.decryptString(value);
-    } catch (error) {
-      logger.error('Failed to decrypt config secret', { component: 'AdminConfigs', error });
-      return value; // Return encrypted value as-is; sanitizeSecret() will redact it downstream
-    }
-  }
-  return value;
-}
-
-/**
- * Encrypt a value if it's not empty, not an env var placeholder, and not already encrypted
- * @param {string} value - Value to potentially encrypt
- * @returns {string} - Encrypted value, or original if skipped
- */
-function encryptIfNeeded(value) {
+function encryptSecretIfNeeded(value) {
   if (!value || typeof value !== 'string') return value;
   if (isEnvVarPlaceholder(value)) return value;
   if (tokenStorageService.isEncrypted(value)) return value;
   return tokenStorageService.encryptString(value);
-}
-
-/**
- * Decrypt all known secret fields in platform config (in-place mutation)
- * @param {Object} config - Platform config object
- */
-function decryptPlatformSecrets(config) {
-  // Jira
-  if (config.jira?.clientSecret) {
-    config.jira.clientSecret = decryptIfNeeded(config.jira.clientSecret);
-  }
-
-  // Cloud storage providers
-  if (config.cloudStorage?.providers) {
-    for (const provider of config.cloudStorage.providers) {
-      if (provider.clientSecret) {
-        provider.clientSecret = decryptIfNeeded(provider.clientSecret);
-      }
-      if (provider.type === 'office365' && provider.tenantId) {
-        provider.tenantId = decryptIfNeeded(provider.tenantId);
-      }
-    }
-  }
-
-  // OIDC providers
-  if (config.oidcAuth?.providers) {
-    for (const provider of config.oidcAuth.providers) {
-      if (provider.clientSecret) {
-        provider.clientSecret = decryptIfNeeded(provider.clientSecret);
-      }
-    }
-  }
-
-  // LDAP providers
-  if (config.ldapAuth?.providers) {
-    for (const provider of config.ldapAuth.providers) {
-      if (provider.adminPassword) {
-        provider.adminPassword = decryptIfNeeded(provider.adminPassword);
-      }
-    }
-  }
-
-  // NTLM
-  if (config.ntlmAuth?.domainControllerPassword) {
-    config.ntlmAuth.domainControllerPassword = decryptIfNeeded(
-      config.ntlmAuth.domainControllerPassword
-    );
-  }
-
-  // iFinder
-  if (config.iFinder?.privateKey) {
-    config.iFinder.privateKey = decryptIfNeeded(config.iFinder.privateKey);
-  }
-}
-
-/**
- * Encrypt all known secret fields in platform config (in-place mutation)
- * @param {Object} config - Platform config object
- */
-function encryptPlatformSecrets(config) {
-  // Jira
-  if (config.jira?.clientSecret) {
-    config.jira.clientSecret = encryptIfNeeded(config.jira.clientSecret);
-  }
-
-  // Cloud storage providers
-  if (config.cloudStorage?.providers) {
-    for (const provider of config.cloudStorage.providers) {
-      if (provider.clientSecret) {
-        provider.clientSecret = encryptIfNeeded(provider.clientSecret);
-      }
-      if (provider.type === 'office365' && provider.tenantId) {
-        provider.tenantId = encryptIfNeeded(provider.tenantId);
-      }
-    }
-  }
-
-  // OIDC providers
-  if (config.oidcAuth?.providers) {
-    for (const provider of config.oidcAuth.providers) {
-      if (provider.clientSecret) {
-        provider.clientSecret = encryptIfNeeded(provider.clientSecret);
-      }
-    }
-  }
-
-  // LDAP providers
-  if (config.ldapAuth?.providers) {
-    for (const provider of config.ldapAuth.providers) {
-      if (provider.adminPassword) {
-        provider.adminPassword = encryptIfNeeded(provider.adminPassword);
-      }
-    }
-  }
-
-  // NTLM
-  if (config.ntlmAuth?.domainControllerPassword) {
-    config.ntlmAuth.domainControllerPassword = encryptIfNeeded(
-      config.ntlmAuth.domainControllerPassword
-    );
-  }
-
-  // iFinder
-  if (config.iFinder?.privateKey) {
-    config.iFinder.privateKey = encryptIfNeeded(config.iFinder.privateKey);
-  }
 }
 
 /**
@@ -293,20 +172,17 @@ export default function registerAdminConfigRoutes(app) {
    */
   app.get(buildServerPath('/api/admin/configs/platform'), adminAuth, async (req, res) => {
     try {
-      const rootDir = getRootDir();
-      const platformConfigPath = join(rootDir, 'contents', 'config', 'platform.json');
-
-      let platformConfig = {};
-      try {
-        const platformConfigData = await fs.readFile(platformConfigPath, 'utf8');
-        platformConfig = JSON.parse(platformConfigData);
-      } catch {
+      // Strict, for the reason the save below is: defaults rendered over a
+      // platform.json that merely cannot be parsed read as "nothing is
+      // configured", which is the one thing that is not true.
+      let platformConfig = await configStore.readJsonStrict(PLATFORM_FILE);
+      if (!platformConfig) {
         logger.info('Platform config not found, returning default config', {
           component: 'AdminConfigs'
         });
         platformConfig = {
           auth: {
-            mode: 'proxy',
+            mode: 'local',
             authenticatedGroup: 'authenticated'
           },
           anonymousAuth: {
@@ -322,25 +198,19 @@ export default function registerAdminConfigRoutes(app) {
           localAuth: {
             enabled: false,
             usersFile: 'contents/config/users.json',
-            sessionTimeoutMinutes: 480,
-            jwtSecret: '${JWT_SECRET}'
+            sessionTimeoutMinutes: 480
           },
           oidcAuth: {
             enabled: false,
             providers: []
-          },
-          anonymousAuth: {
-            enabled: true,
-            defaultGroups: ['anonymous']
           }
         };
       }
 
-      // Decrypt any encrypted secrets so sanitization sees plaintext (not ENC[...])
-      decryptPlatformSecrets(platformConfig);
-
-      // Sanitize sensitive fields even for admin endpoint
-      // Preserve environment variable placeholders but redact actual secrets
+      // Integration secrets (jira/cloudStorage/oidc/ldap/ntlm/iFinder) no longer
+      // live in platform.json — they are stored in the central credential store
+      // and referenced by *Ref ids, so there is nothing to sanitize for them
+      // here. Only the JWT secrets and proxy JWT provider config remain inline.
       const sanitizedConfig = { ...platformConfig };
 
       // Sanitize JWT secret from auth config
@@ -359,25 +229,25 @@ export default function registerAdminConfigRoutes(app) {
         };
       }
 
-      // Sanitize OIDC provider secrets
-      if (sanitizedConfig.oidcAuth?.providers) {
-        sanitizedConfig.oidcAuth = {
-          ...sanitizedConfig.oidcAuth,
-          providers: sanitizedConfig.oidcAuth.providers.map(provider => ({
-            ...provider,
-            clientSecret: sanitizeSecret(provider.clientSecret)
-          }))
+      // Sanitize the realtime speech API key (server-side secret).
+      if (sanitizedConfig.speech?.realtime?.apiKey) {
+        sanitizedConfig.speech = {
+          ...sanitizedConfig.speech,
+          realtime: {
+            ...sanitizedConfig.speech.realtime,
+            apiKey: sanitizeSecret(sanitizedConfig.speech.realtime.apiKey)
+          }
         };
       }
 
-      // Sanitize LDAP provider secrets
-      if (sanitizedConfig.ldapAuth?.providers) {
-        sanitizedConfig.ldapAuth = {
-          ...sanitizedConfig.ldapAuth,
-          providers: sanitizedConfig.ldapAuth.providers.map(provider => ({
-            ...provider,
-            adminPassword: sanitizeSecret(provider.adminPassword)
-          }))
+      // Sanitize the Azure Speech subscription key (server-side secret).
+      if (sanitizedConfig.speech?.azure?.subscriptionKey) {
+        sanitizedConfig.speech = {
+          ...sanitizedConfig.speech,
+          azure: {
+            ...sanitizedConfig.speech.azure,
+            subscriptionKey: sanitizeSecret(sanitizedConfig.speech.azure.subscriptionKey)
+          }
         };
       }
 
@@ -392,45 +262,6 @@ export default function registerAdminConfigRoutes(app) {
             audience: provider.audience
             // Exclude jwkUrl and any other potentially sensitive configuration
           }))
-        };
-      }
-
-      // Sanitize Jira client secret
-      if (sanitizedConfig.jira?.clientSecret) {
-        sanitizedConfig.jira = {
-          ...sanitizedConfig.jira,
-          clientSecret: sanitizeSecret(sanitizedConfig.jira.clientSecret)
-        };
-      }
-
-      // Sanitize NTLM domain controller password
-      if (sanitizedConfig.ntlmAuth?.domainControllerPassword) {
-        sanitizedConfig.ntlmAuth = {
-          ...sanitizedConfig.ntlmAuth,
-          domainControllerPassword: sanitizeSecret(
-            sanitizedConfig.ntlmAuth.domainControllerPassword
-          )
-        };
-      }
-
-      // Sanitize cloud storage provider secrets
-      if (sanitizedConfig.cloudStorage?.providers) {
-        sanitizedConfig.cloudStorage = {
-          ...sanitizedConfig.cloudStorage,
-          providers: sanitizedConfig.cloudStorage.providers.map(provider => ({
-            ...provider,
-            clientSecret: sanitizeSecret(provider.clientSecret),
-            tenantId:
-              provider.type === 'office365' ? sanitizeSecret(provider.tenantId) : provider.tenantId
-          }))
-        };
-      }
-
-      // Sanitize iFinder private key
-      if (sanitizedConfig.iFinder?.privateKey) {
-        sanitizedConfig.iFinder = {
-          ...sanitizedConfig.iFinder,
-          privateKey: sanitizeSecret(sanitizedConfig.iFinder.privateKey)
         };
       }
 
@@ -451,21 +282,19 @@ export default function registerAdminConfigRoutes(app) {
         return sendBadRequest(res, 'Invalid configuration data');
       }
 
-      const rootDir = getRootDir();
-      const platformConfigPath = join(rootDir, 'contents', 'config', 'platform.json');
-
-      // Load existing config to preserve other fields and track changes
-      let existingConfig = {};
-      try {
-        const existingConfigData = await fs.readFile(platformConfigPath, 'utf8');
-        existingConfig = JSON.parse(existingConfigData);
-      } catch {
-        // File doesn't exist, start with empty config
+      // Load existing config to preserve other fields and track changes.
+      // Strict, because this is a read-modify-write: the merge below emits
+      // only the named keys, so treating an unparseable platform.json as a
+      // first run would answer 200 while replacing `features`, `cors`,
+      // `storage`, `chats`, `runLog`, `rateLimit` and the rest with nothing.
+      // One trailing comma left by an operator, one Save, and the file is
+      // gone.
+      const storedConfig = await configStore.readJsonStrict(PLATFORM_FILE);
+      if (!storedConfig) {
+        // File genuinely absent: first run.
         logger.info('Creating new platform config file', { component: 'AdminConfigs' });
       }
-
-      // Decrypt existing secrets so restoreSecretIfRedacted compares against plaintext
-      decryptPlatformSecrets(existingConfig);
+      const existingConfig = storedConfig || {};
 
       // Merge the authentication-related config with existing config
       const mergedConfig = {
@@ -479,10 +308,19 @@ export default function registerAdminConfigRoutes(app) {
         ntlmAuth: newConfig.ntlmAuth || existingConfig.ntlmAuth,
         authorization: newConfig.authorization || existingConfig.authorization,
         oauth: newConfig.oauth || existingConfig.oauth,
+        // MCP gateway (Admin → MCP gateway) is edited through this generic
+        // endpoint rather than a dedicated route, so it must be listed here —
+        // otherwise the spread of existingConfig silently wins and the saved
+        // toggles revert on the next load.
+        mcpServer:
+          newConfig.mcpServer !== undefined ? newConfig.mcpServer : existingConfig.mcpServer,
         jira: newConfig.jira || existingConfig.jira,
         cloudStorage: newConfig.cloudStorage || existingConfig.cloudStorage,
         iFinder: newConfig.iFinder || existingConfig.iFinder,
-        iAssistant: newConfig.iAssistant || existingConfig.iAssistant
+        iAssistant: newConfig.iAssistant || existingConfig.iAssistant,
+        telemetry:
+          newConfig.telemetry !== undefined ? newConfig.telemetry : existingConfig.telemetry,
+        speech: newConfig.speech !== undefined ? newConfig.speech : existingConfig.speech
       };
 
       // Restore secrets that were redacted in the client
@@ -505,92 +343,58 @@ export default function registerAdminConfigRoutes(app) {
         );
       }
 
-      // Restore OIDC provider client secrets
-      if (newConfig.oidcAuth?.providers && existingConfig.oidcAuth?.providers) {
-        if (!mergedConfig.oidcAuth) mergedConfig.oidcAuth = {};
-        mergedConfig.oidcAuth.providers = newConfig.oidcAuth.providers.map((provider, index) => {
-          const existingProvider = existingConfig.oidcAuth?.providers?.[index];
-          return {
-            ...provider,
-            clientSecret: restoreSecretIfRedacted(
-              provider.clientSecret,
-              existingProvider?.clientSecret
-            )
-          };
-        });
-      }
+      // Integration secrets (jira/cloudStorage/oidc/ldap/ntlm/iFinder) live in
+      // the central credential store and are referenced by *Ref ids that are
+      // plain config values — they pass through the merge above unchanged and
+      // require no encrypt/restore handling here.
 
-      // Restore LDAP provider admin passwords
-      if (newConfig.ldapAuth?.providers && existingConfig.ldapAuth?.providers) {
-        if (!mergedConfig.ldapAuth) mergedConfig.ldapAuth = {};
-        mergedConfig.ldapAuth.providers = newConfig.ldapAuth.providers.map((provider, index) => {
-          const existingProvider = existingConfig.ldapAuth?.providers?.[index];
-          return {
-            ...provider,
-            adminPassword: restoreSecretIfRedacted(
-              provider.adminPassword,
-              existingProvider?.adminPassword
-            )
-          };
-        });
-      }
-
-      // Restore Jira client secret
-      if (newConfig.jira?.clientSecret) {
-        if (!mergedConfig.jira) mergedConfig.jira = {};
-        mergedConfig.jira.clientSecret = restoreSecretIfRedacted(
-          newConfig.jira.clientSecret,
-          existingConfig.jira?.clientSecret
+      // Realtime speech API key: restore if the client sent the redacted
+      // placeholder, otherwise encrypt the newly provided secret at rest.
+      if (newConfig.speech?.realtime && Object.hasOwn(newConfig.speech.realtime, 'apiKey')) {
+        if (!mergedConfig.speech) mergedConfig.speech = {};
+        if (!mergedConfig.speech.realtime) mergedConfig.speech.realtime = {};
+        const restored = restoreSecretIfRedacted(
+          newConfig.speech.realtime.apiKey,
+          existingConfig.speech?.realtime?.apiKey
         );
+        mergedConfig.speech.realtime.apiKey = encryptSecretIfNeeded(restored);
       }
 
-      // Restore cloud storage provider secrets
-      if (newConfig.cloudStorage?.providers && existingConfig.cloudStorage?.providers) {
-        if (!mergedConfig.cloudStorage) mergedConfig.cloudStorage = {};
-        mergedConfig.cloudStorage.providers = newConfig.cloudStorage.providers.map(
-          (provider, index) => {
-            const existingProvider = existingConfig.cloudStorage?.providers?.[index];
-            return {
-              ...provider,
-              clientSecret: restoreSecretIfRedacted(
-                provider.clientSecret,
-                existingProvider?.clientSecret
-              ),
-              tenantId:
-                provider.type === 'office365'
-                  ? restoreSecretIfRedacted(provider.tenantId, existingProvider?.tenantId)
-                  : provider.tenantId
-            };
-          }
+      // Azure Speech subscription key: same restore-or-encrypt handling.
+      if (newConfig.speech?.azure && Object.hasOwn(newConfig.speech.azure, 'subscriptionKey')) {
+        if (!mergedConfig.speech) mergedConfig.speech = {};
+        if (!mergedConfig.speech.azure) mergedConfig.speech.azure = {};
+        const restored = restoreSecretIfRedacted(
+          newConfig.speech.azure.subscriptionKey,
+          existingConfig.speech?.azure?.subscriptionKey
         );
+        mergedConfig.speech.azure.subscriptionKey = encryptSecretIfNeeded(restored);
       }
 
-      // Restore NTLM domain controller password
-      if (newConfig.ntlmAuth?.domainControllerPassword) {
-        if (!mergedConfig.ntlmAuth) mergedConfig.ntlmAuth = {};
-        mergedConfig.ntlmAuth.domainControllerPassword = restoreSecretIfRedacted(
-          newConfig.ntlmAuth.domainControllerPassword,
-          existingConfig.ntlmAuth?.domainControllerPassword
-        );
-      }
-
-      // Restore iFinder private key
-      if (newConfig.iFinder?.privateKey) {
-        if (!mergedConfig.iFinder) mergedConfig.iFinder = {};
-        mergedConfig.iFinder.privateKey = restoreSecretIfRedacted(
-          newConfig.iFinder.privateKey,
-          existingConfig.iFinder?.privateKey
-        );
-      }
-
-      // Encrypt secrets before writing to disk
-      encryptPlatformSecrets(mergedConfig);
-
-      // Save to file
-      await atomicWriteJSON(platformConfigPath, mergedConfig);
+      // Save to file. Every secret has already been restored-if-redacted and
+      // encrypted above; what reaches the store is a plain object.
+      await configStore.writeJson(PLATFORM_FILE, mergedConfig);
 
       // Refresh cache
       await configCache.refreshCacheEntry('config/platform.json');
+
+      // Apply runtime-mutable telemetry settings without server restart
+      try {
+        const telemetryChanged =
+          JSON.stringify(existingConfig.telemetry) !== JSON.stringify(newConfig.telemetry);
+        if (telemetryChanged && newConfig.telemetry) {
+          const { reloadTelemetryConfig } = await import('../../telemetry.js');
+          const { default: activityTracker } = await import('../../telemetry/ActivityTracker.js');
+          reloadTelemetryConfig(newConfig.telemetry);
+          activityTracker.configure(newConfig.telemetry.activitySummary || {});
+          logger.info('Telemetry runtime configuration updated', { component: 'AdminConfigs' });
+        }
+      } catch (telemetryError) {
+        logger.warn('Failed to apply runtime telemetry config update', {
+          component: 'AdminConfigs',
+          error: telemetryError.message
+        });
+      }
 
       // Reset iFinder/iAssistant service caches so they pick up new config
       const iFinderChanged =
@@ -609,7 +413,7 @@ export default function registerAdminConfigRoutes(app) {
             component: 'AdminConfigs'
           });
         } catch (error) {
-          logger.warn('Could not reset iFinder caches', { component: 'AdminConfigs', error: err });
+          logger.warn('Could not reset iFinder caches', { component: 'AdminConfigs', error });
         }
       }
 
@@ -635,48 +439,32 @@ export default function registerAdminConfigRoutes(app) {
 
       logger.info('Platform authentication configuration updated', { component: 'AdminConfigs' });
 
-      // Decrypt for sanitization before sending response (mergedConfig has encrypted values on disk)
+      // Sanitize the remaining inline secrets in the response — the admin UI
+      // should see ***REDACTED*** for JWT secrets, not raw values. Integration
+      // secrets no longer live in platform.json (they are in the credential
+      // store), so only the JWT secrets need sanitizing here.
       const responseConfig = JSON.parse(JSON.stringify(mergedConfig));
-      decryptPlatformSecrets(responseConfig);
-
-      // Sanitize secrets in response — admin UI should see ***REDACTED***, not raw values
-      if (responseConfig.jira?.clientSecret) {
-        responseConfig.jira.clientSecret = sanitizeSecret(responseConfig.jira.clientSecret);
-      }
-      if (responseConfig.oidcAuth?.providers) {
-        responseConfig.oidcAuth.providers = responseConfig.oidcAuth.providers.map(p => ({
-          ...p,
-          clientSecret: sanitizeSecret(p.clientSecret)
-        }));
-      }
-      if (responseConfig.ldapAuth?.providers) {
-        responseConfig.ldapAuth.providers = responseConfig.ldapAuth.providers.map(p => ({
-          ...p,
-          adminPassword: sanitizeSecret(p.adminPassword)
-        }));
-      }
-      if (responseConfig.ntlmAuth?.domainControllerPassword) {
-        responseConfig.ntlmAuth.domainControllerPassword = sanitizeSecret(
-          responseConfig.ntlmAuth.domainControllerPassword
-        );
-      }
-      if (responseConfig.cloudStorage?.providers) {
-        responseConfig.cloudStorage.providers = responseConfig.cloudStorage.providers.map(p => ({
-          ...p,
-          clientSecret: sanitizeSecret(p.clientSecret),
-          tenantId: p.type === 'office365' ? sanitizeSecret(p.tenantId) : p.tenantId
-        }));
-      }
       if (responseConfig.auth?.jwtSecret) {
         responseConfig.auth.jwtSecret = sanitizeSecret(responseConfig.auth.jwtSecret);
       }
       if (responseConfig.localAuth?.jwtSecret) {
         responseConfig.localAuth.jwtSecret = sanitizeSecret(responseConfig.localAuth.jwtSecret);
       }
-      if (responseConfig.iFinder?.privateKey) {
-        responseConfig.iFinder.privateKey = sanitizeSecret(responseConfig.iFinder.privateKey);
-      }
 
+      await saveSnapshot({
+        resource: 'platform',
+        id: 'platform',
+        before: existingConfig,
+        after: mergedConfig,
+        admin: req.user?.username ?? req.user?.name ?? req.user?.id ?? 'unknown'
+      });
+      await logAudit({
+        req,
+        action: 'update',
+        resource: 'platform',
+        resourceId: 'platform',
+        summary: 'Updated platform configuration'
+      });
       res.json({
         message: 'Platform configuration updated successfully',
         config: responseConfig,
@@ -688,6 +476,38 @@ export default function registerAdminConfigRoutes(app) {
       });
     } catch (error) {
       return sendInternalError(res, error, 'update platform configuration');
+    }
+  });
+
+  /**
+   * Test connectivity to the vLLM realtime speech endpoint.
+   * Accepts optional { url, model, apiKey } to test unsaved form values. When
+   * the apiKey is omitted, blank, or the redacted placeholder, the saved
+   * (decrypted) key from the platform cache is used so the secret is never sent
+   * to the browser.
+   */
+  app.post(buildServerPath('/api/admin/voice/realtime/test'), adminAuth, async (req, res) => {
+    try {
+      const body = req.body || {};
+      const saved = (configCache.getPlatform() || {}).speech?.realtime || {};
+
+      const url = (body.url ?? saved.url ?? '').trim();
+      const model = body.model ?? saved.model ?? '';
+
+      // Resolve the API key without leaking the stored secret.
+      let apiKey = body.apiKey;
+      if (!apiKey || apiKey === '***REDACTED***' || isEnvVarPlaceholder(apiKey)) {
+        apiKey = saved.apiKey || ''; // already decrypted by configCache
+      }
+
+      if (!url) {
+        return res.json({ ok: false, message: 'No realtime URL configured' });
+      }
+
+      const result = await testRealtimeConnection({ url, model, apiKey });
+      return res.json(result);
+    } catch (error) {
+      return sendInternalError(res, error, 'test realtime speech connection');
     }
   });
 }

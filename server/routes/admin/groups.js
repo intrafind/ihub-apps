@@ -1,7 +1,4 @@
-import { promises as fs } from 'fs';
-import { join } from 'path';
-import { getRootDir } from '../../pathUtils.js';
-import { atomicWriteJSON } from '../../utils/atomicWrite.js';
+import configStore from '../../services/config/ConfigStore.js';
 import configCache from '../../configCache.js';
 import { adminAuth } from '../../middleware/adminAuth.js';
 import { buildServerPath } from '../../utils/basePath.js';
@@ -13,6 +10,72 @@ import {
   sendBadRequest,
   sendErrorResponse
 } from '../../utils/responseHelpers.js';
+import { logAudit } from '../../services/AuditLogService.js';
+import { saveSnapshot } from '../../services/ChangeHistoryService.js';
+
+/** The group configuration, as a path relative to `contents/`. */
+const GROUPS_FILE = 'config/groups.json';
+
+/**
+ * The `{ id, name }` summaries a resource namespace holds.
+ *
+ * A document that does not parse is skipped and a namespace with no directory
+ * yet reads as empty — both are how this endpoint has always behaved for
+ * prompts and workflows, and now for apps and models too.
+ *
+ * @param {string} ns - Configuration namespace: apps, models, prompts, workflows
+ * @returns {Promise<Array<{id: string, name: Object}>>} One summary per document
+ */
+async function listResourceSummaries(ns) {
+  const documents = await configStore.listDocuments(ns);
+  return documents.map(({ data }) => ({
+    id: data?.id,
+    name: data?.name || { en: data?.id, de: data?.id }
+  }));
+}
+
+/**
+ * Count groups that grant adminAccess. Used to prevent removing/demoting the
+ * last group that can administer the platform.
+ */
+function countAdminAccessGroups(groups, excludeGroupId = null) {
+  return Object.entries(groups || {}).filter(
+    ([groupId, group]) => groupId !== excludeGroupId && group?.permissions?.adminAccess === true
+  ).length;
+}
+
+/**
+ * Normalize an incoming group `permissions` object.
+ *
+ * Both the create and update handlers rebuild this object field by field, so
+ * anything missing from the list is silently dropped on every admin save —
+ * that is how `skills` (and later `tools`) disappeared from groups that an
+ * admin merely opened and saved. Keep every permission the authorization layer
+ * reads (`utils/authorization.js`) in ONE place so adding the next one cannot
+ * regress the others.
+ *
+ * @param {object} incoming - `permissions` from the request body.
+ * @param {object} [existing] - Current permissions, used as the fallback for
+ *   list fields the caller omitted. Empty for newly created groups.
+ * @param {boolean} [adminAccess] - Resolved adminAccess (the update handler
+ *   computes it separately because of the last-admin-group guard).
+ */
+function normalizeGroupPermissions(incoming = {}, existing = {}, adminAccess = undefined) {
+  const list = key => (Array.isArray(incoming[key]) ? incoming[key] : existing[key] || []);
+  return {
+    apps: list('apps'),
+    prompts: list('prompts'),
+    models: list('models'),
+    workflows: list('workflows'),
+    skills: list('skills'),
+    tools: list('tools'),
+    adminAccess:
+      adminAccess !== undefined
+        ? adminAccess
+        : Boolean(incoming.adminAccess ?? existing.adminAccess),
+    contentAdmin: Boolean(incoming.contentAdmin ?? existing.contentAdmin)
+  };
+}
 
 /**
  * @swagger
@@ -40,9 +103,35 @@ import {
  *           items:
  *             type: string
  *           example: ["gpt-4", "claude-3"]
+ *         workflows:
+ *           type: array
+ *           description: List of workflow IDs the group can run, or ['*'] for all workflows
+ *           items:
+ *             type: string
+ *           example: ["document-analysis"]
+ *         skills:
+ *           type: array
+ *           description: List of agent skill names the group can use, or ['*'] for all skills
+ *           items:
+ *             type: string
+ *           example: ["*"]
+ *         tools:
+ *           type: array
+ *           description: >
+ *             Tool IDs the group may call directly over the MCP/A2A gateways, or ['*'] for
+ *             all tools. Naming a tool (`iFinder`) grants every function of it; naming a
+ *             function (`iFinder_search`) grants only that one. Does not affect chat, where
+ *             an app's own `tools` list decides what the model may call.
+ *           items:
+ *             type: string
+ *           example: ["iFinder"]
  *         adminAccess:
  *           type: boolean
  *           description: Whether the group has administrative access
+ *           example: false
+ *         contentAdmin:
+ *           type: boolean
+ *           description: Whether the group can administer content without full admin access
  *           example: false
  *
  *     UserGroup:
@@ -219,17 +308,17 @@ export default function registerAdminGroupRoutes(app) {
    */
   app.get(buildServerPath('/api/admin/groups'), adminAuth, async (req, res) => {
     try {
-      const rootDir = getRootDir();
-      const groupsFilePath = join(rootDir, 'contents', 'config', 'groups.json');
-
-      let groupsData = { groups: {}, metadata: {} };
-      try {
-        const groupsFileData = await fs.readFile(groupsFilePath, 'utf8');
-        groupsData = JSON.parse(groupsFileData);
-      } catch {
-        logger.info('Groups file not found or invalid, returning empty list', {
+      // Strict, so an unreadable file is not rendered as an empty one. The
+      // write path already fails closed, but an admin page showing no groups
+      // over a `groups.json` with a trailing comma in it says the permissions
+      // are gone rather than that the file cannot be parsed — and the first
+      // thing it invites is a save.
+      let groupsData = await configStore.readJsonStrict(GROUPS_FILE);
+      if (!groupsData) {
+        logger.info('Groups file not found, returning empty list', {
           component: 'AdminGroups'
         });
+        groupsData = { groups: {}, metadata: {} };
       }
 
       res.json(groupsData);
@@ -293,111 +382,10 @@ export default function registerAdminGroupRoutes(app) {
    */
   app.get(buildServerPath('/api/admin/groups/resources'), adminAuth, async (req, res) => {
     try {
-      const rootDir = getRootDir();
-
-      // Get apps
-      const appsPath = join(rootDir, 'contents', 'apps');
-      const appFiles = await fs.readdir(appsPath);
-      const apps = [];
-
-      for (const file of appFiles) {
-        if (file.endsWith('.json')) {
-          try {
-            const appData = await fs.readFile(join(appsPath, file), 'utf8');
-            const app = JSON.parse(appData);
-            apps.push({
-              id: app.id,
-              name: app.name || { en: app.id, de: app.id }
-            });
-          } catch (error) {
-            logger.warn('Error reading app file', {
-              component: 'AdminGroups',
-              file,
-              error: error.message
-            });
-          }
-        }
-      }
-
-      // Get models
-      const modelsPath = join(rootDir, 'contents', 'models');
-      const modelFiles = await fs.readdir(modelsPath);
-      const models = [];
-
-      for (const file of modelFiles) {
-        if (file.endsWith('.json')) {
-          try {
-            const modelData = await fs.readFile(join(modelsPath, file), 'utf8');
-            const model = JSON.parse(modelData);
-            models.push({
-              id: model.id,
-              name: model.name || { en: model.id, de: model.id }
-            });
-          } catch (error) {
-            logger.warn('Error reading model file', {
-              component: 'AdminGroups',
-              file,
-              error: error.message
-            });
-          }
-        }
-      }
-
-      // Get prompts
-      const promptsPath = join(rootDir, 'contents', 'prompts');
-      const prompts = [];
-
-      try {
-        const promptFiles = await fs.readdir(promptsPath);
-        for (const file of promptFiles) {
-          if (file.endsWith('.json')) {
-            try {
-              const promptData = await fs.readFile(join(promptsPath, file), 'utf8');
-              const prompt = JSON.parse(promptData);
-              prompts.push({
-                id: prompt.id,
-                name: prompt.name || { en: prompt.id, de: prompt.id }
-              });
-            } catch (error) {
-              logger.warn('Error reading prompt file', {
-                component: 'AdminGroups',
-                file,
-                error: error.message
-              });
-            }
-          }
-        }
-      } catch {
-        logger.info('Prompts directory not found or empty', { component: 'AdminGroups' });
-      }
-
-      // Get workflows
-      const workflowsPath = join(rootDir, 'contents', 'workflows');
-      const workflows = [];
-
-      try {
-        const workflowFiles = await fs.readdir(workflowsPath);
-        for (const file of workflowFiles) {
-          if (file.endsWith('.json')) {
-            try {
-              const workflowData = await fs.readFile(join(workflowsPath, file), 'utf8');
-              const workflow = JSON.parse(workflowData);
-              workflows.push({
-                id: workflow.id,
-                name: workflow.name || { en: workflow.id, de: workflow.id }
-              });
-            } catch (error) {
-              logger.warn('Error reading workflow file', {
-                component: 'AdminGroups',
-                file,
-                error: error.message
-              });
-            }
-          }
-        }
-      } catch {
-        logger.info('Workflows directory not found or empty', { component: 'AdminGroups' });
-      }
+      const apps = await listResourceSummaries('apps');
+      const models = await listResourceSummaries('models');
+      const prompts = await listResourceSummaries('prompts');
+      const workflows = await listResourceSummaries('workflows');
 
       // Get skills
       const { data: allSkills } = configCache.getSkills();
@@ -406,12 +394,31 @@ export default function registerAdminGroupRoutes(app) {
         name: { en: skill.displayName || skill.name, de: skill.displayName || skill.name }
       }));
 
+      // Tools are offered per function (`iFinder_search`) as well as by base id
+      // (`iFinder`), because granting the base id covers every function of that
+      // tool — which is usually what an operator wants.
+      const { data: allTools } = configCache.getTools();
+      const toolsById = new Map();
+      for (const tool of allTools || []) {
+        if (!tool?.id) continue;
+        toolsById.set(tool.id, { id: tool.id, name: tool.name || { en: tool.id, de: tool.id } });
+        const baseId = tool.id.includes('_') ? tool.id.split('_')[0] : tool.id;
+        if (!toolsById.has(baseId)) {
+          toolsById.set(baseId, {
+            id: baseId,
+            name: { en: `${baseId} (all functions)`, de: `${baseId} (alle Funktionen)` }
+          });
+        }
+      }
+      const tools = Array.from(toolsById.values());
+
       res.json({
         apps: apps.sort((a, b) => a.id.localeCompare(b.id)),
         models: models.sort((a, b) => a.id.localeCompare(b.id)),
         prompts: prompts.sort((a, b) => a.id.localeCompare(b.id)),
         workflows: workflows.sort((a, b) => a.id.localeCompare(b.id)),
-        skills: skills.sort((a, b) => a.id.localeCompare(b.id))
+        skills: skills.sort((a, b) => a.id.localeCompare(b.id)),
+        tools: tools.sort((a, b) => a.id.localeCompare(b.id))
       });
     } catch (error) {
       return sendInternalError(res, error, 'get resources');
@@ -519,7 +526,7 @@ export default function registerAdminGroupRoutes(app) {
    */
   app.post(buildServerPath('/api/admin/groups'), adminAuth, async (req, res) => {
     try {
-      const { id, name, description, permissions, mappings = [] } = req.body;
+      const { id, name, description, permissions, mappings = [], inherits = [] } = req.body;
 
       if (!id || !name) {
         return sendBadRequest(res, 'Group ID and name are required');
@@ -535,28 +542,19 @@ export default function registerAdminGroupRoutes(app) {
         return sendBadRequest(res, 'Valid permissions object is required');
       }
 
-      const rootDir = getRootDir();
-      const groupsFilePath = join(rootDir, 'contents', 'config', 'groups.json');
+      // No group file yet is the first-run case: start the structure here.
+      const groupsData = (await configStore.readJsonStrict(GROUPS_FILE)) || {
+        groups: {},
+        metadata: {
+          version: '1.0.0',
+          description: 'Unified group configuration with permissions and external mappings',
+          lastModified: new Date().toISOString()
+        }
+      };
 
-      // Load existing groups
-      let groupsData = { groups: {}, metadata: {} };
-      try {
-        const groupsFileData = await fs.readFile(groupsFilePath, 'utf8');
-        groupsData = JSON.parse(groupsFileData);
-      } catch {
-        // File doesn't exist, create new structure
-        groupsData = {
-          groups: {},
-          metadata: {
-            version: '1.0.0',
-            description: 'Unified group configuration with permissions and external mappings',
-            lastModified: new Date().toISOString()
-          }
-        };
-      }
-
-      // Check if group ID already exists
-      if (groupsData.groups[id]) {
+      // Check if group ID already exists (own-property check so names inherited
+      // from Object.prototype, e.g. "hasOwnProperty", can't be mistaken for a group)
+      if (Object.hasOwn(groupsData.groups, id)) {
         return sendErrorResponse(res, 409, 'Group ID already exists');
       }
 
@@ -565,27 +563,29 @@ export default function registerAdminGroupRoutes(app) {
         id,
         name,
         description: description || '',
-        permissions: {
-          apps: Array.isArray(permissions.apps) ? permissions.apps : [],
-          prompts: Array.isArray(permissions.prompts) ? permissions.prompts : [],
-          models: Array.isArray(permissions.models) ? permissions.models : [],
-          workflows: Array.isArray(permissions.workflows) ? permissions.workflows : [],
-          adminAccess: Boolean(permissions.adminAccess)
-        },
-        mappings: Array.isArray(mappings) ? mappings : []
+        permissions: normalizeGroupPermissions(permissions),
+        mappings: Array.isArray(mappings) ? mappings : [],
+        inherits: Array.isArray(inherits) ? inherits : []
       };
 
       groupsData.groups[id] = newGroup;
       groupsData.metadata.lastModified = new Date().toISOString();
 
       // Save to file
-      await atomicWriteJSON(groupsFilePath, groupsData);
+      await configStore.writeJson(GROUPS_FILE, groupsData);
 
       // Refresh cache
       await configCache.refreshCacheEntry('config/groups.json');
 
       logger.info('Created new group', { component: 'AdminGroups', name, id });
 
+      await logAudit({
+        req,
+        action: 'create',
+        resource: 'group',
+        resourceId: id,
+        summary: `Created group ${id}`
+      });
       res.json({ group: newGroup });
     } catch (error) {
       return sendInternalError(res, error, 'create group');
@@ -665,62 +665,78 @@ export default function registerAdminGroupRoutes(app) {
         return;
       }
 
-      const { name, description, permissions, mappings } = req.body;
+      const { name, description, permissions, mappings, inherits } = req.body;
 
-      const rootDir = getRootDir();
-      const groupsFilePath = join(rootDir, 'contents', 'config', 'groups.json');
-
-      // Load existing groups
-      let groupsData = { groups: {}, metadata: {} };
-      try {
-        const groupsFileData = await fs.readFile(groupsFilePath, 'utf8');
-        groupsData = JSON.parse(groupsFileData);
-      } catch {
+      const groupsData = await configStore.readJsonStrict(GROUPS_FILE);
+      if (!groupsData) {
         return sendNotFound(res, 'Groups file');
       }
 
-      // Check if group exists
-      if (!groupsData.groups[groupId]) {
+      // Check if group exists (own-property check so names inherited from
+      // Object.prototype, e.g. "hasOwnProperty", can't be mistaken for a group)
+      if (!Object.hasOwn(groupsData.groups, groupId)) {
         return sendNotFound(res, 'Group');
       }
 
       const group = groupsData.groups[groupId];
+      const oldGroup = JSON.parse(JSON.stringify(group));
 
       // Update fields
       if (name !== undefined) group.name = name;
       if (description !== undefined) group.description = description;
       if (mappings !== undefined) group.mappings = Array.isArray(mappings) ? mappings : [];
+      if (inherits !== undefined) group.inherits = Array.isArray(inherits) ? inherits : [];
 
       // Update permissions
       if (permissions !== undefined && typeof permissions === 'object') {
-        group.permissions = {
-          apps: Array.isArray(permissions.apps) ? permissions.apps : group.permissions.apps || [],
-          prompts: Array.isArray(permissions.prompts)
-            ? permissions.prompts
-            : group.permissions.prompts || [],
-          models: Array.isArray(permissions.models)
-            ? permissions.models
-            : group.permissions.models || [],
-          workflows: Array.isArray(permissions.workflows)
-            ? permissions.workflows
-            : group.permissions.workflows || [],
-          adminAccess:
-            permissions.adminAccess !== undefined
-              ? Boolean(permissions.adminAccess)
-              : group.permissions.adminAccess || false
-        };
+        const newAdminAccess =
+          permissions.adminAccess !== undefined
+            ? Boolean(permissions.adminAccess)
+            : group.permissions.adminAccess || false;
+
+        // Prevent stripping adminAccess from the last group that grants it,
+        // which would lock every admin out of the platform.
+        if (group.permissions?.adminAccess === true && newAdminAccess !== true) {
+          const remainingAdminGroups = countAdminAccessGroups(groupsData.groups, groupId);
+          if (remainingAdminGroups === 0) {
+            return sendBadRequest(
+              res,
+              `Cannot remove administrative access from group '${groupId}': it is the only group with administrative access`
+            );
+          }
+        }
+
+        group.permissions = normalizeGroupPermissions(
+          permissions,
+          group.permissions || {},
+          newAdminAccess
+        );
       }
 
       groupsData.metadata.lastModified = new Date().toISOString();
 
       // Save to file
-      await atomicWriteJSON(groupsFilePath, groupsData);
+      await configStore.writeJson(GROUPS_FILE, groupsData);
 
       // Refresh cache
       await configCache.refreshCacheEntry('config/groups.json');
 
       logger.info('Updated group', { component: 'AdminGroups', groupName: group.name, groupId });
 
+      await saveSnapshot({
+        resource: 'group',
+        id: groupId,
+        before: oldGroup,
+        after: group,
+        admin: req.user?.username ?? req.user?.name ?? req.user?.id ?? 'unknown'
+      });
+      await logAudit({
+        req,
+        action: 'update',
+        resource: 'group',
+        resourceId: groupId,
+        summary: `Updated group ${groupId}`
+      });
       res.json({ group });
     } catch (error) {
       return sendInternalError(res, error, 'update group');
@@ -734,13 +750,14 @@ export default function registerAdminGroupRoutes(app) {
    *     summary: Delete a user group
    *     description: |
    *       Permanently deletes a user group and its configuration.
-   *       Protected system groups (admin, user, anonymous, authenticated) cannot be deleted
-   *       to maintain system integrity.
+   *       Protected system groups (admins, users, anonymous, authenticated) cannot be deleted
+   *       to maintain system integrity. Additionally, the last remaining group that grants
+   *       adminAccess cannot be deleted, to prevent locking all admins out of the platform.
    *
    *       **Protected Groups:**
    *       The following system groups are protected and cannot be deleted:
-   *       - admin: Administrative access group
-   *       - user: Standard user group
+   *       - admins: Administrative access group
+   *       - users: Standard user group
    *       - anonymous: Anonymous access group
    *       - authenticated: Base authenticated user group
    *     tags:
@@ -778,7 +795,7 @@ export default function registerAdminGroupRoutes(app) {
    *                 error:
    *                   type: string
    *             example:
-   *               error: "Cannot delete protected system group: admin"
+   *               error: "Cannot delete protected system group: admins"
    *       404:
    *         description: Group not found
    *         content:
@@ -803,42 +820,65 @@ export default function registerAdminGroupRoutes(app) {
       }
 
       // Prevent deletion of core system groups
-      const protectedGroups = ['admin', 'user', 'anonymous', 'authenticated'];
+      const protectedGroups = ['admins', 'users', 'anonymous', 'authenticated'];
       if (protectedGroups.includes(groupId)) {
         return sendBadRequest(res, `Cannot delete protected system group: ${groupId}`);
       }
 
-      const rootDir = getRootDir();
-      const groupsFilePath = join(rootDir, 'contents', 'config', 'groups.json');
-
-      // Load existing groups
-      let groupsData = { groups: {}, metadata: {} };
-      try {
-        const groupsFileData = await fs.readFile(groupsFilePath, 'utf8');
-        groupsData = JSON.parse(groupsFileData);
-      } catch {
+      const groupsData = await configStore.readJsonStrict(GROUPS_FILE);
+      if (!groupsData) {
         return sendNotFound(res, 'Groups file');
       }
 
-      // Check if group exists
-      if (!groupsData.groups[groupId]) {
+      // Check if group exists (own-property check so names inherited from
+      // Object.prototype, e.g. "hasOwnProperty", can't be mistaken for a group)
+      if (!Object.hasOwn(groupsData.groups, groupId)) {
         return sendNotFound(res, 'Group');
       }
 
-      const groupName = groupsData.groups[groupId].name;
+      const deletedGroup = groupsData.groups[groupId];
+      const groupName = deletedGroup.name;
+
+      // Prevent deleting the last group that grants adminAccess, which would
+      // lock every admin out of the platform.
+      if (deletedGroup.permissions?.adminAccess === true) {
+        const remainingAdminGroups = countAdminAccessGroups(groupsData.groups, groupId);
+        if (remainingAdminGroups === 0) {
+          return sendBadRequest(
+            res,
+            `Cannot delete group '${groupId}': it is the only group with administrative access`
+          );
+        }
+      }
+
+      // Save snapshot before deletion
+      await saveSnapshot({
+        resource: 'group',
+        id: groupId,
+        before: deletedGroup,
+        after: null,
+        admin: req.user?.username ?? req.user?.name ?? req.user?.id ?? 'unknown'
+      });
 
       // Remove group
       delete groupsData.groups[groupId];
       groupsData.metadata.lastModified = new Date().toISOString();
 
       // Save to file
-      await atomicWriteJSON(groupsFilePath, groupsData);
+      await configStore.writeJson(GROUPS_FILE, groupsData);
 
       // Refresh cache
       await configCache.refreshCacheEntry('config/groups.json');
 
       logger.info('Deleted group', { component: 'AdminGroups', groupName, groupId });
 
+      await logAudit({
+        req,
+        action: 'delete',
+        resource: 'group',
+        resourceId: groupId,
+        summary: `Deleted group ${groupId}`
+      });
       res.json({ message: 'Group deleted successfully' });
     } catch (error) {
       return sendInternalError(res, error, 'delete group');

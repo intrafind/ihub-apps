@@ -68,7 +68,6 @@
     "en": "Ask anything - I have access to FAQ, docs, and web sources...",
     "de": "Frage alles - ich habe Zugang zu FAQ, Dokumentation und Web-Quellen..."
   },
-  "tokenLimit": 12000,
   "preferredOutputFormat": "markdown",
   "preferredStyle": "normal",
   "preferredTemperature": 0.4,

@@ -1,6 +1,7 @@
-import { useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import Icon from '../../../shared/components/Icon';
+import useFocusTrap from '../../../shared/hooks/useFocusTrap';
 import { exportChatToFormat } from '../../../api/endpoints/apps';
 import {
   exportToXLSX,
@@ -13,16 +14,48 @@ import { useUIConfig } from '../../../shared/contexts/UIConfigContext';
 import { getLocalizedContent } from '../../../utils/localizeContent';
 import useFeatureFlags from '../../../shared/hooks/useFeatureFlags';
 
-function ExportDialog({ isOpen, onClose, messages = [], settings = {}, appId, chatId }) {
+// Formats whose content can be copied to the clipboard as plain text. Binary
+// formats (pdf, docx, xlsx, pptx) and the styled HTML document can only be
+// downloaded, so the Copy button is disabled when one of those is selected.
+const COPYABLE_FORMATS = ['txt', 'markdown', 'json', 'jsonl'];
+
+function ExportDialog({
+  isOpen,
+  onClose,
+  messages = [],
+  settings = {},
+  appId,
+  chatId,
+  isSingleMessage = false
+}) {
   const { t, i18n } = useTranslation();
   const { uiConfig } = useUIConfig();
   const featureFlags = useFeatureFlags();
   const currentLanguage = i18n.language || 'en';
-  const pdfExportEnabled = featureFlags.isEnabled('pdfExport', true);
 
   const [selectedFormat, setSelectedFormat] = useState('pdf');
   const [isExporting, setIsExporting] = useState(false);
   const [exportError, setExportError] = useState(null);
+  const [copied, setCopied] = useState(false);
+
+  const dialogRef = useRef(null);
+
+  useFocusTrap(dialogRef, {
+    isActive: isOpen,
+    returnFocusOnDeactivate: true
+  });
+
+  useEffect(() => {
+    if (!isOpen) return undefined;
+    const onKeyDown = event => {
+      if (event.key === 'Escape' && !isExporting) {
+        event.preventDefault();
+        onClose?.();
+      }
+    };
+    window.addEventListener('keydown', onKeyDown);
+    return () => window.removeEventListener('keydown', onKeyDown);
+  }, [isOpen, isExporting, onClose]);
 
   // PDF-specific configuration
   const [pdfConfig, setPdfConfig] = useState({
@@ -36,6 +69,8 @@ function ExportDialog({ isOpen, onClose, messages = [], settings = {}, appId, ch
 
   if (!isOpen) return null;
 
+  const canCopySelectedFormat = COPYABLE_FORMATS.includes(selectedFormat);
+
   const buildMeta = () => ({
     model: settings.model,
     style: settings.style,
@@ -46,6 +81,108 @@ function ExportDialog({ isOpen, onClose, messages = [], settings = {}, appId, ch
 
   const getAppName = () => {
     return uiConfig?.title ? getLocalizedContent(uiConfig.title, currentLanguage) : 'iHub Apps';
+  };
+
+  // Helper functions to generate content for copying
+  const generateTextContent = messages => {
+    return messages
+      .filter(m => !m.isGreeting)
+      .map(m => {
+        const role = m.role === 'user' ? 'User' : 'Assistant';
+        const timestamp = m.timestamp ? new Date(m.timestamp).toLocaleString() : '';
+        let text = `[${role}]`;
+        if (timestamp) {
+          text += ` - ${timestamp}`;
+        }
+        text += '\n' + '-'.repeat(50) + '\n';
+        text += (m.content || '') + '\n';
+        return text;
+      })
+      .join('\n');
+  };
+
+  const generateMarkdownContent = messages => {
+    return messages
+      .filter(m => !m.isGreeting)
+      .map(m => `**${m.role}**: ${m.content || ''}`)
+      .join('\n\n');
+  };
+
+  const generateJSONContent = (messages, settings) => {
+    const buildMetadata = () => ({
+      model: settings?.model,
+      style: settings?.style,
+      outputFormat: settings?.outputFormat,
+      temperature: settings?.temperature,
+      variables: settings?.variables
+    });
+    return JSON.stringify(
+      { ...buildMetadata(), messages: messages.filter(m => !m.isGreeting) },
+      null,
+      2
+    );
+  };
+
+  const generateJSONLContent = (messages, settings) => {
+    const buildMetadata = () => ({
+      model: settings?.model,
+      style: settings?.style,
+      outputFormat: settings?.outputFormat,
+      temperature: settings?.temperature,
+      variables: settings?.variables
+    });
+    const lines = [JSON.stringify({ meta: buildMetadata() })];
+    messages.filter(m => !m.isGreeting).forEach(m => lines.push(JSON.stringify(m)));
+    return lines.join('\n');
+  };
+
+  const handleCopy = async () => {
+    setCopied(false);
+    setExportError(null);
+
+    // The Copy button is disabled for non-copyable formats; this guard keeps
+    // the handler safe if it is ever invoked programmatically.
+    if (!canCopySelectedFormat) {
+      setExportError(
+        t(
+          'pages.appChat.export.copyNotSupported',
+          'Copy not supported for this format. Please use download instead.'
+        )
+      );
+      return;
+    }
+
+    try {
+      const filteredMessages = messages.filter(m => !m.isGreeting);
+      const exportSettings = buildMeta();
+      let content = '';
+
+      // Generate content based on selected format
+      switch (selectedFormat) {
+        case 'txt':
+          content = generateTextContent(filteredMessages);
+          break;
+        case 'markdown':
+          content = generateMarkdownContent(filteredMessages);
+          break;
+        case 'json':
+          content = generateJSONContent(filteredMessages, exportSettings);
+          break;
+        case 'jsonl':
+          content = generateJSONLContent(filteredMessages, exportSettings);
+          break;
+        default:
+          throw new Error(`Unsupported format: ${selectedFormat}`);
+      }
+
+      // Copy to clipboard
+      await navigator.clipboard.writeText(content);
+      setCopied(true);
+      setTimeout(() => setCopied(false), 2000);
+    } catch (error) {
+      console.error(`Copy to clipboard failed:`, error);
+      setExportError(error.message || 'Copy failed');
+    }
   };
 
   const handleExport = async () => {
@@ -60,7 +197,8 @@ function ExportDialog({ isOpen, onClose, messages = [], settings = {}, appId, ch
       const options = {
         appId,
         chatId,
-        appName
+        appName,
+        isSingleMessage
       };
 
       // Handle different export formats
@@ -83,19 +221,54 @@ function ExportDialog({ isOpen, onClose, messages = [], settings = {}, appId, ch
           await exportChatToFormat(filteredMessages, exportSettings, 'html', options);
           break;
         case 'xlsx':
-          await exportToXLSX(filteredMessages, exportSettings, appName, appId, chatId);
+          await exportToXLSX(
+            filteredMessages,
+            exportSettings,
+            appName,
+            appId,
+            chatId,
+            isSingleMessage
+          );
           break;
         case 'csv':
-          await exportToCSV(filteredMessages, exportSettings, appName, appId, chatId);
+          await exportToCSV(
+            filteredMessages,
+            exportSettings,
+            appName,
+            appId,
+            chatId,
+            isSingleMessage
+          );
           break;
         case 'docx':
-          await exportToDOCX(filteredMessages, exportSettings, appName, appId, chatId);
+          await exportToDOCX(
+            filteredMessages,
+            exportSettings,
+            appName,
+            appId,
+            chatId,
+            isSingleMessage
+          );
           break;
         case 'txt':
-          await exportToTXT(filteredMessages, exportSettings, appName, appId, chatId);
+          await exportToTXT(
+            filteredMessages,
+            exportSettings,
+            appName,
+            appId,
+            chatId,
+            isSingleMessage
+          );
           break;
         case 'pptx':
-          await exportToPPTX(filteredMessages, exportSettings, appName, appId, chatId);
+          await exportToPPTX(
+            filteredMessages,
+            exportSettings,
+            appName,
+            appId,
+            chatId,
+            isSingleMessage
+          );
           break;
         default:
           throw new Error(`Unsupported format: ${selectedFormat}`);
@@ -114,19 +287,12 @@ function ExportDialog({ isOpen, onClose, messages = [], settings = {}, appId, ch
   };
 
   const exportFormats = [
-    ...(pdfExportEnabled
-      ? [
-          {
-            id: 'pdf',
-            name: t('pages.appChat.export.formats.pdf', 'PDF Document'),
-            icon: 'file-text',
-            description: t(
-              'pages.appChat.export.descriptions.pdf',
-              'Formatted PDF with styling options'
-            )
-          }
-        ]
-      : []),
+    {
+      id: 'pdf',
+      name: t('pages.appChat.export.formats.pdf', 'PDF Document'),
+      icon: 'file-text',
+      description: t('pages.appChat.export.descriptions.pdf', 'Formatted PDF with styling options')
+    },
     {
       id: 'docx',
       name: t('pages.appChat.export.formats.docx', 'Word Document'),
@@ -191,40 +357,52 @@ function ExportDialog({ isOpen, onClose, messages = [], settings = {}, appId, ch
 
   return (
     <div
-      className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4"
+      className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-2 sm:p-4"
       onClick={e => {
         if (e.target === e.currentTarget) onClose?.();
       }}
     >
-      <div className="bg-white dark:bg-gray-800 rounded-lg shadow-xl w-full max-w-2xl max-h-[90vh] overflow-hidden flex flex-col">
+      <div
+        ref={dialogRef}
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby="export-dialog-title"
+        className="bg-white dark:bg-gray-800 rounded-lg shadow-xl w-full max-w-2xl max-h-[95vh] sm:max-h-[90vh] overflow-hidden flex flex-col"
+      >
         {/* Header */}
-        <div className="px-6 py-4 border-b border-gray-200 dark:border-gray-700 flex items-center justify-between">
-          <h2 className="text-xl font-semibold text-gray-900 dark:text-gray-100">
-            {t('pages.appChat.export.dialogTitle', 'Export Conversation')}
+        <div className="px-4 sm:px-6 py-4 border-b border-gray-200 dark:border-gray-700 flex items-center justify-between">
+          <h2
+            id="export-dialog-title"
+            className="text-xl font-semibold text-gray-900 dark:text-gray-100"
+          >
+            {isSingleMessage
+              ? t('pages.appChat.export.dialogTitleSingleMessage', 'Export Message')
+              : t('pages.appChat.export.dialogTitle', 'Export Conversation')}
           </h2>
           <button
             onClick={onClose}
             className="text-gray-400 hover:text-gray-600 dark:hover:text-gray-300"
             disabled={isExporting}
+            aria-label={t('common.close', 'Close')}
           >
             <Icon name="x-mark" size="md" />
           </button>
         </div>
 
         {/* Content */}
-        <div className="flex-1 overflow-y-auto p-6">
+        <div className="flex-1 overflow-y-auto p-4 sm:p-6">
           {/* Format Selection */}
           <div className="mb-6">
             <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-3">
               {t('pages.appChat.export.selectFormat', 'Select export format')}
             </label>
-            <div className="grid grid-cols-2 gap-3">
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
               {exportFormats.map(format => (
                 <button
                   key={format.id}
                   onClick={() => setSelectedFormat(format.id)}
                   disabled={isExporting}
-                  className={`p-4 rounded-lg border-2 text-left transition-all ${
+                  className={`p-3 sm:p-4 rounded-lg border-2 text-left transition-all ${
                     selectedFormat === format.id
                       ? 'border-blue-500 bg-blue-50 dark:bg-blue-900/20'
                       : 'border-gray-200 dark:border-gray-700 hover:border-gray-300 dark:hover:border-gray-600'
@@ -261,7 +439,7 @@ function ExportDialog({ isOpen, onClose, messages = [], settings = {}, appId, ch
           </div>
 
           {/* PDF Options */}
-          {selectedFormat === 'pdf' && pdfExportEnabled && (
+          {selectedFormat === 'pdf' && (
             <div className="space-y-4 p-4 bg-gray-50 dark:bg-gray-900/50 rounded-lg">
               <h3 className="text-sm font-medium text-gray-900 dark:text-gray-100">
                 {t('pages.appChat.export.pdfOptions', 'PDF Options')}
@@ -274,7 +452,7 @@ function ExportDialog({ isOpen, onClose, messages = [], settings = {}, appId, ch
                 <select
                   value={pdfConfig.template}
                   onChange={e => setPdfConfig(prev => ({ ...prev, template: e.target.value }))}
-                  className="w-full text-sm border border-gray-300 dark:border-gray-600 rounded px-3 py-2 bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100"
+                  className="w-full text-sm border border-gray-300 dark:border-gray-600 rounded-sm px-3 py-2 bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100"
                   disabled={isExporting}
                 >
                   <option value="default">
@@ -302,7 +480,7 @@ function ExportDialog({ isOpen, onClose, messages = [], settings = {}, appId, ch
                       watermark: { ...prev.watermark, text: e.target.value }
                     }))
                   }
-                  className="w-full text-sm border border-gray-300 dark:border-gray-600 rounded px-3 py-2 bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100"
+                  className="w-full text-sm border border-gray-300 dark:border-gray-600 rounded-sm px-3 py-2 bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100"
                   placeholder={t(
                     'pages.appChat.export.watermarkPlaceholder',
                     'Enter watermark text'
@@ -323,7 +501,7 @@ function ExportDialog({ isOpen, onClose, messages = [], settings = {}, appId, ch
                       watermark: { ...prev.watermark, position: e.target.value }
                     }))
                   }
-                  className="w-full text-sm border border-gray-300 dark:border-gray-600 rounded px-3 py-2 bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100"
+                  className="w-full text-sm border border-gray-300 dark:border-gray-600 rounded-sm px-3 py-2 bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100"
                   disabled={isExporting}
                 >
                   <option value="bottom-right">
@@ -378,18 +556,43 @@ function ExportDialog({ isOpen, onClose, messages = [], settings = {}, appId, ch
         </div>
 
         {/* Footer */}
-        <div className="px-6 py-4 border-t border-gray-200 dark:border-gray-700 flex items-center justify-end gap-3">
+        <div className="px-4 sm:px-6 py-4 border-t border-gray-200 dark:border-gray-700 flex flex-col-reverse sm:flex-row sm:items-center sm:justify-end gap-3">
           <button
             onClick={onClose}
             disabled={isExporting}
-            className="px-4 py-2 text-sm font-medium text-gray-700 dark:text-gray-300 hover:text-gray-900 dark:hover:text-gray-100 disabled:opacity-50 disabled:cursor-not-allowed"
+            className="w-full sm:w-auto px-4 py-2 text-sm font-medium text-gray-700 dark:text-gray-300 hover:text-gray-900 dark:hover:text-gray-100 disabled:opacity-50 disabled:cursor-not-allowed"
           >
             {t('common.cancel', 'Cancel')}
           </button>
           <button
+            onClick={handleCopy}
+            disabled={isExporting || !selectedFormat || !canCopySelectedFormat}
+            title={
+              !canCopySelectedFormat
+                ? t(
+                    'pages.appChat.export.copyNotSupported',
+                    'Copy not supported for this format. Please use download instead.'
+                  )
+                : undefined
+            }
+            className="w-full sm:w-auto px-4 py-2 text-sm font-medium text-gray-700 dark:text-gray-300 bg-white dark:bg-gray-700 border border-gray-300 dark:border-gray-600 hover:bg-gray-50 dark:hover:bg-gray-600 rounded-lg disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2"
+          >
+            {copied ? (
+              <>
+                <Icon name="check" size="sm" />
+                {t('pages.appChat.export.copied', 'Copied!')}
+              </>
+            ) : (
+              <>
+                <Icon name="clipboard" size="sm" />
+                {t('pages.appChat.export.copy', 'Copy')}
+              </>
+            )}
+          </button>
+          <button
             onClick={handleExport}
             disabled={isExporting || !selectedFormat}
-            className="px-4 py-2 text-sm font-medium text-white bg-blue-600 hover:bg-blue-700 rounded-lg disabled:bg-gray-400 disabled:cursor-not-allowed flex items-center gap-2"
+            className="w-full sm:w-auto px-4 py-2 text-sm font-medium text-white bg-blue-600 hover:bg-blue-700 rounded-lg disabled:bg-gray-400 disabled:cursor-not-allowed flex items-center justify-center gap-2"
           >
             {isExporting ? (
               <>

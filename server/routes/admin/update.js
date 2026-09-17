@@ -13,10 +13,15 @@ import {
   rollback,
   getUpdateStatus,
   isBinaryInstallation,
+  isContainerInstallation,
   checkDiskSpace,
   checkWritePermissions,
   UPDATE_RESTART_CODE
 } from '../../services/updateService.js';
+
+const CONTAINER_UPDATE_MESSAGE =
+  'In-place updates are disabled when running in a container. ' +
+  'Pull a new container image and restart the container to update.';
 
 export default function registerAdminUpdateRoutes(app) {
   /**
@@ -45,6 +50,9 @@ export default function registerAdminUpdateRoutes(app) {
    * Download and stage an update
    */
   app.post(buildServerPath('/api/admin/update/download'), adminAuth, async (req, res) => {
+    if (isContainerInstallation()) {
+      return sendBadRequest(res, CONTAINER_UPDATE_MESSAGE);
+    }
     if (!isBinaryInstallation()) {
       return sendBadRequest(res, 'In-place updates are only available for binary installations');
     }
@@ -87,6 +95,9 @@ export default function registerAdminUpdateRoutes(app) {
    * Apply a previously downloaded update and trigger server restart
    */
   app.post(buildServerPath('/api/admin/update/apply'), adminAuth, async (req, res) => {
+    if (isContainerInstallation()) {
+      return sendBadRequest(res, CONTAINER_UPDATE_MESSAGE);
+    }
     if (!isBinaryInstallation()) {
       return sendBadRequest(res, 'In-place updates are only available for binary installations');
     }
@@ -110,6 +121,9 @@ export default function registerAdminUpdateRoutes(app) {
    * Rollback to the previous version
    */
   app.post(buildServerPath('/api/admin/update/rollback'), adminAuth, async (req, res) => {
+    if (isContainerInstallation()) {
+      return sendBadRequest(res, CONTAINER_UPDATE_MESSAGE);
+    }
     if (!isBinaryInstallation()) {
       return sendBadRequest(res, 'In-place updates are only available for binary installations');
     }

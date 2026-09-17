@@ -6,11 +6,13 @@ import { useNavigate } from 'react-router-dom';
 import ChatActionsMenu from './ChatActionsMenu';
 import ExportDialog from './ExportDialog';
 import { useAuth } from '../../../shared/contexts/AuthContext';
+import useFeatureFlags from '../../../shared/hooks/useFeatureFlags';
 
 /**
  * A reusable header component for chat interfaces
  */
 function ChatHeader({
+  app,
   title,
   description,
   color,
@@ -33,11 +35,20 @@ function ChatHeader({
   exportSettings = {},
   appId,
   chatId,
-  conversationTitle = null
+  conversationTitle = null,
+  // Compare mode props
+  showCompareModeToggle = false,
+  compareModeActive = false,
+  onCompareModeChange,
+  compareModeDisabled = false
 }) {
   const { t } = useTranslation();
   const navigate = useNavigate();
   const { user } = useAuth();
+  const featureFlags = useFeatureFlags();
+
+  // Check if export is enabled at both platform and app levels
+  const exportEnabled = featureFlags.isBothEnabled(app, 'export', true);
 
   // Default icon if none provided
   const defaultIcon = <Icon name="chat" className="text-white" />;
@@ -55,29 +66,29 @@ function ChatHeader({
   }, [isMobile, showDescription]);
 
   const handleBack = () => {
-    navigate('/');
+    navigate('/apps');
   };
 
   return (
-    <div className="flex flex-col mb-4 pb-4 border-b">
+    <div className="flex flex-col mb-2 pb-2 border-b sm:mb-4 sm:pb-4">
       <div className="flex items-center justify-between">
         <div className="flex items-center">
           <button
             onClick={handleBack}
-            className="mr-3 bg-gray-200 hover:bg-gray-300 text-gray-800 p-2 rounded-full flex items-center justify-center h-10 w-10"
+            className="mr-2 bg-gray-200 hover:bg-gray-300 text-gray-800 p-1.5 rounded-full flex items-center justify-center h-8 w-8 sm:mr-3 sm:p-2 sm:h-10 sm:w-10"
             title={t('pages.appChat.backToApps')}
             aria-label={t('common.backToAppsList', 'Back to apps list')}
           >
             <Icon name="arrowLeft" size="sm" />
           </button>
           <div
-            className="w-10 h-10 rounded-full flex items-center justify-center mr-3"
+            className="w-8 h-8 rounded-full flex items-center justify-center mr-2 sm:w-10 sm:h-10 sm:mr-3"
             style={{ backgroundColor: color }}
           >
             {icon || defaultIcon}
           </div>
           <div className="relative">
-            <h1 className="text-2xl font-bold leading-tight flex items-center">
+            <h1 className="text-lg font-bold leading-tight flex items-center sm:text-2xl">
               {typeof title === 'object' ? getLocalizedContent(title, currentLanguage) : title}
               {isMobile && description && (
                 <button
@@ -109,7 +120,7 @@ function ChatHeader({
               </p>
             )}
             {isMobile && showDescription && (
-              <div className="absolute z-10 mt-2 p-2 bg-white border rounded shadow text-xs max-w-xs">
+              <div className="absolute z-10 mt-2 p-2 bg-white border rounded-sm shadow-sm text-xs max-w-xs">
                 {typeof description === 'object'
                   ? getLocalizedContent(description, currentLanguage)
                   : description}
@@ -152,7 +163,7 @@ function ChatHeader({
                 <Icon name="trash" size="sm" />
               </button>
             )}
-            {messages && messages.length > 0 && exportSettings && (
+            {exportEnabled && messages && messages.length > 0 && exportSettings && (
               <button
                 onClick={() => setShowExportDialog(true)}
                 className="bg-gray-200 dark:bg-gray-700 hover:bg-gray-300 dark:hover:bg-gray-600 text-gray-800 dark:text-gray-200 p-2 rounded-full flex items-center justify-center h-10 w-10"
@@ -170,6 +181,21 @@ function ChatHeader({
                 aria-label={t('pages.appChat.share', 'Share')}
               >
                 <Icon name="share" size="sm" />
+              </button>
+            )}
+            {showCompareModeToggle && (
+              <button
+                onClick={() => !compareModeDisabled && onCompareModeChange?.(!compareModeActive)}
+                disabled={compareModeDisabled}
+                className={`p-2 rounded-full flex items-center justify-center h-10 w-10 transition-colors ${
+                  compareModeActive
+                    ? 'bg-indigo-600 hover:bg-indigo-700 text-white'
+                    : 'bg-gray-200 dark:bg-gray-700 hover:bg-gray-300 dark:hover:bg-gray-600 text-gray-800 dark:text-gray-200'
+                } ${compareModeDisabled ? 'opacity-50 cursor-not-allowed' : ''}`}
+                title={t('chat.compareMode.toggle', 'Compare Mode')}
+                aria-label={t('chat.compareMode.toggle', 'Compare Mode')}
+              >
+                <Icon name="document-duplicate" size="sm" />
               </button>
             )}
             {user?.isAdmin && appId && (
@@ -197,6 +223,7 @@ function ChatHeader({
           {/* Mobile burger menu - shown on mobile/tablet */}
           <div className="md:hidden">
             <ChatActionsMenu
+              app={app}
               onClearChat={onClearChat}
               onToggleConfig={onToggleConfig}
               onShare={onShare}
@@ -212,20 +239,26 @@ function ChatHeader({
               parametersVisible={parametersVisible}
               appId={appId}
               chatId={chatId}
+              showCompareModeToggle={showCompareModeToggle}
+              compareModeActive={compareModeActive}
+              onCompareModeChange={onCompareModeChange}
+              compareModeDisabled={compareModeDisabled}
             />
           </div>
         </div>
       </div>
 
-      {/* Export Dialog */}
-      <ExportDialog
-        isOpen={showExportDialog}
-        onClose={() => setShowExportDialog(false)}
-        messages={messages}
-        settings={exportSettings}
-        appId={appId}
-        chatId={chatId}
-      />
+      {/* Export Dialog - only render if export is enabled */}
+      {exportEnabled && (
+        <ExportDialog
+          isOpen={showExportDialog}
+          onClose={() => setShowExportDialog(false)}
+          messages={messages}
+          settings={exportSettings}
+          appId={appId}
+          chatId={chatId}
+        />
+      )}
     </div>
   );
 }

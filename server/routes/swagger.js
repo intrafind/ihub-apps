@@ -108,7 +108,7 @@ export default async function registerSwaggerRoutes(app) {
       path.join(__dirname, 'generalRoutes.js'),
       path.join(__dirname, 'modelRoutes.js'),
       path.join(__dirname, 'toolRoutes.js'),
-      path.join(__dirname, 'sessionRoutes.js'),
+      path.join(__dirname, 'appSessionRoutes.js'),
       path.join(__dirname, 'pageRoutes.js'),
       path.join(__dirname, 'magicPromptRoutes.js'),
       path.join(__dirname, 'shortLinkRoutes.js'),

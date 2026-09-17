@@ -121,8 +121,30 @@ export class StartNodeExecutor extends BaseNodeExecutor {
       mappedFieldCount: Object.keys(stateUpdates).length
     });
 
+    // Surface the resolved input values in the execution UI so users can
+    // see exactly what the workflow was started with — searchProfile,
+    // queryLanguage, filter, etc. Strip large binaries (file/image
+    // uploads) so we don't bloat the persisted nodeResults.
+    const inputsForUi = {};
+    for (const [k, v] of Object.entries(stateUpdates)) {
+      if (k.startsWith('_')) continue;
+      if (v && typeof v === 'object' && (v.content || v.pageImages || Array.isArray(v))) {
+        // Likely a file payload — summarise rather than dump.
+        if (Array.isArray(v)) {
+          inputsForUi[k] = `[${v.length} item${v.length === 1 ? '' : 's'}]`;
+        } else if (typeof v.content === 'string') {
+          inputsForUi[k] = `<file ${v.fileName || ''} (${v.content.length} chars)>`;
+        } else {
+          inputsForUi[k] = v;
+        }
+      } else {
+        inputsForUi[k] = v;
+      }
+    }
+
     return this.createSuccessResult(output, {
-      stateUpdates: Object.keys(stateUpdates).length > 0 ? stateUpdates : undefined
+      stateUpdates: Object.keys(stateUpdates).length > 0 ? stateUpdates : undefined,
+      resolvedInputs: Object.keys(inputsForUi).length > 0 ? inputsForUi : undefined
     });
   }
 

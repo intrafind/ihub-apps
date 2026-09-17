@@ -12,6 +12,7 @@ This comprehensive guide covers how to implement and use tool calling in iHub Ap
 - [Practical Examples](#practical-examples)
 - [Troubleshooting & Best Practices](#troubleshooting--best-practices)
 - [Tool Configuration Reference](#tool-configuration-reference)
+- [Native Web Search Resolution](#native-web-search-resolution)
 - [Built-in Tools Reference](#built-in-tools-reference)
 
 ## Quick Start
@@ -37,7 +38,6 @@ Add a `tools` property to your app configuration:
     "en": "You are a helpful research assistant. Use web search to find current information when needed.",
     "de": "Du bist ein hilfreicher Recherche-Assistent. Nutze die Websuche, um aktuelle Informationen zu finden."
   },
-  "tokenLimit": 8000,
   "websearch": {
     "enabled": true,
     "provider": "auto",
@@ -82,22 +82,30 @@ Tools are functions that AI models can call to:
 ```mermaid
 graph LR
     User[User] --> Chat[Chat Interface]
-    Chat --> Model[AI Model]
-    Model --> ToolRequest[Tool Request]
-    ToolRequest --> ToolExecutor[Tool Executor]
-    ToolExecutor --> ExternalService[External Service]
-    ExternalService --> ToolExecutor
-    ToolExecutor --> Model
-    Model --> Response[Final Response]
+    Chat --> Loop[AgentLoop]
+    Loop --> Model[AI Model via LLMClient]
+    Model --> ToolRequest[Tool Call]
+    ToolRequest --> Runner[toolLoader.runTool]
+    Runner --> ExternalService[External Service]
+    ExternalService --> Runner
+    Runner --> Loop
+    Loop --> Response[Final Response]
     Response --> Chat
     Chat --> User
 ```
+
+The round trip between model and tools is the shared [Agent Loop](agent-loop.md):
+chat, workflow nodes, app-as-tool and MCP all run tool calls through it (tool
+matching, argument repair, circuit breakers, round budgets), and the tool itself
+is executed by `toolLoader.runTool()`. In chat, one tool runs at a time and each
+call is surfaced to the client as `tool/started` / `tool/completed` SSE v2 frames
+(see [SSE v2 Streaming](sse-v2.md)).
 
 ### Tool Registration and Discovery
 
 Tools are registered through three methods:
 
-1. **Static Configuration** (`contents/config/tools.json`)
+1. **Static Configuration** (one JSON file per tool under `contents/tools/`)
 2. **MCP Server Discovery** (Model Context Protocol)
 3. **Dynamic Registration** (Runtime API)
 
@@ -105,7 +113,7 @@ Tools are registered through three methods:
 
 ### 1. Tool Definition
 
-Create a tool definition in `contents/config/tools.json`:
+Create a tool definition file at `contents/tools/weatherLookup.json`:
 
 ```json
 {
@@ -394,30 +402,19 @@ export async function* executeStream(params) {
 
 ### MCP Server Integration
 
-Model Context Protocol (MCP) enables dynamic tool discovery:
+iHub speaks the Model Context Protocol in **both directions** — it can act
+as an MCP client connecting to external MCP servers, and as an MCP server
+exposing iHub apps/workflows/tools to MCP-aware agents (Claude Desktop,
+Cursor, etc).
 
-```bash
-# Configure MCP server
-export MCP_SERVER_URL="http://localhost:8080/mcp"
-```
+See [MCP Integration](mcp-integration.md) for the full guide:
 
-MCP server response format:
-```json
-{
-  "tools": [
-    {
-      "name": "dynamicTool",
-      "description": "Dynamically discovered tool",
-      "inputSchema": {
-        "type": "object",
-        "properties": {
-          "param1": { "type": "string" }
-        }
-      }
-    }
-  ]
-}
-```
+- Outbound: register external MCP servers in `contents/config/mcpServers.json`
+  or via `/admin/mcp/servers`. Supports Streamable HTTP, SSE (legacy),
+  stdio, and WebSocket transports with SSRF guards and encrypted credentials.
+- Inbound: enable the gateway in `platform.mcpServer.enabled` and point
+  MCP-aware clients at `https://your-ihub/mcp`. Gated by the existing
+  OAuth2 authorization server using new `mcp:*` scopes.
 
 ### Tool Chaining and Workflows
 
@@ -790,7 +787,7 @@ function calculateTotals(invoice) {
 Error: Tool 'myTool' not found in configuration
 ```
 **Solution**: 
-- Verify tool is defined in `contents/config/tools.json`
+- Verify a tool file exists at `contents/tools/<toolId>.json`
 - Check tool ID matches exactly (case-sensitive)
 - Restart server after adding new tools
 
@@ -914,7 +911,7 @@ Test complete workflow from chat interface through tool execution.
 
 ### Tool Development Checklist
 
-- [ ] Tool definition in `contents/config/tools.json`
+- [ ] Tool definition file in `contents/tools/`
 - [ ] Implementation script in `server/tools/`
 - [ ] Parameter validation implemented
 - [ ] Error handling for all edge cases
@@ -929,9 +926,9 @@ Test complete workflow from chat interface through tool execution.
 
 ## Tool Configuration Reference
 
-### `tools.json` Field Reference
+### Tool File Field Reference
 
-Each entry in `contents/config/tools.json` uses the following fields:
+Each tool file in `contents/tools/` (named `<toolId>.json`) uses the following fields:
 
 | Field | Description |
 |-------|-------------|
@@ -946,38 +943,29 @@ Each entry in `contents/config/tools.json` uses the following fields:
 
 ### Provider-Handled Tools (`isSpecialTool`)
 
-Some tools are not executed server-side but are instead passed directly to the LLM provider's API as a capability hint. When `isSpecialTool: true`, iHub Apps includes the tool in the API request but delegates all execution to the model provider.
+Some tools are not executed server-side but are instead passed directly to the LLM provider's API as a capability hint. When `isSpecialTool: true`, iHub Apps includes the tool in the API request but delegates all execution to the model provider. This is a general mechanism admins can use to register an arbitrary provider-handled tool with no script.
 
-This is used for native capabilities such as:
-- Google Search grounding in Gemini models
-- Web search in OpenAI Responses API models
+Native web search (Google Search grounding, OpenAI Web Search, Anthropic Web Search) does **not** use this mechanism — see [Native Web Search Resolution](#native-web-search-resolution) below.
 
 These tools do not have a `script` file because no server-side code runs.
+
+## Native Web Search Resolution
+
+Native (provider-handled) web search is resolved directly by `toolLoader.resolveNativeWebSearchProvider()` / `resolveAppNativeWebSearch()` from the app's unified `websearch` config (see [Web Tools](web-tools.md)) or a workflow node's generic `webSearch` tool id — it is never a tool file in `contents/tools/` and never flows through the generic tool-calling converters. When native search applies, the adapter (`anthropic.js`, `google.js`, or `openai-responses.js`) injects the provider's native tool block directly into the request:
+
+| Provider | Native tool injected |
+|----------|----------------------|
+| `google` | `{ google_search: {} }` — mutually exclusive with function calling (Gemini API limitation); function tools are dropped when native search is active |
+| `openai-responses` | `{ type: 'web_search' }` — combinable with function tools |
+| `anthropic` | `{ type: <toolVersion>, name: 'web_search', max_uses: <cap> }` — the version comes from the model's `nativeWebSearch.toolVersion` (default `web_search_20250305`); newer versions are sent with `allowed_callers: ['direct']` unless the model enables `dynamicFiltering`; `max_uses` is the app's `websearch.maxSearches` or the node's `maxWebSearches` (default 5); combinable with function tools; billed separately by Anthropic per search |
+
+For any other provider — and for models with `nativeWebSearch.enabled: false` — `websearch` config falls back to the real, script-backed `braveSearch` tool. Response-side, search results and citations are surfaced as `groundingMetadata` on the generic streaming response, which powers the "Grounding" answer-source badge, the Sources list under the answer and (for workflow agent nodes) the synthesizer's citation ledger.
+
+Two runtime safeguards live in the agent loop and the LLM client: when the provider rejects the request with a client error that names web search, the loop retries once without the directive and with the `braveSearch` tool, and remembers the rejection per model for 15 minutes (`server/services/loop/nativeWebSearchFallback.js`); when Anthropic pauses a search turn (`stop_reason: pause_turn`), `LLMClient` replays the paused assistant blocks verbatim on a follow-up request (`providerContent`), up to three times per call.
 
 ## Built-in Tools Reference
 
 iHub Apps ships with a set of pre-configured built-in tools that cover the most common integration scenarios.
-
-### `webSearch`
-
-- **Provider**: OpenAI GPT-5 and compatible models via the Responses API
-- **Description**: Enables the model to search the web for up-to-date information, providing answers with citations and sources
-- **Type**: Provider-handled (`isSpecialTool: true`)
-- **Parameters**: None — automatically enabled when listed in an app's `tools` array
-- **Authentication**: Uses the configured OpenAI API key; no additional setup required
-- **Response**: Returns responses with inline citations, annotations, and web search metadata (queries, domains, sources)
-- **Use Cases**: Current events, latest news, real-time data, fact-checking
-
-### `googleSearch`
-
-- **Provider**: Google Gemini models only
-- **Description**: Grounds Gemini responses with real-time information from Google Search, providing verifiable and up-to-date answers with citations
-- **Type**: Provider-handled (`isSpecialTool: true`)
-- **Parameters**: None — automatically enabled when listed in an app's `tools` array
-- **Authentication**: Uses the configured Google Gemini API key; no additional setup required
-- **Response**: Returns grounding metadata with search queries, sources, and citations
-- **How it works**: When enabled in an app's tools array, Gemini models automatically invoke Google Search when they detect queries requiring current information. The search is performed directly by Google's infrastructure and results are incorporated into the response with citations.
-- **Use Cases**: Current events, fact-checking with authoritative sources, questions requiring real-time information
 
 ### `braveSearch`
 
@@ -1018,51 +1006,6 @@ iHub Apps ships with a set of pre-configured built-in tools that cover the most 
 }
 ```
 
-### `tavilySearch`
-
-- **Provider**: Any model supporting function calling
-- **Description**: Web search powered by the Tavily Search API, optimized for AI agents with configurable search depth and optional content extraction
-- **Type**: Server-side execution
-- **Parameters**:
-  - `query` (string, required): The search query or search terms
-  - `search_depth` (string, optional): Search depth level — `"basic"` (default) or `"advanced"`
-  - `max_results` (integer, optional): Maximum number of results to return (default: configured by app's `websearch.maxResults`, min: `1`, max: `10`)
-  - `extractContent` (boolean, optional): Extract full content from results (default: configured by app's `websearch.extractContent`)
-  - `contentMaxLength` (number, optional): Maximum content length per page (default: configured by app's `websearch.contentMaxLength`)
-- **Authentication**: Configure via **Admin Panel → Providers → Tavily Search** or set `TAVILY_SEARCH_API_KEY` environment variable
-- **Configuration**:
-  - **Admin Panel Method** (Recommended):
-    1. Navigate to Admin → Providers
-    2. Find "Tavily Search" under "Web Search Providers"
-    3. Click "Configure" and enter your API key
-    4. Save changes — no server restart required
-  - **Environment Variable Method**:
-    - Add `TAVILY_SEARCH_API_KEY=your_api_key` to your `config.env` file
-    - Restart the server for changes to take effect
-  - **Fallback**: System first checks admin panel configuration, then falls back to environment variable
-- **Returns**: Array of search results with:
-  - `title`: Page title
-  - `url`: Page URL
-  - `description`: Content snippet from the page
-  - `score`: Relevance score (when available)
-  - `content`: Extracted page content (when `extractContent` is enabled)
-- **Defaults**:
-  - `search_depth`: `"basic"`
-  - `max_results`: `5`
-- **Use Cases**: Research-oriented search, AI agent information gathering, comprehensive research with content extraction
-
-**Example Tool Call**:
-```json
-{
-  "tool": "tavilySearch",
-  "parameters": {
-    "query": "quantum computing breakthroughs",
-    "search_depth": "advanced",
-    "max_results": 8
-  }
-}
-```
-
 ### Unified Web Search Configuration
 
 > **Changed in v5.2.11**: Web search is no longer configured by adding tool IDs to the `tools` array. Instead, use the `websearch` configuration object on each app. The server automatically resolves the best search tool at runtime based on the model's provider. See [Web Tools](web-tools.md) for full details.
@@ -1086,7 +1029,7 @@ iHub Apps ships with a set of pre-configured built-in tools that cover the most 
 **How provider resolution works**:
 - **Gemini models** + `useNativeSearch: true` → Google Search grounding
 - **OpenAI Responses models** + `useNativeSearch: true` → OpenAI Web Search
-- **`provider: "tavily"`** → Tavily Search
+- **Anthropic models** + `useNativeSearch: true` → Anthropic Web Search
 - **Otherwise** → Brave Search
 
 **Key properties**:
@@ -1094,14 +1037,14 @@ iHub Apps ships with a set of pre-configured built-in tools that cover the most 
 | Property | Type | Default | Description |
 |----------|------|---------|-------------|
 | `enabled` | Boolean | `false` | Enable web search for this app |
-| `provider` | String | `"auto"` | Provider: `"auto"`, `"brave"`, or `"tavily"` |
-| `useNativeSearch` | Boolean | `true` | Prefer native search for Gemini/OpenAI models |
+| `provider` | String | `"auto"` | Provider: `"auto"` or `"brave"` |
+| `useNativeSearch` | Boolean | `true` | Prefer native search for Gemini/OpenAI/Anthropic models |
 | `maxResults` | Number | `5` | Maximum search results (1-20) |
 | `extractContent` | Boolean | `true` | Extract full page content from results |
 | `contentMaxLength` | Number | `3000` | Max extracted content per page (500-50,000) |
 | `enabledByDefault` | Boolean | `false` | Whether search is active by default for users |
 
-**Migration**: Existing apps with websearch tool IDs (`braveSearch`, `enhancedWebSearch`, `tavilySearch`, etc.) in their `tools` array are automatically migrated to the new format on server startup.
+**Migration**: Existing apps with websearch tool IDs (`braveSearch`, `enhancedWebSearch`, etc.) in their `tools` array are automatically migrated to the new format on server startup.
 
 ### `iFinder`
 

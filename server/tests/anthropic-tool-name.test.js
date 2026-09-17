@@ -105,9 +105,9 @@ const multipleTools = [
     parameters: { type: 'object', properties: {} }
   },
   {
-    id: 'tavilySearch',
-    name: 'Tavily Websuche',
-    description: 'Search using Tavily',
+    id: 'webContentExtractor',
+    name: 'Web-Inhalts-Extraktor',
+    description: 'Extract content from a web page',
     parameters: { type: 'object', properties: {} }
   },
   {
@@ -121,7 +121,7 @@ const multipleTools = [
 const convertedMultiple = convertGenericToolsToAnthropic(multipleTools);
 assert.strictEqual(convertedMultiple.length, 3, 'Should convert all tools');
 assert.strictEqual(convertedMultiple[0].name, 'braveSearch', 'First tool should use ID');
-assert.strictEqual(convertedMultiple[1].name, 'tavilySearch', 'Second tool should use ID');
+assert.strictEqual(convertedMultiple[1].name, 'webContentExtractor', 'Second tool should use ID');
 assert.strictEqual(convertedMultiple[2].name, 'deepResearch', 'Third tool should use ID');
 logger.info('✓ Multiple tools batch conversion successful\n');
 

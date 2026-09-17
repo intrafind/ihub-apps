@@ -1,8 +1,8 @@
 import * as speechSdk from 'microsoft-cognitiveservices-speech-sdk';
+import { buildApiUrl } from './runtimeBasePath';
 
 // const postfix = '?language=de-DE';
 const postfix = '';
-const subscriptionId = import.meta.env.VITE_AZURE_SUBSCRIPTION_ID;
 
 class AzureSpeechRecognition {
   recognition;
@@ -131,25 +131,47 @@ class AzureSpeechRecognition {
     );
   }
 
-  initRecognizer() {
-    try {
-      const hostURL = new URL(
-        `${this.host}/speech/recognition/interactive/cognitiveservices/v1${postfix}`
-      );
-      const speechConfig = speechSdk.SpeechConfig.fromHost(hostURL, subscriptionId);
-      const audioConfig = speechSdk.AudioConfig.fromDefaultMicrophoneInput();
+  // Fetch a short-lived Azure authorization token from the iHub server. The
+  // subscription key stays server-side; the browser only ever sees the token.
+  async #fetchAuthToken() {
+    const res = await fetch(buildApiUrl('/voice/azure/token'), { credentials: 'include' });
+    if (!res.ok) {
+      let message = `Azure token request failed (${res.status})`;
+      try {
+        const body = await res.json();
+        if (body?.error) message = body.error;
+      } catch {
+        /* non-JSON error body */
+      }
+      throw new Error(message);
+    }
+    return res.json(); // { token, region }
+  }
 
-      // No German recognition like this
-      speechConfig.speechRecognitionLanguage = this.lang ?? 'de-DE';
-      const recognizer = new speechSdk.SpeechRecognizer(speechConfig, audioConfig);
-      this.recognition = recognizer;
-    } catch (e) {
-      if (!host) {
-        console.error("Failed to construct URL since 'host' is not defined");
-        return;
+  async initRecognizer() {
+    try {
+      const { token, region } = await this.#fetchAuthToken();
+
+      // Prefer a custom host when configured (private/regional endpoint),
+      // otherwise use the region from the token response. Either way the
+      // recognizer authenticates with the short-lived token, never a key.
+      let speechConfig;
+      if (this.host) {
+        const hostURL = new URL(
+          `${this.host}/speech/recognition/interactive/cognitiveservices/v1${postfix}`
+        );
+        speechConfig = speechSdk.SpeechConfig.fromHost(hostURL);
+        speechConfig.authorizationToken = token;
+      } else {
+        speechConfig = speechSdk.SpeechConfig.fromAuthorizationToken(token, region);
       }
 
-      console.error(e);
+      const audioConfig = speechSdk.AudioConfig.fromDefaultMicrophoneInput();
+      speechConfig.speechRecognitionLanguage = this.lang ?? 'de-DE';
+      this.recognition = new speechSdk.SpeechRecognizer(speechConfig, audioConfig);
+    } catch (e) {
+      console.error('Failed to initialize Azure recognizer:', e);
+      this.#triggerOnError({ error: 'service', message: e.message });
     }
   }
 

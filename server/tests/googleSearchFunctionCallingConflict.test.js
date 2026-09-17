@@ -1,28 +1,33 @@
 /**
- * Test to verify that google_search and function calling cannot be combined
- * This test validates the fix for the issue where Google's API rejects
- * requests that combine google_search with functionDeclarations
+ * Test to verify that native Google Search grounding and function calling
+ * cannot be combined in the same request. This validates the fix for the
+ * issue where Google's API rejects requests that combine google_search with
+ * functionDeclarations.
+ *
+ * Native search is resolved and injected directly by google.js via the
+ * `nativeWebSearch` request option (see native-web-search.test.js) — it no
+ * longer flows through GoogleConverter's generic tool-calling pipeline.
  */
 
 import assert from 'assert';
-import { convertGenericToolsToGoogle } from '../adapters/toolCalling/GoogleConverter.js';
+import GoogleAdapter from '../adapters/google.js';
 import logger from '../utils/logger.js';
 
 logger.info('Testing Google Search + Function Calling conflict resolution...');
 
-// Test 1: Only google_search should work
-const googleSearchOnly = [
-  {
-    id: 'googleSearch',
-    name: 'googleSearch',
-    description: 'Search the web using Google',
-    parameters: { type: 'object', properties: {} }
-  }
-];
+const model = {
+  modelId: 'gemini-2.5-flash',
+  url: 'https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent',
+  provider: 'google'
+};
+const messages = [{ role: 'user', content: 'test' }];
 
-const result1 = convertGenericToolsToGoogle(googleSearchOnly);
-assert.strictEqual(result1.length, 1, 'Should have 1 tool');
-assert.deepStrictEqual(result1[0], { google_search: {} }, 'Should be google_search');
+// Test 1: Only native google_search should work
+const req1 = await GoogleAdapter.createCompletionRequest(model, messages, 'key', {
+  nativeWebSearch: { provider: 'google' }
+});
+assert.strictEqual(req1.body.tools.length, 1, 'Should have 1 tool');
+assert.deepStrictEqual(req1.body.tools[0], { google_search: {} }, 'Should be google_search');
 logger.info('✓ Test 1: google_search only works correctly');
 
 // Test 2: Only function tools should work
@@ -35,45 +40,41 @@ const functionToolsOnly = [
   }
 ];
 
-const result2 = convertGenericToolsToGoogle(functionToolsOnly);
-assert.strictEqual(result2.length, 1, 'Should have 1 tool');
-assert.ok(result2[0].functionDeclarations, 'Should have functionDeclarations');
-assert.strictEqual(result2[0].functionDeclarations.length, 1, 'Should have 1 function declaration');
+const req2 = await GoogleAdapter.createCompletionRequest(model, messages, 'key', {
+  tools: functionToolsOnly
+});
+assert.strictEqual(req2.body.tools.length, 1, 'Should have 1 tool');
+assert.ok(req2.body.tools[0].functionDeclarations, 'Should have functionDeclarations');
+assert.strictEqual(
+  req2.body.tools[0].functionDeclarations.length,
+  1,
+  'Should have 1 function declaration'
+);
 logger.info('✓ Test 2: function tools only work correctly');
 
-// Test 3: When both are present, google_search should take priority
-const bothTools = [
-  {
-    id: 'googleSearch',
-    name: 'googleSearch',
-    description: 'Search the web using Google',
-    parameters: { type: 'object', properties: {} }
-  },
-  {
-    id: 'webContentExtractor',
-    name: 'webContentExtractor',
-    description: 'Extract content from a web page',
-    parameters: { type: 'object', properties: { url: { type: 'string' } } }
-  }
-];
-
+// Test 3: When both are requested, native google_search should take priority
 // Capture logger.warn to verify warning is logged
 let warnCalled = false;
 let warnMessage = '';
+let warnMeta = null;
 const originalWarn = logger.warn;
-logger.warn = message => {
+logger.warn = (message, meta) => {
   warnCalled = true;
   warnMessage = message;
+  warnMeta = meta;
 };
 
-const result3 = convertGenericToolsToGoogle(bothTools);
+const req3 = await GoogleAdapter.createCompletionRequest(model, messages, 'key', {
+  nativeWebSearch: { provider: 'google' },
+  tools: functionToolsOnly
+});
 
 // Restore logger.warn
 logger.warn = originalWarn;
 
-assert.strictEqual(result3.length, 1, 'Should have only 1 tool when both are present');
+assert.strictEqual(req3.body.tools.length, 1, 'Should have only 1 tool when both are present');
 assert.deepStrictEqual(
-  result3[0],
+  req3.body.tools[0],
   { google_search: {} },
   'Should prioritize google_search over function tools'
 );
@@ -83,16 +84,15 @@ assert.ok(
   'Warning should mention Google API limitation'
 );
 assert.ok(
-  warnMessage.includes('webContentExtractor'),
-  'Warning should mention the skipped tool name'
+  warnMeta?.skippedTools?.includes('webContentExtractor'),
+  'Warning metadata should mention the skipped tool name'
 );
 logger.info('✓ Test 3: google_search takes priority over function tools with warning');
 
-// Test 4: Empty tools array
-const emptyTools = [];
-const result4 = convertGenericToolsToGoogle(emptyTools);
-assert.strictEqual(result4.length, 0, 'Should return empty array for no tools');
-logger.info('✓ Test 4: empty tools array handled correctly');
+// Test 4: Empty tools array, no native search
+const req4 = await GoogleAdapter.createCompletionRequest(model, messages, 'key', {});
+assert.strictEqual(req4.body.tools, undefined, 'Should have no tools field when nothing requested');
+logger.info('✓ Test 4: no tools requested handled correctly');
 
 logger.info(
   '\n✅ All tests passed! The fix prevents combining google_search with function calling.'

@@ -1,9 +1,10 @@
 import configCache from '../../configCache.js';
-import { createCompletionRequest } from '../../adapters/index.js';
-import { getToolsForApp } from '../../toolLoader.js';
+import { isFeatureEnabled } from '../../featureRegistry.js';
+import { getToolsForApp, resolveAppNativeWebSearch } from '../../toolLoader.js';
 import ErrorHandler from '../../utils/ErrorHandler.js';
 import ApiKeyVerifier from '../../utils/ApiKeyVerifier.js';
 import logger from '../../utils/logger.js';
+import { findByIdCaseInsensitive } from '../../utils/resourceLookup.js';
 
 function preprocessMessagesWithFileData(messages) {
   return messages.map(msg => {
@@ -71,6 +72,47 @@ function preprocessMessagesWithFileData(messages) {
 }
 
 /**
+ * When an app supports web search but it is disabled for this turn, append a
+ * short directive to the system prompt clarifying that web search is
+ * unavailable. Apps that advertise web search generally instruct the model to
+ * "use the web search tool"; without this note the model is told to call a tool
+ * that isn't in the request, which can produce empty/malformed responses (e.g.
+ * Gemini's MALFORMED_FUNCTION_CALL). No-op when web search is on for the turn,
+ * when the app has no web search configured, or when there is no system message
+ * to amend.
+ *
+ * @param {Array} llmMessages - Prepared messages (mutated in place)
+ * @param {Object} app - App configuration
+ * @param {boolean|undefined} websearchEnabled - User toggle: undefined = use app default
+ * @returns {boolean} true when a notice was appended
+ */
+export function appendWebSearchDisabledNotice(llmMessages, app, websearchEnabled) {
+  if (!app?.websearch?.enabled) return false;
+
+  const enabledByDefault = app.websearch.enabledByDefault ?? false;
+  const effectiveEnabled = websearchEnabled !== undefined ? websearchEnabled : enabledByDefault;
+  if (effectiveEnabled) return false;
+
+  const systemMessage = llmMessages.find(m => m.role === 'system');
+  if (!systemMessage || typeof systemMessage.content !== 'string') return false;
+
+  const notice =
+    'Note: Web search is currently turned off for this conversation, so you cannot ' +
+    'search the web or browse external websites right now. Answer using your existing ' +
+    'knowledge and do not attempt to call a web search tool or claim that you are ' +
+    'searching the web.';
+
+  if (systemMessage.content.includes(notice)) return false;
+
+  systemMessage.content = systemMessage.content ? `${systemMessage.content}\n\n${notice}` : notice;
+  logger.info('Appended web-search-disabled notice to system prompt', {
+    component: 'RequestBuilder',
+    appId: app.id
+  });
+  return true;
+}
+
+/**
  * Filter models based on app requirements
  * @param {Array} models - All available models
  * @param {Object} app - App configuration
@@ -84,8 +126,14 @@ function filterModelsForApp(models, app) {
     availableModels = availableModels.filter(model => app.allowedModels.includes(model.id));
   }
 
-  // Filter by tools requirement (app.tools array or websearch config both require tool support)
-  if ((app?.tools && app.tools.length > 0) || app?.websearch?.enabled) {
+  // Filter by tools requirement (app.tools, app.apps — apps invoked as tools —
+  // or websearch config all require tool support). app.apps only counts while
+  // the appAsTool feature is enabled: with the flag off no app__* tools are
+  // generated, so a configured-but-inactive delegation must not shrink the
+  // model list.
+  const appToolsActive =
+    app?.apps && app.apps.length > 0 && isFeatureEnabled('appAsTool', configCache.getFeatures());
+  if ((app?.tools && app.tools.length > 0) || appToolsActive || app?.websearch?.enabled) {
     availableModels = availableModels.filter(model => model.supportsTools);
   }
 
@@ -106,6 +154,19 @@ function filterModelsForApp(models, app) {
   return availableModels;
 }
 
+/**
+ * Whether the user is permitted to use a specific model id per their resolved
+ * group permissions (`user.permissions.models`, which may contain the `*`
+ * wildcard). Returns true when no model-permission info is present so callers
+ * without an enhanced user object (e.g. internal/system flows) are not blocked.
+ */
+function isModelPermittedForUser(user, modelId) {
+  const allowed = user?.permissions?.models;
+  if (allowed instanceof Set) return allowed.has('*') || allowed.has(modelId);
+  if (Array.isArray(allowed)) return allowed.includes('*') || allowed.includes(modelId);
+  return true;
+}
+
 class RequestBuilder {
   constructor() {
     this.errorHandler = new ErrorHandler();
@@ -120,10 +181,9 @@ class RequestBuilder {
     style,
     outputFormat,
     language,
-    useMaxTokens = false,
     bypassAppPrompts = false,
     thinkingEnabled,
-    thinkingBudget,
+    thinkingLevel,
     thinkingThoughts,
     enabledTools,
     websearchEnabled,
@@ -132,8 +192,6 @@ class RequestBuilder {
     requestedSkill,
     documentIds,
     processMessageTemplates,
-    res,
-    clientRes,
     user,
     chatId
   }) {
@@ -145,7 +203,7 @@ class RequestBuilder {
         return { success: false, error };
       }
 
-      const app = apps.find(a => a.id === appId);
+      const app = findByIdCaseInsensitive(apps, appId);
       if (!app) {
         const error = await this.errorHandler.createModelError(appId, 'unknown', language);
         error.code = 'APP_NOT_FOUND';
@@ -202,8 +260,33 @@ class RequestBuilder {
       const globalDefaultModel = models.find(m => m.default)?.id;
       const defaultModel = defaultModelFromFiltered || globalDefaultModel;
 
+      // A caller may request a specific model, but only one they're permitted
+      // to use. An explicitly requested modelId the user has no permission for
+      // is ignored (not an error) so resolution falls back to the app's
+      // preferred/default model. This stops `modelId` from being used to
+      // escalate to a model outside `permissions.models` — over both the chat
+      // route and the MCP gateway — without changing the app-default path when
+      // no model is requested.
+      let requestedModelId = modelId;
+      if (requestedModelId) {
+        // Normalize to the configured casing up front so the permission
+        // check and every downstream `id === requestedModelId` comparison
+        // line up regardless of how the caller cased the model id.
+        const matchedModel = findByIdCaseInsensitive(models, requestedModelId);
+        if (matchedModel) requestedModelId = matchedModel.id;
+      }
+      if (requestedModelId && !isModelPermittedForUser(user, requestedModelId)) {
+        logger.warn('Requested model not permitted for user; falling back to app default', {
+          component: 'RequestBuilder',
+          appId: app.id,
+          requestedModelId,
+          user: user?.id
+        });
+        requestedModelId = undefined;
+      }
+
       // Determine which model to use
-      let resolvedModelId = modelId || app.preferredModel || defaultModel;
+      let resolvedModelId = requestedModelId || app.preferredModel || defaultModel;
 
       // Check if we still don't have a model ID (all sources were null/undefined)
       if (!resolvedModelId) {
@@ -322,23 +405,24 @@ class RequestBuilder {
       logger.info('Preparing chat request', {
         component: 'RequestBuilder',
         appId: app.id,
-        modelId: model.id,
-        useMaxTokens
+        modelId: model.id
       });
 
-      // Determine model token limit (default to 8192 if not specified)
-      const modelTokenLimit = model.tokenLimit || 8192;
-      logger.info('Model token limit', { component: 'RequestBuilder', modelTokenLimit });
+      // Output cap sent to the provider (max_tokens / maxOutputTokens). This is
+      // the model's response limit — NOT the context window. Apps no longer
+      // configure token limits; they inherit the output cap from the model.
+      const DEFAULT_MAX_OUTPUT = 4096;
+      const finalTokens = model.maxOutputTokens || DEFAULT_MAX_OUTPUT;
+      logger.info('Max output tokens for request', {
+        component: 'RequestBuilder',
+        finalTokens,
+        contextWindow: model.contextWindow || null
+      });
 
-      // If app specifies tokenLimit, use it; otherwise use model's tokenLimit
-      const appTokenLimit = app.tokenLimit !== undefined ? app.tokenLimit : modelTokenLimit;
-      logger.info('App token limit', { component: 'RequestBuilder', appTokenLimit });
-
-      // Use max tokens if requested, otherwise use the minimum of app and model limits
-      const finalTokens = useMaxTokens ? modelTokenLimit : Math.min(appTokenLimit, modelTokenLimit);
-      logger.info('Final token limit for request', { component: 'RequestBuilder', finalTokens });
-
-      const apiKeyResult = await this.apiKeyVerifier.verifyApiKey(model, res, clientRes, language);
+      // Fail fast on a missing provider key so the route can answer with a
+      // clean HTTP error before any stream is opened. The verifier never
+      // writes to a response here — the caller owns the reply.
+      const apiKeyResult = await this.apiKeyVerifier.verifyApiKey(model, language);
       if (!apiKeyResult.success) {
         return { success: false, error: apiKeyResult.error };
       }
@@ -349,9 +433,28 @@ class RequestBuilder {
         language,
         enabledTools,
         modelProvider: model.provider,
+        model,
         websearchEnabled
       };
       const tools = await getToolsForApp(app, language, context);
+      const nativeWebSearch = resolveAppNativeWebSearch(
+        app,
+        model.provider,
+        websearchEnabled,
+        model
+      );
+
+      // A web-search-enabled app's system prompt typically instructs the model
+      // to "use the web search tool". When web search is toggled OFF for the
+      // turn, no such tool is sent — leaving the prompt telling the model to
+      // call a tool that isn't there. Some models (notably Gemini with thinking
+      // enabled) react by emitting a function call that can't be validated
+      // against any declaration, which Google returns as
+      // finishReason: MALFORMED_FUNCTION_CALL — i.e. an empty answer, seen
+      // intermittently and especially on a resend. Appending a short directive
+      // that web search is unavailable removes the contradiction so the model
+      // answers directly instead of attempting a phantom tool call.
+      appendWebSearchDisabledNotice(llmMessages, app, websearchEnabled);
 
       // Build imageConfig if image generation is supported and parameters are provided
       // Pass raw user parameters to adapter for provider-specific translation
@@ -379,21 +482,21 @@ class RequestBuilder {
         }
       }
 
-      const request = await createCompletionRequest(model, llmMessages, apiKeyResult.apiKey, {
-        temperature: parseFloat(temperature) || app.preferredTemperature || 0.7,
-        maxTokens: finalTokens,
-        stream: !!clientRes,
-        tools,
-        responseFormat: outputFormat,
-        responseSchema: app.outputSchema,
+      const resolvedTemperature = parseFloat(temperature) || app.preferredTemperature || 0.7;
+
+      // Provider-facing options for every model call of this turn. The loop
+      // hands them to LLMClient unchanged, so follow-up calls after tool
+      // results keep native web search, thinking and image settings.
+      const llmOptions = {
+        nativeWebSearch,
+        thinkingEnabled,
+        thinkingLevel,
+        thinkingThoughts,
+        imageConfig,
         user,
         chatId,
-        appConfig: documentIds ? { ...app, documentIds } : app,
-        thinkingEnabled,
-        thinkingBudget,
-        thinkingThoughts,
-        imageConfig
-      });
+        appConfig: documentIds ? { ...app, documentIds } : app
+      };
 
       return {
         success: true,
@@ -401,11 +504,13 @@ class RequestBuilder {
           app,
           model,
           llmMessages,
-          request,
           tools,
           apiKey: apiKeyResult.apiKey,
-          temperature: parseFloat(temperature) || app.preferredTemperature || 0.7,
+          temperature: resolvedTemperature,
           maxTokens: finalTokens,
+          responseFormat: outputFormat,
+          responseSchema: app.outputSchema,
+          llmOptions,
           userFileData
         }
       };

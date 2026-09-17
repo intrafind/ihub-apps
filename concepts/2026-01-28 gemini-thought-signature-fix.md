@@ -1,5 +1,13 @@
 # Gemini 3 ThoughtSignature Fix - Implementation Summary
 
+> **Partly superseded (2026-08-27).** This document covers the in-product chat path only. Two
+> claims below have since been checked against Google's thought-signature reference and are not
+> accurate: signatures are validated for the **current turn only** (not "ALL" turns), and with
+> parallel function calls only the **first** `functionCall` part carries one. The
+> OpenAI-compatible Inference API contract, the current-turn scoping and the sentinel fallback are
+> documented in
+> `concepts/2026-08-27 Gemini Thought Signatures over the Inference API.md`.
+
 ## Issue Description
 
 When using Gemini 3 Flash/Pro models with thinking enabled and tool calling, the system failed on the second API request (after the first tool execution) with a 400 error indicating a missing `thought_signature`.

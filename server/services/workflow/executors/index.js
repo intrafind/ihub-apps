@@ -6,7 +6,7 @@
  *
  * - StartNodeExecutor: Entry point that initializes workflow state
  * - EndNodeExecutor: Exit point that collects final output
- * - AgentNodeExecutor: LLM agent with optional tool access
+ * - PromptNodeExecutor: LLM prompt step with optional tool access
  * - ToolNodeExecutor: Direct tool invocation without LLM
  * - DecisionNodeExecutor: Conditional branching logic
  *
@@ -16,33 +16,67 @@
  * @module services/workflow/executors
  *
  * @example
- * import { getExecutor, AgentNodeExecutor } from './executors/index.js';
+ * import { getExecutor, PromptNodeExecutor } from './executors/index.js';
  *
  * // Using factory function
- * const executor = getExecutor('agent');
+ * const executor = getExecutor('prompt');
  * const result = await executor.execute(node, state, context);
  *
  * // Direct instantiation
- * const agentExecutor = new AgentNodeExecutor({ maxIterations: 5 });
+ * const promptExecutor = new PromptNodeExecutor({ maxIterations: 5 });
  */
 
 export { BaseNodeExecutor } from './BaseNodeExecutor.js';
 export { StartNodeExecutor } from './StartNodeExecutor.js';
 export { EndNodeExecutor } from './EndNodeExecutor.js';
-export { AgentNodeExecutor } from './AgentNodeExecutor.js';
+export { PromptNodeExecutor } from './PromptNodeExecutor.js';
 export { ToolNodeExecutor } from './ToolNodeExecutor.js';
 export { DecisionNodeExecutor } from './DecisionNodeExecutor.js';
 export { HumanNodeExecutor } from './HumanNodeExecutor.js';
 export { TransformNodeExecutor } from './TransformNodeExecutor.js';
+export { PlannerNodeExecutor } from './PlannerNodeExecutor.js';
+export { VerifierNodeExecutor } from './VerifierNodeExecutor.js';
+export { LoopNodeExecutor } from './LoopNodeExecutor.js';
+export { ParallelNodeExecutor } from './ParallelNodeExecutor.js';
+export { JoinNodeExecutor } from './JoinNodeExecutor.js';
+export { HttpNodeExecutor } from './HttpNodeExecutor.js';
+export { CodeNodeExecutor } from './CodeNodeExecutor.js';
+export { InboxLoadNodeExecutor } from './InboxLoadNodeExecutor.js';
+export { InboxFinalizeNodeExecutor } from './InboxFinalizeNodeExecutor.js';
+export { MemoryNodeExecutor } from './MemoryNodeExecutor.js';
+export { MemoryFinalizeNodeExecutor } from './MemoryFinalizeNodeExecutor.js';
+export { StructuredRecordNodeExecutor } from './StructuredRecordNodeExecutor.js';
+export { QuoteValidatorNodeExecutor } from './QuoteValidatorNodeExecutor.js';
+export { TemplateRenderNodeExecutor } from './TemplateRenderNodeExecutor.js';
+export { QueryPlanNodeExecutor } from './QueryPlanNodeExecutor.js';
+export { CorpusSearchNodeExecutor } from './CorpusSearchNodeExecutor.js';
+export { ProgressNodeExecutor } from './ProgressNodeExecutor.js';
 
 // Import classes for the factory
 import { StartNodeExecutor } from './StartNodeExecutor.js';
 import { EndNodeExecutor } from './EndNodeExecutor.js';
-import { AgentNodeExecutor } from './AgentNodeExecutor.js';
+import { PromptNodeExecutor } from './PromptNodeExecutor.js';
 import { ToolNodeExecutor } from './ToolNodeExecutor.js';
 import { DecisionNodeExecutor } from './DecisionNodeExecutor.js';
 import { HumanNodeExecutor } from './HumanNodeExecutor.js';
 import { TransformNodeExecutor } from './TransformNodeExecutor.js';
+import { PlannerNodeExecutor } from './PlannerNodeExecutor.js';
+import { VerifierNodeExecutor } from './VerifierNodeExecutor.js';
+import { LoopNodeExecutor } from './LoopNodeExecutor.js';
+import { ParallelNodeExecutor } from './ParallelNodeExecutor.js';
+import { JoinNodeExecutor } from './JoinNodeExecutor.js';
+import { HttpNodeExecutor } from './HttpNodeExecutor.js';
+import { CodeNodeExecutor } from './CodeNodeExecutor.js';
+import { InboxLoadNodeExecutor } from './InboxLoadNodeExecutor.js';
+import { InboxFinalizeNodeExecutor } from './InboxFinalizeNodeExecutor.js';
+import { MemoryNodeExecutor } from './MemoryNodeExecutor.js';
+import { MemoryFinalizeNodeExecutor } from './MemoryFinalizeNodeExecutor.js';
+import { StructuredRecordNodeExecutor } from './StructuredRecordNodeExecutor.js';
+import { QuoteValidatorNodeExecutor } from './QuoteValidatorNodeExecutor.js';
+import { TemplateRenderNodeExecutor } from './TemplateRenderNodeExecutor.js';
+import { QueryPlanNodeExecutor } from './QueryPlanNodeExecutor.js';
+import { CorpusSearchNodeExecutor } from './CorpusSearchNodeExecutor.js';
+import { ProgressNodeExecutor } from './ProgressNodeExecutor.js';
 
 /**
  * Registry mapping node types to their executor classes.
@@ -51,11 +85,28 @@ import { TransformNodeExecutor } from './TransformNodeExecutor.js';
 const executorRegistry = {
   start: StartNodeExecutor,
   end: EndNodeExecutor,
-  agent: AgentNodeExecutor,
+  prompt: PromptNodeExecutor,
   tool: ToolNodeExecutor,
   decision: DecisionNodeExecutor,
   human: HumanNodeExecutor,
-  transform: TransformNodeExecutor
+  transform: TransformNodeExecutor,
+  planner: PlannerNodeExecutor,
+  verifier: VerifierNodeExecutor,
+  loop: LoopNodeExecutor,
+  parallel: ParallelNodeExecutor,
+  join: JoinNodeExecutor,
+  http: HttpNodeExecutor,
+  code: CodeNodeExecutor,
+  'inbox-load': InboxLoadNodeExecutor,
+  'inbox-finalize': InboxFinalizeNodeExecutor,
+  memory: MemoryNodeExecutor,
+  'memory-finalize': MemoryFinalizeNodeExecutor,
+  'structured-record': StructuredRecordNodeExecutor,
+  'quote-validator': QuoteValidatorNodeExecutor,
+  'template-render': TemplateRenderNodeExecutor,
+  'query-plan': QueryPlanNodeExecutor,
+  'corpus-search': CorpusSearchNodeExecutor,
+  progress: ProgressNodeExecutor
 };
 
 /**
@@ -71,7 +122,7 @@ const executorCache = new Map();
  * This factory function returns the appropriate executor for the specified
  * node type. Executors are cached for performance since they are stateless.
  *
- * @param {string} nodeType - The type of node ('start', 'end', 'agent', 'tool', 'decision')
+ * @param {string} nodeType - The type of node ('start', 'end', 'prompt', 'tool', 'decision')
  * @param {Object} [options] - Optional configuration for the executor
  * @param {boolean} [options.fresh=false] - If true, create a new instance instead of using cache
  * @returns {BaseNodeExecutor} Executor instance for the node type
@@ -79,11 +130,11 @@ const executorCache = new Map();
  *
  * @example
  * // Get cached executor (default)
- * const executor = getExecutor('agent');
+ * const executor = getExecutor('prompt');
  *
  * @example
  * // Get fresh executor instance with custom options
- * const executor = getExecutor('agent', {
+ * const executor = getExecutor('prompt', {
  *   fresh: true,
  *   maxIterations: 20
  * });
@@ -158,7 +209,7 @@ export function registerExecutor(nodeType, ExecutorClass) {
  *
  * @example
  * const types = getRegisteredTypes();
- * // ['start', 'end', 'agent', 'tool', 'decision']
+ * // ['start', 'end', 'prompt', 'tool', 'decision']
  */
 export function getRegisteredTypes() {
   return Object.keys(executorRegistry);

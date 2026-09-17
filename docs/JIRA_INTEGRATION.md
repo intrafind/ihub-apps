@@ -210,7 +210,7 @@ server/
 └── routes/integrations/jira.js             # OAuth routes
 
 contents/
-├── config/tools.json                       # Tool configuration
+├── tools/*.json                            # Tool configuration (one file per tool)
 └── integrations/jira/                      # Token storage (encrypted)
 ```
 

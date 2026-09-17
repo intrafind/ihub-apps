@@ -12,6 +12,7 @@ import * as AnthropicConverter from './AnthropicConverter.js';
 import * as GoogleConverter from './GoogleConverter.js';
 import * as MistralConverter from './MistralConverter.js';
 import * as VLLMConverter from './VLLMConverter.js';
+import * as BedrockConverter from './BedrockConverter.js';
 
 // GenericToolCalling exports are re-exported from converters, not directly used here
 
@@ -24,7 +25,8 @@ const CONVERTERS = {
   anthropic: AnthropicConverter,
   google: GoogleConverter,
   mistral: MistralConverter,
-  local: VLLMConverter // vLLM uses dedicated converter with schema sanitization
+  local: VLLMConverter, // vLLM uses dedicated converter with schema sanitization
+  bedrock: BedrockConverter
 };
 
 /**
@@ -149,6 +151,24 @@ export async function convertResponseToGeneric(data, sourceProvider, streamId = 
   }
 
   return await converterFunction(data, streamId);
+}
+
+/**
+ * Discard accumulated per-stream state (e.g. pending tool call accumulation) for a
+ * stream that errored, was aborted, or otherwise ended without reaching its natural
+ * completion event. Providers without stateful streaming (e.g. Mistral) have no clear
+ * function and this is a no-op for them.
+ * @param {string} sourceProvider - Source provider name
+ * @param {string} streamId - Stream identifier to clear
+ */
+export function clearStreamingState(sourceProvider, streamId = 'default') {
+  const converter = CONVERTERS[sourceProvider];
+  if (!converter) return;
+
+  const clearFunction = converter[`clear${capitalize(sourceProvider)}StreamingState`];
+  if (clearFunction) {
+    clearFunction(streamId);
+  }
 }
 
 /**

@@ -1,4 +1,8 @@
 import logger from '../utils/logger.js';
+import { createParser } from 'eventsource-parser';
+import { getReadableStream } from '../utils/streamUtils.js';
+import { convertResponseToGeneric, clearStreamingState } from './toolCalling/index.js';
+
 /**
  * Base adapter class for LLM providers to reduce duplication
  */
@@ -38,8 +42,34 @@ export class BaseAdapter {
       tools: options.tools || null,
       toolChoice: options.toolChoice,
       responseFormat: options.responseFormat || null,
-      responseSchema: options.responseSchema || null
+      responseSchema: options.responseSchema || null,
+      nativeWebSearch: options.nativeWebSearch || null
     };
+  }
+
+  /**
+   * Resolve a reasoning "effort" level for OpenAI-compatible providers.
+   *
+   * Shared mapping so the budget/level → effort translation stays in one place,
+   * while the decision of whether/how to send it remains provider-specific in
+   * each adapter, from the one control there is: a level.
+   *
+   * There used to be a token-budget fallback here, translating a number into
+   * one of these four. It was the only thing any adapter ever did with a
+   * budget — no provider took the number — so 1024 and 32768 meant the same
+   * thing while looking like a considered choice. `medium` is the default when
+   * nothing says otherwise.
+   *
+   * @param {Object} options - Request options (thinkingLevel)
+   * @param {Object} model - Model config (model.thinking.level)
+   * @returns {'minimal'|'low'|'medium'|'high'} Reasoning effort
+   */
+  resolveReasoningEffort(options = {}, model = {}) {
+    const level = options.thinkingLevel ?? model.thinking?.level;
+    if (!level) return 'medium';
+    const allowed = new Set(['minimal', 'low', 'medium', 'high']);
+    const lower = String(level).toLowerCase();
+    return allowed.has(lower) ? lower : 'medium';
   }
 
   /**
@@ -125,5 +155,185 @@ export class BaseAdapter {
       name: message.name,
       is_error: message.is_error || false
     };
+  }
+
+  /**
+   * Default streaming-response parser. Subclasses may override to handle
+   * non-SSE wire formats (e.g. AWS Bedrock binary EventStream).
+   *
+   * @param {Response} response
+   * @param {{ model: object, chatId?: string, request?: object }} ctx
+   * @yields {object} Normalized result chunks consumed by LLMClient
+   */
+  async *parseResponseStream(response, ctx) {
+    yield* this.parseSseStream(response, ctx.model.provider, ctx.chatId);
+  }
+
+  /**
+   * Generic SSE parser used by OpenAI-compatible providers. Reads the
+   * response body, feeds chunks through eventsource-parser, and yields the
+   * normalized result of convertResponseToGeneric for each event.
+   *
+   * @param {Response} response
+   * @param {string} provider - Provider name passed to the converter registry
+   * @param {string} [streamId] - Per-chat identifier isolating tool-call accumulation
+   *   state between concurrent streams; falls back to a shared 'default' bucket
+   *   (previous behavior) when the caller doesn't provide one.
+   * @yields {object} Normalized result chunks
+   */
+  async *parseSseStream(response, provider, streamId = 'default') {
+    const readable = getReadableStream(response);
+    const reader = readable.getReader();
+    const decoder = new TextDecoder();
+    const queue = [];
+    let parsingError = null;
+
+    const parser = createParser({
+      onEvent: event => {
+        if (event.type === 'event' || !event.type) {
+          queue.push(event);
+        }
+      }
+    });
+
+    try {
+      while (true) {
+        const { done, value } = await reader.read();
+        if (done) break;
+
+        try {
+          const chunk = decoder.decode(value, { stream: true });
+          parser.feed(chunk);
+        } catch (parseErr) {
+          // Catch parsing errors from eventsource-parser (e.g., malformed SSE data)
+          logger.error('SSE parsing error', {
+            component: 'BaseAdapter',
+            provider,
+            error: parseErr.message,
+            errorDetails: parseErr.toString()
+          });
+
+          // Store the error but continue processing queued events
+          parsingError = parseErr;
+
+          // If the error is about unexpected tokens (common with vLLM/gpt-oss),
+          // yield an error result to inform the user
+          yield {
+            content: [],
+            complete: false,
+            finishReason: 'error',
+            error: true,
+            errorMessage: `The model sent malformed data: ${parseErr.message}. This may be due to a model configuration issue. Please try a different model or contact your administrator.`
+          };
+          return;
+        }
+
+        while (queue.length > 0) {
+          const evt = queue.shift();
+          try {
+            const result = await convertResponseToGeneric(evt.data, provider, streamId);
+            if (!result) continue;
+            yield result;
+            if (result.error || result.complete) return;
+          } catch (conversionErr) {
+            logger.error('Error converting SSE event to generic format', {
+              component: 'BaseAdapter',
+              provider,
+              error: conversionErr.message
+            });
+            // Yield error but don't stop processing other events
+            yield {
+              content: [],
+              complete: false,
+              finishReason: 'error',
+              error: true,
+              errorMessage: `Error processing response: ${conversionErr.message}`
+            };
+          }
+        }
+      }
+
+      // If we had parsing errors but no events were processed, yield a final error
+      if (parsingError && queue.length === 0) {
+        yield {
+          content: [],
+          complete: true,
+          finishReason: 'error',
+          error: true,
+          errorMessage: `Stream parsing failed: ${parsingError.message}. The model may have sent invalid data.`
+        };
+      }
+    } finally {
+      try {
+        reader.releaseLock();
+      } catch {
+        /* ignore */
+      }
+      // Guard against a stale pending tool call surviving an aborted/errored
+      // stream and being finalized by a later, unrelated stream on the same
+      // provider's shared state map (only relevant when streamId was reused).
+      clearStreamingState(provider, streamId);
+    }
+  }
+
+  /**
+   * Custom SSE parser for providers that emit multi-event blocks separated
+   * by `\n\n` and expect the adapter to interpret entire blocks at once
+   * (currently iAssistant Conversation).
+   *
+   * The adapter must implement `processResponseBuffer(buffer)` which returns
+   * a normalized result object.
+   *
+   * @param {Response} response
+   * @yields {object} Normalized result chunks
+   */
+  async *parseLineDelimitedSseStream(response) {
+    const readable = getReadableStream(response);
+    const reader = readable.getReader();
+    const decoder = new TextDecoder();
+    let buffer = '';
+
+    try {
+      while (true) {
+        const { done, value } = await reader.read();
+        if (done) break;
+        buffer += decoder.decode(value, { stream: true });
+
+        if (buffer.includes('\n\n')) {
+          const parts = buffer.split('\n\n');
+          const completeEvents = parts.slice(0, -1).join('\n\n');
+          buffer = parts[parts.length - 1];
+          if (!completeEvents) continue;
+
+          let result;
+          try {
+            result = await this.processResponseBuffer(completeEvents + '\n\n');
+          } catch (err) {
+            yield {
+              content: [],
+              complete: false,
+              finishReason: 'error',
+              error: true,
+              errorMessage: `Processing error: ${err.message}`
+            };
+            return;
+          }
+          if (!result) continue;
+          yield result;
+          if (result.error || result.complete) return;
+        }
+      }
+
+      if (buffer.trim()) {
+        const result = await this.processResponseBuffer(buffer);
+        if (result) yield result;
+      }
+    } finally {
+      try {
+        reader.releaseLock();
+      } catch {
+        /* ignore */
+      }
+    }
   }
 }

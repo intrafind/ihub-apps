@@ -1,0 +1,42 @@
+{
+  "id": "seleniumScreenshot",
+  "name": {
+    "en": "Website Screenshot (Selenium)",
+    "de": "Website-Screenshot (Selenium)"
+  },
+  "description": {
+    "en": "Take a screenshot or PDF of a webpage using Selenium.",
+    "de": "Erstellen Sie einen Screenshot oder PDF einer Webseite mit Selenium."
+  },
+  "script": "seleniumScreenshot.js",
+  "parameters": {
+    "type": "object",
+    "properties": {
+      "url": {
+        "type": "string",
+        "description": {
+          "en": "Target URL",
+          "de": "Ziel-URL"
+        }
+      },
+      "format": {
+        "type": "string",
+        "enum": ["png", "pdf"],
+        "default": "png",
+        "description": {
+          "en": "Output format (png or pdf)",
+          "de": "Ausgabeformat (png oder pdf)"
+        }
+      },
+      "fullPage": {
+        "type": "boolean",
+        "default": true,
+        "description": {
+          "en": "Capture full page or just visible area",
+          "de": "Ganze Seite oder nur sichtbaren Bereich erfassen"
+        }
+      }
+    },
+    "required": ["url"]
+  }
+}

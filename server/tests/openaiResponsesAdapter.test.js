@@ -1,5 +1,6 @@
 import assert from 'assert';
 import OpenAIResponsesAdapter from '../adapters/openai-responses.js';
+import { convertOpenaiResponsesResponseToGeneric } from '../adapters/toolCalling/OpenAIResponsesConverter.js';
 import logger from '../utils/logger.js';
 
 // Test basic adapter functionality
@@ -16,7 +17,7 @@ const messages = [
   { role: 'user', content: 'Hello!' }
 ];
 
-const req = OpenAIResponsesAdapter.createCompletionRequest(model, messages, 'test-key', {
+const req = await OpenAIResponsesAdapter.createCompletionRequest(model, messages, 'test-key', {
   stream: true
 });
 
@@ -62,9 +63,14 @@ const multipleMessages = [
   { role: 'user', content: 'How are you?' }
 ];
 
-const req2 = OpenAIResponsesAdapter.createCompletionRequest(model, multipleMessages, 'test-key', {
-  stream: true
-});
+const req2 = await OpenAIResponsesAdapter.createCompletionRequest(
+  model,
+  multipleMessages,
+  'test-key',
+  {
+    stream: true
+  }
+);
 
 // Verify input is an array when multiple messages
 assert.ok(Array.isArray(req2.body.input), 'Input should be array for multiple messages');
@@ -83,7 +89,7 @@ const schema = {
   required: ['name', 'age']
 };
 
-const req3 = OpenAIResponsesAdapter.createCompletionRequest(
+const req3 = await OpenAIResponsesAdapter.createCompletionRequest(
   model,
   [{ role: 'user', content: 'Extract person info' }],
   'test-key',
@@ -123,7 +129,7 @@ const nonStreamingResponse = JSON.stringify({
   status: 'completed'
 });
 
-const result = OpenAIResponsesAdapter.processResponseBuffer(nonStreamingResponse);
+const result = await convertOpenaiResponsesResponseToGeneric(nonStreamingResponse);
 assert.strictEqual(result.content.length, 1, 'Should have one content item');
 assert.strictEqual(
   result.content[0],
@@ -153,7 +159,7 @@ const toolCallResponse = JSON.stringify({
   status: 'completed'
 });
 
-const result2 = OpenAIResponsesAdapter.processResponseBuffer(toolCallResponse);
+const result2 = await convertOpenaiResponsesResponseToGeneric(toolCallResponse);
 assert.strictEqual(result2.tool_calls.length, 1, 'Should have one tool call');
 assert.strictEqual(result2.tool_calls[0].function.name, 'get_weather', 'Tool name should match');
 assert.strictEqual(result2.complete, true, 'Response should be complete');

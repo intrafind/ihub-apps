@@ -3,6 +3,7 @@ import crypto from 'crypto';
 import config from '../config.js';
 import configCache from '../configCache.js';
 import tokenStorageService from '../services/TokenStorageService.js';
+import credentialService from '../services/CredentialService.js';
 import logger from './logger.js';
 
 /**
@@ -84,17 +85,14 @@ function getIFinderPrivateKey(iFinderConfig) {
   // Try environment variable first
   if (config.IFINDER_PRIVATE_KEY) {
     privateKey = config.IFINDER_PRIVATE_KEY;
-  } else {
-    // Try platform configuration
-    const platform = configCache.getPlatform() || {};
-    if (platform.iFinder?.privateKey) {
-      privateKey = platform.iFinder.privateKey;
-    }
+  } else if (iFinderConfig.privateKeyRef) {
+    // Resolve the private key from the central credential store
+    privateKey = credentialService.tryResolveSecret(iFinderConfig.privateKeyRef);
   }
 
   if (!privateKey) {
     throw new Error(
-      'iFinder private key not configured. Set IFINDER_PRIVATE_KEY environment variable or configure in platform.json'
+      'iFinder private key not configured. Select or create a credential under Admin > Integrations > iFinder, or set the IFINDER_PRIVATE_KEY environment variable in PEM format.'
     );
   }
 
@@ -122,17 +120,68 @@ function getIFinderPrivateKey(iFinderConfig) {
 function resolveJwtSubject(user, config) {
   const field = config.jwtSubjectField || 'email';
 
+  let resolved;
   switch (field) {
     case 'email':
-      return user.email || user.username || user.id;
+      resolved = user.email || user.username || user.id;
+      break;
     case 'username':
-      return user.username || user.email || user.id;
+      resolved = user.username || user.email || user.id;
+      break;
     case 'domain\\username':
-      return user.domain ? `${user.domain}\\${user.username || user.id}` : user.username || user.id;
-    default:
-      // Custom template: replace ${field} placeholders
-      return field.replace(/\$\{(\w+)\}/g, (_, key) => user[key] || '');
+      resolved = user.domain
+        ? `${user.domain}\\${user.username || user.id}`
+        : user.username || user.id;
+      break;
+    default: {
+      // Custom template. Placeholders ALWAYS resolve from the authenticated
+      // user object (`user[field]`), never from environment variables.
+      //
+      // Two accepted forms:
+      //   ${user.field}  — preferred, self-documenting.
+      //   ${field}       — legacy. configCache opts this path out of env var
+      //                    resolution via the `ENV_VAR_SKIP_PATHS_BY_KEY`
+      //                    entry for `config/platform.json`, so this form
+      //                    is now safe; before that skip was added it could
+      //                    collide with `process.env.field` (notably
+      //                    `process.env.username` on Windows = the OS
+      //                    service account running the server), leaking
+      //                    that account into every JWT subject. We still
+      //                    warn so admins migrate to the explicit
+      //                    `${user.field}` form.
+      if (/\$\{(?!user\.)\w+\}/.test(field)) {
+        logger.warn(
+          'iFinder jwtSubjectField uses legacy ${field} placeholder syntax. ' +
+            'Use ${user.field} instead (e.g. "BMG\\\\${user.username}") to ' +
+            'avoid collision with environment variable names.',
+          { component: 'iFinderJwt', jwtSubjectField: field }
+        );
+      }
+      resolved = field.replace(/\$\{(?:user\.)?(\w+)\}/g, (_, key) => {
+        const value = user[key];
+        if (value === undefined || value === null || value === '') {
+          logger.warn(
+            `iFinder JWT subject template placeholder for user.${key} resolved to empty for user ${user.id || user.username || '<unknown>'}`,
+            { component: 'iFinderJwt', jwtSubjectField: field }
+          );
+          return '';
+        }
+        return value;
+      });
+      break;
+    }
   }
+
+  if (typeof resolved !== 'string' || resolved.trim() === '') {
+    throw new Error(
+      `iFinder JWT subject could not be resolved (jwtSubjectField="${field}"). ` +
+        `User is missing the required field(s). ` +
+        `Check the "JWT Subject Field" setting in Admin > iFinder Integration and ensure ` +
+        `the authenticated user has a non-empty value for it.`
+    );
+  }
+
+  return resolved;
 }
 
 /**
@@ -184,6 +233,19 @@ export function generateIFinderJWT(user, options = {}) {
     const kid = computeOidcKid();
     if (kid) signOptions.keyid = kid;
   }
+
+  logger.debug('iFinder JWT payload and sign options', {
+    component: 'iFinderJwt',
+    payload,
+    signOptions: {
+      algorithm: signOptions.algorithm,
+      expiresIn: signOptions.expiresIn,
+      issuer: signOptions.issuer,
+      audience: signOptions.audience,
+      keyid: signOptions.keyid
+    },
+    jwtSubjectField: iFinderConfig.jwtSubjectField
+  });
 
   return jwt.sign(payload, privateKey, signOptions);
 }

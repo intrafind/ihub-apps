@@ -1,12 +1,9 @@
 import { useState, useRef, useEffect, useCallback } from 'react';
-import { createPortal } from 'react-dom';
 import { useTranslation } from 'react-i18next';
 import { useAuth } from '../../../shared/contexts/AuthContext';
 import { usePlatformConfig } from '../../../shared/contexts/PlatformConfigContext';
 import { useFeatureFlags } from '../../../shared/hooks/useFeatureFlags';
 import { useKeyboardNavigation } from '../../../shared/hooks/useKeyboardNavigation';
-import { useFocusTrap } from '../../../shared/hooks/useFocusTrap';
-import LoginForm from './LoginForm';
 import Icon from '../../../shared/components/Icon';
 import { Link } from 'react-router-dom';
 
@@ -17,37 +14,15 @@ import { Link } from 'react-router-dom';
  * @param {string} props.className - Additional CSS classes to apply to the root element
  * @returns {JSX.Element|null} The user authentication menu component
  */
-export default function UserAuthMenu({ variant = 'header', className = '' }) {
+export default function UserAuthMenu({ variant = 'header', className = '', collapsed = false }) {
   const { t } = useTranslation();
   const { user, isAuthenticated, logout, authConfig } = useAuth();
   const { platformConfig } = usePlatformConfig();
   const featureFlags = useFeatureFlags();
   const [showDropdown, setShowDropdown] = useState(false);
-  const [showLoginModal, setShowLoginModal] = useState(false);
   const [showAllGroups, setShowAllGroups] = useState(false);
   const dropdownRef = useRef(null);
   const menuRef = useRef(null);
-  const loginDialogRef = useRef(null);
-
-  useFocusTrap(loginDialogRef, {
-    isActive: showLoginModal
-  });
-
-  /** Closes the login modal when the Escape key is pressed */
-  const handleLoginModalKeyDown = useCallback(
-    event => {
-      if (event.key === 'Escape') {
-        setShowLoginModal(false);
-      }
-    },
-    [setShowLoginModal]
-  );
-
-  useEffect(() => {
-    if (!showLoginModal) return;
-    window.addEventListener('keydown', handleLoginModalKeyDown);
-    return () => window.removeEventListener('keydown', handleLoginModalKeyDown);
-  }, [showLoginModal, handleLoginModalKeyDown]);
 
   /** Handles selecting a menu item via keyboard (Enter/Space) */
   const handleMenuSelect = useCallback(index => {
@@ -115,28 +90,19 @@ export default function UserAuthMenu({ variant = 'header', className = '' }) {
     return null;
   }
 
-  // For sidebar variant, don't render if user is not authenticated or is anonymous
-  if (variant === 'sidebar' && (!isAuthenticated || !user || user.id === 'anonymous')) {
-    return null;
-  }
-
-  // If anonymous access is not allowed and user is not authenticated,
-  // delegate to the auth gate (which handles all login flows).
-  if (!allowAnonymous && !isAuthenticated) {
-    if (window.__authGate && !window.__authGate.isVisible()) {
-      window.__authGate.show();
-    }
-    return null;
-  }
-
   const handleLoginClick = () => {
     setShowDropdown(false);
     setShowAllGroups(false);
-    // Delegate to auth gate when available (supports all auth methods)
+    // The auth gate is the single login dialog for the whole app (it handles
+    // every auth method). Open it as a dismissible overlay when anonymous
+    // access is allowed; otherwise open the non-dismissible full-page gate so
+    // closing it can't reveal an app the user isn't permitted to use.
     if (window.__authGate) {
-      window.__authGate.show({ overlay: true });
+      window.__authGate.show({ overlay: allowAnonymous });
     } else {
-      setShowLoginModal(true);
+      // The gate is inlined on every index.html entry, so this should not
+      // happen where UserAuthMenu renders. Warn instead of failing silently.
+      console.warn('Auth gate is unavailable; cannot open the login dialog.');
     }
   };
 
@@ -146,8 +112,37 @@ export default function UserAuthMenu({ variant = 'header', className = '' }) {
     setShowAllGroups(false);
   };
 
-  // Use the backend-calculated isAdmin flag instead of hardcoded group names
+  // Sidebar variant for anonymous visitors: the sidebar is the only navigation
+  // on regular pages, so it must offer a way to sign in. A plain button opens
+  // the auth gate directly (the anonymous dropdown card is a header affordance).
+  if (variant === 'sidebar' && (!isAuthenticated || !user || user.id === 'anonymous')) {
+    const signIn = t('auth.menu.signIn', 'Sign In');
+    return (
+      <div className={className}>
+        <button
+          type="button"
+          onClick={handleLoginClick}
+          title={signIn}
+          aria-label={collapsed ? signIn : undefined}
+          className={
+            collapsed
+              ? 'w-10 h-10 flex items-center justify-center rounded-xl text-gray-500 dark:text-gray-400 hover:bg-gray-100 dark:hover:bg-gray-800 transition-colors'
+              : 'flex items-center gap-2.5 w-full px-3 py-2 rounded-lg text-sm font-medium text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-800 transition-colors text-left'
+          }
+        >
+          <Icon name="login" size="sm" className="text-gray-500 dark:text-gray-400 flex-none" />
+          {!collapsed && <span className="truncate">{signIn}</span>}
+        </button>
+      </div>
+    );
+  }
+
+  // Use the backend-calculated isAdmin flag instead of hardcoded group names.
+  // Content admins (permissions.contentAdmin) aren't full admins (isAdmin) but
+  // must still reach the admin area to manage apps/prompts/sources (issue #1923).
   const isAdmin = user?.isAdmin === true;
+  const isContentAdmin = user?.permissions?.contentAdmin === true;
+  const canAccessAdmin = isAdmin || isContentAdmin;
 
   return (
     <div className={`relative ${className}`} ref={dropdownRef}>
@@ -156,11 +151,14 @@ export default function UserAuthMenu({ variant = 'header', className = '' }) {
         onClick={() => setShowDropdown(!showDropdown)}
         className={
           variant === 'header'
-            ? 'flex items-center space-x-2 text-white hover:text-white/80 focus:outline-none'
-            : 'flex items-center space-x-2 p-2 rounded-lg hover:bg-gray-100 focus:outline-none focus:ring-2 focus:ring-blue-500 transition-colors'
+            ? 'flex items-center space-x-2 text-white hover:text-white/80 focus:outline-hidden'
+            : 'flex items-center space-x-2 p-2 rounded-lg hover:bg-gray-100 dark:hover:bg-gray-800 focus:outline-hidden focus:ring-2 focus:ring-blue-500 transition-colors w-full min-w-0'
         }
         aria-expanded={showDropdown}
         aria-haspopup="true"
+        aria-label={
+          variant === 'sidebar' ? `${t('auth.userMenu', 'User menu')}: ${displayName}` : undefined
+        }
       >
         {isAuthenticated ? (
           <>
@@ -175,15 +173,21 @@ export default function UserAuthMenu({ variant = 'header', className = '' }) {
               </>
             ) : (
               <>
-                <div className="w-8 h-8 bg-blue-600 text-white rounded-full flex items-center justify-center text-sm font-medium">
+                <div className="w-8 h-8 bg-blue-600 text-white rounded-full flex items-center justify-center text-sm font-medium flex-none">
                   {initials}
                 </div>
-                <div className="hidden sm:block text-left">
-                  <div className="text-sm font-medium text-gray-900">{displayName}</div>
-                  {user?.email && user.email !== displayName && (
-                    <div className="text-xs text-gray-500">{user.email}</div>
-                  )}
-                </div>
+                {!collapsed && (
+                  <div className="hidden sm:block text-left min-w-0">
+                    <div className="text-sm font-medium text-gray-900 dark:text-gray-100 truncate">
+                      {displayName}
+                    </div>
+                    {user?.email && user.email !== displayName && (
+                      <div className="text-xs text-gray-500 dark:text-gray-400 truncate">
+                        {user.email}
+                      </div>
+                    )}
+                  </div>
+                )}
               </>
             )}
           </>
@@ -201,11 +205,13 @@ export default function UserAuthMenu({ variant = 'header', className = '' }) {
             </span>
           </>
         )}
-        <Icon
-          name="chevron-down"
-          size="sm"
-          className={`transition-transform duration-200 ${showDropdown ? 'rotate-180' : ''} ${variant === 'header' ? 'text-white' : 'text-gray-500'}`}
-        />
+        {!collapsed && (
+          <Icon
+            name="chevron-down"
+            size="sm"
+            className={`transition-transform duration-200 ${showDropdown ? 'rotate-180' : ''} ${variant === 'header' ? 'text-white' : 'text-gray-500'}`}
+          />
+        )}
       </button>
 
       {/* Dropdown menu */}
@@ -214,7 +220,18 @@ export default function UserAuthMenu({ variant = 'header', className = '' }) {
           ref={menuRef}
           role="menu"
           aria-label={t('auth.userMenu', 'User menu')}
-          className="absolute right-0 mt-2 w-64 bg-white dark:bg-gray-800 rounded-lg shadow-lg border border-gray-200 dark:border-gray-700 py-1 z-50"
+          className={
+            variant === 'sidebar'
+              ? // In the sidebar the trigger sits at the very bottom, so the menu
+                // floats upward instead of pushing the layout (which would happen
+                // if it opened downward off-screen). When the rail is collapsed it
+                // gets a fixed width and floats over the content to the right.
+                // Use a comfortable fixed width anchored to the left so the menu
+                // floats over the page content instead of being squeezed into
+                // the (now narrower) account row.
+                `absolute bottom-full mb-2 left-0 w-64 bg-white dark:bg-gray-800 rounded-lg shadow-xl border border-gray-200 dark:border-gray-700 py-1 z-50`
+              : 'absolute right-0 mt-2 w-64 bg-white dark:bg-gray-800 rounded-lg shadow-lg border border-gray-200 dark:border-gray-700 py-1 z-50'
+          }
         >
           {isAuthenticated ? (
             <>
@@ -258,22 +275,6 @@ export default function UserAuthMenu({ variant = 'header', className = '' }) {
 
               {/* Menu items */}
               <div className="py-1">
-                {/* Profile (placeholder for sidebar variant) */}
-                {variant === 'sidebar' && (
-                  <button
-                    role="menuitem"
-                    tabIndex={-1}
-                    className="w-full text-left px-4 py-2 text-sm text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700 flex items-center"
-                    onClick={() => {
-                      setShowDropdown(false);
-                      setShowAllGroups(false);
-                    }}
-                  >
-                    <Icon name="user" className="w-4 h-4 mr-3" />
-                    {t('auth.menu.profile', 'Profile')}
-                  </button>
-                )}
-
                 {/* Integrations */}
                 {featureFlags.isEnabled('integrations', true) &&
                   (platformConfig?.cloudStorage?.enabled || platformConfig?.jira?.enabled) && (
@@ -297,7 +298,7 @@ export default function UserAuthMenu({ variant = 'header', className = '' }) {
                   )}
 
                 {/* Admin Panel */}
-                {isAdmin && (
+                {canAccessAdmin && (
                   <Link
                     to="/admin"
                     role="menuitem"
@@ -363,36 +364,6 @@ export default function UserAuthMenu({ variant = 'header', className = '' }) {
           )}
         </div>
       )}
-
-      {/* Login modal */}
-      {showLoginModal &&
-        createPortal(
-          <div
-            ref={loginDialogRef}
-            role="dialog"
-            aria-modal="true"
-            aria-labelledby="login-dialog-title"
-            className="fixed inset-0 bg-gray-600 bg-opacity-50 overflow-y-auto h-full w-full"
-            style={{ zIndex: 2147483647 }}
-          >
-            <div className="relative top-20 mx-auto p-5 border w-full max-w-md shadow-lg rounded-md bg-white">
-              <div className="flex justify-between items-center mb-4">
-                <h3 id="login-dialog-title" className="text-lg font-medium text-gray-900">
-                  {t('auth.menu.signIn', 'Sign In')}
-                </h3>
-                <button
-                  onClick={() => setShowLoginModal(false)}
-                  className="text-gray-400 hover:text-gray-600"
-                  aria-label={t('auth.menu.closeLogin', 'Close login dialog')}
-                >
-                  <Icon name="x" size="md" />
-                </button>
-              </div>
-              <LoginForm onSuccess={() => setShowLoginModal(false)} />
-            </div>
-          </div>,
-          document.body
-        )}
     </div>
   );
 }

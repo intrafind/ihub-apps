@@ -70,7 +70,7 @@ const simpleAgentWorkflow = {
     },
     {
       id: 'summarize',
-      type: 'agent',
+      type: 'prompt',
       name: { en: 'Summarize' },
       config: {
         system: { en: 'You are a helpful assistant. Be concise. Respond in one short sentence.' },
@@ -109,7 +109,7 @@ const toolCallingWorkflow = {
     },
     {
       id: 'searcher',
-      type: 'agent',
+      type: 'prompt',
       name: { en: 'Search Agent' },
       config: {
         system: {

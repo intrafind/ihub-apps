@@ -1,0 +1,486 @@
+// Office Add-in Integration Routes
+// Serves runtime configuration and generates the Office manifest XML
+
+import express from 'express';
+import { readFileSync } from 'fs';
+import { join, dirname } from 'path';
+import { fileURLToPath } from 'url';
+import { requireFeature } from '../../featureRegistry.js';
+import { buildPublicBaseUrl } from '../../utils/publicBaseUrl.js';
+import configCache from '../../configCache.js';
+import { getLocalizedContent } from '../../../shared/localize.js';
+import { sanitizeOfficeStartPage } from '../../utils/officeStartPage.js';
+import logger from '../../utils/logger.js';
+
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = dirname(__filename);
+
+// Load translation files
+const translations = {
+  en: JSON.parse(readFileSync(join(__dirname, '../../../shared/i18n/en.json'), 'utf-8')),
+  de: JSON.parse(readFileSync(join(__dirname, '../../../shared/i18n/de.json'), 'utf-8'))
+};
+
+const router = express.Router();
+
+// Gate all Office add-in routes behind the integrations feature flag
+router.use(requireFeature('integrations'));
+
+/**
+ * Keep only `{ [lang: string]: string }` entries. Defensive sanitizer used on the
+ * public add-in config endpoint so a manually corrupted platform.json can't crash
+ * the taskpane during rendering.
+ */
+function sanitizeLocalizedObject(value) {
+  if (!value || typeof value !== 'object' || Array.isArray(value)) return {};
+  const out = {};
+  for (const [lang, val] of Object.entries(value)) {
+    if (typeof lang === 'string' && typeof val === 'string') out[lang] = val;
+  }
+  return out;
+}
+
+function sanitizeStarterPrompts(value) {
+  if (!Array.isArray(value)) return [];
+  const out = [];
+  for (const item of value) {
+    if (!item || typeof item !== 'object' || Array.isArray(item)) continue;
+    const title = sanitizeLocalizedObject(item.title);
+    const message = sanitizeLocalizedObject(item.message);
+    if (Object.keys(title).length === 0 || Object.keys(message).length === 0) continue;
+    out.push({ title, message });
+  }
+  return out;
+}
+
+/**
+ * @swagger
+ * /api/integrations/office-addin/config:
+ *   get:
+ *     summary: Get Office add-in runtime configuration
+ *     description: Returns runtime configuration needed by the Outlook add-in before it can authenticate — OAuth client, redirect URI, display name, starter prompts and the start-page settings (which view the pane opens after sign-in, the default chat app, the curated app shortcuts). No authentication required.
+ *     tags:
+ *       - Integrations - Office Add-in
+ *     responses:
+ *       200:
+ *         description: Runtime configuration object
+ *       404:
+ *         description: Office integration not enabled
+ */
+router.get('/config', (req, res) => {
+  const platform = configCache.getPlatform();
+  const officeConfig = platform?.officeIntegration;
+
+  if (!officeConfig?.enabled) {
+    return res.status(404).json({ error: 'Office integration is not enabled' });
+  }
+
+  const baseUrl = buildPublicBaseUrl(req);
+
+  res.json({
+    baseUrl,
+    clientId: officeConfig.oauthClientId || '',
+    redirectUri: `${baseUrl}/office/callback.html`,
+    // The add-in's name as the admin configured it, for the pane's header.
+    displayName: sanitizeLocalizedObject(officeConfig.displayName),
+    starterPrompts: sanitizeStarterPrompts(officeConfig.starterPrompts),
+    calendarStarterPrompts: sanitizeStarterPrompts(officeConfig.calendarStarterPrompts),
+    // Where the pane lands after sign-in and what its start page shows.
+    // Sanitized, not validated: a hand-edited value must not break the pane.
+    startPage: sanitizeOfficeStartPage(officeConfig.startPage)
+  });
+});
+
+/**
+ * @swagger
+ * /api/integrations/office-addin/manifest.xml:
+ *   get:
+ *     summary: Get Office add-in manifest
+ *     description: Dynamically generates the Office add-in manifest XML with correct URLs for this deployment.
+ *     tags:
+ *       - Integrations - Office Add-in
+ *     responses:
+ *       200:
+ *         description: Office manifest XML
+ *         content:
+ *           application/xml:
+ *             schema:
+ *               type: string
+ *       404:
+ *         description: Office integration not enabled
+ */
+router.get('/manifest.xml', (req, res) => {
+  const platform = configCache.getPlatform();
+  const officeConfig = platform?.officeIntegration;
+
+  if (!officeConfig?.enabled) {
+    return res.status(404).json({ error: 'Office integration is not enabled' });
+  }
+
+  const baseUrl = buildPublicBaseUrl(req);
+  const origin = new URL(baseUrl).origin;
+
+  // Get localized values for all supported languages
+  const displayNameEn = getLocalizedContent(officeConfig.displayName, 'en') || 'iHub Apps';
+  const displayNameDe = getLocalizedContent(officeConfig.displayName, 'de') || displayNameEn;
+  const descriptionEn =
+    getLocalizedContent(officeConfig.description, 'en') || 'AI-powered assistant for Outlook';
+  const descriptionDe = getLocalizedContent(officeConfig.description, 'de') || descriptionEn;
+  const showTaskPaneLabelEn = translations.en?.office?.showTaskPane || 'Show Task Pane';
+  const showTaskPaneLabelDe = translations.de?.office?.showTaskPane || showTaskPaneLabelEn;
+
+  logger.debug('Generating Office manifest', {
+    component: 'OfficeAddinRoutes',
+    baseUrl,
+    displayNameEn,
+    displayNameDe,
+    showTaskPaneLabelEn,
+    showTaskPaneLabelDe
+  });
+
+  const manifest = generateManifest({
+    baseUrl,
+    origin,
+    displayNameEn,
+    displayNameDe,
+    descriptionEn,
+    descriptionDe,
+    showTaskPaneLabelEn,
+    showTaskPaneLabelDe
+  });
+
+  res.set('Content-Type', 'application/xml; charset=utf-8');
+  res.set('Content-Disposition', 'attachment; filename="manifest.xml"');
+  res.send(manifest);
+});
+
+function generateManifest({
+  baseUrl,
+  origin,
+  displayNameEn,
+  displayNameDe,
+  descriptionEn,
+  descriptionDe,
+  showTaskPaneLabelEn,
+  showTaskPaneLabelDe
+}) {
+  return `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+<OfficeApp xmlns="http://schemas.microsoft.com/office/appforoffice/1.1"
+           xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+           xmlns:bt="http://schemas.microsoft.com/office/officeappbasictypes/1.0"
+           xmlns:mailappor="http://schemas.microsoft.com/office/mailappversionoverrides/1.0"
+           xsi:type="MailApp">
+  <Id>4fe644da-8036-47f8-ac9f-e478bcbe5274</Id>
+  <Version>1.1.0.0</Version>
+  <ProviderName>intrafind</ProviderName>
+  <DefaultLocale>en-US</DefaultLocale>
+  <DisplayName DefaultValue="${escapeXml(displayNameEn)}">
+    <Override Locale="de-DE" Value="${escapeXml(displayNameDe)}"/>
+  </DisplayName>
+  <Description DefaultValue="${escapeXml(descriptionEn)}">
+    <Override Locale="de-DE" Value="${escapeXml(descriptionDe)}"/>
+  </Description>
+  <IconUrl DefaultValue="${baseUrl}/office/assets/icon-64.png"/>
+  <HighResolutionIconUrl DefaultValue="${baseUrl}/office/assets/icon-128.png"/>
+  <SupportUrl DefaultValue="${origin}"/>
+  <AppDomains>
+    <AppDomain>${origin}</AppDomain>
+  </AppDomains>
+  <Hosts>
+    <Host Name="Mailbox"/>
+  </Hosts>
+  <Requirements>
+    <Sets>
+      <Set Name="Mailbox" MinVersion="1.3"/>
+    </Sets>
+  </Requirements>
+  <FormSettings>
+    <Form xsi:type="ItemRead">
+      <DesktopSettings>
+        <SourceLocation DefaultValue="${baseUrl}/office/taskpane.html"/>
+        <RequestedHeight>250</RequestedHeight>
+      </DesktopSettings>
+    </Form>
+    <Form xsi:type="ItemEdit">
+      <DesktopSettings>
+        <SourceLocation DefaultValue="${baseUrl}/office/taskpane.html"/>
+      </DesktopSettings>
+    </Form>
+  </FormSettings>
+  <Permissions>ReadWriteItem</Permissions>
+  <Rule xsi:type="RuleCollection" Mode="Or">
+    <Rule xsi:type="ItemIs" ItemType="Message" FormType="Read"/>
+    <Rule xsi:type="ItemIs" ItemType="Message" FormType="Edit"/>
+    <Rule xsi:type="ItemIs" ItemType="Appointment" FormType="Read"/>
+    <Rule xsi:type="ItemIs" ItemType="Appointment" FormType="Edit"/>
+  </Rule>
+  <VersionOverrides xmlns="http://schemas.microsoft.com/office/mailappversionoverrides" xsi:type="VersionOverridesV1_0">
+    <Requirements>
+      <bt:Sets DefaultMinVersion="1.3">
+        <bt:Set Name="Mailbox"/>
+      </bt:Sets>
+    </Requirements>
+    <Hosts>
+      <Host xsi:type="MailHost">
+        <DesktopFormFactor>
+          <FunctionFile resid="Commands.Url"/>
+          <ExtensionPoint xsi:type="MessageReadCommandSurface">
+            <OfficeTab id="TabDefault">
+              <Group id="msgReadGroup">
+                <Label resid="GroupLabel"/>
+                <Control xsi:type="Button" id="msgReadOpenPaneButton">
+                  <Label resid="TaskpaneButton.Label"/>
+                  <Supertip>
+                    <Title resid="TaskpaneButton.Label"/>
+                    <Description resid="TaskpaneButton.Tooltip"/>
+                  </Supertip>
+                  <Icon>
+                    <bt:Image size="16" resid="Icon.16x16"/>
+                    <bt:Image size="32" resid="Icon.32x32"/>
+                    <bt:Image size="80" resid="Icon.80x80"/>
+                  </Icon>
+                  <Action xsi:type="ShowTaskpane">
+                    <SourceLocation resid="Taskpane.Url"/>
+                  </Action>
+                </Control>
+              </Group>
+            </OfficeTab>
+          </ExtensionPoint>
+          <ExtensionPoint xsi:type="MessageComposeCommandSurface">
+            <OfficeTab id="TabDefault">
+              <Group id="msgComposeGroup">
+                <Label resid="GroupLabel"/>
+                <Control xsi:type="Button" id="msgComposeOpenPaneButton">
+                  <Label resid="TaskpaneButton.Label"/>
+                  <Supertip>
+                    <Title resid="TaskpaneButton.Label"/>
+                    <Description resid="TaskpaneButton.Tooltip"/>
+                  </Supertip>
+                  <Icon>
+                    <bt:Image size="16" resid="Icon.16x16"/>
+                    <bt:Image size="32" resid="Icon.32x32"/>
+                    <bt:Image size="80" resid="Icon.80x80"/>
+                  </Icon>
+                  <Action xsi:type="ShowTaskpane">
+                    <SourceLocation resid="Taskpane.Url"/>
+                  </Action>
+                </Control>
+              </Group>
+            </OfficeTab>
+          </ExtensionPoint>
+          <ExtensionPoint xsi:type="AppointmentOrganizerCommandSurface">
+            <OfficeTab id="TabDefault">
+              <Group id="apptOrganizerGroup">
+                <Label resid="GroupLabel"/>
+                <Control xsi:type="Button" id="apptOrganizerOpenPaneButton">
+                  <Label resid="TaskpaneButton.Label"/>
+                  <Supertip>
+                    <Title resid="TaskpaneButton.Label"/>
+                    <Description resid="TaskpaneButton.Tooltip"/>
+                  </Supertip>
+                  <Icon>
+                    <bt:Image size="16" resid="Icon.16x16"/>
+                    <bt:Image size="32" resid="Icon.32x32"/>
+                    <bt:Image size="80" resid="Icon.80x80"/>
+                  </Icon>
+                  <Action xsi:type="ShowTaskpane">
+                    <SourceLocation resid="Taskpane.Url"/>
+                  </Action>
+                </Control>
+              </Group>
+            </OfficeTab>
+          </ExtensionPoint>
+          <ExtensionPoint xsi:type="AppointmentAttendeeCommandSurface">
+            <OfficeTab id="TabDefault">
+              <Group id="apptAttendeeGroup">
+                <Label resid="GroupLabel"/>
+                <Control xsi:type="Button" id="apptAttendeeOpenPaneButton">
+                  <Label resid="TaskpaneButton.Label"/>
+                  <Supertip>
+                    <Title resid="TaskpaneButton.Label"/>
+                    <Description resid="TaskpaneButton.Tooltip"/>
+                  </Supertip>
+                  <Icon>
+                    <bt:Image size="16" resid="Icon.16x16"/>
+                    <bt:Image size="32" resid="Icon.32x32"/>
+                    <bt:Image size="80" resid="Icon.80x80"/>
+                  </Icon>
+                  <Action xsi:type="ShowTaskpane">
+                    <SourceLocation resid="Taskpane.Url"/>
+                  </Action>
+                </Control>
+              </Group>
+            </OfficeTab>
+          </ExtensionPoint>
+        </DesktopFormFactor>
+      </Host>
+    </Hosts>
+    <Resources>
+      <bt:Images>
+        <bt:Image id="Icon.16x16" DefaultValue="${baseUrl}/office/assets/icon-16.png"/>
+        <bt:Image id="Icon.32x32" DefaultValue="${baseUrl}/office/assets/icon-32.png"/>
+        <bt:Image id="Icon.80x80" DefaultValue="${baseUrl}/office/assets/icon-80.png"/>
+      </bt:Images>
+      <bt:Urls>
+        <bt:Url id="Commands.Url" DefaultValue="${baseUrl}/office/commands.html"/>
+        <bt:Url id="Taskpane.Url" DefaultValue="${baseUrl}/office/taskpane.html"/>
+      </bt:Urls>
+      <bt:ShortStrings>
+        <bt:String id="GroupLabel" DefaultValue="${escapeXml(displayNameEn)} Add-in">
+          <bt:Override Locale="de-DE" Value="${escapeXml(displayNameDe)} Add-in"/>
+        </bt:String>
+        <bt:String id="TaskpaneButton.Label" DefaultValue="${escapeXml(showTaskPaneLabelEn)}">
+          <bt:Override Locale="de-DE" Value="${escapeXml(showTaskPaneLabelDe)}"/>
+        </bt:String>
+      </bt:ShortStrings>
+      <bt:LongStrings>
+        <bt:String id="TaskpaneButton.Tooltip" DefaultValue="${escapeXml(descriptionEn)}">
+          <bt:Override Locale="de-DE" Value="${escapeXml(descriptionDe)}"/>
+        </bt:String>
+      </bt:LongStrings>
+    </Resources>
+    <VersionOverrides xmlns="http://schemas.microsoft.com/office/mailappversionoverrides/1.1" xsi:type="VersionOverridesV1_1">
+      <Requirements>
+        <bt:Sets DefaultMinVersion="1.5">
+          <bt:Set Name="Mailbox"/>
+        </bt:Sets>
+      </Requirements>
+      <Hosts>
+        <Host xsi:type="MailHost">
+          <DesktopFormFactor>
+            <FunctionFile resid="Commands.Url"/>
+            <ExtensionPoint xsi:type="MessageReadCommandSurface">
+              <OfficeTab id="TabDefault">
+                <Group id="msgReadGroupV1_1">
+                  <Label resid="GroupLabel"/>
+                  <Control xsi:type="Button" id="msgReadOpenPaneButtonV1_1">
+                    <Label resid="TaskpaneButton.Label"/>
+                    <Supertip>
+                      <Title resid="TaskpaneButton.Label"/>
+                      <Description resid="TaskpaneButton.Tooltip"/>
+                    </Supertip>
+                    <Icon>
+                      <bt:Image size="16" resid="Icon.16x16"/>
+                      <bt:Image size="32" resid="Icon.32x32"/>
+                      <bt:Image size="80" resid="Icon.80x80"/>
+                    </Icon>
+                    <Action xsi:type="ShowTaskpane">
+                      <SourceLocation resid="Taskpane.Url"/>
+                      <SupportsPinning>true</SupportsPinning>
+                      <SupportsMultiSelect>true</SupportsMultiSelect>
+                    </Action>
+                  </Control>
+                </Group>
+              </OfficeTab>
+            </ExtensionPoint>
+            <ExtensionPoint xsi:type="MessageComposeCommandSurface">
+              <OfficeTab id="TabDefault">
+                <Group id="msgComposeGroupV1_1">
+                  <Label resid="GroupLabel"/>
+                  <Control xsi:type="Button" id="msgComposeOpenPaneButtonV1_1">
+                    <Label resid="TaskpaneButton.Label"/>
+                    <Supertip>
+                      <Title resid="TaskpaneButton.Label"/>
+                      <Description resid="TaskpaneButton.Tooltip"/>
+                    </Supertip>
+                    <Icon>
+                      <bt:Image size="16" resid="Icon.16x16"/>
+                      <bt:Image size="32" resid="Icon.32x32"/>
+                      <bt:Image size="80" resid="Icon.80x80"/>
+                    </Icon>
+                    <Action xsi:type="ShowTaskpane">
+                      <SourceLocation resid="Taskpane.Url"/>
+                      <SupportsPinning>true</SupportsPinning>
+                    </Action>
+                  </Control>
+                </Group>
+              </OfficeTab>
+            </ExtensionPoint>
+            <ExtensionPoint xsi:type="AppointmentOrganizerCommandSurface">
+              <OfficeTab id="TabDefault">
+                <Group id="apptOrganizerGroupV1_1">
+                  <Label resid="GroupLabel"/>
+                  <Control xsi:type="Button" id="apptOrganizerOpenPaneButtonV1_1">
+                    <Label resid="TaskpaneButton.Label"/>
+                    <Supertip>
+                      <Title resid="TaskpaneButton.Label"/>
+                      <Description resid="TaskpaneButton.Tooltip"/>
+                    </Supertip>
+                    <Icon>
+                      <bt:Image size="16" resid="Icon.16x16"/>
+                      <bt:Image size="32" resid="Icon.32x32"/>
+                      <bt:Image size="80" resid="Icon.80x80"/>
+                    </Icon>
+                    <Action xsi:type="ShowTaskpane">
+                      <SourceLocation resid="Taskpane.Url"/>
+                      <SupportsPinning>true</SupportsPinning>
+                    </Action>
+                  </Control>
+                </Group>
+              </OfficeTab>
+            </ExtensionPoint>
+            <ExtensionPoint xsi:type="AppointmentAttendeeCommandSurface">
+              <OfficeTab id="TabDefault">
+                <Group id="apptAttendeeGroupV1_1">
+                  <Label resid="GroupLabel"/>
+                  <Control xsi:type="Button" id="apptAttendeeOpenPaneButtonV1_1">
+                    <Label resid="TaskpaneButton.Label"/>
+                    <Supertip>
+                      <Title resid="TaskpaneButton.Label"/>
+                      <Description resid="TaskpaneButton.Tooltip"/>
+                    </Supertip>
+                    <Icon>
+                      <bt:Image size="16" resid="Icon.16x16"/>
+                      <bt:Image size="32" resid="Icon.32x32"/>
+                      <bt:Image size="80" resid="Icon.80x80"/>
+                    </Icon>
+                    <Action xsi:type="ShowTaskpane">
+                      <SourceLocation resid="Taskpane.Url"/>
+                      <SupportsPinning>true</SupportsPinning>
+                    </Action>
+                  </Control>
+                </Group>
+              </OfficeTab>
+            </ExtensionPoint>
+          </DesktopFormFactor>
+        </Host>
+      </Hosts>
+      <Resources>
+        <bt:Images>
+          <bt:Image id="Icon.16x16" DefaultValue="${baseUrl}/office/assets/icon-16.png"/>
+          <bt:Image id="Icon.32x32" DefaultValue="${baseUrl}/office/assets/icon-32.png"/>
+          <bt:Image id="Icon.80x80" DefaultValue="${baseUrl}/office/assets/icon-80.png"/>
+        </bt:Images>
+        <bt:Urls>
+          <bt:Url id="Commands.Url" DefaultValue="${baseUrl}/office/commands.html"/>
+          <bt:Url id="Taskpane.Url" DefaultValue="${baseUrl}/office/taskpane.html"/>
+        </bt:Urls>
+        <bt:ShortStrings>
+          <bt:String id="GroupLabel" DefaultValue="${escapeXml(displayNameEn)} Add-in">
+            <bt:Override Locale="de-DE" Value="${escapeXml(displayNameDe)} Add-in"/>
+          </bt:String>
+          <bt:String id="TaskpaneButton.Label" DefaultValue="${escapeXml(showTaskPaneLabelEn)}">
+            <bt:Override Locale="de-DE" Value="${escapeXml(showTaskPaneLabelDe)}"/>
+          </bt:String>
+        </bt:ShortStrings>
+        <bt:LongStrings>
+          <bt:String id="TaskpaneButton.Tooltip" DefaultValue="${escapeXml(descriptionEn)}">
+            <bt:Override Locale="de-DE" Value="${escapeXml(descriptionDe)}"/>
+          </bt:String>
+        </bt:LongStrings>
+      </Resources>
+    </VersionOverrides>
+  </VersionOverrides>
+</OfficeApp>`;
+}
+
+function escapeXml(str) {
+  return String(str)
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;')
+    .replace(/'/g, '&apos;');
+}
+
+export default router;

@@ -12,6 +12,7 @@ import {
   sendAuthRequired,
   sendErrorResponse
 } from '../../utils/responseHelpers.js';
+import { isValidReturnUrl } from '../../utils/oauthReturnUrl.js';
 
 const router = express.Router();
 
@@ -41,11 +42,26 @@ router.get('/auth', authRequired, async (req, res) => {
       return sendErrorResponse(res, 500, 'Session not available');
     }
 
+    // authRequired only rejects missing `req.user` or anonymous users;
+    // it does NOT guarantee req.user.id is truthy. Refuse to start an
+    // OAuth flow without a real user id — otherwise tokens would land
+    // under a shared sentinel key and could be read by another caller.
+    if (!req.user?.id) {
+      return sendAuthRequired(res);
+    }
+
     // Generate state for CSRF protection
     const state = crypto.randomBytes(32).toString('hex');
 
     // Generate PKCE parameters (may be ignored by Atlassian Cloud)
     const codeVerifier = crypto.randomBytes(32).toString('base64url');
+
+    // Validate returnUrl to reject `javascript:`, `data:`, off-host
+    // redirects, and protocol-relative URLs that would leak the flow
+    // off-site after the callback finishes.
+    const validatedReturnUrl = isValidReturnUrl(returnUrl, req)
+      ? returnUrl
+      : '/settings/integrations';
 
     // Store OAuth parameters in session with a consistent key
     // Using oauth_jira key for consistency with Office 365 pattern
@@ -53,8 +69,8 @@ router.get('/auth', authRequired, async (req, res) => {
     req.session[sessionKey] = {
       state,
       codeVerifier,
-      userId: req.user?.id || 'fallback-user',
-      returnUrl: returnUrl || '/settings/integrations',
+      userId: req.user.id,
+      returnUrl: validatedReturnUrl,
       timestamp: Date.now()
     };
 
@@ -89,7 +105,15 @@ router.get('/callback', authOptional, async (req, res) => {
     // Check for OAuth errors
     if (error) {
       logger.error('JIRA OAuth error', { component: 'Jira', oauthError: error });
-      return res.redirect(`${returnUrl}${separator}jira_error=${encodeURIComponent(error)}`);
+      // Stable error code rather than echoing the upstream error string.
+      return res.redirect(`${returnUrl}${separator}jira_error=oauth_failed`);
+    }
+
+    // Surface a stable error code if the IdP returned no `code`
+    // rather than failing inside `exchangeCodeForTokens`.
+    if (!code) {
+      logger.error('JIRA OAuth callback missing code', { component: 'Jira' });
+      return res.redirect(`${returnUrl}${separator}jira_error=missing_code`);
     }
 
     // Check if session is available
@@ -161,7 +185,10 @@ router.get('/callback', authOptional, async (req, res) => {
     }
 
     const separator = returnUrl.includes('?') ? '&' : '?';
-    res.redirect(`${returnUrl}${separator}jira_error=${encodeURIComponent(error.message)}`);
+    // Use a stable error code rather than echoing `error.message` —
+    // some upstream errors interpolate user-influenced strings, and
+    // we don't want those landing in the redirect URL.
+    res.redirect(`${returnUrl}${separator}jira_error=callback_failed`);
   }
 });
 

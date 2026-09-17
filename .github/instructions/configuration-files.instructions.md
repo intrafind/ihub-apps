@@ -35,8 +35,8 @@ Each app is defined in its own JSON file (not in an array).
   "system": {                       // Localized system prompts
     "en": "You are a helpful assistant...",
     "de": "Du bist ein hilfreicher Assistent..."
-  },
-  "tokenLimit": 4096               // Max tokens (1-1,000,000)
+  }
+  // Note: apps do NOT set token limits; they inherit contextWindow / maxOutputTokens from the model
 }
 ```
 
@@ -71,7 +71,8 @@ Each model is defined in its own JSON file.
     "de": "GPT-4"
   },
   "provider": "openai",            // Provider: openai, anthropic, google, mistral
-  "tokenLimit": 8192,              // Maximum tokens
+  "contextWindow": 8192,           // Total input+output context window
+  "maxOutputTokens": 4096,         // Response cap sent to the provider
   "enabled": true                  // Whether model is available
 }
 ```

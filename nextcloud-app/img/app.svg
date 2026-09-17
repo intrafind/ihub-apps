@@ -1,0 +1,10 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 72 72" width="72" height="72">
+  <defs>
+    <linearGradient id="ihub-chat-grad" x1="43.28" y1="112.78" x2="43.28" y2="53.23" gradientTransform="translate(0 109.41) scale(1 -1)" gradientUnits="userSpaceOnUse">
+      <stop offset="0" stop-color="#329248"/>
+      <stop offset="1" stop-color="#008fba"/>
+    </linearGradient>
+  </defs>
+  <path fill="#a2a1a1" d="M31.72,20.75c-.83-1.4-2.11-2.5-3.64-3.1-1.53-.6-3.22-.68-4.8-.23L0,56.17h10.34L31.72,20.75h0Z"/>
+  <path fill="url(#ihub-chat-grad)" d="M63.27,56.17h-10.7L31.72,20.75c-.83-1.4-2.11-2.5-3.64-3.1-1.53-.6-3.22-.68-4.8-.23l2.41-4.01.11-.18c.88-1.45,2.71-4.45,5.97-4.45s5.4,3.09,6.32,4.63l25.17,42.76Z"/>
+</svg>

@@ -17,7 +17,7 @@ export default function registerToolRoutes(app) {
     authRequired,
     async (req, res) => {
       try {
-        const platformConfig = req.app.get('platform') || {};
+        const platformConfig = configCache.getPlatform() || {};
         const authConfig = platformConfig.auth || {};
 
         // Force permission enhancement if not already done

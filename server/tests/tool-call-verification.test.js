@@ -109,7 +109,7 @@ async function testProviderToolCall(provider, model, prompt, tools) {
     logger.info(`   Expected tool call: ${prompt.shouldCallTool ? prompt.expectedTool : 'none'}`);
 
     // Create request
-    const request = createCompletionRequest(
+    const request = await createCompletionRequest(
       model,
       [{ role: 'user', content: prompt.message }],
       apiKeys[provider],

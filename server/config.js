@@ -1,4 +1,4 @@
-import { cleanEnv, str, num } from 'envalid';
+import { cleanEnv, str, num, bool } from 'envalid';
 import dotenv from 'dotenv';
 
 dotenv.config();
@@ -14,28 +14,30 @@ const env = cleanEnv(
     PORT: num({ default: 3000 }),
     HOST: str({ default: '0.0.0.0' }),
     REQUEST_TIMEOUT: num({ default: 300000 }), // 5 minutes for streaming/generation requests
+    // Ceiling for the phase before a provider's first response byte, per
+    // attempt (see services/loop/LLMClient.js). Every provider call streams,
+    // so that phase is reach rather than generation. 0 disables it.
+    // Overridable per deployment via platform.json `llm` and per model via
+    // the model config's `connectTimeoutMs` — image models set 60000 there,
+    // because they withhold their headers until the render is ready.
+    LLM_CONNECT_TIMEOUT_MS: num({ default: 30000 }),
+    // Ceiling for the gap between two chunks of a stream that has already
+    // produced one. 0 disables it.
+    LLM_STREAM_IDLE_TIMEOUT_MS: num({ default: 60000 }),
     WORKERS: num({ default: undefined, optional: true }),
     NUM_WORKERS: num({ default: undefined, optional: true }),
+    // Opt back in to pinning each client to one worker by hashing its TCP peer
+    // address. Chat no longer needs it — cross-worker state is relayed over the
+    // cluster bus — and behind a proxy the hash collapses all traffic onto a
+    // single worker, so it defaults off. Only useful when iHub is exposed
+    // directly to clients and some other worker-local state must stay pinned.
+    STICKY_SESSIONS: bool({ default: false }),
     SSL_KEY: str({ optional: true }),
     SSL_CERT: str({ optional: true }),
     SSL_CA: str({ optional: true }),
     CONTENTS_DIR: str({ default: 'contents', optional: true }),
     DATA_DIR: str({ default: 'data', optional: true }),
-    MCP_SERVER_URL: str({ optional: true }),
     APP_ROOT_DIR: str({ optional: true }),
-    BRAVE_SEARCH_API_KEY: str({ optional: true }),
-    BRAVE_SEARCH_ENDPOINT: str({
-      default: 'https://api.search.brave.com/res/v1/web/search',
-      optional: true
-    }),
-    TAVILY_SEARCH_API_KEY: str({ optional: true }),
-    TAVILY_ENDPOINT: str({ default: 'https://api.tavily.com/search', optional: true }),
-    OPENAI_API_KEY: str({ optional: true }),
-    ANTHROPIC_API_KEY: str({ optional: true }),
-    MISTRAL_API_KEY: str({ optional: true }),
-    GOOGLE_API_KEY: str({ optional: true }),
-    LOCAL_API_KEY: str({ optional: true }),
-    DEFAULT_API_KEY: str({ optional: true }),
     AUTH_MODE: str({ default: 'proxy', optional: true }),
     PROXY_AUTH_ENABLED: str({ optional: true }),
     PROXY_AUTH_USER_HEADER: str({ optional: true }),
@@ -44,7 +46,15 @@ const env = cleanEnv(
     PROXY_AUTH_JWT_HEADER: str({ optional: true }),
     HTTP_PROXY: str({ optional: true }),
     HTTPS_PROXY: str({ optional: true }),
-    NO_PROXY: str({ optional: true })
+    NO_PROXY: str({ optional: true }),
+    // Documented defaults for the magic-prompt feature (model id / system prompt).
+    MAGIC_PROMPT_MODEL: str({ optional: true }),
+    MAGIC_PROMPT_PROMPT: str({ optional: true }),
+    USE_HTTPS: str({ default: 'false', optional: true }),
+    NODE_ENV: str({ default: 'development', optional: true }),
+    // RSA/EC private key (PEM) used to sign iFinder JWTs when iFinder.useOidcKeyPair
+    // is off and iFinder.privateKeyRef is not set. See server/utils/iFinderJwt.js.
+    IFINDER_PRIVATE_KEY: str({ optional: true })
   },
   {
     reporter: () => {}, // Disable envalid's default reporter that shows missing variables
@@ -52,29 +62,31 @@ const env = cleanEnv(
   }
 );
 
+// Provider- and model-specific API keys (e.g. COHERE_API_KEY, GPT_4_AZURE1_API_KEY for
+// model id "gpt-4-azure1") are looked up dynamically by name in utils.js and can't be
+// enumerated in the schema above, since the set of providers/models is defined in JSON
+// config rather than known statically. Pass through only vars matching that one pattern
+// instead of the entire process environment, so undeclared/unrelated env vars stay out
+// of the exported config.
+const dynamicApiKeys = Object.fromEntries(
+  Object.entries(process.env).filter(([key]) => key.endsWith('_API_KEY'))
+);
+
 const config = Object.freeze({
-  ...process.env,
+  ...dynamicApiKeys,
   PORT: env.PORT,
   HOST: env.HOST,
   REQUEST_TIMEOUT: env.REQUEST_TIMEOUT,
-  WORKERS: env.WORKERS ?? env.NUM_WORKERS ?? 1,
+  LLM_CONNECT_TIMEOUT_MS: env.LLM_CONNECT_TIMEOUT_MS,
+  LLM_STREAM_IDLE_TIMEOUT_MS: env.LLM_STREAM_IDLE_TIMEOUT_MS,
+  WORKERS: env.WORKERS ?? env.NUM_WORKERS ?? 4,
+  STICKY_SESSIONS: env.STICKY_SESSIONS,
   SSL_KEY: env.SSL_KEY,
   SSL_CERT: env.SSL_CERT,
   SSL_CA: env.SSL_CA,
   CONTENTS_DIR: env.CONTENTS_DIR,
   DATA_DIR: env.DATA_DIR,
-  MCP_SERVER_URL: env.MCP_SERVER_URL,
   APP_ROOT_DIR: env.APP_ROOT_DIR,
-  BRAVE_SEARCH_API_KEY: env.BRAVE_SEARCH_API_KEY,
-  BRAVE_SEARCH_ENDPOINT: env.BRAVE_SEARCH_ENDPOINT,
-  TAVILY_SEARCH_API_KEY: env.TAVILY_SEARCH_API_KEY,
-  TAVILY_ENDPOINT: env.TAVILY_ENDPOINT,
-  OPENAI_API_KEY: env.OPENAI_API_KEY,
-  ANTHROPIC_API_KEY: env.ANTHROPIC_API_KEY,
-  MISTRAL_API_KEY: env.MISTRAL_API_KEY,
-  GOOGLE_API_KEY: env.GOOGLE_API_KEY,
-  LOCAL_API_KEY: env.LOCAL_API_KEY,
-  DEFAULT_API_KEY: env.DEFAULT_API_KEY,
   AUTH_MODE: env.AUTH_MODE,
   PROXY_AUTH_ENABLED: env.PROXY_AUTH_ENABLED,
   PROXY_AUTH_USER_HEADER: env.PROXY_AUTH_USER_HEADER,
@@ -83,7 +95,12 @@ const config = Object.freeze({
   PROXY_AUTH_JWT_HEADER: env.PROXY_AUTH_JWT_HEADER,
   HTTP_PROXY: env.HTTP_PROXY,
   HTTPS_PROXY: env.HTTPS_PROXY,
-  NO_PROXY: env.NO_PROXY
+  NO_PROXY: env.NO_PROXY,
+  MAGIC_PROMPT_MODEL: env.MAGIC_PROMPT_MODEL,
+  MAGIC_PROMPT_PROMPT: env.MAGIC_PROMPT_PROMPT,
+  USE_HTTPS: env.USE_HTTPS,
+  NODE_ENV: env.NODE_ENV,
+  IFINDER_PRIVATE_KEY: env.IFINDER_PRIVATE_KEY
 });
 
 export default config;

@@ -2,13 +2,15 @@ import { useState, useEffect, useCallback } from 'react';
 import { useNavigate, useParams, useLocation } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
 import { getLocalizedContent, DEFAULT_LANGUAGE } from '../../../utils/localizeContent';
-import { makeAdminApiCall } from '../../../api/adminApi';
+import { getAdminApiErrorMessage, makeAdminApiCall } from '../../../api/adminApi';
 import { fetchJsonSchema } from '../../../utils/schemaService';
 import Icon from '../../../shared/components/Icon';
-import AdminAuth from '../components/AdminAuth';
-import AdminNavigation from '../components/AdminNavigation';
 import DualModeEditor from '../../../shared/components/DualModeEditor';
 import ModelFormEditor from '../components/ModelFormEditor';
+import ChangeHistoryDrawer from '../components/ChangeHistoryDrawer';
+import AdminBreadcrumb from '../components/AdminBreadcrumb';
+import { useUnsavedChanges } from '../hooks/useUnsavedChanges';
+import ConfirmDialog from '../../../shared/components/ConfirmDialog';
 
 function AdminModelEditPage() {
   const { t, i18n } = useTranslation();
@@ -21,6 +23,7 @@ function AdminModelEditPage() {
   // Constants
   const API_KEY_PLACEHOLDER = '••••••••';
 
+  const [historyOpen, setHistoryOpen] = useState(false);
   const [loading, setLoading] = useState(!isNewModel);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState(null);
@@ -28,6 +31,7 @@ function AdminModelEditPage() {
   const [apps, setApps] = useState([]);
   const [usage, setUsage] = useState(null);
   const [jsonSchema, setJsonSchema] = useState(null);
+  const [initialData, setInitialData] = useState(null);
 
   const [formData, setFormData] = useState({
     id: '',
@@ -36,7 +40,8 @@ function AdminModelEditPage() {
     description: { [DEFAULT_LANGUAGE]: '' },
     url: '',
     provider: '',
-    tokenLimit: '',
+    contextWindow: '',
+    maxOutputTokens: '',
     supportsTools: false,
     supportsImageGeneration: false,
     enabled: true,
@@ -44,6 +49,8 @@ function AdminModelEditPage() {
     apiKey: '',
     apiKeySet: false
   });
+
+  const { blocker, markSaved } = useUnsavedChanges(initialData, formData);
 
   useEffect(() => {
     const loadJsonSchema = async () => {
@@ -69,13 +76,31 @@ function AdminModelEditPage() {
   useEffect(() => {
     if (isNewModel && location.state?.templateModel) {
       const tpl = location.state.templateModel;
-      setFormData(prev => ({
-        ...prev,
+      const tplData = {
         ...tpl,
         id: '',
         enabled: tpl.enabled !== undefined ? tpl.enabled : true,
         default: false
-      }));
+      };
+      setFormData(prev => ({ ...prev, ...tplData }));
+      setInitialData(tplData);
+    } else if (isNewModel && !location.state?.templateModel) {
+      setInitialData({
+        id: '',
+        modelId: '',
+        name: { [DEFAULT_LANGUAGE]: '' },
+        description: { [DEFAULT_LANGUAGE]: '' },
+        url: '',
+        provider: '',
+        contextWindow: '',
+        maxOutputTokens: '',
+        supportsTools: false,
+        supportsImageGeneration: false,
+        enabled: true,
+        default: false,
+        apiKey: '',
+        apiKeySet: false
+      });
     }
   }, [isNewModel, location.state]);
 
@@ -104,7 +129,8 @@ function AdminModelEditPage() {
         description: ensureLocalizedObject(model.description),
         url: model.url || '',
         provider: model.provider || '',
-        tokenLimit: model.tokenLimit || '',
+        contextWindow: model.contextWindow || '',
+        maxOutputTokens: model.maxOutputTokens || '',
         supportsTools: model.supportsTools || false,
         enabled: model.enabled !== undefined ? model.enabled : true,
         default: model.default || false
@@ -117,6 +143,12 @@ function AdminModelEditPage() {
       if (model.requestDelayMs !== undefined) {
         formDataObj.requestDelayMs = model.requestDelayMs;
       }
+      if (model.connectTimeoutMs !== undefined) {
+        formDataObj.connectTimeoutMs = model.connectTimeoutMs;
+      }
+      if (model.streamIdleTimeoutMs !== undefined) {
+        formDataObj.streamIdleTimeoutMs = model.streamIdleTimeoutMs;
+      }
 
       // Handle API key display - show placeholder if key is set
       if (model.apiKeySet) {
@@ -128,11 +160,12 @@ function AdminModelEditPage() {
       }
 
       setFormData(formDataObj);
+      setInitialData(formDataObj);
 
       console.log('Form data set with name:', ensureLocalizedObject(model.name));
       console.log('Form data set with description:', ensureLocalizedObject(model.description));
     } catch (err) {
-      setError(err.message);
+      setError(getAdminApiErrorMessage(err));
     } finally {
       setLoading(false);
     }
@@ -177,6 +210,19 @@ function AdminModelEditPage() {
     await handleSave(formData);
   };
 
+  /**
+   * A number field that accepts 0. `''`/null/undefined mean "not set" and drop
+   * out of the payload; anything unparseable is left out rather than sent as
+   * NaN, which the Zod schema would reject with an unhelpful message.
+   * @param {string|number|null|undefined} value
+   * @returns {number|undefined}
+   */
+  const toOptionalInt = value => {
+    if (value === '' || value === null || value === undefined) return undefined;
+    const parsed = parseInt(value, 10);
+    return Number.isFinite(parsed) ? parsed : undefined;
+  };
+
   const handleSave = async data => {
     try {
       setSaving(true);
@@ -185,9 +231,14 @@ function AdminModelEditPage() {
       // Prepare the data to send
       const dataToSend = {
         ...data,
-        tokenLimit: data.tokenLimit ? parseInt(data.tokenLimit) : undefined,
+        contextWindow: data.contextWindow ? parseInt(data.contextWindow) : undefined,
+        maxOutputTokens: data.maxOutputTokens ? parseInt(data.maxOutputTokens) : undefined,
         concurrency: data.concurrency ? parseInt(data.concurrency) : undefined,
-        requestDelayMs: data.requestDelayMs ? parseInt(data.requestDelayMs) : undefined
+        requestDelayMs: data.requestDelayMs ? parseInt(data.requestDelayMs) : undefined,
+        // `0` is a meaningful value on both ceilings — it disables them — so
+        // these are emptiness-checked rather than truthiness-checked.
+        connectTimeoutMs: toOptionalInt(data.connectTimeoutMs),
+        streamIdleTimeoutMs: toOptionalInt(data.streamIdleTimeoutMs)
       };
 
       // Handle API key:
@@ -227,17 +278,18 @@ function AdminModelEditPage() {
         headers: {
           'Content-Type': 'application/json'
         },
-        body: JSON.stringify(dataToSend)
+        body: dataToSend
       });
 
       setSuccess(true);
+      markSaved();
 
       // Redirect after a short delay
       setTimeout(() => {
         navigate('/admin/models');
       }, 1500);
     } catch (err) {
-      setError(err.message);
+      setError(getAdminApiErrorMessage(err));
       throw err; // Re-throw to let DualModeEditor handle it
     } finally {
       setSaving(false);
@@ -246,244 +298,271 @@ function AdminModelEditPage() {
 
   if (loading) {
     return (
-      <AdminAuth>
-        <AdminNavigation />
-        <div className="max-w-4xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
-          <div className="text-center">
-            <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-indigo-600 mx-auto"></div>
-            <p className="mt-4 text-gray-600 dark:text-gray-400">{t('app.loading')}</p>
-          </div>
+      <div className="max-w-4xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
+        <div className="text-center">
+          <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-indigo-600 mx-auto"></div>
+          <p className="mt-4 text-gray-600 dark:text-gray-400">{t('app.loading')}</p>
         </div>
-      </AdminAuth>
+      </div>
     );
   }
 
   return (
-    <AdminAuth>
-      <AdminNavigation />
-      <div className="min-h-screen bg-gray-50 dark:bg-gray-900">
-        <div className="max-w-4xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
-          {/* Header */}
-          <div className="mb-8">
-            <div className="flex items-center justify-between">
-              <div>
-                <h1 className="text-2xl font-semibold text-gray-900 dark:text-gray-100">
-                  {isNewModel ? t('admin.models.edit.titleNew') : t('admin.models.edit.title')}
-                </h1>
-                <p className="mt-1 text-sm text-gray-600 dark:text-gray-400">
-                  {isNewModel
-                    ? t('admin.models.edit.subtitleNew')
-                    : t('admin.models.edit.subtitle', {
-                        name: getLocalizedContent(formData.name, currentLanguage)
-                      })}
-                </p>
-              </div>
-              <div className="flex space-x-3">
-                {!isNewModel && (
-                  <button
-                    type="button"
-                    onClick={() => {
-                      const dataStr = JSON.stringify(formData, null, 2);
-                      const dataUri =
-                        'data:application/json;charset=utf-8,' + encodeURIComponent(dataStr);
-                      const exportFileDefaultName = `model-${formData.id}.json`;
-                      const linkElement = document.createElement('a');
-                      linkElement.setAttribute('href', dataUri);
-                      linkElement.setAttribute('download', exportFileDefaultName);
-                      linkElement.click();
-                    }}
-                    className="inline-flex items-center px-4 py-2 border border-gray-300 dark:border-gray-600 shadow-sm text-sm font-medium rounded-md text-gray-700 dark:text-gray-200 bg-white dark:bg-gray-700 hover:bg-gray-50 dark:hover:bg-gray-600 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500"
-                  >
-                    <Icon name="download" className="h-4 w-4 mr-2" />
-                    {t('common.download')}
-                  </button>
-                )}
+    <div className="min-h-screen bg-gray-50 dark:bg-gray-900">
+      <div className="max-w-4xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
+        <AdminBreadcrumb
+          crumbs={[
+            { label: 'Admin', href: '/admin' },
+            { label: 'Models', href: '/admin/models' },
+            { label: isNewModel ? 'New Model' : (formData?.name?.en ?? modelId) }
+          ]}
+        />
+        {/* Header */}
+        <div className="mb-8">
+          <div className="flex items-center justify-between">
+            <div>
+              <h1 className="text-2xl font-semibold text-gray-900 dark:text-gray-100">
+                {isNewModel ? t('admin.models.edit.titleNew') : t('admin.models.edit.title')}
+              </h1>
+              <p className="mt-1 text-sm text-gray-600 dark:text-gray-400">
+                {isNewModel
+                  ? t('admin.models.edit.subtitleNew')
+                  : t('admin.models.edit.subtitle', {
+                      name: getLocalizedContent(formData.name, currentLanguage)
+                    })}
+              </p>
+            </div>
+            <div className="flex space-x-3">
+              {!isNewModel && (
                 <button
-                  onClick={() => navigate('/admin/models')}
-                  className="inline-flex items-center px-4 py-2 border border-gray-300 dark:border-gray-600 shadow-sm text-sm font-medium rounded-md text-gray-700 dark:text-gray-200 bg-white dark:bg-gray-700 hover:bg-gray-50 dark:hover:bg-gray-600 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500"
+                  type="button"
+                  onClick={() => {
+                    const dataStr = JSON.stringify(formData, null, 2);
+                    const dataUri =
+                      'data:application/json;charset=utf-8,' + encodeURIComponent(dataStr);
+                    const exportFileDefaultName = `model-${formData.id}.json`;
+                    const linkElement = document.createElement('a');
+                    linkElement.setAttribute('href', dataUri);
+                    linkElement.setAttribute('download', exportFileDefaultName);
+                    linkElement.click();
+                  }}
+                  className="inline-flex items-center px-4 py-2 border border-gray-300 dark:border-gray-600 shadow-xs text-sm font-medium rounded-md text-gray-700 dark:text-gray-200 bg-white dark:bg-gray-700 hover:bg-gray-50 dark:hover:bg-gray-600 focus:outline-hidden focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500"
                 >
-                  <Icon name="arrow-left" className="h-4 w-4 mr-2" />
-                  {t('admin.models.edit.backToModels')}
+                  <Icon name="download" className="h-4 w-4 mr-2" />
+                  {t('common.download')}
                 </button>
+              )}
+              {modelId !== 'new' && (
+                <button
+                  type="button"
+                  onClick={() => setHistoryOpen(true)}
+                  className="inline-flex items-center justify-center rounded-md border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 px-4 py-2 text-sm font-medium text-gray-700 dark:text-gray-200 shadow-xs hover:bg-gray-50 dark:hover:bg-gray-600 focus:outline-hidden focus:ring-2 focus:ring-indigo-500 focus:ring-offset-2 sm:w-auto"
+                >
+                  History
+                </button>
+              )}
+              <button
+                onClick={() => navigate('/admin/models')}
+                className="inline-flex items-center px-4 py-2 border border-gray-300 dark:border-gray-600 shadow-xs text-sm font-medium rounded-md text-gray-700 dark:text-gray-200 bg-white dark:bg-gray-700 hover:bg-gray-50 dark:hover:bg-gray-600 focus:outline-hidden focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500"
+              >
+                <Icon name="arrow-left" className="h-4 w-4 mr-2" />
+                {t('admin.models.edit.backToModels')}
+              </button>
+            </div>
+          </div>
+        </div>
+
+        {/* Error display */}
+        {error && (
+          <div className="mb-6 rounded-md bg-red-50 dark:bg-red-900/30 p-4">
+            <div className="flex">
+              <div className="shrink-0">
+                <Icon name="x-circle" className="h-5 w-5 text-red-400" />
+              </div>
+              <div className="ml-3">
+                <h3 className="text-sm font-medium text-red-800 dark:text-red-200">
+                  {t('common.error')}
+                </h3>
+                <div className="mt-2 text-sm text-red-700 dark:text-red-300">
+                  <p>{error}</p>
+                </div>
               </div>
             </div>
           </div>
+        )}
 
-          {/* Error display */}
-          {error && (
-            <div className="mb-6 rounded-md bg-red-50 dark:bg-red-900/30 p-4">
-              <div className="flex">
-                <div className="flex-shrink-0">
-                  <Icon name="x-circle" className="h-5 w-5 text-red-400" />
-                </div>
-                <div className="ml-3">
-                  <h3 className="text-sm font-medium text-red-800 dark:text-red-200">
-                    {t('common.error')}
-                  </h3>
-                  <div className="mt-2 text-sm text-red-700 dark:text-red-300">
-                    <p>{error}</p>
+        {/* Success display */}
+        {success && (
+          <div className="mb-6 rounded-md bg-green-50 dark:bg-green-900/30 p-4">
+            <div className="flex">
+              <div className="shrink-0">
+                <Icon name="check-circle" className="h-5 w-5 text-green-400" />
+              </div>
+              <div className="ml-3">
+                <p className="text-sm font-medium text-green-800 dark:text-green-200">
+                  {t('admin.models.edit.success', {
+                    action: isNewModel
+                      ? t('admin.models.edit.successCreated')
+                      : t('admin.models.edit.successUpdated')
+                  })}
+                </p>
+              </div>
+            </div>
+          </div>
+        )}
+
+        <form onSubmit={handleFormSubmit} className="space-y-8">
+          <div className="space-y-8">
+            {/* Main Form Editor */}
+            <DualModeEditor
+              value={formData}
+              onChange={handleDataChange}
+              formComponent={ModelFormEditor}
+              formProps={{
+                isNewModel,
+                apps,
+                usage,
+                jsonSchema
+              }}
+              jsonSchema={jsonSchema}
+              title={isNewModel ? t('admin.models.edit.titleNew') : t('admin.models.edit.title')}
+            />
+
+            {/* Usage Stats and Apps List - integrated as sections */}
+            {!isNewModel && (
+              <div className="space-y-8">
+                {/* Usage Stats */}
+                <div className="bg-white dark:bg-gray-800 shadow-sm rounded-lg">
+                  <div className="px-6 py-4 border-b border-gray-200 dark:border-gray-700">
+                    <h3 className="text-lg font-medium text-gray-900 dark:text-gray-100">
+                      {t('admin.models.edit.usageStats')}
+                    </h3>
                   </div>
-                </div>
-              </div>
-            </div>
-          )}
-
-          {/* Success display */}
-          {success && (
-            <div className="mb-6 rounded-md bg-green-50 dark:bg-green-900/30 p-4">
-              <div className="flex">
-                <div className="flex-shrink-0">
-                  <Icon name="check-circle" className="h-5 w-5 text-green-400" />
-                </div>
-                <div className="ml-3">
-                  <p className="text-sm font-medium text-green-800 dark:text-green-200">
-                    {t('admin.models.edit.success', {
-                      action: isNewModel
-                        ? t('admin.models.edit.successCreated')
-                        : t('admin.models.edit.successUpdated')
-                    })}
-                  </p>
-                </div>
-              </div>
-            </div>
-          )}
-
-          <form onSubmit={handleFormSubmit} className="space-y-8">
-            <div className="space-y-8">
-              {/* Main Form Editor */}
-              <DualModeEditor
-                value={formData}
-                onChange={handleDataChange}
-                formComponent={ModelFormEditor}
-                formProps={{
-                  isNewModel,
-                  apps,
-                  usage,
-                  jsonSchema
-                }}
-                jsonSchema={jsonSchema}
-                title={isNewModel ? t('admin.models.edit.titleNew') : t('admin.models.edit.title')}
-              />
-
-              {/* Usage Stats and Apps List - integrated as sections */}
-              {!isNewModel && (
-                <div className="space-y-8">
-                  {/* Usage Stats */}
-                  <div className="bg-white dark:bg-gray-800 shadow rounded-lg">
-                    <div className="px-6 py-4 border-b border-gray-200 dark:border-gray-700">
-                      <h3 className="text-lg font-medium text-gray-900 dark:text-gray-100">
-                        {t('admin.models.edit.usageStats')}
-                      </h3>
-                    </div>
-                    <div className="px-6 py-4">
-                      {usage ? (
-                        <div className="grid grid-cols-2 gap-4">
-                          <div className="text-center">
-                            <div className="text-2xl font-semibold text-gray-900 dark:text-gray-100">
-                              {usage.messages?.toLocaleString() || 0}
-                            </div>
-                            <div className="text-sm text-gray-500 dark:text-gray-400">
-                              {t('admin.models.details.messages')}
-                            </div>
+                  <div className="px-6 py-4">
+                    {usage ? (
+                      <div className="grid grid-cols-2 gap-4">
+                        <div className="text-center">
+                          <div className="text-2xl font-semibold text-gray-900 dark:text-gray-100">
+                            {usage.messages?.toLocaleString() || 0}
                           </div>
-                          <div className="text-center">
-                            <div className="text-2xl font-semibold text-gray-900 dark:text-gray-100">
-                              {usage.tokens?.toLocaleString() || 0}
-                            </div>
-                            <div className="text-sm text-gray-500 dark:text-gray-400">
-                              {t('admin.models.details.tokens')}
-                            </div>
+                          <div className="text-sm text-gray-500 dark:text-gray-400">
+                            {t('admin.models.details.messages')}
                           </div>
                         </div>
-                      ) : (
-                        <p className="text-sm text-gray-500 dark:text-gray-400 text-center py-4">
-                          {t('admin.models.edit.noUsageData')}
-                        </p>
-                      )}
-                    </div>
+                        <div className="text-center">
+                          <div className="text-2xl font-semibold text-gray-900 dark:text-gray-100">
+                            {usage.tokens?.toLocaleString() || 0}
+                          </div>
+                          <div className="text-sm text-gray-500 dark:text-gray-400">
+                            {t('admin.models.details.tokens')}
+                          </div>
+                        </div>
+                      </div>
+                    ) : (
+                      <p className="text-sm text-gray-500 dark:text-gray-400 text-center py-4">
+                        {t('admin.models.edit.noUsageData')}
+                      </p>
+                    )}
                   </div>
+                </div>
 
-                  {/* Apps Using Model */}
-                  <div className="bg-white dark:bg-gray-800 shadow rounded-lg">
-                    <div className="px-6 py-4 border-b border-gray-200 dark:border-gray-700">
-                      <h3 className="text-lg font-medium text-gray-900 dark:text-gray-100">
-                        {t('admin.models.edit.appsUsingModel')}
-                      </h3>
-                    </div>
-                    <div className="px-6 py-4">
-                      {apps.length > 0 ? (
-                        <div className="space-y-3">
-                          {apps.map(app => (
-                            <div
-                              key={app.id}
-                              className="flex items-center justify-between p-3 bg-gray-50 dark:bg-gray-700 rounded-lg"
-                            >
-                              <div className="flex items-center space-x-3">
-                                <div
-                                  className="w-8 h-8 rounded-md flex items-center justify-center text-white text-xs font-bold"
-                                  style={{ backgroundColor: app.color || '#6B7280' }}
-                                >
-                                  <Icon name={app.icon || 'chat-bubbles'} className="w-4 h-4" />
-                                </div>
-                                <div>
-                                  <span className="text-sm font-medium text-gray-900 dark:text-gray-100">
-                                    {getLocalizedContent(app.name, currentLanguage)}
-                                  </span>
-                                  <div className="text-xs text-gray-500 dark:text-gray-400">
-                                    {app.id}
-                                  </div>
+                {/* Apps Using Model */}
+                <div className="bg-white dark:bg-gray-800 shadow-sm rounded-lg">
+                  <div className="px-6 py-4 border-b border-gray-200 dark:border-gray-700">
+                    <h3 className="text-lg font-medium text-gray-900 dark:text-gray-100">
+                      {t('admin.models.edit.appsUsingModel')}
+                    </h3>
+                  </div>
+                  <div className="px-6 py-4">
+                    {apps.length > 0 ? (
+                      <div className="space-y-3">
+                        {apps.map(app => (
+                          <div
+                            key={app.id}
+                            className="flex items-center justify-between p-3 bg-gray-50 dark:bg-gray-700 rounded-lg"
+                          >
+                            <div className="flex items-center space-x-3">
+                              <div
+                                className="w-8 h-8 rounded-md flex items-center justify-center text-white text-xs font-bold"
+                                style={{ backgroundColor: app.color || '#6B7280' }}
+                              >
+                                <Icon name={app.icon || 'chat-bubbles'} className="w-4 h-4" />
+                              </div>
+                              <div>
+                                <span className="text-sm font-medium text-gray-900 dark:text-gray-100">
+                                  {getLocalizedContent(app.name, currentLanguage)}
+                                </span>
+                                <div className="text-xs text-gray-500 dark:text-gray-400">
+                                  {app.id}
                                 </div>
                               </div>
-                              <span
-                                className={`inline-flex px-2 py-1 text-xs font-semibold rounded-full ${
-                                  app.enabled
-                                    ? 'bg-green-100 dark:bg-green-900/50 text-green-800 dark:text-green-300'
-                                    : 'bg-red-100 dark:bg-red-900/50 text-red-800 dark:text-red-300'
-                                }`}
-                              >
-                                {app.enabled
-                                  ? t('admin.models.status.enabled')
-                                  : t('admin.models.status.disabled')}
-                              </span>
                             </div>
-                          ))}
-                        </div>
-                      ) : (
-                        <p className="text-sm text-gray-500 dark:text-gray-400 text-center py-4">
-                          {t('admin.models.edit.noApps')}
-                        </p>
-                      )}
-                    </div>
+                            <span
+                              className={`inline-flex px-2 py-1 text-xs font-semibold rounded-full ${
+                                app.enabled
+                                  ? 'bg-green-100 dark:bg-green-900/50 text-green-800 dark:text-green-300'
+                                  : 'bg-red-100 dark:bg-red-900/50 text-red-800 dark:text-red-300'
+                              }`}
+                            >
+                              {app.enabled
+                                ? t('admin.models.status.enabled')
+                                : t('admin.models.status.disabled')}
+                            </span>
+                          </div>
+                        ))}
+                      </div>
+                    ) : (
+                      <p className="text-sm text-gray-500 dark:text-gray-400 text-center py-4">
+                        {t('admin.models.edit.noApps')}
+                      </p>
+                    )}
                   </div>
                 </div>
-              )}
-            </div>
+              </div>
+            )}
+          </div>
 
-            {/* Save buttons */}
-            <div className="flex justify-end space-x-4">
-              <button
-                type="button"
-                onClick={() => navigate('/admin/models')}
-                className="px-4 py-2 border border-gray-300 dark:border-gray-600 rounded-md shadow-sm text-sm font-medium text-gray-700 dark:text-gray-200 bg-white dark:bg-gray-700 hover:bg-gray-50 dark:hover:bg-gray-600 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500"
-              >
-                {t('common.cancel')}
-              </button>
-              <button
-                type="submit"
-                disabled={saving}
-                className="inline-flex justify-center px-4 py-2 border border-transparent shadow-sm text-sm font-medium rounded-md text-white bg-indigo-600 hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500 disabled:opacity-50"
-              >
-                {saving
-                  ? t('admin.models.edit.saving')
-                  : isNewModel
-                    ? t('admin.models.edit.createModel')
-                    : t('admin.models.edit.saveChanges')}
-              </button>
-            </div>
-          </form>
-        </div>
+          {/* Save buttons */}
+          <div className="flex justify-end space-x-4">
+            <button
+              type="button"
+              onClick={() => navigate('/admin/models')}
+              className="px-4 py-2 border border-gray-300 dark:border-gray-600 rounded-md shadow-xs text-sm font-medium text-gray-700 dark:text-gray-200 bg-white dark:bg-gray-700 hover:bg-gray-50 dark:hover:bg-gray-600 focus:outline-hidden focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500"
+            >
+              {t('common.cancel')}
+            </button>
+            <button
+              type="submit"
+              disabled={saving}
+              className="inline-flex justify-center px-4 py-2 border border-transparent shadow-xs text-sm font-medium rounded-md text-white bg-indigo-600 hover:bg-indigo-700 focus:outline-hidden focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500 disabled:opacity-50"
+            >
+              {saving
+                ? t('admin.models.edit.saving')
+                : isNewModel
+                  ? t('admin.models.edit.createModel')
+                  : t('admin.models.edit.saveChanges')}
+            </button>
+          </div>
+        </form>
       </div>
-    </AdminAuth>
+      <ChangeHistoryDrawer
+        isOpen={historyOpen}
+        onClose={() => setHistoryOpen(false)}
+        resource="model"
+        resourceId={modelId}
+      />
+
+      <ConfirmDialog
+        isOpen={blocker.state === 'blocked'}
+        title="Unsaved Changes"
+        message="You have unsaved changes. Leave anyway?"
+        confirmLabel="Leave"
+        denyLabel="Stay"
+        danger={false}
+        onConfirm={() => blocker.proceed?.()}
+        onDeny={() => blocker.reset?.()}
+      />
+    </div>
   );
 }
 

@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react';
 import { useParams } from 'react-router-dom';
-import { fetchAppDetails } from '../../../api/api';
+import { fetchAppDetails } from '../../../api';
 import LoadingSpinner from '../../../shared/components/LoadingSpinner';
 import { useTranslation } from 'react-i18next';
 import AppChat from '../pages/AppChat';
@@ -51,7 +51,7 @@ function AppRouterWrapper() {
       <div className="text-center py-12">
         <div className="text-red-500 mb-4">{error}</div>
         <button
-          className="bg-indigo-600 text-white px-4 py-2 rounded hover:bg-indigo-700"
+          className="bg-indigo-600 text-white px-4 py-2 rounded-sm hover:bg-indigo-700"
           onClick={() => window.location.reload()}
         >
           {t('app.retry')}

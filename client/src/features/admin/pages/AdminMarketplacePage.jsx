@@ -1,8 +1,7 @@
 import { useState, useEffect, useCallback } from 'react';
 import { Link } from 'react-router-dom';
+import { useFilterState } from '../hooks/useFilterState';
 import { useTranslation } from 'react-i18next';
-import AdminAuth from '../components/AdminAuth';
-import AdminNavigation from '../components/AdminNavigation';
 import { browseMarketplace, fetchMarketplaceRegistries } from '../../../api/adminApi';
 import MarketplaceItemCard from '../components/marketplace/MarketplaceItemCard';
 import MarketplaceTypeTabs from '../components/marketplace/MarketplaceTypeTabs';
@@ -31,11 +30,11 @@ function AdminMarketplacePage() {
   const [registries, setRegistries] = useState([]);
   const [selectedItem, setSelectedItem] = useState(null);
 
-  // Filter state
-  const [activeType, setActiveType] = useState('all');
-  const [search, setSearch] = useState('');
-  const [selectedRegistry, setSelectedRegistry] = useState('');
-  const [statusFilter, setStatusFilter] = useState('all');
+  // Filter state (URL-persisted)
+  const [activeType, setActiveType] = useFilterState('type', 'all');
+  const [search, setSearch] = useFilterState('q', '');
+  const [selectedRegistry, setSelectedRegistry] = useFilterState('registry', '');
+  const [statusFilter, setStatusFilter] = useFilterState('status', 'all');
   const [page, setPage] = useState(1);
 
   // Type badge counts derived from a full unfiltered fetch
@@ -139,9 +138,8 @@ function AdminMarketplacePage() {
   const noRegistries = !loading && registries.length === 0;
 
   return (
-    <AdminAuth>
+    <>
       <div className="min-h-screen bg-gray-50 dark:bg-gray-900">
-        <AdminNavigation />
         <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
           {/* Page header */}
           <div className="flex items-center justify-between mb-6">
@@ -276,7 +274,7 @@ function AdminMarketplacePage() {
                       <button
                         disabled={page <= 1}
                         onClick={() => setPage(p => p - 1)}
-                        className="px-3 py-1 border border-gray-300 dark:border-gray-600 rounded text-sm disabled:opacity-50 text-gray-700 dark:text-gray-300"
+                        className="px-3 py-1 border border-gray-300 dark:border-gray-600 rounded-sm text-sm disabled:opacity-50 text-gray-700 dark:text-gray-300"
                       >
                         &#x2190;
                       </button>
@@ -286,7 +284,7 @@ function AdminMarketplacePage() {
                       <button
                         disabled={page >= totalPages}
                         onClick={() => setPage(p => p + 1)}
-                        className="px-3 py-1 border border-gray-300 dark:border-gray-600 rounded text-sm disabled:opacity-50 text-gray-700 dark:text-gray-300"
+                        className="px-3 py-1 border border-gray-300 dark:border-gray-600 rounded-sm text-sm disabled:opacity-50 text-gray-700 dark:text-gray-300"
                       >
                         &#x2192;
                       </button>
@@ -314,7 +312,7 @@ function AdminMarketplacePage() {
           onAction={handleItemAction}
         />
       )}
-    </AdminAuth>
+    </>
   );
 }
 

@@ -1,7 +1,7 @@
 import configCache from '../../configCache.js';
 import { adminAuth } from '../../middleware/adminAuth.js';
-import { simpleCompletion } from '../../utils.js';
-import { verifyApiKey } from '../../serverHelpers.js';
+import llmClient, { isLLMError } from '../../services/loop/LLMClient.js';
+import { sendLLMError } from '../../services/loop/llmHttpErrors.js';
 import { buildServerPath } from '../../utils/basePath.js';
 import {
   sendInternalError,
@@ -10,6 +10,15 @@ import {
 } from '../../utils/responseHelpers.js';
 
 export default function registerAdminTranslateRoute(app) {
+  /**
+   * POST /api/admin/translate
+   *
+   * Translates a snippet of admin-authored UI text with the platform's default
+   * model (first model when none is marked default). The model call goes
+   * through `LLMClient`, which resolves the API key itself — providers that
+   * need no key (e.g. iAssistant) work too — and records the call in the run
+   * ledger as a `utility` run.
+   */
   app.post(buildServerPath('/api/admin/translate'), adminAuth, async (req, res) => {
     try {
       const { text, from = 'en', to } = req.body || {};
@@ -17,7 +26,7 @@ export default function registerAdminTranslateRoute(app) {
         return sendBadRequest(res, 'Missing required fields');
       }
 
-      let { data: models = [] } = configCache.getModels(true);
+      const { data: models = [] } = configCache.getModels(true);
       if (!models) {
         return sendFailedOperationError(
           res,
@@ -35,11 +44,6 @@ export default function registerAdminTranslateRoute(app) {
         );
       }
 
-      const apiKey = await verifyApiKey(model, res);
-      if (!apiKey) {
-        return;
-      }
-
       const messages = [
         { role: 'system', content: 'You are a helpful translation assistant.' },
         {
@@ -49,12 +53,18 @@ export default function registerAdminTranslateRoute(app) {
         { role: 'user', content: text }
       ];
 
-      const result = await simpleCompletion(messages, {
-        modelId: model.id,
-        apiKey: apiKey
+      // `retries: 0` — an interactive admin request must not stall on a provider's Retry-After.
+      const result = await llmClient.complete({
+        model,
+        messages,
+        retries: 0,
+        telemetry: { kind: 'utility', purpose: 'admin-translate', user: req.user }
       });
       res.json({ translation: result.content });
     } catch (error) {
+      if (isLLMError(error)) {
+        return sendLLMError(res, error, { context: 'translate text' });
+      }
       return sendInternalError(res, error, 'translate text');
     }
   });

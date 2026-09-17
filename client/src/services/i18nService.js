@@ -1,7 +1,7 @@
 import i18n from 'i18next';
 import { initReactI18next } from 'react-i18next';
 import LanguageDetector from 'i18next-browser-languagedetector';
-import { fetchTranslations } from '../api/api';
+import { fetchTranslations } from '../api';
 import { apiClient } from '../api/client';
 // Import core translations statically to avoid Firefox dynamic import issues
 import enCoreTranslations from '../../../shared/i18n/en.json';
@@ -15,6 +15,8 @@ class I18nService {
     this.pendingTranslations = new Map();
     this.platformConfig = null;
     this.languageChangeInProgress = false;
+    this.broadcastChannel = null;
+    this.suppressBroadcast = false;
 
     // Initialize synchronously with minimal setup
     this.initializeSync();
@@ -25,7 +27,7 @@ class I18nService {
 
     try {
       // Initialize i18next with minimal setup first (synchronous)
-      // eslint-disable-next-line @eslint-react/error-boundaries
+
       i18n
         .use(LanguageDetector)
         .use(initReactI18next)
@@ -51,11 +53,16 @@ class I18nService {
           }
         });
 
+      // Open the cross-product broadcast channel before wiring the
+      // languageChanged handler so publishes from that handler land here.
+      this.setupBroadcastChannel();
+
       // Set up language change listener with race condition protection
       i18n.on('languageChanged', newLanguage => {
         if (!this.languageChangeInProgress) {
           this.loadFullTranslations(newLanguage);
         }
+        this.broadcastLanguageChange(newLanguage);
       });
 
       this.isInitialized = true;
@@ -65,6 +72,62 @@ class I18nService {
     } catch (error) {
       console.error('Failed to initialize i18n service synchronously:', error);
       this.isInitialized = true;
+    }
+  }
+
+  // Cross-product (iHub, iFinder, iAssistant, …) language sync uses a
+  // same-origin BroadcastChannel named "intrafind". The channel is shared by
+  // all IntraFind products; events are discriminated by their `type` field.
+  setupBroadcastChannel() {
+    if (typeof window === 'undefined' || typeof BroadcastChannel === 'undefined') {
+      return;
+    }
+
+    try {
+      this.broadcastChannel = new BroadcastChannel('intrafind');
+      this.broadcastChannel.addEventListener('message', event =>
+        this.handleBroadcastMessage(event)
+      );
+    } catch (err) {
+      console.warn('[i18n] BroadcastChannel unavailable, cross-product sync disabled:', err);
+      this.broadcastChannel = null;
+    }
+  }
+
+  handleBroadcastMessage(event) {
+    const data = event?.data;
+    if (!data || typeof data !== 'object') return;
+    if (data.type !== 'language-changed') return;
+
+    const requested = data.language;
+    if (typeof requested !== 'string') return;
+
+    const language = requested.trim();
+    if (!/^[A-Za-z]{2,3}(-[A-Za-z]{2,4})?$/.test(language)) {
+      console.warn(
+        `[i18n] intrafind channel language-changed ignored: invalid language code ${JSON.stringify(language.slice(0, 32))}`
+      );
+      return;
+    }
+
+    if (i18n.language === language) return;
+
+    // Avoid bouncing the same change back onto the channel.
+    this.suppressBroadcast = true;
+    this.changeLanguage(language).finally(() => {
+      this.suppressBroadcast = false;
+    });
+  }
+
+  broadcastLanguageChange(language) {
+    if (this.suppressBroadcast) return;
+    if (!this.broadcastChannel) return;
+    if (typeof language !== 'string' || !language) return;
+
+    try {
+      this.broadcastChannel.postMessage({ type: 'language-changed', language });
+    } catch (err) {
+      console.warn('[i18n] Failed to publish language change on intrafind channel:', err);
     }
   }
 

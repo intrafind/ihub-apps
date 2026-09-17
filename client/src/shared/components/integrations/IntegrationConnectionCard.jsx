@@ -33,10 +33,10 @@ const IntegrationConnectionCard = ({
 
   return (
     <div
-      className={`bg-gradient-to-r from-blue-50 to-indigo-50 border border-blue-200 rounded-lg p-4 mb-4 shadow-sm ${className}`}
+      className={`bg-linear-to-r from-blue-50 to-indigo-50 border border-blue-200 rounded-lg p-4 mb-4 shadow-xs ${className}`}
     >
       <div className="flex items-start space-x-3">
-        <div className="flex-shrink-0">
+        <div className="shrink-0">
           <div className="w-10 h-10 bg-blue-600 rounded-lg flex items-center justify-center">
             <Icon name={config.icon || 'link'} className="w-6 h-6 text-white" />
           </div>
@@ -77,13 +77,13 @@ const IntegrationConnectionCard = ({
               <ul className="text-sm text-gray-700 space-y-1">
                 {features.map((feature, index) => (
                   <li key={index} className="flex items-center">
-                    <Icon name="check" className="w-4 h-4 text-green-500 mr-2 flex-shrink-0" />
+                    <Icon name="check" className="w-4 h-4 text-green-500 mr-2 shrink-0" />
                     {feature}
                   </li>
                 ))}
               </ul>
 
-              <div className="mt-3 p-2 bg-yellow-50 rounded border-l-4 border-yellow-400">
+              <div className="mt-3 p-2 bg-yellow-50 rounded-sm border-l-4 border-yellow-400">
                 <p className="text-sm text-yellow-800">
                   <Icon name="lock" className="w-4 h-4 inline mr-1" />
                   {t(
@@ -96,7 +96,7 @@ const IntegrationConnectionCard = ({
           )}
 
           {state.error && (
-            <div className="mt-3 p-2 bg-red-50 border border-red-200 rounded text-sm text-red-700">
+            <div className="mt-3 p-2 bg-red-50 border border-red-200 rounded-sm text-sm text-red-700">
               <Icon name="warning" className="w-4 h-4 inline mr-1" />
               {state.error}
             </div>

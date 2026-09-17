@@ -1,8 +1,6 @@
-import { promises as fs } from 'fs';
-import { join } from 'path';
-import { getRootDir } from '../../pathUtils.js';
-import { atomicWriteJSON } from '../../utils/atomicWrite.js';
+import configStore from '../../services/config/ConfigStore.js';
 import configCache from '../../configCache.js';
+import { announceFullConfigReload, getConfigSyncStats } from '../../configSync.js';
 import { getUsage } from '../../usageTracker.js';
 import { adminAuth } from '../../middleware/adminAuth.js';
 import { buildServerPath } from '../../utils/basePath.js';
@@ -23,7 +21,9 @@ export default function registerAdminCacheRoutes(app) {
   app.get(buildServerPath('/api/admin/cache/stats'), adminAuth, async (req, res) => {
     try {
       const stats = configCache.getStats();
-      res.json(stats);
+      // Cluster invalidation counters, so a multi-worker deployment can tell
+      // whether config changes are actually reaching the other workers.
+      res.json({ ...stats, sync: getConfigSyncStats() });
     } catch (error) {
       return sendInternalError(res, error, 'get cache statistics');
     }
@@ -47,6 +47,9 @@ export default function registerAdminCacheRoutes(app) {
     try {
       configCache.clear();
       await configCache.initialize();
+      // clear()/initialize() only rebuild this worker's cache; the rest of the
+      // cluster reloads from the announcement.
+      announceFullConfigReload();
       res.json({ message: 'Configuration cache cleared successfully' });
     } catch (error) {
       return sendInternalError(res, error, 'clear cache');
@@ -60,16 +63,14 @@ export default function registerAdminCacheRoutes(app) {
 
   app.post(buildServerPath('/api/admin/client/_refresh'), adminAuth, async (req, res) => {
     try {
-      const rootDir = getRootDir();
-      const platformConfigPath = join(rootDir, 'contents', 'config', 'platform.json');
-      const platformConfigData = await fs.readFile(platformConfigPath, 'utf8');
-      const platformConfig = JSON.parse(platformConfigData);
+      const platformConfig = await configStore.readJson('config/platform.json');
+      if (!platformConfig) throw new Error('Unable to read config/platform.json');
       if (!platformConfig.refreshSalt) {
         platformConfig.refreshSalt = { salt: 0, lastUpdated: new Date().toISOString() };
       }
       platformConfig.refreshSalt.salt += 1;
       platformConfig.refreshSalt.lastUpdated = new Date().toISOString();
-      await atomicWriteJSON(platformConfigPath, platformConfig);
+      await configStore.writeJson('config/platform.json', platformConfig);
       await new Promise(resolve => setTimeout(resolve, 100));
       await configCache.refreshCacheEntry('config/platform.json');
       logger.info('Force refresh triggered', {

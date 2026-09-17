@@ -1,58 +1,40 @@
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, useRef } from 'react';
 import { Link } from 'react-router-dom';
 import { buildApiUrl } from '../../../utils/runtimeBasePath';
 import { apiClient } from '../../../api/client';
-
-function StatusBadge({ status }) {
-  const colors = {
-    queued: 'bg-gray-100 text-gray-800 dark:bg-gray-700 dark:text-gray-300',
-    processing: 'bg-blue-100 text-blue-800 dark:bg-blue-900/30 dark:text-blue-300',
-    building: 'bg-blue-100 text-blue-800 dark:bg-blue-900/30 dark:text-blue-300',
-    completed: 'bg-green-100 text-green-800 dark:bg-green-900/30 dark:text-green-300',
-    error: 'bg-red-100 text-red-800 dark:bg-red-900/30 dark:text-red-300',
-    cancelled: 'bg-yellow-100 text-yellow-800 dark:bg-yellow-900/30 dark:text-yellow-300'
-  };
-
-  return (
-    <span
-      className={`inline-flex px-2 py-0.5 text-xs font-medium rounded-full ${colors[status] || colors.queued}`}
-    >
-      {status}
-    </span>
-  );
-}
+import StatusBadge from '../../../shared/components/StatusBadge';
+import ProgressBar from '../../../shared/components/ProgressBar';
 
 function formatDate(timestamp) {
   if (!timestamp) return '-';
   return new Date(timestamp).toLocaleString();
 }
 
-function ProgressBar({ value, max }) {
-  const pct = max > 0 ? Math.round((value / max) * 100) : 0;
-  return (
-    <div className="flex items-center gap-2">
-      <div className="flex-1 bg-gray-200 dark:bg-gray-700 rounded-full h-2 overflow-hidden">
-        <div
-          className="bg-blue-600 h-2 rounded-full transition-all duration-300"
-          style={{ width: `${pct}%` }}
-        />
-      </div>
-      <span className="text-xs text-gray-500 dark:text-gray-400 w-10 text-right">{pct}%</span>
-    </div>
-  );
-}
-
 export default function JobListPage() {
   const [jobs, setJobs] = useState([]);
   const [loading, setLoading] = useState(true);
+  // Abort the previous in-flight fetch when a new poll tick starts (or on
+  // unmount) so slow responses don't pile up against the browser's 6-connection
+  // HTTP/1.1 limit.
+  const inFlightAbortRef = useRef(null);
 
   const fetchJobs = useCallback(async () => {
+    if (inFlightAbortRef.current) {
+      inFlightAbortRef.current.abort();
+    }
+    const controller = new AbortController();
+    inFlightAbortRef.current = controller;
+
     try {
-      const res = await apiClient.get('/tools-service/jobs');
+      const res = await apiClient.get('/tools-service/jobs', { signal: controller.signal });
       setJobs(res.data);
-    } catch {
-      // Silently fail
+    } catch (err) {
+      if (err.name === 'CanceledError' || err.name === 'AbortError') return;
+      // Silently fail other errors
     } finally {
+      if (inFlightAbortRef.current === controller) {
+        inFlightAbortRef.current = null;
+      }
       setLoading(false);
     }
   }, []);
@@ -65,7 +47,13 @@ export default function JobListPage() {
       fetchJobs();
     }, 5000);
 
-    return () => clearInterval(interval);
+    return () => {
+      clearInterval(interval);
+      if (inFlightAbortRef.current) {
+        inFlightAbortRef.current.abort();
+        inFlightAbortRef.current = null;
+      }
+    };
   }, [fetchJobs]);
 
   const handleDownload = jobId => {
@@ -140,7 +128,11 @@ export default function JobListPage() {
                     </td>
                     <td className="py-3 px-2 w-32">
                       {job.progress?.total > 0 ? (
-                        <ProgressBar value={job.progress.current} max={job.progress.total} />
+                        <ProgressBar
+                          value={job.progress.current}
+                          max={job.progress.total}
+                          variant="inline"
+                        />
                       ) : isActive ? (
                         <span className="text-xs text-gray-400">Pending...</span>
                       ) : (
@@ -158,7 +150,7 @@ export default function JobListPage() {
                         {job.status === 'completed' && (
                           <button
                             onClick={() => handleDownload(job.id)}
-                            className="px-2 py-1 text-xs bg-green-600 text-white rounded hover:bg-green-700 transition-colors"
+                            className="px-2 py-1 text-xs bg-green-600 text-white rounded-sm hover:bg-green-700 transition-colors"
                           >
                             Download
                           </button>
@@ -166,7 +158,7 @@ export default function JobListPage() {
                         {isActive && (
                           <button
                             onClick={() => handleCancel(job.id)}
-                            className="px-2 py-1 text-xs bg-red-100 text-red-700 dark:bg-red-900/30 dark:text-red-300 rounded hover:bg-red-200 dark:hover:bg-red-900/50 transition-colors"
+                            className="px-2 py-1 text-xs bg-red-100 text-red-700 dark:bg-red-900/30 dark:text-red-300 rounded-sm hover:bg-red-200 dark:hover:bg-red-900/50 transition-colors"
                           >
                             Cancel
                           </button>

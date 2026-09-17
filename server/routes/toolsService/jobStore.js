@@ -90,6 +90,11 @@ export function listJobs(userId, isAdmin, filters = {}) {
 
 /**
  * Send SSE update to all connected clients for a job.
+ *
+ * Wraps each client's write/end in its own try/catch — without this, the first
+ * dead socket throws and aborts iteration, so every later client misses the
+ * update AND the `job.clients = []` reset below is skipped (causing repeated
+ * notifyClients() calls to spam errors against the same dead sockets).
  */
 export function notifyClients(job) {
   if (!job.clients || job.clients.length === 0) return;
@@ -102,15 +107,23 @@ export function notifyClients(job) {
     model: job.model || null
   };
   const message = `data: ${JSON.stringify(payload)}\n\n`;
+  const isTerminal =
+    job.status === 'completed' || job.status === 'error' || job.status === 'cancelled';
 
+  const survivors = [];
   for (const res of job.clients) {
-    res.write(message);
-    if (job.status === 'completed' || job.status === 'error' || job.status === 'cancelled') {
-      res.end();
+    try {
+      res.write(message);
+      if (isTerminal) {
+        res.end();
+      } else {
+        survivors.push(res);
+      }
+    } catch {
+      // Dead socket — drop this client. The HTTP layer will reclaim the
+      // connection slot on its own; we just stop trying to write to it.
     }
   }
 
-  if (job.status === 'completed' || job.status === 'error' || job.status === 'cancelled') {
-    job.clients = [];
-  }
+  job.clients = isTerminal ? [] : survivors;
 }

@@ -3,11 +3,15 @@ import { promises as fs } from 'fs';
 import { join } from 'path';
 import { createHash } from 'crypto';
 import { getRootDir } from '../../pathUtils.js';
+import configStore from '../../services/config/ConfigStore.js';
 import configCache from '../../configCache.js';
+import { loadAllTools } from '../../toolsLoader.js';
 import { adminAuth } from '../../middleware/adminAuth.js';
 import { buildServerPath } from '../../utils/basePath.js';
-import { validateIdForPath } from '../../utils/pathSecurity.js';
+import { validateIdForPath, resolveAndValidatePath } from '../../utils/pathSecurity.js';
 import logger from '../../utils/logger.js';
+import { saveSnapshot } from '../../services/ChangeHistoryService.js';
+import { logAudit } from '../../services/AuditLogService.js';
 import {
   sendInternalError,
   sendNotFound,
@@ -119,48 +123,53 @@ import {
  */
 
 /**
- * Load raw tools from JSON file (unexpanded)
- * For admin operations, we need the original tool definitions, not the expanded ones
+ * Filter out expanded tools (those with a 'method' property) from a list —
+ * but PRESERVE intentionally script-bound tools like the agent tools
+ * registered by V042/V045 (`script: 'agentTools.js'` + `method: '...'` +
+ * `isAgentTool: true`). The original "expanded tools" filter targets
+ * accidentally persisted runtime expansions; for script-bound tools,
+ * `method` is the canonical reference to the exported function and must
+ * survive admin round-trips.
  */
-function loadRawTools() {
-  const rootDir = getRootDir();
-  const contentsDir = process.env.CONTENTS_DIR || 'contents';
-  const toolsFilePath = join(rootDir, contentsDir, 'config', 'tools.json');
+/**
+ * Tool script filenames must be a bare `.js` filename — no path separators
+ * or `..` segments — since they are joined onto server/tools/ without
+ * further sanitization by the create/update handlers.
+ */
+const SCRIPT_FILENAME_PATTERN = /^[a-zA-Z0-9_-]+\.js$/;
 
-  let tools = [];
-  let needsCleanup = false;
+function filterExpandedTools(tools) {
+  return tools.filter(tool => {
+    if (!tool.method) return true;
+    if (tool.isAgentTool === true) return true;
+    if (typeof tool.script === 'string' && tool.script.length > 0) return true;
+    return false;
+  });
+}
 
-  if (existsSync(toolsFilePath)) {
-    const fileContent = readFileSync(toolsFilePath, 'utf-8');
-    const allTools = JSON.parse(fileContent);
+/**
+ * Load raw tool definitions (unexpanded) from individual files in
+ * contents/tools/. For admin operations, we need the original tool
+ * definitions, not the expanded (per-function) ones used at runtime.
+ */
+async function loadRawTools() {
+  return filterExpandedTools(await loadAllTools(true, false));
+}
 
-    // Filter out expanded tools (those with 'method' property)
-    // This handles legacy cases where expanded tools were saved to the config file
-    tools = allTools.filter(tool => !tool.method);
-
-    // Check if we filtered any tools out
-    if (tools.length !== allTools.length) {
-      needsCleanup = true;
-      logger.info('Detected expanded tools in config file', {
-        component: 'AdminTools',
-        expandedCount: allTools.length - tools.length,
-        toolsFilePath
-      });
-      logger.info('Filtered raw tool definitions', {
-        component: 'AdminTools',
-        count: tools.length
-      });
-    }
-  } else {
-    // Fall back to defaults if no custom config exists
-    const defaultToolsPath = join(rootDir, 'server', 'defaults', 'config', 'tools.json');
-    if (existsSync(defaultToolsPath)) {
-      const fileContent = readFileSync(defaultToolsPath, 'utf-8');
-      tools = JSON.parse(fileContent);
-    }
-  }
-
-  return { tools, needsCleanup, filePath: toolsFilePath };
+/**
+ * The file a tool id lives in.
+ *
+ * A tool file's name is allowed to diverge from the `id` inside it, so the
+ * path is resolved instead of assumed: writing straight to `<id>.json` would
+ * fork such a tool into two files. A tool that exists nowhere resolves to
+ * `<id>.json`, which is the right answer when one is being created.
+ *
+ * @param {string} toolId - Tool id
+ * @returns {Promise<string|null>} Path relative to `contents/`, or null when
+ *   the id is not usable as a file name
+ */
+function toolPath(toolId) {
+  return configStore.resolveIdToPath('tools', toolId);
 }
 
 export default function registerAdminToolsRoutes(app) {
@@ -208,7 +217,7 @@ export default function registerAdminToolsRoutes(app) {
   app.get(buildServerPath('/api/admin/tools'), adminAuth, async (req, res) => {
     try {
       // Load raw (unexpanded) tools for admin interface
-      const { tools, needsCleanup, filePath } = loadRawTools();
+      const tools = await loadRawTools();
 
       if (!tools) {
         return sendFailedOperationError(
@@ -218,43 +227,12 @@ export default function registerAdminToolsRoutes(app) {
         );
       }
 
-      // If we detected expanded tools, clean up the file
-      if (needsCleanup && filePath) {
-        try {
-          const rootDir = getRootDir();
-          const contentsDir = process.env.CONTENTS_DIR || 'contents';
-          await fs.mkdir(join(rootDir, contentsDir, 'config'), { recursive: true });
-          await fs.writeFile(filePath, JSON.stringify(tools, null, 2));
-          logger.info('Cleaned up tools file - removed expanded tools', {
-            component: 'AdminTools',
-            filePath
-          });
-        } catch (cleanupError) {
-          logger.error('Failed to cleanup tools file', {
-            component: 'AdminTools',
-            error: cleanupError
-          });
-          // Don't fail the request, just log the error
-        }
-      }
-
-      // Append workflow tools that have chatIntegration enabled
-      const { data: workflows } = configCache.getWorkflows();
-      const workflowTools = workflows
-        .filter(wf => wf.chatIntegration?.enabled)
-        .map(wf => ({
-          id: `workflow:${wf.id}`,
-          name: wf.chatIntegration?.toolDescription || wf.name,
-          description: wf.chatIntegration?.toolDescription || wf.description,
-          isWorkflowTool: true,
-          workflowId: wf.id
-        }));
-
-      const allTools = [...tools, ...workflowTools];
+      // Workflows are managed as a dedicated app.workflows array (first-class
+      // citizens), so they are intentionally NOT mixed into the tools list.
 
       // Generate ETag for caching using MD5 hash (same as configCache)
       const hash = createHash('md5');
-      hash.update(JSON.stringify(allTools));
+      hash.update(JSON.stringify(tools));
       const etag = `"${hash.digest('hex')}"`;
 
       if (etag) {
@@ -264,7 +242,7 @@ export default function registerAdminToolsRoutes(app) {
           return res.status(304).end();
         }
       }
-      res.json(allTools);
+      res.json(tools);
     } catch (error) {
       return sendInternalError(res, error, 'fetch tools');
     }
@@ -319,7 +297,7 @@ export default function registerAdminToolsRoutes(app) {
       }
 
       // Load raw (unexpanded) tools
-      const { tools } = loadRawTools();
+      const tools = await loadRawTools();
       const tool = tools.find(t => t.id === toolId);
 
       if (!tool) {
@@ -343,7 +321,7 @@ export default function registerAdminToolsRoutes(app) {
    *
    *       **Admin Access Required**: This endpoint requires administrator authentication.
    *
-   *       **File System Changes**: This operation modifies the tools.json file on disk
+   *       **File System Changes**: This operation modifies the tool's individual JSON file on disk
    *       and refreshes the system cache immediately.
    *     tags:
    *       - Admin - Tools
@@ -393,38 +371,66 @@ export default function registerAdminToolsRoutes(app) {
         return;
       }
 
-      // Validate required fields
-      if (!updatedTool.id || !updatedTool.name || !updatedTool.description) {
-        return sendBadRequest(res, 'Missing required fields: id, name, description');
+      // Validate required fields. Description is optional — per-tool schemas
+      // (e.g. openApiToolDefSchema) decide what else is mandatory.
+      if (!updatedTool.id || !updatedTool.name) {
+        return sendBadRequest(res, 'Missing required fields: id, name');
       }
 
       if (updatedTool.id !== toolId) {
         return sendBadRequest(res, 'Tool ID cannot be changed');
       }
 
-      const rootDir = getRootDir();
-      const contentsDir = process.env.CONTENTS_DIR || 'contents';
-      const toolsFilePath = join(rootDir, contentsDir, 'config', 'tools.json');
+      if (updatedTool.script && !SCRIPT_FILENAME_PATTERN.test(updatedTool.script)) {
+        return sendBadRequest(res, 'Invalid script filename');
+      }
 
-      // Load existing tools (raw, unexpanded)
-      const { tools } = loadRawTools();
-      const toolIndex = tools.findIndex(t => t.id === toolId);
+      // Validate OpenAPI tool definitions against their schema
+      if (updatedTool.type === 'openapi') {
+        const { validateOpenApiToolDef } = await import('../../validators/openApiToolDefSchema.js');
+        const result = validateOpenApiToolDef(updatedTool);
+        if (!result.success) {
+          return sendBadRequest(res, 'Invalid OpenAPI tool definition', result.errors);
+        }
+      }
 
-      if (toolIndex === -1) {
+      // Load existing tools (raw, unexpanded) to confirm the tool exists
+      const tools = await loadRawTools();
+      const oldTool = tools.find(t => t.id === toolId);
+
+      if (!oldTool) {
         return sendNotFound(res, 'Tool');
       }
 
-      // Update the tool
-      tools[toolIndex] = updatedTool;
-
-      // Ensure directory exists
-      await fs.mkdir(join(rootDir, contentsDir, 'config'), { recursive: true });
-
-      // Write back to file
-      await fs.writeFile(toolsFilePath, JSON.stringify(tools, null, 2));
+      // Persist the update to the tool's individual file.
+      const toolFilePath = await toolPath(toolId);
+      if (!toolFilePath) {
+        return sendBadRequest(res, 'Invalid tool path');
+      }
+      await configStore.writeJson(toolFilePath, updatedTool);
 
       // Refresh cache
-      await configCache.refreshCacheEntry('config/tools.json');
+      await configCache.refreshToolsCache();
+
+      logAudit({
+        req,
+        action: 'update',
+        resource: 'tool',
+        resourceId: toolId,
+        summary: `Updated tool ${toolId}`
+      });
+
+      try {
+        await saveSnapshot({
+          resource: 'tool',
+          id: toolId,
+          before: oldTool,
+          after: updatedTool,
+          admin: req.user?.username ?? req.user?.name ?? req.user?.id ?? 'unknown'
+        });
+      } catch {
+        /* skip */
+      }
 
       res.json({ message: 'Tool updated successfully', tool: updatedTool });
     } catch (error) {
@@ -443,7 +449,7 @@ export default function registerAdminToolsRoutes(app) {
    *
    *       **Admin Access Required**: This endpoint requires administrator authentication.
    *
-   *       **File System Changes**: This operation modifies the tools.json file on disk
+   *       **File System Changes**: This operation modifies the tool's individual JSON file on disk
    *       and refreshes the system cache immediately.
    *     tags:
    *       - Admin - Tools
@@ -477,9 +483,10 @@ export default function registerAdminToolsRoutes(app) {
     try {
       const newTool = req.body;
 
-      // Validate required fields
-      if (!newTool.id || !newTool.name || !newTool.description) {
-        return sendBadRequest(res, 'Missing required fields: id, name, description');
+      // Validate required fields. Description is optional — per-tool schemas
+      // (e.g. openApiToolDefSchema) decide what else is mandatory.
+      if (!newTool.id || !newTool.name) {
+        return sendBadRequest(res, 'Missing required fields: id, name');
       }
 
       // Validate toolId for security
@@ -487,12 +494,21 @@ export default function registerAdminToolsRoutes(app) {
         return;
       }
 
-      const rootDir = getRootDir();
-      const contentsDir = process.env.CONTENTS_DIR || 'contents';
-      const toolsFilePath = join(rootDir, contentsDir, 'config', 'tools.json');
+      if (newTool.script && !SCRIPT_FILENAME_PATTERN.test(newTool.script)) {
+        return sendBadRequest(res, 'Invalid script filename');
+      }
+
+      // Validate OpenAPI tool definitions against their schema
+      if (newTool.type === 'openapi') {
+        const { validateOpenApiToolDef } = await import('../../validators/openApiToolDefSchema.js');
+        const result = validateOpenApiToolDef(newTool);
+        if (!result.success) {
+          return sendBadRequest(res, 'Invalid OpenAPI tool definition', result.errors);
+        }
+      }
 
       // Load existing tools (raw, unexpanded)
-      const { tools } = loadRawTools();
+      const tools = await loadRawTools();
 
       // Check if tool already exists
       if (tools.find(t => t.id === newTool.id)) {
@@ -504,17 +520,35 @@ export default function registerAdminToolsRoutes(app) {
         newTool.enabled = true;
       }
 
-      // Add the new tool
-      tools.push(newTool);
-
-      // Ensure directory exists
-      await fs.mkdir(join(rootDir, contentsDir, 'config'), { recursive: true });
-
-      // Write back to file
-      await fs.writeFile(toolsFilePath, JSON.stringify(tools, null, 2));
+      // Create the new tool as its own individual file.
+      const newToolFilePath = await toolPath(newTool.id);
+      if (!newToolFilePath) {
+        return sendBadRequest(res, 'Invalid tool path');
+      }
+      await configStore.writeJson(newToolFilePath, newTool);
 
       // Refresh cache
-      await configCache.refreshCacheEntry('config/tools.json');
+      await configCache.refreshToolsCache();
+
+      logAudit({
+        req,
+        action: 'create',
+        resource: 'tool',
+        resourceId: newTool.id,
+        summary: `Created tool ${newTool.id}`
+      });
+
+      try {
+        await saveSnapshot({
+          resource: 'tool',
+          id: newTool.id,
+          before: null,
+          after: newTool,
+          admin: req.user?.username ?? req.user?.name ?? req.user?.id ?? 'unknown'
+        });
+      } catch {
+        /* skip */
+      }
 
       res.status(201).json({ message: 'Tool created successfully', tool: newTool });
     } catch (error) {
@@ -533,7 +567,7 @@ export default function registerAdminToolsRoutes(app) {
    *
    *       **Admin Access Required**: This endpoint requires administrator authentication.
    *
-   *       **File System Changes**: This operation modifies the tools.json file on disk
+   *       **File System Changes**: This operation modifies the tool's individual JSON file on disk
    *       and refreshes the system cache immediately.
    *     tags:
    *       - Admin - Tools
@@ -578,24 +612,25 @@ export default function registerAdminToolsRoutes(app) {
       }
 
       const rootDir = getRootDir();
-      const contentsDir = process.env.CONTENTS_DIR || 'contents';
-      const toolsFilePath = join(rootDir, contentsDir, 'config', 'tools.json');
+      // Load existing tools (raw, unexpanded) to confirm the tool exists
+      const tools = await loadRawTools();
+      const tool = tools.find(t => t.id === toolId);
 
-      // Load existing tools (raw, unexpanded)
-      const { tools } = loadRawTools();
-      const toolIndex = tools.findIndex(t => t.id === toolId);
-
-      if (toolIndex === -1) {
+      if (!tool) {
         return sendNotFound(res, 'Tool');
       }
 
-      const tool = tools[toolIndex];
-
       // Delete the script file if it exists (only for non-special tools)
       if (tool.script && !tool.isSpecialTool && !tool.provider) {
-        const scriptPath = join(rootDir, 'server', 'tools', tool.script);
+        const scriptsBaseDir = join(rootDir, 'server', 'tools');
         try {
-          if (existsSync(scriptPath)) {
+          const scriptPath = await resolveAndValidatePath(tool.script, scriptsBaseDir);
+          if (!scriptPath) {
+            logger.warn('Skipping script deletion: invalid script path', {
+              component: 'AdminTools',
+              script: tool.script
+            });
+          } else if (existsSync(scriptPath)) {
             await fs.unlink(scriptPath);
             logger.info('Deleted script file', { component: 'AdminTools', script: tool.script });
           }
@@ -609,17 +644,34 @@ export default function registerAdminToolsRoutes(app) {
         }
       }
 
-      // Remove the tool from config
-      tools.splice(toolIndex, 1);
-
-      // Ensure directory exists
-      await fs.mkdir(join(rootDir, contentsDir, 'config'), { recursive: true });
-
-      // Write back to file
-      await fs.writeFile(toolsFilePath, JSON.stringify(tools, null, 2));
+      // Remove the tool's individual file.
+      const individualToolPath = await toolPath(toolId);
+      if (individualToolPath) {
+        await configStore.remove(individualToolPath);
+      }
 
       // Refresh cache
-      await configCache.refreshCacheEntry('config/tools.json');
+      await configCache.refreshToolsCache();
+
+      logAudit({
+        req,
+        action: 'delete',
+        resource: 'tool',
+        resourceId: toolId,
+        summary: `Deleted tool ${toolId}`
+      });
+
+      try {
+        await saveSnapshot({
+          resource: 'tool',
+          id: toolId,
+          before: tool,
+          after: null,
+          admin: req.user?.username ?? req.user?.name ?? req.user?.id ?? 'unknown'
+        });
+      } catch {
+        /* skip */
+      }
 
       res.json({
         message: 'Tool deleted successfully',
@@ -641,7 +693,7 @@ export default function registerAdminToolsRoutes(app) {
    *
    *       **Admin Access Required**: This endpoint requires administrator authentication.
    *
-   *       **File System Changes**: This operation modifies the tools.json file on disk
+   *       **File System Changes**: This operation modifies the tool's individual JSON file on disk
    *       and refreshes the system cache immediately.
    *     tags:
    *       - Admin - Tools
@@ -688,12 +740,8 @@ export default function registerAdminToolsRoutes(app) {
         return;
       }
 
-      const rootDir = getRootDir();
-      const contentsDir = process.env.CONTENTS_DIR || 'contents';
-      const toolsFilePath = join(rootDir, contentsDir, 'config', 'tools.json');
-
       // Load existing tools (raw, unexpanded)
-      const { tools } = loadRawTools();
+      const tools = await loadRawTools();
       const tool = tools.find(t => t.id === toolId);
 
       if (!tool) {
@@ -703,14 +751,23 @@ export default function registerAdminToolsRoutes(app) {
       // Toggle enabled state
       tool.enabled = !tool.enabled;
 
-      // Ensure directory exists
-      await fs.mkdir(join(rootDir, contentsDir, 'config'), { recursive: true });
-
-      // Write back to file
-      await fs.writeFile(toolsFilePath, JSON.stringify(tools, null, 2));
+      // Persist to the tool's individual file.
+      const toolFilePath = await toolPath(toolId);
+      if (!toolFilePath) {
+        return sendBadRequest(res, 'Invalid tool path');
+      }
+      await configStore.writeJson(toolFilePath, tool);
 
       // Refresh cache
-      await configCache.refreshCacheEntry('config/tools.json');
+      await configCache.refreshToolsCache();
+
+      logAudit({
+        req,
+        action: 'toggle',
+        resource: 'tool',
+        resourceId: toolId,
+        summary: `${tool.enabled ? 'Enabled' : 'Disabled'} tool ${toolId}`
+      });
 
       res.json({ message: 'Tool state updated successfully', enabled: tool.enabled });
     } catch (error) {
@@ -768,7 +825,7 @@ export default function registerAdminToolsRoutes(app) {
         return;
       }
 
-      const { tools } = loadRawTools();
+      const tools = await loadRawTools();
       const tool = tools.find(t => t.id === toolId);
 
       if (!tool) {
@@ -780,7 +837,18 @@ export default function registerAdminToolsRoutes(app) {
       }
 
       const rootDir = getRootDir();
-      const scriptPath = join(rootDir, 'server', 'tools', tool.script);
+      const scriptsBaseDir = join(rootDir, 'server', 'tools');
+      const scriptPath = await resolveAndValidatePath(tool.script, scriptsBaseDir);
+      if (!scriptPath) {
+        // Respond identically to "script file not found" so an invalid/traversal
+        // path can't be distinguished from a merely missing file by the caller.
+        logger.warn('Rejected out-of-bounds script path', {
+          component: 'AdminTools',
+          toolId,
+          script: tool.script
+        });
+        return sendNotFound(res, 'Script file');
+      }
 
       if (!existsSync(scriptPath)) {
         return sendNotFound(res, 'Script file');
@@ -873,7 +941,7 @@ export default function registerAdminToolsRoutes(app) {
         return;
       }
 
-      const { tools } = loadRawTools();
+      const tools = await loadRawTools();
       const tool = tools.find(t => t.id === toolId);
 
       if (!tool) {
@@ -885,7 +953,18 @@ export default function registerAdminToolsRoutes(app) {
       }
 
       const rootDir = getRootDir();
-      const scriptPath = join(rootDir, 'server', 'tools', tool.script);
+      const scriptsBaseDir = join(rootDir, 'server', 'tools');
+      const scriptPath = await resolveAndValidatePath(tool.script, scriptsBaseDir);
+      if (!scriptPath) {
+        // Respond identically to "script file not found" so an invalid/traversal
+        // path can't be distinguished from a merely missing file by the caller.
+        logger.warn('Rejected out-of-bounds script path', {
+          component: 'AdminTools',
+          toolId,
+          script: tool.script
+        });
+        return sendNotFound(res, 'Script file');
+      }
 
       if (!existsSync(scriptPath)) {
         return sendNotFound(res, 'Script file');
@@ -894,9 +973,105 @@ export default function registerAdminToolsRoutes(app) {
       // Write the new content
       await fs.writeFile(scriptPath, content, 'utf-8');
 
+      logAudit({
+        req,
+        action: 'update',
+        resource: 'toolScript',
+        resourceId: toolId,
+        summary: `Updated script for tool ${toolId}`
+      });
+
       res.json({ message: 'Script updated successfully' });
     } catch (error) {
       return sendInternalError(res, error, 'update tool script');
+    }
+  });
+
+  /**
+   * @swagger
+   * /api/admin/tools/openapi/parse:
+   *   post:
+   *     summary: Parse an OpenAPI document and list its operations
+   *     description: |
+   *       Fetches (SSRF-guarded) and parses an OpenAPI 3.x document, returning
+   *       its operations so the admin UI can present an operation picker for
+   *       building a `type: "openapi"` tool.
+   *     tags:
+   *       - Admin - Tools
+   *     security:
+   *       - bearerAuth: []
+   *       - sessionAuth: []
+   */
+  app.post(buildServerPath('/api/admin/tools/openapi/parse'), adminAuth, async (req, res) => {
+    try {
+      const { source } = req.body || {};
+      if (!source || !source.type) {
+        return sendBadRequest(res, 'Missing OpenAPI source ({ type, url|path|spec })');
+      }
+
+      let raw;
+      if (source.type === 'url') {
+        if (!/^https?:\/\//i.test(source.url || '')) {
+          return sendBadRequest(res, 'Only http(s) OpenAPI URLs are supported');
+        }
+        const { safeFetch } = await import('../../services/mcp/safeFetch.js');
+        // SSRF is mitigated by safeFetch: it resolves DNS once, rejects
+        // private/internal IPs (blockPrivateIps), and pins the socket to the
+        // validated address to defeat DNS rebinding. This admin-only endpoint
+        // must fetch an operator-supplied OpenAPI URL, so the host cannot be
+        // allow-listed. CodeQL cannot see the guard across the call boundary.
+        const fetchRes = await safeFetch(source.url, { method: 'GET' }, { blockPrivateIps: true }); // codeql[js/request-forgery]
+        if (!fetchRes.ok) {
+          return sendBadRequest(res, `Failed to fetch OpenAPI doc: ${fetchRes.status}`);
+        }
+        const text = await fetchRes.text();
+        if (Buffer.byteLength(text) > 2 * 1024 * 1024) {
+          return sendBadRequest(res, 'OpenAPI document exceeds the 2MB limit');
+        }
+        const { parseOpenApiText } = await import('../../services/tools/OpenApiToolRunner.js');
+        raw = parseOpenApiText(text);
+      } else if (source.type === 'inline') {
+        const { parseOpenApiText } = await import('../../services/tools/OpenApiToolRunner.js');
+        raw = typeof source.spec === 'string' ? parseOpenApiText(source.spec) : source.spec;
+      } else {
+        return sendBadRequest(res, 'Unsupported source type for parsing (use url or inline)');
+      }
+
+      const SwaggerParser = (await import('@apidevtools/swagger-parser')).default;
+      // external:false prevents dereferencing from following external $refs
+      // (remote URLs / local files), which would bypass the SSRF guard above.
+      const spec = await SwaggerParser.dereference(raw, { resolve: { external: false } });
+
+      const methods = ['get', 'put', 'post', 'delete', 'patch', 'head', 'options'];
+      const operations = [];
+      for (const [path, pathItem] of Object.entries(spec.paths || {})) {
+        if (!pathItem || typeof pathItem !== 'object') continue;
+        const shared = Array.isArray(pathItem.parameters) ? pathItem.parameters : [];
+        for (const method of methods) {
+          const op = pathItem[method];
+          if (!op || typeof op !== 'object') continue;
+          operations.push({
+            operationId: op.operationId,
+            method,
+            path,
+            summary: op.summary || op.description || '',
+            parameters: [...shared, ...(op.parameters || [])].map(p => ({
+              name: p.name,
+              in: p.in,
+              required: Boolean(p.required)
+            })),
+            hasRequestBody: Boolean(op.requestBody)
+          });
+        }
+      }
+
+      res.json({
+        info: { title: spec.info?.title, version: spec.info?.version },
+        servers: (spec.servers || []).map(s => ({ url: s.url })),
+        operations
+      });
+    } catch (error) {
+      return sendBadRequest(res, `Failed to parse OpenAPI document: ${error.message}`);
     }
   });
 }

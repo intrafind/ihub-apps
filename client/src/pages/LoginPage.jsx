@@ -1,7 +1,6 @@
 import { useEffect } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
 import { useAuth } from '../shared/contexts/AuthContext.jsx';
-import LoginForm from '../features/auth/components/LoginForm.jsx';
 
 export default function LoginPage() {
   const [searchParams] = useSearchParams();
@@ -17,6 +16,16 @@ export default function LoginPage() {
       sessionStorage.setItem('authReturnUrl', returnUrl);
     }
   }, []); // eslint-disable-line @eslint-react/exhaustive-deps
+
+  // Open the auth gate — the single login dialog for the whole app — full-page
+  // for the dedicated /login route. After a successful gate login the gate
+  // dispatches `authGateSuccess`, AuthContext refreshes, and the effect below
+  // redirects to the stored returnUrl.
+  useEffect(() => {
+    if (!isLoading && !user && window.__authGate) {
+      window.__authGate.show();
+    }
+  }, [isLoading, user]);
 
   // Redirect authenticated users immediately (handles NTLM return and already-logged-in users)
   useEffect(() => {
@@ -47,9 +56,13 @@ export default function LoginPage() {
     return null;
   }
 
+  // The auth gate (full-page overlay) renders the login UI on top of this page.
+  // It is inlined into every index.html entry that renders this route (see
+  // vite-plugin-auth-gate.js), so window.__authGate is always defined here —
+  // just show a spinner underneath while it loads.
   return (
     <div className="min-h-screen flex items-center justify-center bg-gray-50">
-      <LoginForm />
+      <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600"></div>
     </div>
   );
 }

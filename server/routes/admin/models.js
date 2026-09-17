@@ -1,8 +1,5 @@
-import { readFileSync, existsSync } from 'fs';
-import { promises as fs } from 'fs';
-import { join } from 'path';
-import { getRootDir } from '../../pathUtils.js';
 import { getLocalizedContent } from '../../../shared/localize.js';
+import configStore from '../../services/config/ConfigStore.js';
 import configCache from '../../configCache.js';
 import { adminAuth } from '../../middleware/adminAuth.js';
 import { buildServerPath } from '../../utils/basePath.js';
@@ -16,6 +13,135 @@ import {
   sendBadRequest,
   sendErrorResponse
 } from '../../utils/responseHelpers.js';
+import { logAudit } from '../../services/AuditLogService.js';
+import { saveSnapshot } from '../../services/ChangeHistoryService.js';
+import llmClient, { isLLMError, LLM_ERROR_CODES } from '../../services/loop/LLMClient.js';
+import { llmErrorToHttpStatus, isMissingApiKeyError } from '../../services/loop/llmHttpErrors.js';
+
+/**
+ * The file a model id lives in.
+ *
+ * A model file's name is allowed to diverge from the `id` inside it, so the
+ * path is resolved instead of assumed: writing straight to `<id>.json` would
+ * fork such a model into two files. A model that exists nowhere resolves to
+ * `<id>.json`, which is the right answer when one is being created.
+ *
+ * @param {string} modelId - Model id
+ * @returns {Promise<string|null>} Path relative to `contents/`, or null when
+ *   the id is not usable as a file name
+ */
+function modelPath(modelId) {
+  return configStore.resolveIdToPath('models', modelId);
+}
+
+/** Prompt sent by the admin "test model" diagnostic. */
+const MODEL_TEST_MESSAGE = 'Hello, can you respond with a simple "Test successful" message?';
+
+/** Hard cap for one model test call (interactive admin request). */
+const MODEL_TEST_TIMEOUT_MS = 60000;
+
+/**
+ * Socket-level failure codes (undici / Node `net`) that deserve a dedicated
+ * explanation in the admin UI. Checked before the generic code mapping.
+ */
+const MODEL_TEST_NETWORK_CAUSES = Object.freeze({
+  UND_ERR_CONNECT_TIMEOUT: {
+    userMessage: 'Connection timeout',
+    errorMessage:
+      'The model service did not respond within the timeout period. Please check if the model URL is correct and the service is running.'
+  },
+  ECONNREFUSED: {
+    userMessage: 'Connection refused',
+    errorMessage:
+      'Unable to connect to the model service. Please verify the URL and ensure the service is running.'
+  },
+  ENOTFOUND: {
+    userMessage: 'Service not found',
+    errorMessage:
+      'The model service hostname could not be resolved. Please check the URL configuration.'
+  }
+});
+
+/**
+ * Translate an `LLMError` raised by a model connectivity test into the two
+ * strings the admin UI shows: a short `userMessage` headline and a longer
+ * `errorMessage` with remediation hints.
+ *
+ * Keys off `err.code` (and the underlying socket error code for network
+ * failures) — never off message substrings, which differ per provider and
+ * language.
+ *
+ * @param {import('../../services/loop/contracts/errors.js').LLMError} err
+ * @returns {{ userMessage: string, errorMessage: string }}
+ */
+function describeModelTestFailure(err) {
+  // `fetch failed` wraps the socket error one level deeper (err.cause.cause);
+  // LLMClient also surfaces that code as providerCode for network failures.
+  const socketCode = String(err.providerCode || err.cause?.code || err.cause?.cause?.code || '');
+  if (MODEL_TEST_NETWORK_CAUSES[socketCode]) {
+    return MODEL_TEST_NETWORK_CAUSES[socketCode];
+  }
+
+  const fallback = {
+    userMessage: 'Model test failed',
+    errorMessage: err.message || 'Unknown error occurred'
+  };
+
+  switch (err.code) {
+    case LLM_ERROR_CODES.NETWORK: {
+      const detail =
+        typeof err.details === 'string' && err.details
+          ? err.details
+          : err.cause?.message || err.message;
+      return {
+        userMessage: 'Network error',
+        errorMessage: `Network connection failed: ${detail}`
+      };
+    }
+    case LLM_ERROR_CODES.TIMEOUT:
+      return {
+        userMessage: 'Request timeout',
+        errorMessage:
+          'The model service took too long to respond. Please try again or check the service status.'
+      };
+    case LLM_ERROR_CODES.AUTH_FAILED:
+      if (isMissingApiKeyError(err)) {
+        return { userMessage: 'API key not configured', errorMessage: err.message };
+      }
+      if (err.status === 403) {
+        return {
+          userMessage: 'Access denied',
+          errorMessage: 'Access denied by the model service. Please check your API key permissions.'
+        };
+      }
+      return {
+        userMessage: 'Authentication failed',
+        errorMessage:
+          'Invalid API key or authentication credentials. Please check your model configuration.'
+      };
+    case LLM_ERROR_CODES.MODEL_NOT_FOUND:
+      return {
+        userMessage: 'Model not found',
+        errorMessage:
+          'The specified model was not found on the service. Please check the model ID configuration.'
+      };
+    case LLM_ERROR_CODES.RATE_LIMITED:
+      return {
+        userMessage: 'Rate limit exceeded',
+        errorMessage: 'Too many requests to the model service. Please try again later.'
+      };
+    case LLM_ERROR_CODES.PROVIDER_ERROR:
+      if (typeof err.status === 'number' && err.status >= 500) {
+        return {
+          userMessage: 'Server error',
+          errorMessage: 'The model service encountered an internal error. Please try again later.'
+        };
+      }
+      return fallback;
+    default:
+      return fallback;
+  }
+}
 
 export default function registerAdminModelsRoutes(app) {
   /**
@@ -147,31 +273,15 @@ export default function registerAdminModelsRoutes(app) {
           }
         } else {
           // Masked value - need to preserve existing key
-          // CRITICAL FIX: Read from disk, not cache, to ensure we have the apiKey field
-          // The cache might not have the apiKey due to TTL expiration or race conditions
-          const rootDir = getRootDir();
-          const modelFilePath = join(rootDir, 'contents', 'models', `${modelId}.json`);
-
-          try {
-            if (existsSync(modelFilePath)) {
-              const existingModelFromDisk = JSON.parse(await fs.readFile(modelFilePath, 'utf8'));
-              if (existingModelFromDisk.apiKey) {
-                // Preserve the existing encrypted API key from disk
-                updatedModel.apiKey = existingModelFromDisk.apiKey;
-              } else {
-                // No existing key on disk, remove the masked placeholder
-                delete updatedModel.apiKey;
-              }
-            } else {
-              // File doesn't exist yet (shouldn't happen in update), remove placeholder
-              delete updatedModel.apiKey;
-            }
-          } catch (error) {
-            logger.error('Error reading existing model from disk', {
-              component: 'ModelsRoutes',
-              error
-            });
-            // Fallback to removing the masked placeholder
+          // CRITICAL FIX: Read the stored document, not the cache, to ensure we
+          // have the apiKey field. The cache might not have it due to TTL
+          // expiration or race conditions.
+          const storedModel = await configStore.readJson(await modelPath(modelId));
+          if (storedModel?.apiKey) {
+            // Preserve the existing encrypted API key
+            updatedModel.apiKey = storedModel.apiKey;
+          } else {
+            // Nothing stored to preserve, drop the masked placeholder
             delete updatedModel.apiKey;
           }
         }
@@ -186,16 +296,33 @@ export default function registerAdminModelsRoutes(app) {
         const allModels = modelsResponse.data || modelsResponse;
         for (const model of allModels) {
           if (model.id !== modelId && model.default === true) {
-            const otherModelPath = join(getRootDir(), 'contents', 'models', `${model.id}.json`);
             model.default = false;
-            await fs.writeFile(otherModelPath, JSON.stringify(model, null, 2));
+            await configStore.writeJson(await modelPath(model.id), model);
           }
         }
       }
-      const rootDir = getRootDir();
-      const modelFilePath = join(rootDir, 'contents', 'models', `${modelId}.json`);
-      await fs.writeFile(modelFilePath, JSON.stringify(updatedModel, null, 2));
+      // Capture old model state before writing
+      const { data: currentModels } = configCache.getModels(true);
+      const oldModel = currentModels.find(m => m.id === modelId);
+
+      await configStore.writeJson(await modelPath(modelId), updatedModel);
       await configCache.refreshModelsCache();
+      if (oldModel) {
+        await saveSnapshot({
+          resource: 'model',
+          id: modelId,
+          before: oldModel,
+          after: updatedModel,
+          admin: req.user?.username ?? req.user?.name ?? req.user?.id ?? 'unknown'
+        });
+      }
+      await logAudit({
+        req,
+        action: 'update',
+        resource: 'model',
+        resourceId: modelId,
+        summary: `Updated model ${modelId}`
+      });
       res.json({ message: 'Model updated successfully', model: updatedModel });
     } catch (error) {
       return sendInternalError(res, error, 'update model');
@@ -237,27 +364,31 @@ export default function registerAdminModelsRoutes(app) {
       delete newModel.apiKeySet;
       delete newModel.apiKeyMasked;
 
-      const rootDir = getRootDir();
-      const modelFilePath = join(rootDir, 'contents', 'models', `${newModel.id}.json`);
-      try {
-        readFileSync(modelFilePath, 'utf8');
+      // The duplicate check stays ahead of the default-demotion below: a 409
+      // must not leave every other model stripped of its default flag.
+      const newModelPath = `models/${newModel.id}.json`;
+      if ((await configStore.readJson(newModelPath)) !== null) {
         return sendErrorResponse(res, 409, 'Model with this ID already exists');
-      } catch {
-        // file not found, continue
       }
       if (newModel.default === true) {
         const modelsResponse = configCache.getModels(true);
         const allModels = modelsResponse.data || modelsResponse;
         for (const model of allModels) {
           if (model.default === true) {
-            const otherModelPath = join(getRootDir(), 'contents', 'models', `${model.id}.json`);
             model.default = false;
-            await fs.writeFile(otherModelPath, JSON.stringify(model, null, 2));
+            await configStore.writeJson(await modelPath(model.id), model);
           }
         }
       }
-      await fs.writeFile(modelFilePath, JSON.stringify(newModel, null, 2));
+      await configStore.writeJson(newModelPath, newModel);
       await configCache.refreshModelsCache();
+      await logAudit({
+        req,
+        action: 'create',
+        resource: 'model',
+        resourceId: newModel.id,
+        summary: `Created model ${newModel.id}`
+      });
       res.json({ message: 'Model created successfully', model: newModel });
     } catch (error) {
       return sendInternalError(res, error, 'create model');
@@ -284,20 +415,19 @@ export default function registerAdminModelsRoutes(app) {
         const enabledModels = models.filter(m => m.id !== modelId && m.enabled === true);
         if (enabledModels.length > 0) {
           enabledModels[0].default = true;
-          const newDefaultPath = join(
-            getRootDir(),
-            'contents',
-            'models',
-            `${enabledModels[0].id}.json`
-          );
-          await fs.writeFile(newDefaultPath, JSON.stringify(enabledModels[0], null, 2));
+          await configStore.writeJson(await modelPath(enabledModels[0].id), enabledModels[0]);
         }
         model.default = false;
       }
-      const rootDir = getRootDir();
-      const modelFilePath = join(rootDir, 'contents', 'models', `${modelId}.json`);
-      await fs.writeFile(modelFilePath, JSON.stringify(model, null, 2));
+      await configStore.writeJson(await modelPath(modelId), model);
       await configCache.refreshModelsCache();
+      await logAudit({
+        req,
+        action: 'toggle',
+        resource: 'model',
+        resourceId: modelId,
+        summary: `${newEnabledState ? 'Enabled' : 'Disabled'} model ${modelId}`
+      });
       res.json({
         message: `Model ${newEnabledState ? 'enabled' : 'disabled'} successfully`,
         model: model,
@@ -324,7 +454,6 @@ export default function registerAdminModelsRoutes(app) {
 
       const { data: models } = configCache.getModels(true);
       const resolvedIds = ids.includes('*') ? models.map(m => m.id) : ids;
-      const rootDir = getRootDir();
 
       for (const id of resolvedIds) {
         const model = models.find(m => m.id === id);
@@ -333,19 +462,24 @@ export default function registerAdminModelsRoutes(app) {
         if (!enabled) {
           model.default = false;
         }
-        const modelFilePath = join(rootDir, 'contents', 'models', `${id}.json`);
-        await fs.writeFile(modelFilePath, JSON.stringify(model, null, 2));
+        await configStore.writeJson(await modelPath(id), model);
       }
 
       // ensure at least one enabled model has default=true
       const enabledModels = models.filter(m => m.enabled);
       if (enabledModels.length > 0 && !enabledModels.some(m => m.default)) {
         enabledModels[0].default = true;
-        const defaultPath = join(rootDir, 'contents', 'models', `${enabledModels[0].id}.json`);
-        await fs.writeFile(defaultPath, JSON.stringify(enabledModels[0], null, 2));
+        await configStore.writeJson(await modelPath(enabledModels[0].id), enabledModels[0]);
       }
 
       await configCache.refreshModelsCache();
+      await logAudit({
+        req,
+        action: 'toggle',
+        resource: 'model',
+        resourceId: resolvedIds.join(','),
+        summary: `Batch ${enabled ? 'enabled' : 'disabled'} ${resolvedIds.length} models`
+      });
       res.json({
         message: `Models ${enabled ? 'enabled' : 'disabled'} successfully`,
         enabled,
@@ -374,29 +508,46 @@ export default function registerAdminModelsRoutes(app) {
         const otherModels = models.filter(m => m.id !== modelId && m.enabled === true);
         if (otherModels.length > 0) {
           otherModels[0].default = true;
-          const newDefaultPath = join(
-            getRootDir(),
-            'contents',
-            'models',
-            `${otherModels[0].id}.json`
-          );
-          await fs.writeFile(newDefaultPath, JSON.stringify(otherModels[0], null, 2));
+          await configStore.writeJson(await modelPath(otherModels[0].id), otherModels[0]);
         }
       }
-      const rootDir = getRootDir();
-      const modelFilePath = join(rootDir, 'contents', 'models', `${modelId}.json`);
-      if (!existsSync(modelFilePath)) {
+      if (!(await configStore.remove(await modelPath(modelId)))) {
         return sendNotFound(res, 'Model file');
       }
-      await fs.unlink(modelFilePath);
       await configCache.refreshModelsCache();
       await removeMarketplaceInstallation('model', modelId);
+      if (model) {
+        await saveSnapshot({
+          resource: 'model',
+          id: modelId,
+          before: model,
+          after: null,
+          admin: req.user?.username ?? req.user?.name ?? req.user?.id ?? 'unknown'
+        });
+      }
+      await logAudit({
+        req,
+        action: 'delete',
+        resource: 'model',
+        resourceId: modelId,
+        summary: `Deleted model ${modelId}`
+      });
       res.json({ message: 'Model deleted successfully' });
     } catch (error) {
       return sendInternalError(res, error, 'delete model');
     }
   });
 
+  /**
+   * POST /api/admin/models/:modelId/test
+   *
+   * Connectivity / credential diagnostic for one configured model. Disabled
+   * models are included so an admin can verify a model before enabling it.
+   * The call goes through `LLMClient` and is recorded in the run ledger as a
+   * `diagnostic` run. Failures answer with a non-2xx status derived from the
+   * `LLMError` code and a body of `{ error, details, code }` — `error` is the
+   * short headline, `details` the remediation text shown by the admin UI.
+   */
   app.post(buildServerPath('/api/admin/models/:modelId/test'), adminAuth, async (req, res) => {
     try {
       const { modelId } = req.params;
@@ -411,71 +562,43 @@ export default function registerAdminModelsRoutes(app) {
       if (!model) {
         return sendNotFound(res, 'Model');
       }
-      const testMessage = 'Hello, can you respond with a simple "Test successful" message?';
-      const { simpleCompletion } = await import('../../utils.js');
-      const { verifyApiKey } = await import('../../serverHelpers.js');
-      const apiKey = await verifyApiKey(model, res);
-      if (!apiKey) {
-        return;
-      }
+
       try {
-        const result = await simpleCompletion(testMessage, {
-          modelId: model.id,
-          apiKey: apiKey
+        const result = await llmClient.complete({
+          model,
+          messages: [{ role: 'user', content: MODEL_TEST_MESSAGE }],
+          retries: 0,
+          timeoutMs: MODEL_TEST_TIMEOUT_MS,
+          telemetry: { kind: 'diagnostic', purpose: 'model-test', user: req.user }
         });
+        // Never echo stored credentials back to the browser (mirrors GET /admin/models).
+        const safeModel = { ...model };
+        delete safeModel.apiKey;
         res.json({
           success: true,
           message: 'Model test successful',
           response: result.content,
-          model: model
+          model: safeModel
         });
       } catch (testError) {
-        logger.error('Model test failed', { component: 'ModelsRoutes', error: testError });
-        let errorMessage = 'Unknown error occurred';
-        let userMessage = 'Model test failed';
-        if (testError.message.includes('fetch failed')) {
-          if (testError.cause?.code === 'UND_ERR_CONNECT_TIMEOUT') {
-            userMessage = 'Connection timeout';
-            errorMessage =
-              'The model service did not respond within the timeout period. Please check if the model URL is correct and the service is running.';
-          } else if (testError.cause?.code === 'ECONNREFUSED') {
-            userMessage = 'Connection refused';
-            errorMessage =
-              'Unable to connect to the model service. Please verify the URL and ensure the service is running.';
-          } else if (testError.cause?.code === 'ENOTFOUND') {
-            userMessage = 'Service not found';
-            errorMessage =
-              'The model service hostname could not be resolved. Please check the URL configuration.';
-          } else {
-            userMessage = 'Network error';
-            errorMessage = `Network connection failed: ${testError.cause?.message || testError.message}`;
-          }
-        } else if (testError.message.includes('timeout')) {
-          userMessage = 'Request timeout';
-          errorMessage =
-            'The model service took too long to respond. Please try again or check the service status.';
-        } else if (testError.message.includes('401')) {
-          userMessage = 'Authentication failed';
-          errorMessage =
-            'Invalid API key or authentication credentials. Please check your model configuration.';
-        } else if (testError.message.includes('403')) {
-          userMessage = 'Access denied';
-          errorMessage =
-            'Access denied by the model service. Please check your API key permissions.';
-        } else if (testError.message.includes('404')) {
-          userMessage = 'Model not found';
-          errorMessage =
-            'The specified model was not found on the service. Please check the model ID configuration.';
-        } else if (testError.message.includes('429')) {
-          userMessage = 'Rate limit exceeded';
-          errorMessage = 'Too many requests to the model service. Please try again later.';
-        } else if (testError.message.includes('500')) {
-          userMessage = 'Server error';
-          errorMessage = 'The model service encountered an internal error. Please try again later.';
-        } else {
-          errorMessage = testError.message;
+        if (!isLLMError(testError)) {
+          throw testError;
         }
-        sendInternalError(res, new Error(errorMessage), `test model: ${userMessage}`);
+        logger.error('Model test failed', {
+          component: 'ModelsRoutes',
+          modelId: model.id,
+          provider: model.provider,
+          code: testError.code,
+          providerCode: testError.providerCode,
+          upstreamStatus: testError.status,
+          error: testError.message
+        });
+        const { userMessage, errorMessage } = describeModelTestFailure(testError);
+        const mappedStatus = llmErrorToHttpStatus(testError);
+        const httpStatus = mappedStatus >= 400 ? mappedStatus : 502;
+        res
+          .status(httpStatus)
+          .json({ error: userMessage, details: errorMessage, code: testError.code });
       }
     } catch (error) {
       logger.error('Error testing model', { component: 'ModelsRoutes', error });

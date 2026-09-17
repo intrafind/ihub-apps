@@ -1,0 +1,164 @@
+import { describe, it, expect, beforeAll, afterAll, jest } from '@jest/globals';
+import fs from 'fs/promises';
+import path from 'path';
+import configCacheSingleton from '../../../server/configCache.js';
+
+jest.mock('../../../server/pathUtils.js', () => ({
+  getRootDir: () => process.cwd()
+}));
+
+jest.mock('../../../server/utils/authorization.js', () => ({
+  resolveGroupInheritance: groups => groups,
+  filterResourcesByPermissions: resources => resources,
+  isAnonymousAccessAllowed: () => false
+}));
+
+jest.mock('../../../server/toolLoader.js', () => ({
+  loadTools: async () => []
+}));
+
+jest.mock('../../../server/utils/ApiKeyVerifier.js', () => {
+  return jest.fn().mockImplementation(() => ({
+    validateEnabledModelsApiKeys: async () => {}
+  }));
+});
+
+// Jest transpiles this file to CommonJS via Babel, which does not support
+// the raw `import.meta` syntax, so __dirname is used directly rather than
+// deriving it from import.meta.url.
+const rootDir = path.join(__dirname, '../../../');
+
+if (typeof global.setImmediate !== 'function') {
+  global.setImmediate = (fn, ...args) => setTimeout(fn, 0, ...args);
+}
+
+describe('Locale Override Feature', () => {
+  let configCache;
+  const contentsDir = path.join(rootDir, 'contents');
+  const localesDir = path.join(contentsDir, 'locales');
+  const testOverrideFile = path.join(localesDir, 'en.json');
+
+  beforeAll(async () => {
+    // Create contents/locales directory if it doesn't exist
+    await fs.mkdir(localesDir, { recursive: true });
+
+    // Create a test override file
+    const overrideContent = {
+      app: {
+        title: 'Custom App Title'
+      },
+      common: {
+        save: 'Custom Save Button'
+      }
+    };
+    await fs.writeFile(testOverrideFile, JSON.stringify(overrideContent, null, 2));
+
+    // Initialize config cache
+    configCache = configCacheSingleton;
+    if (!configCache.isInitialized) {
+      await configCache.initialize();
+    }
+  });
+
+  afterAll(async () => {
+    // Clean up test files
+    try {
+      await fs.unlink(testOverrideFile);
+      // Try to remove locales directory if empty
+      const files = await fs.readdir(localesDir);
+      if (files.length === 0) {
+        await fs.rmdir(localesDir);
+      }
+    } catch (_error) {
+      // Ignore errors during cleanup
+    }
+  });
+
+  it('should merge override locale with builtin locale', async () => {
+    // Load the locale with overrides
+    await configCache.loadAndCacheLocale('en');
+    const localeEntry = configCache.getLocalizations('en');
+    const translations = localeEntry?.data;
+
+    expect(translations).toBeDefined();
+    expect(translations.app).toBeDefined();
+    expect(translations.app.title).toBe('Custom App Title');
+    expect(translations.common).toBeDefined();
+    expect(translations.common.save).toBe('Custom Save Button');
+  });
+
+  it('should preserve non-overridden keys from builtin locale', async () => {
+    const translations = configCache.getLocalizations('en')?.data;
+
+    expect(translations).toBeDefined();
+    // These keys should exist from the base translation file
+    expect(translations.common).toBeDefined();
+    expect(translations.common.cancel).toBeDefined(); // Not overridden
+  });
+
+  it('should handle missing override file gracefully', async () => {
+    // Load a locale without override file
+    await configCache.loadAndCacheLocale('de');
+    const translations = configCache.getLocalizations('de')?.data;
+
+    expect(translations).toBeDefined();
+    expect(translations.app).toBeDefined();
+  });
+
+  it('should warn about unknown keys in override', () => {
+    const base = {
+      app: {
+        title: 'Title'
+      },
+      common: {
+        save: 'Save'
+      }
+    };
+
+    const overrides = {
+      app: {
+        title: 'New Title'
+      },
+      unknownKey: {
+        value: 'Should warn'
+      }
+    };
+
+    // This should not throw but log a warning
+    const merged = configCache.mergeLocaleData(base, overrides);
+
+    expect(merged.app.title).toBe('New Title');
+    expect(merged.unknownKey).toBeUndefined(); // Unknown keys are not merged
+  });
+
+  it('should handle nested override keys', () => {
+    const base = {
+      app: {
+        title: 'Title',
+        subtitle: 'Subtitle',
+        nested: {
+          deep: {
+            value: 'Original'
+          }
+        }
+      }
+    };
+
+    const overrides = {
+      app: {
+        title: 'New Title',
+        nested: {
+          deep: {
+            value: 'Overridden'
+          }
+        }
+      }
+    };
+
+    const merged = configCache.mergeLocaleData(base, overrides);
+
+    expect(merged.app.title).toBe('New Title');
+    expect(merged.app.subtitle).toBe('Subtitle'); // Not overridden
+    expect(merged.app.nested.deep.value).toBe('Overridden');
+  });
+});

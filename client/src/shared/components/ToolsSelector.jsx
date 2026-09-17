@@ -1,7 +1,7 @@
 import { useState, useRef, useEffect } from 'react';
 import { useTranslation } from 'react-i18next';
 import Icon from './Icon';
-import { fetchTools } from '../../api/api';
+import { fetchTools } from '../../api';
 import { getLocalizedContent } from '../../utils/localizeContent';
 
 function ToolsSelector({ selectedTools = [], onToolsChange, excludeToolIds = [] }) {
@@ -92,30 +92,32 @@ function ToolsSelector({ selectedTools = [], onToolsChange, excludeToolIds = [] 
 
   return (
     <div className="space-y-3">
-      {/* Selected Tools */}
-      {selectedTools.length > 0 && (
+      {/* Selected Tools (excluded ids are managed elsewhere, e.g. MCP picker) */}
+      {selectedTools.filter(id => !excludeToolIds.includes(id)).length > 0 && (
         <div className="flex flex-wrap gap-2">
-          {selectedTools.map(toolId => {
-            const toolInfo = availableTools.find(t => t.id === toolId);
-            const displayName = toolInfo
-              ? getLocalizedContent(toolInfo.name, currentLanguage)
-              : toolId;
-            return (
-              <span
-                key={toolId}
-                className="inline-flex items-center gap-1 px-3 py-1 rounded-full text-sm font-medium bg-indigo-100 dark:bg-indigo-900/50 text-indigo-800 dark:text-indigo-300"
-              >
-                {displayName}
-                <button
-                  onClick={() => handleRemoveTool(toolId)}
-                  className="ml-1 flex-shrink-0 text-indigo-600 dark:text-indigo-400 hover:text-indigo-800 dark:hover:text-indigo-300"
-                  aria-label={`Remove ${displayName}`}
+          {selectedTools
+            .filter(id => !excludeToolIds.includes(id))
+            .map(toolId => {
+              const toolInfo = availableTools.find(t => t.id === toolId);
+              const displayName = toolInfo
+                ? getLocalizedContent(toolInfo.name, currentLanguage)
+                : toolId;
+              return (
+                <span
+                  key={toolId}
+                  className="inline-flex items-center gap-1 px-3 py-1 rounded-full text-sm font-medium bg-indigo-100 dark:bg-indigo-900/50 text-indigo-800 dark:text-indigo-300"
                 >
-                  <Icon name="x" className="w-3 h-3" />
-                </button>
-              </span>
-            );
-          })}
+                  {displayName}
+                  <button
+                    onClick={() => handleRemoveTool(toolId)}
+                    className="ml-1 shrink-0 text-indigo-600 dark:text-indigo-400 hover:text-indigo-800 dark:hover:text-indigo-300"
+                    aria-label={`Remove ${displayName}`}
+                  >
+                    <Icon name="x" className="w-3 h-3" />
+                  </button>
+                </span>
+              );
+            })}
         </div>
       )}
 
@@ -150,7 +152,7 @@ function ToolsSelector({ selectedTools = [], onToolsChange, excludeToolIds = [] 
                 <button
                   key={tool.id}
                   onClick={() => handleAddTool(tool)}
-                  className="w-full text-left px-3 py-3 text-sm text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700 focus:bg-gray-100 dark:focus:bg-gray-700 focus:outline-none border-b border-gray-100 dark:border-gray-700 last:border-b-0"
+                  className="w-full text-left px-3 py-3 text-sm text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700 focus:bg-gray-100 dark:focus:bg-gray-700 focus:outline-hidden border-b border-gray-100 dark:border-gray-700 last:border-b-0"
                 >
                   <div className="font-medium text-gray-900 dark:text-gray-100">
                     {getLocalizedContent(tool.name, currentLanguage)}

@@ -4,9 +4,16 @@ import { useTranslation } from 'react-i18next';
 import { useAuth } from '../../auth/hooks/useAuth';
 import { usePlatformConfig } from '../../../shared/contexts/PlatformConfigContext';
 import Icon from '../../../shared/components/Icon';
+import ConfirmDialog from '../../../shared/components/ConfirmDialog';
+import IntegrationCard from '../components/IntegrationCard';
+import PersonalApiKeysCard from '../components/PersonalApiKeysCard';
+import ConnectedAppsCard from '../components/ConnectedAppsCard';
+import { getLocalizedContent } from '../../../utils/localizeContent';
+import { buildApiUrl } from '../../../utils/runtimeBasePath';
 
 export default function IntegrationsPage() {
-  useTranslation(); // Hook called for future i18n, not currently used
+  const { t, i18n } = useTranslation();
+  const lang = i18n.language;
   const { user } = useAuth();
   const { platformConfig } = usePlatformConfig();
   const location = useLocation();
@@ -14,6 +21,17 @@ export default function IntegrationsPage() {
   const [integrations, setIntegrations] = useState({});
   const [loading, setLoading] = useState(false);
   const [message, setMessage] = useState(null);
+  // Personal API keys are offered only when an admin enabled them, so the
+  // overview stays null until the server confirms the feature is available.
+  const [apiKeyOverview, setApiKeyOverview] = useState(null);
+  const [apiKeySecrets, setApiKeySecrets] = useState(null);
+  const [apiKeyBusy, setApiKeyBusy] = useState(false);
+  const [keyPendingRevoke, setKeyPendingRevoke] = useState(null);
+  // Connected apps. Null until the server confirms the OAuth authorization
+  // server is on — without it there is nothing a user could have connected.
+  const [connectionOverview, setConnectionOverview] = useState(null);
+  const [connectionBusy, setConnectionBusy] = useState(false);
+  const [connectionPendingRevoke, setConnectionPendingRevoke] = useState(null);
 
   // Derive cloud storage providers from platform config
   const cloudStorage = platformConfig?.cloudStorage || { enabled: false, providers: [] };
@@ -30,15 +48,19 @@ export default function IntegrationsPage() {
 
     // Handle JIRA callbacks
     if (jiraConnected === 'true') {
+      // eslint-disable-next-line @eslint-react/set-state-in-effect
       setMessage({
         type: 'success',
-        text: 'JIRA account connected successfully! You can now use JIRA features in your apps.'
+        text: t('integrations.page.jira.connected')
       });
       navigate('/settings/integrations', { replace: true });
     } else if (jiraError) {
+      // eslint-disable-next-line @eslint-react/set-state-in-effect
       setMessage({
         type: 'error',
-        text: `JIRA connection failed: ${decodeURIComponent(jiraError)}`
+        text: t('integrations.page.jira.connectionFailed', {
+          message: decodeURIComponent(jiraError)
+        })
       });
       navigate('/settings/integrations', { replace: true });
     }
@@ -51,21 +73,33 @@ export default function IntegrationsPage() {
       if (connected === 'true') {
         setMessage({
           type: 'success',
-          text: `${provider.displayName} account connected successfully! You can now select files from ${provider.displayName}.`
+          text: t('integrations.page.cloud.connected', { name: provider.displayName })
         });
         navigate('/settings/integrations', { replace: true });
       } else if (error) {
         setMessage({
           type: 'error',
-          text: `${provider.displayName} connection failed: ${decodeURIComponent(error)}`
+          text: t('integrations.page.cloud.connectionFailed', {
+            name: provider.displayName,
+            message: decodeURIComponent(error)
+          })
         });
         navigate('/settings/integrations', { replace: true });
       }
     });
-  }, [location.search, navigate, cloudProviders]);
+  }, [location.search, navigate, cloudProviders, t]);
 
   // Derive Jira enabled state from platform config
   const jiraEnabled = platformConfig?.jira?.enabled;
+
+  // Derive Office Integration state from platform config
+  const officeIntegration = platformConfig?.officeIntegration;
+  const officeEnabled = officeIntegration?.enabled;
+  const officeDisplayName =
+    getLocalizedContent(officeIntegration?.displayName, lang) || 'iHub Apps for Outlook';
+  const officeDescription =
+    getLocalizedContent(officeIntegration?.description, lang) || 'AI-powered assistant for Outlook';
+  const officeManifestUrl = buildApiUrl('integrations/office-addin/manifest.xml');
 
   // Load integration status
   useEffect(() => {
@@ -76,7 +110,7 @@ export default function IntegrationsPage() {
       try {
         // Check JIRA status only if configured on the server
         if (jiraEnabled) {
-          const jiraResponse = await fetch('/api/integrations/jira/status', {
+          const jiraResponse = await fetch(buildApiUrl('integrations/jira/status'), {
             credentials: 'include'
           });
           const jiraData = await jiraResponse.json();
@@ -87,10 +121,36 @@ export default function IntegrationsPage() {
           }));
         }
 
+        // Personal API keys. A 404 means the admin has not enabled them, which
+        // is the normal case — the card simply stays hidden.
+        try {
+          const apiKeyResponse = await fetch(buildApiUrl('integrations/api-keys'), {
+            credentials: 'include'
+          });
+          if (apiKeyResponse.ok) {
+            setApiKeyOverview(await apiKeyResponse.json());
+          }
+        } catch (err) {
+          console.error('Error loading API keys:', err);
+        }
+
+        // Connected apps. A 404 means the OAuth authorization server is off,
+        // which is the normal case — the card simply stays hidden.
+        try {
+          const connectionResponse = await fetch(buildApiUrl('integrations/connections'), {
+            credentials: 'include'
+          });
+          if (connectionResponse.ok) {
+            setConnectionOverview(await connectionResponse.json());
+          }
+        } catch (err) {
+          console.error('Error loading connections:', err);
+        }
+
         // Check cloud storage provider status dynamically
         for (const provider of cloudProviders) {
           try {
-            const response = await fetch(`/api/integrations/${provider.type}/status`, {
+            const response = await fetch(buildApiUrl(`integrations/${provider.type}/status`), {
               credentials: 'include'
             });
             const data = await response.json();
@@ -113,84 +173,53 @@ export default function IntegrationsPage() {
     loadIntegrations();
   }, [user?.id, cloudProviders, jiraEnabled]);
 
-  const handleConnect = async integration => {
-    if (integration === 'jira') {
-      // Use fetch to initiate the OAuth flow so credentials are included
-      try {
-        // Get current page path as return URL
-        const returnUrl = window.location.origin + window.location.pathname;
-        const response = await fetch(
-          `/api/integrations/jira/auth?returnUrl=${encodeURIComponent(returnUrl)}`,
-          {
-            credentials: 'include',
-            redirect: 'manual' // Don't automatically follow redirects
-          }
-        );
-
-        if (
-          response.type === 'opaqueredirect' ||
-          response.status === 302 ||
-          response.status === 301
-        ) {
-          // The server is redirecting to JIRA OAuth, follow the redirect manually
-          window.location.href = `/api/integrations/jira/auth?returnUrl=${encodeURIComponent(returnUrl)}`;
-        } else if (!response.ok) {
-          const errorData = await response.json().catch(() => ({ message: 'Unknown error' }));
-          setMessage({
-            type: 'error',
-            text: `Connection failed: ${errorData.message || 'Unknown error'}`
-          });
-        }
-      } catch (error) {
-        setMessage({
-          type: 'error',
-          text: `Connection failed: ${error.message}`
-        });
-      }
-    }
-  };
-
-  // Handle cloud provider connection
-  const handleCloudConnect = provider => {
-    // Get current page path as return URL
+  // Connect flow — JIRA pre-checks the auth response before redirecting so
+  // config errors surface inline instead of after a failed round trip.
+  const handleConnect = async ({ type, id }) => {
     const returnUrl = window.location.origin + window.location.pathname;
-    window.location.href = `/api/integrations/${provider.type}/auth?providerId=${encodeURIComponent(provider.id)}&returnUrl=${encodeURIComponent(returnUrl)}`;
-  };
+    const authUrl =
+      type === 'jira'
+        ? `${buildApiUrl('integrations/jira/auth')}?returnUrl=${encodeURIComponent(returnUrl)}`
+        : `${buildApiUrl(`integrations/${type}/auth`)}?providerId=${encodeURIComponent(id)}&returnUrl=${encodeURIComponent(returnUrl)}`;
 
-  const handleDisconnect = async integration => {
-    if (integration === 'jira') {
-      try {
-        const response = await fetch('/api/integrations/jira/disconnect', {
-          method: 'POST',
-          credentials: 'include',
-          headers: {
-            'Content-Type': 'application/json'
-          }
-        });
+    if (type !== 'jira') {
+      window.location.href = authUrl;
+      return;
+    }
 
-        if (response.ok) {
-          setIntegrations(prev => ({
-            ...prev,
-            jira: { connected: false, message: 'JIRA account disconnected' }
-          }));
-          setMessage({
-            type: 'success',
-            text: 'JIRA account disconnected successfully'
-          });
-        }
-      } catch (error) {
+    try {
+      const response = await fetch(authUrl, {
+        credentials: 'include',
+        redirect: 'manual' // Don't automatically follow redirects
+      });
+
+      if (
+        response.type === 'opaqueredirect' ||
+        response.status === 302 ||
+        response.status === 301
+      ) {
+        // The server is redirecting to JIRA OAuth, follow the redirect manually
+        window.location.href = authUrl;
+      } else if (!response.ok) {
+        const errorData = await response.json().catch(() => ({ message: 'Unknown error' }));
         setMessage({
           type: 'error',
-          text: `Failed to disconnect JIRA: ${error.message}`
+          text: t('integrations.page.jira.connectionFailed', {
+            message: errorData.message || 'Unknown error'
+          })
         });
       }
+    } catch (error) {
+      setMessage({
+        type: 'error',
+        text: t('integrations.page.jira.connectionFailed', { message: error.message })
+      });
     }
   };
 
-  // Handle cloud provider disconnection
-  const handleCloudDisconnect = async provider => {
+  const handleDisconnect = async ({ type, id, displayName }) => {
     try {
-      const response = await fetch(`/api/integrations/${provider.type}/disconnect`, {
+      const response = await fetch(buildApiUrl(`integrations/${type}/disconnect`), {
         method: 'POST',
         credentials: 'include',
         headers: {
@@ -201,54 +230,191 @@ export default function IntegrationsPage() {
       if (response.ok) {
         setIntegrations(prev => ({
           ...prev,
-          [provider.id]: {
-            connected: false,
-            message: `${provider.displayName} account disconnected`
-          }
+          [id]: { connected: false }
         }));
         setMessage({
           type: 'success',
-          text: `${provider.displayName} account disconnected successfully`
+          text:
+            type === 'jira'
+              ? t('integrations.page.jira.disconnected')
+              : t('integrations.page.cloud.disconnected', { name: displayName })
         });
       }
     } catch (error) {
       setMessage({
         type: 'error',
-        text: `Failed to disconnect ${provider.displayName}: ${error.message}`
+        text:
+          type === 'jira'
+            ? t('integrations.page.jira.disconnectFailed', { message: error.message })
+            : t('integrations.page.cloud.disconnectFailed', {
+                name: displayName,
+                message: error.message
+              })
       });
     }
   };
 
-  const handleTest = async integration => {
-    if (integration === 'jira') {
-      try {
-        const response = await fetch('/api/integrations/jira/test', {
-          credentials: 'include'
-        });
-        const data = await response.json();
+  const handleTest = async () => {
+    try {
+      const response = await fetch(buildApiUrl('integrations/jira/test'), {
+        credentials: 'include'
+      });
+      const data = await response.json();
 
-        if (data.success) {
-          setMessage({
-            type: 'success',
-            text: `JIRA connection test successful! Found ${data.testResults?.accessibleTickets || 0} accessible tickets.`
-          });
-        } else {
-          setMessage({
-            type: 'error',
-            text: `JIRA connection test failed: ${data.message}`
-          });
-        }
-      } catch (error) {
+      if (data.success) {
+        setMessage({
+          type: 'success',
+          text: t('integrations.page.jira.testSuccess', {
+            count: data.testResults?.accessibleTickets || 0
+          })
+        });
+      } else {
         setMessage({
           type: 'error',
-          text: `JIRA connection test failed: ${error.message}`
+          text: t('integrations.page.jira.testFailed', { message: data.message })
         });
       }
+    } catch (error) {
+      setMessage({
+        type: 'error',
+        text: t('integrations.page.jira.testFailed', { message: error.message })
+      });
     }
   };
 
   const dismissMessage = () => {
     setMessage(null);
+  };
+
+  const refreshConnections = async () => {
+    const response = await fetch(buildApiUrl('integrations/connections'), {
+      credentials: 'include'
+    });
+    if (response.ok) {
+      setConnectionOverview(await response.json());
+    }
+  };
+
+  const handleDisconnectApp = async connection => {
+    setConnectionPendingRevoke(null);
+    if (!connection) return;
+
+    setConnectionBusy(true);
+    try {
+      const response = await fetch(
+        buildApiUrl(`integrations/connections/${encodeURIComponent(connection.clientId)}`),
+        { method: 'DELETE', credentials: 'include' }
+      );
+      const data = await response.json().catch(() => ({}));
+
+      if (!response.ok) {
+        setMessage({
+          type: 'error',
+          text: t('integrations.page.connections.disconnectFailed', {
+            message: data.error || response.statusText
+          })
+        });
+        return;
+      }
+
+      setMessage({
+        type: 'success',
+        text: t('integrations.page.connections.disconnected', 'Disconnected {{name}}', {
+          name: connection.clientName
+        })
+      });
+      await refreshConnections().catch(() => {});
+    } catch (error) {
+      setMessage({
+        type: 'error',
+        text: t('integrations.page.connections.disconnectFailed', { message: error.message })
+      });
+    } finally {
+      setConnectionBusy(false);
+    }
+  };
+
+  // Personal API keys. Create and rotate return the credentials once; everything
+  // afterwards works from the key list, which never carries a secret.
+  const refreshApiKeys = async () => {
+    const response = await fetch(buildApiUrl('integrations/api-keys'), {
+      credentials: 'include'
+    });
+    if (response.ok) {
+      setApiKeyOverview(await response.json());
+    }
+  };
+
+  const callApiKeyEndpoint = async (path, options, errorKey) => {
+    setApiKeyBusy(true);
+    try {
+      const response = await fetch(buildApiUrl(`integrations/api-keys${path}`), {
+        credentials: 'include',
+        headers: { 'Content-Type': 'application/json' },
+        ...options
+      });
+
+      const data = await response.json().catch(() => ({}));
+      if (!response.ok) {
+        setMessage({
+          type: 'error',
+          text: t(errorKey, { message: data.error || response.statusText })
+        });
+        return null;
+      }
+
+      // The key already exists on the server and `data` may carry secrets shown
+      // exactly once, so a failed list refresh must not turn a success into an
+      // error and discard them.
+      await refreshApiKeys().catch(() => {});
+
+      return data;
+    } catch (error) {
+      setMessage({ type: 'error', text: t(errorKey, { message: error.message }) });
+      return null;
+    } finally {
+      setApiKeyBusy(false);
+    }
+  };
+
+  const handleCreateApiKey = async ({ name, expirationDays }) => {
+    const data = await callApiKeyEndpoint(
+      '',
+      { method: 'POST', body: JSON.stringify({ name, expirationDays }) },
+      'integrations.page.apiKeys.createFailed'
+    );
+
+    if (data?.secrets) {
+      setApiKeySecrets(data.secrets);
+      setMessage({ type: 'success', text: t('integrations.page.apiKeys.created') });
+    }
+  };
+
+  const handleRotateApiKey = async key => {
+    const data = await callApiKeyEndpoint(
+      `/${encodeURIComponent(key.id)}/rotate`,
+      { method: 'POST', body: JSON.stringify({}) },
+      'integrations.page.apiKeys.rotateFailed'
+    );
+
+    if (data?.secrets) {
+      setApiKeySecrets(data.secrets);
+      setMessage({ type: 'success', text: t('integrations.page.apiKeys.rotated') });
+    }
+  };
+
+  const handleRevokeApiKey = async key => {
+    setKeyPendingRevoke(null);
+    const data = await callApiKeyEndpoint(
+      `/${encodeURIComponent(key.id)}`,
+      { method: 'DELETE' },
+      'integrations.page.apiKeys.revokeFailed'
+    );
+
+    if (data?.success) {
+      setApiKeySecrets(null);
+      setMessage({ type: 'success', text: t('integrations.page.apiKeys.revoked') });
+    }
   };
 
   if (!user) {
@@ -257,10 +423,10 @@ export default function IntegrationsPage() {
         <div className="text-center">
           <Icon name="lock" className="w-12 h-12 text-gray-400 mx-auto mb-4" />
           <h2 className="text-xl font-semibold text-gray-900 dark:text-gray-100 mb-2">
-            Authentication Required
+            {t('integrations.page.authRequiredTitle')}
           </h2>
           <p className="text-gray-600 dark:text-gray-400">
-            Please log in to manage your integrations.
+            {t('integrations.page.authRequiredBody')}
           </p>
         </div>
       </div>
@@ -270,16 +436,16 @@ export default function IntegrationsPage() {
   return (
     <div className="min-h-screen bg-gray-50 dark:bg-gray-900 py-6">
       <div className="max-w-4xl mx-auto px-4 sm:px-6 lg:px-8">
-        <div className="bg-white dark:bg-gray-800 shadow rounded-lg">
+        <div className="bg-white dark:bg-gray-800 shadow-sm rounded-lg">
           {/* Header */}
           <div className="px-6 py-4 border-b border-gray-200 dark:border-gray-700">
             <div className="flex items-center justify-between">
               <div>
                 <h1 className="text-2xl font-bold text-gray-900 dark:text-gray-100">
-                  Integrations
+                  {t('integrations.page.title')}
                 </h1>
                 <p className="text-gray-600 dark:text-gray-400 mt-1">
-                  Connect your external accounts to enhance your AI applications
+                  {t('integrations.page.subtitle')}
                 </p>
               </div>
               <Icon name="link" className="w-8 h-8 text-blue-600" />
@@ -309,10 +475,10 @@ export default function IntegrationsPage() {
                 </div>
                 <button
                   onClick={dismissMessage}
-                  className={`p-1 rounded-full hover:bg-opacity-20 ${
+                  className={`p-1 rounded-full ${
                     message.type === 'success'
-                      ? 'hover:bg-green-600 text-green-600'
-                      : 'hover:bg-red-600 text-red-600'
+                      ? 'hover:bg-green-600/20 text-green-600'
+                      : 'hover:bg-red-600/20 text-red-600'
                   }`}
                 >
                   <Icon name="x" className="w-4 h-4" />
@@ -327,140 +493,111 @@ export default function IntegrationsPage() {
               <div className="flex items-center justify-center py-8">
                 <Icon name="spinner" className="w-8 h-8 animate-spin text-blue-600" />
                 <span className="ml-3 text-gray-600 dark:text-gray-400">
-                  Loading integrations...
+                  {t('integrations.page.loading')}
                 </span>
               </div>
             ) : (
               <div className="space-y-6">
                 {/* JIRA Integration — only shown when Jira is configured server-side */}
                 {jiraEnabled && (
-                  <div className="border border-gray-200 dark:border-gray-700 rounded-lg p-6">
-                    <div className="flex items-start space-x-4">
-                      <div className="flex-shrink-0">
-                        <div className="w-12 h-12 bg-blue-600 rounded-lg flex items-center justify-center">
-                          <Icon name="ticket" className="w-7 h-7 text-white" />
-                        </div>
-                      </div>
-
-                      <div className="flex-1 min-w-0">
-                        <div className="flex items-center justify-between">
-                          <div>
-                            <h3 className="text-lg font-semibold text-gray-900 dark:text-gray-100">
-                              JIRA
-                            </h3>
-                            <p className="text-gray-600 dark:text-gray-400 text-sm">
-                              Atlassian JIRA integration for ticket management and project insights
-                            </p>
-                          </div>
-
-                          <div className="flex items-center">
-                            <span
-                              className={`px-3 py-1 text-xs font-medium rounded-full ${
-                                integrations.jira?.connected
-                                  ? 'bg-green-100 dark:bg-green-900/50 text-green-800 dark:text-green-300'
-                                  : 'bg-gray-100 dark:bg-gray-700 text-gray-800 dark:text-gray-300'
-                              }`}
-                            >
-                              {integrations.jira?.connected ? 'Connected' : 'Not Connected'}
-                            </span>
-                          </div>
-                        </div>
-
-                        {integrations.jira?.connected && integrations.jira.userInfo && (
-                          <div className="mt-3 p-3 bg-gray-50 dark:bg-gray-900/50 rounded-md">
-                            <div className="flex items-center text-sm text-gray-700 dark:text-gray-300">
-                              <Icon name="user" className="w-4 h-4 mr-2" />
-                              <span className="font-medium">
-                                {integrations.jira.userInfo.displayName}
-                              </span>
-                              <span className="ml-2 text-gray-500 dark:text-gray-400">
-                                ({integrations.jira.userInfo.emailAddress})
-                              </span>
-                            </div>
-                          </div>
-                        )}
-
-                        <div className="mt-4 flex items-center space-x-3">
-                          {integrations.jira?.connected ? (
-                            <>
-                              <button
-                                onClick={() => handleTest('jira')}
-                                className="bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-md font-medium transition-colors flex items-center"
-                              >
-                                <Icon name="check-circle" className="w-4 h-4 mr-2" />
-                                Test Connection
-                              </button>
-                              <button
-                                onClick={() => handleDisconnect('jira')}
-                                className="bg-red-600 hover:bg-red-700 text-white px-4 py-2 rounded-md font-medium transition-colors flex items-center"
-                              >
-                                <Icon name="x-circle" className="w-4 h-4 mr-2" />
-                                Disconnect
-                              </button>
-                            </>
-                          ) : (
-                            <button
-                              onClick={() => handleConnect('jira')}
-                              className="bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-md font-medium transition-colors flex items-center"
-                            >
-                              <Icon name="link" className="w-4 h-4 mr-2" />
-                              Connect JIRA Account
-                            </button>
-                          )}
-                        </div>
-
-                        {integrations.jira?.connected && (
-                          <div className="mt-3">
-                            <h4 className="text-sm font-medium text-gray-900 dark:text-gray-100 mb-2">
-                              Available Features:
-                            </h4>
-                            <ul className="text-sm text-gray-700 dark:text-gray-300 space-y-1">
-                              <li className="flex items-center">
-                                <Icon
-                                  name="check"
-                                  className="w-4 h-4 text-green-500 mr-2 flex-shrink-0"
-                                />
-                                Search and retrieve JIRA tickets
-                              </li>
-                              <li className="flex items-center">
-                                <Icon
-                                  name="check"
-                                  className="w-4 h-4 text-green-500 mr-2 flex-shrink-0"
-                                />
-                                Create new tickets and issues
-                              </li>
-                              <li className="flex items-center">
-                                <Icon
-                                  name="check"
-                                  className="w-4 h-4 text-green-500 mr-2 flex-shrink-0"
-                                />
-                                Update existing tickets
-                              </li>
-                              <li className="flex items-center">
-                                <Icon
-                                  name="check"
-                                  className="w-4 h-4 text-green-500 mr-2 flex-shrink-0"
-                                />
-                                Get project and user information
-                              </li>
-                            </ul>
-                          </div>
-                        )}
-                      </div>
-                    </div>
-                  </div>
+                  <IntegrationCard
+                    icon="ticket"
+                    iconBgClassName="bg-blue-600"
+                    title={t('integrations.jira.title')}
+                    description={t('integrations.page.jira.description')}
+                    connected={!!integrations.jira?.connected}
+                    userInfo={
+                      integrations.jira?.userInfo
+                        ? {
+                            displayName: integrations.jira.userInfo.displayName,
+                            email: integrations.jira.userInfo.emailAddress
+                          }
+                        : null
+                    }
+                    features={[
+                      t('integrations.page.jira.features.search'),
+                      t('integrations.page.jira.features.create'),
+                      t('integrations.page.jira.features.update'),
+                      t('integrations.page.jira.features.info')
+                    ]}
+                    connectLabel={t('integrations.page.card.connectAccount', { name: 'JIRA' })}
+                    onConnect={() =>
+                      handleConnect({ type: 'jira', id: 'jira', displayName: 'JIRA' })
+                    }
+                    onDisconnect={() =>
+                      handleDisconnect({ type: 'jira', id: 'jira', displayName: 'JIRA' })
+                    }
+                    extraActions={
+                      <button
+                        onClick={handleTest}
+                        className="bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-md font-medium transition-colors flex items-center"
+                      >
+                        <Icon name="check-circle" className="w-4 h-4 mr-2" />
+                        {t('integrations.jira.test')}
+                      </button>
+                    }
+                  />
                 )}
 
                 {/* Cloud Storage Integrations */}
                 {cloudProviders.map(provider => (
-                  <div
+                  <IntegrationCard
                     key={provider.id}
-                    className="border border-gray-200 dark:border-gray-700 rounded-lg p-6"
-                  >
+                    icon="cloud"
+                    iconBgClassName="bg-linear-to-br from-purple-600 to-teal-500"
+                    connectButtonClassName="bg-purple-600 hover:bg-purple-700"
+                    title={provider.displayName}
+                    description={
+                      provider.type === 'office365'
+                        ? t('integrations.page.cloud.description.office365')
+                        : t('integrations.page.cloud.description.googleDrive')
+                    }
+                    connected={!!integrations[provider.id]?.connected}
+                    userInfo={
+                      integrations[provider.id]?.userInfo
+                        ? {
+                            displayName: integrations[provider.id].userInfo.displayName,
+                            email:
+                              integrations[provider.id].userInfo.mail ||
+                              integrations[provider.id].userInfo.emailAddress
+                          }
+                        : null
+                    }
+                    tokenExpiring={!!integrations[provider.id]?.tokenInfo?.isExpiring}
+                    features={[
+                      provider.type === 'office365'
+                        ? t('integrations.page.cloud.features.browseOffice365')
+                        : t('integrations.page.cloud.features.browseGoogleDrive'),
+                      t('integrations.page.cloud.features.upload'),
+                      t('integrations.page.cloud.features.oauth')
+                    ]}
+                    connectLabel={t('integrations.page.card.connectAccount', {
+                      name: provider.displayName
+                    })}
+                    onConnect={() =>
+                      handleConnect({
+                        type: provider.type,
+                        id: provider.id,
+                        displayName: provider.displayName
+                      })
+                    }
+                    onDisconnect={() =>
+                      handleDisconnect({
+                        type: provider.type,
+                        id: provider.id,
+                        displayName: provider.displayName
+                      })
+                    }
+                  />
+                ))}
+
+                {/* Office Integration — shown when enabled by admin */}
+                {officeEnabled && (
+                  <div className="border border-gray-200 dark:border-gray-700 rounded-lg p-6">
                     <div className="flex items-start space-x-4">
-                      <div className="flex-shrink-0">
-                        <div className="w-12 h-12 bg-gradient-to-br from-purple-600 to-teal-500 rounded-lg flex items-center justify-center">
-                          <Icon name="cloud" className="w-7 h-7 text-white" />
+                      <div className="shrink-0">
+                        <div className="w-12 h-12 bg-blue-600 rounded-lg flex items-center justify-center">
+                          <Icon name="envelope" className="w-7 h-7 text-white" />
                         </div>
                       </div>
 
@@ -468,131 +605,105 @@ export default function IntegrationsPage() {
                         <div className="flex items-center justify-between">
                           <div>
                             <h3 className="text-lg font-semibold text-gray-900 dark:text-gray-100">
-                              {provider.displayName}
+                              {officeDisplayName}
                             </h3>
                             <p className="text-gray-600 dark:text-gray-400 text-sm">
-                              {provider.type === 'office365'
-                                ? 'Microsoft Office 365 integration for cloud file access'
-                                : 'Google Drive integration for cloud file access'}
+                              {officeDescription}
                             </p>
                           </div>
-
-                          <div className="flex items-center">
-                            <span
-                              className={`px-3 py-1 text-xs font-medium rounded-full ${
-                                integrations[provider.id]?.connected
-                                  ? 'bg-green-100 dark:bg-green-900/50 text-green-800 dark:text-green-300'
-                                  : 'bg-gray-100 dark:bg-gray-700 text-gray-800 dark:text-gray-300'
-                              }`}
-                            >
-                              {integrations[provider.id]?.connected ? 'Connected' : 'Not Connected'}
-                            </span>
-                          </div>
+                          <span className="px-3 py-1 text-xs font-medium rounded-full bg-green-100 dark:bg-green-900/50 text-green-800 dark:text-green-300">
+                            {t('integrations.page.office.available')}
+                          </span>
                         </div>
 
-                        {integrations[provider.id]?.connected &&
-                          integrations[provider.id].userInfo && (
-                            <div className="mt-3 p-3 bg-gray-50 dark:bg-gray-900/50 rounded-md">
-                              <div className="flex items-center text-sm text-gray-700 dark:text-gray-300">
-                                <Icon name="user" className="w-4 h-4 mr-2" />
-                                <span className="font-medium">
-                                  {integrations[provider.id].userInfo.displayName}
-                                </span>
-                                <span className="ml-2 text-gray-500 dark:text-gray-400">
-                                  (
-                                  {integrations[provider.id].userInfo.mail ||
-                                    integrations[provider.id].userInfo.emailAddress}
-                                  )
-                                </span>
-                              </div>
-                              {integrations[provider.id].tokenInfo?.isExpiring && (
-                                <div className="mt-2 flex items-center text-sm text-amber-600 dark:text-amber-400">
-                                  <Icon name="exclamationTriangle" className="w-4 h-4 mr-2" />
-                                  <span>Token expires soon - consider reconnecting</span>
-                                </div>
-                              )}
-                            </div>
-                          )}
-
-                        <div className="mt-4 flex items-center space-x-3">
-                          {integrations[provider.id]?.connected ? (
+                        <div className="mt-4">
+                          <p className="text-sm text-gray-600 dark:text-gray-400 mb-3">
+                            {t('integrations.page.office.deployHint')}
+                          </p>
+                          <div className="flex items-center gap-2">
+                            <input
+                              type="text"
+                              readOnly
+                              value={officeManifestUrl}
+                              className="flex-1 rounded-md border border-gray-300 dark:border-gray-600 bg-gray-50 dark:bg-gray-700 px-3 py-1.5 text-xs font-mono text-gray-600 dark:text-gray-300 focus:outline-hidden min-w-0"
+                              onClick={e => e.target.select()}
+                            />
                             <button
-                              onClick={() => handleCloudDisconnect(provider)}
-                              className="bg-red-600 hover:bg-red-700 text-white px-4 py-2 rounded-md font-medium transition-colors flex items-center"
+                              type="button"
+                              onClick={() => navigator.clipboard?.writeText(officeManifestUrl)}
+                              className="shrink-0 rounded-md border border-gray-300 dark:border-gray-600 px-3 py-1.5 text-sm text-gray-600 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-700"
                             >
-                              <Icon name="x-circle" className="w-4 h-4 mr-2" />
-                              Disconnect
+                              {t('integrations.page.office.copy')}
                             </button>
-                          ) : (
-                            <button
-                              onClick={() => handleCloudConnect(provider)}
-                              className="bg-purple-600 hover:bg-purple-700 text-white px-4 py-2 rounded-md font-medium transition-colors flex items-center"
+                            <a
+                              href={officeManifestUrl}
+                              download="manifest.xml"
+                              className="shrink-0 rounded-md bg-blue-600 text-white px-3 py-1.5 text-sm font-medium hover:bg-blue-700"
                             >
-                              <Icon name="link" className="w-4 h-4 mr-2" />
-                              Connect {provider.displayName} Account
-                            </button>
-                          )}
-                        </div>
-
-                        {integrations[provider.id]?.connected && (
-                          <div className="mt-3">
-                            <h4 className="text-sm font-medium text-gray-900 dark:text-gray-100 mb-2">
-                              Available Features:
-                            </h4>
-                            <ul className="text-sm text-gray-700 dark:text-gray-300 space-y-1">
-                              <li className="flex items-center">
-                                <Icon
-                                  name="check"
-                                  className="w-4 h-4 text-green-500 mr-2 flex-shrink-0"
-                                />
-                                {provider.type === 'office365'
-                                  ? 'Browse OneDrive and SharePoint files'
-                                  : 'Browse Google Drive files'}
-                              </li>
-                              <li className="flex items-center">
-                                <Icon
-                                  name="check"
-                                  className="w-4 h-4 text-green-500 mr-2 flex-shrink-0"
-                                />
-                                Upload cloud files to chats
-                              </li>
-                              <li className="flex items-center">
-                                <Icon
-                                  name="check"
-                                  className="w-4 h-4 text-green-500 mr-2 flex-shrink-0"
-                                />
-                                Secure OAuth 2.0 with PKCE
-                              </li>
-                            </ul>
+                              {t('integrations.page.office.download')}
+                            </a>
                           </div>
-                        )}
+                        </div>
                       </div>
                     </div>
                   </div>
-                ))}
-
-                {/* Empty state when no integrations are configured */}
-                {!jiraEnabled && cloudProviders.length === 0 && (
-                  <div className="border border-dashed border-gray-300 dark:border-gray-600 rounded-lg p-6 text-center">
-                    <Icon name="link" className="w-8 h-8 text-gray-400 mx-auto mb-2" />
-                    <h3 className="text-lg font-medium text-gray-500 dark:text-gray-400 mb-1">
-                      No Integrations Configured
-                    </h3>
-                    <p className="text-gray-400 dark:text-gray-500 text-sm">
-                      Contact your administrator to enable external integrations.
-                    </p>
-                  </div>
                 )}
 
+                {/* Personal API keys — shown when enabled by admin */}
+                {apiKeyOverview?.enabled && (
+                  <PersonalApiKeysCard
+                    limits={apiKeyOverview.limits}
+                    endpoints={apiKeyOverview.endpoints}
+                    keys={apiKeyOverview.keys}
+                    busy={apiKeyBusy}
+                    secrets={apiKeySecrets}
+                    onDismissSecrets={() => setApiKeySecrets(null)}
+                    onCreate={handleCreateApiKey}
+                    onRotate={handleRotateApiKey}
+                    onRevoke={setKeyPendingRevoke}
+                  />
+                )}
+
+                {/* Connected apps — shown when the OAuth authorization server is on */}
+                {connectionOverview?.enabled && (
+                  <ConnectedAppsCard
+                    connections={connectionOverview.connections}
+                    tokenExpirationMinutes={connectionOverview.tokenExpirationMinutes}
+                    busy={connectionBusy}
+                    onDisconnect={setConnectionPendingRevoke}
+                  />
+                )}
+
+                {/* Empty state when no integrations are configured */}
+                {!jiraEnabled &&
+                  cloudProviders.length === 0 &&
+                  !officeEnabled &&
+                  !apiKeyOverview?.enabled &&
+                  !connectionOverview?.enabled && (
+                    <div className="border border-dashed border-gray-300 dark:border-gray-600 rounded-lg p-6 text-center">
+                      <Icon name="link" className="w-8 h-8 text-gray-400 mx-auto mb-2" />
+                      <h3 className="text-lg font-medium text-gray-500 dark:text-gray-400 mb-1">
+                        {t('integrations.page.empty.title')}
+                      </h3>
+                      <p className="text-gray-400 dark:text-gray-500 text-sm">
+                        {t('integrations.page.empty.body')}
+                      </p>
+                    </div>
+                  )}
+
                 {/* Placeholder for future integrations */}
-                {(jiraEnabled || cloudProviders.length > 0) && (
+                {(jiraEnabled ||
+                  cloudProviders.length > 0 ||
+                  officeEnabled ||
+                  apiKeyOverview?.enabled ||
+                  connectionOverview?.enabled) && (
                   <div className="border border-dashed border-gray-300 dark:border-gray-600 rounded-lg p-6 text-center">
                     <Icon name="plus" className="w-8 h-8 text-gray-400 mx-auto mb-2" />
                     <h3 className="text-lg font-medium text-gray-500 dark:text-gray-400 mb-1">
-                      More Integrations Coming Soon
+                      {t('integrations.page.comingSoon.title')}
                     </h3>
                     <p className="text-gray-400 dark:text-gray-500 text-sm">
-                      We're working on adding more integrations to enhance your AI applications
+                      {t('integrations.page.comingSoon.body')}
                     </p>
                   </div>
                 )}
@@ -601,6 +712,30 @@ export default function IntegrationsPage() {
           </div>
         </div>
       </div>
+
+      <ConfirmDialog
+        isOpen={!!connectionPendingRevoke}
+        title={t('integrations.page.connections.disconnectTitle', 'Disconnect application')}
+        message={t('integrations.page.connections.disconnectConfirm', {
+          name: connectionPendingRevoke?.clientName || ''
+        })}
+        confirmLabel={t('integrations.page.connections.disconnect', 'Disconnect')}
+        danger
+        onConfirm={() => handleDisconnectApp(connectionPendingRevoke)}
+        onDeny={() => setConnectionPendingRevoke(null)}
+      />
+
+      <ConfirmDialog
+        isOpen={!!keyPendingRevoke}
+        title={t('integrations.page.apiKeys.revokeTitle', 'Revoke API key')}
+        message={t('integrations.page.apiKeys.revokeConfirm', {
+          name: keyPendingRevoke?.name || ''
+        })}
+        confirmLabel={t('integrations.page.apiKeys.revoke', 'Revoke')}
+        danger
+        onConfirm={() => handleRevokeApiKey(keyPendingRevoke)}
+        onDeny={() => setKeyPendingRevoke(null)}
+      />
     </div>
   );
 }

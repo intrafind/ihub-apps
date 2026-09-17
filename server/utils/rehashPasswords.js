@@ -1,26 +1,27 @@
-import fs from 'fs';
 import path from 'path';
-import bcrypt from 'bcryptjs';
 import { fileURLToPath } from 'url';
 import logger from './logger.js';
+import { hashPasswordWithUserId, loadUsers, saveUsers } from './userManager.js';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
-/**
- * Hash password with user ID as salt for unique hashes
- * @param {string} password - Plain text password
- * @param {string} userId - User ID to use as salt
- * @returns {Promise<string>} Hashed password
- */
-async function hashPasswordWithUserId(password, userId) {
-  // Create a deterministic salt from user ID
-  const salt = await bcrypt.genSalt(12);
+function parseKnownPasswords() {
+  const arg = process.argv.find(value => value.startsWith('--passwords='));
+  const json = arg ? arg.substring('--passwords='.length) : process.env.REHASH_PASSWORDS_JSON;
 
-  // Combine password with user ID for unique hash
-  const passwordWithUserId = `${userId}:${password}`;
+  if (!json) {
+    return {};
+  }
 
-  return await bcrypt.hash(passwordWithUserId, salt);
+  try {
+    const parsed = JSON.parse(json);
+    return parsed && typeof parsed === 'object' ? parsed : {};
+  } catch (error) {
+    throw new Error(
+      `Invalid password mapping JSON: ${error.message}. Use --passwords='{"userId":"password"}'`
+    );
+  }
 }
 
 /**
@@ -30,16 +31,10 @@ async function rehashUserPasswords() {
   const usersFilePath = path.join(__dirname, '../../contents/config/users.json');
 
   try {
-    // Read existing users file
-    const usersData = JSON.parse(fs.readFileSync(usersFilePath, 'utf8'));
+    const usersData = loadUsers(usersFilePath);
+    const knownPasswords = parseKnownPasswords();
 
     logger.info('Rehashing passwords for existing users', { component: 'RehashPasswords' });
-
-    // Known passwords for demo users (in production, you'd need to handle this differently)
-    const knownPasswords = {
-      user_demo_admin: 'password123',
-      user_demo_user: 'password123'
-    };
 
     for (const [userId, user] of Object.entries(usersData.users)) {
       if (knownPasswords[userId]) {
@@ -70,8 +65,7 @@ async function rehashUserPasswords() {
       lastUpdated: new Date().toISOString()
     };
 
-    // Write updated file
-    fs.writeFileSync(usersFilePath, JSON.stringify(usersData, null, 2));
+    await saveUsers(usersData, usersFilePath);
     logger.info('Users file updated with new password hashes', { component: 'RehashPasswords' });
   } catch (error) {
     logger.error('Error rehashing passwords', { component: 'RehashPasswords', error });
@@ -91,4 +85,4 @@ if (import.meta.url === `file://${process.argv[1]}`) {
   }
 }
 
-export { hashPasswordWithUserId, rehashUserPasswords };
+export { rehashUserPasswords };

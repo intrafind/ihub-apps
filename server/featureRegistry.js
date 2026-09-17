@@ -94,6 +94,33 @@ export const featureRegistry = [
     default: true
   },
   {
+    id: 'compareMode',
+    name: { en: 'Compare Mode', de: 'Vergleichsmodus' },
+    description: {
+      en: 'Compare responses from two different AI models side-by-side',
+      de: 'Antworten von zwei verschiedenen KI-Modellen nebeneinander vergleichen'
+    },
+    category: 'ai',
+    default: false
+  },
+  // `chatHistoryPreview` lived here and gated a sidebar section and a /chats
+  // page backed by fixtures. The history UI is now driven by the durable-chat
+  // store, so `chatPersistence` is the single switch for both storing chats and
+  // showing them. A saved `chatHistoryPreview: true` is deliberately *not*
+  // promoted to it — the preview showed sample data, and this one writes real
+  // conversations to disk — so V097 warns instead of deciding.
+  {
+    id: 'chatPersistence',
+    name: { en: 'Durable Chats', de: 'Dauerhafte Chats' },
+    description: {
+      en: 'Store chats server-side so a conversation survives a reload, a new device and a lost connection — the run keeps going and its answer is waiting in the chat. API clients then post only the new message instead of the whole history (or send ephemeral: true)',
+      de: 'Chats serverseitig speichern, sodass eine Unterhaltung Neuladen, Gerätewechsel und Verbindungsabbruch übersteht — der Lauf läuft weiter und seine Antwort wartet im Chat. API-Clients senden dann nur noch die neue Nachricht statt des gesamten Verlaufs (oder ephemeral: true)'
+    },
+    category: 'preview',
+    default: false,
+    preview: true
+  },
+  {
     id: 'shortLinks',
     name: { en: 'Short Links', de: 'Kurzlinks' },
     description: {
@@ -104,11 +131,11 @@ export const featureRegistry = [
     default: true
   },
   {
-    id: 'pdfExport',
-    name: { en: 'PDF Export', de: 'PDF-Export' },
+    id: 'export',
+    name: { en: 'Export', de: 'Export' },
     description: {
-      en: 'Export chat conversations as formatted PDF documents',
-      de: 'Chat-Unterhaltungen als formatierte PDF-Dokumente exportieren'
+      en: 'Enable exporting chat conversations and canvas content in various formats (JSON, JSONL, Markdown, HTML, PDF)',
+      de: 'Exportieren von Chat-Unterhaltungen und Canvas-Inhalten in verschiedenen Formaten (JSON, JSONL, Markdown, HTML, PDF) aktivieren'
     },
     category: 'content',
     default: true
@@ -123,6 +150,42 @@ export const featureRegistry = [
     category: 'preview',
     default: false,
     preview: true
+  },
+  {
+    id: 'agentFactory',
+    name: { en: 'Agent Factory', de: 'Agent-Fabrik' },
+    description: {
+      en: 'Autonomous agent profiles with cron/webhook/manual triggers, long-term memory, inboxes, and HITL approval',
+      de: 'Autonome Agentenprofile mit Cron-/Webhook-/Manuelle Trigger, Langzeitgedächtnis, Inboxes und HITL-Freigabe'
+    },
+    category: 'preview',
+    default: false,
+    preview: true
+  },
+  {
+    id: 'appAsTool',
+    name: { en: 'App-as-Tool', de: 'App-als-Tool' },
+    description: {
+      en: 'Allow apps and agents to invoke other iHub apps as synthetic tools (app__<id>) — e.g. a concierge app delegating to specialist apps.',
+      de: 'Apps und Agenten erlauben, andere iHub-Apps als synthetische Tools (app__<id>) aufzurufen — z. B. eine Concierge-App, die an Spezial-Apps delegiert.'
+    },
+    category: 'preview',
+    default: false,
+    preview: true
+  },
+  {
+    id: 'runLog',
+    name: { en: 'Run Ledger (RunLog)', de: 'Run-Ledger (RunLog)' },
+    description: {
+      en: 'Persist an append-only per-run event ledger (chats, workflows, agents, inference) under contents/data/run-log for audit, replay and durable interactions',
+      de: 'Ein anhängbares Ereignis-Ledger pro Lauf (Chats, Workflows, Agenten, Inferenz) unter contents/data/run-log für Audit, Replay und dauerhafte Interaktionen speichern'
+    },
+    // Not `preview`: the ledger left preview when durable chats came to depend
+    // on it. Leaving the category behind after dropping `preview: true` put it
+    // under the Preview heading as the only row there without the badge, which
+    // reads as an oversight in the one place an admin decides what to trust.
+    category: 'platform',
+    default: false
   }
 ];
 
@@ -130,7 +193,8 @@ export const featureCategories = {
   preview: { name: { en: 'Preview', de: 'Vorschau' }, order: 1 },
   ai: { name: { en: 'AI Capabilities', de: 'KI-Funktionen' }, order: 2 },
   content: { name: { en: 'Content', de: 'Inhalte' }, order: 3 },
-  analytics: { name: { en: 'Analytics', de: 'Analytik' }, order: 4 }
+  analytics: { name: { en: 'Analytics', de: 'Analytik' }, order: 4 },
+  platform: { name: { en: 'Platform', de: 'Plattform' }, order: 5 }
 };
 
 /**

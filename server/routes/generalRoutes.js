@@ -2,6 +2,8 @@ import configCache from '../configCache.js';
 import { enhanceUserWithPermissions, isAnonymousAccessAllowed } from '../utils/authorization.js';
 import { authRequired, appAccessRequired } from '../middleware/authRequired.js';
 import { buildServerPath, getRelativeRequestPath } from '../utils/basePath.js';
+import { findByIdCaseInsensitive } from '../utils/resourceLookup.js';
+import { getStorage, isStorageReady } from '../storage/bootstrap.js';
 import {
   sendInternalError,
   sendFailedOperationError,
@@ -50,10 +52,6 @@ import {
  *         system:
  *           type: object
  *           description: Localized system prompts
- *         tokenLimit:
- *           type: number
- *           description: Maximum tokens per request
- *           example: 4000
  *         preferredModel:
  *           type: string
  *           description: Default model selection
@@ -123,7 +121,6 @@ export default function registerGeneralRoutes(app, { getLocalizedError }) {
    *                     category: "productivity"
    *                     enabled: true
    *                     order: 1
-   *                     tokenLimit: 4000
    *                     preferredModel: "gpt-4"
    *                   - id: "code-reviewer"
    *                     name: { "en": "Code Reviewer" }
@@ -167,7 +164,7 @@ export default function registerGeneralRoutes(app, { getLocalizedError }) {
    */
   app.get(buildServerPath('/api/apps'), authRequired, async (req, res) => {
     try {
-      const platformConfig = req.app.get('platform') || {};
+      const platformConfig = configCache.getPlatform() || {};
       const authConfig = platformConfig.auth || {};
 
       // Force permission enhancement if not already done
@@ -250,7 +247,6 @@ export default function registerGeneralRoutes(app, { getLocalizedError }) {
    *               system:
    *                 en: "You are a helpful AI assistant..."
    *                 de: "Du bist ein hilfreicher KI-Assistent..."
-   *               tokenLimit: 4000
    *               preferredModel: "gpt-4"
    *               variables:
    *                 - name: "context"
@@ -319,7 +315,18 @@ export default function registerGeneralRoutes(app, { getLocalizedError }) {
         requestPath: req.path,
         requestUrl: req.url,
         relativePath: getRelativeRequestPath(req.path),
-        environment: process.env.NODE_ENV || 'development'
+        environment: process.env.NODE_ENV || 'development',
+        // Storage down is not fatal by design — the features built on it fall
+        // back to their in-memory behaviour — so `status` stays OK. But until
+        // this field existed there was no way to *find out*: a misspelt
+        // provider name or a data directory the container user cannot write
+        // leaves one `logger.error` at boot and nothing else, and every
+        // consumer then degrades in silence. The run ledger records nothing,
+        // configuration quietly takes the filesystem path, and
+        // `chats.persistence` reports false, which is indistinguishable from
+        // the feature being switched off. The probe stays green and, once the
+        // boot log has rotated, there is nothing left to query.
+        storage: { ready: isStorageReady(), provider: getStorage()?.name ?? null }
       });
     } catch (error) {
       return sendInternalError(res, error, 'health check');
@@ -333,7 +340,7 @@ export default function registerGeneralRoutes(app, { getLocalizedError }) {
     async (req, res) => {
       try {
         const { appId } = req.params;
-        const { data: platform } = configCache.getPlatform() || {};
+        const platform = configCache.getPlatform() || {};
         const defaultLang = platform?.defaultLanguage || 'en';
         const language = req.headers['accept-language']?.split(',')[0] || defaultLang;
 
@@ -347,7 +354,7 @@ export default function registerGeneralRoutes(app, { getLocalizedError }) {
             new Error('apps is null')
           );
         }
-        const appData = apps.find(a => a.id === appId);
+        const appData = findByIdCaseInsensitive(apps, appId);
         if (!appData) {
           const errorMessage = await getLocalizedError('appNotFound', {}, language);
           return sendErrorResponse(res, 404, errorMessage);
@@ -356,7 +363,7 @@ export default function registerGeneralRoutes(app, { getLocalizedError }) {
         // Check if user has permission to access this app
         if (req.user && req.user.permissions) {
           const allowedApps = req.user.permissions.apps || new Set();
-          if (!allowedApps.has('*') && !allowedApps.has(appId)) {
+          if (!allowedApps.has('*') && !allowedApps.has(appData.id)) {
             const errorMessage = await getLocalizedError('appNotFound', {}, language);
             return sendErrorResponse(res, 404, errorMessage);
           }

@@ -1,4 +1,5 @@
 import { z } from 'zod';
+import { zSafeId } from './common.js';
 import logger from '../utils/logger.js';
 
 // Localized string schema - matches client pattern for language codes
@@ -14,23 +15,16 @@ const localizedStringSchema = z.record(
  * Common fields for all source types
  */
 const baseSourceSchema = z.object({
-  id: z
-    .string()
-    .regex(
-      /^[a-zA-Z0-9._-]+$/,
-      'Source ID must contain only alphanumeric characters, underscores, dots, and hyphens'
-    )
-    .min(1, 'Source ID cannot be empty')
-    .max(50, 'Source ID cannot exceed 50 characters'),
+  id: zSafeId.min(1, 'Source ID cannot be empty').max(50, 'Source ID cannot exceed 50 characters'),
   name: localizedStringSchema,
   description: localizedStringSchema.optional(),
   type: z.enum(['filesystem', 'url', 'ifinder', 'page'], {
-    errorMap: () => ({ message: 'Type must be filesystem, url, ifinder, or page' })
+    error: 'Type must be filesystem, url, ifinder, or page'
   }),
-  enabled: z.boolean().default(true),
-  exposeAs: z.enum(['prompt', 'tool']).default('prompt'),
+  enabled: z.boolean().prefault(true),
+  exposeAs: z.enum(['prompt', 'tool']).prefault('prompt'),
   category: z.string().optional(),
-  tags: z.array(z.string()).default([]),
+  tags: z.array(z.string()).prefault([]),
   created: z.string().optional(),
   updated: z.string().optional()
 });
@@ -42,7 +36,7 @@ const baseSourceSchema = z.object({
 const filesystemConfigSchema = z
   .object({
     path: z.string().min(1, 'File path is required'),
-    encoding: z.string().default('utf-8')
+    encoding: z.string().prefault('utf-8')
   })
   .strict();
 
@@ -53,30 +47,36 @@ const filesystemConfigSchema = z
 const urlConfigSchema = z
   .object({
     url: z.string().url('Valid URL is required'),
-    method: z.enum(['GET', 'POST']).default('GET'),
-    headers: z.record(z.string()).default({}),
-    timeout: z.number().min(1000).max(60000).default(10000),
-    followRedirects: z.boolean().default(true),
-    maxRedirects: z.number().min(0).max(10).default(5),
-    retries: z.number().min(0).max(10).default(3),
-    maxContentLength: z.number().positive().default(1048576),
-    cleanContent: z.boolean().default(true)
+    method: z.enum(['GET', 'POST']).prefault('GET'),
+    headers: z.record(z.string()).prefault({}),
+    timeout: z.number().min(1000).max(60000).prefault(10000),
+    followRedirects: z.boolean().prefault(true),
+    maxRedirects: z.number().min(0).max(10).prefault(5),
+    retries: z.number().min(0).max(10).prefault(3),
+    maxContentLength: z.number().positive().prefault(1048576),
+    cleanContent: z.boolean().prefault(true)
   })
   .strict();
 
 /**
  * iFinder source configuration schema
  * Complete schema to match IFinderHandler expectations and client form
+ *
+ * Connection settings (base URL, JWT authentication) come from the central
+ * iFinder integration in platform.json — a source only selects which
+ * documents to load: either one pinned document ID or a search query that
+ * loads the top `maxResults` matching documents.
  */
+const emptyStringAsUndefined = value =>
+  typeof value === 'string' && value.trim() === '' ? undefined : value;
+
 const ifinderConfigSchema = z
   .object({
-    baseUrl: z.string().url('Valid base URL is required'),
-    apiKey: z.string().min(1, 'API key is required'),
-    searchProfile: z.string().default('default'),
-    maxResults: z.number().min(1).max(100).default(10),
-    queryTemplate: z.string().default(''),
-    filters: z.record(z.any()).default({}),
-    maxLength: z.number().positive().default(10000)
+    documentId: z.preprocess(emptyStringAsUndefined, z.string().optional()),
+    query: z.preprocess(emptyStringAsUndefined, z.string().optional()),
+    searchProfile: z.preprocess(emptyStringAsUndefined, z.string().optional()),
+    maxResults: z.number().min(1).max(100).prefault(10),
+    maxLength: z.number().positive().prefault(10000)
   })
   .strict();
 
@@ -86,14 +86,8 @@ const ifinderConfigSchema = z
  */
 const pageConfigSchema = z
   .object({
-    pageId: z
-      .string()
-      .min(1, 'Page ID is required')
-      .regex(
-        /^[a-zA-Z0-9._-]+$/,
-        'Page ID must contain only letters, numbers, underscores, dots, and hyphens'
-      ),
-    language: z.string().default('en')
+    pageId: zSafeId.min(1, 'Page ID is required'),
+    language: z.string().prefault('en')
   })
   .strict();
 
@@ -101,9 +95,9 @@ const pageConfigSchema = z
  * Caching configuration schema
  */
 const cachingConfigSchema = z.object({
-  ttl: z.number().positive().default(3600), // 1 hour in seconds
-  strategy: z.enum(['static', 'refresh']).default('static'),
-  enabled: z.boolean().default(true)
+  ttl: z.number().positive().prefault(3600), // 1 hour in seconds
+  strategy: z.enum(['static', 'refresh']).prefault('static'),
+  enabled: z.boolean().prefault(true)
 });
 
 /**
@@ -163,7 +157,7 @@ export function validateSourceConfig(source) {
     }
 
     if (validated.type === 'ifinder') {
-      validateIFinderConfig(validated.config);
+      validateIFinderConfig(validated);
     }
 
     if (validated.type === 'page') {
@@ -175,7 +169,7 @@ export function validateSourceConfig(source) {
     logger.error('Source validation error', { component: 'ConfigLoader', error });
     return {
       success: false,
-      errors: error.errors || [{ message: error.message }]
+      errors: error.issues || [{ message: error.message }]
     };
   }
 }
@@ -202,7 +196,7 @@ export function validateSourcesArray(sources) {
     logger.error('Sources array validation error', { component: 'ConfigLoader', error });
     return {
       success: false,
-      errors: error.errors || [{ message: error.message }]
+      errors: error.issues || [{ message: error.message }]
     };
   }
 }
@@ -218,22 +212,25 @@ function validateFilesystemPath(path) {
     throw new Error('Invalid file path: Path traversal not allowed');
   }
 
-  // Prevent absolute paths that could access system files
-  if (path.startsWith('/') && !path.startsWith('/app/') && !path.startsWith('/workspace/')) {
-    throw new Error('Invalid file path: Absolute paths to system directories not allowed');
-  }
-
   // Ensure path doesn't start with ./ (should be relative)
   if (path.startsWith('./')) {
     throw new Error('Invalid file path: Use relative paths without ./ prefix');
   }
 
-  // Check for dangerous paths
-  const dangerousPaths = ['/etc', '/var', '/usr', '/sys', '/proc', '/root'];
-  for (const dangerousPath of dangerousPaths) {
-    if (path.startsWith(dangerousPath)) {
-      throw new Error(`Invalid file path: Access to ${dangerousPath} not allowed`);
-    }
+  // Filesystem sources are only ever read/written under contents/sources —
+  // reject anything else so a source config can't be saved with a path
+  // pointing at config/ or other files outside that directory. This check
+  // applies unconditionally, so it also rules out absolute paths (there is
+  // no carve-out for e.g. "/app/..." or "/workspace/..." — the runtime
+  // handler in FileSystemHandler never accepted those either, since it
+  // requires the path to literally start with "sources/").
+  if (path !== 'sources' && !path.startsWith('sources/')) {
+    throw new Error('Invalid file path: Filesystem sources must be under the "sources/" directory');
+  }
+
+  // Reject dotfiles/dot-directories anywhere in the path (e.g. "sources/.env").
+  if (path.split('/').some(segment => segment.startsWith('.'))) {
+    throw new Error('Invalid file path: Dotfiles and dot-directories are not allowed');
   }
 }
 
@@ -255,18 +252,18 @@ function validateUrlConfig(config) {
 
 /**
  * Validate iFinder configuration
- * @param {Object} config - iFinder configuration to validate
+ * @param {Object} source - Full validated source (needed to inspect exposeAs)
  */
-function validateIFinderConfig(config) {
-  const { baseUrl } = config;
+function validateIFinderConfig(source) {
+  const { config, exposeAs } = source;
 
-  // Validate base URL protocol
-  const urlObj = new URL(baseUrl);
-  if (!['http:', 'https:'].includes(urlObj.protocol)) {
-    throw new Error('Invalid iFinder base URL: Only HTTP and HTTPS protocols are allowed');
+  // Tool-exposed sources receive documentId/query from the model at call time;
+  // prompt sources must know up front which documents to load.
+  if (exposeAs !== 'tool' && !config.documentId && !config.query) {
+    throw new Error(
+      'iFinder sources exposed as prompt context require either a document ID or a search query'
+    );
   }
-
-  // Additional validation is handled by the Zod schema
 }
 
 /**
@@ -333,12 +330,10 @@ export function getDefaultSourceConfig(type) {
       return {
         ...baseConfig,
         config: {
-          baseUrl: '',
-          apiKey: '',
-          searchProfile: 'default',
+          documentId: '',
+          query: '',
+          searchProfile: '',
           maxResults: 10,
-          queryTemplate: '',
-          filters: {},
           maxLength: 10000
         }
       };

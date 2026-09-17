@@ -160,7 +160,7 @@ jq . contents/config/platform.json
 // ❌ Missing required fields
 {
   "id": "my-app"
-  // Missing name, description, color, icon, system, tokenLimit
+  // Missing name, description, color, icon, system
 }
 
 // ✅ Minimum valid configuration
@@ -170,8 +170,7 @@ jq . contents/config/platform.json
   "description": {"en": "App description"},
   "color": "#3B82F6",
   "icon": "MessageSquare",
-  "system": {"en": "You are a helpful assistant"},
-  "tokenLimit": 4000
+  "system": {"en": "You are a helpful assistant"}
 }
 ```
 
@@ -263,6 +262,54 @@ node -e "require('dotenv').config(); console.log('JWT_SECRET exists:', !!process
 
 ## Authentication Troubles
 
+### Everything Returns 429 / Health Probes Fail
+
+**Symptoms:**
+
+- The whole platform looks wedged: the SPA never gets past loading, health
+  probes stop passing, and the container may be restarted by the orchestrator
+- `/api/auth/status` answers `429 Too Many Requests`
+- Often starts right after an SSO or OAuth/MCP sign-in flow
+
+**Cause:**
+
+The auth rate limiter is tight on purpose — 30 requests / 15 minutes in the
+shipped `platform.json` — because it guards password guessing. Two things can turn
+it into a self-inflicted outage:
+
+1. Something polls a read-only endpoint in the `/api/auth` namespace —
+   `/api/auth/status` is the usual one, since it is both the SPA's bootstrap call
+   and a natural liveness probe. Read-only auth endpoints are exempt from the
+   credential limiter as of 5.5.0; on older versions they were not.
+2. `trustProxy` is lower than the real number of proxy hops, so `req.ip` resolves
+   to the inner proxy and **every user shares one counter**.
+
+**Debugging Steps:**
+
+```bash
+# Is the limiter the one rejecting? Look at the window and remaining budget.
+curl -si https://your-ihub/api/auth/status | grep -i 'ratelimit\|^HTTP'
+
+# Does req.ip differ per client? If every log line shows the same address
+# while real clients differ, the hop count is too low.
+npm run logs | grep '"ip"' | tail
+```
+
+**Solutions:**
+
+1. Set the hop count to match your topology (`platform.json`):
+
+```json
+{
+  "trustProxy": 2
+}
+```
+
+2. Point liveness/readiness probes at `/api/health`, which is not rate limited.
+
+3. Raise the window if your deployment legitimately needs more credential
+   attempts — see [rate limiting](rate-limiting.md).
+
 ### Login Failures
 
 **Symptoms:**
@@ -292,7 +339,7 @@ jq '.users[].passwordHash' contents/config/users.json
 - **Password Hash Missing:** Run password rehashing utility:
 ```bash
 cd server
-node utils/rehashPasswords.js
+node utils/rehashPasswords.js --passwords='{"user_demo_admin":"password123","user_demo_user":"password123"}'
 ```
 
 - **Wrong Auth Mode:** Update `platform.json`:
@@ -547,6 +594,42 @@ curl -v https://api.openai.com/v1/models
 - **Timeout Issues:** Increase `REQUEST_TIMEOUT` environment variable
 - **Proxy Issues:** Configure proxy settings in environment
 
+### Admin Start Page Shows Only Grey Loading Boxes
+
+**Symptoms:**
+- `/admin` renders animated grey placeholders and never loads the dashboard
+- Typically on installations without outbound internet access
+
+**Cause:**
+
+The dashboard's update check contacts `api.github.com`. Where a firewall drops
+packets instead of refusing them, the connection never completes. Before 5.5.0
+the page waited for that request, so it stayed on its loading placeholders until
+the operating system's TCP timeout — minutes later.
+
+**Debugging Steps:**
+
+```bash
+# Should answer immediately, even with no internet access
+curl -s -w '\n%{time_total}s\n' -b "authToken=$TOKEN" \
+     http://localhost:3000/api/admin/version/check-update
+```
+
+A failed or timed-out check is reported in the response's `error` field; a check
+still running comes back as `"checking": true` with no result yet. Both are
+normal and neither blocks the page.
+
+**Solutions:**
+
+- Upgrade to 5.5.0 or later — the check is bounded and no longer blocks the page.
+- Set `NO_VERSION_CHECK=true` to skip the release lookup entirely on air-gapped
+  installations.
+- Raise `VERSION_CHECK_TIMEOUT_MS` (default `1000`) if GitHub is reachable but
+  slow, for example through a strict proxy — a check that times out means no
+  "update available" badge, nothing worse.
+- Check the server log for `component: VersionCheck` warnings to see what the
+  lookup reported.
+
 ---
 
 ## Performance Problems
@@ -732,6 +815,78 @@ handler.execute({
 ---
 
 ## LLM Provider Problems
+
+### "Sent no response headers within N ms — endpoint unreachable"
+
+**Symptoms:**
+
+- A call fails with `{"error":"Provider google sent no response headers within
+  30000 ms — endpoint unreachable","code":"TIMEOUT"}` (HTTP 504), for any
+  provider, while the same model answers fine from `curl`.
+- In chat, the same failure reads *"The google endpoint for model X could not be
+  reached: it did not answer the connection attempt."*
+- It hits longer jobs — a summary, a translation pass, a batch of them — and
+  short chats through the web UI are unaffected.
+- Or it hits **one image model, every single time**, while every text model on
+  the same provider and API key is fine.
+
+**Cause:**
+
+That message comes from the connect/headers ceiling, which bounds the phase
+before the provider's first response byte so an unreachable host fails fast
+instead of hanging on the 5-minute whole-call deadline (see
+[Stream deadlines](llm-client.md#stream-deadlines)). It is only a measure of
+reach if the request streams, and two things broke that — both fixed:
+
+- **The provider call was not streamed.** The OpenAI-compatible API defaults
+  `stream` to `false`, and that flag used to be passed straight through to the
+  provider. A buffered endpoint (Google's `:generateContent`, and every other
+  one) withholds its headers until the whole answer is generated, so the
+  ceiling was timing the generation. Every provider call now streams and is
+  collected when the client wants one object, so the headers arrive
+  immediately. The chat UI streamed already, which is why only API jobs failed.
+- **Queue time counted.** Every attempt waits for a slot in the per-model
+  throttle (`platform.requestConcurrency` defaults to **5**). With more than
+  five requests in flight for one model, the ones still queued were timed as
+  if they had been sent and ignored. The ceiling is now armed inside the slot.
+
+**The image-model case is different.** If the failure is confined to an image
+model, the ceiling is not misfiring — it is measuring the render. Google's
+image models (`gemini-3-pro-image`, the Nano Banana family) send nothing at all
+until the image is ready, headers included, so time-to-first-byte *is*
+generation time there however the request is sent. A 4K render at
+`thinkingLevel: high` needs well over the installation default. Those models
+ship with `connectTimeoutMs: 60000` of their own, and migration `V103` adds it
+to existing ones; raise it further for large renders on a slow link.
+
+**Solutions:**
+
+1. Upgrade to a build that carries both fixes. On an older build, setting
+   `"llm": { "connectTimeoutMs": 0 }` in `platform.json` (or
+   `LLM_CONNECT_TIMEOUT_MS=0`) removes the ceiling and leaves the call to
+   `REQUEST_TIMEOUT`; sending `"stream": true` from the client also avoids it.
+2. If it still fires, the endpoint really is slow to *accept* a request — a
+   VPN-only host, or a gateway that authenticates before forwarding. Raise the
+   ceiling per installation or for the one model:
+
+```json
+// contents/config/platform.json — the installation default (30000 as shipped)
+{ "llm": { "connectTimeoutMs": 45000 } }
+
+// contents/models/gemini-3-pro-image.json — just this model
+{ "connectTimeoutMs": 60000 }
+```
+
+Both are editable in Admin → Models (Connect Timeout) and Admin → Platform
+Configuration, so neither needs a hand-edited file.
+
+Raise `platform.requestConcurrency` (or the model's own `concurrency`) if
+batches are queueing longer than you expect.
+
+3. If the endpoint is genuinely unreachable, the server log names the URL it
+   tried (secrets redacted) alongside the model and provider. Check DNS, the
+   proxy and VPN reachability of that host from the server — not from your
+   workstation.
 
 ### API Key Issues
 

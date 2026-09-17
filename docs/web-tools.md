@@ -12,8 +12,8 @@ iHub Apps provides a unified web search system that automatically selects the be
 |----------|------|----------|
 | **Google Search** | Native (Gemini models) | Grounded answers with Google Search citations |
 | **OpenAI Web Search** | Native (GPT models via Responses API) | Web-augmented responses with inline citations |
+| **Anthropic Web Search** | Native (Claude models) | Web-augmented responses with inline citations |
 | **Brave Search** | Server-side | Privacy-focused search, any model |
-| **Tavily Search** | Server-side | AI-optimized search, any model |
 
 ### Additional Web Tools
 
@@ -30,7 +30,7 @@ iHub Apps provides a unified web search system that automatically selects the be
 
 ## Unified Web Search Configuration
 
-> **Changed in v5.2.11**: Web search is now configured through a unified `websearch` object on each app instead of adding individual tool IDs (like `braveSearch`, `tavilySearch`, or `enhancedWebSearch`) to the `tools` array. Existing apps are automatically migrated.
+> **Changed in v5.2.11**: Web search is now configured through a unified `websearch` object on each app instead of adding individual tool IDs (like `braveSearch` or `enhancedWebSearch`) to the `tools` array. Existing apps are automatically migrated.
 
 ### App-Level Configuration
 
@@ -41,7 +41,6 @@ Add a `websearch` object to your app configuration:
   "id": "research-assistant",
   "name": { "en": "Research Assistant" },
   "system": { "en": "You are a research assistant with web search capabilities." },
-  "tokenLimit": 8000,
   "websearch": {
     "enabled": true,
     "provider": "auto",
@@ -59,12 +58,13 @@ Add a `websearch` object to your app configuration:
 | Property | Type | Default | Description |
 |----------|------|---------|-------------|
 | `enabled` | Boolean | `false` | Enable web search for this app |
-| `provider` | String | `"auto"` | Search provider: `"auto"`, `"brave"`, or `"tavily"` |
-| `useNativeSearch` | Boolean | `true` | Prefer native search (Google Search for Gemini, OpenAI Web Search for GPT) when available |
+| `provider` | String | `"auto"` | Search provider: `"auto"` or `"brave"` |
+| `useNativeSearch` | Boolean | `true` | Prefer native search (Google Search for Gemini, OpenAI Web Search for GPT, Anthropic Web Search for Claude) when available |
 | `maxResults` | Number | `5` | Maximum number of search results (1-20) |
 | `extractContent` | Boolean | `true` | Extract full page content from search results |
 | `contentMaxLength` | Number | `3000` | Maximum extracted content length per page (500-50,000 characters) |
 | `enabledByDefault` | Boolean | `false` | Whether web search is active by default (users can toggle it in the chat) |
+| `maxSearches` | Number | `5` | Cap on provider-run searches per model call when native search is used (sent to Anthropic as `max_uses`; 1-50). Anthropic bills each search separately |
 
 ### How Provider Resolution Works
 
@@ -83,8 +83,8 @@ The system automatically selects the best search tool at runtime based on the mo
 │  useNativeSearch + OpenAI Responses model?       │
 │    → OpenAI Web Search                           │
 │                                                  │
-│  provider = "tavily"?                            │
-│    → Tavily Search                               │
+│  useNativeSearch + Anthropic model?              │
+│    → Anthropic Web Search                        │
 │                                                  │
 │  Otherwise (provider = "auto" or "brave")        │
 │    → Brave Search                                │
@@ -109,7 +109,7 @@ When web search is enabled for an app, users see a toggle in the chat input area
 
 Apps that previously used websearch tool IDs in their `tools` array are automatically migrated on server startup (Migration V025). The migration:
 
-- Detects apps with `braveSearch`, `enhancedWebSearch`, `tavilySearch`, `googleSearch`, `webSearch`, or `webContentExtractor` in their `tools` array
+- Detects apps with `braveSearch`, `enhancedWebSearch`, `googleSearch`, `webSearch`, or `webContentExtractor` in their `tools` array
 - Infers the provider and content extraction settings from the tools used
 - Creates a unified `websearch` configuration object
 - Removes the deprecated tool IDs from the `tools` array
@@ -144,7 +144,6 @@ Search providers require API keys, which can be configured in two ways:
 1. Navigate to **Admin → Providers**
 2. Find your provider under **Web Search Providers**:
    - **Brave Search**: Click "Configure" and enter your Brave API key
-   - **Tavily Search**: Click "Configure" and enter your Tavily API key
 3. Save changes — no server restart required
 
 API keys are encrypted at rest using AES-256-GCM.
@@ -155,14 +154,26 @@ Add to your `config.env` file:
 
 ```env
 BRAVE_SEARCH_API_KEY=your_brave_api_key_here
-TAVILY_SEARCH_API_KEY=your_tavily_search_api_key_here
 ```
 
 The system checks admin panel configuration first, then falls back to environment variables.
 
 ### Native Search Providers
 
-Native search providers (Google Search and OpenAI Web Search) use the API keys already configured for the respective LLM providers. No additional API key setup is needed.
+Native search providers (Google Search, OpenAI Web Search, and Anthropic Web Search) use the API keys already configured for the respective LLM providers. No additional API key setup is needed. Anthropic's native web search is billed separately by Anthropic in addition to standard token costs — see [Anthropic's web search pricing](https://platform.claude.com/docs/en/agents-and-tools/tool-use/web-search-tool#usage-and-pricing).
+
+Native search is tuned per model in the model configuration (`nativeWebSearch`, see [Models → Native Web Search](models.md#native-web-search)):
+
+- `enabled: false` turns native search off for one model — for example an Anthropic-compatible gateway that does not implement the server tool — so apps fall back to Brave Search on that model.
+- Anthropic only: `toolVersion` selects the web search tool version (`web_search_20250305`, the basic version, by default; `web_search_20260209` and `web_search_20260318` add dynamic filtering on Claude 4.6 and later) and `dynamicFiltering` opts into filtering search results through code execution. Without it, newer versions are called directly (`allowed_callers: ["direct"]`), which is also what Google Cloud and Azure-hosted Foundry require.
+
+Three safeguards apply to every native search call:
+
+- **Search cap.** The app's `websearch.maxSearches` (default 5) or a workflow node's `maxWebSearches` is sent to Anthropic as `max_uses`. Once the cap is reached the model answers with what it has; the refused search reports `max_uses_exceeded` and is not billed.
+- **Fallback on rejection.** When the provider refuses the request because of web search — web search disabled for the organisation in the Claude Console, a model or gateway that does not support the tool version — the call is retried without native search and with the `braveSearch` tool instead. The rejection is remembered for 15 minutes per model so later calls skip the failing request.
+- **Paused turns.** A long Anthropic search turn can end with `stop_reason: pause_turn`. iHub replays the paused assistant message verbatim on a follow-up request (up to three times per call) so the answer is completed instead of truncated.
+
+The billable search count (`server_tool_use.web_search_requests`) is recorded as `webSearchRequests` on the call's usage, in the run log and in the admin usage statistics (`webSearch` totals per app, model and user).
 
 ## Tools Reference
 
@@ -179,37 +190,17 @@ Native search providers (Google Search and OpenAI Web Search) use the API keys a
 
 **Returns**: Array of search results with titles, URLs, descriptions, and optionally extracted page content.
 
-### Tavily Search (`tavilySearch`)
+### Native Search Providers (Google, OpenAI, Anthropic)
 
-**Purpose**: Search the web using the Tavily API, optimized for AI agents.
+Google Search grounding, OpenAI Web Search, and Anthropic Web Search are **not** tools — there is no `googleSearch`, `webSearch`, or `anthropicWebSearch` entry in `contents/tools/`. Each is a provider capability resolved automatically from the app's `websearch` config (see [Unified Web Search Configuration](#unified-web-search-configuration) above) and injected directly into the request by the model adapter:
 
-**Parameters**:
+| Provider | Native capability | How it works |
+|----------|--------------------|--------------|
+| Google Gemini | Google Search grounding | Mutually exclusive with function calling (Gemini API limitation) — function tools are dropped when native search is active for that request |
+| OpenAI (Responses API) | OpenAI Web Search | Combinable with function tools in the same request |
+| Anthropic Claude | Anthropic's server-side [web search tool](https://platform.claude.com/docs/en/agents-and-tools/tool-use/web-search-tool) | Combinable with function tools; Claude runs the search itself and returns results and citations in the same response, without a round trip through iHub; billed separately by Anthropic per search |
 
-- `query` (string, required): Search query
-- `search_depth` (string, optional): `"basic"` or `"advanced"` (default: `"basic"`)
-- `max_results` (integer, optional): Number of results to return (default: configured by app, max: 10)
-- `extractContent` (boolean, optional): Extract full content from results (default: configured by app)
-- `contentMaxLength` (number, optional): Maximum content length per page (default: configured by app)
-
-**Returns**: Array of search results with titles, URLs, content snippets, and optionally extracted page content.
-
-### Google Search (`googleSearch`)
-
-**Purpose**: Ground Gemini model responses with real-time Google Search results.
-
-- **Provider**: Google Gemini models only
-- **Type**: Provider-handled (native)
-- **Parameters**: None — automatically enabled
-- **Authentication**: Uses configured Gemini API key
-
-### OpenAI Web Search (`webSearch`)
-
-**Purpose**: Enable web search for OpenAI models via the Responses API.
-
-- **Provider**: OpenAI GPT models only
-- **Type**: Provider-handled (native)
-- **Parameters**: None — automatically enabled
-- **Authentication**: Uses configured OpenAI API key
+None of these take any parameters — they're automatically enabled when `websearch.useNativeSearch` is on and the app's model supports them (Anthropic additionally receives the app's search cap as `max_uses`). Search results and citations are surfaced as grounding metadata, which powers the "Grounding" answer-source badge and the collapsible **Sources** list under the answer: the pages the model cited, with title, site and the cited passage where the provider supplies it.
 
 ### Web Content Extractor (`webContentExtractor`)
 
@@ -219,7 +210,7 @@ Native search providers (Google Search and OpenAI Web Search) use the API keys a
 
 - `url` (string, required): The URL of the webpage to extract content from
 - `maxLength` (integer, optional): Maximum length of extracted content in characters (default: 5000)
-- `ignoreSSL` (boolean, optional, admin only): Ignore invalid HTTPS certificates. If omitted, the value configured in `tools.json` is used.
+- `ignoreSSL` (boolean, optional, admin only): Ignore invalid HTTPS certificates. If omitted, the value configured in the tool's file under `contents/tools/` is used.
 
 **Returns**:
 
@@ -235,7 +226,7 @@ Native search providers (Google Search and OpenAI Web Search) use the API keys a
 - Handles various webpage structures
 - Provides metadata extraction
 - Error handling for invalid URLs or failed requests
-- Optional `ignoreSSL` flag to bypass invalid HTTPS certificates (value can be preset in `tools.json`)
+- Optional `ignoreSSL` flag to bypass invalid HTTPS certificates (value can be preset in the tool's file under `contents/tools/`)
 - Detects missing pages or authentication requirements and reports them clearly
 - Returned errors include a `code` field so applications can translate messages and the UI automatically shows a localized error when possible
 - **SSRF protection**: Blocks access to private/internal IP addresses. Domains listed in the SSL whitelist configuration bypass this check (added in v5.2.12)
@@ -351,7 +342,6 @@ Here is a complete app configuration with web search enabled:
     "en": "You are a helpful AI assistant with access to web search. When the user asks a question that requires current information, use the web search tool to find relevant content. Always cite your sources with URLs.",
     "de": "Du bist ein hilfreicher KI-Assistent mit Zugriff auf Websuche. Wenn der Benutzer eine Frage stellt, die aktuelle Informationen erfordert, nutze das Websuch-Tool. Zitiere immer deine Quellen mit URLs."
   },
-  "tokenLimit": 8000,
   "preferredModel": "gemini-2.5-flash-preview-05-20",
   "preferredOutputFormat": "markdown",
   "websearch": {
@@ -422,27 +412,33 @@ The web content extractor includes protection against Server-Side Request Forger
    - Configure the key via Admin → Providers → Brave Search (recommended)
    - Or set the API key in your `config.env` file and restart the server
 
-2. **"TAVILY_SEARCH_API_KEY is not set"**
-   - Configure the key via Admin → Providers → Tavily Search (recommended)
-   - Or set the API key in your `config.env` file and restart the server
-
-3. **"Failed to extract content"**
+2. **"Failed to extract content"**
    - Check if the URL is accessible
    - Some websites may block automated requests
    - Try with a different URL to test functionality
 
-4. **"Request timeout"**
+3. **"Request timeout"**
    - The webpage is taking too long to load
    - Consider increasing timeout or trying a different URL
 
-5. **Web search not working after upgrade**
+4. **Web search not working after upgrade**
    - Migration V025 automatically converts old tool-based configs to the new `websearch` format
    - Check server logs for migration output
    - Verify the app has `websearch.enabled: true` in its configuration
 
-6. **Native search not activating for Gemini/GPT models**
+5. **Native search not activating for Gemini/GPT/Claude models**
    - Ensure `useNativeSearch` is `true` (default)
-   - Verify the model's provider is correctly identified as `google` or `openai-responses`
+   - Verify the model's provider is correctly identified as `google`, `openai-responses`, or `anthropic`
+   - Check the model configuration: `nativeWebSearch.enabled: false` switches that model to Brave Search
+
+6. **Answers on a Claude model come from Brave Search although native search is on** (log line `Native web search unavailable — falling back to a search tool`)
+   - The provider rejected the native search request. On Anthropic, check that web search is enabled for your organisation in the Claude Console and that the model supports the configured `nativeWebSearch.toolVersion` (the basic `web_search_20250305` works everywhere)
+   - Gateways or proxies that do not implement the server tool: set `nativeWebSearch.enabled: false` on that model so it uses Brave Search without the failed attempt
+   - The rejection is remembered for 15 minutes per model; restart the server to reset it earlier
+
+7. **Brave Search requests hang or time out**
+   - A search that works when called directly (e.g. from a browser or Postman on your own machine) but times out from iHub is usually the server's outbound proxy — either not configured when the network requires it, or configured but blocking/excluding Brave's domain
+   - See [Proxy Testing Guide → Still Getting Timeout Errors?](proxy-testing-guide.md#still-getting-timeout-errors) for Linux/macOS and Windows commands that reproduce the exact request iHub sends, with and without the proxy, so you can tell which side is failing
 
 ### Debugging
 

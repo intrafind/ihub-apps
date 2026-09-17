@@ -1,0 +1,40 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta http-equiv="X-UA-Compatible" content="IE=Edge" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Signing in…</title>
+    <style>
+      body {
+        font-family: 'Segoe UI', Tahoma, sans-serif;
+        padding: 16px;
+        margin: 0;
+        color: #323130;
+      }
+    </style>
+  </head>
+  <body>
+    <p id="status">Signing in…</p>
+    <script type="text/javascript">
+      (function () {
+        var status = document.getElementById('status');
+        try {
+          if (!window.opener) {
+            status.textContent =
+              'Could not return to the embed (no opener window). Close this tab and try again.';
+            return;
+          }
+          // The opener is iHub itself, so we can safely target its origin.
+          window.opener.postMessage(
+            { kind: 'ihub.nextcloud.authCallback', redirectUrl: window.location.href },
+            window.location.origin
+          );
+          window.close();
+        } catch (e) {
+          status.textContent = 'Could not return to the embed. Close this window and try again.';
+        }
+      })();
+    </script>
+  </body>
+</html>

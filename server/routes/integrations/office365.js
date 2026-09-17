@@ -14,23 +14,10 @@ import {
   sendBadRequest,
   sendErrorResponse
 } from '../../utils/responseHelpers.js';
+import { isValidReturnUrl } from '../../utils/oauthReturnUrl.js';
+import { buildContentDisposition } from '../../utils/safeContentDisposition.js';
 
 const router = express.Router();
-
-/**
- * Validate returnUrl to prevent open redirect attacks.
- * Allows relative paths and absolute URLs on the same hostname (any port).
- */
-function isValidReturnUrl(returnUrl, req) {
-  if (!returnUrl) return false;
-  if (returnUrl.startsWith('/') && !returnUrl.startsWith('//')) return true;
-  try {
-    const url = new URL(returnUrl);
-    return url.hostname === req.hostname;
-  } catch {
-    return false;
-  }
-}
 
 /**
  * Validate an identifier used in Office 365 / Microsoft Graph URLs.
@@ -83,6 +70,14 @@ router.get('/auth', authRequired, office365AuthLimiter, async (req, res) => {
       return sendErrorResponse(res, 500, 'Session not available');
     }
 
+    // authRequired only rejects missing `req.user` or anonymous users;
+    // it does NOT guarantee req.user.id is truthy. Refuse to start an
+    // OAuth flow without a real user id — otherwise tokens would land
+    // under a shared sentinel key and could be read by another caller.
+    if (!req.user?.id) {
+      return sendAuthRequired(res);
+    }
+
     // Generate state for CSRF protection
     const state = crypto.randomBytes(32).toString('hex');
 
@@ -101,7 +96,7 @@ router.get('/auth', authRequired, office365AuthLimiter, async (req, res) => {
       state,
       codeVerifier,
       providerId,
-      userId: req.user?.id || 'fallback-user',
+      userId: req.user.id,
       returnUrl: validatedReturnUrl,
       timestamp: Date.now()
     };
@@ -140,6 +135,18 @@ router.get('/:providerId/callback', authOptional, async (req, res) => {
       });
       // Redirect with a generic error code to avoid exposing raw error details in the URL
       return res.redirect('/settings/integrations?office365_error=oauth_failed');
+    }
+
+    // Some IdP edge cases (consent denied without `error`, or a manual
+    // hit on the callback URL) can land here with no `code`. Surface a
+    // stable error code instead of throwing inside `exchangeCodeForTokens`
+    // and leaking the raw error into the redirect URL.
+    if (!code) {
+      logger.error('❌ Office 365 OAuth callback missing code', {
+        component: 'Office 365',
+        providerId
+      });
+      return res.redirect('/settings/integrations?office365_error=missing_code');
     }
 
     // Check if session is available
@@ -236,131 +243,10 @@ router.get('/:providerId/callback', authOptional, async (req, res) => {
     }
 
     const catchSeparator = catchReturnUrl.includes('?') ? '&' : '?';
-    res.redirect(
-      `${catchReturnUrl}${catchSeparator}office365_error=${encodeURIComponent(error.message)}`
-    );
-  }
-});
-
-/**
- * Handle Office 365 OAuth callback (legacy - without provider ID in URL)
- * GET /api/integrations/office365/callback
- * @deprecated Use /:providerId/callback instead
- */
-router.get('/callback', authOptional, async (req, res) => {
-  try {
-    const { code, state, error: oauthError } = req.query;
-
-    // Find the session key that matches the state parameter
-    // We need to iterate through session keys to find the matching OAuth flow
-    let storedAuth = null;
-    let sessionKey = null;
-
-    if (req.session) {
-      // Look for any oauth_office365_* keys in the session
-      for (const key of Object.keys(req.session)) {
-        if (key.startsWith('oauth_office365_') && req.session[key]?.state === state) {
-          storedAuth = req.session[key];
-          sessionKey = key;
-          break;
-        }
-      }
-    }
-
-    // Get return URL early for error redirects
-    const returnUrl = storedAuth?.returnUrl || '/settings/integrations';
-    const separator = returnUrl.includes('?') ? '&' : '?';
-
-    // Check for OAuth errors
-    if (oauthError) {
-      logger.error('❌ Office 365 OAuth error:', {
-        component: 'Office 365',
-        error: oauthError
-      });
-      // Redirect with a generic error code to avoid exposing raw error details in the URL
-      return res.redirect(`${returnUrl}${separator}office365_error=oauth_failed`);
-    }
-
-    // Check if session is available
-    if (!req.session) {
-      logger.error('❌ No session available for Office 365 OAuth callback', {
-        component: 'Office 365'
-      });
-      return res.redirect(`${returnUrl}${separator}office365_error=no_session`);
-    }
-
-    // Validate state parameter - storedAuth should have been found above
-    if (!storedAuth || storedAuth.state !== state) {
-      logger.error('❌ Invalid Office 365 OAuth state parameter', {
-        component: 'Office 365'
-      });
-      return res.redirect(`${returnUrl}${separator}office365_error=invalid_state`);
-    }
-
-    // Check session timeout (15 minutes)
-    if (Date.now() - storedAuth.timestamp > 15 * 60 * 1000) {
-      logger.error('❌ Office 365 OAuth session expired', {
-        component: 'Office 365'
-      });
-      return res.redirect(`${returnUrl}${separator}office365_error=session_expired`);
-    }
-
-    // Exchange authorization code for tokens (pass request for auto-detection)
-    const tokens = await Office365Service.exchangeCodeForTokens(
-      storedAuth.providerId,
-      code,
-      storedAuth.codeVerifier,
-      req
-    );
-
-    // Verify we received a refresh token
-    if (!tokens.refreshToken) {
-      logger.error('❌ CRITICAL: No refresh token received from Office 365 OAuth.', {
-        component: 'Office 365'
-      });
-      logger.warn(
-        '⚠️ Storing tokens WITHOUT refresh capability - user will need to reconnect periodically',
-        { component: 'Office 365' }
-      );
-    }
-
-    // Store encrypted tokens for user
-    await Office365Service.storeUserTokens(storedAuth.userId, tokens);
-
-    // Clear session data using the provider-specific key
-    if (sessionKey) {
-      delete req.session[sessionKey];
-    }
-
-    logger.info('Office 365 OAuth completed', {
-      component: 'Office 365',
-      userId: storedAuth.userId,
-      providerId: storedAuth.providerId,
-      returnUrl
-    });
-
-    // Redirect back to the original page with success
-    res.redirect(`${returnUrl}${separator}office365_connected=true`);
-  } catch (error) {
-    logger.error('❌ Error handling Office 365 OAuth callback:', {
-      component: 'Office 365',
-      error: error.message
-    });
-
-    // Try to find any Office 365 OAuth session to get return URL
-    let returnUrl = '/settings/integrations';
-    if (req.session) {
-      for (const key of Object.keys(req.session)) {
-        if (key.startsWith('oauth_office365_')) {
-          returnUrl = req.session[key]?.returnUrl || returnUrl;
-          // Clear the session key
-          delete req.session[key];
-        }
-      }
-    }
-
-    const separator = returnUrl.includes('?') ? '&' : '?';
-    res.redirect(`${returnUrl}${separator}office365_error=${encodeURIComponent(error.message)}`);
+    // Use a stable error code rather than echoing `error.message` —
+    // some upstream errors interpolate user-influenced strings, and
+    // we don't want those landing in the redirect URL.
+    res.redirect(`${catchReturnUrl}${catchSeparator}office365_error=callback_failed`);
   }
 });
 
@@ -374,7 +260,9 @@ router.get('/status', authRequired, async (req, res) => {
       return sendAuthRequired(res);
     }
 
-    const isAuthenticated = await Office365Service.isUserAuthenticated(req.user.id);
+    const providerId = typeof req.query.providerId === 'string' ? req.query.providerId : undefined;
+
+    const isAuthenticated = await Office365Service.isUserAuthenticated(req.user.id, providerId);
 
     if (!isAuthenticated) {
       return res.json({
@@ -384,10 +272,10 @@ router.get('/status', authRequired, async (req, res) => {
     }
 
     // Get user info from Microsoft
-    const userInfo = await Office365Service.getUserInfo(req.user.id);
+    const userInfo = await Office365Service.getUserInfo(req.user.id, providerId);
 
     // Get token expiration info
-    const tokenInfo = await Office365Service.getTokenExpirationInfo(req.user.id);
+    const tokenInfo = await Office365Service.getTokenExpirationInfo(req.user.id, providerId);
 
     res.json({
       connected: true,
@@ -434,12 +322,18 @@ router.post('/disconnect', authRequired, async (req, res) => {
       return sendAuthRequired(res);
     }
 
-    const success = await Office365Service.deleteUserTokens(req.user.id);
+    const providerId =
+      (typeof req.query.providerId === 'string' && req.query.providerId) ||
+      (typeof req.body?.providerId === 'string' && req.body.providerId) ||
+      undefined;
+
+    const success = await Office365Service.deleteUserTokens(req.user.id, providerId);
 
     if (success) {
       logger.info('Office 365 disconnected', {
         component: 'Office 365',
-        userId: req.user.id
+        userId: req.user.id,
+        providerId
       });
       res.json({
         success: true,
@@ -513,17 +407,18 @@ router.get('/drives/:source', authRequired, async (req, res) => {
     }
 
     const { source } = req.params;
+    const providerId = typeof req.query.providerId === 'string' ? req.query.providerId : undefined;
     let drives = [];
 
     switch (source) {
       case 'personal':
-        drives = await Office365Service.listPersonalDrives(req.user.id);
+        drives = await Office365Service.listPersonalDrives(req.user.id, providerId);
         break;
       case 'sharepoint':
-        drives = await Office365Service.listSharePointDrives(req.user.id);
+        drives = await Office365Service.listSharePointDrives(req.user.id, providerId);
         break;
       case 'teams':
-        drives = await Office365Service.listTeamsDrives(req.user.id);
+        drives = await Office365Service.listTeamsDrives(req.user.id, providerId);
         break;
       default:
         return sendBadRequest(res, 'Source must be one of: personal, sharepoint, teams');
@@ -559,6 +454,7 @@ router.get('/items', authRequired, async (req, res) => {
     }
 
     const { driveId, folderId, search } = req.query;
+    const providerId = typeof req.query.providerId === 'string' ? req.query.providerId : undefined;
 
     if (driveId && !isValidGraphId(driveId)) {
       return sendBadRequest(res, 'driveId contains invalid characters or is too long');
@@ -574,9 +470,9 @@ router.get('/items', authRequired, async (req, res) => {
       if (!driveId) {
         return sendBadRequest(res, 'driveId is required for search');
       }
-      items = await Office365Service.searchItems(req.user.id, driveId, search);
+      items = await Office365Service.searchItems(req.user.id, driveId, search, providerId);
     } else {
-      items = await Office365Service.listItems(req.user.id, driveId, folderId);
+      items = await Office365Service.listItems(req.user.id, driveId, folderId, providerId);
     }
 
     res.json({
@@ -608,6 +504,7 @@ router.get('/download', authRequired, async (req, res) => {
     }
 
     const { fileId, driveId } = req.query;
+    const providerId = typeof req.query.providerId === 'string' ? req.query.providerId : undefined;
 
     if (!fileId) {
       return sendBadRequest(res, 'fileId query parameter is required');
@@ -621,12 +518,17 @@ router.get('/download', authRequired, async (req, res) => {
       return sendBadRequest(res, 'driveId contains invalid characters or is too long');
     }
 
-    const file = await Office365Service.downloadFile(req.user.id, fileId, driveId);
+    const file = await Office365Service.downloadFile(req.user.id, fileId, driveId, providerId);
 
-    // Set appropriate headers
-    res.setHeader('Content-Type', file.mimeType || 'application/octet-stream');
-    res.setHeader('Content-Length', file.size);
-    res.setHeader('Content-Disposition', `attachment; filename="${file.name}"`);
+    // Force `application/octet-stream` rather than reflecting the
+    // upstream Graph Content-Type. The download is always served with
+    // `Content-Disposition: attachment` so even `text/html` would not
+    // render today, but reflecting upstream MIME types means any
+    // future refactor that drops the attachment disposition would
+    // open an XSS path. Keep the safer baseline.
+    res.setHeader('Content-Type', 'application/octet-stream');
+    if (file.size) res.setHeader('Content-Length', file.size);
+    res.setHeader('Content-Disposition', buildContentDisposition(file.name));
 
     // Send file content
     res.send(file.content);

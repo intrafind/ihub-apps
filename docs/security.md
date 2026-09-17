@@ -434,23 +434,27 @@ The key path can be overridden by setting the `TOKEN_ENCRYPTION_KEY` environment
 
 #### Encrypted Fields
 
-The following fields in `platform.json` are encrypted at rest:
+These integrations no longer keep secrets inline in `platform.json`. Each one
+stores a `*Ref` field pointing to a named profile in the central credential
+store (`contents/config/credentials.json`, managed under Admin >
+Credentials), and the secret-bearing fields of that profile are what's
+actually encrypted at rest:
 
-| Config Section | Field |
+| Config Section | `*Ref` Field |
 |----------------|-------|
-| `jira` | `clientSecret` |
-| `cloudStorage.providers[]` (type: `office365`) | `clientSecret`, `tenantId` |
-| `cloudStorage.providers[]` (type: `googledrive`) | `clientSecret` |
-| `oidcAuth.providers[]` | `clientSecret` |
-| `ldapAuth.providers[]` | `adminPassword` |
-| `ntlmAuth` | `domainControllerPassword` |
-| `iFinder` | `privateKey` |
+| `jira` | `clientSecretRef` |
+| `cloudStorage.providers[]` (type: `office365`) | `clientSecretRef`, `tenantIdRef` |
+| `cloudStorage.providers[]` (type: `googledrive`) | `clientSecretRef` |
+| `oidcAuth.providers[]` | `clientSecretRef` |
+| `ldapAuth.providers[]` | `adminPasswordRef` |
+| `ntlmAuth` | `domainControllerPasswordRef` |
+| `iFinder` | `privateKeyRef` |
 
 #### Encryption Lifecycle
 
-- **On admin save** (`POST /api/admin/configs/platform`): Secrets are encrypted before writing to `platform.json`
-- **On admin read** (`GET /api/admin/configs/platform`): Secrets are decrypted, then sanitized to `***REDACTED***` before being returned to the browser
-- **At runtime** (`configCache.js`): Secrets are decrypted when the platform config is loaded into the in-memory cache so all consumers receive plaintext values
+- **On admin save** (`POST /api/admin/credentials`, `PUT /api/admin/credentials/:id`): Secret-bearing fields of the credential profile are encrypted before writing to `credentials.json`
+- **On admin read** (`GET /api/admin/credentials`, `GET /api/admin/credentials/:id`): Secrets are sanitized to `***REDACTED***` before being returned to the browser — plaintext is never sent back
+- **At runtime** (`configCache.js` / `CredentialService`): Secrets are decrypted when the credential store is loaded into the in-memory cache, so consumers resolving a `*Ref` via `CredentialService` receive plaintext values
 
 #### Guard Pattern
 
@@ -692,12 +696,10 @@ services:
   ihub-app:
     image: ihub-apps:latest
     volumes:
-      # Configuration as read-only
-      - ihub-config:/app/contents/config:ro
-      - ihub-apps:/app/contents/apps:ro
-      
-      # Writable data volumes
-      - ihub-data:/app/contents/data:rw
+      # contents/ must be writable: config migrations and admin-UI saves
+      # write into it at runtime, and it's seeded from image defaults on
+      # first boot when empty.
+      - ihub-contents:/app/contents:rw
       - ihub-logs:/app/logs:rw
     deploy:
       resources:

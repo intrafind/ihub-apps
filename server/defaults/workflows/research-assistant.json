@@ -36,7 +36,7 @@
     },
     {
       "id": "planner",
-      "type": "agent",
+      "type": "prompt",
       "name": { "en": "Research Planner", "de": "Forschungsplaner" },
       "description": {
         "en": "Plans the research approach by breaking down the query",
@@ -72,7 +72,7 @@
     },
     {
       "id": "searcher",
-      "type": "agent",
+      "type": "prompt",
       "name": { "en": "Web Searcher", "de": "Web-Sucher" },
       "description": {
         "en": "Executes web searches based on planned queries using braveSearch",
@@ -100,7 +100,7 @@
     },
     {
       "id": "synthesizer",
-      "type": "agent",
+      "type": "prompt",
       "name": { "en": "Research Synthesizer", "de": "Forschungssynthesizer" },
       "description": {
         "en": "Synthesizes search results into a comprehensive answer",

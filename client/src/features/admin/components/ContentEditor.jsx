@@ -105,7 +105,7 @@ function ContentEditor({ config, onUpdate }) {
             <h4 className="text-sm font-medium text-gray-900 dark:text-gray-100 mb-2">
               {t('admin.ui.content.preview', 'Preview')}
             </h4>
-            <div className="bg-white dark:bg-gray-700 p-3 rounded border dark:border-gray-600">
+            <div className="bg-white dark:bg-gray-700 p-3 rounded-sm border dark:border-gray-600">
               <div className="flex items-center space-x-2 text-gray-600 dark:text-gray-400 text-sm">
                 <svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                   <path
@@ -139,7 +139,7 @@ function ContentEditor({ config, onUpdate }) {
                 type="checkbox"
                 checked={config.disclaimer?.enabled !== false}
                 onChange={e => updateDisclaimer({ enabled: e.target.checked })}
-                className="h-4 w-4 text-indigo-600 focus:ring-indigo-500 border-gray-300 dark:border-gray-600 rounded"
+                className="h-4 w-4 text-indigo-600 focus:ring-indigo-500 border-gray-300 dark:border-gray-600 rounded-sm"
               />
               <label className="ml-2 block text-sm text-gray-900 dark:text-gray-100">
                 {t('admin.ui.content.disclaimerEnabled', 'Enable Disclaimer Popup')}
@@ -203,7 +203,7 @@ function ContentEditor({ config, onUpdate }) {
                   value={config.disclaimer?.version || ''}
                   onChange={e => updateDisclaimer({ version: e.target.value })}
                   placeholder="1.0"
-                  className="block w-full max-w-xs px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md shadow-sm focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100"
+                  className="block w-full max-w-xs px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md shadow-xs focus:outline-hidden focus:ring-indigo-500 focus:border-indigo-500 bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100"
                 />
                 <p className="mt-1 text-sm text-gray-500 dark:text-gray-400">
                   {t(
@@ -222,7 +222,7 @@ function ContentEditor({ config, onUpdate }) {
                   type="date"
                   value={config.disclaimer?.updated || ''}
                   onChange={e => updateDisclaimer({ updated: e.target.value })}
-                  className="block w-full max-w-xs px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md shadow-sm focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100"
+                  className="block w-full max-w-xs px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md shadow-xs focus:outline-hidden focus:ring-indigo-500 focus:border-indigo-500 bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100"
                 />
                 <p className="mt-1 text-sm text-gray-500 dark:text-gray-400">
                   {t(
@@ -297,7 +297,7 @@ function ContentEditor({ config, onUpdate }) {
                   'admin.ui.content.appsListLogoPlaceholder',
                   '/uploads/assets/my-logo.svg'
                 )}
-                className="block w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md shadow-sm focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100"
+                className="block w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md shadow-xs focus:outline-hidden focus:ring-indigo-500 focus:border-indigo-500 bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100"
               />
               <p className="mt-1 text-sm text-gray-500 dark:text-gray-400">
                 {t(
@@ -310,7 +310,7 @@ function ContentEditor({ config, onUpdate }) {
                   <p className="text-xs font-medium text-gray-500 dark:text-gray-400 mb-2">
                     {t('admin.ui.content.preview', 'Preview')}
                   </p>
-                  <div className="flex items-center justify-center bg-white dark:bg-gray-700 p-3 rounded">
+                  <div className="flex items-center justify-center bg-white dark:bg-gray-700 p-3 rounded-sm">
                     <img
                       src={config.icons.appsListLogo}
                       alt="Apps List Logo"
@@ -340,7 +340,7 @@ function ContentEditor({ config, onUpdate }) {
                         search: { ...config.appsList?.search, enabled: e.target.checked }
                       })
                     }
-                    className="rounded border-gray-300 dark:border-gray-600 text-indigo-600 focus:ring-indigo-500"
+                    className="rounded-sm border-gray-300 dark:border-gray-600 text-indigo-600 focus:ring-indigo-500"
                   />
                   <span className="ml-2 text-sm text-gray-900 dark:text-gray-100">
                     {t('admin.ui.content.enableSearch', 'Enable Search')}
@@ -358,7 +358,7 @@ function ContentEditor({ config, onUpdate }) {
                         categories: { ...config.appsList?.categories, enabled: e.target.checked }
                       })
                     }
-                    className="rounded border-gray-300 dark:border-gray-600 text-indigo-600 focus:ring-indigo-500"
+                    className="rounded-sm border-gray-300 dark:border-gray-600 text-indigo-600 focus:ring-indigo-500"
                   />
                   <span className="ml-2 text-sm text-gray-900 dark:text-gray-100">
                     {t('admin.ui.content.enableCategories', 'Enable Categories')}

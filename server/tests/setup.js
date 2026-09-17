@@ -1,3 +1,4 @@
+import { jest } from '@jest/globals';
 import logger from '../utils/logger.js';
 /**
  * Jest setup file for authentication security tests

@@ -3,6 +3,7 @@ import { useTranslation } from 'react-i18next';
 import ExportMenu from './ExportMenu';
 import Icon from '../../../shared/components/Icon';
 import CanvasVoiceInput from './CanvasVoiceInput';
+import useFeatureFlags from '../../../shared/hooks/useFeatureFlags';
 import './QuillToolbar.css';
 
 const QuillToolbar = ({
@@ -14,10 +15,14 @@ const QuillToolbar = ({
   onVoiceInput // Add callback for voice input
 }) => {
   const { t } = useTranslation();
+  const featureFlags = useFeatureFlags();
   const exportMenuRef = useRef(null);
   const [canUndo, setCanUndo] = useState(false);
   const [canRedo, setCanRedo] = useState(false);
   const [currentFormat, setCurrentFormat] = useState({});
+
+  // Check if export is enabled at both platform and app levels
+  const exportEnabled = featureFlags.isBothEnabled(app, 'export', true);
 
   const characterCount = content.replace(/<[^>]*>/g, '').length;
 
@@ -160,7 +165,7 @@ const QuillToolbar = ({
             {/* Text style dropdown */}
             <div className="relative">
               <select
-                className="modern-select bg-white border border-gray-300 rounded px-3 h-8 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+                className="modern-select bg-white border border-gray-300 rounded-sm px-3 h-8 text-sm focus:outline-hidden focus:ring-2 focus:ring-blue-500"
                 onChange={e => {
                   const headerValue = e.target.value;
                   if (headerValue === '') {
@@ -339,24 +344,30 @@ const QuillToolbar = ({
 
           {/* Right side - Word count and actions */}
           <div className="flex items-center gap-3">
-            <div className="text-sm text-gray-500 px-3 py-1 bg-gray-50 rounded border border-gray-200">
+            <div className="text-sm text-gray-500 px-3 py-1 bg-gray-50 rounded-sm border border-gray-200">
               {characterCount} characters
             </div>
 
-            <div className="relative" ref={exportMenuRef}>
-              <button
-                onClick={() => onToggleExportMenu(!showExportMenu)}
-                className="flex items-center gap-2 px-4 py-2 text-sm bg-blue-600 hover:bg-blue-700 text-white rounded-lg transition-colors"
-                title={t('canvas.export.title', 'Export Document')}
-                type="button"
-              >
-                <Icon name="download" size="sm" />
-                <span>{t('canvas.export.export', 'Export')}</span>
-              </button>
-              {showExportMenu && (
-                <ExportMenu content={content} onClose={() => onToggleExportMenu(false)} />
-              )}
-            </div>
+            {exportEnabled && (
+              <div className="relative" ref={exportMenuRef}>
+                <button
+                  onClick={() => onToggleExportMenu(!showExportMenu)}
+                  className="flex items-center gap-2 px-4 py-2 text-sm bg-blue-600 hover:bg-blue-700 text-white rounded-lg transition-colors"
+                  title={t('canvas.export.title', 'Export Document')}
+                  type="button"
+                >
+                  <Icon name="download" size="sm" />
+                  <span>{t('canvas.export.export', 'Export')}</span>
+                </button>
+                {showExportMenu && (
+                  <ExportMenu
+                    app={app}
+                    content={content}
+                    onClose={() => onToggleExportMenu(false)}
+                  />
+                )}
+              </div>
+            )}
           </div>
         </div>
       </div>

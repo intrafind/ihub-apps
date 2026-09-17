@@ -14,8 +14,13 @@
  */
 
 import { BaseNodeExecutor } from './BaseNodeExecutor.js';
+import interactionService from '../../loop/InteractionService.js';
+import runLog from '../../loop/RunLog.js';
+import { checkpointToInteraction } from '../../loop/RunStream.js';
 import { v4 as uuidv4 } from 'uuid';
 import { actionTracker } from '../../../actionTracker.js';
+import configCache from '../../../configCache.js';
+import { getLocalizedString } from '../../../utils/localize.js';
 
 /**
  * Executor for human checkpoint nodes.
@@ -113,6 +118,51 @@ export class HumanNodeExecutor extends BaseNodeExecutor {
       checkpointId: checkpoint.id
     });
 
+    // The checkpoint IS an interaction: persist it through the one service so
+    // it survives a restart, shows up in the interactions queue and is answered
+    // through the one answer endpoint (which resumes the execution, see
+    // checkpointResume.js). Approver groups come from the agent profile when
+    // this is an agent run; the service enforces them on answer. A checkpoint
+    // that cannot be raised fails the node instead of pausing a run nobody
+    // could ever resume.
+    const profileId = state?.data?._agent?.profileId || null;
+    const approverGroups = profileId ? this._approverGroupsFor(profileId) : [];
+    const template = checkpointToInteraction(checkpoint, {
+      runId: context.executionId,
+      executionId: context.executionId,
+      step: state?.data?._currentStep || 0
+    });
+    const runMeta = runLog.getRunMeta(context.executionId);
+    const principalId = runMeta?.principalId || null;
+    const identityMode = runMeta?.identityMode || null;
+    try {
+      await interactionService.raise({
+        id: checkpoint.id,
+        runId: context.executionId,
+        step: template.step,
+        kind: template.kind,
+        origin: 'node',
+        prompt: template.prompt,
+        policy: {
+          ...(approverGroups.length > 0 ? { approverGroups } : {}),
+          ...(checkpoint.timeout ? { timeoutMs: checkpoint.timeout } : {}),
+          onTimeout: 'fail'
+        },
+        source: {
+          ...template.source,
+          ...(profileId ? { profileId } : {}),
+          ...(principalId ? { principalId: String(principalId) } : {}),
+          ...(identityMode ? { identityMode } : {}),
+          ...(runMeta?.anonymous ? { anonymous: true } : {})
+        }
+      });
+    } catch (raiseErr) {
+      return this.createErrorResult(`Could not raise the human checkpoint: ${raiseErr.message}`, {
+        executionId: context.executionId,
+        checkpointId: checkpoint.id
+      });
+    }
+
     // Emit event for real-time notification
     actionTracker.emit('fire-sse', {
       event: 'workflow.human.required',
@@ -120,6 +170,17 @@ export class HumanNodeExecutor extends BaseNodeExecutor {
       executionId: context.executionId,
       checkpoint
     });
+
+    // Agent-specific HITL event for run-detail UIs
+    if (state?.data?._agent?.profileId) {
+      actionTracker.emit('fire-sse', {
+        event: 'agent.hitl.requested',
+        chatId: context.executionId,
+        executionId: context.executionId,
+        profileId: state.data._agent.profileId,
+        checkpoint
+      });
+    }
 
     // Return paused result with checkpoint info
     return {
@@ -158,6 +219,11 @@ export class HumanNodeExecutor extends BaseNodeExecutor {
       checkpointId,
       response
     });
+
+    // Approver groups (agent runs) are enforced by InteractionService.answer on
+    // the interaction's policy — the answer never reaches this point otherwise.
+    const agentEnvelope = state?.data?._agent;
+    const requester = context?.user;
 
     // Validate response against options if options were specified
     const { config } = node;
@@ -202,6 +268,20 @@ export class HumanNodeExecutor extends BaseNodeExecutor {
       response
     });
 
+    // Agent-specific approval/rejection event for run-detail UIs
+    if (agentEnvelope?.profileId) {
+      const isReject = response && /reject|deny|cancel/i.test(String(response));
+      actionTracker.emit('fire-sse', {
+        event: isReject ? 'agent.hitl.rejected' : 'agent.hitl.approved',
+        chatId: context?.executionId,
+        executionId: context?.executionId,
+        profileId: agentEnvelope.profileId,
+        checkpointId,
+        response,
+        userId: requester?.id || null
+      });
+    }
+
     // Return completed result with response data
     // Include branch in output for consistency with ExecutionProgress display
     return this.createSuccessResult(
@@ -211,12 +291,36 @@ export class HumanNodeExecutor extends BaseNodeExecutor {
       },
       {
         stateUpdates: {
-          [`humanResponse_${node.id}`]: humanResponseOutput,
+          // A step id may contain characters a template cannot reference —
+          // `humanResponse_plan-checkpoint` is unreachable from `{{...}}`.
+          // `outputVariable` lets the step name its own answer, like every
+          // other step; the id-derived key stays the default.
+          [node.config?.outputVariable || `humanResponse_${node.id}`]: humanResponseOutput,
           pendingCheckpoint: null // Clear the pending checkpoint
         },
         branch: response // Use the response value as the branch for decision routing
       }
     );
+  }
+
+  /**
+   * Approver groups configured on an agent profile (`hitl.approverGroups`).
+   * @private
+   */
+  _approverGroupsFor(profileId) {
+    try {
+      const profiles = configCache.getAgentProfiles ? configCache.getAgentProfiles(true) : null;
+      const profile = profiles?.data?.find(p => p.id === profileId);
+      const groups = profile?.hitl?.approverGroups;
+      return Array.isArray(groups) ? groups.filter(g => typeof g === 'string') : [];
+    } catch (err) {
+      this.logger.warn('Failed to resolve approver groups', {
+        component: 'HumanNodeExecutor',
+        profileId,
+        error: err.message
+      });
+      return [];
+    }
   }
 
   /**
@@ -227,13 +331,7 @@ export class HumanNodeExecutor extends BaseNodeExecutor {
    * @private
    */
   _getLocalizedValue(value, language) {
-    if (typeof value === 'string') {
-      return value;
-    }
-    if (value && typeof value === 'object') {
-      return value[language] || value.en || Object.values(value)[0] || '';
-    }
-    return '';
+    return getLocalizedString(value, language);
   }
 
   /**

@@ -55,8 +55,15 @@ The server reads settings from the environment or a `.env` file such as `config.
 | `HOST`                     | Host interface to bind to. Use `0.0.0.0` to listen on all interfaces (recommended), then access via `localhost` or `127.0.0.1` in your browser. **Never access via `http://0.0.0.0:*` as browsers will reject cookies.** | `0.0.0.0`                                        |
 | `NODE_ENV`                 | Runtime environment (`development`, `production`, `test`). Affects cookie security flags, debug logging, and cache TTLs. | – |
 | `REQUEST_TIMEOUT`          | LLM request timeout in milliseconds                               | `300000`                                         |
-| `WORKERS`                  | Number of Node.js cluster workers (alias: `NUM_WORKERS`)          | `1`                                              |
-| `NUM_WORKERS`              | Number of Node.js cluster workers (alias of `WORKERS`)            | `1`                                              |
+| `LLM_TRANSIENT_RETRIES`    | How often a transient provider failure (429, 5xx, network) is retried with backoff before an LLM call fails. `WORKFLOW_LLM_TRANSIENT_RETRIES` is still honoured. | `3`                                              |
+| `LLM_CONNECT_TIMEOUT_MS`   | Longest a provider call waits for the response headers before failing as unreachable, per attempt. Every provider call streams, so those headers arrive as soon as the request is accepted; time queued in the per-model throttle does not count. `0` disables it. Overridable per installation via `llm.connectTimeoutMs` in `platform.json` and per model via `connectTimeoutMs`. See [Stream deadlines](llm-client.md#stream-deadlines). | `30000` |
+| `LLM_STREAM_IDLE_TIMEOUT_MS` | Longest gap between two chunks of a stream that has already produced one, before the turn is ended. Armed only after the first chunk, so a model that thinks for minutes is not cut off. `0` disables it. Overridable via `llm.streamIdleTimeoutMs` and a model's `streamIdleTimeoutMs`. | `60000` |
+| `UV_THREADPOOL_SIZE`       | Size of the libuv threadpool that runs DNS lookups, file I/O and crypto. iHub sets `16` when the variable is unset (Node's own default is `4`, which lets two hung DNS lookups stall every outbound request). Must come from the environment or `.env`; it is read once at startup. | `16`                                             |
+| `DNS_LOOKUP_TIMEOUT_MS`    | Longest an outbound connection waits for a hostname lookup before failing with a DNS error. `0` disables the limit. See [Outbound DNS guard](llm-client.md#outbound-dns-guard). | `5000`                                           |
+| `DNS_NEGATIVE_CACHE_MS`    | How long a failed or overdue hostname lookup is remembered so new requests to that host fail immediately instead of queueing another lookup. `0` disables it. | `30000`                                          |
+| `LLM_DEBUG_DUMP_ALL`       | Set to `1` to write every outbound LLM request body to `contents/data/debug/llm-request/` (auth headers and URL keys redacted). Diagnostics only. | –                                                |
+| `WORKERS`                  | Number of Node.js cluster workers (alias: `NUM_WORKERS`). Set to `1` to disable clustering. See [Scaling with Multiple Workers](scaling.md). | `4`                                              |
+| `NUM_WORKERS`              | Number of Node.js cluster workers (alias of `WORKERS`)            | `4`                                              |
 | `OPENAI_API_KEY`           | API key for OpenAI models                                         | –                                                |
 | `ANTHROPIC_API_KEY`        | API key for Anthropic models                                      | –                                                |
 | `MISTRAL_API_KEY`          | API key for Mistral models                                        | –                                                |
@@ -66,11 +73,10 @@ The server reads settings from the environment or a `.env` file such as `config.
 | `CONTENTS_DIR`             | Directory containing the `contents` folder                        | `contents`                                       |
 | `DATA_DIR`                 | Directory for storing application data                            | `data`                                           |
 | `APP_ROOT_DIR`             | Override the application root path when running packaged binaries | –                                                |
-| `MCP_SERVER_URL`           | URL of a Model Context Protocol server for tool discovery         | –                                                |
 | `BRAVE_SEARCH_API_KEY`     | API key for the Brave Search tool                                 | –                                                |
 | `BRAVE_SEARCH_ENDPOINT`    | Custom Brave Search API endpoint                                  | `https://api.search.brave.com/res/v1/web/search` |
-| `TAVILY_SEARCH_API_KEY`    | API key for the Tavily Search tool                                | –                                                |
-| `TAVILY_ENDPOINT`          | Custom Tavily API endpoint                                        | `https://api.tavily.com/search`                  |
+
+For Model Context Protocol (MCP) servers, see [MCP Integration](mcp-integration.md). The legacy `MCP_SERVER_URL` env var was removed in favour of multi-server config at `contents/config/mcpServers.json`; existing installs are auto-migrated by V042.
 | `HTTP_PROXY`               | HTTP proxy URL for external requests                              | –                                                |
 | `HTTPS_PROXY`              | HTTPS proxy URL for external requests                             | –                                                |
 | `NO_PROXY`                 | Comma-separated list of hosts that bypass the proxy               | –                                                |
@@ -91,6 +97,8 @@ The server reads settings from the environment or a `.env` file such as `config.
 | `AZURE_TENANT_ID`          | Azure tenant ID for the Office 365 / Microsoft Teams cloud storage integration. | – |
 | `NTLM_LDAP_USER`           | LDAP bind user for NTLM authentication domain controller queries. Overrides `ntlmAuth.domainControllerUser` in `platform.json`. | – |
 | `NTLM_LDAP_PASSWORD`       | LDAP bind password for NTLM authentication domain controller queries. Overrides `ntlmAuth.domainControllerPassword` in `platform.json`. | – |
+| `NO_VERSION_CHECK`         | Skip the release lookup against `api.github.com` entirely (alias: `IHUB_NO_VERSION_CHECK`). Truthy: `1`, `true`, `yes`, `on`. See [Update Procedures](INSTALLATION.md#update-procedures). | – |
+| `VERSION_CHECK_TIMEOUT_MS` | Abort deadline in milliseconds for the release lookup (alias: `IHUB_VERSION_CHECK_TIMEOUT_MS`). Clamped to 500–60000. | `1000` |
 
 The concurrency of outbound requests is configured via `requestConcurrency` in `contents/config/platform.json` and can be overridden per model or tool. If this value is omitted or below `1`, requests are not throttled.
 The delay between requests can be adjusted with `requestDelayMs` in the same configuration files. A value of `0` disables the delay.
@@ -123,6 +131,8 @@ The server exposes configured models via an OpenAI compatible API. It reuses the
 
 Authenticated requests can call `/api/inference/v1/chat/completions` and `/api/inference/v1/models` using any OpenAI compatible client. Model access is filtered based on the user's permissions.
 
+For a complete walkthrough — setup, credential issuance, and client/SDK examples (curl, Python, JavaScript, LangChain) — see [OpenAI-Compatible API](openai-compatible-api.md).
+
 ## SSL Configuration
 
 To enable HTTPS you must provide certificate files via environment variables:
@@ -133,7 +143,7 @@ To enable HTTPS you must provide certificate files via environment variables:
 | `SSL_CERT` | Path to the certificate file       |
 | `SSL_CA`   | Path to an optional CA certificate |
 
-When `SSL_KEY` and `SSL_CERT` are set the server starts in HTTPS mode.
+When `SSL_KEY` and `SSL_CERT` are set the server starts in HTTPS mode. For a complete walkthrough of serving iHub Apps over HTTPS — native TLS, reverse proxy termination, secure cookies, Docker, and troubleshooting — see [Running with SSL/HTTPS](ssl-https-setup.md).
 
 ### External Services with Self-Signed Certificates
 
@@ -225,7 +235,7 @@ When enabled, the proxy configuration applies to:
 - **LLM Providers**: OpenAI, Anthropic, Google, Mistral, custom endpoints
 - **Authentication**: OIDC, OAuth2, Azure AD, LDAP
 - **Integrations**: Jira, Microsoft Graph (Entra ID)
-- **Tools**: Web search (Brave, Tavily), web content extraction
+- **Tools**: Web search (Brave), web content extraction
 - **Sources**: External URL sources, iFinder integrations
 
 ### Troubleshooting
@@ -248,3 +258,9 @@ Run the production build with four workers on port 8080:
 ```bash
 PORT=8080 HOST=127.0.0.1 WORKERS=4 npm run start:prod
 ```
+
+Four workers is now the default; set `WORKERS=1` to fall back to a single
+process (recommended in development because hot reloaders and breakpoints
+behave badly across forked children). See
+[Scaling with Multiple Workers](scaling.md) for details on the sticky-session
+cluster, tuning guidance, and the limitations to be aware of.

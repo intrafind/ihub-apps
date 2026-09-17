@@ -1,41 +1,140 @@
-import { useState, useEffect, useRef, useCallback } from 'react';
+import { useState, useEffect, useRef, useCallback, useMemo } from 'react';
 import { apiClient } from '../../../api/client';
+import { answerInteraction } from '../../../api';
 import { buildApiUrl } from '../../../utils/runtimeBasePath';
 import useFeatureFlags from '../../../shared/hooks/useFeatureFlags';
+import useRunStream from '../../../shared/hooks/useRunStream';
+import { RUN_EVENTS, getRuns } from '../../../shared/run/runReducer';
+import { projectWorkflowState, isActiveWorkflowStatus } from '../workflowRunProjection';
+
+/** Delay before reconnecting after the stream dropped while the execution is still active. */
+const RECONNECT_DELAY_MS = 3000;
+/** Delay before refetching the REST state after the root run completed (server has the full state). */
+const REFETCH_AFTER_COMPLETE_MS = 500;
 
 /**
- * Hook for managing a single workflow execution.
- * Handles SSE streaming for real-time updates and checkpoint responses.
- * Only fetches if the workflows feature is enabled.
+ * Hook for managing a single workflow execution (or agent run).
  *
- * @param {string} executionId - The workflow execution ID
+ * The live stream (`GET ${streamEndpoint}/:id/stream`, SSE v2) is consumed via
+ * `useRunStream` and projected with `projectWorkflowState` onto the state
+ * shape the pages read; the REST state (`GET ${stateEndpoint}/:id`) is the
+ * base the live frames are layered on. Events of child runs (sub-workflow
+ * executions) arriving on the same stream are folded into the same state.
+ * Only fetches if the required feature flag(s) are enabled.
+ *
+ * @param {string} executionId - The workflow execution ID (root run id of the stream)
+ * @param {Object} [options]
+ * @param {string|string[]} [options.requireFeature='workflows'] - Feature flag id(s); any one enabled suffices
+ * @param {string} [options.stateEndpoint='workflows/executions'] - REST base path (relative to the API root)
+ * @param {string} [options.streamEndpoint='workflows/executions'] - Stream base path (buildApiUrl prepends /api)
+ * @param {string} [options.cancelEndpoint='cancel'] - Suffix for the cancel endpoint
  * @returns {Object} Execution state and methods
- * @property {Object|null} state - Current execution state
+ * @property {Object|null} state - Current execution state (REST state + live projection)
  * @property {boolean} loading - Whether initial state is loading
- * @property {boolean} connected - Whether SSE connection is active
+ * @property {boolean} connected - Whether the stream is open
  * @property {string|null} error - Error message if any
- * @property {Function} respondToCheckpoint - Function to respond to human checkpoint
- * @property {Function} reconnect - Function to reconnect SSE stream
- * @property {Function} refetch - Function to refetch execution state
+ * @property {Function} respondToCheckpoint - Answer a human checkpoint (the execution's pending interaction)
+ * @property {Function} cancelExecution - Cancel the execution
+ * @property {Function} reconnect - Reconnect the stream
+ * @property {Function} refetch - Refetch the REST state
  */
-function useWorkflowExecution(executionId) {
-  const [state, setState] = useState(null);
+function useWorkflowExecution(executionId, options = {}) {
+  const {
+    requireFeature = 'workflows',
+    stateEndpoint = 'workflows/executions',
+    streamEndpoint = 'workflows/executions',
+    cancelEndpoint = 'cancel'
+  } = options;
+
+  const [baseState, setBaseState] = useState(null);
   const [loading, setLoading] = useState(true);
-  const [connected, setConnected] = useState(false);
   const [error, setError] = useState(null);
-  const eventSourceRef = useRef(null);
   const reconnectTimeoutRef = useRef(null);
+  // Tracks whether the hook is still mounted so the reconnect timer and the
+  // post-completion refetch bail out after unmount.
+  const mountedRef = useRef(true);
   const featureFlags = useFeatureFlags();
 
-  // Fetch initial execution state
+  const requiredFeatures = useMemo(
+    () => (Array.isArray(requireFeature) ? requireFeature : [requireFeature]),
+    [requireFeature]
+  );
+  const isFeatureEnabled = useCallback(
+    () => requiredFeatures.some(id => featureFlags.isEnabled(id, true)),
+    [requiredFeatures, featureFlags]
+  );
+  const featureDisabledMessage = () =>
+    `Required feature(s) ${requiredFeatures.join(' or ')} disabled`;
+
+  // Latest values for callbacks that must not re-create the stream.
+  const fetchStateRef = useRef(null);
+  const connectRef = useRef(null);
+  const statusRef = useRef(null);
+  const streamStateRef = useRef(null);
+
+  const scheduleReconnect = useCallback(() => {
+    if (reconnectTimeoutRef.current) clearTimeout(reconnectTimeoutRef.current);
+    reconnectTimeoutRef.current = setTimeout(() => {
+      reconnectTimeoutRef.current = null;
+      // Bail out if the component unmounted while we were waiting.
+      if (!mountedRef.current) return;
+      // Only reconnect if the execution is still running/paused
+      if (isActiveWorkflowStatus(statusRef.current)) {
+        console.log('Attempting SSE reconnection...');
+        connectRef.current?.();
+      }
+    }, RECONNECT_DELAY_MS);
+  }, []);
+
+  const handleRunEnd = useCallback(envelope => {
+    // Refetch state after completion to ensure all data is loaded (the stream
+    // payload may be truncated; the server has the full state).
+    if (envelope?.data?.status === 'completed') {
+      setTimeout(() => {
+        if (mountedRef.current) fetchStateRef.current?.();
+      }, REFETCH_AFTER_COMPLETE_MS);
+    }
+  }, []);
+
+  const handleStreamError = useCallback(
+    err => {
+      console.error('Workflow SSE error:', err);
+      scheduleReconnect();
+    },
+    [scheduleReconnect]
+  );
+
+  const {
+    state: streamState,
+    connect,
+    disconnect,
+    reset,
+    push,
+    connected
+  } = useRunStream({
+    closeOnRunEnd: true,
+    onRunEnd: handleRunEnd,
+    onError: handleStreamError,
+    onClose: scheduleReconnect
+  });
+  streamStateRef.current = streamState;
+
+  const state = useMemo(
+    () => (baseState ? projectWorkflowState(streamState, executionId, baseState) : null),
+    [streamState, baseState, executionId]
+  );
+  statusRef.current = state?.status ?? null;
+
+  // Fetch the REST execution state. The response is authoritative: the live
+  // accumulation is dropped (the legacy hook replaced the whole state on fetch)
+  // and later frames layer on top of the fresh base.
   const fetchState = useCallback(async () => {
     if (!executionId) return;
 
-    // Don't fetch if workflows feature is disabled
-    if (!featureFlags.isEnabled('workflows', true)) {
-      setState(null);
+    if (!isFeatureEnabled()) {
+      setBaseState(null);
       setLoading(false);
-      setError('Workflows feature is disabled');
+      setError(featureDisabledMessage());
       return;
     }
 
@@ -43,287 +142,96 @@ function useWorkflowExecution(executionId) {
     setError(null);
 
     try {
-      const response = await apiClient.get(`/workflows/executions/${executionId}`);
-      setState(response.data);
+      const response = await apiClient.get(`/${stateEndpoint}/${executionId}`);
+      if (!mountedRef.current) return;
+      setBaseState(response.data);
+      reset({ keepConnection: true, keepSeq: true });
     } catch (err) {
       console.error('Failed to fetch execution state:', err);
-      setError(err.response?.data?.error || err.message || 'Failed to load execution');
+      if (mountedRef.current) {
+        setError(err.response?.data?.error || err.message || 'Failed to load execution');
+      }
     } finally {
-      setLoading(false);
+      if (mountedRef.current) setLoading(false);
     }
-  }, [executionId, featureFlags]);
+    // eslint-disable-next-line @eslint-react/exhaustive-deps
+  }, [executionId, stateEndpoint, isFeatureEnabled, reset]);
+  fetchStateRef.current = fetchState;
 
-  // Connect to SSE stream
+  // Open the SSE v2 stream (root run = executionId).
   const connectSSE = useCallback(() => {
     if (!executionId) return;
-
-    // Don't connect if workflows feature is disabled
-    if (!featureFlags.isEnabled('workflows', true)) {
-      return;
-    }
-
-    // Close existing connection
-    if (eventSourceRef.current) {
-      eventSourceRef.current.close();
-      eventSourceRef.current = null;
-    }
-
-    const url = buildApiUrl(`workflows/executions/${executionId}/stream`);
-    const eventSource = new EventSource(url);
-    eventSourceRef.current = eventSource;
-
-    eventSource.onopen = () => {
-      setConnected(true);
-      setError(null);
-    };
-
-    // Handle workflow events
-    const eventTypes = [
-      'connected',
-      'workflow.start',
-      'workflow.iteration',
-      'workflow.node.start',
-      'workflow.node.complete',
-      'workflow.node.error',
-      'workflow.paused',
-      'workflow.human.required',
-      'workflow.human.responded',
-      'workflow.complete',
-      'workflow.failed',
-      'workflow.cancelled',
-      'workflow.checkpoint.saved'
-    ];
-
-    const handleEvent = event => {
-      let data = null;
-      if (event.data) {
-        try {
-          data = JSON.parse(event.data);
-        } catch {
-          data = event.data;
-        }
-      }
-
-      const eventType = event.type;
-
-      switch (eventType) {
-        case 'connected':
-          // SSE connection established
-          break;
-
-        case 'workflow.iteration':
-          // Iteration progress - update state to trigger UI refresh
-          setState(prev => ({
-            ...prev,
-            _lastIteration: data?.iteration
-          }));
-          break;
-
-        case 'workflow.node.start':
-          setState(prev => ({
-            ...prev,
-            currentNodes: data.nodeId ? [data.nodeId] : prev?.currentNodes || []
-          }));
-          break;
-
-        case 'workflow.node.complete':
-          setState(prev => {
-            // Build updated nodeResults with both iteration key and base key
-            const nodeResults = { ...prev?.data?.nodeResults };
-            const iteration = data.result?.iteration || data.result?.output?.iteration;
-
-            // Store with iteration key if iteration info is available (for loops)
-            if (iteration !== undefined) {
-              nodeResults[`${data.nodeId}_iter${iteration}`] = data.result;
-            }
-
-            // Always store latest result under nodeId for backward compatibility
-            nodeResults[data.nodeId] = data.result;
-
-            // Update execution metrics from node result
-            const prevMetrics = prev?.data?.executionMetrics || {
-              totalDuration: 0,
-              totalTokens: { input: 0, output: 0, total: 0 },
-              nodeCount: 0
-            };
-            const resultMetrics = data.result?.metrics;
-            const resultTokens = data.result?.tokens;
-            const updatedMetrics = resultMetrics
-              ? {
-                  totalDuration: prevMetrics.totalDuration + (resultMetrics.duration || 0),
-                  totalTokens: {
-                    input: prevMetrics.totalTokens.input + (resultTokens?.input || 0),
-                    output: prevMetrics.totalTokens.output + (resultTokens?.output || 0),
-                    total:
-                      prevMetrics.totalTokens.total +
-                      ((resultTokens?.input || 0) + (resultTokens?.output || 0))
-                  },
-                  nodeCount: prevMetrics.nodeCount + 1
-                }
-              : prevMetrics;
-
-            return {
-              ...prev,
-              // Remove completed node from currentNodes
-              currentNodes: (prev?.currentNodes || []).filter(id => id !== data.nodeId),
-              history: [...(prev?.history || []), { ...data, iteration }],
-              completedNodes: [...(prev?.completedNodes || []), data.nodeId].filter(
-                (v, i, a) => a.indexOf(v) === i
-              ),
-              data: {
-                ...prev?.data,
-                nodeResults,
-                nodeInvocations: (prev?.data?.nodeInvocations || 0) + 1,
-                executionMetrics: updatedMetrics
-              }
-            };
-          });
-          break;
-
-        case 'workflow.node.error':
-          setState(prev => ({
-            ...prev,
-            failedNodes: [...(prev?.failedNodes || []), data.nodeId].filter(
-              (v, i, a) => a.indexOf(v) === i
-            ),
-            errors: [...(prev?.errors || []), data.error]
-          }));
-          break;
-
-        case 'workflow.human.required':
-          setState(prev => ({
-            ...prev,
-            status: 'paused',
-            pendingCheckpoint: data.checkpoint,
-            currentNodes: data.checkpoint?.nodeId ? [data.checkpoint.nodeId] : prev?.currentNodes
-          }));
-          break;
-
-        case 'workflow.human.responded':
-          setState(prev => ({
-            ...prev,
-            pendingCheckpoint: null
-          }));
-          break;
-
-        case 'workflow.paused':
-          setState(prev => ({
-            ...prev,
-            status: 'paused'
-          }));
-          break;
-
-        case 'workflow.complete':
-          setState(prev => ({
-            ...prev,
-            // Use custom status from event (e.g., 'approved', 'rejected') or default to 'completed'
-            status: data.status || 'completed',
-            completedAt: new Date().toISOString(),
-            // Merge the final output into state.data (handle empty/undefined output gracefully)
-            data: {
-              ...prev?.data,
-              ...(data.output && typeof data.output === 'object' ? data.output : {})
-            }
-          }));
-          eventSource.close();
-          setConnected(false);
-          // Refetch state after completion to ensure all data is loaded
-          // (SSE event may have truncated data, server has the full state)
-          setTimeout(() => fetchState(), 500);
-          break;
-
-        case 'workflow.failed':
-          setState(prev => ({
-            ...prev,
-            status: 'failed',
-            errors: [...(prev?.errors || []), data.error]
-          }));
-          eventSource.close();
-          setConnected(false);
-          break;
-
-        case 'workflow.cancelled':
-          setState(prev => ({
-            ...prev,
-            status: 'cancelled'
-          }));
-          eventSource.close();
-          setConnected(false);
-          break;
-
-        case 'workflow.checkpoint.saved':
-          // Checkpoint saved - this is informational, no state update needed
-          // Could be used to show a toast notification in the future
-          break;
-
-        default:
-          // Only log truly unhandled events, not expected internal events
-          if (!eventType.startsWith('workflow.')) {
-            console.log('Unhandled workflow event:', eventType, data);
-          }
-      }
-    };
-
-    // Register event handlers
-    eventTypes.forEach(eventType => {
-      eventSource.addEventListener(eventType, handleEvent);
+    if (!isFeatureEnabled()) return;
+    connect(buildApiUrl(`${streamEndpoint}/${executionId}/stream`), {
+      streamId: executionId,
+      rootRunId: executionId
     });
+  }, [executionId, streamEndpoint, isFeatureEnabled, connect]);
+  connectRef.current = connectSSE;
 
-    eventSource.onerror = err => {
-      console.error('Workflow SSE error:', err);
-      setConnected(false);
-
-      // Attempt reconnection after delay
-      if (reconnectTimeoutRef.current) {
-        clearTimeout(reconnectTimeoutRef.current);
-      }
-
-      reconnectTimeoutRef.current = setTimeout(() => {
-        // Only reconnect if execution is still running/paused
-        if (state?.status === 'running' || state?.status === 'paused') {
-          console.log('Attempting SSE reconnection...');
-          connectSSE();
-        }
-      }, 3000);
-    };
-
-    return () => {
-      eventSource.close();
-      eventSourceRef.current = null;
-    };
-  }, [executionId, state?.status, featureFlags]);
-
-  // Respond to human checkpoint
+  // Answer a human checkpoint: the checkpoint is a pending interaction of the
+  // run that raised it (checkpoint id === interaction id; for a sub-workflow
+  // that run is the child execution), answered through the one answer
+  // endpoint, which resumes the execution.
   const respondToCheckpoint = useCallback(
-    async ({ checkpointId, response, data }) => {
+    async ({ checkpointId, response, data, skipped = false }) => {
       if (!executionId) return;
 
-      // Don't respond if workflows feature is disabled
-      if (!featureFlags.isEnabled('workflows', true)) {
-        throw new Error('Workflows feature is disabled');
+      if (!isFeatureEnabled()) {
+        throw new Error(featureDisabledMessage());
       }
 
       try {
-        const result = await apiClient.post(`/workflows/executions/${executionId}/respond`, {
+        const owner =
+          getRuns(streamStateRef.current).find(r => r.interactions?.[checkpointId]) || null;
+        const ownerRunId =
+          owner?.interactions?.[checkpointId]?.runId || owner?.runId || executionId;
+        const result = await answerInteraction(
+          ownerRunId,
           checkpointId,
-          response,
-          data
+          skipped ? { skipped: true } : { value: response, ...(data ? { data } : {}) },
+          { channel: 'run_page' }
+        );
+
+        // Optimistic local update until the server's interaction/answered +
+        // run/resumed frames arrive.
+        const now = new Date().toISOString();
+        push({
+          v: 2,
+          runId: ownerRunId,
+          ts: now,
+          type: RUN_EVENTS.INTERACTION_ANSWERED,
+          data: {
+            interactionId: checkpointId,
+            kind: owner?.interactions?.[checkpointId]?.kind || 'approval',
+            answer: {
+              value: response,
+              ...(data ? { data } : {}),
+              by: 'user',
+              at: now,
+              channel: 'run_page'
+            }
+          }
         });
+        push({
+          v: 2,
+          runId: ownerRunId,
+          ts: now,
+          type: RUN_EVENTS.RUN_RESUMED,
+          data: { interactionId: checkpointId }
+        });
+        setBaseState(prev =>
+          prev ? { ...prev, pendingCheckpoint: null, status: 'running' } : prev
+        );
 
-        // Update local state immediately
-        setState(prev => ({
-          ...prev,
-          pendingCheckpoint: null,
-          status: result.data.newStatus || 'running'
-        }));
-
-        return result.data;
+        return result;
       } catch (err) {
         console.error('Failed to respond to checkpoint:', err);
         throw err;
       }
     },
-    [executionId, featureFlags]
+    // eslint-disable-next-line @eslint-react/exhaustive-deps
+    [executionId, isFeatureEnabled, push]
   );
 
   // Cancel execution
@@ -331,20 +239,25 @@ function useWorkflowExecution(executionId) {
     async (reason = 'user_cancelled') => {
       if (!executionId) return;
 
-      // Don't cancel if workflows feature is disabled
-      if (!featureFlags.isEnabled('workflows', true)) {
-        throw new Error('Workflows feature is disabled');
+      if (!isFeatureEnabled()) {
+        throw new Error(featureDisabledMessage());
       }
 
       try {
-        const result = await apiClient.post(`/workflows/executions/${executionId}/cancel`, {
+        const result = await apiClient.post(`/${stateEndpoint}/${executionId}/${cancelEndpoint}`, {
           reason
         });
 
-        setState(prev => ({
-          ...prev,
-          status: 'cancelled'
-        }));
+        // Optimistic: mark the root run cancelled; the server's run/ended confirms.
+        const now = new Date().toISOString();
+        push({
+          v: 2,
+          runId: executionId,
+          ts: now,
+          type: RUN_EVENTS.RUN_ENDED,
+          data: { status: 'aborted', finishReason: 'cancelled' }
+        });
+        setBaseState(prev => (prev ? { ...prev, status: 'cancelled' } : prev));
 
         return result.data;
       } catch (err) {
@@ -352,7 +265,8 @@ function useWorkflowExecution(executionId) {
         throw err;
       }
     },
-    [executionId, featureFlags]
+    // eslint-disable-next-line @eslint-react/exhaustive-deps
+    [executionId, stateEndpoint, cancelEndpoint, isFeatureEnabled, push]
   );
 
   // Initial fetch
@@ -360,22 +274,34 @@ function useWorkflowExecution(executionId) {
     fetchState();
   }, [fetchState]);
 
-  // Connect SSE when execution is running or paused
+  // Track mount status so timers can bail out after unmount.
   useEffect(() => {
-    if (state && (state.status === 'running' || state.status === 'paused') && state.canReconnect) {
+    mountedRef.current = true;
+    return () => {
+      mountedRef.current = false;
+      if (reconnectTimeoutRef.current) {
+        clearTimeout(reconnectTimeoutRef.current);
+        reconnectTimeoutRef.current = null;
+      }
+    };
+  }, []);
+
+  // Stream while the execution is running or paused (one connection across
+  // pause/resume; closed once the execution reaches a terminal status).
+  const shouldStream = !!state && isActiveWorkflowStatus(state.status) && !!state.canReconnect;
+  useEffect(() => {
+    if (shouldStream) {
       connectSSE();
     }
 
     return () => {
-      if (eventSourceRef.current) {
-        eventSourceRef.current.close();
-        eventSourceRef.current = null;
-      }
+      disconnect();
       if (reconnectTimeoutRef.current) {
         clearTimeout(reconnectTimeoutRef.current);
+        reconnectTimeoutRef.current = null;
       }
     };
-  }, [state?.status, state?.canReconnect, connectSSE]);
+  }, [shouldStream, connectSSE, disconnect]);
 
   return {
     state,

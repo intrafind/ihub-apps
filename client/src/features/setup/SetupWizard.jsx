@@ -217,7 +217,7 @@ export default function SetupWizard() {
   const progressWidth = `${(step / TOTAL_STEPS) * 100}%`;
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-blue-50 to-indigo-100 dark:from-gray-900 dark:to-gray-800 flex items-center justify-center p-4">
+    <div className="min-h-screen bg-linear-to-br from-blue-50 to-indigo-100 dark:from-gray-900 dark:to-gray-800 flex items-center justify-center p-4">
       <div className="bg-white dark:bg-gray-900 rounded-2xl shadow-xl w-full max-w-lg">
         {/* Progress bar */}
         <div className="h-1.5 bg-gray-100 dark:bg-gray-800 rounded-t-2xl overflow-hidden">
@@ -246,7 +246,7 @@ export default function SetupWizard() {
               </button>
               <button
                 onClick={handleSkip}
-                className="mt-3 w-full text-sm text-gray-400 hover:text-gray-600 dark:hover:text-gray-300 py-2 transition-colors"
+                className="mt-3 w-full text-sm text-gray-600 hover:text-gray-800 dark:text-gray-400 dark:hover:text-gray-200 py-2 transition-colors"
               >
                 {t('setup.step1.skipLater')}
               </button>
@@ -279,7 +279,7 @@ export default function SetupWizard() {
 
               <button
                 onClick={handleSkip}
-                className="mt-3 w-full text-sm text-gray-400 hover:text-gray-600 dark:hover:text-gray-300 py-2 transition-colors"
+                className="mt-3 w-full text-sm text-gray-600 hover:text-gray-800 dark:text-gray-400 dark:hover:text-gray-200 py-2 transition-colors"
               >
                 {t('setup.step1.skipLater')}
               </button>
@@ -359,7 +359,7 @@ export default function SetupWizard() {
                     setTestResult(null);
                   }}
                   placeholder={selectedProvider.placeholder}
-                  className="w-full border border-gray-300 dark:border-gray-600 rounded-xl px-4 py-2.5 text-sm bg-white dark:bg-gray-800 text-gray-900 dark:text-white placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                  className="w-full border border-gray-300 dark:border-gray-600 rounded-xl px-4 py-2.5 text-sm bg-white dark:bg-gray-800 text-gray-900 dark:text-white placeholder-gray-400 focus:outline-hidden focus:ring-2 focus:ring-blue-500 focus:border-transparent"
                   autoComplete="off"
                 />
                 {isLocal && (
@@ -415,7 +415,7 @@ export default function SetupWizard() {
                 <button
                   onClick={handleSave}
                   disabled={saving || (!isLocal && !apiKey.trim())}
-                  className="flex-[2] bg-blue-600 hover:bg-blue-700 disabled:bg-blue-400 disabled:cursor-not-allowed text-white font-semibold py-2.5 px-6 rounded-xl transition-colors"
+                  className="flex-2 bg-blue-600 hover:bg-blue-700 disabled:bg-blue-400 disabled:cursor-not-allowed text-white font-semibold py-2.5 px-6 rounded-xl transition-colors"
                 >
                   {saving
                     ? t('setup.step2.savingButton')
@@ -427,69 +427,119 @@ export default function SetupWizard() {
 
               <button
                 onClick={handleSkip}
-                className="mt-3 w-full text-sm text-gray-400 hover:text-gray-600 dark:hover:text-gray-300 py-2 transition-colors"
+                className="mt-3 w-full text-sm text-gray-600 hover:text-gray-800 dark:text-gray-400 dark:hover:text-gray-200 py-2 transition-colors"
               >
                 {t('setup.step2.skipLater')}
               </button>
             </div>
           )}
 
-          {/* Step 4: Finish */}
+          {/* Step 4: Finish + next steps */}
           {step === 4 && (
             <div>
               <div className="text-center mb-6">
                 <div className="text-5xl mb-4">🎉</div>
                 <h2 className="text-2xl font-bold text-gray-900 dark:text-white mb-3">
-                  {t('setup.step3.title')}
+                  {t('setup.step3.title', "You're all set!")}
                 </h2>
                 <p className="text-gray-500 dark:text-gray-400">
                   {isLocal
-                    ? t('setup.step3.subtitleLocal')
-                    : t('setup.step3.subtitleCloud', { provider: selectedProvider.name })}
+                    ? t(
+                        'setup.step3.subtitleLocal',
+                        "Your local provider is connected. Here's what to do next."
+                      )
+                    : t(
+                        'setup.step3.subtitleCloud',
+                        "Connected to {{provider}}. Here's what to do next.",
+                        { provider: selectedProvider.name }
+                      )}
                 </p>
               </div>
 
-              {/* Next steps */}
-              <div className="mb-6 rounded-xl border border-gray-200 dark:border-gray-700 overflow-hidden">
-                <div className="px-4 py-2.5 bg-gray-50 dark:bg-gray-800 border-b border-gray-200 dark:border-gray-700">
-                  <span className="text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wide">
-                    {t('setup.step3.nextStepsTitle')}
+              {/* CTA cards */}
+              <div className="mb-6 space-y-2.5">
+                <button
+                  onClick={() => {
+                    sessionStorage.removeItem('setup_wizard_step');
+                    navigate('/admin/apps/new', { replace: true });
+                  }}
+                  className="w-full flex items-center gap-4 rounded-xl border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800 hover:border-blue-400 dark:hover:border-blue-500 hover:bg-blue-50 dark:hover:bg-blue-900/20 p-4 text-left transition-colors group"
+                >
+                  <span className="shrink-0 w-10 h-10 rounded-lg bg-blue-100 dark:bg-blue-900/40 flex items-center justify-center text-xl">
+                    🛠️
                   </span>
-                </div>
-                <ul className="divide-y divide-gray-100 dark:divide-gray-800">
-                  {[
-                    t('setup.step3.nextStep1'),
-                    t('setup.step3.nextStep2'),
-                    t('setup.step3.nextStep3'),
-                    t('setup.step3.nextStep4')
-                  ].map((item, i) => (
-                    <li
-                      key={i}
-                      className="flex items-start gap-3 px-4 py-3 text-sm text-gray-700 dark:text-gray-300"
-                    >
-                      <span className="mt-0.5 flex-shrink-0 w-5 h-5 rounded-full bg-blue-100 dark:bg-blue-900 text-blue-600 dark:text-blue-400 text-xs font-bold flex items-center justify-center">
-                        {i + 1}
-                      </span>
-                      {item}
-                    </li>
-                  ))}
-                </ul>
+                  <span className="flex-1 min-w-0">
+                    <span className="block text-sm font-semibold text-gray-900 dark:text-gray-100">
+                      {t('setup.finish.createApp', 'Create your first app')}
+                    </span>
+                    <span className="block text-xs text-gray-500 dark:text-gray-400 mt-0.5">
+                      {t(
+                        'setup.finish.createAppDesc',
+                        'Build a custom AI assistant with a system prompt'
+                      )}
+                    </span>
+                  </span>
+                  <span className="text-gray-300 dark:text-gray-600 group-hover:text-blue-400 transition-colors">
+                    →
+                  </span>
+                </button>
+
+                <button
+                  onClick={() => {
+                    sessionStorage.removeItem('setup_wizard_step');
+                    navigate('/admin/users', { replace: true });
+                  }}
+                  className="w-full flex items-center gap-4 rounded-xl border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800 hover:border-blue-400 dark:hover:border-blue-500 hover:bg-blue-50 dark:hover:bg-blue-900/20 p-4 text-left transition-colors group"
+                >
+                  <span className="shrink-0 w-10 h-10 rounded-lg bg-green-100 dark:bg-green-900/40 flex items-center justify-center text-xl">
+                    👥
+                  </span>
+                  <span className="flex-1 min-w-0">
+                    <span className="block text-sm font-semibold text-gray-900 dark:text-gray-100">
+                      {t('setup.finish.inviteUsers', 'Invite users')}
+                    </span>
+                    <span className="block text-xs text-gray-500 dark:text-gray-400 mt-0.5">
+                      {t('setup.finish.inviteUsersDesc', 'Manage who can access the platform')}
+                    </span>
+                  </span>
+                  <span className="text-gray-300 dark:text-gray-600 group-hover:text-blue-400 transition-colors">
+                    →
+                  </span>
+                </button>
+
+                <button
+                  onClick={() => {
+                    sessionStorage.removeItem('setup_wizard_step');
+                    navigate('/admin/auth', { replace: true });
+                  }}
+                  className="w-full flex items-center gap-4 rounded-xl border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800 hover:border-blue-400 dark:hover:border-blue-500 hover:bg-blue-50 dark:hover:bg-blue-900/20 p-4 text-left transition-colors group"
+                >
+                  <span className="shrink-0 w-10 h-10 rounded-lg bg-purple-100 dark:bg-purple-900/40 flex items-center justify-center text-xl">
+                    🔐
+                  </span>
+                  <span className="flex-1 min-w-0">
+                    <span className="block text-sm font-semibold text-gray-900 dark:text-gray-100">
+                      {t('setup.finish.configureSso', 'Configure SSO')}
+                    </span>
+                    <span className="block text-xs text-gray-500 dark:text-gray-400 mt-0.5">
+                      {t(
+                        'setup.finish.configureSsoDesc',
+                        'Set up OIDC, LDAP, or NTLM authentication'
+                      )}
+                    </span>
+                  </span>
+                  <span className="text-gray-300 dark:text-gray-600 group-hover:text-blue-400 transition-colors">
+                    →
+                  </span>
+                </button>
               </div>
 
-              <div className="flex gap-3">
-                <button
-                  onClick={handleGoToAdmin}
-                  className="flex-1 border border-gray-300 dark:border-gray-600 text-gray-700 dark:text-gray-300 font-medium py-2.5 px-4 rounded-xl hover:bg-gray-50 dark:hover:bg-gray-800 transition-colors"
-                >
-                  {t('setup.step3.goToAdmin')}
-                </button>
-                <button
-                  onClick={handleFinish}
-                  className="flex-[2] bg-blue-600 hover:bg-blue-700 text-white font-semibold py-2.5 px-6 rounded-xl transition-colors"
-                >
-                  {t('setup.step3.goToApps')}
-                </button>
-              </div>
+              <button
+                onClick={handleFinish}
+                className="w-full text-sm text-gray-600 hover:text-gray-800 dark:text-gray-400 dark:hover:text-gray-200 py-2 transition-colors"
+              >
+                {t('setup.finish.skipToApps', 'Skip — take me to the apps')}
+              </button>
             </div>
           )}
         </div>

@@ -1,29 +1,44 @@
 import jwt from 'jsonwebtoken';
-import jwksClient from 'jwks-rsa';
 import { promisify } from 'util';
 import configCache from '../configCache.js';
 import { enhanceUserGroups, mapExternalGroups } from '../utils/authorization.js';
+import { validateAndPersistExternalUser } from '../utils/userManager.js';
 import { generateJwt } from '../utils/tokenService.js';
 import ErrorHandler from '../utils/ErrorHandler.js';
 import logger from '../utils/logger.js';
+import { getAuthCookieOptions } from '../utils/cookieSettings.js';
+import { clearOidcLogoutHint } from '../utils/oidcLogoutHint.js';
 
-// JWKS client for Microsoft public keys
-const createJwksClient = tenantId => {
+// jwks-rsa pulls in jose (pure ESM) internally via a synchronous require(), so
+// a static top-level import here would blow up as soon as anything imports
+// this file — e.g. for route registration — under Jest's CJS-style module
+// loading, even when Teams auth is never exercised. Deferred until a Teams
+// token actually needs verifying.
+async function createJwksClient(tenantId) {
+  const { default: jwksClient } = await import('jwks-rsa');
   return jwksClient({
     jwksUri: `https://login.microsoftonline.com/${tenantId}/discovery/v2.0/keys`,
     cache: true,
     cacheMaxEntries: 5,
     cacheMaxAge: 10 * 60 * 60 * 1000 // 10 hours
   });
-};
+}
 
 // Cache for JWKS clients per tenant
 const jwksClients = new Map();
 
 /**
+ * Detect the disabled-account error thrown by validateAndPersistExternalUser
+ * so it can be rejected explicitly instead of falling into generic error handling.
+ */
+function isAccountDisabledError(error) {
+  return typeof error?.message === 'string' && error.message.includes('account is disabled');
+}
+
+/**
  * Get or create JWKS client for a tenant
  */
-function getJwksClient(tenantId) {
+async function getJwksClient(tenantId) {
   if (!jwksClients.has(tenantId)) {
     jwksClients.set(tenantId, createJwksClient(tenantId));
   }
@@ -50,7 +65,7 @@ async function verifyTeamsToken(token, teamsConfig) {
     }
 
     // Get JWKS client for this tenant
-    const client = getJwksClient(tenantId);
+    const client = await getJwksClient(tenantId);
     const getSigningKey = promisify(client.getSigningKey);
 
     // Get the signing key
@@ -169,7 +184,11 @@ export async function teamsAuthMiddleware(req, res, next) {
     }
 
     // Normalize user data
-    const user = normalizeTeamsUser(tokenData, profile, groups, teamsConfig);
+    const normalizedUser = normalizeTeamsUser(tokenData, profile, groups, teamsConfig);
+
+    // Validate and persist the user like every other external provider (OIDC/LDAP/NTLM/Proxy),
+    // so an administrator can disable a Teams user via users.json
+    const user = await validateAndPersistExternalUser(normalizedUser, platform);
 
     // Generate our JWT token using centralized token service
     const { token } = generateJwt(user, {
@@ -188,6 +207,13 @@ export async function teamsAuthMiddleware(req, res, next) {
     next();
   } catch (error) {
     logger.error('Teams authentication failed', { component: 'TeamsAuth', error });
+
+    if (isAccountDisabledError(error)) {
+      return res.status(403).json({
+        error: 'access_denied',
+        error_description: 'User account has been disabled'
+      });
+    }
 
     // Don't fail the request, just continue without Teams auth
     // This allows fallback to other auth methods
@@ -241,7 +267,11 @@ export async function teamsTokenExchange(req, res) {
     const groups = tokenData.groups || [];
 
     // Normalize user data
-    const user = normalizeTeamsUser(tokenData, null, groups, teamsConfig);
+    const normalizedUser = normalizeTeamsUser(tokenData, null, groups, teamsConfig);
+
+    // Validate and persist the user like every other external provider (OIDC/LDAP/NTLM/Proxy),
+    // so an administrator can disable a Teams user via users.json
+    const user = await validateAndPersistExternalUser(normalizedUser, platform);
 
     // Generate our JWT token using centralized token service
     const { token, expiresIn } = generateJwt(user, {
@@ -253,12 +283,11 @@ export async function teamsTokenExchange(req, res) {
     });
 
     // Set HTTP-only cookie for authentication
-    res.cookie('authToken', token, {
-      httpOnly: true,
-      secure: process.env.NODE_ENV === 'production',
-      sameSite: 'lax',
-      maxAge: expiresIn * 1000
-    });
+    res.cookie('authToken', token, getAuthCookieOptions(expiresIn * 1000, req));
+    // Drop any oidcLogoutHint left over from an earlier OIDC login on this
+    // browser: it would keep an ID token around and send this session's logout
+    // through an unrelated provider. See utils/oidcLogoutHint.js.
+    clearOidcLogoutHint(res, req);
 
     res.json({
       success: true,
@@ -275,6 +304,20 @@ export async function teamsTokenExchange(req, res) {
     });
   } catch (error) {
     logger.error('Teams token exchange error', { component: 'TeamsAuth', error });
+
+    if (isAccountDisabledError(error)) {
+      const errorMessage = await errorHandler.getLocalizedError(
+        'TEAMS_ACCOUNT_DISABLED',
+        {},
+        language
+      );
+      return res.status(403).json({
+        success: false,
+        error: errorMessage,
+        errorKey: 'TEAMS_ACCOUNT_DISABLED'
+      });
+    }
+
     const errorMessage = await errorHandler.getLocalizedError(
       'TEAMS_INVALID_OR_EXPIRED_TOKEN',
       {},
@@ -286,6 +329,26 @@ export async function teamsTokenExchange(req, res) {
       errorKey: 'TEAMS_INVALID_OR_EXPIRED_TOKEN'
     });
   }
+}
+
+/**
+ * Teams client configuration handler
+ * Exposes the (non-secret) Azure AD client/tenant IDs so the Teams auth-start
+ * popup can build the login URL without relying on build-time env vars.
+ */
+export async function teamsClientConfig(req, res) {
+  const platform = configCache.getPlatform() || {};
+  const teamsConfig = platform.teamsAuth || {};
+
+  if (!teamsConfig.enabled) {
+    return res.json({ enabled: false });
+  }
+
+  res.json({
+    enabled: true,
+    clientId: teamsConfig.clientId || null,
+    tenantId: teamsConfig.tenantId || null
+  });
 }
 
 /**

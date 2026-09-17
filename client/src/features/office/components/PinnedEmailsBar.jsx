@@ -1,0 +1,134 @@
+import { useTranslation } from 'react-i18next';
+import Icon from '../../../shared/components/Icon';
+
+function truncate(s, n) {
+  if (!s) return '';
+  const str = String(s);
+  return str.length > n ? `${str.slice(0, n - 1)}…` : str;
+}
+
+/**
+ * Toolbar that lives between the message list and the chat input in the
+ * Outlook taskpane. A single "Add email(s)" button attaches the currently
+ * open email — and, on Mailbox 1.15+, every email Ctrl-selected in the
+ * message list — to the outgoing prompt without losing them when the user
+ * navigates between emails. Issue #1553 consolidated the previous pair of
+ * "Add this email" / "Add selected emails" buttons into one control.
+ *
+ * When `embedded` is true (the OfficeContextStrip usage) the surrounding
+ * collapsible strip owns the page-level margins / borders, so this bar
+ * just renders its contents flush. Issue #1467.
+ *
+ * When `collapsedMode` is true, only the action button is shown without the
+ * pinned items list or clear button, enabling an always-visible pin control
+ * in the collapsed strip header.
+ */
+function PinnedEmailsBar({
+  pinned,
+  onUnpin,
+  onClearAll,
+  onAddEmails,
+  canAddEmails,
+  addEmailsLoading,
+  addEmailsDisabled,
+  embedded = false,
+  collapsedMode = false
+}) {
+  const { t } = useTranslation();
+  const hasPins = Array.isArray(pinned) && pinned.length > 0;
+
+  const compact = collapsedMode;
+  const buttonClass = compact
+    ? 'inline-flex items-center gap-1 rounded-md border border-slate-200 bg-white px-2 py-1 text-slate-700 hover:bg-slate-100 disabled:opacity-50 disabled:cursor-not-allowed transition-colors dark:border-slate-600 dark:bg-slate-800 dark:text-slate-200 dark:hover:bg-slate-700 text-xs'
+    : 'inline-flex items-center gap-1 rounded-md border border-slate-200 bg-white px-2 py-1 text-slate-700 hover:bg-slate-100 disabled:opacity-50 disabled:cursor-not-allowed transition-colors dark:border-slate-600 dark:bg-slate-800 dark:text-slate-200 dark:hover:bg-slate-700';
+
+  const addButton = canAddEmails ? (
+    <button
+      type="button"
+      onClick={onAddEmails}
+      disabled={addEmailsLoading || addEmailsDisabled}
+      title={
+        addEmailsDisabled
+          ? t('office.pinned.alreadyAdded', 'Already added')
+          : t(
+              'office.pinned.addEmailsTooltip',
+              "Attach the open email — or every email you've selected in Outlook — to the chat"
+            )
+      }
+      className={buttonClass}
+    >
+      <Icon name="paper-clip" size="sm" />
+      <span>
+        {addEmailsLoading
+          ? t('common.loading', 'Loading…')
+          : addEmailsDisabled
+            ? t('office.pinned.alreadyAdded', 'Already added')
+            : t('office.pinned.addEmails', 'Add email(s)')}
+      </span>
+    </button>
+  ) : null;
+
+  // In collapsed mode, we only show the action button, never the pinned list.
+  if (collapsedMode) {
+    if (!canAddEmails) return null;
+    return <div className="flex flex-wrap items-center gap-1.5">{addButton}</div>;
+  }
+
+  // Normal (expanded) mode below.
+  // Nothing to do when we can't add emails and don't have any pins to show.
+  if (!hasPins && !canAddEmails) return null;
+
+  const outerClassName = embedded
+    ? 'office-pinned-bar bg-slate-50/70 px-3 py-2 text-xs dark:bg-slate-900/40'
+    : 'office-pinned-bar border-t border-slate-100 bg-slate-50/70 px-3 py-2 text-xs dark:border-slate-700 dark:bg-slate-900/40';
+
+  return (
+    <div className={outerClassName}>
+      <div className="flex flex-wrap items-center gap-1.5">
+        {addButton}
+
+        {hasPins && (
+          <button
+            type="button"
+            onClick={onClearAll}
+            title={t('office.pinned.clearAllTooltip', 'Remove every pinned email')}
+            className="ml-auto inline-flex items-center gap-1 rounded-md px-2 py-1 text-slate-500 hover:bg-slate-100 hover:text-slate-700 transition-colors dark:text-slate-400 dark:hover:bg-slate-700 dark:hover:text-slate-200"
+          >
+            <Icon name="trash" size="sm" />
+            <span>{t('office.pinned.clearAll', 'Clear')}</span>
+          </button>
+        )}
+      </div>
+
+      {hasPins && (
+        <div className="mt-1.5 flex flex-wrap gap-1.5">
+          {pinned.map((p, idx) => {
+            const key = p.itemId || `pin-${idx}`;
+            const label = truncate(p.subject || t('office.pinned.untitled', '(no subject)'), 60);
+            return (
+              <span
+                key={key}
+                className="inline-flex items-center gap-1 rounded-full bg-indigo-50 text-indigo-700 border border-indigo-100 px-2 py-0.5 dark:bg-indigo-900/40 dark:text-indigo-300 dark:border-indigo-800"
+                title={p.subject || ''}
+              >
+                <Icon name="paper-clip" size="xs" />
+                <span className="max-w-[180px] truncate">{label}</span>
+                <button
+                  type="button"
+                  onClick={() => onUnpin?.(p.itemId)}
+                  title={t('office.pinned.removeOne', 'Remove from chat')}
+                  className="ml-0.5 rounded-full p-0.5 hover:bg-indigo-100 dark:hover:bg-indigo-800"
+                  aria-label={t('office.pinned.removeOne', 'Remove from chat')}
+                >
+                  <Icon name="x" size="xs" />
+                </button>
+              </span>
+            );
+          })}
+        </div>
+      )}
+    </div>
+  );
+}
+
+export default PinnedEmailsBar;

@@ -1,6 +1,7 @@
-import { actionTracker } from '../actionTracker.js';
+import { emitToolProgress } from './loop/RunStream.js';
 import config from '../config.js';
 import { throttledFetch } from '../requestThrottler.js';
+import { makeSearchCacheKey, getCachedSearch, setCachedSearch } from './searchCache.js';
 import configCache from '../configCache.js';
 import tokenStorageService from './TokenStorageService.js';
 import logger from '../utils/logger.js';
@@ -84,18 +85,107 @@ class BraveSearchProvider extends SearchProvider {
       config.BRAVE_SEARCH_ENDPOINT || 'https://api.search.brave.com/res/v1/web/search';
 
     if (chatId) {
-      actionTracker.trackAction(chatId, { action: 'search', query, provider: 'brave' });
+      emitToolProgress(chatId, {
+        phase: 'search',
+        message: query,
+        data: { query, provider: 'brave' }
+      });
     }
 
-    const res = await throttledFetch('braveSearch', `${endpoint}?q=${encodeURIComponent(query)}`, {
-      headers: {
-        'X-Subscription-Token': apiKey,
-        Accept: 'application/json'
-      }
-    });
+    // Query cache. Across re-plan/verify rounds the same query recurs; serving
+    // a repeat from cache skips both the network and the ~1 req/s throttle,
+    // which is the difference between a result and a 429 (run wf-exec-f4f70e84).
+    const cacheKey = makeSearchCacheKey('brave', query);
+    const cached = getCachedSearch(cacheKey);
+    if (cached) {
+      logger.debug('Brave search cache hit', { component: 'WebSearch', provider: 'brave' });
+      return cached;
+    }
 
-    if (!res.ok) {
-      throw new Error(`Brave search failed with status ${res.status}`);
+    // Brave's Free plan is rate-limited to ~1 request/second, so an agent that
+    // fires several searches in a turn reliably trips HTTP 429. Retry a bounded
+    // number of times with backoff (honoring Retry-After) so transient
+    // rate-limit / 503 responses recover instead of failing the whole step.
+    const MAX_RETRIES = 2;
+    let res;
+    let attempt = 0;
+
+    while (true) {
+      try {
+        res = await throttledFetch('braveSearch', `${endpoint}?q=${encodeURIComponent(query)}`, {
+          headers: {
+            'X-Subscription-Token': apiKey,
+            Accept: 'application/json'
+          }
+        });
+      } catch (error) {
+        // Network/proxy failures (ECONNREFUSED, ETIMEDOUT, TLS errors, proxy unreachable, ...)
+        // surface here as a thrown Error from node-fetch. Without this branch the upstream
+        // wrapper only sees `error.message` and drops the code/cause, making proxy issues
+        // impossible to diagnose from the logs.
+        const causeMsg =
+          error?.cause?.message || (typeof error?.cause === 'string' ? error.cause : undefined);
+        logger.error('Brave search network request failed', {
+          component: 'WebSearch',
+          provider: 'brave',
+          endpoint,
+          errorName: error?.name,
+          errorCode: error?.code || error?.cause?.code,
+          errorMessage: error?.message,
+          errorCause: causeMsg,
+          hint: 'If a proxy is configured, verify HTTPS_PROXY/HTTP_PROXY, ssl.domainWhitelist, and proxy.urlPatterns in platform.json.'
+        });
+        const detailParts = [error?.message];
+        if (error?.code) detailParts.push(`code=${error.code}`);
+        if (causeMsg) detailParts.push(`cause=${causeMsg}`);
+        const wrapped = new Error(
+          `Brave search request failed: ${detailParts.filter(Boolean).join(' ')}`
+        );
+        wrapped.code = error?.code || error?.cause?.code || 'NETWORK_ERROR';
+        wrapped.cause = error;
+        throw wrapped;
+      }
+
+      if (res.ok) break;
+
+      // Retry transient rate-limit (429) and server (503) responses.
+      if ((res.status === 429 || res.status === 503) && attempt < MAX_RETRIES) {
+        const retryAfter = Number(res.headers?.get?.('retry-after'));
+        const waitMs =
+          Number.isFinite(retryAfter) && retryAfter > 0
+            ? Math.min(retryAfter * 1000, 5000)
+            : 1200 * (attempt + 1);
+        logger.warn('Brave search rate-limited; backing off and retrying', {
+          component: 'WebSearch',
+          provider: 'brave',
+          status: res.status,
+          attempt: attempt + 1,
+          waitMs
+        });
+        await new Promise(resolve => setTimeout(resolve, waitMs));
+        attempt += 1;
+        continue;
+      }
+
+      let bodyPreview = '';
+      try {
+        bodyPreview = (await res.text()).slice(0, 500);
+      } catch {
+        // ignore body read errors
+      }
+      logger.error('Brave search returned non-OK status', {
+        component: 'WebSearch',
+        provider: 'brave',
+        status: res.status,
+        statusText: res.statusText,
+        bodyPreview
+      });
+      const err = new Error(
+        `Brave search failed with status ${res.status}${res.statusText ? ` (${res.statusText})` : ''}`
+      );
+      err.code = `HTTP_${res.status}`;
+      err.status = res.status;
+      throw err;
     }
 
     const data = await res.json();
@@ -112,99 +202,14 @@ class BraveSearchProvider extends SearchProvider {
       }
     }
 
-    return { results };
-  }
-}
-
-/**
- * Tavily Search Provider
- */
-class TavilySearchProvider extends SearchProvider {
-  getName() {
-    return 'tavily';
-  }
-
-  /**
-   * Get API key with fallback logic:
-   * 1. Check provider-level API key (from providers.json)
-   * 2. Fallback to environment variable
-   */
-  getApiKey() {
-    try {
-      const { data: providers } = configCache.getProviders(true);
-      const tavilyProvider = providers.find(p => p.id === 'tavily');
-
-      if (tavilyProvider?.apiKey) {
-        try {
-          return tokenStorageService.decryptString(tavilyProvider.apiKey);
-        } catch (error) {
-          logger.error('Failed to decrypt Tavily provider API key', {
-            component: 'WebSearch',
-            error
-          });
-          // Fall through to environment variable
-        }
-      }
-    } catch (error) {
-      logger.error('Failed to load Tavily provider configuration', {
-        component: 'WebSearch',
-        error
-      });
-      // Fall through to environment variable
-    }
-
-    // Fallback to environment variable
-    return config.TAVILY_SEARCH_API_KEY;
-  }
-
-  async search(query, options = {}) {
-    const { chatId, search_depth = 'basic', max_results = 5 } = options;
-    const apiKey = this.getApiKey();
-
-    if (!apiKey) {
-      throw new Error(
-        'Tavily Search API key is not configured. Please configure it in the admin panel or set TAVILY_SEARCH_API_KEY environment variable.'
-      );
-    }
-
-    const endpoint = config.TAVILY_ENDPOINT || 'https://api.tavily.com/search';
-
-    if (chatId) {
-      actionTracker.trackAction(chatId, { action: 'search', query, provider: 'tavily' });
-    }
-
-    const res = await throttledFetch('tavilySearch', endpoint, {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json'
-      },
-      body: JSON.stringify({
-        api_key: apiKey,
-        query,
-        search_depth,
-        max_results
-      })
-    });
-
-    if (!res.ok) {
-      throw new Error(`Tavily search failed with status ${res.status}`);
-    }
-
-    const data = await res.json();
-    const results = [];
-
-    if (Array.isArray(data.results)) {
-      for (const item of data.results) {
-        results.push({
-          title: item.title,
-          url: item.url,
-          description: item.content,
-          score: item.score
-        });
-      }
-    }
-
-    return { results };
+    const payload = { results };
+    // Cache only successful responses (errors throw above and never reach here),
+    // so a transient 429 is never cached. TTL is configurable; default 10 min —
+    // long enough to dedupe within a multi-round run, short enough to stay fresh.
+    const parsedTtl = Number(config.SEARCH_CACHE_TTL_MS);
+    const ttlMs = Number.isFinite(parsedTtl) && parsedTtl > 0 ? parsedTtl : 600000;
+    setCachedSearch(cacheKey, payload, ttlMs);
+    return payload;
   }
 }
 
@@ -219,7 +224,6 @@ class WebSearchService {
 
     // Register built-in providers
     this.registerProvider(new BraveSearchProvider());
-    this.registerProvider(new TavilySearchProvider());
   }
 
   /**
@@ -280,7 +284,20 @@ class WebSearchService {
     try {
       return await provider.search(query, options);
     } catch (error) {
-      throw new Error(`Search failed with ${providerName}: ${error.message}`);
+      logger.error('Web search provider failed', {
+        component: 'WebSearch',
+        provider: providerName,
+        errorName: error?.name,
+        errorCode: error?.code,
+        errorMessage: error?.message,
+        errorCause: error?.cause?.message || error?.cause
+      });
+      const wrapped = new Error(`Search failed with ${providerName}: ${error.message}`);
+      // Preserve original code/cause so admins (and the chat tool error report)
+      // can see proxy/network/TLS specifics instead of a generic "Search failed" line.
+      if (error?.code) wrapped.code = error.code;
+      wrapped.cause = error;
+      throw wrapped;
     }
   }
 }
@@ -289,4 +306,4 @@ class WebSearchService {
 const webSearchService = new WebSearchService();
 
 export default webSearchService;
-export { SearchProvider, BraveSearchProvider, TavilySearchProvider, WebSearchService };
+export { SearchProvider, BraveSearchProvider, WebSearchService };

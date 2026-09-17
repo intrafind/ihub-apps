@@ -9,6 +9,7 @@ import {
   formatToolsForAnthropic,
   formatToolsForGoogle
 } from '../adapters/toolFormatter.js';
+import { convertResponseToGeneric } from '../adapters/toolCalling/index.js';
 
 // Test tool definition
 const testTool = {
@@ -118,28 +119,28 @@ logger.info('✅ Tool formatting consistency test passed\n');
 // Test 2: Single Tool Call Request Generation
 logger.info('📋 Test 2: Single Tool Call Request Generation');
 
-const openaiSingleReq = OpenAIAdapter.createCompletionRequest(
+const openaiSingleReq = await OpenAIAdapter.createCompletionRequest(
   models.openai,
   singleToolCallMessages,
   'test-key',
   { tools: [testTool] }
 );
 
-const anthropicSingleReq = AnthropicAdapter.createCompletionRequest(
+const anthropicSingleReq = await AnthropicAdapter.createCompletionRequest(
   models.anthropic,
   singleToolCallMessages,
   'test-key',
   { tools: [testTool] }
 );
 
-const googleSingleReq = GoogleAdapter.createCompletionRequest(
+const googleSingleReq = await GoogleAdapter.createCompletionRequest(
   models.google,
   singleToolCallMessages,
   'test-key',
   { tools: [testTool] }
 );
 
-const mistralSingleReq = MistralAdapter.createCompletionRequest(
+const mistralSingleReq = await MistralAdapter.createCompletionRequest(
   models.mistral,
   singleToolCallMessages,
   'test-key',
@@ -177,28 +178,28 @@ logger.info('✅ Single tool call request generation test passed\n');
 // Test 3: Multi-Round Tool Execution Request Generation
 logger.info('📋 Test 3: Multi-Round Tool Execution Request Generation');
 
-const openaiMultiReq = OpenAIAdapter.createCompletionRequest(
+const openaiMultiReq = await OpenAIAdapter.createCompletionRequest(
   models.openai,
   multiRoundMessages,
   'test-key',
   { tools: [testTool] }
 );
 
-const anthropicMultiReq = AnthropicAdapter.createCompletionRequest(
+const anthropicMultiReq = await AnthropicAdapter.createCompletionRequest(
   models.anthropic,
   multiRoundMessages,
   'test-key',
   { tools: [testTool] }
 );
 
-const googleMultiReq = GoogleAdapter.createCompletionRequest(
+const googleMultiReq = await GoogleAdapter.createCompletionRequest(
   models.google,
   multiRoundMessages,
   'test-key',
   { tools: [testTool] }
 );
 
-const mistralMultiReq = MistralAdapter.createCompletionRequest(
+const mistralMultiReq = await MistralAdapter.createCompletionRequest(
   models.mistral,
   multiRoundMessages,
   'test-key',
@@ -332,10 +333,10 @@ const mockResponses = {
 
 // Test response processing
 try {
-  const openaiProcessed = OpenAIAdapter.processResponseBuffer(mockResponses.openai);
-  const anthropicProcessed = AnthropicAdapter.processResponseBuffer(mockResponses.anthropic);
-  const googleProcessed = GoogleAdapter.processResponseBuffer(mockResponses.google);
-  const mistralProcessed = MistralAdapter.processResponseBuffer(mockResponses.mistral);
+  const openaiProcessed = await convertResponseToGeneric(mockResponses.openai, 'openai');
+  const anthropicProcessed = await convertResponseToGeneric(mockResponses.anthropic, 'anthropic');
+  const googleProcessed = await convertResponseToGeneric(mockResponses.google, 'google');
+  const mistralProcessed = await convertResponseToGeneric(mockResponses.mistral, 'mistral');
 
   logger.info('Response processing results:');
   logger.info('- OpenAI processed:', !!openaiProcessed);

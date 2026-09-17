@@ -1,7 +1,7 @@
-import { createCompletionRequest } from '../../server/adapters/index.js';
-import { loadConfiguredTools } from '../../server/toolLoader.js';
-import { TestHelper, MockDataGenerator } from '../utils/helpers.js';
-import { testModels, testEnvironment, mockApiKeys } from '../utils/fixtures.js';
+import { createCompletionRequest } from '../../../server/adapters/index.js';
+import { loadConfiguredTools } from '../../../server/toolLoader.js';
+import { TestHelper, MockDataGenerator } from '../../utils/helpers.js';
+import { testModels, testEnvironment, mockApiKeys } from '../../utils/fixtures.js';
 import dotenv from 'dotenv';
 
 // Load environment variables
@@ -12,6 +12,17 @@ dotenv.config({ path: '.env' });
  * Model Integration Tests
  * These tests validate the integration with actual LLM providers
  * or use mock responses when real API calls are disabled
+ *
+ * NOT run in CI (see package.json's test:integration:ci) and not collectible
+ * under Jest at all today: server/adapters/index.js transitively requires
+ * server/sources/index.js -> URLHandler.js -> utils/httpConfig.js, which
+ * statically imports node-fetch/http-proxy-agent/https-proxy-agent - all
+ * real ESM-only packages Babel's CommonJS transform can't parse (and each
+ * one mocked away just uncovers the next in the chain). Needs a true
+ * ESM-mode Jest project (`--experimental-vm-modules`, as
+ * server/jest.config.js already uses for server/tests/) rather than the
+ * jsdom/babel-CJS config this file currently lives under. Tracked in
+ * https://github.com/intrafind/ihub-apps/issues/1705.
  */
 
 describe('Model Integration Tests', () => {
@@ -48,7 +59,7 @@ describe('Model Integration Tests', () => {
 
       if (testEnvironment.enableRealApiCalls && process.env.OPENAI_API_KEY) {
         // Real API call
-        const request = createCompletionRequest(model, messages, apiKey, {
+        const request = await createCompletionRequest(model, messages, apiKey, {
           temperature: 0.1,
           maxTokens: 50,
           stream: false
@@ -82,7 +93,7 @@ describe('Model Integration Tests', () => {
 
       if (testEnvironment.enableRealApiCalls && process.env.OPENAI_API_KEY) {
         // Real API call with tools
-        const request = createCompletionRequest(model, messages, apiKey, {
+        const request = await createCompletionRequest(model, messages, apiKey, {
           tools: availableTools.slice(0, 2), // Use first 2 tools
           temperature: 0.1,
           maxTokens: 200,
@@ -124,7 +135,7 @@ describe('Model Integration Tests', () => {
 
       if (testEnvironment.enableRealApiCalls && process.env.OPENAI_API_KEY) {
         // Real streaming API call
-        const request = createCompletionRequest(model, messages, apiKey, {
+        const request = await createCompletionRequest(model, messages, apiKey, {
           temperature: 0.7,
           maxTokens: 100,
           stream: true
@@ -171,7 +182,7 @@ describe('Model Integration Tests', () => {
 
       if (testEnvironment.enableRealApiCalls) {
         // Test with invalid API key
-        const request = createCompletionRequest(model, messages, invalidApiKey, {
+        const request = await createCompletionRequest(model, messages, invalidApiKey, {
           temperature: 0.1,
           maxTokens: 50,
           stream: false
@@ -206,7 +217,7 @@ describe('Model Integration Tests', () => {
 
       if (testEnvironment.enableRealApiCalls && process.env.ANTHROPIC_API_KEY) {
         // Real API call
-        const request = createCompletionRequest(model, messages, apiKey, {
+        const request = await createCompletionRequest(model, messages, apiKey, {
           temperature: 0.1,
           maxTokens: 50,
           stream: false
@@ -252,7 +263,7 @@ describe('Model Integration Tests', () => {
 
       if (testEnvironment.enableRealApiCalls && process.env.ANTHROPIC_API_KEY) {
         // Real API call with tools
-        const request = createCompletionRequest(model, messages, apiKey, {
+        const request = await createCompletionRequest(model, messages, apiKey, {
           tools: availableTools.slice(0, 1), // Use first tool
           temperature: 0.1,
           maxTokens: 200,
@@ -309,7 +320,7 @@ describe('Model Integration Tests', () => {
 
       if (testEnvironment.enableRealApiCalls && process.env.GOOGLE_API_KEY) {
         // Real API call
-        const request = createCompletionRequest(model, messages, apiKey, {
+        const request = await createCompletionRequest(model, messages, apiKey, {
           temperature: 0.1,
           maxTokens: 50,
           stream: false
@@ -364,7 +375,7 @@ describe('Model Integration Tests', () => {
 
       if (testEnvironment.enableRealApiCalls && process.env.MISTRAL_API_KEY) {
         // Real API call
-        const request = createCompletionRequest(model, messages, apiKey, {
+        const request = await createCompletionRequest(model, messages, apiKey, {
           temperature: 0.1,
           maxTokens: 50,
           stream: false
@@ -405,7 +416,7 @@ describe('Model Integration Tests', () => {
           process.env[`${provider.toUpperCase()}_API_KEY`]
         ) {
           try {
-            const request = createCompletionRequest(
+            const request = await createCompletionRequest(
               model,
               [{ role: 'user', content: testMessage }],
               apiKey,
@@ -463,7 +474,7 @@ describe('Model Integration Tests', () => {
         const model = testModels.openai;
         const apiKey = process.env.OPENAI_API_KEY;
 
-        const request = createCompletionRequest(model, messages, apiKey, {
+        const request = await createCompletionRequest(model, messages, apiKey, {
           temperature: 0.1,
           maxTokens: 10,
           stream: false
@@ -501,7 +512,7 @@ describe('Model Integration Tests', () => {
           .map(async (_, index) => {
             const messages = [{ role: 'user', content: `Concurrent test ${index + 1}` }];
 
-            const request = createCompletionRequest(model, messages, apiKey, {
+            const request = await createCompletionRequest(model, messages, apiKey, {
               temperature: 0.1,
               maxTokens: 10,
               stream: false

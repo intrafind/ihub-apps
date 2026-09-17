@@ -214,7 +214,6 @@ ihub-apps/
 ├── 📁 shared/          # Code shared between client/server
 ├── 📁 docs/           # Documentation (mdBook format)
 ├── 📁 docker/         # Docker configuration
-├── 📁 electron/       # Electron app wrapper
 └── 📁 teams/          # Microsoft Teams integration
 ```
 
@@ -454,24 +453,28 @@ graph LR
 
 ```mermaid
 graph TB
-    ChatService[Chat Service] --> RequestBuilder[Request Builder]
-    ChatService --> StreamingHandler[Streaming Handler]
-    ChatService --> ToolExecutor[Tool Executor]
-    
+    Routes[sessionRoutes] --> ChatService[Chat Service]
+    ChatService --> RequestBuilder[Request Builder]
+    ChatService --> AgentLoop[Agent Loop]
+    ChatService --> Projection[chatChannel + chatSeams]
+
     RequestBuilder --> Templates[Process Templates]
-    StreamingHandler --> SSE[Server-Sent Events]
-    ToolExecutor --> Tools[LLM Tools]
-    
-    Templates --> LLMAdapter[LLM Adapter]
-    SSE --> Client[Client Stream]
+    AgentLoop --> LLMClient[LLM Client]
+    AgentLoop --> Tools[toolLoader.runTool]
+    LLMClient --> LLMAdapter[LLM Adapter]
     Tools --> External[External APIs]
+
+    Projection --> SSE[Server-Sent Events]
+    SSE --> Client[Client Stream]
 ```
 
 **Key Components**:
-- `ChatService.js` - Main orchestration
-- `RequestBuilder.js` - Template processing  
-- `StreamingHandler.js` - Real-time responses
-- `ToolExecutor.js` - LLM tool calling
+- `ChatService.js` - One chat turn: `prepareChatRequest()`, `runTurn()`, headless `invokeAppInternal()`
+- `RequestBuilder.js` - Resolves app, model, messages, tools and options (template processing)
+- `chatChannel.js` / `chatSeams.js` - Project loop chunks and tool events onto chat SSE events
+- `chatErrors.js` / `chatTelemetry.js` - Localized error payloads, usage and metrics per model call
+- `server/services/loop/AgentLoop.js` - The shared tool loop (see [agent-loop.md](agent-loop.md))
+- `server/services/loop/LLMClient.js` - The one way to call a model (see [llm-client.md](llm-client.md))
 
 For detailed architecture information, see [docs/architecture.md](architecture.md).
 
@@ -495,7 +498,6 @@ For detailed architecture information, see [docs/architecture.md](architecture.m
     "en": "You are a helpful assistant that...",
     "de": "Du bist ein hilfreicher Assistent, der..."
   },
-  "tokenLimit": 4000,
   "color": "blue",
   "icon": "lightbulb"
 }
@@ -549,6 +551,13 @@ For detailed architecture information, see [docs/architecture.md](architecture.m
    - Edit `client/src/App.css`
    - Use Tailwind CSS classes for styling
    - Follow existing component patterns
+
+3. **Change the Tailwind Theme** (colors, fonts, plugins, scanned paths):
+   - Edit `client/tailwind.css` — Tailwind v4 is configured in CSS (`@theme`,
+     `@plugin`, `@custom-variant`, `@source`), not in a `tailwind.config.js`
+   - The client has four CSS entry points (`src/App.css`, `office/office.css`,
+     `extension/extension.css`, `nextcloud/nextcloud.css`); each imports
+     `client/tailwind.css`, so theme changes only need to be made once
 
 ### Adding User Groups and Permissions
 

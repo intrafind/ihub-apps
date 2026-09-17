@@ -3,6 +3,7 @@
  * Provides centralized configuration for HTTP clients including SSL and proxy settings.
  * All outbound HTTP calls should use httpFetch() to ensure proxy/SSL configuration is applied.
  */
+import http from 'http';
 import https from 'https';
 import nodeFetch from 'node-fetch';
 import { HttpProxyAgent } from 'http-proxy-agent';
@@ -10,6 +11,50 @@ import { HttpsProxyAgent } from 'https-proxy-agent';
 import configCache from '../configCache.js';
 import config from '../config.js';
 import logger from './logger.js';
+import { guardedLookup } from './dnsGuard.js';
+
+/**
+ * Workaround for `https-proxy-agent` >=7.0.0 (verified through 9.0.0).
+ *
+ * The upstream constructor in `https-proxy-agent/dist/index.js` does:
+ *
+ *   constructor(proxy, opts) {
+ *     super(opts);                        // http.Agent stores opts in this.options
+ *     this.options = { path: undefined }; // overwrites — rejectUnauthorized lost here
+ *     ...
+ *     this.connectOpts = { ALPNProtocols: ['http/1.1'], ...omit(opts,'headers'), host, port };
+ *   }
+ *
+ * `http.Agent.addRequest` merges `{...requestOptions, ...this.options}` before calling
+ * `createSocket`. Because `this.options` was clobbered to `{ path: undefined }`,
+ * `rejectUnauthorized: false` from the constructor never reaches the options that
+ * `agent-base.createSocket` forwards as `connectOpts` to `connect()`. The destination
+ * TLS upgrade (`tls.connect({...omit(opts, 'host','path','port'), socket})`) therefore
+ * runs with Node's default `rejectUnauthorized: true` and rejects self-signed certs.
+ *
+ * `this.connectOpts` does retain `rejectUnauthorized`, but it's used only for the socket to
+ * the proxy itself, which is irrelevant when the proxy is plain HTTP (the common case).
+ *
+ * This subclass re-injects `rejectUnauthorized` into the `opts` argument of `connect()`,
+ * which the parent then spreads into `tls.connect()` for the destination upgrade.
+ *
+ * Remove this subclass once upstream stops clobbering `this.options` in the constructor or
+ * exposes a TLS-options pass-through API. See `node_modules/https-proxy-agent/dist/index.js`
+ * to verify on dependency upgrades.
+ */
+export class TlsForwardingHttpsProxyAgent extends HttpsProxyAgent {
+  constructor(proxy, opts = {}) {
+    super(proxy, opts);
+    this._destinationTlsOptions = {};
+    if (typeof opts.rejectUnauthorized === 'boolean') {
+      this._destinationTlsOptions.rejectUnauthorized = opts.rejectUnauthorized;
+    }
+  }
+
+  async connect(req, opts) {
+    return super.connect(req, { ...opts, ...this._destinationTlsOptions });
+  }
+}
 
 /**
  * Get SSL configuration from platform config
@@ -102,36 +147,54 @@ export function isDomainWhitelisted(hostname, whitelist) {
 export function shouldIgnoreSSLForURL(url, sslConfig = null) {
   const config = sslConfig || getSSLConfig();
 
+  let hostname = '';
+  try {
+    hostname = new URL(url).hostname;
+  } catch {
+    // hostname stays empty; we still log below so the operator sees why bypass didn't apply
+  }
+
   // If ignoreInvalidCertificates is false, always validate SSL
   if (!config.ignoreInvalidCertificates) {
+    logger.debug('SSL bypass not applied: ignoreInvalidCertificates is false', {
+      component: 'HttpConfig',
+      hostname
+    });
     return false;
   }
 
-  // If whitelist is empty, do NOT ignore SSL (security: require explicit domain whitelisting)
+  // If whitelist is empty, do NOT ignore SSL (security: require explicit domain whitelisting).
+  // Operators upgrading from older versions used to rely on a global bypass when whitelist
+  // was empty — that behavior was removed for security. This warning makes the silent skip visible.
   if (!config.domainWhitelist || config.domainWhitelist.length === 0) {
+    logger.warn(
+      'SSL bypass not applied: ignoreInvalidCertificates is true but ssl.domainWhitelist is empty. Add the LLM hostname to ssl.domainWhitelist in platform.json.',
+      { component: 'HttpConfig', hostname }
+    );
     return false;
   }
 
-  // Extract hostname from URL
-  try {
-    const urlObj = new URL(url);
-    const hostname = urlObj.hostname;
-
-    // Check if hostname is in whitelist
-    const isWhitelisted = isDomainWhitelisted(hostname, config.domainWhitelist);
-
-    if (isWhitelisted) {
-      logger.debug('SSL validation will be ignored for whitelisted domain', {
-        component: 'HttpConfig',
-        hostname
-      });
-    }
-
-    return isWhitelisted;
-  } catch (error) {
-    logger.warn('Error parsing URL for SSL whitelist check', { component: 'HttpConfig', error });
+  if (!hostname) {
+    logger.warn('Error parsing URL for SSL whitelist check', { component: 'HttpConfig', url });
     return false;
   }
+
+  // Check if hostname is in whitelist
+  const isWhitelisted = isDomainWhitelisted(hostname, config.domainWhitelist);
+
+  if (isWhitelisted) {
+    logger.debug('SSL validation will be ignored for whitelisted domain', {
+      component: 'HttpConfig',
+      hostname
+    });
+  } else {
+    logger.warn(
+      'SSL bypass not applied: hostname is not in ssl.domainWhitelist. Self-signed certs will be rejected for this host.',
+      { component: 'HttpConfig', hostname, domainWhitelist: config.domainWhitelist }
+    );
+  }
+
+  return isWhitelisted;
 }
 
 /**
@@ -238,12 +301,71 @@ export function matchesProxyPattern(url, patterns) {
 }
 
 /**
+ * Build an agent for a direct (non-proxied) connection.
+ *
+ * Returns `undefined` (letting the fetch library use its default agent) when
+ * no SSL bypass and no pinned DNS lookup are required, preserving prior
+ * behavior. When a `lookup` is supplied it is attached to a concrete agent so
+ * the connection resolves only to the caller-validated addresses (SSRF DNS
+ * pinning); the lookup is intentionally never attached to proxy agents.
+ *
+ * @param {boolean} isHttps - Whether the request is HTTPS
+ * @param {boolean} shouldIgnoreSSL - Whether to disable certificate validation
+ * @param {Function|null} lookup - Optional dns.lookup-compatible function to pin DNS
+ * @returns {http.Agent|https.Agent|undefined}
+ */
+function createDirectAgent(isHttps, shouldIgnoreSSL, lookup = null) {
+  const options = {};
+  // Admin opt-in only: reached solely when shouldIgnoreSSL is true, which
+  // requires ssl.ignoreInvalidCertificates=true AND an explicit per-domain
+  // whitelist match (see shouldIgnoreSSLForURL / isDomainWhitelisted). This is
+  // pre-existing, intentional behavior consolidated here from three prior call
+  // sites; it is not introduced by this change.
+  if (shouldIgnoreSSL) options.rejectUnauthorized = false; // codeql[js/disabling-certificate-validation]
+  if (typeof lookup === 'function') options.lookup = lookup;
+
+  if (Object.keys(options).length === 0 && !isHttps) {
+    return undefined; // nothing to customize for plain HTTP -> default agent
+  }
+  if (Object.keys(options).length === 0) {
+    return undefined; // plain HTTPS with default settings -> default agent
+  }
+  return isHttps ? new https.Agent(options) : new http.Agent(options);
+}
+
+/**
+ * Direct agent for a URL, resolving hostnames through the DNS guard.
+ *
+ * Without a caller-supplied lookup the agent is shared per (protocol, SSL
+ * bypass) so every outbound connection goes through `guardedLookup` (see
+ * dnsGuard.js): one getaddrinfo per hostname at a time, a bounded wait and a
+ * short negative cache, so an unreachable model endpoint cannot stall other
+ * requests by occupying the threadpool's DNS slots. A caller-supplied lookup
+ * (the SSRF guard's DNS pinning) is request-specific and gets its own agent.
+ */
+const sharedDirectAgents = new Map();
+function guardedDirectAgent(isHttps, shouldIgnoreSSL, lookup = null) {
+  if (typeof lookup === 'function') {
+    return createDirectAgent(isHttps, shouldIgnoreSSL, lookup);
+  }
+  const key = `${isHttps ? 'https' : 'http'}:${shouldIgnoreSSL ? 'insecure' : 'strict'}`;
+  let agent = sharedDirectAgents.get(key);
+  if (!agent) {
+    agent = createDirectAgent(isHttps, shouldIgnoreSSL, guardedLookup);
+    sharedDirectAgents.set(key, agent);
+  }
+  return agent;
+}
+
+/**
  * Create HTTP/HTTPS agent with global SSL and proxy configuration
  * @param {string} url - Request URL (used to determine protocol and proxy bypass)
  * @param {boolean} [forceIgnoreSSL] - Force ignore SSL (overrides global setting)
+ * @param {Function} [lookup] - Optional dns.lookup-compatible function to pin DNS resolution
+ *   for direct connections (used by the SSRF guard). Ignored for proxied requests.
  * @returns {http.Agent|https.Agent|HttpProxyAgent|HttpsProxyAgent|undefined} Agent with appropriate configuration
  */
-export function createAgent(url = '', forceIgnoreSSL = null) {
+export function createAgent(url = '', forceIgnoreSSL = null, lookup = null) {
   // Always call getSSLConfig() to ensure configuration is loaded
   const sslConfig = getSSLConfig();
   const proxyConfig = getProxyConfig();
@@ -262,11 +384,8 @@ export function createAgent(url = '', forceIgnoreSSL = null) {
   // Check if proxy should be bypassed for this URL
   if (proxyConfig.enabled && proxyConfig.noProxy && shouldBypassProxy(url, proxyConfig.noProxy)) {
     logger.info('Bypassing proxy for URL', { component: 'HttpConfig', url });
-    // Return standard agent with SSL configuration if needed
-    if (isHttps && shouldIgnoreSSL) {
-      return new https.Agent({ rejectUnauthorized: false });
-    }
-    return undefined;
+    // Direct connection: apply SSL bypass and/or DNS pinning as needed.
+    return guardedDirectAgent(isHttps, shouldIgnoreSSL, lookup);
   }
 
   // Check if URL matches selective proxy patterns
@@ -277,11 +396,8 @@ export function createAgent(url = '', forceIgnoreSSL = null) {
     !matchesProxyPattern(url, proxyConfig.urlPatterns)
   ) {
     logger.info('URL does not match proxy patterns', { component: 'HttpConfig', url });
-    // Return standard agent with SSL configuration if needed
-    if (isHttps && shouldIgnoreSSL) {
-      return new https.Agent({ rejectUnauthorized: false });
-    }
-    return undefined;
+    // Direct connection: apply SSL bypass and/or DNS pinning as needed.
+    return guardedDirectAgent(isHttps, shouldIgnoreSSL, lookup);
   }
 
   // Apply proxy configuration
@@ -295,11 +411,12 @@ export function createAgent(url = '', forceIgnoreSSL = null) {
     }
 
     try {
-      // For HttpsProxyAgent v7+, rejectUnauthorized is passed as a top-level option
       const agentOptions = shouldIgnoreSSL ? { rejectUnauthorized: false } : {};
 
       if (isHttps) {
-        return new HttpsProxyAgent(proxyUrl, agentOptions);
+        // TlsForwardingHttpsProxyAgent ensures rejectUnauthorized propagates to the
+        // destination TLS handshake, not just the proxy connection.
+        return new TlsForwardingHttpsProxyAgent(proxyUrl, agentOptions);
       } else {
         return new HttpProxyAgent(proxyUrl, agentOptions);
       }
@@ -308,12 +425,22 @@ export function createAgent(url = '', forceIgnoreSSL = null) {
     }
   }
 
-  // Fallback to SSL-only configuration if needed
+  // No proxy path: optionally bypass SSL and/or pin DNS via a direct agent.
   if (isHttps && shouldIgnoreSSL) {
-    return new https.Agent({ rejectUnauthorized: false });
+    logger.info('SSL certificate verification disabled for direct HTTPS request', {
+      component: 'HttpConfig',
+      url
+    });
+  } else if (isHttps && typeof lookup !== 'function') {
+    // No agent applied. If the request later fails with a TLS error, the operator can
+    // look at the preceding shouldIgnoreSSLForURL log to see why bypass was skipped.
+    logger.debug('No SSL bypass agent applied for HTTPS request', {
+      component: 'HttpConfig',
+      url,
+      proxyConfigured: Boolean(proxyConfig.https)
+    });
   }
-
-  return undefined;
+  return guardedDirectAgent(isHttps, shouldIgnoreSSL, lookup);
 }
 
 /**
@@ -321,20 +448,41 @@ export function createAgent(url = '', forceIgnoreSSL = null) {
  * @param {Object} options - Existing fetch options
  * @param {string} url - Request URL
  * @param {boolean} [forceIgnoreSSL] - Force ignore SSL (overrides global setting)
+ * @param {Function} [lookup] - Optional dns.lookup-compatible function to pin DNS resolution
  * @returns {Object} Enhanced fetch options
  */
-export function enhanceFetchOptions(options = {}, url = '', forceIgnoreSSL = null) {
+export function enhanceFetchOptions(options = {}, url = '', forceIgnoreSSL = null, lookup = null) {
   const enhancedOptions = { ...options };
 
   // Only add agent if not already specified
   if (!enhancedOptions.agent) {
-    const agent = createAgent(url, forceIgnoreSSL);
+    const agent = createAgent(url, forceIgnoreSSL, lookup);
     if (agent) {
       enhancedOptions.agent = agent;
     }
   }
 
   return enhancedOptions;
+}
+
+/**
+ * Redact secret-looking parts of a URL so it can be safely included in logs and
+ * error messages. Credentials ride along in a URL two ways: query parameters
+ * (Google's `?key=`, plus `token` / `api_key` / `client_secret` / ...) and
+ * basic-auth userinfo (`http://user:pass@host`). Both are masked; non-strings
+ * are returned unchanged.
+ *
+ * @param {string} url - The URL to sanitize
+ * @returns {string} URL with any embedded secrets replaced by `REDACTED`
+ */
+export function redactUrlSecrets(url) {
+  if (typeof url !== 'string') return url;
+  return url
+    .replace(/(\/\/)[^/@\s]+@/, '$1REDACTED@')
+    .replace(
+      /([?&](?:api[-_]?key|access[-_]?token|client[-_]?secret|key|token|password|secret)=)[^&#\s]*/gi,
+      '$1REDACTED'
+    );
 }
 
 /**
@@ -345,18 +493,29 @@ export function enhanceFetchOptions(options = {}, url = '', forceIgnoreSSL = nul
  * All outbound HTTP calls in the server should use this function.
  *
  * @param {string} url - The URL to fetch
- * @param {Object} [options] - Standard fetch options (method, headers, body, signal, etc.)
+ * @param {Object} [options] - Standard fetch options (method, headers, body, signal, etc.).
+ *   A `lookup` property (dns.lookup-compatible) is extracted to pin DNS resolution for
+ *   direct connections and is not forwarded to the underlying fetch.
  * @param {boolean} [forceIgnoreSSL] - Force ignore SSL (overrides global setting)
  * @returns {Promise<Response>} node-fetch Response
  */
 export async function httpFetch(url, options = {}, forceIgnoreSSL = null) {
-  // Validate URL scheme - admin-configured URLs are trusted but must use http(s)
+  // Validate URL scheme - admin-configured URLs are trusted but must use http(s).
+  // Include the offending URL (secrets redacted) in the error: a bad scheme
+  // usually means a model/tool has no valid endpoint URL and its id or an
+  // unresolved placeholder leaked through as the URL (e.g. "ministral"), which
+  // the bare scheme alone doesn't reveal.
   if (url && typeof url === 'string') {
     const scheme = url.split(':')[0].toLowerCase();
     if (scheme !== 'http' && scheme !== 'https') {
-      throw new Error(`Unsupported URL scheme: ${scheme}`);
+      throw new Error(
+        `Unsupported URL scheme "${scheme}" (expected http or https) for URL: ${redactUrlSecrets(url)}`
+      );
     }
   }
-  const enhanced = enhanceFetchOptions(options, url, forceIgnoreSSL);
+  // `lookup` is not a node-fetch option; pull it out and apply it to the agent
+  // (used by the workflow SSRF guard to pin connections to validated IPs).
+  const { lookup = null, ...fetchOptions } = options;
+  const enhanced = enhanceFetchOptions(fetchOptions, url, forceIgnoreSSL, lookup);
   return nodeFetch(url, enhanced);
 }

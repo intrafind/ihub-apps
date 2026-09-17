@@ -23,6 +23,13 @@ router.get('/jobs', authRequired, (req, res) => {
 /**
  * GET /jobs/:jobId/progress
  * SSE endpoint for real-time progress updates (shared across all tools).
+ *
+ * Deliberately NOT migrated to createSseChannel (server/utils/sseChannel.js):
+ * jobs support multiple concurrent listeners per id (`job.clients` is an
+ * array, not a single pinned entry), progress pushes happen synchronously
+ * from notifyClients() rather than via the actionTracker 'fire-sse' bus, and
+ * jobs are short-lived with their own TTL sweep (jobStore.js), so a
+ * heartbeat/dead-client sweep would be redundant.
  */
 router.get('/jobs/:jobId/progress', authRequired, (req, res) => {
   const job = getJob(req.params.jobId);
@@ -30,10 +37,11 @@ router.get('/jobs/:jobId/progress', authRequired, (req, res) => {
     return sendNotFound(res, 'Job');
   }
 
+  // `Connection: keep-alive` is intentionally absent — hop-by-hop headers are
+  // forbidden in HTTP/2 (RFC 9113 §8.2.2) and break proxies that forward them.
   res.writeHead(200, {
     'Content-Type': 'text/event-stream',
     'Cache-Control': 'no-cache',
-    Connection: 'keep-alive',
     'X-Accel-Buffering': 'no'
   });
 

@@ -14,23 +14,10 @@ import {
   sendBadRequest,
   sendErrorResponse
 } from '../../utils/responseHelpers.js';
+import { isValidReturnUrl } from '../../utils/oauthReturnUrl.js';
+import { buildContentDisposition } from '../../utils/safeContentDisposition.js';
 
 const router = express.Router();
-
-/**
- * Validate returnUrl to prevent open redirect attacks.
- * Allows relative paths and absolute URLs on the same hostname (any port).
- */
-function isValidReturnUrl(returnUrl, req) {
-  if (!returnUrl) return false;
-  if (returnUrl.startsWith('/') && !returnUrl.startsWith('//')) return true;
-  try {
-    const url = new URL(returnUrl);
-    return url.hostname === req.hostname;
-  } catch {
-    return false;
-  }
-}
 
 /**
  * Validate Google Drive fileId to ensure it is a safe opaque identifier.
@@ -87,6 +74,14 @@ router.get('/auth', authRequired, googleDriveAuthLimiter, async (req, res) => {
       return sendErrorResponse(res, 500, 'Session not available');
     }
 
+    // authRequired only rejects missing `req.user` or anonymous users;
+    // it does NOT guarantee req.user.id is truthy. Refuse to start an
+    // OAuth flow without a real user id — otherwise tokens would land
+    // under a shared sentinel key and could be read by another caller.
+    if (!req.user?.id) {
+      return sendAuthRequired(res);
+    }
+
     // Generate state for CSRF protection
     const state = crypto.randomBytes(32).toString('hex');
 
@@ -104,7 +99,7 @@ router.get('/auth', authRequired, googleDriveAuthLimiter, async (req, res) => {
       state,
       codeVerifier,
       providerId,
-      userId: req.user?.id || 'fallback-user',
+      userId: req.user.id,
       returnUrl: validatedReturnUrl,
       timestamp: Date.now()
     };
@@ -140,6 +135,18 @@ router.get('/:providerId/callback', authOptional, async (req, res) => {
         providerId
       });
       return res.redirect('/settings/integrations?googledrive_error=oauth_failed');
+    }
+
+    // Some IdP edge cases (consent denied without `error`, or a manual
+    // hit on the callback URL) can land here with no `code`. Surface a
+    // stable error code instead of throwing inside `exchangeCodeForTokens`
+    // and leaking the raw error into the redirect URL.
+    if (!code) {
+      logger.error('Google Drive OAuth callback missing code', {
+        component: 'Google Drive',
+        providerId
+      });
+      return res.redirect('/settings/integrations?googledrive_error=missing_code');
     }
 
     if (!req.session) {
@@ -230,9 +237,10 @@ router.get('/:providerId/callback', authOptional, async (req, res) => {
     }
 
     const catchSeparator = catchReturnUrl.includes('?') ? '&' : '?';
-    res.redirect(
-      `${catchReturnUrl}${catchSeparator}googledrive_error=${encodeURIComponent(error.message)}`
-    );
+    // Use a stable error code rather than echoing `error.message` —
+    // some upstream errors interpolate user-influenced strings, and
+    // we don't want those landing in the redirect URL.
+    res.redirect(`${catchReturnUrl}${catchSeparator}googledrive_error=callback_failed`);
   }
 });
 
@@ -246,7 +254,9 @@ router.get('/status', authRequired, googleDriveApiLimiter, async (req, res) => {
       return sendAuthRequired(res);
     }
 
-    const isAuthenticated = await GoogleDriveService.isUserAuthenticated(req.user.id);
+    const providerId = typeof req.query.providerId === 'string' ? req.query.providerId : undefined;
+
+    const isAuthenticated = await GoogleDriveService.isUserAuthenticated(req.user.id, providerId);
 
     if (!isAuthenticated) {
       return res.json({
@@ -255,8 +265,8 @@ router.get('/status', authRequired, googleDriveApiLimiter, async (req, res) => {
       });
     }
 
-    const userInfo = await GoogleDriveService.getUserInfo(req.user.id);
-    const tokenInfo = await GoogleDriveService.getTokenExpirationInfo(req.user.id);
+    const userInfo = await GoogleDriveService.getUserInfo(req.user.id, providerId);
+    const tokenInfo = await GoogleDriveService.getTokenExpirationInfo(req.user.id, providerId);
 
     res.json({
       connected: true,
@@ -302,12 +312,18 @@ router.post('/disconnect', authRequired, async (req, res) => {
       return sendAuthRequired(res);
     }
 
-    const success = await GoogleDriveService.deleteUserTokens(req.user.id);
+    const providerId =
+      (typeof req.query.providerId === 'string' && req.query.providerId) ||
+      (typeof req.body?.providerId === 'string' && req.body.providerId) ||
+      undefined;
+
+    const success = await GoogleDriveService.deleteUserTokens(req.user.id, providerId);
 
     if (success) {
       logger.info('Google Drive disconnected', {
         component: 'Google Drive',
-        userId: req.user.id
+        userId: req.user.id,
+        providerId
       });
       res.json({
         success: true,
@@ -395,6 +411,7 @@ router.get('/drives/:source', authRequired, async (req, res) => {
     }
 
     const { source } = req.params;
+    const providerId = typeof req.query.providerId === 'string' ? req.query.providerId : undefined;
     let drives = [];
 
     switch (source) {
@@ -411,7 +428,7 @@ router.get('/drives/:source', authRequired, async (req, res) => {
         ];
         break;
       case 'sharedDrives':
-        drives = await GoogleDriveService.listSharedDrives(req.user.id);
+        drives = await GoogleDriveService.listSharedDrives(req.user.id, providerId);
         break;
       case 'sharedWithMe':
         // Shared with Me is a virtual drive entry (flat list, no folder hierarchy)
@@ -459,6 +476,7 @@ router.get('/items', authRequired, async (req, res) => {
     }
 
     const { driveId, folderId, search, source } = req.query;
+    const providerId = typeof req.query.providerId === 'string' ? req.query.providerId : undefined;
 
     let items;
 
@@ -466,16 +484,21 @@ router.get('/items', authRequired, async (req, res) => {
       // Search mode
       const searchDriveId =
         driveId && driveId !== 'root' && driveId !== 'sharedWithMe' ? driveId : null;
-      items = await GoogleDriveService.searchFiles(req.user.id, search, searchDriveId);
+      items = await GoogleDriveService.searchFiles(req.user.id, search, searchDriveId, providerId);
     } else if (source === 'sharedWithMe' || driveId === 'sharedWithMe') {
       // Shared with Me - flat list
-      items = await GoogleDriveService.listSharedWithMe(req.user.id);
+      items = await GoogleDriveService.listSharedWithMe(req.user.id, providerId);
     } else if (driveId === 'root' || !driveId) {
       // My Drive
-      items = await GoogleDriveService.listMyDriveFiles(req.user.id, folderId);
+      items = await GoogleDriveService.listMyDriveFiles(req.user.id, folderId, providerId);
     } else {
       // Shared drive
-      items = await GoogleDriveService.listSharedDriveFiles(req.user.id, driveId, folderId);
+      items = await GoogleDriveService.listSharedDriveFiles(
+        req.user.id,
+        driveId,
+        folderId,
+        providerId
+      );
     }
 
     res.json({
@@ -507,6 +530,7 @@ router.get('/download', authRequired, async (req, res) => {
     }
 
     const { fileId } = req.query;
+    const providerId = typeof req.query.providerId === 'string' ? req.query.providerId : undefined;
 
     if (!fileId) {
       return sendBadRequest(res, 'fileId query parameter is required');
@@ -516,11 +540,17 @@ router.get('/download', authRequired, async (req, res) => {
       return sendBadRequest(res, 'fileId must be a valid Google Drive file identifier');
     }
 
-    const file = await GoogleDriveService.downloadFile(req.user.id, fileId);
+    const file = await GoogleDriveService.downloadFile(req.user.id, fileId, providerId);
 
-    res.setHeader('Content-Type', file.mimeType || 'application/octet-stream');
-    res.setHeader('Content-Length', file.size);
-    res.setHeader('Content-Disposition', `attachment; filename="${file.name}"`);
+    // Force `application/octet-stream` rather than reflecting the
+    // upstream Google Drive Content-Type. The download is always served
+    // with `Content-Disposition: attachment` so even `text/html` would
+    // not render today, but reflecting upstream MIME types means any
+    // future refactor that drops the attachment disposition would
+    // open an XSS path. Keep the safer baseline.
+    res.setHeader('Content-Type', 'application/octet-stream');
+    if (file.size) res.setHeader('Content-Length', file.size);
+    res.setHeader('Content-Disposition', buildContentDisposition(file.name));
 
     res.send(file.content);
   } catch (error) {

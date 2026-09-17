@@ -5,10 +5,14 @@ import configCache from '../../configCache.js';
 import { createJob } from './jobStore.js';
 import { processOcrJob } from './processors/ocrProcessor.js';
 import { sendBadRequest, sendInternalError } from '../../utils/responseHelpers.js';
+import { recordUpload } from '../../telemetry/metrics.js';
+import { estimateTokens } from '../../usageTracker.js';
 
 const router = express.Router();
 
-const MAX_PROMPT_LENGTH = 2000;
+// Custom prompt is bounded by tokens (matching the chat token estimator), not
+// raw characters. Keep this in sync with the client-side limit in OcrPage.jsx.
+const MAX_PROMPT_TOKENS = 4096;
 const MAX_FILE_SIZE = 200 * 1024 * 1024; // 200 MB per file
 const MAX_FILES = 20;
 const VALID_OCR_MODES = ['full', 'smart', 'text-only'];
@@ -54,6 +58,15 @@ router.post(
   (req, res, next) => {
     upload.array('files', MAX_FILES)(req, res, err => {
       if (err) {
+        // Map multer's failure code to a label so dashboards can split
+        // size-rejected from mime-rejected from generic.
+        const outcome =
+          err instanceof multer.MulterError
+            ? err.code === 'LIMIT_FILE_SIZE'
+              ? 'rejected_size'
+              : 'rejected_other'
+            : 'rejected_other';
+        recordUpload('ocr', outcome);
         if (err instanceof multer.MulterError) {
           return sendBadRequest(res, `Upload error: ${err.message}`);
         }
@@ -66,7 +79,11 @@ router.post(
     try {
       const files = req.files;
       if (!files || files.length === 0) {
+        recordUpload('ocr', 'rejected_other');
         return sendBadRequest(res, 'At least one file is required');
+      }
+      for (const f of files) {
+        recordUpload('ocr', 'accepted', f.size);
       }
 
       const { modelId, prompt, ocrMode = 'full', debugMode } = req.body;
@@ -77,11 +94,11 @@ router.post(
       }
 
       // Validate prompt
-      if (prompt && (typeof prompt !== 'string' || prompt.length > MAX_PROMPT_LENGTH)) {
-        return sendBadRequest(
-          res,
-          `prompt must be a string of at most ${MAX_PROMPT_LENGTH} characters`
-        );
+      if (prompt !== undefined && typeof prompt !== 'string') {
+        return sendBadRequest(res, 'prompt must be a string');
+      }
+      if (prompt && estimateTokens(prompt) > MAX_PROMPT_TOKENS) {
+        return sendBadRequest(res, `prompt must be at most ${MAX_PROMPT_TOKENS} tokens`);
       }
 
       const jobs = [];

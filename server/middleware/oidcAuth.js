@@ -2,12 +2,17 @@ import passport from 'passport';
 import { Strategy as OAuth2Strategy } from 'passport-oauth2';
 import { httpFetch } from '../utils/httpConfig.js';
 import configCache from '../configCache.js';
+import credentialService from '../services/CredentialService.js';
 import { enhanceUserGroups } from '../utils/authorization.js';
 import { validateAndPersistExternalUser } from '../utils/userManager.js';
 import { generateJwt } from '../utils/tokenService.js';
 import authDebugService from '../utils/authDebugService.js';
 import logger from '../utils/logger.js';
 import { buildServerPath } from '../utils/basePath.js';
+import { getAuthCookieOptions } from '../utils/cookieSettings.js';
+import { setOidcLogoutHint } from '../utils/oidcLogoutHint.js';
+import { decodeIdTokenClaims } from '../utils/oidcIdToken.js';
+import { logAudit } from '../services/AuditLogService.js';
 
 // Store configured providers
 const configuredProviders = new Map();
@@ -40,7 +45,7 @@ export function configureOidcProviders() {
     if (
       !provider.name ||
       !provider.clientId ||
-      !provider.clientSecret ||
+      !provider.clientSecretRef ||
       !provider.authorizationURL ||
       !provider.tokenURL ||
       !provider.userInfoURL
@@ -52,6 +57,9 @@ export function configureOidcProviders() {
       continue;
     }
 
+    // Resolve the client secret from the central credential store
+    const clientSecret = credentialService.resolveSecret(provider.clientSecretRef);
+
     try {
       // Create OAuth2 strategy for this provider
       const strategy = new OAuth2Strategy(
@@ -59,7 +67,7 @@ export function configureOidcProviders() {
           authorizationURL: provider.authorizationURL,
           tokenURL: provider.tokenURL,
           clientID: provider.clientId,
-          clientSecret: provider.clientSecret,
+          clientSecret,
           callbackURL: provider.callbackURL || `/api/auth/oidc/${provider.name}/callback`,
           scope: provider.scope || ['openid', 'profile', 'email'],
           state: true,
@@ -68,21 +76,26 @@ export function configureOidcProviders() {
           customHeaders: {},
           skipUserProfile: false // We'll fetch user info manually
         },
-        async (accessToken, _refreshToken, _profile, done) => {
+        async (accessToken, _refreshToken, params, _profile, done) => {
           const sessionId = authDebugService.generateSessionId();
 
           try {
-            //log access token itself if includeRawdata is enabled
-            authDebugService.log(
-              'oidc',
-              'debug',
-              'raw_access_token',
-              {
-                provider: provider.name,
-                accessToken
-              },
-              sessionId
-            );
+            // Log the access token itself only when the admin explicitly
+            // opted into raw data (default off). sanitizeData leaves it
+            // unmasked in that mode; the core logger still redacts the
+            // token-named key as a safety net.
+            if (authDebugService.isRawDataEnabled('oidc')) {
+              authDebugService.log(
+                'oidc',
+                'debug',
+                'raw_access_token',
+                {
+                  provider: provider.name,
+                  accessToken
+                },
+                sessionId
+              );
+            }
 
             authDebugService.log(
               'oidc',
@@ -92,11 +105,49 @@ export function configureOidcProviders() {
                 provider: provider.name,
                 hasAccessToken: !!accessToken,
                 hasRefreshToken: !!_refreshToken,
+                hasIdToken: !!params?.id_token,
                 accessTokenLength: accessToken?.length || 0,
                 tokenType: 'Bearer'
               },
               sessionId
             );
+
+            // Decode ID token claims (if present). Some IdPs (notably
+            // Microsoft Entra) emit `groups` only in the ID token and not in
+            // the userinfo endpoint response, so we read it here and merge it
+            // into userInfo before normalization.
+            const idTokenClaims = decodeIdTokenClaims(params?.id_token);
+            if (idTokenClaims) {
+              const groupsAttr = provider.groupsAttribute || 'groups';
+              const overage = !!(
+                idTokenClaims._claim_names?.[groupsAttr] || idTokenClaims.hasgroups
+              );
+              authDebugService.log(
+                'oidc',
+                'debug',
+                'id_token_claims_decoded',
+                {
+                  provider: provider.name,
+                  claimKeys: Object.keys(idTokenClaims),
+                  hasGroupsClaim: Array.isArray(idTokenClaims[groupsAttr]),
+                  groupsCount: Array.isArray(idTokenClaims[groupsAttr])
+                    ? idTokenClaims[groupsAttr].length
+                    : 0,
+                  hasOverageIndicator: overage
+                },
+                sessionId
+              );
+              if (overage) {
+                logger.warn(
+                  'OIDC ID token signaled groups overage; the groups claim list is incomplete. ' +
+                    'Consider configuring a Microsoft Graph fallback or an Entra group filter.',
+                  {
+                    component: 'OidcAuth',
+                    providerName: provider.name
+                  }
+                );
+              }
+            }
 
             // Get user info from OIDC provider
             const userInfo = await fetchUserInfo(
@@ -106,17 +157,42 @@ export function configureOidcProviders() {
               sessionId
             );
 
-            // Log user info if includeRawData is enabled
-            authDebugService.log(
-              'oidc',
-              'debug',
-              'raw_user_info',
-              {
-                provider: provider.name,
-                userInfo: JSON.stringify(userInfo, null, 2)
-              },
-              sessionId
-            );
+            // If the userinfo response lacks the configured groups attribute
+            // but the ID token carries it, fill it in so downstream extraction
+            // picks the groups up unchanged.
+            const groupsAttr = provider.groupsAttribute || 'groups';
+            if (
+              idTokenClaims &&
+              userInfo[groupsAttr] === undefined &&
+              Array.isArray(idTokenClaims[groupsAttr])
+            ) {
+              userInfo[groupsAttr] = idTokenClaims[groupsAttr];
+              authDebugService.log(
+                'oidc',
+                'info',
+                'groups_merged_from_id_token',
+                {
+                  provider: provider.name,
+                  groupsAttribute: groupsAttr,
+                  groupsCount: idTokenClaims[groupsAttr].length
+                },
+                sessionId
+              );
+            }
+
+            // Log the full user-info payload only when raw data is enabled.
+            if (authDebugService.isRawDataEnabled('oidc')) {
+              authDebugService.log(
+                'oidc',
+                'debug',
+                'raw_user_info',
+                {
+                  provider: provider.name,
+                  userInfo: JSON.stringify(userInfo, null, 2)
+                },
+                sessionId
+              );
+            }
 
             // Normalize user data from OIDC provider
             const oidcUser = normalizeOidcUser(userInfo, provider, sessionId);
@@ -154,7 +230,13 @@ export function configureOidcProviders() {
               sessionId
             );
 
-            return done(null, validatedUser);
+            // Pass the raw ID token out via Passport's `info` argument rather than
+            // attaching it to validatedUser: that object flows into
+            // validateAndPersistExternalUser() above, which can persist user fields
+            // to contents/config/users.json, and the ID token must never end up
+            // there. `info` is only used transiently by createOidcCallbackHandler
+            // to set the (also transient, httpOnly) oidcLogoutHint cookie.
+            return done(null, validatedUser, { idToken: params?.id_token });
           } catch (error) {
             authDebugService.log(
               'oidc',
@@ -191,6 +273,26 @@ export function configureOidcProviders() {
         component: 'OidcAuth',
         providerName: provider.name
       });
+
+      // logoutURL enables RP-Initiated Logout (GET /api/auth/oidc-logout), but the
+      // provider must separately allow-list iHub's own URL as a post-logout redirect
+      // target - a setup step iHub cannot verify from here. Surface it now so it's
+      // caught during setup, not by a user hitting the IdP's error page at logout.
+      // info, not warn: a configured logoutURL is a correct setup, and warning on
+      // every boot for it trains operators to ignore the log.
+      if (provider.logoutURL) {
+        logger.info(
+          'OIDC provider has logoutURL configured (RP-Initiated Logout) - your iHub URL ' +
+            'must be allow-listed at the provider as a valid post-logout redirect target ' +
+            '(e.g. Keycloak: client "Valid post logout redirect URIs"), otherwise logout ' +
+            'will fail with an IdP-side error. See docs/oidc-authentication.md.',
+          {
+            component: 'OidcAuth',
+            providerName: provider.name,
+            logoutURL: provider.logoutURL
+          }
+        );
+      }
     } catch (error) {
       logger.error('Failed to configure OIDC provider', {
         component: 'OidcAuth',
@@ -425,6 +527,72 @@ export function getConfiguredProviders() {
 }
 
 /**
+ * Validate a returnUrl query parameter to prevent open-redirect attacks via
+ * the OIDC callback (which appends ?token=... to the value).
+ *
+ * Allows:
+ *  - Same-origin absolute URLs (host must match req.get('host'))
+ *  - Relative paths starting with a single '/'
+ *
+ * Rejects (returns null):
+ *  - Non-string values, including arrays from duplicate ?returnUrl= params
+ *  - Cross-origin absolute URLs
+ *  - Protocol-relative URLs ('//evil.com')
+ *  - Backslash bypass attempts ('\\evil.com')
+ *
+ * @param {*} rawReturnUrl - Untrusted value from req.query.returnUrl.
+ * @param {import('express').Request} req - Express request, used for host comparison.
+ * @returns {string|null} Sanitized returnUrl, or null if invalid.
+ */
+function sanitizeReturnUrl(rawReturnUrl, req) {
+  if (rawReturnUrl === null || rawReturnUrl === undefined) return null;
+  if (typeof rawReturnUrl !== 'string') {
+    logger.warn('[Security] OIDC returnUrl rejected: non-string value', {
+      component: 'OidcAuth',
+      type: typeof rawReturnUrl
+    });
+    return null;
+  }
+
+  // Normalize backslashes — '\evil.com' is parsed as '/evil.com' by some clients
+  let value = rawReturnUrl.replace(/\\/g, '/');
+
+  if (value.startsWith('//')) {
+    // Protocol-relative — '//evil.com' resolves to https://evil.com
+    logger.warn('[Security] OIDC returnUrl rejected: protocol-relative URL', {
+      component: 'OidcAuth',
+      returnUrl: rawReturnUrl
+    });
+    return null;
+  }
+
+  if (value.startsWith('http://') || value.startsWith('https://')) {
+    try {
+      const parsed = new URL(value);
+      if (parsed.host !== req.get('host')) {
+        logger.warn('[Security] OIDC returnUrl rejected: cross-origin', {
+          component: 'OidcAuth',
+          returnUrl: rawReturnUrl
+        });
+        return null;
+      }
+      return value;
+    } catch {
+      logger.warn('[Security] OIDC returnUrl rejected: invalid absolute URL', {
+        component: 'OidcAuth',
+        returnUrl: rawReturnUrl
+      });
+      return null;
+    }
+  }
+
+  if (!value.startsWith('/')) {
+    value = '/' + value;
+  }
+  return value;
+}
+
+/**
  * OIDC authentication route handler
  */
 export function createOidcAuthHandler(providerName) {
@@ -434,14 +602,11 @@ export function createOidcAuthHandler(providerName) {
       return res.status(404).json({ error: `OIDC provider '${providerName}' not found` });
     }
 
-    // Store return URL in session/state if provided
-    const returnUrl = req.query.returnUrl;
-    if (returnUrl) {
-      // Ensure session exists
-      if (!req.session) {
-      } else {
-        req.session.returnUrl = returnUrl;
-      }
+    // Store return URL in session/state if provided. Sanitize first to prevent
+    // open redirects through the callback's `${returnUrl}?token=...` redirect.
+    const sanitized = sanitizeReturnUrl(req.query.returnUrl, req);
+    if (sanitized && req.session) {
+      req.session.returnUrl = sanitized;
     }
 
     // Pass callbackURL at request time so buildServerPath() can detect the base path
@@ -536,7 +701,11 @@ export function createOidcCallbackHandler(providerName) {
               query: req.query,
               sessionId: req.sessionID,
               session: req.session,
-              cookies: req.headers.cookie
+              // Names only, never the raw Cookie header: it carries the authToken
+              // JWT and (for providers with a logoutURL) the oidcLogoutHint ID
+              // token. Which cookies arrived is what actually diagnoses a state
+              // failure; their values never were.
+              cookieNames: Object.keys(req.cookies || {})
             }
           );
         }
@@ -598,6 +767,23 @@ export function createOidcCallbackHandler(providerName) {
           }
         });
 
+        // Carry the ID token for a possible later RP-Initiated Logout
+        // (https://openid.net/specs/openid-connect-rpinitiated-1_0.html) in a
+        // dedicated httpOnly cookie. Consumed exclusively by
+        // POST /api/auth/logout (presence only) and GET /api/auth/oidc-logout;
+        // never exposed to client JS or included in any JSON API response.
+        //
+        // Called unconditionally: setOidcLogoutHint() *clears* any existing hint
+        // when this provider has no logoutURL, so logging in via a second
+        // provider can't leave the first provider's stale hint behind. See
+        // utils/oidcLogoutHint.js.
+        setOidcLogoutHint(res, req, {
+          provider: providerName,
+          idToken: info?.idToken,
+          logoutURL: provider.logoutURL,
+          maxAge: expiresIn * 1000
+        });
+
         authDebugService.log(
           'oidc',
           'info',
@@ -611,6 +797,68 @@ export function createOidcCallbackHandler(providerName) {
           },
           sessionId
         );
+
+        logAudit({
+          req,
+          action: 'login',
+          resource: 'auth',
+          resourceId: user.id,
+          summary: `OIDC login succeeded (provider: ${providerName})`,
+          source: 'web',
+          actor: {
+            id: user.id,
+            username: user.username ?? user.name ?? user.email ?? user.id,
+            groups: user.groups || [],
+            authenticated: true
+          }
+        });
+
+        // Check if there's an OAuth authorization flow in progress
+        // If so, redirect back to the OAuth authorize endpoint to complete the flow
+        const oauthParams = req.session?.oauthParams;
+        if (oauthParams) {
+          // Build the OAuth authorize URL with original parameters
+          const oauthUrl = new URL(buildServerPath('/api/oauth/authorize'), 'http://dummy');
+          oauthUrl.searchParams.set('response_type', 'code');
+          oauthUrl.searchParams.set('client_id', oauthParams.client_id);
+          oauthUrl.searchParams.set('redirect_uri', oauthParams.redirect_uri);
+          if (oauthParams.scope) oauthUrl.searchParams.set('scope', oauthParams.scope);
+          if (oauthParams.state) oauthUrl.searchParams.set('state', oauthParams.state);
+          if (oauthParams.code_challenge) {
+            oauthUrl.searchParams.set('code_challenge', oauthParams.code_challenge);
+          }
+          if (oauthParams.code_challenge_method) {
+            oauthUrl.searchParams.set('code_challenge_method', oauthParams.code_challenge_method);
+          }
+          if (oauthParams.nonce) oauthUrl.searchParams.set('nonce', oauthParams.nonce);
+
+          const oauthRedirectPath = oauthUrl.pathname + oauthUrl.search;
+
+          authDebugService.log(
+            'oidc',
+            'info',
+            'oauth_flow_resume',
+            {
+              provider: providerName,
+              userId: user.id,
+              oauthClientId: oauthParams.client_id,
+              oauthRedirectUri: oauthParams.redirect_uri
+            },
+            sessionId
+          );
+
+          logger.info('[OIDC] Resuming OAuth authorization flow after OIDC authentication', {
+            component: 'OidcAuth',
+            provider: providerName,
+            userId: user.id,
+            oauthClientId: oauthParams.client_id
+          });
+
+          // Set HTTP-only cookie for authentication (needed for OAuth authorize endpoint)
+          res.cookie('authToken', token, getAuthCookieOptions(expiresIn * 1000, req));
+
+          return res.redirect(oauthRedirectPath);
+        }
 
         // Get return URL - use base path for default
         let returnUrl = req.session?.returnUrl || buildServerPath('/');
@@ -641,12 +889,7 @@ export function createOidcCallbackHandler(providerName) {
         );
 
         // Set HTTP-only cookie for authentication
-        res.cookie('authToken', token, {
-          httpOnly: true,
-          secure: process.env.NODE_ENV === 'production',
-          sameSite: 'lax',
-          maxAge: expiresIn * 1000
-        });
+        res.cookie('authToken', token, getAuthCookieOptions(expiresIn * 1000));
 
         // For web flows, redirect with token in query (for backward compatibility)
         if (req.query.redirect !== 'false') {

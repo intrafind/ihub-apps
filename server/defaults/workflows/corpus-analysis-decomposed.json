@@ -1,0 +1,421 @@
+{
+  "id": "corpus-analysis-decomposed",
+  "name": {
+    "en": "Corpus Completeness Analysis — Decomposed (case B)",
+    "de": "Korpus-Vollständigkeitsanalyse — Zerlegt (Fall B)"
+  },
+  "description": {
+    "en": "Free-form question → planner emits sub-questions → for each sub-question run its own iFinder search and per-document evidence extraction → audit-grade report. The 'nested' completeness pattern; same primitives, search happens INSIDE the outer cycle.",
+    "de": "Freie Frage → Planner erzeugt Teilfragen → für jede Teilfrage eine eigene iFinder-Suche und Evidenzextraktion pro Dokument → revisionssicherer Bericht. Das 'verschachtelte' Vollständigkeitsmuster; selbe Primitive, die Suche liegt INNERHALB des äußeren Zyklus."
+  },
+  "version": "2.0.0",
+  "enabled": true,
+  "config": {
+    "observability": "standard",
+    "persistence": "session",
+    "errorHandling": "fail",
+    "humanInLoop": "none",
+    "maxExecutionTime": 2700000,
+    "maxNodes": 40,
+    "maxIterations": 1000,
+    "allowCycles": true,
+    "defaultModelId": "gemini-flash-latest"
+  },
+  "nodes": [
+    {
+      "id": "start",
+      "type": "start",
+      "name": { "en": "Pose Question", "de": "Frage stellen" },
+      "position": { "x": 100, "y": 50 },
+      "config": {
+        "inputVariables": [
+          {
+            "name": "userQuestion",
+            "type": "string",
+            "required": true,
+            "label": { "en": "Question", "de": "Frage" }
+          },
+          {
+            "name": "topicSeeds",
+            "type": "string",
+            "required": false,
+            "label": { "en": "Topic seeds (optional)", "de": "Themenstichwörter (optional)" }
+          }
+        ]
+      }
+    },
+    {
+      "id": "init",
+      "type": "transform",
+      "name": { "en": "Init accumulators", "de": "Akkumulatoren initialisieren" },
+      "position": { "x": 100, "y": 180 },
+      "config": {
+        "operations": [
+          { "set": "_records", "value": [] },
+          { "set": "_corpusAll", "value": [] },
+          {
+            "set": "_coverage",
+            "value": {
+              "candidates": { "total": 0, "source": "ifinder" },
+              "processed": 0,
+              "skipped": [],
+              "failed": [],
+              "quotesChecked": 0,
+              "quotesValidated": 0
+            }
+          }
+        ]
+      }
+    },
+    {
+      "id": "plan-subquestions",
+      "type": "query-plan",
+      "name": { "en": "Decompose into sub-questions", "de": "In Teilfragen zerlegen" },
+      "position": { "x": 100, "y": 320 },
+      "config": {
+        "questionPath": "$.data.userQuestion",
+        "seedsPath": "$.data.topicSeeds",
+        "outputVar": "_queryPlan",
+        "maxTopics": 5,
+        "maxSynonymsPerTopic": 3
+      }
+    },
+    {
+      "id": "init-sub-cursor",
+      "type": "transform",
+      "name": { "en": "Initialise sub-question cursor", "de": "Teilfragen-Zähler initialisieren" },
+      "position": { "x": 100, "y": 460 },
+      "config": {
+        "chatVisible": false,
+        "operations": [
+          { "lengthOf": "_queryPlan.topics", "to": "_subQuestionsTotal" },
+          { "set": "_subIndex", "value": 0 },
+          { "set": "_subHuman", "value": 1 }
+        ]
+      }
+    },
+    {
+      "id": "pick-subquestion",
+      "type": "transform",
+      "name": { "en": "Pick next sub-question", "de": "Nächste Teilfrage auswählen" },
+      "position": { "x": 100, "y": 580 },
+      "config": {
+        "chatVisible": false,
+        "operations": [
+          { "arrayGet": "_queryPlan.topics", "index": "_subIndex", "to": "_subQuestion" }
+        ]
+      }
+    },
+    {
+      "id": "announce-subquestion",
+      "type": "progress",
+      "name": { "en": "Announce sub-question", "de": "Teilfrage ankündigen" },
+      "position": { "x": 100, "y": 700 },
+      "config": {
+        "chatVisible": false,
+        "message": "🔍 Teilfrage {{_subHuman}} / {{_subQuestionsTotal}} — \"{{_subQuestion}}\""
+      }
+    },
+    {
+      "id": "search-subquestion",
+      "type": "corpus-search",
+      "name": { "en": "Search iFinder", "de": "iFinder durchsuchen" },
+      "position": { "x": 100, "y": 820 },
+      "config": {
+        "queryPath": "$.data._subQuestion",
+        "corpusVar": "_corpus",
+        "coverageVar": "_coverage",
+        "maxPerTopic": 25,
+        "maxTotalDocs": 100,
+        "fetchFulltext": true,
+        "maxFulltextChars": 30000
+      }
+    },
+    {
+      "id": "accumulate-corpus",
+      "type": "code",
+      "name": {
+        "en": "Accumulate corpus across sub-questions",
+        "de": "Korpus über Teilfragen akkumulieren"
+      },
+      "position": { "x": 100, "y": 940 },
+      "config": {
+        "chatVisible": false,
+        "code": "const prev = data._corpusAll; const prevArr = Array.isArray(prev) ? prev : (prev && Array.isArray(prev.result) ? prev.result : []); [...prevArr, ...(data._corpus || [])];",
+        "outputVariable": "_corpusAllRaw",
+        "timeout": 5000
+      }
+    },
+    {
+      "id": "unwrap-corpus-accumulator",
+      "type": "transform",
+      "name": { "en": "Unwrap accumulator", "de": "Akkumulator auspacken" },
+      "position": { "x": 100, "y": 1060 },
+      "config": {
+        "chatVisible": false,
+        "operations": [{ "copy": "_corpusAllRaw.result", "to": "_corpusAll" }]
+      }
+    },
+    {
+      "id": "init-doc-cursor",
+      "type": "transform",
+      "name": { "en": "Initialise doc cursor", "de": "Dokument-Zähler initialisieren" },
+      "position": { "x": 100, "y": 1180 },
+      "config": {
+        "chatVisible": false,
+        "operations": [
+          { "lengthOf": "_corpus", "to": "_docsTotal" },
+          { "set": "_docIndex", "value": 0 },
+          { "set": "_docHuman", "value": 1 }
+        ]
+      }
+    },
+    {
+      "id": "more-docs-initial",
+      "type": "decision",
+      "name": { "en": "Sub-question has any docs?", "de": "Hat die Teilfrage Dokumente?" },
+      "position": { "x": 100, "y": 1300 },
+      "config": {
+        "chatVisible": false,
+        "type": "expression",
+        "expression": "$.data._docsTotal > 0"
+      }
+    },
+    {
+      "id": "pick-doc",
+      "type": "transform",
+      "name": { "en": "Pick next document", "de": "Nächstes Dokument auswählen" },
+      "position": { "x": 100, "y": 1420 },
+      "config": {
+        "chatVisible": false,
+        "operations": [{ "arrayGet": "_corpus", "index": "_docIndex", "to": "_currentDoc" }]
+      }
+    },
+    {
+      "id": "announce-doc",
+      "type": "progress",
+      "name": { "en": "Announce document", "de": "Dokument ankündigen" },
+      "position": { "x": 100, "y": 1540 },
+      "config": {
+        "chatVisible": false,
+        "message": "  📄 Doc {{_docHuman}} / {{_docsTotal}} — \"{{_currentDoc.title}}\""
+      }
+    },
+    {
+      "id": "extract-evidence",
+      "type": "prompt",
+      "name": { "en": "Extract evidence", "de": "Evidenz extrahieren" },
+      "position": { "x": 100, "y": 1660 },
+      "config": {
+        "chatVisible": false,
+        "temperature": 0.2,
+        "system": {
+          "en": "You analyse one document for one specific sub-question. Extract structured findings, ground every claim in the source, quote verbatim. The downstream validator checks every quote against the source."
+        },
+        "prompt": {
+          "en": "## Original question\n${$.data.userQuestion}\n\n## Sub-question being investigated\n{{_subQuestion}}\n\n## Document ({{_docHuman}} of {{_docsTotal}} for this sub-question)\nTitle: {{_currentDoc.title}}\nDocId: {{_currentDoc.docId}}\n\n### Content\n{{_currentDoc.fulltext}}\n\n## Output (JSON only, no markdown fences)\n{\n  \"keyStatements\": [\"<statement relevant to the sub-question>\"],\n  \"entities\": [\"<named entities>\"],\n  \"position\": \"<document's position on the sub-question, or empty>\",\n  \"evidenceQuotes\": [\"<VERBATIM source quote>\"],\n  \"quotes\": [{ \"text\": \"<each VERBATIM quote, one per entry>\" }]\n}"
+        },
+        "outputVariable": "_extractionOutput",
+        "maxIterations": 1,
+        "maxTokens": 6000
+      },
+      "execution": { "timeout": 90000, "retries": 1 }
+    },
+    {
+      "id": "collect-evidence",
+      "type": "structured-record",
+      "name": { "en": "Capture structured evidence", "de": "Strukturierte Evidenz erfassen" },
+      "position": { "x": 100, "y": 1780 },
+      "config": {
+        "chatVisible": false,
+        "schema": {
+          "type": "object",
+          "properties": {
+            "keyStatements": { "type": "array", "items": { "type": "string" } },
+            "entities": { "type": "array", "items": { "type": "string" } },
+            "position": { "type": "string" },
+            "evidenceQuotes": { "type": "array", "items": { "type": "string" } }
+          },
+          "required": ["keyStatements"]
+        },
+        "inputPath": "$.data._extractionOutput",
+        "sourcePath": "$.data._currentDoc",
+        "sourceSystem": "ifinder",
+        "recordsVar": "_records",
+        "iterationIndexPath": "$.data._docIndex"
+      }
+    },
+    {
+      "id": "advance-doc",
+      "type": "transform",
+      "name": { "en": "Advance to next document", "de": "Zum nächsten Dokument fortschreiten" },
+      "position": { "x": 100, "y": 1900 },
+      "config": {
+        "chatVisible": false,
+        "operations": [
+          { "increment": "_coverage.processed", "by": 1 },
+          { "increment": "_docIndex", "by": 1 },
+          { "increment": "_docHuman", "by": 1 },
+          { "set": "_currentDoc", "value": null },
+          { "set": "_extractionOutput", "value": null }
+        ]
+      }
+    },
+    {
+      "id": "more-docs",
+      "type": "decision",
+      "name": { "en": "More documents?", "de": "Weitere Dokumente?" },
+      "position": { "x": 100, "y": 2020 },
+      "config": {
+        "chatVisible": false,
+        "type": "expression",
+        "expression": "$.data._docIndex < $.data._docsTotal"
+      }
+    },
+    {
+      "id": "advance-subquestion",
+      "type": "transform",
+      "name": {
+        "en": "Advance to next sub-question",
+        "de": "Zur nächsten Teilfrage fortschreiten"
+      },
+      "position": { "x": 100, "y": 2140 },
+      "config": {
+        "chatVisible": false,
+        "operations": [
+          { "increment": "_subIndex", "by": 1 },
+          { "increment": "_subHuman", "by": 1 },
+          { "set": "_subQuestion", "value": null },
+          { "set": "_corpus", "value": null }
+        ]
+      }
+    },
+    {
+      "id": "more-subquestions",
+      "type": "decision",
+      "name": { "en": "More sub-questions?", "de": "Weitere Teilfragen?" },
+      "position": { "x": 100, "y": 2260 },
+      "config": {
+        "chatVisible": false,
+        "type": "expression",
+        "expression": "$.data._subIndex < $.data._subQuestionsTotal"
+      }
+    },
+    {
+      "id": "validate",
+      "type": "quote-validator",
+      "name": { "en": "Validate all quotes", "de": "Alle Zitate validieren" },
+      "position": { "x": 100, "y": 2400 },
+      "config": {
+        "recordsVar": "_records",
+        "coverageVar": "_coverage",
+        "corpusVar": "_corpusAll",
+        "maxSourceChars": 30000
+      }
+    },
+    {
+      "id": "synthesise",
+      "type": "prompt",
+      "name": { "en": "Synthesise across sub-questions", "de": "Über Teilfragen synthetisieren" },
+      "position": { "x": 100, "y": 2540 },
+      "config": {
+        "temperature": 0.3,
+        "system": {
+          "en": "You synthesise evidence collected across multiple sub-questions into a single narrative. Group findings by sub-question, then offer cross-cutting themes. Cite docIds inline. Do not add facts beyond the evidence."
+        },
+        "prompt": {
+          "en": "## Original question\n${$.data.userQuestion}\n\n## Sub-questions\n{{#each _queryPlan.topics}}\n- {{this}}\n{{/each}}\n\n## Records (across all sub-questions)\n{{#each _records}}\n- Doc {{this.source.docId}} ({{this.source.title}}): {{this.data.position}}\n{{/each}}\n\nWrite a markdown synthesis: for each sub-question a short paragraph, then a cross-cutting ## Themes section and ## Offene Punkte."
+        },
+        "outputVariable": "_synthesis",
+        "maxIterations": 1,
+        "maxTokens": 6000
+      },
+      "execution": { "timeout": 60000 }
+    },
+    {
+      "id": "compose",
+      "type": "template-render",
+      "name": { "en": "Render audit report", "de": "Auditbericht erzeugen" },
+      "position": { "x": 100, "y": 2680 },
+      "config": {
+        "recordsVar": "_records",
+        "coverageVar": "_coverage",
+        "synthesisVar": "_synthesis",
+        "artifactName": "corpus-analysis-decomposed.md",
+        "outputVariable": "finalReport",
+        "template": "# Korpus-Vollständigkeitsanalyse (zerlegt)\n\n## Frage\n\n{{userQuestion}}\n\n{{#if _queryPlan.topics}}\n## Teilfragen\n\n{{#each _queryPlan.topics}}\n- {{this}}\n{{/each}}\n{{/if}}\n\n## Abdeckung\n\n- **Kandidaten identifiziert (über alle Teilfragen):** {{coverage.candidates.total}}\n- **Dokumente verarbeitet:** {{coverage.processed}}\n- **Zitate geprüft:** {{coverage.quotesChecked}}\n- **Zitate validiert:** {{coverage.quotesValidated}}\n\n{{#if synthesis}}\n## Synthese\n\n{{synthesis}}\n{{/if}}\n\n{{#if records}}\n## Per-Dokument-Datensätze\n\n{{#each records}}\n### {{this.source.title}}\n\n- **DocId:** {{this.source.docId}}\n- **Status:** {{this.status}}\n- **Position:** {{this.data.position}}\n\n{{#if this.data.keyStatements}}\n**Kernaussagen:**\n{{#each this.data.keyStatements}}\n- {{this}}\n{{/each}}\n{{/if}}\n\n{{#if this.quotes}}\n**Zitate:**\n{{#each this.quotes}}\n- {{#if this.validated}}✓{{/if}}{{#if this.closestMatch}}⚠ Nicht wörtlich — nächstgelegen: \"{{this.closestMatch}}\"{{/if}}{{#if this.text}} \"{{this.text}}\"{{/if}}\n{{/each}}\n{{/if}}\n\n---\n\n{{/each}}\n{{/if}}\n"
+      }
+    },
+    {
+      "id": "end",
+      "type": "end",
+      "name": { "en": "Done", "de": "Fertig" },
+      "position": { "x": 100, "y": 2960 },
+      "config": { "outputVariables": ["finalReport"] }
+    }
+  ],
+  "edges": [
+    { "id": "e1", "source": "start", "target": "init" },
+    { "id": "e2", "source": "init", "target": "plan-subquestions" },
+    { "id": "e3", "source": "plan-subquestions", "target": "init-sub-cursor" },
+    { "id": "e4", "source": "init-sub-cursor", "target": "pick-subquestion" },
+    { "id": "e5", "source": "pick-subquestion", "target": "announce-subquestion" },
+    { "id": "e6", "source": "announce-subquestion", "target": "search-subquestion" },
+    { "id": "e7", "source": "search-subquestion", "target": "accumulate-corpus" },
+    { "id": "e8", "source": "accumulate-corpus", "target": "unwrap-corpus-accumulator" },
+    { "id": "e9", "source": "unwrap-corpus-accumulator", "target": "init-doc-cursor" },
+    { "id": "e10", "source": "init-doc-cursor", "target": "more-docs-initial" },
+    {
+      "id": "e11-has-docs",
+      "source": "more-docs-initial",
+      "target": "pick-doc",
+      "condition": { "type": "equals", "field": "result.branch", "value": "true" }
+    },
+    {
+      "id": "e11-no-docs",
+      "source": "more-docs-initial",
+      "target": "advance-subquestion",
+      "condition": { "type": "equals", "field": "result.branch", "value": "false" }
+    },
+    { "id": "e12", "source": "pick-doc", "target": "announce-doc" },
+    { "id": "e13", "source": "announce-doc", "target": "extract-evidence" },
+    { "id": "e14", "source": "extract-evidence", "target": "collect-evidence" },
+    { "id": "e15", "source": "collect-evidence", "target": "advance-doc" },
+    { "id": "e16", "source": "advance-doc", "target": "more-docs" },
+    {
+      "id": "e17-continue-doc",
+      "source": "more-docs",
+      "target": "pick-doc",
+      "condition": { "type": "equals", "field": "result.branch", "value": "true" }
+    },
+    {
+      "id": "e17-done-doc",
+      "source": "more-docs",
+      "target": "advance-subquestion",
+      "condition": { "type": "equals", "field": "result.branch", "value": "false" }
+    },
+    { "id": "e18", "source": "advance-subquestion", "target": "more-subquestions" },
+    {
+      "id": "e19-continue-sub",
+      "source": "more-subquestions",
+      "target": "pick-subquestion",
+      "condition": { "type": "equals", "field": "result.branch", "value": "true" }
+    },
+    {
+      "id": "e19-done-sub",
+      "source": "more-subquestions",
+      "target": "validate",
+      "condition": { "type": "equals", "field": "result.branch", "value": "false" }
+    },
+    { "id": "e20", "source": "validate", "target": "synthesise" },
+    { "id": "e21", "source": "synthesise", "target": "compose" },
+    { "id": "e22", "source": "compose", "target": "end" }
+  ],
+  "allowedGroups": [],
+  "chatIntegration": {
+    "enabled": true,
+    "passthroughResult": false,
+    "primaryOutput": "finalReport",
+    "outputFormat": "markdown"
+  }
+}

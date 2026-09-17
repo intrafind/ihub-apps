@@ -1,46 +1,75 @@
 import { apiClient } from './client.js';
-import { buildPath } from '../utils/runtimeBasePath';
+import { buildApiUrl } from '../utils/runtimeBasePath';
+
+const isPlainObjectForBody = value =>
+  value !== null &&
+  !Array.isArray(value) &&
+  Object.prototype.toString.call(value) === '[object Object]';
+
+// Extracts the server-provided error message from a failed admin API call,
+// falling back to the generic axios message (e.g. network errors with no response).
+export const getAdminApiErrorMessage = err =>
+  err?.response?.data?.error ||
+  err?.response?.data?.message ||
+  err?.message ||
+  'An unexpected error occurred';
 
 // Utility function to make authenticated API calls to admin endpoints
 export const makeAdminApiCall = async (url, options = {}) => {
   // Handle admin token for anonymous mode
   const adminToken = localStorage.getItem('adminToken');
 
-  // Create axios config from options
+  const { method = 'GET', headers = {}, ...axiosOptions } = options;
+
+  // Create axios config from supported options
   const axiosConfig = {
     url: url.startsWith('/') ? url : `/${url}`,
-    method: options.method || 'GET',
-    ...options
+    method,
+    ...axiosOptions,
+    headers: { ...headers }
   };
 
-  // Initialize headers
-  axiosConfig.headers = axiosConfig.headers || {};
+  const hasBody = Object.hasOwn(options, 'body');
+  const body = options.body;
+  const isFormData = body instanceof FormData;
 
-  // Track if this is a FormData request
-  const isFormData = options.body instanceof FormData;
+  if (Object.hasOwn(options, 'data')) {
+    throw new Error(
+      'Breaking change: makeAdminApiCall no longer supports the "data" option. Use "body" instead, for example { body: { key: value } } or { body: formData }.'
+    );
+  }
 
   // Handle request body
-  if (options.body) {
+  if (hasBody) {
+    if (!isFormData && !isPlainObjectForBody(body)) {
+      const bodyType = body === null ? 'null' : Array.isArray(body) ? 'array' : typeof body;
+      throw new Error(
+        `makeAdminApiCall expects "body" to be a plain object (or FormData). Received ${bodyType}.`
+      );
+    }
+
+    axiosConfig.data = body;
     if (isFormData) {
-      axiosConfig.data = options.body;
-      // For FormData, start with empty headers (no Content-Type)
-      // Let the browser set the correct multipart/form-data header with boundary
-      axiosConfig.headers = {
-        ...options.headers
-      };
-    } else if (typeof options.body === 'string') {
-      axiosConfig.data = JSON.parse(options.body);
-      axiosConfig.headers = {
-        'Content-Type': 'application/json',
-        ...axiosConfig.headers,
-        ...options.headers
-      };
+      // Let axios/browser set the multipart boundary for FormData bodies.
+      //
+      // Deleting the key from this per-request object is NOT enough: the shared
+      // axios instance declares `Content-Type: application/json` as an *instance
+      // default* (see api/client.js), and that default still applies to a request
+      // whose own headers simply omit the key. Axios' default transformRequest
+      // then sees a JSON content type on a FormData payload and serialises the
+      // form to JSON (`{"backup":{}}`), so the file never leaves the browser and
+      // the server reports a missing upload. Setting the header to `undefined`
+      // overrides the instance default and tells axios to omit it entirely.
+      Object.keys(axiosConfig.headers).forEach(headerKey => {
+        if (headerKey.toLowerCase() === 'content-type') {
+          delete axiosConfig.headers[headerKey];
+        }
+      });
+      axiosConfig.headers['Content-Type'] = undefined;
     } else {
-      axiosConfig.data = options.body;
       axiosConfig.headers = {
         'Content-Type': 'application/json',
-        ...axiosConfig.headers,
-        ...options.headers
+        ...axiosConfig.headers
       };
     }
   }
@@ -57,67 +86,38 @@ export const makeAdminApiCall = async (url, options = {}) => {
   }
 
   try {
-    // For FormData requests, use fetch directly to avoid axios default headers
-    if (isFormData) {
-      const API_URL = import.meta.env.VITE_API_URL || '/api';
-      const fullUrl = `${API_URL}${axiosConfig.url}`;
-
-      // Add session ID manually since we're not using axios interceptors
-      const { getSessionId } = await import('../utils/sessionManager');
-      const sessionId = getSessionId();
-
-      const fetchHeaders = {
-        ...axiosConfig.headers,
-        'X-Session-ID': sessionId
-        // Deliberately NOT setting Content-Type - let browser handle it for FormData
-      };
-
-      const fetchResponse = await fetch(fullUrl, {
-        method: axiosConfig.method,
-        headers: fetchHeaders,
-        body: axiosConfig.data,
-        credentials: 'include'
-      });
-
-      if (!fetchResponse.ok) {
-        const error = new Error(`HTTP ${fetchResponse.status}`);
-        error.response = {
-          status: fetchResponse.status,
-          statusText: fetchResponse.statusText,
-          data: await fetchResponse.json().catch(() => ({}))
-        };
-        throw error;
-      }
-
-      return {
-        data: await fetchResponse.json(),
-        status: fetchResponse.status,
-        headers: Object.fromEntries(fetchResponse.headers.entries())
-      };
-    } else {
-      const response = await apiClient(axiosConfig);
-      return response;
-    }
+    const response = await apiClient(axiosConfig);
+    return response;
   } catch (error) {
+    const status = error.response?.status;
+
     // Handle admin-specific auth failures
-    if (error.response?.status === 401 || error.response?.status === 403) {
-      // Clear invalid admin tokens
+    if (status === 401 || status === 403) {
+      // Clear the anonymous-mode admin token if present; it is no longer valid.
       if (adminToken) {
         localStorage.removeItem('adminToken');
       }
 
-      // For auth failures, redirect appropriately based on the auth mode
-      if (window.location.pathname.startsWith('/admin')) {
-        const authToken = localStorage.getItem('authToken');
-        // If we have a regular auth token, this suggests a permission issue
-        if (authToken) {
-          // User is authenticated but doesn't have admin permissions
-          window.location.href = buildPath('/admin'); // Will show appropriate error message
-        } else {
-          // User is not authenticated, redirect to login
-          window.location.href = buildPath('/');
-        }
+      if (status === 401) {
+        // Session expired or token invalid. Trigger the global re-authentication
+        // flow instead of hard-redirecting away from the admin area. The
+        // `authTokenExpired` handler stores the current URL and shows the auth
+        // gate overlay, returning the user to exactly where they were after they
+        // log back in — so an admin re-prompted mid-session lands back on the
+        // admin page, not the app home.
+        //
+        // Dispatching is idempotent: handleTokenExpired guards against re-entry
+        // and the auth gate won't re-show while it is already visible.
+        window.dispatchEvent(new CustomEvent('authTokenExpired'));
       }
+      // 403 (authenticated but not permitted for THIS endpoint) is intentionally
+      // NOT handled with a redirect. Entry to the admin area is already gated by
+      // AdminLayout via /admin/auth/status; individual endpoints are permission-
+      // scoped (e.g. content admins may call /admin/apps but not /admin/usage).
+      // A hard `window.location` redirect here caused an infinite reload loop for
+      // content admins: the Overview page fires full-admin-only calls that 403,
+      // the redirect reloaded /admin, which re-fired them, and so on (issue #1923).
+      // Let the 403 propagate so the calling component can handle it locally.
     }
     throw error;
   }
@@ -204,6 +204,18 @@ export const toggleApps = async (ids, enabled) => {
   const response = await makeAdminApiCall(`/admin/apps/${idParam}/_toggle`, {
     method: 'POST',
     body: { enabled }
+  });
+  return response.data;
+};
+
+/**
+ * Save the display order of apps: the first id becomes `order: 1`, the second
+ * `order: 2`, and so on. Apps left out of `ids` keep the order they have.
+ */
+export const reorderApps = async ids => {
+  const response = await makeAdminApiCall('/admin/apps/_reorder', {
+    method: 'POST',
+    body: { ids }
   });
   return response.data;
 };
@@ -400,6 +412,27 @@ export const fetchAdminGroups = async () => {
   return response.data;
 };
 
+// Content access: which groups may use one app / prompt / skill / tool /
+// workflow. Content admins get only the groups they belong to (and the groups
+// inheriting from those); full admins get every group.
+export const fetchContentAccess = async (type, id) => {
+  const response = await makeAdminApiCall(
+    `/admin/content-access/${encodeURIComponent(type)}/${encodeURIComponent(id)}`
+  );
+  return response.data;
+};
+
+export const updateContentAccess = async (type, id, { grant = [], revoke = [] } = {}) => {
+  const response = await makeAdminApiCall(
+    `/admin/content-access/${encodeURIComponent(type)}/${encodeURIComponent(id)}`,
+    {
+      method: 'PUT',
+      body: { grant, revoke }
+    }
+  );
+  return response.data;
+};
+
 // Tools API functions
 export const fetchAdminTools = async () => {
   try {
@@ -462,6 +495,96 @@ export const updateToolScript = async (toolId, content) => {
   return response.data;
 };
 
+// Credential store API functions
+
+/**
+ * Fetches all credential profiles from the central credential store.
+ * Secret fields are redacted to '***REDACTED***' by the server.
+ *
+ * @returns {Promise<Array>} Array of credential profile objects (with id)
+ */
+export const listCredentials = async () => {
+  try {
+    const response = await makeAdminApiCall('/admin/credentials');
+    const data = response.data;
+    const credentials = data?.credentials ?? data;
+    return Array.isArray(credentials) ? credentials : [];
+  } catch (error) {
+    console.error('Error in listCredentials:', error);
+    throw error;
+  }
+};
+
+/**
+ * Fetches a single credential profile by id (secrets redacted).
+ *
+ * @param {string} id - The credential profile id
+ * @returns {Promise<Object>} The credential profile object
+ */
+export const getCredential = async id => {
+  const response = await makeAdminApiCall(`/admin/credentials/${encodeURIComponent(id)}`);
+  return response.data;
+};
+
+/**
+ * Creates a new credential profile.
+ *
+ * @param {Object} data - Credential profile data (id, type, and type-specific fields)
+ * @returns {Promise<Object>} The created credential profile (secrets redacted)
+ */
+export const createCredential = async data => {
+  const response = await makeAdminApiCall('/admin/credentials', {
+    method: 'POST',
+    body: data
+  });
+  return response.data;
+};
+
+/**
+ * Updates an existing credential profile. Secret fields left as '***REDACTED***'
+ * preserve the stored value on the server.
+ *
+ * @param {string} id - The credential profile id
+ * @param {Object} data - Updated credential profile data
+ * @returns {Promise<Object>} The updated credential profile (secrets redacted)
+ */
+export const updateCredential = async (id, data) => {
+  const response = await makeAdminApiCall(`/admin/credentials/${encodeURIComponent(id)}`, {
+    method: 'PUT',
+    body: data
+  });
+  return response.data;
+};
+
+/**
+ * Deletes a credential profile by id.
+ *
+ * @param {string} id - The credential profile id
+ * @returns {Promise<void>}
+ */
+export const deleteCredential = async id => {
+  const response = await makeAdminApiCall(`/admin/credentials/${encodeURIComponent(id)}`, {
+    method: 'DELETE'
+  });
+  return response.data;
+};
+
+/**
+ * Parses an OpenAPI specification from a URL, inline text, or uploaded content.
+ * Returns the spec info, servers, and a flattened list of operations for the
+ * OpenAPI tool editor.
+ *
+ * @param {string} source - OpenAPI source (URL or inline JSON/YAML text)
+ * @returns {Promise<{info: Object, servers: Array, operations: Array}>}
+ */
+export const parseOpenApiSpec = async source => {
+  const response = await makeAdminApiCall('/admin/tools/openapi/parse', {
+    method: 'POST',
+    body: { source }
+  });
+  return response.data;
+};
+
 // Workflow Execution Admin API functions
 
 /**
@@ -475,9 +598,9 @@ export const updateToolScript = async (toolId, content) => {
  * @param {number} [params.offset] - Number of results to skip
  * @returns {Promise<Object>} Response containing executions array, total count, and stats
  */
-export const fetchAdminExecutions = async params => {
+export const fetchAdminExecutions = async (params, { signal } = {}) => {
   const queryString = params ? '?' + new URLSearchParams(params).toString() : '';
-  const response = await makeAdminApiCall(`/admin/workflows/executions${queryString}`);
+  const response = await makeAdminApiCall(`/admin/workflows/executions${queryString}`, { signal });
   return response.data;
 };
 
@@ -585,8 +708,7 @@ export const importSkill = async formData => {
  * @param {string} skillName - The unique name identifier of the skill
  */
 export const exportSkill = skillName => {
-  const baseURL = import.meta.env.VITE_API_URL || '/api';
-  window.open(`${baseURL}/admin/skills/${encodeURIComponent(skillName)}/export`, '_blank');
+  window.open(buildApiUrl(`admin/skills/${encodeURIComponent(skillName)}/export`), '_blank');
 };
 
 // Marketplace - Registry management
@@ -813,7 +935,7 @@ export const fetchAdminUsageMeta = async () => {
 export const updateAdminUsageTrackingMode = async mode => {
   const response = await makeAdminApiCall('/admin/usage/meta', {
     method: 'PUT',
-    data: { trackingMode: mode }
+    body: { trackingMode: mode }
   });
   return response.data;
 };
@@ -838,6 +960,11 @@ export const fetchAdminUsageModels = async (range = '30d') => {
   return response.data;
 };
 
+export const fetchAdminFeedbackEntries = async (limit = 100, offset = 0) => {
+  const response = await makeAdminApiCall(`/admin/usage/feedback?limit=${limit}&offset=${offset}`);
+  return response.data;
+};
+
 // Create an adminApi object that contains all the functions for compatibility
 export const adminApi = {
   // Existing functions
@@ -850,6 +977,7 @@ export const adminApi = {
   fetchAdminUsageUsers,
   fetchAdminUsageApps,
   fetchAdminUsageModels,
+  fetchAdminFeedbackEntries,
   fetchAdminCacheStats,
   fetchAdminApps,
   fetchAdminModels,
@@ -860,6 +988,7 @@ export const adminApi = {
   updatePrompt,
   translateText,
   toggleApps,
+  reorderApps,
   fetchAdminPages,
   fetchAdminPage,
   createPage,
@@ -894,6 +1023,10 @@ export const adminApi = {
   toggleAdminWorkflow,
   fetchAdminGroups,
 
+  // Content access functions
+  fetchContentAccess,
+  updateContentAccess,
+
   // Workflow Execution functions
   fetchAdminExecutions,
   cancelAdminExecution,
@@ -907,6 +1040,14 @@ export const adminApi = {
   toggleTool,
   fetchToolScript,
   updateToolScript,
+  parseOpenApiSpec,
+
+  // Credential store functions
+  listCredentials,
+  getCredential,
+  createCredential,
+  updateCredential,
+  deleteCredential,
 
   // Skills functions
   fetchAdminSkills,

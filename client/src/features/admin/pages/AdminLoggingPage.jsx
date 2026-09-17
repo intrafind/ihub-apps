@@ -1,9 +1,16 @@
 import { useState, useEffect } from 'react';
 import { useTranslation } from 'react-i18next';
 import Icon from '../../../shared/components/Icon';
-import AdminAuth from '../components/AdminAuth';
-import AdminNavigation from '../components/AdminNavigation';
 import { makeAdminApiCall } from '../../../api/adminApi';
+
+// Accepts the platform.json shape (boolean | 'off' | 'mask' | 'drop') and
+// produces the string form used by the <select>. Older configs that pre-date
+// the string enum stored `true`/`false`, so map those to the closest mode.
+function normalizeAnonymizeIp(value) {
+  if (value === true || value === 'mask') return 'mask';
+  if (value === 'drop') return 'drop';
+  return 'off';
+}
 
 function AdminLoggingPage() {
   const { t } = useTranslation();
@@ -33,7 +40,6 @@ function AdminLoggingPage() {
     enabled: false,
     maskTokens: true,
     redactPasswords: true,
-    consoleLogging: false,
     includeRawData: false,
     providers: {
       oidc: { enabled: true },
@@ -42,6 +48,13 @@ function AdminLoggingPage() {
       ldap: { enabled: true },
       ntlm: { enabled: true }
     }
+  });
+  // Both anonymizeIp settings accept boolean | 'off' | 'mask' | 'drop' on the
+  // server. The UI normalises everything to the string form so the <select>
+  // always has a single source of truth.
+  const [privacyConfig, setPrivacyConfig] = useState({
+    loggingAnonymizeIp: 'off',
+    auditAnonymizeIp: 'off'
   });
 
   const availableLevels = ['error', 'warn', 'info', 'http', 'verbose', 'debug', 'silly'];
@@ -84,10 +97,32 @@ function AdminLoggingPage() {
         'Verification of provider API keys (OpenAI, Anthropic, Google, Mistral) at startup'
     },
     {
-      id: 'ToolExecutor',
-      name: 'Tool Executor',
+      id: 'AgentLoop',
+      name: 'Agent Loop',
       description:
-        'Execution of tools called by LLMs (web search, code execution, file operations, browser automation)'
+        'The one agentic loop behind chats, workflow nodes, agents and app invocations: model steps, tool execution, budgets, compaction'
+    },
+    {
+      id: 'LLMClient',
+      name: 'LLM Client',
+      description: 'Every provider request and response: model resolution, API keys, retries, usage'
+    },
+    {
+      id: 'RunLog',
+      name: 'Run Ledger',
+      description:
+        'Append-only run ledger: persistence, retention sweep, spill files, deletion cascade'
+    },
+    {
+      id: 'RunStream',
+      name: 'Run Stream',
+      description: 'Live run events (SSE v2) delivered to chat, workflow and run detail views'
+    },
+    {
+      id: 'InteractionService',
+      name: 'Interactions',
+      description:
+        'Human touchpoints raised by runs (questions, approvals, reviews): pending store, answers, expiry'
     },
     {
       id: 'DataRoutes',
@@ -206,6 +241,7 @@ function AdminLoggingPage() {
       setLoggingConfig({
         level: loadedConfig.level || 'info',
         format: loadedConfig.format || 'json',
+        anonymizeIp: loadedConfig.anonymizeIp ?? false,
         file: loadedConfig.file || {
           enabled: false,
           path: 'logs/app.log',
@@ -223,13 +259,26 @@ function AdminLoggingPage() {
         }
       });
 
-      // Load platform config for authDebug
+      // Load platform config for auth debug settings. The canonical location is
+      // `auth.debug` (what the server reads); merge over defaults so any fields
+      // an older config omits keep sensible values.
       const platformResponse = await makeAdminApiCall('/admin/configs/platform', {
         method: 'GET'
       });
-      if (platformResponse.data?.authDebug) {
-        setAuthDebugConfig(platformResponse.data.authDebug);
+      if (platformResponse.data?.auth?.debug) {
+        setAuthDebugConfig(prev => ({ ...prev, ...platformResponse.data.auth.debug }));
       }
+
+      // Load audit-log settings (anonymizeIp lives under `audit.*`, the
+      // logging variant under `logging.*`). The server normalises both to a
+      // string mode so the <select> stays simple.
+      const auditResponse = await makeAdminApiCall('/admin/audit-log/settings', {
+        method: 'GET'
+      });
+      setPrivacyConfig({
+        loggingAnonymizeIp: normalizeAnonymizeIp(loadedConfig.anonymizeIp),
+        auditAnonymizeIp: normalizeAnonymizeIp(auditResponse.data?.anonymizeIp)
+      });
 
       setMessage('');
     } catch (error) {
@@ -249,7 +298,7 @@ function AdminLoggingPage() {
 
       await makeAdminApiCall('/admin/logging/config', {
         method: 'PUT',
-        data: loggingConfig
+        body: loggingConfig
       });
 
       setMessage({
@@ -277,13 +326,15 @@ function AdminLoggingPage() {
       });
       const platformConfig = platformResponse.data;
 
-      // Update authDebug section
-      platformConfig.authDebug = authDebugConfig;
+      // Persist under the canonical `auth.debug` key that the server reads.
+      // The platform save route merges the whole `auth` object, so keep the
+      // rest of the auth config intact.
+      platformConfig.auth = { ...platformConfig.auth, debug: authDebugConfig };
 
       // Save back
       await makeAdminApiCall('/admin/configs/platform', {
         method: 'POST',
-        data: platformConfig
+        body: platformConfig
       });
 
       setMessage({
@@ -299,6 +350,43 @@ function AdminLoggingPage() {
         text:
           error.message ||
           t('admin.logging.authDebugSaveError', 'Failed to save authentication debug configuration')
+      });
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  const handleSavePrivacyConfig = async () => {
+    try {
+      setSaving(true);
+      setMessage('');
+
+      // logging.anonymizeIp rides the existing logging-config PUT (shallow
+      // merge of the body into platform.json's logging block). audit.* goes
+      // through its dedicated settings endpoint to avoid coupling the two
+      // blocks server-side.
+      await makeAdminApiCall('/admin/logging/config', {
+        method: 'PUT',
+        body: { ...loggingConfig, anonymizeIp: privacyConfig.loggingAnonymizeIp }
+      });
+      await makeAdminApiCall('/admin/audit-log/settings', {
+        method: 'PUT',
+        body: { anonymizeIp: privacyConfig.auditAnonymizeIp }
+      });
+
+      // Reflect the saved values in `loggingConfig` so a subsequent
+      // "Save Logging Configuration" click doesn't drop them again.
+      setLoggingConfig(prev => ({ ...prev, anonymizeIp: privacyConfig.loggingAnonymizeIp }));
+
+      setMessage({
+        type: 'success',
+        text: t('admin.logging.privacySaveSuccess', 'Privacy settings saved successfully')
+      });
+    } catch (error) {
+      setMessage({
+        type: 'error',
+        text:
+          error.message || t('admin.logging.privacySaveError', 'Failed to save privacy settings')
       });
     } finally {
       setSaving(false);
@@ -351,91 +439,84 @@ function AdminLoggingPage() {
 
   if (loading) {
     return (
-      <AdminAuth>
-        <AdminNavigation />
-        <div className="min-h-screen bg-gray-50 dark:bg-gray-900 p-6">
-          <div className="max-w-6xl mx-auto">
-            <div className="bg-white dark:bg-gray-800 rounded-lg shadow p-6">
-              <p className="text-gray-600 dark:text-gray-400">
-                {t('common.loading', 'Loading...')}
-              </p>
-            </div>
+      <div className="min-h-screen bg-gray-50 dark:bg-gray-900 p-6">
+        <div className="max-w-6xl mx-auto">
+          <div className="bg-white dark:bg-gray-800 rounded-lg shadow-sm p-6">
+            <p className="text-gray-600 dark:text-gray-400">{t('common.loading', 'Loading...')}</p>
           </div>
         </div>
-      </AdminAuth>
+      </div>
     );
   }
 
   return (
-    <AdminAuth>
-      <AdminNavigation />
-      <div className="min-h-screen bg-gray-50 dark:bg-gray-900 p-6">
-        <div className="max-w-6xl mx-auto space-y-6">
-          {/* Header */}
-          <div className="bg-white dark:bg-gray-800 rounded-lg shadow p-6">
-            <div className="flex items-start mb-2">
-              <Icon
-                name="AdjustmentsHorizontalIcon"
-                className="w-8 h-8 mr-3 text-blue-500 flex-shrink-0"
-              />
-              <div>
-                <h1 className="text-2xl font-bold text-gray-900 dark:text-gray-100">
-                  {t('admin.logging.title', 'Logging Configuration')}
-                </h1>
-                <p className="text-sm text-gray-600 dark:text-gray-400 mt-1">
-                  {t(
-                    'admin.logging.description',
-                    'Configure logging levels, components, metadata, and debug settings'
-                  )}
-                </p>
-              </div>
+    <div className="min-h-screen bg-gray-50 dark:bg-gray-900 p-6">
+      <div className="max-w-6xl mx-auto space-y-6">
+        {/* Header */}
+        <div className="bg-white dark:bg-gray-800 rounded-lg shadow-sm p-6">
+          <div className="flex items-start mb-2">
+            <Icon
+              name="AdjustmentsHorizontalIcon"
+              className="w-8 h-8 mr-3 text-blue-500 shrink-0"
+            />
+            <div>
+              <h1 className="text-2xl font-bold text-gray-900 dark:text-gray-100">
+                {t('admin.logging.title', 'Logging Configuration')}
+              </h1>
+              <p className="text-sm text-gray-600 dark:text-gray-400 mt-1">
+                {t(
+                  'admin.logging.description',
+                  'Configure logging levels, components, metadata, and debug settings'
+                )}
+              </p>
             </div>
           </div>
+        </div>
 
-          {/* Status Message */}
-          {message && (
-            <div
-              className={`p-4 rounded-lg ${
-                message.type === 'success'
-                  ? 'bg-green-50 dark:bg-green-900/20 text-green-700 dark:text-green-300'
-                  : 'bg-red-50 dark:bg-red-900/20 text-red-700 dark:text-red-300'
-              }`}
-            >
-              <div className="flex items-start">
-                <Icon
-                  name={message.type === 'success' ? 'CheckCircleIcon' : 'ExclamationCircleIcon'}
-                  className="w-5 h-5 mr-2 flex-shrink-0"
-                />
-                <p className="text-sm">{message.text}</p>
-              </div>
+        {/* Status Message */}
+        {message && (
+          <div
+            className={`p-4 rounded-lg ${
+              message.type === 'success'
+                ? 'bg-green-50 dark:bg-green-900/20 text-green-700 dark:text-green-300'
+                : 'bg-red-50 dark:bg-red-900/20 text-red-700 dark:text-red-300'
+            }`}
+          >
+            <div className="flex items-start">
+              <Icon
+                name={message.type === 'success' ? 'CheckCircleIcon' : 'ExclamationCircleIcon'}
+                className="w-5 h-5 mr-2 shrink-0"
+              />
+              <p className="text-sm">{message.text}</p>
             </div>
-          )}
+          </div>
+        )}
 
-          {/* Log Level Configuration */}
-          <div className="bg-white dark:bg-gray-800 rounded-lg shadow p-6">
-            <h2 className="text-xl font-semibold text-gray-900 dark:text-gray-100 mb-4 flex items-center">
-              <Icon name="AdjustmentsVerticalIcon" className="w-5 h-5 mr-2 text-blue-500" />
-              {t('admin.logging.levelSection', 'Log Level')}
-            </h2>
+        {/* Log Level Configuration */}
+        <div className="bg-white dark:bg-gray-800 rounded-lg shadow-sm p-6">
+          <h2 className="text-xl font-semibold text-gray-900 dark:text-gray-100 mb-4 flex items-center">
+            <Icon name="AdjustmentsVerticalIcon" className="w-5 h-5 mr-2 text-blue-500" />
+            {t('admin.logging.levelSection', 'Log Level')}
+          </h2>
 
-            {/* Current Level Display */}
-            <div className="mb-6 p-4 bg-gray-50 dark:bg-gray-700 rounded-lg">
-              <p className="text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
-                {t('admin.logging.currentLevel', 'Current Level')}:
-              </p>
-              <p className="text-lg font-bold text-blue-600 dark:text-blue-400">
-                {loggingConfig.level}
-              </p>
-            </div>
+          {/* Current Level Display */}
+          <div className="mb-6 p-4 bg-gray-50 dark:bg-gray-700 rounded-lg">
+            <p className="text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+              {t('admin.logging.currentLevel', 'Current Level')}:
+            </p>
+            <p className="text-lg font-bold text-blue-600 dark:text-blue-400">
+              {loggingConfig.level}
+            </p>
+          </div>
 
-            {/* Level Selector */}
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-3">
-              {availableLevels.map(level => (
-                <button
-                  key={level}
-                  onClick={() => handleLevelChange(level)}
-                  disabled={loggingConfig.level === level}
-                  className={`
+          {/* Level Selector */}
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-3">
+            {availableLevels.map(level => (
+              <button
+                key={level}
+                onClick={() => handleLevelChange(level)}
+                disabled={loggingConfig.level === level}
+                className={`
                     p-3 rounded-lg border-2 text-left transition-all
                     ${
                       loggingConfig.level === level
@@ -444,34 +525,34 @@ function AdminLoggingPage() {
                     }
                     disabled:cursor-not-allowed cursor-pointer
                   `}
-                >
-                  <div className="flex items-center justify-between mb-1">
-                    <span className="font-semibold text-gray-900 dark:text-gray-100 capitalize">
-                      {level}
-                    </span>
-                    {loggingConfig.level === level && (
-                      <Icon name="CheckCircleIcon" className="w-5 h-5 text-blue-500" />
-                    )}
-                  </div>
-                </button>
-              ))}
-            </div>
+              >
+                <div className="flex items-center justify-between mb-1">
+                  <span className="font-semibold text-gray-900 dark:text-gray-100 capitalize">
+                    {level}
+                  </span>
+                  {loggingConfig.level === level && (
+                    <Icon name="CheckCircleIcon" className="w-5 h-5 text-blue-500" />
+                  )}
+                </div>
+              </button>
+            ))}
           </div>
+        </div>
 
-          {/* Log Format Configuration */}
-          <div className="bg-white dark:bg-gray-800 rounded-lg shadow p-6">
-            <h2 className="text-xl font-semibold text-gray-900 dark:text-gray-100 mb-4 flex items-center">
-              <Icon name="DocumentTextIcon" className="w-5 h-5 mr-2 text-blue-500" />
-              {t('admin.logging.formatSection', 'Log Format')}
-            </h2>
+        {/* Log Format Configuration */}
+        <div className="bg-white dark:bg-gray-800 rounded-lg shadow-sm p-6">
+          <h2 className="text-xl font-semibold text-gray-900 dark:text-gray-100 mb-4 flex items-center">
+            <Icon name="DocumentTextIcon" className="w-5 h-5 mr-2 text-blue-500" />
+            {t('admin.logging.formatSection', 'Log Format')}
+          </h2>
 
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-              {['json', 'text'].map(format => (
-                <button
-                  key={format}
-                  onClick={() => handleFormatChange(format)}
-                  disabled={loggingConfig.format === format}
-                  className={`
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+            {['json', 'text'].map(format => (
+              <button
+                key={format}
+                onClick={() => handleFormatChange(format)}
+                disabled={loggingConfig.format === format}
+                className={`
                     p-4 rounded-lg border-2 text-left transition-all
                     ${
                       loggingConfig.format === format
@@ -480,257 +561,339 @@ function AdminLoggingPage() {
                     }
                     disabled:cursor-not-allowed cursor-pointer
                   `}
-                >
-                  <div className="flex items-center justify-between mb-1">
-                    <span className="font-semibold text-gray-900 dark:text-gray-100 capitalize">
-                      {format}
-                    </span>
-                    {loggingConfig.format === format && (
-                      <Icon name="CheckCircleIcon" className="w-5 h-5 text-blue-500" />
-                    )}
-                  </div>
-                  <p className="text-xs text-gray-600 dark:text-gray-400">
-                    {format === 'json'
-                      ? t('admin.logging.jsonDescription', 'Structured JSON logging')
-                      : t('admin.logging.textDescription', 'Human-readable text format')}
-                  </p>
-                </button>
-              ))}
-            </div>
+              >
+                <div className="flex items-center justify-between mb-1">
+                  <span className="font-semibold text-gray-900 dark:text-gray-100 capitalize">
+                    {format}
+                  </span>
+                  {loggingConfig.format === format && (
+                    <Icon name="CheckCircleIcon" className="w-5 h-5 text-blue-500" />
+                  )}
+                </div>
+                <p className="text-xs text-gray-600 dark:text-gray-400">
+                  {format === 'json'
+                    ? t('admin.logging.jsonDescription', 'Structured JSON logging')
+                    : t('admin.logging.textDescription', 'Human-readable text format')}
+                </p>
+              </button>
+            ))}
+          </div>
+        </div>
+
+        {/* Component Filtering */}
+        <div className="bg-white dark:bg-gray-800 rounded-lg shadow-sm p-6">
+          <h2 className="text-xl font-semibold text-gray-900 dark:text-gray-100 mb-4 flex items-center">
+            <Icon name="FunnelIcon" className="w-5 h-5 mr-2 text-blue-500" />
+            {t('admin.logging.componentSection', 'Component Filtering')}
+          </h2>
+
+          <div className="mb-4">
+            <label className="flex items-center">
+              <input
+                type="checkbox"
+                checked={loggingConfig.components?.enabled || false}
+                onChange={e =>
+                  setLoggingConfig(prev => ({
+                    ...prev,
+                    components: { ...prev.components, enabled: e.target.checked }
+                  }))
+                }
+                className="rounded-sm border-gray-300 text-blue-600 focus:ring-blue-500"
+              />
+              <span className="ml-2 text-sm text-gray-700 dark:text-gray-300">
+                {t('admin.logging.enableComponentFilter', 'Enable component filtering')}
+              </span>
+            </label>
+            <p className="text-xs text-gray-500 dark:text-gray-400 mt-1 ml-6">
+              {t(
+                'admin.logging.componentFilterHelp',
+                'When enabled, only logs from selected components will be shown'
+              )}
+            </p>
           </div>
 
-          {/* Component Filtering */}
-          <div className="bg-white dark:bg-gray-800 rounded-lg shadow p-6">
-            <h2 className="text-xl font-semibold text-gray-900 dark:text-gray-100 mb-4 flex items-center">
-              <Icon name="FunnelIcon" className="w-5 h-5 mr-2 text-blue-500" />
-              {t('admin.logging.componentSection', 'Component Filtering')}
-            </h2>
+          {loggingConfig.components?.enabled && (
+            <div className="mb-4 flex gap-2">
+              <button
+                onClick={handleSelectAllComponents}
+                className="px-3 py-1.5 text-sm bg-blue-600 hover:bg-blue-700 text-white rounded-md transition-colors"
+              >
+                {t('admin.logging.selectAll', 'Select All')}
+              </button>
+              <button
+                onClick={handleDeselectAllComponents}
+                className="px-3 py-1.5 text-sm bg-gray-600 hover:bg-gray-700 text-white rounded-md transition-colors"
+              >
+                {t('admin.logging.deselectAll', 'Deselect All')}
+              </button>
+            </div>
+          )}
 
-            <div className="mb-4">
-              <label className="flex items-center">
-                <input
-                  type="checkbox"
-                  checked={loggingConfig.components?.enabled || false}
-                  onChange={e =>
-                    setLoggingConfig(prev => ({
-                      ...prev,
-                      components: { ...prev.components, enabled: e.target.checked }
-                    }))
-                  }
-                  className="rounded border-gray-300 text-blue-600 focus:ring-blue-500"
-                />
-                <span className="ml-2 text-sm text-gray-700 dark:text-gray-300">
-                  {t('admin.logging.enableComponentFilter', 'Enable component filtering')}
-                </span>
+          {loggingConfig.components?.enabled && (
+            <div className="space-y-3">
+              {availableComponents.map(component => (
+                <label
+                  key={component.id}
+                  className="flex items-start p-3 border border-gray-200 dark:border-gray-700 rounded-lg hover:bg-gray-50 dark:hover:bg-gray-700 cursor-pointer"
+                >
+                  <input
+                    type="checkbox"
+                    checked={loggingConfig.components?.filter?.includes(component.id) || false}
+                    onChange={() => handleComponentToggle(component.id)}
+                    className="mt-1 rounded-sm border-gray-300 text-blue-600 focus:ring-blue-500"
+                  />
+                  <div className="ml-3 flex-1">
+                    <div className="text-sm font-medium text-gray-900 dark:text-gray-100">
+                      {component.name}
+                    </div>
+                    <div className="text-xs text-gray-600 dark:text-gray-400 mt-1">
+                      {component.description}
+                    </div>
+                  </div>
+                </label>
+              ))}
+            </div>
+          )}
+        </div>
+
+        {/* PII & Privacy */}
+        <div className="bg-white dark:bg-gray-800 rounded-lg shadow-sm p-6">
+          <h2 className="text-xl font-semibold text-gray-900 dark:text-gray-100 mb-2 flex items-center">
+            <Icon name="ShieldCheckIcon" className="w-5 h-5 mr-2 text-blue-500" />
+            {t('admin.logging.privacySection', 'PII & Privacy')}
+          </h2>
+          <p className="text-sm text-gray-600 dark:text-gray-400 mb-4">
+            {t(
+              'admin.logging.privacyDescription',
+              "Anonymize client IP addresses before they're persisted to logs or the audit log."
+            )}
+          </p>
+
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            <div>
+              <label
+                htmlFor="logging-anonymize-ip"
+                className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1"
+              >
+                {t('admin.logging.loggingAnonymizeIp', 'Anonymize IP in structured logs')}
               </label>
-              <p className="text-xs text-gray-500 dark:text-gray-400 mt-1 ml-6">
+              <select
+                id="logging-anonymize-ip"
+                value={privacyConfig.loggingAnonymizeIp}
+                onChange={e =>
+                  setPrivacyConfig(prev => ({ ...prev, loggingAnonymizeIp: e.target.value }))
+                }
+                className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100"
+              >
+                <option value="off">
+                  {t('admin.logging.anonymizeIpOff', 'Off — store IP verbatim')}
+                </option>
+                <option value="mask">
+                  {t('admin.logging.anonymizeIpMask', 'Mask — /24 (IPv4) or /48 (IPv6)')}
+                </option>
+                <option value="drop">
+                  {t('admin.logging.anonymizeIpDrop', 'Drop — omit the field entirely')}
+                </option>
+              </select>
+              <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">
                 {t(
-                  'admin.logging.componentFilterHelp',
-                  'When enabled, only logs from selected components will be shown'
+                  'admin.logging.loggingAnonymizeIpHelp',
+                  'Applies to the IP merged into every log line from the per-request context.'
                 )}
               </p>
             </div>
 
-            {loggingConfig.components?.enabled && (
-              <div className="mb-4 flex gap-2">
-                <button
-                  onClick={handleSelectAllComponents}
-                  className="px-3 py-1.5 text-sm bg-blue-600 hover:bg-blue-700 text-white rounded-md transition-colors"
-                >
-                  {t('admin.logging.selectAll', 'Select All')}
-                </button>
-                <button
-                  onClick={handleDeselectAllComponents}
-                  className="px-3 py-1.5 text-sm bg-gray-600 hover:bg-gray-700 text-white rounded-md transition-colors"
-                >
-                  {t('admin.logging.deselectAll', 'Deselect All')}
-                </button>
-              </div>
-            )}
-
-            {loggingConfig.components?.enabled && (
-              <div className="space-y-3">
-                {availableComponents.map(component => (
-                  <label
-                    key={component.id}
-                    className="flex items-start p-3 border border-gray-200 dark:border-gray-700 rounded-lg hover:bg-gray-50 dark:hover:bg-gray-700 cursor-pointer"
-                  >
-                    <input
-                      type="checkbox"
-                      checked={loggingConfig.components?.filter?.includes(component.id) || false}
-                      onChange={() => handleComponentToggle(component.id)}
-                      className="mt-1 rounded border-gray-300 text-blue-600 focus:ring-blue-500"
-                    />
-                    <div className="ml-3 flex-1">
-                      <div className="text-sm font-medium text-gray-900 dark:text-gray-100">
-                        {component.name}
-                      </div>
-                      <div className="text-xs text-gray-600 dark:text-gray-400 mt-1">
-                        {component.description}
-                      </div>
-                    </div>
-                  </label>
-                ))}
-              </div>
-            )}
+            <div>
+              <label
+                htmlFor="audit-anonymize-ip"
+                className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1"
+              >
+                {t('admin.logging.auditAnonymizeIp', 'Anonymize IP in audit log')}
+              </label>
+              <select
+                id="audit-anonymize-ip"
+                value={privacyConfig.auditAnonymizeIp}
+                onChange={e =>
+                  setPrivacyConfig(prev => ({ ...prev, auditAnonymizeIp: e.target.value }))
+                }
+                className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100"
+              >
+                <option value="off">
+                  {t('admin.logging.anonymizeIpOff', 'Off — store IP verbatim')}
+                </option>
+                <option value="mask">
+                  {t('admin.logging.anonymizeIpMask', 'Mask — /24 (IPv4) or /48 (IPv6)')}
+                </option>
+                <option value="drop">
+                  {t('admin.logging.anonymizeIpDrop', 'Drop — omit the field entirely')}
+                </option>
+              </select>
+              <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">
+                {t(
+                  'admin.logging.auditAnonymizeIpHelp',
+                  'Applies to the `ip` field on each audit entry.'
+                )}
+              </p>
+            </div>
           </div>
 
-          {/* File Logging */}
-          <div className="bg-white dark:bg-gray-800 rounded-lg shadow p-6">
-            <h2 className="text-xl font-semibold text-gray-900 dark:text-gray-100 mb-4 flex items-center">
-              <Icon name="DocumentIcon" className="w-5 h-5 mr-2 text-blue-500" />
-              {t('admin.logging.fileSection', 'File Logging')}
-            </h2>
+          <div className="mt-4">
+            <button
+              onClick={handleSavePrivacyConfig}
+              disabled={saving}
+              className="px-4 py-2 bg-blue-600 hover:bg-blue-700 disabled:bg-gray-400 text-white rounded-lg transition-colors"
+            >
+              {saving
+                ? t('common.saving', 'Saving...')
+                : t('admin.logging.savePrivacy', 'Save Privacy Settings')}
+            </button>
+          </div>
+        </div>
 
-            <div className="space-y-4">
-              <label className="flex items-center">
-                <input
-                  type="checkbox"
-                  checked={loggingConfig.file?.enabled || false}
-                  onChange={e =>
-                    setLoggingConfig(prev => ({
-                      ...prev,
-                      file: { ...prev.file, enabled: e.target.checked }
-                    }))
-                  }
-                  className="rounded border-gray-300 text-blue-600 focus:ring-blue-500"
-                />
-                <span className="ml-2 text-sm text-gray-700 dark:text-gray-300">
-                  {t('admin.logging.enableFileLogging', 'Enable file logging')}
-                </span>
-              </label>
+        {/* File Logging */}
+        <div className="bg-white dark:bg-gray-800 rounded-lg shadow-sm p-6">
+          <h2 className="text-xl font-semibold text-gray-900 dark:text-gray-100 mb-4 flex items-center">
+            <Icon name="DocumentIcon" className="w-5 h-5 mr-2 text-blue-500" />
+            {t('admin.logging.fileSection', 'File Logging')}
+          </h2>
 
-              {loggingConfig.file?.enabled && (
-                <div className="ml-6 space-y-3">
+          <div className="space-y-4">
+            <label className="flex items-center">
+              <input
+                type="checkbox"
+                checked={loggingConfig.file?.enabled || false}
+                onChange={e =>
+                  setLoggingConfig(prev => ({
+                    ...prev,
+                    file: { ...prev.file, enabled: e.target.checked }
+                  }))
+                }
+                className="rounded-sm border-gray-300 text-blue-600 focus:ring-blue-500"
+              />
+              <span className="ml-2 text-sm text-gray-700 dark:text-gray-300">
+                {t('admin.logging.enableFileLogging', 'Enable file logging')}
+              </span>
+            </label>
+
+            {loggingConfig.file?.enabled && (
+              <div className="ml-6 space-y-3">
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+                    {t('admin.logging.filePath', 'Log File Path')}
+                  </label>
+                  <input
+                    type="text"
+                    value={loggingConfig.file?.path || ''}
+                    onChange={e =>
+                      setLoggingConfig(prev => ({
+                        ...prev,
+                        file: { ...prev.file, path: e.target.value }
+                      }))
+                    }
+                    className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100"
+                  />
+                </div>
+
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
                   <div>
                     <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
-                      {t('admin.logging.filePath', 'Log File Path')}
+                      {t('admin.logging.maxSize', 'Max Size (bytes)')}
                     </label>
                     <input
-                      type="text"
-                      value={loggingConfig.file?.path || ''}
+                      type="number"
+                      value={loggingConfig.file?.maxSize || 10485760}
                       onChange={e =>
                         setLoggingConfig(prev => ({
                           ...prev,
-                          file: { ...prev.file, path: e.target.value }
+                          file: { ...prev.file, maxSize: parseInt(e.target.value) }
                         }))
                       }
                       className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100"
                     />
                   </div>
 
-                  <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-                    <div>
-                      <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
-                        {t('admin.logging.maxSize', 'Max Size (bytes)')}
-                      </label>
-                      <input
-                        type="number"
-                        value={loggingConfig.file?.maxSize || 10485760}
-                        onChange={e =>
-                          setLoggingConfig(prev => ({
-                            ...prev,
-                            file: { ...prev.file, maxSize: parseInt(e.target.value) }
-                          }))
-                        }
-                        className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100"
-                      />
-                    </div>
-
-                    <div>
-                      <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
-                        {t('admin.logging.maxFiles', 'Max Files')}
-                      </label>
-                      <input
-                        type="number"
-                        value={loggingConfig.file?.maxFiles || 5}
-                        onChange={e =>
-                          setLoggingConfig(prev => ({
-                            ...prev,
-                            file: { ...prev.file, maxFiles: parseInt(e.target.value) }
-                          }))
-                        }
-                        className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100"
-                      />
-                    </div>
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+                      {t('admin.logging.maxFiles', 'Max Files')}
+                    </label>
+                    <input
+                      type="number"
+                      value={loggingConfig.file?.maxFiles || 5}
+                      onChange={e =>
+                        setLoggingConfig(prev => ({
+                          ...prev,
+                          file: { ...prev.file, maxFiles: parseInt(e.target.value) }
+                        }))
+                      }
+                      className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100"
+                    />
                   </div>
                 </div>
-              )}
-            </div>
+              </div>
+            )}
           </div>
+        </div>
 
-          {/* Authentication Debug Logging */}
-          <div className="bg-white dark:bg-gray-800 rounded-lg shadow p-6">
-            <h2 className="text-xl font-semibold text-gray-900 dark:text-gray-100 mb-4 flex items-center">
-              <Icon name="ShieldCheckIcon" className="w-5 h-5 mr-2 text-blue-500" />
-              {t('admin.logging.authDebugSection', 'Authentication Debug Logging')}
-            </h2>
+        {/* Authentication Debug Logging */}
+        <div className="bg-white dark:bg-gray-800 rounded-lg shadow-sm p-6">
+          <h2 className="text-xl font-semibold text-gray-900 dark:text-gray-100 mb-2 flex items-center">
+            <Icon name="ShieldCheckIcon" className="w-5 h-5 mr-2 text-blue-500" />
+            {t('admin.logging.authDebugSection', 'Authentication Debug Logging')}
+          </h2>
+          <p className="text-sm text-gray-600 dark:text-gray-400 mb-4">
+            {t(
+              'admin.logging.authDebugDescription',
+              'The single place to trace authentication flows — OIDC redirects, token exchange, group mapping, NTLM handshakes. Traces are written at the "info" level, so they appear at the default log level without any further changes and take effect immediately (no restart needed).'
+            )}
+          </p>
 
-            <div className="space-y-4">
-              <label className="flex items-center">
-                <input
-                  type="checkbox"
-                  checked={authDebugConfig.enabled || false}
-                  onChange={e =>
-                    setAuthDebugConfig(prev => ({ ...prev, enabled: e.target.checked }))
-                  }
-                  className="rounded border-gray-300 text-blue-600 focus:ring-blue-500"
-                />
-                <span className="ml-2 text-sm font-medium text-gray-700 dark:text-gray-300">
-                  {t('admin.logging.enableAuthDebug', 'Enable authentication debug logging')}
-                </span>
-              </label>
+          <div className="space-y-4">
+            <label className="flex items-center">
+              <input
+                type="checkbox"
+                checked={authDebugConfig.enabled || false}
+                onChange={e => setAuthDebugConfig(prev => ({ ...prev, enabled: e.target.checked }))}
+                className="rounded-sm border-gray-300 text-blue-600 focus:ring-blue-500"
+              />
+              <span className="ml-2 text-sm font-medium text-gray-700 dark:text-gray-300">
+                {t('admin.logging.enableAuthDebug', 'Enable authentication debug logging')}
+              </span>
+            </label>
 
-              {authDebugConfig.enabled && (
-                <div className="ml-6 space-y-3 border-l-2 border-blue-200 dark:border-blue-800 pl-4">
-                  <label className="flex items-center">
-                    <input
-                      type="checkbox"
-                      checked={authDebugConfig.maskTokens !== false}
-                      onChange={e =>
-                        setAuthDebugConfig(prev => ({ ...prev, maskTokens: e.target.checked }))
-                      }
-                      className="rounded border-gray-300 text-blue-600 focus:ring-blue-500"
-                    />
-                    <span className="ml-2 text-sm text-gray-700 dark:text-gray-300">
-                      {t('admin.logging.maskTokens', 'Mask tokens in logs')}
-                    </span>
-                  </label>
+            {authDebugConfig.enabled && (
+              <div className="ml-6 space-y-3 border-l-2 border-blue-200 dark:border-blue-800 pl-4">
+                <label className="flex items-center">
+                  <input
+                    type="checkbox"
+                    checked={authDebugConfig.maskTokens !== false}
+                    onChange={e =>
+                      setAuthDebugConfig(prev => ({ ...prev, maskTokens: e.target.checked }))
+                    }
+                    className="rounded-sm border-gray-300 text-blue-600 focus:ring-blue-500"
+                  />
+                  <span className="ml-2 text-sm text-gray-700 dark:text-gray-300">
+                    {t('admin.logging.maskTokens', 'Mask tokens in logs')}
+                  </span>
+                </label>
 
-                  <label className="flex items-center">
-                    <input
-                      type="checkbox"
-                      checked={authDebugConfig.redactPasswords !== false}
-                      onChange={e =>
-                        setAuthDebugConfig(prev => ({
-                          ...prev,
-                          redactPasswords: e.target.checked
-                        }))
-                      }
-                      className="rounded border-gray-300 text-blue-600 focus:ring-blue-500"
-                    />
-                    <span className="ml-2 text-sm text-gray-700 dark:text-gray-300">
-                      {t('admin.logging.redactPasswords', 'Redact passwords in logs')}
-                    </span>
-                  </label>
+                <label className="flex items-center">
+                  <input
+                    type="checkbox"
+                    checked={authDebugConfig.redactPasswords !== false}
+                    onChange={e =>
+                      setAuthDebugConfig(prev => ({
+                        ...prev,
+                        redactPasswords: e.target.checked
+                      }))
+                    }
+                    className="rounded-sm border-gray-300 text-blue-600 focus:ring-blue-500"
+                  />
+                  <span className="ml-2 text-sm text-gray-700 dark:text-gray-300">
+                    {t('admin.logging.redactPasswords', 'Redact passwords in logs')}
+                  </span>
+                </label>
 
-                  <label className="flex items-center">
-                    <input
-                      type="checkbox"
-                      checked={authDebugConfig.consoleLogging || false}
-                      onChange={e =>
-                        setAuthDebugConfig(prev => ({
-                          ...prev,
-                          consoleLogging: e.target.checked
-                        }))
-                      }
-                      className="rounded border-gray-300 text-blue-600 focus:ring-blue-500"
-                    />
-                    <span className="ml-2 text-sm text-gray-700 dark:text-gray-300">
-                      {t('admin.logging.consoleLogging', 'Enable console logging')}
-                    </span>
-                  </label>
-
+                <div>
                   <label className="flex items-center">
                     <input
                       type="checkbox"
@@ -741,132 +904,138 @@ function AdminLoggingPage() {
                           includeRawData: e.target.checked
                         }))
                       }
-                      className="rounded border-gray-300 text-blue-600 focus:ring-blue-500"
+                      className="rounded-sm border-gray-300 text-blue-600 focus:ring-blue-500"
                     />
                     <span className="ml-2 text-sm text-gray-700 dark:text-gray-300">
                       {t('admin.logging.includeRawData', 'Include raw authentication data')}
                     </span>
                   </label>
+                  <p className="text-xs text-amber-600 dark:text-amber-400 mt-1 ml-6">
+                    {t(
+                      'admin.logging.includeRawDataWarning',
+                      'Security risk: logs the full user-info payload and access tokens. Leave off unless actively debugging; disable again afterwards.'
+                    )}
+                  </p>
+                </div>
 
-                  {/* Provider-specific debug settings */}
-                  <div className="mt-4 pt-4 border-t border-gray-200 dark:border-gray-700">
-                    <p className="text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
-                      {t('admin.logging.authProviders', 'Debug by Provider')}
-                    </p>
-                    <div className="grid grid-cols-2 md:grid-cols-3 gap-2">
-                      {Object.keys(authDebugConfig.providers || {}).map(provider => (
-                        <label key={provider} className="flex items-center">
-                          <input
-                            type="checkbox"
-                            checked={authDebugConfig.providers?.[provider]?.enabled !== false}
-                            onChange={e =>
-                              setAuthDebugConfig(prev => ({
-                                ...prev,
-                                providers: {
-                                  ...prev.providers,
-                                  [provider]: { enabled: e.target.checked }
-                                }
-                              }))
-                            }
-                            className="rounded border-gray-300 text-blue-600 focus:ring-blue-500"
-                          />
-                          <span className="ml-2 text-sm text-gray-700 dark:text-gray-300 capitalize">
-                            {provider}
-                          </span>
-                        </label>
-                      ))}
-                    </div>
+                {/* Provider-specific debug settings */}
+                <div className="mt-4 pt-4 border-t border-gray-200 dark:border-gray-700">
+                  <p className="text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
+                    {t('admin.logging.authProviders', 'Debug by Provider')}
+                  </p>
+                  <div className="grid grid-cols-2 md:grid-cols-3 gap-2">
+                    {Object.keys(authDebugConfig.providers || {}).map(provider => (
+                      <label key={provider} className="flex items-center">
+                        <input
+                          type="checkbox"
+                          checked={authDebugConfig.providers?.[provider]?.enabled !== false}
+                          onChange={e =>
+                            setAuthDebugConfig(prev => ({
+                              ...prev,
+                              providers: {
+                                ...prev.providers,
+                                [provider]: { enabled: e.target.checked }
+                              }
+                            }))
+                          }
+                          className="rounded-sm border-gray-300 text-blue-600 focus:ring-blue-500"
+                        />
+                        <span className="ml-2 text-sm text-gray-700 dark:text-gray-300 capitalize">
+                          {provider}
+                        </span>
+                      </label>
+                    ))}
                   </div>
                 </div>
-              )}
-            </div>
-
-            <div className="mt-4">
-              <button
-                onClick={handleSaveAuthDebugConfig}
-                disabled={saving}
-                className="px-4 py-2 bg-blue-600 hover:bg-blue-700 disabled:bg-gray-400 text-white rounded-lg transition-colors"
-              >
-                {saving
-                  ? t('common.saving', 'Saving...')
-                  : t('admin.logging.saveAuthDebug', 'Save Authentication Debug Settings')}
-              </button>
-            </div>
+              </div>
+            )}
           </div>
 
-          {/* Save Button */}
-          <div className="bg-white dark:bg-gray-800 rounded-lg shadow p-6">
-            <div className="flex items-center justify-between">
-              <div>
-                <h3 className="text-lg font-medium text-gray-900 dark:text-gray-100">
-                  {t('admin.logging.saveChanges', 'Save Changes')}
-                </h3>
-                <p className="text-sm text-gray-600 dark:text-gray-400 mt-1">
+          <div className="mt-4">
+            <button
+              onClick={handleSaveAuthDebugConfig}
+              disabled={saving}
+              className="px-4 py-2 bg-blue-600 hover:bg-blue-700 disabled:bg-gray-400 text-white rounded-lg transition-colors"
+            >
+              {saving
+                ? t('common.saving', 'Saving...')
+                : t('admin.logging.saveAuthDebug', 'Save Authentication Debug Settings')}
+            </button>
+          </div>
+        </div>
+
+        {/* Save Button */}
+        <div className="bg-white dark:bg-gray-800 rounded-lg shadow-sm p-6">
+          <div className="flex items-center justify-between">
+            <div>
+              <h3 className="text-lg font-medium text-gray-900 dark:text-gray-100">
+                {t('admin.logging.saveChanges', 'Save Changes')}
+              </h3>
+              <p className="text-sm text-gray-600 dark:text-gray-400 mt-1">
+                {t(
+                  'admin.logging.saveDescription',
+                  'Save logging configuration and apply changes immediately'
+                )}
+              </p>
+            </div>
+            <button
+              onClick={handleSaveLoggingConfig}
+              disabled={saving}
+              className="px-6 py-2 bg-blue-600 hover:bg-blue-700 disabled:bg-gray-400 text-white rounded-lg transition-colors font-medium"
+            >
+              {saving
+                ? t('common.saving', 'Saving...')
+                : t('admin.logging.save', 'Save Logging Configuration')}
+            </button>
+          </div>
+        </div>
+
+        {/* Info Box */}
+        <div className="bg-blue-50 dark:bg-blue-900/20 rounded-lg border border-blue-200 dark:border-blue-800 p-4">
+          <div className="flex items-start">
+            <Icon
+              name="InformationCircleIcon"
+              className="w-5 h-5 mr-2 text-blue-600 dark:text-blue-400 shrink-0 mt-0.5"
+            />
+            <div className="text-sm text-blue-800 dark:text-blue-300">
+              <p className="font-medium mb-1">{t('common.note', 'Note')}:</p>
+              <ul className="list-disc list-inside space-y-1 text-xs">
+                <li>
                   {t(
-                    'admin.logging.saveDescription',
-                    'Save logging configuration and apply changes immediately'
+                    'admin.logging.note1',
+                    'Changes take effect immediately across all server processes'
                   )}
-                </p>
-              </div>
-              <button
-                onClick={handleSaveLoggingConfig}
-                disabled={saving}
-                className="px-6 py-2 bg-blue-600 hover:bg-blue-700 disabled:bg-gray-400 text-white rounded-lg transition-colors font-medium"
-              >
-                {saving
-                  ? t('common.saving', 'Saving...')
-                  : t('admin.logging.save', 'Save Logging Configuration')}
-              </button>
-            </div>
-          </div>
-
-          {/* Info Box */}
-          <div className="bg-blue-50 dark:bg-blue-900/20 rounded-lg border border-blue-200 dark:border-blue-800 p-4">
-            <div className="flex items-start">
-              <Icon
-                name="InformationCircleIcon"
-                className="w-5 h-5 mr-2 text-blue-600 dark:text-blue-400 flex-shrink-0 mt-0.5"
-              />
-              <div className="text-sm text-blue-800 dark:text-blue-300">
-                <p className="font-medium mb-1">{t('common.note', 'Note')}:</p>
-                <ul className="list-disc list-inside space-y-1 text-xs">
-                  <li>
-                    {t(
-                      'admin.logging.note1',
-                      'Changes take effect immediately across all server processes'
-                    )}
-                  </li>
-                  <li>
-                    {t(
-                      'admin.logging.note2',
-                      'Log level changes are persisted to platform.json configuration'
-                    )}
-                  </li>
-                  <li>
-                    {t(
-                      'admin.logging.note3',
-                      'Lower levels (error, warn) show fewer messages, higher levels (debug, silly) show more'
-                    )}
-                  </li>
-                  <li>
-                    {t(
-                      'admin.logging.note4',
-                      'Use "info" level for production, "debug" for development'
-                    )}
-                  </li>
-                  <li>
-                    {t(
-                      'admin.logging.note5',
-                      'Authentication debug logging is separate and requires restart'
-                    )}
-                  </li>
-                </ul>
-              </div>
+                </li>
+                <li>
+                  {t(
+                    'admin.logging.note2',
+                    'Log level changes are persisted to platform.json configuration'
+                  )}
+                </li>
+                <li>
+                  {t(
+                    'admin.logging.note3',
+                    'Lower levels (error, warn) show fewer messages, higher levels (debug, silly) show more'
+                  )}
+                </li>
+                <li>
+                  {t(
+                    'admin.logging.note4',
+                    'Use "info" level for production, "debug" for development'
+                  )}
+                </li>
+                <li>
+                  {t(
+                    'admin.logging.note5',
+                    'Authentication debug logging applies immediately (no restart) and its traces are emitted at the "info" level, so they show at the default log level'
+                  )}
+                </li>
+              </ul>
             </div>
           </div>
         </div>
       </div>
-    </AdminAuth>
+    </div>
   );
 }
 

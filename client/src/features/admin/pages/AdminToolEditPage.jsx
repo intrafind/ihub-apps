@@ -2,18 +2,23 @@ import { useState, useEffect } from 'react';
 import { useParams, useNavigate, useLocation } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
 import Icon from '../../../shared/components/Icon';
-import AdminNavigation from '../components/AdminNavigation';
-import AdminAuth from '../components/AdminAuth';
 import DualModeEditor from '../../../shared/components/DualModeEditor';
 import ToolFormEditor from '../components/ToolFormEditor';
+import OpenApiToolEditor from '../components/OpenApiToolEditor';
+import ChangeHistoryDrawer from '../components/ChangeHistoryDrawer';
+import AdminBreadcrumb from '../components/AdminBreadcrumb';
+import { useUnsavedChanges } from '../hooks/useUnsavedChanges';
+import ConfirmDialog from '../../../shared/components/ConfirmDialog';
+import ContentAccessSection from '../components/ContentAccessSection';
 import {
-  fetchAdminTools,
   createTool,
-  updateTool,
+  fetchAdminTools,
   fetchToolScript,
+  getAdminApiErrorMessage,
+  updateTool,
   updateToolScript
 } from '../../../api/adminApi';
-import { clearApiCache } from '../../../api/api';
+import { clearApiCache } from '../../../api';
 
 function AdminToolEditPage() {
   const { t } = useTranslation();
@@ -22,7 +27,7 @@ function AdminToolEditPage() {
   const location = useLocation();
   const isNewTool = toolId === 'new';
 
-  const [toolData, setToolData] = useState({
+  const defaultToolData = {
     id: '',
     name: { en: '' },
     description: { en: '' },
@@ -37,13 +42,19 @@ function AdminToolEditPage() {
       required: []
     },
     functions: {} // Support for multi-function tools
-  });
+  };
+
+  const [toolData, setToolData] = useState(defaultToolData);
+  const [initialData, setInitialData] = useState(isNewTool ? defaultToolData : null);
 
   const [scriptContent, setScriptContent] = useState('');
   const [loading, setLoading] = useState(!isNewTool);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState(null);
   const [activeTab, setActiveTab] = useState('config'); // config or script
+  const [historyOpen, setHistoryOpen] = useState(false);
+
+  const { blocker, markSaved } = useUnsavedChanges(initialData, toolData);
 
   useEffect(() => {
     if (isNewTool && location.state?.templateTool) {
@@ -77,7 +88,7 @@ function AdminToolEditPage() {
       }
 
       // Ensure proper structure
-      setToolData({
+      const loadedToolData = {
         ...tool,
         name: tool.name || { en: '' },
         description: tool.description || { en: '' },
@@ -87,7 +98,14 @@ function AdminToolEditPage() {
         provider: tool.provider || '',
         parameters: tool.parameters || { type: 'object', properties: {}, required: [] },
         functions: tool.functions || {}
-      });
+      };
+      setToolData(loadedToolData);
+      setInitialData(loadedToolData);
+
+      // OpenAPI tools use the dedicated editor pane by default.
+      if (loadedToolData.type === 'openapi') {
+        setActiveTab('openapi');
+      }
 
       // Load script if available
       if (tool.script) {
@@ -101,7 +119,7 @@ function AdminToolEditPage() {
       }
     } catch (err) {
       console.error('Error loading tool:', err);
-      setError(err.message);
+      setError(getAdminApiErrorMessage(err));
     } finally {
       setLoading(false);
     }
@@ -141,6 +159,7 @@ function AdminToolEditPage() {
         await updateToolScript(toolToSave.id, scriptContent);
       }
 
+      markSaved();
       navigate('/admin/tools');
     } catch (err) {
       console.error('Error saving tool config:', err);
@@ -175,63 +194,117 @@ function AdminToolEditPage() {
     setToolData(newData);
   };
 
+  // Whether the current tool is an OpenAPI-backed tool. OpenAPI tools use a
+  // dedicated editor pane (spec parsing, operation picker, credentialRef auth)
+  // instead of the generic script/function form.
+  const isOpenApiTool = toolData.type === 'openapi';
+
+  // Persist an OpenAPI tool definition built by OpenApiToolEditor. The editor
+  // owns the full tool shape, so we save it directly via the tools API.
+  const handleSaveOpenApiTool = async toolDef => {
+    try {
+      setSaving(true);
+      setError(null);
+      if (!toolDef.id) {
+        throw new Error('Please provide a tool ID');
+      }
+      if (isNewTool) {
+        await createTool(toolDef);
+      } else {
+        await updateTool(toolId, toolDef);
+      }
+      clearApiCache('admin_tools');
+      markSaved();
+      navigate('/admin/tools');
+    } catch (err) {
+      console.error('Error saving OpenAPI tool:', err);
+      setError(err.response?.data?.error || err.message || 'Failed to save OpenAPI tool');
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  // Switch a brand-new tool into OpenAPI mode (sets type + activates the pane).
+  const startOpenApiTool = () => {
+    setToolData(prev => ({ ...prev, type: 'openapi' }));
+    setActiveTab('openapi');
+  };
+
   if (loading) {
     return (
-      <AdminAuth>
-        <AdminNavigation />
-        <div className="min-h-screen bg-gray-50 dark:bg-gray-900 flex justify-center items-center h-64">
-          <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-indigo-600"></div>
-        </div>
-      </AdminAuth>
+      <div className="min-h-screen bg-gray-50 dark:bg-gray-900 flex justify-center items-center h-64">
+        <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-indigo-600"></div>
+      </div>
     );
   }
 
   return (
-    <AdminAuth>
-      <div className="min-h-screen bg-gray-50 dark:bg-gray-900">
-        <AdminNavigation />
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
-          <div className="md:flex md:items-center md:justify-between mb-6">
-            <div className="flex-1 min-w-0">
-              <h1 className="text-2xl font-semibold text-gray-900 dark:text-gray-100">
-                {isNewTool
-                  ? t('admin.tools.createNew', 'Create New Tool')
-                  : t('admin.tools.editTool', 'Edit Tool')}
-              </h1>
-              <p className="mt-1 text-sm text-gray-500 dark:text-gray-400">
-                {isNewTool
-                  ? t('admin.tools.createDescription', 'Create a new AI tool / function')
-                  : t('admin.tools.editDescription', 'Edit tool configuration and script')}
-              </p>
-            </div>
-            <div className="mt-4 flex md:mt-0 md:ml-4">
-              <button
-                onClick={() => navigate('/admin/tools')}
-                className="inline-flex items-center px-4 py-2 border border-gray-300 dark:border-gray-600 rounded-md shadow-sm text-sm font-medium text-gray-700 dark:text-gray-200 bg-white dark:bg-gray-700 hover:bg-gray-50 dark:hover:bg-gray-600 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500"
-              >
-                <Icon name="arrow-left" className="h-4 w-4 mr-2" />
-                {t('common.back', 'Back')}
-              </button>
-            </div>
+    <div className="min-h-screen bg-gray-50 dark:bg-gray-900">
+      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
+        <AdminBreadcrumb
+          crumbs={[
+            { label: 'Admin', href: '/admin' },
+            { label: 'Tools', href: '/admin/tools' },
+            { label: isNewTool ? 'New Tool' : (toolData?.name?.en ?? toolId) }
+          ]}
+        />
+        <div className="md:flex md:items-center md:justify-between mb-6">
+          <div className="flex-1 min-w-0">
+            <h1 className="text-2xl font-semibold text-gray-900 dark:text-gray-100">
+              {isNewTool
+                ? t('admin.tools.createNew', 'Create New Tool')
+                : t('admin.tools.editTool', 'Edit Tool')}
+            </h1>
+            <p className="mt-1 text-sm text-gray-500 dark:text-gray-400">
+              {isNewTool
+                ? t('admin.tools.createDescription', 'Create a new AI tool / function')
+                : t('admin.tools.editDescription', 'Edit tool configuration and script')}
+            </p>
           </div>
+          <div className="mt-4 flex space-x-3 md:mt-0 md:ml-4">
+            {!isNewTool && (
+              <button
+                type="button"
+                onClick={() => setHistoryOpen(true)}
+                className="inline-flex items-center px-4 py-2 border border-gray-300 dark:border-gray-600 rounded-md shadow-xs text-sm font-medium text-gray-700 dark:text-gray-200 bg-white dark:bg-gray-700 hover:bg-gray-50 dark:hover:bg-gray-600 focus:outline-hidden focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500"
+              >
+                <Icon name="clock" className="h-4 w-4 mr-2" />
+                {t('admin.tools.history', 'History')}
+              </button>
+            )}
+            <button
+              onClick={() => navigate('/admin/tools')}
+              className="inline-flex items-center px-4 py-2 border border-gray-300 dark:border-gray-600 rounded-md shadow-xs text-sm font-medium text-gray-700 dark:text-gray-200 bg-white dark:bg-gray-700 hover:bg-gray-50 dark:hover:bg-gray-600 focus:outline-hidden focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500"
+            >
+              <Icon name="arrow-left" className="h-4 w-4 mr-2" />
+              {t('common.back', 'Back')}
+            </button>
+          </div>
+        </div>
 
-          {error && (
-            <div className="mb-6 bg-red-50 dark:bg-red-900/30 border border-red-200 dark:border-red-800 rounded-md p-4">
-              <div className="flex">
-                <Icon name="exclamation-triangle" className="h-5 w-5 text-red-400" />
-                <div className="ml-3">
-                  <h3 className="text-sm font-medium text-red-800 dark:text-red-200">
-                    {t('common.error', 'Error')}
-                  </h3>
-                  <p className="mt-1 text-sm text-red-700 dark:text-red-300">{error}</p>
-                </div>
+        {error && (
+          <div className="mb-6 bg-red-50 dark:bg-red-900/30 border border-red-200 dark:border-red-800 rounded-md p-4">
+            <div className="flex">
+              <Icon name="exclamation-triangle" className="h-5 w-5 text-red-400" />
+              <div className="ml-3">
+                <h3 className="text-sm font-medium text-red-800 dark:text-red-200">
+                  {t('common.error', 'Error')}
+                </h3>
+                <p className="mt-1 text-sm text-red-700 dark:text-red-300">{error}</p>
               </div>
             </div>
-          )}
+          </div>
+        )}
 
-          {/* Tabs */}
-          <div className="border-b border-gray-200 dark:border-gray-700 mb-6">
-            <nav className="-mb-px flex space-x-8">
+        {/* Tabs */}
+        <div className="border-b border-gray-200 dark:border-gray-700 mb-6">
+          <nav className="-mb-px flex space-x-8">
+            {/* The generic Configuration tab is meaningless for OpenAPI tools —
+                its content/save button already guard on `!isOpenApiTool` and
+                the OpenAPI editor owns the entire tool shape. Keep the tab
+                visible only for non-OpenAPI tools, so the "Use OpenAPI editor"
+                prompt still has a home when creating a brand-new tool. */}
+            {!isOpenApiTool && (
               <button
                 onClick={() => setActiveTab('config')}
                 className={`${
@@ -243,63 +316,168 @@ function AdminToolEditPage() {
                 <Icon name="cog" className="h-4 w-4 inline mr-2" />
                 {t('admin.tools.configTab', 'Configuration')}
               </button>
-              {!isNewTool && toolData.script && (
-                <button
-                  onClick={() => setActiveTab('script')}
-                  className={`${
-                    activeTab === 'script'
-                      ? 'border-indigo-500 text-indigo-600 dark:text-indigo-400'
-                      : 'border-transparent text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-300 hover:border-gray-300 dark:hover:border-gray-600'
-                  } whitespace-nowrap py-4 px-1 border-b-2 font-medium text-sm`}
-                >
-                  <Icon name="code" className="h-4 w-4 inline mr-2" />
-                  {t('admin.tools.scriptTab', 'Script Editor')}
-                </button>
-              )}
-            </nav>
-          </div>
+            )}
+            {!isNewTool && toolData.script && (
+              <button
+                onClick={() => setActiveTab('script')}
+                className={`${
+                  activeTab === 'script'
+                    ? 'border-indigo-500 text-indigo-600 dark:text-indigo-400'
+                    : 'border-transparent text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-300 hover:border-gray-300 dark:hover:border-gray-600'
+                } whitespace-nowrap py-4 px-1 border-b-2 font-medium text-sm`}
+              >
+                <Icon name="code" className="h-4 w-4 inline mr-2" />
+                {t('admin.tools.scriptTab', 'Script Editor')}
+              </button>
+            )}
+            {isOpenApiTool && (
+              <button
+                onClick={() => setActiveTab('openapi')}
+                className={`${
+                  activeTab === 'openapi'
+                    ? 'border-indigo-500 text-indigo-600 dark:text-indigo-400'
+                    : 'border-transparent text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-300 hover:border-gray-300 dark:hover:border-gray-600'
+                } whitespace-nowrap py-4 px-1 border-b-2 font-medium text-sm`}
+              >
+                <Icon name="globe" className="h-4 w-4 inline mr-2" />
+                {t('admin.tools.openApiTab', 'OpenAPI')}
+              </button>
+            )}
+          </nav>
+        </div>
 
-          {/* Configuration Tab */}
-          {activeTab === 'config' && (
-            <DualModeEditor
-              value={toolData}
-              onChange={handleToolDataChange}
-              formComponent={ToolFormEditor}
-              formProps={{
-                isNewTool
-              }}
-              title={
-                isNewTool
-                  ? t('admin.tools.createNew', 'Create New Tool')
-                  : t('admin.tools.editTool', 'Edit Tool')
-              }
-              description={
-                isNewTool
-                  ? t(
-                      'admin.tools.createDescription',
-                      'Create a new AI tool / function using the form interface or JSON editor'
-                    )
-                  : t(
-                      'admin.tools.editDescription',
-                      'Edit tool configuration using the form interface or raw JSON editor'
-                    )
-              }
-            />
+        {/* Offer creating an OpenAPI-type tool from the config tab. */}
+        {activeTab === 'config' && isNewTool && !isOpenApiTool && (
+          <div className="mb-6 rounded-md border border-indigo-200 dark:border-indigo-800 bg-indigo-50 dark:bg-indigo-900/30 p-4 flex items-center justify-between">
+            <div>
+              <p className="text-sm font-medium text-indigo-800 dark:text-indigo-200">
+                {t('admin.tools.openApiPromptTitle', 'Building an OpenAPI-backed tool?')}
+              </p>
+              <p className="text-sm text-indigo-700 dark:text-indigo-300 mt-0.5">
+                {t(
+                  'admin.tools.openApiPromptBody',
+                  'Parse an OpenAPI spec, pick an operation, and reference a stored credential — no script required.'
+                )}
+              </p>
+            </div>
+            <button
+              type="button"
+              onClick={startOpenApiTool}
+              className="inline-flex items-center px-4 py-2 border border-transparent rounded-md shadow-xs text-sm font-medium text-white bg-indigo-600 hover:bg-indigo-700"
+            >
+              <Icon name="globe" className="h-4 w-4 mr-2" />
+              {t('admin.tools.useOpenApi', 'Use OpenAPI editor')}
+            </button>
+          </div>
+        )}
+
+        {/* OpenAPI Tab */}
+        {activeTab === 'openapi' && isOpenApiTool && (
+          <div className="bg-white dark:bg-gray-800 shadow-sm rounded-lg p-6">
+            <OpenApiToolEditor tool={toolData} onSave={handleSaveOpenApiTool} saving={saving} />
+          </div>
+        )}
+
+        {/* Configuration Tab */}
+        {activeTab === 'config' && !isOpenApiTool && (
+          <DualModeEditor
+            value={toolData}
+            onChange={handleToolDataChange}
+            formComponent={ToolFormEditor}
+            formProps={{
+              isNewTool
+            }}
+            title={
+              isNewTool
+                ? t('admin.tools.createNew', 'Create New Tool')
+                : t('admin.tools.editTool', 'Edit Tool')
+            }
+            description={
+              isNewTool
+                ? t(
+                    'admin.tools.createDescription',
+                    'Create a new AI tool / function using the form interface or JSON editor'
+                  )
+                : t(
+                    'admin.tools.editDescription',
+                    'Edit tool configuration using the form interface or raw JSON editor'
+                  )
+            }
+          />
+        )}
+
+        {/* Save button for configuration */}
+        {activeTab === 'config' && !isOpenApiTool && (
+          <div className="mt-6 flex justify-end space-x-3">
+            <button
+              onClick={() => navigate('/admin/tools')}
+              className="px-4 py-2 border border-gray-300 dark:border-gray-600 rounded-md shadow-xs text-sm font-medium text-gray-700 dark:text-gray-200 bg-white dark:bg-gray-700 hover:bg-gray-50 dark:hover:bg-gray-600 focus:outline-hidden focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500"
+            >
+              {t('common.cancel', 'Cancel')}
+            </button>
+            <button
+              onClick={handleSaveConfig}
+              disabled={saving}
+              className="inline-flex items-center px-4 py-2 border border-transparent rounded-md shadow-xs text-sm font-medium text-white bg-indigo-600 hover:bg-indigo-700 focus:outline-hidden focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500 disabled:opacity-50"
+            >
+              {saving ? (
+                <>
+                  <Icon name="refresh" className="animate-spin h-4 w-4 mr-2" />
+                  {t('common.saving', 'Saving...')}
+                </>
+              ) : (
+                <>
+                  <Icon name="check" className="h-4 w-4 mr-2" />
+                  {t('common.save', 'Save')}
+                </>
+              )}
+            </button>
+          </div>
+        )}
+
+        {/* Group access — which groups may call this tool directly (groups.json) */}
+        {!isNewTool &&
+          ((activeTab === 'config' && !isOpenApiTool) ||
+            (activeTab === 'openapi' && isOpenApiTool)) && (
+            <ContentAccessSection resourceType="tools" resourceId={toolId} className="mt-6" />
           )}
 
-          {/* Save button for configuration */}
-          {activeTab === 'config' && (
-            <div className="mt-6 flex justify-end space-x-3">
+        {/* Script Editor Tab */}
+        {activeTab === 'script' && !isNewTool && toolData.script && (
+          <div className="bg-white dark:bg-gray-800 shadow-sm rounded-lg p-6">
+            <div className="mb-4">
+              <p className="text-sm text-gray-600 dark:text-gray-400">
+                {t(
+                  'admin.tools.scriptEditorInfo',
+                  'Edit the JavaScript code for this tool. Changes will be saved to server/tools/'
+                )}{' '}
+                <code className="bg-gray-100 dark:bg-gray-700 px-2 py-1 rounded-sm text-xs">
+                  {toolData.script}
+                </code>
+              </p>
+            </div>
+
+            <div className="mb-4">
+              <textarea
+                value={scriptContent}
+                onChange={e => setScriptContent(e.target.value)}
+                rows={25}
+                className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md shadow-xs focus:outline-hidden focus:ring-indigo-500 focus:border-indigo-500 font-mono text-sm bg-white dark:bg-gray-900 text-gray-900 dark:text-gray-100"
+                style={{ fontFamily: 'monospace' }}
+              />
+            </div>
+
+            <div className="flex justify-end space-x-3">
               <button
-                onClick={() => navigate('/admin/tools')}
-                className="px-4 py-2 border border-gray-300 dark:border-gray-600 rounded-md shadow-sm text-sm font-medium text-gray-700 dark:text-gray-200 bg-white dark:bg-gray-700 hover:bg-gray-50 dark:hover:bg-gray-600 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500"
+                onClick={() => setActiveTab('config')}
+                className="px-4 py-2 border border-gray-300 dark:border-gray-600 rounded-md shadow-xs text-sm font-medium text-gray-700 dark:text-gray-200 bg-white dark:bg-gray-700 hover:bg-gray-50 dark:hover:bg-gray-600 focus:outline-hidden focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500"
               >
                 {t('common.cancel', 'Cancel')}
               </button>
               <button
-                onClick={handleSaveConfig}
+                onClick={handleSaveScript}
                 disabled={saving}
-                className="inline-flex items-center px-4 py-2 border border-transparent rounded-md shadow-sm text-sm font-medium text-white bg-indigo-600 hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500 disabled:opacity-50"
+                className="inline-flex items-center px-4 py-2 border border-transparent rounded-md shadow-xs text-sm font-medium text-white bg-indigo-600 hover:bg-indigo-700 focus:outline-hidden focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500 disabled:opacity-50"
               >
                 {saving ? (
                   <>
@@ -309,68 +487,33 @@ function AdminToolEditPage() {
                 ) : (
                   <>
                     <Icon name="check" className="h-4 w-4 mr-2" />
-                    {t('common.save', 'Save')}
+                    {t('admin.tools.saveScript', 'Save Script')}
                   </>
                 )}
               </button>
             </div>
-          )}
-
-          {/* Script Editor Tab */}
-          {activeTab === 'script' && !isNewTool && toolData.script && (
-            <div className="bg-white dark:bg-gray-800 shadow rounded-lg p-6">
-              <div className="mb-4">
-                <p className="text-sm text-gray-600 dark:text-gray-400">
-                  {t(
-                    'admin.tools.scriptEditorInfo',
-                    'Edit the JavaScript code for this tool. Changes will be saved to server/tools/'
-                  )}{' '}
-                  <code className="bg-gray-100 dark:bg-gray-700 px-2 py-1 rounded text-xs">
-                    {toolData.script}
-                  </code>
-                </p>
-              </div>
-
-              <div className="mb-4">
-                <textarea
-                  value={scriptContent}
-                  onChange={e => setScriptContent(e.target.value)}
-                  rows={25}
-                  className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md shadow-sm focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 font-mono text-sm bg-white dark:bg-gray-900 text-gray-900 dark:text-gray-100"
-                  style={{ fontFamily: 'monospace' }}
-                />
-              </div>
-
-              <div className="flex justify-end space-x-3">
-                <button
-                  onClick={() => setActiveTab('config')}
-                  className="px-4 py-2 border border-gray-300 dark:border-gray-600 rounded-md shadow-sm text-sm font-medium text-gray-700 dark:text-gray-200 bg-white dark:bg-gray-700 hover:bg-gray-50 dark:hover:bg-gray-600 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500"
-                >
-                  {t('common.cancel', 'Cancel')}
-                </button>
-                <button
-                  onClick={handleSaveScript}
-                  disabled={saving}
-                  className="inline-flex items-center px-4 py-2 border border-transparent rounded-md shadow-sm text-sm font-medium text-white bg-indigo-600 hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500 disabled:opacity-50"
-                >
-                  {saving ? (
-                    <>
-                      <Icon name="refresh" className="animate-spin h-4 w-4 mr-2" />
-                      {t('common.saving', 'Saving...')}
-                    </>
-                  ) : (
-                    <>
-                      <Icon name="check" className="h-4 w-4 mr-2" />
-                      {t('admin.tools.saveScript', 'Save Script')}
-                    </>
-                  )}
-                </button>
-              </div>
-            </div>
-          )}
-        </div>
+          </div>
+        )}
       </div>
-    </AdminAuth>
+
+      <ChangeHistoryDrawer
+        isOpen={historyOpen}
+        onClose={() => setHistoryOpen(false)}
+        resource="tool"
+        resourceId={toolId}
+      />
+
+      <ConfirmDialog
+        isOpen={blocker.state === 'blocked'}
+        title="Unsaved Changes"
+        message="You have unsaved changes. Leave anyway?"
+        confirmLabel="Leave"
+        denyLabel="Stay"
+        danger={false}
+        onConfirm={() => blocker.proceed?.()}
+        onDeny={() => blocker.reset?.()}
+      />
+    </div>
   );
 }
 

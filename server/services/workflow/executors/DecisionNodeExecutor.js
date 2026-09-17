@@ -12,6 +12,7 @@
  */
 
 import { BaseNodeExecutor } from './BaseNodeExecutor.js';
+import { evaluateBooleanExpression } from '../expressionEvaluator.js';
 
 /**
  * Decision node configuration
@@ -160,131 +161,22 @@ export class DecisionNodeExecutor extends BaseNodeExecutor {
       return { branch: 'false', value: false };
     }
 
-    try {
-      // Replace variable references with actual values
-      const processedExpression = this.processExpressionVariables(expression, state);
-
-      // Safely evaluate the expression
-      const result = this.safeEvaluate(processedExpression);
-      const boolResult = Boolean(result);
-
-      return {
-        branch: boolResult ? 'true' : 'false',
-        value: boolResult,
-        expression,
-        processedExpression
-      };
-    } catch (error) {
+    const { value, error } = evaluateBooleanExpression(expression, state);
+    if (error && error !== 'empty-expression') {
       this.logger.error('Failed to evaluate expression in node', {
         component: 'DecisionNodeExecutor',
         nodeId,
         expression,
         error
       });
-
-      // On error, default to false branch
-      return {
-        branch: 'false',
-        value: false,
-        error: error.message
-      };
-    }
-  }
-
-  /**
-   * Process variable references in an expression.
-   *
-   * @param {string} expression - Expression with variable references
-   * @param {Object} state - Workflow state
-   * @returns {string} Expression with variables replaced by values
-   * @private
-   */
-  processExpressionVariables(expression, state) {
-    // Pattern to match variable references like $.data.field or $.nodeOutputs.node.field
-    const variablePattern = /\$\.[\w.[\]]+/g;
-
-    return expression.replace(variablePattern, match => {
-      const value = this.resolveVariable(match, state);
-
-      if (value === undefined || value === null) {
-        return 'null';
-      }
-
-      if (typeof value === 'string') {
-        // Escape quotes and wrap in quotes
-        return JSON.stringify(value);
-      }
-
-      if (typeof value === 'object') {
-        return JSON.stringify(value);
-      }
-
-      return String(value);
-    });
-  }
-
-  /**
-   * Safely evaluate a processed expression.
-   *
-   * Only allows safe operations - no function calls, assignments, etc.
-   * Uses Function constructor intentionally for safe expression evaluation
-   * after strict input sanitization.
-   *
-   * SECURITY NOTE: This uses Function constructor which is intentional for
-   * expression evaluation. The input is sanitized to prevent code injection:
-   * - Dangerous patterns are blocked (function, eval, require, etc.)
-   * - No semicolons or braces allowed
-   * - Only comparison and logical operators permitted
-   *
-   * @param {string} expression - Processed expression with resolved values
-   * @returns {*} Evaluation result
-   * @private
-   */
-  safeEvaluate(expression) {
-    // Check for dangerous patterns - this is critical for security
-    const dangerousPatterns = [
-      /\bfunction\b/,
-      /\bnew\b/,
-      /\beval\b/,
-      /\bimport\b/,
-      /\brequire\b/,
-      /\bwindow\b/,
-      /\bglobal\b/,
-      /\bprocess\b/,
-      /\b__proto__\b/,
-      /\bconstructor\b/,
-      /[;{}]/
-    ];
-
-    for (const pattern of dangerousPatterns) {
-      if (pattern.test(expression)) {
-        throw new Error(`Unsafe expression pattern detected: ${pattern}`);
-      }
+      return { branch: 'false', value: false, error, expression };
     }
 
-    // Handle special functions
-    let processedExpr = expression;
-
-    // exists() - check if value is not null/undefined
-    processedExpr = processedExpr.replace(/exists\s*\(\s*([^)]+)\s*\)/g, (_, val) => {
-      return `(${val} !== null && ${val} !== undefined)`;
-    });
-
-    // empty() - check if value is empty (null, undefined, empty string, empty array)
-    processedExpr = processedExpr.replace(/empty\s*\(\s*([^)]+)\s*\)/g, (_, val) => {
-      return `(${val} === null || ${val} === undefined || ${val} === '' || (Array.isArray(${val}) && ${val}.length === 0))`;
-    });
-
-    // length() - get array or string length
-    processedExpr = processedExpr.replace(/length\s*\(\s*([^)]+)\s*\)/g, (_, val) => {
-      return `((${val} && ${val}.length) || 0)`;
-    });
-
-    // Use Function constructor for safe evaluation in strict mode
-    // This creates an isolated scope - safer than eval()
-
-    const evaluator = new Function(`"use strict"; return (${processedExpr});`);
-    return evaluator();
+    return {
+      branch: value ? 'true' : 'false',
+      value,
+      expression
+    };
   }
 
   /**

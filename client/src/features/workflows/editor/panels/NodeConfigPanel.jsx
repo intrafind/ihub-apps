@@ -1,0 +1,360 @@
+import { useState, useEffect } from 'react';
+import { useTranslation } from 'react-i18next';
+import { nodeFormRegistry } from './forms/index';
+import FormField from './forms/FormField';
+import VariablesPanel from './VariablesPanel';
+import LocalizedField from './forms/LocalizedField';
+import { NODE_TYPE_COLORS, NODE_TYPE_META } from '../workflowEditorUtils';
+import { NodeTypeIcon } from '../nodes/nodeIcons';
+
+/**
+ * Editor for a node's progress note — the one-line message the step announces
+ * in chat while it runs. Any step can carry one, which saves adding a separate
+ * announcement step before it (see server/services/workflow/nodeProgress.js).
+ *
+ * The standalone `progress` node type stores its text as a plain string, so a
+ * string value here is legacy config the engine ignores; that case is sent to
+ * the JSON tab rather than silently rewritten into an object.
+ *
+ * @param {object} props
+ * @param {object} props.config - The node's current config object
+ * @param {function} props.onChange - Callback receiving the updated config
+ * @param {function} props.t - Translation function
+ */
+function ProgressNoteField({ config, onChange, t }) {
+  const progress = config.progress;
+
+  if (typeof progress === 'string') {
+    return (
+      <p className="text-xs text-amber-600 dark:text-amber-400">
+        {t(
+          'workflows.editor.progressNoteLegacy',
+          'This step has a plain-text progress value. Edit it via the JSON tab.'
+        )}
+      </p>
+    );
+  }
+
+  const hasText = message =>
+    typeof message === 'string'
+      ? message.trim() !== ''
+      : !!message && Object.values(message).some(v => typeof v === 'string' && v.trim() !== '');
+
+  const update = patch => {
+    const next = { ...(progress || {}), ...patch };
+    Object.keys(next).forEach(k => {
+      if (next[k] === '' || next[k] === undefined) delete next[k];
+    });
+    const nextConfig = { ...config };
+    // Keep the note while any language still has text; drop it once none does.
+    if (hasText(next.message)) nextConfig.progress = next;
+    else delete nextConfig.progress;
+    onChange(nextConfig);
+  };
+
+  return (
+    <div className="space-y-2">
+      {/* Localized, like every other author-written string: a note reading
+          "Lade Dokument 1/12" must not reach an English reader. */}
+      <LocalizedField
+        label={t('workflows.editor.progressNote', 'Progress note')}
+        value={progress?.message}
+        onChange={v => update({ message: v })}
+        placeholder="e.g. 📄 Reading {{_loopItem.title}}…"
+        rows={2}
+      />
+      <p className="text-xs text-gray-500 dark:text-gray-400 -mt-1">
+        {t(
+          'workflows.editor.progressNoteHelp',
+          'Optional. Shown in chat just before this step runs, so you do not need a separate announcement step.'
+        )}
+      </p>
+      {hasText(progress?.message) && (
+        <FormField
+          label={t('workflows.editor.progressNoteWhen', 'Only show when')}
+          value={progress?.when}
+          onChange={v => update({ when: v })}
+          placeholder="$.data._currentDoc.truncated === true"
+          helpText={t(
+            'workflows.editor.progressNoteWhenHelp',
+            'Optional condition. Leave empty to always show the note.'
+          )}
+        />
+      )}
+    </div>
+  );
+}
+
+/**
+ * Side panel for editing the selected workflow node's configuration.
+ * Provides both a structured form view (via nodeFormRegistry) and a raw JSON editor,
+ * switchable via tabs. Includes node deletion for non-start/end nodes.
+ *
+ * @param {object} props
+ * @param {object} props.selectedNode - The currently selected React Flow node
+ * @param {Array<{value: string, label: string}>} [props.variables] - Workflow variables visible to this node
+ * @param {function} props.onUpdateNode - Callback to update node data: (nodeId, { nodeName, nodeConfig }) => void
+ * @param {function} props.onClose - Callback to close the panel
+ * @param {function} props.onDeleteNode - Callback to delete a node: (nodeId) => void
+ */
+export function NodeConfigPanel({ selectedNode, variables, onUpdateNode, onClose, onDeleteNode }) {
+  const { t } = useTranslation();
+  const [name, setName] = useState('');
+  const [config, setConfig] = useState({});
+  const [configText, setConfigText] = useState('');
+  const [activeTab, setActiveTab] = useState('form');
+  const [parseError, setParseError] = useState(null);
+
+  useEffect(() => {
+    if (selectedNode) {
+      setName(selectedNode.data.nodeName || '');
+      const nodeConfig = selectedNode.data.nodeConfig || {};
+      setConfig(nodeConfig);
+      setConfigText(JSON.stringify(nodeConfig, null, 2));
+      setActiveTab('form');
+      setParseError(null);
+    }
+  }, [selectedNode?.id]);
+
+  if (!selectedNode) return null;
+
+  const nodeType = selectedNode.data.nodeType;
+  const FormComponent = nodeFormRegistry[nodeType];
+
+  /**
+   * Handles switching between form and JSON tabs.
+   * Syncs data between the two representations on switch.
+   * @param {'form' | 'json'} tab - The tab to switch to
+   */
+  const handleTabSwitch = tab => {
+    if (tab === activeTab) return;
+    if (tab === 'json') {
+      setConfigText(JSON.stringify(config, null, 2));
+    } else if (activeTab === 'json') {
+      // Only the JSON tab holds edits that are not yet in `config`. Parsing on
+      // every arrival at the form would overwrite form edits with the stale
+      // text last serialized for the JSON tab.
+      try {
+        const parsed = JSON.parse(configText);
+        setConfig(parsed);
+        setParseError(null);
+      } catch (e) {
+        setParseError(e.message);
+        return;
+      }
+    }
+    setActiveTab(tab);
+  };
+
+  const handleConfigChange = newConfig => {
+    setConfig(newConfig);
+  };
+
+  /** Validates and applies changes to the node */
+  const handleApply = () => {
+    let finalConfig = config;
+    if (activeTab === 'json') {
+      try {
+        finalConfig = JSON.parse(configText);
+        setParseError(null);
+        setConfig(finalConfig);
+      } catch (e) {
+        setParseError(e.message);
+        return;
+      }
+    }
+    onUpdateNode(selectedNode.id, {
+      nodeName: name,
+      nodeConfig: finalConfig
+    });
+  };
+
+  const handleDelete = () => {
+    if (
+      onDeleteNode &&
+      window.confirm(t('workflows.editor.confirmDeleteNode', 'Delete this node?'))
+    ) {
+      onDeleteNode(selectedNode.id);
+    }
+  };
+
+  return (
+    <div className="w-80 border-l border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800 flex flex-col h-full min-h-0">
+      <div className="shrink-0 px-4 pt-4 pb-3 border-b border-gray-200 dark:border-gray-700 flex items-center justify-between">
+        <div className="flex items-center gap-2 min-w-0">
+          <span
+            className="w-5 h-5 rounded-sm flex items-center justify-center text-white shrink-0"
+            style={{ backgroundColor: NODE_TYPE_COLORS[nodeType] || '#6B7280' }}
+            aria-hidden="true"
+          >
+            <NodeTypeIcon type={nodeType} className="w-3 h-3" />
+          </span>
+          <span className="text-sm font-semibold text-gray-900 dark:text-gray-100 truncate">
+            {NODE_TYPE_META[nodeType]?.label || nodeType}
+          </span>
+        </div>
+        <div className="flex items-center gap-1 shrink-0">
+          {nodeType !== 'start' && nodeType !== 'end' && onDeleteNode && (
+            <button
+              onClick={handleDelete}
+              className="text-red-400 hover:text-red-600 p-1"
+              aria-label={t('workflows.editor.deleteNode', 'Delete node')}
+              title={t('workflows.editor.deleteNode', 'Delete node')}
+            >
+              <svg
+                xmlns="http://www.w3.org/2000/svg"
+                className="w-4 h-4"
+                viewBox="0 0 20 20"
+                fill="currentColor"
+                aria-hidden="true"
+              >
+                <path
+                  fillRule="evenodd"
+                  d="M9 2a1 1 0 00-.894.553L7.382 4H4a1 1 0 000 2v10a2 2 0 002 2h8a2 2 0 002-2V6a1 1 0 100-2h-3.382l-.724-1.447A1 1 0 0011 2H9zM7 8a1 1 0 012 0v6a1 1 0 11-2 0V8zm5-1a1 1 0 00-1 1v6a1 1 0 102 0V8a1 1 0 00-1-1z"
+                  clipRule="evenodd"
+                />
+              </svg>
+            </button>
+          )}
+          <button
+            onClick={onClose}
+            className="text-gray-400 hover:text-gray-600 dark:hover:text-gray-300 p-1"
+            aria-label={t('common.close', 'Close')}
+          >
+            &#x2715;
+          </button>
+        </div>
+      </div>
+
+      <div className="flex-1 overflow-y-auto px-4 py-4 space-y-4 min-h-0">
+        {NODE_TYPE_META[nodeType]?.description && (
+          <p className="text-xs text-gray-500 dark:text-gray-400">
+            {NODE_TYPE_META[nodeType].description}
+          </p>
+        )}
+        <div>
+          <label className="block text-xs font-medium text-gray-600 dark:text-gray-400 mb-1">
+            {t('workflows.editor.name', 'Name')}
+          </label>
+          <input
+            type="text"
+            value={name}
+            onChange={e => setName(e.target.value)}
+            className="w-full text-sm border border-gray-300 dark:border-gray-600 rounded-sm px-2 py-1.5 bg-white dark:bg-gray-900 text-gray-900 dark:text-gray-100"
+            placeholder={t('workflows.editor.name', 'Name')}
+          />
+        </div>
+
+        <div className="flex border-b border-gray-200 dark:border-gray-700">
+          <button
+            onClick={() => handleTabSwitch('form')}
+            className={`px-3 py-1.5 text-xs font-medium border-b-2 transition-colors ${
+              activeTab === 'form'
+                ? 'border-blue-500 text-blue-600 dark:text-blue-400'
+                : 'border-transparent text-gray-500 hover:text-gray-700 dark:text-gray-400'
+            }`}
+          >
+            {t('workflows.editor.formTab', 'Form')}
+          </button>
+          <button
+            onClick={() => handleTabSwitch('json')}
+            className={`px-3 py-1.5 text-xs font-medium border-b-2 transition-colors ${
+              activeTab === 'json'
+                ? 'border-blue-500 text-blue-600 dark:text-blue-400'
+                : 'border-transparent text-gray-500 hover:text-gray-700 dark:text-gray-400'
+            }`}
+          >
+            {t('workflows.editor.jsonTab', 'JSON')}
+          </button>
+          <button
+            onClick={() => handleTabSwitch('variables')}
+            className={`px-3 py-1.5 text-xs font-medium border-b-2 transition-colors ${
+              activeTab === 'variables'
+                ? 'border-blue-500 text-blue-600 dark:text-blue-400'
+                : 'border-transparent text-gray-500 hover:text-gray-700 dark:text-gray-400'
+            }`}
+          >
+            {t('workflows.editor.variablesTab', 'Variables')}
+          </button>
+        </div>
+
+        {activeTab === 'variables' ? (
+          <VariablesPanel variables={variables} />
+        ) : activeTab === 'form' ? (
+          <>
+            {FormComponent ? (
+              // Keyed on the node so every form remounts when the selection
+              // changes: a form holding local text state would otherwise show
+              // the previous node's value and write it onto this one.
+              <FormComponent
+                key={selectedNode.id}
+                config={config}
+                onChange={handleConfigChange}
+                variables={variables}
+              />
+            ) : (
+              <div className="text-xs text-gray-500 dark:text-gray-400 italic">
+                {t(
+                  'workflows.editor.noFormAvailable',
+                  'No form available for this node type. Use the JSON tab.'
+                )}
+              </div>
+            )}
+            {nodeType !== 'start' && nodeType !== 'end' && nodeType !== 'progress' && (
+              <div className="pt-3 mt-3 border-t border-gray-200 dark:border-gray-700">
+                <ProgressNoteField config={config} onChange={handleConfigChange} t={t} />
+              </div>
+            )}
+            {nodeType !== 'start' && nodeType !== 'end' && (
+              <label className="flex items-center gap-2 cursor-pointer pt-3 mt-3 border-t border-gray-200 dark:border-gray-700">
+                <input
+                  type="checkbox"
+                  checked={config.chatVisible !== false}
+                  onChange={e =>
+                    handleConfigChange(
+                      e.target.checked
+                        ? (() => {
+                            const next = { ...config };
+                            delete next.chatVisible;
+                            return next;
+                          })()
+                        : { ...config, chatVisible: false }
+                    )
+                  }
+                  className="rounded-sm border-gray-300 dark:border-gray-600"
+                />
+                <span className="text-sm text-gray-700 dark:text-gray-300">
+                  {t('workflows.editor.chatVisible', 'Show progress in chat')}
+                </span>
+              </label>
+            )}
+          </>
+        ) : (
+          <div>
+            <textarea
+              value={configText}
+              onChange={e => {
+                setConfigText(e.target.value);
+                setParseError(null);
+              }}
+              rows={20}
+              className="w-full text-xs font-mono border border-gray-300 dark:border-gray-600 rounded-sm px-2 py-1.5 bg-white dark:bg-gray-900 text-gray-900 dark:text-gray-100"
+            />
+            {parseError && <p className="text-xs text-red-500 mt-1">{parseError}</p>}
+          </div>
+        )}
+      </div>
+
+      <div className="shrink-0 px-4 py-3 border-t border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800">
+        <button
+          onClick={handleApply}
+          className="w-full bg-blue-600 text-white text-sm py-2 rounded-sm hover:bg-blue-700 transition-colors"
+        >
+          {t('workflows.editor.applyChanges', 'Apply Changes')}
+        </button>
+      </div>
+    </div>
+  );
+}
+
+export default NodeConfigPanel;

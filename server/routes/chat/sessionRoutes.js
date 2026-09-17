@@ -1,9 +1,29 @@
 import configCache from '../../configCache.js';
-import { createCompletionRequest } from '../../adapters/index.js';
-import { getErrorDetails, logInteraction, trackSession } from '../../utils.js';
-import { clients, activeRequests } from '../../sse.js';
-import { actionTracker } from '../../actionTracker.js';
-import { throttledFetch } from '../../requestThrottler.js';
+import { sendLLMError } from '../../services/loop/llmHttpErrors.js';
+import { logInteraction, trackSession } from '../../utils.js';
+import llmClient, {
+  usageToOpenAI,
+  isLLMError,
+  LLM_ERROR_CODES
+} from '../../services/loop/LLMClient.js';
+import {
+  clients,
+  abortChatRequest,
+  abortChatRequestOnDisconnect,
+  clearChatDurable,
+  closeChatClient,
+  hasActiveChatRequest,
+  hasChatClient,
+  isChatDurable,
+  markChatDurable
+} from '../../sse.js';
+import { RunStreamEmitter, currentSeq, getStreamRun } from '../../services/loop/RunStream.js';
+import runLog, { newRunId } from '../../services/loop/RunLog.js';
+import { resolveActorId, resolvePrincipal } from '../../services/loop/runIdentity.js';
+import { authorizeInteraction } from '../../services/loop/runAccess.js';
+import interactionService from '../../services/loop/InteractionService.js';
+import { SSE_V2_EVENTS, RUN_LOG_EVENTS } from '../../../shared/runEvents.js';
+import { createSseChannel } from '../../utils/sseChannel.js';
 import {
   authRequired,
   chatAuthRequired,
@@ -11,10 +31,22 @@ import {
 } from '../../middleware/authRequired.js';
 
 import ChatService from '../../services/chat/ChatService.js';
+import {
+  materializeAssistantTurn,
+  materializeUserTurn
+} from '../../services/chat/chatMaterializer.js';
+import { authorizeChat } from '../../services/chat/chatAccess.js';
+import {
+  getChatRepository,
+  isPersistableChatId,
+  normalizeChatSettings
+} from '../../services/chat/ChatRepository.js';
+import { isChatPersistenceActive } from '../../services/chat/chatPersistence.js';
 import validate from '../../validators/validate.js';
 import { chatTestSchema, chatPostSchema, chatConnectSchema } from '../../validators/index.js';
 import { buildServerPath } from '../../utils/basePath.js';
 import logger from '../../utils/logger.js';
+import { findByIdCaseInsensitive } from '../../utils/resourceLookup.js';
 import {
   sendNotFound,
   sendFailedOperationError,
@@ -22,11 +54,147 @@ import {
   sendBadRequest,
   sendErrorResponse
 } from '../../utils/responseHelpers.js';
+import { drainPendingFinish } from '../../services/workflow/chatBridge.js';
+import { cancelChatWorkflow, replayChatWorkflowProgress } from '../../tools/workflowRunner.js';
 
-export default function registerSessionRoutes(
-  app,
-  { verifyApiKey, getLocalizedError, DEFAULT_TIMEOUT }
-) {
+/**
+ * Report a failure that happened before (or instead of) a model turn on the
+ * chat stream: a short-lived run that starts, errors and ends, so the client
+ * reducer can attach the message to the pending assistant bubble.
+ */
+function emitFailedRun(chatId, { kind = 'chat', messageId, code, message, refs = {} }) {
+  const emitter = new RunStreamEmitter({ streamId: chatId, runId: newRunId(kind) });
+  emitter.emit(SSE_V2_EVENTS.RUN_STARTED, {
+    kind,
+    refs: { chatId, ...(messageId ? { messageId } : {}), ...refs }
+  });
+  emitter.emit(SSE_V2_EVENTS.STREAM_ERROR, {
+    code: String(code || 'ERROR'),
+    message: String(message)
+  });
+  emitter.emit(SSE_V2_EVENTS.RUN_ENDED, {
+    status: 'error',
+    finishReason: 'error',
+    error: { ...(code ? { code: String(code) } : {}), message: String(message) }
+  });
+}
+
+/**
+ * Chat-shaped view of a persisted transcript: role and content only.
+ *
+ * Everything else on a stored message — ids, usage, the error of a failed turn,
+ * attachment descriptors — is bookkeeping for the history UI and has no place
+ * in a model prompt. Contentless turns are dropped with it: an aborted or
+ * failed turn is stored with an empty answer, and several providers reject a
+ * blank message outright.
+ *
+ * @param {Array<Object>} stored - Messages as `ChatRepository` returns them.
+ * @returns {Array<{role: string, content: string}>}
+ */
+function historyForPrompt(stored) {
+  return stored
+    .filter(entry => entry?.role && typeof entry.content === 'string' && entry.content.trim())
+    .map(entry => ({ role: entry.role, content: entry.content }));
+}
+
+/**
+ * Upload descriptors carried by a chat message, for the materializer to
+ * normalize. The base64 payloads stay in the request: what a stored message
+ * keeps is the fact that a file was attached, not the file.
+ *
+ * Each of the three fields is a single object for one upload and an array for
+ * several — the shape the chat client has always sent and `RequestBuilder`
+ * already handles — so they are flattened here. Without that an array is
+ * `typeof 'object'` and survives as one opaque descriptor, turning three named
+ * PDFs into a single nameless `{ type: 'file' }`.
+ *
+ * @param {Object} message - The new user message from the request.
+ * @returns {Array<Object>}
+ */
+export function messageAttachments(message) {
+  return [message?.fileData, message?.imageData, message?.audioData]
+    .flatMap(value => (Array.isArray(value) ? value : value ? [value] : []))
+    .filter(entry => entry && typeof entry === 'object');
+}
+
+/**
+ * The outcome a workflow run resolved with, in the shape the materializer's
+ * `summary` describes. A cancelled workflow is an abort, anything that is not
+ * a completion is a failure, and the answer text is the one the run streamed.
+ *
+ * @param {Object} result - What `workflowRunner` resolved with.
+ * @returns {Object}
+ */
+export function workflowSummary(result) {
+  const content = typeof result?.outputText === 'string' ? result.outputText : '';
+  if (result?.status === 'completed') return { status: 'success', content, finishReason: 'stop' };
+  if (result?.status === 'cancelled') {
+    return { status: 'aborted', content, finishReason: 'cancelled' };
+  }
+  return {
+    status: 'error',
+    content,
+    finishReason: 'error',
+    errorInfo: {
+      code: 'WORKFLOW_FAILED',
+      message: String(result?.error || 'Workflow execution failed')
+    }
+  };
+}
+
+/**
+ * Write the human half of an @mention workflow turn, or nothing when the chat
+ * is not persisted.
+ *
+ * @param {Object} params
+ * @param {Object|null} params.persistence - Durable-chat context, or null.
+ * @param {string} params.chatId - Chat id.
+ * @param {string} params.appId - App the chat belongs to.
+ * @param {string} [params.modelId] - Model the chat last used.
+ * @param {string} params.runId - The workflow's run id.
+ * @returns {Promise<void>}
+ */
+async function materializeWorkflowUserTurn({ persistence, chatId, appId, modelId, runId }) {
+  if (!persistence) return;
+  await materializeUserTurn({
+    settings: persistence.settings,
+    repository: persistence.repository,
+    chatId,
+    ownerId: persistence.ownerId,
+    identityMode: persistence.identityMode,
+    appId,
+    modelId,
+    runId,
+    content: persistence.content,
+    clientMessageId: persistence.clientMessageId,
+    attachments: persistence.attachments,
+    replaceFromMessageId: persistence.replaceFromMessageId
+  });
+}
+
+/**
+ * Write the assistant half of an @mention workflow turn and release the chat,
+ * or nothing when the chat is not persisted.
+ *
+ * @param {Object} params
+ * @param {Object|null} params.persistence - Durable-chat context, or null.
+ * @param {string} params.chatId - Chat id.
+ * @param {string} params.runId - The workflow's run id.
+ * @param {Object} params.summary - Turn outcome; see {@link workflowSummary}.
+ * @returns {Promise<void>}
+ */
+async function materializeWorkflowAssistantTurn({ persistence, chatId, runId, summary }) {
+  if (!persistence) return;
+  await materializeAssistantTurn({
+    repository: persistence.repository,
+    chatId,
+    runId,
+    summary,
+    clientConnected: hasChatClient(chatId)
+  });
+}
+
+export default function registerSessionRoutes(app, { getLocalizedError, DEFAULT_TIMEOUT }) {
   const chatService = new ChatService();
 
   /**
@@ -68,7 +236,14 @@ export default function registerSessionRoutes(
    *       properties:
    *         messages:
    *           type: array
-   *           description: Array of chat messages forming the conversation history
+   *           description: >-
+   *             The conversation to send. When the installation stores chats
+   *             server-side (the `chatPersistence` feature, for an
+   *             authenticated caller on a turn that is not `ephemeral`) the
+   *             server owns the history and this must hold exactly the new
+   *             message; more than one is refused with
+   *             `CLIENT_HISTORY_NOT_ALLOWED`. Otherwise it is the whole
+   *             conversation history, as before.
    *           items:
    *             $ref: '#/components/schemas/ChatMessage'
    *         modelId:
@@ -92,18 +267,16 @@ export default function registerSessionRoutes(
    *           type: string
    *           description: BCP 47 language code for the response
    *           example: "en"
-   *         useMaxTokens:
-   *           type: boolean
-   *           description: Whether to use the model's maximum token limit
    *         bypassAppPrompts:
    *           type: boolean
    *           description: Skip the app system prompt (advanced usage)
    *         thinkingEnabled:
    *           type: boolean
    *           description: Enable extended thinking for supported models
-   *         thinkingBudget:
-   *           type: number
-   *           description: Token budget for extended thinking
+   *         thinkingLevel:
+   *           type: string
+   *           enum: [minimal, low, medium, high]
+   *           description: Reasoning effort for extended thinking
    *         thinkingThoughts:
    *           type: boolean
    *           description: Include thinking steps in the response
@@ -128,6 +301,26 @@ export default function registerSessionRoutes(
    *           items:
    *             type: string
    *           description: IDs of documents to include as context
+   *         replaceFromMessageId:
+   *           type: string
+   *           description: |
+   *             Persisted chats only. Message id to fork the history from
+   *             (inclusive) before the new message is appended — an edit or a
+   *             regenerate. Matches either the stored id or the client exchange
+   *             id the message was stored under (clientMessageId). Unknown ids
+   *             are rejected with 400 UNKNOWN_MESSAGE.
+   *         sendChatHistory:
+   *           type: boolean
+   *           description: |
+   *             Persisted chats only. False prompts the model with just this
+   *             message instead of the stored transcript — the viewer's
+   *             "Include chat history in requests" setting. Advisory: it can
+   *             only remove history, never add it.
+   *         ephemeral:
+   *           type: boolean
+   *           description: |
+   *             Do not persist this turn. Advisory: it can only turn persistence
+   *             off, never on.
    *
    *     ChatStreamingResponse:
    *       type: object
@@ -187,15 +380,30 @@ export default function registerSessionRoutes(
    *               properties:
    *                 success:
    *                   type: boolean
-   *                 response:
+   *                 model:
+   *                   type: string
+   *                   description: iHub model id that answered
+   *                 content:
    *                   type: string
    *                   description: Model's response to the test message
+   *                 finishReason:
+   *                   type: string
+   *                   nullable: true
+   *                 usage:
+   *                   type: object
+   *                   description: OpenAI-style token usage (prompt_tokens, completion_tokens, total_tokens)
    *       404:
    *         description: Model not found
    *       401:
-   *         description: Authentication or authorization required
+   *         description: Authentication or authorization required, or the provider rejected the server's credentials
+   *       429:
+   *         description: Provider rate limit (Retry-After set when known)
    *       500:
-   *         description: Internal server error
+   *         description: Internal server error or no API key configured for the model
+   *       502:
+   *         description: Upstream provider error
+   *       504:
+   *         description: Model request timed out
    */
   app.get(
     buildServerPath('/api/models/:modelId/chat/test'),
@@ -217,70 +425,42 @@ export default function registerSessionRoutes(
             new Error('models is null')
           );
         }
-        const model = models.find(m => m.id === modelId);
+        const model = findByIdCaseInsensitive(models, modelId);
         if (!model) {
           return sendNotFound(res, 'Model');
         }
         const defaultLang = configCache.getPlatform()?.defaultLanguage || 'en';
-        const apiKey = await verifyApiKey(
-          model,
-          res,
-          null,
-          req.headers['accept-language']?.split(',')[0] || defaultLang
-        );
-        if (!apiKey) {
-          return sendInternalError(
-            res,
-            new Error(`API key not found for model: ${model.id} (${model.provider})`),
-            'test chat completion'
-          );
-        }
-        const request = createCompletionRequest(model, messages, apiKey, {
-          stream: false,
-          tools: []
-        });
-        let timeoutId;
-        const timeoutPromise = new Promise((_, reject) => {
-          timeoutId = setTimeout(
-            () => reject(new Error(`Request timed out after ${DEFAULT_TIMEOUT / 1000} seconds`)),
-            DEFAULT_TIMEOUT
-          );
-        });
+        const language = req.headers['accept-language']?.split(',')[0] || defaultLang;
         try {
-          const responsePromise = throttledFetch(model.id, request.url, {
-            method: 'POST',
-            headers: request.headers,
-            body: JSON.stringify(request.body)
+          // API key resolution, throttling and provider parsing live in LLMClient;
+          // `retries: 0` keeps this interactive diagnostic from stalling on Retry-After.
+          const result = await llmClient.complete({
+            model,
+            messages,
+            timeoutMs: DEFAULT_TIMEOUT,
+            retries: 0,
+            language,
+            telemetry: { kind: 'diagnostic', purpose: 'model-chat-test', user: req.user }
           });
-          const llmResponse = await Promise.race([responsePromise, timeoutPromise]);
-          clearTimeout(timeoutId);
-          if (!llmResponse.ok) {
-            const errorBody = await llmResponse.text();
-            logger.error('LLM API Error', {
-              component: 'sessionRoutes',
-              status: llmResponse.status,
-              errorBody
-            });
-            return res.status(llmResponse.status).json({
-              error: `LLM API request failed with status ${llmResponse.status}`,
-              details: errorBody
-            });
+          return res.json({
+            success: true,
+            model: model.id,
+            content: result.content,
+            finishReason: result.finishReason,
+            usage: usageToOpenAI(result.usage)
+          });
+        } catch (llmError) {
+          if (!isLLMError(llmError)) {
+            throw llmError;
           }
-          const responseData = await llmResponse.json();
-          return res.json(responseData);
-        } catch (fetchError) {
-          clearTimeout(timeoutId);
-          if (fetchError.message.includes('timed out')) {
+          if (llmError.code === LLM_ERROR_CODES.TIMEOUT) {
             return sendErrorResponse(
               res,
               504,
               `Request to ${model.provider} API timed out after ${DEFAULT_TIMEOUT / 1000} seconds`
             );
           }
-          const errorDetails = getErrorDetails(fetchError, model);
-          return sendErrorResponse(res, 500, errorDetails.message, {
-            details: fetchError.message
-          });
+          return sendLLMError(res, llmError, { context: 'test chat completion' });
         }
       } catch (error) {
         logger.error('Error in test chat completion', { component: 'sessionRoutes', error });
@@ -325,12 +505,16 @@ export default function registerSessionRoutes(
    *             schema:
    *               type: string
    *               description: |
-   *                 Newline-delimited Server-Sent Events. Each event is a JSON object.
-   *                 Common event types include `token`, `done`, `error`, and `action`.
+   *                 SSE v2 (see docs/sse-v2.md). Every frame is `event: <type>` with a
+   *                 JSON envelope `{ v: 2, seq, runId, ts, type, data }`. Each message turn is
+   *                 one run: `run/started`, `step/delta`, `tool/started`, `tool/completed`,
+   *                 `interaction/raised`, `run/paused`, `stream/error`, `run/ended`.
    *             example: |
-   *               data: {"type":"token","content":"Hello"}
+   *               event: step/delta
+   *               data: {"v":2,"seq":3,"runId":"chat-…","ts":"…","type":"step/delta","data":{"step":1,"kind":"text","content":"Hello"}}
    *
-   *               data: {"type":"done"}
+   *               event: run/ended
+   *               data: {"v":2,"seq":9,"runId":"chat-…","ts":"…","type":"run/ended","data":{"status":"completed","finishReason":"stop"}}
    *       401:
    *         description: Authentication required
    *       500:
@@ -341,121 +525,221 @@ export default function registerSessionRoutes(
     chatAuthRequired,
     validate(chatConnectSchema),
     async (req, res) => {
+      // Destructured outside the try so the catch below can still reference
+      // chatId when channel setup throws.
+      const { appId, chatId } = req.params;
       try {
-        const { appId, chatId } = req.params;
-        res.setHeader('Content-Type', 'text/event-stream');
-        res.setHeader('Cache-Control', 'no-cache');
-        res.setHeader('Connection', 'keep-alive');
-        clients.set(chatId, { response: res, lastActivity: new Date(), appId });
-        actionTracker.trackConnected(chatId);
+        // `chatAuthRequired` authorizes the app, never the chat id. A persisted
+        // chat is a durable, guessable resource, so subscribing to its stream
+        // has to be an ownership decision as well as an app one.
+        const access = await authorizeChat(chatId, req.user, { intent: 'read' });
+        if (!access.ok) return sendNotFound(res, 'Chat session');
 
-        req.on('close', () => {
-          if (clients.has(chatId)) {
-            if (activeRequests.has(chatId)) {
-              try {
-                const controller = activeRequests.get(chatId);
-                controller.abort();
-                activeRequests.delete(chatId);
-                logger.info('Aborted request', { component: 'sessionRoutes', chatId });
-              } catch (error) {
-                logger.error('Error aborting request', {
-                  component: 'sessionRoutes',
-                  chatId,
-                  error: error.message
-                });
-              }
-            }
-            clients.delete(chatId);
+        const channel = createSseChannel({
+          req,
+          res,
+          id: chatId,
+          map: clients,
+          component: 'sessionRoutes',
+          onClose: ({ isCurrent }) => {
+            if (!isCurrent) return;
+            // The LLM call feeding this stream may be running on another
+            // worker, so abort through the cluster-aware helper — otherwise a
+            // browser closing the tab would leave the generation running to
+            // completion, billing tokens nobody will read. A persisted turn is
+            // the exception: its answer is stored for the user to come back to,
+            // so the helper leaves that one running.
+            abortChatRequestOnDisconnect(chatId);
             logger.info('Client disconnected', { component: 'sessionRoutes', chatId });
           }
         });
+        // appId is carried on the entry for parity with the previous shape;
+        // nothing currently reads it back off the map, but keep it available.
+        channel.entry.appId = appId;
+        new RunStreamEmitter({ streamId: chatId }).emit(SSE_V2_EVENTS.STREAM_CONNECTED, {
+          runId: chatId,
+          lastSeq: currentSeq(chatId)
+        });
+
+        // --- Workflow disconnect resilience ---
+        // 1. If a workflow finished while the chat was disconnected, deliver
+        //    the result + final chunk + done now (final output backfill).
+        // 2. If a workflow is still running for this chatId, replay step
+        //    progress from persisted state so the chat catches up.
+        try {
+          const pending = drainPendingFinish(chatId);
+          if (pending) {
+            const backfill = new RunStreamEmitter({
+              streamId: chatId,
+              runId: pending.runId || newRunId('workflow')
+            });
+            backfill.emit(SSE_V2_EVENTS.RUN_STARTED, {
+              kind: 'workflow',
+              refs: { chatId, executionId: pending.executionId }
+            });
+            backfill.emit(SSE_V2_EVENTS.META, {
+              executionId: pending.executionId,
+              extra: {
+                workflow: {
+                  status: pending.status,
+                  workflowName: pending.workflowName,
+                  outputFormat: pending.outputFormat || 'markdown',
+                  ...(pending.errorMsg ? { error: String(pending.errorMsg) } : {})
+                }
+              }
+            });
+            if (!pending.passthrough && pending.outputText) {
+              backfill.emit(SSE_V2_EVENTS.STEP_DELTA, {
+                step: 0,
+                kind: 'text',
+                content: pending.outputText
+              });
+            }
+            const finishReason =
+              pending.status === 'cancelled'
+                ? 'cancelled'
+                : pending.status === 'failed'
+                  ? 'error'
+                  : 'stop';
+            backfill.emit(SSE_V2_EVENTS.RUN_ENDED, {
+              status:
+                pending.status === 'cancelled'
+                  ? 'aborted'
+                  : pending.status === 'failed'
+                    ? 'error'
+                    : 'completed',
+              finishReason,
+              ...(pending.errorMsg ? { error: { message: String(pending.errorMsg) } } : {})
+            });
+            logger.info('Delivered pending workflow finish on SSE reconnect', {
+              component: 'sessionRoutes',
+              chatId,
+              executionId: pending.executionId,
+              status: pending.status
+            });
+          } else {
+            // Resolves the owning worker itself when the workflow is running
+            // elsewhere in the cluster; the replayed steps come back over the
+            // SSE relay.
+            await replayChatWorkflowProgress(chatId);
+          }
+        } catch (replayError) {
+          logger.warn('Workflow reconnect replay/backfill failed', {
+            component: 'sessionRoutes',
+            chatId,
+            error: replayError.message
+          });
+        }
       } catch (error) {
         logger.error('Error establishing SSE connection', { component: 'sessionRoutes', error });
         if (!res.headersSent) {
           return sendInternalError(res, error, 'establish SSE connection');
         }
-        actionTracker.trackError(chatId, { message: 'Internal server error' });
+        emitFailedRun(chatId, { code: 'INTERNAL_ERROR', message: 'Internal server error' });
         res.end();
       }
     }
   );
 
-  // Extract common chat processing logic to reduce duplication
+  /**
+   * Settle the chat's pending clarifications for an incoming message: the
+   * message that carries `clarificationResponse` answers its interaction
+   * (channel `chat`); any other message cancels clarifications the user
+   * skipped past. Never blocks the turn.
+   */
+  async function settleChatClarifications({ chatId, user, lastMessage }) {
+    const response = lastMessage?.clarificationResponse;
+    const answeredId =
+      response && typeof response === 'object'
+        ? String(response.interactionId || response.questionId || '')
+        : '';
+    try {
+      const pending = await interactionService.listPending({ chatId, kind: 'question' });
+      for (const interaction of pending) {
+        // `chatAuthRequired` authorizes the app, not the chat: only the
+        // principal who owns the interaction's run may settle it (a chat id
+        // alone must not let someone answer another user's question).
+        if (!(await authorizeInteraction(interaction, user))) {
+          logger.warn('Chat clarification belongs to another principal; not settled', {
+            component: 'sessionRoutes',
+            chatId,
+            interactionId: interaction.id
+          });
+          continue;
+        }
+        if (interaction.id === answeredId) {
+          await interactionService.answer(
+            interaction.id,
+            response.skipped ? { skipped: true } : { value: response.value },
+            { user, channel: 'chat' }
+          );
+        } else {
+          await interactionService.cancel(interaction.id, 'superseded');
+        }
+      }
+    } catch (err) {
+      logger.warn('Chat clarification not settled', {
+        component: 'sessionRoutes',
+        chatId,
+        interactionId: answeredId || null,
+        error: err.message
+      });
+    }
+  }
+
+  /**
+   * Run one chat turn through the shared chat service. With an SSE client the
+   * turn streams over the chat channel and this resolves once it ended; without
+   * one the answer is written to the HTTP response.
+   *
+   * `persistence` is the durable-chat context the POST handler assembled, or
+   * null when this turn is not stored — the service treats null as "behave
+   * exactly as you did before chat persistence existed".
+   */
   async function processChatRequest({
     prep,
     buildLogData,
     messageId,
+    activatedSkill = null,
     streaming,
     res,
-    clientRes,
     chatId,
     DEFAULT_TIMEOUT,
     getLocalizedError,
     clientLanguage,
-    user
+    user,
+    persistence = null
   }) {
-    const {} = prep;
+    await logInteraction('chat_request', buildLogData(streaming));
 
-    // Log the request
-    const requestLog = buildLogData(streaming);
-    if (!streaming) {
-      requestLog.options.useMaxTokens = requestLog.options.useMaxTokens || false;
-    }
-    await logInteraction('chat_request', requestLog);
+    const outcome = await chatService.runTurn({
+      prep,
+      chatId,
+      messageId,
+      activatedSkill,
+      streaming,
+      buildLogData,
+      timeoutMs: DEFAULT_TIMEOUT,
+      getLocalizedError,
+      language: clientLanguage,
+      user,
+      persistence
+    });
+    if (streaming) return outcome;
 
-    // Handle requests with tools
-    if (prep.tools && prep.tools.length > 0) {
-      if (streaming) {
-        logger.info('Processing chat with tools', { component: 'sessionRoutes', chatId });
-        return await chatService.processChatWithTools({
-          prep,
-          clientRes,
-          chatId,
-          buildLogData,
-          DEFAULT_TIMEOUT,
-          getLocalizedError,
-          clientLanguage,
-          user
-        });
-      } else {
-        return await chatService.processChatWithTools({
-          prep,
-          res,
-          buildLogData,
-          DEFAULT_TIMEOUT,
-          getLocalizedError,
-          clientLanguage,
-          user
-        });
-      }
+    if (outcome.status === 'error') {
+      if (outcome.error) return sendLLMError(res, outcome.error, { context: 'chat' });
+      return res
+        .status(502)
+        .json({ error: outcome.errorInfo?.message, code: outcome.errorInfo?.code || 'ERROR' });
     }
-
-    // Handle standard requests without tools
-    if (streaming) {
-      return await chatService.processStreamingChat({
-        request: prep.request,
-        chatId,
-        clientRes,
-        buildLogData,
-        model: prep.model,
-        llmMessages: prep.llmMessages,
-        DEFAULT_TIMEOUT,
-        getLocalizedError,
-        clientLanguage
-      });
-    } else {
-      return await chatService.processNonStreamingChat({
-        request: prep.request,
-        res,
-        buildLogData,
-        messageId,
-        model: prep.model,
-        llmMessages: prep.llmMessages,
-        DEFAULT_TIMEOUT,
-        getLocalizedError,
-        clientLanguage
-      });
-    }
+    return res.json({
+      messageId,
+      model: prep.model?.id,
+      content: outcome.content,
+      finishReason: outcome.finishReason,
+      usage: outcome.usage || null
+    });
   }
 
   /**
@@ -521,7 +805,11 @@ export default function registerSessionRoutes(
    *                   message: "Model not found"
    *                   code: "MODEL_NOT_FOUND"
    *       400:
-   *         description: Bad request (missing messages, invalid model, etc.)
+   *         description: >-
+   *           Bad request (missing messages, invalid model, etc.). Also
+   *           `CLIENT_HISTORY_NOT_ALLOWED` when the chat is stored
+   *           server-side and more than one message was posted — send only the
+   *           new message, or `ephemeral: true`.
    *         content:
    *           application/json:
    *             schema:
@@ -550,8 +838,12 @@ export default function registerSessionRoutes(
     chatAuthRequired,
     validate(chatPostSchema),
     async (req, res) => {
+      // Destructured outside the try, and the durable mark tracked next to it,
+      // so the finally below can release the chat even when the handler throws
+      // before it ever reaches the turn.
+      const { appId, chatId } = req.params;
+      let durableTurn = false;
       try {
-        const { appId, chatId } = req.params;
         const {
           messages,
           modelId,
@@ -559,18 +851,27 @@ export default function registerSessionRoutes(
           style,
           outputFormat,
           language,
-          useMaxTokens,
           bypassAppPrompts,
           thinkingEnabled,
-          thinkingBudget,
+          thinkingLevel,
           thinkingThoughts,
           enabledTools,
           websearchEnabled,
           imageAspectRatio,
           imageQuality,
           requestedSkill,
-          documentIds
+          documentIds,
+          replaceFromMessageId,
+          ephemeral,
+          sendChatHistory
         } = req.body;
+
+        // `chatAuthRequired` authorizes the app, never the chat id. Once chats
+        // are stored, anyone who guesses one could otherwise append a turn to
+        // — and, through the stream, read back — another user's chat.
+        const access = await authorizeChat(chatId, req.user, { intent: 'write' });
+        if (!access.ok) return sendNotFound(res, 'Chat session');
+
         const defaultLang = configCache.getPlatform()?.defaultLanguage || 'en';
         const clientLanguage =
           language || req.headers['accept-language']?.split(',')[0] || defaultLang;
@@ -586,6 +887,14 @@ export default function registerSessionRoutes(
           }
         }
         const userSessionId = req.headers['x-session-id'];
+        // A clarification (`ask_user`) is answered by the next message: settle the
+        // pending interaction (channel `chat`) before the turn runs; any other
+        // message supersedes clarifications the user chose not to answer.
+        await settleChatClarifications({
+          chatId,
+          user: req.user,
+          lastMessage: Array.isArray(messages) ? messages[messages.length - 1] : null
+        });
         let model;
         let llmMessages;
         function buildLogData(streaming, extra = {}) {
@@ -606,11 +915,119 @@ export default function registerSessionRoutes(
           const errorMessage = await getLocalizedError('messagesRequired', {}, clientLanguage);
           return sendBadRequest(res, errorMessage);
         }
+
+        // --- durable chats: the server owns the history ---
+        // Persistence moves the conversation's source of truth. A persisted
+        // chat posts exactly one message — the new one — and the server reads
+        // the rest back out of the store, so a client can no longer rewrite
+        // what it already said. Anonymous callers, ephemeral turns and
+        // installations with persistence off keep posting their whole array and
+        // take the same code path they always have; both modes are permanent.
+        const repository = getChatRepository();
+        const persistTurn =
+          isPersistableChatId(chatId) &&
+          isChatPersistenceActive({
+            features: configCache.getFeatures(),
+            platformConfig: configCache.getPlatform(),
+            user: req.user,
+            ephemeral
+          });
+        if (persistTurn && messages.length > 1) {
+          // The code alone tells an integrator nothing about what to do
+          // instead, and this is the one refusal they can hit by doing exactly
+          // what the documentation told them to do before the feature existed.
+          return sendBadRequest(res, 'CLIENT_HISTORY_NOT_ALLOWED', {
+            hint:
+              'This chat is stored server-side: post only the new message as a single-element ' +
+              'messages array, or send ephemeral: true to keep the turn out of the store and ' +
+              'post the whole conversation yourself.'
+          });
+        }
+
+        let conversation = messages;
+        let persistence = null;
+        const newMessage = messages[0];
+        if (persistTurn && newMessage) {
+          const stored = await repository.getMessages(chatId);
+          let history = stored.messages;
+          let forkStoredId = null;
+          if (replaceFromMessageId) {
+            // Either id the client can know this message by: the stored id it
+            // was given on hydrate, or — for a turn made in the session that
+            // is still open, which never learns the stored id — the exchange
+            // id it sent and the store filed as `clientMessageId`. Without the
+            // second, regenerating the answer you just got would carry no fork
+            // id at all and the retry would be appended to the untouched
+            // history, duplicating the exchange.
+            const forkAt = history.findIndex(
+              entry =>
+                entry.id === replaceFromMessageId || entry.clientMessageId === replaceFromMessageId
+            );
+            // Appending onto the untouched history instead would silently
+            // duplicate everything the edit meant to replace, so refuse.
+            if (forkAt === -1) return sendBadRequest(res, 'UNKNOWN_MESSAGE');
+            // Carry the *stored* id onward. The store matches on `id` alone,
+            // so forwarding the client's value forked the prompt here and not
+            // the transcript: a regenerate in a session that never hydrated
+            // sends its exchange id, which this lookup resolves and the store
+            // then rejects with UNKNOWN_MESSAGE. `materializeUserTurn` logs
+            // and returns null, the chat document has already been updated,
+            // and the answer lands at the end — so the stored history keeps
+            // the exchange the user replaced and, for an edit, never records
+            // the edited question at all. Permanent, and replayed to the model
+            // every turn after.
+            forkStoredId = history[forkAt].id;
+            history = history.slice(0, forkAt);
+          }
+          // An app that opted out of chat history stays a one-shot prompt:
+          // storing the transcript must not start feeding it back to the
+          // model. The viewer's own "Include chat history in requests" toggle
+          // says the same thing for one turn: with the client posting a single
+          // message either way, this field is the only channel it has left.
+          const chatApp = (configCache.getApps().data || []).find(a => a.id === appId);
+          conversation =
+            chatApp?.sendChatHistory === false || sendChatHistory === false
+              ? [newMessage]
+              : [...historyForPrompt(history), newMessage];
+
+          // Resolved once here and carried on the turn: `resolvePrincipal` is
+          // async and hits the filesystem, and the run finishes with no request
+          // in scope. The mode travels with the id so that an admin changing
+          // `runLog.identityMode` later cannot orphan this chat.
+          const identityMode = runLog.identityMode();
+          const principal = await resolvePrincipal(req.user, { mode: identityMode });
+          persistence = {
+            repository,
+            ownerId: principal.id,
+            identityMode: principal.mode || identityMode,
+            // The stored history is never client-asserted; the message being
+            // sent necessarily is — it only exists in this request.
+            content: typeof newMessage.content === 'string' ? newMessage.content : '',
+            clientMessageId: messageId,
+            attachments: messageAttachments(newMessage),
+            replaceFromMessageId: forkStoredId,
+            // How this turn is being answered, so reopening the chat comes
+            // back with the same setup rather than the app's defaults. Only
+            // the keys this request actually carried: the repository merges
+            // them over what earlier turns recorded, and `undefined` here
+            // means "this turn said nothing about it".
+            settings: normalizeChatSettings({
+              style,
+              outputFormat,
+              temperature,
+              sendChatHistory,
+              thinkingEnabled,
+              thinkingLevel,
+              thinkingThoughts,
+              enabledTools,
+              websearchEnabled,
+              imageAspectRatio,
+              imageQuality
+            })
+          };
+        }
+
         trackSession(chatId, { appId, userSessionId, userAgent: req.headers['user-agent'] });
-        actionTracker.trackSessionStart(chatId, {
-          sessionId: chatId,
-          timestamp: new Date().toISOString()
-        });
 
         // --- @mention workflow detection ---
         // Check if the last user message contains an @workflow-name mention
@@ -621,6 +1038,36 @@ export default function registerSessionRoutes(
         if (mentionMatch) {
           const mentionedId = mentionMatch[1];
           const mentionedWorkflow = configCache.getWorkflowById(mentionedId);
+
+          // If the user explicitly @-mentioned a workflow but it is not
+          // chat-runnable, refuse the message instead of falling through to
+          // the LLM (which would happily pick a *different* registered
+          // workflow tool — the @human → @auto switch users have seen).
+          if (mentionedWorkflow) {
+            const isDisabled = mentionedWorkflow.enabled === false;
+            const noChatIntegration = !mentionedWorkflow.chatIntegration?.enabled;
+
+            if (isDisabled || noChatIntegration) {
+              const wfName =
+                (typeof mentionedWorkflow.name === 'object'
+                  ? mentionedWorkflow.name[clientLanguage] || mentionedWorkflow.name.en
+                  : mentionedWorkflow.name) || mentionedId;
+              const reason = isDisabled
+                ? `Workflow "${wfName}" is disabled.`
+                : `Workflow "${wfName}" is not configured for chat (chatIntegration.enabled is false).`;
+              if (!hasChatClient(chatId)) {
+                return res.status(400).json({ status: 'error', message: reason });
+              }
+              emitFailedRun(chatId, {
+                kind: 'workflow',
+                messageId,
+                code: 'WORKFLOW_UNAVAILABLE',
+                message: reason,
+                refs: { workflowId: mentionedId }
+              });
+              return res.json({ status: 'streaming', chatId });
+            }
+          }
 
           if (
             mentionedWorkflow &&
@@ -640,11 +1087,43 @@ export default function registerSessionRoutes(
             const fileData = lastUserMsg.fileData || null;
             const imageData = lastUserMsg.imageData || null;
 
-            // Build chat history from all prior messages (excluding the last)
-            const chatHistory = messages.slice(0, -1).map(m => ({
+            // Build chat history from all prior messages (excluding the last).
+            // From `conversation`, not the request body: for a persisted chat
+            // the prior turns came out of the store, not off the wire.
+            const chatHistory = conversation.slice(0, -1).map(m => ({
               role: m.role,
               content: m.content
             }));
+
+            // The @mention launch owns a run on the chat stream: the bridge in
+            // workflowRunner streams progress and the answer under this runId.
+            const workflowRunId = newRunId('workflow');
+            const launch = new RunStreamEmitter({ streamId: chatId, runId: workflowRunId });
+            launch.emit(SSE_V2_EVENTS.RUN_STARTED, {
+              kind: 'workflow',
+              refs: { chatId, appId, messageId, workflowId: mentionedId }
+            });
+            const failLaunch = message => {
+              launch.emit(SSE_V2_EVENTS.STREAM_ERROR, { code: 'WORKFLOW_FAILED', message });
+              launch.emit(SSE_V2_EVENTS.RUN_ENDED, {
+                status: 'error',
+                finishReason: 'error',
+                error: { message }
+              });
+            };
+
+            // A workflow turn is a turn: the user asked something in this chat
+            // and read an answer in it. The launch never goes through
+            // `ChatService`, which is what materializes an ordinary turn, so
+            // both halves are written here or the exchange is missing from the
+            // transcript — and from the history every later turn replays.
+            await materializeWorkflowUserTurn({
+              persistence,
+              chatId,
+              appId,
+              modelId,
+              runId: workflowRunId
+            });
 
             try {
               const workflowRunnerMod = await import('../../tools/workflowRunner.js');
@@ -655,6 +1134,7 @@ export default function registerSessionRoutes(
                 .default({
                   workflowId: mentionedId,
                   chatId,
+                  runId: workflowRunId,
                   user: req.user,
                   input: strippedInput,
                   modelId,
@@ -662,13 +1142,28 @@ export default function registerSessionRoutes(
                   _fileData: fileData || imageData || undefined,
                   language: clientLanguage
                 })
+                .then(result =>
+                  // The assistant half comes off the resolved run rather than
+                  // the SSE frames: the client may be long gone by now, and
+                  // the store is the thing that has to outlive it.
+                  materializeWorkflowAssistantTurn({
+                    persistence,
+                    chatId,
+                    runId: workflowRunId,
+                    summary: workflowSummary(result)
+                  })
+                )
                 .catch(error => {
                   logger.error('Error running @mention workflow', {
                     component: 'sessionRoutes',
                     error
                   });
-                  actionTracker.trackError(chatId, {
-                    message: `Workflow execution failed: ${error.message}`
+                  failLaunch(`Workflow execution failed: ${error.message}`);
+                  return materializeWorkflowAssistantTurn({
+                    persistence,
+                    chatId,
+                    runId: workflowRunId,
+                    summary: workflowSummary({ status: 'failed', error: error.message })
                   });
                 });
 
@@ -676,8 +1171,14 @@ export default function registerSessionRoutes(
               return res.json({ status: 'streaming', chatId });
             } catch (error) {
               logger.error('Error loading workflow runner', { component: 'sessionRoutes', error });
-              actionTracker.trackError(chatId, {
-                message: `Workflow execution failed: ${error.message}`
+              failLaunch(`Workflow execution failed: ${error.message}`);
+              // The user half is already stored and the chat is marked
+              // `running` for a run that will never start; close it out.
+              await materializeWorkflowAssistantTurn({
+                persistence,
+                chatId,
+                runId: workflowRunId,
+                summary: workflowSummary({ status: 'failed', error: error.message })
               });
               return res.json({ status: 'error', message: error.message });
             }
@@ -685,7 +1186,24 @@ export default function registerSessionRoutes(
         }
         // --- end @mention detection ---
 
-        if (!clients.has(chatId)) {
+        // Resolve the SSE sink once, up front. In cluster mode the stream for
+        // this chat may be held by another worker, in which case this is a
+        // relay shim rather than a local response; null means no stream exists
+        // anywhere and the answer has to come back on this POST instead.
+        // Deciding from the sink itself (rather than checking membership and
+        // fetching separately) keeps the two in step.
+        const streamOpen = hasChatClient(chatId);
+
+        // From here the turn owns the chat. A persisted turn has to survive the
+        // browser closing — its answer is written to the store either way — so
+        // the three paths that abort a run on disconnect must leave it alone
+        // until the finally below releases the mark.
+        if (persistence) {
+          markChatDurable(chatId);
+          durableTurn = true;
+        }
+
+        if (!streamOpen) {
           logger.info('No active SSE connection, creating response without streaming', {
             component: 'sessionRoutes',
             chatId
@@ -693,15 +1211,14 @@ export default function registerSessionRoutes(
           const prep = await chatService.prepareChatRequest({
             appId,
             modelId,
-            messages,
+            messages: conversation,
             temperature,
             style,
             outputFormat,
             language: clientLanguage,
-            useMaxTokens,
             bypassAppPrompts,
             thinkingEnabled,
-            thinkingBudget,
+            thinkingLevel,
             thinkingThoughts,
             enabledTools,
             websearchEnabled,
@@ -709,7 +1226,6 @@ export default function registerSessionRoutes(
             imageQuality,
             requestedSkill,
             documentIds,
-            res,
             user: req.user,
             chatId
           });
@@ -734,34 +1250,41 @@ export default function registerSessionRoutes(
           }
           ({ model, llmMessages } = prep.data);
 
-          return processChatRequest({
+          // Awaited, not returned bare: `return promise` inside a try/finally
+          // runs the finally before the turn settles, which would drop the
+          // durable mark while the run is still going.
+          return await processChatRequest({
             prep: prep.data,
             buildLogData,
             messageId,
             streaming: false,
             res,
-            clientRes: null,
-            chatId: null,
+            chatId,
             DEFAULT_TIMEOUT,
             getLocalizedError,
             clientLanguage,
-            user: req.user
+            user: req.user,
+            persistence
           });
         } else {
-          const clientRes = clients.get(chatId).response;
-          clients.set(chatId, { ...clients.get(chatId), lastActivity: new Date() });
+          // Note that `hasChatClient` refreshed lastActivity on the
+          // existing map entry in place rather than replacing it: the SSE GET
+          // handler pins that object reference via `myEntry` to identify a stale
+          // `req.on('close')` after a reconnect, and replacing the entry would
+          // defeat that check, letting a dead socket's close handler bail out
+          // and leak the Map entry + activeRequests controller for up to
+          // 5 minutes until cleanupInactiveClients evicts it.
           const prep = await chatService.prepareChatRequest({
             appId,
             modelId,
-            messages,
+            messages: conversation,
             temperature,
             style,
             outputFormat,
             language: clientLanguage,
-            useMaxTokens,
             bypassAppPrompts,
             thinkingEnabled,
-            thinkingBudget,
+            thinkingLevel,
             thinkingThoughts,
             enabledTools,
             websearchEnabled,
@@ -769,7 +1292,6 @@ export default function registerSessionRoutes(
             imageQuality,
             requestedSkill,
             documentIds,
-            clientRes,
             user: req.user,
             chatId
           });
@@ -779,34 +1301,36 @@ export default function registerSessionRoutes(
               {},
               clientLanguage
             );
-            actionTracker.trackError(chatId, { message: errMsg, code: prep.error.code });
+            emitFailedRun(chatId, { messageId, code: prep.error.code, message: errMsg });
             return res.json({ status: 'error', message: errMsg, code: prep.error.code });
           }
           model = prep.data.model;
           llmMessages = prep.data.llmMessages;
 
-          // Emit skill.activation SSE event when a skill was pre-activated via slash command
+          // A skill pre-activated via slash command is announced on the turn's run.
+          let activatedSkill = null;
           if (requestedSkill) {
             const { data: skills = [] } = configCache.getSkills();
             const skillMeta = skills.find(s => s.name === requestedSkill);
-            actionTracker.trackSkillActivation(chatId, {
+            activatedSkill = {
               skillName: requestedSkill,
               description: skillMeta?.description || ''
-            });
+            };
           }
 
           await processChatRequest({
             prep: prep.data,
             buildLogData,
             messageId,
+            activatedSkill,
             streaming: true,
             res: null,
-            clientRes,
             chatId,
             DEFAULT_TIMEOUT,
             getLocalizedError,
             clientLanguage,
-            user: req.user
+            user: req.user,
+            persistence
           });
 
           return res.json({ status: 'streaming', chatId });
@@ -814,6 +1338,10 @@ export default function registerSessionRoutes(
       } catch (error) {
         logger.error('Error in app chat', { component: 'sessionRoutes', error });
         return sendInternalError(res, error, 'app chat');
+      } finally {
+        // The turn is over however it ended, so a disconnect from here on has
+        // nothing to protect and should abort again.
+        if (durableTurn) clearChatDurable(chatId);
       }
     }
   );
@@ -878,51 +1406,77 @@ export default function registerSessionRoutes(
     chatAuthRequired,
     async (req, res) => {
       const { chatId } = req.params;
-      if (clients.has(chatId)) {
-        if (activeRequests.has(chatId)) {
-          try {
-            const controller = activeRequests.get(chatId);
-            controller.abort();
-            activeRequests.delete(chatId);
-            logger.info('Aborted request', { component: 'sessionRoutes', chatId });
-          } catch (error) {
-            logger.error('Error aborting request', {
-              component: 'sessionRoutes',
-              chatId,
-              error: error.message
-            });
-          }
-        }
+      // `chatAuthRequired` authorizes the app, never the chat id: stopping
+      // someone else's turn must not be one guessed id away.
+      const access = await authorizeChat(chatId, req.user, { intent: 'write' });
+      if (!access.ok) return sendNotFound(res, 'Chat session');
 
-        // Also cancel any running workflow execution for this chatId
-        const { activeWorkflowExecutions } = await import('../../tools/workflowRunner.js');
-        const workflowExec = activeWorkflowExecutions.get(chatId);
-        if (workflowExec) {
-          try {
-            await workflowExec.engine.cancel(workflowExec.executionId, 'user_cancelled');
-            activeWorkflowExecutions.delete(chatId);
-            logger.info('Cancelled workflow', {
-              component: 'sessionRoutes',
-              executionId: workflowExec.executionId,
-              chatId
-            });
-          } catch (error) {
-            logger.error('Error cancelling workflow', {
-              component: 'sessionRoutes',
-              chatId,
-              error: error.message
-            });
-          }
-        }
-
-        const client = clients.get(chatId);
-        actionTracker.trackDisconnected(chatId, { message: 'Chat stream stopped by client' });
-        client.response.end();
-        clients.delete(chatId);
-        logger.info('Chat stream stopped', { component: 'sessionRoutes', chatId });
-        return res.status(200).json({ success: true, message: 'Chat stream stopped' });
+      // A live SSE client used to be the proof that there was something to
+      // stop. It no longer is: a persisted turn keeps running after its client
+      // is gone, and that is exactly the turn a user needs to be able to stop.
+      // Anything in flight for this chat, anywhere in the cluster, qualifies.
+      if (!hasChatClient(chatId) && !isChatDurable(chatId) && !hasActiveChatRequest(chatId)) {
+        return sendNotFound(res, 'Chat session');
       }
-      return sendNotFound(res, 'Chat session');
+
+      // The stop is a human event on the run bound to this chat stream. That
+      // binding is process-local, so for a turn running on another worker —
+      // the normal case once the client is gone — fall back to the run the
+      // chat document recorded when the turn started.
+      const bound = getStreamRun(chatId);
+      const boundRunId =
+        (bound && typeof bound === 'object' ? bound.runId : bound) ||
+        access.chat?.activeRunId ||
+        null;
+      if (boundRunId) {
+        try {
+          // The turn may run on another worker: continue its persisted sequence.
+          await runLog.appendRecovered(boundRunId, RUN_LOG_EVENTS.HUMAN_EVENT, {
+            kind: 'stop',
+            by: await resolveActorId(req.user, {
+              mode: runLog.getRunMeta(boundRunId)?.identityMode || runLog.identityMode()
+            }),
+            at: new Date().toISOString()
+          });
+        } catch (ledgerErr) {
+          logger.debug('Stop human/event not recorded', {
+            component: 'sessionRoutes',
+            chatId,
+            error: ledgerErr.message
+          });
+        }
+      }
+      // Each of the three teardown steps targets state that may live on a
+      // different worker than this POST landed on: the LLM call, the workflow
+      // execution and the SSE stream are registered independently, so each
+      // helper resolves its own owner and relays if it is not this process.
+      // The abort is deliberately the unconditional one — Stop overrides
+      // durability, which only ever protects a run from a *disconnect*.
+      const aborted = abortChatRequest(chatId);
+
+      // Also cancel any running workflow execution for this chatId
+      const workflowCancelled = await cancelChatWorkflow(chatId);
+
+      // Note the awaits above: cancelling the workflow yields the event loop,
+      // and the SSE connection can close in that gap (its req.on('close')
+      // handler deletes the entry from `clients`). The check at the top of the
+      // handler is therefore stale here, which is why the close goes through
+      // `closeChatClient` — it re-reads the entry and no-ops when it is gone,
+      // instead of dereferencing undefined. An unguarded
+      // `client.response.end()` throws a TypeError that crashes the whole
+      // process as an unhandled rejection on Node >= 15.
+      const closed = closeChatClient(chatId);
+
+      // Report what actually happened. The guard above passes on the durable
+      // mark alone, and a mark can outlive the thing it marks by the width of
+      // this handler — answering `success: true` there would tell the user a
+      // turn was stopped when nothing was found to stop.
+      if (!aborted && !workflowCancelled && !closed) {
+        logger.info('Chat stop found nothing in flight', { component: 'sessionRoutes', chatId });
+        return sendNotFound(res, 'Chat session');
+      }
+      logger.info('Chat stream stopped', { component: 'sessionRoutes', chatId });
+      return res.status(200).json({ success: true, message: 'Chat stream stopped' });
     }
   );
 
@@ -985,15 +1539,30 @@ export default function registerSessionRoutes(
    *       401:
    *         description: Authentication required
    */
-  app.get(buildServerPath('/api/apps/:appId/chat/:chatId/status'), chatAuthRequired, (req, res) => {
-    const { chatId } = req.params;
-    if (clients.has(chatId)) {
-      return res.status(200).json({
-        active: true,
-        lastActivity: clients.get(chatId).lastActivity,
-        processing: activeRequests.has(chatId)
-      });
+  app.get(
+    buildServerPath('/api/apps/:appId/chat/:chatId/status'),
+    chatAuthRequired,
+    async (req, res) => {
+      const { chatId } = req.params;
+      // `chatAuthRequired` authorizes the app, never the chat id — the same
+      // reason SSE connect, the turn POST and stop all add this. Durable chats
+      // put the id in the address bar, so ids reach history, referrers and
+      // pasted links; without this, anyone reaching the same app who holds
+      // another user's id can poll this route as an activity oracle.
+      const access = await authorizeChat(chatId, req.user, { intent: 'read' });
+      if (!access.ok) return sendNotFound(res, 'Chat session');
+      if (hasChatClient(chatId)) {
+        // lastActivity lives with the response object, so it is only readable
+        // on the worker holding the stream. Rather than a bus round trip for a
+        // diagnostic field, report null when the stream is elsewhere —
+        // `active` and `processing` are the parts callers branch on.
+        return res.status(200).json({
+          active: true,
+          lastActivity: clients.get(chatId)?.lastActivity ?? null,
+          processing: hasActiveChatRequest(chatId)
+        });
+      }
+      return res.status(200).json({ active: false });
     }
-    return res.status(200).json({ active: false });
-  });
+  );
 }

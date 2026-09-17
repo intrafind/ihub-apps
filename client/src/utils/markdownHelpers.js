@@ -158,6 +158,24 @@ const MERMAID_LANGUAGES = new Set([
   'quadrant'
 ]);
 
+export const escapeHtml = text =>
+  String(text).replace(/[&<>"']/g, char => {
+    switch (char) {
+      case '&':
+        return '&amp;';
+      case '<':
+        return '&lt;';
+      case '>':
+        return '&gt;';
+      case '"':
+        return '&quot;';
+      case "'":
+        return '&#39;';
+      default:
+        return char;
+    }
+  });
+
 export const getLanguageDisplayName = (language = 'text') => {
   const lang = language.toLowerCase();
   return LANGUAGE_DISPLAY_MAP[lang] || language.toUpperCase();
@@ -296,3 +314,25 @@ export const detectDiagramType = code => {
 // Helper to generate a unique-ish ID without Math.random() issues
 export const generateId = () =>
   `id-${Date.now().toString(36)}-${Math.random().toString(36).substring(2, 7)}`;
+
+/**
+ * Stable, content-derived hash used to build deterministic element IDs.
+ *
+ * Mermaid containers must keep the same ID across re-parses of the same
+ * markdown, otherwise every re-render produces brand new DOM nodes and the
+ * diagram has to be rendered from scratch (causing visible flicker).
+ *
+ * FNV-1a, returned as base36.
+ *
+ * @param {string} str - Input string.
+ * @returns {string} Short, stable hash.
+ */
+export const hashString = str => {
+  const input = String(str ?? '');
+  let hash = 0x811c9dc5;
+  for (let i = 0; i < input.length; i++) {
+    hash ^= input.charCodeAt(i);
+    hash = Math.imul(hash, 0x01000193);
+  }
+  return (hash >>> 0).toString(36);
+};

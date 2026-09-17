@@ -1,0 +1,143 @@
+/* global Office, document */
+import { createRoot } from 'react-dom/client';
+import { MemoryRouter } from 'react-router-dom';
+import './office.css';
+// Initialize i18next so main chat components (useTranslation) work in the taskpane.
+// This is a side-effect import — i18n initializes synchronously and loads translations async.
+import '../src/i18n/i18n';
+import { OfficeConfigContext } from '../src/features/office/contexts/OfficeConfigContext';
+import { EmbeddedHostProvider } from '../src/features/office/contexts/EmbeddedHostContext';
+import OfficeApp from '../src/features/office/components/OfficeApp';
+import { installOfficeAuthInterceptor } from '../src/features/office/api/officeAuthBridge';
+import { openOfficeAuthDialog } from '../src/features/office/utilities/officeAuthDialog';
+import { fetchCurrentOutlookItemContext } from '../src/features/office/utilities/outlookMailContext';
+import { initOfficeTheme } from '../src/features/office/utilities/officeTheme';
+
+/**
+ * Derive the base path from the current URL so the config fetch works
+ * regardless of deployment subpath (e.g., /ihub/office/taskpane.html).
+ */
+function detectBasePath() {
+  const pathname = window.location.pathname;
+  // Remove /office/taskpane.html (or just /office/) from the end
+  const match = pathname.match(/^(\/.*?)\/office(?:\/.*)?$/);
+  return match ? match[1] : '';
+}
+
+// Apply the persisted light/dark preference (Settings → Appearance) before
+// Office.js finishes initialising so dark-mode users never see a white flash.
+// Re-run inside onReady: only then are Office.context.officeTheme and the
+// OfficeThemeChanged event available for "auto" mode.
+initOfficeTheme();
+
+Office.onReady(async () => {
+  initOfficeTheme();
+
+  const basePath = detectBasePath();
+
+  let config;
+  try {
+    const res = await fetch(`${basePath}/api/integrations/office-addin/config`);
+    if (!res.ok) {
+      throw new Error(`Config fetch failed: ${res.status}`);
+    }
+    config = await res.json();
+  } catch (err) {
+    const rootEl = document.getElementById('office-root');
+    if (rootEl) {
+      rootEl.textContent = `Failed to load add-in configuration. Please contact your administrator. (${err.message})`;
+      rootEl.style.cssText = 'padding:16px;font-family:sans-serif;color:#b91c1c;';
+    }
+    return;
+  }
+
+  // Install Office Bearer token interceptor so apiClient works in the taskpane.
+  // Passing config stores it in officeAuth so the SSE hook and Axios interceptor
+  // can call refreshTokenOrExpireSession() without threading config everywhere.
+  installOfficeAuthInterceptor(config);
+
+  // Register the ItemChanged event to reset chat when user switches emails.
+  // Also listen for SelectedItemsChanged so the taskpane reacts when the user
+  // Ctrl-selects multiple messages in the list (ItemChanged does NOT fire for
+  // multi-select transitions). Both dispatch the same internal event so the
+  // chat panel can refresh its current-item state and the "Add email(s)"
+  // control stays in sync with the live Outlook selection. Issue #1553.
+  if (Office.context?.mailbox?.addHandlerAsync) {
+    const dispatchItemChanged = () => document.dispatchEvent(new CustomEvent('ihub:itemchanged'));
+    Office.context.mailbox.addHandlerAsync(Office.EventType.ItemChanged, dispatchItemChanged);
+    if (Office.EventType?.SelectedItemsChanged) {
+      try {
+        Office.context.mailbox.addHandlerAsync(
+          Office.EventType.SelectedItemsChanged,
+          dispatchItemChanged
+        );
+      } catch {
+        // SelectedItemsChanged requires Mailbox 1.13+; older hosts simply
+        // keep the ItemChanged-only behavior.
+      }
+    }
+  }
+
+  const rootEl = document.getElementById('office-root');
+  if (!rootEl) return;
+
+  // Detect which Office host is running this add-in so we can pick host-aware
+  // copy for the "insert into document" primary action. `Office.context.host`
+  // returns the Office.HostType enum string ("Outlook" | "Word" | "PowerPoint"
+  // | …); we fall back to the mailbox presence check that the rest of the
+  // codebase already uses, so older clients that don't populate `host` still
+  // get the Outlook label.
+  const officeHost = (() => {
+    try {
+      if (Office.context?.host) return String(Office.context.host);
+    } catch {
+      // Office.context.host can throw in some weird embed scenarios.
+    }
+    if (Office.context?.mailbox) return 'Outlook';
+    return null;
+  })();
+  const isOutlookHost = officeHost === 'Outlook';
+  const insertLabelKey = isOutlookHost ? 'office.insertIntoEmail' : 'office.insertIntoDocument';
+
+  // Outlook host adapter: popup-window auth dialog + Outlook mailbox context.
+  //
+  // No `contextToggles` are declared (issue #1467). The body /
+  // attachments filters that used to live in the chat input's `+` menu
+  // are now owned by OfficeMailContextBanner — the "Include body"
+  // checkbox sits on the email card and each attachment ships with its
+  // own X button, so the duplicated menu toggles only confused users.
+  // The browser-extension side panel still declares its own `pageText`
+  // toggle in sidepanel-entry.jsx; that surface keeps working unchanged.
+  const outlookHost = {
+    kind: 'office',
+    loginSubtitle: 'iHub Apps for Outlook',
+    runAuthDialog: openOfficeAuthDialog,
+    // Unified reader dispatches between mail and appointment items by
+    // inspecting `Office.context.mailbox.item.itemType`. Existing mail
+    // surfaces get the same payload as before plus `itemKind: 'message'`;
+    // calendar surfaces receive the appointment shape (subject, start,
+    // end, organizer, attendees, location, body).
+    readMessageContext: fetchCurrentOutlookItemContext,
+    // In the Office taskpane the "insert this response into the document /
+    // email" button is the whole reason the user opened the add-in, so it
+    // gets promoted to a labelled primary button beneath each assistant
+    // message instead of the small icon used in the main web app.
+    // See issue #1450.
+    insertAction: {
+      variant: 'primary',
+      labelKey: insertLabelKey
+    }
+  };
+
+  const root = createRoot(rootEl);
+  root.render(
+    // eslint-disable-next-line @eslint-react/no-context-provider
+    <OfficeConfigContext.Provider value={config}>
+      <EmbeddedHostProvider value={outlookHost}>
+        <MemoryRouter>
+          <OfficeApp />
+        </MemoryRouter>
+      </EmbeddedHostProvider>
+    </OfficeConfigContext.Provider>
+  );
+});

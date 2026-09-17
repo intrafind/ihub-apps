@@ -1,0 +1,251 @@
+import { z } from 'zod';
+import { HEX_COLOR_PATTERN, LANGUAGE_CODE_PATTERN } from '../../shared/validationPatterns.js';
+
+const AGENT_PROFILE_ID_PATTERN = /^[a-z0-9][a-z0-9-_]*[a-z0-9]$/;
+const AGENT_PROFILE_ID_MAX_LENGTH = 64;
+
+const localizedStringSchema = z.record(
+  z.string().regex(LANGUAGE_CODE_PATTERN, 'Invalid language code'),
+  z.string().min(1, 'Localized string cannot be empty')
+);
+
+// Lax variant used for optional localized fields. Empty per-language values
+// are tolerated (treated as "user hasn't filled this language in yet"). The
+// admin form strips empty entries before submit anyway; this is defense in
+// depth.
+const optionalLocalizedStringSchema = z.record(
+  z.string().regex(LANGUAGE_CODE_PATTERN, 'Invalid language code'),
+  z.string()
+);
+
+// Embedded workflow definition is intentionally permissive; the workflow
+// validator validates the full shape when the engine starts.
+// The Profile may omit `workflow.definition` entirely — the
+// profileWorkflowSerializer fills in a default shape on save based on the
+// Profile's `system`/`tools`/`sources`/`apps`/`preferredModel`/Planner/
+// Dynamic-Tasks settings. For `external` refs `workflowId` is required.
+const workflowRefSchema = z
+  .object({
+    ref: z.enum(['embedded', 'external']).optional().prefault('embedded'),
+    workflowId: z.string().optional(),
+    definition: z
+      .object({
+        nodes: z.array(z.any()).optional(),
+        edges: z.array(z.any()).optional(),
+        triggers: z.array(z.any()).optional()
+      })
+      .passthrough()
+      .optional()
+  })
+  .refine(
+    data => {
+      if (data.ref === 'external') {
+        return typeof data.workflowId === 'string' && data.workflowId.length > 0;
+      }
+      return true;
+    },
+    { message: 'external workflow requires a workflowId' }
+  );
+
+const memorySchema = z
+  .object({
+    enabled: z.boolean().optional().prefault(true),
+    autoInclude: z.boolean().optional().prefault(true),
+    maxBytes: z.number().int().min(0).max(1_000_000).optional().prefault(8192),
+    // Memory composer — explicit LLM step that decides what to commit to
+    // long-term memory at the end of a run. Only used when enabled=true.
+    modelId: z.string().optional(),
+    temperature: z.number().min(0).max(2).optional(),
+    system: optionalLocalizedStringSchema.optional(),
+    prompt: optionalLocalizedStringSchema.optional()
+  })
+  .strict();
+
+const hitlSchema = z
+  .object({
+    approverGroups: z.array(z.string()).optional().prefault([])
+  })
+  .strict();
+
+const plannerSchema = z
+  .object({
+    enabled: z.boolean().optional().prefault(false),
+    maxTasks: z.number().int().min(1).max(50).optional().prefault(10),
+    // Planner-specific instructions (separate from profile.system which is the
+    // agent persona used for task execution). The serializer wires this into
+    // the planner LLM call only.
+    system: optionalLocalizedStringSchema.optional(),
+    // Goal template — supports `${$.data.currentInboxItem}` / `${$.data.brief}`.
+    goal: optionalLocalizedStringSchema.optional(),
+    // Planner model can differ from the executor model (e.g. stronger model
+    // for decomposition, cheaper model for tasks).
+    modelId: z.string().optional()
+  })
+  .strict();
+
+// Synthesizer is the final LLM call that composes the report from sub-task
+// results. It has NO tools — pure text-in/text-out. The runtime persists its
+// output as the final artifact, so the LLM never needs to call write_artifact.
+const synthesizerSchema = z
+  .object({
+    enabled: z.boolean().optional().prefault(true),
+    system: optionalLocalizedStringSchema.optional(),
+    // Prompt template — supports `${$.data.brief}`, `${$.data.currentInboxItem}`,
+    // and `{{previousTaskResults}}` injected by the runtime.
+    prompt: optionalLocalizedStringSchema.optional(),
+    modelId: z.string().optional(),
+    // Output token budget for the one-shot synthesis call. Comprehensive
+    // research reports routinely exceed provider defaults (4-8K). Setting
+    // this higher trades cost for coverage. 0 → use the serializer default.
+    maxTokens: z.number().int().min(0).max(32000).optional().prefault(8000)
+  })
+  .strict();
+
+const dynamicTasksSchema = z
+  .object({
+    enabled: z.boolean().optional().prefault(false),
+    maxDepth: z.number().int().min(0).max(10).optional().prefault(3),
+    // Preferred model for dynamic task_runner executions. Falls back to
+    // profile.preferredModel when omitted. Different from the agent's
+    // model so operators can use a cheaper / faster model for the
+    // decomposed sub-tasks while keeping the orchestrating agent on a
+    // stronger model (or vice versa).
+    modelId: z.string().optional()
+  })
+  .strict();
+
+// Review block — opt-in plan-and-review loop. When enabled, the planner runs
+// inside a `while` loop with a toolless reviewer node that judges sufficiency.
+// If gaps exist, the loop re-runs the planner with prior work surfaced; the
+// planner emits ONLY new gap-closing tasks (with `r{round}_` id namespacing).
+const reviewSchema = z
+  .object({
+    enabled: z.boolean().optional().prefault(false),
+    // Strictness preset for the adversarial review acceptance bar + round budget.
+    // See server/agents/profile/reviewSettings.js.
+    //
+    // NOTE: strictness / stallLimit / criteria are consumed by the adversarial
+    // `verifier` node, which only exists in EXTERNAL workflows (e.g. the
+    // claude-style-agent workflows) — they are injected at run start via
+    // applyReviewSettings(). The DEFAULT serializer-built (embedded) agent
+    // workflow uses a prompt-based reviewer loop instead and honors ONLY
+    // maxRounds; strictness/stallLimit/criteria have no effect there.
+    strictness: z.enum(['lenient', 'balanced', 'strict']).optional().prefault('balanced'),
+    // Round budget. Optional (NO default) so an unset value means "use the
+    // strictness preset"; when set it overrides the preset's maxRetries. This is
+    // the one review knob the embedded planner loop also honors.
+    maxRounds: z.number().int().min(1).max(10).optional(),
+    // Optional override of the preset's stall limit (verifier node only).
+    stallLimit: z.number().int().min(1).max(5).optional(),
+    // Optional free-text acceptance criteria; overrides the verify node's
+    // criteria prompt for this agent (verifier node only).
+    criteria: z.string().optional(),
+    modelId: z.string().optional(),
+    system: optionalLocalizedStringSchema.optional()
+  })
+  .strict();
+
+const budgetsSchema = z
+  .object({
+    maxWallTimeSec: z.number().int().min(10).max(86_400).optional().prefault(600),
+    // Per-run token budget across all LLM iterations (input + output). 0 means
+    // unlimited. When the running spend reaches this ceiling, the agent's tool
+    // loop is nudged to wrap up: it answers the current round's tool calls,
+    // then does one final tool-less turn to produce its answer instead of
+    // continuing to call tools. Modeled on Claude Code's token-budget gating.
+    maxTokensPerRun: z.number().int().min(0).max(100_000_000).optional().prefault(0),
+    // Per-node cap on tool-calling rounds (safety backstop above the budget).
+    // 0 falls back to the node/executor default (10).
+    maxToolRoundsPerNode: z.number().int().min(0).max(200).optional().prefault(0)
+  })
+  .strict();
+
+const concurrencySchema = z
+  .object({
+    maxConcurrent: z.number().int().min(1).max(10).optional().prefault(1)
+  })
+  .strict();
+
+const artifactsSchema = z
+  .object({
+    outputDir: z.string().optional().prefault('auto'),
+    primary: z.string().optional().prefault('report.md')
+  })
+  .strict();
+
+const serviceAccountSchema = z
+  .object({
+    groups: z.array(z.string()).optional().prefault(['agents', 'authenticated'])
+  })
+  .strict();
+
+const baseAgentProfileSchema = z.object({
+  id: z
+    .string()
+    .regex(
+      AGENT_PROFILE_ID_PATTERN,
+      'Profile ID must be lowercase alphanumeric (hyphens/underscores allowed)'
+    )
+    .min(1)
+    .max(AGENT_PROFILE_ID_MAX_LENGTH),
+  name: localizedStringSchema,
+  description: optionalLocalizedStringSchema.optional(),
+  color: z
+    .string()
+    .regex(HEX_COLOR_PATTERN, 'Color must be a valid hex code (e.g. #6366F1)')
+    .optional()
+    .prefault('#6366F1'),
+  icon: z.string().min(1).optional().prefault('robot'),
+
+  workflow: workflowRefSchema.optional().prefault({}),
+
+  // ── Agent brief: what it is, what model + capabilities it gets ──────────
+  // These are convenience fields on the Profile. The profileWorkflowSerializer
+  // propagates them into every prompt node in the default workflow. Authors
+  // who hand-author `workflow.definition` can still override per-node.
+  system: optionalLocalizedStringSchema.optional(),
+  preferredModel: z.string().optional(),
+  // Per-step model overrides for the run's workflow, keyed by node id
+  // (e.g. { "agent": "gemini-flash-3", "verify": "claude-opus-4-8" }). Applied
+  // at run start onto each matching node's config.modelId. `preferredModel`
+  // remains the run-wide default for any node not listed here. Lets an operator
+  // run, say, a fast model for drafting and a stronger one for verification —
+  // configured on the profile, without editing the workflow definition.
+  nodeModels: z.record(z.string(), z.string()).optional(),
+  preferredTemperature: z.number().min(0).max(2).optional(),
+  maxIterations: z.number().int().min(1).max(50).optional(),
+  tools: z.array(z.string()).optional().prefault([]),
+  sources: z.array(z.string()).optional().prefault([]),
+  apps: z.array(z.string()).optional().prefault([]),
+  // Skills: instructional knowledge the agent can activate at runtime.
+  // Mirrors the same field on apps; the agent's planner / task executors /
+  // dynamic-task workers all see `<available_skills>` metadata in their
+  // system prompt and can activate a skill via the `activate_skill` tool to
+  // load its full procedural body. The planner can also pre-activate skills
+  // by listing them in its plan JSON (`skills_used`) and may re-plan once
+  // after activation (`activate_then_replan`).
+  skills: z.array(z.string()).optional().prefault([]),
+
+  memory: memorySchema.optional().prefault({}),
+  inboxId: z.string().optional(),
+  hitl: hitlSchema.optional().prefault({}),
+  planner: plannerSchema.optional().prefault({}),
+  synthesizer: synthesizerSchema.optional().prefault({}),
+  dynamicTasks: dynamicTasksSchema.optional().prefault({}),
+  review: reviewSchema.optional().prefault({}),
+  budgets: budgetsSchema.optional().prefault({}),
+  concurrency: concurrencySchema.optional().prefault({}),
+  artifacts: artifactsSchema.optional().prefault({}),
+
+  groups: z.array(z.string()).optional().prefault([]),
+  serviceAccount: serviceAccountSchema.optional().prefault({}),
+
+  enabled: z.boolean().optional().prefault(true),
+  order: z.number().int().min(0).optional()
+});
+
+export const knownAgentProfileKeys = Object.keys(baseAgentProfileSchema.shape);
+
+export const agentProfileSchema = baseAgentProfileSchema.strict();
+
+export { AGENT_PROFILE_ID_PATTERN, AGENT_PROFILE_ID_MAX_LENGTH };

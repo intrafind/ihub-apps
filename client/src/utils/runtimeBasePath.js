@@ -7,11 +7,49 @@
  */
 
 /**
+ * Known top-level React Router routes — these are app routes, not deployment subpaths.
+ *
+ * ⚠️ IMPORTANT: When adding new top-level routes to App.jsx, you MUST update this list!
+ * Also update the matching array in client/index.html for consistency.
+ *
+ * Failure to keep this list in sync will cause base path detection to fail for subpath
+ * deployments (e.g. /ihub/forbidden would incorrectly be detected as the base path
+ * instead of /ihub).
+ */
+export const KNOWN_ROUTES = [
+  'start', // Start page (greeting, chat input, featured apps)
+  'apps', // App listing and individual app routes
+  'admin', // Admin panel and all admin sub-routes
+  'login', // Standalone login page
+  'pages', // Dynamic content pages
+  'prompts', // Prompts listing
+  'chats', // Chat history overview
+  'settings', // Settings pages (integrations, etc.)
+  'teams', // Microsoft Teams embed routes
+  'workflows', // Workflow management and execution
+  's', // Short-link redirect (server-side, same base path)
+  'setup', // First-run setup wizard
+  'tools', // Tool pages (AI OCR, etc.)
+  'office', // Office add-in pages (served by server at /office/*)
+  'nextcloud', // Nextcloud embed pages (served by server at /nextcloud/*)
+  'unauthorized', // 401 / insufficient-permissions error page
+  'forbidden', // 403 forbidden error page
+  'server-error' // 500 server error page
+];
+
+/**
  * Detect the base path from the current window location
  * This works by finding where the app is served from
  * @returns {string} The detected base path (e.g., "", "/ihub", "/tools/ai")
  */
 export const detectBasePath = () => {
+  // Prefer the authoritative base path injected by the server into index.html
+  // (from the X-Forwarded-Prefix header). URL-based detection below is
+  // ambiguous for unknown/404 routes, so trust the server whenever it told us.
+  if (typeof window !== 'undefined' && typeof window.__SERVER_BASE_PATH__ === 'string') {
+    return window.__SERVER_BASE_PATH__;
+  }
+
   // Get the current pathname
   const pathname = window.location.pathname;
 
@@ -19,34 +57,6 @@ export const detectBasePath = () => {
   // The app's root is where we are now, before any React routing
   // Remove any trailing /index.html or just trailing slash
   const cleanPath = pathname.replace(/\/index\.html$/, '').replace(/\/$/, '');
-
-  // Known React routes - these are app routes, not deployment subpaths
-  //
-  // ⚠️ IMPORTANT: When adding new top-level routes to App.jsx, you MUST update this array!
-  // Also update the matching array in index.html for consistency.
-  // This includes any new routes like:
-  // - New feature routes (e.g., /reports, /analytics)
-  // - New page routes (e.g., /help, /docs)
-  // - New API endpoint prefixes that need special handling
-  //
-  // Failure to update this array will cause base path detection to fail for subpath
-  // deployments (e.g., /ihub/newroute will incorrectly detect /ihub/newroute as base path
-  // instead of /ihub).
-  const knownRoutes = [
-    'apps', // App listing and individual app routes
-    'admin', // Admin panel routes
-    'auth', // Authentication routes
-    'login', // Login page
-    'chat', // Direct chat routes
-    'pages', // Dynamic pages
-    'prompts', // Prompts listing
-    'settings', // Settings pages (integrations, etc.)
-    'teams', // Microsoft Teams routes
-    'workflows', // Workflow management and execution
-    's', // Short links
-    'setup', // First-run setup wizard
-    'tools' // Tool pages (AI OCR, etc.)
-  ];
 
   // Split path into segments and find the first known route
   // This correctly handles paths like /admin/apps (route 'admin' at segment 0)
@@ -56,7 +66,7 @@ export const detectBasePath = () => {
   // Find the index of the first segment that matches a known route
   let routeSegmentIndex = -1;
   for (let i = 0; i < segments.length; i++) {
-    if (knownRoutes.includes(segments[i])) {
+    if (KNOWN_ROUTES.includes(segments[i])) {
       routeSegmentIndex = i;
       break;
     }
@@ -87,6 +97,14 @@ export const detectBasePath = () => {
  * @returns {string} The base path
  */
 export const getBasePath = () => {
+  // The server-injected base path is authoritative and cannot be stale (it is
+  // set fresh on every index.html render), so short-circuit before touching the
+  // sessionStorage cache or URL heuristics. This is what fixes 404 URLs like
+  // `/tools-service` misdetecting the whole path as a deployment prefix.
+  if (typeof window !== 'undefined' && typeof window.__SERVER_BASE_PATH__ === 'string') {
+    return window.__SERVER_BASE_PATH__;
+  }
+
   // Cache the detected base path in sessionStorage for performance
   const cacheKey = 'runtime-base-path';
 
@@ -105,22 +123,7 @@ export const getBasePath = () => {
     const currentPath = window.location.pathname;
 
     // Check if cached base path is actually a known route (invalid - routes are not base paths)
-    const knownRoutes = [
-      'apps',
-      'admin',
-      'auth',
-      'login',
-      'chat',
-      'pages',
-      'prompts',
-      'settings',
-      'teams',
-      'workflows',
-      's',
-      'setup',
-      'tools'
-    ];
-    const isKnownRoute = knownRoutes.some(route => basePath === '/' + route);
+    const isKnownRoute = KNOWN_ROUTES.some(route => basePath === '/' + route);
 
     if (isKnownRoute) {
       // Cached base path is a React route, not a deployment path - invalid!
@@ -158,6 +161,23 @@ export const getBasePath = () => {
 };
 
 /**
+ * Override the API origin used by `buildApiUrl()`.
+ *
+ * When the iHub UI runs from a non-iHub origin (e.g. a chrome-extension://
+ * side panel), relative `/api/...` URLs resolve against the wrong host.
+ * Hosts in that situation call `setApiBaseUrlOverride('https://ihub.example.com')`
+ * once at entry time so every subsequent `buildApiUrl(...)` returns an
+ * absolute URL pointing at the iHub server.
+ *
+ * Pass `null` to clear the override.
+ */
+let apiBaseUrlOverride = null;
+export const setApiBaseUrlOverride = baseUrl => {
+  apiBaseUrlOverride = baseUrl ? String(baseUrl).replace(/\/$/, '') : null;
+};
+export const getApiBaseUrlOverride = () => apiBaseUrlOverride;
+
+/**
  * Build a complete URL relative to the base path
  * @param {string} path - The path to append (e.g., "/api/health", "logo.svg")
  * @returns {string} The complete path
@@ -188,7 +208,35 @@ export const buildPath = path => {
  */
 export const buildApiUrl = endpoint => {
   const cleanEndpoint = endpoint.startsWith('/') ? endpoint.substring(1) : endpoint;
+  // When the host has set an absolute API base URL (e.g. the browser
+  // extension's side panel running from chrome-extension://<id>), return
+  // a fully-qualified URL so callers like `fetch()` and `new EventSource()`
+  // don't resolve relative paths against the wrong origin.
+  if (apiBaseUrlOverride) {
+    return apiBaseUrlOverride + '/api/' + cleanEndpoint;
+  }
   return buildPath('api/' + cleanEndpoint);
+};
+
+/**
+ * Build an absolute WebSocket URL for an API endpoint.
+ * Uses ws:// or wss:// to match the current page protocol and respects the
+ * runtime base path (and any absolute API base override).
+ * @param {string} endpoint - API endpoint (e.g., "/voice/realtime")
+ * @returns {string} Complete ws(s):// URL
+ */
+export const buildWsUrl = endpoint => {
+  const apiPath = buildApiUrl(endpoint); // handles base path + override
+
+  // Already absolute (http/https override) → just swap the scheme.
+  if (/^https?:\/\//i.test(apiPath)) {
+    return apiPath.replace(/^http/i, 'ws');
+  }
+
+  const { protocol, host } = window.location;
+  const wsProtocol = protocol === 'https:' ? 'wss:' : 'ws:';
+  const path = apiPath.startsWith('/') ? apiPath : `/${apiPath}`;
+  return `${wsProtocol}//${host}${path}`;
 };
 
 /**
@@ -197,6 +245,16 @@ export const buildApiUrl = endpoint => {
  * @returns {string} Complete asset URL
  */
 export const buildAssetUrl = asset => {
+  // When the host has set an absolute API base URL (e.g. the browser
+  // extension's side panel running from chrome-extension://<id>), assets
+  // such as `/icons/<app-icon>.svg` live on the iHub server, NOT on the
+  // current origin. Return a fully-qualified URL so <img src> etc. fetch
+  // them from the right place.
+  if (apiBaseUrlOverride) {
+    const cleanAsset = asset.startsWith('/') ? asset.substring(1) : asset;
+    return apiBaseUrlOverride + '/' + cleanAsset;
+  }
+
   // For Vite dev server, use root paths
   if (import.meta.env.DEV) {
     return asset.startsWith('/') ? asset : '/' + asset;
@@ -213,6 +271,9 @@ export const buildAssetUrl = asset => {
  */
 export const buildUploadUrl = path => {
   const cleanPath = path.startsWith('/') ? path.substring(1) : path;
+  if (apiBaseUrlOverride) {
+    return apiBaseUrlOverride + '/uploads/' + cleanPath;
+  }
   return buildPath('uploads/' + cleanPath);
 };
 

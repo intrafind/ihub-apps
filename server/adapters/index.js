@@ -6,25 +6,35 @@ import GoogleAdapter from './google.js';
 import MistralAdapter from './mistral.js';
 import VLLMAdapter from './vllm.js';
 import IAssistantConversationAdapter from './iassistant-conversation.js';
+import BedrockAdapter from './bedrock.js';
 
-// Adapter registry
-const adapters = {
-  openai: OpenAIAdapter,
-  'openai-responses': OpenAIResponsesAdapter,
-  anthropic: AnthropicAdapter,
-  google: GoogleAdapter,
-  mistral: MistralAdapter,
-  local: VLLMAdapter, // vLLM uses dedicated adapter with schema sanitization
-  'iassistant-conversation': IAssistantConversationAdapter
-};
+function getAdapterRegistry() {
+  return {
+    openai: OpenAIAdapter,
+    'openai-responses': OpenAIResponsesAdapter,
+    anthropic: AnthropicAdapter,
+    google: GoogleAdapter,
+    mistral: MistralAdapter,
+    local: VLLMAdapter, // vLLM uses dedicated adapter with schema sanitization
+    'iassistant-conversation': IAssistantConversationAdapter,
+    bedrock: BedrockAdapter
+  };
+}
 
 /**
  * Get the appropriate adapter for a model
  * @param {string} provider - The provider name
  * @returns {Object} The provider adapter
+ * @throws {Error} If the provider is not registered
  */
 export function getAdapter(provider) {
-  const adapter = adapters[provider] || adapters['openai']; // Fallback to OpenAI
+  const adapters = getAdapterRegistry();
+  const adapter = adapters[provider];
+  if (!adapter) {
+    throw new Error(
+      `Unknown provider "${provider}". Supported providers: ${Object.keys(adapters).join(', ')}`
+    );
+  }
   return adapter;
 }
 
@@ -34,22 +44,13 @@ export function getAdapter(provider) {
  * @param {Array} messages - The messages to send
  * @param {string} apiKey - The API key
  * @param {Object} options - Additional options like temperature
- * @returns {Object} Request details including URL, headers, and body
+ * @returns {Promise<Object>} Request details including URL, headers, and body
  */
-export function createCompletionRequest(model, messages, apiKey, options = {}) {
+export async function createCompletionRequest(model, messages, apiKey, options = {}, context = {}) {
   const adapter = getAdapter(model.provider);
-  return adapter.createCompletionRequest(model, messages, apiKey, options);
-}
-
-/**
- * Process a streaming response from the model
- * @param {string} provider - The provider name
- * @param {string} buffer - The response buffer to process
- * @returns {Promise<Object>} Result containing content, completion status and a normalized finish reason
- */
-export async function processResponseBuffer(provider, buffer) {
-  const adapter = getAdapter(provider);
-  return await adapter.processResponseBuffer(buffer);
+  // `context.signal` is the caller's abort / deadline signal: adapters that do
+  // network work while building the request (model discovery) honour it.
+  return await adapter.createCompletionRequest(model, messages, apiKey, options, context);
 }
 
 /**
@@ -61,4 +62,24 @@ export async function processResponseBuffer(provider, buffer) {
 export function formatMessages(provider, messages) {
   const adapter = getAdapter(provider);
   return adapter.formatMessages(messages);
+}
+
+/**
+ * Get the provider-specific config schema declared by the adapter (if any).
+ * The schema describes fields that are written to `model.config[key]` and
+ * is consumed by the admin Model Form Editor for dynamic field rendering.
+ *
+ * @param {string} provider - The provider name
+ * @returns {Promise<object|null>}
+ */
+export async function getProviderConfigSchema(provider) {
+  if (!provider) return null;
+  switch (provider) {
+    case 'bedrock': {
+      const mod = await import('./bedrock.js');
+      return mod.providerConfigSchema || null;
+    }
+    default:
+      return null;
+  }
 }

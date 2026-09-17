@@ -45,8 +45,7 @@ Add this to your `contents/apps/my-first-app.json`:
   "icon": "chat",
   "system": {
     "en": "You are a helpful assistant. Answer questions clearly and concisely."
-  },
-  "tokenLimit": 4000
+  }
 }
 ```
 
@@ -65,7 +64,6 @@ That's it! Your app will:
   "name": { "en": "Support Assistant" },
   "description": { "en": "24/7 customer support" },
   "system": { "en": "You are a friendly customer support agent. Help users with their questions professionally." },
-  "tokenLimit": 4000,
   "preferredStyle": "professional",
   "websearch": { "enabled": true, "enabledByDefault": true }
 }
@@ -78,7 +76,6 @@ That's it! Your app will:
   "name": { "en": "Document Analyzer" },
   "description": { "en": "Extract insights from documents" },
   "system": { "en": "Analyze uploaded documents and extract key information." },
-  "tokenLimit": 8000,
   "upload": {
     "enabled": true,
     "fileUpload": {
@@ -96,7 +93,6 @@ That's it! Your app will:
   "name": { "en": "Data Extractor" },
   "description": { "en": "Extract structured data from text" },
   "system": { "en": "Extract information and return it in JSON format." },
-  "tokenLimit": 4000,
   "preferredOutputFormat": "json",
   "outputSchema": {
     "type": "object",
@@ -134,7 +130,6 @@ Standard AI-powered chat interfaces with customizable prompts and settings. This
   "name": { "en": "My Chat Assistant" },
   "description": { "en": "AI assistant for general questions" },
   "system": { "en": "You are a helpful assistant." },
-  "tokenLimit": 4000,
   "color": "#4F46E5",
   "icon": "chat"
 }
@@ -448,7 +443,6 @@ Chat apps require these additional fields:
 | Field | Type | Description | Example |
 |-------|------|-------------|---------|
 | `system` | Object | Localized system prompts | `{"en": "You are a helpful assistant."}` |
-| `tokenLimit` | Number | Max tokens (1-1,000,000) | `4000` |
 
 Optional fields include: `preferredModel`, `preferredStyle`, `preferredTemperature`, `tools`, `variables`, `settings`, etc.
 
@@ -479,19 +473,19 @@ These optional fields work for all app types:
 | Field | Type | Default | Description |
 |-------|------|---------|-------------|
 | `enabled` | Boolean | `true` | Whether the app is enabled |
-| `order` | Number | - | Display order in app list |
+| `order` | Number | - | Display order in the apps browser, the start page and the sidebar. Editable by drag and drop under Admin → Apps → Reorder |
 | `category` | String | - | App category for grouping |
 
 ### Chat-Specific Fields Not Used in Redirect/Iframe Apps
 
 The following fields are specific to chat apps and are not used for redirect or iframe types:
-- `system`, `tokenLimit`, `preferredModel`, `preferredOutputFormat`
+- `system`, `preferredModel`, `preferredOutputFormat`
 - `preferredStyle`, `preferredTemperature`, `sendChatHistory`
 - `tools`, `websearch`, `variables`, `prompt`, `outputSchema`
 - `settings`, `inputMode`, `upload`, `features`
 - `greeting`, `starterPrompts`, `messagePlaceholder`
 - `allowEmptyContent`, `allowedModels`, `disallowModelSelection`
-- `sources`, `thinking`
+- `sources`, `thinking`, `ephemeral`
 
 ## Basic App Structure
 
@@ -515,7 +509,6 @@ Each app is defined with the following essential properties:
     "en": "System instructions in English",
     "de": "System instructions in German"
   },
-  "tokenLimit": 4096,
   "preferredModel": "gpt-3.5-turbo",
   "preferredOutputFormat": "markdown",
   "preferredStyle": "normal",
@@ -534,9 +527,8 @@ Each app is defined with the following essential properties:
 | `color`                 | String  | **Required.** Hex color code for app theming                                                                             |
 | `icon`                  | String  | **Required.** Icon identifier for the app (see [Available Icons](#available-icons))                                      |
 | `system`                | Object  | **Required for chat type.** Localized system prompts/instructions for the AI model                                       |
-| `tokenLimit`            | Number  | **Required for chat type.** Maximum token limit for context window (1-1,000,000)                                        |
 | `type`                  | String  | Optional. App type: `"chat"` (default), `"redirect"`, or `"iframe"`                                                     |
-| `order`                 | Number  | Optional. Display order in the app list                                                                                  |
+| `order`                 | Number  | Optional. Display order in the apps browser, the start page and the sidebar. Editable by drag and drop under Admin → Apps → Reorder |
 | `enabled`               | Boolean | Optional. Whether the app is enabled. Default: `true`                                                                    |
 | `category`              | String  | Optional. Category label for grouping apps in the UI                                                                     |
 | `preferredModel`        | String  | Optional. Default AI model to use with this app. If omitted, uses the model marked as default in `models.json`          |
@@ -545,6 +537,7 @@ Each app is defined with the following essential properties:
 | `preferredTemperature`  | Number  | Optional. Temperature setting (0.0-2.0) controlling randomness                                                           |
 | `sendChatHistory`       | Boolean | Optional. Whether to include chat history in API requests. Default: `true`                                               |
 | `autoStart`             | Boolean | Optional. Automatically start the chat as soon as the app opens (sends the configured `prompt` without user input). Default: `false` |
+| `ephemeral`             | Boolean | Optional. When `true`, the chat is never stored. Messages exist only in memory while the chat is open and are discarded when the user switches apps or reloads the page. No chat history or iAssistant conversation ID is written to browser storage. This is the default value for the ghost-icon toggle users see below the chat input, next to the send button (hide it with `settings.ephemeral.enabled: false`). While active, the input is highlighted and a notice explains that messages are not saved — similar to a browser's incognito mode. Default: `false` |
 | `allowEmptyContent`     | Boolean | Optional. Allow users to submit the form without entering content in the main input field. Default: `false`              |
 | `allowedModels`         | Array   | Optional. Array of model IDs to restrict which models can be selected for this app                                       |
 | `disallowModelSelection`| Boolean | Optional. Hide the model selector so users cannot change the model. Default: `false`                                     |
@@ -556,6 +549,7 @@ Each app is defined with the following essential properties:
 | `imageGeneration`       | Object  | Optional. Default image generation parameters for this app. See [Image Generation](#image-generation-configuration) below |
 | `thinking`              | Object  | Optional. Extended thinking configuration for supported models. See [Thinking Configuration](#thinking-configuration) below |
 | `tools`                 | Array   | Optional. Array of tool identifiers available in this app                                                                |
+| `apps`                  | Array   | Optional. Array of app IDs this app may invoke as tools (`app__<id>`). Requires the `appAsTool` platform feature. See [Apps as Tools](#apps-as-tools-concierge-pattern) below |
 | `websearch`             | Object  | Optional. Unified web search configuration. See [Web Search Configuration](#web-search-configuration) below             |
 | `sources`               | Array   | Optional. Array of source reference IDs for knowledge base access                                                       |
 | `allowInheritance`      | Boolean | Optional. Allow child apps to inherit configuration from this app. Default: `false`                                      |
@@ -690,6 +684,7 @@ When a setting is disabled (`false`), the corresponding UI element will be hidde
 
 - `imageUpload` – allow users to attach images (see [Image Upload Feature](image-upload-feature.md))
 - `fileUpload` – allow users to upload text or PDF files (see [File Upload Feature](file-upload-feature.md))
+- `compareMode` – enable side-by-side comparison of two different models (see [Compare Mode](compare-mode.md))
 
 #### Input Mode
 
@@ -900,12 +895,47 @@ The `skills` array specifies which skill identifiers are available for an app. S
 | `skillSettings.autoActivate`   | Boolean | -       | When `true`, all listed skills are activated automatically when the app opens        |
 | `skillSettings.maxActiveSkills`| Number  | -       | Maximum number of skills that can be active at the same time (1-10)                 |
 
+#### Apps as Tools (Concierge Pattern)
+
+The `apps` array lets an app delegate to other apps. Each listed app is exposed to the model
+as a synthetic tool named `app__<appId>` — its description is the target app's description and
+its parameters are derived from the target app's `variables` (plus a required `message`
+parameter). When the model calls the tool, the target app runs its full chat pipeline
+**server-side and in-process** (own system prompt, own preferred model, own tools and
+sources — no REST round-trip) and returns its answer as the tool result.
+
+This enables a "concierge" bot that routes requests to specialist bots:
+
+```json
+{
+  "id": "concierge",
+  "name": { "en": "Concierge" },
+  "description": { "en": "Routes your request to the right assistant" },
+  "system": {
+    "en": "You are a concierge. Delegate domain questions to the available app tools and synthesize their answers. State which specialist you consulted."
+  },
+  "apps": ["hr-bot", "it-support-bot", "travel-bot"]
+}
+```
+
+Requirements and behavior:
+
+| Aspect            | Behavior                                                                                                          |
+| ----------------- | ----------------------------------------------------------------------------------------------------------------- |
+| Feature flag      | The `appAsTool` platform feature must be enabled (Admin → Features). Off by default.                               |
+| Permissions       | Users can only reach target apps their groups allow — the same check as opening the app directly. Apps the user may not access are not offered to the model at all. |
+| Nesting           | One level only. A called app runs without `app__*` tools, so chains like A → B → C (or loops) cannot form. Self-references are ignored. |
+| Model             | Each target app resolves its own model (`preferredModel` or platform default). The target model must support tools only if the target app itself uses tools. The calling app's model must support tool calling. |
+| Statelessness     | Each call is a fresh, single-turn invocation of the target app — no chat history is shared in either direction.    |
+| Tool description  | Write target app descriptions as if instructing the concierge's model when to pick that specialist — the description **is** the tool description. |
+
 #### iAssistant Configuration
 
 The `iassistant` property configures app-specific overrides for the iAssistant search integration. When set, these values take precedence over the global `iAssistant` settings in `platform.json`.
 
 ```json
 "iassistant": {
+  "enabled": true,
   "baseUrl": "https://iassistant.example.com",
   "profileId": "my-search-profile",
   "filter": [
@@ -926,6 +956,7 @@ The `iassistant` property configures app-specific overrides for the iAssistant s
 
 | Property                    | Type   | Description                                                                                      |
 | --------------------------- | ------ | ------------------------------------------------------------------------------------------------ |
+| `iassistant.enabled`        | Boolean | Enable or disable iAssistant integration for this app. Default: `false`                         |
 | `iassistant.baseUrl`        | String | Base URL of the iAssistant service, overriding the platform-level default                        |
 | `iassistant.profileId`      | String | iAssistant profile ID that determines the search index and configuration                         |
 | `iassistant.filter`         | Array  | Array of filter objects to restrict search results. Each filter has `key`, `values`, and optional `isNegated` |
@@ -935,6 +966,21 @@ The `iassistant` property configures app-specific overrides for the iAssistant s
 | `iassistant.searchMode`     | String | Search algorithm mode (e.g., `"semantic"`, `"fulltext"`, `"hybrid"`)                            |
 | `iassistant.searchDistance` | String | Similarity threshold for semantic search results (e.g., `"0.7"`)                                |
 | `iassistant.searchFields`   | Object | Map of field names to boost weights for relevance tuning                                         |
+| `iassistant.searchProfile`  | String | iAssistant search profile used for retrieval (e.g., `"searchprofile-standard"`)                  |
+| `iassistant.extraContext`   | String | Additional context sent to the iAssistant when a conversation starts. Supports global prompt variables (see below) |
+| `iassistant.systemPromptPreamble` | String | Text prepended to the iAssistant's system prompt. Supports global prompt variables (see below) |
+
+**Prompt variables in `extraContext` and `systemPromptPreamble`:**
+
+Both fields support the same global prompt variables as system prompts — built-ins like `{{user_name}}`, `{{user_email}}`, `{{date}}`, `{{date_iso}}`, `{{time}}`, `{{timezone}}`, `{{locale}}`, plus any custom variables defined under **Admin → Prompts → Global Variables**. Values resolve against the requesting user when the conversation is created, so every user gets a personalized context:
+
+```json
+"iassistant": {
+  "extraContext": "You are talking to {{user_name}} ({{user_email}}). Today is {{date}} ({{date_iso}}), the user's timezone is {{timezone}}."
+}
+```
+
+Unknown placeholders are left in the text unchanged (the same behavior as system prompts), so typos are visible instead of silently disappearing. Note that the context is fixed when the conversation is created: date and time variables reflect the start of the conversation, not each individual message.
 
 #### Image Generation Configuration
 
@@ -959,7 +1005,7 @@ The `thinking` property enables extended thinking for models that support it (e.
 ```json
 "thinking": {
   "enabled": true,
-  "budget": 5000,
+  "level": "medium",
   "thoughts": true
 }
 ```
@@ -967,12 +1013,16 @@ The `thinking` property enables extended thinking for models that support it (e.
 | Property           | Type    | Default | Description                                                                                             |
 | ------------------ | ------- | ------- | ------------------------------------------------------------------------------------------------------- |
 | `thinking.enabled` | Boolean | `false` | Enable extended thinking mode                                                                           |
-| `thinking.budget`  | Number  | -       | Token budget allocated for internal thinking steps. A positive integer sets a specific budget           |
+| `thinking.level`   | String  | `medium`| Reasoning effort: `minimal`, `low`, `medium` or `high`. More effort is slower and costs more tokens     |
 | `thinking.thoughts`| Boolean | `false` | When `true`, the model's internal thinking steps are included and displayed in the response             |
+
+An app's `thinking` block overrides the model's for that app. `thinking.budget`
+is no longer accepted — see [Models](models.md#model-thinking-configuration).
 
 #### Other Options
 
 - `autoStart`: Automatically begin the chat on app open, sending the configured `prompt` immediately
+- `ephemeral`: Never store the chat. Messages live only in memory while the chat is open and are discarded on app switch or reload. Useful for privacy-sensitive apps such as iFinder document chats
 - `allowEmptyContent`: Allow submission without content input
 - `allowedModels`: Restrict which models can be used with this app
 - `disallowModelSelection`: Prevent user from changing the model
@@ -1108,7 +1158,7 @@ Here are some practical examples of how to configure the settings for different 
 - Verify required fields are marked correctly
 
 **Tools not executing:**
-- Ensure tools are defined in `contents/config/tools.json`
+- Ensure tools are defined as individual files under `contents/tools/`
 - Check that tool IDs match exactly (case-sensitive)
 - Verify user has permissions for the specified tools
 
@@ -1225,14 +1275,15 @@ Web search is configured per-app using the `websearch` object. This replaces the
 | Property | Type | Default | Description |
 |----------|------|---------|-------------|
 | `enabled` | Boolean | `false` | Enable web search for this app |
-| `provider` | String | `"auto"` | Search provider: `"auto"`, `"brave"`, or `"tavily"` |
-| `useNativeSearch` | Boolean | `true` | Prefer native search (Google Search for Gemini, OpenAI Web Search for GPT) when the model supports it |
+| `provider` | String | `"auto"` | Search provider: `"auto"` or `"brave"` |
+| `useNativeSearch` | Boolean | `true` | Prefer native search (Google Search for Gemini, OpenAI Web Search for GPT, Anthropic Web Search for Claude) when the model supports it |
 | `maxResults` | Number | `5` | Maximum number of search results (1-20) |
 | `extractContent` | Boolean | `true` | Extract full page content from search results |
 | `contentMaxLength` | Number | `3000` | Maximum extracted content length per page in characters (500-50,000) |
 | `enabledByDefault` | Boolean | `false` | Whether web search is active by default; users can toggle it in the chat input |
+| `maxSearches` | Number | `5` | Cap on provider-run searches per model call when native search is used (Anthropic `max_uses`; 1-50) |
 
-The server automatically selects the best search tool at runtime: native Google/OpenAI search when the model supports it, or Brave/Tavily for other models.
+The server automatically selects the best search tool at runtime: native Google/OpenAI/Anthropic search when the model supports it, or Brave for other models.
 
 For full details including provider setup and API keys, see **[Web Tools](web-tools.md)**.
 

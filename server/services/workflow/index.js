@@ -21,7 +21,12 @@
  * const state = await engine.start(workflowDefinition, initialData);
  */
 
-export { WorkflowEngine, default as workflowEngine } from './WorkflowEngine.js';
+export {
+  WorkflowEngine,
+  getWorkflowEngine,
+  resetWorkflowEngine,
+  default as workflowEngine
+} from './WorkflowEngine.js';
 export { DAGScheduler } from './DAGScheduler.js';
 export {
   StateManager,
@@ -34,4 +39,3 @@ export {
   getExecutionRegistry,
   resetExecutionRegistry
 } from './ExecutionRegistry.js';
-export { WorkflowLLMHelper, default as workflowLLMHelper } from './WorkflowLLMHelper.js';

@@ -1,5 +1,10 @@
 // Shared file processing utilities for upload components
 import { fetchMimetypesConfig } from '../../../api/endpoints/config';
+// Resolved by Vite at build time → copied to dist as a local asset.
+// Using the ?url suffix is the correct Vite pattern for worker files from
+// node_modules; it ensures offline/air-gapped deployments work and the
+// version always tracks the installed pdfjs-dist package.
+import pdfjsWorkerUrl from 'pdfjs-dist/build/pdf.worker.min.mjs?url';
 
 // Cache for mimetypes configuration
 let mimetypesConfigCache = null;
@@ -127,15 +132,20 @@ export const SUPPORTED_TEXT_FORMATS = getMimeTypesByCategories(['documents']);
 // Legacy MIME_TO_EXTENSION for backward compatibility - empty for now, use getMimeTypeDetails
 export const MIME_TO_EXTENSION = {};
 
-// Initialize config on module load (non-blocking)
-loadMimetypesConfig();
+// NB: no module-init prefetch of mimetypes here. In the browser extension
+// the side panel imports this transitively from sidepanel-entry.jsx's
+// static imports — i.e. before `installExtensionAuth` has set the apiClient
+// baseURL — so a module-init fetch resolves against `chrome-extension://`
+// and fails with ERR_FILE_NOT_FOUND. `loadMimetypesConfig` is called
+// lazily by every consumer that needs it, so warm-up here was only ever a
+// minor optimisation.
 
 // Lazy load PDF.js only when needed
 export const loadPdfjs = async () => {
   const pdfjsLib = await import('pdfjs-dist');
-  // Configure PDF.js worker
-  pdfjsLib.GlobalWorkerOptions.workerSrc =
-    'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/4.10.38/pdf.worker.min.mjs';
+  // Use the locally bundled worker (resolved by the static import above).
+  // Works in offline/air-gapped environments; version tracks pdfjs-dist.
+  pdfjsLib.GlobalWorkerOptions.workerSrc = pdfjsWorkerUrl;
   return pdfjsLib;
 };
 
@@ -145,16 +155,40 @@ export const loadMammoth = async () => {
   return mammoth;
 };
 
-// Lazy load MSGReader only when needed
+// Lazy load MSGReader only when needed.
+// @kenjiuno/msgreader is a CommonJS module that exposes the MsgReader class as
+// its default export (it sets both `__esModule` and `exports.default`). Because
+// of that double-default, bundler CJS/ESM interop can surface the constructor at
+// mod.default, mod.default.default, or mod itself depending on the build. Pick
+// the first candidate that is actually a constructor so it works everywhere.
 export const loadMsgReader = async () => {
-  const MsgReader = await import('@kenjiuno/msgreader');
+  const mod = await import('@kenjiuno/msgreader');
+  const MsgReader = [mod?.default?.default, mod?.default, mod].find(
+    candidate => typeof candidate === 'function'
+  );
+  if (!MsgReader) {
+    throw new Error('msg-reader-unavailable');
+  }
   return MsgReader;
+};
+
+// Lazy load the RTF decompressor only when a .msg has no plain/HTML body and we
+// must fall back to its compressed RTF stream (PidTagRtfCompressed).
+export const loadDecompressRtf = async () => {
+  const mod = await import('@kenjiuno/decompressrtf');
+  return mod?.decompressRTF || mod?.default?.decompressRTF || mod?.default;
 };
 
 // Lazy load JSZip only when needed for OpenOffice formats
 export const loadJSZip = async () => {
   const JSZip = await import('jszip');
   return JSZip.default;
+};
+
+// Lazy load SheetJS (xlsx) only when needed for spreadsheet reading
+export const loadXlsx = async () => {
+  const mod = await import('xlsx');
+  return mod.default ?? mod;
 };
 
 // Lazy load UTIF only when needed for TIFF processing
@@ -256,18 +290,179 @@ export const processTiffFile = async (file, options = {}) => {
 };
 
 /**
+ * Resize an already-loaded image to fit within `maxDimension` (longest edge)
+ * and re-encode it as JPEG. Shared canvas primitive used by both the
+ * uploader's processImageFile and the Office add-in's attachment resizer so
+ * the resize/re-encode behavior can't drift between the two call sites.
+ * @param {HTMLImageElement} img - A loaded image element
+ * @param {number} maxDimension - Maximum dimension for the longest edge
+ * @param {number} [quality] - JPEG re-encode quality (0-1)
+ * @returns {{ width: number, height: number, dataUrl: string }}
+ */
+export const resizeImageCanvas = (img, maxDimension, quality = 0.8) => {
+  let width = img.naturalWidth || img.width;
+  let height = img.naturalHeight || img.height;
+
+  if (width > height && width > maxDimension) {
+    height = Math.round((height * maxDimension) / width);
+    width = maxDimension;
+  } else if (height > maxDimension) {
+    width = Math.round((width * maxDimension) / height);
+    height = maxDimension;
+  }
+
+  const canvas = document.createElement('canvas');
+  canvas.width = width;
+  canvas.height = height;
+  const ctx = canvas.getContext('2d');
+  ctx.drawImage(img, 0, 0, width, height);
+  const dataUrl = canvas.toDataURL('image/jpeg', quality);
+
+  return { width, height, dataUrl };
+};
+
+/**
+ * Process an image (or TIFF) file into the uploader's preview/data shape.
+ * Handles multipage TIFF (optionally returning one result per page via
+ * `allowMultiple`), resizing regular images through `resizeImageCanvas`.
+ * @param {File} file - The image file to process
+ * @param {Object} [options] - Processing options
+ * @param {number} [options.maxDimension] - Maximum dimension for resizing
+ * @param {boolean} [options.resize] - Whether to resize images
+ * @param {boolean} [options.allowMultiple] - Return one result per TIFF page
+ * @param {number} [options.quality] - JPEG re-encode quality (0-1)
+ * @returns {Promise<Object>} `{ preview, data }` or `{ multipleResults }`
+ */
+export const processImageFile = async (file, options = {}) => {
+  const { maxDimension = 1024, resize = true, allowMultiple = false, quality = 0.8 } = options;
+  const isTiff = file.type === 'image/tiff' || file.type === 'image/tif';
+
+  if (isTiff) {
+    try {
+      const pages = await processTiffFile(file, { maxDimension, resize });
+
+      if (pages.length > 1 && allowMultiple) {
+        const pageResults = [];
+
+        for (let i = 0; i < pages.length; i++) {
+          const page = pages[i];
+
+          const response = await fetch(page.base64);
+          const blob = await response.blob();
+          const previewUrl = URL.createObjectURL(blob);
+
+          const baseFileName = file.name.replace(/\.tiff?$/i, '');
+          const fileName = `${baseFileName}_page${page.pageNumber}.png`;
+
+          pageResults.push({
+            preview: { type: 'image', url: previewUrl },
+            data: {
+              type: 'image',
+              source: 'local',
+              base64: page.base64,
+              fileName,
+              fileSize: blob.size,
+              fileType: 'image/png',
+              width: page.width,
+              height: page.height,
+              originalFileType: file.type,
+              originalFileName: file.name,
+              pageNumber: page.pageNumber,
+              totalPages: page.totalPages
+            }
+          });
+        }
+
+        return { multipleResults: pageResults };
+      }
+
+      const firstPage = pages[0];
+      const response = await fetch(firstPage.base64);
+      const blob = await response.blob();
+      const previewUrl = URL.createObjectURL(blob);
+
+      return {
+        preview: { type: 'image', url: previewUrl },
+        data: {
+          type: 'image',
+          source: 'local',
+          base64: firstPage.base64,
+          fileName: file.name.replace(/\.tiff?$/i, '.png'),
+          fileSize: blob.size,
+          fileType: 'image/png',
+          width: firstPage.width,
+          height: firstPage.height,
+          originalFileType: file.type,
+          originalFileName: file.name,
+          tiffPages: pages.length > 1 ? pages : undefined
+        }
+      };
+    } catch (error) {
+      console.error('Error processing TIFF file:', error);
+      throw new Error('tiff-processing-error');
+    }
+  }
+
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+
+    reader.onload = e => {
+      const img = new Image();
+      img.onload = () => {
+        const previewUrl = URL.createObjectURL(file);
+
+        if (!resize) {
+          return resolve({
+            preview: { type: 'image', url: previewUrl },
+            data: {
+              type: 'image',
+              source: 'local',
+              base64: e.target.result,
+              fileName: file.name,
+              fileSize: file.size,
+              fileType: file.type,
+              width: img.width,
+              height: img.height
+            }
+          });
+        }
+
+        const { width, height, dataUrl } = resizeImageCanvas(img, maxDimension, quality);
+
+        resolve({
+          preview: { type: 'image', url: previewUrl },
+          data: {
+            type: 'image',
+            source: 'local',
+            base64: dataUrl,
+            fileName: file.name,
+            fileSize: file.size,
+            fileType: 'image/jpeg',
+            width,
+            height
+          }
+        });
+      };
+      img.onerror = () => reject(new Error('invalid-image'));
+      img.src = e.target.result;
+    };
+
+    reader.onerror = () => reject(new Error('read-error'));
+    reader.readAsDataURL(file);
+  });
+};
+
+/**
  * Extract audio from a video file using Web Audio API
  * @param {File} file - The video file to extract audio from
  * @param {Object} options - Processing options
  * @param {string} options.format - Output format: 'wav' (default) or 'mp3'
  * @returns {Promise<Object>} Object with audioBuffer and metadata
  */
-export const extractAudioFromVideo = async (file, options = {}) => {
-  const { format = 'wav' } = options;
-
+export const extractAudioFromVideo = async file => {
+  let audioContext = null;
   try {
-    // Create audio context
-    const audioContext = new (window.AudioContext || window.webkitAudioContext)();
+    audioContext = new (window.AudioContext || window.webkitAudioContext)();
 
     // Read video file as ArrayBuffer
     const arrayBuffer = await file.arrayBuffer();
@@ -281,38 +476,20 @@ export const extractAudioFromVideo = async (file, options = {}) => {
       throw new Error('audio-decode-error');
     }
 
-    // Use OfflineAudioContext to render the audio
-    const offlineContext = new OfflineAudioContext(
-      audioBuffer.numberOfChannels,
-      audioBuffer.length,
-      audioBuffer.sampleRate
-    );
-
-    const source = offlineContext.createBufferSource();
-    source.buffer = audioBuffer;
-    source.connect(offlineContext.destination);
-    source.start();
-
-    const renderedBuffer = await offlineContext.startRendering();
-
-    // Convert to WAV format
-    const wavBlob = audioBufferToWav(renderedBuffer);
+    // decodeAudioData already yields the fully-decoded PCM. (An earlier version
+    // re-rendered it through a same-rate/same-channel OfflineAudioContext — a
+    // pure copy that doubled peak memory on long videos.)
+    const wavBlob = audioBufferToWav(audioBuffer);
     const wavBase64 = await blobToBase64(wavBlob);
 
-    // Get duration in seconds
-    const duration = renderedBuffer.duration;
-
-    // Clean up
-    await audioContext.close();
-
     return {
-      audioBuffer: renderedBuffer,
+      audioBuffer,
       base64: wavBase64,
       blob: wavBlob,
       format: 'audio/wav',
-      sampleRate: renderedBuffer.sampleRate,
-      channels: renderedBuffer.numberOfChannels,
-      duration,
+      sampleRate: audioBuffer.sampleRate,
+      channels: audioBuffer.numberOfChannels,
+      duration: audioBuffer.duration,
       size: wavBlob.size
     };
   } catch (error) {
@@ -321,6 +498,69 @@ export const extractAudioFromVideo = async (file, options = {}) => {
       throw error;
     }
     throw new Error('video-audio-extraction-error');
+  } finally {
+    // Close on EVERY path: browsers cap concurrent AudioContexts (~6 in
+    // Chrome), so leaking one per failed decode would break all audio features
+    // (recording, dictation, decoding) until the page reloads.
+    if (audioContext && audioContext.state !== 'closed') {
+      audioContext.close().catch(() => {});
+    }
+  }
+};
+
+/**
+ * Convert a base64 data URL (or bare base64 string) to an ArrayBuffer without
+ * relying on fetch(), which does not handle `data:` URLs consistently across
+ * environments.
+ */
+const dataUrlToArrayBuffer = dataUrl => {
+  const commaIdx = dataUrl.indexOf(',');
+  const meta = commaIdx >= 0 ? dataUrl.slice(0, commaIdx) : '';
+  const payload = commaIdx >= 0 ? dataUrl.slice(commaIdx + 1) : dataUrl;
+  const isBase64 = commaIdx < 0 || /;base64/i.test(meta);
+  const binary = isBase64 ? atob(payload) : decodeURIComponent(payload);
+  const bytes = new Uint8Array(binary.length);
+  for (let i = 0; i < binary.length; i++) bytes[i] = binary.charCodeAt(i);
+  return bytes.buffer;
+};
+
+/**
+ * Decode an uploaded audio source into an AudioBuffer using the Web Audio API.
+ *
+ * Used by the Voxtral transcription flow: the decoded buffer is re-rendered to
+ * 16 kHz mono PCM16 and streamed to the realtime endpoint. Decoding happens in
+ * the browser, so codec support varies (e.g. Safari lacks OGG); an undecodable
+ * source raises `audio-decode-error` so the caller can surface a clear message
+ * (issue #1927 gap G10).
+ *
+ * @param {string|ArrayBuffer|Blob} input - A base64 data URL, an ArrayBuffer, or a Blob/File.
+ * @returns {Promise<AudioBuffer>}
+ */
+export const decodeAudioFileToBuffer = async input => {
+  let arrayBuffer;
+  if (typeof input === 'string') {
+    arrayBuffer = dataUrlToArrayBuffer(input);
+  } else if (input instanceof ArrayBuffer) {
+    arrayBuffer = input;
+  } else if (input && typeof input.arrayBuffer === 'function') {
+    arrayBuffer = await input.arrayBuffer();
+  } else {
+    throw new Error('audio-decode-error');
+  }
+
+  const audioContext = new (window.AudioContext || window.webkitAudioContext)();
+  try {
+    // decodeAudioData may detach the input buffer, so decode a copy.
+    return await audioContext.decodeAudioData(arrayBuffer.slice(0));
+  } catch (decodeError) {
+    console.error('Audio decode error:', decodeError);
+    throw new Error('audio-decode-error');
+  } finally {
+    try {
+      await audioContext.close();
+    } catch {
+      /* ignore */
+    }
   }
 };
 
@@ -445,7 +685,7 @@ export const readTextFile = file => {
 export const processPdfFile = async file => {
   const arrayBuffer = await file.arrayBuffer();
   const pdfjsLib = await loadPdfjs();
-  const pdf = await pdfjsLib.getDocument(arrayBuffer).promise;
+  const pdf = await pdfjsLib.getDocument({ data: new Uint8Array(arrayBuffer) }).promise;
   let textContent = '';
 
   for (let i = 1; i <= pdf.numPages; i++) {
@@ -462,7 +702,7 @@ export const processPdfFile = async file => {
 export const renderPdfPagesToImages = async (file, maxPages = 5, scale = 1.5) => {
   const arrayBuffer = await file.arrayBuffer();
   const pdfjsLib = await loadPdfjs();
-  const pdf = await pdfjsLib.getDocument(arrayBuffer).promise;
+  const pdf = await pdfjsLib.getDocument({ data: new Uint8Array(arrayBuffer) }).promise;
   const pages = Math.min(pdf.numPages, maxPages);
   const images = [];
   for (let i = 1; i <= pages; i++) {
@@ -490,33 +730,263 @@ export const processDocxFile = async file => {
   return tempDiv.textContent || tempDiv.innerText || '';
 };
 
+// Process XLSX / XLS file — converts all sheets to tab-separated text
+export const processXlsxFile = async file => {
+  const arrayBuffer = await file.arrayBuffer();
+  const XLSX = await loadXlsx();
+  const workbook = XLSX.read(arrayBuffer, { type: 'array' });
+
+  const parts = [];
+  for (const sheetName of workbook.SheetNames) {
+    const sheet = workbook.Sheets[sheetName];
+    const csv = XLSX.utils.sheet_to_csv(sheet, { FS: '\t' });
+    if (csv.trim()) {
+      parts.push(`[Sheet: ${sheetName}]\n${csv}`);
+    }
+  }
+  return parts.join('\n\n').trim();
+};
+
+// Map a Windows/MAPI code page number to a label TextDecoder understands.
+// MSG bodies stored as bytes (PidTagHtml, decompressed RTF) carry no charset of
+// their own, so we decode with the message's declared code page when possible.
+const CODEPAGE_TO_LABEL = {
+  20127: 'us-ascii',
+  28591: 'iso-8859-1',
+  28592: 'iso-8859-2',
+  28595: 'iso-8859-5',
+  65000: 'utf-7',
+  65001: 'utf-8',
+  1200: 'utf-16le',
+  1250: 'windows-1250',
+  1251: 'windows-1251',
+  1252: 'windows-1252',
+  1253: 'windows-1253',
+  1254: 'windows-1254',
+  1255: 'windows-1255',
+  1256: 'windows-1256',
+  1257: 'windows-1257',
+  1258: 'windows-1258',
+  932: 'shift_jis',
+  936: 'gbk',
+  949: 'euc-kr',
+  950: 'big5'
+};
+
+const decodeBytesWithCodepage = (bytes, ...codepages) => {
+  const label = codepages.map(cp => CODEPAGE_TO_LABEL[cp]).find(Boolean) || 'utf-8';
+  try {
+    return new TextDecoder(label).decode(bytes);
+  } catch {
+    return new TextDecoder('utf-8').decode(bytes);
+  }
+};
+
+// Convert an HTML fragment/document to readable plain text. Runs in the browser
+// (and jsdom) using an inert document, so no scripts run and no resources load.
+export const htmlToText = html => {
+  if (!html) return '';
+  const doc = new DOMParser().parseFromString(html, 'text/html');
+  doc
+    .querySelectorAll('script, style, head, title, meta, link, noscript')
+    .forEach(el => el.remove());
+  doc.querySelectorAll('br').forEach(br => br.replaceWith('\n'));
+  // Force a line break after common block-level elements so the flattened text
+  // keeps paragraph/row structure instead of running together.
+  doc
+    .querySelectorAll(
+      'p, div, tr, li, h1, h2, h3, h4, h5, h6, table, blockquote, section, article, header, footer'
+    )
+    .forEach(el => el.append('\n'));
+  const root = doc.body || doc.documentElement;
+  const text = root ? root.textContent || '' : '';
+  return text
+    .replace(/[ \t\u00a0]+/g, ' ')
+    .replace(/ *\n */g, '\n')
+    .replace(/\n{3,}/g, '\n\n')
+    .trim();
+};
+
+// Best-effort conversion of RTF to plain text. Handles HTML-encapsulated RTF
+// (MS-OXRTFEX, used by Outlook) by stripping the RTF wrapper and then flattening
+// the recovered HTML. Never throws; returns '' if nothing readable is found.
+const rtfToText = rtf => {
+  if (!rtf) return '';
+  let text = rtf
+    // Drop RTF-only spans that wrap the encapsulated HTML markup.
+    .replace(/\\htmlrtf\b[\s\S]*?\\htmlrtf0 ?/g, ' ')
+    .replace(/\\'([0-9a-fA-F]{2})/g, (_m, hex) => String.fromCharCode(parseInt(hex, 16)))
+    .replace(/\\u(-?\d+)\??/g, (_m, n) => {
+      let code = parseInt(n, 10);
+      if (code < 0) code += 65536;
+      return String.fromCharCode(code);
+    })
+    .replace(/\\par[d]?\b ?/g, '\n')
+    .replace(/\\line\b ?/g, '\n')
+    .replace(/\\tab\b ?/g, '\t')
+    .replace(/\\[a-zA-Z]+-?\d* ?/g, '') // remaining control words
+    .replace(/[{}]/g, '')
+    .replace(/\\\r?\n/g, '\n');
+  // Encapsulated HTML leaves real markup behind — flatten it to text.
+  if (/<\/?[a-z][\s\S]*>/i.test(text)) {
+    text = htmlToText(text);
+  }
+  return text
+    .replace(/[ \t\u00a0]+/g, ' ')
+    .replace(/ *\n */g, '\n')
+    .replace(/\n{3,}/g, '\n\n')
+    .trim();
+};
+
+// Outlook stores internal Exchange addresses as an X.500 DN (e.g. "/O=EXCHANGE
+// LABS/...") which is noise to a model. Prefer a real SMTP address when present.
+const isExchangeDn = value => typeof value === 'string' && /^\/[oO]=/.test(value);
+const pickEmail = (...candidates) => candidates.find(v => v && !isExchangeDn(v)) || '';
+
+const formatMsgParticipant = (name, email) => {
+  if (name && email && name !== email) return `${name} <${email}>`;
+  return name || email || '';
+};
+
+// Build a readable text representation (headers + body) from parsed MSG data.
+// Exported for unit testing of the fallback chain independent of the binary
+// parser. The body falls back across all storage formats Outlook may use:
+// plain text → HTML string → HTML bytes → compressed RTF.
+export const extractMsgContent = async fileData => {
+  if (!fileData) return '';
+
+  const headerLines = [];
+  if (fileData.subject) headerLines.push(`Subject: ${fileData.subject}`);
+
+  const senderEmail = pickEmail(
+    fileData.senderSmtpAddress,
+    fileData.sentRepresentingSmtpAddress,
+    fileData.senderEmail
+  );
+  const fromLine = formatMsgParticipant(fileData.senderName, senderEmail);
+  if (fromLine) headerLines.push(`From: ${fromLine}`);
+
+  const recipients = Array.isArray(fileData.recipients) ? fileData.recipients : [];
+  const formatGroup = type =>
+    recipients
+      .filter(r => (r.recipType || 'to').toLowerCase() === type)
+      .map(r => formatMsgParticipant(r.name, pickEmail(r.smtpAddress, r.email)))
+      .filter(Boolean)
+      .join(', ');
+  const toLine = formatGroup('to');
+  const ccLine = formatGroup('cc');
+  if (toLine) headerLines.push(`To: ${toLine}`);
+  if (ccLine) headerLines.push(`Cc: ${ccLine}`);
+
+  const date = fileData.messageDeliveryTime || fileData.clientSubmitTime || fileData.creationTime;
+  if (date) headerLines.push(`Date: ${date}`);
+
+  const attachmentNames = (Array.isArray(fileData.attachments) ? fileData.attachments : [])
+    .map(a => a.fileName || a.name)
+    .filter(Boolean);
+  if (attachmentNames.length > 0) {
+    headerLines.push(`Attachments: ${attachmentNames.join(', ')}`);
+  }
+
+  // Resolve the body across every format Outlook may have stored it in.
+  let body = '';
+  if (fileData.body && fileData.body.trim()) {
+    body = fileData.body.trim();
+  } else if (fileData.bodyHtml && String(fileData.bodyHtml).trim()) {
+    body = htmlToText(String(fileData.bodyHtml));
+  } else if (fileData.html) {
+    const htmlString =
+      typeof fileData.html === 'string'
+        ? fileData.html
+        : decodeBytesWithCodepage(
+            fileData.html,
+            fileData.internetCodepage,
+            fileData.messageCodepage
+          );
+    body = htmlToText(htmlString);
+  } else if (fileData.compressedRtf) {
+    try {
+      const decompressRTF = await loadDecompressRtf();
+      const rtfBytes = decompressRTF(Array.from(fileData.compressedRtf));
+      const rtf = decodeBytesWithCodepage(Uint8Array.from(rtfBytes), fileData.messageCodepage);
+      body = rtfToText(rtf);
+    } catch (error) {
+      console.warn('[fileProcessing] MSG RTF body extraction failed:', error);
+    }
+  }
+
+  return [headerLines.join('\n'), body].filter(Boolean).join('\n\n').trim();
+};
+
 // Process MSG file
 export const processMsgFile = async file => {
   const arrayBuffer = await file.arrayBuffer();
   const MsgReader = await loadMsgReader();
-  const msgReader = new MsgReader.default(arrayBuffer);
+  const msgReader = new MsgReader(arrayBuffer);
   const fileData = msgReader.getFileData();
+  return extractMsgContent(fileData);
+};
 
-  // Extract text content from MSG file
-  let textContent = '';
-  if (fileData.subject) {
-    textContent += `Subject: ${fileData.subject}\n\n`;
-  }
-  if (fileData.senderName) {
-    textContent += `From: ${fileData.senderName}`;
-    if (fileData.senderEmail) {
-      textContent += ` <${fileData.senderEmail}>`;
+// DrawingML namespace — text runs in PPTX slide XML live in <a:t> elements
+// under this namespace regardless of the prefix the producer chose.
+const DRAWINGML_NS = 'http://schemas.openxmlformats.org/drawingml/2006/main';
+
+// Process PPTX file — extracts the visible text of every slide from the OOXML
+// package (ppt/slides/slideN.xml). Without this handler PPTX fell through to
+// readTextFile, which decoded the raw ZIP container as text and shipped
+// hundreds of thousands of garbage tokens to the model.
+export const processPptxFile = async file => {
+  const arrayBuffer = await file.arrayBuffer();
+  const JSZip = await loadJSZip();
+  const zip = await JSZip.loadAsync(arrayBuffer);
+
+  const slideNumber = path => {
+    const match = path.match(/slide(\d+)\.xml$/);
+    return match ? parseInt(match[1], 10) : 0;
+  };
+  const slidePaths = Object.keys(zip.files)
+    .filter(path => /^ppt\/slides\/slide\d+\.xml$/.test(path))
+    .sort((a, b) => slideNumber(a) - slideNumber(b));
+
+  const parser = new DOMParser();
+  const slides = [];
+  for (const path of slidePaths) {
+    const xml = await zip.file(path).async('string');
+    const doc = parser.parseFromString(xml, 'application/xml');
+    // Paragraphs (<a:p>) keep line structure; each holds one or more text
+    // runs (<a:t>) that must be joined without separators (a word can be
+    // split across runs by formatting boundaries).
+    const paragraphs = [];
+    for (const p of Array.from(doc.getElementsByTagNameNS(DRAWINGML_NS, 'p'))) {
+      const line = Array.from(p.getElementsByTagNameNS(DRAWINGML_NS, 't'))
+        .map(t => t.textContent)
+        .join('')
+        .trim();
+      if (line) paragraphs.push(line);
     }
-    textContent += '\n';
-  }
-  if (fileData.recipients && fileData.recipients.length > 0) {
-    textContent += `To: ${fileData.recipients.map(r => r.name || r.email).join(', ')}\n`;
-  }
-  if (fileData.body) {
-    textContent += `\n${fileData.body}`;
+    if (paragraphs.length > 0) {
+      slides.push(`[Slide ${slideNumber(path)}]\n${paragraphs.join('\n')}`);
+    }
   }
 
-  return textContent.trim();
+  return slides.join('\n\n').trim();
+};
+
+// Heuristic check that a string produced by reading a file "as text" is
+// actually text. Binary containers (ZIP, OLE, images) decode to NUL bytes
+// and long runs of U+FFFD replacement characters — either signal means the
+// file has no meaningful text representation and must not be sent to the
+// model as content.
+export const looksLikeBinaryText = text => {
+  if (!text) return false;
+  const sample = text.slice(0, 8192);
+  let replacements = 0;
+  for (let i = 0; i < sample.length; i++) {
+    const code = sample.charCodeAt(i);
+    if (code === 0) return true;
+    if (code === 0xfffd) replacements++;
+  }
+  return replacements > sample.length * 0.05;
 };
 
 // Process OpenOffice/LibreOffice file
@@ -591,10 +1061,13 @@ export const processDocumentFile = async file => {
   ) {
     content = await processDocxFile(file);
   } else if (
-    file.type === 'application/vnd.ms-outlook' ||
-    file.type === 'application/x-msg' ||
-    fileExtension === '.msg'
+    file.type === 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' ||
+    file.type === 'application/vnd.ms-excel' ||
+    fileExtension === '.xlsx' ||
+    fileExtension === '.xls'
   ) {
+    content = await processXlsxFile(file);
+  } else if (file.type === 'application/vnd.ms-outlook' || fileExtension === '.msg') {
     content = await processMsgFile(file);
   } else if (
     file.type === 'image/tif' ||
@@ -603,6 +1076,16 @@ export const processDocumentFile = async file => {
     fileExtension === '.tiff'
   ) {
     content = await processTiffFile(file);
+  } else if (
+    file.type === 'application/vnd.openxmlformats-officedocument.presentationml.presentation' ||
+    fileExtension === '.pptx'
+  ) {
+    content = await processPptxFile(file);
+  } else if (file.type === 'application/vnd.ms-powerpoint' || fileExtension === '.ppt') {
+    // Legacy binary PowerPoint (OLE compound file) — no client-side extractor
+    // exists. Reject instead of falling through to readTextFile, which would
+    // decode the OLE container as garbage text.
+    throw new Error('unsupported-format');
   } else if (
     file.type === 'application/vnd.oasis.opendocument.text' ||
     file.type === 'application/vnd.oasis.opendocument.spreadsheet' ||
@@ -615,6 +1098,12 @@ export const processDocumentFile = async file => {
   } else {
     // Default: read as text file
     content = await readTextFile(file);
+    // Unknown binary formats (renamed Office files, archives, executables)
+    // decode to NUL/replacement-character soup here — refuse to treat that
+    // as document content rather than flooding the model's context window.
+    if (looksLikeBinaryText(content)) {
+      throw new Error('unsupported-format');
+    }
   }
 
   return { content, pageImages };

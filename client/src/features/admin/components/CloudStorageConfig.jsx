@@ -2,8 +2,17 @@ import { useState, useEffect } from 'react';
 import { useTranslation } from 'react-i18next';
 import Icon from '../../../shared/components/Icon';
 import { makeAdminApiCall } from '../../../api/adminApi';
+import { CredentialRefSelect } from './OpenApiToolEditor';
 
-function CloudStorageConfig() {
+/**
+ * @param {Object} props
+ * @param {'office365'|'googledrive'|'nextcloud'} [props.filterType] When
+ *   set, the component only lists / edits providers of this type and
+ *   the "Add provider" action seeds a provider of the same type. Used
+ *   by the dedicated `/admin/integrations/{office365,google-drive,nextcloud}`
+ *   subpages so each integration has its own admin home.
+ */
+function CloudStorageConfig({ filterType } = {}) {
   const { t } = useTranslation();
   const [config, setConfig] = useState({
     enabled: false,
@@ -14,6 +23,9 @@ function CloudStorageConfig() {
   const [message, setMessage] = useState('');
   const [editingProvider, setEditingProvider] = useState(null);
   const [showAddProvider, setShowAddProvider] = useState(false);
+  // Briefly flip to true after the admin clicks "Copy" on the callback
+  // URL so we can swap the icon to a check and give visual confirmation.
+  const [callbackUrlCopied, setCallbackUrlCopied] = useState(false);
 
   // Fetch current cloud storage configuration on mount
   useEffect(() => {
@@ -46,23 +58,31 @@ function CloudStorageConfig() {
   };
 
   const handleAddProvider = () => {
+    const type = filterType || 'office365';
+    // Nextcloud intentionally has no `sources` map — it exposes a
+    // single per-user source (the files root). Office 365 and Google
+    // Drive seed the typical per-provider source toggles.
+    const defaultSources =
+      type === 'googledrive'
+        ? { myDrive: true, sharedDrives: true, sharedWithMe: true }
+        : type === 'nextcloud'
+          ? undefined
+          : { personalDrive: true, followedSites: true, teams: true };
+
     setEditingProvider({
       id: '',
       name: '', // This will be same as id for cloud storage providers
       displayName: '',
-      type: 'office365',
+      type,
       enabled: true,
-      tenantId: '',
+      tenantIdRef: '',
       clientId: '',
-      clientSecret: '',
+      clientSecretRef: '',
       siteUrl: '',
       driveId: '',
+      serverUrl: '',
       redirectUri: '',
-      sources: {
-        personalDrive: true,
-        followedSites: true,
-        teams: true
-      }
+      sources: defaultSources
     });
     setShowAddProvider(true);
   };
@@ -97,14 +117,41 @@ function CloudStorageConfig() {
       return;
     }
 
-    // Set name to be same as id if not provided (for cloud storage providers)
-    const providerToSave = {
-      ...editingProvider,
-      name: editingProvider.name || editingProvider.id
+    // Set name to be same as id if not provided (for cloud storage providers).
+    // We also prune fields that belong to a different provider type — the
+    // edit form keeps stale values (e.g. tenantId left over after switching
+    // type from office365 to nextcloud) and those would otherwise be
+    // written to platform.json as empty strings, adding noise the
+    // discriminated-union schema flags as unknown fields.
+    // `sources` lives in the per-type lists because Nextcloud has no
+    // source toggles (see schema) and including it globally would
+    // persist an empty `sources` object for Nextcloud providers.
+    const fieldsByType = {
+      office365: ['tenantIdRef', 'clientId', 'clientSecretRef', 'siteUrl', 'driveId', 'sources'],
+      googledrive: ['clientId', 'clientSecretRef', 'sources'],
+      nextcloud: ['serverUrl', 'clientId', 'clientSecretRef']
     };
+    const allowed = new Set([
+      'id',
+      'name',
+      'displayName',
+      'type',
+      'enabled',
+      'redirectUri',
+      ...(fieldsByType[editingProvider.type] || [])
+    ]);
+    const providerToSave = {};
+    for (const [key, value] of Object.entries(editingProvider)) {
+      if (allowed.has(key)) providerToSave[key] = value;
+    }
+    providerToSave.name = providerToSave.name || providerToSave.id;
 
     if (providerToSave.type === 'office365') {
-      if (!providerToSave.tenantId || !providerToSave.clientId || !providerToSave.clientSecret) {
+      if (
+        !providerToSave.tenantIdRef ||
+        !providerToSave.clientId ||
+        !providerToSave.clientSecretRef
+      ) {
         setMessage({
           type: 'error',
           text: t('admin.cloudStorage.validation.clientSecretRequired')
@@ -114,12 +161,29 @@ function CloudStorageConfig() {
     }
 
     if (providerToSave.type === 'googledrive') {
-      if (!providerToSave.clientId || !providerToSave.clientSecret) {
+      if (!providerToSave.clientId || !providerToSave.clientSecretRef) {
         setMessage({
           type: 'error',
           text: t(
             'admin.cloudStorage.validation.googledriveRequired',
             'Client ID and Client Secret are required for Google Drive'
+          )
+        });
+        return;
+      }
+    }
+
+    if (providerToSave.type === 'nextcloud') {
+      if (
+        !providerToSave.serverUrl ||
+        !providerToSave.clientId ||
+        !providerToSave.clientSecretRef
+      ) {
+        setMessage({
+          type: 'error',
+          text: t(
+            'admin.cloudStorage.validation.nextcloudRequired',
+            'Server URL, Client ID, and Client Secret are required for Nextcloud'
           )
         });
         return;
@@ -173,7 +237,7 @@ function CloudStorageConfig() {
       // Save the updated platform config
       await makeAdminApiCall('/admin/configs/platform', {
         method: 'POST',
-        data: updatedPlatformConfig
+        body: updatedPlatformConfig
       });
 
       setMessage({
@@ -196,7 +260,7 @@ function CloudStorageConfig() {
 
   if (loading) {
     return (
-      <div className="bg-white dark:bg-gray-800 rounded-lg shadow-sm border border-gray-200 dark:border-gray-700 p-6">
+      <div className="bg-white dark:bg-gray-800 rounded-lg shadow-xs border border-gray-200 dark:border-gray-700 p-6">
         <div className="flex items-center justify-center">
           <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-indigo-600"></div>
         </div>
@@ -204,10 +268,42 @@ function CloudStorageConfig() {
     );
   }
 
+  // Scope the visible provider list when a host page passes filterType.
+  // Computed in the component body (not via an IIFE in the JSX) because the
+  // React Compiler does not optimise inline IIFEs and ESLint flags them.
+  const visibleProviders = filterType
+    ? config.providers.filter(p => p.type === filterType)
+    : config.providers;
+
+  // Pre-compute the auto-detected OAuth callback URL for the provider
+  // currently being edited so we can render it as a copyable hint
+  // inside the modal. Same rationale as `visibleProviders`: computed in
+  // the component body to keep the JSX free of IIFEs.
+  const editingProviderId = (editingProvider?.id || '').trim();
+  const browserOrigin =
+    typeof window !== 'undefined' && window.location?.origin
+      ? window.location.origin
+      : 'https://your-ihub-host';
+  const editingCallbackUrl =
+    editingProvider && editingProviderId
+      ? `${browserOrigin}/api/integrations/${editingProvider.type}/${encodeURIComponent(editingProviderId)}/callback`
+      : '';
+
+  const handleCopyCallbackUrl = async () => {
+    if (!editingCallbackUrl) return;
+    try {
+      await navigator.clipboard.writeText(editingCallbackUrl);
+      setCallbackUrlCopied(true);
+      setTimeout(() => setCallbackUrlCopied(false), 1500);
+    } catch (err) {
+      console.error('Failed to copy callback URL', err);
+    }
+  };
+
   return (
-    <div className="bg-white dark:bg-gray-800 rounded-lg shadow-sm border border-gray-200 dark:border-gray-700 p-6">
+    <div className="bg-white dark:bg-gray-800 rounded-lg shadow-xs border border-gray-200 dark:border-gray-700 p-6">
       <div className="flex items-start space-x-4">
-        <div className="flex-shrink-0 mt-1">
+        <div className="shrink-0 mt-1">
           <div className="p-3 rounded-full bg-indigo-100 dark:bg-indigo-900/50">
             <Icon name="cloud" size="lg" className="text-indigo-600 dark:text-indigo-400" />
           </div>
@@ -242,7 +338,7 @@ function CloudStorageConfig() {
               id="cloudStorageEnabled"
               checked={config.enabled}
               onChange={handleToggleEnabled}
-              className="h-4 w-4 text-indigo-600 focus:ring-indigo-500 border-gray-300 dark:border-gray-600 rounded"
+              className="h-4 w-4 text-indigo-600 focus:ring-indigo-500 border-gray-300 dark:border-gray-600 rounded-sm"
             />
             <label
               htmlFor="cloudStorageEnabled"
@@ -261,30 +357,26 @@ function CloudStorageConfig() {
                 </h4>
                 <button
                   onClick={handleAddProvider}
-                  className="inline-flex items-center px-3 py-1.5 border border-transparent text-xs font-medium rounded-md text-white bg-indigo-600 hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500"
+                  className="inline-flex items-center px-3 py-1.5 border border-transparent text-xs font-medium rounded-md text-white bg-indigo-600 hover:bg-indigo-700 focus:outline-hidden focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500"
                 >
                   <Icon name="plus" size="sm" className="mr-1" />
                   {t('admin.cloudStorage.addProvider')}
                 </button>
               </div>
 
-              {config.providers.length === 0 ? (
+              {visibleProviders.length === 0 ? (
                 <p className="text-sm text-gray-500 dark:text-gray-400 italic">
                   {t('admin.cloudStorage.noProviders')}
                 </p>
               ) : (
                 <div className="space-y-2">
-                  {config.providers.map(provider => (
+                  {visibleProviders.map(provider => (
                     <div
                       key={provider.id}
                       className="flex items-center justify-between p-3 border border-gray-200 dark:border-gray-700 rounded-md hover:bg-gray-50 dark:hover:bg-gray-700"
                     >
                       <div className="flex items-center space-x-3">
-                        <Icon
-                          name={provider.type === 'office365' ? 'cloud' : 'cloud'}
-                          size="md"
-                          className="text-gray-400"
-                        />
+                        <Icon name="cloud" size="md" className="text-gray-400" />
                         <div>
                           <p className="text-sm font-medium text-gray-900 dark:text-gray-100">
                             {provider.displayName}
@@ -292,7 +384,11 @@ function CloudStorageConfig() {
                           <p className="text-xs text-gray-500 dark:text-gray-400">
                             {provider.type === 'office365'
                               ? t('admin.cloudStorage.office365')
-                              : t('admin.cloudStorage.googledrive')}
+                              : provider.type === 'googledrive'
+                                ? t('admin.cloudStorage.googledrive')
+                                : provider.type === 'nextcloud'
+                                  ? t('admin.cloudStorage.nextcloud', 'Nextcloud')
+                                  : provider.type}
                             {' • '}
                             {provider.enabled
                               ? t('admin.cloudStorage.providerEnabled')
@@ -323,7 +419,7 @@ function CloudStorageConfig() {
 
           {/* Provider Editor Modal */}
           {showAddProvider && editingProvider && (
-            <div className="fixed inset-0 bg-gray-500 dark:bg-gray-900 bg-opacity-75 dark:bg-opacity-75 flex items-center justify-center z-50">
+            <div className="fixed inset-0 bg-gray-500/75 dark:bg-gray-900/75 flex items-center justify-center z-50">
               <div className="bg-white dark:bg-gray-800 rounded-lg shadow-xl max-w-2xl w-full max-h-[90vh] overflow-y-auto m-4">
                 <div className="p-6">
                   <h3 className="text-lg font-semibold text-gray-900 dark:text-gray-100 mb-4">
@@ -348,7 +444,7 @@ function CloudStorageConfig() {
                             name: e.target.value // Keep name in sync with id
                           })
                         }
-                        className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md shadow-sm focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 bg-white dark:bg-gray-900 text-gray-900 dark:text-gray-100"
+                        className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md shadow-xs focus:outline-hidden focus:ring-indigo-500 focus:border-indigo-500 bg-white dark:bg-gray-900 text-gray-900 dark:text-gray-100"
                         placeholder="office365-main"
                       />
                     </div>
@@ -364,7 +460,7 @@ function CloudStorageConfig() {
                         onChange={e =>
                           setEditingProvider({ ...editingProvider, displayName: e.target.value })
                         }
-                        className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md shadow-sm focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 bg-white dark:bg-gray-900 text-gray-900 dark:text-gray-100"
+                        className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md shadow-xs focus:outline-hidden focus:ring-indigo-500 focus:border-indigo-500 bg-white dark:bg-gray-900 text-gray-900 dark:text-gray-100"
                         placeholder="Company Office 365"
                       />
                     </div>
@@ -392,33 +488,38 @@ function CloudStorageConfig() {
                               followedSites: true,
                               teams: true
                             };
+                          } else if (newType === 'nextcloud') {
+                            // Nextcloud has no `sources` toggles — see
+                            // the schema comment on `nextcloudProviderSchema`.
+                            delete newProvider.sources;
                           }
                           setEditingProvider(newProvider);
                         }}
-                        className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md shadow-sm focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 bg-white dark:bg-gray-900 text-gray-900 dark:text-gray-100"
+                        className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md shadow-xs focus:outline-hidden focus:ring-indigo-500 focus:border-indigo-500 bg-white dark:bg-gray-900 text-gray-900 dark:text-gray-100"
                       >
                         <option value="office365">{t('admin.cloudStorage.office365')}</option>
                         <option value="googledrive">{t('admin.cloudStorage.googledrive')}</option>
+                        <option value="nextcloud">
+                          {t('admin.cloudStorage.nextcloud', 'Nextcloud')}
+                        </option>
                       </select>
                     </div>
 
                     {/* Office 365-specific fields */}
                     {editingProvider.type === 'office365' && (
                       <>
-                        <div>
-                          <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
-                            {t('admin.cloudStorage.tenantId')} *
-                          </label>
-                          <input
-                            type="text"
-                            value={editingProvider.tenantId}
-                            onChange={e =>
-                              setEditingProvider({ ...editingProvider, tenantId: e.target.value })
-                            }
-                            className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md shadow-sm focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 bg-white dark:bg-gray-900 text-gray-900 dark:text-gray-100"
-                            placeholder="your-tenant-id"
-                          />
-                        </div>
+                        <CredentialRefSelect
+                          value={editingProvider.tenantIdRef}
+                          onChange={id =>
+                            setEditingProvider({ ...editingProvider, tenantIdRef: id })
+                          }
+                          types={['secret']}
+                          label={`${t('admin.cloudStorage.tenantId')} *`}
+                          help={t(
+                            'admin.cloudStorage.tenantIdRefHelp',
+                            'Select a stored credential profile holding the tenant id.'
+                          )}
+                        />
 
                         <div>
                           <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
@@ -430,28 +531,23 @@ function CloudStorageConfig() {
                             onChange={e =>
                               setEditingProvider({ ...editingProvider, clientId: e.target.value })
                             }
-                            className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md shadow-sm focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 bg-white dark:bg-gray-900 text-gray-900 dark:text-gray-100"
+                            className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md shadow-xs focus:outline-hidden focus:ring-indigo-500 focus:border-indigo-500 bg-white dark:bg-gray-900 text-gray-900 dark:text-gray-100"
                             placeholder="your-client-id"
                           />
                         </div>
 
-                        <div>
-                          <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
-                            {t('admin.cloudStorage.clientSecret')} *
-                          </label>
-                          <input
-                            type="password"
-                            value={editingProvider.clientSecret}
-                            onChange={e =>
-                              setEditingProvider({
-                                ...editingProvider,
-                                clientSecret: e.target.value
-                              })
-                            }
-                            className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md shadow-sm focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 bg-white dark:bg-gray-900 text-gray-900 dark:text-gray-100"
-                            placeholder="your-client-secret"
-                          />
-                        </div>
+                        <CredentialRefSelect
+                          value={editingProvider.clientSecretRef}
+                          onChange={id =>
+                            setEditingProvider({ ...editingProvider, clientSecretRef: id })
+                          }
+                          types={['secret', 'oauth2']}
+                          label={`${t('admin.cloudStorage.clientSecret')} *`}
+                          help={t(
+                            'admin.cloudStorage.clientSecretRefHelp',
+                            'Select a stored credential profile holding the OAuth client secret.'
+                          )}
+                        />
 
                         <div>
                           <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
@@ -463,7 +559,7 @@ function CloudStorageConfig() {
                             onChange={e =>
                               setEditingProvider({ ...editingProvider, siteUrl: e.target.value })
                             }
-                            className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md shadow-sm focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 bg-white dark:bg-gray-900 text-gray-900 dark:text-gray-100"
+                            className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md shadow-xs focus:outline-hidden focus:ring-indigo-500 focus:border-indigo-500 bg-white dark:bg-gray-900 text-gray-900 dark:text-gray-100"
                             placeholder="https://yourcompany.sharepoint.com"
                           />
                         </div>
@@ -478,7 +574,7 @@ function CloudStorageConfig() {
                             onChange={e =>
                               setEditingProvider({ ...editingProvider, driveId: e.target.value })
                             }
-                            className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md shadow-sm focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 bg-white dark:bg-gray-900 text-gray-900 dark:text-gray-100"
+                            className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md shadow-xs focus:outline-hidden focus:ring-indigo-500 focus:border-indigo-500 bg-white dark:bg-gray-900 text-gray-900 dark:text-gray-100"
                             placeholder="drive-id"
                           />
                         </div>
@@ -502,7 +598,7 @@ function CloudStorageConfig() {
                                     }
                                   })
                                 }
-                                className="h-4 w-4 text-indigo-600 focus:ring-indigo-500 border-gray-300 rounded"
+                                className="h-4 w-4 text-indigo-600 focus:ring-indigo-500 border-gray-300 rounded-sm"
                               />
                               <span className="ml-2 text-sm text-gray-700">
                                 {t('admin.cloudStorage.personalOneDrive', 'Personal OneDrive')}
@@ -521,7 +617,7 @@ function CloudStorageConfig() {
                                     }
                                   })
                                 }
-                                className="h-4 w-4 text-indigo-600 focus:ring-indigo-500 border-gray-300 rounded"
+                                className="h-4 w-4 text-indigo-600 focus:ring-indigo-500 border-gray-300 rounded-sm"
                               />
                               <span className="ml-2 text-sm text-gray-700">
                                 {t(
@@ -543,7 +639,7 @@ function CloudStorageConfig() {
                                     }
                                   })
                                 }
-                                className="h-4 w-4 text-indigo-600 focus:ring-indigo-500 border-gray-300 rounded"
+                                className="h-4 w-4 text-indigo-600 focus:ring-indigo-500 border-gray-300 rounded-sm"
                               />
                               <span className="ml-2 text-sm text-gray-700">
                                 {t('admin.cloudStorage.microsoftTeams', 'Microsoft Teams')}
@@ -567,28 +663,23 @@ function CloudStorageConfig() {
                             onChange={e =>
                               setEditingProvider({ ...editingProvider, clientId: e.target.value })
                             }
-                            className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md shadow-sm focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 bg-white dark:bg-gray-900 text-gray-900 dark:text-gray-100"
+                            className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md shadow-xs focus:outline-hidden focus:ring-indigo-500 focus:border-indigo-500 bg-white dark:bg-gray-900 text-gray-900 dark:text-gray-100"
                             placeholder="your-client-id.apps.googleusercontent.com"
                           />
                         </div>
 
-                        <div>
-                          <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
-                            {t('admin.cloudStorage.clientSecret')} *
-                          </label>
-                          <input
-                            type="password"
-                            value={editingProvider.clientSecret}
-                            onChange={e =>
-                              setEditingProvider({
-                                ...editingProvider,
-                                clientSecret: e.target.value
-                              })
-                            }
-                            className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md shadow-sm focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 bg-white dark:bg-gray-900 text-gray-900 dark:text-gray-100"
-                            placeholder="your-client-secret"
-                          />
-                        </div>
+                        <CredentialRefSelect
+                          value={editingProvider.clientSecretRef}
+                          onChange={id =>
+                            setEditingProvider({ ...editingProvider, clientSecretRef: id })
+                          }
+                          types={['secret', 'oauth2']}
+                          label={`${t('admin.cloudStorage.clientSecret')} *`}
+                          help={t(
+                            'admin.cloudStorage.clientSecretRefHelp',
+                            'Select a stored credential profile holding the OAuth client secret.'
+                          )}
+                        />
 
                         {/* Google Drive Sources configuration */}
                         <div>
@@ -609,7 +700,7 @@ function CloudStorageConfig() {
                                     }
                                   })
                                 }
-                                className="h-4 w-4 text-indigo-600 focus:ring-indigo-500 border-gray-300 rounded"
+                                className="h-4 w-4 text-indigo-600 focus:ring-indigo-500 border-gray-300 rounded-sm"
                               />
                               <span className="ml-2 text-sm text-gray-700 dark:text-gray-300">
                                 {t('admin.cloudStorage.myDrive', 'My Drive')}
@@ -628,7 +719,7 @@ function CloudStorageConfig() {
                                     }
                                   })
                                 }
-                                className="h-4 w-4 text-indigo-600 focus:ring-indigo-500 border-gray-300 rounded"
+                                className="h-4 w-4 text-indigo-600 focus:ring-indigo-500 border-gray-300 rounded-sm"
                               />
                               <span className="ml-2 text-sm text-gray-700 dark:text-gray-300">
                                 {t('admin.cloudStorage.sharedDrives', 'Shared Drives')}
@@ -647,7 +738,7 @@ function CloudStorageConfig() {
                                     }
                                   })
                                 }
-                                className="h-4 w-4 text-indigo-600 focus:ring-indigo-500 border-gray-300 rounded"
+                                className="h-4 w-4 text-indigo-600 focus:ring-indigo-500 border-gray-300 rounded-sm"
                               />
                               <span className="ml-2 text-sm text-gray-700 dark:text-gray-300">
                                 {t('admin.cloudStorage.sharedWithMe', 'Shared with Me')}
@@ -657,6 +748,136 @@ function CloudStorageConfig() {
                         </div>
                       </>
                     )}
+
+                    {/* Nextcloud-specific fields */}
+                    {editingProvider.type === 'nextcloud' && (
+                      <>
+                        <div>
+                          <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+                            {t('admin.cloudStorage.serverUrl', 'Nextcloud Server URL')} *
+                          </label>
+                          <input
+                            type="url"
+                            value={editingProvider.serverUrl || ''}
+                            onChange={e =>
+                              setEditingProvider({
+                                ...editingProvider,
+                                serverUrl: e.target.value
+                              })
+                            }
+                            className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md shadow-xs focus:outline-hidden focus:ring-indigo-500 focus:border-indigo-500 bg-white dark:bg-gray-900 text-gray-900 dark:text-gray-100"
+                            placeholder="https://nextcloud.example.com"
+                          />
+                          <p className="mt-1 text-xs text-gray-500 dark:text-gray-400">
+                            {t(
+                              'admin.cloudStorage.serverUrlHint',
+                              'Base URL of your Nextcloud instance (no trailing slash).'
+                            )}
+                          </p>
+                        </div>
+
+                        <div>
+                          <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+                            {t('admin.cloudStorage.clientId')} *
+                          </label>
+                          <input
+                            type="text"
+                            value={editingProvider.clientId}
+                            onChange={e =>
+                              setEditingProvider({ ...editingProvider, clientId: e.target.value })
+                            }
+                            className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md shadow-xs focus:outline-hidden focus:ring-indigo-500 focus:border-indigo-500 bg-white dark:bg-gray-900 text-gray-900 dark:text-gray-100"
+                            placeholder="your-client-id"
+                          />
+                        </div>
+
+                        <CredentialRefSelect
+                          value={editingProvider.clientSecretRef}
+                          onChange={id =>
+                            setEditingProvider({ ...editingProvider, clientSecretRef: id })
+                          }
+                          types={['secret', 'oauth2']}
+                          label={`${t('admin.cloudStorage.clientSecret')} *`}
+                          help={t(
+                            'admin.cloudStorage.clientSecretRefHelp',
+                            'Select a stored credential profile holding the OAuth client secret.'
+                          )}
+                        />
+
+                        {/* Nextcloud has a single per-user source (the
+                            files root) so no Sources toggle is exposed
+                            — see comment on `nextcloudProviderSchema`. */}
+                      </>
+                    )}
+
+                    {/* Calculated callback URL — mirrors `_buildCallbackUrl`
+                        in each provider's server-side service:
+                        `${origin}/api/integrations/${type}/${providerId}/callback`.
+                        Showing it live as the admin types the provider ID lets
+                        them copy-paste straight into the IdP's redirect-URI
+                        field without having to construct it by hand. */}
+                    <div>
+                      <label
+                        htmlFor="cloudStorage-callback-url"
+                        className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1"
+                      >
+                        {t('admin.cloudStorage.callbackUrl', 'Callback URL')}
+                      </label>
+                      <div className="flex">
+                        <input
+                          id="cloudStorage-callback-url"
+                          type="text"
+                          readOnly
+                          aria-describedby="cloudStorage-callback-url-hint"
+                          value={
+                            editingCallbackUrl ||
+                            t(
+                              'admin.cloudStorage.callbackUrlPlaceholder',
+                              'Enter a Name above to generate the callback URL'
+                            )
+                          }
+                          className="flex-1 px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-l-md shadow-xs bg-gray-50 dark:bg-gray-900 text-gray-900 dark:text-gray-100 font-mono text-xs focus:outline-hidden"
+                          onFocus={e => e.target.select()}
+                        />
+                        <button
+                          type="button"
+                          onClick={handleCopyCallbackUrl}
+                          disabled={!editingCallbackUrl}
+                          className="inline-flex items-center px-3 py-2 border border-l-0 border-gray-300 dark:border-gray-600 rounded-r-md bg-white dark:bg-gray-800 text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-700 disabled:opacity-50 disabled:cursor-not-allowed"
+                          aria-label={
+                            callbackUrlCopied
+                              ? t('common.copied', 'Copied')
+                              : t('common.copy', 'Copy')
+                          }
+                          title={
+                            callbackUrlCopied
+                              ? t('common.copied', 'Copied')
+                              : t('common.copy', 'Copy')
+                          }
+                        >
+                          <Icon
+                            name={callbackUrlCopied ? 'check' : 'clipboard'}
+                            size="sm"
+                            className={callbackUrlCopied ? 'text-green-600' : ''}
+                            aria-hidden="true"
+                          />
+                        </button>
+                      </div>
+                      {/* aria-live announces "Copied" to screen readers
+                          without visually duplicating the icon swap. */}
+                      <span className="sr-only" aria-live="polite">
+                        {callbackUrlCopied ? t('common.copied', 'Copied') : ''}
+                      </span>
+                      <p
+                        id="cloudStorage-callback-url-hint"
+                        className="mt-1 text-xs text-gray-500 dark:text-gray-400"
+                      >
+                        {t(
+                          'admin.cloudStorage.callbackUrlHint',
+                          'Register this URL as the redirect URI in your provider (Azure AD / Google Cloud / Nextcloud OAuth admin). Leave the optional Redirect URI field below blank to use this auto-detected value.'
+                        )}
+                      </p>
+                    </div>
 
                     {/* Redirect URI (optional for all) */}
                     <div>
@@ -669,9 +890,15 @@ function CloudStorageConfig() {
                         onChange={e =>
                           setEditingProvider({ ...editingProvider, redirectUri: e.target.value })
                         }
-                        className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md shadow-sm focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 bg-white dark:bg-gray-900 text-gray-900 dark:text-gray-100"
+                        className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md shadow-xs focus:outline-hidden focus:ring-indigo-500 focus:border-indigo-500 bg-white dark:bg-gray-900 text-gray-900 dark:text-gray-100"
                         placeholder="https://your-app.com/auth/callback"
                       />
+                      <p className="mt-1 text-xs text-gray-500 dark:text-gray-400">
+                        {t(
+                          'admin.cloudStorage.redirectUriHint',
+                          'Optional. Override the auto-detected callback URL above. Useful when iHub is behind a proxy whose external hostname differs from what the server sees.'
+                        )}
+                      </p>
                     </div>
 
                     {/* Enabled Toggle */}
@@ -683,7 +910,7 @@ function CloudStorageConfig() {
                         onChange={e =>
                           setEditingProvider({ ...editingProvider, enabled: e.target.checked })
                         }
-                        className="h-4 w-4 text-indigo-600 focus:ring-indigo-500 border-gray-300 rounded"
+                        className="h-4 w-4 text-indigo-600 focus:ring-indigo-500 border-gray-300 rounded-sm"
                       />
                       <label htmlFor="providerEnabled" className="ml-2 block text-sm text-gray-900">
                         {t('admin.cloudStorage.providerEnabled')}
@@ -695,13 +922,13 @@ function CloudStorageConfig() {
                   <div className="mt-6 flex justify-end space-x-3">
                     <button
                       onClick={handleCancelEdit}
-                      className="px-4 py-2 border border-gray-300 rounded-md shadow-sm text-sm font-medium text-gray-700 bg-white hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500"
+                      className="px-4 py-2 border border-gray-300 rounded-md shadow-xs text-sm font-medium text-gray-700 bg-white hover:bg-gray-50 focus:outline-hidden focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500"
                     >
                       {t('common.cancel')}
                     </button>
                     <button
                       onClick={handleSaveProvider}
-                      className="px-4 py-2 border border-transparent rounded-md shadow-sm text-sm font-medium text-white bg-indigo-600 hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500"
+                      className="px-4 py-2 border border-transparent rounded-md shadow-xs text-sm font-medium text-white bg-indigo-600 hover:bg-indigo-700 focus:outline-hidden focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500"
                     >
                       {t('common.save')}
                     </button>
@@ -745,11 +972,11 @@ function CloudStorageConfig() {
             disabled={saving}
             className={`
               inline-flex items-center px-4 py-2 border border-transparent text-sm font-medium 
-              rounded-md shadow-sm text-white 
+              rounded-md shadow-xs text-white 
               ${
                 saving
                   ? 'bg-gray-400 cursor-not-allowed'
-                  : 'bg-indigo-600 hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500'
+                  : 'bg-indigo-600 hover:bg-indigo-700 focus:outline-hidden focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500'
               }
             `}
           >

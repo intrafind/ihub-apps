@@ -1,5 +1,13 @@
 # iFinder JWT Key Generation Guide
 
+> **Prefer the keyless approach.** You only need this guide if you are running
+> the legacy **manual key-exchange** setup. The recommended way to connect iHub
+> to iFinder is to reuse iHub's OIDC signing key and let iFinder fetch the public
+> key from iHub's JWKS endpoint — no key generation and no key exchange. See
+> [iFinder Keyless (OIDC/OAuth) JWT Integration](ifinder-oidc-jwt.md). Continue
+> below only if you specifically need to sign iFinder tokens with a dedicated,
+> manually managed RSA key pair.
+
 This guide provides step-by-step instructions for generating RSA public-private key pairs using OpenSSL for JWT authentication with iFinder integration.
 
 ## Overview
@@ -79,42 +87,39 @@ head -1 ifinder_public.pem
 
 ## iHub Apps Configuration
 
-### Environment Variable Configuration
+There are two supported ways to make the private key available to iHub Apps.
+`getIFinderPrivateKey()` (`server/utils/iFinderJwt.js`) checks the environment
+variable first, then falls back to the credential reference:
 
-Configure iHub Apps to use the private key for JWT signing:
+### Option A: Admin UI (recommended)
+
+1. Open **Admin > Credentials** and create a new credential of type
+   **Secret**, pasting the full contents of `ifinder_private.pem` (including
+   the `-----BEGIN`/`-----END` lines) as its value. It is encrypted at rest.
+2. Open **Admin > Integrations > iFinder**, leave "Use OIDC key pair"
+   unchecked, and select that credential in the **Private Key** field.
+3. Save. No environment variable or server restart is needed — the key is
+   read from the credential store on every JWT signing call.
+
+### Option B: Environment Variable
+
+Useful for local/CLI testing without touching the credential store:
 
 ```bash
 # Set the private key content as environment variable
 export IFINDER_PRIVATE_KEY="$(cat ifinder_private.pem)"
-
-# Alternative: Set the file path
-export IFINDER_PRIVATE_KEY_FILE="/path/to/ifinder_private.pem"
 
 # Other required iFinder configuration
 export IFINDER_API_URL="https://your-ifinder-instance.com"
 export IFINDER_SEARCH_PROFILE="your-default-search-profile"
 ```
 
-### Platform.json Configuration
+The environment variable always takes precedence over a configured
+credential. Restart the server after setting it.
 
-Alternatively, configure in your `contents/config/platform.json`:
-
-```json
-{
-  "iFinder": {
-    "baseUrl": "https://your-ifinder-instance.com",
-    "defaultSearchProfile": "your-default-search-profile",
-    "privateKey": "-----BEGIN PRIVATE KEY-----\nMIIEvgIBADANBgkqhkiG9w0BAQEFAASCBKgwggSkAgEAAoIBAQDKrCFR...\n-----END PRIVATE KEY-----",
-    "algorithm": "RS256",
-    "issuer": "ihub-apps",
-    "audience": "ifinder-api",
-    "defaultScope": "fi_index_read",
-    "tokenExpirationSeconds": 3600
-  }
-}
-```
-
-**Important**: When storing the private key in JSON, replace actual newlines with `\n` escape sequences.
+There is no `IFINDER_PRIVATE_KEY_FILE` variable — only the key's PEM content
+via `IFINDER_PRIVATE_KEY`, or a credential via `iFinder.privateKeyRef` in
+`platform.json` (set through the admin UI above), are read.
 
 ## iFinder Configuration
 
@@ -420,4 +425,4 @@ For issues with JWT key generation or iFinder integration:
 
 ---
 
-_Last updated: July 2024_
+_Last updated: September 2026_

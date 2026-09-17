@@ -66,7 +66,7 @@ function FooterCustomization({ config, onUpdate, t }) {
               type="checkbox"
               checked={config.enabled !== false}
               onChange={e => onUpdate({ enabled: e.target.checked })}
-              className="h-4 w-4 text-indigo-600 focus:ring-indigo-500 border-gray-300 dark:border-gray-600 rounded"
+              className="h-4 w-4 text-indigo-600 focus:ring-indigo-500 border-gray-300 dark:border-gray-600 rounded-sm"
             />
             <label className="ml-2 block text-sm text-gray-900 dark:text-gray-100">
               {t('admin.ui.footer.enabled', 'Enable Footer')}
@@ -109,7 +109,7 @@ function FooterCustomization({ config, onUpdate, t }) {
                 </label>
                 <button
                   onClick={addFooterLink}
-                  className="px-3 py-2 bg-indigo-600 text-white text-sm rounded-md hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-indigo-500"
+                  className="px-3 py-2 bg-indigo-600 text-white text-sm rounded-md hover:bg-indigo-700 focus:outline-hidden focus:ring-2 focus:ring-indigo-500"
                 >
                   {t('admin.ui.footer.addLink', 'Add Link')}
                 </button>
@@ -161,7 +161,7 @@ function FooterCustomization({ config, onUpdate, t }) {
                           value={link.href || ''}
                           onChange={e => updateFooterLink(index, { href: e.target.value })}
                           placeholder="/page-url or https://external.com"
-                          className="w-full px-2 py-1 border border-gray-300 dark:border-gray-600 rounded text-sm bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100"
+                          className="w-full px-2 py-1 border border-gray-300 dark:border-gray-600 rounded-sm text-sm bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100"
                         />
                         <div className="mt-2 flex items-center space-x-4">
                           <label className="flex items-center">
@@ -169,7 +169,7 @@ function FooterCustomization({ config, onUpdate, t }) {
                               type="checkbox"
                               checked={link.enabled !== false}
                               onChange={e => updateFooterLink(index, { enabled: e.target.checked })}
-                              className="rounded border-gray-300 dark:border-gray-600 text-indigo-600 focus:ring-indigo-500"
+                              className="rounded-sm border-gray-300 dark:border-gray-600 text-indigo-600 focus:ring-indigo-500"
                             />
                             <span className="ml-2 text-sm text-gray-600 dark:text-gray-400">
                               {t('admin.ui.footer.linkEnabled', 'Enabled')}
@@ -178,7 +178,7 @@ function FooterCustomization({ config, onUpdate, t }) {
                           <select
                             value={link.target || '_self'}
                             onChange={e => updateFooterLink(index, { target: e.target.value })}
-                            className="text-sm border border-gray-300 dark:border-gray-600 rounded px-2 py-1 bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100"
+                            className="text-sm border border-gray-300 dark:border-gray-600 rounded-sm px-2 py-1 bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100"
                           >
                             <option value="_self">
                               {t('admin.ui.footer.samePage', 'Same Page')}

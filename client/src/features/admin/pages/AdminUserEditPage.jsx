@@ -2,11 +2,12 @@ import { useState, useEffect } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
 import Icon from '../../../shared/components/Icon';
-import AdminAuth from '../components/AdminAuth';
-import AdminNavigation from '../components/AdminNavigation';
+import AdminBreadcrumb from '../components/AdminBreadcrumb';
+import { useUnsavedChanges } from '../hooks/useUnsavedChanges';
+import ConfirmDialog from '../../../shared/components/ConfirmDialog';
 import DualModeEditor from '../../../shared/components/DualModeEditor';
 import UserFormEditor from '../components/UserFormEditor';
-import { makeAdminApiCall } from '../../../api/adminApi';
+import { getAdminApiErrorMessage, makeAdminApiCall } from '../../../api/adminApi';
 import LoadingSpinner from '../../../shared/components/LoadingSpinner';
 import { getSchemaByType } from '../../../utils/schemaService';
 
@@ -15,22 +16,28 @@ function AdminUserEditPage() {
   const { userId } = useParams();
   const navigate = useNavigate();
   const [user, setUser] = useState(null);
+  const [initialData, setInitialData] = useState(null);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState(null);
+  const [saveError, setSaveError] = useState(null);
   const [jsonSchema, setJsonSchema] = useState(null);
+  const [availableGroups, setAvailableGroups] = useState([]);
 
   const isNewUser = userId === 'new';
+
+  const { blocker, markSaved } = useUnsavedChanges(initialData, user);
 
   // Generate a unique ID for new users
   const generateUserId = () => `user_${crypto.randomUUID().replace(/-/g, '_')}`;
 
   useEffect(() => {
     loadSchema();
+    loadGroups();
 
     if (isNewUser) {
       // Initialize new user with generated ID
-      setUser({
+      const defaultUser = {
         id: generateUserId(),
         username: '',
         email: null,
@@ -41,7 +48,9 @@ function AdminUserEditPage() {
         authMethods: ['local'],
         enabled: true,
         active: true
-      });
+      };
+      setUser(defaultUser);
+      setInitialData(defaultUser);
       setLoading(false);
       setError(null); // Clear any previous errors
     } else {
@@ -58,12 +67,11 @@ function AdminUserEditPage() {
             throw new Error('User not found');
           }
 
-          setUser({
-            ...userData,
-            password: ''
-          });
+          const loadedUser = { ...userData, password: '' };
+          setUser(loadedUser);
+          setInitialData(loadedUser);
         } catch (err) {
-          setError(err.message);
+          setError(getAdminApiErrorMessage(err));
         } finally {
           setLoading(false);
         }
@@ -82,16 +90,27 @@ function AdminUserEditPage() {
     }
   };
 
+  const loadGroups = async () => {
+    try {
+      const response = await makeAdminApiCall('/admin/groups');
+      const groups = response.data?.groups || {};
+      setAvailableGroups(Object.values(groups));
+    } catch (error) {
+      console.error('Failed to load groups:', error);
+    }
+  };
+
   const handleSave = async data => {
     if (!data) data = user;
 
     if (!data.username) {
-      setError('Username is required');
+      setSaveError('Username is required');
       return;
     }
 
     try {
       setSaving(true);
+      setSaveError(null);
       const method = isNewUser ? 'POST' : 'PUT';
       const url = isNewUser ? '/admin/auth/users' : `/admin/auth/users/${userId}`;
 
@@ -125,14 +144,14 @@ function AdminUserEditPage() {
         headers: {
           'Content-Type': 'application/json'
         },
-        body: JSON.stringify(apiData)
+        body: apiData
       });
 
+      markSaved();
       // Success - navigate back to users list
       navigate('/admin/users');
     } catch (err) {
-      setError(err.message);
-      throw err; // Re-throw to let DualModeEditor handle it
+      setSaveError(getAdminApiErrorMessage(err));
     } finally {
       setSaving(false);
     }
@@ -149,137 +168,158 @@ function AdminUserEditPage() {
 
   if (loading) {
     return (
-      <AdminAuth>
-        <AdminNavigation />
-        <div className="min-h-screen bg-gray-50 dark:bg-gray-900 flex items-center justify-center">
-          <LoadingSpinner size="lg" />
-        </div>
-      </AdminAuth>
+      <div className="min-h-screen bg-gray-50 dark:bg-gray-900 flex items-center justify-center">
+        <LoadingSpinner size="lg" />
+      </div>
     );
   }
 
   if (error) {
     return (
-      <AdminAuth>
-        <AdminNavigation />
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
-          <div className="bg-red-50 dark:bg-red-900/30 border border-red-200 dark:border-red-800 rounded-md p-4">
-            <div className="flex">
-              <div className="flex-shrink-0">
-                <Icon name="warning" size="md" className="text-red-400" />
-              </div>
-              <div className="ml-3">
-                <h3 className="text-sm font-medium text-red-800 dark:text-red-200">Error</h3>
-                <div className="mt-2 text-sm text-red-700 dark:text-red-300">{error}</div>
-              </div>
+      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
+        <div className="bg-red-50 dark:bg-red-900/30 border border-red-200 dark:border-red-800 rounded-md p-4">
+          <div className="flex">
+            <div className="shrink-0">
+              <Icon name="warning" size="md" className="text-red-400" />
+            </div>
+            <div className="ml-3">
+              <h3 className="text-sm font-medium text-red-800 dark:text-red-200">Error</h3>
+              <div className="mt-2 text-sm text-red-700 dark:text-red-300">{error}</div>
             </div>
           </div>
         </div>
-      </AdminAuth>
+      </div>
     );
   }
 
   return (
-    <AdminAuth>
-      <AdminNavigation />
-      <div className="min-h-screen bg-gray-50 dark:bg-gray-900">
-        <div className="max-w-4xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
-          <div className="mb-8">
-            <div className="flex items-center justify-between">
-              <div>
-                <h1 className="text-2xl font-semibold text-gray-900 dark:text-gray-100">
-                  {isNewUser
-                    ? t('admin.users.edit.createTitle', 'Create New User')
-                    : t('admin.users.edit.editTitle', 'Edit User')}
-                </h1>
-                <p className="mt-1 text-sm text-gray-600 dark:text-gray-400">
-                  {isNewUser
-                    ? t(
-                        'admin.users.edit.createDesc',
-                        'Create a new user account with permissions and settings'
-                      )
-                    : t(
-                        'admin.users.edit.editDesc',
-                        'Edit user account, permissions, and settings'
-                      )}
-                </p>
-              </div>
-              <div className="flex space-x-3">
-                {!isNewUser && (
-                  <button
-                    type="button"
-                    onClick={() => {
-                      const dataStr = JSON.stringify(user, null, 2);
-                      const dataUri =
-                        'data:application/json;charset=utf-8,' + encodeURIComponent(dataStr);
-                      const exportFileDefaultName = `user-${user.username}.json`;
-                      const linkElement = document.createElement('a');
-                      linkElement.setAttribute('href', dataUri);
-                      linkElement.setAttribute('download', exportFileDefaultName);
-                      linkElement.click();
-                    }}
-                    className="inline-flex items-center px-4 py-2 border border-gray-300 dark:border-gray-600 shadow-sm text-sm font-medium rounded-md text-gray-700 dark:text-gray-300 bg-white dark:bg-gray-700 hover:bg-gray-50 dark:hover:bg-gray-600 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500"
-                  >
-                    <Icon name="download" className="h-4 w-4 mr-2" />
-                    {t('common.download')}
-                  </button>
-                )}
+    <div className="min-h-screen bg-gray-50 dark:bg-gray-900">
+      <div className="max-w-4xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
+        <AdminBreadcrumb
+          crumbs={[
+            { label: 'Admin', href: '/admin' },
+            { label: 'Users', href: '/admin/users' },
+            { label: isNewUser ? 'New User' : (user?.username ?? userId) }
+          ]}
+        />
+        <div className="mb-8">
+          <div className="flex items-center justify-between">
+            <div>
+              <h1 className="text-2xl font-semibold text-gray-900 dark:text-gray-100">
+                {isNewUser
+                  ? t('admin.users.edit.createTitle', 'Create New User')
+                  : t('admin.users.edit.editTitle', 'Edit User')}
+              </h1>
+              <p className="mt-1 text-sm text-gray-600 dark:text-gray-400">
+                {isNewUser
+                  ? t(
+                      'admin.users.edit.createDesc',
+                      'Create a new user account with permissions and settings'
+                    )
+                  : t('admin.users.edit.editDesc', 'Edit user account, permissions, and settings')}
+              </p>
+            </div>
+            <div className="flex space-x-3">
+              {!isNewUser && (
                 <button
-                  onClick={() => navigate('/admin/users')}
-                  className="inline-flex items-center px-4 py-2 border border-gray-300 dark:border-gray-600 shadow-sm text-sm font-medium rounded-md text-gray-700 dark:text-gray-300 bg-white dark:bg-gray-700 hover:bg-gray-50 dark:hover:bg-gray-600 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500"
+                  type="button"
+                  onClick={() => {
+                    const dataStr = JSON.stringify(user, null, 2);
+                    const dataUri =
+                      'data:application/json;charset=utf-8,' + encodeURIComponent(dataStr);
+                    const exportFileDefaultName = `user-${user.username}.json`;
+                    const linkElement = document.createElement('a');
+                    linkElement.setAttribute('href', dataUri);
+                    linkElement.setAttribute('download', exportFileDefaultName);
+                    linkElement.click();
+                  }}
+                  className="inline-flex items-center px-4 py-2 border border-gray-300 dark:border-gray-600 shadow-xs text-sm font-medium rounded-md text-gray-700 dark:text-gray-300 bg-white dark:bg-gray-700 hover:bg-gray-50 dark:hover:bg-gray-600 focus:outline-hidden focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500"
                 >
-                  <Icon name="arrow-left" className="h-4 w-4 mr-2" />
-                  {t('admin.users.edit.backToList', 'Back to Users')}
+                  <Icon name="download" className="h-4 w-4 mr-2" />
+                  {t('common.download')}
                 </button>
+              )}
+              <button
+                onClick={() => navigate('/admin/users')}
+                className="inline-flex items-center px-4 py-2 border border-gray-300 dark:border-gray-600 shadow-xs text-sm font-medium rounded-md text-gray-700 dark:text-gray-300 bg-white dark:bg-gray-700 hover:bg-gray-50 dark:hover:bg-gray-600 focus:outline-hidden focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500"
+              >
+                <Icon name="arrow-left" className="h-4 w-4 mr-2" />
+                {t('admin.users.edit.backToList', 'Back to Users')}
+              </button>
+            </div>
+          </div>
+        </div>
+
+        {saveError && (
+          <div className="mb-6 bg-red-50 dark:bg-red-900/30 border border-red-200 dark:border-red-800 rounded-md p-4">
+            <div className="flex">
+              <div className="shrink-0">
+                <Icon name="warning" size="md" className="text-red-400" />
+              </div>
+              <div className="ml-3">
+                <h3 className="text-sm font-medium text-red-800 dark:text-red-200">Error</h3>
+                <div className="mt-2 text-sm text-red-700 dark:text-red-300">{saveError}</div>
               </div>
             </div>
           </div>
+        )}
 
-          <form onSubmit={handleFormSubmit} className="space-y-8">
-            <DualModeEditor
-              value={user}
-              onChange={handleDataChange}
-              formComponent={UserFormEditor}
-              formProps={{
-                isNewUser,
-                jsonSchema
-              }}
-              jsonSchema={jsonSchema}
-              title={
-                isNewUser
-                  ? t('admin.users.edit.createTitle', 'Create New User')
-                  : t('admin.users.edit.editTitle', 'Edit User')
-              }
-            />
+        <form onSubmit={handleFormSubmit} className="space-y-8">
+          <DualModeEditor
+            value={user}
+            onChange={handleDataChange}
+            formComponent={UserFormEditor}
+            formProps={{
+              isNewUser,
+              jsonSchema,
+              availableGroups
+            }}
+            jsonSchema={jsonSchema}
+            title={
+              isNewUser
+                ? t('admin.users.edit.createTitle', 'Create New User')
+                : t('admin.users.edit.editTitle', 'Edit User')
+            }
+          />
 
-            {/* Save buttons */}
-            <div className="flex justify-end space-x-4">
-              <button
-                type="button"
-                onClick={() => navigate('/admin/users')}
-                className="px-4 py-2 border border-gray-300 dark:border-gray-600 rounded-md shadow-sm text-sm font-medium text-gray-700 dark:text-gray-300 bg-white dark:bg-gray-700 hover:bg-gray-50 dark:hover:bg-gray-600 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500"
-              >
-                {t('admin.users.edit.cancel', 'Cancel')}
-              </button>
-              <button
-                type="submit"
-                disabled={saving}
-                className="px-4 py-2 border border-transparent rounded-md shadow-sm text-sm font-medium text-white bg-indigo-600 hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500 disabled:opacity-50"
-              >
-                {saving ? (
-                  <>
-                    <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white mr-2 inline-block"></div>
-                    {t('admin.users.edit.saving', 'Saving...')}
-                  </>
-                ) : (
-                  t('admin.users.edit.save', isNewUser ? 'Create User' : 'Save User')
-                )}
-              </button>
-            </div>
-          </form>
-        </div>
+          {/* Save buttons */}
+          <div className="flex justify-end space-x-4">
+            <button
+              type="button"
+              onClick={() => navigate('/admin/users')}
+              className="px-4 py-2 border border-gray-300 dark:border-gray-600 rounded-md shadow-xs text-sm font-medium text-gray-700 dark:text-gray-300 bg-white dark:bg-gray-700 hover:bg-gray-50 dark:hover:bg-gray-600 focus:outline-hidden focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500"
+            >
+              {t('admin.users.edit.cancel', 'Cancel')}
+            </button>
+            <button
+              type="submit"
+              disabled={saving}
+              className="px-4 py-2 border border-transparent rounded-md shadow-xs text-sm font-medium text-white bg-indigo-600 hover:bg-indigo-700 focus:outline-hidden focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500 disabled:opacity-50"
+            >
+              {saving ? (
+                <>
+                  <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white mr-2 inline-block"></div>
+                  {t('admin.users.edit.saving', 'Saving...')}
+                </>
+              ) : (
+                t('admin.users.edit.save', isNewUser ? 'Create User' : 'Save User')
+              )}
+            </button>
+          </div>
+        </form>
       </div>
-    </AdminAuth>
+
+      <ConfirmDialog
+        isOpen={blocker.state === 'blocked'}
+        title="Unsaved Changes"
+        message="You have unsaved changes. Leave anyway?"
+        confirmLabel="Leave"
+        denyLabel="Stay"
+        danger={false}
+        onConfirm={() => blocker.proceed?.()}
+        onDeny={() => blocker.reset?.()}
+      />
+    </div>
   );
 }
 

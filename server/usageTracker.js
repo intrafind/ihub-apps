@@ -1,24 +1,22 @@
-import fs from 'fs/promises';
 import path from 'path';
 import { getRootDir } from './pathUtils.js';
 import config from './config.js';
 
 import { recordTokenUsage } from './telemetry.js';
+import { recordMagicPromptUsage, recordFeedbackEvent } from './telemetry/metrics.js';
 import { resolveUserId } from './services/UserFingerprint.js';
 import { logUsageEvent } from './services/UsageEventLog.js';
-import logger from './utils/logger.js';
+import { createDebouncedJsonStore } from './utils/debouncedJsonStore.js';
+import { estimateTokens as estimateTokensShared } from '../shared/tokenEstimator.js';
 
 const contentsDir = config.CONTENTS_DIR;
 const dataFile = path.join(getRootDir(), contentsDir, 'data', 'usage.json');
-const SAVE_INTERVAL_MS = 10000;
 const now = () => new Date().toISOString();
 
-let usage = null;
 let trackingEnabled = true;
 let trackingMode = 'pseudonymous';
 let configLoaded = false;
-let dirty = false;
-let saveTimer = null;
+let migrationChecked = false;
 
 function createDefaultUsage() {
   return {
@@ -31,6 +29,8 @@ function createDefaultUsage() {
       prompt: { total: 0, perUser: {}, perApp: {}, perModel: {} },
       completion: { total: 0, perUser: {}, perApp: {}, perModel: {} }
     },
+    // Provider-run web searches billed on top of tokens (Anthropic web search).
+    webSearch: { total: 0, perUser: {}, perApp: {}, perModel: {} },
     feedback: {
       total: 0,
       ratings: { 1: 0, 2: 0, 3: 0, 4: 0, 5: 0 },
@@ -56,6 +56,15 @@ function createDefaultUsage() {
   };
 }
 
+const store = createDebouncedJsonStore({
+  filePath: dataFile,
+  createDefault: createDefaultUsage,
+  component: 'UsageTracker',
+  onBeforeSave: data => {
+    data.lastUpdated = now();
+  }
+});
+
 async function loadConfig() {
   if (configLoaded) return;
   try {
@@ -76,7 +85,7 @@ export function reloadConfig() {
 }
 
 function migrateLegacyFeedback(feedbackObj) {
-  if (!feedbackObj || typeof feedbackObj !== 'object') return;
+  if (!feedbackObj || typeof feedbackObj !== 'object') return false;
 
   // Initialize structure if missing
   if (!feedbackObj.ratings) {
@@ -105,77 +114,84 @@ function migrateLegacyFeedback(feedbackObj) {
     feedbackObj.ratings[5] += good;
     feedbackObj.ratings[1] += bad;
     feedbackObj.total = legacyTotal;
-
-    // Calculate weighted average: (5*good + 1*bad) / total
-    if (feedbackObj.total > 0) {
-      const weightedSum = 5 * good + 1 * bad;
-      feedbackObj.averageRating = weightedSum / feedbackObj.total;
-    } else {
-      feedbackObj.averageRating = 0;
-    }
+    feedbackObj.averageRating = computeAverageRating(feedbackObj.ratings);
   }
 
   // Keep legacy fields for backward compatibility
   feedbackObj.good = feedbackObj.good || 0;
   feedbackObj.bad = feedbackObj.bad || 0;
+
+  return needsMigration;
 }
 
 async function loadUsage() {
-  if (usage) return usage;
-  try {
-    const data = await fs.readFile(dataFile, 'utf8');
-    usage = JSON.parse(data);
-    usage.lastUpdated = usage.lastUpdated || now();
-    usage.lastReset = usage.lastReset || now();
+  const data = await store.load();
+  if (!migrationChecked) {
+    migrationChecked = true;
+    data.lastUpdated = data.lastUpdated || now();
+    data.lastReset = data.lastReset || now();
 
-    // Migrate top-level feedback
-    if (usage.feedback) {
-      migrateLegacyFeedback(usage.feedback);
+    if (data.feedback) {
+      let changed = migrateLegacyFeedback(data.feedback);
 
       // Migrate all nested feedback objects (perUser, perApp, perModel)
       ['perUser', 'perApp', 'perModel'].forEach(key => {
-        if (usage.feedback[key]) {
-          Object.keys(usage.feedback[key]).forEach(id => {
-            const feedbackItem = usage.feedback[key][id];
-            migrateLegacyFeedback(feedbackItem);
+        if (data.feedback[key]) {
+          Object.keys(data.feedback[key]).forEach(id => {
+            if (migrateLegacyFeedback(data.feedback[key][id])) changed = true;
           });
         }
       });
 
       // Mark as migrated by saving immediately
-      dirty = true;
-      await saveUsage();
+      if (changed) {
+        store.markDirty();
+        await store.flush();
+      }
     }
-  } catch {
-    usage = createDefaultUsage();
   }
-  return usage;
-}
-
-async function saveUsage() {
-  if (!usage || !dirty) return;
-  await fs.mkdir(path.dirname(dataFile), { recursive: true });
-  usage.lastUpdated = now();
-  await fs.writeFile(dataFile, JSON.stringify(usage, null, 2));
-  dirty = false;
-}
-
-function scheduleSave() {
-  if (saveTimer) return;
-  saveTimer = setTimeout(async () => {
-    saveTimer = null;
-    try {
-      await saveUsage();
-    } catch (error) {
-      logger.error('Failed to save usage data', { component: 'UsageTracker', error: e });
-    }
-  }, SAVE_INTERVAL_MS);
+  return data;
 }
 
 function inc(map, key, amount) {
   if (!key) return;
   if (key === '__proto__' || key === 'constructor' || key === 'prototype') return;
   map[key] = (map[key] || 0) + amount;
+}
+
+function computeAverageRating(ratings) {
+  const totalRatings = Object.values(ratings).reduce((sum, count) => sum + count, 0);
+  if (totalRatings === 0) return 0;
+  const weightedSum = Object.entries(ratings).reduce(
+    (sum, [rating, count]) => sum + parseInt(rating) * count,
+    0
+  );
+  return weightedSum / totalRatings;
+}
+
+function applyRating(bucket, rating) {
+  // Handle numeric ratings (1-5)
+  if (typeof rating === 'number') {
+    const roundedRating = Math.round(rating * 2) / 2; // Round to nearest 0.5
+    const ratingKey = Math.ceil(roundedRating); // Round up for indexing (1.5 -> 2)
+
+    if (ratingKey >= 1 && ratingKey <= 5) {
+      bucket.ratings[ratingKey] += 1;
+      bucket.total += 1;
+      bucket.averageRating = computeAverageRating(bucket.ratings);
+
+      // Update legacy format (ratings 4-5 = good, ratings 1-3 = bad)
+      if (ratingKey >= 4) {
+        bucket.good += 1;
+      } else {
+        bucket.bad += 1;
+      }
+    }
+  } else {
+    // Handle legacy string format for backward compatibility
+    const legacyRating = rating === 'positive' ? 'good' : 'bad';
+    bucket[legacyRating] = (bucket[legacyRating] || 0) + 1;
+  }
 }
 
 function incFeedback(map, key, rating) {
@@ -189,49 +205,21 @@ function incFeedback(map, key, rating) {
     good: 0,
     bad: 0
   };
-
-  // Handle numeric ratings (1-5)
-  if (typeof rating === 'number') {
-    const roundedRating = Math.round(rating * 2) / 2; // Round to nearest 0.5
-    const ratingKey = Math.ceil(roundedRating); // Round up for indexing (1.5 -> 2)
-
-    if (ratingKey >= 1 && ratingKey <= 5) {
-      map[key].ratings[ratingKey] += 1;
-      map[key].total += 1;
-
-      // Calculate new average rating
-      const totalRatings = Object.values(map[key].ratings).reduce((sum, count) => sum + count, 0);
-      const weightedSum = Object.entries(map[key].ratings).reduce(
-        (sum, [rating, count]) => sum + parseInt(rating) * count,
-        0
-      );
-      map[key].averageRating = totalRatings > 0 ? weightedSum / totalRatings : 0;
-
-      // Update legacy format (ratings 4-5 = good, ratings 1-3 = bad)
-      if (ratingKey >= 4) {
-        map[key].good += 1;
-      } else {
-        map[key].bad += 1;
-      }
-    }
-  } else {
-    // Handle legacy string format for backward compatibility
-    const legacyRating = rating === 'positive' ? 'good' : 'bad';
-    map[key][legacyRating] = (map[key][legacyRating] || 0) + 1;
-  }
+  applyRating(map[key], rating);
 }
 
 export function estimateTokens(text) {
-  if (!text) return 0;
-  return Math.ceil(text.length / 4);
+  return estimateTokensShared(text);
 }
 
-export async function recordChatRequest({
+async function recordChatMessage({
+  direction,
   userId,
   appId,
   modelId,
   tokens = 0,
   tokenSource = 'estimate',
+  webSearchRequests = 0,
   user
 }) {
   await loadConfig();
@@ -248,64 +236,39 @@ export async function recordChatRequest({
   inc(data.tokens.perUser, resolvedUser, tokens);
   inc(data.tokens.perApp, appId, tokens);
   inc(data.tokens.perModel, modelId, tokens);
-  inc(data.tokens.prompt.perUser, resolvedUser, tokens);
-  inc(data.tokens.prompt.perApp, appId, tokens);
-  inc(data.tokens.prompt.perModel, modelId, tokens);
-  inc(data.tokens.prompt, 'total', tokens);
+  const directionBucket = data.tokens[direction];
+  inc(directionBucket.perUser, resolvedUser, tokens);
+  inc(directionBucket.perApp, appId, tokens);
+  inc(directionBucket.perModel, modelId, tokens);
+  inc(directionBucket, 'total', tokens);
   if (!data.tokenSources) data.tokenSources = { provider: 0, estimate: 0 };
   data.tokenSources[tokenSource] = (data.tokenSources[tokenSource] || 0) + 1;
+  if (webSearchRequests > 0) {
+    if (!data.webSearch) data.webSearch = { total: 0, perUser: {}, perApp: {}, perModel: {} };
+    data.webSearch.total += webSearchRequests;
+    inc(data.webSearch.perUser, resolvedUser, webSearchRequests);
+    inc(data.webSearch.perApp, appId, webSearchRequests);
+    inc(data.webSearch.perModel, modelId, webSearchRequests);
+  }
   recordTokenUsage(tokens);
   logUsageEvent({
-    type: 'chat_request',
+    type: direction === 'prompt' ? 'chat_request' : 'chat_response',
     userId: resolvedUser,
     appId,
     modelId,
-    promptTokens: tokens,
+    ...(direction === 'prompt' ? { promptTokens: tokens } : { completionTokens: tokens }),
+    ...(webSearchRequests > 0 ? { webSearchRequests } : {}),
     tokenSource
   });
-  dirty = true;
-  scheduleSave();
+  store.markDirty();
 }
 
-export async function recordChatResponse({
-  userId,
-  appId,
-  modelId,
-  tokens = 0,
-  tokenSource = 'estimate',
-  user
-}) {
-  await loadConfig();
-  if (!trackingEnabled) return;
-  const resolvedUser =
-    trackingMode === 'identified' && user?.id ? user.id : await resolveUserId(userId, trackingMode);
-  const data = await loadUsage();
-  data.messages.total += 1;
-  inc(data.messages.perUser, resolvedUser, 1);
-  inc(data.messages.perApp, appId, 1);
-  inc(data.messages.perModel, modelId, 1);
+export async function recordChatRequest(args) {
+  return recordChatMessage({ ...args, direction: 'prompt' });
+}
 
-  data.tokens.total += tokens;
-  inc(data.tokens.perUser, resolvedUser, tokens);
-  inc(data.tokens.perApp, appId, tokens);
-  inc(data.tokens.perModel, modelId, tokens);
-  inc(data.tokens.completion.perUser, resolvedUser, tokens);
-  inc(data.tokens.completion.perApp, appId, tokens);
-  inc(data.tokens.completion.perModel, modelId, tokens);
-  inc(data.tokens.completion, 'total', tokens);
-  if (!data.tokenSources) data.tokenSources = { provider: 0, estimate: 0 };
-  data.tokenSources[tokenSource] = (data.tokenSources[tokenSource] || 0) + 1;
-  recordTokenUsage(tokens);
-  logUsageEvent({
-    type: 'chat_response',
-    userId: resolvedUser,
-    appId,
-    modelId,
-    completionTokens: tokens,
-    tokenSource
-  });
-  dirty = true;
-  scheduleSave();
+export async function recordChatResponse(args) {
+  return recordChatMessage({ ...args, direction: 'completion' });
 }
 
 export async function recordFeedback({ userId, appId, modelId, rating, user }) {
@@ -315,42 +278,12 @@ export async function recordFeedback({ userId, appId, modelId, rating, user }) {
     trackingMode === 'identified' && user?.id ? user.id : await resolveUserId(userId, trackingMode);
   const data = await loadUsage();
 
-  // Handle numeric ratings (1-5)
-  if (typeof rating === 'number') {
-    const roundedRating = Math.round(rating * 2) / 2; // Round to nearest 0.5
-    const ratingKey = Math.ceil(roundedRating); // Round up for indexing
-
-    if (ratingKey >= 1 && ratingKey <= 5) {
-      data.feedback.ratings[ratingKey] += 1;
-      data.feedback.total += 1;
-
-      // Calculate new average rating
-      const totalRatings = Object.values(data.feedback.ratings).reduce(
-        (sum, count) => sum + count,
-        0
-      );
-      const weightedSum = Object.entries(data.feedback.ratings).reduce(
-        (sum, [rating, count]) => sum + parseInt(rating) * count,
-        0
-      );
-      data.feedback.averageRating = totalRatings > 0 ? weightedSum / totalRatings : 0;
-
-      // Update legacy format (ratings 4-5 = good, ratings 1-3 = bad)
-      if (ratingKey >= 4) {
-        data.feedback.good += 1;
-      } else {
-        data.feedback.bad += 1;
-      }
-    }
-  } else {
-    // Handle legacy string format for backward compatibility
-    const r = rating === 'positive' ? 'good' : 'bad';
-    data.feedback[r] += 1;
-  }
+  applyRating(data.feedback, rating);
 
   incFeedback(data.feedback.perUser, resolvedUser, rating);
   incFeedback(data.feedback.perApp, appId, rating);
   incFeedback(data.feedback.perModel, modelId, rating);
+  recordFeedbackEvent(appId, rating);
   logUsageEvent({
     type: 'feedback',
     userId: resolvedUser,
@@ -358,8 +291,7 @@ export async function recordFeedback({ userId, appId, modelId, rating, user }) {
     modelId,
     rating
   });
-  dirty = true;
-  scheduleSave();
+  store.markDirty();
 }
 
 export async function recordMagicPrompt({
@@ -391,6 +323,7 @@ export async function recordMagicPrompt({
   inc(data.magicPrompt.tokensOut, 'total', outputTokens);
 
   recordTokenUsage(inputTokens + outputTokens);
+  recordMagicPromptUsage(appId);
   logUsageEvent({
     type: 'magic_prompt',
     userId: resolvedUser,
@@ -401,8 +334,7 @@ export async function recordMagicPrompt({
     tokenSource: 'estimate'
   });
 
-  dirty = true;
-  scheduleSave();
+  store.markDirty();
 }
 
 export async function getUsage() {
@@ -422,16 +354,9 @@ export async function getTrackingMode() {
 
 export async function resetUsage() {
   await loadConfig();
-  usage = createDefaultUsage();
-  usage.lastReset = now();
-  dirty = true;
-  await saveUsage();
+  const fresh = createDefaultUsage();
+  fresh.lastReset = now();
+  store.replace(fresh);
+  migrationChecked = true;
+  await store.flush();
 }
-
-// Start periodic save interval
-setInterval(() => {
-  if (dirty)
-    saveUsage().catch(e =>
-      logger.error('Usage save error', { component: 'UsageTracker', error: e })
-    );
-}, SAVE_INTERVAL_MS);

@@ -1,10 +1,22 @@
 import { v4 as uuidv4 } from 'uuid';
 import { DAGScheduler } from './DAGScheduler.js';
+import { emitNodeProgress } from './nodeProgress.js';
 import { getStateManager, WorkflowStatus } from './StateManager.js';
 import { getExecutor as getDefaultExecutor } from './executors/index.js';
 import { getExecutionRegistry } from './ExecutionRegistry.js';
 import { actionTracker } from '../../actionTracker.js';
+import { summarizePlanForEvent } from '../../agents/runtime/taskRecord.js';
+import runLog from '../loop/RunLog.js';
+import { resetStream } from '../loop/RunStream.js';
+import { RUN_LOG_EVENTS } from '../../../shared/runEvents.js';
+import { isValidId } from '../../utils/pathSecurity.js';
+import { createPresenceMap, hasRemote, publish, subscribe } from '../../clusterBus.js';
 import logger from '../../utils/logger.js';
+
+/** Presence kind announcing which worker holds a running execution's abort controller. */
+export const EXECUTION_PRESENCE_KIND = 'execution';
+/** Cluster bus channel relaying a cancellation to the worker running the execution. */
+export const EXECUTION_CANCEL_CHANNEL = 'execution:cancel';
 
 /**
  * Default timeout for node execution in milliseconds (5 minutes)
@@ -25,10 +37,14 @@ const MIN_NODE_TIMEOUT = 1000; // 1 second
 const MAX_NODE_TIMEOUT = 30 * 60 * 1000;
 
 /**
- * Maximum number of execution iterations to prevent infinite loops
+ * Engine-level cap on total scheduler iterations (each iteration runs one
+ * ready node). This is a backstop above the per-node `maxIterations`
+ * check; the per-node cap is the primary safety. Set high enough to
+ * accommodate cycle-shaped workflows that visit many nodes many times
+ * (e.g. 5 sub-questions × 100 docs × ~5 inner cycle nodes ≈ 2500).
  * @constant {number}
  */
-const MAX_EXECUTION_ITERATIONS = 100;
+const MAX_EXECUTION_ITERATIONS = 10000;
 
 /**
  * WorkflowEngine is the main orchestrator for executing workflow definitions.
@@ -47,12 +63,55 @@ const MAX_EXECUTION_ITERATIONS = 100;
  *
  * // Register executors for different node types
  * engine.registerExecutor('llm', new LLMExecutor());
- * engine.registerExecutor('tool', new ToolExecutor());
+ * engine.registerExecutor('tool', new ToolNodeExecutor());
  *
  * // Start workflow execution
  * const state = await engine.start(workflowDefinition, { userInput: 'Hello' });
  * console.log('Execution ID:', state.executionId);
  */
+/**
+ * Singleton WorkflowEngine instance shared across all entry points
+ * (workflowRunner, workflowRoutes, agents/runs, agents/artifacts, and the
+ * boot-time resume path). `abortControllers` is per-instance state, so a
+ * cancel() routed through a different instance than the one running the
+ * loop cannot fire that run's abort signal — it can only flip the
+ * persisted status, which is only picked up between nodes. Sharing one
+ * instance makes cancellation coherent across every entry point.
+ * @type {WorkflowEngine|null}
+ * @private
+ */
+let _singletonInstance = null;
+
+/**
+ * Returns the shared WorkflowEngine singleton instance.
+ * Creates one on first call. All callers should use this instead of
+ * `new WorkflowEngine()` so abort controllers and cancellation stay
+ * coherent across entry points.
+ *
+ * Do not pass a `defaultTimeout` override here — since the instance is
+ * shared, whichever caller happens to construct it first would silently
+ * decide the default for everyone else. Callers that need a longer
+ * per-run timeout (e.g. agent runs) should pass `timeout` explicitly in
+ * the `options` of each `start`/`resume`/`resumeFromCheckpoint`/
+ * `resumeFromTerminated` call instead — `_normalizeTimeout` already
+ * prefers a per-call `options.timeout` over `this.defaultTimeout`.
+ * @param {Object} [options] - Options passed to constructor on first creation
+ * @returns {WorkflowEngine}
+ */
+export function getWorkflowEngine(options) {
+  if (!_singletonInstance) {
+    _singletonInstance = new WorkflowEngine(options);
+  }
+  return _singletonInstance;
+}
+
+/**
+ * Resets the singleton instance (for testing purposes only).
+ */
+export function resetWorkflowEngine() {
+  _singletonInstance = null;
+}
+
 export class WorkflowEngine {
   /**
    * Creates a new WorkflowEngine instance
@@ -60,6 +119,8 @@ export class WorkflowEngine {
    * @param {StateManager} [options.stateManager] - Custom state manager instance
    * @param {DAGScheduler} [options.scheduler] - Custom scheduler instance
    * @param {number} [options.defaultTimeout] - Default node execution timeout in ms
+   * @param {{createPresenceMap: Function, hasRemote: Function, publish: Function, subscribe: Function}} [options.bus]
+   *   cluster bus (default: clusterBus) — tests inject a fake to simulate workers
    */
   constructor(options = {}) {
     /**
@@ -92,7 +153,13 @@ export class WorkflowEngine {
      * @type {Map<string, AbortController>}
      * @private
      */
-    this.abortControllers = new Map();
+    this._bus = options.bus || { createPresenceMap, hasRemote, publish, subscribe };
+    // A presence map: every worker knows which one holds a running execution's
+    // abort controller, so a cancellation landing elsewhere can be relayed.
+    this.abortControllers = this._bus.createPresenceMap(EXECUTION_PRESENCE_KIND);
+    this._unsubscribeCancel = this._bus.subscribe(EXECUTION_CANCEL_CHANNEL, message =>
+      this._onRemoteCancel(message)
+    );
   }
 
   /**
@@ -143,6 +210,68 @@ export class WorkflowEngine {
   }
 
   /**
+   * Execute a child sub-workflow spawned by a planner node.
+   *
+   * Creates a new execution with a parent-child relationship tracked in state,
+   * emits an SSE event for UI visibility, and starts the child workflow
+   * non-blocking via this.start().
+   *
+   * @param {string} parentExecutionId - The execution ID of the parent workflow
+   * @param {Object} workflowDef - The materialized sub-workflow definition
+   * @param {Object} initialData - Initial data for the child workflow (merged from parent state)
+   * @param {Object} [options={}] - Execution options
+   * @param {number} [options.depth=0] - Current sub-workflow nesting depth
+   * @param {number} [options.maxDepth=3] - Maximum allowed nesting depth
+   * @param {Object} [options.user] - User context
+   * @param {string} [options.chatId] - Chat ID for SSE events
+   * @param {Object} [options.appConfig] - App configuration
+   * @param {string} [options.language] - Language code
+   * @returns {Promise<string>} The child execution ID
+   * @throws {Error} If depth limit is exceeded
+   */
+  async executeSubWorkflow(parentExecutionId, workflowDef, initialData, options = {}) {
+    const depth = options.depth || 0;
+    const maxDepth = options.maxDepth || 3;
+    if (depth > maxDepth) throw new Error(`Sub-workflow depth limit (${maxDepth}) exceeded`);
+
+    const childExecutionId = `wf-child-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
+
+    // Store parent-child relationship in parent state
+    const parentState = await this.stateManager.get(parentExecutionId);
+    if (parentState) {
+      const childIds = parentState.data?._childExecutionIds || [];
+      await this.stateManager.update(parentExecutionId, {
+        data: { _childExecutionIds: [...childIds, childExecutionId] }
+      });
+    }
+
+    // Emit SSE event for UI tracking. Flat payload to match the rest of
+    // the workflow/agent event surface (the client handler reads top-level
+    // fields, not a nested `data:` envelope).
+    actionTracker.emit('fire-sse', {
+      event: 'workflow.subworkflow.start',
+      chatId: parentExecutionId,
+      executionId: childExecutionId,
+      parentExecutionId,
+      depth,
+      taskCount: workflowDef.nodes?.length
+    });
+
+    // Start child execution (non-blocking)
+    await this.start(
+      workflowDef,
+      { ...initialData, _parentExecutionId: parentExecutionId },
+      {
+        executionId: childExecutionId,
+        depth,
+        ...options
+      }
+    );
+
+    return childExecutionId;
+  }
+
+  /**
    * Starts a new workflow execution
    *
    * @param {Object} workflowDefinition - The workflow definition
@@ -166,6 +295,15 @@ export class WorkflowEngine {
    * });
    */
   async start(workflowDefinition, initialData = {}, options = {}) {
+    // A caller-supplied execution id becomes a state directory name and a
+    // ledger run id: accept only a safe id.
+    if (options.executionId !== undefined && !isValidId(options.executionId)) {
+      const error = new Error(
+        'Invalid executionId: only letters, digits, dots, underscores and hyphens are allowed'
+      );
+      error.code = 'INVALID_EXECUTION_ID';
+      throw error;
+    }
     const executionId = options.executionId || `wf-exec-${uuidv4()}`;
     const workflowId = workflowDefinition.id || 'unknown';
 
@@ -216,7 +354,31 @@ export class WorkflowEngine {
     const maxExecutionTime = workflowDefinition.config?.maxExecutionTime || 300000;
     const executionDeadline = Date.now() + maxExecutionTime;
 
-    // 4. Create execution state
+    // 4. Create execution state. We persist a SUMMARY of the workflow
+    // definition (just the node shape — id / type / config._isSynthesizer)
+    // so the UI can render orchestrator rows ("Planning", "Composing
+    // final report") with stable visibility before those nodes actually
+    // run. We don't store the full definition (with prompts, model ids,
+    // etc.) because it can be tens of KB per state save.
+    const workflowSummary = {
+      id: workflowDefinition.id,
+      name: workflowDefinition.name,
+      nodes: Array.isArray(workflowDefinition.nodes)
+        ? workflowDefinition.nodes.map(n => ({
+            id: n?.id,
+            type: n?.type,
+            // Carry only the markers the UI inspects. _isSynthesizer flags
+            // the final composer; _persistAsArtifact flags a prompt node
+            // that IS the primary answer producer (simple-agent or
+            // inbox-worker without a separate synthesizer) — the UI uses
+            // this to render a step row for it even though no planner
+            // materialized it as a task.
+            ...(n?.config?._isSynthesizer === true ? { _isSynthesizer: true } : {}),
+            ...(n?.config?._persistAsArtifact === true ? { _persistAsArtifact: true } : {})
+          }))
+        : []
+    };
+
     const state = await this.stateManager.create({
       executionId,
       workflowId,
@@ -226,7 +388,8 @@ export class WorkflowEngine {
           startedBy: options.user?.id || 'anonymous',
           startedAt: new Date().toISOString()
         },
-        _executionDeadline: executionDeadline
+        _executionDeadline: executionDeadline,
+        _workflowSummary: workflowSummary
       },
       currentNodes: startNodes
     });
@@ -234,6 +397,11 @@ export class WorkflowEngine {
     // 5. Set up abort controller for cancellation
     const abortController = new AbortController();
     this.abortControllers.set(executionId, abortController);
+
+    // 5b. The execution is a run on the ledger (runId === executionId): its
+    // interactions, pause/resume and end are recorded there and the run routes
+    // (`/api/runs/:runId/…`) authorize against it.
+    await this._startLedgerRun(executionId, workflowDefinition, initialData, options);
 
     // 6. Emit workflow start event
     this._emitEvent('workflow.start', {
@@ -255,6 +423,124 @@ export class WorkflowEngine {
 
     // 8. Return initial state (execution continues in background)
     return state;
+  }
+
+  /**
+   * Resume a previously-interrupted execution from its last checkpoint.
+   *
+   * Unlike start(), this does NOT create fresh state — it restores the
+   * persisted `latest.json` for `executionId` (with its `completedNodes` /
+   * `currentNodes` / accumulated `data`) and re-enters the same execution
+   * loop. The scheduler picks up exactly where it left off; any node that was
+   * mid-flight at crash time re-runs (at-least-once semantics — node executors
+   * should be idempotent where it matters).
+   *
+   * Used on boot to recover runs the server was executing when it stopped,
+   * instead of marking them failed. The caller is responsible for supplying
+   * the full `workflowDefinition` (reloaded from disk / re-serialized from the
+   * agent profile) since only a summary is persisted in state.
+   *
+   * Distinct from `resume()` (which un-pauses a HITL-paused run): this recovers
+   * a run that was interrupted by a process crash/restart.
+   *
+   * @param {Object} workflowDefinition - Full workflow definition
+   * @param {string} executionId - The execution to resume
+   * @param {Object} [options] - Execution options (user, etc.)
+   * @returns {Promise<Object|null>} The execution state, or null if not resumable
+   */
+  async resumeFromCheckpoint(workflowDefinition, executionId, options = {}) {
+    let state = null;
+    try {
+      state = await this.stateManager.restore(executionId);
+    } catch {
+      state = null; // restore throws when no checkpoint file exists
+    }
+    if (!state) {
+      logger.warn('Cannot resume execution — no checkpoint found', {
+        component: 'WorkflowEngine',
+        executionId
+      });
+      return null;
+    }
+
+    // Terminal runs are not resumable.
+    const TERMINAL = [WorkflowStatus.COMPLETED, WorkflowStatus.FAILED, WorkflowStatus.CANCELLED];
+    if (TERMINAL.includes(state.status)) {
+      logger.debug('Skipping resume — execution already terminal', {
+        component: 'WorkflowEngine',
+        executionId,
+        status: state.status
+      });
+      return state;
+    }
+
+    // Re-anchor the execution deadline to now so a run that was interrupted
+    // hours ago doesn't instantly trip MAX_EXECUTION_TIME on resume.
+    const maxExecutionTime = workflowDefinition.config?.maxExecutionTime || 300000;
+
+    // Reset the per-node iteration counter for the nodes we're about to
+    // re-run (same rationale as resumeFromTerminated): the counter is a CYCLE
+    // guard, not a retry counter. Without this, a loop node interrupted near
+    // MAX_NODE_ITERATIONS trips the cap on its first post-resume execution and
+    // defeats recovery. deepMerge preserves counters for other in-loop nodes.
+    const prevIterations = state.data?._nodeIterations || {};
+    const resetIterations = { ...prevIterations };
+    for (const nodeId of state.currentNodes || []) {
+      resetIterations[nodeId] = 0;
+    }
+
+    await this.stateManager.update(executionId, {
+      status: WorkflowStatus.RUNNING,
+      data: {
+        _executionDeadline: Date.now() + maxExecutionTime,
+        _resumedAt: new Date().toISOString(),
+        _nodeIterations: resetIterations
+      }
+    });
+
+    const abortController = new AbortController();
+    this.abortControllers.set(executionId, abortController);
+
+    // Re-register the run on the ledger so its sequence continues after a restart.
+    try {
+      await runLog.resumeRun(executionId, {
+        kind: state.data?._agent?.profileId ? 'agent' : 'workflow'
+      });
+    } catch (err) {
+      logger.debug('Ledger resumeRun failed', {
+        component: 'WorkflowEngine',
+        executionId,
+        error: err.message
+      });
+    }
+
+    logger.info('Resuming workflow execution from checkpoint', {
+      component: 'WorkflowEngine',
+      executionId,
+      workflowId: workflowDefinition.id,
+      completedNodes: state.completedNodes?.length || 0,
+      currentNodes: state.currentNodes
+    });
+
+    this._emitEvent('workflow.resumed', {
+      executionId,
+      workflowId: workflowDefinition.id,
+      completedNodes: state.completedNodes || [],
+      currentNodes: state.currentNodes || []
+    });
+
+    // Re-enter the same loop; it reads currentNodes/completedNodes from state.
+    this._runExecutionLoop(workflowDefinition, executionId, options, abortController.signal).catch(
+      error => {
+        logger.error('Resumed workflow execution failed', {
+          component: 'WorkflowEngine',
+          executionId,
+          error
+        });
+      }
+    );
+
+    return this.stateManager.get(executionId);
   }
 
   /**
@@ -464,12 +750,16 @@ export class WorkflowEngine {
                 pauseReason: result.pauseReason || 'node_requested_pause'
               });
 
-              // Update state to paused with checkpoint info
+              // Update state to paused with checkpoint info.
+              // Record _pausedAtMs (wall clock) so resume() can extend the
+              // execution deadline by the time spent waiting for the human —
+              // user thinking time must not eat into maxExecutionTime.
               await this.stateManager.update(executionId, {
                 status: WorkflowStatus.PAUSED,
                 data: {
                   ...result.stateUpdates,
                   _pausedAt: nodeId,
+                  _pausedAtMs: Date.now(),
                   _pauseReason: result.pauseReason
                 }
               });
@@ -498,15 +788,30 @@ export class WorkflowEngine {
               return;
             }
 
-            // Determine next nodes based on result
+            // Determine next nodes based on result.
+            //
+            // `isTerminal: true` on a node's result short-circuits the rest
+            // of the workflow. Used by InboxLoadNodeExecutor when the inbox
+            // is empty — there's nothing to plan or synthesize, so we don't
+            // burn an LLM call (and the planner's wall-time budget) on a
+            // no-op run. The currentNodes list is cleared so the execution
+            // loop's "no more nodes" check terminates the run cleanly.
             const currentState = await this.stateManager.get(executionId);
-            const nextNodes = this.scheduler.getNextNodes(nodeId, result, workflow, currentState);
-
-            // Update current nodes (remove completed, add next)
-            const newCurrentNodes = [
-              ...currentState.currentNodes.filter(id => id !== nodeId),
-              ...nextNodes
-            ];
+            let newCurrentNodes;
+            if (result && result.isTerminal === true) {
+              logger.info('Workflow short-circuited by terminal node', {
+                component: 'WorkflowEngine',
+                executionId,
+                nodeId
+              });
+              newCurrentNodes = currentState.currentNodes.filter(id => id !== nodeId);
+            } else {
+              const nextNodes = this.scheduler.getNextNodes(nodeId, result, workflow, currentState);
+              newCurrentNodes = [
+                ...currentState.currentNodes.filter(id => id !== nodeId),
+                ...nextNodes
+              ];
+            }
 
             await this.stateManager.update(executionId, {
               currentNodes: newCurrentNodes
@@ -697,6 +1002,15 @@ export class WorkflowEngine {
     // 6. Build execution context
     const context = {
       executionId,
+      // ChatId is the ROOT run id — used as the SSE channel key by every
+      // event the executors emit (planner workflow.plan.created, task
+      // workers' agent.task.created, activate_skill, etc.). Without this
+      // those events fire with chatId=undefined and the route's SSE
+      // forwarder drops them — so tasks only show up in the UI AFTER the
+      // run completes (via API refetch). For top-level runs this equals
+      // the executionId; sub-workflows inherit it from options.chatId
+      // (PlannerNodeExecutor passes context.chatId when spawning the child).
+      chatId: options.chatId || executionId,
       nodeId,
       workflow,
       initialData: updatedState.data, // Initial data stored in state.data
@@ -704,8 +1018,14 @@ export class WorkflowEngine {
       iteration: currentIteration, // Current iteration count for this node
       user: options.user,
       language: options.language || 'en',
-      abortSignal: this.abortControllers.get(executionId)?.signal
+      abortSignal: this.abortControllers.get(executionId)?.signal,
+      engine: this, // Reference to engine for sub-workflow spawning (planner nodes)
+      depth: options?.depth || 0 // Current sub-workflow nesting depth
     };
+
+    // 6b. A node may carry its own progress note (config.progress) — show it
+    // before the work starts, so the chat reflects what is happening now.
+    emitNodeProgress(node, updatedState, context);
 
     // 7. Execute with timeout and timing (prefer node.execution.timeout over legacy node.timeout)
     const executionConfig = node.execution || {};
@@ -715,9 +1035,10 @@ export class WorkflowEngine {
 
     try {
       result = await this._executeWithTimeout(
-        () => executor.execute(node, updatedState, context),
+        signal => executor.execute(node, updatedState, { ...context, abortSignal: signal }),
         timeout,
-        `Node ${nodeId} execution timed out after ${timeout}ms`
+        `Node ${nodeId} execution timed out after ${timeout}ms`,
+        context.abortSignal
       );
     } catch (error) {
       // Re-throw to be handled by caller
@@ -821,6 +1142,10 @@ export class WorkflowEngine {
     const shouldFailWorkflow = true;
 
     if (shouldFailWorkflow) {
+      // Same plan reconciliation as the success path: a failed run shouldn't
+      // leave a task spinning at in_progress either.
+      await this._reconcilePlanOnTerminal(executionId);
+
       await this.stateManager.update(executionId, {
         status: WorkflowStatus.FAILED,
         completedAt: new Date().toISOString()
@@ -861,6 +1186,10 @@ export class WorkflowEngine {
       completedNodes: state.completedNodes.length,
       finalStatus
     });
+
+    // Close out any task the agent left in_progress/open before persisting the
+    // terminal status, so the completed run never shows a spinning task.
+    await this._reconcilePlanOnTerminal(executionId, state);
 
     await this.stateManager.update(executionId, {
       status: finalStatus,
@@ -938,14 +1267,38 @@ export class WorkflowEngine {
       currentNodes: state.currentNodes
     });
 
+    // Extend the execution deadline by however long the workflow sat paused
+    // so human idle time does NOT eat into maxExecutionTime. Also accumulate
+    // a `_humanWaitMs` counter for observability.
+    const pausedAtMs = state.data?._pausedAtMs;
+    const previousDeadline = state.data?._executionDeadline;
+    const pausedDurationMs = pausedAtMs ? Math.max(0, Date.now() - pausedAtMs) : 0;
+    const extendedDeadline =
+      previousDeadline && pausedDurationMs > 0
+        ? previousDeadline + pausedDurationMs
+        : previousDeadline;
+    const accumulatedHumanWait = (state.data?._humanWaitMs || 0) + pausedDurationMs;
+
     // Merge resume data into state (stateManager.update uses deep merge internally)
     await this.stateManager.update(executionId, {
       status: WorkflowStatus.RUNNING,
       data: {
         ...resumeData,
-        _resumedAt: new Date().toISOString()
+        _resumedAt: new Date().toISOString(),
+        _pausedAtMs: null,
+        ...(extendedDeadline ? { _executionDeadline: extendedDeadline } : {}),
+        _humanWaitMs: accumulatedHumanWait
       }
     });
+
+    if (pausedDurationMs > 0) {
+      logger.info('Extended execution deadline by human wait time', {
+        component: 'WorkflowEngine',
+        executionId,
+        pausedDurationMs,
+        extendedDeadline
+      });
+    }
 
     // Set up new abort controller
     const abortController = new AbortController();
@@ -1023,6 +1376,161 @@ export class WorkflowEngine {
   }
 
   /**
+   * Resumes a workflow that was previously cancelled or failed mid-execution
+   * (timeout, server restart, transient error). The interrupted node will be
+   * re-executed from scratch; previously-completed nodes are not re-run.
+   *
+   * For user-initiated cancellations we refuse — those were intentional.
+   *
+   * @param {string} executionId
+   * @param {Object} [options]
+   * @returns {Promise<Object>} New execution state
+   */
+  async resumeFromTerminated(executionId, options = {}) {
+    const state = await this.stateManager.get(executionId);
+    if (!state) {
+      const error = new Error(`Execution not found: ${executionId}`);
+      error.code = 'EXECUTION_NOT_FOUND';
+      throw error;
+    }
+
+    const RESUMABLE = new Set([WorkflowStatus.CANCELLED, WorkflowStatus.FAILED]);
+    if (!RESUMABLE.has(state.status)) {
+      const error = new Error(
+        `Cannot resume execution with status '${state.status}'. Only cancelled or failed executions can be resumed via resumeFromTerminated.`
+      );
+      error.code = 'INVALID_STATE_FOR_RESUME';
+      throw error;
+    }
+
+    // Don't resurrect user-cancelled executions — that was an explicit stop.
+    const lastCancelEvent = (state.history || [])
+      .slice()
+      .reverse()
+      .find(h => h.type === 'workflow_cancelled');
+    const cancelReason = lastCancelEvent?.data?.reason;
+    if (cancelReason === 'user_cancelled' || cancelReason === 'user_requested') {
+      const error = new Error('Cannot resume a workflow that was cancelled by the user.');
+      error.code = 'USER_CANCELLED';
+      throw error;
+    }
+
+    // currentNodes is the set of in-flight / ready-to-run nodes. For a timeout
+    // cancellation it's typically non-empty (the next iteration node was about
+    // to run). For a hard failure the engine moves the failed node out of
+    // currentNodes into failedNodes and may leave currentNodes empty — in that
+    // case we recover the resume point by re-queueing the failed nodes for
+    // retry.
+    const hasCurrent = Array.isArray(state.currentNodes) && state.currentNodes.length > 0;
+    const hasFailed = Array.isArray(state.failedNodes) && state.failedNodes.length > 0;
+    if (!hasCurrent && !hasFailed) {
+      const error = new Error(
+        'Cannot resume: no in-flight nodes recorded. The workflow finished its last scheduled node before interruption.'
+      );
+      error.code = 'NO_RESUME_POINT';
+      throw error;
+    }
+    const resumeNodes = hasCurrent ? [...state.currentNodes] : [...new Set(state.failedNodes)];
+
+    const workflow = options.workflow || state.data?._workflowDefinition;
+    if (!workflow) {
+      const error = new Error(
+        'Workflow definition not available. Provide it in options or ensure it was stored in state.'
+      );
+      error.code = 'WORKFLOW_NOT_AVAILABLE';
+      throw error;
+    }
+
+    const now = new Date().toISOString();
+
+    // Reset the execution deadline. The original deadline (set at workflow
+    // start) is in the past — that's the whole reason we're resuming. Give
+    // the resumed run a fresh window equal to maxExecutionTime so it can
+    // actually finish. Track total accumulated runtime across resumes for
+    // observability.
+    const maxExecutionTime = workflow.config?.maxExecutionTime || 300000;
+    const newDeadline = Date.now() + maxExecutionTime;
+    const previousElapsed = state.data?._totalElapsedMs || 0;
+    const startedAtTs = state.data?._workflow?.startedAt
+      ? new Date(state.data._workflow.startedAt).getTime()
+      : null;
+    const interruptedAtTs = state.completedAt ? new Date(state.completedAt).getTime() : null;
+    const lastRunElapsed =
+      startedAtTs && interruptedAtTs ? Math.max(0, interruptedAtTs - startedAtTs) : 0;
+
+    // Reset the per-node iteration counter for the nodes we're about to
+    // re-execute. The counter is a CYCLE guard (catches a node that loops
+    // back to itself N times within a single run), not a RETRY counter —
+    // a failed attempt followed by a resume should start fresh. Without
+    // this reset, every resume bumps the counter and after `maxIterations`
+    // resumes the engine refuses to run the node with
+    // `MAX_NODE_ITERATIONS_EXCEEDED`. We deepMerge `_nodeIterations` so
+    // counters for OTHER nodes (which may legitimately be mid-loop) are
+    // preserved.
+    const prevIterations = state.data?._nodeIterations || {};
+    const resetIterations = { ...prevIterations };
+    for (const nodeId of resumeNodes) {
+      resetIterations[nodeId] = 0;
+    }
+
+    // Clear the terminal markers, requeue the resume nodes, clear failedNodes
+    // so the engine doesn't immediately re-flag them on retry. completedNodes
+    // is preserved so already-finished work is not re-run.
+    await this.stateManager.update(executionId, {
+      status: WorkflowStatus.RUNNING,
+      errors: [],
+      completedAt: null,
+      currentNodes: resumeNodes,
+      failedNodes: [],
+      data: {
+        _resumedAt: now,
+        _resumedFromStatus: state.status,
+        _executionDeadline: newDeadline,
+        _totalElapsedMs: previousElapsed + lastRunElapsed,
+        _resumeCount: (state.data?._resumeCount || 0) + 1,
+        _nodeIterations: resetIterations
+      }
+    });
+
+    await this.stateManager.addStep(executionId, {
+      nodeId: null,
+      type: 'workflow_resumed',
+      data: {
+        fromStatus: state.status,
+        reason: cancelReason || null,
+        resumeNodes
+      },
+      timestamp: now
+    });
+
+    try {
+      getExecutionRegistry().updateStatus(executionId, WorkflowStatus.RUNNING);
+    } catch {
+      // Registry may not be wired in this environment — non-fatal.
+    }
+
+    logger.info('Resuming terminated workflow execution', {
+      component: 'WorkflowEngine',
+      executionId,
+      fromStatus: state.status,
+      resumeNodes
+    });
+
+    const abortController = new AbortController();
+    this.abortControllers.set(executionId, abortController);
+
+    this._runExecutionLoop(workflow, executionId, options, abortController.signal).catch(error => {
+      logger.error('Resumed workflow execution failed', {
+        component: 'WorkflowEngine',
+        executionId,
+        error
+      });
+    });
+
+    return this.stateManager.get(executionId);
+  }
+
+  /**
    * Cancels a running or paused workflow execution
    *
    * @param {string} executionId - The execution identifier
@@ -1032,6 +1540,56 @@ export class WorkflowEngine {
    * @example
    * await engine.cancel('exec-123', 'User requested cancellation');
    */
+  /**
+   * Cancel an execution wherever it runs. The abort controller of a running
+   * execution lives in the worker executing it; a request landing on another
+   * worker relays the cancellation there instead of only flipping the
+   * persisted state while the node keeps running. Without a running owner
+   * (paused, or nobody holds it) the state is cancelled here.
+   *
+   * @param {string} executionId
+   * @param {string} [reason]
+   * @returns {Promise<Object>} the execution state; `cancelRelayed: true` when another worker performs it
+   */
+  async cancelAnywhere(executionId, reason = 'user_cancelled') {
+    if (
+      !this.abortControllers.has(executionId) &&
+      this._bus.hasRemote(EXECUTION_PRESENCE_KIND, executionId)
+    ) {
+      const state = await this.stateManager.get(executionId);
+      if (!state) {
+        const error = new Error(`Execution not found: ${executionId}`);
+        error.code = 'EXECUTION_NOT_FOUND';
+        throw error;
+      }
+      this._bus.publish(
+        EXECUTION_CANCEL_CHANNEL,
+        { executionId, reason },
+        { kind: EXECUTION_PRESENCE_KIND, key: executionId }
+      );
+      logger.info('Relayed cancellation to the worker running the execution', {
+        component: 'WorkflowEngine',
+        executionId,
+        reason
+      });
+      return { ...state, cancelRelayed: true };
+    }
+    return this.cancel(executionId, reason);
+  }
+
+  /** A cancellation relayed by another worker for an execution running here. */
+  _onRemoteCancel(message) {
+    const executionId = message?.executionId;
+    if (typeof executionId !== 'string' || !this.abortControllers.has(executionId)) return;
+    this.cancel(executionId, message.reason || 'user_cancelled').catch(error => {
+      logger.warn('Relayed cancellation failed', {
+        component: 'WorkflowEngine',
+        executionId,
+        error: error.message
+      });
+    });
+  }
+
   async cancel(executionId, reason = 'user_cancelled') {
     const state = await this.stateManager.get(executionId);
 
@@ -1103,6 +1661,25 @@ export class WorkflowEngine {
   }
 
   /**
+   * Hard-deletes an execution's checkpoint data from disk. Refuses if the
+   * execution is currently active. The ExecutionRegistry entry must be
+   * removed separately by the caller.
+   *
+   * @param {string} executionId - The execution identifier
+   * @returns {Promise<void>}
+   */
+  async deleteExecution(executionId) {
+    if (this.abortControllers && this.abortControllers.has(executionId)) {
+      const error = new Error(
+        `Cannot delete execution ${executionId} while it is active. Cancel it first.`
+      );
+      error.code = 'EXECUTION_ACTIVE';
+      throw error;
+    }
+    await this.stateManager.cleanup(executionId, false);
+  }
+
+  /**
    * Lists all active workflow executions
    * @returns {Promise<Object[]>} Array of execution summaries
    */
@@ -1112,29 +1689,47 @@ export class WorkflowEngine {
 
   /**
    * Executes a function with a timeout
-   * @param {Function} fn - The async function to execute
+   * @param {Function} fn - The async function to execute; receives an AbortSignal
+   *   that fires when the timeout elapses (or the outer signal aborts) so callers
+   *   that respect it can actually tear down their in-flight work
    * @param {number} timeout - Timeout in milliseconds
    * @param {string} timeoutMessage - Error message on timeout
+   * @param {AbortSignal} [outerSignal] - Signal (e.g. workflow-level cancellation)
+   *   that should also abort the signal passed to fn
    * @returns {Promise<*>} The function result
    * @private
    */
-  async _executeWithTimeout(fn, timeout, timeoutMessage) {
-    return new Promise(async (resolve, reject) => {
-      const timeoutId = setTimeout(() => {
+  async _executeWithTimeout(fn, timeout, timeoutMessage, outerSignal) {
+    const timeoutController = new AbortController();
+    const onOuterAbort = () => timeoutController.abort();
+
+    if (outerSignal) {
+      if (outerSignal.aborted) {
+        timeoutController.abort();
+      } else {
+        outerSignal.addEventListener('abort', onOuterAbort, { once: true });
+      }
+    }
+
+    let timeoutId;
+    const timeoutPromise = new Promise((_resolve, reject) => {
+      timeoutId = setTimeout(() => {
         const error = new Error(timeoutMessage);
         error.code = 'NODE_TIMEOUT';
+        // Settle the race with the NODE_TIMEOUT error first so callers keep
+        // seeing that contract even if fn() also rejects (e.g. because it
+        // observes the abort below) in the same tick.
         reject(error);
+        timeoutController.abort();
       }, timeout);
-
-      try {
-        const result = await fn();
-        clearTimeout(timeoutId);
-        resolve(result);
-      } catch (error) {
-        clearTimeout(timeoutId);
-        reject(error);
-      }
     });
+
+    try {
+      return await Promise.race([fn(timeoutController.signal), timeoutPromise]);
+    } finally {
+      clearTimeout(timeoutId);
+      outerSignal?.removeEventListener('abort', onOuterAbort);
+    }
   }
 
   /**
@@ -1178,6 +1773,52 @@ export class WorkflowEngine {
    * @param {Object} data - Event data
    * @private
    */
+  /**
+   * Reconcile the living plan (`_taskQueue`) when a run reaches a terminal
+   * state. A workflow's terminal status is driven by the node graph — NOT by
+   * whether the agent finished every task it laid out via set_plan/update_task.
+   * So a run can complete (or fail) while a task is still `in_progress` or
+   * `open`, which renders as a finished run with a perpetually-spinning task.
+   *
+   * On terminal we mark any leftover `in_progress`/`open` task as `cancelled`
+   * (we can't honestly claim it `done`) so the plan reflects reality, and emit
+   * `agent.plan.updated` so a live (non-refetched) view corrects immediately.
+   * Only touches agent runs that actually have a task queue.
+   *
+   * @param {string} executionId
+   * @param {Object} [stateArg] - already-loaded state, to avoid a re-read
+   * @private
+   */
+  async _reconcilePlanOnTerminal(executionId, stateArg) {
+    try {
+      const state = stateArg || (await this.stateManager.get(executionId));
+      const queue = state?.data?._taskQueue;
+      if (!Array.isArray(queue) || queue.length === 0) return;
+      let changed = false;
+      const reconciled = queue.map(t => {
+        if (t && (t.status === 'in_progress' || t.status === 'open')) {
+          changed = true;
+          return { ...t, status: 'cancelled' };
+        }
+        return t;
+      });
+      if (!changed) return;
+      // deepMerge replaces arrays, so this swaps the queue wholesale.
+      await this.stateManager.update(executionId, { data: { _taskQueue: reconciled } });
+      this._emitEvent('agent.plan.updated', {
+        executionId,
+        reason: 'terminal-reconcile',
+        ...summarizePlanForEvent(reconciled)
+      });
+    } catch (err) {
+      logger.warn('Plan reconciliation on terminal state failed', {
+        component: 'WorkflowEngine',
+        executionId,
+        error: err.message
+      });
+    }
+  }
+
   _emitEvent(eventType, data) {
     // Use the executionId as the chatId for consistency with actionTracker
     const chatId = data.executionId;
@@ -1188,11 +1829,112 @@ export class WorkflowEngine {
       ...data
     });
 
+    this._mirrorToLedger(eventType, data);
+
+    // The execution's own stream (workflow / agent run pages) is done once the
+    // run is terminal: the frames above were already sequenced and delivered.
+    if (
+      data?.executionId &&
+      (eventType === 'workflow.complete' ||
+        eventType === 'workflow.failed' ||
+        eventType === 'workflow.cancelled')
+    ) {
+      resetStream(data.executionId);
+    }
+
     logger.debug('Emitted workflow event', {
       component: 'WorkflowEngine',
       eventType,
       executionId: data.executionId
     });
+  }
+
+  /**
+   * Start the execution's run on the ledger. Never throws — the ledger must not
+   * break an execution.
+   * @private
+   */
+  async _startLedgerRun(executionId, workflowDefinition, initialData, options) {
+    const agent = initialData?._agent;
+    const triggerKind = agent?.triggeredBy?.kind;
+    const trigger =
+      triggerKind === 'schedule' || triggerKind === 'webhook'
+        ? { type: triggerKind }
+        : triggerKind === 'inbox' || triggerKind === 'system'
+          ? { type: 'system', source: triggerKind }
+          : initialData?._chatHistory !== undefined || initialData?._chatId
+            ? { type: 'tool', source: 'chat' }
+            : { type: 'user' };
+    try {
+      await runLog.startRun({
+        runId: executionId,
+        kind: agent?.profileId ? 'agent' : 'workflow',
+        user: options.user || null,
+        trigger,
+        refs: {
+          executionId,
+          ...(workflowDefinition.id ? { workflowId: String(workflowDefinition.id) } : {}),
+          ...(agent?.profileId ? { profileId: String(agent.profileId) } : {}),
+          ...(typeof initialData?._chatId === 'string' ? { chatId: initialData._chatId } : {})
+        },
+        ...(initialData?.language ? { language: String(initialData.language) } : {})
+      });
+    } catch (err) {
+      logger.warn('Ledger startRun failed for execution', {
+        component: 'WorkflowEngine',
+        executionId,
+        error: err.message
+      });
+    }
+  }
+
+  /**
+   * Mirror the lifecycle events onto the execution's ledger run
+   * (`run/paused`, `run/end`). Never throws.
+   * @private
+   */
+  _mirrorToLedger(eventType, data) {
+    const runId = data?.executionId;
+    if (!runId) return;
+    try {
+      switch (eventType) {
+        case 'workflow.paused':
+          runLog.append(runId, RUN_LOG_EVENTS.RUN_PAUSED, {
+            reason: 'interaction',
+            ...(data.checkpoint?.id ? { interactionId: String(data.checkpoint.id) } : {}),
+            pausedAt: new Date().toISOString()
+          });
+          break;
+        case 'workflow.complete':
+          runLog.endRun(runId, {
+            status: 'completed',
+            finishReason: data.status && data.status !== 'completed' ? String(data.status) : null
+          });
+          break;
+        case 'workflow.failed':
+          runLog.endRun(runId, {
+            status: 'error',
+            finishReason: 'error',
+            error: {
+              code: String(data.error?.code || 'WORKFLOW_FAILED'),
+              message: String(data.error?.message || data.error || 'Workflow failed')
+            }
+          });
+          break;
+        case 'workflow.cancelled':
+          runLog.endRun(runId, { status: 'aborted', finishReason: 'cancelled' });
+          break;
+        default:
+          break;
+      }
+    } catch (err) {
+      logger.debug('Ledger mirror failed', {
+        component: 'WorkflowEngine',
+        executionId: runId,
+        eventType,
+        error: err.message
+      });
+    }
   }
 
   /**

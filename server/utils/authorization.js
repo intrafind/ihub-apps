@@ -3,6 +3,8 @@ import path from 'path';
 import { fileURLToPath } from 'url';
 import { sendAuthRequired, sendInsufficientPermissions } from './responseHelpers.js';
 import logger from './logger.js';
+import configCache from '../configCache.js';
+import { hasIdCaseInsensitive } from './resourceLookup.js';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -63,7 +65,9 @@ export function resolveGroupInheritance(groupsConfig) {
         models: new Set(),
         workflows: new Set(),
         skills: new Set(),
-        adminAccess: false
+        tools: new Set(),
+        adminAccess: false,
+        contentAdmin: false
       };
 
       // Merge from parent groups first (in order)
@@ -95,9 +99,19 @@ export function resolveGroupInheritance(groupsConfig) {
           parentPerms.skills.forEach(skill => mergedPermissions.skills.add(skill));
         }
 
+        // Merge tools
+        if (Array.isArray(parentPerms.tools)) {
+          parentPerms.tools.forEach(tool => mergedPermissions.tools.add(tool));
+        }
+
         // Admin access: if any parent has admin access, inherit it
         if (parentPerms.adminAccess === true) {
           mergedPermissions.adminAccess = true;
+        }
+
+        // Content admin: if any parent has content admin, inherit it
+        if (parentPerms.contentAdmin === true) {
+          mergedPermissions.contentAdmin = true;
         }
       }
 
@@ -118,8 +132,14 @@ export function resolveGroupInheritance(groupsConfig) {
       if (Array.isArray(ownPerms.skills)) {
         ownPerms.skills.forEach(skill => mergedPermissions.skills.add(skill));
       }
+      if (Array.isArray(ownPerms.tools)) {
+        ownPerms.tools.forEach(tool => mergedPermissions.tools.add(tool));
+      }
       if (ownPerms.adminAccess === true) {
         mergedPermissions.adminAccess = true;
+      }
+      if (ownPerms.contentAdmin === true) {
+        mergedPermissions.contentAdmin = true;
       }
 
       // Update the group with resolved permissions
@@ -131,7 +151,9 @@ export function resolveGroupInheritance(groupsConfig) {
           models: Array.from(mergedPermissions.models),
           workflows: Array.from(mergedPermissions.workflows),
           skills: Array.from(mergedPermissions.skills),
-          adminAccess: mergedPermissions.adminAccess
+          tools: Array.from(mergedPermissions.tools),
+          adminAccess: mergedPermissions.adminAccess,
+          contentAdmin: mergedPermissions.contentAdmin
         }
       };
 
@@ -165,12 +187,36 @@ export function resolveGroupInheritance(groupsConfig) {
 }
 
 /**
- * Load unified groups configuration
+ * Load unified groups configuration, with inheritance already resolved.
+ *
+ * The cache is the real source: `configCache` loads `config/groups.json`
+ * through the `ConfigStore` — so through the storage provider — and stores it
+ * with inheritance resolved, which is the same shape this returns. Reading it
+ * from there is also what makes a group change take effect on every worker; a
+ * disk read here would keep serving whatever this worker's filesystem said at
+ * the moment it was asked.
+ *
+ * This function is synchronous and cannot become async: `adminAuth` and
+ * `contentAdminAuth` call it in the middleware path of every admin request,
+ * and every test in the tree stubs it as a sync function. The disk read below
+ * is the fallback for a cache that has not been populated — before
+ * `configCache.initialize()` finishes, and in tests that never boot it.
+ *
+ * `CONTENTS_DIR` is read from the environment rather than from
+ * `server/config.js`, whose import pulls dotenv and envalid into every module
+ * that touches this one; `group-handling.test.js` automocks `fs`, and an
+ * env-validating module loaded under that mock does not survive it. The
+ * default repeated here is the one `config.js` declares.
+ *
  * @returns {Object} Groups configuration with permissions and mappings
  */
 export function loadGroupsConfiguration() {
+  const cached = configCache.getGroups();
+  if (cached?.data) return cached.data;
+
   try {
-    const configPath = path.join(__dirname, '../../contents/config/groups.json');
+    const contentsDir = process.env.CONTENTS_DIR || 'contents';
+    const configPath = path.join(__dirname, '../..', contentsDir, 'config/groups.json');
     const config = JSON.parse(fs.readFileSync(configPath, 'utf8'));
 
     // Resolve group inheritance
@@ -199,7 +245,9 @@ export function loadGroupPermissions() {
       models: group.permissions?.models || [],
       workflows: group.permissions?.workflows || [],
       skills: group.permissions?.skills || [],
+      tools: group.permissions?.tools || [],
       adminAccess: group.permissions?.adminAccess || false,
+      contentAdmin: group.permissions?.contentAdmin || false,
       description: group.description || ''
     };
   }
@@ -311,7 +359,9 @@ export function getPermissionsForUser(userGroups, groupPermissions = null) {
     models: new Set(),
     workflows: new Set(),
     skills: new Set(),
-    adminAccess: false
+    tools: new Set(),
+    adminAccess: false,
+    contentAdmin: false
   };
 
   if (!Array.isArray(userGroups)) {
@@ -360,9 +410,23 @@ export function getPermissionsForUser(userGroups, groupPermissions = null) {
       groupPerms.skills.forEach(skill => permissions.skills.add(skill));
     }
 
+    // Handle wildcards and specific permissions for tools. Unlike the other
+    // entries this grants *direct* tool access over the MCP/A2A gateways only —
+    // which tools a chat app may call is still declared by the app itself.
+    if (groupPerms.tools?.includes('*')) {
+      permissions.tools.add('*');
+    } else if (Array.isArray(groupPerms.tools)) {
+      groupPerms.tools.forEach(tool => permissions.tools.add(tool));
+    }
+
     // Admin access
     if (groupPerms.adminAccess) {
       permissions.adminAccess = true;
+    }
+
+    // Content admin access
+    if (groupPerms.contentAdmin) {
+      permissions.contentAdmin = true;
     }
   }
 
@@ -377,6 +441,62 @@ export function getPermissionsForUser(userGroups, groupPermissions = null) {
   });
 
   return permissions;
+}
+
+/**
+ * Intersect a set of user-permitted IDs with a client-level allow-list.
+ *
+ * Semantics (matches issue #1299):
+ *   - An empty/undefined clientAllowed list means "no client-level restriction" → return userAllowed unchanged.
+ *   - A list containing '*' has the same effect (wildcard, no restriction).
+ *   - Otherwise, return the intersection of userAllowed ∩ clientAllowed.
+ *   - If the user has wildcard access ('*'), the result is the client's list.
+ *
+ * @param {Set<string>} userAllowed - Set of IDs the user may access (may contain '*').
+ * @param {Array<string>|undefined} clientAllowed - OAuth client's allow-list.
+ * @returns {Set<string>} Intersected set of allowed IDs.
+ */
+export function intersectWithClientAllowList(userAllowed, clientAllowed) {
+  if (!Array.isArray(clientAllowed) || clientAllowed.length === 0 || clientAllowed.includes('*')) {
+    // No client-level restriction configured → user keeps their full permissions
+    return userAllowed;
+  }
+
+  // User has wildcard → collapse to the client's explicit list
+  if (userAllowed && userAllowed.has && userAllowed.has('*')) {
+    return new Set(clientAllowed);
+  }
+
+  // Intersection
+  const result = new Set();
+  const clientSet = new Set(clientAllowed);
+  for (const id of userAllowed || []) {
+    if (hasIdCaseInsensitive(clientSet, id)) {
+      result.add(id);
+    }
+  }
+  return result;
+}
+
+/**
+ * Apply an OAuth client's allow-list as a filter on top of the user's group permissions.
+ *
+ * Used for user-delegated tokens (`oauth_authorization_code` and the personal API
+ * keys users mint for themselves): the token acts as a specific user, and the OAuth
+ * client (e.g. the Outlook add-in) may define additional restrictions. If the client
+ * configures no restrictions, the user keeps their full group-granted permissions.
+ *
+ * @param {Object} permissions - User permissions object with apps/models/prompts Sets.
+ * @param {Object} user - User object carrying clientAllowedApps/clientAllowedModels/clientAllowedPrompts.
+ * @returns {Object} Filtered permissions object.
+ */
+export function applyOAuthClientFilter(permissions, user) {
+  return {
+    ...permissions,
+    apps: intersectWithClientAllowList(permissions.apps, user.clientAllowedApps),
+    models: intersectWithClientAllowList(permissions.models, user.clientAllowedModels),
+    prompts: intersectWithClientAllowList(permissions.prompts, user.clientAllowedPrompts)
+  };
 }
 
 /**
@@ -397,8 +517,39 @@ export function filterResourcesByPermissions(resources, allowedResources) {
   // Filter resources based on allowed IDs
   return resources.filter(resource => {
     const resourceId = resource.id || resource.modelId || resource.name;
-    return allowedResources.has(resourceId);
+    return hasIdCaseInsensitive(allowedResources, resourceId);
   });
+}
+
+/**
+ * Auth modes whose tokens never carry administrative rights, whatever groups
+ * the underlying user belongs to: machine tokens (client credentials, static
+ * API keys) and tokens that merely act on a user's behalf (authorization-code
+ * delegation, personal API keys).
+ */
+const NON_ADMIN_AUTH_MODES = [
+  'oauth_client_credentials',
+  'oauth_static_api_key',
+  'oauth_authorization_code',
+  'oauth_personal_key'
+];
+
+/**
+ * Whether a principal may hold admin rights at all.
+ *
+ * `enhanceUserWithPermissions` already forces `isAdmin` to false for delegated
+ * and machine principals, but the admin middlewares gate on raw group
+ * membership, so they need the same rule stated somewhere they can reach it.
+ * Without it, an administrator could mint a long-lived bearer token from the
+ * integrations page and use it to drive the admin API.
+ *
+ * @param {Object} user - Request user
+ * @returns {boolean} True when the principal is allowed to be an admin
+ */
+export function isAdminEligiblePrincipal(user) {
+  if (!user) return false;
+  if (user.isOAuthClient || user.isAgent === true) return false;
+  return !NON_ADMIN_AUTH_MODES.includes(user.authMode);
 }
 
 /**
@@ -507,14 +658,16 @@ export function enhanceUserWithPermissions(user, authConfig, platform) {
   }
 
   // Get permissions for user
-  // For OAuth clients, use their allowedApps/allowedModels directly instead of group permissions
+  // For OAuth clients (client_credentials / static API keys), use their allowedApps /
+  // allowedModels / allowedPrompts directly instead of group permissions — the token
+  // represents the client itself, so the listed resources are the full permission set.
   if (user.isOAuthClient) {
     logger.debug('OAuth client detected, using client-specific permissions', {
       component: 'Authorization'
     });
     user.permissions = {
       apps: new Set(user.allowedApps || []),
-      prompts: new Set(), // OAuth clients don't have prompt permissions
+      prompts: new Set(user.allowedPrompts || []),
       models: new Set(user.allowedModels || []),
       workflows: new Set(), // OAuth clients don't have workflow permissions
       skills: new Set(), // OAuth clients don't have skill permissions
@@ -522,12 +675,31 @@ export function enhanceUserWithPermissions(user, authConfig, platform) {
     };
   } else {
     user.permissions = getPermissionsForUser(user.groups);
+
+    // For OAuth authorization_code (user-delegated) tokens, the client's allowedApps/
+    // allowedModels/allowedPrompts act as an additional filter on top of the user's group
+    // permissions. An empty or undefined list means "no client-level restriction" so the
+    // user keeps their full group-granted permissions. A list containing '*' has the same
+    // effect. Any non-wildcard list narrows the user's permissions by intersection.
+    // Personal API keys are delegated in exactly the same sense: the token acts
+    // as its owner, bounded by that owner's group permissions.
+    if (user.authMode === 'oauth_authorization_code' || user.authMode === 'oauth_personal_key') {
+      user.permissions = applyOAuthClientFilter(user.permissions, user);
+      // OAuth-delegated tokens must never grant admin access regardless of the user's groups
+      user.permissions.adminAccess = false;
+    }
   }
 
-  // Check admin access (OAuth clients never have admin access)
-  user.isAdmin = user.isOAuthClient
-    ? false
-    : hasAdminAccess(user.groups, authConfig) || user.permissions.adminAccess;
+  // Check admin access. Both OAuth client-credentials and OAuth authorization-code tokens
+  // are denied admin access regardless of the underlying user's groups.
+  // Agent service-account principals also never get admin: they are
+  // identified solely by `isAgent === true`.
+  const isOAuthDelegated =
+    user.authMode === 'oauth_authorization_code' || user.authMode === 'oauth_personal_key';
+  user.isAdmin =
+    user.isOAuthClient || isOAuthDelegated || user.isAgent === true
+      ? false
+      : hasAdminAccess(user.groups) || user.permissions.adminAccess;
 
   logger.debug('User enhancement complete', {
     component: 'Authorization',
@@ -554,7 +726,7 @@ export function createAuthorizationMiddleware(options = {}) {
 
   return (req, res, next) => {
     const authConfig = req.app.get('authConfig') || {};
-    const platform = req.app.get('platform') || {};
+    const platform = configCache.getPlatform() || req.app.get('platform') || {};
 
     // Enhance user with permissions if not already done
     if (req.user && !req.user.permissions) {
@@ -598,7 +770,7 @@ export function canUserAccessResource(user, resourceType, resourceId) {
   const allowedResources = user.permissions[resourceType];
   if (!allowedResources) return false;
 
-  return allowedResources.has('*') || allowedResources.has(resourceId);
+  return allowedResources.has('*') || hasIdCaseInsensitive(allowedResources, resourceId);
 }
 
 /**
@@ -698,4 +870,40 @@ export function enhanceUserGroups(user, authConfig, providerConfig = null) {
  */
 export function getAuthenticatedGroup(authConfig) {
   return authConfig?.authenticatedGroup || 'authenticated';
+}
+
+/**
+ * Build a service-account principal for an agent run.
+ *
+ * The principal's id is `agent:<profileId>`. The configured
+ * `serviceAccount.groups` determine what apps/tools/models the agent can access
+ * via the normal group permission system. `isAgent: true` forces `isAdmin =
+ * false` in `enhanceUserWithPermissions`.
+ *
+ * @param {Object} profile - Resolved AgentProfile
+ * @param {Object} [triggeredBy] - `{ userId, kind }` describing the trigger
+ * @returns {Object} bare principal (call enhanceUserWithPermissions to expand)
+ */
+export function buildAgentPrincipal(profile, triggeredBy = null) {
+  if (!profile || !profile.id) {
+    throw new Error('buildAgentPrincipal requires a profile with an id');
+  }
+  const localizedName =
+    typeof profile.name === 'string' ? profile.name : profile.name?.en || profile.id;
+  const groups = Array.from(new Set(profile.serviceAccount?.groups || ['agents', 'authenticated']));
+  return {
+    id: `agent:${profile.id}`,
+    name: localizedName,
+    email: null,
+    groups,
+    isAgent: true,
+    profileId: profile.id,
+    // Carry the bound inbox so the deterministic inbox nodes
+    // (InboxLoadNodeExecutor) can resolve it via `context.user.inboxId` when the
+    // run uses an EXTERNAL workflow that wasn't built by the inbox-worker
+    // serializer (which would otherwise set `config.inboxId` on the node).
+    inboxId:
+      typeof profile.inboxId === 'string' && profile.inboxId.length > 0 ? profile.inboxId : null,
+    triggeredBy: triggeredBy || null
+  };
 }

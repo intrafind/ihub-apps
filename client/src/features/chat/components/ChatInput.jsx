@@ -10,6 +10,33 @@ import ModelSelector from './ModelSelector';
 import ModelHintBanner from './ModelHintBanner';
 import { VoiceInputComponent } from '../../voice/components';
 import { useUIConfig } from '../../../shared/contexts/UIConfigContext';
+import { usePlatformConfig } from '../../../shared/contexts/PlatformConfigContext';
+import useFeatureFlags from '../../../shared/hooks/useFeatureFlags';
+import MagicPromptLoader from '../../../shared/components/MagicPromptLoader';
+import {
+  computeContextUsage,
+  conversationTokenFragments
+} from '../../../shared/utils/tokenEstimatorClient.js';
+import {
+  useEstimatedTokenCount,
+  useEstimatedTokensForFragments
+} from '../../../shared/hooks/useEstimatedTokenCount.js';
+import { getLocalizedContent } from '../../../utils/localizeContent';
+
+/**
+ * Stable empty default for the `messages` prop: a fresh `[]` per render would
+ * invalidate the memoized history fragments and re-run the token estimate on
+ * every render for surfaces that don't pass a conversation.
+ */
+const NO_MESSAGES = [];
+
+/** Format elapsed seconds as m:ss for the recording timer. */
+const formatElapsed = seconds => {
+  const total = Math.floor(seconds || 0);
+  const m = Math.floor(total / 60);
+  const s = total % 60;
+  return `${m}:${String(s).padStart(2, '0')}`;
+};
 
 /**
  * Chat input component following Claude's design
@@ -26,6 +53,17 @@ function ChatInput({
   onCancel,
   onVoiceInput,
   onVoiceCommand,
+  // Record→transcribe control (distinct from dictation onVoiceInput):
+  // records audio and renders the transcript as an assistant chat turn.
+  onRecordTranscription = null,
+  transcriptionRecordEnabled = false,
+  isRecordingTranscription = false,
+  recordTranscriptionElapsed = 0,
+  // Per-chat transcription toggle (like websearch): when on, audio/video
+  // uploads are transcribed by the transcription model instead of the chat LLM.
+  transcriptionAvailable = false,
+  transcriptionEnabled = false,
+  onTranscriptionEnabledChange = null,
   onFileSelect,
   allowEmptySubmit = false,
   inputRef = null,
@@ -44,6 +82,20 @@ function ChatInput({
   onEnabledToolsChange = null,
   websearchEnabled = false,
   onWebsearchEnabledChange = null,
+  // Ephemeral (incognito-style) chat. When on, the conversation is never
+  // persisted — it disappears on reload or when leaving the app. The toggle
+  // renders below the input, aligned with the send button.
+  ephemeral = false,
+  onEphemeralChange = null,
+  // Optional node (e.g. the AI disclaimer) rendered centered on the same
+  // tight line as the ephemeral toggle, directly below the input box.
+  disclaimer = null,
+  // Per-message host-context toggles. Surfaced under the `+` menu when
+  // the embedded host (Outlook taskpane / browser extension side panel)
+  // declares any in its EmbeddedHostAdapter.contextToggles. Empty in the
+  // main web app — no toggles render and the props are inert.
+  hostContextFlags = null,
+  onHostContextFlagChange = null,
   // Model selection props
   models = [],
   selectedModel = null,
@@ -60,13 +112,33 @@ function ChatInput({
   onSkillSelect = null,
   // Skills slash command gating (when skills feature is enabled and app has skills)
   skillsSlashEnabled = false,
+  // Conversation so far. Every prior message is re-sent on each turn, so the
+  // context-window indicator has to count the whole history — not just the
+  // pending message (issue #2283). Optional: surfaces without it simply show
+  // the pending input's share of the window.
+  messages = NO_MESSAGES,
+  // Mirrors the app/user "send chat history" setting. When off, no history is
+  // re-sent and the estimate covers the pending message only.
+  sendChatHistory = true,
   // Clarification state
   clarificationPending = false, // When true, input is disabled waiting for clarification answer
   // Document token size warning
-  fileTokenWarning = null
+  fileTokenWarning = null,
+  // Additional context text contributed by the host (e.g. Outlook email body +
+  // pinned emails) that will be appended to the outgoing message. Included in
+  // the live token-count estimate so the context-window indicator reflects what
+  // will actually be sent to the LLM.
+  extraContextText = '',
+  // Optional override for the auto-grow textarea cap. Defaults to 5 lines
+  // (~150 px) in single-line mode and 12 lines in multiline mode. The
+  // Outlook taskpane passes 3 so the input doesn't dominate the small
+  // task pane when the user pastes a long prompt — issue #1467.
+  maxRows = null
 }) {
   const { t, i18n } = useTranslation();
   const { uiConfig } = useUIConfig();
+  const { platformConfig } = usePlatformConfig();
+  const featureFlags = useFeatureFlags();
   const localInputRef = useRef(null);
   const actualInputRef = inputRef || localInputRef;
   const workflowSearchRef = useRef(null);
@@ -79,8 +151,15 @@ function ChatInput({
 
   const promptsListEnabled =
     uiConfig?.promptsList?.enabled !== false && app?.features?.promptsList !== false;
+  // The ephemeral toggle is shown unless the app explicitly disables the
+  // setting (same gate the settings dialog used before the toggle moved here).
+  const ephemeralToggleAvailable =
+    typeof onEphemeralChange === 'function' && app?.settings?.ephemeral?.enabled !== false;
   const slashCommandEnabled = promptsListEnabled || skillsSlashEnabled;
-  const workflowMentionsEnabled = app?.tools?.some(t => t.startsWith('workflow:'));
+  const workflowMentionsEnabled =
+    featureFlags.isEnabled('workflows', true) &&
+    Array.isArray(app?.workflows) &&
+    app.workflows.length > 0;
 
   // Derive the @mention query from the current input value
   const mentionQuery = showWorkflowSearch ? value.match(/@([\w.-]*)$/)?.[1] || '' : '';
@@ -100,6 +179,71 @@ function ChatInput({
     if (!selectedFile) return [];
     return Array.isArray(selectedFile) ? selectedFile : [selectedFile];
   }, [selectedFile]);
+
+  // Tokenize attached document content separately so large files are only
+  // re-tokenized when the attachments change — not on every keystroke. The
+  // tokenizer chunk is loaded lazily; counts refine once it resolves.
+  const fileContent = useMemo(
+    () => normalizedFiles.map(f => f?.content || '').join('\n'),
+    [normalizedFiles]
+  );
+  const fileTokens = useEstimatedTokenCount(fileContent);
+  // Debounce the typed-message estimate so we don't run the tokenizer on every
+  // keystroke (matters for large pasted text).
+  const valueTokens = useEstimatedTokenCount(value || '', { debounceMs: 300 });
+  // Host-injected context (e.g. Outlook email body + pinned emails) that will
+  // be appended to the outgoing message but isn't reflected in `value` or
+  // `fileContent`. Debounced lightly since it only changes when the user
+  // navigates emails or pins/unpins — not on every keystroke.
+  const extraContextTokens = useEstimatedTokenCount(extraContextText || '', { debounceMs: 150 });
+
+  // The conversation so far, flattened into the text fragments that go back to
+  // the model on the next turn (message content plus attached document text).
+  // Re-tokenized only when the message list actually changes, and per-fragment
+  // counts are memoized, so a long conversation is not re-scanned per render.
+  const historyFragments = useMemo(
+    () => conversationTokenFragments(messages, { includeHistory: sendChatHistory !== false }),
+    [messages, sendChatHistory]
+  );
+  const historyTokens = useEstimatedTokensForFragments(historyFragments, { debounceMs: 150 });
+
+  // The app's system prompt is part of every request. Sources, style/output-format
+  // instructions and tool definitions are resolved server-side and stay invisible
+  // here, so the estimate remains a lower bound on the real prompt size.
+  const systemPromptText = useMemo(
+    () => getLocalizedContent(app?.system, currentLanguage) || '',
+    [app?.system, currentLanguage]
+  );
+  const systemTokens = useEstimatedTokenCount(systemPromptText);
+
+  // Estimate how much of the model's context window the next request would
+  // consume: system prompt + full conversation + pending input. This is a live,
+  // client-side estimate using the shared tokenizer; the provider-reported count
+  // after each turn is authoritative. Only shown when the model exposes a context
+  // window and there is something to report — a fresh, untouched chat stays quiet.
+  // Note: extraContextTokens (e.g. Outlook email body / pinned emails) can make
+  // pendingTokens non-zero even when no text has been typed and no files attached.
+  const contextUsage = useMemo(() => {
+    const contextWindow = selectedModelData?.contextWindow;
+    if (!contextWindow) return null;
+    const pendingTokens = valueTokens + fileTokens + extraContextTokens;
+    if (pendingTokens === 0 && historyTokens === 0) return null;
+    return computeContextUsage({
+      contextWindow,
+      inputTokens: systemTokens + historyTokens + pendingTokens,
+      maxOutputTokens: selectedModelData?.maxOutputTokens || 0
+    });
+  }, [selectedModelData, fileTokens, valueTokens, extraContextTokens, historyTokens, systemTokens]);
+
+  // Warn as the window fills up: the indicator is the only place a user can see
+  // a multiturn conversation approaching the limit.
+  const contextUsageTone = !contextUsage
+    ? ''
+    : contextUsage.remaining <= 0
+      ? 'text-red-600 dark:text-red-400'
+      : contextUsage.usedRatio >= 0.85
+        ? 'text-amber-600 dark:text-amber-400'
+        : 'text-gray-400 dark:text-gray-500';
 
   // Determine input mode configuration
   const inputMode = app?.inputMode;
@@ -149,13 +293,26 @@ function ChatInput({
   // Calculate if single-action optimization is active in ChatInputActionsMenu
   // This logic mirrors the calculation in ChatInputActionsMenu.jsx
   const hasTools = app?.tools && app.tools.length > 0;
+  // Local upload (paper-clip + dropzone) is independent from cloud storage
+  // upload, which is rendered as separate entries in the actions menu.
+  const localUploadEnabled = uploadConfig?.localUploadEnabled === true;
+  // Match ChatInputActionsMenu's hasCloudProviders calculation so the
+  // single-action optimization stays in sync (issue #1426).
+  const cloudStorageEnabledForApp = uploadConfig?.cloudStorageUpload?.enabled === true;
+  const platformCloudStorage = platformConfig?.cloudStorage;
+  const hasCloudProviders =
+    cloudStorageEnabledForApp &&
+    platformCloudStorage?.enabled === true &&
+    Array.isArray(platformCloudStorage?.providers) &&
+    platformCloudStorage.providers.some(p => p.enabled);
   const quickActionCount =
-    (uploadConfig?.enabled === true ? 1 : 0) +
+    (localUploadEnabled ? 1 : 0) +
     (magicPromptEnabled && !showUndoMagicPrompt ? 1 : 0) +
     (showUndoMagicPrompt ? 1 : 0) +
     (onVoiceInput ? 1 : 0);
   const totalActions = quickActionCount + (hasTools ? 1 : 0);
-  const isSingleActionOptimization = totalActions === 1 && quickActionCount === 1 && !hasTools;
+  const isSingleActionOptimization =
+    totalActions === 1 && quickActionCount === 1 && !hasTools && !hasCloudProviders;
 
   // Handler to trigger file upload dialog via ref
   const handleAttachFile = useCallback(() => {
@@ -213,11 +370,21 @@ function ChatInput({
         // Reset height to auto to get the correct scrollHeight
         textarea.style.height = 'auto';
 
-        // Calculate the new height based on content
+        // Calculate the new height based on content. Use the live root font-size
+        // rather than a hardcoded 16px so the min/max line heights follow the
+        // Office task pane's responsive scaling on small / high-DPI panes.
         const scrollHeight = textarea.scrollHeight;
-        const minHeight = inputRows * 1.5 * 16; // Convert em to px (assuming 16px base font size)
-        // Max height: 150px (approx 5 lines) for single-line mode, 12 lines for multiline mode
-        const maxHeight = multilineMode ? 12 * 1.5 * 16 + 24 : 150;
+        const rootFontSize = parseFloat(getComputedStyle(document.documentElement).fontSize) || 16;
+        const minHeight = inputRows * 1.5 * rootFontSize; // line-height (1.5) × rows × base font
+        // Default cap: 5 lines (single-line mode) / 12 lines (multiline mode).
+        // `maxRows` lets the embedding host (Outlook taskpane) clamp lower.
+        const defaultMaxLines = multilineMode ? 12 : 5;
+        const effectiveMaxLines =
+          typeof maxRows === 'number' && maxRows > 0
+            ? Math.max(maxRows, inputRows)
+            : defaultMaxLines;
+        const maxHeight =
+          effectiveMaxLines * 1.5 * rootFontSize + (multilineMode ? 1.5 * rootFontSize : 0);
 
         // Set the height to fit content, but respect min/max limits
         const newHeight = Math.min(Math.max(scrollHeight, minHeight), maxHeight);
@@ -234,7 +401,7 @@ function ChatInput({
         textarea.removeEventListener('input', autoResize);
       };
     }
-  }, [value, multilineMode, inputRows, actualInputRef]);
+  }, [value, multilineMode, inputRows, maxRows, actualInputRef]);
 
   const handleSubmit = e => {
     e.preventDefault();
@@ -336,12 +503,60 @@ function ChatInput({
 
       {fileTokenWarning && (
         <div className="mx-2 mb-2 flex items-start gap-2 rounded-lg border border-amber-300 bg-amber-50 p-2 text-sm text-amber-800 dark:border-amber-700 dark:bg-amber-900/20 dark:text-amber-200">
-          <span className="mt-0.5 flex-shrink-0">⚠️</span>
-          <span>
-            {t('errors.documentTooLarge', {
-              estimatedTokens: fileTokenWarning.estimatedTokens.toLocaleString(i18n.language),
-              tokenLimit: fileTokenWarning.tokenLimit.toLocaleString(i18n.language)
-            })}
+          <span className="mt-0.5 shrink-0">⚠️</span>
+          <div className="flex flex-col gap-1">
+            <span>
+              {(fileTokenWarning.files?.length || 0) > 1
+                ? t('errors.documentTooLargeCombined', {
+                    fileCount: fileTokenWarning.files.length,
+                    estimatedTokens: fileTokenWarning.estimatedTokens.toLocaleString(i18n.language),
+                    tokenLimit: fileTokenWarning.contextWindow.toLocaleString(i18n.language)
+                  })
+                : t('errors.documentTooLarge', {
+                    fileName: fileTokenWarning.files?.[0]?.fileName || '',
+                    estimatedTokens: fileTokenWarning.estimatedTokens.toLocaleString(i18n.language),
+                    tokenLimit: fileTokenWarning.contextWindow.toLocaleString(i18n.language)
+                  })}
+            </span>
+            {(fileTokenWarning.files?.length || 0) > 1 && (
+              <ul className="ml-1 list-inside list-disc">
+                {fileTokenWarning.files.map((f, idx) => (
+                  <li key={idx}>
+                    {t('errors.documentTooLargeFileItem', {
+                      fileName: f.fileName,
+                      estimatedTokens: f.estimatedTokens.toLocaleString(i18n.language)
+                    })}
+                  </li>
+                ))}
+              </ul>
+            )}
+          </div>
+        </div>
+      )}
+
+      {/* Status line above the input: ephemeral "not saved" notice centered,
+          token count right. Rendered as one row to keep vertical space tight. */}
+      {(ephemeral || (contextUsage && !fileTokenWarning)) && (
+        /* Flex on mobile so the token count gets the width it needs: in the
+           three-column grid it was squeezed into a 1fr column and wrapped
+           ("~290 / 32,768 context" + "tokens" on a second line). */
+        <div className="mx-2 mb-0.5 flex items-center justify-between gap-2 text-xs sm:grid sm:grid-cols-[1fr_auto_1fr]">
+          <span className="hidden sm:block" />
+          <span className="min-w-0 truncate text-center text-violet-600 dark:text-violet-400">
+            {ephemeral &&
+              t(
+                'chat.ephemeral.activeNotice',
+                'Messages are not saved and disappear when you leave or reload.'
+              )}
+          </span>
+          <span className={`shrink-0 whitespace-nowrap justify-self-end ${contextUsageTone}`}>
+            {contextUsage &&
+              !fileTokenWarning &&
+              t('chat.contextUsage', {
+                used: contextUsage.inputTokens.toLocaleString(i18n.language),
+                total: contextUsage.contextWindow.toLocaleString(i18n.language),
+                defaultValue: '~{{used}} / {{total}} context tokens'
+              })}
           </span>
         </div>
       )}
@@ -380,7 +595,11 @@ function ChatInput({
           ref={formRef}
           onSubmit={handleSubmit}
           autoComplete="off"
-          className="flex flex-col border border-gray-300 dark:border-gray-600 rounded-2xl bg-white dark:bg-gray-800 shadow-sm focus-within:ring-2 focus-within:ring-indigo-500 focus-within:border-indigo-500 mb-1"
+          className={`flex flex-col border rounded-2xl bg-white dark:bg-gray-800 shadow-xs focus-within:ring-2 mb-1 ${
+            ephemeral
+              ? 'border-violet-400 dark:border-violet-500 focus-within:ring-violet-500 focus-within:border-violet-500'
+              : 'border-gray-300 dark:border-gray-600 focus-within:ring-indigo-500 focus-within:border-indigo-500'
+          }`}
         >
           {/* Top line: User input */}
           <div className="relative flex-1">
@@ -393,14 +612,21 @@ function ChatInput({
               onChange={handleInputChange}
               onKeyDown={handleKeyDown}
               disabled={isInputDisabled || isProcessing}
-              className="w-full px-3 py-2 pr-10 bg-transparent border-0 focus:ring-0 focus:outline-none resize-none dark:text-gray-100 rounded-t-2xl"
+              className="w-full px-3 py-2 pr-10 bg-transparent border-0 focus:ring-0 focus:outline-hidden resize-none dark:text-gray-100 rounded-t-2xl"
               placeholder={defaultPlaceholder}
               ref={actualInputRef}
               aria-label={t('chat.inputLabel', 'Type your message')}
               style={{
                 minHeight: multilineMode ? `${inputRows * 1.5}em` : undefined,
-                maxHeight: multilineMode ? `calc(11 * 1.5em + 1.5rem)` : undefined,
-                overflowY: multilineMode ? 'auto' : 'hidden',
+                maxHeight: multilineMode
+                  ? `calc(11 * 1.5em + 1.5rem)`
+                  : typeof maxRows === 'number' && maxRows > 0
+                    ? `calc(${Math.max(maxRows, inputRows)} * 1.5em)`
+                    : undefined,
+                // Show a scrollbar once the textarea hits the cap — `maxRows`
+                // would otherwise hide overflowing text in single-line mode.
+                overflowY:
+                  multilineMode || (typeof maxRows === 'number' && maxRows > 0) ? 'auto' : 'hidden',
                 height: multilineMode ? 'auto' : undefined
               }}
               title={
@@ -423,7 +649,7 @@ function ChatInput({
           </div>
 
           {/* Bottom line: Actions menu, model selector, send/stop button */}
-          <div className="flex items-center gap-2 px-3 pb-2 border-t border-gray-100 dark:border-gray-700/50 pt-2">
+          <div className="flex items-center gap-2 px-3 pb-1.5 border-t border-gray-100 dark:border-gray-700/50 pt-1.5 sm:pb-2 sm:pt-2">
             {/* Chat Input Actions Menu */}
             <ChatInputActionsMenu
               app={app}
@@ -449,11 +675,16 @@ function ChatInput({
               onImageQualityChange={onImageQualityChange}
               websearchEnabled={websearchEnabled}
               onWebsearchEnabledChange={onWebsearchEnabledChange}
+              transcriptionAvailable={transcriptionAvailable}
+              transcriptionEnabled={transcriptionEnabled}
+              onTranscriptionEnabledChange={onTranscriptionEnabledChange}
+              hostContextFlags={hostContextFlags}
+              onHostContextFlagChange={onHostContextFlagChange}
             />
 
             {/* Upload icon - show directly on desktop if enabled and NOT in single-action mode */}
             {/* When single action, ChatInputActionsMenu shows it directly without a menu */}
-            {uploadConfig?.enabled === true && !isSingleActionOptimization && (
+            {localUploadEnabled && !isSingleActionOptimization && (
               <button
                 type="button"
                 onClick={handleAttachFile}
@@ -462,6 +693,32 @@ function ChatInput({
                 className="hidden md:flex p-2 rounded-lg hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors disabled:opacity-50"
               >
                 <Icon name="paper-clip" size="md" />
+              </button>
+            )}
+
+            {/* Magic Prompt button - show directly on desktop if enabled and NOT in single-action mode */}
+            {magicPromptEnabled && !showUndoMagicPrompt && !isSingleActionOptimization && (
+              <button
+                type="button"
+                onClick={onMagicPrompt}
+                disabled={isInputDisabled || isProcessing}
+                title={t('common.magicPrompt', 'Magic Prompt')}
+                className="hidden md:flex p-2 rounded-lg hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors disabled:opacity-50"
+              >
+                {magicPromptLoading ? <MagicPromptLoader /> : <Icon name="sparkles" size="md" />}
+              </button>
+            )}
+
+            {/* Undo Magic Prompt button - show directly on desktop if enabled and NOT in single-action mode */}
+            {showUndoMagicPrompt && !isSingleActionOptimization && (
+              <button
+                type="button"
+                onClick={onUndoMagicPrompt}
+                disabled={isInputDisabled || isProcessing}
+                title={t('common.undo', 'Undo')}
+                className="hidden md:flex p-2 rounded-lg hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors disabled:opacity-50"
+              >
+                <Icon name="arrowLeft" size="md" />
               </button>
             )}
 
@@ -477,6 +734,43 @@ function ChatInput({
                   onCommand={onVoiceCommand}
                 />
               </div>
+            )}
+
+            {/* Record → transcribe. Distinct from dictation: the
+                recording is transcribed into an assistant chat message. */}
+            {transcriptionRecordEnabled && onRecordTranscription && (
+              <button
+                type="button"
+                onClick={onRecordTranscription}
+                disabled={isInputDisabled}
+                aria-pressed={isRecordingTranscription}
+                title={
+                  isRecordingTranscription
+                    ? t('transcription.stopRecording', 'Stop recording & transcribe')
+                    : t('transcription.record', 'Record audio to transcribe')
+                }
+                className={`flex items-center gap-1.5 p-2 rounded-lg transition-colors disabled:opacity-50 ${
+                  isRecordingTranscription
+                    ? 'bg-red-100 text-red-600 dark:bg-red-900/40 dark:text-red-400'
+                    : 'text-red-600 dark:text-red-400 hover:bg-gray-100 dark:hover:bg-gray-700'
+                }`}
+              >
+                {/* Record = red dot; stop = red square (distinct from the
+                    dictation microphone icon). */}
+                <span
+                  className={`inline-block bg-red-600 dark:bg-red-500 ${
+                    isRecordingTranscription
+                      ? 'w-3 h-3 rounded-xs animate-pulse'
+                      : 'w-3.5 h-3.5 rounded-full'
+                  }`}
+                  aria-hidden="true"
+                />
+                {isRecordingTranscription && (
+                  <span className="text-xs tabular-nums">
+                    {formatElapsed(recordTranscriptionElapsed)}
+                  </span>
+                )}
+              </button>
             )}
 
             {/* Image Generation Controls - Show on desktop only if model supports it */}
@@ -521,7 +815,7 @@ function ChatInput({
               type="button"
               onClick={isProcessing ? handleCancel : handleSubmit}
               disabled={isInputDisabled || (!allowEmptySubmit && !value.trim() && !isProcessing)}
-              className={`p-2.5 rounded-lg font-medium flex items-center justify-center transition-colors ${
+              className={`p-2 sm:p-2.5 rounded-lg font-medium flex items-center justify-center transition-colors ${
                 disabled || (!allowEmptySubmit && !value.trim() && !isProcessing)
                   ? 'bg-gray-200 text-gray-400 cursor-not-allowed dark:bg-gray-700 dark:text-gray-500'
                   : isProcessing
@@ -535,6 +829,51 @@ function ChatInput({
             </button>
           </div>
         </form>
+
+        {/* Single tight line below the input: disclaimer centered, ephemeral
+            (incognito) toggle right-aligned under the send button. The active
+            "not saved" notice lives in the status line above the input. */}
+        {(ephemeralToggleAvailable || disclaimer) && (
+          <div className="flex items-center justify-between gap-2 sm:grid sm:grid-cols-[1fr_auto_1fr]">
+            <span className="hidden sm:block" />
+            <div className="min-w-0 flex-1 text-center sm:flex-none">{disclaimer}</div>
+            <div className="shrink-0 justify-self-end">
+              {ephemeralToggleAvailable && (
+                <button
+                  type="button"
+                  onClick={() => onEphemeralChange(!ephemeral)}
+                  disabled={isInputDisabled || isProcessing}
+                  aria-pressed={ephemeral}
+                  // Explicit name: below `sm` the visible label is hidden, and
+                  // a `title` alone is an unreliable accessible name.
+                  aria-label={t('chat.ephemeral.label', 'Incognito mode')}
+                  title={
+                    ephemeral
+                      ? t('chat.ephemeral.disable', 'Turn off ephemeral chat')
+                      : t(
+                          'chat.ephemeral.enable',
+                          'Turn on ephemeral chat — messages are not saved'
+                        )
+                  }
+                  className={`flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-xs font-medium whitespace-nowrap transition-colors disabled:opacity-50 ${
+                    ephemeral
+                      ? 'bg-violet-100 text-violet-700 hover:bg-violet-200 dark:bg-violet-900/50 dark:text-violet-300 dark:hover:bg-violet-900/70'
+                      : 'text-gray-400 hover:text-gray-600 hover:bg-gray-100 dark:text-gray-500 dark:hover:text-gray-300 dark:hover:bg-gray-700'
+                  }`}
+                >
+                  <Icon name="ghost" size="sm" solid={ephemeral} />
+                  {/* Icon-only below `sm` (phones and the Outlook taskpane):
+                      the label cost ~110px of the row and pushed the
+                      disclaimer onto a third line. The button's `title` and
+                      `aria-pressed` still name it for assistive tech. */}
+                  <span className="hidden sm:inline">
+                    {t('chat.ephemeral.label', 'Incognito mode')}
+                  </span>
+                </button>
+              )}
+            </div>
+          </div>
+        )}
       </div>
     </>
   );
@@ -574,7 +913,7 @@ function ChatInput({
         />
       )}
 
-      {uploadConfig?.enabled === true ? (
+      {localUploadEnabled ? (
         <UnifiedUploader
           onFileSelect={handleLocalFileSelect}
           disabled={isInputDisabled || isProcessing}

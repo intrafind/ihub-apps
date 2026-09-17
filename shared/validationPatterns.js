@@ -5,14 +5,15 @@
 
 /**
  * App ID validation
- * Must contain only alphanumeric characters, underscores, dots, and hyphens
+ * Must contain only lowercase alphanumeric characters, underscores, dots, and hyphens
+ * (lowercase-only so ids stay unambiguous now that lookups are case-insensitive)
  * Length: 1-50 characters
  */
-export const APP_ID_PATTERN = /^[a-zA-Z0-9._-]+$/;
+export const APP_ID_PATTERN = /^[a-z0-9._-]+$/;
 export const APP_ID_MIN_LENGTH = 1;
 export const APP_ID_MAX_LENGTH = 50;
 export const APP_ID_ERROR_MESSAGE =
-  'App ID can only contain letters, numbers, dots (.), underscores (_), and hyphens (-)';
+  'App ID can only contain lowercase letters, numbers, dots (.), underscores (_), and hyphens (-)';
 
 /**
  * Model ID validation
@@ -65,10 +66,19 @@ export const HEX_COLOR_PATTERN = /^#[0-9A-Fa-f]{6}$/;
 export const HEX_COLOR_ERROR_MESSAGE = 'Color must be a valid hex code (e.g., #4F46E5)';
 
 /**
- * Token limit validation
+ * Context window validation
+ * Total input+output tokens supported by a model. Used for fitting documents
+ * and showing the user how much capacity is left.
  */
-export const TOKEN_LIMIT_MIN = 1;
-export const TOKEN_LIMIT_MAX = 1000000;
+export const CONTEXT_WINDOW_MIN = 1;
+export const CONTEXT_WINDOW_MAX = 10000000; // headroom for 1M+ context models
+
+/**
+ * Max output tokens validation
+ * The provider response cap sent as max_tokens / maxOutputTokens.
+ */
+export const MAX_OUTPUT_TOKENS_MIN = 1;
+export const MAX_OUTPUT_TOKENS_MAX = 200000;
 
 /**
  * Validate app ID format

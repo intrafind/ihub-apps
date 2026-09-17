@@ -10,9 +10,19 @@ import { getIFinderAuthorizationHeader } from '../utils/iFinderJwt.js';
 import conversationApiService from '../services/integrations/ConversationApiService.js';
 import conversationStateManager from '../services/integrations/ConversationStateManager.js';
 import iAssistantService from '../services/integrations/iAssistantService.js';
+import PromptService from '../services/PromptService.js';
 import logger from '../utils/logger.js';
 
 class IAssistantConversationAdapterClass extends BaseAdapter {
+  /**
+   * Use the line-delimited SSE parser from BaseAdapter.
+   * The conversation API emits multi-event blocks separated by `\n\n` and
+   * expects whole-block interpretation in processResponseBuffer.
+   */
+  async *parseResponseStream(response) {
+    yield* this.parseLineDelimitedSseStream(response);
+  }
+
   /**
    * Format messages for the conversation API.
    * The conversation API handles history via parent_id, so we only extract the last user message.
@@ -33,6 +43,21 @@ class IAssistantConversationAdapterClass extends BaseAdapter {
     const modelConfig = model.config || {};
     const serviceConfig = iAssistantService.getConfig();
 
+    // extraContext / systemPromptPreamble support global prompt variables
+    // ({{user_name}}, {{user_email}}, {{date}}, admin-defined custom
+    // variables, …) so the conversation is personalized per requesting user
+    // instead of carrying one hardcoded identity for everyone.
+    let extraContext = appConfig.extraContext || modelConfig.extraContext;
+    let systemPromptPreamble = appConfig.systemPromptPreamble || modelConfig.systemPromptPreamble;
+    if (extraContext?.includes('{{') || systemPromptPreamble?.includes('{{')) {
+      const variables = PromptService.resolveGlobalPromptVariables(
+        options.user,
+        model?.modelId || model?.id
+      );
+      extraContext = PromptService.substituteVariables(extraContext, variables);
+      systemPromptPreamble = PromptService.substituteVariables(systemPromptPreamble, variables);
+    }
+
     return {
       baseUrl: appConfig.baseUrl || modelConfig.baseUrl || serviceConfig.baseUrl,
       profileId: appConfig.profileId || modelConfig.profileId || serviceConfig.defaultProfileId,
@@ -45,7 +70,10 @@ class IAssistantConversationAdapterClass extends BaseAdapter {
       tools: appConfig.tools || modelConfig.tools || [],
       scope: appConfig.scope || modelConfig.scope,
       labels: appConfig.labels || modelConfig.labels,
-      ephemeral: appConfig.ephemeral ?? modelConfig.ephemeral ?? false
+      ephemeral:
+        appConfig.ephemeral ?? options.appConfig?.ephemeral ?? modelConfig.ephemeral ?? false,
+      extraContext,
+      systemPromptPreamble
     };
   }
 
@@ -59,7 +87,7 @@ class IAssistantConversationAdapterClass extends BaseAdapter {
    * @param {Object} options - { user, chatId, appConfig, ... }
    * @returns {Promise<Object>} Request object { url, method, headers, body }
    */
-  async createCompletionRequest(model, messages, apiKey, options = {}) {
+  async createCompletionRequest(model, messages, apiKey, options = {}, { signal } = {}) {
     const content = this.formatMessages(messages);
     const { user, chatId } = options;
 
@@ -68,7 +96,10 @@ class IAssistantConversationAdapterClass extends BaseAdapter {
     }
 
     const config = this.resolveConfig(model, options);
-    let state = conversationStateManager.getState(chatId);
+    // The durable read, not the cache-only `getState`: a chat whose first turn
+    // landed on another worker (or before a restart) must thread onto the same
+    // remote conversation instead of silently starting a second one.
+    let state = await conversationStateManager.loadState(chatId, { ownerId: user.id });
 
     // Lazy conversation creation: create on first message if no conversation exists
     if (!state?.conversationId) {
@@ -78,18 +109,44 @@ class IAssistantConversationAdapterClass extends BaseAdapter {
         profileId: config.profileId
       });
 
+      // Build labels array - include "ihub" and app ID
+      const labels = ['ihub'];
+      if (options.appConfig?.id) {
+        labels.push(options.appConfig.id);
+      }
+      // Add any additional labels from config
+      if (config.labels) {
+        if (Array.isArray(config.labels)) {
+          labels.push(...config.labels);
+        } else if (typeof config.labels === 'string') {
+          labels.push(config.labels);
+        }
+      }
+
       const createParams = {
         user,
         baseUrl: config.baseUrl,
         searchProfile: config.searchProfile,
-        labels: config.labels,
-        ephemeral: config.ephemeral
+        labels,
+        ephemeral: config.ephemeral,
+        signal
       };
 
       // Support document-scoped conversations
       const documentIds = options.appConfig?.documentIds;
       if (documentIds && documentIds.length > 0) {
         createParams.retrievalScope = { document_ids: documentIds };
+      }
+
+      // Add response_generation options if configured
+      if (config.extraContext || config.systemPromptPreamble) {
+        createParams.responseGeneration = {};
+        if (config.extraContext) {
+          createParams.responseGeneration.extra_context = config.extraContext;
+        }
+        if (config.systemPromptPreamble) {
+          createParams.responseGeneration.system_prompt_preamble = config.systemPromptPreamble;
+        }
       }
 
       const conversation = await conversationApiService.createConversation(createParams);
@@ -99,7 +156,11 @@ class IAssistantConversationAdapterClass extends BaseAdapter {
         lastParentId: null,
         title: conversation.title || null,
         baseUrl: config.baseUrl,
-        profileId: config.profileId
+        profileId: config.profileId,
+        // Whose conversation this is. A chat id is a URL path segment, so
+        // without an owner on the state a user holding someone else's id
+        // would thread their turn onto that user's remote conversation.
+        ownerId: user.id
       };
       conversationStateManager.setState(chatId, state);
 
@@ -127,16 +188,15 @@ class IAssistantConversationAdapterClass extends BaseAdapter {
       'Content-Type': 'application/json',
       Accept: 'text/event-stream',
       Authorization: authHeader,
-      'Cache-Control': 'no-cache',
-      Connection: 'keep-alive'
+      'Cache-Control': 'no-cache'
     };
 
     return {
       url,
       method: 'POST',
       headers,
-      body, // StreamingHandler will JSON.stringify
-      // Attach metadata for StreamingHandler to use
+      body, // LLMClient will JSON.stringify
+      // Attach metadata for the chat channel to use
       _conversationId: state.conversationId,
       _chatId: chatId,
       _searchProfile: config.searchProfile

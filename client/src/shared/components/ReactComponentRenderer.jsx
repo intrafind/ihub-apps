@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useMemo, useRef } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { ErrorBoundary } from 'react-error-boundary';
 
 // Error fallback component
@@ -23,12 +23,12 @@ function ErrorFallback({ error, resetErrorBoundary, t }) {
           {t ? t('errors.componentError', 'Component Error') : 'Component Error'}
         </h3>
       </div>
-      <pre className="text-sm text-red-700 bg-red-100 p-3 rounded mb-4 overflow-auto">
+      <pre className="text-sm text-red-700 bg-red-100 p-3 rounded-sm mb-4 overflow-auto">
         {error.message}
       </pre>
       <button
         onClick={resetErrorBoundary}
-        className="px-4 py-2 bg-red-600 text-white rounded hover:bg-red-700 transition-colors"
+        className="px-4 py-2 bg-red-600 text-white rounded-sm hover:bg-red-700 transition-colors"
       >
         Try Again
       </button>
@@ -46,6 +46,14 @@ function LoadingComponent({ t }) {
       </span>
     </div>
   );
+}
+
+// Cached across renders/mounts so the bundled @babel/standalone chunk is only
+// ever fetched once, rather than on every JSX compile.
+let babelModulePromise;
+function loadBabel() {
+  babelModulePromise ??= import('@babel/standalone');
+  return babelModulePromise;
 }
 
 function ReactComponentRenderer({ jsxCode, componentProps = {}, className = '' }) {
@@ -76,68 +84,9 @@ function ReactComponentRenderer({ jsxCode, componentProps = {}, className = '' }
         setIsLoading(true);
         setCompileError(null);
 
-        // Wait for Babel to be available
-        if (!window.Babel || (!window.Babel.transform && !window.Babel.transformSync)) {
-          // Try to load Babel if not already loaded
-          await new Promise((resolve, reject) => {
-            const existingScript = document.querySelector('script[src*="babel"]');
-
-            if (
-              existingScript &&
-              window.Babel &&
-              (window.Babel.transform || window.Babel.transformSync)
-            ) {
-              resolve();
-              return;
-            }
-
-            // Remove any existing incomplete Babel script
-            if (existingScript) {
-              existingScript.remove();
-            }
-
-            const babelUrls = [
-              'https://unpkg.com/@babel/standalone/babel.min.js',
-              'https://cdn.jsdelivr.net/npm/@babel/standalone/babel.min.js'
-            ];
-
-            let urlIndex = 0;
-
-            const tryLoadBabel = () => {
-              if (urlIndex >= babelUrls.length) {
-                reject(new Error('Failed to load Babel from all CDN sources'));
-                return;
-              }
-
-              const script = document.createElement('script');
-              script.src = babelUrls[urlIndex];
-              script.onload = () => {
-                // Wait a bit for Babel to fully initialize
-                setTimeout(() => {
-                  if (window.Babel && (window.Babel.transform || window.Babel.transformSync)) {
-                    console.log('✅ Babel loaded successfully:', {
-                      hasTransform: !!window.Babel.transform,
-                      hasTransformSync: !!window.Babel.transformSync,
-                      availableMethods: Object.keys(window.Babel)
-                    });
-                    resolve();
-                  } else {
-                    console.error('❌ Babel object:', window.Babel);
-                    reject(new Error('Babel failed to initialize properly'));
-                  }
-                }, 150);
-              };
-              script.onerror = () => {
-                script.remove();
-                urlIndex++;
-                tryLoadBabel();
-              };
-              document.head.appendChild(script);
-            };
-
-            tryLoadBabel();
-          });
-        }
+        // Load the bundled @babel/standalone chunk (lazy, cached across compiles).
+        const BabelModule = await loadBabel();
+        const Babel = BabelModule.default ?? BabelModule;
 
         // Prepare the JSX code with imports and proper component structure
         let fullCode = jsxCode.trim();
@@ -169,13 +118,19 @@ UserComponent;
         let transformed;
         try {
           // Use transformSync if available, otherwise fallback to transform
-          const transformMethod = window.Babel.transformSync || window.Babel.transform;
+          const transformMethod = Babel.transformSync || Babel.transform;
           if (!transformMethod) {
             throw new Error('No Babel transform method available');
           }
 
           transformed = transformMethod(fullCode, {
-            presets: ['react'],
+            // Force the classic JSX runtime so Babel emits React.createElement
+            // calls. The execution context below only injects `React`; it does
+            // not provide the react/jsx-runtime imports (_jsx/_jsxs) that the
+            // automatic runtime relies on. Newer @babel/standalone builds
+            // default to the automatic runtime, which produced
+            // "_jsxs is not defined" at render time.
+            presets: [['react', { runtime: 'classic' }]],
             plugins: []
           });
         } catch (babelError) {
@@ -267,26 +222,20 @@ UserComponent;
     };
   }, [jsxCode]);
 
-  // Build a stable wrapper around the compiled function. Only gets a new
-  // identity when the compiled function itself changes (i.e. jsxCode changed).
-  // Props are always read from the ref so they are never stale.
-  const CompiledComponent = useMemo(() => {
-    if (!ComponentFunction) return null;
-    return props => {
-      const combinedProps = {
-        ...componentPropsRef.current,
-        ...props,
-        React,
-        useState: React.useState,
-        useEffect: React.useEffect,
-        useMemo: React.useMemo,
-        useCallback: React.useCallback,
-        useRef: React.useRef,
-        useId: React.useId
-      };
-      return React.createElement(ComponentFunction, combinedProps);
-    };
-  }, [ComponentFunction]);
+  // Build the props the compiled component should receive. Recomputed on
+  // every render so the user component always sees the latest external
+  // props; React's reconciliation keeps the compiled component's state
+  // stable as long as ComponentFunction's identity is unchanged.
+  const compiledChildProps = {
+    ...componentPropsRef.current,
+    React,
+    useState: React.useState,
+    useEffect: React.useEffect,
+    useMemo: React.useMemo,
+    useCallback: React.useCallback,
+    useRef: React.useRef,
+    useId: React.useId
+  };
 
   if (isLoading) {
     return <LoadingComponent t={t} />;
@@ -313,14 +262,14 @@ UserComponent;
             {t('errors.compilationError', 'Compilation Error')}
           </h3>
         </div>
-        <pre className="text-sm text-yellow-700 bg-yellow-100 p-3 rounded overflow-auto">
+        <pre className="text-sm text-yellow-700 bg-yellow-100 p-3 rounded-sm overflow-auto">
           {compileError}
         </pre>
       </div>
     );
   }
 
-  if (!CompiledComponent) {
+  if (!ComponentFunction) {
     return (
       <div className="text-center py-8 text-gray-500">
         {t('errors.noComponentToRender', 'No component to render')}
@@ -331,14 +280,14 @@ UserComponent;
   return (
     <div className={`react-component-container ${className}`}>
       <ErrorBoundary
-        FallbackComponent={props => <ErrorFallback {...props} t={t} />}
+        fallbackRender={fallbackProps => <ErrorFallback {...fallbackProps} t={t} />}
         onReset={() => {
           // Force recompilation on reset
           setComponentFunction(null);
           setIsLoading(true);
         }}
       >
-        <CompiledComponent />
+        {React.createElement(ComponentFunction, compiledChildProps)}
       </ErrorBoundary>
     </div>
   );

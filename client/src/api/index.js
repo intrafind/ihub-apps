@@ -6,6 +6,8 @@ export * from './endpoints/prompts';
 export * from './endpoints/admin';
 export * from './endpoints/skills';
 export * from './endpoints/misc';
+export * from './endpoints/runs';
+export * from './endpoints/chats';
 
 // Re-export utility functions
 export { clearApiCache, invalidateCacheByPattern } from './utils/cache';

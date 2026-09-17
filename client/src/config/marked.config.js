@@ -1,13 +1,29 @@
-import { marked } from 'marked';
+import DOMPurify from 'dompurify';
+import { Marked, Renderer } from 'marked';
 import {
+  escapeHtml,
   getLanguageDisplayName,
   isMermaidLanguage,
-  generateId,
+  hashString,
   detectDiagramType
 } from '../utils/markdownHelpers';
 
+// Occurrence counter for the parse currently in progress. Diagram IDs are
+// derived from the diagram source so that re-parsing the same markdown yields
+// the same IDs; the counter only disambiguates identical diagrams that appear
+// more than once in the same document. `marked.parse()` is synchronous, so a
+// single module-level scope is safe.
+let mermaidIdScope = new Map();
+
+const nextMermaidId = code => {
+  const base = hashString(code);
+  const occurrence = mermaidIdScope.get(base) || 0;
+  mermaidIdScope.set(base, occurrence + 1);
+  return occurrence === 0 ? `mermaid-${base}` : `mermaid-${base}-${occurrence}`;
+};
+
 const renderMermaidPlaceholder = (code, language) => {
-  const diagramId = `mermaid-${generateId()}`;
+  const diagramId = nextMermaidId(code);
   const detectedType = detectDiagramType(code);
 
   return `
@@ -27,8 +43,29 @@ const renderMermaidPlaceholder = (code, language) => {
   `;
 };
 
-export const configureMarked = t => {
-  const renderer = new marked.Renderer();
+const highlightCode = (code, lang) => {
+  if (
+    typeof window !== 'undefined' &&
+    lang &&
+    window.hljs &&
+    typeof window.hljs.getLanguage === 'function' &&
+    window.hljs.getLanguage(lang)
+  ) {
+    try {
+      return window.hljs.highlight(code, {
+        language: lang,
+        ignoreIllegals: true
+      }).value;
+    } catch (e) {
+      console.error('Highlight.js error:', e);
+    }
+  }
+
+  return escapeHtml(code);
+};
+
+const createRenderer = t => {
+  const renderer = new Renderer();
 
   // --- Code Renderer ---
   renderer.code = (code, language) => {
@@ -57,18 +94,16 @@ export const configureMarked = t => {
     const displayLanguage = getLanguageDisplayName(lang);
 
     // Use the original highlighted code from marked
-    const highlightedCode = marked.defaults.highlight
-      ? marked.defaults.highlight(actualCode, lang)
-      : actualCode.replace(/</g, '&lt;').replace(/>/g, '&gt;');
+    const highlightedCode = highlightCode(actualCode, lang);
 
     return `
-      <div class="code-block-container relative group my-4 border border-gray-200 rounded-lg shadow-sm">
+      <div class="code-block-container relative group my-4 border border-gray-200 rounded-lg shadow-xs">
         <pre class="bg-gray-900 text-gray-100 rounded-t-lg p-4 overflow-x-auto"><code class="language-${lang}">${highlightedCode}</code></pre>
         <div class="code-block-toolbar flex items-center justify-between bg-gray-50 border-t border-gray-200 px-3 py-2 rounded-b-lg">
           <span class="text-xs font-medium text-gray-600">${displayLanguage}</span>
           <div class="flex flex-row items-center gap-2">
             <button
-              class="code-copy-btn p-1.5 rounded text-xs text-gray-600 hover:bg-gray-200 flex flex-row items-center gap-1"
+              class="code-copy-btn p-1.5 rounded-sm text-xs text-gray-600 hover:bg-gray-200 flex flex-row items-center gap-1"
               data-code-content="${encodeURIComponent(actualCode)}"
               type="button"
               title="${t ? t('common.copyCode', 'Copy code') : 'Copy code'}"
@@ -77,7 +112,7 @@ export const configureMarked = t => {
               <span class="hidden sm:inline">${t ? t('common.copy', 'Copy') : 'Copy'}</span>
             </button>
             <button
-              class="code-download-btn p-1.5 rounded text-xs text-gray-600 hover:bg-gray-200 flex flex-row items-center gap-1"
+              class="code-download-btn p-1.5 rounded-sm text-xs text-gray-600 hover:bg-gray-200 flex flex-row items-center gap-1"
               data-code-content="${encodeURIComponent(actualCode)}"
               data-code-language="${lang}"
               type="button"
@@ -93,7 +128,7 @@ export const configureMarked = t => {
   };
 
   // --- Link Renderer ---
-  renderer.link = token => {
+  renderer.link = function (token) {
     // In marked v5+, the renderer receives a token object instead of separate parameters
     // Extract href, title, and text from the token
     let actualHref = token.href;
@@ -139,28 +174,103 @@ export const configureMarked = t => {
     return `<a href="${actualHref}"${titleAttr}${targetAttr}>${text}</a>`;
   };
 
-  marked.setOptions({
+  return renderer;
+};
+
+const createMarked = (t, { breaks = true } = {}) =>
+  new Marked({
     gfm: true,
-    breaks: true,
+    breaks,
     headerIds: true,
     mangle: false,
     pedantic: false,
-    sanitize: false, // IMPORTANT: Ensure your markdown source is trusted
     smartLists: true,
     smartypants: false,
     xhtml: false,
-    renderer: renderer,
-    highlight: (code, lang) => {
-      // Use a global hljs instance if available
-      if (lang && window.hljs && window.hljs.getLanguage(lang)) {
-        try {
-          return window.hljs.highlight(code, { language: lang, ignoreIllegals: true }).value;
-        } catch (e) {
-          console.error('Highlight.js error:', e);
-        }
-      }
-      // Fallback to no highlighting
-      return code.replace(/</g, '&lt;').replace(/>/g, '&gt;');
-    }
+    renderer: createRenderer(t)
   });
+
+const markedInstanceByTranslator = new WeakMap();
+const defaultMarkedInstances = {};
+
+// Cache parser instances by translation function (and line-break mode) so repeated renders
+// avoid rebuilding renderers. WeakMap ensures stale translator functions can be GC'd.
+// `defaultMarkedInstances` serves call sites that don't pass `t`.
+const getMarkedInstance = (t, { breaks = true } = {}) => {
+  const variant = breaks ? 'breaks' : 'noBreaks';
+
+  if (typeof t === 'function') {
+    let variants = markedInstanceByTranslator.get(t);
+    if (!variants) {
+      variants = {};
+      markedInstanceByTranslator.set(t, variants);
+    }
+    if (!variants[variant]) {
+      variants[variant] = createMarked(t, { breaks });
+    }
+    return variants[variant];
+  }
+
+  if (!defaultMarkedInstances[variant]) {
+    defaultMarkedInstances[variant] = createMarked(undefined, { breaks });
+  }
+  return defaultMarkedInstances[variant];
 };
+
+/**
+ * Render markdown to sanitized HTML using an isolated Marked instance.
+ *
+ * @param {string} markdown - Markdown source string.
+ * @param {Object} [options] - Optional rendering behavior.
+ * @param {Function} [options.t] - Translation function for renderer labels.
+ * @param {Function} [options.transformHtml] - Optional post-parse HTML transform.
+ *   The transformed HTML is still sanitized by DOMPurify afterwards.
+ * @param {Object} [options.sanitizeOptions] - DOMPurify sanitize options.
+ * @param {boolean} [options.breaks=true] - Turn single newlines into `<br>` (chat-style text).
+ *   Pass `false` for hand-written, hard-wrapped Markdown such as release notes, where a line
+ *   break inside a paragraph is just wrapping.
+ * @returns {string} Sanitized HTML string.
+ */
+export const renderMarkdown = (markdown, options = {}) => {
+  const { t, transformHtml, sanitizeOptions, breaks = true } = options;
+  const source = String(markdown ?? '');
+
+  try {
+    const marked = getMarkedInstance(t, { breaks });
+    // Reset the per-document occurrence counter so diagram IDs depend only on
+    // the document being parsed, never on how many parses happened before.
+    mermaidIdScope = new Map();
+    const html = marked.parse(source);
+    const transformedHtml = typeof transformHtml === 'function' ? transformHtml(html) : html;
+    return DOMPurify.sanitize(transformedHtml, sanitizeOptions);
+  } catch (error) {
+    console.error('Error rendering markdown:', error);
+    return DOMPurify.sanitize(`<pre>${escapeHtml(source)}</pre>`, sanitizeOptions);
+  }
+};
+
+/**
+ * Render a single line of Markdown — a heading, a table cell — to sanitized inline HTML: bold,
+ * italics, inline code and links, but no block wrapper (`<p>`) around the result.
+ *
+ * @param {string} markdown - Markdown source string, expected to be one line.
+ * @param {Object} [options] - Optional rendering behavior.
+ * @param {Function} [options.t] - Translation function for renderer labels.
+ * @param {Object} [options.sanitizeOptions] - DOMPurify sanitize options.
+ * @returns {string} Sanitized HTML string.
+ */
+export const renderInlineMarkdown = (markdown, options = {}) => {
+  const { t, sanitizeOptions } = options;
+  const source = String(markdown ?? '');
+
+  try {
+    const marked = getMarkedInstance(t);
+    return DOMPurify.sanitize(marked.parseInline(source), sanitizeOptions);
+  } catch (error) {
+    console.error('Error rendering inline markdown:', error);
+    return DOMPurify.sanitize(escapeHtml(source), sanitizeOptions);
+  }
+};
+
+// Backward-compatible no-op: markdown rendering no longer mutates global marked state.
+export const configureMarked = () => {};

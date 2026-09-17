@@ -84,13 +84,32 @@ import {
   TicketIcon as OutlineTicketIcon,
   KeyIcon as OutlineKeyIcon,
   ChevronLeftIcon as OutlineChevronLeftIcon,
+  ChevronDoubleLeftIcon as OutlineChevronDoubleLeftIcon,
+  ChevronDoubleRightIcon as OutlineChevronDoubleRightIcon,
+  ChevronUpDownIcon as OutlineChevronUpDownIcon,
+  EllipsisVerticalIcon as OutlineEllipsisVerticalIcon,
   AdjustmentsVerticalIcon as OutlineAdjustmentsVerticalIcon,
   FunnelIcon as OutlineFunnelIcon,
   DocumentIcon as OutlineDocumentIcon,
   ShieldCheckIcon as OutlineShieldCheckIcon,
   CloudArrowUpIcon as OutlineCloudArrowUpIcon,
   ArchiveBoxIcon as OutlineArchiveBoxIcon,
-  PlusIcon as OutlinePlusIcon
+  PlusIcon as OutlinePlusIcon,
+  PhotoIcon,
+  MusicalNoteIcon,
+  LockClosedIcon,
+  NoSymbolIcon,
+  BookOpenIcon,
+  DocumentChartBarIcon,
+  HandRaisedIcon,
+  ArrowsRightLeftIcon,
+  CubeIcon,
+  Squares2X2Icon,
+  StopCircleIcon,
+  UserGroupIcon,
+  PrinterIcon,
+  BoltIcon,
+  CursorArrowRaysIcon
 } from '@heroicons/react/24/outline';
 
 import {
@@ -159,14 +178,79 @@ import {
   TicketIcon as SolidTicketIcon,
   KeyIcon as SolidKeyIcon,
   ChevronLeftIcon as SolidChevronLeftIcon,
+  ChevronDoubleLeftIcon as SolidChevronDoubleLeftIcon,
+  ChevronDoubleRightIcon as SolidChevronDoubleRightIcon,
+  ChevronUpDownIcon as SolidChevronUpDownIcon,
+  EllipsisVerticalIcon as SolidEllipsisVerticalIcon,
   AdjustmentsVerticalIcon as SolidAdjustmentsVerticalIcon,
   FunnelIcon as SolidFunnelIcon,
   DocumentIcon as SolidDocumentIcon,
   ShieldCheckIcon as SolidShieldCheckIcon,
   CloudArrowUpIcon as SolidCloudArrowUpIcon,
   ArchiveBoxIcon as SolidArchiveBoxIcon,
-  PlusIcon as SolidPlusIcon
+  PlusIcon as SolidPlusIcon,
+  PhotoIcon as SolidPhotoIcon,
+  MusicalNoteIcon as SolidMusicalNoteIcon,
+  LockClosedIcon as SolidLockClosedIcon,
+  NoSymbolIcon as SolidNoSymbolIcon,
+  BookOpenIcon as SolidBookOpenIcon,
+  DocumentChartBarIcon as SolidDocumentChartBarIcon,
+  HandRaisedIcon as SolidHandRaisedIcon,
+  ArrowsRightLeftIcon as SolidArrowsRightLeftIcon,
+  CubeIcon as SolidCubeIcon,
+  Squares2X2Icon as SolidSquares2X2Icon,
+  StopCircleIcon as SolidStopCircleIcon,
+  UserGroupIcon as SolidUserGroupIcon,
+  PrinterIcon as SolidPrinterIcon,
+  BoltIcon as SolidBoltIcon,
+  CursorArrowRaysIcon as SolidCursorArrowRaysIcon
 } from '@heroicons/react/24/solid';
+
+// Custom icons not available in Heroicons. They mirror the Heroicons component
+// contract (24x24 viewBox, className/title/rest props) so they can live in the
+// iconMap alongside the imported ones.
+const OutlineGhostIcon = ({ className, title, ...props }) => (
+  <svg
+    xmlns="http://www.w3.org/2000/svg"
+    fill="none"
+    viewBox="0 0 24 24"
+    strokeWidth={1.5}
+    stroke="currentColor"
+    aria-hidden={title ? undefined : 'true'}
+    className={className}
+    {...props}
+  >
+    {title ? <title>{title}</title> : null}
+    <path
+      strokeLinecap="round"
+      strokeLinejoin="round"
+      d="M19.5 10.5a7.5 7.5 0 0 0-15 0v9.75l2.625-2.25 2.437 2.25L12 18l2.438 2.25 2.437-2.25 2.625 2.25V10.5Z"
+    />
+    <path
+      strokeLinecap="round"
+      strokeLinejoin="round"
+      d="M9.375 10.125h.008v.008h-.008v-.008Zm5.25 0h.008v.008h-.008v-.008Z"
+    />
+  </svg>
+);
+
+const SolidGhostIcon = ({ className, title, ...props }) => (
+  <svg
+    xmlns="http://www.w3.org/2000/svg"
+    viewBox="0 0 24 24"
+    fill="currentColor"
+    aria-hidden={title ? undefined : 'true'}
+    className={className}
+    {...props}
+  >
+    {title ? <title>{title}</title> : null}
+    <path
+      fillRule="evenodd"
+      clipRule="evenodd"
+      d="M12 2.25a8.25 8.25 0 0 0-8.25 8.25v9.75a.75.75 0 0 0 1.238.57l2.387-2.047 1.929 1.781a.75.75 0 0 0 1.017.001L12 18.77l1.679 1.786a.75.75 0 0 0 1.017-.001l1.929-1.781 2.387 2.046a.75.75 0 0 0 1.238-.569V10.5A8.25 8.25 0 0 0 12 2.25Zm-2.625 6.9a.975.975 0 1 0 0 1.95.975.975 0 0 0 0-1.95Zm5.25 0a.975.975 0 1 0 0 1.95.975.975 0 0 0 0-1.95Z"
+    />
+  </svg>
+);
 
 const iconMap = {
   arrowLeft: { outline: ArrowLeftIcon, solid: ArrowLeftIcon },
@@ -198,6 +282,7 @@ const iconMap = {
   },
   'face-frown': { outline: OutlineFaceFrownIcon, solid: SolidFaceFrownIcon },
   format: { outline: Bars3Icon, solid: Bars3Icon },
+  ghost: { outline: OutlineGhostIcon, solid: SolidGhostIcon },
   'information-circle': {
     outline: OutlineInformationCircleIcon,
     solid: SolidInformationCircleIcon
@@ -295,6 +380,16 @@ const iconMap = {
   ticket: { outline: OutlineTicketIcon, solid: SolidTicketIcon },
   key: { outline: OutlineKeyIcon, solid: SolidKeyIcon },
   'chevron-left': { outline: OutlineChevronLeftIcon, solid: SolidChevronLeftIcon },
+  'chevron-double-left': {
+    outline: OutlineChevronDoubleLeftIcon,
+    solid: SolidChevronDoubleLeftIcon
+  },
+  'chevron-double-right': {
+    outline: OutlineChevronDoubleRightIcon,
+    solid: SolidChevronDoubleRightIcon
+  },
+  'chevron-up-down': { outline: OutlineChevronUpDownIcon, solid: SolidChevronUpDownIcon },
+  'ellipsis-vertical': { outline: OutlineEllipsisVerticalIcon, solid: SolidEllipsisVerticalIcon },
   'adjustments-vertical': {
     outline: OutlineAdjustmentsVerticalIcon,
     solid: SolidAdjustmentsVerticalIcon
@@ -343,7 +438,45 @@ const iconMap = {
   'archive-box': { outline: OutlineArchiveBoxIcon, solid: SolidArchiveBoxIcon },
   MagnifyingGlassIcon: { outline: MagnifyingGlassIcon, solid: MagnifyingGlassIcon },
   PlusIcon: { outline: OutlinePlusIcon, solid: SolidPlusIcon },
-  KeyIcon: { outline: OutlineKeyIcon, solid: SolidKeyIcon }
+  KeyIcon: { outline: OutlineKeyIcon, solid: SolidKeyIcon },
+  // Additional aliases resolved locally instead of falling back to a
+  // (nonexistent) /icons/{name}.svg request
+  informationCircle: { outline: OutlineInformationCircleIcon, solid: SolidInformationCircleIcon },
+  xMark: { outline: XMarkIcon, solid: XMarkIcon },
+  'x-mark': { outline: XMarkIcon, solid: XMarkIcon },
+  'x-circle': { outline: XCircleIcon, solid: XCircleIcon },
+  GlobeAltIcon: { outline: GlobeAltIcon, solid: SolidGlobeAltIcon },
+  'globe-alt': { outline: GlobeAltIcon, solid: SolidGlobeAltIcon },
+  'shield-exclamation': {
+    outline: OutlineShieldExclamationIcon,
+    solid: SolidShieldExclamationIcon
+  },
+  server: { outline: ServerIcon, solid: SolidServerIcon },
+  cpu: { outline: CpuChipIcon, solid: SolidCpuChipIcon },
+  'alert-triangle': {
+    outline: OutlineExclamationTriangleIcon,
+    solid: SolidExclamationTriangleIcon
+  },
+  loader: { outline: ArrowPathIcon, solid: ArrowPathIcon },
+  spinner: { outline: ArrowPathIcon, solid: ArrowPathIcon },
+  envelope: { outline: OutlineEnvelopeIcon, solid: SolidEnvelopeIcon },
+  photograph: { outline: PhotoIcon, solid: SolidPhotoIcon },
+  'musical-note': { outline: MusicalNoteIcon, solid: SolidMusicalNoteIcon },
+  MusicalNoteIcon: { outline: MusicalNoteIcon, solid: SolidMusicalNoteIcon },
+  lock: { outline: LockClosedIcon, solid: SolidLockClosedIcon },
+  'lock-closed': { outline: LockClosedIcon, solid: SolidLockClosedIcon },
+  ban: { outline: NoSymbolIcon, solid: SolidNoSymbolIcon },
+  'book-open': { outline: BookOpenIcon, solid: SolidBookOpenIcon },
+  'document-chart-bar': { outline: DocumentChartBarIcon, solid: SolidDocumentChartBarIcon },
+  'hand-raised': { outline: HandRaisedIcon, solid: SolidHandRaisedIcon },
+  'arrows-right-left': { outline: ArrowsRightLeftIcon, solid: SolidArrowsRightLeftIcon },
+  cube: { outline: CubeIcon, solid: SolidCubeIcon },
+  'squares-2x2': { outline: Squares2X2Icon, solid: SolidSquares2X2Icon },
+  'stop-circle': { outline: StopCircleIcon, solid: SolidStopCircleIcon },
+  'user-group': { outline: UserGroupIcon, solid: SolidUserGroupIcon },
+  printer: { outline: PrinterIcon, solid: SolidPrinterIcon },
+  workflow: { outline: BoltIcon, solid: SolidBoltIcon },
+  'cursor-text': { outline: CursorArrowRaysIcon, solid: SolidCursorArrowRaysIcon }
 };
 
 const sizeClasses = {

@@ -7,6 +7,36 @@ import config from '../config.js';
 import logger from '../utils/logger.js';
 
 /**
+ * Create `filePath` containing `contents`, exclusively AND atomically.
+ * Throws an EEXIST error - exactly like writeFile's `wx` flag - when the file
+ * already exists, so callers keep their existing race handling.
+ *
+ * `wx` alone elects a single winner but is not atomic: it creates the file
+ * first and flushes the contents after, leaving a window in which a sibling
+ * worker that lost the race opens the winner's file and reads it empty or
+ * half-written. For a key file that surfaced as "Concurrently created
+ * encryption key file is invalid", after which the loser ran with no
+ * persisted key at all. Writing to a private temp file and publishing it with
+ * link() closes the window: the name appears only once the bytes are all
+ * there, so a reader either does not see the file or sees the complete key.
+ *
+ * @param {string} filePath - final path to publish
+ * @param {string} contents - file contents
+ * @param {number} mode - permission bits for the created file
+ */
+async function createFileExclusively(filePath, contents, mode) {
+  const tmpPath = `${filePath}.${process.pid}.${crypto.randomBytes(4).toString('hex')}.tmp`;
+  try {
+    await fs.writeFile(tmpPath, contents, { mode, flag: 'wx' });
+    // link() fails with EEXIST if another process already published, which is
+    // the same signal the callers below already handle.
+    await fs.link(tmpPath, filePath);
+  } finally {
+    await fs.unlink(tmpPath).catch(() => {});
+  }
+}
+
+/**
  * Centralized Token Storage Service
  * Provides secure encryption, decryption, storage, and retrieval of user tokens
  * for any integration service with user and service-specific security
@@ -40,7 +70,14 @@ class TokenStorageService {
   async initializeEncryptionKey() {
     // Priority 1: Environment variable (allows override)
     if (process.env.TOKEN_ENCRYPTION_KEY) {
-      this.encryptionKey = process.env.TOKEN_ENCRYPTION_KEY;
+      const envKey = process.env.TOKEN_ENCRYPTION_KEY.trim();
+      if (!/^[0-9a-f]{64}$/i.test(envKey)) {
+        throw new Error(
+          'TOKEN_ENCRYPTION_KEY must be a 64-character hex string (32 bytes). ' +
+            'Generate one with: openssl rand -hex 32'
+        );
+      }
+      this.encryptionKey = envKey;
       logger.info('Using encryption key from TOKEN_ENCRYPTION_KEY environment variable', {
         component: 'TokenStorage'
       });
@@ -84,10 +121,13 @@ class TokenStorageService {
       const contentsDir = path.dirname(this.keyFilePath);
       await fs.mkdir(contentsDir, { recursive: true });
 
-      // Save the key with restrictive permissions
-      await fs.writeFile(this.keyFilePath, this.encryptionKey, {
-        mode: 0o600 // Read/write for owner only
-      });
+      // Save the key with restrictive permissions. `wx` fails instead of
+      // overwriting: on a cold start every cluster worker reaches this point
+      // with a different freshly generated key, and a plain write would leave
+      // each worker using its own while the file holds whichever wrote last.
+      // Anything one worker encrypted would then be undecryptable everywhere
+      // else. The loser of the race adopts the winner's key below.
+      await createFileExclusively(this.keyFilePath, this.encryptionKey, 0o600);
       logger.info('Encryption key persisted to disk', {
         component: 'TokenStorage',
         keyFilePath: this.keyFilePath
@@ -97,6 +137,23 @@ class TokenStorageService {
         { component: 'TokenStorage' }
       );
     } catch (error) {
+      if (error.code === 'EEXIST') {
+        // Another process created the file between our read and our write. Its
+        // key is the one on disk, so use that rather than the one we generated.
+        const winner = (await fs.readFile(this.keyFilePath, 'utf8')).trim();
+        if (/^[0-9a-f]{64}$/i.test(winner)) {
+          this.encryptionKey = winner;
+          logger.info('Adopted encryption key created concurrently by another process', {
+            component: 'TokenStorage'
+          });
+          return;
+        }
+        logger.error('Concurrently created encryption key file is invalid', {
+          component: 'TokenStorage',
+          keyFilePath: this.keyFilePath
+        });
+        return;
+      }
       logger.error('Failed to persist encryption key', {
         component: 'TokenStorage',
         error
@@ -158,11 +215,32 @@ class TokenStorageService {
       await fs.mkdir(contentsDir, { recursive: true });
 
       const encryptedSecret = this.encryptString(this.jwtSecret);
-      await fs.writeFile(this.jwtSecretFilePath, encryptedSecret, {
-        mode: 0o600
-      });
+      // Exclusive create, like the encryption key and the RSA pair: on a cold
+      // start every cluster worker generates its own secret here, and a plain
+      // write left each one signing with the secret it generated while the file
+      // kept whichever wrote last. A token issued by one worker then failed
+      // verification on the others, which under round-robin routing logs a user
+      // out on a fraction of requests. The loser adopts the winner's secret.
+      await createFileExclusively(this.jwtSecretFilePath, encryptedSecret, 0o600);
       logger.info('JWT secret persisted to disk (encrypted)', { component: 'TokenStorage' });
     } catch (error) {
+      if (error.code === 'EEXIST') {
+        // Another process persisted a secret first; adopt it so the whole
+        // cluster signs and verifies with the same one.
+        const winner = (await fs.readFile(this.jwtSecretFilePath, 'utf8')).trim();
+        if (winner && this.isEncrypted(winner)) {
+          this.jwtSecret = this.decryptString(winner);
+          logger.info('Adopted JWT secret created concurrently by another process', {
+            component: 'TokenStorage'
+          });
+          return;
+        }
+        logger.error('Concurrently created JWT secret file is invalid', {
+          component: 'TokenStorage',
+          jwtSecretFilePath: this.jwtSecretFilePath
+        });
+        return;
+      }
       logger.error('Failed to persist JWT secret', {
         component: 'TokenStorage',
         error
@@ -201,6 +279,92 @@ class TokenStorageService {
   }
 
   /**
+   * Reject filename components that could escape the integrations
+   * directory or otherwise produce surprising on-disk paths. Both
+   * `userId` (sourced from the authenticated user, but a malicious or
+   * misbehaving IdP could supply arbitrary values) and `providerId`
+   * (admin-defined, but routes accept it from the query string before
+   * we look up the matching configured provider) are external inputs
+   * from CodeQL's perspective. Enforce a conservative allowlist:
+   * letters, digits, and a handful of separators commonly used in
+   * stable identifiers (email-style `userId`s, UUIDs, slugified
+   * provider IDs).
+   *
+   * Throws synchronously rather than silently rewriting the value so
+   * the caller's logging carries the bad input.
+   *
+   * @private
+   */
+  _assertSafeFilenameComponent(value, label) {
+    if (typeof value !== 'string' || value.length === 0 || value.length > 256) {
+      throw new Error(`Invalid ${label}: must be a non-empty string up to 256 characters`);
+    }
+    if (!/^[A-Za-z0-9._@+-]+$/.test(value)) {
+      throw new Error(`Invalid ${label}: contains characters outside the safe filename set`);
+    }
+  }
+
+  /**
+   * Resolve the on-disk filename for a token blob.
+   *
+   * Per-provider scoping is the supported form: callers pass a
+   * `providerId` and the file ends up at `<userId>__<providerId>.json`,
+   * which lets a user connect to multiple instances of the same service
+   * (e.g. two Office 365 tenants) without each overwriting the others.
+   * `__` is used as the separator so `userId` values that contain a `.`
+   * (typical for email-style IDs) don't collide with the `.json` suffix.
+   *
+   * Callers that omit `providerId` fall back to the legacy single-slot
+   * `<userId>.json` path. Production paths always pass `providerId`; the
+   * un-scoped form is kept for tests and for the migration entry point.
+   *
+   * Both `userId` and `providerId` are validated via
+   * `_assertSafeFilenameComponent` before being interpolated into the
+   * path so a malicious IdP-supplied `userId` (or a tampered URL
+   * `providerId`) cannot escape `storageBasePath/serviceName/`.
+   */
+  _tokenFilePath(userId, serviceName, providerId) {
+    this._assertSafeFilenameComponent(userId, 'userId');
+    this._assertSafeFilenameComponent(serviceName, 'serviceName');
+    if (providerId) {
+      this._assertSafeFilenameComponent(providerId, 'providerId');
+    }
+    const dir = path.join(this.storageBasePath, serviceName);
+    const filename = providerId ? `${userId}__${providerId}.json` : `${userId}.json`;
+    // Defense-in-depth containment check: compose the candidate path,
+    // resolve it to an absolute form, and reject anything that doesn't
+    // sit directly inside the per-service directory. The allowlist in
+    // `_assertSafeFilenameComponent` already excludes path separators,
+    // but this second layer satisfies CodeQL's path-traversal analysis
+    // and protects against future changes to that allowlist.
+    const candidate = path.resolve(dir, filename);
+    const baseDir = path.resolve(dir) + path.sep;
+    if (!candidate.startsWith(baseDir)) {
+      throw new Error('Resolved token-file path escapes its service directory');
+    }
+    return candidate;
+  }
+
+  /**
+   * Like `_tokenFilePath`, but if the providerId-scoped file does not
+   * exist, fall back to the legacy `<userId>.json` path so a partially-
+   * migrated install still serves tokens. Once the startup migration has
+   * run, this almost always resolves to the scoped path.
+   */
+  async _resolveExistingTokenFilePath(userId, serviceName, providerId) {
+    if (providerId) {
+      const scoped = this._tokenFilePath(userId, serviceName, providerId);
+      try {
+        await fs.access(scoped);
+        return scoped;
+      } catch {
+        // Fall through to legacy path
+      }
+    }
+    return this._tokenFilePath(userId, serviceName, null);
+  }
+
+  /**
    * Encrypt token data with user and service-specific security
    */
   encryptTokens(tokens, userId, serviceName) {
@@ -211,7 +375,7 @@ class TokenStorageService {
       const context = this._generateEncryptionContext(userId, serviceName);
 
       // Include context in the encryption to bind tokens to specific user/service
-      const cipher = crypto.createCipheriv('aes-256-cbc', key, iv);
+      const cipher = crypto.createCipheriv(this.algorithm, key, iv);
 
       let encrypted = cipher.update(
         JSON.stringify({ ...tokens, context: context.toString('hex') }),
@@ -219,10 +383,13 @@ class TokenStorageService {
         'hex'
       );
       encrypted += cipher.final('hex');
+      const authTag = cipher.getAuthTag();
 
       return {
         encrypted,
         iv: iv.toString('hex'),
+        authTag: authTag.toString('hex'),
+        algorithm: this.algorithm,
         userId,
         serviceName,
         contextHash: context.toString('hex')
@@ -237,7 +404,14 @@ class TokenStorageService {
   }
 
   /**
-   * Decrypt token data with user and service verification
+   * Decrypt token data with user and service verification.
+   *
+   * New tokens are encrypted with authenticated AES-256-GCM (see
+   * `encryptTokens`). Tokens written before this change used
+   * unauthenticated AES-256-CBC and have no `authTag`/`algorithm`
+   * field — that legacy format is still accepted here so existing
+   * on-disk tokens keep working; they get upgraded to GCM the next
+   * time they're re-encrypted (e.g. on token refresh).
    */
   decryptTokens(encryptedData, userId, serviceName) {
     this._ensureKeyInitialized();
@@ -252,11 +426,24 @@ class TokenStorageService {
 
       const key = Buffer.from(this.encryptionKey, 'hex');
       const iv = Buffer.from(encryptedData.iv, 'hex');
+      const isGcm = encryptedData.algorithm === 'aes-256-gcm' || Boolean(encryptedData.authTag);
 
-      const decipher = crypto.createDecipheriv('aes-256-cbc', key, iv);
-
-      let decrypted = decipher.update(encryptedData.encrypted, 'hex', 'utf8');
-      decrypted += decipher.final('utf8');
+      let decrypted;
+      if (isGcm) {
+        const decipher = crypto.createDecipheriv('aes-256-gcm', key, iv);
+        decipher.setAuthTag(Buffer.from(encryptedData.authTag, 'hex'));
+        decrypted = decipher.update(encryptedData.encrypted, 'hex', 'utf8');
+        decrypted += decipher.final('utf8');
+      } else {
+        logger.warn('Decrypting tokens stored in legacy unauthenticated AES-256-CBC format', {
+          component: 'TokenStorage',
+          userId,
+          serviceName
+        });
+        const decipher = crypto.createDecipheriv('aes-256-cbc', key, iv);
+        decrypted = decipher.update(encryptedData.encrypted, 'hex', 'utf8');
+        decrypted += decipher.final('utf8');
+      }
 
       const parsedData = JSON.parse(decrypted);
 
@@ -278,14 +465,21 @@ class TokenStorageService {
   }
 
   /**
-   * Store encrypted user tokens for a specific service
+   * Store encrypted user tokens for a specific service + provider.
+   *
+   * `providerId` scopes the on-disk filename so the same user can
+   * connect to multiple instances of the same service (e.g. two
+   * Office 365 tenants or two Nextcloud servers) without each
+   * overwriting the others. Callers should always pass the providerId
+   * from the OAuth state — only tests omit it.
    */
-  async storeUserTokens(userId, serviceName, tokens) {
+  async storeUserTokens(userId, serviceName, tokens, providerId = null) {
     try {
       const encryptedTokens = this.encryptTokens(tokens, userId, serviceName);
       const now = new Date();
       const tokenData = {
         ...encryptedTokens,
+        providerId: providerId || tokens?.providerId || null,
         createdAt: now.toISOString(),
         expiresAt: tokens.expiresIn
           ? new Date(now.getTime() + tokens.expiresIn * 1000).toISOString()
@@ -296,13 +490,14 @@ class TokenStorageService {
       const tokenDir = path.join(this.storageBasePath, serviceName);
       await fs.mkdir(tokenDir, { recursive: true });
 
-      const tokenFile = path.join(tokenDir, `${userId}.json`);
+      const tokenFile = this._tokenFilePath(userId, serviceName, tokenData.providerId);
       await fs.writeFile(tokenFile, JSON.stringify(tokenData, null, 2));
 
       logger.info('Tokens stored for user', {
         component: 'TokenStorage',
         serviceName,
-        userId
+        userId,
+        providerId: tokenData.providerId
       });
       return true;
     } catch (error) {
@@ -315,11 +510,14 @@ class TokenStorageService {
   }
 
   /**
-   * Retrieve and decrypt user tokens for a specific service
+   * Retrieve and decrypt user tokens for a specific service + provider.
+   * Falls back to the legacy single-slot file if the scoped one is
+   * missing (upgrade safety; the eager startup migration normally
+   * renames legacy files first).
    */
-  async getUserTokens(userId, serviceName) {
+  async getUserTokens(userId, serviceName, providerId = null) {
     try {
-      const tokenFile = path.join(this.storageBasePath, serviceName, `${userId}.json`);
+      const tokenFile = await this._resolveExistingTokenFilePath(userId, serviceName, providerId);
       const tokenData = JSON.parse(await fs.readFile(tokenFile, 'utf8'));
 
       return this.decryptTokens(tokenData, userId, serviceName);
@@ -339,9 +537,9 @@ class TokenStorageService {
    * Check if tokens are expired based on stored expiration time
    * Includes a 2-minute buffer for proactive refresh
    */
-  async areTokensExpired(userId, serviceName) {
+  async areTokensExpired(userId, serviceName, providerId = null) {
     try {
-      const tokenFile = path.join(this.storageBasePath, serviceName, `${userId}.json`);
+      const tokenFile = await this._resolveExistingTokenFilePath(userId, serviceName, providerId);
       const tokenData = JSON.parse(await fs.readFile(tokenFile, 'utf8'));
 
       if (!tokenData.expiresAt) {
@@ -367,16 +565,17 @@ class TokenStorageService {
   }
 
   /**
-   * Delete user tokens for a specific service (disconnect)
+   * Delete user tokens for a specific service + provider (disconnect)
    */
-  async deleteUserTokens(userId, serviceName) {
+  async deleteUserTokens(userId, serviceName, providerId = null) {
     try {
-      const tokenFile = path.join(this.storageBasePath, serviceName, `${userId}.json`);
+      const tokenFile = await this._resolveExistingTokenFilePath(userId, serviceName, providerId);
       await fs.unlink(tokenFile);
       logger.info('Tokens deleted for user', {
         component: 'TokenStorage',
         serviceName,
-        userId
+        userId,
+        providerId
       });
       return true;
     } catch (error) {
@@ -391,57 +590,30 @@ class TokenStorageService {
   }
 
   /**
-   * Check if user has valid tokens for a specific service
+   * Check if user has valid tokens for a specific service + provider
    */
-  async hasValidTokens(userId, serviceName) {
+  async hasValidTokens(userId, serviceName, providerId = null) {
     try {
-      await this.getUserTokens(userId, serviceName);
-      const expired = await this.areTokensExpired(userId, serviceName);
+      await this.getUserTokens(userId, serviceName, providerId);
+      const expired = await this.areTokensExpired(userId, serviceName, providerId);
       return !expired;
-    } catch (error) {
+    } catch {
       return false;
-    }
-  }
-
-  /**
-   * List all services that have tokens for a user
-   */
-  async getUserServices(userId) {
-    try {
-      const services = [];
-      const integrationDir = await fs.readdir(this.storageBasePath);
-
-      for (const serviceName of integrationDir) {
-        const tokenFile = path.join(this.storageBasePath, serviceName, `${userId}.json`);
-        try {
-          await fs.access(tokenFile);
-          services.push(serviceName);
-        } catch (error) {
-          // File doesn't exist, skip
-        }
-      }
-
-      return services;
-    } catch (error) {
-      logger.error('Error listing user services', {
-        component: 'TokenStorage',
-        error
-      });
-      return [];
     }
   }
 
   /**
    * Get token metadata without decrypting the actual tokens
    */
-  async getTokenMetadata(userId, serviceName) {
+  async getTokenMetadata(userId, serviceName, providerId = null) {
     try {
-      const tokenFile = path.join(this.storageBasePath, serviceName, `${userId}.json`);
+      const tokenFile = await this._resolveExistingTokenFilePath(userId, serviceName, providerId);
       const tokenData = JSON.parse(await fs.readFile(tokenFile, 'utf8'));
 
       return {
         userId: tokenData.userId,
         serviceName: tokenData.serviceName,
+        providerId: tokenData.providerId || null,
         createdAt: tokenData.createdAt,
         expiresAt: tokenData.expiresAt,
         expired: tokenData.expiresAt ? new Date(tokenData.expiresAt) <= new Date() : false
@@ -503,8 +675,8 @@ class TokenStorageService {
 
   /**
    * Generic decryption for simple strings (e.g., API keys)
-   * Supports both new ENC[...] format and legacy base64 format
-   * @param {string} encryptedData - Encrypted data in ENC[...] format or legacy base64
+   * Supports the ENC[...] format only
+   * @param {string} encryptedData - Encrypted data in ENC[...] format
    * @returns {string} Decrypted plaintext
    */
   decryptString(encryptedData) {
@@ -572,7 +744,7 @@ class TokenStorageService {
 
   /**
    * Check if a string appears to be encrypted
-   * Supports both ENC[...] format and legacy base64 format
+   * Supports the ENC[...] format only
    * @param {string} value - The value to check
    * @returns {boolean} True if the value appears to be encrypted
    */
@@ -650,8 +822,14 @@ class TokenStorageService {
       const contentsDir = path.dirname(this.rsaPublicKeyPath);
       await fs.mkdir(contentsDir, { recursive: true });
 
+      // `wx` on the private key makes this the arbitration point for a cold
+      // start: without it every cluster worker keeps the pair it generated
+      // itself, so a token signed by one worker fails verification on the
+      // others and an authenticated user gets 401s on a fraction of requests
+      // — exactly the intermittency round-robin scheduling produces. The
+      // public key follows only after the private write wins.
+      await createFileExclusively(this.rsaPrivateKeyPath, privateKey, 0o600);
       await fs.writeFile(this.rsaPublicKeyPath, publicKey, { mode: 0o644 });
-      await fs.writeFile(this.rsaPrivateKeyPath, privateKey, { mode: 0o600 });
 
       logger.info('RSA key pair persisted to disk', { component: 'TokenStorage' });
       logger.info(
@@ -659,6 +837,18 @@ class TokenStorageService {
         { component: 'TokenStorage' }
       );
     } catch (error) {
+      if (error.code === 'EEXIST') {
+        // Another process persisted a pair first; adopt it so the whole cluster
+        // signs and verifies with the same key.
+        const adopted = await this.#readPersistedRSAKeyPair();
+        if (adopted) {
+          this.rsaKeyPair = adopted;
+          logger.info('Adopted RSA key pair created concurrently by another process', {
+            component: 'TokenStorage'
+          });
+          return;
+        }
+      }
       logger.error('Failed to persist RSA key pair', {
         component: 'TokenStorage',
         error
@@ -667,6 +857,31 @@ class TokenStorageService {
         component: 'TokenStorage'
       });
     }
+  }
+
+  /**
+   * Read the persisted RSA key pair, retrying briefly.
+   *
+   * The retry covers the gap between the winner's private-key write and its
+   * public-key write: a loser that lands in between would otherwise see only
+   * half a pair and fall back to its own keys.
+   *
+   * @returns {Promise<{publicKey: string, privateKey: string}|null>}
+   */
+  async #readPersistedRSAKeyPair() {
+    for (let attempt = 0; attempt < 10; attempt++) {
+      try {
+        const [publicKey, privateKey] = await Promise.all([
+          fs.readFile(this.rsaPublicKeyPath, 'utf8'),
+          fs.readFile(this.rsaPrivateKeyPath, 'utf8')
+        ]);
+        if (publicKey && privateKey) return { publicKey, privateKey };
+      } catch {
+        // Not both files yet — fall through to the wait below.
+      }
+      await new Promise(resolve => setTimeout(resolve, 50));
+    }
+    return null;
   }
 
   /**
@@ -691,6 +906,191 @@ class TokenStorageService {
    */
   getRSAPrivateKey() {
     return this.rsaKeyPair?.privateKey || null;
+  }
+
+  /**
+   * Migrate legacy token files in `contents/integrations/*` from the
+   * old single-slot `<userId>.json` layout to the per-provider
+   * `<userId>__<providerId>.json` layout.
+   *
+   * Each legacy file is decrypted to read its `providerId` (the field
+   * is also persisted in plaintext on new files but historical files
+   * only carry it inside the encrypted payload). On success the file
+   * is renamed; on failure (missing providerId, decryption error,
+   * etc.) the file is left in place and logged so an operator can
+   * decide whether to delete it. The migration runs once per process
+   * start and is a no-op on already-migrated installs.
+   */
+  async migrateLegacyTokenFiles() {
+    try {
+      // Quick exit if the integrations directory has never been
+      // created (fresh install).
+      try {
+        await fs.access(this.storageBasePath);
+      } catch (err) {
+        if (err.code === 'ENOENT') return;
+        throw err;
+      }
+
+      const services = await fs.readdir(this.storageBasePath);
+      let migrated = 0;
+      let skipped = 0;
+
+      for (const serviceName of services) {
+        // Directory listings can technically contain anything if the
+        // host filesystem was tampered with; refuse to touch directory
+        // names that don't look like a normal service slug.
+        try {
+          this._assertSafeFilenameComponent(serviceName, 'serviceName');
+        } catch (err) {
+          logger.warn('Skipping integration directory with unsafe name', {
+            component: 'TokenStorage',
+            entry: serviceName,
+            error: err.message
+          });
+          skipped += 1;
+          continue;
+        }
+        const serviceDir = path.join(this.storageBasePath, serviceName);
+        let stat;
+        try {
+          stat = await fs.stat(serviceDir);
+        } catch {
+          continue;
+        }
+        if (!stat.isDirectory()) continue;
+
+        const entries = await fs.readdir(serviceDir);
+        for (const entry of entries) {
+          // Already-scoped filenames contain the `__` separator —
+          // those are new-format files and need no migration.
+          if (!entry.endsWith('.json') || entry.includes('__')) continue;
+
+          const userId = entry.slice(0, -'.json'.length);
+          // Same containment check: a hostile filename in the listing
+          // could otherwise flow into the rename target.
+          try {
+            this._assertSafeFilenameComponent(userId, 'userId');
+          } catch (err) {
+            logger.warn('Skipping legacy token file with unsafe name', {
+              component: 'TokenStorage',
+              serviceName,
+              file: entry,
+              error: err.message
+            });
+            skipped += 1;
+            continue;
+          }
+          const oldPath = path.join(serviceDir, entry);
+
+          let tokenData;
+          try {
+            tokenData = JSON.parse(await fs.readFile(oldPath, 'utf8'));
+          } catch (err) {
+            logger.warn('Skipping unparseable legacy token file during migration', {
+              component: 'TokenStorage',
+              serviceName,
+              file: entry,
+              error: err.message
+            });
+            skipped += 1;
+            continue;
+          }
+
+          // The on-disk file may already carry the providerId in
+          // plaintext (from this codebase) or only inside the
+          // encrypted blob (older installs).
+          let providerId = tokenData.providerId || null;
+          if (!providerId) {
+            try {
+              const decrypted = this.decryptTokens(tokenData, userId, serviceName);
+              providerId = decrypted.providerId || null;
+            } catch (err) {
+              logger.warn('Skipping legacy token file: could not recover providerId', {
+                component: 'TokenStorage',
+                serviceName,
+                file: entry,
+                error: err.message
+              });
+              skipped += 1;
+              continue;
+            }
+          }
+
+          if (!providerId) {
+            logger.warn('Skipping legacy token file: no providerId in payload', {
+              component: 'TokenStorage',
+              serviceName,
+              file: entry
+            });
+            skipped += 1;
+            continue;
+          }
+
+          // `providerId` here came out of an encrypted payload that we
+          // wrote, but defense-in-depth: a tampered on-disk file could
+          // contain anything. `_tokenFilePath` runs the same check
+          // internally; doing it explicitly first lets us skip rather
+          // than throw out of the migration loop.
+          try {
+            this._assertSafeFilenameComponent(providerId, 'providerId');
+          } catch (err) {
+            logger.warn('Skipping legacy token file: providerId fails safety check', {
+              component: 'TokenStorage',
+              serviceName,
+              file: entry,
+              error: err.message
+            });
+            skipped += 1;
+            continue;
+          }
+
+          const newPath = this._tokenFilePath(userId, serviceName, providerId);
+
+          // If the new-format path already exists (unlikely but
+          // possible after a partial rename) keep the new one and
+          // delete the legacy file to converge.
+          try {
+            await fs.access(newPath);
+            await fs.unlink(oldPath);
+            logger.info('Removed duplicate legacy token file (scoped file already exists)', {
+              component: 'TokenStorage',
+              serviceName,
+              file: entry,
+              providerId
+            });
+            migrated += 1;
+            continue;
+          } catch {
+            // Scoped path does not exist; proceed with rename.
+          }
+
+          await fs.rename(oldPath, newPath);
+          migrated += 1;
+          logger.info('Migrated legacy token file to per-provider path', {
+            component: 'TokenStorage',
+            serviceName,
+            userId,
+            providerId
+          });
+        }
+      }
+
+      if (migrated > 0 || skipped > 0) {
+        logger.info('Token-file migration complete', {
+          component: 'TokenStorage',
+          migrated,
+          skipped
+        });
+      }
+    } catch (error) {
+      logger.error('Error migrating legacy token files', {
+        component: 'TokenStorage',
+        error: error.message
+      });
+      // Non-fatal: server continues to boot, falling back to legacy
+      // read paths via `_resolveExistingTokenFilePath`.
+    }
   }
 }
 

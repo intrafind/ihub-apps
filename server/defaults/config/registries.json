@@ -9,6 +9,16 @@
       "enabled": true,
       "autoRefresh": false,
       "refreshIntervalHours": 24
+    },
+    {
+      "id": "ihub-examples",
+      "name": "iHub Examples",
+      "description": "In-repo example apps, models, prompts, and skills shipped with iHub Apps",
+      "source": "https://raw.githubusercontent.com/intrafind/ihub-apps/main/examples/catalog.json",
+      "auth": { "type": "none" },
+      "enabled": true,
+      "autoRefresh": false,
+      "refreshIntervalHours": 24
     }
   ]
 }

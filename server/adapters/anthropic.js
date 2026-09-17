@@ -4,7 +4,44 @@
 import { convertToolsFromGeneric } from './toolCalling/index.js';
 import { BaseAdapter } from './BaseAdapter.js';
 import logger from '../utils/logger.js';
-import { parseJsonAsync } from '../utils/asyncJson.js';
+
+/** Basic web search — accepted by every Claude model and by Vertex AI / Foundry. */
+export const ANTHROPIC_WEB_SEARCH_DEFAULT_VERSION = 'web_search_20250305';
+export const ANTHROPIC_WEB_SEARCH_VERSIONS = [
+  'web_search_20250305',
+  'web_search_20260209',
+  'web_search_20260318'
+];
+
+/**
+ * Build Anthropic's server-side web search tool block for one request.
+ *
+ * The tool version comes from the model config (`nativeWebSearch.toolVersion`,
+ * default basic). `web_search_20260209` and later default `allowed_callers` to
+ * code execution (dynamic filtering) — a 400 on models without programmatic
+ * tool calling and on Vertex AI / Azure-hosted Foundry — so the block pins
+ * direct calls unless the admin opted into dynamic filtering for the model.
+ * `max_uses` caps the billable searches for the call.
+ * See https://platform.claude.com/docs/en/agents-and-tools/tool-use/web-search-tool
+ *
+ * @param {Object} model - model config
+ * @param {{maxUses?: number}|null} directive - native web search directive
+ * @returns {Object} Anthropic tool block
+ */
+export function buildAnthropicWebSearchTool(model, directive) {
+  const config = model?.nativeWebSearch || {};
+  const type = ANTHROPIC_WEB_SEARCH_VERSIONS.includes(config.toolVersion)
+    ? config.toolVersion
+    : ANTHROPIC_WEB_SEARCH_DEFAULT_VERSION;
+  const tool = { type, name: 'web_search' };
+  if (Number.isInteger(directive?.maxUses) && directive.maxUses > 0) {
+    tool.max_uses = directive.maxUses;
+  }
+  if (type !== ANTHROPIC_WEB_SEARCH_DEFAULT_VERSION && config.dynamicFiltering !== true) {
+    tool.allowed_callers = ['direct'];
+  }
+  return tool;
+}
 
 class AnthropicAdapterClass extends BaseAdapter {
   /**
@@ -31,7 +68,7 @@ class AnthropicAdapterClass extends BaseAdapter {
           toolContent.push({
             type: 'tool_result',
             tool_use_id: msg.tool_call_id,
-            content: msg.content, // Already simplified in ToolExecutor
+            content: msg.content, // Already simplified by the tool loop
             is_error: msg.is_error || false
           });
 
@@ -74,6 +111,17 @@ class AnthropicAdapterClass extends BaseAdapter {
           role: 'user',
           content: toolContent
         });
+      } else if (
+        msg.role === 'assistant' &&
+        msg.providerContent?.provider === 'anthropic' &&
+        Array.isArray(msg.providerContent.blocks)
+      ) {
+        // A turn Anthropic paused (`stop_reason: pause_turn`) is continued by
+        // replaying the assistant content blocks exactly as received —
+        // server_tool_use / web_search_tool_result blocks and their encrypted
+        // payloads included. Flattened text would be an assistant prefill,
+        // which current models reject.
+        processedMessages.push({ role: 'assistant', content: msg.providerContent.blocks });
       } else if (msg.role === 'assistant' && msg.tool_calls) {
         const content = [];
         if (msg.content) {
@@ -149,8 +197,8 @@ class AnthropicAdapterClass extends BaseAdapter {
   /**
    * Create a completion request for Anthropic
    */
-  createCompletionRequest(model, messages, apiKey, options = {}) {
-    const { temperature, stream, maxTokens, tools, responseSchema } =
+  async createCompletionRequest(model, messages, apiKey, options = {}) {
+    const { temperature, stream, maxTokens, tools, responseSchema, nativeWebSearch } =
       this.extractRequestOptions(options);
 
     // Format messages and extract system prompt
@@ -164,9 +212,19 @@ class AnthropicAdapterClass extends BaseAdapter {
       model: model.modelId,
       messages: formattedMessages,
       stream,
-      temperature: parseFloat(temperature),
       max_tokens: maxTokens
     };
+
+    // Sampling parameters were removed from Anthropic's newer reasoning models
+    // (Claude Opus 5, Sonnet 5, Fable 5.x, Opus 4.7/4.8): sending `temperature`
+    // returns a 400 and the whole request fails. Model configs opt out with
+    // `supportsTemperature: false`; everything else keeps sending it.
+    if (model.supportsTemperature !== false) {
+      const parsedTemperature = parseFloat(temperature);
+      if (Number.isFinite(parsedTemperature)) {
+        requestBody.temperature = parsedTemperature;
+      }
+    }
 
     let finalTools = tools ? [...tools] : [];
     if (responseSchema) {
@@ -179,8 +237,18 @@ class AnthropicAdapterClass extends BaseAdapter {
       requestBody.tool_choice = { type: 'tool', name: 'json' };
     }
 
-    if (finalTools.length > 0) {
-      requestBody.tools = convertToolsFromGeneric(finalTools, 'anthropic');
+    const anthropicTools =
+      finalTools.length > 0 ? convertToolsFromGeneric(finalTools, 'anthropic') : [];
+
+    // Anthropic's server-side web search tool. Unlike Google, Anthropic allows
+    // combining it with client-defined function tools in the same request, so
+    // it's simply prepended rather than gated on finalTools being empty.
+    if (nativeWebSearch?.provider === 'anthropic') {
+      anthropicTools.unshift(buildAnthropicWebSearchTool(model, nativeWebSearch));
+    }
+
+    if (anthropicTools.length > 0) {
+      requestBody.tools = anthropicTools;
       // // Anthropic-specific instruction to encourage tool use, especially in multi-turn scenarios.
       // const toolInstruction =
       //   "If you need to use a tool to answer, please do so. After using the tools, provide a final answer to the user's question.";
@@ -218,115 +286,6 @@ class AnthropicAdapterClass extends BaseAdapter {
       },
       body: requestBody
     };
-  }
-
-  /**
-   * Process streaming response from Anthropic
-   */
-  async processResponseBuffer(data) {
-    const result = {
-      content: [],
-      tool_calls: [],
-      complete: false,
-      error: false,
-      errorMessage: null,
-      finishReason: null,
-      usage: null
-    };
-
-    if (!data) return result;
-    try {
-      const parsed = await parseJsonAsync(data);
-
-      // Extract usage from message_start (input tokens)
-      if (parsed.type === 'message_start' && parsed.message?.usage) {
-        result.usage = {
-          promptTokens: parsed.message.usage.input_tokens || 0,
-          completionTokens: parsed.message.usage.output_tokens || 0,
-          totalTokens:
-            (parsed.message.usage.input_tokens || 0) + (parsed.message.usage.output_tokens || 0)
-        };
-      }
-
-      // Extract usage from message_delta (final output token count)
-      if (parsed.type === 'message_delta' && parsed.usage) {
-        result.usage = {
-          promptTokens: 0,
-          completionTokens: parsed.usage.output_tokens || 0,
-          totalTokens: parsed.usage.output_tokens || 0
-        };
-      }
-
-      // Extract usage from non-streaming full response
-      if (parsed.usage && !parsed.type) {
-        result.usage = {
-          promptTokens: parsed.usage.input_tokens || 0,
-          completionTokens: parsed.usage.output_tokens || 0,
-          totalTokens: (parsed.usage.input_tokens || 0) + (parsed.usage.output_tokens || 0)
-        };
-      }
-
-      // Handle full response object (non-streaming)
-      if (parsed.content && Array.isArray(parsed.content) && parsed.content[0]?.text) {
-        result.content.push(parsed.content[0].text);
-        result.complete = true;
-        if (parsed.stop_reason) {
-          result.finishReason = parsed.stop_reason === 'end_turn' ? 'stop' : parsed.stop_reason;
-        }
-      }
-      // Handle streaming content deltas
-      else if (parsed.type === 'content_block_delta' && parsed.delta && parsed.delta.text) {
-        result.content.push(parsed.delta.text);
-      } else if (parsed.type === 'message_delta' && parsed.delta) {
-        if (parsed.delta.content) {
-          result.content.push(parsed.delta.content);
-        }
-        if (parsed.delta.stop_reason) {
-          result.finishReason =
-            parsed.delta.stop_reason === 'tool_use' ? 'tool_calls' : parsed.delta.stop_reason;
-        }
-      }
-
-      // Tool streaming events
-      if (parsed.type === 'content_block_start' && parsed.content_block?.type === 'tool_use') {
-        result.tool_calls.push({
-          index: parsed.index,
-          id: parsed.content_block.id,
-          type: 'function',
-          function: {
-            name: parsed.content_block.name,
-            arguments: ''
-          }
-        });
-      } else if (
-        parsed.type === 'content_block_delta' &&
-        parsed.delta?.type === 'input_json_delta'
-      ) {
-        // Pass partial tool call chunks to ToolExecutor for merging
-        result.tool_calls.push({
-          index: parsed.index,
-          function: {
-            arguments: parsed.delta.partial_json || ''
-          }
-        });
-      }
-
-      if (parsed.type === 'message_stop') {
-        result.complete = true;
-        // The finishReason is provided in the 'message_delta' event, not here.
-        // By not setting a finishReason, we avoid overwriting the correct 'tool_calls' reason
-        // that was already processed by the ToolExecutor.
-      }
-    } catch (parseError) {
-      logger.error('Error parsing Claude response chunk', {
-        component: 'AnthropicAdapter',
-        error: parseError
-      });
-      result.error = true;
-      result.errorMessage = `Error parsing Claude response: ${parseError.message}`;
-    }
-
-    return result;
   }
 }
 

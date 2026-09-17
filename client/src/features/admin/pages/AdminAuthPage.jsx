@@ -1,11 +1,9 @@
 import { useState, useEffect } from 'react';
 import { useTranslation } from 'react-i18next';
 import Icon from '../../../shared/components/Icon';
-import AdminAuth from '../components/AdminAuth';
-import AdminNavigation from '../components/AdminNavigation';
 import DualModeEditor from '../../../shared/components/DualModeEditor';
 import PlatformFormEditor from '../components/PlatformFormEditor';
-import { makeAdminApiCall } from '../../../api/adminApi';
+import { getAdminApiErrorMessage, makeAdminApiCall } from '../../../api/adminApi';
 import LoadingSpinner from '../../../shared/components/LoadingSpinner';
 import { usePlatformConfig } from '../../../shared/contexts/PlatformConfigContext';
 import { getSchemaByType } from '../../../utils/schemaService';
@@ -17,6 +15,7 @@ function AdminAuthPage() {
   const [saving, setSaving] = useState(false);
   const [message, setMessage] = useState('');
   const [jsonSchema, setJsonSchema] = useState(null);
+  const [availableGroups, setAvailableGroups] = useState([]);
   const [config, setConfig] = useState({
     auth: {
       mode: 'proxy',
@@ -57,36 +56,15 @@ function AdminAuthPage() {
       defaultGroups: [],
       sessionTimeoutMinutes: 480,
       generateJwtToken: true
-    },
-    authDebug: {
-      enabled: false,
-      maskTokens: true,
-      redactPasswords: true,
-      consoleLogging: false,
-      includeRawData: false,
-      providers: {
-        oidc: {
-          enabled: true
-        },
-        local: {
-          enabled: true
-        },
-        proxy: {
-          enabled: true
-        },
-        ldap: {
-          enabled: true
-        },
-        ntlm: {
-          enabled: true
-        }
-      }
     }
+    // Authentication debug logging is configured on the Logging page
+    // (Platform → Logging) under the canonical `auth.debug` key.
   });
 
   useEffect(() => {
     loadConfiguration();
     loadSchema();
+    loadGroups();
   }, []);
 
   const loadSchema = async () => {
@@ -95,6 +73,16 @@ function AdminAuthPage() {
       setJsonSchema(schema);
     } catch (error) {
       console.error('Failed to load platform schema:', error);
+    }
+  };
+
+  const loadGroups = async () => {
+    try {
+      const response = await makeAdminApiCall('/admin/groups');
+      const groups = response.data?.groups || {};
+      setAvailableGroups(Object.values(groups));
+    } catch (error) {
+      console.error('Failed to load groups:', error);
     }
   };
 
@@ -110,7 +98,7 @@ function AdminAuthPage() {
     } catch (error) {
       setMessage({
         type: 'error',
-        text: `Failed to load configuration: ${error.message}`
+        text: `Failed to load configuration: ${getAdminApiErrorMessage(error)}`
       });
     } finally {
       setLoading(false);
@@ -129,7 +117,7 @@ function AdminAuthPage() {
         headers: {
           'Content-Type': 'application/json'
         },
-        body: JSON.stringify(data)
+        body: data
       });
 
       // Success - axios doesn't have response.ok, successful responses are returned directly
@@ -142,9 +130,8 @@ function AdminAuthPage() {
     } catch (error) {
       setMessage({
         type: 'error',
-        text: `Failed to save configuration: ${error.message}`
+        text: `Failed to save configuration: ${getAdminApiErrorMessage(error)}`
       });
-      throw error; // Re-throw to let DualModeEditor handle it
     } finally {
       setSaving(false);
     }
@@ -156,113 +143,108 @@ function AdminAuthPage() {
 
   if (loading) {
     return (
-      <AdminAuth>
-        <AdminNavigation />
-        <div className="min-h-screen bg-gray-50 dark:bg-gray-900 flex items-center justify-center">
-          <LoadingSpinner size="lg" />
-        </div>
-      </AdminAuth>
+      <div className="min-h-screen bg-gray-50 dark:bg-gray-900 flex items-center justify-center">
+        <LoadingSpinner size="lg" />
+      </div>
     );
   }
 
   return (
-    <AdminAuth>
-      <AdminNavigation />
-      <div className="min-h-screen bg-gray-50 dark:bg-gray-900">
-        {/* Header */}
-        <div className="bg-white dark:bg-gray-800 shadow-sm border-b border-gray-200 dark:border-gray-700">
-          <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6">
-            <div className="flex justify-between items-center">
-              <div>
-                <h1 className="text-3xl font-bold text-gray-900 dark:text-gray-100">
-                  {t('admin.auth.configuration', 'Authentication Configuration')}
-                </h1>
-                <p className="text-gray-600 dark:text-gray-400 mt-1">
-                  Configure multiple authentication methods and user access settings. Enable dual
-                  authentication for maximum flexibility.
-                </p>
-              </div>
-              <button
-                type="button"
-                onClick={() => {
-                  const dataStr = JSON.stringify(config, null, 2);
-                  const dataUri =
-                    'data:application/json;charset=utf-8,' + encodeURIComponent(dataStr);
-                  const exportFileDefaultName = `platform-config.json`;
-                  const linkElement = document.createElement('a');
-                  linkElement.setAttribute('href', dataUri);
-                  linkElement.setAttribute('download', exportFileDefaultName);
-                  linkElement.click();
-                }}
-                className="inline-flex items-center px-4 py-2 border border-gray-300 dark:border-gray-600 shadow-sm text-sm font-medium rounded-md text-gray-700 dark:text-gray-300 bg-white dark:bg-gray-700 hover:bg-gray-50 dark:hover:bg-gray-600 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500"
-              >
-                <Icon name="download" className="h-4 w-4 mr-2" />
-                {t('common.download')}
-              </button>
+    <div className="min-h-screen bg-gray-50 dark:bg-gray-900">
+      {/* Header */}
+      <div className="bg-white dark:bg-gray-800 shadow-xs border-b border-gray-200 dark:border-gray-700">
+        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6">
+          <div className="flex justify-between items-center">
+            <div>
+              <h1 className="text-3xl font-bold text-gray-900 dark:text-gray-100">
+                {t('admin.auth.configuration', 'Authentication Configuration')}
+              </h1>
+              <p className="text-gray-600 dark:text-gray-400 mt-1">
+                Configure multiple authentication methods and user access settings. Enable dual
+                authentication for maximum flexibility.
+              </p>
             </div>
-          </div>
-        </div>
-
-        {/* Content */}
-        <div className="max-w-4xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
-          {message && (
-            <div
-              className={`mb-6 p-4 rounded-md ${
-                message.type === 'success'
-                  ? 'bg-green-50 dark:bg-green-900/30 border border-green-200 dark:border-green-800'
-                  : 'bg-red-50 dark:bg-red-900/30 border border-red-200 dark:border-red-800'
-              }`}
-            >
-              <div className="flex">
-                <Icon
-                  name={message.type === 'success' ? 'check' : 'warning'}
-                  size="md"
-                  className={`mt-0.5 mr-3 ${
-                    message.type === 'success' ? 'text-green-500' : 'text-red-500'
-                  }`}
-                />
-                <p
-                  className={`text-sm ${
-                    message.type === 'success'
-                      ? 'text-green-700 dark:text-green-300'
-                      : 'text-red-700 dark:text-red-300'
-                  }`}
-                >
-                  {message.text}
-                </p>
-              </div>
-            </div>
-          )}
-
-          <DualModeEditor
-            value={config}
-            onChange={handleDataChange}
-            formComponent={PlatformFormEditor}
-            jsonSchema={jsonSchema}
-            title={t('admin.auth.configuration', 'Authentication Configuration')}
-          />
-
-          {/* Save buttons */}
-          <div className="flex justify-end space-x-4 mt-8">
             <button
               type="button"
-              onClick={() => handleSave()}
-              disabled={saving}
-              className="px-4 py-2 border border-transparent rounded-md shadow-sm text-sm font-medium text-white bg-indigo-600 hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500 disabled:opacity-50"
+              onClick={() => {
+                const dataStr = JSON.stringify(config, null, 2);
+                const dataUri =
+                  'data:application/json;charset=utf-8,' + encodeURIComponent(dataStr);
+                const exportFileDefaultName = `platform-config.json`;
+                const linkElement = document.createElement('a');
+                linkElement.setAttribute('href', dataUri);
+                linkElement.setAttribute('download', exportFileDefaultName);
+                linkElement.click();
+              }}
+              className="inline-flex items-center px-4 py-2 border border-gray-300 dark:border-gray-600 shadow-xs text-sm font-medium rounded-md text-gray-700 dark:text-gray-300 bg-white dark:bg-gray-700 hover:bg-gray-50 dark:hover:bg-gray-600 focus:outline-hidden focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500"
             >
-              {saving ? (
-                <>
-                  <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white mr-2 inline-block"></div>
-                  {t('admin.auth.saving', 'Saving...')}
-                </>
-              ) : (
-                t('admin.auth.save', 'Save Configuration')
-              )}
+              <Icon name="download" className="h-4 w-4 mr-2" />
+              {t('common.download')}
             </button>
           </div>
         </div>
       </div>
-    </AdminAuth>
+
+      {/* Content */}
+      <div className="max-w-4xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
+        {message && (
+          <div
+            className={`mb-6 p-4 rounded-md ${
+              message.type === 'success'
+                ? 'bg-green-50 dark:bg-green-900/30 border border-green-200 dark:border-green-800'
+                : 'bg-red-50 dark:bg-red-900/30 border border-red-200 dark:border-red-800'
+            }`}
+          >
+            <div className="flex">
+              <Icon
+                name={message.type === 'success' ? 'check' : 'warning'}
+                size="md"
+                className={`mt-0.5 mr-3 ${
+                  message.type === 'success' ? 'text-green-500' : 'text-red-500'
+                }`}
+              />
+              <p
+                className={`text-sm ${
+                  message.type === 'success'
+                    ? 'text-green-700 dark:text-green-300'
+                    : 'text-red-700 dark:text-red-300'
+                }`}
+              >
+                {message.text}
+              </p>
+            </div>
+          </div>
+        )}
+
+        <DualModeEditor
+          value={config}
+          onChange={handleDataChange}
+          formComponent={PlatformFormEditor}
+          formProps={{ availableGroups }}
+          jsonSchema={jsonSchema}
+          title={t('admin.auth.configuration', 'Authentication Configuration')}
+        />
+
+        {/* Save buttons */}
+        <div className="flex justify-end space-x-4 mt-8">
+          <button
+            type="button"
+            onClick={() => handleSave()}
+            disabled={saving}
+            className="px-4 py-2 border border-transparent rounded-md shadow-xs text-sm font-medium text-white bg-indigo-600 hover:bg-indigo-700 focus:outline-hidden focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500 disabled:opacity-50"
+          >
+            {saving ? (
+              <>
+                <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white mr-2 inline-block"></div>
+                {t('admin.auth.saving', 'Saving...')}
+              </>
+            ) : (
+              t('admin.auth.save', 'Save Configuration')
+            )}
+          </button>
+        </div>
+      </div>
+    </div>
   );
 }
 

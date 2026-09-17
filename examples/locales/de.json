@@ -1,0 +1,13 @@
+{
+  "app": {
+    "title": "Meine Firmen-KI-Apps",
+    "subtitle": "Intelligente Lösungen für Ihr Unternehmen"
+  },
+  "common": {
+    "welcome": "Willkommen bei Meiner Firmen-KI-Plattform"
+  },
+  "chat": {
+    "newChat": "Neue Unterhaltung starten",
+    "placeholder": "Fragen Sie mich alles über Ihr Geschäft..."
+  }
+}

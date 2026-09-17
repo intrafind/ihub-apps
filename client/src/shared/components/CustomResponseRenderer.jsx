@@ -1,6 +1,8 @@
 import React, { useState, useEffect, Suspense, useMemo, useCallback, useRef } from 'react';
 import { useTranslation } from 'react-i18next';
+import { useNavigate } from 'react-router-dom';
 import ReactComponentRenderer from './ReactComponentRenderer';
+import { buildApiUrl } from '../../utils/runtimeBasePath';
 
 /**
  * CustomResponseRenderer - Renders custom response components for structured app outputs
@@ -14,13 +16,15 @@ import ReactComponentRenderer from './ReactComponentRenderer';
  *
  * @param {string} componentName - Name of the renderer component (e.g., 'nda-results')
  * @param {object} data - Parsed JSON data to pass to the component
+ * @param {object} rendererConfig - Optional renderer-specific config from the app JSON (passthrough)
  * @param {string} className - Optional CSS classes for the container
  */
-function CustomResponseRenderer({ componentName, data, className = '' }) {
+function CustomResponseRenderer({ componentName, data, rendererConfig, className = '' }) {
   const [rendererCode, setRendererCode] = useState(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
   const { t } = useTranslation();
+  const navigate = useNavigate();
 
   useEffect(() => {
     const loadRendererFromAPI = async () => {
@@ -29,7 +33,7 @@ function CustomResponseRenderer({ componentName, data, className = '' }) {
         setError(null);
 
         // Fetch renderer code from API
-        const response = await fetch(`/api/renderers/${componentName}`);
+        const response = await fetch(buildApiUrl(`renderers/${componentName}`));
 
         if (!response.ok) {
           if (response.status === 404) {
@@ -65,6 +69,8 @@ function CustomResponseRenderer({ componentName, data, className = '' }) {
     () => ({
       data,
       t,
+      rendererConfig,
+      navigate,
       // Add React and hooks that the renderer might need
       React,
       useState,
@@ -73,7 +79,7 @@ function CustomResponseRenderer({ componentName, data, className = '' }) {
       useCallback,
       useRef
     }),
-    [data, t]
+    [data, t, rendererConfig, navigate]
   );
 
   if (loading) {
@@ -111,7 +117,7 @@ function CustomResponseRenderer({ componentName, data, className = '' }) {
           <summary className="cursor-pointer text-sm text-red-600 hover:text-red-800">
             {t('common.details', 'Details')}
           </summary>
-          <pre className="text-xs text-red-700 bg-red-100 p-3 rounded mt-2 overflow-auto">
+          <pre className="text-xs text-red-700 bg-red-100 p-3 rounded-sm mt-2 overflow-auto">
             Renderer: {componentName}
             {'\n'}
             Error: {error}

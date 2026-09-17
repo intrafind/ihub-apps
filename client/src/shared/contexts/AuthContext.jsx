@@ -1,6 +1,6 @@
 import { createContext, useContext, useReducer, useEffect, useCallback, useRef } from 'react';
 import { apiClient } from '../../api/client.js';
-import { buildPath, buildApiUrl } from '../../utils/runtimeBasePath';
+import { buildPath, buildApiUrl, getApiBaseUrlOverride } from '../../utils/runtimeBasePath';
 
 // Auth action types
 const AUTH_ACTIONS = {
@@ -76,6 +76,21 @@ function authReducer(state, action) {
 
     default:
       return state;
+  }
+}
+
+// Redirect to a stored return URL after successful authentication, skipping the
+// redirect if we're already on the target page (e.g. embedded login in setup wizard).
+function redirectToReturnUrl(logContext) {
+  const returnUrl = sessionStorage.getItem('authReturnUrl');
+  if (!returnUrl) return;
+
+  sessionStorage.removeItem('authReturnUrl');
+  const currentPath = window.location.pathname;
+  const returnPath = new URL(returnUrl, window.location.origin).pathname;
+  if (currentPath !== returnPath) {
+    console.log(`↩️ Redirecting to stored return URL after ${logContext}:`, returnUrl);
+    window.location.href = returnUrl;
   }
 }
 
@@ -164,7 +179,13 @@ export function AuthProvider({ children }) {
             console.log('📍 Stored return URL for post-authentication redirect:', returnUrl);
           }
 
-          if (data.autoRedirect && !data.authenticated && !isLogoutPage) {
+          // Skip the OIDC auto-redirect when the app is iframed (e.g. the
+          // Nextcloud embed). An iframe can't complete an IdP redirect —
+          // most IdPs serve X-Frame-Options: DENY — and our embed entries
+          // run their own OAuth-popup flow before mounting <App />.
+          const isIframed = typeof window !== 'undefined' && window.self !== window.top;
+
+          if (data.autoRedirect && !data.authenticated && !isLogoutPage && !isIframed) {
             // Prevent infinite redirect loops by checking if we've already attempted a redirect
             const redirectAttemptKey = `autoRedirect_${data.autoRedirect.provider}`;
             const lastRedirectAttempt = sessionStorage.getItem(redirectAttemptKey);
@@ -231,18 +252,7 @@ export function AuthProvider({ children }) {
         dispatch({ type: AUTH_ACTIONS.SET_USER, payload: data.user });
 
         // Check for stored return URL and redirect (for all auth methods)
-        const returnUrl = sessionStorage.getItem('authReturnUrl');
-        if (returnUrl) {
-          sessionStorage.removeItem('authReturnUrl');
-          // Only redirect if we're on a different page (e.g., /login → /setup)
-          // Skip redirect if already on the target page (e.g., embedded login in setup wizard)
-          const currentPath = window.location.pathname;
-          const returnPath = new URL(returnUrl, window.location.origin).pathname;
-          if (currentPath !== returnPath) {
-            console.log('↩️ Redirecting to stored return URL after token login:', returnUrl);
-            window.location.href = returnUrl;
-          }
-        }
+        redirectToReturnUrl('token login');
 
         return { success: true };
       } else {
@@ -401,17 +411,12 @@ export function AuthProvider({ children }) {
     };
   }, [handleOidcCallback, loadAuthStatus]);
 
-  // Login with username/password using local authentication only
-  const loginLocal = async (username, password) => {
+  // Shared login flow for username/password based auth methods (local, LDAP)
+  const loginWithCredentials = async (endpoint, requestBody, errorContext) => {
     try {
       dispatch({ type: AUTH_ACTIONS.SET_LOADING, payload: true });
 
-      const requestBody = {
-        username,
-        password
-      };
-
-      const response = await apiClient.post('/auth/local/login', requestBody);
+      const response = await apiClient.post(endpoint, requestBody);
 
       const data = response.data;
 
@@ -438,18 +443,7 @@ export function AuthProvider({ children }) {
         await loadAuthStatus();
 
         // Check for stored return URL and redirect
-        const returnUrl = sessionStorage.getItem('authReturnUrl');
-        if (returnUrl) {
-          sessionStorage.removeItem('authReturnUrl');
-          // Only redirect if we're on a different page (e.g., /login → /setup)
-          // Skip redirect if already on the target page (e.g., embedded login in setup wizard)
-          const currentPath = window.location.pathname;
-          const returnPath = new URL(returnUrl, window.location.origin).pathname;
-          if (currentPath !== returnPath) {
-            console.log('↩️ Redirecting to stored return URL after login:', returnUrl);
-            window.location.href = returnUrl;
-          }
-        }
+        redirectToReturnUrl('login');
 
         return { success: true };
       } else {
@@ -458,80 +452,28 @@ export function AuthProvider({ children }) {
         return { success: false, error };
       }
     } catch (error) {
-      console.error('Local login error:', error);
-      const errorMessage = error.message || 'Local login failed';
+      console.error(`${errorContext} error:`, error);
+      // Extract the error message from the response
+      const errorMessage = error.response?.data?.error || error.message || `${errorContext} failed`;
       dispatch({ type: AUTH_ACTIONS.SET_ERROR, payload: errorMessage });
       return { success: false, error: errorMessage };
     }
   };
 
+  // Login with username/password using local authentication only
+  const loginLocal = async (username, password) =>
+    loginWithCredentials('/auth/local/login', { username, password }, 'Local login');
+
   // Login with username/password using LDAP authentication only
   const loginLdap = async (username, password, provider = null) => {
-    try {
-      dispatch({ type: AUTH_ACTIONS.SET_LOADING, payload: true });
+    const requestBody = { username, password };
 
-      const requestBody = {
-        username,
-        password
-      };
-
-      // Add provider if specified (for LDAP provider selection)
-      if (provider) {
-        requestBody.provider = provider;
-      }
-
-      const response = await apiClient.post('/auth/ldap/login', requestBody);
-
-      const data = response.data;
-
-      if (data.success) {
-        // Token is set as HTTP-only cookie by the server for security (XSS protection)
-        // Store token in localStorage only if provided (for backward compatibility)
-        if (data.token) {
-          localStorage.setItem('authToken', data.token);
-        }
-
-        // Clear any existing cached data to prevent permission leakage
-        try {
-          const { clearApiCache } = await import('../../api/utils/cache');
-          clearApiCache();
-        } catch (error) {
-          // Cache clearing is optional, don't fail login
-          console.warn('Could not clear API cache on login:', error);
-        }
-
-        // Set user
-        dispatch({ type: AUTH_ACTIONS.SET_USER, payload: data.user });
-
-        // Refresh auth status to ensure all components are updated
-        await loadAuthStatus();
-
-        // Check for stored return URL and redirect
-        const returnUrl = sessionStorage.getItem('authReturnUrl');
-        if (returnUrl) {
-          sessionStorage.removeItem('authReturnUrl');
-          // Only redirect if we're on a different page (e.g., /login → /setup)
-          // Skip redirect if already on the target page (e.g., embedded login in setup wizard)
-          const currentPath = window.location.pathname;
-          const returnPath = new URL(returnUrl, window.location.origin).pathname;
-          if (currentPath !== returnPath) {
-            console.log('↩️ Redirecting to stored return URL after login:', returnUrl);
-            window.location.href = returnUrl;
-          }
-        }
-
-        return { success: true };
-      } else {
-        const error = data.error || 'Login failed';
-        dispatch({ type: AUTH_ACTIONS.SET_ERROR, payload: error });
-        return { success: false, error };
-      }
-    } catch (error) {
-      console.error('LDAP login error:', error);
-      const errorMessage = error.message || 'LDAP login failed';
-      dispatch({ type: AUTH_ACTIONS.SET_ERROR, payload: errorMessage });
-      return { success: false, error: errorMessage };
+    // Add provider if specified (for LDAP provider selection)
+    if (provider) {
+      requestBody.provider = provider;
     }
+
+    return loginWithCredentials('/auth/ldap/login', requestBody, 'LDAP login');
   };
 
   // OIDC login - redirect to provider
@@ -553,34 +495,55 @@ export function AuthProvider({ children }) {
 
   // Logout with comprehensive cleanup
   const logout = async () => {
+    let oidcLogoutRequired = false;
     try {
       console.log('🔒 LOGOUT: Redirecting to logout page to prevent auto-redirect');
 
-      // Call logout API if authenticated
-      if (state.isAuthenticated) {
-        await apiClient.post(
-          '/auth/logout',
-          {},
-          {
-            headers: getAuthHeaders()
-          }
-        );
-      }
+      // Always call the logout API, even when this tab believes it is not
+      // authenticated. The endpoint is idempotent, and it is the only thing
+      // that can tell us whether the browser still holds an OIDC logout hint -
+      // which outlives our own JWT, so skipping the call when `isAuthenticated`
+      // has already flipped to false would leave the provider's SSO session
+      // alive and silently sign the next person in as this user.
+      const response = await apiClient.post(
+        '/auth/logout',
+        {},
+        {
+          headers: getAuthHeaders()
+        }
+      );
+      oidcLogoutRequired = response?.data?.oidcLogoutRequired === true;
     } catch (error) {
       console.error('Logout API error:', error);
     } finally {
       // Comprehensive cleanup
-      performLogoutCleanup();
+      await performLogoutCleanup();
       dispatch({ type: AUTH_ACTIONS.LOGOUT });
+
+      // If authenticated via OIDC, first end the session at the provider too
+      // (RP-Initiated Logout) before landing back home - otherwise the IdP's
+      // SSO session stays active and the next login silently re-authenticates
+      // without a login prompt. See GET /api/auth/oidc-logout.
+      //
+      // Not in an embedded host, though: an iframe (Nextcloud/Office embed)
+      // can't render an IdP logout page - most serve X-Frame-Options: DENY -
+      // and in the browser-extension panel buildApiUrl() returns an absolute
+      // iHub URL, which would navigate the panel off the extension entirely.
+      // Those hosts fall back to a local logout, same as before this feature.
+      const isEmbeddedHost =
+        (typeof window !== 'undefined' && window.self !== window.top) || !!getApiBaseUrlOverride();
 
       // Redirect to apps home page with logout parameter to prevent auto redirect
       // This ensures users don't remain on admin or other protected pages after logout
-      window.location.href = buildPath('/?logout=true');
+      window.location.href =
+        oidcLogoutRequired && !isEmbeddedHost
+          ? buildApiUrl('auth/oidc-logout')
+          : buildPath('/?logout=true');
     }
   };
 
   // Comprehensive logout cleanup function
-  const performLogoutCleanup = () => {
+  const performLogoutCleanup = async () => {
     try {
       // Clear authentication token
       localStorage.removeItem('authToken');
@@ -594,7 +557,7 @@ export function AuthProvider({ children }) {
 
       // Clear API cache if available
       try {
-        const { clearApiCache } = require('../../api/utils/cache');
+        const { clearApiCache } = await import('../../api/utils/cache');
         clearApiCache();
       } catch (error) {
         // Cache clearing is optional, don't fail logout

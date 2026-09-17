@@ -1,56 +1,18 @@
 import bcrypt from 'bcryptjs';
 import crypto from 'crypto';
-import fs from 'fs';
-import path from 'path';
-import { fileURLToPath } from 'url';
 import { enhanceUserGroups } from '../utils/authorization.js';
 import { generateJwt } from '../utils/tokenService.js';
+import {
+  equalsIgnoreCase,
+  hashPasswordWithUserId,
+  loadUsers,
+  saveUsers
+} from '../utils/userManager.js';
 import configCache from '../configCache.js';
-import logger from '../utils/logger.js';
 import { ensureFirstUserIsAdmin } from '../utils/adminRescue.js';
 
-const __filename = fileURLToPath(import.meta.url);
-const __dirname = path.dirname(__filename);
-
-/**
- * Load users from the local users file
- * @param {string} usersFilePath - Path to users.json file
- * @returns {Object} Users configuration
- */
-function loadUsers(usersFilePath) {
-  try {
-    const fullPath = path.isAbsolute(usersFilePath)
-      ? usersFilePath
-      : path.join(__dirname, '../../', usersFilePath);
-
-    if (!fs.existsSync(fullPath)) {
-      logger.warn('Users file not found', { component: 'LocalAuth', fullPath });
-      return { users: {} };
-    }
-
-    const config = JSON.parse(fs.readFileSync(fullPath, 'utf8'));
-    return config;
-  } catch (error) {
-    logger.warn('Could not load users configuration', { component: 'LocalAuth', error });
-    return { users: {} };
-  }
-}
-
-/**
- * Hash password with user ID as salt for unique hashes
- * @param {string} password - Plain text password
- * @param {string} userId - User ID to use as salt
- * @returns {Promise<string>} Hashed password
- */
-export async function hashPasswordWithUserId(password, userId) {
-  // Create a deterministic salt from user ID
-  const salt = await bcrypt.genSalt(12);
-
-  // Combine password with user ID for unique hash
-  const passwordWithUserId = `${userId}:${password}`;
-
-  return await bcrypt.hash(passwordWithUserId, salt);
-}
+const DUMMY_USER_ID = 'nonexistent-user';
+const DUMMY_PASSWORD_HASH = '$2a$12$n6wyln4ERyOHBD6UAx2fAOkt0F7nX0x6X2ZiYAbBVvK7i7diOaJjG';
 
 /**
  * Verify password against hash using user ID
@@ -93,10 +55,13 @@ export async function loginUser(username, password, localAuthConfig) {
   const usersConfig = loadUsers(localAuthConfig.usersFile || 'contents/config/users.json');
   const users = usersConfig.users || {};
 
-  // Find user by username or email
-  const user = Object.values(users).find(u => u.username === username || u.email === username);
+  // Find user by username or email (case-insensitive)
+  const user = Object.values(users).find(
+    u => equalsIgnoreCase(u.username, username) || equalsIgnoreCase(u.email, username)
+  );
 
   if (!user) {
+    await verifyPasswordWithUserId(password, DUMMY_USER_ID, DUMMY_PASSWORD_HASH);
     throw new Error('Invalid credentials');
   }
 
@@ -117,7 +82,7 @@ export async function loginUser(username, password, localAuthConfig) {
     username: user.username,
     name: user.name,
     email: user.email,
-    groups: user.internalGroups || ['user'],
+    groups: user.internalGroups || ['users'],
     authenticated: true,
     authMethod: 'local'
   };
@@ -153,7 +118,7 @@ export async function loginUser(username, password, localAuthConfig) {
  * @returns {Object} Created user (without password)
  */
 export async function createUser(userData, usersFilePath) {
-  const { username, email, password, name, groups = ['user'], active = true } = userData;
+  const { username, email, password, name, internalGroups = ['users'], active = true } = userData;
 
   if (!username || !email || !password || !name) {
     throw new Error('Missing required fields: username, email, password, name');
@@ -162,8 +127,10 @@ export async function createUser(userData, usersFilePath) {
   const usersConfig = loadUsers(usersFilePath);
   const users = usersConfig.users || {};
 
-  // Check if user already exists
-  const existingUser = Object.values(users).find(u => u.username === username || u.email === email);
+  // Check if user already exists (case-insensitive)
+  const existingUser = Object.values(users).find(
+    u => equalsIgnoreCase(u.username, username) || equalsIgnoreCase(u.email, email)
+  );
 
   if (existingUser) {
     throw new Error('User with this username or email already exists');
@@ -181,7 +148,7 @@ export async function createUser(userData, usersFilePath) {
     username,
     email,
     name,
-    groups,
+    internalGroups,
     active,
     passwordHash,
     createdAt: new Date().toISOString(),
@@ -192,18 +159,13 @@ export async function createUser(userData, usersFilePath) {
   users[userId] = newUser;
   usersConfig.users = users;
 
-  // Save to file
-  const fullPath = path.isAbsolute(usersFilePath)
-    ? usersFilePath
-    : path.join(__dirname, '../../', usersFilePath);
-
-  // Ensure directory exists
-  const dir = path.dirname(fullPath);
-  if (!fs.existsSync(dir)) {
-    fs.mkdirSync(dir, { recursive: true });
-  }
-
-  fs.writeFileSync(fullPath, JSON.stringify(usersConfig, null, 2));
+  // `saveUsers` is the only writer of this file: it goes through the
+  // `ConfigStore`, refreshes the cache entry and tells the other cluster
+  // workers to re-read it. Writing the file here directly — as this did —
+  // left every other worker authenticating against a users file it still
+  // believed was current, and the next save from one of them rewrote the
+  // whole file from that stale snapshot, dropping the new user.
+  await saveUsers(usersConfig, usersFilePath);
 
   // Return user without sensitive data
 

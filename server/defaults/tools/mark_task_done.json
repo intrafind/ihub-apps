@@ -1,0 +1,24 @@
+{
+  "id": "mark_task_done",
+  "name": {
+    "en": "Mark Task Done"
+  },
+  "description": {
+    "en": "Explicitly mark a task as done with an optional result."
+  },
+  "script": "agentTools.js",
+  "method": "markTaskDone",
+  "isAgentTool": true,
+  "parameters": {
+    "type": "object",
+    "properties": {
+      "taskId": {
+        "type": "string"
+      },
+      "result": {
+        "description": "Arbitrary completion payload"
+      }
+    },
+    "required": ["taskId"]
+  }
+}

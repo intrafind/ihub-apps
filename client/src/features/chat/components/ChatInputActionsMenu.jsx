@@ -1,14 +1,13 @@
 import { useState, useEffect, useRef, useCallback } from 'react';
 import { useTranslation } from 'react-i18next';
 import Icon from '../../../shared/components/Icon';
-import { fetchToolsBasic } from '../../../api/api';
-import { apiClient } from '../../../api/client';
+import { fetchToolsBasic } from '../../../api';
 import { VoiceInputComponent } from '../../voice/components';
 import MagicPromptLoader from '../../../shared/components/MagicPromptLoader';
 import ImageGenerationControls from './ImageGenerationControls';
 import { trackToolUsage } from '../../../utils/toolUsageTracker';
 import { usePlatformConfig } from '../../../shared/contexts/PlatformConfigContext';
-import useFeatureFlags from '../../../shared/hooks/useFeatureFlags';
+import { useEmbeddedHost } from '../../office/contexts/EmbeddedHostContext';
 import { useKeyboardNavigation } from '../../../shared/hooks/useKeyboardNavigation';
 
 /**
@@ -45,11 +44,33 @@ function ChatInputActionsMenu({
   onCloudProviderSelect,
   // Websearch props
   websearchEnabled = false,
-  onWebsearchEnabledChange = null
+  onWebsearchEnabledChange = null,
+  // Transcription toggle props: available = admin enabled it; enabled
+  // = the per-chat user toggle state.
+  transcriptionAvailable = false,
+  transcriptionEnabled = false,
+  onTranscriptionEnabledChange = null,
+  // Host-context toggles (Outlook taskpane / browser-extension side panel).
+  // The host adapter declares which toggles to render via
+  // EmbeddedHostAdapter.contextToggles (read below via useEmbeddedHost).
+  // `hostContextFlags` is the user-visible state map keyed by toggle.key.
+  hostContextFlags = null,
+  onHostContextFlagChange = null
 }) {
   const { t } = useTranslation();
   const { platformConfig } = usePlatformConfig();
-  const featureFlags = useFeatureFlags();
+  // Embedded-host adapter (Outlook taskpane / browser-extension side panel)
+  // declares which "Include …" toggles to render under the `+` menu via
+  // its `contextToggles` array. Empty in the main web app — the section
+  // below renders nothing. The Outlook taskpane intentionally declares no
+  // toggles (issue #1467) because the OfficeMailContextBanner already
+  // surfaces equivalent controls; the browser extension still uses this
+  // mechanism for its `Include page` toggle.
+  const embeddedHost = useEmbeddedHost();
+  const hostContextToggles =
+    onHostContextFlagChange && Array.isArray(embeddedHost?.contextToggles)
+      ? embeddedHost.contextToggles
+      : [];
   const [isOpen, setIsOpen] = useState(false);
   const [availableTools, setAvailableTools] = useState([]);
   const [toolsLoading, setToolsLoading] = useState(false);
@@ -59,78 +80,9 @@ function ChatInputActionsMenu({
   /** Closes the actions menu dropdown */
   const handleActionsMenuClose = useCallback(() => setIsOpen(false), []);
 
-  /** Handle selection of menu items via keyboard (Enter/Space) */
-  const handleMenuItemSelect = useCallback(
-    index => {
-      const menuNavItems = [];
-      if (uploadConfig?.enabled === true && !(disabled || isProcessing))
-        menuNavItems.push('upload');
-      if (magicPromptEnabled && !showUndoMagicPrompt && !(disabled || isProcessing))
-        menuNavItems.push('magic');
-      if (showUndoMagicPrompt && !(disabled || isProcessing)) menuNavItems.push('undo');
-      enabledCloudProviders.forEach(p => {
-        if (!(disabled || isProcessing)) menuNavItems.push(`cloud-${p.id}`);
-      });
-      if (hasWebsearch) menuNavItems.push('websearch');
-      grouped.forEach(g => menuNavItems.push(`group-${g.id}`));
-      individual.forEach(id => menuNavItems.push(`tool-${id}`));
-
-      const selectedKey = menuNavItems[index];
-      if (!selectedKey) return;
-
-      if (selectedKey === 'websearch') {
-        onWebsearchEnabledChange?.(!websearchEnabled);
-      } else if (selectedKey === 'upload') {
-        onToggleUploader?.();
-        setIsOpen(false);
-      } else if (selectedKey === 'magic') {
-        onMagicPrompt?.();
-        setIsOpen(false);
-      } else if (selectedKey === 'undo') {
-        onUndoMagicPrompt?.();
-        setIsOpen(false);
-      } else if (selectedKey.startsWith('cloud-')) {
-        const providerId = selectedKey.replace('cloud-', '');
-        const provider = enabledCloudProviders.find(p => p.id === providerId);
-        if (provider) {
-          onCloudProviderSelect?.(provider);
-          setIsOpen(false);
-        }
-      } else if (selectedKey.startsWith('group-')) {
-        const groupId = selectedKey.replace('group-', '');
-        const group = grouped.find(g => g.id === groupId);
-        if (group) {
-          toggleTool(group.id, true, group.matchedTools);
-        }
-      } else if (selectedKey.startsWith('tool-')) {
-        const toolId = selectedKey.replace('tool-', '');
-        toggleTool(toolId);
-      }
-    },
-    [
-      uploadConfig,
-      disabled,
-      isProcessing,
-      magicPromptEnabled,
-      showUndoMagicPrompt,
-      enabledCloudProviders,
-      hasWebsearch,
-      grouped,
-      individual,
-      websearchEnabled,
-      onWebsearchEnabledChange,
-      onToggleUploader,
-      onMagicPrompt,
-      onUndoMagicPrompt,
-      onCloudProviderSelect,
-      toggleTool
-    ]
-  );
-
   const { activeIndex: menuActiveIndex } = useKeyboardNavigation(actionsMenuRef, {
     isActive: isOpen,
-    onClose: handleActionsMenuClose,
-    onSelect: handleMenuItemSelect
+    onClose: handleActionsMenuClose
   });
 
   // Get enabled cloud storage providers
@@ -145,7 +97,8 @@ function ChatInputActionsMenu({
   // Tool grouping configuration (websearch is now handled via app.websearch config, not app.tools)
   const TOOL_GROUPS = {};
 
-  // Load tools and workflow metadata when component mounts
+  // Load tool metadata when component mounts. Workflows live in app.workflows now
+  // and are triggered via @mentions, so they are intentionally not surfaced here.
   useEffect(() => {
     const loadTools = async () => {
       if (!app?.tools || app.tools.length === 0) return;
@@ -153,38 +106,7 @@ function ChatInputActionsMenu({
       try {
         setToolsLoading(true);
         const tools = await fetchToolsBasic();
-        const allTools = [...(tools || [])];
-
-        // Fetch workflow metadata for workflow tool entries
-        const hasWorkflowTools = app.tools.some(
-          t => typeof t === 'string' && t.startsWith('workflow:')
-        );
-        // Only fetch workflows if feature is enabled
-        if (hasWorkflowTools && featureFlags.isEnabled('workflows', true)) {
-          try {
-            const { data: workflows } = await apiClient.get('/workflows');
-            if (Array.isArray(workflows)) {
-              const lang = t('common.language', 'en');
-              for (const wf of workflows) {
-                const wfName = typeof wf.name === 'object' ? wf.name[lang] || wf.name.en : wf.name;
-                const wfDesc =
-                  typeof wf.description === 'object'
-                    ? wf.description[lang] || wf.description.en
-                    : wf.description;
-                // Register under both the app.tools key and the runtime tool ID
-                allTools.push({
-                  id: `workflow:${wf.id}`,
-                  name: wfName || wf.id,
-                  description: wfDesc
-                });
-              }
-            }
-          } catch {
-            // Workflows endpoint may not be available — fall back to raw IDs
-          }
-        }
-
-        setAvailableTools(allTools);
+        setAvailableTools(tools || []);
       } catch (error) {
         console.error('Failed to fetch tools:', error);
         setAvailableTools([]);
@@ -194,7 +116,7 @@ function ChatInputActionsMenu({
     };
 
     loadTools();
-  }, [app?.tools, t, featureFlags]);
+  }, [app?.tools]);
 
   // Close dropdown when clicking outside
   useEffect(() => {
@@ -274,26 +196,45 @@ function ChatInputActionsMenu({
   const toolCount = app?.tools?.length || 0;
   const enabledCount = hasTools ? app.tools.filter(t => enabledTools.includes(t)).length : 0;
   const hasWebsearch = app?.websearch?.enabled === true && onWebsearchEnabledChange !== null;
+  const hasTranscription = transcriptionAvailable === true && onTranscriptionEnabledChange !== null;
+
+  // Local upload covers the paper-clip / drop-zone affordance. Cloud storage
+  // providers are rendered separately so they must remain available even when
+  // local upload is disabled (issue #1426).
+  const localUploadEnabled = uploadConfig?.localUploadEnabled === true;
+  const hasCloudProviders = enabledCloudProviders.length > 0;
 
   // Count quick actions (non-tools actions)
   const quickActionCount =
-    (uploadConfig?.enabled === true ? 1 : 0) +
+    (localUploadEnabled ? 1 : 0) +
     (magicPromptEnabled && !showUndoMagicPrompt ? 1 : 0) +
     (showUndoMagicPrompt ? 1 : 0) +
     (onVoiceInput ? 1 : 0);
 
   // Check if we have any actions to show
-  const hasActions = hasTools || hasWebsearch || quickActionCount > 0;
+  const hasHostContextToggles = hostContextToggles.length > 0;
+  const hasActions =
+    hasTools ||
+    hasWebsearch ||
+    hasTranscription ||
+    hasHostContextToggles ||
+    hasCloudProviders ||
+    quickActionCount > 0;
 
   if (!hasActions) return null;
 
   // Single action optimization: if we have exactly one action and no tools,
   // render that action directly without a menu
-  const totalActions = quickActionCount + (hasTools ? 1 : 0) + (hasWebsearch ? 1 : 0);
+  const totalActions =
+    quickActionCount +
+    (hasTools ? 1 : 0) +
+    (hasWebsearch ? 1 : 0) +
+    (hasTranscription ? 1 : 0) +
+    (hasHostContextToggles ? 1 : 0);
 
-  if (totalActions === 1 && quickActionCount === 1 && !hasTools) {
+  if (totalActions === 1 && quickActionCount === 1 && !hasTools && !hasCloudProviders) {
     // Render the single action directly
-    if (uploadConfig?.enabled === true) {
+    if (localUploadEnabled) {
       return (
         <button
           type="button"
@@ -354,7 +295,7 @@ function ChatInputActionsMenu({
   // getNavigableElements discovers, so React-controlled tabIndex agrees with the
   // hook's activeIndex (prevents roving tabindex from being overwritten on re-render).
   const menuNavItems = [];
-  if (uploadConfig?.enabled === true && !(disabled || isProcessing)) menuNavItems.push('upload');
+  if (localUploadEnabled && !(disabled || isProcessing)) menuNavItems.push('upload');
   if (magicPromptEnabled && !showUndoMagicPrompt && !(disabled || isProcessing))
     menuNavItems.push('magic');
   if (showUndoMagicPrompt && !(disabled || isProcessing)) menuNavItems.push('undo');
@@ -366,14 +307,25 @@ function ChatInputActionsMenu({
   individual.forEach(id => menuNavItems.push(`tool-${id}`));
   const navTabIndex = key => (menuNavItems.indexOf(key) === menuActiveIndex ? 0 : -1);
 
+  // On desktop (md:), check if menu would be empty
+  // Quick Actions and Image Generation are hidden on desktop with md:hidden
+  // So only Cloud Storage, Web Search, and Tools remain visible on desktop
+  const hasDesktopMenuContent =
+    enabledCloudProviders.length > 0 ||
+    hasWebsearch ||
+    hasTranscription ||
+    hasTools ||
+    hasHostContextToggles;
+
   return (
     <div className="relative" ref={dropdownRef}>
+      {/* Show + button on mobile always, on desktop only if menu has content */}
       <button
         type="button"
         onClick={() => setIsOpen(!isOpen)}
         className={`p-2 rounded-lg hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors ${
           isOpen ? 'bg-gray-100 dark:bg-gray-700' : ''
-        }`}
+        } md:${hasDesktopMenuContent ? 'block' : 'hidden'}`}
         title={t('chatActions.menu', 'Actions menu')}
         aria-label={t('chatActions.menu', 'Actions menu')}
       >
@@ -390,13 +342,13 @@ function ChatInputActionsMenu({
           aria-label={t('chatActions.menu', 'Actions menu')}
           className="absolute bottom-full left-0 mb-2 w-80 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg shadow-lg z-50 max-h-96 overflow-y-auto"
         >
-          {/* Quick Actions Section */}
-          <div className="p-3 border-b border-gray-200 dark:border-gray-700">
+          {/* Quick Actions Section - Hidden on desktop (md:) since actions are shown inline */}
+          <div className="md:hidden p-3 border-b border-gray-200 dark:border-gray-700">
             <h3 className="text-sm font-semibold text-gray-900 dark:text-gray-100 mb-2">
               {t('chatActions.quickActions', 'Quick Actions')}
             </h3>
             <div className="flex flex-wrap gap-2">
-              {uploadConfig?.enabled === true && (
+              {localUploadEnabled && (
                 <button
                   type="button"
                   role="menuitem"
@@ -481,9 +433,6 @@ function ChatInputActionsMenu({
           {/* Cloud Storage Providers Section */}
           {enabledCloudProviders.length > 0 && (
             <div className="p-3 border-b border-gray-200 dark:border-gray-700">
-              <h3 className="text-sm font-semibold text-gray-900 dark:text-gray-100 mb-3">
-                {t('cloudStorage.providers', 'Cloud Storage')}
-              </h3>
               <div className="space-y-2">
                 {enabledCloudProviders.map(provider => (
                   <button
@@ -498,7 +447,7 @@ function ChatInputActionsMenu({
                     disabled={disabled || isProcessing}
                     className="w-full flex items-center p-3 hover:bg-gray-50 dark:hover:bg-gray-700 focus:bg-gray-50 dark:focus:bg-gray-700 focus:ring-2 focus:ring-indigo-500 focus:ring-inset rounded-lg disabled:opacity-50 transition-colors text-left"
                   >
-                    <div className="flex-shrink-0 w-10 h-10 flex items-center justify-center bg-blue-100 dark:bg-blue-900 rounded-lg">
+                    <div className="shrink-0 w-10 h-10 flex items-center justify-center bg-blue-100 dark:bg-blue-900 rounded-lg">
                       <Icon name="cloud" size="md" className="text-blue-600 dark:text-blue-300" />
                     </div>
                     <div className="ml-3 flex-1 min-w-0">
@@ -507,8 +456,12 @@ function ChatInputActionsMenu({
                       </div>
                       <div className="text-xs text-gray-500 dark:text-gray-400 mt-0.5">
                         {provider.type === 'office365'
-                          ? t('cloudStorage.office365', 'Microsoft Office 365')
-                          : t('cloudStorage.googleDrive', 'Google Drive')}
+                          ? t('admin.cloudStorage.office365', 'Microsoft Office 365')
+                          : provider.type === 'googledrive'
+                            ? t('admin.cloudStorage.googledrive', 'Google Drive')
+                            : provider.type === 'nextcloud'
+                              ? t('admin.cloudStorage.nextcloud', 'Nextcloud')
+                              : provider.type}
                       </div>
                     </div>
                     <Icon
@@ -522,14 +475,55 @@ function ChatInputActionsMenu({
             </div>
           )}
 
+          {/* Host context section — Outlook taskpane / browser extension */}
+          {hostContextToggles.length > 0 && (
+            <div
+              className={`p-3 ${
+                hasTools || hasWebsearch ? 'border-b border-gray-200 dark:border-gray-700' : ''
+              }`}
+            >
+              <h3 className="text-sm font-semibold text-gray-900 dark:text-gray-100 mb-2">
+                {t('chat.input.contextSection', 'Message context')}
+              </h3>
+              <div className="space-y-1">
+                {hostContextToggles.map(toggle => {
+                  const enabled = hostContextFlags?.[toggle.key] ?? toggle.defaultEnabled ?? true;
+                  return (
+                    <div
+                      key={toggle.key}
+                      className="flex items-center justify-between p-2 hover:bg-gray-50 dark:hover:bg-gray-700 rounded-lg"
+                    >
+                      <div className="flex-1 min-w-0 mr-3">
+                        <div className="text-sm font-medium text-gray-900 dark:text-gray-100">
+                          {toggle.label}
+                        </div>
+                        {toggle.description && (
+                          <div className="text-xs text-gray-500 dark:text-gray-400 mt-0.5">
+                            {toggle.description}
+                          </div>
+                        )}
+                      </div>
+                      <label className="relative inline-flex items-center cursor-pointer">
+                        <input
+                          type="checkbox"
+                          checked={enabled}
+                          onChange={e => onHostContextFlagChange?.(toggle.key, e.target.checked)}
+                          className="sr-only peer"
+                        />
+                        <div className="w-11 h-6 bg-gray-200 peer-focus:outline-hidden peer-focus:ring-4 peer-focus:ring-indigo-300 dark:peer-focus:ring-indigo-800 rounded-full peer dark:bg-gray-700 peer-checked:after:translate-x-full peer-checked:rtl:after:-translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:inset-s-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all dark:border-gray-600 peer-checked:bg-indigo-600"></div>
+                      </label>
+                    </div>
+                  );
+                })}
+              </div>
+            </div>
+          )}
+
           {/* Web Search Section */}
           {hasWebsearch && (
             <div
               className={`p-3 ${hasTools ? 'border-b border-gray-200 dark:border-gray-700' : ''}`}
             >
-              <h3 className="text-sm font-semibold text-gray-900 dark:text-gray-100 mb-3">
-                {t('websearch.title', 'Web Search')}
-              </h3>
               <div
                 role="menuitemcheckbox"
                 aria-checked={websearchEnabled}
@@ -551,15 +545,50 @@ function ChatInputActionsMenu({
                     {t('websearch.toggleDescription', 'Search the web for up-to-date information')}
                   </div>
                 </div>
-                <label className="relative inline-flex items-center cursor-pointer pointer-events-none">
+                {/* Purely visual switch: the row owns the role, the state and
+                    the interaction, so the checkbox only drives the `peer-*`
+                    styling and is kept out of the tab order, out of the
+                    accessibility tree and out of the click target. */}
+                <span className="relative inline-flex items-center pointer-events-none">
                   <input
                     type="checkbox"
                     checked={websearchEnabled}
-                    onChange={e => onWebsearchEnabledChange?.(e.target.checked)}
-                    className="sr-only peer"
+                    readOnly
                     tabIndex={-1}
+                    aria-hidden="true"
+                    className="sr-only peer"
                   />
-                  <div className="w-11 h-6 bg-gray-200 peer-focus:outline-none peer-focus:ring-4 peer-focus:ring-indigo-300 dark:peer-focus:ring-indigo-800 rounded-full peer dark:bg-gray-700 peer-checked:after:translate-x-full rtl:peer-checked:after:-translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:start-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all dark:border-gray-600 peer-checked:bg-indigo-600"></div>
+                  <div className="w-11 h-6 bg-gray-200 rounded-full peer dark:bg-gray-700 peer-checked:after:translate-x-full peer-checked:rtl:after:-translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:inset-s-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all dark:border-gray-600 peer-checked:bg-indigo-600"></div>
+                </span>
+              </div>
+            </div>
+          )}
+
+          {/* Transcription Section */}
+          {hasTranscription && (
+            <div
+              className={`p-3 ${hasTools || hasWebsearch ? 'border-b border-gray-200 dark:border-gray-700' : ''}`}
+            >
+              <div className="flex items-center justify-between p-2 hover:bg-gray-50 dark:hover:bg-gray-700 rounded-lg">
+                <div className="flex-1 min-w-0 mr-3">
+                  <div className="text-sm font-medium text-gray-900 dark:text-gray-100">
+                    {t('transcription.toggleLabel', 'Transcription')}
+                  </div>
+                  <div className="text-xs text-gray-500 dark:text-gray-400 mt-0.5">
+                    {t(
+                      'transcription.toggleDescription',
+                      'Transcribe uploaded audio/video with the transcription model instead of the chat model'
+                    )}
+                  </div>
+                </div>
+                <label className="relative inline-flex items-center cursor-pointer">
+                  <input
+                    type="checkbox"
+                    checked={transcriptionEnabled}
+                    onChange={e => onTranscriptionEnabledChange?.(e.target.checked)}
+                    className="sr-only peer"
+                  />
+                  <div className="w-11 h-6 bg-gray-200 peer-focus:outline-hidden peer-focus:ring-4 peer-focus:ring-indigo-300 dark:peer-focus:ring-indigo-800 rounded-full peer dark:bg-gray-700 peer-checked:after:translate-x-full peer-checked:rtl:after:-translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:inset-s-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all dark:border-gray-600 peer-checked:bg-indigo-600"></div>
                 </label>
               </div>
             </div>
@@ -629,7 +658,7 @@ function ChatInputActionsMenu({
                             onChange={() => toggleTool(group.id, true, group.matchedTools)}
                             className="sr-only peer"
                           />
-                          <div className="w-11 h-6 bg-gray-200 peer-focus:outline-none peer-focus:ring-4 peer-focus:ring-indigo-300 dark:peer-focus:ring-indigo-800 rounded-full peer dark:bg-gray-700 peer-checked:after:translate-x-full rtl:peer-checked:after:-translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:start-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all dark:border-gray-600 peer-checked:bg-indigo-600"></div>
+                          <div className="w-11 h-6 bg-gray-200 peer-focus:outline-hidden peer-focus:ring-4 peer-focus:ring-indigo-300 dark:peer-focus:ring-indigo-800 rounded-full peer dark:bg-gray-700 peer-checked:after:translate-x-full peer-checked:rtl:after:-translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:inset-s-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all dark:border-gray-600 peer-checked:bg-indigo-600"></div>
                         </label>
                       </div>
                     );
@@ -677,7 +706,7 @@ function ChatInputActionsMenu({
                             onChange={() => toggleTool(toolId)}
                             className="sr-only peer"
                           />
-                          <div className="w-11 h-6 bg-gray-200 peer-focus:outline-none peer-focus:ring-4 peer-focus:ring-indigo-300 dark:peer-focus:ring-indigo-800 rounded-full peer dark:bg-gray-700 peer-checked:after:translate-x-full rtl:peer-checked:after:-translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:start-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all dark:border-gray-600 peer-checked:bg-indigo-600"></div>
+                          <div className="w-11 h-6 bg-gray-200 peer-focus:outline-hidden peer-focus:ring-4 peer-focus:ring-indigo-300 dark:peer-focus:ring-indigo-800 rounded-full peer dark:bg-gray-700 peer-checked:after:translate-x-full peer-checked:rtl:after:-translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:inset-s-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all dark:border-gray-600 peer-checked:bg-indigo-600"></div>
                         </label>
                       </div>
                     );

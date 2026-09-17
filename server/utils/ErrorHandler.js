@@ -218,6 +218,32 @@ class ErrorHandler {
         language
       );
       errorCode = 'AUTH_FAILED';
+    } else if (llmResponse.status === 404) {
+      // Model not found error - extract model name from error body if available
+      let modelName = model.modelId;
+      try {
+        const errorData = JSON.parse(errorBody);
+        // Try to extract the model name from various error formats
+        if (errorData.error?.message) {
+          const match = errorData.error.message.match(/model `([^`]+)`/i);
+          if (match) {
+            modelName = match[1];
+          }
+        }
+      } catch {
+        // Ignore JSON parse errors
+      }
+
+      errorMessage = await this.getLocalizedError(
+        'modelNotAvailable',
+        {
+          modelId: modelName,
+          provider: model.provider,
+          configuredModel: model.modelId
+        },
+        language
+      );
+      errorCode = 'MODEL_NOT_FOUND';
     } else if (llmResponse.status === 400 || llmResponse.status === 413) {
       const errorBodyLower = errorBody.toLowerCase();
 
@@ -243,7 +269,7 @@ class ErrorHandler {
           {
             provider: model.provider,
             modelId: model.id,
-            tokenLimit: model.tokenLimit || 'unknown'
+            contextWindow: model.contextWindow || 'unknown'
           },
           language
         );
@@ -272,7 +298,7 @@ class ErrorHandler {
           {
             provider: model.provider,
             modelId: model.id,
-            tokenLimit: model.tokenLimit || 'unknown'
+            contextWindow: model.contextWindow || 'unknown'
           },
           language
         );

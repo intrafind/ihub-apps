@@ -11,18 +11,19 @@
   },
   "url": "https://generativelanguage.googleapis.com/v1beta/models/gemini-3-pro-image-preview:streamGenerateContent",
   "provider": "google",
-  "tokenLimit": 32768,
+  "contextWindow": 32768,
+  "maxOutputTokens": 8192,
   "supportsTools": true,
   "supportsImages": true,
   "supportsImageGeneration": true,
   "imageGeneration": {
     "aspectRatio": "1:1",
-    "imageSize": "1K",
+    "quality": "Low",
     "maxReferenceImages": 14
   },
   "thinking": {
     "enabled": true,
-    "budget": -1,
+    "level": "high",
     "thoughts": true
   },
   "enabled": true,

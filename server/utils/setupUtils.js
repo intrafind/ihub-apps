@@ -1,3 +1,22 @@
+/**
+ * Seeds an installation's contents directory from `server/defaults`.
+ *
+ * This is the one part of the configuration plumbing that stays on raw `fs`,
+ * for the same reason the bootstrap read of `platform.json` does: it runs
+ * inside `prepareContents()`, before the migration runner and long before
+ * `bootstrapStorage()`, so there is no storage provider to write through —
+ * and the files it copies may be the very `platform.json` the provider is
+ * configured from.
+ *
+ * Its shape is wrong for a document store besides. It walks two directory
+ * trees and copies whatever it finds — markdown sources, JSX renderers,
+ * nested skill packages, images — comparing raw bytes rather than parsed
+ * JSON, and it must not rewrite a file whose content already matches. A
+ * document API addresses one JSON document at a time and cannot express
+ * that. See the exclusion list in `docs/storage.md`.
+ *
+ * @module utils/setupUtils
+ */
 import fs from 'fs/promises';
 import path from 'path';
 import { getRootDir } from '../pathUtils.js';
@@ -126,6 +145,71 @@ export async function copyDefaultConfiguration() {
 }
 
 /**
+ * Files that are generated at build time (not user-editable) and must be kept
+ * in sync with server/defaults on every startup. Unlike copyMissingFiles,
+ * these are overwritten in contents whenever the shipped default differs, so
+ * regenerated content (e.g. the consolidated documentation) is never left
+ * stale after an upgrade. Paths are relative to both server/defaults and the
+ * contents directory.
+ */
+const MANAGED_DEFAULT_FILES = ['sources/ihub-documentation.md'];
+
+/**
+ * Refreshes build-managed default files into the contents directory.
+ * Overwrites only when the content differs to avoid needless writes (and to
+ * keep the filesystem source cache, which is keyed on mtime, from churning).
+ * Missing source files (e.g. a dev checkout where docs were never exported)
+ * are skipped with a warning.
+ * @returns {Promise<number>} Number of files refreshed
+ */
+export async function syncManagedDefaultFiles() {
+  const rootDir = getRootDir();
+  const defaultConfigPath = path.join(rootDir, 'server', 'defaults');
+  const contentsPath = path.join(rootDir, config.CONTENTS_DIR);
+  let updated = 0;
+
+  for (const relPath of MANAGED_DEFAULT_FILES) {
+    const srcPath = path.join(defaultConfigPath, relPath);
+    const destPath = path.join(contentsPath, relPath);
+
+    try {
+      const srcContent = await fs.readFile(srcPath);
+
+      let destContent = null;
+      try {
+        destContent = await fs.readFile(destPath);
+      } catch (error) {
+        if (error.code !== 'ENOENT') throw error;
+      }
+
+      if (destContent && srcContent.equals(destContent)) {
+        continue; // Already up to date
+      }
+
+      await fs.mkdir(path.dirname(destPath), { recursive: true });
+      await fs.writeFile(destPath, srcContent);
+      updated++;
+      logger.info('Refreshed managed default file', { component: 'Setup', file: relPath });
+    } catch (error) {
+      if (error.code === 'ENOENT') {
+        logger.warn('Managed default file not found in defaults, skipping refresh', {
+          component: 'Setup',
+          file: relPath
+        });
+        continue;
+      }
+      logger.error('Failed to refresh managed default file', {
+        component: 'Setup',
+        file: relPath,
+        error
+      });
+    }
+  }
+
+  return updated;
+}
+
+/**
  * Performs initial setup by copying any missing default configuration files
  * This function should be called during server startup
  * @returns {Promise<boolean>} True if any files were copied
@@ -143,6 +227,16 @@ export async function performInitialSetup() {
     } else {
       logger.info('All default configuration files already exist, no setup needed', {
         component: 'Setup'
+      });
+    }
+
+    // Always keep build-managed (generated) default files in sync, even when
+    // the contents directory already exists from a previous run.
+    const refreshed = await syncManagedDefaultFiles();
+    if (refreshed > 0) {
+      logger.info('Refreshed build-managed default files', {
+        component: 'Setup',
+        count: refreshed
       });
     }
 

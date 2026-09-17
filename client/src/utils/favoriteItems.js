@@ -50,6 +50,17 @@ export const createFavoriteItemHelpers = storageKey => {
       }
 
       localStorage.setItem(storageKey, JSON.stringify(newFavorites));
+      // Notify other mounted components (e.g. the sidebar and the apps list)
+      // so they can refresh their favorite state without a page reload.
+      try {
+        window.dispatchEvent(
+          new CustomEvent('ihub:favorites-changed', {
+            detail: { storageKey, favorites: newFavorites }
+          })
+        );
+      } catch {
+        // Ignore environments without window/CustomEvent (e.g. SSR/tests)
+      }
       return !isCurrentlyFavorite; // Return the new status
     } catch (error) {
       console.error(`Error toggling favorite item for ${storageKey}:`, error);

@@ -1,0 +1,21 @@
+{
+  "id": "bedrock-pixtral-large",
+  "modelId": "mistral.pixtral-large-2502-v1:0",
+  "name": {
+    "en": "Pixtral Large (Bedrock)",
+    "de": "Pixtral Large (Bedrock)"
+  },
+  "description": {
+    "en": "Mistral Pixtral Large via AWS Bedrock — multimodal model with vision and tool calling.",
+    "de": "Mistral Pixtral Large über AWS Bedrock — multimodales Modell mit Vision und Tool-Aufrufen."
+  },
+  "provider": "bedrock",
+  "contextWindow": 128000,
+  "maxOutputTokens": 8000,
+  "supportsTools": true,
+  "supportsVision": true,
+  "enabled": false,
+  "config": {
+    "region": "eu-central-1"
+  }
+}

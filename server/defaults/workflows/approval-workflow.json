@@ -41,7 +41,7 @@
     },
     {
       "id": "research",
-      "type": "agent",
+      "type": "prompt",
       "name": {
         "en": "Research Topic",
         "de": "Thema recherchieren"
@@ -57,7 +57,7 @@
           "de": "[Schritt {{_currentStep}}/{{_totalNodes}}, Iteration {{_currentNodeIteration}}] Recherchieren Sie das folgende Thema und liefern Sie 3-5 Kernpunkte: {{topic}}\n\n{{#if humanResponse_approval.data.feedback}}Vorheriges Feedback zu berücksichtigen: {{humanResponse_approval.data.feedback}}{{/if}}"
         },
         "outputVariable": "research_results",
-        "tools": ["googleSearch"]
+        "tools": ["webSearch"]
       }
     },
     {
@@ -113,7 +113,7 @@
     },
     {
       "id": "summarize",
-      "type": "agent",
+      "type": "prompt",
       "name": {
         "en": "Create Summary",
         "de": "Zusammenfassung erstellen"

@@ -2,6 +2,7 @@ import crypto from 'crypto';
 import tokenStorage from '../TokenStorageService.js';
 import { httpFetch } from '../../utils/httpConfig.js';
 import configCache from '../../configCache.js';
+import credentialService from '../CredentialService.js';
 import logger from '../../utils/logger.js';
 
 /**
@@ -36,7 +37,7 @@ class JiraService {
    */
   isConfigured() {
     const jiraConfig = this.getConfig();
-    return Boolean(jiraConfig.enabled && jiraConfig.clientId && jiraConfig.clientSecret);
+    return Boolean(jiraConfig.enabled && jiraConfig.clientId && jiraConfig.clientSecretRef);
   }
 
   /**
@@ -75,7 +76,7 @@ class JiraService {
       const tokenData = new URLSearchParams({
         grant_type: 'authorization_code',
         client_id: jiraConfig.clientId,
-        client_secret: jiraConfig.clientSecret,
+        client_secret: credentialService.resolveSecret(jiraConfig.clientSecretRef),
         code: authCode,
         redirect_uri: jiraConfig.redirectUri
       });
@@ -187,7 +188,7 @@ class JiraService {
       const tokenData = new URLSearchParams({
         grant_type: 'refresh_token',
         client_id: jiraConfig.clientId,
-        client_secret: jiraConfig.clientSecret,
+        client_secret: credentialService.resolveSecret(jiraConfig.clientSecretRef),
         refresh_token: refreshToken
       });
 

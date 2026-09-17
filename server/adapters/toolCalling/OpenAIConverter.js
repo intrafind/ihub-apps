@@ -12,6 +12,8 @@ import {
   normalizeFinishReason,
   sanitizeSchemaForProvider
 } from './GenericToolCalling.js';
+import { isPlausibleToolName, validateProviderToolName } from './toolNameValidator.js';
+import { buildThoughtSignatureExtraContent, extractThoughtSignature } from './thoughtSignatures.js';
 import logger from '../../utils/logger.js';
 import { parseJsonAsync } from '../../utils/asyncJson.js';
 
@@ -108,7 +110,7 @@ export function convertGenericToolCallsToOpenAI(genericToolCalls = []) {
       args = JSON.stringify(toolCall.arguments);
     }
 
-    return {
+    const openAIToolCall = {
       index: toolCall.index || 0,
       id: toolCall.id,
       type: 'function',
@@ -117,6 +119,20 @@ export function convertGenericToolCallsToOpenAI(genericToolCalls = []) {
         arguments: args
       }
     };
+
+    // Gemini thinking models require their thought signature back on the same
+    // function call in the next turn, and the OpenAI schema has nowhere to put
+    // it. Google's own compatibility layer nests it under
+    // `extra_content.google.thought_signature`, so we emit the same shape —
+    // callers that echo the tool call verbatim keep multi-turn tool calling
+    // working. Only Gemini responses ever set this metadata, so the field never
+    // appears for other providers.
+    const thoughtSignature = extractThoughtSignature(toolCall);
+    if (thoughtSignature) {
+      openAIToolCall.extra_content = buildThoughtSignatureExtraContent(thoughtSignature);
+    }
+
+    return openAIToolCall;
   });
 }
 
@@ -181,7 +197,7 @@ export function convertOpenAIToolCallsToGeneric(openaiToolCalls = []) {
       const toolIndex = toolCall.index !== undefined ? toolCall.index : index;
 
       // For streaming chunks with empty names, create minimal objects to avoid overwriting
-      // the tool name during merging in ToolExecutor
+      // the tool name during merging in the tool-call accumulator
       if (!toolName && args.__raw_arguments !== undefined) {
         // This is a streaming chunk with arguments but no name
         // Create a minimal object that won't overwrite the existing tool name
@@ -197,20 +213,39 @@ export function convertOpenAIToolCallsToGeneric(openaiToolCalls = []) {
             rawArguments: argString
           },
           function: {
-            name: '', // Keep empty so ToolExecutor won't overwrite existing name
+            name: '', // Keep empty so the accumulator won't overwrite existing name
             arguments: argString
           }
         };
       }
 
+      // Accept back the Gemini thought signature we emit in
+      // `extra_content.google.thought_signature`, so an OpenAI-shaped tool call
+      // that originated from a Gemini model keeps it in the generic format.
+      const thoughtSignature = extractThoughtSignature(toolCall);
+
       return createGenericToolCall(toolId, toolName, args, toolIndex, {
         originalFormat: 'openai',
         type: toolCall.type || 'function',
         // Keep raw arguments for streaming merging
-        rawArguments: argString
+        rawArguments: argString,
+        ...(thoughtSignature ? { thoughtSignature } : {})
       });
     })
     .filter(toolCall => {
+      // Drop calls whose name is fully populated but malformed (chain-of-thought
+      // leaked into the name field). Streaming chunks with empty names pass
+      // through; the final accumulated call is re-validated below.
+      if (toolCall.name && !isPlausibleToolName(toolCall.name)) {
+        logger.warn('Dropping OpenAI tool call with malformed name', {
+          component: 'OpenAIConverter',
+          name:
+            typeof toolCall.name === 'string' && toolCall.name.length > 80
+              ? `${toolCall.name.slice(0, 80)}…(${toolCall.name.length})`
+              : toolCall.name
+        });
+        return false;
+      }
       // Filter out tool calls that are completely empty (likely malformed streaming chunks)
       // Keep tool calls that have at least a name, ID, or meaningful content
       // Also keep streaming chunks that have arguments
@@ -275,8 +310,15 @@ export async function convertOpenAIResponseToGeneric(data, streamId = 'default')
 
     // Handle full response object (non-streaming)
     if (parsed.choices && parsed.choices[0]?.message) {
-      if (parsed.choices[0].message.content) {
-        result.content.push(parsed.choices[0].message.content);
+      const message = parsed.choices[0].message;
+      if (message.content) {
+        result.content.push(message.content);
+      }
+      // Reasoning text from OpenAI-compatible endpoints (vLLM/DeepSeek/OpenRouter):
+      // `reasoning_content` (DeepSeek/legacy vLLM) or `reasoning` (current vLLM).
+      const reasoning = message.reasoning_content ?? message.reasoning;
+      if (reasoning) {
+        result.thinking.push(reasoning);
       }
       if (parsed.choices[0].message.tool_calls) {
         result.tool_calls.push(
@@ -293,6 +335,10 @@ export async function convertOpenAIResponseToGeneric(data, streamId = 'default')
       const delta = parsed.choices[0].delta;
       if (delta.content) {
         result.content.push(delta.content);
+      }
+      const reasoning = delta.reasoning_content ?? delta.reasoning;
+      if (reasoning) {
+        result.thinking.push(reasoning);
       }
       if (delta.tool_calls) {
         // Process each tool call delta - accumulate in state
@@ -357,7 +403,7 @@ export async function convertOpenAIResponseToGeneric(data, streamId = 'default')
             } catch (error) {
               logger.warn('Failed to parse accumulated OpenAI tool arguments', {
                 component: 'OpenAIConverter',
-                error: e
+                error
               });
               parsedArgs = { __raw_arguments: pending.arguments };
             }
@@ -367,12 +413,21 @@ export async function convertOpenAIResponseToGeneric(data, streamId = 'default')
               toolName: pending.name,
               parsedArgs
             });
-            result.tool_calls.push(
-              createGenericToolCall(pending.id, pending.name, parsedArgs, index, {
-                originalFormat: 'openai',
-                type: 'function'
+            if (
+              validateProviderToolName({
+                name: pending.name,
+                provider: 'OpenAI',
+                log: logger,
+                result
               })
-            );
+            ) {
+              result.tool_calls.push(
+                createGenericToolCall(pending.id, pending.name, parsedArgs, index, {
+                  originalFormat: 'openai',
+                  type: 'function'
+                })
+              );
+            }
           }
         }
       }
@@ -389,6 +444,15 @@ export async function convertOpenAIResponseToGeneric(data, streamId = 'default')
   }
 
   return result;
+}
+
+/**
+ * Discard accumulated streaming state for a stream that errored or was aborted,
+ * so stale pending tool calls can't leak into a later, unrelated stream.
+ * @param {string} streamId - Stream identifier to clear
+ */
+export function clearOpenAIStreamingState(streamId = 'default') {
+  streamingState.delete(streamId);
 }
 
 /**

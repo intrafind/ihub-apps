@@ -4,8 +4,10 @@ import { useNavigate } from 'react-router-dom';
 import Icon from '../../../shared/components/Icon';
 import ExportDialog from './ExportDialog';
 import { useAuth } from '../../../shared/contexts/AuthContext';
+import useFeatureFlags from '../../../shared/hooks/useFeatureFlags';
 
 function ChatActionsMenu({
+  app,
   onClearChat,
   onToggleConfig,
   onShare,
@@ -20,14 +22,23 @@ function ChatActionsMenu({
   onToggleParameters,
   showCanvasButton = false,
   appId,
-  chatId
+  chatId,
+  // Compare mode toggle (parity with desktop header)
+  showCompareModeToggle = false,
+  compareModeActive = false,
+  onCompareModeChange,
+  compareModeDisabled = false
 }) {
   const { t } = useTranslation();
   const navigate = useNavigate();
   const { user } = useAuth();
+  const featureFlags = useFeatureFlags();
   const [open, setOpen] = useState(false);
   const [showExportDialog, setShowExportDialog] = useState(false);
   const menuRef = useRef(null);
+
+  // Check if export is enabled at both platform and app levels
+  const exportEnabled = featureFlags.isBothEnabled(app, 'export', true);
 
   useEffect(() => {
     const handleClick = e => {
@@ -50,7 +61,7 @@ function ChatActionsMenu({
         <Icon name="menu" size="sm" />
       </button>
       {open && (
-        <div className="absolute right-0 mt-2 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded shadow-lg z-20 min-w-40">
+        <div className="absolute right-0 mt-2 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-sm shadow-lg z-20 min-w-40">
           {user?.isAdmin && appId && (
             <button
               onClick={() => {
@@ -120,7 +131,31 @@ function ChatActionsMenu({
               <Icon name="share" size="sm" /> {t('pages.appChat.share', 'Share')}
             </button>
           )}
-          {messages && messages.length > 0 && exportSettings && (
+          {showCompareModeToggle && (
+            <button
+              onClick={() => {
+                if (compareModeDisabled) return;
+                onCompareModeChange?.(!compareModeActive);
+                setOpen(false);
+              }}
+              disabled={compareModeDisabled}
+              className={`w-full text-left px-3 py-2 text-sm flex items-center gap-2 whitespace-nowrap ${
+                compareModeDisabled
+                  ? 'opacity-50 cursor-not-allowed text-gray-500 dark:text-gray-400'
+                  : 'text-gray-700 dark:text-gray-200 hover:bg-gray-100 dark:hover:bg-gray-700'
+              }`}
+            >
+              <Icon
+                name="document-duplicate"
+                size="sm"
+                className={compareModeActive ? 'text-indigo-600 dark:text-indigo-400' : ''}
+              />
+              {compareModeActive
+                ? t('chat.compareMode.disable', 'Disable Compare Mode')
+                : t('chat.compareMode.toggle', 'Compare Mode')}
+            </button>
+          )}
+          {exportEnabled && messages && messages.length > 0 && exportSettings && (
             <>
               <div className="border-t border-gray-200 dark:border-gray-700 my-1"></div>
               <button
@@ -137,15 +172,17 @@ function ChatActionsMenu({
         </div>
       )}
 
-      {/* Export Dialog */}
-      <ExportDialog
-        isOpen={showExportDialog}
-        onClose={() => setShowExportDialog(false)}
-        messages={messages}
-        settings={exportSettings}
-        appId={appId}
-        chatId={chatId}
-      />
+      {/* Export Dialog - only render if export is enabled */}
+      {exportEnabled && (
+        <ExportDialog
+          isOpen={showExportDialog}
+          onClose={() => setShowExportDialog(false)}
+          messages={messages}
+          settings={exportSettings}
+          appId={appId}
+          chatId={chatId}
+        />
+      )}
     </div>
   );
 }

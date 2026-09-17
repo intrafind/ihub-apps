@@ -1,0 +1,22 @@
+{
+  "id": "gemini-3.5-transcribe",
+  "modelId": "gemini-3.5-transcribe",
+  "name": {
+    "en": "Gemini 3.5 Transcribe",
+    "de": "Gemini 3.5 Transcribe"
+  },
+  "description": {
+    "en": "Google's hosted speech-to-text for complete recordings, up to one hour of audio. Transcribes in a single request instead of streaming, so the transcript arrives at the end. The audio is uploaded to Google's Files API first and deleted again afterwards.",
+    "de": "Googles gehostete Spracherkennung für vollständige Aufnahmen mit bis zu einer Stunde Audio. Transkribiert in einer einzigen Anfrage statt im Stream, das Transkript erscheint daher am Ende. Das Audio wird zuvor in Googles Files API geladen und danach wieder gelöscht."
+  },
+  "url": "https://generativelanguage.googleapis.com",
+  "provider": "google-transcribe",
+  "modelType": "transcription",
+  "config": {
+    "mode": "smart",
+    "languageCodes": [],
+    "customVocabulary": []
+  },
+  "enabled": false,
+  "default": false
+}

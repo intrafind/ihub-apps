@@ -564,7 +564,7 @@ const UnifiedAdapterInterface = {
     }
 
     // Create request using the provider-specific adapter
-    return adapter.createCompletionRequest(model, formattedMessages.messages, apiKey, {
+    return await adapter.createCompletionRequest(model, formattedMessages.messages, apiKey, {
       tools,
       temperature,
       maxTokens,

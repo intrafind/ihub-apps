@@ -1,5 +1,37 @@
+import { Marked } from 'marked';
+import DOMPurify from 'dompurify';
 import { apiClient, streamingApiClient } from '../client';
 import { handleApiResponse } from '../utils/requestHandler';
+import { buildChatExportFilename, buildChatExportTitle } from '../../utils/exportFormats';
+
+// Isolated marked instance for static exports (PDF/HTML). It intentionally does
+// NOT use the shared interactive markdown renderer, which injects toolbar
+// buttons and mermaid placeholders that don't work in downloaded documents.
+// GFM is enabled so tables, lists, and code blocks render correctly.
+const exportMarked = new Marked({
+  gfm: true,
+  breaks: true,
+  pedantic: false
+});
+
+// Convert message markdown to sanitized HTML for export documents.
+const renderMarkdownForExport = content => {
+  if (!content) return '';
+  const html = exportMarked.parse(String(content));
+  return DOMPurify.sanitize(html, { USE_PROFILES: { html: true } });
+};
+
+// HTML-escape arbitrary text for safe interpolation into the export
+// document's <title>/<h1>. The doc title now includes the first user
+// message (via buildChatExportTitle), which is attacker-controlled and
+// must not be rendered as raw HTML.
+const escapeHtml = s =>
+  String(s ?? '')
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;')
+    .replace(/'/g, '&#39;');
 
 // Apps
 export const fetchApps = async (options = {}) => {
@@ -93,49 +125,130 @@ export const checkAppChatStatus = async (appId, chatId) => {
   );
 };
 
+// Print an HTML document via a hidden, same-origin iframe.
+//
+// We deliberately avoid `window.open()` here: inside sandboxed/embedded hosts
+// such as the Outlook taskpane and the browser-extension side panel, popups
+// are blocked and `window.open()` returns `null`. The previous implementation
+// then accessed `printWindow.document`, which crashed the whole export with
+// "null is not an object (evaluating '...document')". An offscreen iframe
+// prints the document in-place and works across those hosts.
+const printHtmlDocument = htmlContent =>
+  new Promise((resolve, reject) => {
+    const iframe = document.createElement('iframe');
+    iframe.setAttribute('aria-hidden', 'true');
+    iframe.style.position = 'fixed';
+    iframe.style.left = '-9999px';
+    iframe.style.width = '0';
+    iframe.style.height = '0';
+    iframe.style.border = '0';
+
+    let settled = false;
+    const removeFrame = () => setTimeout(() => iframe.remove(), 1000);
+
+    const triggerPrint = () => {
+      if (settled) return;
+      try {
+        const frameWindow = iframe.contentWindow;
+        if (!frameWindow) throw new Error('Print frame is unavailable');
+        settled = true;
+        frameWindow.focus();
+        frameWindow.print();
+        removeFrame();
+        resolve();
+      } catch (err) {
+        settled = true;
+        removeFrame();
+        reject(err);
+      }
+    };
+
+    iframe.onload = triggerPrint;
+    // Safety net in case `onload` never fires for the generated document.
+    setTimeout(triggerPrint, 1500);
+
+    document.body.appendChild(iframe);
+
+    // Prefer `srcdoc`; fall back to document.write for engines that ignore it.
+    try {
+      iframe.srcdoc = htmlContent;
+    } catch {
+      const doc = iframe.contentWindow?.document;
+      if (!doc) {
+        settled = true;
+        iframe.remove();
+        reject(new Error('Unable to initialise print frame'));
+        return;
+      }
+      doc.open();
+      doc.write(htmlContent);
+      doc.close();
+    }
+  });
+
 // Client-side PDF generation using browser print functionality
 export const exportChatToPDF = async (
   messages,
   settings,
   template = 'default',
   watermark = {},
-  appName = 'iHub Apps'
+  appName = 'iHub Apps',
+  appId = null,
+  chatId = null,
+  isSingleMessage = false
 ) => {
   if (!messages) {
     throw new Error('Missing required parameters');
   }
 
   // Generate HTML content for PDF
-  const htmlContent = generatePDFHTML(messages, settings, template, watermark, appName);
+  const htmlContent = generatePDFHTML(
+    messages,
+    settings,
+    template,
+    watermark,
+    appName,
+    isSingleMessage
+  );
 
-  // Create a new window for printing
-  const printWindow = window.open('', '_blank');
-  printWindow.document.write(htmlContent);
-  printWindow.document.close();
-
-  // Wait for content to load
-  await new Promise(resolve => {
-    printWindow.onload = resolve;
-    setTimeout(resolve, 1000); // Fallback timeout
+  const filename = buildChatExportFilename({
+    format: 'pdf',
+    appName,
+    appId,
+    messages,
+    isSingleMessage
   });
 
-  // Focus and print
-  printWindow.focus();
-  printWindow.print();
-
-  // Close after a delay
-  setTimeout(() => {
-    printWindow.close();
-  }, 1000);
-
-  const timestamp = new Date().toISOString().slice(0, 19).replace(/:/g, '-');
-  const filename = `chat-${appName.replace(/[^a-z0-9]/gi, '-').toLowerCase()}-${timestamp}.pdf`;
-
-  return { success: true, filename };
+  try {
+    await printHtmlDocument(htmlContent);
+    return { success: true, filename };
+  } catch (err) {
+    // Printing is unavailable in this host (e.g. a locked-down embedded
+    // sandbox). Fall back to downloading the rendered HTML so the user can
+    // still open and print it themselves, instead of hitting a hard crash.
+    console.warn('PDF print unavailable, falling back to HTML download:', err);
+    const htmlFilename = buildChatExportFilename({
+      format: 'html',
+      appName,
+      appId,
+      messages,
+      isSingleMessage
+    });
+    downloadFile(htmlContent, htmlFilename, 'text/html');
+    return { success: true, filename: htmlFilename, fallback: 'html' };
+  }
 };
 
 // Generate HTML content for PDF
-const generatePDFHTML = (messages, settings, template, watermark, appName) => {
+const generatePDFHTML = (
+  messages,
+  settings,
+  template,
+  watermark,
+  appName,
+  isSingleMessage = false
+) => {
+  const docTitle = buildChatExportTitle({ appName, messages, isSingleMessage });
   const styles = getTemplateStyles(template);
   const watermarkStyle = getWatermarkStyle(watermark);
 
@@ -147,73 +260,7 @@ const generatePDFHTML = (messages, settings, template, watermark, appName) => {
     }
   };
 
-  const formatContent = content => {
-    if (!content) return '';
-
-    // Split content into lines to process block-level elements
-    const lines = content.split('\n');
-    const processedLines = [];
-
-    for (let i = 0; i < lines.length; i++) {
-      const line = lines[i];
-      const trimmedLine = line.trim();
-
-      // Handle horizontal rules: ***, ---, ___ (three or more)
-      if (/^(\*{3,}|-{3,}|_{3,})$/.test(trimmedLine)) {
-        processedLines.push('<hr>');
-        continue;
-      }
-
-      // Handle headings (# through ######)
-      const headingMatch = trimmedLine.match(/^(#{1,6})\s+(.+)$/);
-      if (headingMatch) {
-        const level = headingMatch[1].length;
-        const text = headingMatch[2];
-        processedLines.push(`<h${level}>${processInlineMarkdown(text)}</h${level}>`);
-        continue;
-      }
-
-      // Handle unordered lists (* - +) - must check AFTER horizontal rule
-      const unorderedListMatch = trimmedLine.match(/^[\*\-\+]\s+(.+)$/);
-      if (unorderedListMatch) {
-        processedLines.push(`<li>${processInlineMarkdown(unorderedListMatch[1])}</li>`);
-        continue;
-      }
-
-      // Handle ordered lists (1. 2. etc.)
-      const orderedListMatch = trimmedLine.match(/^(\d+)\.\s+(.+)$/);
-      if (orderedListMatch) {
-        processedLines.push(
-          `<li class="ordered">${processInlineMarkdown(orderedListMatch[2])}</li>`
-        );
-        continue;
-      }
-
-      // Empty line creates paragraph break
-      if (trimmedLine === '') {
-        if (processedLines.length > 0 && processedLines[processedLines.length - 1] !== '<br>') {
-          processedLines.push('<br>');
-        }
-        continue;
-      }
-
-      // Regular paragraph text
-      processedLines.push(processInlineMarkdown(line));
-      processedLines.push('<br>');
-    }
-
-    // Join with line breaks and wrap in paragraph tags
-    return processedLines.join('');
-  };
-
-  // Helper function to process inline markdown (bold, italic, code)
-  const processInlineMarkdown = text => {
-    return text
-      .replace(/\*\*\*([\s\S]*?)\*\*\*/g, '<strong><em>$1</em></strong>') // ***bold italic***
-      .replace(/\*\*([\s\S]*?)\*\*/g, '<strong>$1</strong>') // **bold**
-      .replace(/\*([^\*\n]+?)\*/g, '<em>$1</em>') // *italic*
-      .replace(/`([^`]+?)`/g, '<code>$1</code>'); // `code`
-  };
+  const formatContent = renderMarkdownForExport;
 
   const messagesHTML = messages
     .filter(msg => !msg.isGreeting) // Exclude greeting messages
@@ -228,7 +275,7 @@ const generatePDFHTML = (messages, settings, template, watermark, appName) => {
             <span class="timestamp">${formatTimestamp(message.timestamp || Date.now())}</span>
           </div>
           <div class="message-content">
-            <p>${formatContent(message.content)}</p>
+            ${formatContent(message.content)}
           </div>
         </div>
       `;
@@ -264,7 +311,7 @@ const generatePDFHTML = (messages, settings, template, watermark, appName) => {
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Chat Export - ${appName || 'iHub Apps'}</title>
+  <title>${escapeHtml(docTitle)}</title>
   <style>
     ${styles}
     ${watermarkStyle}
@@ -273,7 +320,7 @@ const generatePDFHTML = (messages, settings, template, watermark, appName) => {
 <body>
   <div class="container">
     <header class="header">
-      <h1>Chat Conversation Export</h1>
+      <h1>${escapeHtml(docTitle)}</h1>
       ${appName ? `<h2>${appName}</h2>` : ''}
       <p class="export-date">Exported on ${new Date().toLocaleString()}</p>
     </header>
@@ -453,16 +500,83 @@ const getTemplateStyles = template => {
       margin: 15px 0;
     }
     
-    .message-content li {
-      margin-left: 20px;
-      margin-bottom: 5px;
+    .message-content ul,
+    .message-content ol {
+      margin: 10px 0;
+      padding-left: 24px;
+    }
+
+    .message-content ul {
       list-style-type: disc;
     }
-    
-    .message-content li.ordered {
+
+    .message-content ol {
       list-style-type: decimal;
     }
-    
+
+    .message-content li {
+      margin-bottom: 5px;
+    }
+
+    .message-content pre {
+      background-color: #1a202c;
+      color: #f7fafc;
+      padding: 12px 16px;
+      border-radius: 6px;
+      overflow-x: auto;
+      margin: 12px 0;
+      font-size: 13px;
+      line-height: 1.5;
+    }
+
+    .message-content pre code {
+      background-color: transparent;
+      padding: 0;
+      color: inherit;
+      font-size: inherit;
+    }
+
+    .message-content blockquote {
+      border-left: 4px solid #cbd5e0;
+      padding-left: 12px;
+      margin: 12px 0;
+      color: #4a5568;
+    }
+
+    .message-content table {
+      border-collapse: collapse;
+      width: 100%;
+      margin: 12px 0;
+      font-size: 14px;
+    }
+
+    .message-content th,
+    .message-content td {
+      border: 1px solid #e2e8f0;
+      padding: 8px 12px;
+      text-align: left;
+      vertical-align: top;
+    }
+
+    .message-content th {
+      background-color: #f7fafc;
+      font-weight: 600;
+    }
+
+    .message-content tr:nth-child(even) td {
+      background-color: #fafbfc;
+    }
+
+    .message-content a {
+      color: #3182ce;
+      text-decoration: underline;
+    }
+
+    .message-content img {
+      max-width: 100%;
+      height: auto;
+    }
+
     @media print {
       .container {
         max-width: none;
@@ -660,44 +774,83 @@ const generateMarkdown = messages => {
     .join('\n\n');
 };
 
-const generateHTML = (messages, settings, appName) => {
+const generateHTML = (messages, settings, appName, isSingleMessage = false) => {
   // Use the same high-quality HTML generation as PDF export
   // This ensures consistent styling and proper markdown rendering
-  const htmlContent = generatePDFHTML(messages, settings, 'default', {}, appName || 'iHub Apps');
+  const htmlContent = generatePDFHTML(
+    messages,
+    settings,
+    'default',
+    {},
+    appName || 'iHub Apps',
+    isSingleMessage
+  );
 
   // Return the full HTML document
   return htmlContent;
 };
 
 // Client-side export functions
-export const exportChatToJSON = async (messages, settings, appId = null) => {
-  const content = generateJSON(
-    messages.filter(m => !m.isGreeting),
-    settings
-  );
-  const timestamp = new Date().toISOString().slice(0, 19).replace(/:/g, '-');
-  const filename = `chat-${appId || 'export'}-${timestamp}.json`;
+export const exportChatToJSON = async (
+  messages,
+  settings,
+  appId = null,
+  chatId = null,
+  appName = null,
+  isSingleMessage = false
+) => {
+  const filtered = messages.filter(m => !m.isGreeting);
+  const content = generateJSON(filtered, settings);
+  const filename = buildChatExportFilename({
+    format: 'json',
+    appName,
+    appId,
+    messages: filtered,
+    isSingleMessage
+  });
 
   downloadFile(content, filename, 'application/json');
   return { success: true, filename };
 };
 
-export const exportChatToJSONL = async (messages, settings, appId = null) => {
-  const content = generateJSONL(
-    messages.filter(m => !m.isGreeting),
-    settings
-  );
-  const timestamp = new Date().toISOString().slice(0, 19).replace(/:/g, '-');
-  const filename = `chat-${appId || 'export'}-${timestamp}.jsonl`;
+export const exportChatToJSONL = async (
+  messages,
+  settings,
+  appId = null,
+  chatId = null,
+  appName = null,
+  isSingleMessage = false
+) => {
+  const filtered = messages.filter(m => !m.isGreeting);
+  const content = generateJSONL(filtered, settings);
+  const filename = buildChatExportFilename({
+    format: 'jsonl',
+    appName,
+    appId,
+    messages: filtered,
+    isSingleMessage
+  });
 
   downloadFile(content, filename, 'application/json');
   return { success: true, filename };
 };
 
-export const exportChatToMarkdown = async (messages, settings, appId = null, chatId = null) => {
+export const exportChatToMarkdown = async (
+  messages,
+  settings,
+  appId = null,
+  chatId = null,
+  appName = null,
+  isSingleMessage = false
+) => {
   const content = generateMarkdown(messages);
-  const timestamp = new Date().toISOString().slice(0, 19).replace(/:/g, '-');
-  const filename = `chat-${appId || 'export'}-${timestamp}.md`;
+  const filename = buildChatExportFilename({
+    format: 'md',
+    appName,
+    appId,
+    messages,
+    isSingleMessage
+  });
 
   downloadFile(content, filename, 'text/markdown');
   return { success: true, filename };
@@ -708,11 +861,17 @@ export const exportChatToHTML = async (
   settings,
   appId = null,
   chatId = null,
-  appName = 'iHub Apps'
+  appName = 'iHub Apps',
+  isSingleMessage = false
 ) => {
-  const content = generateHTML(messages, settings, appName);
-  const timestamp = new Date().toISOString().slice(0, 19).replace(/:/g, '-');
-  const filename = `chat-${appId || 'export'}-${timestamp}.html`;
+  const content = generateHTML(messages, settings, appName, isSingleMessage);
+  const filename = buildChatExportFilename({
+    format: 'html',
+    appName,
+    appId,
+    messages,
+    isSingleMessage
+  });
 
   downloadFile(content, filename, 'text/html');
   return { success: true, filename };
@@ -725,20 +884,30 @@ export const exportChatToFormat = async (messages, settings, format, options = {
     chatId = null,
     appName = 'iHub Apps',
     template = 'default',
-    watermark = {}
+    watermark = {},
+    isSingleMessage = false
   } = options;
 
   switch (format) {
     case 'pdf':
-      return exportChatToPDF(messages, settings, template, watermark, appName, appId, chatId);
+      return exportChatToPDF(
+        messages,
+        settings,
+        template,
+        watermark,
+        appName,
+        appId,
+        chatId,
+        isSingleMessage
+      );
     case 'json':
-      return exportChatToJSON(messages, settings, appId, chatId);
+      return exportChatToJSON(messages, settings, appId, chatId, appName, isSingleMessage);
     case 'jsonl':
-      return exportChatToJSONL(messages, settings, appId, chatId);
+      return exportChatToJSONL(messages, settings, appId, chatId, appName, isSingleMessage);
     case 'markdown':
-      return exportChatToMarkdown(messages, settings, appId, chatId);
+      return exportChatToMarkdown(messages, settings, appId, chatId, appName, isSingleMessage);
     case 'html':
-      return exportChatToHTML(messages, settings, appId, chatId, appName);
+      return exportChatToHTML(messages, settings, appId, chatId, appName, isSingleMessage);
     default:
       throw new Error(`Unsupported export format: ${format}`);
   }

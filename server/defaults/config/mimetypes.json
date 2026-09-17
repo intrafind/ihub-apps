@@ -68,7 +68,6 @@
         "application/vnd.ms-excel",
         "application/vnd.ms-powerpoint",
         "application/vnd.ms-outlook",
-        "application/x-msg",
         "application/vnd.oasis.opendocument.text",
         "application/vnd.oasis.opendocument.spreadsheet",
         "application/vnd.oasis.opendocument.presentation"
@@ -247,11 +246,6 @@
       "category": "documents"
     },
     "application/vnd.ms-outlook": {
-      "extensions": [".msg"],
-      "displayName": "MSG",
-      "category": "documents"
-    },
-    "application/x-msg": {
       "extensions": [".msg"],
       "displayName": "MSG",
       "category": "documents"

@@ -1,10 +1,25 @@
 {
+  "speech": {
+    "realtime": {
+      "enabled": false,
+      "url": "ws://localhost:8080/v1/realtime",
+      "model": "mistralai/Voxtral-Mini-4B-Realtime-2602",
+      "apiKey": ""
+    },
+    "azure": {
+      "enabled": false,
+      "host": "",
+      "region": "",
+      "subscriptionKey": ""
+    }
+  },
   "skills": {
     "skillsDirectory": "contents/skills",
     "maxSkillBodyTokens": 5000
   },
   "globalPromptVariables": {
-    "context": "Very important: The user's timezone is {{timezone}}. The current date is {{date}}. Any dates before this are in the past, and any dates after this are in the future. When dealing with modern entities/companies/people, and the user asks for the 'latest', 'most recent', 'today's', etc. don't assume your knowledge is up to date; You can and should speak any language the user asks you to speak or use the language of the user. \n"
+    "context": "Very important: The user's timezone is {{timezone}}. The current date is {{date}}. Any dates before this are in the past, and any dates after this are in the future. When dealing with modern entities/companies/people, and the user asks for the 'latest', 'most recent', 'today's', etc. don't assume your knowledge is up to date; You can and should speak any language the user asks you to speak or use the language of the user. \n",
+    "variables": {}
   },
   "pdfExport": {
     "defaultTemplate": "default",
@@ -33,9 +48,55 @@
   "requestBodyLimitMB": 50,
   "telemetry": {
     "enabled": false,
-    "logs": true
+    "provider": "console",
+    "exporters": {
+      "otlp": {
+        "endpoint": "${OTEL_EXPORTER_OTLP_ENDPOINT:-http://localhost:4318}",
+        "protocol": "http/protobuf",
+        "headers": {}
+      },
+      "prometheus": {
+        "port": 9464,
+        "host": "0.0.0.0"
+      }
+    },
+    "spans": {
+      "enabled": true,
+      "sampleRate": 1.0,
+      "includeOptInAttributes": false
+    },
+    "events": {
+      "enabled": true,
+      "includePrompts": false,
+      "includeCompletions": false,
+      "maxEventSize": 1024
+    },
+    "metrics": {
+      "enabled": true,
+      "exportInterval": 60000
+    },
+    "logs": {
+      "enabled": false,
+      "level": "info"
+    },
+    "activitySummary": {
+      "enabled": false,
+      "intervalSeconds": 300,
+      "windowMinutes": 5
+    },
+    "autoInstrumentation": false,
+    "resource": {
+      "service.name": "ihub-apps",
+      "service.version": "auto",
+      "deployment.environment": "${NODE_ENV:-production}"
+    }
   },
   "requestConcurrency": 5,
+  "llm": {
+    "connectTimeoutMs": 30000,
+    "streamIdleTimeoutMs": 60000
+  },
+  "trustProxy": 1,
   "refreshSalt": {
     "salt": 1,
     "lastUpdated": "2025-07-08T17:00:38.743Z"
@@ -43,7 +104,30 @@
   "auth": {
     "mode": "local",
     "authenticatedGroup": "authenticated",
-    "sessionTimeoutMinutes": 480
+    "sessionTimeoutMinutes": 480,
+    "debug": {
+      "enabled": false,
+      "maskTokens": true,
+      "redactPasswords": true,
+      "includeRawData": false,
+      "providers": {
+        "oidc": {
+          "enabled": true
+        },
+        "local": {
+          "enabled": true
+        },
+        "proxy": {
+          "enabled": true
+        },
+        "ldap": {
+          "enabled": true
+        },
+        "ntlm": {
+          "enabled": true
+        }
+      }
+    }
   },
   "oauth": {
     "enabled": {
@@ -59,7 +143,55 @@
     "refreshTokenEnabled": false,
     "refreshTokenExpirationDays": 30,
     "consentRequired": true,
-    "consentMemoryDays": 90
+    "consentMemoryDays": 90,
+    "dcr": {
+      "enabled": false,
+      "maxClients": 100
+    },
+    "cimd": {
+      "enabled": false,
+      "allowedClientHosts": ["claude.ai"],
+      "allowedGroups": [],
+      "allowedScopes": [],
+      "allowedApps": [],
+      "allowedModels": [],
+      "allowedPrompts": [],
+      "cacheMaxSeconds": 86400,
+      "fetchTimeoutMs": 5000
+    },
+    "personalKeys": {
+      "enabled": false,
+      "allowedGroups": [],
+      "maxKeysPerUser": 5,
+      "defaultExpirationDays": 90,
+      "maxExpirationDays": 365,
+      "allowClientCredentials": true,
+      "scopes": []
+    }
+  },
+  "mcpServer": {
+    "enabled": false,
+    "requireConsent": true,
+    "publicUrl": "",
+    "transports": {
+      "streamableHttp": {
+        "enabled": true,
+        "stateless": false
+      },
+      "sse": {
+        "enabled": true
+      }
+    },
+    "a2a": {
+      "enabled": false
+    },
+    "expose": {
+      "tools": true,
+      "apps": true,
+      "workflows": true,
+      "resources": false
+    },
+    "defaultScopes": ["mcp:tools:read", "mcp:tools:call"]
   },
   "anonymousAuth": {
     "enabled": true,
@@ -115,6 +247,23 @@
     "ignoreInvalidCertificates": false,
     "domainWhitelist": []
   },
+  "cors": {
+    "origin": [],
+    "credentials": true,
+    "maxAge": 86400,
+    "methods": ["GET", "POST", "PUT", "DELETE", "OPTIONS", "HEAD", "PATCH"],
+    "allowedHeaders": [
+      "Content-Type",
+      "Authorization",
+      "X-Requested-With",
+      "X-Forwarded-User",
+      "X-Forwarded-Groups",
+      "Accept",
+      "Origin",
+      "Cache-Control",
+      "X-File-Name"
+    ]
+  },
   "logging": {
     "level": "info",
     "format": "json",
@@ -123,16 +272,34 @@
       "path": "logs/app.log",
       "maxSize": 10485760,
       "maxFiles": 5
-    }
+    },
+    "anonymizeIp": false
+  },
+  "audit": {
+    "retentionDays": 365,
+    "cleanupEnabled": true,
+    "includeEmail": false,
+    "verbosity": "metadata",
+    "winstonMirror": false,
+    "anonymizeIp": false
+  },
+  "usageTracking": {
+    "eventRetentionDays": 90,
+    "dailyRetentionDays": 365,
+    "monthlyRetentionDays": -1,
+    "feedbackRetentionDays": -1
   },
   "jwt": {
     "algorithm": "RS256"
+  },
+  "cookieSettings": {
+    "disableSecure": false
   },
   "iFinder": {
     "enabled": false,
     "baseUrl": "",
     "useOidcKeyPair": false,
-    "privateKey": "",
+    "privateKeyRef": "",
     "algorithm": "RS256",
     "issuer": "ihub-apps",
     "audience": "ifinder-api",
@@ -143,5 +310,116 @@
   "iAssistant": {
     "defaultProfileId": "",
     "timeout": 60000
+  },
+  "officeIntegration": {
+    "enabled": false,
+    "oauthClientId": "",
+    "displayName": {
+      "en": "iHub Apps",
+      "de": "iHub Apps"
+    },
+    "description": {
+      "en": "AI-powered assistant for Outlook",
+      "de": "KI-gestützter Assistent für Outlook"
+    },
+    "starterPrompts": [
+      {
+        "title": {
+          "en": "Summarize this email",
+          "de": "Fasse diese E-Mail zusammen"
+        },
+        "message": {
+          "en": "Summarize this email",
+          "de": "Fasse diese E-Mail zusammen"
+        }
+      },
+      {
+        "title": {
+          "en": "Summarize and reply to this email",
+          "de": "Fasse diese E-Mail zusammen und antworte darauf"
+        },
+        "message": {
+          "en": "Summarize and reply to this email",
+          "de": "Fasse diese E-Mail zusammen und antworte darauf"
+        }
+      },
+      {
+        "title": {
+          "en": "What are the main takeaways from this email?",
+          "de": "Was sind die wichtigsten Erkenntnisse aus dieser E-Mail?"
+        },
+        "message": {
+          "en": "What are the main takeaways from this email?",
+          "de": "Was sind die wichtigsten Erkenntnisse aus dieser E-Mail?"
+        }
+      }
+    ],
+    "calendarStarterPrompts": [
+      {
+        "title": {
+          "en": "Draft an agenda for this meeting",
+          "de": "Entwirf eine Agenda für dieses Meeting"
+        },
+        "message": {
+          "en": "Draft an agenda for this meeting. Use the invite details and the knowledge base; flag anything that is missing.",
+          "de": "Entwirf eine Agenda für dieses Meeting. Nutze die Einladungsdetails und die Wissensdatenbank; markiere fehlende Punkte."
+        }
+      },
+      {
+        "title": {
+          "en": "Prepare me for this meeting",
+          "de": "Bereite mich auf dieses Meeting vor"
+        },
+        "message": {
+          "en": "Prepare me for this meeting. Give me a one-page briefing using the invite and the knowledge base.",
+          "de": "Bereite mich auf dieses Meeting vor. Erstelle ein einseitiges Briefing aus Einladung und Wissensdatenbank."
+        }
+      },
+      {
+        "title": {
+          "en": "Who is attending and why?",
+          "de": "Wer nimmt teil und warum?"
+        },
+        "message": {
+          "en": "Tell me about the attendees of this meeting and why each is likely on the invite.",
+          "de": "Erzähle mir etwas über die Teilnehmenden dieses Meetings und warum jede Person vermutlich eingeladen wurde."
+        }
+      }
+    ],
+    "startPage": {
+      "defaultPage": "start",
+      "featuredAppIds": []
+    },
+    "useLocalOfficejs": false
+  },
+  "runLog": {
+    "enabled": true,
+    "identityMode": "default",
+    "retentionDays": 90,
+    "cleanupEnabled": true,
+    "flushIntervalMs": 2000,
+    "spillThresholdBytes": 65536
+  },
+  "chats": {
+    "enabled": true,
+    "retentionDays": 90,
+    "maxChatsPerUser": 200,
+    "maxMessagesPerChat": 2000
+  },
+  "artifacts": {
+    "enabled": true,
+    "maxBytes": 10485760,
+    "maxPerBatch": 8
+  },
+  "workflowState": {
+    "retentionDays": 30,
+    "cleanupEnabled": true
+  },
+  "storage": {
+    "provider": "filesystem",
+    "filesystem": {
+      "dataDir": "data",
+      "flushIntervalMs": 2000
+    }
   }
 }

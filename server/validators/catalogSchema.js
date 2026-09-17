@@ -27,7 +27,7 @@ const catalogSourceSchema = z.discriminatedUnion('type', [
     owner: z.string(),
     repo: z.string(),
     path: z.string(),
-    ref: z.string().optional().default('main')
+    ref: z.string().optional().prefault('main')
   }),
   z.object({
     type: z.literal('url'),
@@ -58,7 +58,7 @@ const catalogItemSchema = z.object({
   /** Freeform category label used for UI filtering */
   category: z.string().optional(),
   /** Arbitrary tags for discovery and filtering */
-  tags: z.array(z.string()).optional().default([]),
+  tags: z.array(z.string()).optional().prefault([]),
   /** How to fetch the actual content file */
   source: catalogSourceSchema,
   /** Icon identifier (e.g. emoji, icon name, or URL) */
@@ -80,9 +80,9 @@ export const catalogSchema = z.object({
   /** Catalog schema version */
   version: z.string().optional(),
   /** Category names used in this catalog (informational) */
-  categories: z.array(z.string()).optional().default([]),
+  categories: z.array(z.string()).optional().prefault([]),
   /** List of installable content items */
-  items: z.array(catalogItemSchema).default([])
+  items: z.array(catalogItemSchema).prefault([])
 });
 
 /**
@@ -104,6 +104,6 @@ export function validateCatalog(data) {
   }
   return {
     success: false,
-    errors: result.error.errors.map(e => `${e.path.join('.')}: ${e.message}`)
+    errors: result.error.issues.map(e => `${e.path.join('.')}: ${e.message}`)
   };
 }

@@ -236,7 +236,7 @@ export async function getSkillContent(skillName, customDir) {
   }
 
   const skillsDir = getSkillsDirectory(customDir);
-  const resolvedSkillPath = resolveAndValidatePath(skillName, skillsDir);
+  const resolvedSkillPath = await resolveAndValidatePath(skillName, skillsDir);
   if (!resolvedSkillPath) {
     logger.warn('Rejected skill path traversal attempt', { component: 'SkillLoader', skillName });
     return null;
@@ -305,14 +305,14 @@ export async function getSkillResource(skillName, filePath, customDir) {
   }
 
   const skillsDir = getSkillsDirectory(customDir);
-  const resolvedSkillPath = resolveAndValidatePath(skillName, skillsDir);
+  const resolvedSkillPath = await resolveAndValidatePath(skillName, skillsDir);
   if (!resolvedSkillPath) {
     logger.warn('Rejected skill path traversal attempt', { component: 'SkillLoader', skillName });
     return null;
   }
 
   // Validate the file path stays within the skill directory (handles ".." and absolute paths)
-  const resolvedFilePath = resolveAndValidatePath(filePath, resolvedSkillPath);
+  const resolvedFilePath = await resolveAndValidatePath(filePath, resolvedSkillPath);
   if (!resolvedFilePath) {
     logger.warn('Path traversal attempt blocked', {
       component: 'SkillLoader',

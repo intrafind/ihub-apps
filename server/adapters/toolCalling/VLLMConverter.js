@@ -273,7 +273,7 @@ export async function convertVLLMResponseToGeneric(data, streamId = 'default') {
           } catch (error) {
             logger.warn('Failed to parse accumulated vLLM tool arguments on [DONE]', {
               component: 'VLLMConverter',
-              error: e
+              error
             });
             parsedArgs = { __raw_arguments: pending.arguments };
           }
@@ -308,8 +308,14 @@ export async function convertVLLMResponseToGeneric(data, streamId = 'default') {
 
     // Handle full response object (non-streaming)
     if (parsed.choices && parsed.choices[0]?.message) {
-      if (parsed.choices[0].message.content) {
-        result.content.push(parsed.choices[0].message.content);
+      const message = parsed.choices[0].message;
+      if (message.content) {
+        result.content.push(message.content);
+      }
+      // vLLM reasoning text: `reasoning` (current) or `reasoning_content` (legacy)
+      const reasoning = message.reasoning_content ?? message.reasoning;
+      if (reasoning) {
+        result.thinking.push(reasoning);
       }
       if (parsed.choices[0].message.tool_calls) {
         result.tool_calls.push(
@@ -326,6 +332,10 @@ export async function convertVLLMResponseToGeneric(data, streamId = 'default') {
       const delta = parsed.choices[0].delta;
       if (delta.content) {
         result.content.push(delta.content);
+      }
+      const reasoning = delta.reasoning_content ?? delta.reasoning;
+      if (reasoning) {
+        result.thinking.push(reasoning);
       }
       if (delta.tool_calls) {
         // Process each tool call delta - accumulate in state
@@ -375,7 +385,7 @@ export async function convertVLLMResponseToGeneric(data, streamId = 'default') {
             } catch (error) {
               logger.warn('Failed to parse accumulated vLLM tool arguments', {
                 component: 'VLLMConverter',
-                error: e
+                error
               });
               parsedArgs = { __raw_arguments: pending.arguments };
             }
@@ -405,6 +415,15 @@ export async function convertVLLMResponseToGeneric(data, streamId = 'default') {
   }
 
   return result;
+}
+
+/**
+ * Discard accumulated streaming state for a stream that errored or was aborted,
+ * so stale pending tool calls can't leak into a later, unrelated stream.
+ * @param {string} streamId - Stream identifier to clear
+ */
+export function clearVLLMStreamingState(streamId = 'default') {
+  streamingState.delete(streamId);
 }
 
 /**

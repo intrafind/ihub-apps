@@ -2,9 +2,13 @@
  * OpenAI API adapter
  */
 import { convertToolsFromGeneric } from './toolCalling/index.js';
+import {
+  modelConsumesThoughtSignature,
+  stripThoughtSignatureExtraContent
+} from './toolCalling/thoughtSignatures.js';
 import { BaseAdapter } from './BaseAdapter.js';
 import logger from '../utils/logger.js';
-import { parseJsonAsync } from '../utils/asyncJson.js';
+import modelDiscoveryService from '../services/ModelDiscoveryService.js';
 
 class OpenAIAdapterClass extends BaseAdapter {
   /**
@@ -30,13 +34,23 @@ class OpenAIAdapterClass extends BaseAdapter {
    * @param {Array} messages - Messages to format
    * @returns {Array} Formatted messages for OpenAI API
    */
-  formatMessages(messages) {
+  formatMessages(messages, model) {
+    const keepExtraContent = modelConsumesThoughtSignature(model);
     const formattedMessages = messages.map(message => {
       const content = message.content;
 
       // Base message with role and optional tool fields
       const base = { role: message.role };
-      if (message.tool_calls) base.tool_calls = message.tool_calls;
+      // Gemini's `extra_content` thought signature is a Google vendor extension.
+      // Strict OpenAI-compatible providers reject a request that carries it, so
+      // drop it unless this model is the one that consumes it — a caller
+      // replaying Gemini-originated history against another model must not have
+      // that field forwarded upstream.
+      if (message.tool_calls) {
+        base.tool_calls = keepExtraContent
+          ? message.tool_calls
+          : stripThoughtSignatureExtraContent(message.tool_calls);
+      }
       if (message.tool_call_id) base.tool_call_id = message.tool_call_id;
       if (message.name) base.name = message.name;
 
@@ -112,15 +126,21 @@ class OpenAIAdapterClass extends BaseAdapter {
   /**
    * Create a completion request for OpenAI
    */
-  createCompletionRequest(model, messages, apiKey, options = {}) {
+  async createCompletionRequest(model, messages, apiKey, options = {}, { signal } = {}) {
     const { temperature, stream, tools, toolChoice, responseFormat, responseSchema, maxTokens } =
       this.extractRequestOptions(options);
 
-    const formattedMessages = this.formatMessages(messages);
+    const formattedMessages = this.formatMessages(messages, model);
     this.debugLogMessages(messages, formattedMessages, 'OpenAI');
 
+    // Use model discovery to get the effective model ID if enabled (under the
+    // caller's deadline / abort signal, so a hung discovery cannot outlive it).
+    const effectiveModelId = await modelDiscoveryService.getEffectiveModelId(model, apiKey, {
+      signal
+    });
+
     const body = {
-      model: model.modelId,
+      model: effectiveModelId,
       messages: formattedMessages,
       stream,
       temperature: parseFloat(temperature),
@@ -132,16 +152,23 @@ class OpenAIAdapterClass extends BaseAdapter {
       body.stream_options = { include_usage: true };
     }
 
+    // Reasoning/thinking support. Gated on model.thinking.enabled so plain chat
+    // models are unaffected. OpenAI reasoning models — and OpenAI-compatible
+    // endpoints reached via this adapter (vLLM/DeepSeek/OpenRouter) — accept the
+    // `reasoning_effort` parameter on /chat/completions. We deliberately keep
+    // this conservative: max_tokens and temperature are left untouched so the
+    // many OpenAI-compatible endpoints that don't impose reasoning-model
+    // constraints keep working.
+    if (model.thinking?.enabled && (options.thinkingEnabled ?? true)) {
+      body.reasoning_effort = this.resolveReasoningEffort(options, model);
+    }
+
     if (tools && tools.length > 0) body.tools = convertToolsFromGeneric(tools, 'openai');
     if (toolChoice) body.tool_choice = toolChoice;
     if (responseSchema) {
       // Deep clone incoming schema and enforce additionalProperties:false on all objects
       const schemaClone = JSON.parse(JSON.stringify(responseSchema));
       const enforceNoExtras = node => {
-        logger.info('Enforcing no extras on schema node', {
-          component: 'OpenAIAdapter',
-          nodeType: node?.type
-        });
         if (node && node.type === 'object') {
           node.additionalProperties = false;
         }
@@ -163,9 +190,8 @@ class OpenAIAdapterClass extends BaseAdapter {
           strict: true
         }
       };
-      logger.info('Using response schema for structured output', {
-        component: 'OpenAIAdapter',
-        responseFormat: body.response_format
+      logger.debug('Using response schema for structured output', {
+        component: 'OpenAIAdapter'
       });
     } else if (responseFormat === 'json') {
       body.response_format = { type: 'json_object' };
@@ -180,93 +206,6 @@ class OpenAIAdapterClass extends BaseAdapter {
       headers: this.createRequestHeaders(apiKey),
       body
     };
-  }
-
-  /**
-   * Process streaming response from OpenAI
-   */
-  async processResponseBuffer(data) {
-    const result = {
-      content: [],
-      tool_calls: [],
-      complete: false,
-      error: false,
-      errorMessage: null,
-      finishReason: null,
-      usage: null
-    };
-
-    if (!data) return result;
-    if (data === '[DONE]') {
-      result.complete = true;
-      return result;
-    }
-
-    try {
-      const parsed = await parseJsonAsync(data);
-
-      // Extract usage data from any chunk that contains it
-      if (parsed.usage) {
-        result.usage = {
-          promptTokens: parsed.usage.prompt_tokens || 0,
-          completionTokens: parsed.usage.completion_tokens || 0,
-          totalTokens: parsed.usage.total_tokens || 0
-        };
-      }
-
-      // Handle full response object (non-streaming)
-      if (parsed.choices && parsed.choices[0]?.message) {
-        if (parsed.choices[0].message.content) {
-          result.content.push(parsed.choices[0].message.content);
-        }
-        if (parsed.choices[0].message.tool_calls) {
-          result.tool_calls.push(...parsed.choices[0].message.tool_calls);
-        }
-        result.complete = true;
-        if (parsed.choices[0].finish_reason) {
-          result.finishReason = parsed.choices[0].finish_reason;
-        }
-      }
-      // Handle streaming response chunks
-      else if (parsed.choices && parsed.choices[0]?.delta) {
-        const delta = parsed.choices[0].delta;
-        if (delta.content) {
-          result.content.push(delta.content);
-        }
-        if (delta.tool_calls) {
-          for (const tc of delta.tool_calls) {
-            const normalized = { index: tc.index };
-            if (tc.id) normalized.id = tc.id;
-            if (tc.function) {
-              normalized.function = { ...tc.function };
-            }
-            if (tc.type) {
-              normalized.type = tc.type;
-            } else {
-              normalized.type = 'function';
-            }
-            result.tool_calls.push(normalized);
-          }
-        }
-      }
-
-      if (parsed.choices && parsed.choices[0]?.finish_reason) {
-        // Possible OpenAI finish reasons include 'stop', 'length', 'tool_calls'
-        // and 'content_filter'. We forward the raw value so the service layer
-        // can normalize or act on it as needed.
-        result.complete = true;
-        result.finishReason = parsed.choices[0].finish_reason;
-      }
-    } catch (error) {
-      logger.error('Error parsing OpenAI response chunk', {
-        component: 'OpenAIAdapter',
-        error
-      });
-      result.error = true;
-      result.errorMessage = `Error parsing OpenAI response: ${error.message}`;
-    }
-
-    return result;
   }
 }
 

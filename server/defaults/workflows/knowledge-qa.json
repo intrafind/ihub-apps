@@ -60,7 +60,7 @@
     },
     {
       "id": "classify-question",
-      "type": "agent",
+      "type": "prompt",
       "name": {
         "en": "Classify Question",
         "de": "Frage klassifizieren"
@@ -93,7 +93,7 @@
     },
     {
       "id": "generate-answer",
-      "type": "agent",
+      "type": "prompt",
       "name": {
         "en": "Generate Answer",
         "de": "Antwort generieren"

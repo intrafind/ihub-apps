@@ -71,7 +71,6 @@
     "en": "Ask me to search for documents or research topics...",
     "de": "Bitte mich, nach Dokumenten zu suchen oder Themen zu recherchieren..."
   },
-  "tokenLimit": 16000,
   "preferredOutputFormat": "markdown",
   "preferredStyle": "professional",
   "preferredTemperature": 0.2,

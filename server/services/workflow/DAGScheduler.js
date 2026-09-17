@@ -1,4 +1,5 @@
 import logger from '../../utils/logger.js';
+import { evaluateBooleanExpression } from './expressionEvaluator.js';
 
 /**
  * DAGScheduler handles dependency resolution and execution ordering for workflow graphs.
@@ -236,45 +237,85 @@ export class DAGScheduler {
 
     const completedSet = new Set(completedNodes || []);
 
-    // MVP: Sequential execution - return first current node only
-    // This ensures deterministic behavior for initial implementation
-    // TODO: Enable parallel execution when parallel: true in workflow config
-
-    // For now, just validate that the first node can execute
-    const firstNode = currentNodes[0];
-
-    // Check incoming edges to this node
-    const incomingEdges = (workflow.edges || []).filter(edge => edge.target === firstNode);
-
-    // For workflows with cycles/loops, we use "any" dependency logic:
-    // A node is ready if AT LEAST ONE incoming edge has a completed source.
-    // This allows:
-    // - Initial execution when the "forward" edge source is complete
-    // - Loop execution when the "back" edge source (loop trigger) is complete
+    // Two dependency-readiness modes, picked by workflow.config.allowCycles:
     //
-    // For strict DAG workflows (no cycles), this is equivalent to "all" logic
-    // since each node typically has only one incoming edge path active at a time.
-    const anyDependencyMet =
-      incomingEdges.length === 0 || incomingEdges.some(edge => completedSet.has(edge.source));
+    // (A) Cyclic workflows — `allowCycles: true` (default).
+    //     Use OR-semantics: a node is ready if ANY incoming edge's source is
+    //     completed. This is required for loop bodies, where the back-edge
+    //     source completes on every iteration and re-triggers the body.
+    //     Requiring ALL incoming edges to be satisfied would deadlock — the
+    //     loop's "forward" edge source would have to complete every iteration
+    //     too, but it doesn't.
+    //
+    // (B) DAG workflows — `allowCycles: false` (planner sub-workflows).
+    //     Use AND-semantics: a node is ready ONLY when ALL its incoming
+    //     edges have completed sources. This is what `dependsOn` and the
+    //     sequential safety net in SubWorkflowMaterializer rely on — if we
+    //     used OR here, declaring `dependsOn: ['A']` on a task that ALSO
+    //     has a sequential predecessor `B` would let the task run as soon
+    //     as either A or B completes (whichever fires first), defeating the
+    //     dependency ordering. With AND, both must complete first.
+    //
+    // The legacy comment that "for DAGs, OR is equivalent to AND because
+    // each node has only one incoming edge active" is no longer true: the
+    // materializer's sequential safety net deliberately adds a second
+    // incoming edge alongside `dependsOn` to harden ordering, so DAGs now
+    // routinely have multiple incoming edges per node.
+    const allowCycles = workflow.config?.allowCycles !== false;
 
-    if (anyDependencyMet) {
-      const satisfiedEdges = incomingEdges.filter(e => completedSet.has(e.source));
-      logger.debug('Node ready for execution', {
-        component: 'DAGScheduler',
-        nodeId: firstNode,
-        satisfiedDependencies: satisfiedEdges.map(e => e.source),
-        totalIncomingEdges: incomingEdges.length
-      });
-      return [firstNode];
+    // MVP: Sequential execution — return the FIRST currentNode that's ready.
+    // Previously this only ever checked `currentNodes[0]`, which worked under
+    // OR-semantics (almost any current node was "ready"). Under AND-semantics
+    // a node can be blocked behind unsatisfied upstreams; iterating lets a
+    // later-in-the-list ready node run instead of stalling the whole loop.
+    // TODO: Return all ready nodes for true parallel execution.
+    const edges = workflow.edges || [];
+    const isReady = nodeId => {
+      const incomingEdges = edges.filter(edge => edge.target === nodeId);
+      if (incomingEdges.length === 0) return { ready: true, incomingEdges };
+      const ready = allowCycles
+        ? incomingEdges.some(edge => completedSet.has(edge.source))
+        : incomingEdges.every(edge => completedSet.has(edge.source));
+      return { ready, incomingEdges };
+    };
+
+    for (const nodeId of currentNodes) {
+      const { ready, incomingEdges } = isReady(nodeId);
+      if (ready) {
+        logger.debug('Node ready for execution', {
+          component: 'DAGScheduler',
+          nodeId,
+          dependencyMode: allowCycles ? 'any' : 'all',
+          satisfiedDependencies: incomingEdges
+            .filter(e => completedSet.has(e.source))
+            .map(e => e.source),
+          totalIncomingEdges: incomingEdges.length
+        });
+        return [nodeId];
+      }
     }
 
-    // No incoming edges are satisfied - node is blocked
-    logger.warn('Node has no satisfied dependencies', {
-      component: 'DAGScheduler',
-      nodeId: firstNode,
-      requiredNodes: incomingEdges.map(e => e.source),
-      completedNodes: Array.from(completedSet)
-    });
+    // No current node is ready. Log a deadlock warning for the first
+    // current node so operators see *something*; the per-node loop above
+    // already debug-logged each waiter.
+    const firstNode = currentNodes[0];
+    const { incomingEdges } = isReady(firstNode);
+    const unsatisfied = incomingEdges.filter(e => !completedSet.has(e.source));
+    if (unsatisfied.length === incomingEdges.length) {
+      logger.warn('No current nodes have any satisfied dependencies', {
+        component: 'DAGScheduler',
+        currentNodes,
+        dependencyMode: allowCycles ? 'any' : 'all',
+        requiredNodes: incomingEdges.map(e => e.source),
+        completedNodes: Array.from(completedSet)
+      });
+    } else {
+      logger.debug('All current nodes still waiting for upstream dependencies', {
+        component: 'DAGScheduler',
+        currentNodes,
+        waitingFor: unsatisfied.map(e => e.source)
+      });
+    }
 
     return [];
   }
@@ -341,7 +382,9 @@ export class DAGScheduler {
    * @param {Object} edge - The edge to evaluate
    * @param {Object} [edge.condition] - Condition configuration
    * @param {string} [edge.condition.type='always'] - Condition type
-   * @param {string} [edge.condition.value] - Condition expression or value
+   * @param {string} [edge.condition.expression] - Boolean expression for type='expression'
+   * @param {string} [edge.condition.field] - Path for type='equals'/'contains'/'exists'
+   * @param {*} [edge.condition.value] - Comparand for type='equals'/'contains'
    * @param {*} result - The result from the source node
    * @param {Object} state - Current execution state
    * @param {Object} state.data - Workflow data/context
@@ -378,7 +421,7 @@ export class DAGScheduler {
         return false;
 
       case 'expression':
-        return this._evaluateExpression(condition.value, result, state);
+        return this._evaluateExpression(condition.expression, result, state);
 
       case 'equals':
         return this._evaluateEquals(condition, result, state);
@@ -417,34 +460,19 @@ export class DAGScheduler {
    * @private
    */
   _evaluateExpression(expression, result, state) {
-    if (!expression) {
-      return true;
+    const { value, error } = evaluateBooleanExpression(expression, state);
+    if (error && error !== 'empty-expression') {
+      logger.warn('Edge expression evaluation failed', {
+        component: 'DAGScheduler',
+        expression,
+        error
+      });
+    } else if (error === 'empty-expression') {
+      logger.warn('Empty expression on edge condition — treating as false', {
+        component: 'DAGScheduler'
+      });
     }
-
-    try {
-      // Create a safe evaluation context with result and state data
-      const context = {
-        result,
-        data: state?.data || {},
-        nodeResults: state?.data?.nodeResults || {}
-      };
-
-      // Simple expression evaluation (safe subset)
-      // Supports: result.field, result.field === value, result.field !== value
-      // Supports: data.field, nodeResults.nodeId.field
-
-      // Handle direct property access checks
-      if (expression.includes('===') || expression.includes('!==')) {
-        return this._evaluateComparison(expression, context);
-      }
-
-      // Handle boolean property access (e.g., "result.success")
-      const value = this._getValueFromPath(expression, context);
-      return Boolean(value);
-    } catch (error) {
-      logger.warn('Expression evaluation failed', { component: 'DAGScheduler', expression, error });
-      return false;
-    }
+    return value;
   }
 
   /**
@@ -514,61 +542,6 @@ export class DAGScheduler {
   }
 
   /**
-   * Evaluates a comparison expression (=== or !==)
-   * @param {string} expression - The comparison expression
-   * @param {Object} context - The evaluation context
-   * @returns {boolean} Comparison result
-   * @private
-   */
-  _evaluateComparison(expression, context) {
-    let operator;
-    let parts;
-
-    if (expression.includes('!==')) {
-      operator = '!==';
-      parts = expression.split('!==').map(p => p.trim());
-    } else if (expression.includes('===')) {
-      operator = '===';
-      parts = expression.split('===').map(p => p.trim());
-    } else {
-      return false;
-    }
-
-    if (parts.length !== 2) {
-      return false;
-    }
-
-    const [leftPath, rightValue] = parts;
-    const leftActual = this._getValueFromPath(leftPath, context);
-
-    // Parse the right value (handle strings, numbers, booleans)
-    let rightActual;
-    if (rightValue === 'true') {
-      rightActual = true;
-    } else if (rightValue === 'false') {
-      rightActual = false;
-    } else if (rightValue === 'null') {
-      rightActual = null;
-    } else if (rightValue === 'undefined') {
-      rightActual = undefined;
-    } else if (/^['"].*['"]$/.test(rightValue)) {
-      // String literal
-      rightActual = rightValue.slice(1, -1);
-    } else if (!isNaN(Number(rightValue))) {
-      rightActual = Number(rightValue);
-    } else {
-      // Treat as a path reference
-      rightActual = this._getValueFromPath(rightValue, context);
-    }
-
-    if (operator === '===') {
-      return leftActual === rightActual;
-    } else {
-      return leftActual !== rightActual;
-    }
-  }
-
-  /**
    * Gets a value from a dot-notation path in the context
    * @param {string} path - The dot-notation path (e.g., "result.data.value")
    * @param {Object} context - The context object to search in
@@ -634,8 +607,12 @@ export class DAGScheduler {
     // Find all nodes that are targets of edges
     const targetNodes = new Set(edges.map(e => e.target));
 
-    // Start nodes are those not targeted by any edge
-    const startNodes = nodes.filter(node => !targetNodes.has(node.id)).map(node => node.id);
+    // Start nodes are those not targeted by any edge. Loop-body nodes
+    // (parentId set) are excluded: a body's entry node has no incoming edge
+    // by design and is executed by its loop container, never at top level.
+    const startNodes = nodes
+      .filter(node => !targetNodes.has(node.id) && !node.parentId)
+      .map(node => node.id);
 
     if (startNodes.length === 0 && nodes.length > 0) {
       // If no clear start node, use the first node (for simple linear workflows)
@@ -667,8 +644,12 @@ export class DAGScheduler {
     // Find all nodes that are sources of edges
     const sourceNodes = new Set(edges.map(e => e.source));
 
-    // End nodes are those not the source of any edge
-    const endNodes = nodes.filter(node => !sourceNodes.has(node.id)).map(node => node.id);
+    // End nodes are those not the source of any edge. Loop-body nodes are
+    // excluded for the same reason as in findStartNodes: the body's last
+    // node has no outgoing edge but is not a workflow exit.
+    const endNodes = nodes
+      .filter(node => !sourceNodes.has(node.id) && !node.parentId)
+      .map(node => node.id);
 
     if (endNodes.length === 0 && nodes.length > 0) {
       // If no clear end node, use the last node

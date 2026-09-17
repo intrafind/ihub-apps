@@ -1,8 +1,16 @@
-import { loadOAuthClients, findClientById } from '../utils/oauthClientManager.js';
-import { loadUsers, isUserActive } from '../utils/userManager.js';
+import {
+  loadOAuthClients,
+  findClientById,
+  updateClientLastUsed
+} from '../utils/oauthClientManager.js';
+import { isPersonalKeyExpired, isPersonalKeysEnabled } from '../utils/personalApiKeyManager.js';
+import { isCurrentKeyGeneration } from '../utils/oauthTokenService.js';
+import { loadUsers, isUserActive, equalsIgnoreCase } from '../utils/userManager.js';
 import { verifyJwt, decodeJwt } from '../utils/tokenService.js';
+import { recordAuthEvent } from '../telemetry/metrics.js';
 import configCache from '../configCache.js';
 import logger from '../utils/logger.js';
+import { getClearAuthCookieOptions } from '../utils/cookieSettings.js';
 
 /**
  * JWT authentication middleware
@@ -13,20 +21,18 @@ export default function jwtAuthMiddleware(req, res, next) {
     return next();
   }
 
-  // Check for token in cookies first (preferred for SSE), then Authorization header
+  // Check for token in Authorization header first, then fall back to cookie.
+  // Explicit Bearer tokens (e.g. from the Office add-in OAuth flow) must take precedence
+  // over the main-app session cookie so that the correct auth mode is used.
+  // SSE connections cannot send custom headers and rely on the cookie, but they also
+  // never send an Authorization header, so this order is safe for both.
   let token = null;
 
-  // Check HTTP-only cookie first
-  if (req.cookies && req.cookies.authToken) {
+  const authHeader = req.headers.authorization;
+  if (authHeader && authHeader.startsWith('Bearer ')) {
+    token = authHeader.substring(7);
+  } else if (req.cookies && req.cookies.authToken) {
     token = req.cookies.authToken;
-  }
-  // Fallback to Authorization header for API calls
-  else {
-    const authHeader = req.headers.authorization;
-
-    if (authHeader && authHeader.startsWith('Bearer ')) {
-      token = authHeader.substring(7);
-    }
   }
 
   if (!token) {
@@ -36,32 +42,37 @@ export default function jwtAuthMiddleware(req, res, next) {
   const platform = configCache.getPlatform() || {};
 
   try {
-    let decoded = verifyJwt(token);
+    // Peek at the token first to determine the correct audience for verification.
+    // OAuth authorization_code tokens use the client ID as audience instead of 'ihub-apps'.
+    // Checking this upfront avoids a spurious verification failure (and log warning)
+    // for every Outlook add-in request.
+    let decoded = null;
+    const peeked = decodeJwt(token);
 
-    // If standard verification failed, check if it's an OAuth authorization code token
-    // with a client-specific audience (aud: clientId instead of 'ihub-apps')
-    if (!decoded) {
-      const peeked = decodeJwt(token);
-      if (
-        peeked?.payload?.authMode === 'oauth_authorization_code' &&
-        peeked?.payload?.aud &&
-        peeked.payload.aud !== 'ihub-apps'
-      ) {
-        // Verify the audience against registered OAuth clients before using it
-        // This prevents an attacker from using an arbitrary audience claim to influence verification
-        const oauthConfig = platform.oauth || {};
-        if (oauthConfig.enabled?.clients) {
-          try {
-            const clientsFilePath = oauthConfig.clientsFile || 'contents/config/oauth-clients.json';
-            const clientsConfig = loadOAuthClients(clientsFilePath);
-            if (clientsConfig.clients[peeked.payload.aud]) {
-              decoded = verifyJwt(token, { audience: peeked.payload.aud });
-            }
-          } catch {
-            // If we can't load clients, don't allow the alternative audience
+    if (
+      peeked?.payload?.authMode === 'oauth_authorization_code' &&
+      peeked?.payload?.aud &&
+      peeked.payload.aud !== 'ihub-apps'
+    ) {
+      // Verify the audience against registered OAuth clients before trusting it.
+      // This prevents an attacker from using an arbitrary audience claim to influence verification.
+      const oauthConfig = platform.oauth || {};
+      if (oauthConfig.enabled?.clients) {
+        try {
+          const clientsFilePath = oauthConfig.clientsFile || 'contents/config/oauth-clients.json';
+          const clientsConfig = loadOAuthClients(clientsFilePath);
+          if (clientsConfig.clients[peeked.payload.aud]) {
+            decoded = verifyJwt(token, { audience: peeked.payload.aud });
           }
+        } catch {
+          // If we can't load clients, fall through to standard verification
         }
       }
+    }
+
+    // Standard verification for all other tokens (or if client-audience path didn't match)
+    if (!decoded) {
+      decoded = verifyJwt(token);
     }
 
     if (!decoded) {
@@ -71,11 +82,13 @@ export default function jwtAuthMiddleware(req, res, next) {
 
     // Debug: Log JWT payload in development
     if (process.env.NODE_ENV === 'development') {
-      logger.info('JWT user authenticated', {
+      logger.debug('JWT user authenticated', {
         component: 'JwtAuth',
         userId: decoded.sub || decoded.username || decoded.id,
         name: decoded.name,
-        authMode: decoded.authMode
+        authMode: decoded.authMode,
+        method: req.method,
+        path: req.path
       });
     }
 
@@ -168,6 +181,7 @@ export default function jwtAuthMiddleware(req, res, next) {
             scopes: decoded.scopes || [],
             allowedApps: client.allowedApps || [],
             allowedModels: client.allowedModels || [],
+            allowedPrompts: client.allowedPrompts || [],
             staticKey: decoded.static_key || false
           };
         } catch (loadError) {
@@ -188,17 +202,14 @@ export default function jwtAuthMiddleware(req, res, next) {
             scopes: decoded.scopes || [],
             allowedApps: [],
             allowedModels: [],
+            allowedPrompts: [],
             staticKey: decoded.static_key || false
           };
         }
       } else {
         // OAuth clients not enabled, but token is OAuth type - reject
         logger.warn('OAuth token rejected: OAuth clients not enabled', { component: 'JwtAuth' });
-        res.clearCookie('authToken', {
-          httpOnly: true,
-          secure: process.env.NODE_ENV === 'production',
-          sameSite: 'lax'
-        });
+        res.clearCookie('authToken', getClearAuthCookieOptions(req));
         if (req.path === '/api/auth/status') {
           return next(); // Continue as anonymous — let status endpoint return available auth methods
         }
@@ -207,9 +218,138 @@ export default function jwtAuthMiddleware(req, res, next) {
           error_description: 'OAuth clients are not enabled'
         });
       }
+    } else if (decoded.authMode === 'oauth_personal_key') {
+      // Personal API key - a user minted this for themselves from the
+      // integrations page. The token carries no identity of its own: the acting
+      // user is resolved from the backing client on every request, so revoking
+      // the key, suspending it, or turning the feature off cuts access at once.
+      if (!isPersonalKeysEnabled(platform)) {
+        logger.warn('Personal API key rejected: feature not enabled', { component: 'JwtAuth' });
+        return res.status(401).json({
+          error: 'invalid_token',
+          error_description: 'Personal API keys are not enabled'
+        });
+      }
+
+      let client;
+      try {
+        const clientsFilePath = platform.oauth?.clientsFile || 'contents/config/oauth-clients.json';
+        const clientsConfig = loadOAuthClients(clientsFilePath);
+
+        // loadOAuthClients() catches internally and returns a safe empty config
+        // with metadata.error set. Fail closed rather than reporting the key as
+        // unknown, which would read like a revocation that never happened.
+        if (clientsConfig?.metadata?.error) {
+          logger.error('OAuth clients configuration unavailable for personal key', {
+            component: 'JwtAuth',
+            clientId: decoded.client_id,
+            loaderError: clientsConfig.metadata.error
+          });
+          return res.status(503).json({
+            error: 'service_unavailable',
+            error_description: 'Unable to validate the API key. Please try again later.'
+          });
+        }
+
+        client = findClientById(clientsConfig, decoded.client_id);
+      } catch (loadError) {
+        logger.error('Failed to load OAuth clients for personal key', {
+          component: 'JwtAuth',
+          error: loadError
+        });
+        return res.status(503).json({
+          error: 'service_unavailable',
+          error_description: 'Unable to validate the API key. Please try again later.'
+        });
+      }
+
+      if (!client || client.personal !== true || client.ownerUserId !== decoded.sub) {
+        logger.warn('Personal API key rejected: key revoked or not owned by the token subject', {
+          component: 'JwtAuth',
+          clientId: decoded.client_id
+        });
+        return res.status(401).json({
+          error: 'invalid_token',
+          error_description: 'API key has been revoked'
+        });
+      }
+
+      if (!client.active) {
+        logger.warn('Personal API key rejected: key suspended', {
+          component: 'JwtAuth',
+          clientId: decoded.client_id
+        });
+        return res.status(403).json({
+          error: 'access_denied',
+          error_description: 'API key has been suspended'
+        });
+      }
+
+      // The API key JWT carries its own `exp`, already verified, so its
+      // lifetime needs no second opinion from the store. A token exchanged from
+      // this key's client credentials has a short lifetime of its own that can
+      // outlast the key, so for those the key's expiry is what keeps
+      // `maxExpirationDays` binding.
+      if (!decoded.static_key && isPersonalKeyExpired(client)) {
+        logger.warn('Personal API key rejected: key expired', {
+          component: 'JwtAuth',
+          clientId: decoded.client_id
+        });
+        return res.status(401).json({
+          error: 'invalid_token',
+          error_description: 'API key has expired'
+        });
+      }
+
+      // Rotating a key invalidates every credential issued for an earlier
+      // generation. A counter rather than a timestamp: `iat` has second
+      // granularity, so a credential minted in the same second as the rotation
+      // that replaced it compares equal and would survive.
+      if (!isCurrentKeyGeneration(decoded, client)) {
+        logger.warn('Personal API key rejected: issued before the last rotation', {
+          component: 'JwtAuth',
+          clientId: decoded.client_id
+        });
+        return res.status(401).json({
+          error: 'invalid_token',
+          error_description: 'API key was issued before the last rotation'
+        });
+      }
+
+      user = {
+        id: client.ownerUserId,
+        username: client.ownerUsername || client.ownerUserId,
+        name: client.ownerName || client.ownerUsername || client.ownerUserId,
+        email: client.ownerEmail || '',
+        groups: Array.isArray(client.ownerGroups) ? client.ownerGroups : [],
+        authMode: 'oauth_personal_key',
+        timestamp: Date.now(),
+        isPersonalApiKey: true,
+        clientId: client.clientId,
+        scopes: decoded.scopes || [],
+        // Same filter semantics as an authorization-code token: an empty list
+        // means the owner's group permissions apply unchanged.
+        clientAllowedApps: Array.isArray(client.allowedApps) ? client.allowedApps : [],
+        clientAllowedModels: Array.isArray(client.allowedModels) ? client.allowedModels : [],
+        clientAllowedPrompts: Array.isArray(client.allowedPrompts) ? client.allowedPrompts : []
+      };
+
+      // Record the use so the integrations page reports keys used through the
+      // HTTP APIs, not only those exchanged at the token endpoint. Best effort:
+      // a failed bookkeeping write must not fail the request.
+      updateClientLastUsed(
+        client.clientId,
+        platform.oauth?.clientsFile || 'contents/config/oauth-clients.json'
+      ).catch(error => {
+        logger.error('Failed to record personal API key usage', {
+          component: 'JwtAuth',
+          clientId: client.clientId,
+          error
+        });
+      });
     } else if (decoded.authMode === 'oauth_authorization_code') {
-      // OAuth authorization code - this is a user-delegated token
-      // The token carries user identity, validate the user is still active
+      // OAuth authorization code - this is a user-delegated token.
+      // The token carries user identity, validate the user is still active.
       const oauthConfig = platform.oauth || {};
       if (oauthConfig.enabled?.authz) {
         try {
@@ -229,6 +369,75 @@ export default function jwtAuthMiddleware(req, res, next) {
             });
           }
 
+          // Load OAuth client to apply current per-client permission restrictions.
+          // Client restrictions are looked up fresh on every request so that admin
+          // changes take effect immediately without waiting for token refresh.
+          let clientAllowedApps = [];
+          let clientAllowedModels = [];
+          let clientAllowedPrompts = [];
+          if (decoded.client_id) {
+            try {
+              const clientsFilePath =
+                oauthConfig.clientsFile || 'contents/config/oauth-clients.json';
+              const clientsConfig = loadOAuthClients(clientsFilePath);
+
+              // loadOAuthClients() catches internally and returns a safe empty config with
+              // `metadata.error` set. Treat that as a load failure so we fail closed with 503
+              // instead of falling through to a misleading "client not found" 401.
+              if (clientsConfig?.metadata?.error) {
+                logger.error('OAuth clients configuration unavailable for auth-code token', {
+                  component: 'JwtAuth',
+                  clientId: decoded.client_id,
+                  loaderError: clientsConfig.metadata.error
+                });
+                return res.status(503).json({
+                  error: 'service_unavailable',
+                  error_description: 'Unable to validate OAuth client. Please try again later.'
+                });
+              }
+
+              const client = findClientById(clientsConfig, decoded.client_id);
+
+              if (!client) {
+                logger.warn('OAuth auth-code token rejected: client no longer exists', {
+                  component: 'JwtAuth',
+                  clientId: decoded.client_id
+                });
+                return res.status(401).json({
+                  error: 'invalid_token',
+                  error_description: 'OAuth client no longer exists'
+                });
+              }
+
+              if (!client.active) {
+                logger.warn('OAuth auth-code token rejected: client suspended', {
+                  component: 'JwtAuth',
+                  clientId: decoded.client_id
+                });
+                return res.status(403).json({
+                  error: 'access_denied',
+                  error_description: 'OAuth client has been suspended'
+                });
+              }
+
+              clientAllowedApps = Array.isArray(client.allowedApps) ? client.allowedApps : [];
+              clientAllowedModels = Array.isArray(client.allowedModels) ? client.allowedModels : [];
+              clientAllowedPrompts = Array.isArray(client.allowedPrompts)
+                ? client.allowedPrompts
+                : [];
+            } catch (clientLoadError) {
+              logger.error('OAuth failed to load client for auth-code token', {
+                component: 'JwtAuth',
+                error: clientLoadError
+              });
+              // Fail closed: if we cannot verify client restrictions, reject the request
+              return res.status(503).json({
+                error: 'service_unavailable',
+                error_description: 'Unable to validate OAuth client. Please try again later.'
+              });
+            }
+          }
+
           user = {
             id: userId,
             username: decoded.username || decoded.preferred_username || userId,
@@ -239,7 +448,12 @@ export default function jwtAuthMiddleware(req, res, next) {
             timestamp: Date.now(),
             isOAuthAuthCode: true,
             clientId: decoded.client_id || null,
-            scopes: decoded.scopes || []
+            scopes: decoded.scopes || [],
+            // Per-client restrictions applied as a filter on top of the user's
+            // group permissions (see enhanceUserWithPermissions).
+            clientAllowedApps,
+            clientAllowedModels,
+            clientAllowedPrompts
           };
         } catch (loadError) {
           logger.error('OAuth failed to validate user for auth code token', {
@@ -253,11 +467,7 @@ export default function jwtAuthMiddleware(req, res, next) {
         }
       } else {
         logger.warn('OAuth auth code token rejected: OAuth not enabled', { component: 'JwtAuth' });
-        res.clearCookie('authToken', {
-          httpOnly: true,
-          secure: process.env.NODE_ENV === 'production',
-          sameSite: 'lax'
-        });
+        res.clearCookie('authToken', getClearAuthCookieOptions(req));
         if (req.path === '/api/auth/status') {
           return next();
         }
@@ -327,11 +537,7 @@ export default function jwtAuthMiddleware(req, res, next) {
         logger.warn('JWT Auth token rejected: local authentication is not enabled', {
           component: 'JwtAuth'
         });
-        res.clearCookie('authToken', {
-          httpOnly: true,
-          secure: process.env.NODE_ENV === 'production',
-          sameSite: 'lax'
-        });
+        res.clearCookie('authToken', getClearAuthCookieOptions(req));
         if (req.path === '/api/auth/status') {
           return next(); // Continue as anonymous — let status endpoint return available auth methods
         }
@@ -354,7 +560,7 @@ export default function jwtAuthMiddleware(req, res, next) {
         // If not found by ID, try to find by email (OIDC users may have different IDs)
         if (!userRecord && decoded.email) {
           userRecord = Object.values(usersConfig.users || {}).find(
-            u => u.email === decoded.email && u.authMethods?.includes('oidc')
+            u => equalsIgnoreCase(u.email, decoded.email) && u.authMethods?.includes('oidc')
           );
         }
 
@@ -397,13 +603,22 @@ export default function jwtAuthMiddleware(req, res, next) {
         const usersFilePath = platform.localAuth?.usersFile || 'contents/config/users.json';
         const usersConfig = loadUsers(usersFilePath);
 
-        const userId = decoded.username;
+        // users.json is keyed by the persisted UUID (decoded.sub). Fall back to
+        // username for legacy tokens minted before sub was the canonical id.
+        const userId = decoded.sub || decoded.username;
         let userRecord = usersConfig.users?.[userId];
 
-        // If not found by username, try to find by email
         if (!userRecord && decoded.email) {
           userRecord = Object.values(usersConfig.users || {}).find(
-            u => u.email === decoded.email && u.authMethods?.includes('ldap')
+            u => equalsIgnoreCase(u.email, decoded.email) && u.authMethods?.includes('ldap')
+          );
+        }
+
+        if (!userRecord && decoded.username) {
+          userRecord = Object.values(usersConfig.users || {}).find(
+            u =>
+              equalsIgnoreCase(u.ldapData?.username, decoded.username) &&
+              u.authMethods?.includes('ldap')
           );
         }
 
@@ -419,8 +634,8 @@ export default function jwtAuthMiddleware(req, res, next) {
         }
 
         user = {
-          id: decoded.username,
-          username: decoded.username,
+          id: decoded.sub || decoded.username,
+          username: decoded.username || decoded.sub,
           name: decoded.name || decoded.displayName || decoded.username,
           email: decoded.email || decoded.mail || '',
           groups: decoded.groups || [],
@@ -450,7 +665,7 @@ export default function jwtAuthMiddleware(req, res, next) {
         // If not found by ID, try to find by email
         if (!userRecord && decoded.email) {
           userRecord = Object.values(usersConfig.users || {}).find(
-            u => u.email === decoded.email && u.authMethods?.includes('teams')
+            u => equalsIgnoreCase(u.email, decoded.email) && u.authMethods?.includes('teams')
           );
         }
 
@@ -499,7 +714,9 @@ export default function jwtAuthMiddleware(req, res, next) {
           userRecord = Object.values(usersConfig.users || {}).find(
             u =>
               (u.ntlmData?.subject === userId && u.authMethods?.includes('ntlm')) ||
-              (decoded.email && u.email === decoded.email && u.authMethods?.includes('ntlm'))
+              (decoded.email &&
+                equalsIgnoreCase(u.email, decoded.email) &&
+                u.authMethods?.includes('ntlm'))
           );
         }
 
@@ -548,6 +765,7 @@ export default function jwtAuthMiddleware(req, res, next) {
     }
 
     req.user = user;
+    recordAuthEvent('jwt', 'token_validated');
     return next();
   } catch (error) {
     // For /api/auth/status endpoint, allow expired/invalid tokens to pass through
@@ -556,10 +774,12 @@ export default function jwtAuthMiddleware(req, res, next) {
       logger.info('JWT Auth: expired token on status endpoint, continuing', {
         component: 'JwtAuth'
       });
+      recordAuthEvent('jwt', 'token_expired');
       return next();
     }
 
     logger.warn('JWT Auth token validation failed', { component: 'JwtAuth', error });
+    recordAuthEvent('jwt', error?.name === 'TokenExpiredError' ? 'token_expired' : 'token_invalid');
     return next();
   }
 }

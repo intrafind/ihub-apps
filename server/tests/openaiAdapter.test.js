@@ -9,7 +9,7 @@ const model = {
 };
 const messages = [{ role: 'user', content: 'test' }];
 
-const req = OpenAIAdapter.createCompletionRequest(model, messages, 'key', {
+const req = await OpenAIAdapter.createCompletionRequest(model, messages, 'key', {
   responseFormat: 'json'
 });
 

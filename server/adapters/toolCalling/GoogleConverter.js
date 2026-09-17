@@ -13,25 +13,28 @@ import {
   sanitizeSchemaForProvider,
   normalizeToolName
 } from './GenericToolCalling.js';
+import { isPlausibleToolName, describeInvalidToolName } from './toolNameValidator.js';
+import { extractThoughtSignature } from './thoughtSignatures.js';
 import logger from '../../utils/logger.js';
 import { parseJsonAsync } from '../../utils/asyncJson.js';
 
+const HALLUCINATION_NOTICE_PREFIX = '[provider:google dropped malformed function call]';
+
+function truncateForLog(value, max = 200) {
+  if (typeof value !== 'string') return value;
+  return value.length > max ? `${value.slice(0, max)}…(${value.length})` : value;
+}
+
 /**
  * Convert generic tools to Google format
- * Filters out provider-specific special tools from other providers (webSearch, etc.)
+ * Filters out provider-specific special tools from other providers (webSearch, etc.) —
+ * Google's own native Search grounding is injected directly by the adapter (see
+ * google.js), not routed through this generic tool-calling pipeline.
  * @param {import('./GenericToolCalling.js').GenericTool[]} genericTools - Generic tools
  * @returns {Object[]} Google formatted tools
  */
 export function convertGenericToolsToGoogle(genericTools = []) {
-  const tools = [];
-
-  // Separate Google Search tool from regular function-based tools
-  const googleSearchTool = genericTools.find(tool => tool.id === 'googleSearch');
-
-  // Filter tools for function declarations
   const functionTools = genericTools.filter(tool => {
-    // Keep googleSearch separate for special handling
-    if (tool.id === 'googleSearch') return false;
     // If tool specifies this provider, always include it
     if (tool.provider === 'google') {
       return true;
@@ -57,35 +60,17 @@ export function convertGenericToolsToGoogle(genericTools = []) {
     return true;
   });
 
-  // Add Google Search grounding if present
-  if (googleSearchTool) {
-    tools.push({ google_search: {} });
+  if (functionTools.length === 0) return [];
 
-    // Google API limitation: google_search cannot be combined with functionDeclarations
-    // If both are present, prioritize google_search and warn about skipped function tools
-    if (functionTools.length > 0) {
-      logger.warn(
-        'Google API limitation: cannot combine google_search with function calling, skipping function tools',
-        {
-          component: 'GoogleConverter',
-          skippedToolCount: functionTools.length,
-          skippedTools: functionTools.map(t => t.name)
-        }
-      );
-    }
-  }
-  // Only add regular function declarations if google_search is NOT present
-  else if (functionTools.length > 0) {
-    tools.push({
+  return [
+    {
       functionDeclarations: functionTools.map(tool => ({
         name: normalizeToolName(tool.id),
         description: tool.description,
         parameters: sanitizeSchemaForProvider(tool.parameters, 'google')
       }))
-    });
-  }
-
-  return tools;
+    }
+  ];
 }
 
 /**
@@ -121,12 +106,19 @@ export function convertGoogleToolsToGeneric(googleTools = []) {
  * @returns {Object[]} Google formatted function call parts
  */
 export function convertGenericToolCallsToGoogle(genericToolCalls = []) {
-  return genericToolCalls.map(toolCall => ({
-    functionCall: {
-      name: normalizeToolName(toolCall.name),
-      args: toolCall.arguments || {}
-    }
-  }));
+  return genericToolCalls.map(toolCall => {
+    const part = {
+      functionCall: {
+        name: normalizeToolName(toolCall.name),
+        args: toolCall.arguments || {}
+      }
+    };
+    // Gemini validates that a function call comes back with the thought
+    // signature it was issued with (see ./thoughtSignatures.js).
+    const thoughtSignature = extractThoughtSignature(toolCall);
+    if (thoughtSignature) part.thoughtSignature = thoughtSignature;
+    return part;
+  });
 }
 
 /**
@@ -137,16 +129,22 @@ export function convertGenericToolCallsToGoogle(genericToolCalls = []) {
 export function convertGoogleFunctionCallsToGeneric(googleFunctionCalls = []) {
   return googleFunctionCalls
     .map((part, index) => {
-      if (part.functionCall) {
-        return createGenericToolCall(
-          `call_${index}_${Date.now()}`, // Generate ID since Google doesn't provide one
-          part.functionCall.name,
-          part.functionCall.args || {},
-          index,
-          { originalFormat: 'google' }
-        );
+      if (!part.functionCall) return null;
+      if (!isPlausibleToolName(part.functionCall.name)) {
+        logger.warn('Dropping Google function call with malformed name', {
+          component: 'GoogleConverter',
+          reason: describeInvalidToolName(part.functionCall.name),
+          name: truncateForLog(part.functionCall.name)
+        });
+        return null;
       }
-      return null;
+      return createGenericToolCall(
+        `call_${index}_${Date.now()}`, // Generate ID since Google doesn't provide one
+        part.functionCall.name,
+        part.functionCall.args || {},
+        index,
+        { originalFormat: 'google' }
+      );
     })
     .filter(Boolean);
 }
@@ -190,11 +188,18 @@ export function convertGoogleFunctionResponseToGeneric(googleResponse) {
 /**
  * Convert Google streaming response to generic format
  * @param {string} data - Raw Google response data
- * @param {string} streamId - Stream identifier for stateful processing (unused for Google)
+ * @param {string} streamId - Stream identifier for stateful processing
  * @returns {Promise<import('./GenericToolCalling.js').GenericStreamingResponse>} Generic streaming response
  */
-export async function convertGoogleResponseToGeneric(data, _streamId = 'default') {
+const streamingState = new Map();
+
+export async function convertGoogleResponseToGeneric(data, streamId = 'default') {
   const result = createGenericStreamingResponse();
+
+  if (!streamingState.has(streamId)) {
+    streamingState.set(streamId, { toolCallIndex: 0 });
+  }
+  const state = streamingState.get(streamId);
 
   if (!data) return result;
 
@@ -246,22 +251,34 @@ export async function convertGoogleResponseToGeneric(data, _streamId = 'default'
           });
         }
         if (part.functionCall && part.functionCall.name) {
-          // Only create tool call if we have a valid name
-          // Include thoughtSignature in metadata for multi-turn conversations with thinking enabled
-          const metadata = { originalFormat: 'google' };
-          if (part.thoughtSignature) {
-            metadata.thoughtSignature = part.thoughtSignature;
+          if (!isPlausibleToolName(part.functionCall.name)) {
+            const reason = describeInvalidToolName(part.functionCall.name);
+            logger.warn('Google emitted malformed function call name; dropping', {
+              component: 'GoogleConverter',
+              reason,
+              name: truncateForLog(part.functionCall.name)
+            });
+            result.content.push(
+              `${HALLUCINATION_NOTICE_PREFIX} ${reason}: ${truncateForLog(part.functionCall.name, 80)}`
+            );
+          } else {
+            // Include thoughtSignature in metadata for multi-turn conversations with thinking enabled
+            const metadata = { originalFormat: 'google' };
+            if (part.thoughtSignature) {
+              metadata.thoughtSignature = part.thoughtSignature;
+            }
+            const toolCallIndex = state.toolCallIndex++;
+            result.tool_calls.push(
+              createGenericToolCall(
+                `call_${toolCallIndex}_${Date.now()}`,
+                part.functionCall.name,
+                part.functionCall.args || {},
+                toolCallIndex,
+                metadata
+              )
+            );
+            if (!result.finishReason) result.finishReason = 'tool_calls';
           }
-          result.tool_calls.push(
-            createGenericToolCall(
-              `call_${result.tool_calls.length}_${Date.now()}`,
-              part.functionCall.name,
-              part.functionCall.args || {},
-              result.tool_calls.length,
-              metadata
-            )
-          );
-          if (!result.finishReason) result.finishReason = 'tool_calls';
         }
         // Collect thought signatures for multi-turn conversations (for backward compatibility)
         if (part.thoughtSignature) {
@@ -270,6 +287,7 @@ export async function convertGoogleResponseToGeneric(data, _streamId = 'default'
         }
       }
       result.complete = true;
+      streamingState.delete(streamId);
       const fr = parsed.candidates[0].finishReason;
       // Only set finishReason from Google if we don't already have tool_calls
       // Check both the finishReason flag AND the actual tool_calls array
@@ -308,24 +326,34 @@ export async function convertGoogleResponseToGeneric(data, _streamId = 'default'
           });
         }
         if (part.functionCall && part.functionCall.name) {
-          // Only create tool call if we have a valid name (non-empty)
-          // This prevents creating tool calls with empty names during streaming
-
-          // Include thoughtSignature in metadata for multi-turn conversations with thinking enabled
-          const metadata = { originalFormat: 'google' };
-          if (part.thoughtSignature) {
-            metadata.thoughtSignature = part.thoughtSignature;
+          if (!isPlausibleToolName(part.functionCall.name)) {
+            const reason = describeInvalidToolName(part.functionCall.name);
+            logger.warn('Google streaming emitted malformed function call name; dropping', {
+              component: 'GoogleConverter',
+              reason,
+              name: truncateForLog(part.functionCall.name)
+            });
+            result.content.push(
+              `${HALLUCINATION_NOTICE_PREFIX} ${reason}: ${truncateForLog(part.functionCall.name, 80)}`
+            );
+          } else {
+            // Include thoughtSignature in metadata for multi-turn conversations with thinking enabled
+            const metadata = { originalFormat: 'google' };
+            if (part.thoughtSignature) {
+              metadata.thoughtSignature = part.thoughtSignature;
+            }
+            const toolCallIndex = state.toolCallIndex++;
+            result.tool_calls.push(
+              createGenericToolCall(
+                `call_${toolCallIndex}_${Date.now()}`,
+                part.functionCall.name,
+                part.functionCall.args || {},
+                toolCallIndex,
+                metadata
+              )
+            );
+            if (!result.finishReason) result.finishReason = 'tool_calls';
           }
-          result.tool_calls.push(
-            createGenericToolCall(
-              `call_${result.tool_calls.length}_${Date.now()}`,
-              part.functionCall.name,
-              part.functionCall.args || {},
-              result.tool_calls.length,
-              metadata
-            )
-          );
-          if (!result.finishReason) result.finishReason = 'tool_calls';
         }
         // Handle partial function calls during streaming - ignore incomplete ones
         else if (part.functionCall && !part.functionCall.name) {
@@ -343,8 +371,18 @@ export async function convertGoogleResponseToGeneric(data, _streamId = 'default'
       }
     }
 
-    // Extract grounding metadata if present (for Google Search grounding)
-    if (parsed.groundingMetadata) {
+    // Extract grounding metadata if present (for Google Search grounding).
+    // Gemini puts this at `candidates[0].groundingMetadata` in real responses;
+    // the top-level `parsed.groundingMetadata` lookup we used before only
+    // matched a hypothetical shape and silently dropped every real grounding
+    // payload — which is why agent runs with webSearch (auto-swapped to
+    // googleSearch on Google models) never produced citations. Check the
+    // candidates[0] location first and fall back to top-level for forward
+    // compatibility.
+    const candidateGrounding = parsed.candidates?.[0]?.groundingMetadata;
+    if (candidateGrounding) {
+      result.groundingMetadata = candidateGrounding;
+    } else if (parsed.groundingMetadata) {
       result.groundingMetadata = parsed.groundingMetadata;
     }
 
@@ -360,6 +398,7 @@ export async function convertGoogleResponseToGeneric(data, _streamId = 'default'
         // If we have tool_calls, mark as complete but preserve the tool_calls finish reason
         result.complete = true;
       }
+      streamingState.delete(streamId);
     }
   } catch (jsonError) {
     logger.error('Failed to parse Google response as JSON', {
@@ -382,10 +421,20 @@ export async function convertGoogleResponseToGeneric(data, _streamId = 'default'
       result.finishReason = 'stop';
       result.complete = true;
       result.error = false; // Clear error if we could extract some content
+      streamingState.delete(streamId);
     }
   }
 
   return result;
+}
+
+/**
+ * Discard accumulated per-stream state (e.g. tool call index counter) for a stream
+ * that errored or was aborted before reaching its natural completion event.
+ * @param {string} streamId - Stream identifier to clear
+ */
+export function clearGoogleStreamingState(streamId = 'default') {
+  streamingState.delete(streamId);
 }
 
 /**
@@ -407,16 +456,11 @@ export function convertGenericResponseToGoogle(genericResponse) {
     }
   }
 
-  // Add function calls
+  // Add function calls. Reuse the tool-call converter so this path keeps the
+  // thought signature too — every public Google conversion has to preserve it,
+  // not just the ones on the hot path.
   if (genericResponse.tool_calls && genericResponse.tool_calls.length > 0) {
-    for (const toolCall of genericResponse.tool_calls) {
-      parts.push({
-        functionCall: {
-          name: toolCall.name,
-          args: toolCall.arguments
-        }
-      });
-    }
+    parts.push(...convertGenericToolCallsToGoogle(genericResponse.tool_calls));
   }
 
   const response = {
@@ -498,12 +542,17 @@ export function processMessageForGoogle(message) {
         args = {};
       }
 
-      parts.push({
+      const functionCallPart = {
         functionCall: {
           name: normalizeToolName(toolCall.function.name),
           args
         }
-      });
+      };
+      // Gemini validates that a function call comes back with the thought
+      // signature it was issued with (see ./thoughtSignatures.js).
+      const thoughtSignature = extractThoughtSignature(toolCall);
+      if (thoughtSignature) functionCallPart.thoughtSignature = thoughtSignature;
+      parts.push(functionCallPart);
     }
 
     return { role: 'model', parts };

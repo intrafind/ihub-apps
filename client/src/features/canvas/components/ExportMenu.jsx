@@ -1,10 +1,15 @@
 import { useTranslation } from 'react-i18next';
 import Icon from '../../../shared/components/Icon';
 import { useClipboard } from '../../../shared/hooks/useClipboard';
+import useFeatureFlags from '../../../shared/hooks/useFeatureFlags';
 
-export default function ExportMenu({ content, onClose }) {
+export default function ExportMenu({ app, content, onClose }) {
   const { t } = useTranslation();
   const { copyText, copyMarkdown, copyHTML } = useClipboard();
+  const featureFlags = useFeatureFlags();
+
+  // Check if export is enabled at both platform and app levels
+  const exportEnabled = featureFlags.isBothEnabled(app, 'export', true);
 
   const handleCopyText = async () => {
     await copyText(content);
@@ -48,6 +53,11 @@ export default function ExportMenu({ content, onClose }) {
     onClose();
   };
 
+  // If export is disabled, don't render anything
+  if (!exportEnabled) {
+    return null;
+  }
+
   return (
     <div className="absolute top-full right-0 mt-2 bg-white border border-gray-200 rounded-lg shadow-lg z-50 min-w-56">
       <div className="p-2">
@@ -56,21 +66,21 @@ export default function ExportMenu({ content, onClose }) {
         </div>
         <button
           onClick={handleCopyText}
-          className="w-full text-left px-3 py-2 text-sm text-gray-700 hover:bg-gray-100 rounded flex items-center gap-2 transition-colors whitespace-nowrap"
+          className="w-full text-left px-3 py-2 text-sm text-gray-700 hover:bg-gray-100 rounded-sm flex items-center gap-2 transition-colors whitespace-nowrap"
         >
           <Icon name="document-text" size="sm" />
           {t('canvas.export.copyText', 'as Text')}
         </button>
         <button
           onClick={handleCopyMarkdown}
-          className="w-full text-left px-3 py-2 text-sm text-gray-700 hover:bg-gray-100 rounded flex items-center gap-2 transition-colors whitespace-nowrap"
+          className="w-full text-left px-3 py-2 text-sm text-gray-700 hover:bg-gray-100 rounded-sm flex items-center gap-2 transition-colors whitespace-nowrap"
         >
           <Icon name="code" size="sm" />
           {t('canvas.export.copyMarkdown', 'as Markdown')}
         </button>
         <button
           onClick={handleCopyHTML}
-          className="w-full text-left px-3 py-2 text-sm text-gray-700 hover:bg-gray-100 rounded flex items-center gap-2 transition-colors whitespace-nowrap"
+          className="w-full text-left px-3 py-2 text-sm text-gray-700 hover:bg-gray-100 rounded-sm flex items-center gap-2 transition-colors whitespace-nowrap"
         >
           <Icon name="code" size="sm" />
           {t('canvas.export.copyHTML', 'as HTML')}
@@ -83,7 +93,7 @@ export default function ExportMenu({ content, onClose }) {
         </div>
         <button
           onClick={handlePrintPDF}
-          className="w-full text-left px-3 py-2 text-sm text-gray-700 hover:bg-gray-100 rounded flex items-center gap-2 transition-colors"
+          className="w-full text-left px-3 py-2 text-sm text-gray-700 hover:bg-gray-100 rounded-sm flex items-center gap-2 transition-colors"
         >
           <Icon name="printer" size="sm" />
           {t('canvas.export.printPDF', 'Print as PDF')}

@@ -12,7 +12,9 @@ Ask the user for:
 - **system prompt**: The AI system prompt in English and German
 - **icon**: HeroIcon name (e.g. `SparklesIcon`, `ChatBubbleLeftIcon`, `DocumentTextIcon`)
 - **color**: Hex color code (e.g. `#4F46E5`)
-- **tokenLimit**: Max tokens (typical values: 4096, 8192, 16384, 32768, 131072)
+
+> Note: apps no longer configure token limits. The context window and output cap
+> come from the selected model (`contextWindow` / `maxOutputTokens` in the model config).
 
 ## Create the Config File
 
@@ -35,7 +37,6 @@ Create `contents/apps/{id}.json` with this minimal valid shape:
     "en": "...",
     "de": "..."
   },
-  "tokenLimit": 8192,
   "enabled": true
 }
 ```

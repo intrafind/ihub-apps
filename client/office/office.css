@@ -1,0 +1,86 @@
+@import 'tailwindcss' source(none);
+@import '../tailwind.css';
+
+/*
+ * Resolution-aware base scale for the Office task pane.
+ *
+ * Outlook desktop renders the add-in inside WebView2 at the OS display-scale
+ * factor — a small 13" Windows laptop is typically 125–150%. Crucially, the
+ * <meta name="viewport"> tag in taskpane.html is a no-op in desktop WebView2,
+ * so nothing in the add-in otherwise compensates for that scaling and the whole
+ * UI (tiles, chat input, attachments, dialogs) renders oversized — forcing the
+ * user to manually zoom out to fit the pane.
+ *
+ * Both "scaled small screen" and "narrow pane" surface as a small CSS-pixel
+ * viewport width (CSS px = device px / devicePixelRatio), so we key a fluid
+ * root font-size off the pane width. Because the entire add-in is built with
+ * rem-based Tailwind sizing (text, spacing, widths, icon sizes), shrinking the
+ * root font-size scales everything down together instead of patching each
+ * component. The pane viewport == the add-in's viewport, so `vw` is the pane
+ * width here.
+ *
+ * ~13px floor at/under a ~300px pane, ramping to the 16px default once the pane
+ * is comfortably wide (≥ ~470px).
+ */
+html {
+  font-size: clamp(13px, 1.7vw + 8px, 16px);
+}
+
+html,
+body {
+  box-sizing: border-box;
+  overflow-x: hidden;
+  width: 100%;
+  max-width: 100%;
+  margin: 0;
+  padding: 0;
+}
+
+*,
+*::before,
+*::after {
+  box-sizing: inherit;
+}
+
+#office-root {
+  width: 100%;
+  max-width: 100%;
+  overflow-x: hidden;
+  min-height: 100vh;
+}
+
+/*
+ * Dark mode (Settings → Appearance). The preference is applied as
+ * `data-theme="dark"` on <html> before React mounts; painting the root here
+ * (rather than a React container) keeps the pane dark while the add-in is
+ * still loading, and `color-scheme` switches native controls (select
+ * dropdowns, checkboxes, scrollbars) to their dark rendering.
+ */
+html[data-theme='dark'] {
+  color-scheme: dark;
+  background-color: #0f172a; /* slate-900 */
+}
+
+/* Loading dots animation */
+@keyframes chat-loading-dot {
+  0%,
+  80%,
+  100% {
+    transform: scale(0.8);
+    opacity: 0.5;
+  }
+  40% {
+    transform: scale(1.2);
+    opacity: 1;
+  }
+}
+
+.chat-loading-dots span {
+  animation: chat-loading-dot 1.2s ease-in-out infinite both;
+}
+.chat-loading-dots span:nth-child(2) {
+  animation-delay: 0.15s;
+}
+.chat-loading-dots span:nth-child(3) {
+  animation-delay: 0.3s;
+}

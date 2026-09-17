@@ -1,10 +1,8 @@
-import { promises as fs } from 'fs';
-import { join } from 'path';
-import { getRootDir } from '../../pathUtils.js';
-import { atomicWriteJSON } from '../../utils/atomicWrite.js';
+import configStore from '../../services/config/ConfigStore.js';
 import configCache from '../../configCache.js';
 import { adminAuth, isAdminAuthRequired } from '../../middleware/adminAuth.js';
-import { hashPasswordWithUserId } from '../../middleware/localAuth.js';
+import { isContentAdminAuthRequired } from '../../middleware/contentAdminAuth.js';
+import { equalsIgnoreCase, hashPasswordWithUserId } from '../../utils/userManager.js';
 import { v4 as uuidv4 } from 'uuid';
 import { buildServerPath } from '../../utils/basePath.js';
 import { validateIdForPath } from '../../utils/pathSecurity.js';
@@ -16,6 +14,10 @@ import {
   sendErrorResponse
 } from '../../utils/responseHelpers.js';
 import { isLastAdmin } from '../../utils/adminRescue.js';
+import { logAudit } from '../../services/AuditLogService.js';
+
+/** The local user database, as a path relative to `contents/`. */
+const USERS_FILE = 'config/users.json';
 
 /**
  * @swagger
@@ -168,7 +170,8 @@ export default function registerAdminAuthRoutes(app) {
     try {
       // Check if admin auth is required considering current user authentication
       // req.user is populated by the global auth middleware (proxyAuth, localAuth)
-      const authRequired = isAdminAuthRequired(req);
+      // Accept both full admins and content admins for admin panel entry
+      const authRequired = isAdminAuthRequired(req) && isContentAdminAuthRequired(req);
 
       res.json({
         authRequired,
@@ -249,21 +252,24 @@ export default function registerAdminAuthRoutes(app) {
    */
   app.get(buildServerPath('/api/admin/auth/users'), adminAuth, async (req, res) => {
     try {
-      const rootDir = getRootDir();
-      const usersFilePath = join(rootDir, 'contents', 'config', 'users.json');
-
-      let usersData = { users: {}, metadata: {} };
-      try {
-        const usersFileData = await fs.readFile(usersFilePath, 'utf8');
-        usersData = JSON.parse(usersFileData);
-      } catch {
+      let usersData = await configStore.readJson(USERS_FILE);
+      if (!usersData) {
         // File doesn't exist or is invalid, return empty users
         logger.info('Users file not found or invalid, returning empty list', {
           component: 'AdminAuth'
         });
+        usersData = { users: {}, metadata: {} };
       }
 
-      res.json(usersData);
+      const sanitizedUsers = Object.fromEntries(
+        Object.entries(usersData.users || {}).map(([id, user]) => {
+          // eslint-disable-next-line no-unused-vars
+          const { passwordHash, ...userWithoutPasswordHash } = user;
+          return [id, userWithoutPasswordHash];
+        })
+      );
+
+      res.json({ ...usersData, users: sanitizedUsers });
     } catch (error) {
       return sendInternalError(res, error, 'get users');
     }
@@ -367,27 +373,19 @@ export default function registerAdminAuthRoutes(app) {
         return sendBadRequest(res, 'Password must be at least 6 characters long');
       }
 
-      const rootDir = getRootDir();
-      const usersFilePath = join(rootDir, 'contents', 'config', 'users.json');
+      // No user database yet is the first-run case: start the structure here.
+      const usersData = (await configStore.readJson(USERS_FILE)) || {
+        users: {},
+        metadata: {
+          version: '2.0.0',
+          description: 'Local user database for iHub Apps'
+        }
+      };
 
-      // Load existing users
-      let usersData = { users: {}, metadata: {} };
-      try {
-        const usersFileData = await fs.readFile(usersFilePath, 'utf8');
-        usersData = JSON.parse(usersFileData);
-      } catch {
-        // File doesn't exist, create new structure
-        usersData = {
-          users: {},
-          metadata: {
-            version: '2.0.0',
-            description: 'Local user database for iHub Apps'
-          }
-        };
-      }
-
-      // Check if username already exists
-      const existingUser = Object.values(usersData.users).find(user => user.username === username);
+      // Check if username already exists (case-insensitive)
+      const existingUser = Object.values(usersData.users).find(user =>
+        equalsIgnoreCase(user.username, username)
+      );
       if (existingUser) {
         return sendErrorResponse(res, 409, 'Username already exists');
       }
@@ -416,7 +414,7 @@ export default function registerAdminAuthRoutes(app) {
       usersData.metadata.lastUpdated = new Date().toISOString();
 
       // Save to file
-      await atomicWriteJSON(usersFilePath, usersData);
+      await configStore.writeJson(USERS_FILE, usersData);
 
       // Refresh cache to ensure new user is available in cache
       await configCache.refreshCacheEntry('config/users.json');
@@ -426,6 +424,14 @@ export default function registerAdminAuthRoutes(app) {
         username,
         userId,
         authMethods: authMethods.join(', ')
+      });
+
+      logAudit({
+        req,
+        action: 'create',
+        resource: 'user',
+        resourceId: userId,
+        summary: `Created user "${username}"`
       });
 
       // Return user without password hash
@@ -514,15 +520,8 @@ export default function registerAdminAuthRoutes(app) {
 
       const { email, name, password, internalGroups, active } = req.body;
 
-      const rootDir = getRootDir();
-      const usersFilePath = join(rootDir, 'contents', 'config', 'users.json');
-
-      // Load existing users
-      let usersData = { users: {}, metadata: {} };
-      try {
-        const usersFileData = await fs.readFile(usersFilePath, 'utf8');
-        usersData = JSON.parse(usersFileData);
-      } catch {
+      const usersData = await configStore.readJson(USERS_FILE);
+      if (!usersData) {
         return sendNotFound(res, 'Users file');
       }
 
@@ -552,12 +551,20 @@ export default function registerAdminAuthRoutes(app) {
       usersData.metadata.lastUpdated = new Date().toISOString();
 
       // Save to file
-      await atomicWriteJSON(usersFilePath, usersData);
+      await configStore.writeJson(USERS_FILE, usersData);
 
       // Refresh cache to ensure updated user data is available in cache
       await configCache.refreshCacheEntry('config/users.json');
 
       logger.info('Updated user', { component: 'AdminAuth', username: user.username, userId });
+
+      logAudit({
+        req,
+        action: 'update',
+        resource: 'user',
+        resourceId: userId,
+        summary: `Updated user "${user.username}"`
+      });
 
       // Return user without password hash
       // eslint-disable-next-line no-unused-vars
@@ -619,15 +626,8 @@ export default function registerAdminAuthRoutes(app) {
         return;
       }
 
-      const rootDir = getRootDir();
-      const usersFilePath = join(rootDir, 'contents', 'config', 'users.json');
-
-      // Load existing users
-      let usersData = { users: {}, metadata: {} };
-      try {
-        const usersFileData = await fs.readFile(usersFilePath, 'utf8');
-        usersData = JSON.parse(usersFileData);
-      } catch {
+      const usersData = await configStore.readJson(USERS_FILE);
+      if (!usersData) {
         return sendNotFound(res, 'Users file');
       }
 
@@ -637,7 +637,7 @@ export default function registerAdminAuthRoutes(app) {
       }
 
       // Check if user is the last admin - prevent deletion
-      if (isLastAdmin(userId, usersFilePath)) {
+      if (isLastAdmin(userId)) {
         return sendErrorResponse(
           res,
           403,
@@ -652,12 +652,20 @@ export default function registerAdminAuthRoutes(app) {
       usersData.metadata.lastUpdated = new Date().toISOString();
 
       // Save to file
-      await atomicWriteJSON(usersFilePath, usersData);
+      await configStore.writeJson(USERS_FILE, usersData);
 
       // Refresh cache to ensure deleted user is removed from cache
       await configCache.refreshCacheEntry('config/users.json');
 
       logger.info('Deleted user', { component: 'AdminAuth', username, userId });
+
+      logAudit({
+        req,
+        action: 'delete',
+        resource: 'user',
+        resourceId: userId,
+        summary: `Deleted user "${username}"`
+      });
 
       res.json({ message: 'User deleted successfully' });
     } catch (error) {

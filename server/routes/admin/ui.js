@@ -5,12 +5,34 @@ import fs from 'fs';
 import { join } from 'path';
 import { getRootDir } from '../../pathUtils.js';
 import configCache from '../../configCache.js';
-import { atomicWriteJSON } from '../../utils/atomicWrite.js';
+import configStore from '../../services/config/ConfigStore.js';
 import { adminAuth } from '../../middleware/adminAuth.js';
 import { authRequired } from '../../middleware/authRequired.js';
 import { buildServerPath } from '../../utils/basePath.js';
 import { resolveAndValidatePath } from '../../utils/pathSecurity.js';
 import logger from '../../utils/logger.js';
+import { recordUpload } from '../../telemetry/metrics.js';
+import { logAudit } from '../../services/AuditLogService.js';
+import { APP_ID_PATTERN, APP_ID_MAX_LENGTH } from '../../../shared/validationPatterns.js';
+
+/**
+ * Views `ui.json → startPage.defaultPage` may name as the "/" route: the
+ * personalized start page, the apps browser, a content page (`defaultPageId`)
+ * or an app (`defaultPageAppId`). Mirrored on the client in utils/homePage.js.
+ */
+const VALID_DEFAULT_PAGES = ['start', 'apps', 'page', 'app'];
+
+/**
+ * How the start page and the sidebar rank the apps that are neither favorites
+ * nor admin-picked defaults. Mirrored on the client in utils/appShortcuts.js.
+ */
+const VALID_APP_SHORTCUT_MODES = ['order', 'recent'];
+
+/** Upper bound for `startPage.appsCount` / `startPage.sidebarAppsCount`. */
+const MAX_APP_SHORTCUTS = 12;
+
+/** Nobody curates more default apps than this; the counts cap the lists anyway. */
+const MAX_FEATURED_APPS = 50;
 
 export default function registerAdminUIRoutes(app) {
   // Configure multer for file uploads
@@ -73,11 +95,13 @@ export default function registerAdminUIRoutes(app) {
     (req, res) => {
       try {
         if (!req.file) {
+          recordUpload('admin_asset', 'rejected_other');
           return res.status(400).json({
             success: false,
             message: 'No file uploaded'
           });
         }
+        recordUpload('admin_asset', 'accepted', req.file.size);
 
         const { assetType = 'general', description = '' } = req.body;
 
@@ -97,6 +121,14 @@ export default function registerAdminUIRoutes(app) {
           uploadedAt: new Date().toISOString(),
           uploadedBy: req.user?.username || 'admin'
         };
+
+        logAudit({
+          req,
+          action: 'create',
+          resource: 'uiAsset',
+          resourceId: assetInfo.filename,
+          summary: `Uploaded UI asset ${assetInfo.filename}`
+        });
 
         res.json({
           success: true,
@@ -180,42 +212,55 @@ export default function registerAdminUIRoutes(app) {
   /**
    * Delete asset
    */
-  app.delete(buildServerPath('/api/admin/ui/assets/:id'), authRequired, adminAuth, (req, res) => {
-    try {
-      const { id } = req.params;
-      const assetsDir = join(getRootDir(), 'contents/uploads/assets');
+  app.delete(
+    buildServerPath('/api/admin/ui/assets/:id'),
+    authRequired,
+    adminAuth,
+    async (req, res) => {
+      try {
+        const { id } = req.params;
+        const assetsDir = join(getRootDir(), 'contents/uploads/assets');
 
-      // Validate path stays within assets directory (prevents traversal)
-      const filepath = resolveAndValidatePath(id, assetsDir);
-      if (!filepath) {
-        return res.status(400).json({
+        // Validate path stays within assets directory (prevents traversal)
+        const filepath = await resolveAndValidatePath(id, assetsDir);
+        if (!filepath) {
+          return res.status(400).json({
+            success: false,
+            message: 'Invalid asset id'
+          });
+        }
+
+        if (!fs.existsSync(filepath)) {
+          return res.status(404).json({
+            success: false,
+            message: 'Asset not found'
+          });
+        }
+
+        fs.unlinkSync(filepath);
+
+        logAudit({
+          req,
+          action: 'delete',
+          resource: 'uiAsset',
+          resourceId: id,
+          summary: `Deleted UI asset ${id}`
+        });
+
+        res.json({
+          success: true,
+          message: 'Asset deleted successfully'
+        });
+      } catch (error) {
+        logger.error('Error deleting asset', { component: 'AdminUI', error });
+        res.status(500).json({
           success: false,
-          message: 'Invalid asset id'
+          message: 'Failed to delete asset',
+          error: error.message
         });
       }
-
-      if (!fs.existsSync(filepath)) {
-        return res.status(404).json({
-          success: false,
-          message: 'Asset not found'
-        });
-      }
-
-      fs.unlinkSync(filepath);
-
-      res.json({
-        success: true,
-        message: 'Asset deleted successfully'
-      });
-    } catch (error) {
-      logger.error('Error deleting asset', { component: 'AdminUI', error });
-      res.status(500).json({
-        success: false,
-        message: 'Failed to delete asset',
-        error: error.message
-      });
     }
-  });
+  );
 
   /**
    * Get UI configuration
@@ -252,17 +297,21 @@ export default function registerAdminUIRoutes(app) {
         });
       }
 
-      // Get the current config path
-      const configPath = join(getRootDir(), 'contents/config/ui.json');
-
       // Validate the configuration structure (basic validation)
       validateUIConfig(config);
 
       // Write the updated configuration atomically
-      await atomicWriteJSON(configPath, config);
+      await configStore.writeJson('config/ui.json', config);
 
       // Refresh the cache
       await configCache.refreshCacheEntry('config/ui.json');
+
+      logAudit({
+        req,
+        action: 'update',
+        resource: 'uiConfig',
+        summary: 'Updated UI configuration'
+      });
 
       res.json({
         success: true,
@@ -286,15 +335,18 @@ export default function registerAdminUIRoutes(app) {
       const uiConfig = configCache.getUI();
       const currentConfig = uiConfig?.data || {};
       const timestamp = new Date().toISOString().replace(/[:.]/g, '-');
-      const backupDir = join(getRootDir(), 'contents/backups');
 
-      // Create backup directory if it doesn't exist
-      if (!fs.existsSync(backupDir)) {
-        fs.mkdirSync(backupDir, { recursive: true });
-      }
+      // `backups/` is not a configuration namespace, so this lands on the
+      // contained path — the store creates the directory on the way.
+      await configStore.writeJson(`backups/ui-config-backup-${timestamp}.json`, currentConfig);
 
-      const backupPath = join(backupDir, `ui-config-backup-${timestamp}.json`);
-      await atomicWriteJSON(backupPath, currentConfig);
+      logAudit({
+        req,
+        action: 'export',
+        resource: 'uiConfig',
+        resourceId: `ui-config-backup-${timestamp}.json`,
+        summary: 'Backed up UI configuration'
+      });
 
       res.json({
         success: true,
@@ -365,6 +417,124 @@ export default function registerAdminUIRoutes(app) {
       }
       if (pwa.shortName && typeof pwa.shortName !== 'string') {
         throw new Error('pwa.shortName must be a string');
+      }
+    }
+
+    // Validate errorPages section if present. Each screen is an object of
+    // localized `{ lang: value }` fields; unset fields fall back to i18n.
+    if (config.errorPages !== undefined) {
+      if (typeof config.errorPages !== 'object' || Array.isArray(config.errorPages)) {
+        throw new Error('errorPages section must be an object');
+      }
+      for (const [pageKey, page] of Object.entries(config.errorPages)) {
+        if (page !== null && (typeof page !== 'object' || Array.isArray(page))) {
+          throw new Error(`errorPages.${pageKey} must be an object`);
+        }
+      }
+    }
+
+    // Validate startPage section if present. `defaultAppId` ends up in a URL
+    // path (/apps/<id>) and an API call on the client, so it must look like an
+    // app id; `title` and `subtitle` are localized `{ lang: value }` objects.
+    if (config.startPage !== undefined) {
+      const { startPage } = config;
+      if (typeof startPage !== 'object' || startPage === null || Array.isArray(startPage)) {
+        throw new Error('startPage section must be an object');
+      }
+      if (startPage.showDefaultApp !== undefined && typeof startPage.showDefaultApp !== 'boolean') {
+        throw new Error('startPage.showDefaultApp must be a boolean');
+      }
+      if (startPage.showUserName !== undefined && typeof startPage.showUserName !== 'boolean') {
+        throw new Error('startPage.showUserName must be a boolean');
+      }
+      if (
+        startPage.defaultAppId !== undefined &&
+        startPage.defaultAppId !== null &&
+        startPage.defaultAppId !== ''
+      ) {
+        if (
+          typeof startPage.defaultAppId !== 'string' ||
+          startPage.defaultAppId.length > APP_ID_MAX_LENGTH ||
+          !APP_ID_PATTERN.test(startPage.defaultAppId)
+        ) {
+          throw new Error('startPage.defaultAppId must be a valid app id');
+        }
+      }
+      for (const field of ['title', 'subtitle']) {
+        const value = startPage[field];
+        if (value === undefined || value === null) continue;
+        if (typeof value !== 'object' || Array.isArray(value)) {
+          throw new Error(`startPage.${field} must be a localized object`);
+        }
+      }
+      // `defaultPage` decides what the "/" route shows. Anything but "start"
+      // redirects to another route, so the ids it points at reach a URL path
+      // and get the same treatment as `defaultAppId` above.
+      if (
+        startPage.defaultPage !== undefined &&
+        startPage.defaultPage !== null &&
+        startPage.defaultPage !== ''
+      ) {
+        if (!VALID_DEFAULT_PAGES.includes(startPage.defaultPage)) {
+          throw new Error(
+            `startPage.defaultPage must be one of: ${VALID_DEFAULT_PAGES.join(', ')}`
+          );
+        }
+      }
+      for (const field of ['defaultPageId', 'defaultPageAppId']) {
+        const value = startPage[field];
+        if (value === undefined || value === null || value === '') continue;
+        if (
+          typeof value !== 'string' ||
+          value.length > APP_ID_MAX_LENGTH ||
+          !APP_ID_PATTERN.test(value)
+        ) {
+          throw new Error(`startPage.${field} must be a valid id`);
+        }
+      }
+      // App shortcuts: which apps lead the start-page grid and the sidebar's
+      // Apps section, how the rest rank, and how many each list shows.
+      if (
+        startPage.appsMode !== undefined &&
+        startPage.appsMode !== null &&
+        startPage.appsMode !== ''
+      ) {
+        if (!VALID_APP_SHORTCUT_MODES.includes(startPage.appsMode)) {
+          throw new Error(
+            `startPage.appsMode must be one of: ${VALID_APP_SHORTCUT_MODES.join(', ')}`
+          );
+        }
+      }
+      for (const field of ['appsCount', 'sidebarAppsCount']) {
+        const value = startPage[field];
+        // Unset means "use the built-in default", which the client applies.
+        if (value === undefined || value === null || value === '') continue;
+        if (!Number.isInteger(value) || value < 0 || value > MAX_APP_SHORTCUTS) {
+          throw new Error(
+            `startPage.${field} must be an integer between 0 and ${MAX_APP_SHORTCUTS}`
+          );
+        }
+      }
+      if (startPage.featuredAppIds !== undefined && startPage.featuredAppIds !== null) {
+        const { featuredAppIds } = startPage;
+        if (!Array.isArray(featuredAppIds)) {
+          throw new Error('startPage.featuredAppIds must be an array of app ids');
+        }
+        if (featuredAppIds.length > MAX_FEATURED_APPS) {
+          throw new Error(
+            `startPage.featuredAppIds must not hold more than ${MAX_FEATURED_APPS} ids`
+          );
+        }
+        // These ids end up in /apps/<id> links on the client, so they get the
+        // same treatment as every other app id in this config.
+        for (const id of featuredAppIds) {
+          if (typeof id !== 'string' || id.length > APP_ID_MAX_LENGTH || !APP_ID_PATTERN.test(id)) {
+            throw new Error('startPage.featuredAppIds must only contain valid app ids');
+          }
+        }
+        if (new Set(featuredAppIds).size !== featuredAppIds.length) {
+          throw new Error('startPage.featuredAppIds must not contain duplicates');
+        }
       }
     }
   }

@@ -50,7 +50,7 @@ function ImageGenerationControls({
           onChange={e => onImageAspectRatioChange?.(e.target.value)}
           disabled={imageGenDisabled}
           title={t('appConfig.imageAspectRatio', 'Aspect Ratio')}
-          className="px-2 py-1.5 text-sm border border-gray-300 dark:border-gray-600 rounded-md focus:outline-none focus:ring-1 focus:ring-indigo-500 dark:bg-gray-700 dark:text-gray-200 disabled:opacity-50 disabled:cursor-not-allowed"
+          className="px-2 py-1.5 text-sm border border-gray-300 dark:border-gray-600 rounded-md focus:outline-hidden focus:ring-1 focus:ring-indigo-500 dark:bg-gray-700 dark:text-gray-200 disabled:opacity-50 disabled:cursor-not-allowed"
         >
           {aspectRatios.map(ratio => (
             <option key={ratio.id} value={ratio.id}>
@@ -65,7 +65,7 @@ function ImageGenerationControls({
           onChange={e => onImageQualityChange?.(e.target.value)}
           disabled={imageGenDisabled}
           title={t('appConfig.imageQuality', 'Quality')}
-          className="px-2 py-1.5 text-sm border border-gray-300 dark:border-gray-600 rounded-md focus:outline-none focus:ring-1 focus:ring-indigo-500 dark:bg-gray-700 dark:text-gray-200 disabled:opacity-50 disabled:cursor-not-allowed"
+          className="px-2 py-1.5 text-sm border border-gray-300 dark:border-gray-600 rounded-md focus:outline-hidden focus:ring-1 focus:ring-indigo-500 dark:bg-gray-700 dark:text-gray-200 disabled:opacity-50 disabled:cursor-not-allowed"
         >
           {qualityLevels.map(level => (
             <option key={level.id} value={level.id}>
@@ -88,7 +88,7 @@ function ImageGenerationControls({
           value={imageAspectRatio || '1:1'}
           onChange={e => onImageAspectRatioChange?.(e.target.value)}
           disabled={imageGenDisabled}
-          className="w-full px-2 py-1.5 text-sm border border-gray-300 dark:border-gray-600 rounded-md focus:outline-none focus:ring-1 focus:ring-indigo-500 dark:bg-gray-700 dark:text-gray-200 disabled:opacity-50 disabled:cursor-not-allowed"
+          className="w-full px-2 py-1.5 text-sm border border-gray-300 dark:border-gray-600 rounded-md focus:outline-hidden focus:ring-1 focus:ring-indigo-500 dark:bg-gray-700 dark:text-gray-200 disabled:opacity-50 disabled:cursor-not-allowed"
         >
           {aspectRatios.map(ratio => (
             <option key={ratio.id} value={ratio.id}>
@@ -107,7 +107,7 @@ function ImageGenerationControls({
           value={imageQuality || 'Medium'}
           onChange={e => onImageQualityChange?.(e.target.value)}
           disabled={imageGenDisabled}
-          className="w-full px-2 py-1.5 text-sm border border-gray-300 dark:border-gray-600 rounded-md focus:outline-none focus:ring-1 focus:ring-indigo-500 dark:bg-gray-700 dark:text-gray-200 disabled:opacity-50 disabled:cursor-not-allowed"
+          className="w-full px-2 py-1.5 text-sm border border-gray-300 dark:border-gray-600 rounded-md focus:outline-hidden focus:ring-1 focus:ring-indigo-500 dark:bg-gray-700 dark:text-gray-200 disabled:opacity-50 disabled:cursor-not-allowed"
         >
           {qualityLevels.map(level => (
             <option key={level.id} value={level.id}>

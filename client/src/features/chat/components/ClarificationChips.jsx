@@ -204,7 +204,7 @@ function ClarificationChips({
                 inline-flex items-center gap-2 px-4 py-2.5 rounded-full text-sm font-medium
                 transition-all duration-150 ease-in-out
                 min-h-[44px] min-w-[44px]
-                focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500
+                focus:outline-hidden focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500
                 ${
                   disabled
                     ? 'bg-gray-100 text-gray-400 cursor-not-allowed dark:bg-gray-700 dark:text-gray-500'
@@ -214,7 +214,7 @@ function ClarificationChips({
                 }
               `}
             >
-              {multiSelect && selected && <Icon name="check" size="sm" className="flex-shrink-0" />}
+              {multiSelect && selected && <Icon name="check" size="sm" className="shrink-0" />}
               <span>{item.label}</span>
             </button>
           );

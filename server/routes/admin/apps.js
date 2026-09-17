@@ -1,10 +1,6 @@
-import { readFileSync } from 'fs';
-import { promises as fs } from 'fs';
-import { join } from 'path';
-import { getRootDir } from '../../pathUtils.js';
-import { atomicWriteJSON } from '../../utils/atomicWrite.js';
+import configStore from '../../services/config/ConfigStore.js';
 import configCache from '../../configCache.js';
-import { adminAuth } from '../../middleware/adminAuth.js';
+import { contentAdminAuth } from '../../middleware/contentAdminAuth.js';
 import {
   sendNotFound,
   sendBadRequest,
@@ -16,55 +12,8 @@ import { buildServerPath } from '../../utils/basePath.js';
 import { validateIdForPath, validateIdsForPath } from '../../utils/pathSecurity.js';
 import logger from '../../utils/logger.js';
 import { removeMarketplaceInstallation } from '../../utils/installationCleanup.js';
-
-/**
- * Find the actual filename for an app ID
- * Handles cases where the filename doesn't match the app ID
- * @param {string} appId - The app ID to search for
- * @param {string} appsDir - The apps directory path
- * @returns {Promise<string|null>} The filename if found, null otherwise
- */
-async function findAppFile(appId, appsDir) {
-  try {
-    const files = await fs.readdir(appsDir);
-    const jsonFiles = files.filter(f => f.endsWith('.json'));
-
-    // First try the expected filename
-    const expectedFilename = `${appId}.json`;
-    if (jsonFiles.includes(expectedFilename)) {
-      return expectedFilename;
-    }
-
-    // If not found, search through all files to find one with matching ID
-    for (const file of jsonFiles) {
-      try {
-        const filePath = join(appsDir, file);
-        const content = await fs.readFile(filePath, 'utf8');
-        const app = JSON.parse(content);
-        if (app.id === appId) {
-          return file;
-        }
-      } catch (error) {
-        // Skip files that can't be read or parsed
-        logger.debug('Skipping malformed app file', {
-          component: 'AdminApps',
-          file,
-          error: error.message
-        });
-        continue;
-      }
-    }
-
-    return null;
-  } catch (error) {
-    logger.warn('Failed to read apps directory', {
-      component: 'AdminApps',
-      appsDir,
-      error: error.message
-    });
-    return null;
-  }
-}
+import { logAudit } from '../../services/AuditLogService.js';
+import { saveSnapshot } from '../../services/ChangeHistoryService.js';
 
 /**
  * @swagger
@@ -80,7 +29,6 @@ async function findAppFile(appId, appsDir) {
  *         - color
  *         - icon
  *         - system
- *         - tokenLimit
  *       properties:
  *         id:
  *           type: string
@@ -110,10 +58,6 @@ async function findAppFile(appId, appsDir) {
  *           type: object
  *           description: Localized system prompts
  *           example: { "en": "You are a helpful AI assistant..." }
- *         tokenLimit:
- *           type: number
- *           description: Maximum tokens per request
- *           example: 4000
  *         preferredModel:
  *           type: string
  *           description: Default model selection
@@ -287,7 +231,6 @@ export default function registerAdminAppsRoutes(app) {
    *                 icon: "chat"
    *                 system:
    *                   en: "You are a helpful AI assistant..."
-   *                 tokenLimit: 4000
    *                 preferredModel: "gpt-4"
    *                 category: "productivity"
    *                 enabled: true
@@ -325,7 +268,7 @@ export default function registerAdminAppsRoutes(app) {
    *             example:
    *               error: "Failed to fetch apps"
    */
-  app.get(buildServerPath('/api/admin/apps'), adminAuth, async (req, res) => {
+  app.get(buildServerPath('/api/admin/apps'), contentAdminAuth, async (req, res) => {
     try {
       const { data: apps, etag: appsEtag } = configCache.getApps(true);
       res.setHeader('ETag', appsEtag);
@@ -382,7 +325,7 @@ export default function registerAdminAppsRoutes(app) {
    *       500:
    *         description: Internal server error
    */
-  app.get(buildServerPath('/api/admin/apps/templates'), adminAuth, async (req, res) => {
+  app.get(buildServerPath('/api/admin/apps/templates'), contentAdminAuth, async (req, res) => {
     try {
       const { data: apps, etag: appsEtag } = configCache.getApps(true);
       const templates = apps.filter(app => app.allowInheritance !== false && app.enabled);
@@ -457,39 +400,43 @@ export default function registerAdminAppsRoutes(app) {
    *       500:
    *         description: Internal server error
    */
-  app.get(buildServerPath('/api/admin/apps/:appId/inheritance'), adminAuth, async (req, res) => {
-    try {
-      const { appId } = req.params;
+  app.get(
+    buildServerPath('/api/admin/apps/:appId/inheritance'),
+    contentAdminAuth,
+    async (req, res) => {
+      try {
+        const { appId } = req.params;
 
-      // Validate appId for security
-      if (!validateIdForPath(appId, 'app', res)) {
-        return;
+        // Validate appId for security
+        if (!validateIdForPath(appId, 'app', res)) {
+          return;
+        }
+
+        const { data: apps } = configCache.getApps(true);
+        const app = apps.find(a => a.id === appId);
+
+        if (!app) {
+          return sendNotFound(res, 'App');
+        }
+
+        const inheritance = {
+          app: app,
+          parent: null,
+          children: []
+        };
+
+        if (app.parentId) {
+          inheritance.parent = apps.find(a => a.id === app.parentId);
+        }
+        inheritance.children = apps.filter(a => a.parentId === appId);
+        res.json(inheritance);
+      } catch (error) {
+        sendFailedOperationError(res, 'fetch app inheritance', error);
       }
-
-      const { data: apps } = configCache.getApps(true);
-      const app = apps.find(a => a.id === appId);
-
-      if (!app) {
-        return sendNotFound(res, 'App');
-      }
-
-      const inheritance = {
-        app: app,
-        parent: null,
-        children: []
-      };
-
-      if (app.parentId) {
-        inheritance.parent = apps.find(a => a.id === app.parentId);
-      }
-      inheritance.children = apps.filter(a => a.parentId === appId);
-      res.json(inheritance);
-    } catch (error) {
-      sendFailedOperationError(res, 'fetch app inheritance', error);
     }
-  });
+  );
 
-  app.get(buildServerPath('/api/admin/apps/:appId'), adminAuth, async (req, res) => {
+  app.get(buildServerPath('/api/admin/apps/:appId'), contentAdminAuth, async (req, res) => {
     try {
       const { appId } = req.params;
 
@@ -558,7 +505,6 @@ export default function registerAdminAppsRoutes(app) {
    *             icon: "chat"
    *             system:
    *               en: "You are an enhanced AI assistant..."
-   *             tokenLimit: 8000
    *             preferredModel: "gpt-4-turbo"
    *             enabled: true
    *     responses:
@@ -592,7 +538,7 @@ export default function registerAdminAppsRoutes(app) {
    *       500:
    *         description: Internal server error
    */
-  app.put(buildServerPath('/api/admin/apps/:appId'), adminAuth, async (req, res) => {
+  app.put(buildServerPath('/api/admin/apps/:appId'), contentAdminAuth, async (req, res) => {
     try {
       const { appId } = req.params;
       const updatedApp = req.body;
@@ -609,18 +555,33 @@ export default function registerAdminAppsRoutes(app) {
         return sendBadRequest(res, 'App ID cannot be changed');
       }
 
-      const rootDir = getRootDir();
-      const appsDir = join(rootDir, 'contents', 'apps');
-      // Ensure directory exists before writing
-      await fs.mkdir(appsDir, { recursive: true });
       // Find the actual file for this app ID (may not match ${appId}.json)
-      const filename = await findAppFile(appId, appsDir);
-      if (!filename) {
+      const appFilePath = await configStore.resolveIdToPath('apps', appId, {
+        createIfMissing: false
+      });
+      if (!appFilePath) {
         return sendNotFound(res, 'App file');
       }
-      const appFilePath = join(appsDir, filename);
-      await atomicWriteJSON(appFilePath, updatedApp);
+      const { data: currentApps } = configCache.getApps(true);
+      const oldApp = currentApps.find(a => a.id === appId);
+      await configStore.writeJson(appFilePath, updatedApp);
       await configCache.refreshAppsCache();
+      if (oldApp) {
+        await saveSnapshot({
+          resource: 'app',
+          id: appId,
+          before: oldApp,
+          after: updatedApp,
+          admin: req.user?.username ?? req.user?.name ?? req.user?.id ?? 'unknown'
+        });
+      }
+      await logAudit({
+        req,
+        action: 'update',
+        resource: 'app',
+        resourceId: appId,
+        summary: `Updated app ${appId}`
+      });
       res.json({ message: 'App updated successfully', app: updatedApp });
     } catch (error) {
       sendFailedOperationError(res, 'update app', error);
@@ -668,7 +629,6 @@ export default function registerAdminAppsRoutes(app) {
    *             icon: "assistant"
    *             system:
    *               en: "You are a helpful new assistant..."
-   *             tokenLimit: 4000
    *             preferredModel: "gpt-4"
    *             category: "productivity"
    *             enabled: true
@@ -704,7 +664,7 @@ export default function registerAdminAppsRoutes(app) {
    *       500:
    *         description: Internal server error
    */
-  app.post(buildServerPath('/api/admin/apps'), adminAuth, async (req, res) => {
+  app.post(buildServerPath('/api/admin/apps'), contentAdminAuth, async (req, res) => {
     try {
       const newApp = req.body;
       if (!newApp.id || !newApp.name || !newApp.description) {
@@ -716,19 +676,27 @@ export default function registerAdminAppsRoutes(app) {
         return;
       }
 
-      const rootDir = getRootDir();
-      const appsDir = join(rootDir, 'contents', 'apps');
-      const appFilePath = join(appsDir, `${newApp.id}.json`);
-      try {
-        readFileSync(appFilePath, 'utf8');
+      // Check for duplicate ID via configCache (covers filenames that differ from their ID)
+      const { data: existingApps } = configCache.getApps(true);
+      if (existingApps.some(a => a.id === newApp.id)) {
         return sendErrorResponse(res, 409, 'App with this ID already exists');
-      } catch {
-        // file does not exist
       }
-      // Ensure directory exists before writing
-      await fs.mkdir(appsDir, { recursive: true });
-      await fs.writeFile(appFilePath, JSON.stringify(newApp, null, 2));
+      try {
+        // Create-only: the file-exists check and the write are one step, so two
+        // concurrent creates cannot both decide the name is free.
+        await configStore.createJson(`apps/${newApp.id}.json`, newApp);
+      } catch (error) {
+        if (error.code !== 'EEXIST') throw error;
+        return sendErrorResponse(res, 409, 'App with this ID already exists');
+      }
       await configCache.refreshAppsCache();
+      await logAudit({
+        req,
+        action: 'create',
+        resource: 'app',
+        resourceId: newApp.id,
+        summary: `Created app ${newApp.id}`
+      });
       res.json({ message: 'App created successfully', app: newApp });
     } catch (error) {
       return sendInternalError(res, error, 'create app');
@@ -786,7 +754,7 @@ export default function registerAdminAppsRoutes(app) {
    *       500:
    *         description: Internal server error
    */
-  app.post(buildServerPath('/api/admin/apps/:appId/toggle'), adminAuth, async (req, res) => {
+  app.post(buildServerPath('/api/admin/apps/:appId/toggle'), contentAdminAuth, async (req, res) => {
     try {
       const { appId } = req.params;
 
@@ -802,18 +770,22 @@ export default function registerAdminAppsRoutes(app) {
       }
       const newEnabledState = !app.enabled;
       app.enabled = newEnabledState;
-      const rootDir = getRootDir();
-      const appsDir = join(rootDir, 'contents', 'apps');
-      // Ensure directory exists before writing
-      await fs.mkdir(appsDir, { recursive: true });
       // Find the actual file for this app ID (may not match ${appId}.json)
-      const filename = await findAppFile(appId, appsDir);
-      if (!filename) {
+      const appFilePath = await configStore.resolveIdToPath('apps', appId, {
+        createIfMissing: false
+      });
+      if (!appFilePath) {
         return sendNotFound(res, 'App file');
       }
-      const appFilePath = join(appsDir, filename);
-      await fs.writeFile(appFilePath, JSON.stringify(app, null, 2));
+      await configStore.writeJson(appFilePath, app);
       await configCache.refreshAppsCache();
+      await logAudit({
+        req,
+        action: 'toggle',
+        resource: 'app',
+        resourceId: appId,
+        summary: `${newEnabledState ? 'Enabled' : 'Disabled'} app ${appId}`
+      });
       res.json({
         message: `App ${newEnabledState ? 'enabled' : 'disabled'} successfully`,
         app: app,
@@ -821,6 +793,132 @@ export default function registerAdminAppsRoutes(app) {
       });
     } catch (error) {
       return sendInternalError(res, error, 'toggle app');
+    }
+  });
+
+  /**
+   * @swagger
+   * /api/admin/apps/_reorder:
+   *   post:
+   *     summary: Set the display order of applications
+   *     description: |
+   *       Rewrites the `order` field of the given applications so it matches the
+   *       order the ids are sent in: the first id gets `order: 1`, the second
+   *       `order: 2`, and so on. This is what the reorder view in
+   *       **Admin → Apps** saves, and what the apps browser, the start page and
+   *       the sidebar rank by.
+   *
+   *       Only the `order` field of each app's own configuration file is
+   *       touched; apps that are not listed keep the order they have.
+   *     tags:
+   *       - Admin
+   *       - Applications
+   *     security:
+   *       - adminAuth: []
+   *     requestBody:
+   *       required: true
+   *       content:
+   *         application/json:
+   *           schema:
+   *             type: object
+   *             required:
+   *               - ids
+   *             properties:
+   *               ids:
+   *                 type: array
+   *                 items:
+   *                   type: string
+   *                 description: App ids, in the order they should appear
+   *           example:
+   *             ids: ["chat-assistant", "translator", "code-reviewer"]
+   *     responses:
+   *       200:
+   *         description: Order successfully applied
+   *         content:
+   *           application/json:
+   *             schema:
+   *               type: object
+   *               properties:
+   *                 message:
+   *                   type: string
+   *                 ids:
+   *                   type: array
+   *                   items:
+   *                     type: string
+   *                 updated:
+   *                   type: array
+   *                   items:
+   *                     type: string
+   *                   description: Apps whose file actually changed
+   *             example:
+   *               message: "App order updated successfully"
+   *               ids: ["chat-assistant", "translator"]
+   *               updated: ["translator"]
+   *       400:
+   *         description: Bad request - missing, duplicated or unknown ids
+   *       500:
+   *         description: Internal server error
+   */
+  app.post(buildServerPath('/api/admin/apps/_reorder'), contentAdminAuth, async (req, res) => {
+    try {
+      const { ids: requestedIds } = req.body || {};
+      if (!Array.isArray(requestedIds) || requestedIds.length === 0) {
+        return sendBadRequest(res, 'ids must be a non-empty array of app ids');
+      }
+      if (new Set(requestedIds).size !== requestedIds.length) {
+        return sendBadRequest(res, 'ids must not contain duplicates');
+      }
+
+      // Same id validation as every other app route — these reach the filesystem.
+      const ids = validateIdsForPath(requestedIds, 'app', res);
+      if (!ids) {
+        return;
+      }
+
+      const { data: apps } = configCache.getApps(true);
+      const known = new Set(apps.map(a => a.id));
+      const unknown = ids.filter(id => !known.has(id));
+      if (unknown.length > 0) {
+        return sendBadRequest(res, `Unknown app ids: ${unknown.join(', ')}`);
+      }
+
+      const updated = [];
+
+      for (const [index, id] of ids.entries()) {
+        const order = index + 1;
+        const appFilePath = await configStore.resolveIdToPath('apps', id, {
+          createIfMissing: false
+        });
+        if (!appFilePath) {
+          logger.warn('App file not found', { component: 'AdminApps', id });
+          continue;
+        }
+        // Read the stored document, not the cached entry: the cache holds
+        // inheritance already merged in, and writing that back would freeze a
+        // child app's inherited fields into its own config.
+        const stored = await configStore.readJson(appFilePath);
+        if (!stored) {
+          logger.warn('App file not readable', { component: 'AdminApps', id });
+          continue;
+        }
+        if (stored.order === order) continue;
+        stored.order = order;
+        await configStore.writeJson(appFilePath, stored);
+        updated.push(id);
+      }
+
+      await configCache.refreshAppsCache();
+      await logAudit({
+        req,
+        action: 'update',
+        resource: 'app',
+        resourceId: updated.join(','),
+        summary: `Reordered ${ids.length} apps (${updated.length} changed)`
+      });
+
+      res.json({ message: 'App order updated successfully', ids, updated });
+    } catch (error) {
+      return sendInternalError(res, error, 'reorder apps');
     }
   });
 
@@ -892,53 +990,60 @@ export default function registerAdminAppsRoutes(app) {
    *       500:
    *         description: Internal server error
    */
-  app.post(buildServerPath('/api/admin/apps/:appIds/_toggle'), adminAuth, async (req, res) => {
-    try {
-      const { appIds } = req.params;
-      const { enabled } = req.body;
-      if (typeof enabled !== 'boolean') {
-        return sendBadRequest(res, 'Missing enabled flag');
-      }
-
-      // Validate appIds for security
-      const ids = validateIdsForPath(appIds, 'app', res);
-      if (!ids) {
-        return;
-      }
-
-      const { data: apps } = configCache.getApps(true);
-      const resolvedIds = ids.includes('*') ? apps.map(a => a.id) : ids;
-      const rootDir = getRootDir();
-      const appsDir = join(rootDir, 'contents', 'apps');
-      // Ensure directory exists before writing
-      await fs.mkdir(appsDir, { recursive: true });
-
-      for (const id of resolvedIds) {
-        const app = apps.find(a => a.id === id);
-        if (!app) continue;
-        if (app.enabled !== enabled) {
-          app.enabled = enabled;
-          // Find the actual file for this app ID (may not match ${id}.json)
-          const filename = await findAppFile(id, appsDir);
-          if (!filename) {
-            logger.warn('App file not found', { component: 'AdminApps', id });
-            continue;
-          }
-          const appFilePath = join(appsDir, filename);
-          await fs.writeFile(appFilePath, JSON.stringify(app, null, 2));
+  app.post(
+    buildServerPath('/api/admin/apps/:appIds/_toggle'),
+    contentAdminAuth,
+    async (req, res) => {
+      try {
+        const { appIds } = req.params;
+        const { enabled } = req.body;
+        if (typeof enabled !== 'boolean') {
+          return sendBadRequest(res, 'Missing enabled flag');
         }
-      }
 
-      await configCache.refreshAppsCache();
-      res.json({
-        message: `Apps ${enabled ? 'enabled' : 'disabled'} successfully`,
-        enabled,
-        ids: resolvedIds
-      });
-    } catch (error) {
-      return sendInternalError(res, error, 'toggle apps');
+        // Validate appIds for security
+        const ids = validateIdsForPath(appIds, 'app', res);
+        if (!ids) {
+          return;
+        }
+
+        const { data: apps } = configCache.getApps(true);
+        const resolvedIds = ids.includes('*') ? apps.map(a => a.id) : ids;
+        for (const id of resolvedIds) {
+          const app = apps.find(a => a.id === id);
+          if (!app) continue;
+          if (app.enabled !== enabled) {
+            app.enabled = enabled;
+            // Find the actual file for this app ID (may not match ${id}.json)
+            const appFilePath = await configStore.resolveIdToPath('apps', id, {
+              createIfMissing: false
+            });
+            if (!appFilePath) {
+              logger.warn('App file not found', { component: 'AdminApps', id });
+              continue;
+            }
+            await configStore.writeJson(appFilePath, app);
+          }
+        }
+
+        await configCache.refreshAppsCache();
+        await logAudit({
+          req,
+          action: 'toggle',
+          resource: 'app',
+          resourceId: resolvedIds.join(','),
+          summary: `Batch ${enabled ? 'enabled' : 'disabled'} ${resolvedIds.length} apps`
+        });
+        res.json({
+          message: `Apps ${enabled ? 'enabled' : 'disabled'} successfully`,
+          enabled,
+          ids: resolvedIds
+        });
+      } catch (error) {
+        return sendInternalError(res, error, 'toggle apps');
+      }
     }
-  });
+  );
 
   /**
    * @swagger
@@ -994,7 +1099,7 @@ export default function registerAdminAppsRoutes(app) {
    *             example:
    *               error: "Failed to delete app"
    */
-  app.delete(buildServerPath('/api/admin/apps/:appId'), adminAuth, async (req, res) => {
+  app.delete(buildServerPath('/api/admin/apps/:appId'), contentAdminAuth, async (req, res) => {
     try {
       const { appId } = req.params;
 
@@ -1003,16 +1108,33 @@ export default function registerAdminAppsRoutes(app) {
         return;
       }
 
-      const rootDir = getRootDir();
-      const appFilePath = join(rootDir, 'contents', 'apps', `${appId}.json`);
-      try {
-        readFileSync(appFilePath, 'utf8');
-      } catch {
+      const appFilePath = await configStore.resolveIdToPath('apps', appId, {
+        createIfMissing: false
+      });
+      if (!appFilePath) {
         return sendNotFound(res, 'App');
       }
-      await fs.unlink(appFilePath);
+      const { data: currentApps } = configCache.getApps(true);
+      const deletedApp = currentApps.find(a => a.id === appId);
+      if (deletedApp) {
+        await saveSnapshot({
+          resource: 'app',
+          id: appId,
+          before: deletedApp,
+          after: null,
+          admin: req.user?.username ?? req.user?.name ?? req.user?.id ?? 'unknown'
+        });
+      }
+      await configStore.remove(appFilePath);
       await configCache.refreshAppsCache();
       await removeMarketplaceInstallation('app', appId);
+      await logAudit({
+        req,
+        action: 'delete',
+        resource: 'app',
+        resourceId: appId,
+        summary: `Deleted app ${appId}`
+      });
       res.json({ message: 'App deleted successfully' });
     } catch (error) {
       return sendInternalError(res, error, 'delete app');

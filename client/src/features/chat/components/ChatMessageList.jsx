@@ -23,7 +23,13 @@ function ChatMessageList({
   compact = false,
   onOpenInCanvas,
   onInsert,
+  onInsertNew = null,
+  insertAction = null,
   canvasEnabled = false,
+  // Whether this surface's chat stores the images its turns generate. Only the
+  // durable chat page does; the compare panels, the canvas and the Office pane
+  // all mint ephemeral chats, so the default is the honest one.
+  imagesPersisted = false,
   // Integration auth props
   requiredIntegrations = [],
   onConnectIntegration,
@@ -33,7 +39,8 @@ function ChatMessageList({
   onClarificationSubmit = null, // Callback when a clarification response is submitted
   onClarificationSkip = null, // Callback when a clarification is skipped
   // Citation document action handlers
-  onDocumentAction = null
+  onDocumentAction = null,
+  showAvatars = true
 }) {
   const { t } = useTranslation();
   const chatContainerRef = useRef(null);
@@ -118,6 +125,18 @@ function ChatMessageList({
     return null;
   }
 
+  // Index of the most recent assistant message. The Office insertAction
+  // ('primary' variant) uses this to stay always-visible on the latest
+  // response while older assistant turns fold back into hover-revealed icons,
+  // so a small Outlook taskpane keeps a single dominant CTA in view.
+  let lastAssistantIndex = -1;
+  for (let i = displayedMessages.length - 1; i >= 0; i--) {
+    if (displayedMessages[i].role === 'assistant') {
+      lastAssistantIndex = i;
+      break;
+    }
+  }
+
   return (
     <div
       ref={chatContainerRef}
@@ -129,18 +148,20 @@ function ChatMessageList({
       {displayedMessages.map((message, index) => (
         <div key={message.id}>
           <div
-            className={`flex gap-3 ${message.role === 'user' ? 'flex-row-reverse' : 'flex-row'}`}
+            className={`flex ${showAvatars ? 'gap-3' : 'gap-1'} ${message.role === 'user' ? 'flex-row-reverse' : 'flex-row'}`}
           >
             {/* Message sender icon */}
-            <div className="flex-shrink-0 mt-1">
-              {message.role === 'assistant' ? (
-                <Icon name={assistantIcon} size="2xl" className="text-blue-500" />
-              ) : message.role === 'user' ? (
-                <Icon name={userIcon} size="xl" className="text-gray-500" />
-              ) : (
-                <Icon name={errorIcon} size="2xl" className="text-yellow-500" />
-              )}
-            </div>
+            {showAvatars && (
+              <div className="shrink-0 mt-1">
+                {message.role === 'assistant' ? (
+                  <Icon name={assistantIcon} size="2xl" className="text-blue-500" />
+                ) : message.role === 'user' ? (
+                  <Icon name={userIcon} size="xl" className="text-gray-500" />
+                ) : (
+                  <Icon name={errorIcon} size="2xl" className="text-yellow-500" />
+                )}
+              </div>
+            )}
 
             {/* Message content */}
             <div className={`max-w-[80%] ${message.role === 'user' ? '' : ''}`}>
@@ -157,7 +178,11 @@ function ChatMessageList({
                 compact={compact}
                 onOpenInCanvas={onOpenInCanvas}
                 onInsert={onInsert}
+                onInsertNew={onInsertNew}
+                insertAction={insertAction}
+                isLatestAssistantMessage={index === lastAssistantIndex}
                 canvasEnabled={canvasEnabled}
+                imagesPersisted={imagesPersisted}
                 app={app}
                 models={models}
                 onClarificationSubmit={onClarificationSubmit}

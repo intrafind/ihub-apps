@@ -2,16 +2,19 @@ import {
   createOAuthClient,
   updateOAuthClient,
   deleteOAuthClient,
+  deleteUnusedDynamicClients,
   rotateClientSecret,
   listOAuthClients,
   findClientById,
   loadOAuthClients
 } from '../../utils/oauthClientManager.js';
 import { generateStaticApiKey, introspectOAuthToken } from '../../utils/oauthTokenService.js';
+import { countByClient, listSeenCimdClients } from '../../services/oauth/ConnectionService.js';
 import { buildServerPath } from '../../utils/basePath.js';
 import { adminAuth } from '../../middleware/adminAuth.js';
 import configCache from '../../configCache.js';
 import { validateIdForPath } from '../../utils/pathSecurity.js';
+import { logAudit } from '../../services/AuditLogService.js';
 import logger from '../../utils/logger.js';
 
 /**
@@ -63,9 +66,21 @@ export default function registerAdminOAuthRoutes(app) {
       const clientsFilePath = oauthConfig.clientsFile || 'contents/config/oauth-clients.json';
       const clients = listOAuthClients(clientsFilePath);
 
+      // How many people are actually connected through each client. A row with
+      // zero is a client nobody uses; a dynamic row with many is one worth
+      // keeping. Neither is visible from the client record alone.
+      const counts = countByClient();
+
       res.json({
         success: true,
-        clients
+        clients: clients.map(client => ({
+          ...client,
+          connectionCount: counts[client.clientId] || 0
+        })),
+        // CIMD clients are not stored, so they would be missing from this page
+        // entirely. These synthetic, read-only rows are derived from the
+        // connections that exist.
+        cimdClients: listSeenCimdClients()
       });
     } catch (error) {
       logger.error('[OAuth Admin] List clients error', { component: 'OAuthAdmin', error });
@@ -179,6 +194,10 @@ export default function registerAdminOAuthRoutes(app) {
    *                 type: array
    *                 items:
    *                   type: string
+   *               allowedPrompts:
+   *                 type: array
+   *                 items:
+   *                   type: string
    *               tokenExpirationMinutes:
    *                 type: number
    *     responses:
@@ -205,6 +224,8 @@ export default function registerAdminOAuthRoutes(app) {
         scopes,
         allowedApps,
         allowedModels,
+        allowedPrompts,
+        allowedGroups,
         tokenExpirationMinutes,
         metadata,
         clientType,
@@ -236,8 +257,13 @@ export default function registerAdminOAuthRoutes(app) {
         name: name.trim(),
         description: description?.trim() || '',
         scopes: Array.isArray(scopes) ? scopes : [],
-        allowedApps: Array.isArray(allowedApps) ? allowedApps : [],
-        allowedModels: Array.isArray(allowedModels) ? allowedModels : [],
+        // Default to ["*"] (allow all) if not specified, making it clear to admins
+        allowedApps: Array.isArray(allowedApps) && allowedApps.length > 0 ? allowedApps : ['*'],
+        allowedModels:
+          Array.isArray(allowedModels) && allowedModels.length > 0 ? allowedModels : ['*'],
+        allowedPrompts:
+          Array.isArray(allowedPrompts) && allowedPrompts.length > 0 ? allowedPrompts : ['*'],
+        allowedGroups: Array.isArray(allowedGroups) ? allowedGroups : [],
         tokenExpirationMinutes:
           tokenExpirationMinutes || oauthConfig.defaultTokenExpirationMinutes || 60,
         metadata: metadata || {},
@@ -254,6 +280,14 @@ export default function registerAdminOAuthRoutes(app) {
 
       const newClient = await createOAuthClient(clientData, clientsFilePath, createdBy);
 
+      logAudit({
+        req,
+        action: 'create',
+        resource: 'oauthClient',
+        resourceId: newClient.clientId,
+        summary: `Created OAuth client "${newClient.name}"`
+      });
+
       // Return client with plain text secret (only time it's shown)
       res.status(201).json({
         success: true,
@@ -267,6 +301,8 @@ export default function registerAdminOAuthRoutes(app) {
           scopes: newClient.scopes,
           allowedApps: newClient.allowedApps,
           allowedModels: newClient.allowedModels,
+          allowedPrompts: newClient.allowedPrompts,
+          allowedGroups: newClient.allowedGroups,
           tokenExpirationMinutes: newClient.tokenExpirationMinutes,
           active: newClient.active,
           createdAt: newClient.createdAt,
@@ -352,6 +388,14 @@ export default function registerAdminOAuthRoutes(app) {
 
       const updatedClient = await updateOAuthClient(clientId, updates, clientsFilePath, updatedBy);
 
+      logAudit({
+        req,
+        action: 'update',
+        resource: 'oauthClient',
+        resourceId: clientId,
+        summary: `Updated OAuth client "${updatedClient.name || clientId}"`
+      });
+
       res.json({
         success: true,
         message: 'OAuth client updated successfully',
@@ -395,6 +439,83 @@ export default function registerAdminOAuthRoutes(app) {
    *       404:
    *         description: Client not found
    */
+  /**
+   * @swagger
+   * /api/admin/oauth/clients/dynamic:
+   *   delete:
+   *     summary: Remove unused dynamically registered OAuth clients
+   *     description: |
+   *       Deletes every client created by RFC 7591 dynamic client registration
+   *       whose last use (or, for a client never used, its registration) is
+   *       older than `unusedForDays`. Deleting a client invalidates the consent
+   *       memory and refresh tokens of everyone who connected through it — they
+   *       simply reconnect — which is why this is never done automatically.
+   *     tags:
+   *       - Admin
+   *       - OAuth
+   *     security:
+   *       - BearerAuth: []
+   *     parameters:
+   *       - name: unusedForDays
+   *         in: query
+   *         required: false
+   *         schema:
+   *           type: integer
+   *           default: 90
+   *     responses:
+   *       200:
+   *         description: Clients removed
+   *       400:
+   *         description: Invalid unusedForDays value, or OAuth clients are not enabled
+   */
+  app.delete(buildServerPath('/api/admin/oauth/clients/dynamic'), adminAuth, async (req, res) => {
+    try {
+      const platform = configCache.getPlatform() || {};
+      const oauthConfig = platform.oauth || {};
+
+      if (!oauthConfig.enabled?.clients) {
+        return res.status(400).json({
+          success: false,
+          error: 'OAuth clients are not enabled on this server'
+        });
+      }
+
+      const raw = req.query.unusedForDays;
+      const unusedForDays = raw === undefined || raw === '' ? 90 : Number(raw);
+      if (!Number.isInteger(unusedForDays) || unusedForDays < 0 || unusedForDays > 3650) {
+        return res.status(400).json({
+          success: false,
+          error: 'unusedForDays must be an integer between 0 and 3650'
+        });
+      }
+
+      const clientsFilePath = oauthConfig.clientsFile || 'contents/config/oauth-clients.json';
+      const deletedBy = req.user?.id || 'admin';
+
+      const { deleted, clientIds } = await deleteUnusedDynamicClients(
+        unusedForDays,
+        clientsFilePath,
+        deletedBy
+      );
+
+      logAudit({
+        req,
+        action: 'delete',
+        resource: 'oauthClient',
+        resourceId: 'dynamic',
+        summary: `Removed ${deleted} dynamic OAuth client(s) unused for ${unusedForDays} day(s)`
+      });
+
+      res.json({ success: true, deleted, clientIds });
+    } catch (error) {
+      logger.error('[OAuth Admin] Prune dynamic clients error', { component: 'OAuthAdmin', error });
+      res.status(500).json({
+        success: false,
+        error: 'Failed to remove unused dynamic OAuth clients'
+      });
+    }
+  });
+
   app.delete(buildServerPath('/api/admin/oauth/clients/:clientId'), adminAuth, async (req, res) => {
     try {
       const platform = configCache.getPlatform() || {};
@@ -416,6 +537,14 @@ export default function registerAdminOAuthRoutes(app) {
       const deletedBy = req.user?.id || 'admin';
 
       await deleteOAuthClient(clientId, clientsFilePath, deletedBy);
+
+      logAudit({
+        req,
+        action: 'delete',
+        resource: 'oauthClient',
+        resourceId: clientId,
+        summary: `Deleted OAuth client ${clientId}`
+      });
 
       res.json({
         success: true,
@@ -483,6 +612,14 @@ export default function registerAdminOAuthRoutes(app) {
         const rotatedBy = req.user?.id || 'admin';
 
         const result = await rotateClientSecret(clientId, clientsFilePath, rotatedBy);
+
+        logAudit({
+          req,
+          action: 'update',
+          resource: 'oauthClient',
+          resourceId: clientId,
+          summary: `Rotated client secret for ${clientId}`
+        });
 
         res.json({
           success: true,
@@ -589,6 +726,14 @@ export default function registerAdminOAuthRoutes(app) {
 
         const apiKeyResult = generateStaticApiKey(client, expirationDays);
 
+        logAudit({
+          req,
+          action: 'create',
+          resource: 'oauthToken',
+          resourceId: clientId,
+          summary: `Generated static API key for ${clientId} (expires in ${expirationDays} days)`
+        });
+
         res.json({
           success: true,
           message:
@@ -688,4 +833,134 @@ export default function registerAdminOAuthRoutes(app) {
       }
     }
   );
+
+  /**
+   * @swagger
+   * /api/admin/oauth/public-key/pem:
+   *   get:
+   *     summary: Download public key in PEM format
+   *     description: Download the RSA public key used for JWT signature verification in PEM format
+   *     tags:
+   *       - Admin
+   *       - OAuth
+   *     security:
+   *       - BearerAuth: []
+   *     responses:
+   *       200:
+   *         description: Public key in PEM format
+   *         content:
+   *           application/x-pem-file:
+   *             schema:
+   *               type: string
+   *       400:
+   *         description: OAuth not configured or wrong algorithm
+   *       404:
+   *         description: Public key not available
+   */
+  app.get(buildServerPath('/api/admin/oauth/public-key/pem'), adminAuth, async (req, res) => {
+    try {
+      const platform = configCache.getPlatform() || {};
+      const jwtAlgorithm = platform.jwt?.algorithm || 'RS256';
+
+      if (jwtAlgorithm !== 'RS256') {
+        return res.status(400).json({
+          success: false,
+          error:
+            'Public key is only available for RS256 algorithm. Current algorithm: ' + jwtAlgorithm
+        });
+      }
+
+      const tokenStorageService = (await import('../../services/TokenStorageService.js')).default;
+      const keyPair = tokenStorageService.getRSAKeyPair();
+
+      if (!keyPair || !keyPair.publicKey) {
+        return res.status(404).json({
+          success: false,
+          error: 'RSA public key not available'
+        });
+      }
+
+      // Set headers for file download
+      res.setHeader('Content-Type', 'application/x-pem-file');
+      res.setHeader('Content-Disposition', 'attachment; filename="jwt-public-key.pem"');
+      res.send(keyPair.publicKey);
+    } catch (error) {
+      logger.error('[OAuth Admin] Download public key PEM error', {
+        component: 'OAuthAdmin',
+        error
+      });
+      res.status(500).json({
+        success: false,
+        error: 'Failed to download public key'
+      });
+    }
+  });
+
+  /**
+   * @swagger
+   * /api/admin/oauth/public-key/base64:
+   *   get:
+   *     summary: Download public key in base64 format
+   *     description: Download the RSA public key used for JWT signature verification in base64 format (for Spring Boot configs)
+   *     tags:
+   *       - Admin
+   *       - OAuth
+   *     security:
+   *       - BearerAuth: []
+   *     responses:
+   *       200:
+   *         description: Public key in base64 format
+   *         content:
+   *           text/plain:
+   *             schema:
+   *               type: string
+   *       400:
+   *         description: OAuth not configured or wrong algorithm
+   *       404:
+   *         description: Public key not available
+   */
+  app.get(buildServerPath('/api/admin/oauth/public-key/base64'), adminAuth, async (req, res) => {
+    try {
+      const platform = configCache.getPlatform() || {};
+      const jwtAlgorithm = platform.jwt?.algorithm || 'RS256';
+
+      if (jwtAlgorithm !== 'RS256') {
+        return res.status(400).json({
+          success: false,
+          error:
+            'Public key is only available for RS256 algorithm. Current algorithm: ' + jwtAlgorithm
+        });
+      }
+
+      const tokenStorageService = (await import('../../services/TokenStorageService.js')).default;
+      const keyPair = tokenStorageService.getRSAKeyPair();
+
+      if (!keyPair || !keyPair.publicKey) {
+        return res.status(404).json({
+          success: false,
+          error: 'RSA public key not available'
+        });
+      }
+
+      // Convert PEM to base64 (remove header, footer, and newlines)
+      const base64Key = keyPair.publicKey
+        .replace('-----BEGIN PUBLIC KEY-----', '')
+        .replace('-----END PUBLIC KEY-----', '')
+        .replace(/\s/g, '');
+
+      // Set headers for text download
+      res.setHeader('Content-Type', 'text/plain; charset=utf-8');
+      res.setHeader('Content-Disposition', 'attachment; filename="jwt-public-key-base64.txt"');
+      res.send(base64Key);
+    } catch (error) {
+      logger.error('[OAuth Admin] Download public key base64 error', {
+        component: 'OAuthAdmin',
+        error
+      });
+      res.status(500).json({
+        success: false,
+        error: 'Failed to download public key'
+      });
+    }
+  });
 }

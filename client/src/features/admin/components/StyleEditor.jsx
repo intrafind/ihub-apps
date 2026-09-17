@@ -257,13 +257,13 @@ function StyleEditor({ config, onUpdate, t }) {
                         type="color"
                         value={currentColor}
                         onChange={e => handleThemeColorChange(key, e.target.value)}
-                        className="w-10 h-10 rounded-md border-2 border-gray-300 dark:border-gray-600 shadow-sm cursor-pointer"
+                        className="w-10 h-10 rounded-md border-2 border-gray-300 dark:border-gray-600 shadow-xs cursor-pointer"
                       />
                       <input
                         type="text"
                         value={currentColor}
                         onChange={e => handleThemeColorChange(key, e.target.value)}
-                        className={`flex-1 px-3 py-2 border rounded-md shadow-sm focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 font-mono text-sm bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100 ${
+                        className={`flex-1 px-3 py-2 border rounded-md shadow-xs focus:outline-hidden focus:ring-indigo-500 focus:border-indigo-500 font-mono text-sm bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100 ${
                           colorErrors[key]
                             ? 'border-red-500'
                             : 'border-gray-300 dark:border-gray-600'
@@ -283,7 +283,7 @@ function StyleEditor({ config, onUpdate, t }) {
                         <button
                           key={color}
                           onClick={() => handleThemeColorChange(key, color)}
-                          className="w-6 h-6 rounded border border-gray-300 dark:border-gray-600 hover:scale-110 transition-transform"
+                          className="w-6 h-6 rounded-sm border border-gray-300 dark:border-gray-600 hover:scale-110 transition-transform"
                           style={{ backgroundColor: color }}
                           title={color}
                         />
@@ -322,13 +322,13 @@ function StyleEditor({ config, onUpdate, t }) {
                         type="color"
                         value={currentColor || defaultColor}
                         onChange={e => handleThemeColorChange(key, e.target.value, true)}
-                        className="w-10 h-10 rounded-md border-2 border-gray-300 dark:border-gray-600 shadow-sm cursor-pointer"
+                        className="w-10 h-10 rounded-md border-2 border-gray-300 dark:border-gray-600 shadow-xs cursor-pointer"
                       />
                       <input
                         type="text"
                         value={currentColor}
                         onChange={e => handleThemeColorChange(key, e.target.value, true)}
-                        className={`flex-1 px-3 py-2 border rounded-md shadow-sm focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 font-mono text-sm bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100 ${
+                        className={`flex-1 px-3 py-2 border rounded-md shadow-xs focus:outline-hidden focus:ring-indigo-500 focus:border-indigo-500 font-mono text-sm bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100 ${
                           colorErrors[errorKey]
                             ? 'border-red-500'
                             : 'border-gray-300 dark:border-gray-600'
@@ -348,7 +348,7 @@ function StyleEditor({ config, onUpdate, t }) {
                         <button
                           key={color}
                           onClick={() => handleThemeColorChange(key, color, true)}
-                          className="w-6 h-6 rounded border border-gray-300 dark:border-gray-600 hover:scale-110 transition-transform"
+                          className="w-6 h-6 rounded-sm border border-gray-300 dark:border-gray-600 hover:scale-110 transition-transform"
                           style={{ backgroundColor: color }}
                           title={color}
                         />
@@ -368,7 +368,7 @@ function StyleEditor({ config, onUpdate, t }) {
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
               {/* Light Mode Preview */}
               <div
-                className="p-4 rounded-lg shadow-sm border"
+                className="p-4 rounded-lg shadow-xs border"
                 style={{
                   backgroundColor: config.theme?.surfaceColor || '#ffffff',
                   color: config.theme?.textColor || '#1a1a2e'
@@ -394,7 +394,7 @@ function StyleEditor({ config, onUpdate, t }) {
 
               {/* Dark Mode Preview */}
               <div
-                className="p-4 rounded-lg shadow-sm border"
+                className="p-4 rounded-lg shadow-xs border"
                 style={{
                   backgroundColor: config.theme?.darkMode?.surfaceColor || '#16213e',
                   color: config.theme?.darkMode?.textColor || '#f5f5f5'
@@ -466,12 +466,12 @@ function StyleEditor({ config, onUpdate, t }) {
   box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
 }`}
               rows={15}
-              className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md shadow-sm focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 font-mono text-sm bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100"
+              className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md shadow-xs focus:outline-hidden focus:ring-indigo-500 focus:border-indigo-500 font-mono text-sm bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100"
             />
 
             <div className="bg-yellow-50 border border-yellow-200 rounded-md p-4">
               <div className="flex">
-                <div className="flex-shrink-0">
+                <div className="shrink-0">
                   <svg className="h-5 w-5 text-yellow-400" viewBox="0 0 20 20" fill="currentColor">
                     <path
                       fillRule="evenodd"
@@ -516,7 +516,7 @@ function StyleEditor({ config, onUpdate, t }) {
             </div>
             <button
               onClick={addCssVariable}
-              className="px-3 py-2 bg-indigo-600 text-white text-sm rounded-md hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-indigo-500"
+              className="px-3 py-2 bg-indigo-600 text-white text-sm rounded-md hover:bg-indigo-700 focus:outline-hidden focus:ring-2 focus:ring-indigo-500"
             >
               {t('admin.ui.styles.addVariable', 'Add Variable')}
             </button>
@@ -536,7 +536,7 @@ function StyleEditor({ config, onUpdate, t }) {
                     type="text"
                     value={value}
                     onChange={e => updateCssVariable(name, e.target.value)}
-                    className="flex-1 px-3 py-1 border border-gray-300 dark:border-gray-600 rounded text-sm bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100"
+                    className="flex-1 px-3 py-1 border border-gray-300 dark:border-gray-600 rounded-sm text-sm bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100"
                   />
                   <button
                     onClick={() => removeCssVariable(name)}

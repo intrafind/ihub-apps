@@ -1,0 +1,212 @@
+{
+  "id": "topic-deep-dive",
+  "name": {
+    "en": "Topic Deep Dive",
+    "de": "Themen-Tiefenanalyse"
+  },
+  "description": {
+    "en": "Breaks a topic into an outline and analyzes every section inside a visual loop container — the loop iterates over the outline and runs its child prompt once per section (two sections in parallel), then composes a final report. Flagship demo for loop containers.",
+    "de": "Zerlegt ein Thema in eine Gliederung und analysiert jeden Abschnitt in einem visuellen Loop-Container — die Schleife iteriert über die Gliederung und führt ihren Kind-Prompt einmal pro Abschnitt aus (zwei Abschnitte parallel), danach wird ein Abschlussbericht erstellt. Vorzeige-Demo für Loop-Container."
+  },
+  "version": "1.0.0",
+  "enabled": true,
+  "config": {
+    "observability": "standard",
+    "persistence": "session",
+    "errorHandling": "retry",
+    "humanInLoop": "none",
+    "maxExecutionTime": 300000,
+    "maxNodes": 20,
+    "defaultModelId": "gemini-3.0-flash"
+  },
+  "nodes": [
+    {
+      "id": "start",
+      "type": "start",
+      "name": { "en": "Start", "de": "Start" },
+      "position": { "x": 80, "y": 220 },
+      "config": {
+        "inputVariables": [
+          {
+            "name": "topic",
+            "type": "string",
+            "required": true,
+            "label": {
+              "en": "Topic",
+              "de": "Thema"
+            },
+            "description": {
+              "en": "The topic to research in depth, e.g. 'Battery recycling in Europe'",
+              "de": "Das Thema, das vertieft untersucht werden soll, z. B. 'Batterierecycling in Europa'"
+            }
+          }
+        ]
+      },
+      "execution": {
+        "timeout": 5000
+      }
+    },
+    {
+      "id": "outline",
+      "type": "prompt",
+      "name": { "en": "Create Outline", "de": "Gliederung erstellen" },
+      "description": {
+        "en": "Breaks the topic into 3-6 focused section titles",
+        "de": "Zerlegt das Thema in 3-6 fokussierte Abschnittstitel"
+      },
+      "position": { "x": 300, "y": 220 },
+      "config": {
+        "system": {
+          "en": "You are a research editor. Break the given topic into 3 to 6 focused section titles that together cover the topic well. Each title must be short (at most 10 words) and self-explanatory without extra context. Return a JSON object with a 'sections' array of section title strings.",
+          "de": "Sie sind ein Forschungsredakteur. Zerlegen Sie das gegebene Thema in 3 bis 6 fokussierte Abschnittstitel, die das Thema zusammen gut abdecken. Jeder Titel muss kurz sein (höchstens 10 Wörter) und ohne weiteren Kontext verständlich. Geben Sie ein JSON-Objekt mit einem 'sections'-Array aus Abschnittstitel-Strings zurück."
+        },
+        "prompt": {
+          "en": "[Step {{_currentStep}}/{{_totalNodes}}] Create a section outline for the topic: {{topic}}",
+          "de": "[Schritt {{_currentStep}}/{{_totalNodes}}] Erstellen Sie eine Abschnittsgliederung für das Thema: {{topic}}"
+        },
+        "outputVariable": "outline",
+        "outputSchema": {
+          "type": "object",
+          "properties": {
+            "sections": {
+              "type": "array",
+              "items": { "type": "string" }
+            }
+          },
+          "required": ["sections"]
+        },
+        "maxIterations": 3
+      },
+      "execution": {
+        "timeout": 30000,
+        "retries": 1
+      }
+    },
+    {
+      "id": "analyze-sections",
+      "type": "loop",
+      "name": { "en": "Analyze Sections", "de": "Abschnitte analysieren" },
+      "description": {
+        "en": "Loop container: runs its child node once per section title in outline.sections, two iterations in parallel, and collects the results into sectionAnalyses",
+        "de": "Loop-Container: führt seinen Kind-Knoten einmal pro Abschnittstitel in outline.sections aus, zwei Iterationen parallel, und sammelt die Ergebnisse in sectionAnalyses"
+      },
+      "position": { "x": 540, "y": 100 },
+      "size": { "width": 520, "height": 300 },
+      "config": {
+        "mode": "forEach",
+        "array": "outline.sections",
+        "outputVariable": "sectionAnalyses",
+        "maxIterations": 6,
+        "concurrency": 2
+      },
+      "execution": {
+        "timeout": 240000
+      }
+    },
+    {
+      "id": "analyze-section",
+      "type": "prompt",
+      "name": { "en": "Analyze Section", "de": "Abschnitt analysieren" },
+      "description": {
+        "en": "Loop body: analyzes the current section title provided as _loopItem",
+        "de": "Schleifenkörper: analysiert den aktuellen Abschnittstitel aus _loopItem"
+      },
+      "position": { "x": 40, "y": 80 },
+      "parentId": "analyze-sections",
+      "config": {
+        "system": {
+          "en": "You are a subject-matter analyst. Analyze exactly one section of a larger topic. Stay strictly within the given section — other sections are handled separately. Write in clear markdown prose without a top-level title.",
+          "de": "Sie sind ein Fachanalyst. Analysieren Sie genau einen Abschnitt eines größeren Themas. Bleiben Sie strikt beim vorgegebenen Abschnitt — andere Abschnitte werden separat bearbeitet. Schreiben Sie klare Markdown-Prosa ohne übergeordneten Titel."
+        },
+        "prompt": {
+          "en": "[Section {{_loopHuman}}/{{_loopTotal}}] Analyze the section \"{{_loopItem}}\" of the topic \"{{topic}}\".\n\nWrite a focused analysis (250-400 words) covering:\n- What this section covers and why it matters for the topic\n- The key facts, concepts, or arguments\n- Open questions or common misconceptions\n\nStart your answer with the markdown heading: ## {{_loopHuman}}. {{_loopItem}}",
+          "de": "[Abschnitt {{_loopHuman}}/{{_loopTotal}}] Analysieren Sie den Abschnitt \"{{_loopItem}}\" des Themas \"{{topic}}\".\n\nSchreiben Sie eine fokussierte Analyse (250-400 Wörter) zu:\n- Was dieser Abschnitt umfasst und warum er für das Thema wichtig ist\n- Die wichtigsten Fakten, Konzepte oder Argumente\n- Offene Fragen oder verbreitete Missverständnisse\n\nBeginnen Sie Ihre Antwort mit der Markdown-Überschrift: ## {{_loopHuman}}. {{_loopItem}}"
+        },
+        "outputVariable": "sectionAnalysis",
+        "maxIterations": 3
+      },
+      "execution": {
+        "timeout": 60000,
+        "retries": 1,
+        "retryDelay": 2000
+      }
+    },
+    {
+      "id": "report",
+      "type": "prompt",
+      "name": { "en": "Compose Report", "de": "Bericht erstellen" },
+      "description": {
+        "en": "Merges the collected section analyses into one coherent deep-dive report",
+        "de": "Führt die gesammelten Abschnittsanalysen zu einem kohärenten Tiefenbericht zusammen"
+      },
+      "position": { "x": 1120, "y": 220 },
+      "config": {
+        "system": {
+          "en": "You are a report writer. Merge the provided per-section analyses into one coherent, well-structured markdown report. Keep every section's substance, remove repetition between sections, and add a short introduction and conclusion. Base the report ONLY on the provided analyses — never invent content.",
+          "de": "Sie sind ein Berichtschreiber. Führen Sie die bereitgestellten Abschnittsanalysen zu einem kohärenten, gut strukturierten Markdown-Bericht zusammen. Erhalten Sie die Substanz jedes Abschnitts, entfernen Sie Wiederholungen zwischen Abschnitten und ergänzen Sie eine kurze Einleitung und ein Fazit. Basieren Sie den Bericht AUSSCHLIESSLICH auf den bereitgestellten Analysen — erfinden Sie niemals Inhalte."
+        },
+        "prompt": {
+          "en": "[Step {{_currentStep}}/{{_totalNodes}} - Final] Compose the final deep-dive report on \"{{topic}}\".\n\nPlanned sections: {{outline.sections}}\n\nSection analyses:\n{{#each sectionAnalyses}}\n---\n{{this.content}}\n{{/each}}\n\nStructure the report as:\n1. A top-level title: # Deep Dive: {{topic}}\n2. A short introduction (what the report covers)\n3. One chapter per section, in the order of the planned sections\n4. A conclusion with the most important takeaways",
+          "de": "[Schritt {{_currentStep}}/{{_totalNodes}} - Final] Erstellen Sie den finalen Tiefenbericht zu \"{{topic}}\".\n\nGeplante Abschnitte: {{outline.sections}}\n\nAbschnittsanalysen:\n{{#each sectionAnalyses}}\n---\n{{this.content}}\n{{/each}}\n\nStrukturieren Sie den Bericht als:\n1. Einen übergeordneten Titel: # Tiefenanalyse: {{topic}}\n2. Eine kurze Einleitung (was der Bericht abdeckt)\n3. Ein Kapitel pro Abschnitt, in der Reihenfolge der geplanten Abschnitte\n4. Ein Fazit mit den wichtigsten Erkenntnissen"
+        },
+        "outputVariable": "finalReport",
+        "maxIterations": 3
+      },
+      "execution": {
+        "timeout": 60000,
+        "retries": 1,
+        "retryDelay": 2000
+      }
+    },
+    {
+      "id": "end",
+      "type": "end",
+      "name": { "en": "Complete", "de": "Abgeschlossen" },
+      "position": { "x": 1340, "y": 220 },
+      "config": {
+        "outputVariables": ["topic", "outline", "sectionAnalyses", "finalReport"]
+      },
+      "execution": {
+        "timeout": 5000
+      }
+    }
+  ],
+  "edges": [
+    {
+      "id": "e1",
+      "source": "start",
+      "target": "outline",
+      "condition": { "type": "always" }
+    },
+    {
+      "id": "e2",
+      "source": "outline",
+      "target": "analyze-sections",
+      "condition": { "type": "always" }
+    },
+    {
+      "id": "e3",
+      "source": "analyze-sections",
+      "target": "report",
+      "condition": { "type": "always" }
+    },
+    {
+      "id": "e4",
+      "source": "report",
+      "target": "end",
+      "condition": { "type": "always" }
+    }
+  ],
+  "allowedGroups": [],
+  "chatIntegration": {
+    "enabled": true,
+    "passthroughResult": false,
+    "primaryOutput": "finalReport",
+    "outputFormat": "markdown"
+  },
+  "canvas": {
+    "zoom": 1,
+    "offsetX": 0,
+    "offsetY": 0
+  }
+}

@@ -1,6 +1,8 @@
 import { useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import Icon from '../../../shared/components/Icon';
+import { useTechnicalDetailsToggle } from '../hooks/useTechnicalDetailsToggle';
+import StatusBadge from './StatusBadge';
 
 /**
  * Helper to summarize a value for display
@@ -25,6 +27,84 @@ const summarizeValue = (value, maxLength = 150) => {
 };
 
 /**
+ * Renders one resolved parameter as a labeled key/value row.
+ * Inline preview for small values; collapsible expander with full content
+ * for arrays, objects, and long strings. The expander is always available
+ * (not gated by the technical-details toggle) because these ARE the user's
+ * data — they should never need to flip a setting to see their queries or
+ * the docs the workflow loaded.
+ */
+function ParameterRow({ name, value }) {
+  const isObject = value !== null && typeof value === 'object';
+  const isLongString = typeof value === 'string' && value.length > 200;
+  const collapsible = isObject || isLongString;
+
+  const inlineDisplay = (() => {
+    if (value === null || value === undefined) return <em className="text-gray-400">empty</em>;
+    if (typeof value === 'boolean') return value ? 'true' : 'false';
+    if (typeof value === 'number') return String(value);
+    if (typeof value === 'string') {
+      if (value.length > 200) return value.substring(0, 200) + '…';
+      return value;
+    }
+    if (Array.isArray(value)) {
+      if (value.length === 0) return <em className="text-gray-400">[]</em>;
+      const allPrimitive = value.every(
+        v => v === null || ['string', 'number', 'boolean'].includes(typeof v)
+      );
+      if (allPrimitive) {
+        // Try to inline as many elements as fit in ~200 chars — independent
+        // of total count. With 11 short strings (the user's case) this
+        // produces the full list inline; with 200 long strings it shows the
+        // first few + a "(N total)" suffix and leaves the rest in the
+        // expander.
+        const formatted = value.map(v => (typeof v === 'string' ? `"${v}"` : String(v)));
+        let acc = '';
+        let included = 0;
+        for (const piece of formatted) {
+          const candidate = acc ? `${acc}, ${piece}` : piece;
+          if (candidate.length > 200) break;
+          acc = candidate;
+          included++;
+        }
+        if (included === value.length) return `[${acc}]`;
+        if (included > 0) return `[${acc}, … +${value.length - included} more]`;
+      }
+      // Object arrays or long primitives: show a count summary inline,
+      // full content is in the expander below.
+      return `[${value.length} items]`;
+    }
+    if (typeof value === 'object') {
+      const keys = Object.keys(value);
+      if (keys.length === 0) return <em className="text-gray-400">{'{}'}</em>;
+      return `{${keys.slice(0, 4).join(', ')}${keys.length > 4 ? ', …' : ''}}`;
+    }
+    return String(value);
+  })();
+
+  return (
+    <div className="px-3 py-2 text-xs">
+      <div className="flex items-start gap-2">
+        <span className="font-mono text-gray-500 dark:text-gray-400 min-w-0 shrink-0">{name}</span>
+        <span className="text-gray-900 dark:text-gray-100 wrap-break-word flex-1 min-w-0">
+          {inlineDisplay}
+        </span>
+      </div>
+      {collapsible && (
+        <details className="mt-1">
+          <summary className="cursor-pointer text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-200">
+            show full
+          </summary>
+          <pre className="mt-1 p-2 bg-gray-50 dark:bg-gray-900 rounded-sm border border-gray-200 dark:border-gray-700 overflow-auto max-h-96 whitespace-pre-wrap wrap-break-word">
+            {typeof value === 'string' ? value : JSON.stringify(value, null, 2)}
+          </pre>
+        </details>
+      )}
+    </div>
+  );
+}
+
+/**
  * Status indicator for a node
  */
 function NodeStatus({ status }) {
@@ -33,7 +113,10 @@ function NodeStatus({ status }) {
     running: { icon: 'arrow-path', color: 'text-blue-600', bg: 'bg-blue-100', animate: true },
     completed: { icon: 'check-circle', color: 'text-green-600', bg: 'bg-green-100' },
     failed: { icon: 'x-circle', color: 'text-red-600', bg: 'bg-red-100' },
-    paused: { icon: 'pause-circle', color: 'text-yellow-600', bg: 'bg-yellow-100' }
+    paused: { icon: 'pause-circle', color: 'text-yellow-600', bg: 'bg-yellow-100' },
+    cancelled: { icon: 'stop-circle', color: 'text-gray-600', bg: 'bg-gray-200' },
+    rejected: { icon: 'stop-circle', color: 'text-orange-600', bg: 'bg-orange-100' },
+    approved: { icon: 'check-circle', color: 'text-green-600', bg: 'bg-green-100' }
   };
 
   const c = config[status] || config.pending;
@@ -46,13 +129,47 @@ function NodeStatus({ status }) {
 }
 
 /**
- * Expanded detail view for a single progress item
+ * Expanded detail view for a single progress item.
+ * Technical fields (output variable names, raw JSON dumps) only render when
+ * the user has opted into "Show technical details".
  */
-function ItemDetails({ item, t }) {
+function ItemDetails({ item, t, showTechnical }) {
+  const resolvedInputs = item.rawResult?.resolvedInputs;
+  const inputEntries =
+    resolvedInputs && typeof resolvedInputs === 'object' ? Object.entries(resolvedInputs) : null;
+
   return (
     <div className="border-t border-gray-200 dark:border-gray-700 bg-gray-50 dark:bg-gray-900/50 p-3">
-      {/* Output variable and value */}
-      {item.outputVariable && item.outputValue && (
+      {/* Resolved parameters — what this node was actually run with.
+          Useful for debugging "why did this fail" and verifying that a
+          $.data.X reference resolved to the value you expected. */}
+      {inputEntries && inputEntries.length > 0 && (
+        <div className="mb-3">
+          <div className="text-xs font-medium text-gray-500 dark:text-gray-400 mb-1">
+            {t('workflows.progress.parameters', 'Parameters')}
+          </div>
+          <div className="bg-white dark:bg-gray-800 rounded-sm border border-gray-200 dark:border-gray-700 divide-y divide-gray-100 dark:divide-gray-700">
+            {inputEntries.map(([key, value]) => (
+              <ParameterRow key={key} name={key} value={value} />
+            ))}
+          </div>
+        </div>
+      )}
+
+      {/* Error detail — failures should be impossible to miss */}
+      {item.status === 'failed' && item.rawResult?.error && (
+        <div className="mb-3">
+          <div className="text-xs font-medium text-red-600 dark:text-red-400 mb-1">
+            {t('workflows.progress.error', 'Error')}
+          </div>
+          <div className="text-sm bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800/50 text-red-900 dark:text-red-200 rounded-sm px-3 py-2 whitespace-pre-wrap wrap-break-word">
+            {item.rawResult.error}
+          </div>
+        </div>
+      )}
+
+      {/* Output variable and value — technical only */}
+      {showTechnical && item.outputVariable && item.outputValue && (
         <div className="mb-3">
           <div className="text-xs font-medium text-gray-500 dark:text-gray-400 mb-1">
             {t('workflows.progress.outputVariable', 'Output Variable')}:{' '}
@@ -60,11 +177,20 @@ function ItemDetails({ item, t }) {
               {item.outputVariable}
             </span>
           </div>
-          <pre className="text-xs bg-white dark:bg-gray-800 p-2 rounded border border-gray-200 dark:border-gray-700 overflow-auto max-h-48">
+          <pre className="text-xs bg-white dark:bg-gray-800 p-2 rounded-sm border border-gray-200 dark:border-gray-700 overflow-auto max-h-48">
             {typeof item.outputValue === 'string'
               ? item.outputValue
               : JSON.stringify(item.outputValue, null, 2)}
           </pre>
+        </div>
+      )}
+
+      {/* Plain summary of agent output when toggle is off */}
+      {!showTechnical && typeof item.outputValue === 'string' && item.outputValue && (
+        <div className="mb-3 text-sm text-gray-700 dark:text-gray-300 whitespace-pre-wrap wrap-break-word max-h-48 overflow-y-auto">
+          {item.outputValue.length > 600
+            ? item.outputValue.substring(0, 600) + '…'
+            : item.outputValue}
         </div>
       )}
 
@@ -74,7 +200,7 @@ function ItemDetails({ item, t }) {
           <div className="text-xs font-medium text-gray-500 dark:text-gray-400 mb-1">
             {t('workflows.progress.decisionResult', 'Decision Result')}
           </div>
-          <div className="flex items-center gap-2">
+          <div className="flex items-center gap-2 flex-wrap">
             <span
               className={`px-2 py-1 rounded text-xs font-medium ${
                 item.rawResult.output.branch === 'true'
@@ -84,7 +210,7 @@ function ItemDetails({ item, t }) {
             >
               Branch: {item.rawResult.output.branch}
             </span>
-            {item.rawResult.output.expression && (
+            {showTechnical && item.rawResult.output.expression && (
               <span className="text-xs text-gray-500 dark:text-gray-400 font-mono">
                 {item.rawResult.output.expression}
               </span>
@@ -112,8 +238,9 @@ function ItemDetails({ item, t }) {
         </div>
       )}
 
-      {/* Raw result for debugging (only show if no specific view) */}
-      {item.rawResult &&
+      {/* Raw result — technical only, shown if no specific renderer applies */}
+      {showTechnical &&
+        item.rawResult &&
         !item.outputVariable &&
         item.type !== 'decision' &&
         item.type !== 'human' && (
@@ -121,7 +248,7 @@ function ItemDetails({ item, t }) {
             <div className="text-xs font-medium text-gray-500 dark:text-gray-400 mb-1">
               {t('workflows.progress.rawOutput', 'Output')}
             </div>
-            <pre className="text-xs bg-white dark:bg-gray-800 p-2 rounded border border-gray-200 dark:border-gray-700 overflow-auto max-h-32">
+            <pre className="text-xs bg-white dark:bg-gray-800 p-2 rounded-sm border border-gray-200 dark:border-gray-700 overflow-auto max-h-32">
               {JSON.stringify(item.rawResult.output, null, 2)}
             </pre>
           </div>
@@ -141,6 +268,7 @@ function ExecutionProgress({ state, nodes = [] }) {
   const { t, i18n } = useTranslation();
   const currentLanguage = i18n.language;
   const [expandedNodes, setExpandedNodes] = useState(new Set());
+  const [showTechnical] = useTechnicalDetailsToggle();
 
   const toggleNode = nodeId => {
     setExpandedNodes(prev => {
@@ -181,10 +309,25 @@ function ExecutionProgress({ state, nodes = [] }) {
       statuses.set(nodeId, 'failed');
     });
 
-    // Mark current nodes
+    // Mark current nodes. When the workflow itself has reached a terminal state
+    // (cancelled / failed / completed), the lingering currentNodes entries are
+    // nodes that never got to run, not nodes still executing — so don't render
+    // them as "running" (issue: end node showed "Currently executing..." forever
+    // after a timeout cancellation).
+    const terminalStatuses = new Set(['cancelled', 'failed', 'completed', 'approved', 'rejected']);
+    const isTerminal = terminalStatuses.has(state?.status);
     (state?.currentNodes || []).forEach(nodeId => {
       if (!statuses.has(nodeId)) {
-        statuses.set(nodeId, state?.status === 'paused' ? 'paused' : 'running');
+        let nodeStatus;
+        if (state?.status === 'paused') {
+          nodeStatus = 'paused';
+        } else if (isTerminal) {
+          // Map to a per-node status that matches the workflow's terminal state
+          nodeStatus = state.status === 'completed' ? 'completed' : state.status;
+        } else {
+          nodeStatus = 'running';
+        }
+        statuses.set(nodeId, nodeStatus);
       }
     });
 
@@ -253,8 +396,8 @@ function ExecutionProgress({ state, nodes = [] }) {
           const branch = result.output?.branch;
           insight = branch ? `Decision: took "${branch}" branch` : 'Decision evaluated';
         }
-        // For agent nodes, show what variable was set
-        else if (nodeInfo.type === 'agent') {
+        // For prompt nodes, show what variable was set
+        else if (nodeInfo.type === 'prompt') {
           outputVariable = result.outputVariable;
           outputValue = result.output;
           if (outputVariable) {
@@ -308,16 +451,32 @@ function ExecutionProgress({ state, nodes = [] }) {
     });
 
     // Add current nodes that aren't in history yet (for currently executing nodes)
+    const isWorkflowTerminal = [
+      'cancelled',
+      'failed',
+      'completed',
+      'approved',
+      'rejected'
+    ].includes(state?.status);
     (state?.currentNodes || []).forEach(nodeId => {
       if (!seenCurrentNodes.has(nodeId)) {
         const nodeInfo = nodeMap.get(nodeId) || { name: nodeId, type: 'unknown' };
+        const resolvedStatus =
+          nodeStatuses.get(nodeId) || (isWorkflowTerminal ? state.status : 'running');
+        const insight = isWorkflowTerminal
+          ? state?.status === 'cancelled'
+            ? 'Did not run (workflow cancelled)'
+            : state?.status === 'failed'
+              ? 'Did not run (workflow failed)'
+              : null
+          : 'Currently executing...';
         items.push({
           nodeId,
           historyIndex: `current-${nodeId}`,
           name: nodeInfo.name,
           type: nodeInfo.type,
-          status: nodeStatuses.get(nodeId) || 'running',
-          insight: 'Currently executing...'
+          status: resolvedStatus,
+          insight
         });
       }
     });
@@ -332,7 +491,7 @@ function ExecutionProgress({ state, nodes = [] }) {
         return 'play-circle';
       case 'end':
         return 'stop-circle';
-      case 'agent':
+      case 'prompt':
         return 'cpu-chip';
       case 'tool':
         return 'wrench';
@@ -392,25 +551,7 @@ function ExecutionProgress({ state, nodes = [] }) {
             </button>
           )}
         </div>
-        <span
-          className={`px-3 py-1 rounded-full text-sm font-medium ${
-            state.status === 'completed' || state.status === 'approved'
-              ? 'bg-green-100 text-green-800 dark:bg-green-900/50 dark:text-green-300'
-              : state.status === 'rejected'
-                ? 'bg-orange-100 text-orange-800 dark:bg-orange-900/50 dark:text-orange-300'
-                : state.status === 'failed'
-                  ? 'bg-red-100 text-red-800 dark:bg-red-900/50 dark:text-red-300'
-                  : state.status === 'running'
-                    ? 'bg-blue-100 text-blue-800 dark:bg-blue-900/50 dark:text-blue-300'
-                    : state.status === 'paused'
-                      ? 'bg-yellow-100 text-yellow-800 dark:bg-yellow-900/50 dark:text-yellow-300'
-                      : state.status === 'cancelled'
-                        ? 'bg-gray-100 text-gray-800 dark:bg-gray-700 dark:text-gray-300'
-                        : 'bg-gray-100 text-gray-800 dark:bg-gray-700 dark:text-gray-300'
-          }`}
-        >
-          {state.status.charAt(0).toUpperCase() + state.status.slice(1)}
-        </span>
+        <StatusBadge status={state.status} />
       </div>
 
       {/* Progress timeline — groups repeated iterations of the same node */}
@@ -441,7 +582,7 @@ function ExecutionProgress({ state, nodes = [] }) {
                       <span className="font-medium text-gray-900 dark:text-white">
                         {firstItem.name}
                       </span>
-                      <span className="text-xs bg-indigo-100 text-indigo-700 dark:bg-indigo-900/50 dark:text-indigo-300 px-2 py-0.5 rounded">
+                      <span className="text-xs bg-indigo-100 text-indigo-700 dark:bg-indigo-900/50 dark:text-indigo-300 px-2 py-0.5 rounded-sm">
                         {items.length} {t('workflows.progress.iterations', 'iterations')}
                       </span>
                     </div>
@@ -453,7 +594,7 @@ function ExecutionProgress({ state, nodes = [] }) {
                   </div>
                   <Icon
                     name={isGroupExpanded ? 'chevron-up' : 'chevron-down'}
-                    className="w-5 h-5 text-gray-400 flex-shrink-0"
+                    className="w-5 h-5 text-gray-400 shrink-0"
                   />
                 </button>
 
@@ -482,18 +623,19 @@ function ExecutionProgress({ state, nodes = [] }) {
                             <NodeStatus status={item.status} />
                             <div className="flex-1 min-w-0">
                               <div className="flex items-center gap-2 flex-wrap">
-                                <span className="text-xs bg-gray-100 text-gray-600 dark:bg-gray-700 dark:text-gray-400 px-2 py-0.5 rounded">
+                                <span className="text-xs bg-gray-100 text-gray-600 dark:bg-gray-700 dark:text-gray-400 px-2 py-0.5 rounded-sm">
                                   #{item.iteration}
                                 </span>
-                                {item.type === 'agent' && item.model && (
-                                  <span className="text-xs bg-purple-100 text-purple-700 dark:bg-purple-900/50 dark:text-purple-300 px-2 py-0.5 rounded">
+                                {showTechnical && item.type === 'prompt' && item.model && (
+                                  <span className="text-xs bg-purple-100 text-purple-700 dark:bg-purple-900/50 dark:text-purple-300 px-2 py-0.5 rounded-sm">
                                     {item.model}
                                   </span>
                                 )}
-                                {item.tokens &&
+                                {showTechnical &&
+                                  item.tokens &&
                                   (item.tokens.input > 0 || item.tokens.output > 0) && (
                                     <span
-                                      className="text-xs bg-gray-100 text-gray-600 dark:bg-gray-700 dark:text-gray-400 px-2 py-0.5 rounded"
+                                      className="text-xs bg-gray-100 text-gray-600 dark:bg-gray-700 dark:text-gray-400 px-2 py-0.5 rounded-sm"
                                       title={`Input: ${item.tokens.input}, Output: ${item.tokens.output}`}
                                     >
                                       {(item.tokens.input + item.tokens.output).toLocaleString()}{' '}
@@ -520,9 +662,11 @@ function ExecutionProgress({ state, nodes = [] }) {
                                   {item.insight}
                                 </p>
                               )}
-                              {item.outputVariable && item.outputValue && !isItemExpanded && (
+                              {item.outputValue && !isItemExpanded && (
                                 <p className="text-xs text-gray-500 dark:text-gray-500 mt-1 truncate">
-                                  <span className="font-mono">{item.outputVariable}</span> ={' '}
+                                  {showTechnical && item.outputVariable && (
+                                    <span className="font-mono">{item.outputVariable} = </span>
+                                  )}
                                   {summarizeValue(item.outputValue, 80)}
                                 </p>
                               )}
@@ -530,11 +674,14 @@ function ExecutionProgress({ state, nodes = [] }) {
                             {hasDetails && (
                               <Icon
                                 name={isItemExpanded ? 'chevron-up' : 'chevron-down'}
-                                className="w-5 h-5 text-gray-400 flex-shrink-0"
+                                className="w-5 h-5 text-gray-400 shrink-0"
+                                aria-hidden="true"
                               />
                             )}
                           </button>
-                          {isItemExpanded && hasDetails && <ItemDetails item={item} t={t} />}
+                          {isItemExpanded && hasDetails && (
+                            <ItemDetails item={item} t={t} showTechnical={showTechnical} />
+                          )}
                         </div>
                       );
                     })}
@@ -567,19 +714,21 @@ function ExecutionProgress({ state, nodes = [] }) {
                   <div className="flex items-center gap-2 flex-wrap">
                     <Icon name={getTypeIcon(item.type)} className="w-4 h-4 text-gray-400" />
                     <span className="font-medium text-gray-900 dark:text-white">{item.name}</span>
-                    {item.type === 'agent' && item.model && (
-                      <span className="text-xs bg-purple-100 text-purple-700 dark:bg-purple-900/50 dark:text-purple-300 px-2 py-0.5 rounded">
+                    {showTechnical && item.type === 'prompt' && item.model && (
+                      <span className="text-xs bg-purple-100 text-purple-700 dark:bg-purple-900/50 dark:text-purple-300 px-2 py-0.5 rounded-sm">
                         {item.model}
                       </span>
                     )}
-                    {item.tokens && (item.tokens.input > 0 || item.tokens.output > 0) && (
-                      <span
-                        className="text-xs bg-gray-100 text-gray-600 dark:bg-gray-700 dark:text-gray-400 px-2 py-0.5 rounded"
-                        title={`Input: ${item.tokens.input}, Output: ${item.tokens.output}`}
-                      >
-                        {(item.tokens.input + item.tokens.output).toLocaleString()} tokens
-                      </span>
-                    )}
+                    {showTechnical &&
+                      item.tokens &&
+                      (item.tokens.input > 0 || item.tokens.output > 0) && (
+                        <span
+                          className="text-xs bg-gray-100 text-gray-600 dark:bg-gray-700 dark:text-gray-400 px-2 py-0.5 rounded-sm"
+                          title={`Input: ${item.tokens.input}, Output: ${item.tokens.output}`}
+                        >
+                          {(item.tokens.input + item.tokens.output).toLocaleString()} tokens
+                        </span>
+                      )}
                     {item.duration !== undefined && item.duration !== null && (
                       <span className="text-xs text-gray-400 dark:text-gray-500">
                         {item.duration >= 1000
@@ -598,9 +747,11 @@ function ExecutionProgress({ state, nodes = [] }) {
                   {item.insight && (
                     <p className="text-sm text-gray-600 dark:text-gray-400 mt-1">{item.insight}</p>
                   )}
-                  {item.outputVariable && item.outputValue && !isExpanded && (
+                  {item.outputValue && !isExpanded && (
                     <p className="text-xs text-gray-500 dark:text-gray-500 mt-1 truncate">
-                      <span className="font-mono">{item.outputVariable}</span> ={' '}
+                      {showTechnical && item.outputVariable && (
+                        <span className="font-mono">{item.outputVariable} = </span>
+                      )}
                       {summarizeValue(item.outputValue, 80)}
                     </p>
                   )}
@@ -608,15 +759,65 @@ function ExecutionProgress({ state, nodes = [] }) {
                 {hasDetails && (
                   <Icon
                     name={isExpanded ? 'chevron-up' : 'chevron-down'}
-                    className="w-5 h-5 text-gray-400 flex-shrink-0"
+                    className="w-5 h-5 text-gray-400 shrink-0"
+                    aria-hidden="true"
                   />
                 )}
               </button>
-              {isExpanded && hasDetails && <ItemDetails item={item} t={t} />}
+              {isExpanded && hasDetails && (
+                <ItemDetails item={item} t={t} showTechnical={showTechnical} />
+              )}
             </div>
           );
         })}
       </div>
+
+      {/* Planned Tasks section */}
+      {state.data?.planCreated && (
+        <div className="mt-4 p-4 bg-purple-50 dark:bg-purple-900/20 rounded-lg border border-purple-200 dark:border-purple-800">
+          <div className="flex items-center gap-2 mb-3">
+            <Icon name="light-bulb" className="w-5 h-5 text-purple-600 dark:text-purple-400" />
+            <h4 className="text-sm font-semibold text-purple-800 dark:text-purple-300">
+              {t('workflows.progress.plannedTasks', 'Planned Tasks')}
+              <span className="ml-2 text-xs font-normal text-purple-600 dark:text-purple-400">
+                ({state.data.planCreated.tasks?.length || 0}{' '}
+                {t('workflows.progress.tasks', 'tasks')})
+              </span>
+            </h4>
+          </div>
+          {state.data.planCreated.reasoning && (
+            <p className="text-sm italic text-purple-700 dark:text-purple-300 mb-3">
+              {state.data.planCreated.reasoning}
+            </p>
+          )}
+          <ol className="space-y-2">
+            {(state.data.planCreated.tasks || []).map((task, idx) => (
+              <li key={task.id || idx} className="flex items-start gap-2">
+                <span className="shrink-0 w-5 h-5 rounded-full bg-purple-200 dark:bg-purple-800 text-purple-700 dark:text-purple-300 text-xs flex items-center justify-center font-medium">
+                  {idx + 1}
+                </span>
+                <div className="flex-1 min-w-0">
+                  <span className="text-sm font-medium text-gray-900 dark:text-white">
+                    {task.title || task.id}
+                  </span>
+                  {task.tools && task.tools.length > 0 && (
+                    <div className="flex flex-wrap gap-1 mt-1">
+                      {task.tools.map(tool => (
+                        <span
+                          key={tool}
+                          className="text-xs bg-purple-100 text-purple-600 dark:bg-purple-900/50 dark:text-purple-400 px-1.5 py-0.5 rounded-sm"
+                        >
+                          {tool}
+                        </span>
+                      ))}
+                    </div>
+                  )}
+                </div>
+              </li>
+            ))}
+          </ol>
+        </div>
+      )}
 
       {/* Empty state */}
       {progressItems.length === 0 && (

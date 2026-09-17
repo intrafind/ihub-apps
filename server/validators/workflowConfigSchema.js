@@ -60,11 +60,11 @@ const SEMVER_PATTERN =
 const nodeExecutionSchema = z
   .object({
     /** Maximum execution time for this node in milliseconds */
-    timeout: z.number().int().min(1000).max(300000).optional().default(30000),
+    timeout: z.number().int().min(1000).max(300000).optional().prefault(30000),
     /** Number of retry attempts on failure (0 = no retries) */
-    retries: z.number().int().min(0).max(5).optional().default(0),
+    retries: z.number().int().min(0).max(5).optional().prefault(0),
     /** Delay between retry attempts in milliseconds */
-    retryDelay: z.number().int().min(100).max(60000).optional().default(1000),
+    retryDelay: z.number().int().min(100).max(60000).optional().prefault(1000),
     /** How to handle errors at this node */
     errorHandler: z.enum(['fail', 'continue', 'llm_recovery']).optional()
   })
@@ -94,7 +94,7 @@ const positionSchema = z.object({
  *
  * - start: Entry point of the workflow (exactly one required)
  * - end: Exit point of the workflow (at least one required)
- * - agent: LLM-powered agent that processes input and produces output
+ * - prompt: LLM prompt step that processes input and produces output
  * - tool: External tool or API integration
  * - decision: Conditional branching based on data or LLM evaluation
  * - parallel: Fork execution into multiple parallel branches
@@ -106,15 +106,59 @@ const positionSchema = z.object({
 const nodeTypeEnum = z.enum([
   'start',
   'end',
-  'agent',
+  'prompt',
   'tool',
   'decision',
   'parallel',
   'join',
   'human',
   'transform',
-  'memory'
+  'memory',
+  'planner',
+  'verifier',
+  'loop',
+  'http',
+  'code',
+  // Completeness-analysis primitives. See concepts/2026-06-02 Completeness Analysis Workflows.md
+  'query-plan',
+  'corpus-search',
+  'structured-record',
+  'quote-validator',
+  'template-render',
+  'progress',
+  // Agent-runtime deterministic primitives. These have registered executors
+  // (see services/workflow/executors/index.js) but were previously only emitted
+  // in-memory by the inbox-worker serializer (never schema-validated). A
+  // hand-authored EXTERNAL agent workflow loaded from disk IS validated, so the
+  // enum must list them.
+  'inbox-load',
+  'inbox-finalize',
+  'memory-finalize'
 ]);
+
+/**
+ * Per-node thinking override schema.
+ *
+ * Mirrors the model config `thinking` shape (see
+ * `server/validators/modelConfigSchema.js`) but every field is optional — a
+ * node may set only what it wants to override. Mapped to per-request adapter
+ * options by `thinkingConfigToOptions()` in
+ * `server/services/workflow/thinkingOptions.js`. `.strict()` catches typos
+ * (e.g. `enabld`) instead of silently ignoring them.
+ *
+ *   { enabled, level: "minimal"|"low"|"medium"|"high", thoughts }
+ */
+const nodeThinkingSchema = z
+  .object({
+    enabled: z.boolean().optional(),
+    level: z
+      .enum(['minimal', 'low', 'medium', 'high', 'MINIMAL', 'LOW', 'MEDIUM', 'HIGH'])
+      .optional(),
+    thoughts: z.boolean().optional(),
+    chatTemplateKwargs: z.record(z.any()).optional()
+  })
+  .strict()
+  .optional();
 
 /**
  * Node configuration schema
@@ -137,12 +181,33 @@ export const nodeConfigSchema = z.object({
   position: positionSchema,
 
   /**
+   * Container membership: the ID of a `loop` node this node belongs to.
+   * Nodes with a parentId form the loop's body — they are rendered inside
+   * the container on the canvas and executed once per iteration by the
+   * LoopNodeExecutor instead of being scheduled as top-level nodes.
+   * For container children, `position` is relative to the container's
+   * top-left corner (React Flow parent/child convention).
+   */
+  parentId: z.string().min(1).optional(),
+
+  /**
+   * Rendered size on the visual editor canvas. Persisted for container
+   * nodes (loop) so the body area survives round-trips through the editor.
+   */
+  size: z
+    .object({
+      width: z.number().positive(),
+      height: z.number().positive()
+    })
+    .optional(),
+
+  /**
    * Type-specific configuration object
    * Structure varies based on node type. Uses passthrough to allow
    * flexible configuration without strict type-specific validation.
    *
    * Examples:
-   * - agent: { appId: string, model: string, prompt: string }
+   * - prompt: { appId: string, model: string, prompt: string }
    * - tool: { toolId: string, parameters: object }
    * - decision: { conditions: array }
    * - transform: { mappings: object }
@@ -162,7 +227,40 @@ export const nodeConfigSchema = z.object({
   config: z
     .object({
       /** Whether this node's progress is visible in the chat step indicator. Defaults to true. */
-      chatVisible: z.boolean().optional()
+      chatVisible: z.boolean().optional(),
+      /**
+       * Optional progress note shown while this node runs — the friendly
+       * alternative to a separate `progress` node in a loop body.
+       * `when` is a boolean expression over workflow state; the note is
+       * skipped when it evaluates false.
+       * Standalone `progress` nodes keep using a plain string here as a
+       * legacy alias for their own message, so only objects are treated
+       * as a node-level note.
+       */
+      progress: z
+        .union([
+          z.string(),
+          localizedStringSchema,
+          z.object({
+            /** Plain text, or a localized object resolved against the run's language. */
+            message: z.union([z.string(), localizedStringSchema]),
+            when: z.string().optional(),
+            status: z.enum(['running', 'completed']).optional()
+          })
+        ])
+        .optional(),
+      /**
+       * Optional per-node thinking override for LLM-backed nodes (prompt,
+       * planner, verifier, query-plan). Overrides the model's thinking config
+       * for this node's LLM call only. See nodeThinkingSchema.
+       */
+      thinking: nodeThinkingSchema,
+      /**
+       * Cap on provider-run web searches per model call when the node's tools
+       * include the generic `webSearch` marker and the model has native search
+       * (Anthropic `max_uses`). Defaults to 5.
+       */
+      maxWebSearches: z.number().int().min(1).max(50).optional()
     })
     .passthrough()
     .optional(),
@@ -192,7 +290,7 @@ const edgeConditionSchema = z
     type: z
       .enum(['always', 'never', 'expression', 'equals', 'contains', 'exists', 'llm'])
       .optional()
-      .default('always'),
+      .prefault('always'),
 
     /**
      * Expression for 'expression' type conditions
@@ -273,7 +371,7 @@ const workflowGlobalConfigSchema = z
      * - standard: Node transitions and key events
      * - full: Detailed logging including all inputs/outputs
      */
-    observability: z.enum(['minimal', 'standard', 'full']).optional().default('standard'),
+    observability: z.enum(['minimal', 'standard', 'full']).optional().prefault('standard'),
 
     /**
      * Data persistence strategy
@@ -281,7 +379,7 @@ const workflowGlobalConfigSchema = z
      * - session: Persist within session, cleared on session end
      * - long_term: Persist across sessions for future reference
      */
-    persistence: z.enum(['none', 'session', 'long_term']).optional().default('session'),
+    persistence: z.enum(['none', 'session', 'long_term']).optional().prefault('session'),
 
     /**
      * Default error handling strategy
@@ -289,7 +387,7 @@ const workflowGlobalConfigSchema = z
      * - retry: Retry failed node based on execution config
      * - llm_recovery: Use LLM to attempt error recovery
      */
-    errorHandling: z.enum(['fail', 'retry', 'llm_recovery']).optional().default('fail'),
+    errorHandling: z.enum(['fail', 'retry', 'llm_recovery']).optional().prefault('fail'),
 
     /**
      * Human-in-the-loop configuration
@@ -297,26 +395,34 @@ const workflowGlobalConfigSchema = z
      * - approval_gates: Human approval at designated nodes
      * - real_time: Real-time human intervention capability
      */
-    humanInLoop: z.enum(['none', 'approval_gates', 'real_time']).optional().default('none'),
+    humanInLoop: z.enum(['none', 'approval_gates', 'real_time']).optional().prefault('none'),
 
     /**
-     * Maximum total execution time for the workflow in milliseconds
-     * Default: 300000 (5 minutes), Maximum: 600000 (10 minutes)
+     * Maximum total execution time for the workflow in milliseconds.
+     * Default: 300000 (5 minutes). Maximum: 3600000 (1 hour) — long-running
+     * agentic workflows (multi-step research, large doc analysis) routinely
+     * exceed the old 10-minute cap.
      */
-    maxExecutionTime: z.number().int().min(1000).max(600000).optional().default(300000),
+    maxExecutionTime: z.number().int().min(1000).max(3600000).optional().prefault(300000),
 
     /**
      * Maximum number of nodes allowed in this workflow
      * Default: 20, Maximum: 50
      */
-    maxNodes: z.number().int().min(2).max(50).optional().default(20),
+    maxNodes: z.number().int().min(2).max(50).optional().prefault(20),
 
     /**
      * Maximum times any single node can be executed (for cycles/loops)
      * Used to prevent infinite loops in workflows with intentional cycles.
-     * Default: 10, Maximum: 100
+     * Default: 10, Maximum: 1000.
+     *
+     * Audit/completeness workflows that cycle once per document need this
+     * scaled with corpus size — e.g. a corpus-search returning up to 200
+     * docs visits its `pick-doc` cycle node up to 200 times, and a
+     * decomposed (sub-question × per-doc) shape can multiply further.
+     * The engine's per-node tracking still catches genuine infinite loops.
      */
-    maxIterations: z.number().int().min(1).max(100).optional().default(10),
+    maxIterations: z.number().int().min(1).max(1000).optional().prefault(10),
 
     /**
      * Whether to allow cycles/loops in the workflow graph
@@ -324,7 +430,7 @@ const workflowGlobalConfigSchema = z
      * and iterative patterns. The maxIterations config protects against infinite loops.
      * When false, strict DAG validation is enforced and cycles are rejected at start.
      */
-    allowCycles: z.boolean().optional().default(true),
+    allowCycles: z.boolean().optional().prefault(true),
 
     /**
      * Default model ID for agent nodes that don't specify their own modelId.
@@ -370,7 +476,7 @@ const baseWorkflowConfigSchema = z.object({
     .string()
     .regex(
       APP_ID_PATTERN,
-      'ID must contain only alphanumeric characters, underscores, dots, and hyphens'
+      'ID must contain only lowercase alphanumeric characters, underscores, dots, and hyphens'
     )
     .min(1, 'ID cannot be empty')
     .max(APP_ID_MAX_LENGTH, `ID cannot exceed ${APP_ID_MAX_LENGTH} characters`),
@@ -388,7 +494,7 @@ const baseWorkflowConfigSchema = z.object({
   version: z.string().regex(SEMVER_PATTERN, 'Version must be in semver format (e.g., 1.0.0)'),
 
   /** Whether this workflow is active and can be executed */
-  enabled: z.boolean().optional().default(true),
+  enabled: z.boolean().optional().prefault(true),
 
   /** Global workflow configuration options */
   config: workflowGlobalConfigSchema,
@@ -422,9 +528,9 @@ const baseWorkflowConfigSchema = z.object({
   chatIntegration: z
     .object({
       /** Whether the workflow appears as a selectable tool in chat apps */
-      enabled: z.boolean().optional().default(false),
+      enabled: z.boolean().optional().prefault(false),
       /** If true, workflow output streams directly as chat answer; if false, LLM formats the result */
-      passthroughResult: z.boolean().optional().default(false),
+      passthroughResult: z.boolean().optional().prefault(false),
       /** Overrides workflow description for the LLM tool definition */
       toolDescription: localizedStringSchema.optional(),
       /** Which output field to display as the primary result (e.g., "finalReport") */
@@ -435,7 +541,56 @@ const baseWorkflowConfigSchema = z.object({
     .optional(),
 
   /** Visual editor canvas state */
-  canvas: canvasSchema
+  canvas: canvasSchema,
+
+  /**
+   * Workflow lifecycle status
+   * - draft: Work in progress, not yet available for execution
+   * - published: Ready for execution by users
+   */
+  status: z.enum(['draft', 'published']).optional().prefault('draft'),
+
+  /**
+   * Trigger definitions for automated workflow execution.
+   * Supports scheduled (cron) and webhook-based triggers.
+   */
+  triggers: z
+    .array(
+      z
+        .object({
+          /** Unique trigger identifier */
+          id: z.string(),
+          /** Trigger type: schedule (cron-based) or webhook (HTTP-based) */
+          type: z.enum(['schedule', 'webhook']),
+          /** Cron expression for schedule triggers (e.g., "0 9 * * 1" for Monday 9am) */
+          cron: z.string().optional(),
+          /** IANA timezone for schedule evaluation (e.g., "Europe/Berlin") */
+          timezone: z.string().optional(),
+          /**
+           * Shared HMAC-SHA256 secret for webhook authentication.
+           * REQUIRED for webhook triggers -- otherwise anyone who can reach
+           * the server could fire the workflow. Minimum 16 characters.
+           */
+          secret: z.string().min(16).optional(),
+          /** URL path suffix for webhook triggers */
+          path: z.string().optional(),
+          /** Default initial data passed to the workflow on trigger */
+          initialData: z.record(z.any()).optional()
+        })
+        .refine(t => t.type !== 'schedule' || (typeof t.cron === 'string' && t.cron.length > 0), {
+          message: 'Schedule triggers require a cron expression',
+          path: ['cron']
+        })
+        .refine(
+          t => t.type !== 'webhook' || (typeof t.secret === 'string' && t.secret.length >= 16),
+          {
+            message:
+              'Webhook triggers require a secret of at least 16 characters for HMAC authentication',
+            path: ['secret']
+          }
+        )
+    )
+    .optional()
 });
 
 // Export known workflow keys from base schema before adding refinements
@@ -502,21 +657,68 @@ export const workflowConfigSchema = baseWorkflowConfigSchema
   )
   .refine(
     data => {
-      // Check for orphan nodes - every node except start must have an incoming edge
-      const nodeIds = new Set(data.nodes.map(node => node.id));
+      // Check for orphan nodes - every node except start must have an incoming edge.
+      // Container children (nodes with a parentId) are exempt: a loop body's
+      // entry node deliberately has no incoming edge — execution enters the
+      // body through the container, not through an edge.
       const nodesWithIncomingEdges = new Set(data.edges.map(edge => edge.target));
       const startNodes = data.nodes.filter(node => node.type === 'start').map(node => node.id);
 
-      // All non-start nodes must have at least one incoming edge
-      for (const nodeId of nodeIds) {
-        if (!startNodes.includes(nodeId) && !nodesWithIncomingEdges.has(nodeId)) {
+      for (const node of data.nodes) {
+        if (node.parentId) continue;
+        if (!startNodes.includes(node.id) && !nodesWithIncomingEdges.has(node.id)) {
           return false;
         }
       }
       return true;
     },
     {
-      message: 'All nodes except the start node must have at least one incoming edge',
+      message:
+        'All nodes except the start node and loop-body nodes must have at least one incoming edge',
       path: ['nodes']
+    }
+  )
+  .refine(
+    data => {
+      // parentId must reference an existing loop node, never the node itself,
+      // and parent chains must not cycle (a→b→a).
+      const byId = new Map(data.nodes.map(node => [node.id, node]));
+      for (const node of data.nodes) {
+        if (!node.parentId) continue;
+        const parent = byId.get(node.parentId);
+        if (!parent || parent.type !== 'loop' || node.parentId === node.id) {
+          return false;
+        }
+        // Walk the parent chain with a visited set to reject cycles.
+        const visited = new Set([node.id]);
+        let current = parent;
+        while (current) {
+          if (visited.has(current.id)) return false;
+          visited.add(current.id);
+          current = current.parentId ? byId.get(current.parentId) : null;
+        }
+      }
+      return true;
+    },
+    {
+      message: 'Node parentId must reference an existing loop node without creating a cycle',
+      path: ['nodes']
+    }
+  )
+  .refine(
+    data => {
+      // Edges must not cross a container boundary: source and target must
+      // belong to the same parent (both top-level, or both children of the
+      // same loop node). The loop container itself connects to the outer
+      // graph; its body is entered implicitly, not via edges.
+      const parentOf = new Map(data.nodes.map(node => [node.id, node.parentId || null]));
+      return data.edges.every(
+        edge => (parentOf.get(edge.source) ?? null) === (parentOf.get(edge.target) ?? null)
+      );
+    },
+    {
+      message:
+        'Edges must not cross a loop container boundary — connect body nodes to each other and the container to outside nodes',
+      path: ['edges']
     }
   );

@@ -1,0 +1,13 @@
+{
+  "app": {
+    "title": "My Company AI Apps",
+    "subtitle": "Intelligent Solutions for Your Business"
+  },
+  "common": {
+    "welcome": "Welcome to My Company AI Platform"
+  },
+  "chat": {
+    "newChat": "Start New Conversation",
+    "placeholder": "Ask me anything about your business..."
+  }
+}

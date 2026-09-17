@@ -27,52 +27,6 @@
     }
   },
   {
-    "id": "tavilySearch",
-    "name": "tavilySearch",
-    "title": {
-      "en": "Tavily Web Search",
-      "de": "Tavily Websuche"
-    },
-    "description": {
-      "en": "Search the web using the Tavily API. Use the 'query' parameter with your search terms.",
-      "de": "Durchsuchen Sie das Web mit der Tavily API. Verwenden Sie den 'query' Parameter mit Ihren Suchbegriffen."
-    },
-    "script": "tavilySearch.js",
-    "concurrency": 5,
-    "parameters": {
-      "type": "object",
-      "properties": {
-        "query": {
-          "type": "string",
-          "description": {
-            "en": "The search query or search terms to find on the web. Example: 'latest AI news' or 'Python programming tutorial'",
-            "de": "Die Suchanfrage oder Suchbegriffe für die Websuche. Beispiel: 'neueste KI-Nachrichten' oder 'Python Programmier-Tutorial'"
-          }
-        },
-        "search_depth": {
-          "type": "string",
-          "enum": ["basic", "advanced"],
-          "default": "basic",
-          "description": {
-            "en": "Search depth",
-            "de": "Suchtiefe"
-          }
-        },
-        "max_results": {
-          "type": "integer",
-          "description": {
-            "en": "Maximum number of search results to return",
-            "de": "Maximale Anzahl der zurückzugebenden Suchergebnisse"
-          },
-          "default": 5,
-          "minimum": 1,
-          "maximum": 10
-        }
-      },
-      "required": ["query"]
-    }
-  },
-  {
     "id": "webContentExtractor",
     "name": "webContentExtractor",
     "title": {

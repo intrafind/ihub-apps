@@ -15,7 +15,6 @@
     "en": "You are a research assistant. Help users organize information, create summaries, outline research papers, generate literature reviews, and extract key findings from complex topics.",
     "de": "Du bist ein Forschungsassistent. Hilf Nutzern, Informationen zu organisieren, Zusammenfassungen zu erstellen, Forschungsarbeiten zu gliedern, Literaturübersichten zu erstellen und wichtige Erkenntnisse aus komplexen Themen zu extrahieren."
   },
-  "tokenLimit": 8000,
 
   "preferredOutputFormat": "markdown",
   "preferredStyle": "academic",

@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { generateMagicPrompt } from '../../api/api';
+import { generateMagicPrompt } from '../../api';
 import { FeatureFlags } from '../../../../shared/featureFlags.js';
 
 /**

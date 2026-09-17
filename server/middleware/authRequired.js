@@ -1,8 +1,10 @@
 /**
  * Authentication middleware to enforce authentication when required
  */
-import { isAnonymousAccessAllowed } from '../utils/authorization.js';
+import { isAnonymousAccessAllowed, enhanceUserWithPermissions } from '../utils/authorization.js';
 import authDebugService from '../utils/authDebugService.js';
+import configCache from '../configCache.js';
+import { hasIdCaseInsensitive } from '../utils/resourceLookup.js';
 
 /**
  * Middleware that requires authentication when anonymousAuth is disabled
@@ -16,7 +18,7 @@ export function authRequired(req, res, next) {
     url: req.url,
     method: req.method
   });
-  const platformConfig = req.app.get('platform') || {};
+  const platformConfig = configCache.getPlatform() || {};
 
   // If anonymous access is allowed, proceed regardless of authentication
   if (isAnonymousAccessAllowed(platformConfig)) {
@@ -97,8 +99,10 @@ function resourceAccessRequired(resourceType) {
     if (req.user && req.user.permissions) {
       const allowedResources = req.user.permissions[permissionsKey] || new Set();
 
-      // Check if user has wildcard access or specific resource access
-      if (!allowedResources.has('*') && !allowedResources.has(resourceId)) {
+      // Check if user has wildcard access or specific resource access.
+      // Resource ids arriving from outside (e.g. the OpenAI-compatible
+      // inference API) may not match the configured casing exactly.
+      if (!allowedResources.has('*') && !hasIdCaseInsensitive(allowedResources, resourceId)) {
         return res.status(403).json({
           error: 'Access denied',
           code: `${resourceType.toUpperCase()}_ACCESS_DENIED`,
@@ -128,6 +132,32 @@ export const appAccessRequired = resourceAccessRequired('app');
 export const modelAccessRequired = resourceAccessRequired('model');
 
 /**
+ * Stricter guard than `authRequired`: rejects anonymous principals even
+ * when `anonymousAuth.enabled === true`. Use for endpoints that surface
+ * run data, artifacts, or anything not safe to leak to drive-by traffic.
+ *
+ * Behavior:
+ *  - Passes through if there is an authenticated user with a non-anonymous id.
+ *  - Otherwise responds 401 with a clear message.
+ */
+export function authenticatedOnly(req, res, next) {
+  if (req.user && req.user.id && req.user.id !== 'anonymous') {
+    return next();
+  }
+  authDebugService.log(
+    'authenticated-only',
+    'info',
+    'Rejecting anonymous request — endpoint requires a signed-in user',
+    { url: req.url, method: req.method, userId: req.user?.id }
+  );
+  // Generic message — do NOT leak which endpoints are reachable anonymously.
+  // That hint would help an attacker map the platform's allowed surface.
+  return res.status(401).json({
+    error: 'authentication required'
+  });
+}
+
+/**
  * Combined middleware for chat endpoints that enforces authentication and app access
  * @param {Object} req - Express request object
  * @param {Object} res - Express response object
@@ -143,31 +173,41 @@ export function chatAuthRequired(req, res, next) {
   authRequired(req, res, err => {
     if (err) return next(err);
 
-    // Then check app access permissions if user is authenticated
-    if (req.user && req.user.id !== 'anonymous') {
-      authDebugService.log(
-        'chat-auth-required',
-        'info',
-        'User authenticated, checking app access',
-        {
-          url: req.url,
-          method: req.method,
-          userId: req.user?.id,
-          appId: req.params.appId
-        }
-      );
+    // Tokenless requests reach here with req.user still undefined whenever
+    // anonymousAuth is enabled (authRequired only enforces auth, it never
+    // materializes a principal). Without a principal, appAccessRequired's
+    // permission check silently no-ops, so anonymous callers could reach any
+    // app id, including ones not allowlisted for the anonymous group. Build
+    // the same resolved-permissions anonymous principal here that the apps
+    // list endpoint already builds for itself, scoped to chat endpoints only.
+    if (!req.user) {
+      const platformConfig = configCache.getPlatform() || {};
+      if (isAnonymousAccessAllowed(platformConfig)) {
+        req.user = enhanceUserWithPermissions(null, platformConfig.auth || {}, platformConfig);
+      }
+    }
+
+    // Check app access permissions whenever a principal exists.
+    // resourceAccessRequired() is a safe no-op if req.user.permissions is
+    // somehow still missing.
+    if (req.user) {
+      authDebugService.log('chat-auth-required', 'info', 'Checking app access', {
+        url: req.url,
+        method: req.method,
+        userId: req.user?.id,
+        appId: req.params.appId
+      });
       return appAccessRequired(req, res, next);
     }
 
     authDebugService.log(
       'chat-auth-required',
       'info',
-      'Proceeding without app access check (anonymous or unauthenticated user)',
+      'Proceeding without app access check (no user principal)',
       {
         url: req.url,
         method: req.method,
-        hasUser: !!req.user,
-        userId: req.user?.id
+        hasUser: !!req.user
       }
     );
     next();

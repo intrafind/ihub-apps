@@ -3,35 +3,19 @@ import path from 'path';
 import { getRootDir } from '../pathUtils.js';
 import config from '../config.js';
 import logger from '../utils/logger.js';
+import { createJsonlAppender } from '../utils/jsonlAppender.js';
 
 const contentsDir = config.CONTENTS_DIR;
 const dataDir = path.join(getRootDir(), contentsDir, 'data');
 const eventFile = path.join(dataDir, 'usage-events.jsonl');
-const FLUSH_INTERVAL_MS = 10000;
 
-let queue = [];
-let flushTimer = null;
+const appender = createJsonlAppender({
+  getFilePath: () => eventFile,
+  component: 'UsageEventLog'
+});
 
 export async function flushQueue() {
-  if (queue.length === 0) return 0;
-  await fs.mkdir(path.dirname(eventFile), { recursive: true });
-  const count = queue.length;
-  const lines = queue.map(entry => JSON.stringify(entry)).join('\n') + '\n';
-  queue = [];
-  await fs.appendFile(eventFile, lines, 'utf8');
-  return count;
-}
-
-function scheduleFlush() {
-  if (flushTimer) return;
-  flushTimer = setTimeout(async () => {
-    flushTimer = null;
-    try {
-      await flushQueue();
-    } catch (error) {
-      logger.error('Failed to flush usage events', { component: 'UsageEventLog', error: e });
-    }
-  }, FLUSH_INTERVAL_MS);
+  return appender.flush();
 }
 
 /**
@@ -63,8 +47,7 @@ export function logUsageEvent({
   if (conversationId) entry.cid = conversationId;
   if (rating != null) entry.rating = rating;
   if (metadata) entry.meta = metadata;
-  queue.push(entry);
-  scheduleFlush();
+  appender.append(entry);
 }
 
 /**
@@ -126,29 +109,32 @@ export function getMonthlyDir() {
 export async function cleanupEvents(retentionDays = 90) {
   if (retentionDays < 0) return; // -1 means keep forever
   try {
-    const events = await readEvents();
-    const cutoff = new Date();
-    cutoff.setDate(cutoff.getDate() - retentionDays);
-    const cutoffStr = cutoff.toISOString();
-    const retained = events.filter(e => e.ts >= cutoffStr);
-    if (retained.length < events.length) {
-      const lines = retained.map(e => JSON.stringify(e)).join('\n') + (retained.length ? '\n' : '');
-      await fs.writeFile(eventFile, lines, 'utf8');
-      logger.info('Usage event cleanup completed', {
-        component: 'UsageEventLog',
-        removed: events.length - retained.length
-      });
-    }
+    await appender.withWriteLock(async () => {
+      // Drain any queued events into the on-disk file first so they're
+      // included in the read-filter pass below. Done under the lock so a
+      // new append() can't slip in between drain and rewrite.
+      try {
+        await appender.drainToDisk();
+      } catch {
+        // A drain failure is logged elsewhere; continue with what's on disk.
+      }
+
+      const events = await readEvents();
+      const cutoff = new Date();
+      cutoff.setDate(cutoff.getDate() - retentionDays);
+      const cutoffStr = cutoff.toISOString();
+      const retained = events.filter(e => e.ts >= cutoffStr);
+      if (retained.length < events.length) {
+        const lines =
+          retained.map(e => JSON.stringify(e)).join('\n') + (retained.length ? '\n' : '');
+        await fs.writeFile(eventFile, lines, 'utf8');
+        logger.info('Usage event cleanup completed', {
+          component: 'UsageEventLog',
+          removed: events.length - retained.length
+        });
+      }
+    });
   } catch (error) {
-    logger.error('Failed to cleanup usage events', { component: 'UsageEventLog', error: e });
+    logger.error('Failed to cleanup usage events', { component: 'UsageEventLog', error });
   }
 }
-
-// Periodic flush
-setInterval(() => {
-  if (queue.length > 0) {
-    flushQueue().catch(error =>
-      logger.error('Usage event flush error', { component: 'UsageEventLog', error: e })
-    );
-  }
-}, FLUSH_INTERVAL_MS);

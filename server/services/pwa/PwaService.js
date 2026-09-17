@@ -209,21 +209,44 @@ self.addEventListener('fetch', event => {
 `;
 }
 
-// In-memory cache: key = `${indexPath}:${configETag}`, value = { content, mtime }
+/**
+ * Build the inline <script> that publishes the authoritative deployment base
+ * path to the client BEFORE the base-path detection script in index.html runs.
+ *
+ * The client otherwise has to guess the base path from the URL, which is
+ * ambiguous for unknown/404 routes (e.g. `/tools-service` at a root deployment
+ * looks identical to a `/tools-service` subpath deployment). The server is the
+ * only authority — it knows the real prefix from the X-Forwarded-Prefix header —
+ * so it injects it here and the client trusts it via `window.__SERVER_BASE_PATH__`.
+ *
+ * `basePath` comes from getBasePath() and is validated to contain only
+ * `[\w\-/]+`, so it cannot break out of the string or script context; it is
+ * JSON-encoded as a belt-and-braces measure.
+ */
+export function buildBasePathScript(basePath) {
+  return `  <script>window.__SERVER_BASE_PATH__ = ${JSON.stringify(basePath || '')};</script>`;
+}
+
+// In-memory cache: key = `${indexPath}:${cacheTag}`, value = { content, mtime }
 const indexHtmlCache = new Map();
 
 /**
- * Read index.html, inject PWA <head> tags, and return the modified HTML string.
- * Uses a mtime + config-hash cache to avoid repeated disk reads.
- * Accepts a RESOLVED pwa config (output of resolvePwaConfig).
+ * Read index.html, inject the authoritative base path (always) and the PWA
+ * <head> tags (when a resolved pwa config is provided), and return the modified
+ * HTML string. Uses a mtime + config-hash cache to avoid repeated disk reads.
  * Returns null on failure so the caller can fall back gracefully.
+ *
+ * @param {string} indexPath - Absolute path to index.html
+ * @param {Object} [options]
+ * @param {string} [options.basePath] - Authoritative deployment base path ('' for root)
+ * @param {Object|null} [options.pwaConfig] - RESOLVED pwa config, or null to skip PWA tags
  */
-export function buildIndexWithPwaTags(indexPath, resolvedConfig) {
+export function buildIndexHtml(indexPath, { basePath = '', pwaConfig = null } = {}) {
   try {
     const stat = statSync(indexPath);
     const mtime = stat.mtimeMs;
-    const etag = computePwaETag(resolvedConfig);
-    const cacheKey = `${indexPath}:${etag}`;
+    const pwaTag = pwaConfig ? computePwaETag(pwaConfig) : 'nopwa';
+    const cacheKey = `${indexPath}:${basePath}:${pwaTag}`;
     const cached = indexHtmlCache.get(cacheKey);
 
     if (cached && cached.mtime === mtime) {
@@ -231,8 +254,19 @@ export function buildIndexWithPwaTags(indexPath, resolvedConfig) {
     }
 
     const html = readFileSync(indexPath, 'utf8');
-    const tags = buildHtmlTags(resolvedConfig);
-    const modified = html.replace('</head>', `${tags}\n  </head>`);
+
+    // Inject the base path script right after <head> so it runs before the
+    // inline detection script. Fall back to prepending if <head> is missing.
+    const basePathScript = buildBasePathScript(basePath);
+    let modified = html.includes('<head>')
+      ? html.replace('<head>', `<head>\n${basePathScript}`)
+      : `${basePathScript}\n${html}`;
+
+    // Inject PWA tags before </head> when enabled.
+    if (pwaConfig) {
+      const tags = buildHtmlTags(pwaConfig);
+      modified = modified.replace('</head>', `${tags}\n  </head>`);
+    }
 
     indexHtmlCache.set(cacheKey, { content: modified, mtime });
 
@@ -245,9 +279,9 @@ export function buildIndexWithPwaTags(indexPath, resolvedConfig) {
 
     return modified;
   } catch (error) {
-    logger.error('Failed to build index with PWA tags', {
+    logger.error('Failed to build index.html', {
       component: 'PwaService',
-      error: err
+      error: error?.message || String(error)
     });
     return null; // caller falls back to res.sendFile
   }

@@ -382,7 +382,7 @@ function RegistryFormDialog({ registry, onSave, onCancel }) {
                   max="168"
                   value={form.refreshIntervalHours}
                   onChange={e => set('refreshIntervalHours', parseInt(e.target.value))}
-                  className="w-16 px-2 py-1 border border-gray-300 dark:border-gray-600 rounded bg-white dark:bg-gray-700 text-sm text-gray-900 dark:text-white"
+                  className="w-16 px-2 py-1 border border-gray-300 dark:border-gray-600 rounded-sm bg-white dark:bg-gray-700 text-sm text-gray-900 dark:text-white"
                 />
                 <span className="text-sm text-gray-500 dark:text-gray-400">
                   {t('admin.marketplace.registries.form.hours', 'hours')}

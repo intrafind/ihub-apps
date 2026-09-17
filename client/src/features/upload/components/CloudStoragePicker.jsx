@@ -4,10 +4,11 @@ import Icon from '../../../shared/components/Icon';
 import { usePlatformConfig } from '../../../shared/contexts/PlatformConfigContext';
 import Office365FileBrowser from './Office365FileBrowser';
 import GoogleDriveFileBrowser from './GoogleDriveFileBrowser';
+import NextcloudFileBrowser from './NextcloudFileBrowser';
 
 /**
  * Cloud Storage Picker component
- * Modal for selecting files from cloud storage providers (Office 365, Google Drive)
+ * Modal for selecting files from cloud storage providers (Office 365, Google Drive, Nextcloud)
  */
 const CloudStoragePicker = ({
   onFileSelect,
@@ -50,10 +51,10 @@ const CloudStoragePicker = ({
   // No cloud storage enabled
   if (!cloudStorage.enabled || enabledProviders.length === 0) {
     return (
-      <div className="fixed inset-0 bg-gray-500 bg-opacity-75 dark:bg-gray-900 dark:bg-opacity-75 flex items-center justify-center z-50">
+      <div className="fixed inset-0 bg-gray-500/75 dark:bg-gray-900/75 flex items-center justify-center z-50">
         <div className="bg-white dark:bg-gray-800 rounded-lg shadow-xl max-w-md w-full m-4 p-6">
           <div className="flex items-start mb-4">
-            <div className="flex-shrink-0">
+            <div className="shrink-0">
               <Icon name="warning" size="lg" className="text-yellow-500" />
             </div>
             <div className="ml-3">
@@ -79,7 +80,7 @@ const CloudStoragePicker = ({
   }
 
   return (
-    <div className="fixed inset-0 bg-gray-500 bg-opacity-75 dark:bg-gray-900 dark:bg-opacity-75 flex items-center justify-center z-50">
+    <div className="fixed inset-0 bg-gray-500/75 dark:bg-gray-900/75 flex items-center justify-center z-50">
       <div className="bg-white dark:bg-gray-800 rounded-lg shadow-xl max-w-4xl w-full m-4 p-6 max-h-[90vh] overflow-y-auto">
         {/* Header */}
         <div className="flex justify-between items-center mb-6">
@@ -107,17 +108,19 @@ const CloudStoragePicker = ({
                 onClick={() => handleProviderSelect(provider)}
                 className="w-full flex items-center p-4 border-2 border-gray-200 dark:border-gray-700 rounded-lg hover:border-indigo-500 dark:hover:border-indigo-400 hover:bg-gray-50 dark:hover:bg-gray-700 transition-colors"
               >
-                <Icon
-                  name={provider.type === 'office365' ? 'cloud' : 'cloud'}
-                  size="xl"
-                  className="text-indigo-600 dark:text-indigo-400"
-                />
+                <Icon name="cloud" size="xl" className="text-indigo-600 dark:text-indigo-400" />
                 <div className="ml-4 text-left">
                   <p className="text-base font-medium text-gray-900 dark:text-gray-100">
                     {provider.displayName}
                   </p>
                   <p className="text-sm text-gray-500 dark:text-gray-400">
-                    {provider.type === 'office365' ? 'Microsoft Office 365' : 'Google Drive'}
+                    {provider.type === 'office365'
+                      ? t('admin.cloudStorage.office365', 'Microsoft Office 365')
+                      : provider.type === 'googledrive'
+                        ? t('admin.cloudStorage.googledrive', 'Google Drive')
+                        : provider.type === 'nextcloud'
+                          ? t('admin.cloudStorage.nextcloud', 'Nextcloud')
+                          : provider.type}
                   </p>
                 </div>
               </button>
@@ -151,6 +154,13 @@ const CloudStoragePicker = ({
               />
             ) : selectedProvider.type === 'googledrive' ? (
               <GoogleDriveFileBrowser
+                provider={selectedProvider}
+                onFilesProcessed={handleFilesProcessed}
+                onClose={onClose}
+                uploadConfig={uploadConfig}
+              />
+            ) : selectedProvider.type === 'nextcloud' ? (
+              <NextcloudFileBrowser
                 provider={selectedProvider}
                 onFilesProcessed={handleFilesProcessed}
                 onClose={onClose}

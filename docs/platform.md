@@ -65,7 +65,11 @@ The optional `platform.json` file controls global platform behavior and is locat
 ### **features**
 Controls platform feature flags and capabilities.
 
+- **export** (boolean) – Enables or disables all export functionality including JSON, JSONL, Markdown, HTML, and PDF exports for chat conversations and canvas content. When disabled, all export buttons and menus are hidden across the platform. Default: `true`
+- **pdfExport** (boolean) – Enables or disables PDF export functionality specifically. Only applies when `export` is also enabled. Default: `true`
 - **usageTracking** (boolean) – Enables or disables recording of usage statistics in `contents/data/usage.json`. Default: `true`
+
+**Note:** The `export` feature flag acts as a master switch for all export functionality. The `pdfExport` flag provides granular control over PDF exports specifically, but requires `export` to be enabled to take effect.
 
 ### **globalPromptVariables**
 
@@ -76,7 +80,12 @@ Global prompt variables enable platform administrators to inject dynamic context
 ```json
 {
   "globalPromptVariables": {
-    "context": "Very important: The user's timezone is {{timezone}}. The current date is {{date}}. Any dates before this are in the past, and any dates after this are in the future. When dealing with modern entities/companies/people, and the user asks for the 'latest', 'most recent', 'today's', etc. don't assume your knowledge is up to date; You can and should speak any language the user asks you to speak or use the language of the user."
+    "context": "Very important: The user's timezone is {{timezone}}. The current date is {{date}}. Any dates before this are in the past, and any dates after this are in the future. When dealing with modern entities/companies/people, and the user asks for the 'latest', 'most recent', 'today's', etc. don't assume your knowledge is up to date; You can and should speak any language the user asks you to speak or use the language of the user.",
+    "variables": {
+      "company": "IntraFind Software AG",
+      "department": "AI Solutions",
+      "support_email": "support@intrafind.de"
+    }
   }
 }
 ```
@@ -84,6 +93,8 @@ Global prompt variables enable platform administrators to inject dynamic context
 #### Properties
 
 - **context** (string) – Global context string that is automatically prepended to all system prompts across the platform. This string can include dynamic variable placeholders that are resolved at runtime. The processed context is available via the `{{platform_context}}` variable in app configurations.
+
+- **variables** (object) – Custom key-value pairs that define organization-specific variables (e.g., company name, department, contact information). These custom variables can be referenced anywhere built-in variables are supported, using the same `{{variable_name}}` syntax. Custom variables are managed through the Admin UI at `/admin/prompt-variables`.
 
 #### Available Built-in Variables
 
@@ -220,6 +231,98 @@ When the same variable name appears in multiple places:
 }
 ```
 
+#### Custom Variables
+
+In addition to built-in variables, administrators can define custom variables through the Admin UI (`/admin/prompt-variables`). Custom variables are useful for:
+
+**Organization Information:**
+```json
+{
+  "globalPromptVariables": {
+    "context": "{{platform_context}}",
+    "variables": {
+      "company": "IntraFind Software AG",
+      "company_description": "A leading provider of enterprise search and AI solutions",
+      "support_email": "support@intrafind.de",
+      "support_hours": "Monday-Friday, 9 AM - 5 PM CET"
+    }
+  }
+}
+```
+
+**Department-Specific Information:**
+```json
+{
+  "globalPromptVariables": {
+    "variables": {
+      "department": "Customer Success",
+      "team_lead": "John Doe",
+      "escalation_process": "For urgent issues, contact the on-call engineer via Slack #oncall-support"
+    }
+  }
+}
+```
+
+**Product/Service Information:**
+```json
+{
+  "globalPromptVariables": {
+    "variables": {
+      "product_name": "iHub Apps",
+      "version": "2.0",
+      "documentation_url": "https://docs.example.com",
+      "pricing_tiers": "Starter ($99/mo), Professional ($299/mo), Enterprise (custom)"
+    }
+  }
+}
+```
+
+**Using Custom Variables:**
+
+Custom variables can be used anywhere built-in variables are supported:
+
+1. **In Global Context:**
+   ```json
+   {
+     "context": "You are an AI assistant for {{company}}. For support questions, direct users to {{support_email}}. Current time: {{time}}, {{timezone}}."
+   }
+   ```
+
+2. **In App System Prompts:**
+   ```json
+   {
+     "system": {
+       "en": "You are a helpful assistant for {{company}}'s {{department}}. When users ask for help, remind them they can contact {{support_email}} during {{support_hours}}."
+     }
+   }
+   ```
+
+3. **In the Global Context Reference:**
+   Apps can use `{{platform_context}}` which will already have all custom and built-in variables resolved.
+
+**Managing Custom Variables:**
+
+- Navigate to Admin → Global Prompt Variables (`/admin/prompt-variables`)
+- Add new variables with a unique key (alphanumeric and underscores only)
+- Edit existing variable values
+- Delete variables no longer needed
+- Copy variable syntax (`{{variable_name}}`) to clipboard for easy use
+
+**Variable Naming Rules:**
+- Must start with a letter or underscore
+- Can contain letters, numbers, and underscores
+- Cannot use names reserved for built-in variables
+- Case-sensitive (e.g., `{{Company}}` and `{{company}}` are different)
+
+**Priority:**
+- Built-in variables take precedence over custom variables
+- If a custom variable has the same name as a built-in variable, the built-in value will be used
+- This prevents accidental override of system-provided values
+
+#### Legacy Configuration Support
+
+For backward compatibility, configurations without the `variables` field will continue to work. The migration system automatically adds an empty `variables` object to existing configurations.
+
 #### Troubleshooting
 
 **Variables Not Resolving:**
@@ -240,6 +343,8 @@ When the same variable name appears in multiple places:
 ### **pdfExport**
 Configuration for PDF export functionality.
 
+**Important:** PDF export functionality requires both the `export` feature flag and the `pdfExport` feature flag to be enabled. The general `export` flag controls all export functionality, while `pdfExport` specifically controls the PDF export option.
+
 - **defaultTemplate** (string) – Default template to use for PDF exports. Default: `"default"`
 - **watermark** (object) – Watermark configuration
   - **enabled** (boolean) – Enable/disable watermark
@@ -254,6 +359,34 @@ Configuration for PDF export functionality.
 - **requestBodyLimitMB** (number) – Maximum size of JSON request bodies in megabytes. Default: `50`
 - **requestConcurrency** (number) – Default concurrency level for outbound requests. If omitted or below `1`, concurrency is unlimited. Default: `5`
 - **requestDelayMs** (number) – Default delay in milliseconds between outbound requests. Default: `0`
+
+### llm
+
+Transport ceilings for provider calls, in milliseconds. Both fall back to the
+env vars `LLM_CONNECT_TIMEOUT_MS` / `LLM_STREAM_IDLE_TIMEOUT_MS`, and a single
+model can override either in its own config. `0` disables a ceiling and leaves
+the call to the whole-call deadline (`REQUEST_TIMEOUT`, 5 minutes).
+
+```json
+"llm": {
+  "connectTimeoutMs": 30000,
+  "streamIdleTimeoutMs": 60000
+}
+```
+
+- **connectTimeoutMs** (number) – Longest a provider call waits for the
+  response headers, per attempt, before failing as unreachable. Every provider
+  call streams, so those headers arrive as soon as the request is accepted;
+  time spent queued in the per-model throttle does not count. Default: `30000`.
+  Image models are the exception to "headers arrive on accept" — they withhold
+  them until the render is ready — so they carry a longer `connectTimeoutMs` of
+  their own (see [Models](models.md#connect-ceiling-and-image-models))
+- **streamIdleTimeoutMs** (number) – Longest gap between two chunks of a
+  stream that has already produced one. Armed only after the first chunk, so a
+  model that thinks for minutes before answering is not cut off.
+  Default: `60000`
+
+See [Stream deadlines](llm-client.md#stream-deadlines).
 
 ### **telemetry**
 OpenTelemetry integration configuration.
@@ -580,34 +713,53 @@ Windows NTLM/Kerberos authentication for domain-joined environments.
 
 For detailed setup instructions see [LDAP/NTLM Authentication](ldap-ntlm-authentication.md).
 
-### **authDebug**
-Authentication debugging and logging configuration.
+### **auth.debug**
+Authentication debug logging configuration. This lives under the `auth` block
+(`auth.debug`) and is edited from the admin UI at **Platform → Logging →
+Authentication Debug Logging** — the single place for all auth tracing.
 
 ```json
 {
-  "authDebug": {
-    "enabled": false,
-    "maskTokens": true,
-    "redactPasswords": true,
-    "consoleLogging": false,
-    "includeRawData": false,
-    "providers": {
-      "oidc": { "enabled": true },
-      "local": { "enabled": true },
-      "proxy": { "enabled": true },
-      "ldap": { "enabled": true },
-      "ntlm": { "enabled": true }
+  "auth": {
+    "debug": {
+      "enabled": false,
+      "maskTokens": true,
+      "redactPasswords": true,
+      "includeRawData": false,
+      "providers": {
+        "oidc": { "enabled": true },
+        "local": { "enabled": true },
+        "proxy": { "enabled": true },
+        "ldap": { "enabled": true },
+        "ntlm": { "enabled": true }
+      }
     }
   }
 }
 ```
 
-- **enabled** (boolean) – Enable authentication debugging. Default: `false`
+- **enabled** (boolean) – Enable authentication debug logging. Default: `false`.
+  Traces are emitted at the `info` level, so they appear at the default
+  `logging.level` without any further change, and the toggle applies immediately
+  (no server restart required).
 - **maskTokens** (boolean) – Mask sensitive tokens in logs. Default: `true`
 - **redactPasswords** (boolean) – Redact passwords from logs. Default: `true`
-- **consoleLogging** (boolean) – Enable console logging. Default: `false`
-- **includeRawData** (boolean) – Include raw authentication data. Default: `false`
-- **providers** (object) – Per-provider debugging settings
+- **includeRawData** (boolean) – Log the full, unsanitized user-info payload and
+  raw access token for the OIDC flow. **Security risk** — leave `false` (default)
+  and only enable while actively debugging. The core logger still redacts
+  well-known sensitive keys as a safety net.
+- **providers** (object) – Per-provider toggles (`oidc`, `local`, `proxy`,
+  `ldap`, `ntlm`). Each defaults to enabled when global debug is on.
+
+> **Migration note:** earlier releases wrote a top-level `authDebug` key that the
+> server never read, so the toggle silently did nothing. The value is moved to
+> `auth.debug` automatically on upgrade (migration `V079`), and the dead
+> `consoleLogging` flag is dropped (Winston owns the console transport).
+
+> **NTLM:** the standalone `ntlmAuth.debug` flag still works, and NTLM tracing is
+> now also driven by `auth.debug` (`providers.ntlm`), so a single toggle covers
+> it. When component filtering (`logging.components`) is active, authentication
+> components are never filtered out while `auth.debug.enabled` is `true`.
 
 ## Environment Variables
 
@@ -825,7 +977,7 @@ Configures integration with the IntraFind iFinder enterprise search platform. Wh
   "iFinder": {
     "enabled": false,
     "baseUrl": "https://ifinder.company.com",
-    "privateKey": "${IFINDER_PRIVATE_KEY}",
+    "privateKeyRef": "ifinder",
     "algorithm": "RS256",
     "issuer": "ihub-apps",
     "audience": "ifinder-api",
@@ -836,17 +988,39 @@ Configures integration with the IntraFind iFinder enterprise search platform. Wh
 }
 ```
 
+`privateKeyRef` points at a `secret`-type profile in the central credential
+store (`contents/config/credentials.json`, managed under Admin >
+Credentials); the admin UI's iFinder page writes this field for you when you
+pick a credential there. Set the `IFINDER_PRIVATE_KEY` environment variable
+instead to skip the credential store entirely — it takes precedence over
+`privateKeyRef` when set. Either way, no key material is ever stored as
+plaintext in `platform.json`. See
+[JWT Key Generation](ifinder-jwt-key-generation.md).
+
 | Field                    | Type    | Default           | Description                                                                             |
 | ------------------------ | ------- | ----------------- | --------------------------------------------------------------------------------------- |
 | `enabled`                | Boolean | `false`           | Enable the iFinder integration                                                          |
 | `baseUrl`                | String  | `""`              | Base URL of the iFinder instance                                                        |
-| `privateKey`             | String  | `""`              | RSA private key (PEM format) for signing JWT tokens. Use `${ENV_VAR}` for security     |
+| `privateKeyRef`          | String  | `""`              | ID of a `secret` credential (Admin > Credentials) holding the RSA/EC private key (PEM). Ignored if `IFINDER_PRIVATE_KEY` is set |
 | `algorithm`              | String  | `"RS256"`         | JWT signing algorithm                                                                   |
 | `issuer`                 | String  | `"ihub-apps"`     | JWT `iss` claim value                                                                   |
 | `audience`               | String  | `"ifinder-api"`   | JWT `aud` claim value                                                                   |
 | `tokenExpirationSeconds` | Number  | `3600`            | Lifetime of generated JWT tokens in seconds                                             |
 | `defaultScope`           | String  | `"fa_index_read"` | Default OAuth scope included in generated tokens                                        |
-| `jwtSubjectField`        | String  | `"email"`         | User attribute used as the JWT `sub` claim. Options: `"email"`, `"username"`           |
+| `jwtSubjectField`        | String  | `"email"`         | User attribute used as the JWT `sub` claim. See below for supported values.            |
+
+### `jwtSubjectField` supported values
+
+The JWT `sub` claim identifies the authenticated user to iFinder. It is **always** derived from the authenticated user object — never from environment variables (configCache skips env var resolution for this field, see `ENV_VAR_RESOLUTION_SKIP_PATHS` in `server/configCache.js`).
+
+Accepted forms:
+
+- `"email"` (default) — `user.email`, falling back to `user.username`, then `user.id`.
+- `"username"` — `user.username`, falling back to `user.email`, then `user.id`.
+- `"domain\\username"` — `user.domain + "\\" + user.username`, useful for NTLM/AD setups.
+- **Custom template** — embed `${user.field}` placeholders to build the subject from user attributes. Example: `"DOMAIN\\${user.username}"` produces `DOMAIN\john.doe` for a user with `username = "john.doe"`. Available fields include `id`, `username`, `name`, `email`, `domain`.
+
+> **Security note:** Earlier versions accepted the legacy `${field}` form (no `user.` prefix). That syntax collided with the env var resolver — on Windows `process.env.username` is set to the OS user running the server, so `${username}` silently expanded to the service account name in every JWT subject, breaking per-user identity in iFinder. The configCache skip-list and migration V043 fix this; legacy `${field}` is still accepted with a deprecation warning, but **use `${user.field}` for clarity and forward-compatibility**.
 
 For integration details see [iFinder Integration](iFinder-Integration.md).
 

@@ -13,6 +13,7 @@ var __authGateI18n = (function () {
       usernamePlaceholder: 'Enter your username or email',
       passwordPlaceholder: 'Enter your password',
       signingIn: 'Signing in...',
+      rememberMe: 'Remember me',
       invalidCredentials: 'Invalid username or password',
       connectionError: 'Connection error. Please try again.',
       windowsAuth: 'Windows Authentication',
@@ -31,7 +32,8 @@ var __authGateI18n = (function () {
       sessionExpired: 'Your session has expired. Please sign in again.',
       demoAccounts: 'Demo accounts:',
       demoAdmin: 'Admin: admin / password123',
-      demoUser: 'User: user / password123'
+      demoUser: 'User: user / password123',
+      close: 'Close'
     },
     de: {
       signIn: 'Anmelden',
@@ -41,6 +43,7 @@ var __authGateI18n = (function () {
       usernamePlaceholder: 'Benutzername oder E-Mail eingeben',
       passwordPlaceholder: 'Passwort eingeben',
       signingIn: 'Anmeldung...',
+      rememberMe: 'Angemeldet bleiben',
       invalidCredentials: 'Ung\u00fcltiger Benutzername oder Passwort',
       connectionError: 'Verbindungsfehler. Bitte versuchen Sie es erneut.',
       windowsAuth: 'Windows-Authentifizierung',
@@ -59,7 +62,8 @@ var __authGateI18n = (function () {
       sessionExpired: 'Ihre Sitzung ist abgelaufen. Bitte melden Sie sich erneut an.',
       demoAccounts: 'Demo-Konten:',
       demoAdmin: 'Admin: admin / password123',
-      demoUser: 'Benutzer: user / password123'
+      demoUser: 'Benutzer: user / password123',
+      close: 'Schließen'
     }
   };
 

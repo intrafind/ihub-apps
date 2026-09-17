@@ -24,6 +24,10 @@ dist/
 dist-ssr/
 dist-bin/
 build/
+
+# Browser-extension dev unpacked-load output (`npm run extension:build`)
+browser-extension/extension/
+browser-extension/assets/
 contents/data/*
 !contents/data/.gitkeep
 
@@ -83,3 +87,11 @@ contents/.jwt-secret
 *.pem
 contents*/
 .env*
+
+# Nextcloud plugin tarball built by `make -C nextcloud-app package`
+ihub_chat.tar.gz
+# Generated at build time by scripts/export-docs-markdown.js
+server/defaults/sources/ihub-documentation.md
+
+# Boot smoke test throwaway contents dirs (scripts/smoke-boot.js)
+.smoke-contents/

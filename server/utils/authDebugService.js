@@ -44,7 +44,24 @@ class AuthDebugService {
   }
 
   /**
-   * Log authentication event
+   * Whether unsanitized raw payloads (raw tokens, full user-info claims) may be
+   * logged. Guarded by both the debug toggle and the explicit, security-gated
+   * `includeRawData` flag (default false).
+   */
+  isRawDataEnabled(provider = null) {
+    if (!this.isDebugEnabled(provider)) return false;
+    return this.getDebugConfig(provider).includeRawData === true;
+  }
+
+  /**
+   * Log authentication event.
+   *
+   * Auth debug is an explicit, self-contained opt-in — when it is enabled the
+   * admin wants to see these traces. Winston's global `logging.level` (default
+   * `info`) would otherwise swallow anything emitted at `debug`, forcing admins
+   * to flip a second, separate switch. To make the single toggle sufficient we
+   * emit informational traces at `info`; genuine warnings/errors keep their
+   * severity so they still surface in production logs.
    */
   log(provider, level, event, data = {}, sessionId = null) {
     if (!this.isDebugEnabled(provider)) return;
@@ -53,28 +70,17 @@ class AuthDebugService {
     const sanitizedData = this.sanitizeData(data, config);
 
     const logEntry = {
+      authDebug: true,
       provider,
       event,
       sessionId,
       ...sanitizedData
     };
 
-    // Log via Winston based on level
-    switch (level) {
-      case 'error':
-        logger.error(event, { component: 'AuthService', ...logEntry });
-        break;
-      case 'warn':
-        logger.warn(event, { component: 'AuthService', ...logEntry });
-        break;
-      case 'info':
-        logger.info(event, { component: 'AuthService', ...logEntry });
-        break;
-      case 'debug':
-      default:
-        logger.debug(event, { component: 'AuthService', ...logEntry });
-        break;
-    }
+    // Map non-error/warn levels up to `info` so they clear the default global
+    // log level without the admin also having to lower `logging.level`.
+    const effectiveLevel = level === 'error' ? 'error' : level === 'warn' ? 'warn' : 'info';
+    logger[effectiveLevel](event, { component: 'AuthService', ...logEntry });
   }
 
   /**
@@ -82,6 +88,12 @@ class AuthDebugService {
    */
   sanitizeData(data, config = {}) {
     if (!data || typeof data !== 'object') return data;
+
+    // When the admin has explicitly opted into raw data, bypass service-level
+    // masking so the actual claims/tokens are visible for troubleshooting. The
+    // core logger (utils/logger.js) still redacts known-sensitive keys as a
+    // defense-in-depth safety net, so this stays a deliberate, bounded risk.
+    if (config.includeRawData === true) return { ...data };
 
     const sanitized = { ...data };
     const maskTokens = config.maskTokens !== false; // Default to true
