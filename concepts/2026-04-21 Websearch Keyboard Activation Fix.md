@@ -1,126 +1,74 @@
 # Websearch Keyboard Activation Fix
 
-**Date**: 2026-04-21
-**Issue**: #1295 - WCAG issue: Websearch can't be activated via keys
-**Related**: #1225 - Accessibility (Barrierefreiheit) – WCAG 2.1 AA Compliance Audit & Remediation
+**Date**: 2026-04-21 (implementation revised 2026-09-17)
+**Issue**: #1295 — WCAG issue: Websearch can't be activated via keys
+**Related**: #1225 — Accessibility (Barrierefreiheit) – WCAG 2.1 AA Compliance Audit & Remediation
 
 ## Problem
 
-The websearch toggle in the ChatInputActionsMenu was not keyboard-accessible. Users could tab to the element but couldn't activate it using Space, Enter, or arrow keys, violating WCAG 2.1 Level AA criterion 2.1.1 (Keyboard).
+In the chat input's `+` actions menu (`ChatInputActionsMenu`), the Web Search switch could be
+reached with the keyboard but never activated: arrow keys, Space and Enter all did nothing. That
+is a WCAG 2.1 Level A failure of 2.1.1 (Keyboard) — the capability was mouse-only.
 
-## Root Cause
+## Root cause
 
-The websearch toggle was implemented as a checkbox wrapped in a label, but:
-1. It was not added to the `menuNavItems` array used for keyboard navigation
-2. The `useKeyboardNavigation` hook was set up without an `onSelect` callback
-3. It lacked the proper ARIA attributes and keyboard event handlers needed for menu items
+The menu navigates with the roving-tabindex pattern implemented by
+`client/src/shared/hooks/useKeyboardNavigation.js`. The hook discovers its items from the DOM
+(`button`, `a[href]`, `[role="menuitem"]`, `[role="menuitemcheckbox"]`, `[role="menuitemradio"]`,
+`[role="option"]`), moves focus with the arrow keys, and hands the component an `activeIndex` that
+`menuNavItems` mirrors so React-rendered `tabIndex` values agree with the hook's imperative ones.
 
-## Solution
+The Web Search row was a plain `<div>` wrapping a visually hidden (`sr-only`) checkbox:
 
-The fix involved three key changes to `client/src/features/chat/components/ChatInputActionsMenu.jsx`:
+- no `role`, so the hook never saw it — arrow keys skipped past it,
+- no entry in `menuNavItems`, so it never received the roving `tabIndex`,
+- no key handler, so Space and Enter had nothing to act on.
 
-### 1. Added `onSelect` Callback to `useKeyboardNavigation` Hook
+The hidden checkbox itself was focusable via Tab, which is what made the switch look reachable —
+but the Space keystroke landed on an `sr-only` input with no visible focus indicator, and the menu
+container's own keydown listener called `preventDefault()` on Space before the browser could
+toggle it.
 
-```javascript
-const handleMenuItemSelect = useCallback(
-  index => {
-    // Build menuNavItems array matching DOM order
-    const menuNavItems = [];
-    // ... add all menu items including 'websearch'
+## Fix
 
-    const selectedKey = menuNavItems[index];
-    if (selectedKey === 'websearch') {
-      onWebsearchEnabledChange?.(!websearchEnabled);
-    }
-    // ... handle other menu items
-  },
-  [/* dependencies */]
-);
+The Tools section directly below already implements the correct pattern, so the Web Search row now
+mirrors it (`client/src/features/chat/components/ChatInputActionsMenu.jsx`):
 
-const { activeIndex: menuActiveIndex } = useKeyboardNavigation(actionsMenuRef, {
-  isActive: isOpen,
-  onClose: handleActionsMenuClose,
-  onSelect: handleMenuItemSelect  // NEW: Added onSelect callback
-});
-```
+1. **Registered in the navigation order.** `menuNavItems` gains `'websearch'` between the cloud
+   storage providers and the tool rows — the position must match the DOM order the hook
+   discovers, otherwise the roving `tabIndex` lands on the wrong element.
+2. **The row is the control.** It carries `role="menuitemcheckbox"`, `aria-checked`,
+   `tabIndex={navTabIndex('websearch')}`, a visible `focus:ring`, an `onClick`, and an `onKeyDown`
+   that toggles on Space and Enter.
+3. **The switch is decoration.** The `sr-only` checkbox keeps rendering the switch graphic
+   (Tailwind `peer-checked:` styling) but is now `readOnly`, `tabIndex={-1}` and `aria-hidden`,
+   with `pointer-events-none` on its label — so there is exactly one focusable, announced control
+   per row and a click cannot toggle twice.
 
-### 2. Added Websearch to `menuNavItems` Array
+### Why the hook's `onSelect` is not used
 
-```javascript
-const menuNavItems = [];
-// ... existing items
-if (hasWebsearch) menuNavItems.push('websearch');  // NEW: Added websearch
-grouped.forEach(g => menuNavItems.push(`group-${g.id}`));
-individual.forEach(id => menuNavItems.push(`tool-${id}`));
-```
+`useKeyboardNavigation` also accepts an `onSelect(activeIndex)` callback for Enter/Space. Wiring
+it here would mean maintaining a second copy of the `menuNavItems` order inside the component and
+would double-fire alongside the row's own `onKeyDown`: the hook listens on the menu container in
+the capture phase and does not stop propagation, so React's bubble-phase handler still runs. The
+row-level handler alone matches what the tool rows do and keeps the ordering logic in one place.
 
-### 3. Updated Websearch DOM Structure with Proper ARIA and Keyboard Handlers
+## Tests
 
-```javascript
-<div
-  role="menuitemcheckbox"               // NEW: ARIA role
-  aria-checked={websearchEnabled}       // NEW: ARIA state
-  tabIndex={navTabIndex('websearch')}   // NEW: Roving tabindex
-  className="... focus:ring-2 focus:ring-indigo-500 ..."  // NEW: Focus styling
-  onClick={() => onWebsearchEnabledChange?.(!websearchEnabled)}
-  onKeyDown={e => {                     // NEW: Keyboard handler
-    if (e.key === ' ' || e.key === 'Enter') {
-      e.preventDefault();
-      onWebsearchEnabledChange?.(!websearchEnabled);
-    }
-  }}
->
-  {/* Content */}
-  <label className="... pointer-events-none">  {/* NEW: Prevent double activation */}
-    <input type="checkbox" checked={websearchEnabled} tabIndex={-1} />
-  </label>
-</div>
-```
+`tests/unit/client/chat-actions-menu-websearch-keyboard.test.jsx` covers the role and
+`aria-checked` state, Space and Enter activation, single activation on click, the roving
+`tabIndex`, and the switch staying out of the tab order and the accessibility tree. All seven
+assertions fail against the unfixed component.
 
-## Key Implementation Details
+jsdom reports every element as zero-sized, so the hook's visibility filter finds no items there
+and its arrow-key handling cannot be exercised in a unit test; arrow-key movement was verified
+manually against the same pattern the tool rows use.
 
-### Roving TabIndex Pattern
+## Known follow-ups (out of scope here)
 
-The `useKeyboardNavigation` hook implements the roving tabindex pattern:
-- One menu item has `tabIndex={0}` (currently focused)
-- All other items have `tabIndex={-1}` (not in tab order)
-- Arrow keys move focus between items
-- The active item is tracked in the `menuActiveIndex` state
-
-### Keyboard Interaction
-
-- **Tab**: Enters/exits the menu (browser default)
-- **Arrow Up/Down**: Navigate between menu items
-- **Space or Enter**: Activate the focused item
-- **Escape**: Close the menu
-
-### ARIA Attributes
-
-- `role="menuitemcheckbox"`: Identifies this as a checkbox menu item
-- `aria-checked={true|false}`: Announces the current state
-- Focus ring styling: Provides visual feedback for keyboard users
-
-## Testing
-
-The fix ensures:
-1. ✅ Users can tab to the "+" menu button
-2. ✅ Arrow keys navigate to the websearch toggle
-3. ✅ Space or Enter activates the toggle
-4. ✅ Screen readers announce the state change
-5. ✅ Visual focus indicator is visible
-
-## Related Code
-
-- `client/src/shared/hooks/useKeyboardNavigation.js` - Keyboard navigation hook
-- `client/src/features/chat/components/ChatInputActionsMenu.jsx` - Actions menu component
-- Issue #1225 identifies this as a P1 priority fix in the broader WCAG 2.1 AA compliance effort
-
-## WCAG Compliance
-
-This fix addresses:
-- **WCAG 2.1.1 Keyboard (Level A)**: All functionality is available via keyboard
-- **WCAG 4.1.2 Name, Role, Value (Level A)**: Proper ARIA attributes for assistive technologies
-
-## Future Improvements
-
-Consider applying this same pattern to other interactive elements in the menu that may have similar accessibility issues. The comprehensive accessibility audit in issue #1225 identifies additional areas for improvement.
+- The **Transcription** switch and the embedded-host **Message context** switches ("Include page"
+  in the browser extension) are still built from the pre-fix markup and have the same defect.
+- `menuNavItems` unconditionally includes the Quick Actions buttons, which are `md:hidden`. On
+  desktop the hook's DOM-derived list is shorter than `menuNavItems`, so the two indexes disagree.
+  Focus still lands correctly because the hook sets `tabindex` imperatively and React does not
+  rewrite an unchanged prop, but the mapping is fragile.
