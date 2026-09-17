@@ -38,3 +38,12 @@ fixed:
 - Any key previously pasted into the old field is moved into a credential automatically on
   upgrade, and the "Test iFinder" connection check no longer reports the environment variable as
   available when the key it would actually sign with is still missing.
+
+## Chat: the Web Search switch can be operated with the keyboard
+
+In the chat input's "+" menu, the Web Search switch could be reached but not turned on or off
+without a mouse — arrow keys, Space and Enter all did nothing, so keyboard and screen-reader users
+had no way to run a web search. The switch now behaves like the tool switches below it: arrow keys
+move to it, Space or Enter toggles it, it shows a visible focus ring, and assistive technology
+announces it as a checkable menu item with its on/off state (WCAG 2.1.1 Keyboard, 4.1.2 Name, Role,
+Value).
