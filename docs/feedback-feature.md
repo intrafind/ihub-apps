@@ -188,7 +188,36 @@ Feedback aggregates are also stored in `contents/data/usage.json`:
 
 ## Configuration
 
-### Enable/Disable Feedback Tracking
+Two independent flags control feedback, and they are easy to confuse:
+
+| Flag | Controls | Where it's set |
+|------|----------|----------------|
+| `feedback` (Feature Registry) | Whether the star-rating control and feedback modal are shown at all, and whether `POST /api/feedback` accepts submissions | Admin Panel → Features → Content, or `features.feedback` in `contents/config/platform.json` |
+| `features.feedbackTracking` | Whether feedback that *is* submitted gets written to `feedback.jsonl` / `usage.json` | `contents/config/platform.json` only |
+
+### Feedback Visibility (`feedback`)
+
+Configure via the admin Features panel (Content category), or directly in `contents/config/platform.json`:
+
+```json
+{
+  "features": {
+    "feedback": true
+  }
+}
+```
+
+**Default**: `true` (enabled) — existing installations keep today's behavior until an admin explicitly turns it off; a missing key resolves to this default, so no migration is needed.
+
+**When disabled**:
+- The star-rating row and the feedback submission modal are hidden under every AI response, in every chat surface (main chat, compare mode, canvas, Office add-in)
+- `POST /api/feedback` rejects with `403 { error, code: 'FEATURE_DISABLED' }`, so submission can't be bypassed by calling the API directly
+- Already-submitted feedback is unaffected: it remains visible in Admin → Usage Reports → Feedback
+- The separate `feedbackTracking` flag below is untouched — it only matters again once `feedback` is re-enabled
+
+This flag does **not** control storage — that's `feedbackTracking`, described next. The two were kept independent on purpose: an admin may want to stop collecting new feedback without deciding anything about how already-collected feedback is persisted, or vice versa.
+
+### Feedback Storage (`feedbackTracking`)
 
 Configure in `contents/config/platform.json`:
 
@@ -203,7 +232,7 @@ Configure in `contents/config/platform.json`:
 **Default**: `true` (enabled)
 
 **When disabled**:
-- Feedback API endpoint still accepts requests
+- The feedback UI and `POST /api/feedback` are unaffected by this flag alone — use `feedback` above to hide/block submission itself
 - No data is written to `feedback.jsonl`
 - Usage statistics are not updated
 - iAssistant feedback still routes to iFinder (if configured)

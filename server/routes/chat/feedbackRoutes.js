@@ -3,6 +3,7 @@ import { logInteraction } from '../../utils.js';
 import { recordFeedback } from '../../usageTracker.js';
 import { storeFeedback } from '../../feedbackStorage.js';
 import { authRequired } from '../../middleware/authRequired.js';
+import { requireFeature } from '../../featureRegistry.js';
 import validate from '../../validators/validate.js';
 import { feedbackSchema } from '../../validators/index.js';
 import { sendBadRequest, sendInternalError } from '../../utils/responseHelpers.js';
@@ -108,6 +109,7 @@ export default function registerFeedbackRoutes(app, { getLocalizedError }) {
    */
   app.post(
     buildServerPath('/api/feedback'),
+    requireFeature('feedback'),
     authRequired,
     validate(feedbackSchema),
     async (req, res) => {

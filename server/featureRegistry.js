@@ -131,6 +131,16 @@ export const featureRegistry = [
     default: true
   },
   {
+    id: 'feedback',
+    name: { en: 'Feedback', de: 'Feedback' },
+    description: {
+      en: 'Let users rate AI responses with a star rating and optional comment. Independent of the feedbackTracking flag, which only controls whether submitted feedback is persisted.',
+      de: 'Nutzern erlauben, KI-Antworten mit einer Sternebewertung und optionalem Kommentar zu bewerten. Unabhängig vom Flag feedbackTracking, das nur steuert, ob übermitteltes Feedback gespeichert wird.'
+    },
+    category: 'content',
+    default: true
+  },
+  {
     id: 'export',
     name: { en: 'Export', de: 'Export' },
     description: {

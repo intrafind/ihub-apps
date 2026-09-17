@@ -29,3 +29,19 @@ in the email is never confirmed unless the user says so.
 - Knows today's date and the signed-in user, so it can tell whether a deadline in the email has
   passed and which messages in the thread are the user's own
 - Recommended as the default chat app of the task pane's start page
+
+## A toggle to turn off response feedback
+
+Admins can now disable feedback collection platform-wide from Admin Panel → Features → Content.
+Until now the star-rating control under AI responses was always on, with no supported way to hide
+it — organizations that don't use feedback, or that need to turn it off for compliance, had no
+switch to flip.
+
+- Turning "Feedback" off hides the star-rating control and the feedback modal under every AI
+  response, in every chat surface: main chat, compare mode, canvas, and the Outlook add-in
+- `POST /api/feedback` rejects with `403 FEATURE_DISABLED` while the flag is off, so submission
+  can't be triggered by calling the API directly either
+- Default is on, so existing installations keep today's behaviour until an admin opts out
+- Independent of the existing `feedbackTracking` setting, which only controls whether submitted
+  feedback is written to storage — that flag is unchanged and unaffected
+- Feedback collected before the flag was turned off stays visible in Admin → Usage Reports

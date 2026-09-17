@@ -79,6 +79,12 @@ function ChatMessage({
   // decides whether the "download it or lose it" note is shown — a stored
   // image is identified by its descriptor, not by this flag.
   imagesPersisted = false,
+  // Whether the star-rating control and feedback modal are shown at all. Gates
+  // both as one seam so they can never drift apart (e.g. a modal reachable
+  // after its trigger was hidden). Default true matches the `feedback`
+  // registry flag's own default, preserving existing behavior for callers
+  // that don't thread it through.
+  feedbackEnabled = true,
   app = null, // App configuration for custom response rendering
   models = [], // Available models for determining if model param should be included in link
   onClarificationSubmit = null, // Callback when a clarification response is submitted
@@ -1111,7 +1117,7 @@ function ChatMessage({
           </button>
 
           {/* Add star rating for AI responses only */}
-          {!isUser && !isError && !message.loading && (
+          {!isUser && !isError && !message.loading && feedbackEnabled && (
             <>
               {!compact && <div className="mx-2 h-4 border-l border-gray-300"></div>}
               <div className="flex items-center gap-2">
@@ -1130,7 +1136,7 @@ function ChatMessage({
       </div>
 
       {/* Feedback form modal */}
-      {showFeedbackForm && (
+      {feedbackEnabled && showFeedbackForm && (
         <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
           <div className="bg-white rounded-lg shadow-lg max-w-md w-full p-6 animate-fade-in mx-4">
             <h3 className="text-lg font-medium mb-4">

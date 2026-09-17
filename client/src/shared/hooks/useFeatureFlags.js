@@ -33,4 +33,17 @@ export function useFeatureFlags() {
   return featureFlags;
 }
 
+/**
+ * Whether the feedback star-rating control and submission modal should be
+ * shown under AI responses. Gates the UI only — an admin turning this off
+ * still leaves the separate `feedbackTracking` flag (storage of already
+ * submitted feedback) untouched.
+ *
+ * @returns {boolean}
+ */
+export function useFeedbackEnabled() {
+  const featureFlags = useFeatureFlags();
+  return featureFlags.isEnabled('feedback', true);
+}
+
 export default useFeatureFlags;
