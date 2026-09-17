@@ -23,6 +23,7 @@ import registerAdminLoggingRoutes from './admin/logging.js';
 import registerAdminSSLRoutes from './admin/ssl.js';
 import registerAdminCorsRoutes from './admin/cors.js';
 import registerAdminSsrfRoutes from './admin/ssrf.js';
+import registerAdminProxyRoutes from './admin/proxy.js';
 import registerAdminFeaturesRoutes from './admin/features.js';
 import registerAdminUsageRoutes from './admin/usage.js';
 import registerAdminUpdateRoutes from './admin/update.js';
@@ -66,6 +67,7 @@ export default async function registerAdminRoutes(app) {
   registerAdminSSLRoutes(app);
   registerAdminCorsRoutes(app);
   registerAdminSsrfRoutes(app);
+  registerAdminProxyRoutes(app);
   registerAdminFeaturesRoutes(app);
   registerAdminUsageRoutes(app);
   registerAdminUpdateRoutes(app);

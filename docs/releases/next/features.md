@@ -29,3 +29,30 @@ in the email is never confirmed unless the user says so.
 - Knows today's date and the signed-in user, so it can tell whether a deadline in the email has
   passed and which messages in the thread are the user's own
 - Recommended as the default chat app of the task pane's start page
+
+## Configure and test the outbound proxy from the admin UI
+
+The proxy iHub uses to reach LLM providers, web search, Jira, OIDC and MCP servers is now a
+setting like any other, under **Admin → Security → Outbound Proxy**. Until now it could only be
+changed by hand-editing `contents/config/platform.json` or the environment, with nothing in the
+product to confirm the change had landed.
+
+- Switch proxying on or off, set the HTTP and HTTPS proxy URLs, maintain the bypass list and the
+  selective-proxy URL patterns — invalid regular expressions are flagged as you type and refused
+  on save, naming the offending entry.
+- Each field says whether the value in effect comes from `platform.json` or from the environment,
+  and an `${ENV_VAR}` placeholder that no variable resolves is called out instead of silently
+  doing nothing.
+- **Test connectivity** probes any URL against the settings on screen, saved or not. It reports how
+  the URL is routed (through the proxy, bypassed, excluded by a pattern, or direct), whether the
+  proxy itself answers, the HTTP status and how long each step took, and — when it fails — what
+  went wrong and what to check next: proxy unreachable, proxy authentication required, DNS,
+  TLS, timeout or an error from the target itself. Redirects are not followed and no response body
+  is fetched.
+- Proxy passwords are encrypted at rest and shown as `***REDACTED***`; leave the mask in place to
+  keep the stored password, or type a new one to replace it. They no longer appear in the server
+  log either.
+- The bypass list accepts both forms admins reach for: `"localhost,.local"` and
+  `["localhost", ".local"]`.
+
+Changes take effect immediately — no restart.

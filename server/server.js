@@ -89,7 +89,7 @@ import {
 } from './serverHelpers.js';
 import { performInitialSetup } from './utils/setupUtils.js';
 import { runConfigMigrations } from './migrations/runner.js';
-import { getProxyConfig } from './utils/httpConfig.js';
+import { getProxyConfig, redactUrlSecrets } from './utils/httpConfig.js';
 import {
   getBasePath,
   buildApiPath,
@@ -508,9 +508,10 @@ if (cluster.isPrimary && workerCount > 1) {
       logger.info({
         component: 'Server',
         message: '🌐 Proxy configuration active',
-        http: proxyConfig.http || '(not set)',
-        https: proxyConfig.https || '(not set)',
-        noProxy: proxyConfig.noProxy || '(not set)',
+        // Redacted: a proxy URL may carry basic-auth credentials.
+        http: proxyConfig.http ? redactUrlSecrets(proxyConfig.http) : '(not set)',
+        https: proxyConfig.https ? redactUrlSecrets(proxyConfig.https) : '(not set)',
+        noProxy: proxyConfig.noProxy.length > 0 ? proxyConfig.noProxy.join(',') : '(not set)',
         urlPatterns:
           proxyConfig.urlPatterns?.length > 0 ? proxyConfig.urlPatterns : '(all URLs proxied)'
       });

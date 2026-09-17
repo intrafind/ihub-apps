@@ -119,6 +119,81 @@ const usageTrackingRetentionSchema = z
   })
   .passthrough();
 
+/**
+ * A proxy URL field. Accepts:
+ *  - an absolute http(s) URL, optionally with basic-auth credentials
+ *  - an `${ENV_VAR}` placeholder (resolved by configCache at load time)
+ *  - an `ENC[...]` value (encrypted at rest, decrypted by getProxyConfig())
+ *  - the empty string, meaning "not set"
+ *
+ * Anything else is rejected by name so an admin save fails loudly instead of
+ * silently producing an unusable agent on every outbound request.
+ */
+const proxyUrlSchema = z
+  .string()
+  .prefault('')
+  .refine(
+    value => {
+      const trimmed = value.trim();
+      if (!trimmed) return true;
+      if (/^\$\{[A-Za-z_][A-Za-z0-9_]*(?::-[^}]*)?\}$/.test(trimmed)) return true;
+      if (trimmed.startsWith('ENC[') && trimmed.endsWith(']')) return true;
+      try {
+        const parsed = new URL(trimmed);
+        return parsed.protocol === 'http:' || parsed.protocol === 'https:';
+      } catch {
+        return false;
+      }
+    },
+    {
+      message:
+        'must be an absolute http(s) URL (e.g. http://proxy.example.com:8080), an ${ENV_VAR} placeholder, or empty'
+    }
+  );
+
+/**
+ * Outbound HTTP(S) proxy for everything iHub calls out to: LLM providers, web
+ * search, Jira, OIDC and MCP servers. Unrelated to `proxyAuth` (inbound
+ * header-based login) and `trustProxy` (inbound hop count).
+ */
+export const proxyConfigSchema = z
+  .object({
+    enabled: z
+      .boolean()
+      .prefault(true)
+      .describe(
+        'Master switch. When false no request is proxied, whatever http/https hold. Absent means enabled, so HTTP_PROXY/HTTPS_PROXY from the environment still apply.'
+      ),
+    http: proxyUrlSchema.describe('Proxy URL used for http:// targets'),
+    https: proxyUrlSchema.describe('Proxy URL used for https:// targets'),
+    noProxy: z
+      .union([z.string(), z.array(z.string())])
+      .prefault('')
+      .describe(
+        'Hosts that bypass the proxy. Comma-separated string ("localhost,.local") or array (["localhost", ".local"]). Entries: exact hostname, .example.com or *.example.com for subdomains. CIDR ranges, host:port and the catch-all "*" are not supported.'
+      ),
+    urlPatterns: z
+      .array(z.string())
+      .prefault([])
+      .superRefine((patterns, ctx) => {
+        patterns.forEach((pattern, index) => {
+          try {
+            new RegExp(pattern);
+          } catch (error) {
+            ctx.addIssue({
+              code: z.ZodIssueCode.custom,
+              path: [index],
+              message: `"${pattern}" is not a valid regular expression: ${error.message}`
+            });
+          }
+        });
+      })
+      .describe(
+        'Optional regex allowlist. When non-empty only URLs matching at least one pattern are proxied; everything else goes direct.'
+      )
+  })
+  .passthrough();
+
 export const platformConfigSchema = z
   .object({
     auth: z
@@ -227,6 +302,7 @@ export const platformConfigSchema = z
           )
       })
       .prefault({}),
+    proxy: proxyConfigSchema.prefault({}),
     cloudStorage: cloudStorageConfigSchema.prefault({}),
     // Single source of truth for audit logging: retention + behavior + privacy.
     // (The legacy top-level `auditLog` block is migrated into here by V059.)

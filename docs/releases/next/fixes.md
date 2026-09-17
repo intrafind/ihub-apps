@@ -47,3 +47,20 @@ had no way to run a web search. The switch now behaves like the tool switches be
 move to it, Space or Enter toggles it, it shows a visible focus ring, and assistive technology
 announces it as a checkable menu item with its on/off state (WCAG 2.1.1 Keyboard, 4.1.2 Name, Role,
 Value).
+
+## Proxy: one bad URL pattern or a list-shaped bypass list no longer disables proxying
+
+Two ways of writing a valid-looking `proxy` block stopped the proxy from being used at all, with
+nothing in the log to say so:
+
+- A `urlPatterns` entry that is not a valid regular expression aborted the check for every entry
+  after it — and a bad entry in first position meant no URL ever matched, so everything went
+  direct. Each pattern is now compiled on its own; a bad one is skipped with a warning naming it
+  and the rest still apply.
+- Writing `noProxy` as an array (`["localhost", ".local"]`) — the shape the neighbouring
+  `ssl.domainWhitelist` uses — made every bypass fail, so hosts meant to go direct were sent
+  through the proxy. Both the array and the comma-separated string are now accepted.
+
+An `${ENV_VAR}` placeholder left in `proxy.http` or `proxy.https` is also no longer used as if it
+were a proxy address when the variable is not set; the connection goes direct instead of failing
+on an unparseable URL.

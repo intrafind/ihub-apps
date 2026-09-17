@@ -4,6 +4,7 @@ import Icon from '../../../shared/components/Icon';
 import SSLConfig from '../components/SSLConfig';
 import CorsConfig from '../components/CorsConfig';
 import SsrfConfig from '../components/SsrfConfig';
+import ProxyConfig from '../components/ProxyConfig';
 import CookieSettingsConfig from '../components/CookieSettingsConfig';
 import AdminSettingsPage from '../components/AdminSettingsPage';
 import { makeAdminApiCall } from '../../../api/adminApi';
@@ -262,7 +263,7 @@ function AdminSecurityPage() {
       title={t('admin.nav.security', 'Security')}
       description={t(
         'admin.security.description',
-        'SSL, CORS, cookie settings, and encryption configuration'
+        'SSL, CORS, cookie settings, outbound proxy, and encryption configuration'
       )}
       sections={[
         {
@@ -284,6 +285,11 @@ function AdminSecurityPage() {
           id: 'ssrf',
           label: t('admin.security.sections.ssrf', 'SSRF Allowlist'),
           children: <SsrfConfig />
+        },
+        {
+          id: 'proxy',
+          label: t('admin.security.sections.proxy', 'Outbound Proxy'),
+          children: <ProxyConfig />
         },
         {
           id: 'encryption',
