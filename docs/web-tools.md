@@ -13,7 +13,8 @@ iHub Apps provides a unified web search system that automatically selects the be
 | **Google Search** | Native (Gemini models) | Grounded answers with Google Search citations |
 | **OpenAI Web Search** | Native (GPT models via Responses API) | Web-augmented responses with inline citations |
 | **Anthropic Web Search** | Native (Claude models) | Web-augmented responses with inline citations |
-| **Brave Search** | Server-side | Privacy-focused search, any model |
+| **Brave Search** | Server-side | Privacy-focused search, any model (needs an API key) |
+| **Qwant Search** | Server-side | Privacy-focused search, any model, **no API key required** |
 
 ### Additional Web Tools
 
@@ -58,7 +59,7 @@ Add a `websearch` object to your app configuration:
 | Property | Type | Default | Description |
 |----------|------|---------|-------------|
 | `enabled` | Boolean | `false` | Enable web search for this app |
-| `provider` | String | `"auto"` | Search provider: `"auto"` or `"brave"` |
+| `provider` | String | `"auto"` | Search engine used when native search does not apply: `"auto"`, `"brave"` or `"qwant"`. `"auto"` picks Brave when a Brave API key is configured and Qwant otherwise |
 | `useNativeSearch` | Boolean | `true` | Prefer native search (Google Search for Gemini, OpenAI Web Search for GPT, Anthropic Web Search for Claude) when available |
 | `maxResults` | Number | `5` | Maximum number of search results (1-20) |
 | `extractContent` | Boolean | `true` | Extract full page content from search results |
@@ -86,10 +87,18 @@ The system automatically selects the best search tool at runtime based on the mo
 │  useNativeSearch + Anthropic model?              │
 │    → Anthropic Web Search                        │
 │                                                  │
-│  Otherwise (provider = "auto" or "brave")        │
-│    → Brave Search                                │
+│  Otherwise → provider:                           │
+│    "brave" → Brave Search                        │
+│    "qwant" → Qwant Search                        │
+│    "auto"  → Brave if a Brave API key is set,    │
+│              otherwise Qwant (needs no key)      │
 └─────────────────────────────────────────────────┘
 ```
+
+`"auto"` exists so an install without a Brave subscription still gets working
+web search. A named provider is always honoured as configured — even when it is
+unconfigured — so the resulting error names the engine the admin actually chose
+rather than silently answering from a different one.
 
 ### Admin UI Configuration
 
@@ -137,13 +146,16 @@ When multiple sources are used, a tooltip lists all contributing sources.
 
 ### API Key Setup
 
-Search providers require API keys, which can be configured in two ways:
+Brave Search requires an API key. **Qwant requires none** — it is listed under
+**Admin → Providers → Web Search Providers** as "No API key required" and works
+as soon as an app selects it.
 
 #### Admin Panel (Recommended)
 
 1. Navigate to **Admin → Providers**
 2. Find your provider under **Web Search Providers**:
    - **Brave Search**: Click "Configure" and enter your Brave API key
+   - **Qwant Search**: nothing to configure
 3. Save changes — no server restart required
 
 API keys are encrypted at rest using AES-256-GCM.
@@ -157,6 +169,15 @@ BRAVE_SEARCH_API_KEY=your_brave_api_key_here
 ```
 
 The system checks admin panel configuration first, then falls back to environment variables.
+
+Both engines also accept an endpoint override, which is only needed to point at
+a different host:
+
+```env
+BRAVE_SEARCH_ENDPOINT=https://api.search.brave.com/res/v1/web/search
+QWANT_SEARCH_ENDPOINT=https://api.qwant.com/v3/search/
+QWANT_SEARCH_USER_AGENT=          # override the browser UA Qwant is sent
+```
 
 ### Native Search Providers
 
@@ -189,6 +210,33 @@ The billable search count (`server_tool_use.web_search_requests`) is recorded as
 - `contentMaxLength` (number, optional): Maximum content length per page (default: configured by app)
 
 **Returns**: Array of search results with titles, URLs, descriptions, and optionally extracted page content.
+
+### Qwant Search (`qwantSearch`)
+
+**Purpose**: Search the web using Qwant for up-to-date information, without an API key or an account.
+
+Qwant is the keyless counterpart to `braveSearch`. It returns the same result
+shape, so an app can switch `websearch.provider` between the two without the
+model seeing a different contract. Like `braveSearch`, it is injected from the
+app's `websearch` config rather than listed in the app's `tools` array.
+
+**Parameters**:
+
+- `query` (string, required): Search query
+- `extractContent` (boolean, optional): Extract full content from top results (default: configured by app)
+- `maxResults` (number, optional): Maximum results to return (default: configured by app, max: 10 — one Qwant web request pages in tens)
+- `contentMaxLength` (number, optional): Maximum content length per page (default: configured by app)
+- `language` (string, optional): Language or locale for the results, e.g. `en`, `de`, `de-CH` (default: `en_US`)
+
+**Returns**: Array of search results with titles, URLs, descriptions, an optional `publishedDate`, and optionally extracted page content.
+
+> **Egress IP matters.** Qwant fronts its API with DataDome, which answers
+> requests from data-centre IP ranges with a captcha instead of results. On a
+> cloud VM or behind a hosting-network egress proxy, `qwantSearch` fails with
+> `QWANT_CAPTCHA` however it is configured — that is a property of where the
+> server runs, not of the setup. Check it for a given host with
+> `node tests/manual/manual-test-qwant-search.js`, and use Brave Search where
+> Qwant is blocked.
 
 ### Native Search Providers (Google, OpenAI, Anthropic)
 
@@ -411,32 +459,42 @@ The web content extractor includes protection against Server-Side Request Forger
 1. **"BRAVE_SEARCH_API_KEY is not set"**
    - Configure the key via Admin → Providers → Brave Search (recommended)
    - Or set the API key in your `config.env` file and restart the server
+   - Or switch the app to Qwant (`websearch.provider: "qwant"`), which needs no key.
+     `"auto"` already does this on an install with no Brave key
 
-2. **"Failed to extract content"**
+2. **Qwant search fails with `QWANT_CAPTCHA`**
+   - Qwant's API is behind DataDome, which challenges data-centre IP ranges —
+     so this is about where the server sends its traffic from, not how it is
+     configured, and no retry or setting will clear it
+   - Confirm it for the host with `node tests/manual/manual-test-qwant-search.js`
+   - Route outbound search traffic through an egress IP Qwant accepts, or
+     configure Brave Search for that install
+
+3. **"Failed to extract content"**
    - Check if the URL is accessible
    - Some websites may block automated requests
    - Try with a different URL to test functionality
 
-3. **"Request timeout"**
+4. **"Request timeout"**
    - The webpage is taking too long to load
    - Consider increasing timeout or trying a different URL
 
-4. **Web search not working after upgrade**
+5. **Web search not working after upgrade**
    - Migration V025 automatically converts old tool-based configs to the new `websearch` format
    - Check server logs for migration output
    - Verify the app has `websearch.enabled: true` in its configuration
 
-5. **Native search not activating for Gemini/GPT/Claude models**
+6. **Native search not activating for Gemini/GPT/Claude models**
    - Ensure `useNativeSearch` is `true` (default)
    - Verify the model's provider is correctly identified as `google`, `openai-responses`, or `anthropic`
    - Check the model configuration: `nativeWebSearch.enabled: false` switches that model to Brave Search
 
-6. **Answers on a Claude model come from Brave Search although native search is on** (log line `Native web search unavailable — falling back to a search tool`)
+7. **Answers on a Claude model come from Brave Search although native search is on** (log line `Native web search unavailable — falling back to a search tool`)
    - The provider rejected the native search request. On Anthropic, check that web search is enabled for your organisation in the Claude Console and that the model supports the configured `nativeWebSearch.toolVersion` (the basic `web_search_20250305` works everywhere)
    - Gateways or proxies that do not implement the server tool: set `nativeWebSearch.enabled: false` on that model so it uses Brave Search without the failed attempt
    - The rejection is remembered for 15 minutes per model; restart the server to reset it earlier
 
-7. **Brave Search requests hang or time out**
+8. **Brave Search requests hang or time out**
    - A search that works when called directly (e.g. from a browser or Postman on your own machine) but times out from iHub is usually the server's outbound proxy — either not configured when the network requires it, or configured but blocking/excluding Brave's domain
    - See [Proxy Testing Guide → Still Getting Timeout Errors?](proxy-testing-guide.md#still-getting-timeout-errors) for Linux/macOS and Windows commands that reproduce the exact request iHub sends, with and without the proxy, so you can tell which side is failing
 

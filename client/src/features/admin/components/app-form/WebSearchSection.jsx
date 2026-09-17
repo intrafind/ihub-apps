@@ -63,7 +63,16 @@ function WebSearchSection({ app, onChange }) {
                   <option value="brave">
                     {t('admin.apps.edit.websearchProviderBrave', 'Brave')}
                   </option>
+                  <option value="qwant">
+                    {t('admin.apps.edit.websearchProviderQwant', 'Qwant (no API key)')}
+                  </option>
                 </select>
+                <p className="mt-1 text-xs text-gray-500 dark:text-gray-400">
+                  {t(
+                    'admin.apps.edit.websearchProviderDesc',
+                    'Search engine used when the model has no native search. Auto uses Brave when a Brave API key is configured and Qwant otherwise; Qwant needs no API key.'
+                  )}
+                </p>
               </div>
 
               {/* Use Native Search */}

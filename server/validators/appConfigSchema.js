@@ -54,7 +54,7 @@ const starterPromptSchema = z.object({
 const websearchSchema = z
   .object({
     enabled: z.boolean().optional().prefault(false),
-    provider: z.enum(['auto', 'brave']).optional().prefault('auto'),
+    provider: z.enum(['auto', 'brave', 'qwant']).optional().prefault('auto'),
     useNativeSearch: z.boolean().optional().prefault(true),
     maxResults: z.number().int().min(1).max(20).optional().prefault(5),
     extractContent: z.boolean().optional().prefault(true),

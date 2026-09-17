@@ -1,5 +1,13 @@
 # Fixes — Unreleased
 
+## `BRAVE_SEARCH_ENDPOINT` and `SEARCH_CACHE_TTL_MS` are read again
+
+Both were documented and both were ignored. The server exposes a fixed allowlist of environment
+variables plus anything ending in `_API_KEY`, so `BRAVE_SEARCH_API_KEY` worked while
+`BRAVE_SEARCH_ENDPOINT` silently fell through to the hard-coded Brave URL, and a configured
+search-cache TTL fell through to the built-in 10 minutes. Both are now declared, along with the
+new `QWANT_SEARCH_ENDPOINT` and `QWANT_SEARCH_USER_AGENT`.
+
 ## Outlook Add-in: starter prompts no longer discard a typed note
 
 Clicking a starter prompt such as "Generate a reply" while text was already in the chat input

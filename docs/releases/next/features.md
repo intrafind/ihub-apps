@@ -1,5 +1,33 @@
 # Features — Unreleased
 
+## Web search without an API key: Qwant joins Brave
+
+Web search no longer requires a paid search subscription. `qwantSearch` is a second
+script-backed search engine alongside `braveSearch`, using Qwant's public API — no key, no
+account, no per-query cost — and returning the same result shape, so an app can switch between
+the two without the model seeing a different contract.
+
+- **Admin → Apps → Edit App → Web Search → Provider** now offers *Qwant (no API key)* next to
+  *Auto* and *Brave*.
+- **Auto** now means what it says: Brave when a Brave API key is configured, Qwant otherwise.
+  An install with no Brave key previously offered the model a search tool that failed on every
+  call with "Brave Search API key is not configured"; it now searches. Installs that have a
+  Brave key are unaffected.
+- A named provider is always honoured as configured, so an error names the engine the admin
+  actually chose.
+- **Admin → Providers** lists *Qwant Search* under Web Search Providers marked
+  "No API key required", instead of the "Not Configured" warning that reads as broken when
+  there is nothing to configure.
+- Results can be localised per search (`en`, `de`, `de-CH`, …) and carry a publication date
+  where Qwant reports one.
+
+**Before enabling it, check the server's egress IP.** Qwant's API sits behind DataDome, which
+answers requests from data-centre IP ranges with a captcha rather than results — so on many
+cloud VMs Qwant is blocked no matter how it is configured. That case now reports
+`QWANT_CAPTCHA` with an explanation instead of a bare HTTP 403, and
+`node tests/manual/manual-test-qwant-search.js` answers the question for a given host in one
+command. Where Qwant is blocked, configure Brave Search.
+
 ## Outlook Add-in: the model sees who wrote the email and what you told it to do
 
 The task pane now sends the open email as one structured block — sender, recipients, date,

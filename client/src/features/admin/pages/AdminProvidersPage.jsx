@@ -395,7 +395,13 @@ function AdminProvidersPage() {
                                   </div>
                                 </td>
                                 <td className="px-6 py-4 whitespace-nowrap">
-                                  {provider.apiKeySet ? (
+                                  {provider.requiresApiKey === false ? (
+                                    // Keyless provider (e.g. Qwant): "Not Configured" would
+                                    // read as broken when there is nothing to configure.
+                                    <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-blue-100 dark:bg-blue-900 text-blue-800 dark:text-blue-200">
+                                      {t('admin.providers.noApiKeyRequired', 'No API key required')}
+                                    </span>
+                                  ) : provider.apiKeySet ? (
                                     <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-green-100 dark:bg-green-900 text-green-800 dark:text-green-200">
                                       <Icon name="KeyIcon" className="w-3 h-3 mr-1" />
                                       {t('admin.providers.configured', 'Configured')}
