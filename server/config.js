@@ -51,7 +51,10 @@ const env = cleanEnv(
     MAGIC_PROMPT_MODEL: str({ optional: true }),
     MAGIC_PROMPT_PROMPT: str({ optional: true }),
     USE_HTTPS: str({ default: 'false', optional: true }),
-    NODE_ENV: str({ default: 'development', optional: true })
+    NODE_ENV: str({ default: 'development', optional: true }),
+    // RSA/EC private key (PEM) used to sign iFinder JWTs when iFinder.useOidcKeyPair
+    // is off and iFinder.privateKeyRef is not set. See server/utils/iFinderJwt.js.
+    IFINDER_PRIVATE_KEY: str({ optional: true })
   },
   {
     reporter: () => {}, // Disable envalid's default reporter that shows missing variables
@@ -96,7 +99,8 @@ const config = Object.freeze({
   MAGIC_PROMPT_MODEL: env.MAGIC_PROMPT_MODEL,
   MAGIC_PROMPT_PROMPT: env.MAGIC_PROMPT_PROMPT,
   USE_HTTPS: env.USE_HTTPS,
-  NODE_ENV: env.NODE_ENV
+  NODE_ENV: env.NODE_ENV,
+  IFINDER_PRIVATE_KEY: env.IFINDER_PRIVATE_KEY
 });
 
 export default config;

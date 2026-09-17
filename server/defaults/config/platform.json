@@ -299,7 +299,7 @@
     "enabled": false,
     "baseUrl": "",
     "useOidcKeyPair": false,
-    "privateKey": "",
+    "privateKeyRef": "",
     "algorithm": "RS256",
     "issuer": "ihub-apps",
     "audience": "ifinder-api",

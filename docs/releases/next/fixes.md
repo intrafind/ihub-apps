@@ -22,3 +22,19 @@ the way to the model: `$&`, `$'`, `` $` `` and `$$` were treated as replacement 
 `{{content}}` was filled in, so an email quoting "$$" arrived with a single dollar sign. The
 inserted text now reaches the model exactly as written; only the template's own placeholders are
 expanded.
+
+## iFinder: the private key field now actually takes effect
+
+Pasting a key into Admin > Integrations > iFinder's "Private Key (PEM)" field saved it to a spot
+the JWT-signing code never read, so the integration kept failing with "iFinder private key not
+configured" even right after saving — and setting the `IFINDER_PRIVATE_KEY` environment variable,
+as the error suggested, didn't help either, because the server ignored that variable too. Both are
+fixed:
+
+- The private key field is now a credential picker backed by Admin > Credentials, the same
+  encrypted-storage picker already used for Jira, OIDC and LDAP secrets.
+- The `IFINDER_PRIVATE_KEY` environment variable is read correctly, for setups that prefer it over
+  a stored credential.
+- Any key previously pasted into the old field is moved into a credential automatically on
+  upgrade, and the "Test iFinder" connection check no longer reports the environment variable as
+  available when the key it would actually sign with is still missing.

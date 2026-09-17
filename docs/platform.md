@@ -977,7 +977,7 @@ Configures integration with the IntraFind iFinder enterprise search platform. Wh
   "iFinder": {
     "enabled": false,
     "baseUrl": "https://ifinder.company.com",
-    "privateKey": "${IFINDER_PRIVATE_KEY}",
+    "privateKeyRef": "ifinder",
     "algorithm": "RS256",
     "issuer": "ihub-apps",
     "audience": "ifinder-api",
@@ -988,11 +988,20 @@ Configures integration with the IntraFind iFinder enterprise search platform. Wh
 }
 ```
 
+`privateKeyRef` points at a `secret`-type profile in the central credential
+store (`contents/config/credentials.json`, managed under Admin >
+Credentials); the admin UI's iFinder page writes this field for you when you
+pick a credential there. Set the `IFINDER_PRIVATE_KEY` environment variable
+instead to skip the credential store entirely — it takes precedence over
+`privateKeyRef` when set. Either way, no key material is ever stored as
+plaintext in `platform.json`. See
+[JWT Key Generation](ifinder-jwt-key-generation.md).
+
 | Field                    | Type    | Default           | Description                                                                             |
 | ------------------------ | ------- | ----------------- | --------------------------------------------------------------------------------------- |
 | `enabled`                | Boolean | `false`           | Enable the iFinder integration                                                          |
 | `baseUrl`                | String  | `""`              | Base URL of the iFinder instance                                                        |
-| `privateKey`             | String  | `""`              | RSA private key (PEM format) for signing JWT tokens. Use `${ENV_VAR}` for security     |
+| `privateKeyRef`          | String  | `""`              | ID of a `secret` credential (Admin > Credentials) holding the RSA/EC private key (PEM). Ignored if `IFINDER_PRIVATE_KEY` is set |
 | `algorithm`              | String  | `"RS256"`         | JWT signing algorithm                                                                   |
 | `issuer`                 | String  | `"ihub-apps"`     | JWT `iss` claim value                                                                   |
 | `audience`               | String  | `"ifinder-api"`   | JWT `aud` claim value                                                                   |
