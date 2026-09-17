@@ -107,7 +107,7 @@
     "test:chat": "node --test server/tests/chat-persistence-*.test.js",
     "test:runtime": "node --test server/tests/runtime-*.test.js",
     "test:outbound-http": "node --test server/tests/dnsGuard.test.js server/tests/modelDiscoveryCache.test.js",
-    "test:websearch": "node --test server/tests/qwant-search-provider.test.js server/tests/websearch-provider-selection.test.js && node server/tests/search-cache.test.js",
+    "test:websearch": "node --test server/tests/qwant-search-provider.test.js server/tests/websearch-provider-selection.test.js server/tests/search-diagnostics.test.js && node server/tests/search-cache.test.js",
     "test:auth-routes": "cd server && node --experimental-vm-modules node_modules/jest/bin/jest.js tests/oidc-logout.test.js tests/rateLimiting-auth-readonly-exempt.test.js tests/case-insensitive-resource-access.test.js",
     "test:oauth": "cd server && node --experimental-vm-modules node_modules/jest/bin/jest.js tests/oauth-dcr-validation.test.js tests/oauth-dcr-dedup.test.js tests/oauth-cimd.test.js tests/oauth-connections.test.js",
     "test:office-addin": "node --test server/tests/office-start-page-config.test.js",

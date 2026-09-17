@@ -29,8 +29,17 @@ class BraveSearchProvider extends SearchProvider {
     return Boolean(this.getApiKey());
   }
 
+  /**
+   * @param {string} query - The search query
+   * @param {Object} [options]
+   * @param {string} [options.chatId] - Chat id, for tool-progress events
+   * @param {boolean} [options.skipCache] - Bypass the result cache and always
+   *   issue a request (used by the admin connectivity test, where a cached hit
+   *   would report success for credentials that have since stopped working).
+   * @returns {Promise<{results: Array<Object>}>}
+   */
   async search(query, options = {}) {
-    const { chatId } = options;
+    const { chatId, skipCache = false } = options;
     const apiKey = this.getApiKey();
 
     if (!apiKey) {
@@ -54,10 +63,12 @@ class BraveSearchProvider extends SearchProvider {
     // a repeat from cache skips both the network and the ~1 req/s throttle,
     // which is the difference between a result and a 429 (run wf-exec-f4f70e84).
     const cacheKey = makeSearchCacheKey('brave', query);
-    const cached = getCachedSearch(cacheKey);
-    if (cached) {
-      logger.debug('Brave search cache hit', { component: 'WebSearch', provider: 'brave' });
-      return cached;
+    if (!skipCache) {
+      const cached = getCachedSearch(cacheKey);
+      if (cached) {
+        logger.debug('Brave search cache hit', { component: 'WebSearch', provider: 'brave' });
+        return cached;
+      }
     }
 
     // Brave's Free plan is rate-limited to ~1 request/second, so an agent that

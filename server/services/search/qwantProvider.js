@@ -422,10 +422,19 @@ class QwantSearchProvider extends SearchProvider {
    * @param {string} [options.language] - Language/locale for the results
    * @param {number} [options.count] - Results to request (max {@link QWANT_MAX_WEB_RESULTS})
    * @param {number} [options.safesearch] - 0 off, 1 moderate, 2 strict
+   * @param {boolean} [options.skipCache] - Bypass the result cache and always
+   *   issue a request. Used by the admin connectivity test: a cached hit would
+   *   report success for an egress IP DataDome has since started blocking.
    * @returns {Promise<{results: Array<Object>}>}
    */
   async search(query, options = {}) {
-    const { chatId, language, count = QWANT_MAX_WEB_RESULTS, safesearch = 1 } = options;
+    const {
+      chatId,
+      language,
+      count = QWANT_MAX_WEB_RESULTS,
+      safesearch = 1,
+      skipCache = false
+    } = options;
     const locale = resolveQwantLocale(language);
     const endpoint = config.QWANT_SEARCH_ENDPOINT || QWANT_API_URL;
 
@@ -441,10 +450,12 @@ class QwantSearchProvider extends SearchProvider {
     // per-tool throttle — and, with Qwant, one fewer request past DataDome.
     // Locale and count participate: they change the response.
     const cacheKey = makeSearchCacheKey('qwant', query, { locale, count: clampCount(count) });
-    const cached = getCachedSearch(cacheKey);
-    if (cached) {
-      logger.debug('Qwant search cache hit', { component: 'WebSearch', provider: 'qwant' });
-      return cached;
+    if (!skipCache) {
+      const cached = getCachedSearch(cacheKey);
+      if (cached) {
+        logger.debug('Qwant search cache hit', { component: 'WebSearch', provider: 'qwant' });
+        return cached;
+      }
     }
 
     const url = buildQwantSearchUrl({ query, count, locale, safesearch, endpoint });

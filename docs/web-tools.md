@@ -170,6 +170,42 @@ BRAVE_SEARCH_API_KEY=your_brave_api_key_here
 
 The system checks admin panel configuration first, then falls back to environment variables.
 
+### Connectivity Test (Admin UI)
+
+Whether a search provider *can be reached from this server* is a separate
+question from whether it is configured correctly, and for Qwant it is the one
+that usually decides the outcome. **Admin → Providers → Web Search Providers**
+answers it directly:
+
+- **Test** on a provider row runs one live search and fills in the
+  **Connectivity** column. **Test All** covers every web search provider too.
+- **Configure → Connectivity Test** does the same on the provider's own page,
+  with an optional custom query, so a configuration can be saved and checked
+  in one place.
+
+Each test issues one real search and **bypasses the result cache**, so it
+reports the provider's behaviour right now rather than replaying an earlier
+success. The verdict names what to do next:
+
+| Result | Means | Next step |
+|--------|-------|-----------|
+| **All OK** | The provider answered with results | Nothing — search works from this server |
+| **Partial** | It answered, but returned nothing, or rate-limited the request | Try a broader query, or wait and retest |
+| **Blocked** | Bot protection (DataDome) refused this server's IP | Change egress, or use Brave — see below |
+| **Failed** | No API key, a rejected key, or the request never arrived | Fix the key, or check proxy/TLS settings |
+
+A **Blocked** result is deliberately not labelled a failure. It means the
+request reached Qwant and Qwant declined to answer *this IP address*; no setting
+on the page will change that, and retrying will not either. The panel shows the
+endpoint and the egress route (the outbound proxy, or `direct`) used for the
+request, because that is the variable in play.
+
+The same check is available without the UI:
+
+```bash
+node tests/manual/manual-test-qwant-search.js "your query" [--language=de]
+```
+
 Both engines also accept an endpoint override, which is only needed to point at
 a different host:
 
@@ -234,9 +270,9 @@ app's `websearch` config rather than listed in the app's `tools` array.
 > requests from data-centre IP ranges with a captcha instead of results. On a
 > cloud VM or behind a hosting-network egress proxy, `qwantSearch` fails with
 > `QWANT_CAPTCHA` however it is configured — that is a property of where the
-> server runs, not of the setup. Check it for a given host with
-> `node tests/manual/manual-test-qwant-search.js`, and use Brave Search where
-> Qwant is blocked.
+> server runs, not of the setup. Check it before enabling Qwant with the
+> [connectivity test](#connectivity-test-admin-ui) in the admin UI, and use
+> Brave Search where Qwant is blocked.
 
 ### Native Search Providers (Google, OpenAI, Anthropic)
 
@@ -466,7 +502,8 @@ The web content extractor includes protection against Server-Side Request Forger
    - Qwant's API is behind DataDome, which challenges data-centre IP ranges —
      so this is about where the server sends its traffic from, not how it is
      configured, and no retry or setting will clear it
-   - Confirm it for the host with `node tests/manual/manual-test-qwant-search.js`
+   - Confirm it for the host with **Admin → Providers → Qwant Search → Test**,
+     or `node tests/manual/manual-test-qwant-search.js`
    - Route outbound search traffic through an egress IP Qwant accepts, or
      configure Brave Search for that install
 

@@ -375,6 +375,34 @@ describe('QwantSearchProvider', () => {
     assert.equal(second.results[0].url, 'https://a.test');
   });
 
+  it('skipCache bypasses a cached hit, so a diagnostic always tests the network', async () => {
+    // The admin connectivity test relies on this: a cached success would report
+    // "reachable" for an egress IP DataDome has since started blocking.
+    const fetchImpl = recordingFetch([
+      jsonResponse(webPayload([{ title: 'first', url: 'https://first.test', desc: '' }])),
+      jsonResponse(webPayload([{ title: 'second', url: 'https://second.test', desc: '' }]))
+    ]);
+    const provider = new QwantSearchProvider({ fetchImpl });
+
+    await provider.search('cached query');
+    const fresh = await provider.search('cached query', { skipCache: true });
+
+    assert.equal(fetchImpl.calls.length, 2, 'skipCache must reach the network');
+    assert.equal(fresh.results[0].url, 'https://second.test');
+  });
+
+  it('skipCache still refreshes the cache for ordinary callers', async () => {
+    const fetchImpl = recordingFetch(
+      jsonResponse(webPayload([{ title: 'v', url: 'https://v.test', desc: '' }]))
+    );
+    const provider = new QwantSearchProvider({ fetchImpl });
+
+    await provider.search('shared query', { skipCache: true });
+    await provider.search('shared query');
+
+    assert.equal(fetchImpl.calls.length, 1, 'the cached entry should serve the second call');
+  });
+
   it('caches per locale, so a German search does not return the English results', async () => {
     const fetchImpl = recordingFetch([
       jsonResponse(webPayload([{ title: 'en', url: 'https://en.test', desc: '' }])),

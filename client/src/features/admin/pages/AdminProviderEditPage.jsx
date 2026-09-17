@@ -7,6 +7,7 @@ import Icon from '../../../shared/components/Icon';
 import AdminBreadcrumb from '../components/AdminBreadcrumb';
 import { useUnsavedChanges } from '../hooks/useUnsavedChanges';
 import ConfirmDialog from '../../../shared/components/ConfirmDialog';
+import WebsearchTestResult from '../components/WebsearchTestResult';
 
 function AdminProviderEditPage() {
   const { t } = useTranslation();
@@ -31,7 +32,47 @@ function AdminProviderEditPage() {
     apiKeySet: false
   });
 
+  // Connectivity test state — kept out of formData so running a test never
+  // looks like an unsaved edit.
+  const [testQuery, setTestQuery] = useState('');
+  const [testing, setTesting] = useState(false);
+  const [testResult, setTestResult] = useState(null);
+
   const { blocker, markSaved } = useUnsavedChanges(initialData, formData);
+
+  const isWebsearchProvider = formData.category === 'websearch';
+
+  /**
+   * Run one live search through this provider and show the verdict.
+   *
+   * The endpoint answers 200 even when the provider refuses us — a DataDome
+   * block is a finding, not a failed request — so only a genuinely broken call
+   * lands in the catch.
+   */
+  const runWebsearchTest = async () => {
+    setTesting(true);
+    setTestResult(null);
+    try {
+      const response = await makeAdminApiCall(`/admin/providers/${providerId}/websearch-test`, {
+        method: 'POST',
+        body: testQuery.trim() ? { query: testQuery.trim() } : {}
+      });
+      setTestResult(response?.data || null);
+    } catch (err) {
+      setTestResult({
+        diagnosis: {
+          status: 'error',
+          title: t('admin.providers.websearchTest.couldNotRun', 'Could not run the test'),
+          detail: getAdminApiErrorMessage(err),
+          remediation: []
+        },
+        results: [],
+        environment: {}
+      });
+    } finally {
+      setTesting(false);
+    }
+  };
 
   useEffect(() => {
     loadProvider();
@@ -362,6 +403,74 @@ function AdminProviderEditPage() {
             </button>
           </div>
         </form>
+
+        {/* Connectivity test — web search providers only.
+            Deliberately outside the <form>: a button inside one submits it, and
+            "Test" must never save. Saving first still matters, since the test
+            runs against the stored configuration, which is what the hint says. */}
+        {isWebsearchProvider && (
+          <div className="mt-6 bg-white dark:bg-gray-800 shadow-sm rounded-lg p-6">
+            <h2 className="text-lg font-medium text-gray-900 dark:text-gray-100">
+              {t('admin.providers.websearchTest.title', 'Connectivity Test')}
+            </h2>
+            <p className="mt-1 text-sm text-gray-500 dark:text-gray-400">
+              {t(
+                'admin.providers.websearchTest.description',
+                'Runs one real search from this server, bypassing the result cache, and reports whether the provider answered. This is the only way to find out whether bot protection (such as the DataDome layer in front of Qwant) is blocking this server’s IP address — that is decided by where the server sends traffic from, not by the settings on this page.'
+              )}
+            </p>
+            <p className="mt-1 text-xs text-gray-500 dark:text-gray-400">
+              {t(
+                'admin.providers.websearchTest.savedConfigHint',
+                'The test uses the saved configuration — save your changes first to test them.'
+              )}
+            </p>
+
+            <div className="mt-4 flex flex-col gap-3 sm:flex-row sm:items-end">
+              <div className="flex-1">
+                <label
+                  htmlFor="websearch-test-query"
+                  className="block text-sm font-medium text-gray-700 dark:text-gray-300"
+                >
+                  {t('admin.providers.websearchTest.queryLabel', 'Test query (optional)')}
+                </label>
+                <input
+                  id="websearch-test-query"
+                  type="text"
+                  maxLength={100}
+                  value={testQuery}
+                  onChange={e => setTestQuery(e.target.value)}
+                  placeholder={t(
+                    'admin.providers.websearchTest.queryPlaceholder',
+                    'open source software'
+                  )}
+                  className="mt-1 block w-full rounded-lg border-gray-300 dark:border-gray-600 dark:bg-gray-700 dark:text-gray-100 shadow-xs focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm"
+                />
+              </div>
+              <button
+                type="button"
+                onClick={runWebsearchTest}
+                disabled={testing}
+                className="px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2"
+              >
+                {testing ? (
+                  <span className="animate-spin rounded-full h-4 w-4 border-b-2 border-white inline-block" />
+                ) : (
+                  <Icon name="SignalIcon" className="w-5 h-5" />
+                )}
+                {testing
+                  ? t('admin.providers.websearchTest.running', 'Testing...')
+                  : t('admin.providers.websearchTest.run', 'Run Test')}
+              </button>
+            </div>
+
+            {testResult && (
+              <div className="mt-4">
+                <WebsearchTestResult result={testResult} />
+              </div>
+            )}
+          </div>
+        )}
       </div>
 
       <ConfirmDialog
