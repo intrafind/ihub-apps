@@ -13,7 +13,7 @@ A customer asked whether the Outlook add-in can add metadata to emails. The goal
 Two questions decide the design:
 
 1. Where can an add-in write metadata on a received mail, and what does each surface cost in permissions?
-2. How close to "runs automatically" can we get, given that the add-in is a task pane the user opens?
+2. How close to "runs automatically" can the add-in get, given that it is a task pane the user opens?
 
 ## Goals
 
@@ -23,9 +23,9 @@ Two questions decide the design:
 - Ask the M365 tenant for no permission the add-in does not already have, unless the admin opts in.
 - Never classify the same mail twice.
 
-## Non-goals (phase 1)
+## Non-goals
 
-- Classifying mail nobody has opened. The add-in cannot do this; see [Phase 2](#phase-2-background-classification-via-microsoft-graph).
+- Classifying mail nobody has opened. The add-in cannot do this (see [Why the add-in cannot run on arrival](#why-the-add-in-cannot-run-on-arrival)); a server-side job against Microsoft Graph would be a separate concept and is not part of this one.
 - Moving mails to folders, setting flags, importance or sensitivity labels. Read mode has no APIs for these.
 - Classifying outgoing mail at send time (Smart Alerts). Possible later as a separate feature.
 
@@ -41,7 +41,6 @@ Two questions decide the design:
 | Live mail snapshot hook with a `generation` counter bumped on item change                                                       | `client/src/features/office/hooks/useOutlookMailContextSnapshot.js`                                                         | Trigger for auto-classification                           |
 | Manifest: permission `ReadWriteItem`, Mailbox 1.3 / 1.5 minimum, pinning and multi-select enabled                               | `server/routes/integrations/officeAddin.js`                                                                                 | Categories and custom properties need no new permission   |
 | Admin config pattern: sanitize for the pane, validate for the admin API, seed by migration                                      | `server/utils/officeStartPage.js`, `server/migrations/V107__add_office_start_page_config.js`                                | Template for the classification settings                  |
-| Office 365 provider: delegated Graph OAuth per user, Files / Sites / Teams scopes only                                          | `server/services/integrations/Office365Service.js`                                                                          | Basis for phase 2                                         |
 
 Write-back today is reply-only (`client/src/features/office/utilities/replyForm.js`: reply form, prepend into a draft, new message). Nothing in the codebase touches categories or custom properties yet.
 
@@ -65,34 +64,30 @@ Consequences:
 
 ## Why the add-in cannot run on arrival
 
-Event-based activation fires for compose, send and appointment-edit events only. The two "on message read" events (`OnMessageReadWithCustomHeader`, `OnMessageReadWithCustomAttachment`) are preview and limited to classic Outlook on Windows. There is no "on message received" event at all. Anything that must happen without the user selecting the mail has to run server-side against Microsoft Graph (phase 2).
+Event-based activation fires for compose, send and appointment-edit events only. The two "on message read" events (`OnMessageReadWithCustomHeader`, `OnMessageReadWithCustomAttachment`) are preview and limited to classic Outlook on Windows. There is no "on message received" event at all. Anything that must happen without the user selecting the mail would have to run server-side against Microsoft Graph, outside the add-in and outside this concept.
 
 The closest the add-in gets: the pane is pinnable (`SupportsPinning` is already set), `ItemChanged` fires for every selection, and the pane can classify on selection when the user has opted in.
 
 ## Options considered
 
-### A. Classify in the pane, confirm, write back (recommended, phase 1)
+### A. Classify in the pane, confirm, write back (recommended)
 
 Uses the existing add-in, structured output and `ReadWriteItem`. Human in the loop by design, which is what the requester described as the ideal. Limited to mails the user selects.
 
-### B. Background classification via Microsoft Graph (phase 2)
-
-The server subscribes to the inbox, runs the same app, and patches categories plus an extension onto the message. Zero-touch, but needs `Mail.ReadWrite` consent per user (or application permissions with admin consent), a public webhook, subscription lifecycle management, and it sends mail content to the model without the user present.
-
-### C. Event-based activation
+### B. Event-based activation
 
 Rejected for incoming mail: no event exists. Kept in mind for outgoing mail (`OnMessageSend`, Mailbox 1.12) as a separate feature.
 
 ---
 
-## Phase 1 design
+## Design
 
 ### User flow
 
 1. The admin creates a classifier app (below) and points **Admin → Office Integration → Classification** at it.
 2. The user selects a mail. The pane shows a **Classification** card above the chat.
    - If the item already carries a confirmed classification: show it read-only, with **Change**.
-   - Else if it carries a suggestion (from an earlier run, or from phase 2): show the suggestion.
+   - Else if it carries a suggestion (from an earlier run): show the suggestion.
    - Else: a **Classify** button, or run immediately when the user's auto-classify setting is on.
 3. The app runs with the mail as context and returns JSON. The card renders every taxonomy value as a checkable chip with the suggested ones pre-checked, the confidence as a subtle hint, the summary, and the extracted fields as editable rows.
 4. The user adjusts and taps **Confirm**. The pane writes
@@ -203,7 +198,7 @@ Implementation follows `officeStartPage.js`: `sanitizeOfficeClassification` for 
 - **`OfficeClassificationCard`**: rendered by `OfficeChatPanel` next to `OfficeContextStrip`, and on the start page above the default app's input. Chips, fields, **Confirm**, **Re-classify**; collapses to one line once confirmed.
 - **Settings dialog**: "Classify automatically when I select an email", stored like language and appearance (Outlook local storage), defaulting to the admin's value.
 - **Error handling**: `InvalidCategory` → still save the custom property, show "Category X does not exist in your mailbox" with the names to create (Outlook: **Categorize → Manage categories**). A failed `saveAsync` while offline keeps the suggestion in memory and retries on the next confirm.
-- **Multi-select**: with Mailbox 1.15 `loadItemByIdAsync`, a bulk **Classify selected** could apply categories but not custom properties (`set` is unsupported on loaded items). Phase 1 scopes to the open item; bulk is a follow-up.
+- **Multi-select**: with Mailbox 1.15 `loadItemByIdAsync`, a bulk **Classify selected** could apply categories but not custom properties (`set` is unsupported on loaded items). This concept scopes to the open item; bulk is a follow-up.
 
 Why a native card instead of a custom response renderer: renderers receive `data`, `t`, `rendererConfig` and hooks, but no access to the host adapter, so a renderer would have to touch `window.Office` directly and could not read the stored record before deciding whether to run the model. If customers later need bespoke cards, `CustomResponseRenderer` can pass the host adapter as an extra prop and the native card becomes the default renderer.
 
@@ -250,22 +245,12 @@ Downstream systems read the record through Graph `singleValueExtendedProperties`
 
 ---
 
-## Phase 2: background classification via Microsoft Graph
-
-Only if the customer needs mails classified before anyone opens them. Sketch, to be detailed in its own concept:
-
-- Add the delegated `Mail.ReadWrite` scope to `Office365Service._buildScopes` behind a new source flag. Users connect their Microsoft account as they do today for OneDrive. Delegated `Mail.ReadWrite` is user-consentable unless the tenant policy requires admin consent. Application permissions (`Mail.ReadWrite` app-only, scoped with Exchange application access policies) avoid per-user connection but need admin consent and a data-protection review.
-- Subscribe to change notifications on the inbox (webhook on iHub's public URL, subscription lifetime up to seven days for messages, renewal job), or start simpler with a delta query poll.
-- A server job runs the same classifier app through the server-side loop and issues `PATCH /me/messages/{id}` with `categories: ["AI: Invoice"]` plus an open extension `com.intrafind.ihub.classification` holding the suggestion.
-- The pane reconciles: categories prefixed `AI:` are treated as a suggestion; on confirm it removes them, adds the plain category and writes the custom property. The `AI:` categories must exist in the master list too: provision via Graph `POST /me/outlook/masterCategories` (`MailboxSettings.ReadWrite`) or tenant-wide via Exchange PowerShell.
-- Costs and risks: mail content leaves the mailbox to the model without a user action; token cost per mail (mitigate with folder and sender filters, body only); a public webhook endpoint; a renewal job and long-lived per-user Graph tokens.
-
 ## Open questions
 
-1. **Taxonomy scope.** One classifier app tenant-wide, or per group? Phase 1 supports one `appId`; per-group taxonomies are possible with several apps but need a group-to-app mapping in the settings.
+1. **Taxonomy scope.** One classifier app tenant-wide, or per group? The design supports one `appId`; per-group taxonomies are possible with several apps but need a group-to-app mapping in the settings.
 2. **Category naming.** Are language-neutral English names acceptable in the customers' mailboxes? Otherwise we need a per-locale mapping, and mixed-language teams see different names on the same mail.
-3. **Appointments.** The reader already supports them. Hide the card for appointments in phase 1, or classify them with the same app?
-4. **Downstream consumer.** Which system reads the metadata (iFinder indexing, a DMS, a ticket system), and does it prefer categories, extended properties, or a record on the iHub server? This decides whether phase 1 should also post confirmations to a new iHub endpoint.
+3. **Appointments.** The reader already supports them. Hide the card for appointments, or classify them with the same app?
+4. **Downstream consumer.** Which system reads the metadata (iFinder indexing, a DMS, a ticket system), and does it prefer categories, extended properties, or a record on the iHub server? This decides whether the pane should also post confirmations to a new iHub endpoint.
 5. **Retention.** The custom property lives as long as the mail. Is a **Clear classification** action needed for deletion requests?
 6. **Quality loop.** Do we collect suggested / confirmed pairs server-side for agreement metrics? That would be the first piece needing a new server endpoint.
 
@@ -278,7 +263,6 @@ Only if the customer needs mails classified before anyone opens them. Sketch, to
 | Admin settings block, sanitize / validate, config endpoint, migration V108, admin UI section | M                   |
 | Default classifier app, docs, release note                                                  | S                   |
 | Optional master-category management with manifest switch                                    | S                   |
-| Phase 2 Graph job                                                                            | L, separate concept |
 
 ## References
 
@@ -286,4 +270,4 @@ Only if the customer needs mails classified before anyone opens them. Sketch, to
 - [Understanding Outlook add-in permissions](https://learn.microsoft.com/en-us/office/dev/add-ins/outlook/understanding-outlook-add-in-permissions)
 - [Activate add-ins with events](https://learn.microsoft.com/en-us/office/dev/add-ins/develop/event-based-activation)
 - [Get and set add-in metadata for an Outlook add-in](https://learn.microsoft.com/en-us/office/dev/add-ins/outlook/metadata-for-an-outlook-add-in)
-- Microsoft Graph: `message` resource, `outlookCategory`, change notifications for Outlook resources
+- Microsoft Graph `message` resource (`categories`, `singleValueExtendedProperties`) for downstream readers
