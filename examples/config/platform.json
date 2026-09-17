@@ -244,7 +244,7 @@
   "iFinder": {
     "enabled": true,
     "baseUrl": "${IFINDER_API_URL}",
-    "privateKey": "${IFINDER_PRIVATE_KEY}",
+    "privateKeyRef": "ifinder",
     "algorithm": "RS256",
     "issuer": "ihub-apps",
     "audience": "ifinder-api",

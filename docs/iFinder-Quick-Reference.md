@@ -27,13 +27,20 @@ spring.security.oauth2.resourceserver.jwt.principal-claim-name: email
 
 ## Legacy Setup Checklist (manual key exchange)
 
-### 1. Environment Variables
+### 1. Private Key
+
+Either set the environment variable:
 
 ```bash
 export IFINDER_API_URL="https://your-ifinder.com"
 export IFINDER_SEARCH_PROFILE="default"
 export IFINDER_PRIVATE_KEY="-----BEGIN PRIVATE KEY-----..."
 ```
+
+...or, from Admin > Credentials, create a "Secret" credential holding the PEM
+key and select it in Admin > Integrations > iFinder's **Private Key** field
+(stored as `iFinder.privateKeyRef`). The env var takes precedence when both
+are set.
 
 ### 2. Test Configuration
 

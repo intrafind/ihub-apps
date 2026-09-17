@@ -4,6 +4,7 @@ import Icon from '../../../shared/components/Icon';
 import { makeAdminApiCall } from '../../../api/adminApi';
 import { getBasePath } from '../../../utils/runtimeBasePath.js';
 import IntegrationTestResults from './IntegrationTestResults';
+import { CredentialRefSelect } from './OpenApiToolEditor';
 
 const ALGORITHM_OPTIONS = ['RS256', 'RS384', 'RS512', 'ES256', 'ES384', 'ES512'];
 
@@ -20,7 +21,7 @@ function IFinderConfig() {
     enabled: false,
     baseUrl: '',
     useOidcKeyPair: false,
-    privateKey: '',
+    privateKeyRef: '',
     algorithm: 'RS256',
     issuer: 'ihub-apps',
     audience: 'ifinder-api',
@@ -61,7 +62,7 @@ function IFinderConfig() {
           enabled: false,
           baseUrl: '',
           useOidcKeyPair: false,
-          privateKey: '',
+          privateKeyRef: '',
           algorithm: 'RS256',
           issuer: 'ihub-apps',
           audience: 'ifinder-api',
@@ -489,24 +490,16 @@ function IFinderConfig() {
                 {/* Private key and algorithm: only shown when NOT using OIDC keypair */}
                 {!iFinderConfig.useOidcKeyPair && (
                   <>
-                    <div>
-                      <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
-                        {t('admin.iFinder.privateKey', 'Private Key (PEM)')} *
-                      </label>
-                      <textarea
-                        value={iFinderConfig.privateKey}
-                        onChange={e => handleIFinderChange('privateKey', e.target.value)}
-                        rows={4}
-                        className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md shadow-xs focus:outline-hidden focus:ring-indigo-500 focus:border-indigo-500 bg-white dark:bg-gray-900 text-gray-900 dark:text-gray-100 font-mono text-sm"
-                        placeholder="-----BEGIN RSA PRIVATE KEY-----&#10;...&#10;-----END RSA PRIVATE KEY-----"
-                      />
-                      <p className="mt-1 text-xs text-gray-500 dark:text-gray-400">
-                        {t(
-                          'admin.iFinder.privateKeyHelp',
-                          'RSA/EC private key in PEM format for signing JWT tokens'
-                        )}
-                      </p>
-                    </div>
+                    <CredentialRefSelect
+                      value={iFinderConfig.privateKeyRef}
+                      onChange={id => handleIFinderChange('privateKeyRef', id)}
+                      types={['secret']}
+                      label={`${t('admin.iFinder.privateKeyRef', 'Private Key')} *`}
+                      help={t(
+                        'admin.iFinder.privateKeyRefHelp',
+                        'Select a stored credential holding the RSA/EC private key (PEM format) used to sign JWT tokens. Alternatively, set the IFINDER_PRIVATE_KEY environment variable on the server.'
+                      )}
+                    />
 
                     <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                       <div>

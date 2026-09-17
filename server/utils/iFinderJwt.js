@@ -92,7 +92,7 @@ function getIFinderPrivateKey(iFinderConfig) {
 
   if (!privateKey) {
     throw new Error(
-      'iFinder private key not configured. Set IFINDER_PRIVATE_KEY environment variable or configure the iFinder private key credential in platform.json (iFinder.privateKeyRef)'
+      'iFinder private key not configured. Select or create a credential under Admin > Integrations > iFinder, or set the IFINDER_PRIVATE_KEY environment variable in PEM format.'
     );
   }
 

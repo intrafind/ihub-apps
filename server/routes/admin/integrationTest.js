@@ -1,5 +1,6 @@
 import { adminAuth } from '../../middleware/adminAuth.js';
 import { buildServerPath } from '../../utils/basePath.js';
+import config from '../../config.js';
 import iFinderService from '../../services/integrations/iFinderService.js';
 import iAssistantService from '../../services/integrations/iAssistantService.js';
 import conversationApiService from '../../services/integrations/ConversationApiService.js';
@@ -176,7 +177,10 @@ function describeSigningKey(iFinderConfig) {
       description: 'iHub OIDC RSA key pair (published via /.well-known/jwks.json)'
     };
   }
-  if (process.env.IFINDER_PRIVATE_KEY) {
+  // Checks the same source generateIFinderJWT() actually signs with
+  // (config.IFINDER_PRIVATE_KEY, not process.env directly) so this can never
+  // report "available" for a key the real signing path won't see.
+  if (config.IFINDER_PRIVATE_KEY) {
     return {
       mode: 'privateKey',
       available: true,
@@ -990,7 +994,7 @@ export default function registerIntegrationTestRoutes(app) {
                   'Set "jwt.algorithm" to RS256 under Admin > Authentication so iHub generates an RSA key pair, then restart the server.'
                 ]
               : [
-                  'Store the private key as the iFinder credential (iFinder.privateKeyRef) or provide the IFINDER_PRIVATE_KEY environment variable in PEM format.',
+                  'Select or create the private key credential under Admin > Integrations > iFinder, or set the IFINDER_PRIVATE_KEY environment variable on the server (PEM format) and restart it.',
                   'Alternatively enable "Use OIDC key pair" to sign with the key pair iHub already publishes via JWKS.'
                 ]
           });

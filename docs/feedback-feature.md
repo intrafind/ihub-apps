@@ -771,8 +771,10 @@ grep "Failed to send feedback to iFinder API" server.log
 # Test iFinder API connectivity
 curl -I https://your-ifinder-instance.com/rag/api/v0
 
-# Verify JWT configuration
-jq '.iFinder.privateKey' contents/config/platform.json
+# Verify JWT configuration (privateKeyRef points at a credential in
+# contents/config/credentials.json; IFINDER_PRIVATE_KEY env var, if set, wins)
+jq '.iFinder.privateKeyRef, .iFinder.useOidcKeyPair' contents/config/platform.json
+echo "IFINDER_PRIVATE_KEY set: $([ -n \"$IFINDER_PRIVATE_KEY\" ] && echo yes || echo no)"
 ```
 
 #### 3. Rating Scale Confusion
