@@ -15,7 +15,7 @@ description: >
 license: Apache-2.0
 metadata:
   author: IntraFind
-  version: '1.1'
+  version: '1.2'
 ---
 
 # Searching iFinder
@@ -211,6 +211,37 @@ Then:
 
 Cite documents by `title` plus `deepLink`, never by bare `id` — the id means
 nothing to the reader.
+
+### Size the result set before you pull it
+
+Every hit carries its teasers, so a 50-hit response is large whatever you put in
+`returnFields` — `returnFields` selects document fields, it does not shrink the
+teasers. When you do not yet know whether a query is any good, spend one hit
+first:
+
+```
+iFinder_search({
+  query: "…",
+  maxResults: 1,
+  returnFacets: ["application.keyword", "sourceName.keyword"]
+})
+```
+
+That returns `totalFound` and the value distribution of the whole result set for
+the price of a single hit — enough to see whether the filter matched, which
+formats and sources the topic lives in, and how many hits are worth fetching.
+Then run the real search.
+
+### The same file appears more than once
+
+`totalFound` counts index documents, not distinct files. A document crawled from
+two sources — a SharePoint copy and a file-share copy of the same spreadsheet —
+is two documents with two ids, and a folder holding several revisions multiplies
+that again. Nine hits can be one file.
+
+Before reporting a count to the user, group by `file.name` (or `title`) and say
+how many distinct documents there are. `returnFacets: ["sourceName.keyword"]`
+shows at a glance when one result set spans several copies of the same corpus.
 
 ## Paging
 
