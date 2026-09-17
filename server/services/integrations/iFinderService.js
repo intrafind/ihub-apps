@@ -319,13 +319,23 @@ class IFinderService {
         return Object.keys(nested).length > 0 ? nested : null;
       };
 
+      // iFinder returns a different field subset per source, so a fixed hit shape
+      // ships mostly nulls. Drop what the deployment has nothing for — an absent
+      // key and a null one mean the same to every caller.
+      const isEmpty = value =>
+        value === null ||
+        value === undefined ||
+        (Array.isArray(value) && value.length === 0) ||
+        (typeof value === 'object' && !Array.isArray(value) && Object.values(value).every(isEmpty));
+      const compact = obj => Object.fromEntries(Object.entries(obj).filter(([, v]) => !isEmpty(v)));
+
       // Normalize result format with enhanced field processing
       if (data.results && Array.isArray(data.results)) {
         results.results = data.results.map(hit => {
           const doc = hit.document || {};
           const hitMetadata = hit.metadata || {};
 
-          return {
+          return compact({
             // Document identification
             id: getFieldValue(doc, 'id'),
             score: hitMetadata.score,
@@ -358,9 +368,10 @@ class IFinderService {
             filename: getFieldValue(doc, 'file.name'),
             size: getFieldValue(doc, 'file.size'),
             extension: getFieldValue(doc, 'file.extension'),
-            sizeFormatted: this._formatFileSize(
-              getFieldValue(doc, 'file.size') || getFieldValue(doc, 'contentLength')
-            ),
+            sizeFormatted: (() => {
+              const bytes = getFieldValue(doc, 'file.size') || getFieldValue(doc, 'contentLength');
+              return bytes ? this._formatFileSize(bytes) : null;
+            })(),
 
             // Legacy/fallback fields for backward compatibility
             url: getFieldValue(doc, 'url'),
@@ -380,13 +391,11 @@ class IFinderService {
             description_texts: getFieldValue(doc, 'description_texts', []),
             summary_texts: getFieldValue(doc, 'summary_texts', []),
 
-            // Search-specific metadata
-            teasers: hitMetadata.teasers || [],
-
-            // Raw document data
-            rawDocument: doc,
-            rawHitMetadata: hitMetadata
-          };
+            // Search-specific metadata. `score` and `teasers` above are the whole
+            // of hit.metadata, and every document field is mapped here, so the
+            // response carries no verbatim echo of either.
+            teasers: hitMetadata.teasers || []
+          });
         });
       }
 
@@ -492,11 +501,7 @@ class IFinderService {
           lastModified: doc.lastModified || doc.modified,
           filename: doc.filename,
           url: doc.url
-        },
-
-        // Raw document data
-        rawDocument: doc,
-        rawApiMetadata: apiMetadata
+        }
       };
 
       // Apply the caller's length cap and report the outcome explicitly.
