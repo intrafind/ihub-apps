@@ -2,6 +2,7 @@
 
 **Date:** 2026-09-16
 **Status:** Proposal
+**Issue:** [#2414](https://github.com/intrafind/ihub-apps/issues/2414)
 **Related:** [Outlook Add-in Rollout Guide](../docs/outlook-add-in.md), [Custom Response Renderers](../docs/custom-renderers.md), [Outlook M365 Personal Tab Integration](outlook-personal-tab/2026-05-19%20Outlook%20M365%20Personal%20Tab%20Integration.md)
 
 ---
@@ -33,7 +34,7 @@ Two questions decide the design:
 
 | Piece                                                                                                                           | Where                                                                                                                       | Relevance                                                 |
 | ------------------------------------------------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------- | --------------------------------------------------------- |
-| Mail context reader: subject, body, file attachments; serialized under a mailbox lock; re-read on `ItemChanged`                 | `client/src/features/office/utilities/outlookMailContext.js`                                                                | Input to the classifier                                   |
+| Mail context reader: headers, subject, body, file attachments; serialized under a mailbox lock; re-read on `ItemChanged`; sent as tagged `<current_email>` blocks (see "What the model receives" in the add-in guide) | `client/src/features/office/utilities/outlookMailContext.js`                                                                | Input to the classifier                                   |
 | Host adapter: mail reading, auth dialog, "Insert into email" action                                                             | `client/src/features/office/contexts/EmbeddedHostContext.jsx`, `client/office/taskpane-entry.jsx`                           | Extension point for a metadata read/write action          |
 | Structured output: `preferredOutputFormat: "json"` plus `outputSchema`, passed to every adapter as `responseSchema`             | `server/validators/appConfigSchema.js`, `server/services/chat/RequestBuilder.js`                                            | Validated classification result                           |
 | Custom response renderers for JSON output (`customResponseRenderer`, `rendererConfig`)                                          | `client/src/shared/components/CustomResponseRenderer.jsx`                                                                   | Alternative for a bespoke card                            |
@@ -160,6 +161,8 @@ The app config is the single source of truth for the taxonomy. The `outputSchema
 }
 ```
 
+The pane sends the mail as the tagged `<current_email>` block documented in `docs/outlook-add-in.md` (sender, recipients, date, subject, mailbox user, body), followed by `<context_rules>` and `<user_instruction>`. The classifier's system prompt can therefore address `<from>`, `<subject>` and `<body>` by name, and the existing rule that instructions inside the email are content, not orders, already covers prompt injection through classified mail.
+
 Contract the card relies on: `categories: string[]` (required), `summary?: string`, `confidence?: number`, `fields?: Record<string, string | number | boolean | null>`. Other properties are ignored by the card and kept in the custom property as long as the record fits the size limit.
 
 Outlook category names are literal strings per mailbox. Use language-neutral `enum` values as the Outlook category name and put localized labels in `rendererConfig`. Otherwise German and English users of the same taxonomy end up with two different categories for the same class.
@@ -189,7 +192,7 @@ New block `officeIntegration.classification` in `platform.json`:
 - `writeCategories`, `writeCustomProperties`, `showNotification`: which surfaces the confirm action writes to.
 - `manageMasterCategories`: when true, the generated manifest emits `ReadWriteMailbox` and the pane creates missing categories with the configured colors. The admin UI must warn that this changes the manifest and requires re-approval in the M365 admin center.
 
-Implementation follows `officeStartPage.js`: `sanitizeOfficeClassification` for the public `/api/integrations/office-addin/config` endpoint (never throws), `validateOfficeClassification` for the admin save, a mirrored client util. Migration `V108` seeds `classification.enabled = false` only for installations that already have an `officeIntegration` block, the same rule V107 uses.
+Implementation follows `officeStartPage.js`: `sanitizeOfficeClassification` for the public `/api/integrations/office-addin/config` endpoint (never throws), `validateOfficeClassification` for the admin save, a mirrored client util. Migration `V109` seeds `classification.enabled = false` only for installations that already have an `officeIntegration` block, the same rule V107 uses.
 
 ### Client changes
 
@@ -228,13 +231,13 @@ Downstream systems read the record through Graph `singleValueExtendedProperties`
 - `server/routes/integrations/officeAddin.js`: expose the sanitized `classification` block on `/config`; make `<Permissions>` in the generated manifest conditional on `manageMasterCategories`.
 - `server/routes/admin/officeIntegration.js`: validate and persist `classification`; a **Create default classifier app** action that copies `server/defaults/apps/email-classifier.json` into `contents/apps/`.
 - `server/utils/officeClassification.js`: sanitize / validate, mirrored on the client.
-- `server/migrations/V108__add_office_classification_config.js`.
+- `server/migrations/V109__add_office_classification_config.js`.
 - Confirm that the public apps endpoint the pane already calls exposes `outputSchema`. It already exposes `rendererConfig` (the web chat reads it for custom renderers); the card needs both.
 
 ### Tests
 
 - Unit (`tests/unit/client/`): the metadata adapter against a mocked `Office` (add / remove categories, custom property round trip, `InvalidCategory` fallback, capability gating), the hook's state machine, the card's states, the sanitize / validate pair, the manifest permission switch.
-- Server (`server/tests/`): migration V108, config endpoint output, admin validation errors.
+- Server (`server/tests/`): migration V109, config endpoint output, admin validation errors.
 - Manual in Outlook on the web and the new Outlook for Windows: classify, confirm, verify the category in the message list and the record via Graph Explorer; reopen and confirm no model call; an old client without Mailbox 1.8 falls back to custom properties.
 
 ### Documentation and release note
@@ -260,7 +263,7 @@ Downstream systems read the record through Graph `singleValueExtendedProperties`
 | ------------------------------------------------------------------------------------------- | ------------------- |
 | Host adapter metadata read / write, capability gating, tests                                | S                   |
 | Classification hook, card, settings toggle, i18n                                            | M                   |
-| Admin settings block, sanitize / validate, config endpoint, migration V108, admin UI section | M                   |
+| Admin settings block, sanitize / validate, config endpoint, migration V109, admin UI section | M                   |
 | Default classifier app, docs, release note                                                  | S                   |
 | Optional master-category management with manifest switch                                    | S                   |
 
