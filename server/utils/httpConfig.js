@@ -682,12 +682,18 @@ export function createAgent(
  * @param {Function} [lookup] - Optional dns.lookup-compatible function to pin DNS resolution
  * @returns {Object} Enhanced fetch options
  */
-export function enhanceFetchOptions(options = {}, url = '', forceIgnoreSSL = null, lookup = null) {
+export function enhanceFetchOptions(
+  options = {},
+  url = '',
+  forceIgnoreSSL = null,
+  lookup = null,
+  proxyConfigOverride = null
+) {
   const enhancedOptions = { ...options };
 
   // Only add agent if not already specified
   if (!enhancedOptions.agent) {
-    const agent = createAgent(url, forceIgnoreSSL, lookup);
+    const agent = createAgent(url, forceIgnoreSSL, lookup, proxyConfigOverride);
     if (agent) {
       enhancedOptions.agent = agent;
     }
@@ -726,7 +732,8 @@ export function redactUrlSecrets(url) {
  * @param {string} url - The URL to fetch
  * @param {Object} [options] - Standard fetch options (method, headers, body, signal, etc.).
  *   A `lookup` property (dns.lookup-compatible) is extracted to pin DNS resolution for
- *   direct connections and is not forwarded to the underlying fetch.
+ *   direct connections, and a `proxyConfig` property is extracted to route this one call
+ *   by a config other than the live one; neither is forwarded to the underlying fetch.
  * @param {boolean} [forceIgnoreSSL] - Force ignore SSL (overrides global setting)
  * @returns {Promise<Response>} node-fetch Response
  */
@@ -744,9 +751,11 @@ export async function httpFetch(url, options = {}, forceIgnoreSSL = null) {
       );
     }
   }
-  // `lookup` is not a node-fetch option; pull it out and apply it to the agent
-  // (used by the workflow SSRF guard to pin connections to validated IPs).
-  const { lookup = null, ...fetchOptions } = options;
-  const enhanced = enhanceFetchOptions(fetchOptions, url, forceIgnoreSSL, lookup);
+  // `lookup` and `proxyConfig` are not node-fetch options; pull them out and apply
+  // them to the agent. `lookup` is used by the workflow SSRF guard to pin
+  // connections to validated IPs; `proxyConfig` lets the admin proxy test probe an
+  // unsaved draft through this same path instead of a bespoke fetch of its own.
+  const { lookup = null, proxyConfig = null, ...fetchOptions } = options;
+  const enhanced = enhanceFetchOptions(fetchOptions, url, forceIgnoreSSL, lookup, proxyConfig);
   return nodeFetch(url, enhanced);
 }

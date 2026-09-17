@@ -26,16 +26,15 @@ import { resolveEnvVars } from '../../utils/envVars.js';
 import { isCertificateError } from '../../services/integrations/integrationDiagnostics.js';
 import { assertSafeHost } from '../../services/mcp/safeFetch.js';
 import {
-  createAgent,
   describeProxyRouting,
   getProxyProvenance,
   getSSLConfig,
+  httpFetch,
   isUnresolvedPlaceholder,
   normalizeNoProxy,
   redactUrlSecrets,
   shouldIgnoreSSLForURL
 } from '../../utils/httpConfig.js';
-import nodeFetch from 'node-fetch';
 
 const PLATFORM_FILE = 'config/platform.json';
 
@@ -651,14 +650,9 @@ export default function registerAdminProxyRoutes(app) {
             };
       }
 
-      // The agent comes from createAgent() — the same call every outbound request
-      // makes — with the draft config passed as an override so an unsaved draft can
-      // be probed without a second copy of the agent rules drifting from the real
-      // one. It also means the test applies the SSL decision live traffic would, so
-      // a host covered by ssl.domainWhitelist is not reported as a TLS failure that
-      // never actually happens.
+      // Reported alongside the result so a relaxed TLS check is visible rather than
+      // implied; httpFetch() below applies the decision itself.
       const ignoreInvalidCertificates = shouldIgnoreSSLForURL(targetUrl.toString(), getSSLConfig());
-      const agent = createAgent(targetUrl.toString(), null, null, proxyConfig || undefined);
 
       const controller = new AbortController();
       const timer = setTimeout(() => controller.abort(), timeout);
@@ -668,18 +662,22 @@ export default function registerAdminProxyRoutes(app) {
       let redirectLocation;
       let requestError;
       try {
-        // The target URL is admin-supplied by design — probing one is what this
-        // endpoint is for. It is constrained before it gets here: the scheme must be
-        // http(s), assertSafeHost() refuses anything resolving into a private range
-        // unless an admin listed it in ssrf.allowedHosts, redirects are not followed
-        // and the response body is never read or returned.
-        // codeql[js/request-forgery]
-        const response = await nodeFetch(targetUrl.toString(), {
+        // httpFetch() is the platform's one outbound path, so the probe is
+        // transported exactly like the traffic it is meant to diagnose — same agent
+        // construction, same SSL decision, same scheme validation. `proxyConfig`
+        // carries the unsaved draft, if one was supplied.
+        //
+        // The target is admin-supplied by design; probing one is what this endpoint
+        // is for. It is constrained before it gets here: the scheme must be http(s),
+        // assertSafeHost() refuses anything resolving into a private range unless an
+        // admin listed it in ssrf.allowedHosts, redirects are not followed and the
+        // response body is never read or returned.
+        const response = await httpFetch(targetUrl.toString(), {
           method: 'GET',
           // No redirect following: the point is what *this* URL does, and a
           // redirect could otherwise walk the probe to a host the guard cleared.
           redirect: 'manual',
-          agent,
+          proxyConfig: proxyConfig || undefined,
           signal: controller.signal,
           headers: { 'user-agent': 'iHub-Apps proxy connectivity test' }
         });
