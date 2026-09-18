@@ -95,6 +95,11 @@ product to confirm the change had landed.
 - Each field says whether the value in effect comes from `platform.json` or from the environment,
   and an `${ENV_VAR}` placeholder that no variable resolves is called out instead of silently
   doing nothing.
+- The page opens on what is actually happening: routed through a named proxy, no proxy in use, or
+  switched off. A fresh installation is in the second state — no `proxy` block is written to
+  `platform.json` and nothing is proxied until a URL is set here or `HTTP_PROXY`/`HTTPS_PROXY` is
+  set in the environment. The switch on its own proxies nothing; turning it off forces every
+  request direct, environment variables included.
 - **Test connectivity** probes any URL against the settings on screen, saved or not. It reports how
   the URL is routed (through the proxy, bypassed, excluded by a pattern, or direct), whether the
   proxy itself answers, the HTTP status and how long each step took, and — when it fails — what

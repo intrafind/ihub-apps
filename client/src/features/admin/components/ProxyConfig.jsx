@@ -80,6 +80,22 @@ function ProxyConfig() {
     [config.urlPatterns]
   );
 
+  /**
+   * What is actually happening to outbound traffic right now.
+   *
+   * Read from `effective`, never from the checkbox: the switch on its own
+   * proxies nothing. It defaults to on so that HTTP_PROXY from the environment
+   * keeps working, which means a checked box with no URL anywhere reads as
+   * "the proxy is on" while every request still goes direct. Saying which of
+   * the three states the installation is in removes that guess.
+   */
+  const status = useMemo(() => {
+    if (!effective) return null;
+    if (!effective.enabled) return 'off';
+    if (!effective.http && !effective.https) return 'inactive';
+    return 'active';
+  }, [effective]);
+
   const sourceLabel = field => {
     switch (provenance[field]) {
       case 'platform':
@@ -248,6 +264,42 @@ function ProxyConfig() {
         </div>
       </div>
 
+      {/* What is in effect, before any of the fields below are read */}
+      {status && (
+        <div
+          className={`flex items-start p-3 rounded-md mb-4 border text-sm ${
+            status === 'active'
+              ? 'bg-blue-50 dark:bg-blue-900/20 border-blue-200 dark:border-blue-800 text-blue-800 dark:text-blue-200'
+              : 'bg-gray-50 dark:bg-gray-700/40 border-gray-200 dark:border-gray-700 text-gray-700 dark:text-gray-300'
+          }`}
+        >
+          <Icon
+            name={status === 'active' ? 'CheckCircleIcon' : 'InformationCircleIcon'}
+            className="w-5 h-5 mr-2 shrink-0"
+          />
+          <p>
+            {status === 'active' &&
+              t(
+                'admin.system.proxy.statusActive',
+                'Outbound requests are routed through {{url}}.',
+                {
+                  url: effective.https || effective.http
+                }
+              )}
+            {status === 'inactive' &&
+              t(
+                'admin.system.proxy.statusInactive',
+                'No proxy is in use — no proxy URL is configured, so outbound requests go direct. Set a URL below to start using one.'
+              )}
+            {status === 'off' &&
+              t(
+                'admin.system.proxy.statusOff',
+                'Proxying is switched off — outbound requests go direct, including any proxy set in the environment.'
+              )}
+          </p>
+        </div>
+      )}
+
       {message && (
         <div
           className={`p-4 rounded-md mb-4 ${
@@ -299,7 +351,7 @@ function ProxyConfig() {
             <p id="proxy-enabled-hint" className="text-xs text-gray-500 dark:text-gray-400 mt-0.5">
               {t(
                 'admin.system.proxy.enabledHint',
-                'When switched off nothing is proxied, whatever the URLs below say.'
+                'On its own this switch proxies nothing — a URL below has to be set. Switch it off to go direct even when a proxy is set in the environment.'
               )}{' '}
               {sourceLabel('enabled')}
             </p>
