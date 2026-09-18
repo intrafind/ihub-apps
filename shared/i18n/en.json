@@ -2369,7 +2369,8 @@
       "saving": "Saving...",
       "saveSuccess": "Default language saved",
       "saveError": "Failed to save the default language",
-      "loadError": "Failed to load the platform configuration"
+      "loadError": "Failed to load the platform configuration",
+      "noTranslations": "no translations"
     }
   },
   "cloudStorage": {

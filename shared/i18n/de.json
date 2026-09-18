@@ -2639,7 +2639,8 @@
       "saving": "Wird gespeichert...",
       "saveSuccess": "Standardsprache gespeichert",
       "saveError": "Standardsprache konnte nicht gespeichert werden",
-      "loadError": "Plattformkonfiguration konnte nicht geladen werden"
+      "loadError": "Plattformkonfiguration konnte nicht geladen werden",
+      "noTranslations": "keine Übersetzungen"
     }
   },
   "cloudStorage": {
