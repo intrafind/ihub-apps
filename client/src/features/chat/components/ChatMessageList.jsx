@@ -4,7 +4,7 @@ import ChatMessage from './ChatMessage';
 import Icon from '../../../shared/components/Icon';
 import { useUIConfig } from '../../../shared/contexts/UIConfigContext';
 import IntegrationAuthPrompts from '../../../shared/components/integrations/IntegrationAuthPrompts';
-import { useFeedbackEnabled } from '../../../shared/hooks/useFeatureFlags';
+import { useFeatureFlags } from '../../../shared/hooks/useFeatureFlags';
 
 /**
  * A reusable component to display chat messages with smart auto-scrolling
@@ -46,7 +46,8 @@ function ChatMessageList({
   const { t } = useTranslation();
   const chatContainerRef = useRef(null);
   const { uiConfig } = useUIConfig();
-  const feedbackEnabled = useFeedbackEnabled();
+  const featureFlags = useFeatureFlags();
+  const feedbackEnabled = featureFlags.isEnabled('feedback', true);
   const [shouldAutoScroll, setShouldAutoScroll] = useState(true);
   const isUserScrollingRef = useRef(false);
   const prevMessageCountRef = useRef(0);

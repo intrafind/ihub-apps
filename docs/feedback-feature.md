@@ -192,18 +192,16 @@ Two independent flags control feedback, and they are easy to confuse:
 
 | Flag | Controls | Where it's set |
 |------|----------|----------------|
-| `feedback` (Feature Registry) | Whether the star-rating control and feedback modal are shown at all, and whether `POST /api/feedback` accepts submissions | Admin Panel → Features → Content, or `features.feedback` in `contents/config/platform.json` |
+| `feedback` (Feature Registry) | Whether the star-rating control and feedback modal are shown at all, and whether `POST /api/feedback` accepts submissions | Admin Panel → Features → Content, or the top-level `feedback` key in `contents/config/features.json` |
 | `features.feedbackTracking` | Whether feedback that *is* submitted gets written to `feedback.jsonl` / `usage.json` | `contents/config/platform.json` only |
 
 ### Feedback Visibility (`feedback`)
 
-Configure via the admin Features panel (Content category), or directly in `contents/config/platform.json`:
+Configure via the admin Features panel (Content category), or directly in `contents/config/features.json` (the same file that holds `skills`, `workflows`, and the platform's other Feature Registry flags — a flat map, not nested under a `features` key):
 
 ```json
 {
-  "features": {
-    "feedback": true
-  }
+  "feedback": true
 }
 ```
 
@@ -777,7 +775,20 @@ df -h
 grep "Failed to save feedback" server.log
 ```
 
-#### 2. iAssistant Feedback Not Routing
+#### 2. Feedback Rejected Outright (403 FEATURE_DISABLED)
+
+**Symptoms**: The star rating and feedback modal don't appear at all, or `POST /api/feedback` returns `403` with `code: 'FEATURE_DISABLED'` — a different, more visible symptom than "Feedback Not Saving" above
+
+**Possible Causes**:
+- The `feedback` flag is disabled in the Feature Registry (Admin Panel → Features → Content, or `contents/config/features.json`)
+
+**Solutions**:
+```bash
+# Check the feedback visibility flag (not feedbackTracking — see Configuration above)
+jq '.feedback' contents/config/features.json
+```
+
+#### 3. iAssistant Feedback Not Routing
 
 **Symptoms**: Local feedback works but iFinder API doesn't receive it
 
@@ -806,7 +817,7 @@ jq '.iFinder.privateKeyRef, .iFinder.useOidcKeyPair' contents/config/platform.js
 echo "IFINDER_PRIVATE_KEY set: $([ -n \"$IFINDER_PRIVATE_KEY\" ] && echo yes || echo no)"
 ```
 
-#### 3. Rating Scale Confusion
+#### 4. Rating Scale Confusion
 
 **Symptoms**: Users report wrong ratings displayed
 
@@ -820,7 +831,7 @@ echo "IFINDER_PRIVATE_KEY set: $([ -n \"$IFINDER_PRIVATE_KEY\" ] && echo yes || 
 - Check server accepts the exact rating value
 - Review migration logs for legacy data conversion
 
-#### 4. Permission Denied
+#### 5. Permission Denied
 
 **Symptoms**: Feedback submission returns 401 Unauthorized
 
@@ -845,7 +856,7 @@ jq '.auth.sessionTimeoutMinutes' contents/config/platform.json
 grep "Authentication failed" server.log
 ```
 
-#### 5. Missing Feedback in Dashboard
+#### 6. Missing Feedback in Dashboard
 
 **Symptoms**: Feedback exists in files but not visible in admin dashboard
 

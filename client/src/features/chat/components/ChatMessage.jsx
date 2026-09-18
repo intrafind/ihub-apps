@@ -130,6 +130,14 @@ function ChatMessage({
   const copyMenuRef = useRef(null);
   const [showExportDialog, setShowExportDialog] = useState(false);
 
+  // Close the feedback modal if the feature is disabled while it's open, so it
+  // can't silently reappear if the flag is re-enabled before the user acts.
+  useEffect(() => {
+    if (!feedbackEnabled) {
+      setShowFeedbackForm(false);
+    }
+  }, [feedbackEnabled]);
+
   // Get custom renderer info from message metadata (set when message completes)
   // This survives re-renders and component unmounting/remounting
   const customRendererFromMessage = message.customResponseRenderer;
