@@ -970,7 +970,7 @@
           "loadError": "Failed to load the client",
           "neverTrusted": "This client is never trusted and always requires consent, whatever its approval state. Approving it lets people connect; it does not skip the consent screen.",
           "noRestriction": "no restriction",
-          "noneSelected": "Nothing selected — this client gets none of them",
+          "noneSelected": "Nothing selected — no restriction from this client; the user keeps everything their groups allow. Add entries to narrow it down.",
           "pending": "Waiting for approval",
           "policyDesc": "Each field either applies to this client alone or inherits the global default for metadata-document clients. Changes take effect on the next gateway request and the next token refresh.",
           "policyTitle": "Policy",
@@ -982,7 +982,7 @@
           "saveError": "Failed to save the policy",
           "saved": "Policy saved",
           "scopes": "Grantable scopes",
-          "scopesHelp": "Comma-separated OAuth scopes this client may be granted. Narrowing them also narrows connections that already exist, at their next token refresh.",
+          "scopesHelp": "Comma-separated OAuth scopes this client may be granted. Narrowing them also narrows connections that already exist, at their next token refresh. An empty list is no restriction at all — wider than the inherited default.",
           "tokenExpirationHelp": "Also the window a block takes to bite: an access token already issued stays valid until it expires.",
           "unblock": "Unblock",
           "unblocked": "Unblocked {{name}}"

@@ -1240,7 +1240,7 @@
           "loadError": "Client konnte nicht geladen werden",
           "neverTrusted": "Dieser Client gilt nie als vertrauenswürdig und erfordert immer eine Zustimmung, unabhängig vom Freigabestatus. Die Freigabe erlaubt das Verbinden; sie überspringt den Zustimmungsdialog nicht.",
           "noRestriction": "keine Einschränkung",
-          "noneSelected": "Nichts ausgewählt — dieser Client erhält keine davon",
+          "noneSelected": "Nichts ausgewählt — keine Einschränkung durch diesen Client; der Benutzer behält alles, was seine Gruppen erlauben. Einträge hinzufügen, um ihn einzuschränken.",
           "pending": "Wartet auf Freigabe",
           "policyDesc": "Jedes Feld gilt entweder nur für diesen Client oder übernimmt die globale Voreinstellung für Clients mit Metadaten-Dokument. Änderungen greifen bei der nächsten Gateway-Anfrage und beim nächsten Token-Refresh.",
           "policyTitle": "Richtlinie",
@@ -1252,7 +1252,7 @@
           "saveError": "Richtlinie konnte nicht gespeichert werden",
           "saved": "Richtlinie gespeichert",
           "scopes": "Vergebbare Scopes",
-          "scopesHelp": "Kommagetrennte OAuth-Scopes, die dieser Client erhalten darf. Eine Einschränkung wirkt beim nächsten Token-Refresh auch auf bestehende Verbindungen.",
+          "scopesHelp": "Kommagetrennte OAuth-Scopes, die dieser Client erhalten darf. Eine Einschränkung wirkt beim nächsten Token-Refresh auch auf bestehende Verbindungen. Eine leere Liste bedeutet gar keine Einschränkung — und damit mehr als die übernommene Voreinstellung.",
           "tokenExpirationHelp": "Zugleich das Zeitfenster, bis eine Sperre greift: ein bereits ausgestelltes Access-Token bleibt bis zu seinem Ablauf gültig.",
           "unblock": "Entsperren",
           "unblocked": "{{name}} entsperrt"

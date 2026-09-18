@@ -3,6 +3,8 @@ import {
   findClientById,
   updateClientLastUsed
 } from '../utils/oauthClientManager.js';
+import { buildPolicyCimdClient } from '../utils/oauthClientResolver.js';
+import { isClientIdUrl } from '../utils/clientIdMetadata.js';
 import { isPersonalKeyExpired, isPersonalKeysEnabled } from '../utils/personalApiKeyManager.js';
 import { isCurrentKeyGeneration } from '../utils/oauthTokenService.js';
 import { loadUsers, isUserActive, equalsIgnoreCase } from '../utils/userManager.js';
@@ -60,8 +62,15 @@ export default function jwtAuthMiddleware(req, res, next) {
       if (oauthConfig.enabled?.clients) {
         try {
           const clientsFilePath = oauthConfig.clientsFile || 'contents/config/oauth-clients.json';
-          const clientsConfig = loadOAuthClients(clientsFilePath);
-          if (clientsConfig.clients[peeked.payload.aud]) {
+          // A client identified by a metadata document has a policy record in
+          // the same store, so bare store presence would accept its audience
+          // while skipping the four conditions that are not `record.active`.
+          // Ask the resolver instead: it returns null unless CIMD is on, the
+          // host is allowed and not blocked, and the client is approved.
+          const audienceIsKnown = isClientIdUrl(peeked.payload.aud)
+            ? buildPolicyCimdClient(peeked.payload.aud, platform) !== null
+            : !!loadOAuthClients(clientsFilePath).clients[peeked.payload.aud];
+          if (audienceIsKnown) {
             decoded = verifyJwt(token, { audience: peeked.payload.aud });
           }
         } catch {
@@ -396,7 +405,16 @@ export default function jwtAuthMiddleware(req, res, next) {
                 });
               }
 
-              const client = findClientById(clientsConfig, decoded.client_id);
+              // Same split as the gateway (`mcpAuth`): a metadata-document
+              // client's policy is the *layered* result of its record over
+              // `platform.oauth.cimd`, and it is refused outright when CIMD is
+              // off, its host is blocked or dropped, or its approval has not
+              // been given. Reading the raw record with `findClientById` would
+              // enforce only `active` and silently drop the platform-wide
+              // allowedApps/Models/Prompts narrowing.
+              const client = isClientIdUrl(decoded.client_id)
+                ? buildPolicyCimdClient(decoded.client_id, platform)
+                : findClientById(clientsConfig, decoded.client_id);
 
               if (!client) {
                 logger.warn('OAuth auth-code token rejected: client no longer exists', {

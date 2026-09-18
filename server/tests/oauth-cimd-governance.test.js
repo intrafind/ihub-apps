@@ -32,7 +32,8 @@ const state = {
   platform: {},
   responses: new Map(),
   fetchCalls: [],
-  token: null
+  token: null,
+  jwt: null
 };
 
 // The clients file lives outside `contents/` on purpose: `locateConfigFile`
@@ -116,6 +117,24 @@ jest.unstable_mockModule('../utils/oauthTokenService.js', () => ({
   validateModelAccess: () => true
 }));
 
+// The REST suite drives the real `jwtAuth`, which verifies the bearer token
+// through `tokenService`. The stub keeps the one behaviour the test turns on:
+// a token is accepted only when the caller asks for the audience it carries,
+// which is exactly the check `jwtAuth` has to get right for a CIMD client.
+jest.unstable_mockModule('../utils/tokenService.js', () => ({
+  verifyJwt: (token, options = {}) => {
+    if (!state.jwt) return null;
+    const expected = options.audience !== undefined ? options.audience : 'ihub-apps';
+    return state.jwt.aud === expected ? state.jwt : null;
+  },
+  decodeJwt: () => (state.jwt ? { payload: state.jwt } : null),
+  generateJwt: () => ({ token: 'stub-token', expiresIn: 3600 }),
+  getJwtAlgorithm: () => 'HS256',
+  getJwtSigningKey: () => 'stub',
+  getJwtVerificationKey: () => 'stub',
+  resolveJwtSecret: () => 'stub'
+}));
+
 const { clearClientMetadataCache, isHostBlocked } = await import('../utils/clientIdMetadata.js');
 const { buildPolicyCimdClient, resolveOAuthClient, getCimdConfig } =
   await import('../utils/oauthClientResolver.js');
@@ -142,6 +161,7 @@ const { default: registerAdminOAuthCimdRoutes } =
   await import('../routes/admin/oauthCimdClients.js');
 const { default: registerOAuthAuthorizeRoutes } = await import('../routes/oauthAuthorize.js');
 const { default: mcpAuth } = await import('../middleware/mcpAuth.js');
+const { default: jwtAuth } = await import('../middleware/jwtAuth.js');
 
 const CODE_URL = 'https://claude.ai/oauth/claude-code-client-metadata';
 const WEB_URL = 'https://claude.ai/oauth/claude-web-client-metadata';
@@ -207,6 +227,7 @@ beforeEach(async () => {
   state.responses.clear();
   state.fetchCalls = [];
   state.token = null;
+  state.jwt = null;
   setPlatform();
   await resetClientStore();
   await resetStores();
@@ -377,6 +398,53 @@ describe('the admin API', () => {
 
     expect(res.status).toBe(200);
     expect(buildPolicyCimdClient(CODE_URL, state.platform).allowedApps).toEqual(['chat', 'search']);
+  });
+
+  test('a pending client is not reported as blocked', async () => {
+    // A pending record carries `active: false` so nothing can connect through
+    // it, but the row must not offer "Unblock" for a client nobody blocked.
+    setPlatform({ approvalMode: 'approval' });
+    await recordCimdDiscovery({
+      clientId: CODE_URL,
+      platform: state.platform,
+      clientName: 'Claude Code'
+    });
+
+    const [row] = listCimdClientRows(state.platform);
+    expect(row.approvalState).toBe('pending');
+    expect(row.blocked).toBe(false);
+    expect(row.active).toBe(false);
+  });
+
+  test('a pending client an administrator also blocked still reads as blocked', async () => {
+    setPlatform({ approvalMode: 'approval' });
+    await recordCimdDiscovery({ clientId: CODE_URL, platform: state.platform });
+
+    const res = await request(buildApp())
+      .put(`/api/admin/oauth/clients/cimd/${encode(CODE_URL)}`)
+      .send({ active: false });
+
+    expect(res.status).toBe(200);
+    const [row] = listCimdClientRows(state.platform);
+    expect(row.approvalState).toBe('pending');
+    expect(row.blocked).toBe(true);
+  });
+
+  test('unblocking clears the block stamp, so the row stops reading as blocked', async () => {
+    await upsertCimdClientPolicy(
+      CODE_URL,
+      { active: false, metadata: { blockedBy: 'admin', blockedAt: '2026-01-01T00:00:00.000Z' } },
+      CLIENTS_FILE,
+      'admin'
+    );
+
+    await request(buildApp())
+      .put(`/api/admin/oauth/clients/cimd/${encode(CODE_URL)}`)
+      .send({ active: true });
+
+    const [row] = listCimdClientRows(state.platform);
+    expect(row.blocked).toBe(false);
+    expect(row.blockedAt).toBeFalsy();
   });
 
   test('lists a client people are connected through even with no record', async () => {
@@ -659,5 +727,86 @@ describe('the gateway', () => {
 
     expect(res.status).toBe(403);
     expect(res.body.error).toBe('access_denied');
+  });
+});
+
+describe('the REST surface (jwtAuth)', () => {
+  // Creating a policy record for a CIMD client makes its `client_id` resolve in
+  // the OAuth client store, which is what lets `jwtAuth` trust the audience on
+  // a delegated token. Everything the gateway checks has to be checked here
+  // too, or `/api/*` becomes the way round the gate.
+  function buildApp() {
+    const app = express();
+    app.get('/api/apps', jwtAuth, (req, res) =>
+      res.json({
+        user: req.user?.id || 'anonymous',
+        clientAllowedApps: req.user?.clientAllowedApps ?? null
+      })
+    );
+    return app;
+  }
+
+  const call = () => request(buildApp()).get('/api/apps').set('Authorization', 'Bearer test-token');
+
+  beforeEach(async () => {
+    setPlatform({ allowedApps: ['chat'] });
+    state.jwt = {
+      sub: 'alice',
+      username: 'alice',
+      groups: ['users'],
+      client_id: CODE_URL,
+      aud: CODE_URL,
+      authMode: 'oauth_authorization_code',
+      scopes: ['mcp:tools:call']
+    };
+    await upsertCimdClientPolicy(
+      CODE_URL,
+      { approvalState: 'approved', active: true },
+      CLIENTS_FILE,
+      'admin'
+    );
+  });
+
+  test('applies the layered platform policy, not the raw record', async () => {
+    const res = await call();
+
+    expect(res.status).toBe(200);
+    expect(res.body.user).toBe('alice');
+    // The record sets no allowedApps, so the client inherits the platform's
+    // list. Reading the record directly would hand back [] — unrestricted.
+    expect(res.body.clientAllowedApps).toEqual(['chat']);
+  });
+
+  test('refuses once the client is blocked', async () => {
+    await upsertCimdClientPolicy(CODE_URL, { active: false }, CLIENTS_FILE, 'admin');
+
+    const res = await call();
+
+    expect(res.body.user).not.toBe('alice');
+  });
+
+  test('refuses once CIMD is switched off', async () => {
+    setPlatform({ allowedApps: ['chat'], enabled: false });
+
+    const res = await call();
+
+    expect(res.body.user).not.toBe('alice');
+  });
+
+  test('refuses once the client host is blocked', async () => {
+    setPlatform({ allowedApps: ['chat'], blocked: ['claude.ai'] });
+
+    const res = await call();
+
+    expect(res.body.user).not.toBe('alice');
+  });
+
+  test('refuses a client that has not been approved', async () => {
+    setPlatform({ allowedApps: ['chat'], approvalMode: 'approval' });
+    await resetClientStore();
+
+    const res = await call();
+
+    expect(res.body.user).not.toBe('alice');
   });
 });

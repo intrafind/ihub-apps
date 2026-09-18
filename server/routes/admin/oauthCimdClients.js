@@ -282,6 +282,13 @@ export default function registerAdminOAuthCimdRoutes(app) {
         if (patch.active === false) {
           metadata.blockedBy = savedBy;
           metadata.blockedAt = new Date().toISOString();
+        } else if (patch.active === true) {
+          // Cleared on unblock, so `blockedAt` always answers "is this client
+          // blocked right now" rather than "was it ever blocked" — which is
+          // what tells a blocked-and-pending row apart from a merely pending
+          // one.
+          metadata.blockedBy = '';
+          metadata.blockedAt = null;
         }
         if (!before?.metadata?.firstSeenAt) {
           metadata.firstSeenAt = existingRow?.firstSeenAt || new Date().toISOString();

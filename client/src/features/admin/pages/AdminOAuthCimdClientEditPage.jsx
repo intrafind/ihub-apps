@@ -163,7 +163,7 @@ function AdminOAuthCimdClientEditPage() {
           placeholder={placeholder}
           emptyMessage={t(
             'admin.auth.oauth.cimd.noneSelected',
-            'Nothing selected — this client gets none of them'
+            'Nothing selected — no restriction from this client; the user keeps everything their groups allow. Add entries to narrow it down.'
           )}
           allowWildcard={true}
         />
@@ -358,7 +358,7 @@ function AdminOAuthCimdClientEditPage() {
             t('admin.auth.oauth.cimd.scopes', 'Grantable scopes'),
             t(
               'admin.auth.oauth.cimd.scopesHelp',
-              'Comma-separated OAuth scopes this client may be granted. Narrowing them also narrows connections that already exist, at their next token refresh.'
+              'Comma-separated OAuth scopes this client may be granted. Narrowing them also narrows connections that already exist, at their next token refresh. An empty list is no restriction at all — wider than the inherited default.'
             ),
             'openid, mcp:tools:read'
           )}

@@ -351,10 +351,15 @@ should have to be approved.
 
 ##### When a policy change takes effect
 
+These conditions are enforced on the MCP gateway, on the authorization and
+token endpoints, and on the REST API (`/api/*`) — a delegated token issued to a
+metadata-document client is resolved through the same policy everywhere, so
+there is no surface on which a blocked or unapproved client keeps working.
+
 | Change | Takes effect |
 |--------|--------------|
-| Client blocked or deleted, CIMD disabled, host removed or blocked, approval withdrawn | Next `/mcp` request — at most one access-token lifetime |
-| `allowedGroups`, `allowedApps`, `allowedModels`, `allowedPrompts` narrowed | Next `/mcp` request — at most one access-token lifetime |
+| Client blocked or deleted, CIMD disabled, host removed or blocked, approval withdrawn | Next `/mcp` or `/api/*` request — at most one access-token lifetime |
+| `allowedGroups`, `allowedApps`, `allowedModels`, `allowedPrompts` narrowed | Next `/mcp` or `/api/*` request — at most one access-token lifetime |
 | Grantable `scopes` narrowed | Next token refresh; the dropped scopes are not re-issued |
 | An administrator revokes a connection | Next refresh; an access token already issued lives out its lifetime |
 | A **local** user leaves a group | Next refresh — the group snapshot is re-read from the user store |

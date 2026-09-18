@@ -64,7 +64,16 @@ function toRow({ clientId, record, seen, cimdConfig, connectionCount }) {
     // about yet.
     hasRecord: !!record,
     approvalState: record?.approvalState || null,
-    blocked: record?.active === false,
+    // A pending record carries `active: false` so that nothing can connect
+    // through it while it waits, but that is not a block and must not be shown
+    // as one: the row would offer "Unblock" for a client no administrator ever
+    // blocked, and clicking it would report success while the client stayed
+    // refused by the approval gate. `blockedAt` is what an actual block leaves
+    // behind, so a client that is both pending and blocked still reads as
+    // blocked.
+    blocked:
+      record?.active === false &&
+      (record?.approvalState !== 'pending' || !!record?.metadata?.blockedAt),
     active: activation.active,
     inactiveCode: activation.code || null,
     approvedBy: record?.metadata?.approvedBy || '',
