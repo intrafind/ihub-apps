@@ -34,6 +34,7 @@ const AdminUpdatesPage = lazyWithRetry(() => import('./features/admin/pages/Admi
 const AdminAdvancedPage = lazyWithRetry(() => import('./features/admin/pages/AdminAdvancedPage'));
 // Lazy load admin components
 const AdminUsageReports = lazyWithRetry(() => import('./features/admin/pages/AdminUsageReports'));
+const AdminFeedbackPage = lazyWithRetry(() => import('./features/admin/pages/AdminFeedbackPage'));
 const AdminAppsPage = lazyWithRetry(() => import('./features/admin/pages/AdminAppsPage'));
 const AdminAppEditPage = lazyWithRetry(() => import('./features/admin/pages/AdminAppEditPage'));
 const AdminShortLinks = lazyWithRetry(() => import('./features/admin/pages/AdminShortLinks'));
@@ -703,6 +704,9 @@ function App() {
             {/* Observability */}
             {showAdminPage('usage') && (
               <Route path="usage" element={<LazyAdminRoute component={AdminUsageReports} />} />
+            )}
+            {showAdminPage('feedback') && (
+              <Route path="feedback" element={<LazyAdminRoute component={AdminFeedbackPage} />} />
             )}
             {showAdminPage('logging') && (
               <Route path="logging" element={<LazyAdminRoute component={AdminLoggingPage} />} />

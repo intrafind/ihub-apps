@@ -56,3 +56,28 @@ product to confirm the change had landed.
   `["localhost", ".local"]`.
 
 Changes take effect immediately — no restart.
+
+## Feedback: one admin page, and a switch to turn it off
+
+Response feedback — the star rating under every AI answer — is now something you configure and
+review in one place, **Admin → Feedback**, and something you can switch off.
+
+- **Settings** holds the whole feature: collection on or off platform-wide, a per-app list that
+  takes single apps out, whether submitted feedback is stored (`feedbackTracking`) and how the
+  person who gave it is recorded (`usageTrackingMode`, shared with usage tracking). What each
+  switch does, and where it stops, is written next to it.
+- **Feedback** holds the review that used to sit under Usage Reports → Feedback: the rating
+  distribution, the breakdowns per user, app and model, and the individual entries with their
+  comments. Usage Reports keeps its average-rating tile, which now links here.
+- Switching collection off hides the rating and the comment dialog in every chat surface — main
+  chat, compare mode, canvas and the Office add-in — and makes `POST /api/feedback` answer
+  `403 FEATURE_DISABLED`, so it cannot be submitted by calling the API either.
+- A single app opts out with **Response Feedback** in the app editor, the per-app list on the new
+  page, or `"features": { "feedback": false }` in its configuration. The platform switch still has
+  the last word.
+- The same platform switch also appears under **Admin → Features → Content**; both read and write
+  one stored value.
+
+Everything defaults to enabled, and feedback submitted earlier stays readable whatever the switches
+say. Storing feedback (`feedbackTracking`) stays independent of showing the rating — turning one off
+does not turn the other off.

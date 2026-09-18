@@ -34,6 +34,7 @@ The feedback feature allows users to rate AI-generated responses and provide opt
 - **Privacy-Preserving**: Supports anonymous, pseudonymous, and identified tracking modes
 - **Dual Storage**: Feedback stored both locally (JSONL format) and in usage tracking system
 - **Usage Analytics**: Integrated with the usage tracking dashboard
+- **Switchable**: Collection can be turned off platform-wide or for individual apps
 
 ## How Feedback Works
 
@@ -188,6 +189,53 @@ Feedback aggregates are also stored in `contents/data/usage.json`:
 
 ## Configuration
 
+Everything below is reachable in one place: **Admin → Feedback → Settings**. The page writes the
+same stored values described here, so hand-edited configuration and the admin UI never disagree.
+
+### Turn Feedback Collection On or Off (Platform-Wide)
+
+`feedback` is a platform feature flag (**Admin → Feedback → Settings**, or **Admin → Features →
+Content** — one and the same switch), stored in `contents/config/features.json`:
+
+```json
+{
+  "feedback": true
+}
+```
+
+**Default**: `true` (enabled). An installation with no saved value collects feedback.
+
+**When disabled**:
+- The star rating and the feedback modal are hidden under every AI response, in every chat surface
+  (main chat, compare mode, canvas, Office add-in)
+- `POST /api/feedback` answers `403 { "error": "...", "code": "FEATURE_DISABLED" }`, so submission
+  cannot be triggered by calling the API directly either
+- Feedback submitted earlier stays readable in **Admin → Feedback → Feedback**
+
+Re-enabling takes effect immediately — no restart.
+
+### Turn Feedback Off for a Single App
+
+Individual apps opt out with `features.feedback` in their own configuration
+(`contents/apps/<id>.json`), or with the **Response Feedback** switch in the app editor and the
+per-app list in **Admin → Feedback → Settings**:
+
+```json
+{
+  "id": "compliance-assistant",
+  "features": {
+    "feedback": false
+  }
+}
+```
+
+**Default**: absent, which means enabled. Only an explicit `false` opts the app out; switching the
+app back on removes the key again.
+
+Both levels have to allow feedback for the rating to appear: an app cannot switch it on while the
+platform flag is off, and the server applies the same rule — `POST /api/feedback` for an app that
+opted out answers `403 FEATURE_DISABLED`, whatever the client shows.
+
 ### Enable/Disable Feedback Tracking
 
 Configure in `contents/config/platform.json`:
@@ -207,6 +255,10 @@ Configure in `contents/config/platform.json`:
 - No data is written to `feedback.jsonl`
 - Usage statistics are not updated
 - iAssistant feedback still routes to iFinder (if configured)
+
+This is persistence, not visibility: the rating stays on screen and submissions are still accepted,
+they are simply not kept. To take the rating away, use the `feedback` flag (or the per-app switch)
+above. The two are independent and stay that way.
 
 ### Usage Tracking Mode
 
@@ -463,19 +515,24 @@ grep "user@company.com" contents/data/feedback.jsonl > user_feedback.json
 
 ### Admin Dashboard
 
-**Location**: Admin Panel → Usage Reports → Feedback Tab
+**Location**: Admin Panel → Feedback
 
-**Features**:
-- **Overview**: Total feedback count, average rating, distribution chart
-- **Filters**: By app, model, user, date range
-- **Visualization**: Star rating distribution histogram
-- **Details**: Individual feedback entries with comments
-- **Export**: Download as CSV or JSON
+The page has two tabs:
+
+- **Settings** — collection on/off (platform-wide and per app), storage (`feedbackTracking`) and the
+  identification mode (`usageTrackingMode`)
+- **Feedback** — the review: total count, average rating, the star distribution, the breakdowns per
+  user, app and model, and the individual entries with their comments
+
+Already-submitted feedback stays readable here no matter how the switches stand.
 
 **Access Requirements**:
 - User must have `adminAccess: true` in group permissions
-- Navigate to `/admin/usage-reports`
-- Select "Feedback" tab
+- Navigate to `/admin/feedback`
+
+The page can be hidden like any other admin page, with `admin.pages.feedback: false` in
+`contents/config/ui.json`. **Admin → Usage Reports** keeps the average-rating tile, which links
+here.
 
 ### File System Access
 
@@ -685,6 +742,14 @@ Required: User must be authenticated (anonymous users rejected)
 ```json
 {
   "error": "Authentication required"
+}
+```
+
+**Error (403 Forbidden)** — feedback is off platform-wide or for this app:
+```json
+{
+  "error": "Feature 'feedback' is not enabled",
+  "code": "FEATURE_DISABLED"
 }
 ```
 

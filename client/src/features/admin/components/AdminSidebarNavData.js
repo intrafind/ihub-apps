@@ -24,7 +24,8 @@ import {
   ExclamationTriangleIcon,
   ClipboardDocumentCheckIcon,
   NewspaperIcon,
-  MicrophoneIcon
+  MicrophoneIcon,
+  StarIcon
 } from '@heroicons/react/24/outline';
 
 /**
@@ -253,6 +254,13 @@ export function getAdminNavSections({ t, showAdminPage, featureFlags }) {
           href: '/admin/usage',
           icon: ChartBarIcon,
           visible: showAdminPage('usage')
+        },
+        {
+          key: 'feedback',
+          label: t('admin.nav.feedback', 'Feedback'),
+          href: '/admin/feedback',
+          icon: StarIcon,
+          visible: showAdminPage('feedback')
         },
         {
           key: 'logging',

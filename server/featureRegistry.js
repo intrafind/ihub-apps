@@ -131,6 +131,16 @@ export const featureRegistry = [
     default: true
   },
   {
+    id: 'feedback',
+    name: { en: 'Response Feedback', de: 'Antwort-Feedback' },
+    description: {
+      en: 'Let users rate AI responses with stars and an optional comment. Individual apps can opt out with `features.feedback: false`; storing what was submitted is controlled separately by Feedback Tracking',
+      de: 'Benutzer KI-Antworten mit Sternen und einem optionalen Kommentar bewerten lassen. Einzelne Apps können sich mit `features.feedback: false` abmelden; die Speicherung des Eingereichten steuert separat das Feedback-Tracking'
+    },
+    category: 'content',
+    default: true
+  },
+  {
     id: 'export',
     name: { en: 'Export', de: 'Export' },
     description: {

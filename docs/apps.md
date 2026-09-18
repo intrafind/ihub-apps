@@ -685,6 +685,7 @@ When a setting is disabled (`false`), the corresponding UI element will be hidde
 - `imageUpload` – allow users to attach images (see [Image Upload Feature](image-upload-feature.md))
 - `fileUpload` – allow users to upload text or PDF files (see [File Upload Feature](file-upload-feature.md))
 - `compareMode` – enable side-by-side comparison of two different models (see [Compare Mode](compare-mode.md))
+- `feedback` – set to `false` to hide the star rating under this app's responses and reject feedback submissions for it (see [Feedback Feature](feedback-feature.md))
 
 #### Input Mode
 

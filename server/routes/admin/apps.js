@@ -798,6 +798,107 @@ export default function registerAdminAppsRoutes(app) {
 
   /**
    * @swagger
+   * /api/admin/apps/{appId}/features/feedback:
+   *   post:
+   *     summary: Enable or disable response feedback for one app
+   *     description: |
+   *       Sets `features.feedback` on the app's own configuration file. Passing
+   *       `enabled: true` removes the key again, so the app follows the
+   *       platform-wide `feedback` feature flag (the default). The platform flag
+   *       still has the last word: an app cannot switch feedback on while it is
+   *       off platform-wide.
+   *     tags:
+   *       - Admin
+   *       - Applications
+   *     security:
+   *       - adminAuth: []
+   *     parameters:
+   *       - in: path
+   *         name: appId
+   *         required: true
+   *         schema:
+   *           type: string
+   *     requestBody:
+   *       required: true
+   *       content:
+   *         application/json:
+   *           schema:
+   *             type: object
+   *             required:
+   *               - enabled
+   *             properties:
+   *               enabled:
+   *                 type: boolean
+   *     responses:
+   *       200:
+   *         description: Setting applied
+   *       400:
+   *         description: "`enabled` missing or not a boolean"
+   *       404:
+   *         description: Application not found
+   *       500:
+   *         description: Internal server error
+   */
+  app.post(
+    buildServerPath('/api/admin/apps/:appId/features/feedback'),
+    contentAdminAuth,
+    async (req, res) => {
+      try {
+        const { appId } = req.params;
+        const { enabled } = req.body || {};
+
+        if (!validateIdForPath(appId, 'app', res)) {
+          return;
+        }
+        if (typeof enabled !== 'boolean') {
+          return sendBadRequest(res, 'Field "enabled" must be a boolean');
+        }
+
+        const { data: apps } = configCache.getApps(true);
+        const appConfig = apps.find(a => a.id === appId);
+        if (!appConfig) {
+          return sendNotFound(res, 'App');
+        }
+
+        const features = { ...(appConfig.features || {}) };
+        if (enabled) {
+          // Absent means "follow the platform flag" — the default state, so an
+          // app that is switched back on carries no override at all.
+          delete features.feedback;
+        } else {
+          features.feedback = false;
+        }
+        const updatedApp = { ...appConfig, features };
+        if (Object.keys(features).length === 0) delete updatedApp.features;
+
+        const appFilePath = await configStore.resolveIdToPath('apps', appId, {
+          createIfMissing: false
+        });
+        if (!appFilePath) {
+          return sendNotFound(res, 'App file');
+        }
+        await configStore.writeJson(appFilePath, updatedApp);
+        await configCache.refreshAppsCache();
+        await logAudit({
+          req,
+          action: 'update',
+          resource: 'app',
+          resourceId: appId,
+          summary: `${enabled ? 'Enabled' : 'Disabled'} response feedback for app ${appId}`
+        });
+        res.json({
+          message: `Feedback ${enabled ? 'enabled' : 'disabled'} for app ${appId}`,
+          appId,
+          enabled
+        });
+      } catch (error) {
+        return sendInternalError(res, error, 'update app feedback setting');
+      }
+    }
+  );
+
+  /**
+   * @swagger
    * /api/admin/apps/_reorder:
    *   post:
    *     summary: Set the display order of applications
