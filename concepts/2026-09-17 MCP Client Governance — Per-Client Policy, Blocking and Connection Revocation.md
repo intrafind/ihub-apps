@@ -196,10 +196,10 @@ kill switch rather than a gate that only new connections pass.
 
 New `oauth.cimd.approvalMode`:
 
-- **`auto`** (default — today's behaviour): a client from an allowed, non-blocked host
+- **`auto`** (default): a client from an allowed, non-blocked host
   connects immediately. The first successful authorization writes a discovery record
   (`approvalState: 'auto'`, `firstSeenAt`, `firstUserId`) so the client becomes a real,
-  editable row instead of a synthetic one.
+  editable row instead of a synthetic one. An unknown is blocked.
 - **`approval`**: the first authorization writes the record with
   `approvalState: 'pending'`, `active: false`, and refuses with a "waiting for administrator
   approval" page. An admin approves on the Clients page; nothing else changes.
