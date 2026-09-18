@@ -93,12 +93,19 @@ export async function scanMigrationFiles(migrationsDir) {
  */
 const RENAMED_MIGRATIONS = [
   {
-    // Written as V112 while the CIMD governance migrations took V112/V113 on
-    // main in parallel.
+    // The staan provider was renumbered twice while its branch was open: the
+    // CIMD governance migrations took V112/V113 and the proxy-defaults fix took
+    // V114, both on main in parallel. Either old number reconciles to V116.
     oldVersion: '112',
     oldFile: 'V112__add_staan_websearch_provider.js',
-    newVersion: '114',
-    newFile: 'V114__add_staan_websearch_provider.js'
+    newVersion: '116',
+    newFile: 'V116__add_staan_websearch_provider.js'
+  },
+  {
+    oldVersion: '114',
+    oldFile: 'V114__add_staan_websearch_provider.js',
+    newVersion: '116',
+    newFile: 'V116__add_staan_websearch_provider.js'
   },
   {
     oldVersion: '018',

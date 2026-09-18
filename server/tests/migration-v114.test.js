@@ -1,16 +1,13 @@
 #!/usr/bin/env node
 
 /**
- * Migration V114 specs — the Staan provider reaches existing installs.
+ * Migration V114 specs — removing the no-op proxy block V110 seeded.
  *
- * providers.json is an existing file, so a new entry has to be merged into it;
- * `tools/staanSearch.json` is not this migration's job, because
- * `copyDefaultConfiguration()` backfills files missing from `contents/` on every
- * boot. What is left to get right is the merge: it must not disturb the
- * providers already there, and it must not overwrite an admin who has since
- * edited, disabled or keyed the entry — a migration is written once and then
- * runs on every install, not just a pristine one. Re-adding the default entry
- * over a configured one would wipe a working API key.
+ * The point of the migration is that it only removes a block that means
+ * nothing. Everything an operator could have decided has to survive it: an
+ * explicit `enabled: false` (the only way to refuse a proxy set through
+ * HTTP_PROXY in the environment), a configured URL, a bypass entry in either
+ * accepted shape, a URL pattern, and any key this migration has never heard of.
  */
 import fs from 'node:fs/promises';
 import os from 'node:os';
@@ -22,8 +19,9 @@ import {
   up,
   precondition,
   version,
-  description
-} from '../migrations/V114__add_staan_websearch_provider.js';
+  description,
+  isSeededNoOpProxyBlock
+} from '../migrations/V114__drop_seeded_proxy_defaults.js';
 
 let baseDir;
 
@@ -51,35 +49,19 @@ function makeCtx(dir) {
   };
 }
 
-const BRAVE = {
-  id: 'brave',
-  name: { en: 'Brave Search' },
-  enabled: true,
-  category: 'websearch'
-};
-
-const QWANT = {
-  id: 'qwant',
-  name: { en: 'Qwant Search' },
-  enabled: true,
-  category: 'websearch',
-  requiresApiKey: false
-};
-
-async function seed(dir, providers) {
+async function seed(dir, platform) {
   await fs.mkdir(path.join(dir, 'config'), { recursive: true });
   await fs.writeFile(
-    path.join(dir, 'config/providers.json'),
-    JSON.stringify(providers, null, 2),
+    path.join(dir, 'config/platform.json'),
+    JSON.stringify(platform, null, 2),
     'utf8'
   );
 }
 
-async function scratch(name) {
-  return fs.mkdtemp(path.join(baseDir, `${name}-`));
-}
+/** Exactly what V110 writes into a platform.json that had no proxy block. */
+const V110_SEED = { enabled: true, http: '', https: '', noProxy: '', urlPatterns: [] };
 
-describe('V114 — Staan web search provider', () => {
+describe('V114 — drop the seeded proxy defaults', () => {
   before(async () => {
     baseDir = await fs.mkdtemp(path.join(os.tmpdir(), 'ihub-v114-'));
   });
@@ -89,87 +71,116 @@ describe('V114 — Staan web search provider', () => {
 
   it('declares its version and description', () => {
     assert.equal(version, '114');
-    assert.equal(description, 'Add the Staan (staan.ai) web search provider');
+    assert.equal(description, 'Remove the no-op proxy block seeded by V110');
   });
 
-  it('skips when there is no providers.json', async () => {
-    const dir = await scratch('nofile');
+  it('skips when there is no platform.json', async () => {
+    const dir = await fs.mkdtemp(path.join(baseDir, 'nofile-'));
     assert.equal(await precondition(makeCtx(dir)), false);
   });
 
-  it('runs when providers.json exists', async () => {
-    const dir = await scratch('hasfile');
-    await seed(dir, { providers: [BRAVE] });
-    assert.equal(await precondition(makeCtx(dir)), true);
-  });
-
-  it('adds the staan provider next to the existing ones', async () => {
-    const dir = await scratch('add');
-    await seed(dir, { providers: [BRAVE, QWANT] });
+  it('removes the block V110 seeded, so a fresh install has no proxy config', async () => {
+    const dir = await fs.mkdtemp(path.join(baseDir, 'seeded-'));
+    await seed(dir, { auth: { mode: 'local' }, proxy: { ...V110_SEED } });
     const ctx = makeCtx(dir);
     await up(ctx);
 
-    const config = await ctx.readJson('config/providers.json');
-    const staan = config.providers.find(p => p.id === 'staan');
-
-    assert.ok(staan, 'staan provider was not added');
-    assert.equal(staan.category, 'websearch');
-    assert.equal(staan.enabled, true);
-    // Staan is keyed, so the admin page must offer an API key field — which it
-    // does for any provider that does not opt out with requiresApiKey: false.
-    assert.equal(staan.requiresApiKey, undefined);
-    // Existing providers are untouched.
-    assert.deepEqual(
-      config.providers.find(p => p.id === 'brave'),
-      BRAVE
-    );
-    assert.deepEqual(
-      config.providers.find(p => p.id === 'qwant'),
-      QWANT
-    );
+    const platform = await ctx.readJson('config/platform.json');
+    assert.equal('proxy' in platform, false, 'the seeded block is gone');
+    assert.deepEqual(platform.auth, { mode: 'local' }, 'the rest of the file is untouched');
   });
 
-  it('is idempotent and never overwrites an admin-customised entry', async () => {
-    const dir = await scratch('idempotent');
-    await seed(dir, { providers: [BRAVE] });
+  it('removes an empty block whatever shape the blank fields take', async () => {
+    const variants = [
+      {},
+      { enabled: true },
+      { http: '', https: '  ' },
+      { noProxy: [] },
+      { noProxy: ['', '  '] },
+      { urlPatterns: [] },
+      { enabled: true, http: '', https: '', noProxy: [], urlPatterns: [] }
+    ];
+    for (const proxy of variants) {
+      const dir = await fs.mkdtemp(path.join(baseDir, 'blank-'));
+      await seed(dir, { proxy });
+      const ctx = makeCtx(dir);
+      await up(ctx);
+      const platform = await ctx.readJson('config/platform.json');
+      assert.equal(
+        'proxy' in platform,
+        false,
+        `expected ${JSON.stringify(proxy)} to be removed as a no-op`
+      );
+    }
+  });
+
+  it('keeps an explicit enabled:false — it is the only way to refuse HTTP_PROXY', async () => {
+    const dir = await fs.mkdtemp(path.join(baseDir, 'disabled-'));
+    await seed(dir, { proxy: { ...V110_SEED, enabled: false } });
     const ctx = makeCtx(dir);
     await up(ctx);
 
-    // Simulate an admin entering a key and disabling Staan, then the migration
-    // re-running. Re-adding the default entry here would wipe the key.
-    const config = await ctx.readJson('config/providers.json');
-    const staan = config.providers.find(p => p.id === 'staan');
-    staan.enabled = false;
-    staan.apiKey = 'encrypted:secret';
-    await ctx.writeJson('config/providers.json', config);
-
-    await up(ctx);
-
-    const reread = await ctx.readJson('config/providers.json');
-    const after = reread.providers.filter(p => p.id === 'staan');
-    assert.equal(after.length, 1);
-    assert.equal(after[0].enabled, false);
-    assert.equal(after[0].apiKey, 'encrypted:secret');
+    const platform = await ctx.readJson('config/platform.json');
+    assert.equal(platform.proxy.enabled, false);
   });
 
-  it('warns instead of throwing when providers.json has no providers array', async () => {
-    const dir = await scratch('malformed');
-    await seed(dir, { notProviders: true });
+  it('keeps a block an operator configured', async () => {
+    const configured = [
+      { ...V110_SEED, https: 'http://proxy.example.com:8080' },
+      { ...V110_SEED, http: 'http://proxy.example.com:8080' },
+      { ...V110_SEED, https: '${HTTPS_PROXY}' },
+      { ...V110_SEED, noProxy: 'localhost,.local' },
+      { ...V110_SEED, noProxy: ['localhost'] },
+      { ...V110_SEED, urlPatterns: ['api\\.openai\\.com'] }
+    ];
+    for (const proxy of configured) {
+      const dir = await fs.mkdtemp(path.join(baseDir, 'configured-'));
+      await seed(dir, { proxy });
+      const ctx = makeCtx(dir);
+      await up(ctx);
+      const platform = await ctx.readJson('config/platform.json');
+      assert.deepEqual(
+        platform.proxy,
+        proxy,
+        `expected ${JSON.stringify(proxy)} to survive untouched`
+      );
+    }
+  });
+
+  it('keeps a block carrying a key it does not know about', async () => {
+    const dir = await fs.mkdtemp(path.join(baseDir, 'unknown-key-'));
+    const proxy = { ...V110_SEED, futureSetting: 'something' };
+    await seed(dir, { proxy });
     const ctx = makeCtx(dir);
     await up(ctx);
 
-    assert.ok(ctx.logs.some(([level]) => level === 'warn'));
+    assert.deepEqual((await ctx.readJson('config/platform.json')).proxy, proxy);
   });
 
-  it('leaves the tool definition to the defaults copy, not to this migration', async () => {
-    // copyDefaultConfiguration() backfills any file missing from contents/ out
-    // of server/defaults/ on every boot, so writing tools/staanSearch.json here
-    // would only duplicate a definition that then drifts from the default.
-    const dir = await scratch('notool');
-    await seed(dir, { providers: [BRAVE] });
+  it('leaves a platform.json that never had a proxy block alone', async () => {
+    const dir = await fs.mkdtemp(path.join(baseDir, 'no-proxy-'));
+    await seed(dir, { auth: { mode: 'local' } });
     const ctx = makeCtx(dir);
     await up(ctx);
 
-    assert.equal(await ctx.fileExists('tools/staanSearch.json'), false);
+    const platform = await ctx.readJson('config/platform.json');
+    assert.deepEqual(platform, { auth: { mode: 'local' } });
+    assert.ok(ctx.logs.some(([, message]) => /nothing to remove/.test(message)));
+  });
+
+  it('is idempotent', async () => {
+    const dir = await fs.mkdtemp(path.join(baseDir, 'twice-'));
+    await seed(dir, { proxy: { ...V110_SEED } });
+    const ctx = makeCtx(dir);
+    await up(ctx);
+    const first = await ctx.readJson('config/platform.json');
+    await up(ctx);
+    assert.deepEqual(await ctx.readJson('config/platform.json'), first);
+  });
+
+  it('never mistakes a non-object for a seeded block', () => {
+    for (const value of [null, undefined, 'proxy', 42, [], [{ enabled: true }]]) {
+      assert.equal(isSeededNoOpProxyBlock(value), false, `${JSON.stringify(value)} is not a block`);
+    }
   });
 });
