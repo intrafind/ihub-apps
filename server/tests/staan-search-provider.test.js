@@ -521,6 +521,60 @@ describe('StaanSearchProvider', () => {
     assert.equal(results.length, 10);
   });
 
+  it('does not cache a short answer produced by a failed page', async () => {
+    // Returning a partial answer is right; remembering it is not. Caching here
+    // would freeze one transient upstream blip into every caller's results for
+    // the whole TTL, and the provider would never retry within that window.
+    const { provider, fetchImpl } = makeProvider([
+      jsonResponse(webPayload(fakeResults(10, 'a'))),
+      jsonResponse({ message: 'boom', statusCode: 500 }, { status: 500 }),
+      jsonResponse(webPayload(fakeResults(10, 'a'))),
+      jsonResponse(webPayload(fakeResults(10, 'b')))
+    ]);
+
+    const first = await provider.search('test', { count: 20 });
+    assert.equal(first.results.length, 10);
+    const callsAfterFirst = fetchImpl.calls.length;
+
+    // The repeat must go back to the network rather than serve the partial.
+    const second = await provider.search('test', { count: 20 });
+    assert.ok(fetchImpl.calls.length > callsAfterFirst, 'the partial answer was cached');
+    assert.equal(second.results.length, 20);
+  });
+
+  it('still caches a complete answer', async () => {
+    const { provider, fetchImpl } = makeProvider([
+      jsonResponse(webPayload(fakeResults(10, 'a'))),
+      jsonResponse(webPayload(fakeResults(10, 'b')))
+    ]);
+    await provider.search('test', { count: 20 });
+    const calls = fetchImpl.calls.length;
+    await provider.search('test', { count: 20 });
+    assert.equal(fetchImpl.calls.length, calls);
+  });
+
+  it('does not treat a dropped result as the end of the pages', async () => {
+    // The API returned a full page; one item was unusable and the parser threw
+    // it away. Measuring the page against the parsed length would read that as
+    // the last page and abandon three pages of results.
+    const fullPageWithOneJunkItem = webPayload([
+      ...fakeResults(9, 'a'),
+      { title: 'no url here', snippet: 'unusable' }
+    ]);
+    const { provider, fetchImpl } = makeProvider([
+      jsonResponse(fullPageWithOneJunkItem),
+      jsonResponse(webPayload(fakeResults(10, 'b'))),
+      jsonResponse(webPayload(fakeResults(10, 'c')))
+    ]);
+
+    const { results } = await provider.search('test', { count: 25 });
+    // Measured against the parsed length this would have stopped after one
+    // request with 9 results; against what the API returned it pages on and
+    // fills the request.
+    assert.equal(fetchImpl.calls.length, 3, 'paging stopped on a full page');
+    assert.equal(results.length, 25);
+  });
+
   it('fails the search when the first page fails', async () => {
     const { provider } = makeProvider(
       jsonResponse({ code: 'INVALID_CREDENTIALS', message: 'Unknown API key' }, { status: 401 })

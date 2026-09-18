@@ -12,10 +12,10 @@ It is now resolved once, the same way for all three: the user's language for the
 maps that onto its own API — Brave's `search_lang` / `country`, Staan's `market`, Qwant's `locale`
 — and falls back to its own default only when the engine does not serve that language at all.
 
-The clearest win is where no user language exists at all: **workflow and agent runs**. Those had no
+The clearest win is where no user language exists at all: **workflow and agent runs**. Those pass no
 language on the tool call, so on a German install every research run was silently answered from the
-US market. Workflow runs now carry the run's language into their tool calls, and the workflow
-engine takes its own default from `platform.json` instead of a hard-coded `en`.
+US market. They now land on the configured default instead — the providers resolve it themselves, so
+nothing about how a workflow renders its own prompts changes.
 
 - Brave searches are now language-targeted at all, which they previously never were.
 - A model can still override the language for a single search with the tool's `language` parameter.

@@ -17,6 +17,9 @@ The default language decides more than the interface:
   workflow and agent run,
 - the fallback for any text with no translation in the requested language.
 
+It does not change the language a workflow renders its own prompts in — that follows the run, not
+this setting.
+
 ## Web search with staan.ai
 
 `staanSearch` is a third script-backed search engine alongside `braveSearch` and `qwantSearch`,

@@ -10,54 +10,85 @@ import { QwantSearchProvider } from './search/qwantProvider.js';
 import { StaanSearchProvider } from './search/staanProvider.js';
 
 /**
- * Languages accepted as Brave's `search_lang` (ISO 639-1).
+ * Language tags Brave accepts as `search_lang`, mapped onto the exact spelling
+ * Brave wants.
  *
- * Brave validates this parameter and does not publish the accepted set on a
- * page that can be read without a dashboard login, so the list is an allowlist
- * rather than a pass-through: a language that is not on it means the request is
- * sent with no language parameters at all, which is exactly how Brave search
- * behaved before this existed. The cost of being wrong is therefore a search
+ * Brave validates this parameter, and its spellings are not all the obvious
+ * ISO 639-1 ones: Japanese is `jp`, Chinese is `zh-hans` / `zh-hant`,
+ * Portuguese is `pt-br` / `pt-pt`, and Greek and Indonesian are not supported
+ * at all. So this is a lookup, not a pass-through — a tag that is not a key
+ * here means the request goes out with no language parameters, which is exactly
+ * how Brave search behaved before this existed. The cost of a miss is a search
  * that is not language-targeted, never a failed one.
+ *
+ * Values transcribed from Brave's own client, which publishes the enum:
+ * https://github.com/brave/brave-search-mcp-server — `src/tools/web/params.ts`.
  */
-export const BRAVE_SEARCH_LANGUAGES = new Set([
-  'ar',
-  'bg',
-  'ca',
-  'cs',
-  'da',
-  'de',
-  'el',
-  'en',
-  'es',
-  'et',
-  'fi',
-  'fr',
-  'he',
-  'hr',
-  'hu',
-  'id',
-  'it',
-  'ja',
-  'ko',
-  'lt',
-  'lv',
-  'nb',
-  'nl',
-  'pl',
-  'pt',
-  'ro',
-  'ru',
-  'sk',
-  'sl',
-  'sv',
-  'th',
-  'tr',
-  'uk',
-  'vi',
-  'zh'
-]);
+export const BRAVE_SEARCH_LANGUAGES = Object.freeze({
+  ar: 'ar',
+  bg: 'bg',
+  bn: 'bn',
+  ca: 'ca',
+  cs: 'cs',
+  da: 'da',
+  de: 'de',
+  en: 'en',
+  'en-gb': 'en-gb',
+  es: 'es',
+  et: 'et',
+  eu: 'eu',
+  fi: 'fi',
+  fr: 'fr',
+  gl: 'gl',
+  gu: 'gu',
+  he: 'he',
+  hi: 'hi',
+  hr: 'hr',
+  hu: 'hu',
+  is: 'is',
+  it: 'it',
+  ja: 'jp',
+  jp: 'jp',
+  kn: 'kn',
+  ko: 'ko',
+  lt: 'lt',
+  lv: 'lv',
+  ml: 'ml',
+  mr: 'mr',
+  ms: 'ms',
+  nb: 'nb',
+  nl: 'nl',
+  pa: 'pa',
+  pl: 'pl',
+  pt: 'pt-pt',
+  'pt-br': 'pt-br',
+  'pt-pt': 'pt-pt',
+  ro: 'ro',
+  ru: 'ru',
+  sk: 'sk',
+  sl: 'sl',
+  sr: 'sr',
+  sv: 'sv',
+  ta: 'ta',
+  te: 'te',
+  th: 'th',
+  tr: 'tr',
+  uk: 'uk',
+  vi: 'vi',
+  zh: 'zh-hans',
+  'zh-cn': 'zh-hans',
+  'zh-hans': 'zh-hans',
+  'zh-hant': 'zh-hant',
+  'zh-hk': 'zh-hant',
+  'zh-mo': 'zh-hant',
+  'zh-sg': 'zh-hans',
+  'zh-tw': 'zh-hant'
+});
 
-/** Regions accepted as Brave's `country` (ISO 3166-1 alpha-2), same caveat. */
+/**
+ * Regions Brave accepts as `country`, from the same source. (Brave also accepts
+ * the pseudo-value `ALL`, which is its default behaviour and never needs sending.)
+ */
 export const BRAVE_COUNTRIES = new Set([
   'AR',
   'AT',
@@ -91,8 +122,8 @@ export const BRAVE_COUNTRIES = new Set([
   'RU',
   'SA',
   'SE',
-  'TW',
   'TR',
+  'TW',
   'US',
   'ZA'
 ]);
@@ -100,10 +131,11 @@ export const BRAVE_COUNTRIES = new Set([
 /**
  * Map a language tag onto Brave's language/region query parameters.
  *
- * Brave takes the two separately — `search_lang` as ISO 639-1 and `country` as
- * a 2-character country code (their own example is `country=DE&search_lang=de`)
- * — so `"de-CH"` targets German content without claiming a Swiss market Brave
- * may not serve, and a bare `"de"` sends the language only.
+ * Brave takes the two separately — `search_lang` and `country` as a
+ * 2-character code (its own example is `country=DE&search_lang=de`). The full
+ * tag is looked up first so `en-GB` and `pt-BR` reach Brave's hyphenated codes,
+ * then the bare language, so `de-LI` still targets German while dropping a
+ * region Brave does not list.
  *
  * @param {string} [language] - Language or locale tag
  * @returns {{search_lang?: string, country?: string}} Params to add, possibly empty
@@ -114,16 +146,18 @@ export function resolveBraveSearchParams(language) {
   const normalized = language.trim().toLowerCase().replace(/_/g, '-');
   const [lang, region] = normalized.split('-');
 
-  const params = {};
-  if (BRAVE_SEARCH_LANGUAGES.has(lang)) params.search_lang = lang;
+  const searchLang = BRAVE_SEARCH_LANGUAGES[normalized] || BRAVE_SEARCH_LANGUAGES[lang];
+  // A country without a language Brave knows would narrow the market while
+  // leaving the content language to Brave's default, which is not what the
+  // caller asked for.
+  if (!searchLang) return {};
+
+  const params = { search_lang: searchLang };
   if (region) {
     const country = region.toUpperCase();
     if (BRAVE_COUNTRIES.has(country)) params.country = country;
   }
-  // A country without a language Brave knows would narrow the market while
-  // leaving the content language to Brave's default, which is not what the
-  // caller asked for.
-  return params.search_lang ? params : {};
+  return params;
 }
 
 /**
@@ -132,11 +166,15 @@ export function resolveBraveSearchParams(language) {
 class BraveSearchProvider extends SearchProvider {
   /**
    * @param {Object} [deps]
+   * @param {(url: string, options: Object) => Promise<Object>} [deps.fetchImpl]
+   *   Transport, injected by tests. Defaults to the throttled, proxy/TLS-aware
+   *   fetch queued under the `braveSearch` tool id.
    * @param {(language?: string) => string} [deps.languageResolver] - Search-language
    *   resolution (user's language, else the install default), injected by tests.
    */
-  constructor({ languageResolver } = {}) {
+  constructor({ fetchImpl, languageResolver } = {}) {
     super();
+    this.fetchImpl = fetchImpl || ((url, options) => throttledFetch('braveSearch', url, options));
     this.languageResolver = languageResolver || resolveSearchLanguage;
   }
 
@@ -198,7 +236,7 @@ class BraveSearchProvider extends SearchProvider {
 
     // Language participates in the key: without it the first caller's language
     // would be served to every later caller asking in another one.
-    const cacheKey = makeSearchCacheKey('brave', query, braveParams);
+    let cacheKey = makeSearchCacheKey('brave', query, braveParams);
     if (!skipCache) {
       const cached = getCachedSearch(cacheKey);
       if (cached) {
@@ -218,7 +256,7 @@ class BraveSearchProvider extends SearchProvider {
     while (true) {
       try {
         const params = new URLSearchParams({ q: query, ...braveParams });
-        res = await throttledFetch('braveSearch', `${endpoint}?${params.toString()}`, {
+        res = await this.fetchImpl(`${endpoint}?${params.toString()}`, {
           headers: {
             'X-Subscription-Token': apiKey,
             Accept: 'application/json'
@@ -261,14 +299,26 @@ class BraveSearchProvider extends SearchProvider {
       // non-targeted search rather than no search at all, and the log line says
       // which language to remove from the list.
       if ((res.status === 422 || res.status === 400) && Object.keys(braveParams).length > 0) {
-        logger.warn('Brave rejected the language parameters; retrying without them', {
+        let bodyPreview = '';
+        try {
+          bodyPreview = (await res.text()).slice(0, 500);
+        } catch {
+          // A body we cannot read is not worth failing the retry over.
+        }
+        logger.warn('Brave rejected the request; retrying without the language parameters', {
           component: 'WebSearch',
           provider: 'brave',
           status: res.status,
           language: searchLanguage,
-          braveParams
+          braveParams,
+          // Brave names the offending parameter here, which is what says whether
+          // the language was actually the problem or the query was.
+          bodyPreview
         });
         braveParams = {};
+        // The key has to describe what was really requested, or an untargeted
+        // result would be served to later callers under a targeted key.
+        cacheKey = makeSearchCacheKey('brave', query, braveParams);
         continue;
       }
 

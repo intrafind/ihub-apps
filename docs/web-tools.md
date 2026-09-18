@@ -200,7 +200,8 @@ falls back to its own default only when the engine does not serve that language:
 Step 2 is what makes a German install behave correctly in the places where no
 user language exists — a workflow or agent run, which has no browser request
 behind it. Set `defaultLanguage` to `de` there and those runs search the German
-market instead of the US one.
+market instead of the US one. It changes only the search language: a workflow
+still renders its own prompts in the language the run was started with.
 
 Set it in **Admin → Customization → Localization**, which offers the languages
 this installation has translations for. It takes effect immediately — the

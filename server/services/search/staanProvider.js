@@ -437,6 +437,10 @@ class StaanSearchProvider extends SearchProvider {
 
     const results = [];
     const seenUrls = new Set();
+    // Only a search that ran every page it meant to is worth caching. A partial
+    // answer is fine to return and wrong to remember: caching it would freeze
+    // one transient upstream blip into every caller's results for the whole TTL.
+    let complete = true;
 
     for (const offset of planStaanPages(wanted)) {
       let page;
@@ -463,24 +467,29 @@ class StaanSearchProvider extends SearchProvider {
           errorCode: error?.code,
           errorMessage: error?.message
         });
+        complete = false;
         break;
       }
 
-      for (const result of page) {
+      for (const result of page.results) {
         if (seenUrls.has(result.url)) continue;
         seenUrls.add(result.url);
         results.push(result);
       }
 
       // A short page is the last page — asking for the next one would spend a
-      // request on an empty answer.
-      if (page.length < STAAN_PAGE_SIZE || results.length >= wanted) break;
+      // request on an empty answer. Measured against what the API returned, not
+      // against what survived parsing: one unusable item in a full page must not
+      // be read as the end of the results.
+      if (page.rawCount < STAAN_PAGE_SIZE || results.length >= wanted) break;
     }
 
     const payload = { results: results.slice(0, wanted) };
-    const parsedTtl = Number(config.SEARCH_CACHE_TTL_MS);
-    const ttlMs = Number.isFinite(parsedTtl) && parsedTtl > 0 ? parsedTtl : 600000;
-    setCachedSearch(cacheKey, payload, ttlMs);
+    if (complete) {
+      const parsedTtl = Number(config.SEARCH_CACHE_TTL_MS);
+      const ttlMs = Number.isFinite(parsedTtl) && parsedTtl > 0 ? parsedTtl : 600000;
+      setCachedSearch(cacheKey, payload, ttlMs);
+    }
     return payload;
   }
 
@@ -490,7 +499,8 @@ class StaanSearchProvider extends SearchProvider {
    * so they fail on the first attempt rather than burning the retry budget.
    *
    * @param {Object} params - see {@link buildStaanRequest}, plus `apiKey`
-   * @returns {Promise<Array<Object>>} The page's results
+   * @returns {Promise<{results: Array<Object>, rawCount: number}>} The page's
+   *   parsed results, and how many items the API actually returned
    */
   async fetchPage({ query, market, offset, includeDomains, excludeDomains, endpoint, apiKey }) {
     const { url, method, body } = buildStaanRequest({
@@ -510,7 +520,16 @@ class StaanSearchProvider extends SearchProvider {
       const payload = await readJson(res);
       const error = parseStaanError(payload, res.status);
 
-      if (!error) return parseStaanWebResults(payload);
+      if (!error) {
+        // `rawCount` is what the API sent; `results` is what survived parsing.
+        // The caller needs the former to tell a genuinely last (short) page from
+        // a full page that happened to contain an item it had to drop.
+        const items = payload?.web?.results;
+        return {
+          results: parseStaanWebResults(payload),
+          rawCount: Array.isArray(items) ? items.length : 0
+        };
+      }
 
       const retryable =
         error.code === 'STAAN_RATE_LIMITED' || res.status === 429 || res.status === 503;

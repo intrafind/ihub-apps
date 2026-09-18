@@ -1931,11 +1931,6 @@ export class PromptNodeExecutor extends BaseNodeExecutor {
 
       const toolCallStartMs = Date.now();
       const result = await runTool(toolId, {
-        // `language` first so a model-supplied argument still wins — it is a
-        // default the tool may use, not an override. Without it a web search
-        // inside a workflow would fall back to the install default and ignore
-        // the language the run is actually being conducted in.
-        language: context?.language,
         ...args,
         chatId,
         user,

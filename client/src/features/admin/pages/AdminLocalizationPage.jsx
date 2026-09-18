@@ -19,11 +19,15 @@ import { useUIConfig } from '../../../shared/contexts/UIConfigContext';
  */
 function AdminLocalizationPage() {
   const { t } = useTranslation();
-  const { uiConfig } = useUIConfig();
+  const { uiConfig, refreshUIConfig } = useUIConfig();
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [message, setMessage] = useState('');
   const [defaultLanguage, setDefaultLanguage] = useState('en');
+  // Save is only safe once the stored value is actually known: before that the
+  // form still holds its initial 'en', and saving would write that over whatever
+  // the install had configured.
+  const [loaded, setLoaded] = useState(false);
 
   /**
    * The languages this install actually has, derived the same way the end-user
@@ -34,15 +38,18 @@ function AdminLocalizationPage() {
   const availableLanguages = useMemo(() => {
     const codes = Object.keys(uiConfig?.header?.title || {});
     const known = codes.length ? codes : ['en', 'de'];
-    return known.map(code => {
+    // A stored language this install has no translations for still has to
+    // appear: a controlled <select> whose value matches no option renders the
+    // FIRST option instead, so the page would claim a language that is not the
+    // one configured — and picking that language back would fire no change
+    // event, leaving the admin unable to set it at all.
+    const all = known.includes(defaultLanguage) ? known : [...known, defaultLanguage];
+    return all.map(code => {
       const localized = t(`languages.${code}`);
-      const name =
-        localized === `languages.${code}`
-          ? { en: 'English', de: 'Deutsch' }[code] || code
-          : localized;
-      return { code, name };
+      const name = localized === `languages.${code}` ? code : localized;
+      return { code, name, untranslated: !known.includes(code) };
     });
-  }, [uiConfig, t]);
+  }, [uiConfig, t, defaultLanguage]);
 
   const loadConfiguration = useCallback(async () => {
     try {
@@ -50,6 +57,7 @@ function AdminLocalizationPage() {
       const response = await makeAdminApiCall('/admin/configs/platform', { method: 'GET' });
       const config = response.data || {};
       setDefaultLanguage(config.defaultLanguage || 'en');
+      setLoaded(true);
       setMessage('');
     } catch (error) {
       console.error('Failed to load platform configuration:', error);
@@ -81,6 +89,10 @@ function AdminLocalizationPage() {
         method: 'POST',
         body: { defaultLanguage }
       });
+
+      // The UI config carries defaultLanguage to the client and is cached for
+      // ~30 minutes; without this the change appears not to take effect.
+      await refreshUIConfig();
 
       setMessage({
         type: 'success',
@@ -127,7 +139,7 @@ function AdminLocalizationPage() {
 
       {message && (
         <div
-          role="status"
+          role={message.type === 'error' ? 'alert' : 'status'}
           className={`mb-6 rounded-lg p-4 text-sm ${
             message.type === 'error'
               ? 'bg-red-50 text-red-800 dark:bg-red-900/30 dark:text-red-200'
@@ -154,10 +166,7 @@ function AdminLocalizationPage() {
 
           <div className="mt-5 md:mt-0 md:col-span-2 space-y-4">
             <div>
-              <label
-                htmlFor="default-language"
-                className="block text-sm font-medium text-gray-700 dark:text-gray-300"
-              >
+              <label htmlFor="default-language" className="sr-only">
                 {t('admin.localization.defaultLanguage', 'Default Language')}
               </label>
               <select
@@ -169,6 +178,9 @@ function AdminLocalizationPage() {
                 {availableLanguages.map(language => (
                   <option key={language.code} value={language.code}>
                     {language.name} ({language.code})
+                    {language.untranslated
+                      ? ` — ${t('admin.localization.noTranslations', 'no translations')}`
+                      : ''}
                   </option>
                 ))}
               </select>
@@ -214,7 +226,7 @@ function AdminLocalizationPage() {
           <button
             type="button"
             onClick={handleSave}
-            disabled={saving}
+            disabled={saving || !loaded}
             className="inline-flex items-center rounded-lg border border-transparent bg-indigo-600 px-4 py-2 text-sm font-medium text-white shadow-xs hover:bg-indigo-700 focus:outline-hidden focus:ring-2 focus:ring-indigo-500 focus:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50"
           >
             {saving

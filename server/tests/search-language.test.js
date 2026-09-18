@@ -93,7 +93,7 @@ describe('the configured default reaches every provider', () => {
     const lang = resolveSearchLanguage('en-GB', german);
     assert.equal(resolveStaanMarket(lang), 'en-gb');
     assert.equal(resolveQwantLocale(lang), 'en_GB');
-    assert.deepEqual(resolveBraveSearchParams(lang), { search_lang: 'en', country: 'GB' });
+    assert.deepEqual(resolveBraveSearchParams(lang), { search_lang: 'en-gb', country: 'GB' });
   });
 });
 
@@ -109,8 +109,27 @@ describe('resolveBraveSearchParams', () => {
   });
 
   it('accepts underscore and mixed-case forms', () => {
-    assert.deepEqual(resolveBraveSearchParams('en_gb'), { search_lang: 'en', country: 'GB' });
-    assert.deepEqual(resolveBraveSearchParams('EN-Gb'), { search_lang: 'en', country: 'GB' });
+    assert.deepEqual(resolveBraveSearchParams('en_gb'), { search_lang: 'en-gb', country: 'GB' });
+    assert.deepEqual(resolveBraveSearchParams('EN-Gb'), { search_lang: 'en-gb', country: 'GB' });
+  });
+
+  it("uses Brave's own spelling, not the obvious ISO code", () => {
+    // Verified against Brave's published enum (brave/brave-search-mcp-server,
+    // src/tools/web/params.ts). Sending the ISO code instead would be rejected.
+    assert.equal(resolveBraveSearchParams('ja').search_lang, 'jp');
+    assert.equal(resolveBraveSearchParams('zh').search_lang, 'zh-hans');
+    assert.equal(resolveBraveSearchParams('zh-TW').search_lang, 'zh-hant');
+    assert.equal(resolveBraveSearchParams('pt').search_lang, 'pt-pt');
+    assert.equal(resolveBraveSearchParams('pt-BR').search_lang, 'pt-br');
+    assert.equal(resolveBraveSearchParams('en-GB').search_lang, 'en-gb');
+  });
+
+  it('sends nothing for a language Brave does not serve at all', () => {
+    // Brave lists neither Greek nor Indonesian. Sending them would cost every
+    // search a rejected request plus an untargeted retry, for no targeting.
+    assert.deepEqual(resolveBraveSearchParams('el'), {});
+    assert.deepEqual(resolveBraveSearchParams('el-GR'), {});
+    assert.deepEqual(resolveBraveSearchParams('id'), {});
   });
 
   it('sends the region when Brave lists it', () => {
