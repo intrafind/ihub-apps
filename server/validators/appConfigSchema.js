@@ -276,7 +276,11 @@ const featuresSchema = z
         // unset, treat it as enabled. The client uses `enabled !== false` for the same reason.
         enabled: z.boolean().optional().prefault(true)
       })
-      .optional()
+      .optional(),
+    // Response feedback (star rating + comment) for this app. Absent means
+    // enabled: only an explicit `false` opts the app out, and the platform-wide
+    // `feedback` feature flag still has to be on for it to show at all.
+    feedback: z.boolean().optional()
   })
   .passthrough(); // Allow additional feature flags
 

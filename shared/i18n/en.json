@@ -1564,7 +1564,8 @@
       "mcpServers": "MCP servers",
       "telemetry": "Telemetry",
       "voiceInput": "Voice Input",
-      "changelog": "What's New"
+      "changelog": "What's New",
+      "feedback": "Feedback"
     },
     "mcp": {
       "common": {
@@ -1882,7 +1883,11 @@
         "searchApps": "Search apps to add...",
         "appsAsToolsNoResults": "No apps match your search",
         "appsAsToolsNoApps": "No apps available",
-        "removeAppTool": "Remove {{name}}"
+        "removeAppTool": "Remove {{name}}",
+        "feedback": "Response Feedback",
+        "feedbackDesc": "Let users rate this app’s responses with stars and an optional comment",
+        "enableFeedback": "Enable response feedback",
+        "feedbackNote": "When disabled, the star rating is hidden under this app’s responses and the feedback API rejects submissions for it. The platform-level feedback feature must also be enabled for the rating to appear; all of it is also manageable under Admin → Feedback."
       },
       "reorder": "Reorder",
       "reorderHelp": "Drag a row or use the arrows to set the order apps appear in for users — in the apps browser, on the start page and in the sidebar. Every app is listed, so search and filters do not apply here. Nothing is saved until you choose \"Save order\".",
@@ -2256,6 +2261,51 @@
       "features": "New & improved",
       "fixes": "Fixes",
       "backToContents": "Back to contents"
+    },
+    "feedback": {
+      "title": "Feedback",
+      "description": "Configure how users rate AI responses and review what they submitted.",
+      "loadError": "Failed to load feedback settings",
+      "saveError": "Failed to save feedback settings",
+      "appSaveError": "Failed to update the app",
+      "saved": "Feedback settings saved",
+      "tabs": {
+        "settings": "Settings",
+        "review": "Feedback"
+      },
+      "sections": {
+        "collection": "Collection",
+        "perApp": "Per-app overrides"
+      },
+      "collect": {
+        "title": "Collect feedback",
+        "description": "Show the star rating under AI responses and accept submissions. Off hides it in every chat surface and answers POST /api/feedback with 403. The same switch appears in Admin → Features → Content."
+      },
+      "store": {
+        "title": "Store feedback",
+        "description": "Write submitted feedback to contents/data/feedback.jsonl and the usage statistics. Off keeps the rating control visible but nothing is kept — iAssistant feedback still reaches iFinder."
+      },
+      "identity": {
+        "title": "Identification mode",
+        "description": "How the person who gave the feedback is recorded. Shared with usage tracking — changing it here changes it there too, and only for entries written from now on.",
+        "modes": {
+          "anonymous": "Anonymous (hashed)",
+          "pseudonymous": "Pseudonymous (session)",
+          "identified": "Identified (user)"
+        }
+      },
+      "perApp": {
+        "description": "Switch feedback off for single apps. An app can never switch it back on while collection is off platform-wide. Saved immediately in the app’s own configuration.",
+        "globalOff": "Collection is off platform-wide, so feedback is hidden in every app regardless of these switches.",
+        "appDisabled": "App disabled",
+        "noApps": "No apps configured."
+      },
+      "review": {
+        "unavailable": "Feedback statistics are not available."
+      }
+    },
+    "usage": {
+      "reviewFeedback": "Review feedback"
     }
   },
   "cloudStorage": {

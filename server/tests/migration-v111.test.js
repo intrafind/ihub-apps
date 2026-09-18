@@ -1,7 +1,7 @@
 #!/usr/bin/env node
 
 /**
- * Migration V110 specs — the keyless Qwant provider reaches existing installs.
+ * Migration V111 specs — the keyless Qwant provider reaches existing installs.
  *
  * providers.json is an existing file, so a new entry has to be merged into it;
  * `tools/qwantSearch.json` is not this migration's job, because
@@ -23,7 +23,7 @@ import {
   precondition,
   version,
   description
-} from '../migrations/V110__add_qwant_websearch_provider.js';
+} from '../migrations/V111__add_qwant_websearch_provider.js';
 
 let baseDir;
 
@@ -71,16 +71,16 @@ async function scratch(name) {
   return fs.mkdtemp(path.join(baseDir, `${name}-`));
 }
 
-describe('V110 — Qwant web search provider', () => {
+describe('V111 — Qwant web search provider', () => {
   before(async () => {
-    baseDir = await fs.mkdtemp(path.join(os.tmpdir(), 'ihub-v110-'));
+    baseDir = await fs.mkdtemp(path.join(os.tmpdir(), 'ihub-v111-'));
   });
   after(async () => {
     await fs.rm(baseDir, { recursive: true, force: true });
   });
 
   it('declares its version and description', () => {
-    assert.equal(version, '110');
+    assert.equal(version, '111');
     assert.equal(description, 'Add the keyless Qwant web search provider');
   });
 

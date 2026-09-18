@@ -1834,7 +1834,8 @@
       "mcpServers": "MCP-Server",
       "telemetry": "Telemetrie",
       "voiceInput": "Spracheingabe",
-      "changelog": "Neuigkeiten"
+      "changelog": "Neuigkeiten",
+      "feedback": "Feedback"
     },
     "mcp": {
       "common": {
@@ -2152,7 +2153,11 @@
         "searchApps": "Apps suchen und hinzufügen...",
         "appsAsToolsNoResults": "Keine Apps entsprechen Ihrer Suche",
         "appsAsToolsNoApps": "Keine Apps verfügbar",
-        "removeAppTool": "{{name}} entfernen"
+        "removeAppTool": "{{name}} entfernen",
+        "feedback": "Antwort-Feedback",
+        "feedbackDesc": "Benutzer die Antworten dieser App mit Sternen und einem optionalen Kommentar bewerten lassen",
+        "enableFeedback": "Antwort-Feedback aktivieren",
+        "feedbackNote": "Wenn deaktiviert, ist die Sternebewertung unter den Antworten dieser App ausgeblendet und die Feedback-API lehnt Einsendungen dafür ab. Die plattformweite Feedback-Funktion muss zusätzlich aktiviert sein; alles davon lässt sich auch unter Admin → Feedback verwalten."
       },
       "reorder": "Reihenfolge",
       "reorderHelp": "Ziehen Sie eine Zeile oder nutzen Sie die Pfeile, um die Reihenfolge festzulegen, in der Apps für Benutzer erscheinen – in der App-Übersicht, auf der Startseite und in der Seitenleiste. Es werden immer alle Apps aufgelistet, Suche und Filter gelten hier nicht. Gespeichert wird erst mit „Reihenfolge speichern“.",
@@ -2526,6 +2531,51 @@
       "features": "Neu & verbessert",
       "fixes": "Fehlerbehebungen",
       "backToContents": "Zurück zur Übersicht"
+    },
+    "feedback": {
+      "title": "Feedback",
+      "description": "Festlegen, wie Benutzer KI-Antworten bewerten, und das Eingereichte durchsehen.",
+      "loadError": "Feedback-Einstellungen konnten nicht geladen werden",
+      "saveError": "Feedback-Einstellungen konnten nicht gespeichert werden",
+      "appSaveError": "App konnte nicht aktualisiert werden",
+      "saved": "Feedback-Einstellungen gespeichert",
+      "tabs": {
+        "settings": "Einstellungen",
+        "review": "Feedback"
+      },
+      "sections": {
+        "collection": "Erfassung",
+        "perApp": "App-spezifische Ausnahmen"
+      },
+      "collect": {
+        "title": "Feedback erfassen",
+        "description": "Die Sternebewertung unter KI-Antworten anzeigen und Einsendungen annehmen. Aus blendet sie in jeder Chat-Oberfläche aus und beantwortet POST /api/feedback mit 403. Derselbe Schalter steht unter Admin → Funktionen → Inhalte."
+      },
+      "store": {
+        "title": "Feedback speichern",
+        "description": "Eingereichtes Feedback in contents/data/feedback.jsonl und die Nutzungsstatistik schreiben. Aus lässt die Bewertung sichtbar, es wird aber nichts gespeichert — iAssistant-Feedback erreicht weiterhin iFinder."
+      },
+      "identity": {
+        "title": "Identifizierungsmodus",
+        "description": "Wie die Person erfasst wird, die das Feedback gegeben hat. Gemeinsam mit der Nutzungsverfolgung — eine Änderung hier gilt auch dort und nur für künftige Einträge.",
+        "modes": {
+          "anonymous": "Anonym (gehasht)",
+          "pseudonymous": "Pseudonym (Sitzung)",
+          "identified": "Identifiziert (Benutzer)"
+        }
+      },
+      "perApp": {
+        "description": "Feedback für einzelne Apps abschalten. Eine App kann es nicht einschalten, solange die Erfassung plattformweit aus ist. Wird sofort in der Konfiguration der App gespeichert.",
+        "globalOff": "Die Erfassung ist plattformweit aus, daher ist Feedback in jeder App ausgeblendet — unabhängig von diesen Schaltern.",
+        "appDisabled": "App deaktiviert",
+        "noApps": "Keine Apps konfiguriert."
+      },
+      "review": {
+        "unavailable": "Feedback-Statistiken sind nicht verfügbar."
+      }
+    },
+    "usage": {
+      "reviewFeedback": "Feedback ansehen"
     }
   },
   "cloudStorage": {

@@ -133,6 +133,15 @@ const RENAMED_MIGRATIONS = [
     oldFile: 'V096__add_workflow_state_retention.js',
     newVersion: '098',
     newFile: 'V098__add_workflow_state_retention.js'
+  },
+  // Same story one release later: the Qwant search provider and the
+  // outbound-proxy defaults were both written as V110 and merged within the
+  // hour, leaving main unable to boot. Qwant moved because it landed second.
+  {
+    oldVersion: '110',
+    oldFile: 'V110__add_qwant_websearch_provider.js',
+    newVersion: '111',
+    newFile: 'V111__add_qwant_websearch_provider.js'
   }
 ];
 
