@@ -334,10 +334,10 @@ describe('the admin API', () => {
   function buildApp() {
     const app = express();
     app.use(express.json());
-    // codeql[js/missing-rate-limiting] — a supertest app that lives for the
-    // duration of one assertion. Rate limiting is mounted on /api/admin and
-    // /api/oauth in server/middleware/setup.js, before the routes are
-    // registered in server.js; it is not this harness's job.
+    // lgtm[js/missing-rate-limiting] -- a supertest app that lives for the
+    // duration of one assertion. The shipped routes are rate limited in
+    // server/middleware/setup.js, mounted on /api/admin and /api/oauth before
+    // the routes are registered in server.js.
     registerAdminOAuthCimdRoutes(app);
     return app;
   }
@@ -505,10 +505,10 @@ describe('discovery records', () => {
 describe('the approval gate', () => {
   function buildApp() {
     const app = express();
-    // codeql[js/missing-rate-limiting] — a supertest app that lives for the
-    // duration of one assertion. Rate limiting is mounted on /api/admin and
-    // /api/oauth in server/middleware/setup.js, before the routes are
-    // registered in server.js; it is not this harness's job.
+    // lgtm[js/missing-rate-limiting] -- a supertest app that lives for the
+    // duration of one assertion. The shipped routes are rate limited in
+    // server/middleware/setup.js, mounted on /api/admin and /api/oauth before
+    // the routes are registered in server.js.
     registerOAuthAuthorizeRoutes(app);
     return app;
   }
@@ -682,10 +682,10 @@ describe('per-client policy', () => {
 describe('the gateway', () => {
   function buildApp() {
     const app = express();
-    // codeql[js/missing-rate-limiting] — a supertest app that lives for the
-    // duration of one assertion. Rate limiting is mounted on /api/admin and
-    // /api/oauth in server/middleware/setup.js, before the routes are
-    // registered in server.js; it is not this harness's job.
+    // lgtm[js/missing-rate-limiting] -- a supertest app that lives for the
+    // duration of one assertion. The shipped routes are rate limited in
+    // server/middleware/setup.js, mounted on /api/admin and /api/oauth before
+    // the routes are registered in server.js.
     app.get('/mcp', mcpAuth, (req, res) => res.json({ ok: true, user: req.user.id }));
     // Surfacing the error keeps a 500 from reading as "the policy refused it".
     app.use((error, req, res, _next) => res.status(500).json({ error: error.message }));
@@ -749,10 +749,10 @@ describe('the REST surface (jwtAuth)', () => {
   // too, or `/api/*` becomes the way round the gate.
   function buildApp() {
     const app = express();
-    // codeql[js/missing-rate-limiting] — a supertest app that lives for the
-    // duration of one assertion. Rate limiting is mounted on /api/admin and
-    // /api/oauth in server/middleware/setup.js, before the routes are
-    // registered in server.js; it is not this harness's job.
+    // lgtm[js/missing-rate-limiting] -- a supertest app that lives for the
+    // duration of one assertion. The shipped routes are rate limited in
+    // server/middleware/setup.js, mounted on /api/admin and /api/oauth before
+    // the routes are registered in server.js.
     app.get('/api/apps', jwtAuth, (req, res) =>
       res.json({
         user: req.user?.id || 'anonymous',
