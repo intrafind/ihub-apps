@@ -21,6 +21,7 @@ import GroundingSources from './GroundingSources';
 import SearchStatusIndicator from './SearchStatusIndicator';
 import WorkflowStepIndicator from './WorkflowStepIndicator';
 import HumanCheckpoint from '../../workflows/components/HumanCheckpoint';
+import useFeatureFlags from '../../../shared/hooks/useFeatureFlags';
 
 /**
  * Renders a workflow checkpoint inline in a chat bubble. The checkpoint is an
@@ -86,6 +87,11 @@ function ChatMessage({
   onDocumentAction = null // Callback for citation document actions (preview, download, openInApp)
 }) {
   const { t } = useTranslation();
+  const featureFlags = useFeatureFlags();
+  // Response feedback is off when either the platform flag or this app's
+  // `features.feedback` says so. One check for every surface: ChatMessage is
+  // what main chat, compare mode, canvas and the Office add-in all render.
+  const feedbackEnabled = featureFlags.isBothEnabled(app, 'feedback', true);
 
   // Debug loading state changes
   // useEffect(() => {
@@ -1111,7 +1117,7 @@ function ChatMessage({
           </button>
 
           {/* Add star rating for AI responses only */}
-          {!isUser && !isError && !message.loading && (
+          {feedbackEnabled && !isUser && !isError && !message.loading && (
             <>
               {!compact && <div className="mx-2 h-4 border-l border-gray-300"></div>}
               <div className="flex items-center gap-2">
@@ -1130,7 +1136,7 @@ function ChatMessage({
       </div>
 
       {/* Feedback form modal */}
-      {showFeedbackForm && (
+      {feedbackEnabled && showFeedbackForm && (
         <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
           <div className="bg-white rounded-lg shadow-lg max-w-md w-full p-6 animate-fade-in mx-4">
             <h3 className="text-lg font-medium mb-4">

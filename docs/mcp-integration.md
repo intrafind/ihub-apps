@@ -343,7 +343,7 @@ successful authorization then still writes a record (`approvalState:
 'auto'`), so the client is a real, editable row rather than a synthetic
 one.
 
-Upgrading disconnects nobody: migration `V112` reads the consent store and
+Upgrading disconnects nobody: migration `V113` reads the consent store and
 approves exactly the metadata-document clients that already have a
 connection, stamping `approvedBy: 'migration'`. Clients nobody has
 connected through are deliberately not created — those are the ones that

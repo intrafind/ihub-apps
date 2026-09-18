@@ -366,6 +366,90 @@ describe('Migration Runner', () => {
       expect(history.migrations[0].file).toBe('V018__add_cookie_settings.js');
     });
 
+    it('rewrites the Qwant provider entry that was renumbered V110 -> V111', () => {
+      const history = {
+        schemaVersion: '1.0',
+        migrations: [
+          {
+            version: '110',
+            description: 'add_qwant_websearch_provider',
+            file: 'V110__add_qwant_websearch_provider.js',
+            checksum: 'abc123',
+            status: 'success'
+          },
+          {
+            version: '110',
+            description: 'add_proxy_defaults',
+            file: 'V110__add_proxy_defaults.js',
+            checksum: 'def456',
+            status: 'success'
+          }
+        ]
+      };
+
+      const changed = reconcileRenamedMigrations(history);
+
+      expect(changed).toBe(true);
+      expect(history.migrations[0].version).toBe('111');
+      expect(history.migrations[0].file).toBe('V111__add_qwant_websearch_provider.js');
+      // The proxy migration kept V110, so its history entry must not move.
+      expect(history.migrations[1].version).toBe('110');
+      expect(history.migrations[1].file).toBe('V110__add_proxy_defaults.js');
+    });
+
+    it('rewrites both CIMD governance entries, V111/V112 -> V112/V113', () => {
+      // The chain is the interesting part: the governance migration moves onto
+      // the number the grandfathering one is vacating, so a rule that matched
+      // on version alone would rewrite the same entry twice.
+      const history = {
+        schemaVersion: '1.0',
+        migrations: [
+          {
+            version: '111',
+            description: 'add_oauth_cimd_governance',
+            file: 'V111__add_oauth_cimd_governance.js',
+            checksum: 'abc123',
+            status: 'success'
+          },
+          {
+            version: '112',
+            description: 'grandfather_connected_cimd_clients',
+            file: 'V112__grandfather_connected_cimd_clients.js',
+            checksum: 'def456',
+            status: 'skipped'
+          }
+        ]
+      };
+
+      const changed = reconcileRenamedMigrations(history);
+
+      expect(changed).toBe(true);
+      expect(history.migrations[0].version).toBe('112');
+      expect(history.migrations[0].file).toBe('V112__add_oauth_cimd_governance.js');
+      expect(history.migrations[1].version).toBe('113');
+      expect(history.migrations[1].file).toBe('V113__grandfather_connected_cimd_clients.js');
+    });
+
+    it('leaves the Qwant provider on V111 when it is already reconciled', () => {
+      // V111 now belongs to Qwant. Its entry must not be dragged to V112 by the
+      // governance rule, which is why the match is on (version, file).
+      const history = {
+        schemaVersion: '1.0',
+        migrations: [
+          {
+            version: '111',
+            description: 'add_qwant_websearch_provider',
+            file: 'V111__add_qwant_websearch_provider.js',
+            checksum: 'abc123',
+            status: 'success'
+          }
+        ]
+      };
+
+      expect(reconcileRenamedMigrations(history)).toBe(false);
+      expect(history.migrations[0].version).toBe('111');
+    });
+
     it('is a no-op on a fresh install with no matching history entries', () => {
       const history = { schemaVersion: '1.0', migrations: [] };
 

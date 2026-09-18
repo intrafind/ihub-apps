@@ -1,5 +1,5 @@
 /**
- * Migration V111 — CIMD client governance settings
+ * Migration V112 — CIMD client governance settings
  *
  * Two knobs for clients identified by a metadata document:
  *
@@ -14,14 +14,14 @@
  *   it. `'auto'` keeps the pre-governance behaviour, where the host allowlist
  *   is the whole decision.
  *
- * Shipping `'approval'` as the default is only safe because V112 grandfathers
+ * Shipping `'approval'` as the default is only safe because V113 grandfathers
  * every CIMD client that already has a connection. The two migrations belong
  * to the same release for exactly that reason.
  *
  * Installations that already define these keys are left alone.
  */
 
-export const version = '111';
+export const version = '112';
 export const description = 'Add OAuth CIMD governance settings (blocked hosts, approval mode)';
 
 export async function precondition(ctx) {

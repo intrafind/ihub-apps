@@ -1,7 +1,7 @@
 /**
- * Migration V112 — Approve the CIMD clients people are already connected through
+ * Migration V113 — Approve the CIMD clients people are already connected through
  *
- * V111 turns the approval gate on by default. Without this migration, the
+ * V112 turns the approval gate on by default. Without this migration, the
  * release that ships it would refuse every client an installation's users are
  * already using, because none of them has a policy record — an upgrade would
  * disconnect everyone at once.
@@ -23,7 +23,7 @@
  * which no authorization decision reads.
  */
 
-export const version = '112';
+export const version = '113';
 export const description = 'Approve client-metadata clients that already have connections';
 
 const CONSENT_PATH = 'data/oauth-consent.json';

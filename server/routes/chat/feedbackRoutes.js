@@ -3,6 +3,8 @@ import { logInteraction } from '../../utils.js';
 import { recordFeedback } from '../../usageTracker.js';
 import { storeFeedback } from '../../feedbackStorage.js';
 import { authRequired } from '../../middleware/authRequired.js';
+import { requireFeature } from '../../featureRegistry.js';
+import { findByIdCaseInsensitive } from '../../utils/resourceLookup.js';
 import validate from '../../validators/validate.js';
 import { feedbackSchema } from '../../validators/index.js';
 import { sendBadRequest, sendInternalError } from '../../utils/responseHelpers.js';
@@ -15,6 +17,33 @@ import runLog, { isValidRunId } from '../../services/loop/RunLog.js';
 import { resolveActorId } from '../../services/loop/runIdentity.js';
 import { authorizeRun } from '../../services/loop/runAccess.js';
 import { RUN_LOG_EVENTS } from '../../../shared/runEvents.js';
+
+/**
+ * Per-app opt-out for response feedback.
+ *
+ * The platform-wide switch is the `feedback` feature flag; this is the same
+ * answer for an app whose config carries `features.feedback: false`, so hiding
+ * the rating in the UI cannot be bypassed by posting here directly. An unknown
+ * appId is not gated — it fails later on its own terms, and a feedback entry
+ * must never be dropped just because its app config could not be read.
+ *
+ * @param {import('express').Request} req
+ * @param {import('express').Response} res
+ * @param {Function} next
+ */
+export function requireAppFeedbackEnabled(req, res, next) {
+  const appId = req.body?.appId;
+  if (!appId) return next();
+  const { data: apps = [] } = configCache.getApps(true) || {};
+  const appConfig = findByIdCaseInsensitive(apps, appId);
+  if (appConfig && appConfig.features?.feedback === false) {
+    return res.status(403).json({
+      error: `Feedback is disabled for app '${appId}'`,
+      code: 'FEATURE_DISABLED'
+    });
+  }
+  return next();
+}
 
 export default function registerFeedbackRoutes(app, { getLocalizedError }) {
   /**
@@ -103,13 +132,20 @@ export default function registerFeedbackRoutes(app, { getLocalizedError }) {
    *                   type: string
    *       401:
    *         description: Authentication required
+   *       403:
+   *         description: |
+   *           Feedback is disabled — either platform-wide (the `feedback` feature
+   *           flag) or for this app (`features.feedback: false`). Body carries
+   *           `code: FEATURE_DISABLED`.
    *       500:
    *         description: Internal server error
    */
   app.post(
     buildServerPath('/api/feedback'),
     authRequired,
+    requireFeature('feedback'),
     validate(feedbackSchema),
+    requireAppFeedbackEnabled,
     async (req, res) => {
       try {
         const {

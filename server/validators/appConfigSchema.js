@@ -54,7 +54,7 @@ const starterPromptSchema = z.object({
 const websearchSchema = z
   .object({
     enabled: z.boolean().optional().prefault(false),
-    provider: z.enum(['auto', 'brave']).optional().prefault('auto'),
+    provider: z.enum(['auto', 'brave', 'qwant']).optional().prefault('auto'),
     useNativeSearch: z.boolean().optional().prefault(true),
     maxResults: z.number().int().min(1).max(20).optional().prefault(5),
     extractContent: z.boolean().optional().prefault(true),
@@ -276,7 +276,11 @@ const featuresSchema = z
         // unset, treat it as enabled. The client uses `enabled !== false` for the same reason.
         enabled: z.boolean().optional().prefault(true)
       })
-      .optional()
+      .optional(),
+    // Response feedback (star rating + comment) for this app. Absent means
+    // enabled: only an explicit `false` opts the app out, and the platform-wide
+    // `feedback` feature flag still has to be on for it to show at all.
+    feedback: z.boolean().optional()
   })
   .passthrough(); // Allow additional feature flags
 

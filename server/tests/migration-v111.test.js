@@ -1,16 +1,16 @@
 #!/usr/bin/env node
 
 /**
- * Migration V111 specs — the CIMD governance settings.
+ * Migration V111 specs — the keyless Qwant provider reaches existing installs.
  *
- * Two things this migration has to get right. `blockedClientHosts` starts
- * empty, because an upgrade must block nobody. `approvalMode` starts at
- * `approval`, which is the change of behaviour the release ships: passing the
- * host allowlist makes a client eligible, not allowed. That default is only
- * safe next to V112, which approves the clients an installation's users are
- * already connected through.
- *
- * As ever, a key an operator already set is left exactly as they set it.
+ * providers.json is an existing file, so a new entry has to be merged into it;
+ * `tools/qwantSearch.json` is not this migration's job, because
+ * `copyDefaultConfiguration()` backfills files missing from `contents/` on every
+ * boot. What is left to get right is the merge: the entry must carry
+ * `requiresApiKey: false` (or the admin page labels a provider that needs no key
+ * "Not Configured"), it must not disturb the providers already there, and it
+ * must not overwrite an admin who has since edited or disabled it — a migration
+ * is written once and then runs on every install, not just a pristine one.
  */
 import fs from 'node:fs/promises';
 import os from 'node:os';
@@ -23,7 +23,7 @@ import {
   precondition,
   version,
   description
-} from '../migrations/V111__add_oauth_cimd_governance.js';
+} from '../migrations/V111__add_qwant_websearch_provider.js';
 
 let baseDir;
 
@@ -51,16 +51,27 @@ function makeCtx(dir) {
   };
 }
 
-async function seed(dir, platform) {
+const BRAVE = {
+  id: 'brave',
+  name: { en: 'Brave Search' },
+  enabled: true,
+  category: 'websearch'
+};
+
+async function seed(dir, providers) {
   await fs.mkdir(path.join(dir, 'config'), { recursive: true });
   await fs.writeFile(
-    path.join(dir, 'config/platform.json'),
-    JSON.stringify(platform, null, 2),
+    path.join(dir, 'config/providers.json'),
+    JSON.stringify(providers, null, 2),
     'utf8'
   );
 }
 
-describe('V111 — CIMD governance settings', () => {
+async function scratch(name) {
+  return fs.mkdtemp(path.join(baseDir, `${name}-`));
+}
+
+describe('V111 — Qwant web search provider', () => {
   before(async () => {
     baseDir = await fs.mkdtemp(path.join(os.tmpdir(), 'ihub-v111-'));
   });
@@ -70,67 +81,78 @@ describe('V111 — CIMD governance settings', () => {
 
   it('declares its version and description', () => {
     assert.equal(version, '111');
-    assert.equal(description, 'Add OAuth CIMD governance settings (blocked hosts, approval mode)');
+    assert.equal(description, 'Add the keyless Qwant web search provider');
   });
 
-  it('skips when there is no platform.json', async () => {
-    const dir = await fs.mkdtemp(path.join(baseDir, 'nofile-'));
+  it('skips when there is no providers.json', async () => {
+    const dir = await scratch('nofile');
     assert.equal(await precondition(makeCtx(dir)), false);
   });
 
-  it('blocks nobody and requires approval for new clients', async () => {
-    const dir = await fs.mkdtemp(path.join(baseDir, 'fresh-'));
-    await seed(dir, { oauth: { cimd: { enabled: true, allowedClientHosts: ['claude.ai'] } } });
-    const ctx = makeCtx(dir);
-    await up(ctx);
-
-    const { oauth } = await ctx.readJson('config/platform.json');
-    assert.deepEqual(oauth.cimd.blockedClientHosts, [], 'an upgrade must block nobody');
-    assert.equal(oauth.cimd.approvalMode, 'approval');
-    assert.deepEqual(oauth.cimd.allowedClientHosts, ['claude.ai'], 'the allowlist is untouched');
+  it('runs when providers.json exists', async () => {
+    const dir = await scratch('hasfile');
+    await seed(dir, { providers: [BRAVE] });
+    assert.equal(await precondition(makeCtx(dir)), true);
   });
 
-  it('creates the cimd block when an older install has none', async () => {
-    const dir = await fs.mkdtemp(path.join(baseDir, 'no-cimd-'));
-    await seed(dir, { oauth: { enabled: { authz: true } } });
+  it('adds the qwant provider next to the existing ones', async () => {
+    const dir = await scratch('add');
+    await seed(dir, { providers: [BRAVE] });
     const ctx = makeCtx(dir);
     await up(ctx);
 
-    const { oauth } = await ctx.readJson('config/platform.json');
-    assert.equal(oauth.cimd.approvalMode, 'approval');
+    const config = await ctx.readJson('config/providers.json');
+    const qwant = config.providers.find(p => p.id === 'qwant');
+
+    assert.ok(qwant, 'qwant provider was not added');
+    assert.equal(qwant.category, 'websearch');
+    assert.equal(qwant.enabled, true);
+    // Without this the admin page labels a provider that needs no key
+    // "Not Configured", which reads as broken.
+    assert.equal(qwant.requiresApiKey, false);
+    // Existing providers are untouched.
+    assert.deepEqual(
+      config.providers.find(p => p.id === 'brave'),
+      BRAVE
+    );
   });
 
-  it('keeps the choice an operator already made', async () => {
-    const dir = await fs.mkdtemp(path.join(baseDir, 'partial-'));
-    await seed(dir, {
-      oauth: { cimd: { approvalMode: 'auto', blockedClientHosts: ['evil.example'] } }
-    });
+  it('is idempotent and never overwrites an admin-customised entry', async () => {
+    const dir = await scratch('idempotent');
+    await seed(dir, { providers: [BRAVE] });
     const ctx = makeCtx(dir);
     await up(ctx);
 
-    const { oauth } = await ctx.readJson('config/platform.json');
-    assert.equal(oauth.cimd.approvalMode, 'auto');
-    assert.deepEqual(oauth.cimd.blockedClientHosts, ['evil.example']);
+    // Simulate an admin disabling Qwant, then the migration re-running.
+    const config = await ctx.readJson('config/providers.json');
+    config.providers.find(p => p.id === 'qwant').enabled = false;
+    await ctx.writeJson('config/providers.json', config);
+
+    await up(ctx);
+
+    const reread = await ctx.readJson('config/providers.json');
+    assert.equal(reread.providers.filter(p => p.id === 'qwant').length, 1);
+    assert.equal(reread.providers.find(p => p.id === 'qwant').enabled, false);
   });
 
-  it('skips a platform.json with no oauth section', async () => {
-    const dir = await fs.mkdtemp(path.join(baseDir, 'no-oauth-'));
-    await seed(dir, { features: {} });
+  it('warns instead of throwing when providers.json has no providers array', async () => {
+    const dir = await scratch('malformed');
+    await seed(dir, { notProviders: true });
     const ctx = makeCtx(dir);
     await up(ctx);
 
-    const platform = await ctx.readJson('config/platform.json');
-    assert.equal(platform.oauth, undefined);
     assert.ok(ctx.logs.some(([level]) => level === 'warn'));
   });
 
-  it('is idempotent', async () => {
-    const dir = await fs.mkdtemp(path.join(baseDir, 'twice-'));
-    await seed(dir, { oauth: {} });
+  it('leaves the tool definition to the defaults copy, not to this migration', async () => {
+    // copyDefaultConfiguration() backfills any file missing from contents/ out
+    // of server/defaults/ on every boot, so writing tools/qwantSearch.json here
+    // would only duplicate a definition that then drifts from the default.
+    const dir = await scratch('notool');
+    await seed(dir, { providers: [BRAVE] });
     const ctx = makeCtx(dir);
     await up(ctx);
-    const first = await ctx.readJson('config/platform.json');
-    await up(ctx);
-    assert.deepEqual(await ctx.readJson('config/platform.json'), first);
+
+    assert.equal(await ctx.fileExists('tools/qwantSearch.json'), false);
   });
 });
