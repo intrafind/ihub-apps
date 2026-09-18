@@ -24,9 +24,6 @@ function AdminLocalizationPage() {
   const [saving, setSaving] = useState(false);
   const [message, setMessage] = useState('');
   const [defaultLanguage, setDefaultLanguage] = useState('en');
-  // The whole platform config, so the save can post it back untouched apart
-  // from the one field this page owns.
-  const [platformConfig, setPlatformConfig] = useState(null);
 
   /**
    * The languages this install actually has, derived the same way the end-user
@@ -52,7 +49,6 @@ function AdminLocalizationPage() {
       setLoading(true);
       const response = await makeAdminApiCall('/admin/configs/platform', { method: 'GET' });
       const config = response.data || {};
-      setPlatformConfig(config);
       setDefaultLanguage(config.defaultLanguage || 'en');
       setMessage('');
     } catch (error) {
@@ -75,9 +71,15 @@ function AdminLocalizationPage() {
       setSaving(true);
       setMessage('');
 
+      // Only the field this page owns. The endpoint merges named keys over the
+      // stored config, so everything else is preserved server-side — and posting
+      // the GET body back would not be harmless: that response is sanitized, and
+      // `proxyAuth.jwtProviders[].jwkUrl` is stripped from it outright rather
+      // than redacted, so echoing it would erase the URL and break proxy-JWT
+      // logins. (Several older admin pages do echo it; see the note in the PR.)
       await makeAdminApiCall('/admin/configs/platform', {
         method: 'POST',
-        body: { ...(platformConfig || {}), defaultLanguage }
+        body: { defaultLanguage }
       });
 
       setMessage({
