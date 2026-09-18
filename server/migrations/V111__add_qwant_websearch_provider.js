@@ -1,5 +1,5 @@
 /**
- * Migration V110 — add the keyless Qwant web search provider
+ * Migration V111 — add the keyless Qwant web search provider
  *
  * Until now the only script-backed search engine was Brave, which needs a
  * subscription token. An install without `BRAVE_SEARCH_API_KEY` therefore had
@@ -19,12 +19,17 @@
  * Apps are left alone: no app's `websearch.provider` is rewritten. An app set
  * to `"auto"` picks Brave whenever a Brave key is present, so an install that
  * has one keeps searching exactly as before.
+ *
+ * Shipped as V110 and renumbered to V111: the outbound-proxy defaults landed on
+ * main as V110 in parallel, and the runner refuses to start on a duplicate
+ * version. Installs that already ran it under the old number are reconciled by
+ * `RENAMED_MIGRATIONS` in the runner, so it is not applied twice.
  */
 
-export const version = '110';
+export const version = '111';
 export const description = 'Add the keyless Qwant web search provider';
 
-/** Snapshot of the `qwant` entry in server/defaults/config/providers.json as of V110. */
+/** Snapshot of the `qwant` entry in server/defaults/config/providers.json as of V111. */
 const QWANT_PROVIDER = {
   id: 'qwant',
   name: {

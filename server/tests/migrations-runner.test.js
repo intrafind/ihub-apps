@@ -366,6 +366,37 @@ describe('Migration Runner', () => {
       expect(history.migrations[0].file).toBe('V018__add_cookie_settings.js');
     });
 
+    it('rewrites the Qwant provider entry that was renumbered V110 -> V111', () => {
+      const history = {
+        schemaVersion: '1.0',
+        migrations: [
+          {
+            version: '110',
+            description: 'add_qwant_websearch_provider',
+            file: 'V110__add_qwant_websearch_provider.js',
+            checksum: 'abc123',
+            status: 'success'
+          },
+          {
+            version: '110',
+            description: 'add_proxy_defaults',
+            file: 'V110__add_proxy_defaults.js',
+            checksum: 'def456',
+            status: 'success'
+          }
+        ]
+      };
+
+      const changed = reconcileRenamedMigrations(history);
+
+      expect(changed).toBe(true);
+      expect(history.migrations[0].version).toBe('111');
+      expect(history.migrations[0].file).toBe('V111__add_qwant_websearch_provider.js');
+      // The proxy migration kept V110, so its history entry must not move.
+      expect(history.migrations[1].version).toBe('110');
+      expect(history.migrations[1].file).toBe('V110__add_proxy_defaults.js');
+    });
+
     it('is a no-op on a fresh install with no matching history entries', () => {
       const history = { schemaVersion: '1.0', migrations: [] };
 
