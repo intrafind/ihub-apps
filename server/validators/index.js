@@ -32,8 +32,8 @@ export const feedbackSchema = {
       }),
     feedback: z.string().optional(),
     modelId: z.string().optional(),
-    conversationId: z.string().optional(),
-    ifinderMessageId: z.string().optional(),
+    conversationId: z.string().nullable().optional(),
+    ifinderMessageId: z.string().nullable().optional(),
     /** Run the rated message belongs to — records a `human/event` on its ledger. */
     runId: z.string().optional()
   })
