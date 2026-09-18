@@ -491,6 +491,7 @@
       "noProviders": "No providers configured.",
       "configured": "Configured",
       "notConfigured": "Not Configured",
+      "noApiKeyRequired": "No API key required",
       "enabled": "Enabled",
       "disabled": "Disabled",
       "configure": "Configure",
@@ -549,6 +550,38 @@
       "info": {
         "title": "API Key Priority",
         "description": "When a model requests an API key, the system checks in this order: 1) Model-specific API key, 2) Provider-level API key (configured here), 3) Environment variable. This allows you to set a default API key for all models of a provider while still allowing individual models to override it."
+      },
+      "websearchTest": {
+        "title": "Connectivity Test",
+        "description": "Runs one real search from this server, bypassing the result cache, and reports whether the provider answered. This is the only way to find out whether bot protection (such as the DataDome layer in front of Qwant) is blocking this server’s IP address — that is decided by where the server sends traffic from, not by the settings on this page.",
+        "savedConfigHint": "The test uses the saved configuration — save your changes first to test them.",
+        "queryLabel": "Test query (optional)",
+        "queryPlaceholder": "open source software",
+        "run": "Run Test",
+        "running": "Testing...",
+        "buttonTitle": "Run one live search and report whether this server can reach the provider",
+        "couldNotRun": "Could not run the test",
+        "blockedBy": "Blocked by {{vendor}} bot protection",
+        "whatToDo": "What to do",
+        "sampleResults": "Sample results",
+        "query": "Query",
+        "results": "Results",
+        "duration": "Took",
+        "endpoint": "Endpoint",
+        "egress": "Egress",
+        "egressDirect": "direct (no proxy)"
+      },
+      "health": {
+        "notTested": "Not tested",
+        "testing": "Testing...",
+        "allOk": "All OK",
+        "partial": "Partial",
+        "failed": "Failed",
+        "blocked": "Blocked",
+        "testSuccessful": "Test successful",
+        "testFailed": "Test failed",
+        "hideResults": "Hide results",
+        "showResults": "Show results"
       }
     },
     "models": {
@@ -1801,6 +1834,8 @@
         "websearchProvider": "Provider",
         "websearchProviderAuto": "Auto",
         "websearchProviderBrave": "Brave",
+        "websearchProviderQwant": "Qwant (no API key)",
+        "websearchProviderDesc": "Search engine used when the model has no native search. Auto uses Brave when a Brave API key is configured and Qwant otherwise; Qwant needs no API key.",
         "websearchUseNative": "Use Native Search",
         "websearchUseNativeDesc": "Use the model's built-in search when available (e.g. Google, OpenAI, Anthropic)",
         "websearchMaxResults": "Max Results",

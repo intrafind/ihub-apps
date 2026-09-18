@@ -2,33 +2,10 @@ import { emitToolProgress } from './loop/RunStream.js';
 import config from '../config.js';
 import { throttledFetch } from '../requestThrottler.js';
 import { makeSearchCacheKey, getCachedSearch, setCachedSearch } from './searchCache.js';
-import configCache from '../configCache.js';
-import tokenStorageService from './TokenStorageService.js';
 import logger from '../utils/logger.js';
-
-/**
- * Base Search Provider Interface
- * All search providers must implement this interface
- */
-class SearchProvider {
-  /**
-   * Execute a search query
-   * @param {string} query - The search query
-   * @returns {Promise<Object>} Search results in standardized format
-   */
-  // eslint-disable-next-line no-unused-vars
-  async search(query) {
-    throw new Error('search() method must be implemented');
-  }
-
-  /**
-   * Get the provider name
-   * @returns {string} Provider name
-   */
-  getName() {
-    throw new Error('getName() method must be implemented');
-  }
-}
+import { getBraveApiKey } from './search/braveApiKey.js';
+import { SearchProvider } from './search/SearchProvider.js';
+import { QwantSearchProvider } from './search/qwantProvider.js';
 
 /**
  * Brave Search Provider
@@ -44,35 +21,25 @@ class BraveSearchProvider extends SearchProvider {
    * 2. Fallback to environment variable
    */
   getApiKey() {
-    try {
-      const { data: providers } = configCache.getProviders(true);
-      const braveProvider = providers.find(p => p.id === 'brave');
-
-      if (braveProvider?.apiKey) {
-        try {
-          return tokenStorageService.decryptString(braveProvider.apiKey);
-        } catch (error) {
-          logger.error('Failed to decrypt Brave provider API key', {
-            component: 'WebSearch',
-            error
-          });
-          // Fall through to environment variable
-        }
-      }
-    } catch (error) {
-      logger.error('Failed to load Brave provider configuration', {
-        component: 'WebSearch',
-        error
-      });
-      // Fall through to environment variable
-    }
-
-    // Fallback to environment variable
-    return config.BRAVE_SEARCH_API_KEY;
+    return getBraveApiKey();
   }
 
+  /** Brave needs a subscription token; without one every call would 401. */
+  isConfigured() {
+    return Boolean(this.getApiKey());
+  }
+
+  /**
+   * @param {string} query - The search query
+   * @param {Object} [options]
+   * @param {string} [options.chatId] - Chat id, for tool-progress events
+   * @param {boolean} [options.skipCache] - Bypass the result cache and always
+   *   issue a request (used by the admin connectivity test, where a cached hit
+   *   would report success for credentials that have since stopped working).
+   * @returns {Promise<{results: Array<Object>}>}
+   */
   async search(query, options = {}) {
-    const { chatId } = options;
+    const { chatId, skipCache = false } = options;
     const apiKey = this.getApiKey();
 
     if (!apiKey) {
@@ -96,10 +63,12 @@ class BraveSearchProvider extends SearchProvider {
     // a repeat from cache skips both the network and the ~1 req/s throttle,
     // which is the difference between a result and a 429 (run wf-exec-f4f70e84).
     const cacheKey = makeSearchCacheKey('brave', query);
-    const cached = getCachedSearch(cacheKey);
-    if (cached) {
-      logger.debug('Brave search cache hit', { component: 'WebSearch', provider: 'brave' });
-      return cached;
+    if (!skipCache) {
+      const cached = getCachedSearch(cacheKey);
+      if (cached) {
+        logger.debug('Brave search cache hit', { component: 'WebSearch', provider: 'brave' });
+        return cached;
+      }
     }
 
     // Brave's Free plan is rate-limited to ~1 request/second, so an agent that
@@ -222,8 +191,11 @@ class WebSearchService {
     this.providers = new Map();
     this.defaultProvider = null;
 
-    // Register built-in providers
+    // Register built-in providers. Brave is registered first and so stays the
+    // default; Qwant is the keyless alternative an install can use with no
+    // account or API key at all.
     this.registerProvider(new BraveSearchProvider());
+    this.registerProvider(new QwantSearchProvider());
   }
 
   /**
@@ -249,6 +221,38 @@ class WebSearchService {
    */
   getAvailableProviders() {
     return Array.from(this.providers.keys());
+  }
+
+  /**
+   * Get a registered provider instance.
+   * @param {string} providerName
+   * @returns {SearchProvider|undefined}
+   */
+  getProvider(providerName) {
+    return this.providers.get(providerName);
+  }
+
+  /**
+   * Whether a provider is registered and ready to run searches (credentials
+   * present, where it needs any). Callers use this to resolve
+   * `websearch.provider: "auto"` onto a provider that will actually answer,
+   * instead of offering the model a tool whose every call fails on a missing key.
+   * @param {string} providerName
+   * @returns {boolean}
+   */
+  isProviderConfigured(providerName) {
+    const provider = this.providers.get(providerName);
+    if (!provider) return false;
+    try {
+      return provider.isConfigured();
+    } catch (error) {
+      logger.error('Failed to determine search provider configuration', {
+        component: 'WebSearch',
+        provider: providerName,
+        error
+      });
+      return false;
+    }
   }
 
   /**
@@ -306,4 +310,4 @@ class WebSearchService {
 const webSearchService = new WebSearchService();
 
 export default webSearchService;
-export { SearchProvider, BraveSearchProvider, WebSearchService };
+export { SearchProvider, BraveSearchProvider, QwantSearchProvider, WebSearchService };

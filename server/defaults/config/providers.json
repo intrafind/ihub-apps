@@ -85,6 +85,20 @@
       },
       "enabled": true,
       "category": "websearch"
+    },
+    {
+      "id": "qwant",
+      "name": {
+        "en": "Qwant Search",
+        "de": "Qwant Suche"
+      },
+      "description": {
+        "en": "Qwant web search API — privacy-focused, no API key required",
+        "de": "Qwant Websuche-API – datenschutzorientiert, kein API-Schlüssel erforderlich"
+      },
+      "enabled": true,
+      "category": "websearch",
+      "requiresApiKey": false
     }
   ]
 }

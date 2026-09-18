@@ -735,6 +735,7 @@
       "noProviders": "Keine Anbieter konfiguriert.",
       "configured": "Konfiguriert",
       "notConfigured": "Nicht konfiguriert",
+      "noApiKeyRequired": "Kein API-Schlüssel erforderlich",
       "enabled": "Aktiviert",
       "disabled": "Deaktiviert",
       "configure": "Konfigurieren",
@@ -793,6 +794,38 @@
       "info": {
         "title": "API-Schlüssel-Priorität",
         "description": "Wenn ein Modell einen API-Schlüssel anfordert, prüft das System in dieser Reihenfolge: 1) Modell-spezifischer API-Schlüssel, 2) Anbieter-Level-API-Schlüssel (hier konfiguriert), 3) Umgebungsvariable. Dies ermöglicht es Ihnen, einen Standard-API-Schlüssel für alle Modelle eines Anbieters festzulegen, während einzelne Modelle ihn überschreiben können."
+      },
+      "websearchTest": {
+        "title": "Verbindungstest",
+        "description": "Führt eine echte Suche von diesem Server aus – unter Umgehung des Ergebnis-Caches – und meldet, ob der Anbieter geantwortet hat. Nur so lässt sich feststellen, ob ein Bot-Schutz (etwa die DataDome-Schicht vor Qwant) die IP-Adresse dieses Servers blockiert. Das hängt davon ab, von wo der Server seine Anfragen sendet, nicht von den Einstellungen auf dieser Seite.",
+        "savedConfigHint": "Der Test verwendet die gespeicherte Konfiguration – speichern Sie Ihre Änderungen zuerst, um sie zu testen.",
+        "queryLabel": "Testanfrage (optional)",
+        "queryPlaceholder": "open source software",
+        "run": "Test ausführen",
+        "running": "Test läuft...",
+        "buttonTitle": "Eine echte Suche ausführen und melden, ob dieser Server den Anbieter erreichen kann",
+        "couldNotRun": "Test konnte nicht ausgeführt werden",
+        "blockedBy": "Durch {{vendor}}-Bot-Schutz blockiert",
+        "whatToDo": "Was zu tun ist",
+        "sampleResults": "Beispielergebnisse",
+        "query": "Anfrage",
+        "results": "Ergebnisse",
+        "duration": "Dauer",
+        "endpoint": "Endpunkt",
+        "egress": "Ausgang",
+        "egressDirect": "direkt (kein Proxy)"
+      },
+      "health": {
+        "notTested": "Nicht getestet",
+        "testing": "Test läuft...",
+        "allOk": "Alles OK",
+        "partial": "Teilweise",
+        "failed": "Fehlgeschlagen",
+        "blocked": "Blockiert",
+        "testSuccessful": "Test erfolgreich",
+        "testFailed": "Test fehlgeschlagen",
+        "hideResults": "Ergebnisse ausblenden",
+        "showResults": "Ergebnisse anzeigen"
       }
     },
     "models": {
@@ -2071,6 +2104,8 @@
         "websearchProvider": "Anbieter",
         "websearchProviderAuto": "Automatisch",
         "websearchProviderBrave": "Brave",
+        "websearchProviderQwant": "Qwant (ohne API-Schlüssel)",
+        "websearchProviderDesc": "Suchmaschine, die verwendet wird, wenn das Modell keine native Suche hat. Automatisch nutzt Brave, sofern ein Brave-API-Schlüssel konfiguriert ist, sonst Qwant; Qwant benötigt keinen API-Schlüssel.",
         "websearchUseNative": "Native Suche verwenden",
         "websearchUseNativeDesc": "Die integrierte Suche des Modells verwenden, wenn verfügbar (z. B. Google, OpenAI, Anthropic)",
         "websearchMaxResults": "Max. Ergebnisse",
