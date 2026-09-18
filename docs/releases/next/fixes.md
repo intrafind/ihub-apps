@@ -21,8 +21,7 @@ engine takes its own default from `platform.json` instead of a hard-coded `en`.
 - A model can still override the language for a single search with the tool's `language` parameter.
 - Brave results are cached per language, so one user's language is no longer served to the next.
 
-Set `defaultLanguage` in `contents/config/platform.json` to match your install. It has no admin UI
-yet, and a change takes effect on server restart.
+Set the default language in **Admin → Customization → Localization** to match your install.
 
 ## `BRAVE_SEARCH_ENDPOINT` and `SEARCH_CACHE_TTL_MS` are read again
 

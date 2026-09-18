@@ -202,10 +202,10 @@ user language exists — a workflow or agent run, which has no browser request
 behind it. Set `defaultLanguage` to `de` there and those runs search the German
 market instead of the US one.
 
-> **`defaultLanguage` has no admin UI.** It is edited in
-> `contents/config/platform.json` (or through `PUT /api/admin/configs/platform`)
-> and takes effect after a server restart, like the rest of the platform
-> configuration.
+Set it in **Admin → Customization → Localization**, which offers the languages
+this installation has translations for. It takes effect immediately — the
+platform cache is refreshed on save, so no restart is needed. It can also be
+edited directly in `contents/config/platform.json`.
 
 A model can still override the language for one search by passing the tool's
 `language` parameter, which beats both of the above.

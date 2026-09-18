@@ -1,5 +1,22 @@
 # Features — Unreleased
 
+## The default language is configurable in the admin UI
+
+**Admin → Customization → Localization** is a new page for the installation's default language.
+It was previously only reachable by hand-editing `contents/config/platform.json`, which meant the
+setting effectively did not exist for most admins.
+
+The dropdown offers the languages this installation actually has translations for — the same set
+the language switcher shows end users — so it is not possible to select a language with nothing
+behind it. The change applies immediately; no restart is needed.
+
+The default language decides more than the interface:
+
+- the interface language for users who have not chosen one,
+- the language **web search** runs in when a request carries none of its own, which is every
+  workflow and agent run,
+- the fallback for any text with no translation in the requested language.
+
 ## Web search with staan.ai
 
 `staanSearch` is a third script-backed search engine alongside `braveSearch` and `qwantSearch`,
