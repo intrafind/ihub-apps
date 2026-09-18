@@ -1,6 +1,6 @@
 # Feedback Visibility Toggle
 
-Status: **ready-for-agent** (spec approved, not yet implemented)
+Status: **implemented** — shipped in `feat/feedback-visibility-toggle` (3 commits: `b597642e` feature, `00322cbf` + `4dcd9d7c` review-driven and manual-testing-driven fixes, see [Review Findings & Fixes](#review-findings--fixes) below).
 
 ## Problem Statement
 
@@ -33,7 +33,7 @@ Add a new platform-wide feature flag `feedback` to the existing Feature Registry
 - New entry in `server/featureRegistry.js`: `id: 'feedback'`, `category: 'content'`, `default: true`, with `en`/`de` name and description. No `preview` flag — a stable capability, not a preview one.
 - No new admin page/component needed: the existing generic Features admin page and admin API already render and persist any registry entry automatically.
 - Server: the feedback submission route gets `requireFeature('feedback')` inserted into its middleware chain, following the same pattern already used by `tools`, `sources`, `skills`, and other gated routes. The disabled state returns the standard 403 `{ error, code: 'FEATURE_DISABLED' }` response already produced by the shared `requireFeature` middleware — no bespoke error handling needed.
-- Client: a small dedicated hook reads the resolved flag from the existing platform-config context (the same context that already exposes a per-feature boolean lookup), following the established one-hook-per-flag idiom used for other flags.
+- Client: `ChatMessageList.jsx` reads the resolved flag inline as `useFeatureFlags().isEnabled('feedback', true)`, matching how every other platform-level flag is checked in this codebase (`ChatInput.jsx`, `WorkflowMentionSearch.jsx`, etc.). The spec originally called for "a small dedicated hook... following the established one-hook-per-flag idiom used for other flags" — code review found that idiom doesn't actually exist anywhere else in the codebase (every other consumer inlines `isEnabled(...)`), so the dedicated `useFeedbackEnabled()` hook that was first built was removed in favor of the inline call. See [Review Findings & Fixes](#review-findings--fixes).
 - The shared chat message rendering component receives the resolved boolean as a prop, threaded through the shared message-list wrapper, following the exact precedent already used for another optional per-message capability threaded the same way. Both the inline rating control and the feedback submission modal are conditioned on this single prop — one seam, not two independent checks.
 - Because this is a single shared component used by every chat surface (main chat, compare mode, canvas, Office add-in), gating it once at that shared layer covers every surface without surface-specific changes.
 - The pre-existing, unrelated storage-only flag stays untouched and independent; it is not renamed, removed, or merged into the new flag. A doc correction (below) clarifies the distinction.
@@ -64,19 +64,39 @@ Single tracer-bullet ticket — the feature is small enough to fit one context w
 
 **Blocked by:** None (can start immediately)
 
-**Status:** ready-for-agent
+**Status:** done
 
-- [ ] New registry entry `feedback` in `server/featureRegistry.js` (`category: 'content'`, `default: true`, `en`/`de` name + description, no `preview` flag)
-- [ ] `POST /api/feedback` (`server/routes/chat/feedbackRoutes.js`) gated with `requireFeature('feedback')`
-- [ ] New client hook (e.g. `useFeedbackEnabled()`) reading the resolved flag from the platform-config context, following the existing one-hook-per-flag idiom
-- [ ] Flag threaded as a prop through the shared message-list wrapper into `ChatMessage`, gating both the inline star-rating row and the feedback modal behind the one prop
-- [ ] No config migration added — confirmed unnecessary: the Feature Registry resolves the missing key to `default: true` for existing installations
-- [ ] Server integration test: `POST /api/feedback` → 403 `FEATURE_DISABLED` when disabled, normal (2xx) behavior when enabled — real route request, following the pattern in `server/tests/oauth-connections.test.js`
-- [ ] Client render test under `tests/unit/client/`: feedback controls absent from `ChatMessage`/`ChatMessageList` output when disabled, present when enabled — component-render level, following the pattern in `chat-component.test.jsx`
-- [ ] `docs/feedback-feature.md` corrected: clarify that `features.feedbackTracking` is storage-only (not a UI-visibility toggle), and add a short section documenting the new `feedback` registry flag
-- [ ] Changelog entry added under `docs/releases/next/` via the `/document-feature` skill (admin-visible feature addition)
-- [ ] `npm run lint:fix && npm run format:fix` run clean before commit
-- [ ] Admin Usage Reports feedback analytics verified unaffected (no regression — out of scope for changes, but confirm nothing broke)
+- [x] New registry entry `feedback` in `server/featureRegistry.js` (`category: 'content'`, `default: true`, `en`/`de` name + description, no `preview` flag)
+- [x] `POST /api/feedback` (`server/routes/chat/feedbackRoutes.js`) gated with `requireFeature('feedback')`
+- [x] Client reads the resolved flag from the platform-config context — inline `useFeatureFlags().isEnabled('feedback', true)` in `ChatMessageList.jsx`, not a dedicated hook (see [Review Findings & Fixes](#review-findings--fixes))
+- [x] Flag threaded as a prop through the shared message-list wrapper into `ChatMessage`, gating both the inline star-rating row and the feedback modal behind the one prop
+- [x] No config migration added — confirmed unnecessary: the Feature Registry resolves the missing key to `default: true` for existing installations
+- [x] Server integration test: `POST /api/feedback` → 403 `FEATURE_DISABLED` when disabled, normal (2xx) behavior when enabled — real route request, following the pattern in `server/tests/oauth-connections.test.js` (`server/tests/feedback-visibility.test.js`)
+- [x] Client render test under `tests/unit/client/`: feedback controls absent from `ChatMessage`/`ChatMessageList` output when disabled, present when enabled — component-render level, following the pattern in `chat-component.test.jsx` (`tests/unit/client/chat-message-feedback-visibility.test.jsx`)
+- [x] `docs/feedback-feature.md` corrected: clarify that `features.feedbackTracking` is storage-only (not a UI-visibility toggle), and add a short section documenting the new `feedback` registry flag — corrected twice, see [Review Findings & Fixes](#review-findings--fixes) (the first pass still pointed at the wrong config file)
+- [x] Changelog entry added under `docs/releases/next/` via the `/document-feature` skill (admin-visible feature addition)
+- [x] `npm run lint:fix && npm run format:fix` run clean before commit
+- [x] Admin Usage Reports feedback analytics verified unaffected (no regression — out of scope for changes, confirmed nothing broke)
+
+## Review Findings & Fixes
+
+A `/code-review high` pass (8 finder angles, 1-vote verification) ran against the diff after the initial implementation (`b597642e`). Findings were triaged and mostly fixed in a follow-up commit (`00322cbf`); manually verifying the shipped feature end-to-end in Docker then surfaced one more, unrelated bug, fixed in a second follow-up commit (`4dcd9d7c`).
+
+**Fixed (`00322cbf`):**
+
+- **Docs pointed at the wrong config file.** `docs/feedback-feature.md` told admins to set the new flag via `contents/config/platform.json`; the server actually reads it from `contents/config/features.json` (`configCache.getFeatures()`, a flat top-level key — same file as `skills`, `workflows`, etc.). Following the doc's own example literally would have had no effect. Corrected the table, the JSON example, and added a matching Troubleshooting entry for the new `403 FEATURE_DISABLED` failure mode (the old Troubleshooting section only covered the unrelated `feedbackTracking` silent-non-persistence case).
+- **The "one-hook-per-flag idiom" didn't exist.** `useFeedbackEnabled()` (in `useFeatureFlags.js`) claimed to follow an established codebase pattern that a repo-wide grep showed doesn't exist — every other flag consumer inlines `useFeatureFlags().isEnabled(id, default)`. Removed the dedicated hook; `ChatMessageList.jsx` now inlines the check like everywhere else. This also removed a triplicated `true` default (registry entry, hook, and `ChatMessage`'s prop default all hardcoded it independently with nothing keeping them in sync).
+- **Modal could silently reappear.** `ChatMessage.jsx`'s `showFeedbackForm` state was never reset when `feedbackEnabled` turned false — the modal only stopped *rendering* (via the new prop guard), so if the flag flipped back on before the user closed it another way, the modal could reappear on its own. Added a `useEffect` that resets `showFeedbackForm` when `feedbackEnabled` becomes false.
+
+**Deliberately not changed** (reported, reasoning recorded so it isn't re-litigated):
+
+- `requireFeature('feedback')` runs before `authRequired` in `feedbackRoutes.js`, so an unauthenticated request gets `403 FEATURE_DISABLED` instead of `401` while the flag is off. Matches the majority existing convention in this codebase (`toolRoutes.js`, `dataRoutes.js`'s `/api/prompts`, all `integrations/*.js` routers) — not a regression specific to this feature.
+- `server/package-lock.json`'s version field changed `5.4.13` → `5.5.9` in the same diff. Unrelated to this feature (syncs the lockfile to a version `package.json` already had from an earlier, separate release-bump commit); reverting it would reintroduce that inconsistency, so left as-is.
+- The `StarRating` test mock in `chat-message-feedback-visibility.test.jsx` uses one non-unique `data-testid` even though `ChatMessage` renders `StarRating` twice (trigger row + modal). No current test opens the modal, so this doesn't fail today — latent fragility for whoever writes that test next, not fixed pre-emptively.
+
+**Found during manual Docker verification, fixed in a second follow-up (`4dcd9d7c`):**
+
+- **`POST /api/feedback` rejected every normal submission with 400**, unrelated to the visibility flag itself. `server/validators/index.js`'s `feedbackSchema` declared `conversationId`/`ifinderMessageId` as `z.string().optional()`, which in Zod v4 accepts `undefined` but not `null` — and the client (`ChatMessage.jsx`) explicitly sends `null` for both whenever there's nothing to report (e.g. no `conversationId` yet in `localStorage` on a fresh install, or a non-iFinder message). Pre-existing bug, surfaced only because verifying this feature required actually submitting feedback end-to-end for the first time in a while. Fixed with `.nullable().optional()`, matching the existing pattern in `auditEntrySchema.js`. Regression test added: `tests/unit/server/feedbackSchema.test.js`.
 
 ## Further Notes
 
