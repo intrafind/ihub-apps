@@ -12,6 +12,7 @@ import { RUN_LOG_EVENTS } from '../../../shared/runEvents.js';
 import { isValidId } from '../../utils/pathSecurity.js';
 import { createPresenceMap, hasRemote, publish, subscribe } from '../../clusterBus.js';
 import logger from '../../utils/logger.js';
+import { getPlatformDefaultLanguage } from '../search/searchLanguage.js';
 
 /** Presence kind announcing which worker holds a running execution's abort controller. */
 export const EXECUTION_PRESENCE_KIND = 'execution';
@@ -1017,7 +1018,9 @@ export class WorkflowEngine {
       nodeResults: updatedState.data?.nodeResults || {},
       iteration: currentIteration, // Current iteration count for this node
       user: options.user,
-      language: options.language || 'en',
+      // Falls back to the install's configured language, not a hard-coded 'en':
+      // a German install running a workflow should search and localize in German.
+      language: options.language || getPlatformDefaultLanguage(),
       abortSignal: this.abortControllers.get(executionId)?.signal,
       engine: this, // Reference to engine for sub-workflow spawning (planner nodes)
       depth: options?.depth || 0 // Current sub-workflow nesting depth

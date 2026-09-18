@@ -83,7 +83,7 @@ export class ToolNodeExecutor extends BaseNodeExecutor {
     this.validateConfig(node, ['toolId']);
 
     const { config } = node;
-    const { user, chatId, appConfig } = context;
+    const { user, chatId, appConfig, language } = context;
     const { toolId, parameters = {}, outputVariable, timeout, optional = false } = config;
 
     this.logger.info('Executing tool node', {
@@ -123,6 +123,9 @@ export class ToolNodeExecutor extends BaseNodeExecutor {
       const result = await this.executeWithTimeout(
         toolId,
         {
+          // `language` first so an explicit parameter on the node still wins —
+          // it is a default the tool may use, not an override.
+          language,
           ...resolvedParams,
           chatId,
           user,

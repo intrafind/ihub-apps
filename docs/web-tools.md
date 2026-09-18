@@ -177,6 +177,39 @@ STAAN_API_KEY=your_staan_api_key_here
 
 The system checks admin panel configuration first, then falls back to environment variables.
 
+### Search Language
+
+Every engine searches in **the user's language**. It is resolved once, the same
+way for all three:
+
+1. The language of the request — the chat/app language, which comes from the
+   client's explicit choice and otherwise from the browser's `Accept-Language`.
+2. `defaultLanguage` in `contents/config/platform.json`, the install-wide
+   default the rest of the platform already uses for localization.
+3. `en`, only if the platform config cannot be read at all.
+
+Each provider then maps that language onto whatever its own API expects, and
+falls back to its own default only when the engine does not serve that language:
+
+| Provider | Sends | Falls back to |
+|----------|-------|---------------|
+| Brave | `search_lang` (ISO 639-1) and `country` (2-letter), when the language is one Brave lists | no language parameters — an untargeted search |
+| Staan | `market` (`de-de`, `en-gb`, …) | `en-us` |
+| Qwant | `locale` (`de_DE`, `en_GB`, …) | `en_US` |
+
+Step 2 is what makes a German install behave correctly in the places where no
+user language exists — a workflow or agent run, which has no browser request
+behind it. Set `defaultLanguage` to `de` there and those runs search the German
+market instead of the US one.
+
+> **`defaultLanguage` has no admin UI.** It is edited in
+> `contents/config/platform.json` (or through `PUT /api/admin/configs/platform`)
+> and takes effect after a server restart, like the rest of the platform
+> configuration.
+
+A model can still override the language for one search by passing the tool's
+`language` parameter, which beats both of the above.
+
 ### Connectivity Test (Admin UI)
 
 Whether a search provider *can be reached from this server* is a separate
@@ -253,6 +286,7 @@ The billable search count (`server_tool_use.web_search_requests`) is recorded as
 - `extractContent` (boolean, optional): Extract full content from top results (default: configured by app)
 - `maxResults` (number, optional): Maximum results to return (default: configured by app, max: 10)
 - `contentMaxLength` (number, optional): Maximum content length per page (default: configured by app)
+- `language` (string, optional): Language or locale for the results, e.g. `en`, `de` or `en-GB` (default: the user's language — see [Search Language](#search-language))
 
 **Returns**: Array of search results with titles, URLs, descriptions, and optionally extracted page content.
 

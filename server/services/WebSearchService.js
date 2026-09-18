@@ -5,13 +5,141 @@ import { makeSearchCacheKey, getCachedSearch, setCachedSearch } from './searchCa
 import logger from '../utils/logger.js';
 import { getBraveApiKey } from './search/braveApiKey.js';
 import { SearchProvider } from './search/SearchProvider.js';
+import { resolveSearchLanguage } from './search/searchLanguage.js';
 import { QwantSearchProvider } from './search/qwantProvider.js';
 import { StaanSearchProvider } from './search/staanProvider.js';
+
+/**
+ * Languages accepted as Brave's `search_lang` (ISO 639-1).
+ *
+ * Brave validates this parameter and does not publish the accepted set on a
+ * page that can be read without a dashboard login, so the list is an allowlist
+ * rather than a pass-through: a language that is not on it means the request is
+ * sent with no language parameters at all, which is exactly how Brave search
+ * behaved before this existed. The cost of being wrong is therefore a search
+ * that is not language-targeted, never a failed one.
+ */
+export const BRAVE_SEARCH_LANGUAGES = new Set([
+  'ar',
+  'bg',
+  'ca',
+  'cs',
+  'da',
+  'de',
+  'el',
+  'en',
+  'es',
+  'et',
+  'fi',
+  'fr',
+  'he',
+  'hr',
+  'hu',
+  'id',
+  'it',
+  'ja',
+  'ko',
+  'lt',
+  'lv',
+  'nb',
+  'nl',
+  'pl',
+  'pt',
+  'ro',
+  'ru',
+  'sk',
+  'sl',
+  'sv',
+  'th',
+  'tr',
+  'uk',
+  'vi',
+  'zh'
+]);
+
+/** Regions accepted as Brave's `country` (ISO 3166-1 alpha-2), same caveat. */
+export const BRAVE_COUNTRIES = new Set([
+  'AR',
+  'AT',
+  'AU',
+  'BE',
+  'BR',
+  'CA',
+  'CH',
+  'CL',
+  'CN',
+  'DE',
+  'DK',
+  'ES',
+  'FI',
+  'FR',
+  'GB',
+  'HK',
+  'ID',
+  'IN',
+  'IT',
+  'JP',
+  'KR',
+  'MX',
+  'MY',
+  'NL',
+  'NO',
+  'NZ',
+  'PH',
+  'PL',
+  'PT',
+  'RU',
+  'SA',
+  'SE',
+  'TW',
+  'TR',
+  'US',
+  'ZA'
+]);
+
+/**
+ * Map a language tag onto Brave's language/region query parameters.
+ *
+ * Brave takes the two separately — `search_lang` as ISO 639-1 and `country` as
+ * a 2-character country code (their own example is `country=DE&search_lang=de`)
+ * — so `"de-CH"` targets German content without claiming a Swiss market Brave
+ * may not serve, and a bare `"de"` sends the language only.
+ *
+ * @param {string} [language] - Language or locale tag
+ * @returns {{search_lang?: string, country?: string}} Params to add, possibly empty
+ */
+export function resolveBraveSearchParams(language) {
+  if (!language || typeof language !== 'string') return {};
+
+  const normalized = language.trim().toLowerCase().replace(/_/g, '-');
+  const [lang, region] = normalized.split('-');
+
+  const params = {};
+  if (BRAVE_SEARCH_LANGUAGES.has(lang)) params.search_lang = lang;
+  if (region) {
+    const country = region.toUpperCase();
+    if (BRAVE_COUNTRIES.has(country)) params.country = country;
+  }
+  // A country without a language Brave knows would narrow the market while
+  // leaving the content language to Brave's default, which is not what the
+  // caller asked for.
+  return params.search_lang ? params : {};
+}
 
 /**
  * Brave Search Provider
  */
 class BraveSearchProvider extends SearchProvider {
+  /**
+   * @param {Object} [deps]
+   * @param {(language?: string) => string} [deps.languageResolver] - Search-language
+   *   resolution (user's language, else the install default), injected by tests.
+   */
+  constructor({ languageResolver } = {}) {
+    super();
+    this.languageResolver = languageResolver || resolveSearchLanguage;
+  }
+
   getName() {
     return 'brave';
   }
@@ -40,7 +168,7 @@ class BraveSearchProvider extends SearchProvider {
    * @returns {Promise<{results: Array<Object>}>}
    */
   async search(query, options = {}) {
-    const { chatId, skipCache = false } = options;
+    const { chatId, language, skipCache = false } = options;
     const apiKey = this.getApiKey();
 
     if (!apiKey) {
@@ -63,7 +191,14 @@ class BraveSearchProvider extends SearchProvider {
     // Query cache. Across re-plan/verify rounds the same query recurs; serving
     // a repeat from cache skips both the network and the ~1 req/s throttle,
     // which is the difference between a result and a 429 (run wf-exec-f4f70e84).
-    const cacheKey = makeSearchCacheKey('brave', query);
+    // The user's language decides the market; `platform.defaultLanguage` stands
+    // in when the caller had none to give (a workflow or agent run).
+    const searchLanguage = this.languageResolver(language);
+    let braveParams = resolveBraveSearchParams(searchLanguage);
+
+    // Language participates in the key: without it the first caller's language
+    // would be served to every later caller asking in another one.
+    const cacheKey = makeSearchCacheKey('brave', query, braveParams);
     if (!skipCache) {
       const cached = getCachedSearch(cacheKey);
       if (cached) {
@@ -82,7 +217,8 @@ class BraveSearchProvider extends SearchProvider {
 
     while (true) {
       try {
-        res = await throttledFetch('braveSearch', `${endpoint}?q=${encodeURIComponent(query)}`, {
+        const params = new URLSearchParams({ q: query, ...braveParams });
+        res = await throttledFetch('braveSearch', `${endpoint}?${params.toString()}`, {
           headers: {
             'X-Subscription-Token': apiKey,
             Accept: 'application/json'
@@ -117,6 +253,24 @@ class BraveSearchProvider extends SearchProvider {
       }
 
       if (res.ok) break;
+
+      // Brave validates `search_lang` / `country` and the accepted values are
+      // not published anywhere readable without a dashboard login, so a wrong
+      // entry in the allowlist above must not cost the search. On a validation
+      // refusal, retry once with the language dropped — the result is a
+      // non-targeted search rather than no search at all, and the log line says
+      // which language to remove from the list.
+      if ((res.status === 422 || res.status === 400) && Object.keys(braveParams).length > 0) {
+        logger.warn('Brave rejected the language parameters; retrying without them', {
+          component: 'WebSearch',
+          provider: 'brave',
+          status: res.status,
+          language: searchLanguage,
+          braveParams
+        });
+        braveParams = {};
+        continue;
+      }
 
       // Retry transient rate-limit (429) and server (503) responses.
       if ((res.status === 429 || res.status === 503) && attempt < MAX_RETRIES) {

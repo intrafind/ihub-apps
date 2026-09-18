@@ -103,11 +103,12 @@ function recordingFetch(responses) {
  * A provider wired to canned responses and a fixed key, with retries made
  * instant. Pass `apiKey: null` for an install that has configured none.
  */
-function makeProvider(responses, { apiKey = 'test-key' } = {}) {
+function makeProvider(responses, { apiKey = 'test-key', languageResolver } = {}) {
   const fetchImpl = recordingFetch(responses);
   const provider = new StaanSearchProvider({
     fetchImpl,
     apiKeyResolver: () => apiKey,
+    ...(languageResolver ? { languageResolver } : {}),
     retryBackoffMs: 1
   });
   return { provider, fetchImpl };
@@ -425,6 +426,24 @@ describe('StaanSearchProvider', () => {
     const { provider, fetchImpl } = makeProvider(jsonResponse(webPayload(fakeResults(1))));
     await provider.search('test', { language: 'de' });
     assert.equal(new URL(fetchImpl.calls[0].url).searchParams.get('market'), 'de-de');
+  });
+
+  it("uses the install's configured language when the caller supplies none", async () => {
+    // The workflow/agent path passes no language, and before this a German
+    // install's research runs were silently answered from the US market.
+    const { provider, fetchImpl } = makeProvider(jsonResponse(webPayload(fakeResults(1))), {
+      languageResolver: () => 'de'
+    });
+    await provider.search('test');
+    assert.equal(new URL(fetchImpl.calls[0].url).searchParams.get('market'), 'de-de');
+  });
+
+  it("the user's language still beats the install default", async () => {
+    const { provider, fetchImpl } = makeProvider(jsonResponse(webPayload(fakeResults(1))), {
+      languageResolver: language => language || 'de'
+    });
+    await provider.search('test', { language: 'en-GB' });
+    assert.equal(new URL(fetchImpl.calls[0].url).searchParams.get('market'), 'en-gb');
   });
 
   it('truncates the results to the requested count', async () => {

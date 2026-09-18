@@ -37,6 +37,7 @@
  */
 import { SearchProvider } from './SearchProvider.js';
 import { getStaanApiKey } from './staanApiKey.js';
+import { resolveSearchLanguage } from './searchLanguage.js';
 import { emitToolProgress } from '../loop/RunStream.js';
 import config from '../../config.js';
 import { throttledFetch } from '../../requestThrottler.js';
@@ -92,10 +93,13 @@ const DEFAULT_REGION_BY_LANGUAGE = {
 };
 
 /**
- * Market used when the requested one is unknown or missing.
+ * Market used when Staan does not serve the requested language at all.
  *
- * Deliberately not the API's own default: Staan defaults to `fr-fr`, which
- * would answer an English install's searches with French-market results.
+ * Reached only after {@link resolveSearchLanguage} has already applied the
+ * user's language and the install's `platform.defaultLanguage`, so this is a
+ * last resort rather than the usual path. Deliberately not the API's own
+ * default: Staan defaults to `fr-fr`, which would answer an English install's
+ * searches with French-market results.
  */
 export const STAAN_DEFAULT_MARKET = 'en-us';
 
@@ -336,13 +340,16 @@ class StaanSearchProvider extends SearchProvider {
    *   fetch, queued under the `staanSearch` tool id so the tool's
    *   `concurrency` / `requestDelayMs` apply.
    * @param {() => string|undefined} [deps.apiKeyResolver] - Key lookup, injected by tests.
+   * @param {(language?: string) => string} [deps.languageResolver] - Search-language
+   *   resolution (user's language, else the install default), injected by tests.
    * @param {number} [deps.retryBackoffMs=1200] - Base backoff between retries;
    *   lowered by tests so exercising the retry budget costs milliseconds.
    */
-  constructor({ fetchImpl, apiKeyResolver, retryBackoffMs = 1200 } = {}) {
+  constructor({ fetchImpl, apiKeyResolver, languageResolver, retryBackoffMs = 1200 } = {}) {
     super();
     this.fetchImpl = fetchImpl || ((url, options) => throttledFetch('staanSearch', url, options));
     this.apiKeyResolver = apiKeyResolver || getStaanApiKey;
+    this.languageResolver = languageResolver || resolveSearchLanguage;
     this.retryBackoffMs = retryBackoffMs;
   }
 
@@ -395,7 +402,9 @@ class StaanSearchProvider extends SearchProvider {
       );
     }
 
-    const market = resolveStaanMarket(language);
+    // The user's language decides the market; `platform.defaultLanguage` stands
+    // in when the caller had none to give (a workflow or agent run).
+    const market = resolveStaanMarket(this.languageResolver(language));
     const endpoint = config.STAAN_SEARCH_ENDPOINT || STAAN_API_URL;
     const wanted = clampCount(count);
 
