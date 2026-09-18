@@ -105,7 +105,11 @@ function setPlatform({ enabled = true, hosts = ['claude.ai'], ...rest } = {}) {
     oauth: {
       enabled: { authz: true, clients: true },
       defaultTokenExpirationMinutes: 60,
-      cimd: { enabled, allowedClientHosts: hosts, ...rest }
+      // `auto` unless a test says otherwise: these tests are about identity and
+      // the host allowlist, and the shipped default (`approval`) would refuse
+      // every client for want of an approval record. The approval gate has its
+      // own suite — see oauth-cimd-governance.test.js.
+      cimd: { enabled, allowedClientHosts: hosts, approvalMode: 'auto', ...rest }
     }
   };
 }

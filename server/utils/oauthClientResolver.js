@@ -17,16 +17,40 @@
  *
  * @module utils/oauthClientResolver
  */
-import { findClientById, loadOAuthClients } from './oauthClientManager.js';
+import { findCimdClientPolicy, findClientById, loadOAuthClients } from './oauthClientManager.js';
 import {
   clientIdHost,
   fetchClientMetadata,
   getCachedClientMetadata,
-  isClientIdUrl,
-  isHostAllowed
+  isClientIdUrl
 } from './clientIdMetadata.js';
+import {
+  approvalSatisfied,
+  effectiveField,
+  evaluateCimdAccess,
+  evaluateCimdActivation
+} from './oauthClientPolicy.js';
 import { DCR_DEFAULT_ALLOWED_SCOPES } from './dcrValidation.js';
 import logger from './logger.js';
+
+/** Where the client store lives, with the shipped default applied. */
+function clientsFileFor(platform) {
+  return platform?.oauth?.clientsFile || 'contents/config/oauth-clients.json';
+}
+
+/**
+ * A copy of a policy list, tolerating a store that was edited by hand.
+ *
+ * The admin API validates what it writes, but `oauth-clients.json` is a file an
+ * operator can open. A string where a list belongs must narrow nothing rather
+ * than throw on the request path.
+ *
+ * @param {*} value - The effective value for a list-shaped policy field
+ * @returns {Array<string>} The list, or an empty one
+ */
+function policyList(value) {
+  return Array.isArray(value) ? [...value] : [];
+}
 
 /**
  * Read the CIMD policy out of the platform config, with the shipped defaults
@@ -44,6 +68,11 @@ export function getCimdConfig(platform = {}) {
     allowedClientHosts: Array.isArray(cimd.allowedClientHosts)
       ? cimd.allowedClientHosts
       : ['claude.ai'],
+    blockedClientHosts: Array.isArray(cimd.blockedClientHosts) ? cimd.blockedClientHosts : [],
+    // `approval` is the shipped default: passing the host allowlist makes a
+    // client eligible, not allowed. An installation that wants the allowlist
+    // to be the whole decision sets `auto` explicitly.
+    approvalMode: cimd.approvalMode === 'auto' ? 'auto' : 'approval',
     allowedGroups: Array.isArray(cimd.allowedGroups) ? cimd.allowedGroups : [],
     allowedScopes:
       Array.isArray(cimd.allowedScopes) && cimd.allowedScopes.length > 0
@@ -60,23 +89,32 @@ export function getCimdConfig(platform = {}) {
 }
 
 /**
- * Build a client object from a metadata document and the CIMD policy.
+ * Build a client object from a metadata document and the effective policy.
  *
  * A CIMD client is never trusted and always requires consent. There is no
  * administrator anywhere in its creation — a client declared itself by
  * publishing a document — so the consent screen is the only authorization
- * gate, and `trusted` must not become settable for it by any path.
+ * gate, and `trusted` must not become settable for it by any path. Approving
+ * a client is not trusting it: an approved client still sends every user
+ * through sign-in and consent.
  *
- * `active` is computed rather than stored, which is what makes disabling CIMD
- * (or dropping a host from the allowlist) an immediate kill switch for every
- * token already issued to such a client.
+ * Identity — name, redirect URIs, grant types — comes from the document.
+ * Policy comes from the stored record layered over the platform defaults,
+ * field by field, so an administrator who set a global `allowedApps` and then
+ * narrows one client's `allowedGroups` keeps the global apps list on it.
+ *
+ * `active` is computed rather than stored, which is what makes each of
+ * disabling CIMD, blocking the host, blocking the client and withdrawing its
+ * approval an immediate kill switch for every token already issued to it.
  *
  * @param {Object} metadata - Validated document metadata
  * @param {Object} cimdConfig - Normalized policy from {@link getCimdConfig}
+ * @param {Object|null} [record] - Stored per-client policy record, if any
  * @returns {Object} Client object shaped like `createOAuthClient` output
  */
-export function buildCimdClient(metadata, cimdConfig) {
+export function buildCimdClient(metadata, cimdConfig, record = null) {
   const host = clientIdHost(metadata.clientId);
+  const activation = evaluateCimdActivation(metadata.clientId, cimdConfig, record);
 
   return {
     id: metadata.clientId,
@@ -84,22 +122,32 @@ export function buildCimdClient(metadata, cimdConfig) {
     name: metadata.name,
     description: `Client metadata document at ${host}`,
     clientSecret: null,
-    scopes: [...cimdConfig.allowedScopes],
-    allowedApps: [...cimdConfig.allowedApps],
-    allowedModels: [...cimdConfig.allowedModels],
-    allowedPrompts: [...cimdConfig.allowedPrompts],
-    allowedGroups: [...cimdConfig.allowedGroups],
-    tokenExpirationMinutes: cimdConfig.tokenExpirationMinutes,
-    active: cimdConfig.enabled && isHostAllowed(metadata.clientId, cimdConfig.allowedClientHosts),
-    createdAt: null,
+    scopes: policyList(effectiveField(record, cimdConfig, 'scopes', 'allowedScopes')),
+    allowedApps: policyList(effectiveField(record, cimdConfig, 'allowedApps')),
+    allowedModels: policyList(effectiveField(record, cimdConfig, 'allowedModels')),
+    allowedPrompts: policyList(effectiveField(record, cimdConfig, 'allowedPrompts')),
+    allowedGroups: policyList(effectiveField(record, cimdConfig, 'allowedGroups')),
+    tokenExpirationMinutes: effectiveField(record, cimdConfig, 'tokenExpirationMinutes'),
+    active: activation.active,
+    inactiveCode: activation.code || null,
+    approvalState: record?.approvalState || null,
+    hasPolicyRecord: !!record,
+    createdAt: record?.createdAt || null,
     createdBy: 'cimd',
-    lastUsed: null,
+    lastUsed: record?.lastUsed || null,
     lastRotated: null,
-    metadata: { cimd: true, host, clientUri: metadata.clientUri || '' },
+    metadata: {
+      ...(record?.metadata || {}),
+      cimd: true,
+      host,
+      clientUri: metadata.clientUri || ''
+    },
     clientType: 'public',
     grantTypes: [...metadata.grantTypes],
     redirectUris: [...metadata.redirectUris],
     postLogoutRedirectUris: [],
+    // Locked by definition, for both kinds of record: a client that declared
+    // itself cannot also be pre-approved to skip the user's decision.
     consentRequired: true,
     trusted: false,
     personal: false,
@@ -124,11 +172,11 @@ export function buildCimdClient(metadata, cimdConfig) {
  *   the request path (`mcpAuth`) and on the token endpoint, which must not
  *   depend on the client's host being reachable.
  * @returns {Promise<{ok: true, client: Object} |
- *           {ok: false, error: string, reason: string, host?: string}>}
+ *           {ok: false, error: string, reason: string, code?: string,
+ *            host?: string, clientName?: string}>}
  */
 export async function resolveOAuthClient(clientId, platform = {}, options = {}) {
-  const oauthConfig = platform.oauth || {};
-  const clientsFilePath = oauthConfig.clientsFile || 'contents/config/oauth-clients.json';
+  const clientsFilePath = clientsFileFor(platform);
 
   if (!isClientIdUrl(clientId)) {
     const clientsConfig = loadOAuthClients(clientsFilePath);
@@ -148,34 +196,55 @@ export async function resolveOAuthClient(clientId, platform = {}, options = {}) 
 
   const cimdConfig = getCimdConfig(platform);
   const host = clientIdHost(clientId);
+  const record = findCimdClientPolicy(clientId, clientsFilePath);
 
-  if (!cimdConfig.enabled) {
-    return {
-      ok: false,
-      error: 'invalid_client',
-      reason: 'client metadata documents are not enabled on this server',
-      host
-    };
-  }
-
-  // Before any network call: an unlisted host must never cause an outbound
-  // request, or the authorize endpoint becomes a request forwarder.
-  if (!isHostAllowed(clientId, cimdConfig.allowedClientHosts)) {
-    logger.warn('[OAuth CIMD] Rejected client from a host that is not allowed', {
+  // Refusals that need no document are decided first, because none of them may
+  // cause a network call: an unlisted or blocked host must never make the
+  // authorize endpoint issue an outbound request on a caller-supplied URL.
+  const access = evaluateCimdAccess(clientId, cimdConfig, record);
+  if (!access.active) {
+    logger.warn('[OAuth CIMD] Client refused by policy', {
       component: 'OAuthClientResolver',
-      host
+      host,
+      code: access.code
     });
     return {
       ok: false,
       error: 'invalid_client',
-      reason: 'client host is not allowed on this server',
-      host
+      reason: access.reason,
+      code: access.code,
+      host,
+      clientName: record?.metadata?.displayName || ''
     };
   }
 
+  // The approval gate is evaluated *after* the document, unlike everything
+  // above. The host is already allowlisted by this point, so fetching costs no
+  // new exposure, and it is what lets the refusal page and the pending row
+  // name the software the user actually tried to connect.
+  const approvalRefusal = metadata => {
+    if (approvalSatisfied(record, cimdConfig.approvalMode)) return null;
+    logger.info('[OAuth CIMD] Client awaiting administrator approval', {
+      component: 'OAuthClientResolver',
+      host,
+      clientId
+    });
+    return {
+      ok: false,
+      error: 'invalid_client',
+      reason: 'this client has not been approved by an administrator',
+      code: 'approval_pending',
+      host,
+      clientId,
+      clientName: metadata?.name || record?.metadata?.displayName || ''
+    };
+  };
+
   const cached = getCachedClientMetadata(clientId);
   if (cached) {
-    return { ok: true, client: buildCimdClient(cached, cimdConfig) };
+    return (
+      approvalRefusal(cached) || { ok: true, client: buildCimdClient(cached, cimdConfig, record) }
+    );
   }
 
   if (options.allowFetch !== true) {
@@ -183,6 +252,7 @@ export async function resolveOAuthClient(clientId, platform = {}, options = {}) 
       ok: false,
       error: 'invalid_client',
       reason: 'client metadata document is not available',
+      code: 'document_unavailable',
       host
     };
   }
@@ -197,10 +267,21 @@ export async function resolveOAuthClient(clientId, platform = {}, options = {}) 
       host,
       reason: fetched.reason
     });
-    return { ok: false, error: 'invalid_client', reason: fetched.reason, host };
+    return {
+      ok: false,
+      error: 'invalid_client',
+      reason: fetched.reason,
+      code: 'document_rejected',
+      host
+    };
   }
 
-  return { ok: true, client: buildCimdClient(fetched.metadata, cimdConfig) };
+  return (
+    approvalRefusal(fetched.metadata) || {
+      ok: true,
+      client: buildCimdClient(fetched.metadata, cimdConfig, record)
+    }
+  );
 }
 
 /**
@@ -211,7 +292,8 @@ export async function resolveOAuthClient(clientId, platform = {}, options = {}) 
  * add: the access token was issued for this `client_id`, and the code or
  * refresh entry pins `client_id`, `redirect_uri` and the PKCE verifier. What
  * still has to be re-checked on every request is the *policy* — CIMD enabled,
- * host still allowed — which is exactly what this returns.
+ * host still allowed and not blocked, client not blocked, approval still
+ * standing — which is exactly what this returns null for when it fails.
  *
  * @param {string} clientId - CIMD client identifier (an HTTPS URL)
  * @param {Object} platform - Platform configuration
@@ -221,8 +303,8 @@ export function buildPolicyCimdClient(clientId, platform = {}) {
   if (!isClientIdUrl(clientId)) return null;
 
   const cimdConfig = getCimdConfig(platform);
-  if (!cimdConfig.enabled) return null;
-  if (!isHostAllowed(clientId, cimdConfig.allowedClientHosts)) return null;
+  const record = findCimdClientPolicy(clientId, clientsFileFor(platform));
+  if (!evaluateCimdActivation(clientId, cimdConfig, record).active) return null;
 
   const cached = getCachedClientMetadata(clientId);
   const host = clientIdHost(clientId);
@@ -230,7 +312,9 @@ export function buildPolicyCimdClient(clientId, platform = {}) {
   return buildCimdClient(
     cached || {
       clientId,
-      name: host,
+      // Display only, and only when no document is cached on this worker. The
+      // record never supplies identity — see `buildCimdClient`.
+      name: record?.metadata?.displayName || host,
       clientUri: '',
       // No document to hand out redirect URIs from. Nothing on these paths
       // matches a redirect URI — the authorization request already did — and
@@ -239,6 +323,7 @@ export function buildPolicyCimdClient(clientId, platform = {}) {
       redirectUris: [],
       grantTypes: ['authorization_code', 'refresh_token']
     },
-    cimdConfig
+    cimdConfig,
+    record
   );
 }

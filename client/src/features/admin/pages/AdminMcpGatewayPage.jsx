@@ -71,6 +71,10 @@ function AdminMcpGatewayPage() {
   const cimdHosts = Array.isArray(oauth.cimd?.allowedClientHosts)
     ? oauth.cimd.allowedClientHosts
     : [];
+  const cimdBlockedHosts = Array.isArray(oauth.cimd?.blockedClientHosts)
+    ? oauth.cimd.blockedClientHosts
+    : [];
+  const cimdApprovalMode = oauth.cimd?.approvalMode === 'auto' ? 'auto' : 'approval';
 
   const update = patch => {
     setPlatform(prev => ({
@@ -296,6 +300,66 @@ function AdminMcpGatewayPage() {
                   }
                   className="w-full rounded-md border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100"
                 />
+              </div>
+            )}
+            {cimdEnabled && (
+              <div className="py-3">
+                <label
+                  htmlFor="cimd-blocked-hosts"
+                  className="block text-sm font-medium text-gray-900 dark:text-gray-100"
+                >
+                  {t('admin.mcp.gateway.cimdBlockedHosts', 'Blocked client hosts')}
+                </label>
+                <p className="text-xs text-gray-500 dark:text-gray-400 mt-0.5 mb-2">
+                  {t(
+                    'admin.mcp.gateway.cimdBlockedHostsDesc',
+                    'Comma-separated hostnames that are refused even while they are trusted above, checked before any request leaves this server. Use it to cut off a vendor without editing the trusted list you want to keep. Blocking an individual client is done per client under OAuth → Clients.'
+                  )}
+                </p>
+                <input
+                  id="cimd-blocked-hosts"
+                  type="text"
+                  placeholder="example.com"
+                  value={cimdBlockedHosts.join(', ')}
+                  onChange={e =>
+                    setCimd({
+                      blockedClientHosts: e.target.value
+                        .split(',')
+                        .map(host => host.trim())
+                        .filter(Boolean)
+                    })
+                  }
+                  className="w-full rounded-md border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100"
+                />
+              </div>
+            )}
+            {cimdEnabled && (
+              <div className="py-3">
+                <label
+                  htmlFor="cimd-approval-mode"
+                  className="block text-sm font-medium text-gray-900 dark:text-gray-100"
+                >
+                  {t('admin.mcp.gateway.cimdApprovalMode', 'New clients')}
+                </label>
+                <p className="text-xs text-gray-500 dark:text-gray-400 mt-0.5 mb-2">
+                  {t(
+                    'admin.mcp.gateway.cimdApprovalModeDesc',
+                    'A trusted host publishes several different clients — Claude web, Claude Desktop, Claude Code — under one hostname. Requiring approval means each one waits for you: the user is told to ask an administrator, and the client appears here as pending. Clients people are already connected through are unaffected.'
+                  )}
+                </p>
+                <select
+                  id="cimd-approval-mode"
+                  value={cimdApprovalMode}
+                  onChange={e => setCimd({ approvalMode: e.target.value })}
+                  className="w-full rounded-md border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100"
+                >
+                  <option value="approval">
+                    {t('admin.mcp.gateway.cimdApprovalRequired', 'Require approval (recommended)')}
+                  </option>
+                  <option value="auto">
+                    {t('admin.mcp.gateway.cimdApprovalAuto', 'Connect automatically')}
+                  </option>
+                </select>
               </div>
             )}
             <Toggle

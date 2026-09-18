@@ -9,7 +9,8 @@ import {
   loadOAuthClients
 } from '../../utils/oauthClientManager.js';
 import { generateStaticApiKey, introspectOAuthToken } from '../../utils/oauthTokenService.js';
-import { countByClient, listSeenCimdClients } from '../../services/oauth/ConnectionService.js';
+import { countByClient } from '../../services/oauth/ConnectionService.js';
+import { listCimdClientRows } from '../../services/oauth/CimdGovernanceService.js';
 import { buildServerPath } from '../../utils/basePath.js';
 import { adminAuth } from '../../middleware/adminAuth.js';
 import configCache from '../../configCache.js';
@@ -73,14 +74,21 @@ export default function registerAdminOAuthRoutes(app) {
 
       res.json({
         success: true,
-        clients: clients.map(client => ({
-          ...client,
-          connectionCount: counts[client.clientId] || 0
-        })),
-        // CIMD clients are not stored, so they would be missing from this page
-        // entirely. These synthetic, read-only rows are derived from the
-        // connections that exist.
-        cimdClients: listSeenCimdClients()
+        // CIMD policy records live in the same store but are not stored
+        // clients: their identity still comes from the document they publish,
+        // and they are rendered from `cimdClients` below with the actions that
+        // apply to them. Listing them twice would offer "rotate secret" on a
+        // client that has no secret.
+        clients: clients
+          .filter(client => client.metadata?.cimd !== true)
+          .map(client => ({
+            ...client,
+            connectionCount: counts[client.clientId] || 0
+          })),
+        // The join of the CIMD policy records and the connections that exist,
+        // so a client people connect through but nobody has decided anything
+        // about yet is still on the page.
+        cimdClients: listCimdClientRows(platform)
       });
     } catch (error) {
       logger.error('[OAuth Admin] List clients error', { component: 'OAuthAdmin', error });

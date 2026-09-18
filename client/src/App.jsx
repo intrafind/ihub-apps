@@ -95,6 +95,9 @@ const AdminOAuthClientsPage = lazyWithRetry(
 const AdminOAuthClientEditPage = lazyWithRetry(
   () => import('./features/admin/pages/AdminOAuthClientEditPage')
 );
+const AdminOAuthCimdClientEditPage = lazyWithRetry(
+  () => import('./features/admin/pages/AdminOAuthCimdClientEditPage')
+);
 const AdminOAuthConnectionsPage = lazyWithRetry(
   () => import('./features/admin/pages/AdminOAuthConnectionsPage')
 );
@@ -615,6 +618,13 @@ function App() {
             <Route
               path="oauth/clients"
               element={<LazyAdminRoute component={AdminOAuthClientsPage} />}
+            />
+            {/* Before the generic :clientId route: a metadata-document client's
+                id is a URL, so it travels base64url-encoded under its own
+                path rather than as a client id segment. */}
+            <Route
+              path="oauth/clients/cimd/:encodedClientId"
+              element={<LazyAdminRoute component={AdminOAuthCimdClientEditPage} />}
             />
             <Route
               path="oauth/clients/:clientId"

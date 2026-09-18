@@ -134,6 +134,36 @@ export function isHostAllowed(clientId, allowedHosts) {
 }
 
 /**
+ * Is the host of a `client_id` URL explicitly blocked?
+ *
+ * Checked **before** the allowlist and before any network call, so a blocked
+ * vendor is cut off without having to edit the allowlist you want to keep —
+ * and without the server making a request on its behalf. Same pattern
+ * semantics as {@link isHostAllowed}; an empty list blocks nobody, which is
+ * the shipped default.
+ *
+ * @param {string} clientId - CIMD client identifier (an HTTPS URL)
+ * @param {Array<string>} blockedHosts - `oauth.cimd.blockedClientHosts`
+ * @returns {boolean} True when the host is blocked
+ */
+export function isHostBlocked(clientId, blockedHosts) {
+  if (!Array.isArray(blockedHosts) || blockedHosts.length === 0) return false;
+
+  let hostname;
+  try {
+    hostname = new URL(clientId).hostname;
+  } catch {
+    // A value that does not parse as a URL is not a CIMD client at all; the
+    // resolver refuses it long before this point.
+    return false;
+  }
+
+  return blockedHosts.some(
+    pattern => pattern === '*' || hostMatchesPattern(hostname, String(pattern))
+  );
+}
+
+/**
  * The hostname of a `client_id`, for display and logging.
  *
  * @param {string} clientId - CIMD client identifier

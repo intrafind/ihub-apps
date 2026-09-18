@@ -204,6 +204,35 @@ export function findUserByIdentifier(usersConfig, identifier, authMethod = null)
 }
 
 /**
+ * Look up a **local** user by the subject a JWT carries.
+ *
+ * `sub` is the user's key in `users.json`, so this is a direct lookup rather
+ * than the identifier scan {@link findUserByIdentifier} performs. It returns
+ * null for a user who is not local, which is the point: group membership for
+ * an OIDC or proxy user lives in the identity provider and arrives at sign-in,
+ * so there is nothing authoritative here to re-read for them.
+ *
+ * @param {string} userId - The `sub` claim / user key
+ * @param {string} usersFilePath - Path to users.json
+ * @returns {Object|null} The local user, or null
+ */
+export function findLocalUserById(userId, usersFilePath) {
+  if (!userId || userId === '__proto__' || userId === 'constructor' || userId === 'prototype') {
+    return null;
+  }
+
+  const usersConfig = loadUsers(usersFilePath);
+  const users = usersConfig.users || {};
+  if (!Object.hasOwn(users, userId)) return null;
+
+  const user = users[userId];
+  const methods = Array.isArray(user?.authMethods) ? user.authMethods : [];
+  if (!methods.includes('local')) return null;
+
+  return { ...user, id: userId };
+}
+
+/**
  * Create or update external user (OIDC/Proxy) in users.json
  * @param {Object} externalUser - External user data
  * @param {string} usersFilePath - Path to users.json file

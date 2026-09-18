@@ -243,6 +243,8 @@ Turn it on under **Admin → MCP gateway → Client identification**, or in
 |-------|---------|---------|
 | `enabled` | `false` | Advertise and accept URL client IDs |
 | `allowedClientHosts` | `["claude.ai"]` | Trust policy; `*.example.com` for subdomains, `*` for any HTTPS client (not recommended) |
+| `blockedClientHosts` | `[]` | Hosts refused even while allowed above, checked before any network call |
+| `approvalMode` | `"approval"` | `approval` — each client waits for an administrator; `auto` — the host allowlist is the whole decision |
 | `allowedGroups` | `[]` | Who may connect such a client (empty = everyone) |
 | `allowedScopes` | `[]` | Grantable scopes (empty = the DCR default list) |
 | `allowedApps` / `allowedModels` / `allowedPrompts` | `[]` | Optional narrowing on top of the user's own permissions |
@@ -278,6 +280,97 @@ Guarantees worth knowing:
   PKCE verifier, so an outage at the client's host cannot strand a user
   mid-flow. Only the authorization request itself aborts when the
   document cannot be resolved.
+
+##### Governing individual clients
+
+One host publishes several different clients. Claude web, Claude Desktop,
+Claude Code and Cowork all live under `claude.ai` with *different*
+`client_id` URLs, so a host is the wrong unit for "only this group may
+use Claude Code". Governance therefore works per `client_id`.
+
+The split that makes this work: **identity from the document, policy from
+the record.** `client_name`, `redirect_uris`, `grant_types` and
+`token_endpoint_auth_method` are still read from the document on every
+authorization and never stored — the "nothing stored" property of CIMD is
+about identity and is untouched. What *is* stored, in the existing
+`contents/config/oauth-clients.json` and keyed by the exact document URL,
+is the set of administrator decisions: whether the client is approved,
+whether it is blocked, and the resource policy that applies to it. Such a
+record carries `metadata.cimd: true` and never a secret, and
+`consentRequired: true` / `trusted: false` are locked on it — approving a
+client is **not** trusting it, and every user still signs in and consents.
+
+Effective policy is layered **field by field**:
+
+```
+effective(field) = record[field]  when the record sets it
+                 = platform.oauth.cimd[field]  otherwise
+```
+
+So narrowing one client's `allowedGroups` keeps the global `allowedApps`
+list on that client, and leaves every other client on the same host alone.
+
+Whether a client may connect at all is computed on **every request** from
+five independently revocable conditions:
+
+```
+active = cimd.enabled
+      && !hostBlocked(blockedClientHosts)
+      && hostAllowed(allowedClientHosts)
+      && record.active !== false
+      && approvalSatisfied(record, approvalMode)
+```
+
+Under **Admin → OAuth → Clients**, metadata-document clients are real
+rows — kind badge, document URL, connection count, first seen, last used —
+with these actions:
+
+| Action | Effect |
+|--------|--------|
+| **Approve** | `approvalState: 'approved'`, `active: true`. The next authorization goes through; consent is still required. |
+| **Block** / **Unblock** | `active: false` / `true`. Blocking **also revokes every connection the client has**, because a block that leaves live refresh tokens behind is not a block. |
+| **Revoke all connections** | Deletes every consent entry and every refresh token for the client, across all users, in one action. Users can reconnect unless the client is blocked. |
+| **Edit policy** | Per-client `allowedGroups`, `allowedApps`, `allowedModels`, `allowedPrompts`, grantable `scopes` and `tokenExpirationMinutes`. Identity fields are read-only. |
+
+**The approval gate.** With the shipped default (`approvalMode:
+"approval"`), passing the host allowlist makes a client *eligible*, not
+allowed. The first authorization by a `client_id` with no record is
+refused with a page naming the client and telling the user to ask an
+administrator, and the client appears at the top of the Clients page as
+**Waiting for approval**. `approvalMode: "auto"` restores the previous
+behaviour, where the host allowlist is the whole decision; the first
+successful authorization then still writes a record (`approvalState:
+'auto'`), so the client is a real, editable row rather than a synthetic
+one.
+
+Upgrading disconnects nobody: migration `V112` reads the consent store and
+approves exactly the metadata-document clients that already have a
+connection, stamping `approvedBy: 'migration'`. Clients nobody has
+connected through are deliberately not created — those are the ones that
+should have to be approved.
+
+##### When a policy change takes effect
+
+| Change | Takes effect |
+|--------|--------------|
+| Client blocked or deleted, CIMD disabled, host removed or blocked, approval withdrawn | Next `/mcp` request — at most one access-token lifetime |
+| `allowedGroups`, `allowedApps`, `allowedModels`, `allowedPrompts` narrowed | Next `/mcp` request — at most one access-token lifetime |
+| Grantable `scopes` narrowed | Next token refresh; the dropped scopes are not re-issued |
+| An administrator revokes a connection | Next refresh; an access token already issued lives out its lifetime |
+| A **local** user leaves a group | Next refresh — the group snapshot is re-read from the user store |
+| An **OIDC / proxy** user leaves a group | Next interactive sign-in, or when an administrator revokes the connection |
+
+That last row is inherent rather than an oversight: iHub does not hold the
+identity provider's group graph and cannot poll it. The mitigations are an
+administrator revoke and `oauth.refreshTokenExpirationDays` (default 30),
+which bounds how long a stale snapshot can survive.
+
+##### Audit
+
+Governance actions are audited under the `oauthCimdClient` and
+`oauthConnection` resources: a client discovered or refused while pending,
+approved, blocked, unblocked, its policy updated, and connections revoked
+in bulk (with the client and the count).
 
 #### Dynamic Client Registration (RFC 7591)
 
@@ -552,9 +645,11 @@ stores; nothing new is persisted.
   apps**: client name and host, the scopes in plain language, when they
   connected, when it was last used, and **Disconnect**.
 - **Admins** see all of them under **Admin → OAuth → Connections**, with
-  filters by user and client, and the same revoke action. **Admin →
-  OAuth → Clients** shows a connection count per client, and **Admin →
-  Users → (user)** lists that person's connections.
+  filters by user and client, and the same revoke action — plus **Revoke
+  all connections** for one client, which clears every consent entry and
+  every refresh token that client holds across all users in one action.
+  **Admin → OAuth → Clients** shows a connection count per client, and
+  **Admin → Users → (user)** lists that person's connections.
 
 Disconnecting deletes the consent record *and* revokes every refresh
 token for the pair, so the client has to send the user through sign-in
@@ -603,14 +698,21 @@ Checklist on the iHub side (all on **Admin → MCP gateway**):
    Documents** and leave `claude.ai` in the trusted hosts. Leave
    **Dynamic client registration** on as well if other MCP clients that
    do not support CIMD need to connect.
+   Trusting the host is not the last word: with **New clients** set to
+   *Require approval* (the default), each Claude surface — web, Desktop,
+   Claude Code, Cowork — publishes its own `client_id` and is approved
+   separately. The first person to try one is told to ask an
+   administrator, and the client turns up on **Admin → OAuth → Clients**
+   waiting for you.
 4. If iHub runs behind a proxy, set the **Public URL** so discovery
    metadata advertises the externally reachable address. iHub must be
    reachable over HTTPS for claude.ai.
 
 Then in Claude: **Settings → Connectors → Add custom connector** and
 paste `https://your-ihub/mcp`. Claude walks the discovery chain,
-identifies itself with its metadata document on `claude.ai` — creating no
-record in `oauth-clients.json` — and sends the user through iHub's
+identifies itself with its metadata document on `claude.ai` — whose
+name, redirect URIs and grant types are read from that document, never
+stored — and sends the user through iHub's
 sign-in and consent screen, which shows the client name and the host.
 Subsequent MCP calls run as that user with their normal group
 permissions, and a reconnect within `consentMemoryDays` skips the consent
@@ -673,10 +775,24 @@ Troubleshooting:
   served from, a `token_endpoint_auth_method` other than `none`, a
   redirect URI with a rejected scheme, a redirect, a non-JSON response, or
   a body over 8 KB. Nothing is cached, so fixing the document is enough.
+- "… needs to be approved", naming the client → `approvalMode` is
+  `approval` (the default) and nobody has approved this `client_id` yet.
+  It is already listed as **Waiting for approval** on **Admin → OAuth →
+  Clients**; approve it there and the same flow goes through. This is
+  the expected experience the first time somebody adds the connector in a
+  Claude surface the installation has not seen before.
+- "… is blocked", naming the client → an administrator blocked it, or its
+  host is in `oauth.cimd.blockedClientHosts`. Unblock it on the Clients
+  page, or remove the host. Note that `blockedClientHosts` wins over
+  `allowedClientHosts`, so leaving a host in both keeps it refused.
 - `401` on `/mcp` for every existing connection right after an OAuth
-  change → CIMD was switched off, or a host was dropped from the
-  allowlist. That is the intended kill switch; users reconnect once it is
-  restored.
+  change → CIMD was switched off, a host was dropped from (or added to)
+  the allowlist or block list, or the client was blocked. That is the
+  intended kill switch; users reconnect once it is restored.
+- `403 access_denied` on `/mcp` for one user while others are fine → that
+  client's `allowedGroups` no longer admits them. This is checked on every
+  request, so it bites within one access-token lifetime rather than at the
+  next consent screen.
 - `400 invalid_client_metadata: Dynamic client registration limit reached`
   → `oauth.dcr.maxClients` (default 100) is full. Repeat registrations of
   software already on file still succeed; this only blocks a genuinely new
