@@ -1,5 +1,5 @@
 /**
- * Migration V112 — add the Staan (staan.ai) web search provider
+ * Migration V114 — add the Staan (staan.ai) web search provider
  *
  * Staan is the third search engine behind `WebSearchService`, and the one that
  * fits the common deployment best: Brave needs a paid subscription, and Qwant —
@@ -19,12 +19,18 @@
  * still prefers Brave wherever a Brave key is configured. An install that adds
  * a Staan key but no Brave key moves from Qwant to Staan under `"auto"`, which
  * is the point — on most hosts Qwant is the one that cannot answer.
+ *
+ * Written as V112 and renumbered to V114: the CIMD governance migrations landed
+ * on main as V112/V113 in parallel, and the runner refuses to start on a
+ * duplicate version. Installs that already ran this from the branch under the
+ * old number are reconciled by `RENAMED_MIGRATIONS` in the runner, so it is not
+ * applied twice.
  */
 
-export const version = '112';
+export const version = '114';
 export const description = 'Add the Staan (staan.ai) web search provider';
 
-/** Snapshot of the `staan` entry in server/defaults/config/providers.json as of V112. */
+/** Snapshot of the `staan` entry in server/defaults/config/providers.json as of V114. */
 const STAAN_PROVIDER = {
   id: 'staan',
   name: {

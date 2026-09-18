@@ -1189,7 +1189,7 @@
         "connectionsLabel": "Verbindungen",
         "connectionsCount": "{{count}} Verbindungen",
         "cimdTitle": "Über Metadaten-Dokument identifizierte Clients",
-        "cimdDesc": "Schreibgeschützt. Die Client-ID ist die URL eines vom Client veröffentlichten Dokuments — es gibt hier keinen Eintrag zum Bearbeiten. Die Rechte werden unter MCP-Gateway → Client-Identifikation festgelegt.",
+        "cimdDesc": "Ihre Client-ID ist die URL eines Dokuments, das sie veröffentlichen — Name, Redirect-URIs und Grant-Typen werden hier also nie gespeichert. Was sie dürfen, legen Sie fest: je Client oder global unter MCP-Gateway → Client-Identifikation.",
         "connections": {
           "loadError": "Verbindungen konnten nicht geladen werden",
           "revoke": "Widerrufen",
@@ -1208,13 +1208,54 @@
           "lastUsed": "Zuletzt genutzt",
           "count": "{{count}} Verbindungen",
           "cimdTitle": "Über Metadaten-Dokument identifizierte Clients",
-          "cimdDesc": "Diese Clients haben keinen Eintrag in der Client-Liste — ihre ID ist die URL eines von ihnen veröffentlichten Dokuments. Sie erscheinen hier, weil Personen über sie verbunden sind."
+          "cimdDesc": "Ihre Client-ID ist die URL eines Dokuments, das sie veröffentlichen. Sie stehen hier, weil Benutzer über sie verbunden sind — und weil Sie hier alle Verbindungen auf einmal trennen können."
         },
         "tabs": {
           "connections": "Verbindungen"
         },
         "overview": {
           "connectionsDesc": "Sehen Sie, welche Nutzer welchen Anwendungen Zugriff gewährt haben, und widerrufen Sie einzelne Freigaben."
+        },
+        "cimd": {
+          "allowedGroups": "Erlaubte Gruppen",
+          "allowedGroupsHelp": "Kommagetrennte Gruppen-IDs. Nur Mitglieder dürfen diesen Client verbinden; wer keine der genannten Gruppen mehr hat, verliert den Zugriff bei der nächsten Gateway-Anfrage. Leer bedeutet jede Gruppe.",
+          "approve": "Freigeben",
+          "approved": "{{name}} freigegeben",
+          "block": "Sperren",
+          "blockConfirm": "{{name}} sperren? Die {{count}} Verbindung(en) werden sofort widerrufen und niemand kann sich verbinden, bis Sie die Sperre aufheben. Ein bereits ausgestelltes Access-Token bleibt bis zu seinem Ablauf gültig — höchstens {{minutes}} Minuten.",
+          "blockTitle": "Diesen Client sperren",
+          "blocked": "{{name}} gesperrt",
+          "blockedBadge": "Gesperrt",
+          "blockedWithRevoke": "{{name}} gesperrt und {{count}} Verbindung(en) widerrufen",
+          "documentUrl": "Dokument-URL",
+          "editPolicy": "Richtlinie bearbeiten",
+          "editSubtitle": "Nur die Richtlinie ist bearbeitbar. Name, Redirect-URIs und Grant-Typen dieses Clients stammen aus dem Dokument, das er veröffentlicht.",
+          "firstSeen": "Zuerst gesehen",
+          "host": "Host",
+          "identityDesc": "Wird bei jeder Autorisierung aus dem Metadaten-Dokument unter der folgenden URL gelesen. Hier wird nichts gespeichert, also kann es weder veralten noch hier bearbeitet werden.",
+          "identityTitle": "Identität",
+          "inactive": "Nicht verbindbar",
+          "inherit": "Globale Voreinstellung übernehmen",
+          "inheriting": "Übernommen: {{value}}",
+          "loadError": "Client konnte nicht geladen werden",
+          "neverTrusted": "Dieser Client gilt nie als vertrauenswürdig und erfordert immer eine Zustimmung, unabhängig vom Freigabestatus. Die Freigabe erlaubt das Verbinden; sie überspringt den Zustimmungsdialog nicht.",
+          "noRestriction": "keine Einschränkung",
+          "noneSelected": "Nichts ausgewählt — keine Einschränkung durch diesen Client; der Benutzer behält alles, was seine Gruppen erlauben. Einträge hinzufügen, um ihn einzuschränken.",
+          "pending": "Wartet auf Freigabe",
+          "policyDesc": "Jedes Feld gilt entweder nur für diesen Client oder übernimmt die globale Voreinstellung für Clients mit Metadaten-Dokument. Änderungen greifen bei der nächsten Gateway-Anfrage und beim nächsten Token-Refresh.",
+          "policyTitle": "Richtlinie",
+          "revokeAll": "Alle Verbindungen widerrufen",
+          "revokeAllConfirm": "Alle {{count}} Benutzer von {{name}} trennen? Sie können sich durch erneutes Anmelden und Zustimmen wieder verbinden — sperren Sie den Client zuerst, wenn Sie das nicht möchten.",
+          "revokeAllError": "Verbindungen konnten nicht widerrufen werden",
+          "revokeAllSuccess": "{{count}} Verbindung(en) von {{name}} widerrufen",
+          "revokeAllTitle": "Alle Verbindungen widerrufen",
+          "saveError": "Richtlinie konnte nicht gespeichert werden",
+          "saved": "Richtlinie gespeichert",
+          "scopes": "Vergebbare Scopes",
+          "scopesHelp": "Kommagetrennte OAuth-Scopes, die dieser Client erhalten darf. Eine Einschränkung wirkt beim nächsten Token-Refresh auch auf bestehende Verbindungen. Eine leere Liste bedeutet gar keine Einschränkung — und damit mehr als die übernommene Voreinstellung.",
+          "tokenExpirationHelp": "Zugleich das Zeitfenster, bis eine Sperre greift: ein bereits ausgestelltes Access-Token bleibt bis zu seinem Ablauf gültig.",
+          "unblock": "Entsperren",
+          "unblocked": "{{name}} entsperrt"
         }
       }
     },
@@ -1947,7 +1988,13 @@
         "cimdHosts": "Vertraute Client-Hosts",
         "cimdHostsDesc": "Kommagetrennte Hostnamen, deren Metadaten-Dokumente akzeptiert werden. *.example.com steht für Subdomains. Eine leere Liste akzeptiert niemanden; \"*\" akzeptiert jeden HTTPS-Client und wird nicht empfohlen.",
         "claudeHintCimd": "Claude: Einstellungen → Connectors → Benutzerdefinierten Connector hinzufügen, dann die obige Endpunkt-URL einfügen. Claude identifiziert sich über sein Metadaten-Dokument auf claude.ai — hier entsteht kein Client-Eintrag — und die Nutzer melden sich bei iHub an und stimmen den angeforderten mcp:*-Scopes zu.",
-        "claudeHintEnterprise": "Claude Team/Enterprise: Alternativ kann eine Organisations-Administration einen vorregistrierten Client für alle festlegen — legen Sie einen öffentlichen OAuth-Client mit der obigen Callback-URL an und lassen Sie dessen Client-ID in den erweiterten Einstellungen des Connectors eintragen."
+        "claudeHintEnterprise": "Claude Team/Enterprise: Alternativ kann eine Organisations-Administration einen vorregistrierten Client für alle festlegen — legen Sie einen öffentlichen OAuth-Client mit der obigen Callback-URL an und lassen Sie dessen Client-ID in den erweiterten Einstellungen des Connectors eintragen.",
+        "cimdBlockedHosts": "Gesperrte Client-Hosts",
+        "cimdBlockedHostsDesc": "Kommagetrennte Hostnamen, die auch dann abgelehnt werden, wenn sie oben als vertrauenswürdig gelten — geprüft, bevor dieser Server irgendeine Anfrage stellt. Damit sperren Sie einen Anbieter, ohne die Liste der vertrauenswürdigen Hosts zu ändern. Einzelne Clients sperren Sie unter OAuth → Clients.",
+        "cimdApprovalMode": "Neue Clients",
+        "cimdApprovalModeDesc": "Ein vertrauenswürdiger Host veröffentlicht mehrere verschiedene Clients — Claude Web, Claude Desktop, Claude Code — unter einem Hostnamen. Mit Freigabepflicht wartet jeder einzelne auf Sie: der Benutzer wird gebeten, sich an die Administration zu wenden, und der Client erscheint hier als wartend. Clients, über die bereits Verbindungen bestehen, sind nicht betroffen.",
+        "cimdApprovalRequired": "Freigabe erforderlich (empfohlen)",
+        "cimdApprovalAuto": "Automatisch verbinden"
       }
     },
     "telemetry": {

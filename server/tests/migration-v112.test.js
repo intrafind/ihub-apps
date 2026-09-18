@@ -1,16 +1,16 @@
 #!/usr/bin/env node
 
 /**
- * Migration V112 specs — the Staan provider reaches existing installs.
+ * Migration V112 specs — the CIMD governance settings.
  *
- * providers.json is an existing file, so a new entry has to be merged into it;
- * `tools/staanSearch.json` is not this migration's job, because
- * `copyDefaultConfiguration()` backfills files missing from `contents/` on every
- * boot. What is left to get right is the merge: it must not disturb the
- * providers already there, and it must not overwrite an admin who has since
- * edited, disabled or keyed the entry — a migration is written once and then
- * runs on every install, not just a pristine one. Re-adding the default entry
- * over a configured one would wipe a working API key.
+ * Two things this migration has to get right. `blockedClientHosts` starts
+ * empty, because an upgrade must block nobody. `approvalMode` starts at
+ * `approval`, which is the change of behaviour the release ships: passing the
+ * host allowlist makes a client eligible, not allowed. That default is only
+ * safe next to V113, which approves the clients an installation's users are
+ * already connected through.
+ *
+ * As ever, a key an operator already set is left exactly as they set it.
  */
 import fs from 'node:fs/promises';
 import os from 'node:os';
@@ -23,7 +23,7 @@ import {
   precondition,
   version,
   description
-} from '../migrations/V112__add_staan_websearch_provider.js';
+} from '../migrations/V112__add_oauth_cimd_governance.js';
 
 let baseDir;
 
@@ -51,35 +51,16 @@ function makeCtx(dir) {
   };
 }
 
-const BRAVE = {
-  id: 'brave',
-  name: { en: 'Brave Search' },
-  enabled: true,
-  category: 'websearch'
-};
-
-const QWANT = {
-  id: 'qwant',
-  name: { en: 'Qwant Search' },
-  enabled: true,
-  category: 'websearch',
-  requiresApiKey: false
-};
-
-async function seed(dir, providers) {
+async function seed(dir, platform) {
   await fs.mkdir(path.join(dir, 'config'), { recursive: true });
   await fs.writeFile(
-    path.join(dir, 'config/providers.json'),
-    JSON.stringify(providers, null, 2),
+    path.join(dir, 'config/platform.json'),
+    JSON.stringify(platform, null, 2),
     'utf8'
   );
 }
 
-async function scratch(name) {
-  return fs.mkdtemp(path.join(baseDir, `${name}-`));
-}
-
-describe('V112 — Staan web search provider', () => {
+describe('V112 — CIMD governance settings', () => {
   before(async () => {
     baseDir = await fs.mkdtemp(path.join(os.tmpdir(), 'ihub-v112-'));
   });
@@ -89,87 +70,67 @@ describe('V112 — Staan web search provider', () => {
 
   it('declares its version and description', () => {
     assert.equal(version, '112');
-    assert.equal(description, 'Add the Staan (staan.ai) web search provider');
+    assert.equal(description, 'Add OAuth CIMD governance settings (blocked hosts, approval mode)');
   });
 
-  it('skips when there is no providers.json', async () => {
-    const dir = await scratch('nofile');
+  it('skips when there is no platform.json', async () => {
+    const dir = await fs.mkdtemp(path.join(baseDir, 'nofile-'));
     assert.equal(await precondition(makeCtx(dir)), false);
   });
 
-  it('runs when providers.json exists', async () => {
-    const dir = await scratch('hasfile');
-    await seed(dir, { providers: [BRAVE] });
-    assert.equal(await precondition(makeCtx(dir)), true);
-  });
-
-  it('adds the staan provider next to the existing ones', async () => {
-    const dir = await scratch('add');
-    await seed(dir, { providers: [BRAVE, QWANT] });
+  it('blocks nobody and requires approval for new clients', async () => {
+    const dir = await fs.mkdtemp(path.join(baseDir, 'fresh-'));
+    await seed(dir, { oauth: { cimd: { enabled: true, allowedClientHosts: ['claude.ai'] } } });
     const ctx = makeCtx(dir);
     await up(ctx);
 
-    const config = await ctx.readJson('config/providers.json');
-    const staan = config.providers.find(p => p.id === 'staan');
-
-    assert.ok(staan, 'staan provider was not added');
-    assert.equal(staan.category, 'websearch');
-    assert.equal(staan.enabled, true);
-    // Staan is keyed, so the admin page must offer an API key field — which it
-    // does for any provider that does not opt out with requiresApiKey: false.
-    assert.equal(staan.requiresApiKey, undefined);
-    // Existing providers are untouched.
-    assert.deepEqual(
-      config.providers.find(p => p.id === 'brave'),
-      BRAVE
-    );
-    assert.deepEqual(
-      config.providers.find(p => p.id === 'qwant'),
-      QWANT
-    );
+    const { oauth } = await ctx.readJson('config/platform.json');
+    assert.deepEqual(oauth.cimd.blockedClientHosts, [], 'an upgrade must block nobody');
+    assert.equal(oauth.cimd.approvalMode, 'approval');
+    assert.deepEqual(oauth.cimd.allowedClientHosts, ['claude.ai'], 'the allowlist is untouched');
   });
 
-  it('is idempotent and never overwrites an admin-customised entry', async () => {
-    const dir = await scratch('idempotent');
-    await seed(dir, { providers: [BRAVE] });
+  it('creates the cimd block when an older install has none', async () => {
+    const dir = await fs.mkdtemp(path.join(baseDir, 'no-cimd-'));
+    await seed(dir, { oauth: { enabled: { authz: true } } });
     const ctx = makeCtx(dir);
     await up(ctx);
 
-    // Simulate an admin entering a key and disabling Staan, then the migration
-    // re-running. Re-adding the default entry here would wipe the key.
-    const config = await ctx.readJson('config/providers.json');
-    const staan = config.providers.find(p => p.id === 'staan');
-    staan.enabled = false;
-    staan.apiKey = 'encrypted:secret';
-    await ctx.writeJson('config/providers.json', config);
-
-    await up(ctx);
-
-    const reread = await ctx.readJson('config/providers.json');
-    const after = reread.providers.filter(p => p.id === 'staan');
-    assert.equal(after.length, 1);
-    assert.equal(after[0].enabled, false);
-    assert.equal(after[0].apiKey, 'encrypted:secret');
+    const { oauth } = await ctx.readJson('config/platform.json');
+    assert.equal(oauth.cimd.approvalMode, 'approval');
   });
 
-  it('warns instead of throwing when providers.json has no providers array', async () => {
-    const dir = await scratch('malformed');
-    await seed(dir, { notProviders: true });
+  it('keeps the choice an operator already made', async () => {
+    const dir = await fs.mkdtemp(path.join(baseDir, 'partial-'));
+    await seed(dir, {
+      oauth: { cimd: { approvalMode: 'auto', blockedClientHosts: ['evil.example'] } }
+    });
     const ctx = makeCtx(dir);
     await up(ctx);
 
+    const { oauth } = await ctx.readJson('config/platform.json');
+    assert.equal(oauth.cimd.approvalMode, 'auto');
+    assert.deepEqual(oauth.cimd.blockedClientHosts, ['evil.example']);
+  });
+
+  it('skips a platform.json with no oauth section', async () => {
+    const dir = await fs.mkdtemp(path.join(baseDir, 'no-oauth-'));
+    await seed(dir, { features: {} });
+    const ctx = makeCtx(dir);
+    await up(ctx);
+
+    const platform = await ctx.readJson('config/platform.json');
+    assert.equal(platform.oauth, undefined);
     assert.ok(ctx.logs.some(([level]) => level === 'warn'));
   });
 
-  it('leaves the tool definition to the defaults copy, not to this migration', async () => {
-    // copyDefaultConfiguration() backfills any file missing from contents/ out
-    // of server/defaults/ on every boot, so writing tools/staanSearch.json here
-    // would only duplicate a definition that then drifts from the default.
-    const dir = await scratch('notool');
-    await seed(dir, { providers: [BRAVE] });
+  it('is idempotent', async () => {
+    const dir = await fs.mkdtemp(path.join(baseDir, 'twice-'));
+    await seed(dir, { oauth: {} });
     const ctx = makeCtx(dir);
     await up(ctx);
-
-    assert.equal(await ctx.fileExists('tools/staanSearch.json'), false);
+    const first = await ctx.readJson('config/platform.json');
+    await up(ctx);
+    assert.deepEqual(await ctx.readJson('config/platform.json'), first);
   });
 });
