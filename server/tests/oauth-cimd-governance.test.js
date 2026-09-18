@@ -50,7 +50,11 @@ jest.unstable_mockModule('../configCache.js', () => ({
     get: () => null,
     setCacheEntry: () => {},
     getAppsForUser: () => [],
-    getGroups: () => ({ groups: {} })
+    // `{ data: ... }`, not a bare groups object: `loadGroupsConfiguration`
+    // checks `cached?.data` and falls back to reading contents/config/groups.json
+    // from disk when it is missing — which passes on a developer machine that
+    // has a contents/ directory and fails on a fresh checkout.
+    getGroups: () => ({ data: { groups: {} } })
   }
 }));
 
@@ -188,7 +192,11 @@ async function resetClientStore() {
 
 async function resetStores() {
   const fs = await import('fs');
-  const dataDir = path.join(state.rootDir, 'contents', 'data');
+  // The stores resolve their path from `config.CONTENTS_DIR`, so this must too
+  // — hardcoding 'contents' makes the suite silently stop resetting anything
+  // when CONTENTS_DIR is set.
+  const { default: serverConfig } = await import('../config.js');
+  const dataDir = path.join(state.rootDir, serverConfig.CONTENTS_DIR, 'data');
   fs.mkdirSync(dataDir, { recursive: true });
   fs.writeFileSync(path.join(dataDir, 'oauth-consent.json'), JSON.stringify({ consents: {} }));
   fs.writeFileSync(path.join(dataDir, 'oauth-refresh-tokens.json'), JSON.stringify({ tokens: {} }));
