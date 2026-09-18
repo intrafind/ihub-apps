@@ -156,8 +156,10 @@ iHub Apps supports routing all external HTTP/HTTPS requests through a proxy serv
 ### Configuration Methods
 
 Proxy configuration can be provided through:
-1. **Environment Variables** (recommended for simple setups)
-2. **Platform Configuration** (`contents/config/platform.json`) for advanced features
+1. **Admin UI** — Admin → Security → Outbound Proxy, including a connectivity
+   test. See [Proxy Configuration](proxy-configuration.md).
+2. **Environment Variables** (simple setups)
+3. **Platform Configuration** (`contents/config/platform.json`) for advanced features
 
 ### Environment Variables
 
@@ -170,8 +172,10 @@ NO_PROXY=localhost,127.0.0.1,.local,.company.com
 
 The `NO_PROXY` variable accepts:
 - **Exact hostnames**: `localhost`, `api.internal.com`
-- **Domain suffixes**: `.company.com` (matches all subdomains)
-- **Wildcard domains**: `*.internal.com`
+- **Domain suffixes**: `.company.com` (matches all subdomains, not the bare domain)
+- **Wildcard domains**: `*.internal.com` (same as `.internal.com`)
+
+CIDR ranges, `host:port` entries and the catch-all `*` are **not** supported.
 
 ### Platform Configuration
 
@@ -193,11 +197,16 @@ For advanced proxy features, configure in `contents/config/platform.json`:
 ```
 
 **Configuration Options**:
-- `enabled` (boolean): Enable/disable proxy globally (default: `false`)
-- `http` (string): HTTP proxy URL
-- `https` (string): HTTPS proxy URL
-- `noProxy` (string): Comma-separated bypass list
+- `enabled` (boolean): Enable/disable proxy globally (default when absent: `true`,
+  so `HTTP_PROXY`/`HTTPS_PROXY` from the environment apply without a `proxy` block)
+- `http` (string): HTTP proxy URL — an `${ENV_VAR}` placeholder is also accepted
+- `https` (string): HTTPS proxy URL — same
+- `noProxy` (string **or** array of strings): Bypass list, either comma-separated
+  (`"localhost,.local"`) or as an array (`["localhost", ".local"]`)
 - `urlPatterns` (array): Regex patterns for selective proxy (empty = all URLs)
+
+Proxy URLs saved from the admin UI are encrypted at rest and their passwords are
+redacted in API responses and logs.
 
 ### Use Cases
 
