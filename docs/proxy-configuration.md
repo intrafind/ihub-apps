@@ -37,7 +37,9 @@ leave the mask in place when saving to keep the stored password.
 
 ### 2. Platform Configuration
 
-Add proxy configuration to your `contents/config/platform.json`:
+A fresh installation has **no `proxy` block at all** in
+`contents/config/platform.json`, and nothing is proxied until you add one (or set
+the environment variables below). Add it by hand, or let the admin UI write it:
 
 ```json
 {
@@ -77,8 +79,16 @@ field. Placeholders survive a save from the admin UI.
 
 ### `proxy.enabled`
 - **Type**: Boolean
-- **Default**: `true`
-- **Description**: Enable or disable proxy for all requests. Set to `false` to bypass proxy even if URLs are configured.
+- **Default**: `true` (and an absent `proxy` block means the same thing)
+- **Description**: Master switch for all outbound requests. Set it to `false` to go
+  direct even when a proxy URL is configured here **or** in the environment —
+  that is the only way to ignore `HTTP_PROXY`/`HTTPS_PROXY`.
+
+  On its own this flag proxies nothing: with no `proxy.http`, `proxy.https` or
+  environment variable set, every request goes direct whether it is `true` or
+  absent. **Admin → Security → Outbound Proxy** says which of the three states
+  an installation is in — routed through a named proxy, no proxy in use, or
+  switched off.
 
 ### `proxy.http`
 - **Type**: String
