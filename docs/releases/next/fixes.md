@@ -1,5 +1,28 @@
 # Fixes — Unreleased
 
+## Web search now follows the user's language
+
+Web search ran in US English far more often than it should have. Each engine decided the search
+language on its own and each one got it wrong in a different way: Qwant defaulted to `en_US`,
+Staan to `en-us`, and **Brave sent no language at all**, leaving it to Brave's own default. None of
+them consulted the platform's `defaultLanguage`, so there was no setting anywhere that changed it.
+
+It is now resolved once, the same way for all three: the user's language for the request, then
+`defaultLanguage` from `platform.json`, then `en` only if the config cannot be read. Each provider
+maps that onto its own API — Brave's `search_lang` / `country`, Staan's `market`, Qwant's `locale`
+— and falls back to its own default only when the engine does not serve that language at all.
+
+The clearest win is where no user language exists at all: **workflow and agent runs**. Those pass no
+language on the tool call, so on a German install every research run was silently answered from the
+US market. They now land on the configured default instead — the providers resolve it themselves, so
+nothing about how a workflow renders its own prompts changes.
+
+- Brave searches are now language-targeted at all, which they previously never were.
+- A model can still override the language for a single search with the tool's `language` parameter.
+- Brave results are cached per language, so one user's language is no longer served to the next.
+
+Set the default language in **Admin → Customization → Localization** to match your install.
+
 ## `BRAVE_SEARCH_ENDPOINT` and `SEARCH_CACHE_TTL_MS` are read again
 
 Both were documented and both were ignored. The server exposes a fixed allowlist of environment

@@ -87,7 +87,8 @@ function describeOutboundPath(providerId) {
 
   const endpoints = {
     brave: config.BRAVE_SEARCH_ENDPOINT || 'https://api.search.brave.com/res/v1/web/search',
-    qwant: config.QWANT_SEARCH_ENDPOINT || 'https://api.qwant.com/v3/search/'
+    qwant: config.QWANT_SEARCH_ENDPOINT || 'https://api.qwant.com/v3/search/',
+    staan: config.STAAN_SEARCH_ENDPOINT || 'https://api.staan.ai/v2/search/web'
   };
 
   return { proxy, proxyEnabled, endpoint: endpoints[providerId] || null };
@@ -442,7 +443,7 @@ export default function registerAdminProvidersRoutes(app) {
    *         required: true
    *         schema:
    *           type: string
-   *         description: A registered web search provider (brave, qwant)
+   *         description: A registered web search provider (brave, staan, qwant)
    *     requestBody:
    *       required: false
    *       content:
