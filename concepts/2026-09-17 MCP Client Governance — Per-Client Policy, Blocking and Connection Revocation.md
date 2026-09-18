@@ -79,7 +79,8 @@ revokes the connection by hand. The same is true of narrowing a client's `allowe
 1. **Revoke** every connection of a client in one action, and have a block actually keep it
    revoked — the client must re-authenticate and re-consent, or be refused outright.
 2. **Control which clients may connect at all**: an explicit allow decision per client, not
-   just per host, with an optional approval gate for clients seen for the first time.
+   just per host. A client nobody has approved does not connect; the user is told to ask an
+   administrator for it.
 3. **Block specific clients** — by `client_id` URL, and by host pattern for a blunter cut.
 4. **Per-client resource policy**: `allowedApps`, `allowedModels`, `allowedPrompts`,
    grantable `scopes`, `tokenExpirationMinutes` — the same fields stored clients already have.
@@ -194,20 +195,38 @@ kill switch rather than a gate that only new connections pass.
 
 ### D5 — Approval mode: controlling *which* clients may connect
 
+**An unknown client is blocked.** Passing the host allowlist makes a client *eligible*, not
+*allowed* — the allowlist says which hosts may identify clients at all, and a host covers
+several distinct `client_id` URLs. The decision that a particular piece of software may
+connect is an administrator's, and until it is taken the answer is no.
+
 New `oauth.cimd.approvalMode`:
 
-- **`auto`** (default): a client from an allowed, non-blocked host
-  connects immediately. The first successful authorization writes a discovery record
-  (`approvalState: 'auto'`, `firstSeenAt`, `firstUserId`) so the client becomes a real,
-  editable row instead of a synthetic one. An unknown is blocked.
-- **`approval`**: the first authorization writes the record with
-  `approvalState: 'pending'`, `active: false`, and refuses with a "waiting for administrator
-  approval" page. An admin approves on the Clients page; nothing else changes.
+- **`approval`** (default): the first authorization by a `client_id` with no record writes
+  one with `approvalState: 'pending'`, `active: false`, `firstSeenAt`, `firstUserId`, and
+  refuses the authorization with a page naming the client and its host and telling the user
+  to ask an administrator to allow it. The client appears at the top of the admin Clients
+  page as pending; **Approve** sets `approvalState: 'approved'`, `active: true`, and the
+  next attempt goes through. Nothing else about the flow changes: consent is still required.
+- **`auto`**: a client from an allowed, non-blocked host connects immediately, and the
+  first successful authorization writes the same record with `approvalState: 'auto'`, so it
+  is still a real, editable row rather than a synthetic one. This is iHub's behaviour before
+  this change, kept for installations that deliberately want the host allowlist to be the
+  whole decision.
 
-Default `auto` because `approval` on upgrade would lock out every user already connected —
-the migration must be invisible. An admin who wants a strict allowlist sets `approval` and
-approves the clients they want; from then on, a new Claude surface or a new vendor cannot
-connect without a decision.
+The refusal page is the feature, not a side effect: a user who adds the connector in a new
+Claude surface gets a sentence telling them what to ask for, and the administrator gets a
+named row to approve instead of discovering the client later in a connections list.
+
+**Upgrading must not disconnect anyone.** With `approval` as the default, an installation
+that upgrades would otherwise refuse every client its users are already connected through —
+none of them has a record. The migration therefore **grandfathers what already works**: it
+reads the consent store and writes an `approvalState: 'approved'`, `active: true` record for
+every distinct CIMD `client_id` that already has at least one connection, stamping
+`approvedBy: 'migration'` and the first-seen date derived from the earliest grant. Clients
+nobody has connected through are not created — they are exactly the ones that should have to
+be approved. An administrator sees on their first visit precisely the clients their users
+already use, and everything new stops at the gate.
 
 ### D6 — Enforce on the request path
 
@@ -251,8 +270,9 @@ here but worth a follow-up.
   secret rotation) are read-only with a note that they come from the document at `<url>`;
   only the policy fields are editable. `trusted` and `consentRequired` are not rendered —
   they are locked by definition.
-- **Admin → MCP gateway → Client identification**: approval-mode selector (*Connect
-  automatically* / *Require approval*) and a blocked-hosts input beside the trusted-hosts one.
+- **Admin → MCP gateway → Client identification**: approval-mode selector (*Require approval*
+  — the default — / *Connect automatically*) and a blocked-hosts input beside the
+  trusted-hosts one.
 - i18n keys in `shared/i18n/en.json` and `de.json`, as ever.
 
 ### D8 — Audit
@@ -293,7 +313,9 @@ Three independent PRs; Phase 1 delivers the operational ask on its own.
 endpoint, `upsertCimdClientPolicy`, discovery records on first authorization,
 `blockedClientHosts`, `active` layered into `resolveOAuthClient`/`buildPolicyCimdClient`,
 Block/Unblock/Revoke-all in the Clients page, the blocked-client refusal page, migration V110,
-audit events, tests, docs, release note.
+audit events, tests, docs, release note. V110 seeds `approvalMode` too, but the gate it names
+only starts refusing in Phase 3 — the setting is inert until the code that reads it lands, so
+the phases stay independently shippable.
 
 **Phase 2 — Per-client policy and request-path enforcement.** Field-by-field layering for
 `allowedGroups` / `allowedApps` / `allowedModels` / `allowedPrompts` / `scopes` /
@@ -301,8 +323,11 @@ audit events, tests, docs, release note.
 and the refresh grant; live group re-read for local users; the CIMD variant of the client edit
 page.
 
-**Phase 3 — Approval mode.** `approvalMode`, pending records, the approval page and the
-Approve action, the gateway-page selector, the documented operator workflow.
+**Phase 3 — Approval gate.** The gate itself: pending records, the "ask your administrator"
+refusal page, the Approve action, the gateway-page selector, and the migration that
+grandfathers every CIMD client with an existing connection as approved — which must ship in
+the *same* release as the enforcement, or the release that turns the gate on disconnects
+everyone. Plus the documented operator workflow.
 
 ## 6. Acceptance criteria
 
@@ -310,9 +335,10 @@ See the tracking issue. In short: a blocked client's live tokens stop working on
 `/mcp` request and its users must re-authenticate; per-client `allowedGroups` lets Claude Code
 be restricted to one group while another CIMD client on the same host is unaffected; per-client
 `allowedApps` narrows what that client sees without touching any other client; "revoke all"
-clears every consent and refresh token for one client in one action; and with
-`approvalMode: 'approval'` a never-seen client cannot connect until an administrator approves
-it — while an upgrade with the defaults changes nothing for anyone already connected.
+clears every consent and refresh token for one client in one action; and a
+never-seen client cannot connect until an administrator approves it, the user being told to
+ask for it — while an upgrade disconnects nobody, because the clients already in use are
+approved by the migration.
 
 ## 7. References
 
