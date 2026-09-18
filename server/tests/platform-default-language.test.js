@@ -27,8 +27,7 @@ import { readFile } from 'node:fs/promises';
 import { platformConfigSchema } from '../validators/platformConfigSchema.js';
 import { isValidLanguageCode } from '../utils/pathSecurity.js';
 
-const routeSource = () =>
-  readFile(new URL('../routes/admin/configs.js', import.meta.url), 'utf8');
+const routeSource = () => readFile(new URL('../routes/admin/configs.js', import.meta.url), 'utf8');
 
 describe('platform.defaultLanguage', () => {
   it('is declared in the platform schema', () => {
