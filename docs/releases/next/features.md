@@ -133,3 +133,38 @@ review in one place, **Admin → Feedback**, and something you can switch off.
 Everything defaults to enabled, and feedback submitted earlier stays readable whatever the switches
 say. Storing feedback (`feedbackTracking`) stays independent of showing the rating — turning one off
 does not turn the other off.
+
+## Govern the MCP clients that connect through a metadata document
+
+Claude identifies itself to the MCP gateway with a metadata document it publishes, which until now
+left administrators with one lever for all of them: the trusted-host list. Claude web, Claude
+Desktop, Claude Code and Cowork all publish under `claude.ai`, so "only this group may use Claude
+Code" was not expressible, and there was no way to cut one of them off. **Admin → OAuth → Clients**
+now lists each of them as a real row — kind badge, document URL, connection count, first seen, last
+used — with actions of its own.
+
+- **Block** a client. Its connections are revoked in the same action, and nobody can reconnect
+  until it is unblocked. An access token already issued keeps working until it expires, which the
+  confirm dialog states.
+- **Revoke all connections** clears every consent and every refresh token that one client holds,
+  across all users, in one action — on the Clients page and on **Admin → OAuth → Connections**.
+- **Edit policy** per client: allowed groups, apps, models, prompts, grantable scopes and token
+  lifetime. Each field either applies to that client alone or inherits the global default under
+  **Admin → MCP gateway → Client identification**, field by field, so narrowing one client's groups
+  leaves its neighbours on the same host untouched.
+- **Blocked client hosts**, beside the trusted-hosts field, refuse a whole vendor without editing
+  the list you want to keep — and before this server makes any request on its behalf.
+- Identity stays where it was: a client's name, redirect URIs and grant types are still read from
+  the document it publishes on every authorization and never stored, and no client can be marked
+  trusted or exempted from the consent screen.
+
+Policy is now re-checked on the request path, not only at the consent screen. Blocking a client,
+narrowing its groups or taking a user out of one takes effect on the next gateway request — at most
+one access-token lifetime — instead of waiting for an administrator to revoke each connection by
+hand. Narrowing a client's grantable scopes narrows connections that already exist at their next
+token refresh, and a **local** user's group membership is re-read from the user store on every
+refresh. Group membership held by an external identity provider still updates at the user's next
+interactive sign-in; **Admin → OAuth → Connections** is the immediate remedy there.
+
+Every action is audited: clients discovered, approved, blocked, unblocked, their policy changed,
+and connections revoked in bulk with the client and the count.

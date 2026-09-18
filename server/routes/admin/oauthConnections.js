@@ -1,8 +1,5 @@
-import {
-  listConnections,
-  listSeenCimdClients,
-  revokeConnection
-} from '../../services/oauth/ConnectionService.js';
+import { listConnections, revokeConnection } from '../../services/oauth/ConnectionService.js';
+import { listCimdClientRows } from '../../services/oauth/CimdGovernanceService.js';
 import { buildServerPath } from '../../utils/basePath.js';
 import { adminAuth } from '../../middleware/adminAuth.js';
 import { logAudit } from '../../services/AuditLogService.js';
@@ -73,9 +70,10 @@ export default function registerAdminOAuthConnectionRoutes(app) {
       res.json({
         success: true,
         ...result,
-        // CIMD clients are not stored, so the clients page cannot show them.
-        // The hosts that have actually been connected to are derived here.
-        cimdClients: listSeenCimdClients()
+        // The clients behind these connections that identify themselves with a
+        // metadata document, with their governance state, so this page can
+        // revoke all of a client's connections at once.
+        cimdClients: listCimdClientRows(platform)
       });
     } catch (error) {
       logger.error('[OAuth Admin] List connections error', { component: 'OAuthAdmin', error });

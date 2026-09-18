@@ -229,6 +229,120 @@ function AdminOAuthClientsPage() {
     }
   };
 
+  const encodeClientId = clientId =>
+    // The client id of a metadata-document client is a URL, so it cannot be a
+    // path segment. base64url keeps it out of the path grammar entirely.
+    btoa(String.fromCharCode(...new TextEncoder().encode(clientId)))
+      .replace(/\+/g, '-')
+      .replace(/\//g, '_')
+      .replace(/=+$/, '');
+
+  const patchCimdClient = async (client, patch, successKey, successFallback) => {
+    try {
+      const response = await makeAdminApiCall(
+        `/admin/oauth/clients/cimd/${encodeClientId(client.clientId)}`,
+        {
+          method: 'PUT',
+          headers: { 'Content-Type': 'application/json' },
+          body: patch
+        }
+      );
+      const revoked = response.data?.revoked;
+      setMessage({
+        type: 'success',
+        text: revoked
+          ? t(
+              'admin.auth.oauth.cimd.blockedWithRevoke',
+              'Blocked {{name}} and revoked {{count}} connection(s)',
+              { name: client.name, count: revoked.connectionsRevoked }
+            )
+          : t(successKey, successFallback, { name: client.name })
+      });
+      loadClients();
+    } catch (error) {
+      setMessage({
+        type: 'error',
+        text: `${t('admin.auth.oauth.cimd.saveError', 'Failed to save the policy')}: ${error.message}`
+      });
+    }
+  };
+
+  const handleBlockCimdClient = client => {
+    setConfirmDialog({
+      title: t('admin.auth.oauth.cimd.blockTitle', 'Block this client'),
+      message: t(
+        'admin.auth.oauth.cimd.blockConfirm',
+        'Block {{name}}? Its {{count}} connection(s) are revoked immediately and nobody can reconnect until you unblock it. An access token it already holds keeps working until it expires — at most {{minutes}} minutes.',
+        {
+          name: client.name,
+          count: client.connectionCount ?? 0,
+          minutes: client.effective?.tokenExpirationMinutes ?? 60
+        }
+      ),
+      danger: true,
+      onConfirm: async () => {
+        setConfirmDialog(null);
+        await patchCimdClient(
+          client,
+          { active: false },
+          'admin.auth.oauth.cimd.blocked',
+          'Blocked {{name}}'
+        );
+      }
+    });
+  };
+
+  const handleUnblockCimdClient = client =>
+    patchCimdClient(
+      client,
+      { active: true },
+      'admin.auth.oauth.cimd.unblocked',
+      'Unblocked {{name}}'
+    );
+
+  const handleApproveCimdClient = client =>
+    patchCimdClient(
+      client,
+      { approvalState: 'approved', active: true },
+      'admin.auth.oauth.cimd.approved',
+      'Approved {{name}}'
+    );
+
+  const handleRevokeCimdConnections = client => {
+    setConfirmDialog({
+      title: t('admin.auth.oauth.cimd.revokeAllTitle', 'Revoke all connections'),
+      message: t(
+        'admin.auth.oauth.cimd.revokeAllConfirm',
+        'Disconnect all {{count}} user(s) from {{name}}? They can reconnect by signing in and consenting again — block the client first if that is not what you want.',
+        { name: client.name, count: client.connectionCount ?? 0 }
+      ),
+      danger: true,
+      onConfirm: async () => {
+        setConfirmDialog(null);
+        try {
+          const response = await makeAdminApiCall(
+            `/admin/oauth/clients/${encodeClientId(client.clientId)}/connections`,
+            { method: 'DELETE' }
+          );
+          setMessage({
+            type: 'success',
+            text: t(
+              'admin.auth.oauth.cimd.revokeAllSuccess',
+              'Revoked {{count}} connection(s) of {{name}}',
+              { name: client.name, count: response.data?.connectionsRevoked ?? 0 }
+            )
+          });
+          loadClients();
+        } catch (error) {
+          setMessage({
+            type: 'error',
+            text: `${t('admin.auth.oauth.cimd.revokeAllError', 'Failed to revoke the connections')}: ${error.message}`
+          });
+        }
+      }
+    });
+  };
+
   const handleRotateSecret = clientId => {
     setConfirmDialog({
       title: t('admin.auth.oauth.rotateSecretTitle', 'Rotate Client Secret'),
@@ -478,13 +592,16 @@ function AdminOAuthClientsPage() {
             <p className="text-xs text-gray-500 dark:text-gray-400 mb-3">
               {t(
                 'admin.auth.oauth.cimdDesc',
-                'Read-only. Their client ID is the URL of a document they publish, so there is no record here to edit — what they may do is set under MCP gateway → Client identification.'
+                'Their client ID is the URL of a document they publish, so their name, redirect URIs and grant types are never stored here. What they may do is yours to set — per client, or globally under MCP gateway → Client identification.'
               )}
             </p>
             <ul className="divide-y divide-gray-200 dark:divide-gray-700">
               {cimdClients.map(client => (
-                <li key={client.clientId} className="py-2 flex items-center justify-between gap-4">
-                  <div className="min-w-0">
+                <li
+                  key={client.clientId}
+                  className="py-3 flex flex-wrap items-start justify-between gap-4"
+                >
+                  <div className="min-w-0 flex-1">
                     <div className="flex items-center gap-2 flex-wrap">
                       <span className="text-sm font-medium text-gray-900 dark:text-gray-100">
                         {client.name}
@@ -492,16 +609,85 @@ function AdminOAuthClientsPage() {
                       <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-indigo-100 dark:bg-indigo-900/50 text-indigo-800 dark:text-indigo-300">
                         {t('admin.auth.oauth.kind.cimd', 'Client metadata')}
                       </span>
+                      {client.approvalState === 'pending' && (
+                        <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-amber-100 dark:bg-amber-900/50 text-amber-800 dark:text-amber-300">
+                          {t('admin.auth.oauth.cimd.pending', 'Waiting for approval')}
+                        </span>
+                      )}
+                      {client.blocked && (
+                        <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-red-100 dark:bg-red-900/50 text-red-800 dark:text-red-300">
+                          {t('admin.auth.oauth.cimd.blockedBadge', 'Blocked')}
+                        </span>
+                      )}
+                      {!client.blocked && client.approvalState !== 'pending' && !client.active && (
+                        <span
+                          className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-gray-100 dark:bg-gray-700 text-gray-700 dark:text-gray-300"
+                          title={client.inactiveCode || ''}
+                        >
+                          {t('admin.auth.oauth.cimd.inactive', 'Not connectable')}
+                        </span>
+                      )}
                     </div>
                     <code className="text-xs text-gray-500 dark:text-gray-400 break-all">
                       {client.clientId}
                     </code>
+                    <div className="mt-1 flex flex-wrap gap-x-4 gap-y-1 text-xs text-gray-500 dark:text-gray-400">
+                      <span>
+                        {t('admin.auth.oauth.connectionsCount', '{{count}} connections', {
+                          count: client.connectionCount
+                        })}
+                      </span>
+                      <span>
+                        {t('admin.auth.oauth.cimd.firstSeen', 'First seen')}:{' '}
+                        {formatDate(client.firstSeenAt)}
+                      </span>
+                      <span>
+                        {t('admin.auth.oauth.lastUsed', 'Last Used')}:{' '}
+                        {formatDate(client.lastUsedAt)}
+                      </span>
+                    </div>
                   </div>
-                  <span className="shrink-0 text-xs text-gray-500 dark:text-gray-400">
-                    {t('admin.auth.oauth.connectionsCount', '{{count}} connections', {
-                      count: client.connectionCount
-                    })}
-                  </span>
+                  <div className="flex flex-wrap gap-2 shrink-0">
+                    {client.approvalState === 'pending' && (
+                      <button
+                        onClick={() => handleApproveCimdClient(client)}
+                        className="inline-flex items-center px-3 py-1.5 border border-green-300 dark:border-green-700 text-xs font-medium rounded-md text-green-700 dark:text-green-400 bg-white dark:bg-gray-700 hover:bg-green-50 dark:hover:bg-green-900/30"
+                      >
+                        {t('admin.auth.oauth.cimd.approve', 'Approve')}
+                      </button>
+                    )}
+                    <button
+                      onClick={() =>
+                        navigate(`/admin/oauth/clients/cimd/${encodeClientId(client.clientId)}`)
+                      }
+                      className="inline-flex items-center px-3 py-1.5 border border-gray-300 dark:border-gray-600 text-xs font-medium rounded-md text-gray-700 dark:text-gray-200 bg-white dark:bg-gray-700 hover:bg-gray-50 dark:hover:bg-gray-600"
+                    >
+                      {t('admin.auth.oauth.cimd.editPolicy', 'Edit policy')}
+                    </button>
+                    {client.connectionCount > 0 && (
+                      <button
+                        onClick={() => handleRevokeCimdConnections(client)}
+                        className="inline-flex items-center px-3 py-1.5 border border-red-300 dark:border-red-700 text-xs font-medium rounded-md text-red-700 dark:text-red-400 bg-white dark:bg-gray-700 hover:bg-red-50 dark:hover:bg-red-900/30"
+                      >
+                        {t('admin.auth.oauth.cimd.revokeAll', 'Revoke all connections')}
+                      </button>
+                    )}
+                    {client.blocked ? (
+                      <button
+                        onClick={() => handleUnblockCimdClient(client)}
+                        className="inline-flex items-center px-3 py-1.5 border border-green-300 dark:border-green-700 text-xs font-medium rounded-md text-green-700 dark:text-green-400 bg-white dark:bg-gray-700 hover:bg-green-50 dark:hover:bg-green-900/30"
+                      >
+                        {t('admin.auth.oauth.cimd.unblock', 'Unblock')}
+                      </button>
+                    ) : (
+                      <button
+                        onClick={() => handleBlockCimdClient(client)}
+                        className="inline-flex items-center px-3 py-1.5 border border-red-300 dark:border-red-700 text-xs font-medium rounded-md text-red-700 dark:text-red-400 bg-white dark:bg-gray-700 hover:bg-red-50 dark:hover:bg-red-900/30"
+                      >
+                        {t('admin.auth.oauth.cimd.block', 'Block')}
+                      </button>
+                    )}
+                  </div>
                 </li>
               ))}
             </ul>

@@ -142,6 +142,22 @@ const RENAMED_MIGRATIONS = [
     oldFile: 'V110__add_qwant_websearch_provider.js',
     newVersion: '111',
     newFile: 'V111__add_qwant_websearch_provider.js'
+  },
+  // And again, against the number Qwant had just moved *to*: the two CIMD
+  // governance migrations were written as V111 and V112 while Qwant was taking
+  // V111 on main. Both moved up one, keeping their order — the approval gate
+  // must be seeded before the migration that grandfathers clients through it.
+  {
+    oldVersion: '111',
+    oldFile: 'V111__add_oauth_cimd_governance.js',
+    newVersion: '112',
+    newFile: 'V112__add_oauth_cimd_governance.js'
+  },
+  {
+    oldVersion: '112',
+    oldFile: 'V112__grandfather_connected_cimd_clients.js',
+    newVersion: '113',
+    newFile: 'V113__grandfather_connected_cimd_clients.js'
   }
 ];
 
