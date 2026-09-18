@@ -6,6 +6,7 @@ import logger from '../utils/logger.js';
 import { getBraveApiKey } from './search/braveApiKey.js';
 import { SearchProvider } from './search/SearchProvider.js';
 import { QwantSearchProvider } from './search/qwantProvider.js';
+import { StaanSearchProvider } from './search/staanProvider.js';
 
 /**
  * Brave Search Provider
@@ -192,9 +193,10 @@ class WebSearchService {
     this.defaultProvider = null;
 
     // Register built-in providers. Brave is registered first and so stays the
-    // default; Qwant is the keyless alternative an install can use with no
-    // account or API key at all.
+    // default; Staan is the other keyed engine, and Qwant the keyless
+    // alternative an install can use with no account or API key at all.
     this.registerProvider(new BraveSearchProvider());
+    this.registerProvider(new StaanSearchProvider());
     this.registerProvider(new QwantSearchProvider());
   }
 
@@ -310,4 +312,10 @@ class WebSearchService {
 const webSearchService = new WebSearchService();
 
 export default webSearchService;
-export { SearchProvider, BraveSearchProvider, QwantSearchProvider, WebSearchService };
+export {
+  SearchProvider,
+  BraveSearchProvider,
+  QwantSearchProvider,
+  StaanSearchProvider,
+  WebSearchService
+};

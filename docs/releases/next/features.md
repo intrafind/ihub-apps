@@ -1,5 +1,36 @@
 # Features — Unreleased
 
+## Web search with staan.ai
+
+`staanSearch` is a third script-backed search engine alongside `braveSearch` and `qwantSearch`,
+using the [staan.ai web search API](https://docs.staan.ai/docs/web-search). It fills the gap
+between the two that were already there: Brave needs a paid subscription, and Qwant — the keyless
+option — is fronted by DataDome, which answers requests from data-centre IP ranges with a captcha.
+An install on cloud hosting therefore had exactly one working choice, and it cost money. Staan
+needs an API key but answers from anywhere.
+
+- Select it per app in **Admin → Apps → Edit App → Web Search** as the **Staan** provider, or
+  leave the provider on **Auto**.
+- Configure the key in **Admin → Providers → Web Search Providers → Staan Search**, or set
+  `STAAN_API_KEY` in `config.env`. Keys entered in the admin UI are encrypted at rest.
+- **Auto** now means: Brave when a Brave API key is configured, then Staan when it has one, and
+  Qwant otherwise. An install that already had a Brave key keeps using Brave and is unaffected.
+- The connectivity test under **Admin → Providers** covers Staan too, and distinguishes a rejected
+  key from a rate limit, a malformed request and a proxy that swallowed the response.
+
+Two things Staan does that the other engines do not:
+
+- **Domain scoping.** `includeDomains` restricts a search to a set of sites and `excludeDomains`
+  keeps results away from them (10 domains each, and the two cannot be combined). The `site:` and
+  `-site:` query operators work as well.
+- **More than ten results.** Staan serves ten per request, so asking for more pages through
+  further requests, up to 40. `maxResults` above 10 is honoured rather than silently truncated.
+
+Results come back in the same shape as Brave's and Qwant's, so an app can be switched between
+engines without the model seeing a different tool. Search language follows the app as usual: Staan
+serves the German, French and English markets, and an unsupported region falls back to a supported
+one for the same language.
+
 ## Web search providers can be tested from the admin UI
 
 **Admin → Providers → Web Search Providers** gained a **Connectivity** column and a **Test**

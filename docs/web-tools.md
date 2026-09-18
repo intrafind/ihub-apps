@@ -14,6 +14,7 @@ iHub Apps provides a unified web search system that automatically selects the be
 | **OpenAI Web Search** | Native (GPT models via Responses API) | Web-augmented responses with inline citations |
 | **Anthropic Web Search** | Native (Claude models) | Web-augmented responses with inline citations |
 | **Brave Search** | Server-side | Privacy-focused search, any model (needs an API key) |
+| **Staan Search** | Server-side | European search index, any model, works from cloud hosting (needs an API key) |
 | **Qwant Search** | Server-side | Privacy-focused search, any model, **no API key required** |
 
 ### Additional Web Tools
@@ -59,7 +60,7 @@ Add a `websearch` object to your app configuration:
 | Property | Type | Default | Description |
 |----------|------|---------|-------------|
 | `enabled` | Boolean | `false` | Enable web search for this app |
-| `provider` | String | `"auto"` | Search engine used when native search does not apply: `"auto"`, `"brave"` or `"qwant"`. `"auto"` picks Brave when a Brave API key is configured and Qwant otherwise |
+| `provider` | String | `"auto"` | Search engine used when native search does not apply: `"auto"`, `"brave"`, `"staan"` or `"qwant"`. `"auto"` picks Brave when a Brave API key is configured, then Staan when it has one, and Qwant otherwise |
 | `useNativeSearch` | Boolean | `true` | Prefer native search (Google Search for Gemini, OpenAI Web Search for GPT, Anthropic Web Search for Claude) when available |
 | `maxResults` | Number | `5` | Maximum number of search results (1-20) |
 | `extractContent` | Boolean | `true` | Extract full page content from search results |
@@ -89,14 +90,18 @@ The system automatically selects the best search tool at runtime based on the mo
 │                                                  │
 │  Otherwise → provider:                           │
 │    "brave" → Brave Search                        │
+│    "staan" → Staan Search                        │
 │    "qwant" → Qwant Search                        │
 │    "auto"  → Brave if a Brave API key is set,    │
-│              otherwise Qwant (needs no key)      │
+│              else Staan if a Staan key is set,   │
+│              else Qwant (needs no key)           │
 └─────────────────────────────────────────────────┘
 ```
 
 `"auto"` exists so an install without a Brave subscription still gets working
-web search. A named provider is always honoured as configured — even when it is
+web search. It walks the keyed engines first, in registration order, so an
+install that already had a Brave key keeps using it and does not change engine
+on upgrade. A named provider is always honoured as configured — even when it is
 unconfigured — so the resulting error names the engine the admin actually chose
 rather than silently answering from a different one.
 
@@ -146,15 +151,16 @@ When multiple sources are used, a tooltip lists all contributing sources.
 
 ### API Key Setup
 
-Brave Search requires an API key. **Qwant requires none** — it is listed under
-**Admin → Providers → Web Search Providers** as "No API key required" and works
-as soon as an app selects it.
+Brave Search and Staan Search each require an API key. **Qwant requires none** —
+it is listed under **Admin → Providers → Web Search Providers** as "No API key
+required" and works as soon as an app selects it.
 
 #### Admin Panel (Recommended)
 
 1. Navigate to **Admin → Providers**
 2. Find your provider under **Web Search Providers**:
    - **Brave Search**: Click "Configure" and enter your Brave API key
+   - **Staan Search**: Click "Configure" and enter your staan.ai API key
    - **Qwant Search**: nothing to configure
 3. Save changes — no server restart required
 
@@ -166,6 +172,7 @@ Add to your `config.env` file:
 
 ```env
 BRAVE_SEARCH_API_KEY=your_brave_api_key_here
+STAAN_API_KEY=your_staan_api_key_here
 ```
 
 The system checks admin panel configuration first, then falls back to environment variables.
@@ -204,15 +211,17 @@ The same check is available without the UI:
 
 ```bash
 node tests/manual/manual-test-qwant-search.js "your query" [--language=de]
+node tests/manual/manual-test-staan-search.js "your query" [--language=de] [--max-results=20]
 ```
 
-Both engines also accept an endpoint override, which is only needed to point at
-a different host:
+All three engines also accept an endpoint override, which is only needed to
+point at a different host:
 
 ```env
 BRAVE_SEARCH_ENDPOINT=https://api.search.brave.com/res/v1/web/search
 QWANT_SEARCH_ENDPOINT=https://api.qwant.com/v3/search/
 QWANT_SEARCH_USER_AGENT=          # override the browser UA Qwant is sent
+STAAN_SEARCH_ENDPOINT=https://api.staan.ai/v2/search/web
 ```
 
 ### Native Search Providers
@@ -273,6 +282,43 @@ app's `websearch` config rather than listed in the app's `tools` array.
 > server runs, not of the setup. Check it before enabling Qwant with the
 > [connectivity test](#connectivity-test-admin-ui) in the admin UI, and use
 > Brave Search where Qwant is blocked.
+
+### Staan Search (`staanSearch`)
+
+**Purpose**: Search the web using [Staan](https://docs.staan.ai/docs/web-search) for up-to-date information.
+
+Staan is the second keyed engine alongside `braveSearch`. It returns the same
+result shape as the other two, so an app can switch `websearch.provider`
+between them without the model seeing a different contract, and like them it is
+injected from the app's `websearch` config rather than listed in the app's
+`tools` array. Two things set it apart:
+
+- It answers requests from data-centre IP ranges, so it works on the cloud
+  hosting where Qwant is blocked.
+- It takes **domain scoping** as a request parameter, which neither of the
+  others does.
+
+**Parameters**:
+
+- `query` (string, required): Search query. Supports the `site:` and `-site:` operators; trimmed to 400 characters
+- `extractContent` (boolean, optional): Extract full content from top results (default: configured by app)
+- `maxResults` (number, optional): Maximum results to return (default: configured by app, max: 40). Staan serves 10 results per request, so more than 10 costs one extra request per further 10
+- `contentMaxLength` (number, optional): Maximum content length per page (default: configured by app)
+- `language` (string, optional): Language or locale for the results, e.g. `en`, `de`, `en-GB` (default: `en-us`)
+- `includeDomains` (string[], optional): Only return results from these domains (max 10)
+- `excludeDomains` (string[], optional): Drop results from these domains (max 10)
+
+`includeDomains` and `excludeDomains` are mutually exclusive — the API rejects a
+request carrying both, so `includeDomains` wins when both are given.
+
+**Returns**: Array of search results with titles, URLs, descriptions, an optional `hostname`, and optionally extracted page content.
+
+> **Markets.** Staan serves the German, French and English markets
+> (`de-de`, `fr-fr`, `en-us`, `en-gb`, `en-fr`, `en-ca`, `en-au`, `en-in`,
+> `en-ie`, `en-nz`, `en-za`, `en-sg`). An unsupported region falls back to a
+> supported one for the same language (`de-CH` → `de-de`), and an unsupported
+> language to `en-us`. Note that iHub defaults to `en-us` rather than to the
+> API's own default of `fr-fr`.
 
 ### Native Search Providers (Google, OpenAI, Anthropic)
 

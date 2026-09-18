@@ -65,6 +65,9 @@ const env = cleanEnv(
     // Qwant answers a default Node user agent with a bot challenge, so the
     // provider sends a browser one. Override it if Qwant starts rejecting it.
     QWANT_SEARCH_USER_AGENT: str({ optional: true }),
+    // Staan's web search endpoint. STAAN_API_KEY needs no declaration: it
+    // reaches `config` through the dynamic `*_API_KEY` pass-through below.
+    STAAN_SEARCH_ENDPOINT: str({ optional: true }),
     // TTL of the in-memory web-search result cache (services/searchCache.js).
     SEARCH_CACHE_TTL_MS: num({ default: 600000 })
   },
@@ -116,6 +119,7 @@ const config = Object.freeze({
   BRAVE_SEARCH_ENDPOINT: env.BRAVE_SEARCH_ENDPOINT,
   QWANT_SEARCH_ENDPOINT: env.QWANT_SEARCH_ENDPOINT,
   QWANT_SEARCH_USER_AGENT: env.QWANT_SEARCH_USER_AGENT,
+  STAAN_SEARCH_ENDPOINT: env.STAAN_SEARCH_ENDPOINT,
   SEARCH_CACHE_TTL_MS: env.SEARCH_CACHE_TTL_MS
 });
 
