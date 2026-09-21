@@ -173,3 +173,41 @@ interactive sign-in; **Admin → OAuth → Connections** is the immediate remedy
 
 Every action is audited: clients discovered, approved, blocked, unblocked, their policy changed,
 and connections revoked in bulk with the client and the count.
+
+## Outlook Add-in: choose where Office.js is loaded from
+
+Networks that block Microsoft's CDN stopped the Outlook add-in from starting at all. **Admin →
+Office Integration** now has an **Office.js Source** section with four options, so the add-in can
+be served from somewhere the network allows.
+
+- **Microsoft CDN** (default) — unchanged behaviour, and the only option Microsoft AppSource
+  accepts.
+- **Proxy through this server** — iHub fetches the Office JavaScript library from the CDN and
+  caches it. Clients never contact Microsoft; only the iHub server needs outbound access, and it
+  can use the proxy configured under **Admin → Proxy**. The cached copy keeps itself current, and
+  if the CDN becomes unreachable the cached files keep being served.
+- **Custom CDN or mirror** — load from a URL you control, such as a corporate CDN or an artifact
+  proxy (Artifactory, Nexus) mirroring the Microsoft CDN. Neither clients nor the iHub server need
+  access to Microsoft. The URL must end in `/office.js`; the page rejects URLs that do not, because
+  Office.js uses that filename to find the rest of the library.
+- **Bundled copy** — the previous offline mode, renamed. Still available for installations with no
+  outbound access at all.
+
+The page shows which URL is actually being served to the add-in, so a misconfiguration is visible
+without opening the task pane source.
+
+Two notes for blocked networks. Microsoft's current CDN host is
+`officeapis.public.onecdn.static.microsoft`, which is **not** under `microsoft.com` — a block
+written as a `microsoft.com` suffix rule does not catch it, and the CDN URL is now an editable
+field. And both that host and the older `appsforoffice.microsoft.com` are `required: true` entries
+in Microsoft's published Microsoft 365 endpoint list, so blocking them is an unsupported Microsoft
+365 configuration rather than only an iHub problem — often the faster route is an allowlist entry.
+
+Prefer **Proxy** or **Custom CDN** over **Bundled** where either is possible: the bundled copy
+comes from the `@microsoft/office-js` npm package, which Microsoft no longer maintains, so it never
+receives updates — including security fixes — and it adds roughly 86 MB to the build. For a fully
+air-gapped installation, **Proxy** with a pre-populated `contents/data/office-js-cache/` directory
+serves the library without any outbound request.
+
+Existing installations are unaffected: the previous offline switch becomes **Bundled** if it was
+on and **Microsoft CDN** if it was off, and both keep the CDN host they were already using.

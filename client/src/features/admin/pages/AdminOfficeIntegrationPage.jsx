@@ -12,6 +12,46 @@ import { getLocalizedContent } from '../../../utils/localizeContent';
 /** The values the task pane's landing view accepts; mirrored in server/utils/officeStartPage.js. */
 const START_PAGE_CHOICES = ['start', 'apps'];
 
+/**
+ * Office.js delivery modes, in the order they are offered. Kept beside the
+ * component so the radio list stays declarative; the ids match
+ * `OFFICE_JS_MODES` in server/utils/officeJsSource.js.
+ */
+const OFFICE_JS_MODES = [
+  {
+    id: 'cdn',
+    labelKey: 'admin.officeIntegration.officeJsModeCdn',
+    labelFallback: 'Microsoft CDN (recommended)',
+    descKey: 'admin.officeIntegration.officeJsModeCdnDesc',
+    descFallback:
+      'Clients load Office.js straight from Microsoft. Always current, and the only option Microsoft AppSource accepts.'
+  },
+  {
+    id: 'proxy',
+    labelKey: 'admin.officeIntegration.officeJsModeProxy',
+    labelFallback: 'Proxy through this server',
+    descKey: 'admin.officeIntegration.officeJsModeProxyDesc',
+    descFallback:
+      'This server fetches Office.js from the CDN and caches it. Clients never contact Microsoft \u2014 only this server needs outbound access, and the cached copy stays up to date.'
+  },
+  {
+    id: 'custom',
+    labelKey: 'admin.officeIntegration.officeJsModeCustom',
+    labelFallback: 'Custom CDN or mirror',
+    descKey: 'admin.officeIntegration.officeJsModeCustomDesc',
+    descFallback:
+      'Load from a URL you control \u2014 a corporate CDN or an artifact proxy mirroring the Microsoft CDN. Neither clients nor this server need access to Microsoft.'
+  },
+  {
+    id: 'bundled',
+    labelKey: 'admin.officeIntegration.officeJsModeBundled',
+    labelFallback: 'Bundled copy (offline)',
+    descKey: 'admin.officeIntegration.officeJsModeBundledDesc',
+    descFallback:
+      'Serve the copy shipped with this release. Needs no network at all, but never receives updates.'
+  }
+];
+
 const DEFAULT_START_PAGE = { defaultPage: 'start', defaultAppId: '', featuredAppIds: [] };
 
 // Only the known fields, each well-formed, whatever the server sent.
@@ -35,7 +75,13 @@ function AdminOfficeIntegrationPage() {
   const [displayName, setDisplayName] = useState({});
   const [description, setDescription] = useState({});
   const [starterPrompts, setStarterPrompts] = useState([]);
-  const [useLocalOfficejs, setUseLocalOfficejs] = useState(false);
+  // Where the add-in loads Office.js from. Office.js derives the base path for
+  // every other file it needs from this one URL, so a proxy or a custom CDN
+  // serves the whole library — see server/utils/officeJsSource.js.
+  const [officeJsMode, setOfficeJsMode] = useState('cdn');
+  const [officeJsCdnUrl, setOfficeJsCdnUrl] = useState('');
+  const [officeJsCustomUrl, setOfficeJsCustomUrl] = useState('');
+  const [officeJsResolvedUrl, setOfficeJsResolvedUrl] = useState('');
   // The task pane's landing view: which view opens after sign-in, the app
   // whose chat input the start page shows, and the curated app shortcuts.
   const [startPage, setStartPage] = useState(DEFAULT_START_PAGE);
@@ -70,7 +116,10 @@ function AdminOfficeIntegrationPage() {
       setStatus(data);
       setDisplayName(sanitizeLocalized(data.displayName));
       setDescription(sanitizeLocalized(data.description));
-      setUseLocalOfficejs(data.useLocalOfficejs === true);
+      setOfficeJsMode(data.officeJsMode || 'cdn');
+      setOfficeJsCdnUrl(data.officeJsCdnUrl || '');
+      setOfficeJsCustomUrl(data.officeJsCustomUrl || '');
+      setOfficeJsResolvedUrl(data.officeJsResolvedUrl || '');
       setStartPage(readStartPage(data.startPage));
       setStarterPrompts(
         Array.isArray(data.starterPrompts)
@@ -198,7 +247,9 @@ function AdminOfficeIntegrationPage() {
           displayName: trimLocalized(displayName),
           description: trimLocalized(description),
           starterPrompts: cleanedPrompts,
-          useLocalOfficejs,
+          officeJsMode,
+          officeJsCdnUrl,
+          officeJsCustomUrl,
           startPage: {
             defaultPage: startPage.defaultPage,
             // '' means "automatic"; the server stores no id for it.
@@ -432,36 +483,126 @@ function AdminOfficeIntegrationPage() {
               </div>
             </div>
 
-            {/* Offline / Local Office.js */}
+            {/* Office.js source */}
             <div className="bg-white dark:bg-gray-800 rounded-xl shadow-xs border border-gray-200 dark:border-gray-700 p-6">
               <h2 className="text-lg font-semibold text-gray-900 dark:text-gray-100 mb-1">
-                {t('admin.officeIntegration.offlineTitle', 'Offline Mode (Local Office.js)')}
+                {t('admin.officeIntegration.officeJsTitle', 'Office.js Source')}
               </h2>
               <p className="text-sm text-gray-500 dark:text-gray-400 mb-4">
                 {t(
-                  'admin.officeIntegration.offlineDesc',
-                  'Enable this if your environment blocks access to appsforoffice.microsoft.com. The add-in will then load the Office JavaScript library from this server instead of the Microsoft CDN.'
+                  'admin.officeIntegration.officeJsDesc',
+                  'Where the add-in loads the Office JavaScript library from. Change this if your network blocks Microsoft\u2019s CDN. Office.js loads the rest of the library relative to this URL, so one setting covers the whole library.'
                 )}
               </p>
-              <label className="flex items-center gap-3 cursor-pointer">
-                <input
-                  type="checkbox"
-                  checked={useLocalOfficejs}
-                  onChange={e => setUseLocalOfficejs(e.target.checked)}
-                  className="h-4 w-4 rounded-sm border-gray-300 text-indigo-600 focus:ring-indigo-500"
-                />
-                <span className="text-sm font-medium text-gray-700 dark:text-gray-300">
-                  {t(
-                    'admin.officeIntegration.offlineLabel',
-                    'Serve Office.js from this server (offline mode)'
-                  )}
-                </span>
-              </label>
-              {useLocalOfficejs && (
+
+              <div className="space-y-3">
+                {OFFICE_JS_MODES.map(({ id, labelKey, labelFallback, descKey, descFallback }) => (
+                  <div
+                    key={id}
+                    className="flex items-start gap-3 rounded-lg border border-gray-200 dark:border-gray-700 px-4 py-3 hover:bg-gray-50 dark:hover:bg-gray-700/40"
+                  >
+                    <input
+                      id={`officeJsMode-${id}`}
+                      type="radio"
+                      name="officeJsMode"
+                      value={id}
+                      checked={officeJsMode === id}
+                      onChange={() => setOfficeJsMode(id)}
+                      aria-describedby={`officeJsMode-${id}-desc`}
+                      className="mt-0.5 h-4 w-4 border-gray-300 text-indigo-600 focus:ring-indigo-500"
+                    />
+                    <div>
+                      <label
+                        htmlFor={`officeJsMode-${id}`}
+                        className="block text-sm font-medium text-gray-700 dark:text-gray-300 cursor-pointer"
+                      >
+                        {t(labelKey, labelFallback)}
+                      </label>
+                      <p
+                        id={`officeJsMode-${id}-desc`}
+                        className="text-xs text-gray-500 dark:text-gray-400 mt-0.5"
+                      >
+                        {t(descKey, descFallback)}
+                      </p>
+                    </div>
+                  </div>
+                ))}
+              </div>
+
+              {/* Upstream CDN: used directly by `cdn`, and as the proxy origin. */}
+              {(officeJsMode === 'cdn' || officeJsMode === 'proxy') && (
+                <div className="mt-4">
+                  <label
+                    htmlFor="officeJsCdnUrl"
+                    className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1"
+                  >
+                    {t('admin.officeIntegration.officeJsCdnUrlLabel', 'Microsoft CDN URL')}
+                  </label>
+                  <input
+                    id="officeJsCdnUrl"
+                    type="url"
+                    value={officeJsCdnUrl}
+                    onChange={e => setOfficeJsCdnUrl(e.target.value)}
+                    className="w-full rounded-lg border border-gray-300 dark:border-gray-600 dark:bg-gray-900 px-3 py-2 text-sm text-gray-900 dark:text-gray-100 focus:border-indigo-500 focus:ring-indigo-500"
+                    placeholder="https://officeapis.public.onecdn.static.microsoft/1/office.js"
+                  />
+                  <p className="mt-1 text-xs text-gray-500 dark:text-gray-400">
+                    {t(
+                      'admin.officeIntegration.officeJsCdnUrlHint',
+                      'Must end in /office.js. Use the China (21Vianet) CDN here if your tenant requires it.'
+                    )}
+                  </p>
+                </div>
+              )}
+
+              {officeJsMode === 'custom' && (
+                <div className="mt-4">
+                  <label
+                    htmlFor="officeJsCustomUrl"
+                    className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1"
+                  >
+                    {t('admin.officeIntegration.officeJsCustomUrlLabel', 'Custom Office.js URL')}
+                  </label>
+                  <input
+                    id="officeJsCustomUrl"
+                    type="url"
+                    value={officeJsCustomUrl}
+                    onChange={e => setOfficeJsCustomUrl(e.target.value)}
+                    className="w-full rounded-lg border border-gray-300 dark:border-gray-600 dark:bg-gray-900 px-3 py-2 text-sm text-gray-900 dark:text-gray-100 focus:border-indigo-500 focus:ring-indigo-500"
+                    placeholder="https://cdn.example.com/office/office.js"
+                  />
+                  <p className="mt-1 text-xs text-gray-500 dark:text-gray-400">
+                    {t(
+                      'admin.officeIntegration.officeJsCustomUrlHint',
+                      'Must end in /office.js \u2014 Office.js derives the path to every other file it needs from this URL, and cannot find them without that filename. Point this at a pull-through mirror of the Microsoft CDN.'
+                    )}
+                  </p>
+                </div>
+              )}
+
+              {officeJsResolvedUrl && (
+                <p className="mt-4 text-xs text-gray-500 dark:text-gray-400">
+                  {t('admin.officeIntegration.officeJsResolved', 'Currently served to the add-in:')}{' '}
+                  <code className="font-mono text-gray-700 dark:text-gray-300">
+                    {officeJsResolvedUrl}
+                  </code>
+                </p>
+              )}
+
+              {officeJsMode !== 'cdn' && (
                 <div className="mt-3 rounded-lg bg-amber-50 dark:bg-amber-900/20 border border-amber-200 dark:border-amber-700 px-4 py-3 text-sm text-amber-800 dark:text-amber-300">
                   {t(
-                    'admin.officeIntegration.offlineWarning',
-                    'Offline mode is active. The add-in will load Office.js from /office/office-js/office.js on this server. Note: Microsoft AppSource will reject add-ins that do not use the official CDN URL — this mode is intended for internal enterprise deployments only.'
+                    'admin.officeIntegration.officeJsAppSourceWarning',
+                    'Microsoft AppSource requires add-ins to load Office.js from the official CDN. Any other source is supported for internal enterprise deployments only \u2014 which is what sideloading or Microsoft 365 admin center deployment does.'
+                  )}
+                </div>
+              )}
+
+              {officeJsMode === 'bundled' && (
+                <div className="mt-3 rounded-lg bg-amber-50 dark:bg-amber-900/20 border border-amber-200 dark:border-amber-700 px-4 py-3 text-sm text-amber-800 dark:text-amber-300">
+                  {t(
+                    'admin.officeIntegration.officeJsBundledWarning',
+                    'The bundled copy comes from the @microsoft/office-js npm package, which Microsoft no longer maintains. It never updates \u2014 including for security fixes \u2014 and adds roughly 86 MB to the build. Prefer Proxy or Custom CDN, and use Bundled only where the server has no outbound access at all.'
                   )}
                 </div>
               )}

@@ -7,6 +7,12 @@ import { createOAuthClient } from '../../utils/oauthClientManager.js';
 import logger from '../../utils/logger.js';
 import { sendInternalError, sendBadRequest } from '../../utils/responseHelpers.js';
 import { sanitizeOfficeStartPage, validateOfficeStartPage } from '../../utils/officeStartPage.js';
+import {
+  DEFAULT_OFFICE_JS_CDN_URL,
+  OFFICE_JS_MODES,
+  resolveOfficeJsSource,
+  validateOfficeJsUrl
+} from '../../utils/officeJsSource.js';
 
 /**
  * Merge updates into the platform configuration and publish them.
@@ -53,7 +59,14 @@ export default function registerAdminOfficeIntegrationRoutes(app) {
       starterPrompts: Array.isArray(officeConfig.starterPrompts) ? officeConfig.starterPrompts : [],
       // Always complete, so the admin form has a value for every control.
       startPage: sanitizeOfficeStartPage(officeConfig.startPage),
-      useLocalOfficejs: officeConfig.useLocalOfficejs === true,
+      officeJsMode: OFFICE_JS_MODES.includes(officeConfig.officeJsMode)
+        ? officeConfig.officeJsMode
+        : 'cdn',
+      officeJsCdnUrl: officeConfig.officeJsCdnUrl || DEFAULT_OFFICE_JS_CDN_URL,
+      officeJsCustomUrl: officeConfig.officeJsCustomUrl || '',
+      // What the add-in HTML will actually carry, so the admin can see the
+      // effective URL without reading the page source.
+      officeJsResolvedUrl: resolveOfficeJsSource(platform).scriptUrl,
       manifestUrl: `${baseUrl}/api/integrations/office-addin/manifest.xml`,
       taskpaneUrl: `${baseUrl}/office/taskpane.html`
     });
@@ -209,8 +222,16 @@ export default function registerAdminOfficeIntegrationRoutes(app) {
    *                 type: object
    *               starterPrompts:
    *                 type: array
-   *               useLocalOfficejs:
-   *                 type: boolean
+   *               officeJsMode:
+   *                 type: string
+   *                 enum: [cdn, proxy, bundled, custom]
+   *                 description: Where the add-in loads Office.js from. `proxy` makes this server fetch and cache the library so clients never contact Microsoft.
+   *               officeJsCdnUrl:
+   *                 type: string
+   *                 description: Upstream CDN URL used by the `cdn` and `proxy` modes. Must end in /office.js.
+   *               officeJsCustomUrl:
+   *                 type: string
+   *                 description: Absolute URL used by the `custom` mode (own CDN or artifact proxy). Must end in /office.js.
    *               startPage:
    *                 type: object
    *                 description: Which view the pane opens after sign-in (`defaultPage` — `start` or `apps`), the default chat app (`defaultAppId`) and the curated app shortcuts (`featuredAppIds`).
@@ -222,7 +243,15 @@ export default function registerAdminOfficeIntegrationRoutes(app) {
    */
   app.put(buildServerPath('/api/admin/office-integration/config'), adminAuth, async (req, res) => {
     try {
-      const { displayName, description, starterPrompts, useLocalOfficejs, startPage } = req.body;
+      const {
+        displayName,
+        description,
+        starterPrompts,
+        officeJsMode,
+        officeJsCdnUrl,
+        officeJsCustomUrl,
+        startPage
+      } = req.body;
       const platform = configCache.getPlatform();
 
       // Accept only `{ [lang: string]: string }` objects. Any non-string locale value
@@ -294,11 +323,34 @@ export default function registerAdminOfficeIntegrationRoutes(app) {
         }
         allowed.starterPrompts = sanitized;
       }
-      if (useLocalOfficejs !== undefined) {
-        if (typeof useLocalOfficejs !== 'boolean') {
-          return sendBadRequest(res, 'useLocalOfficejs must be a boolean');
+      if (officeJsMode !== undefined) {
+        if (!OFFICE_JS_MODES.includes(officeJsMode)) {
+          return sendBadRequest(res, `officeJsMode must be one of: ${OFFICE_JS_MODES.join(', ')}`);
         }
-        allowed.useLocalOfficejs = useLocalOfficejs;
+        allowed.officeJsMode = officeJsMode;
+      }
+      if (officeJsCdnUrl !== undefined) {
+        const result = validateOfficeJsUrl(officeJsCdnUrl);
+        if (result.error) return sendBadRequest(res, `officeJsCdnUrl: ${result.error}`);
+        allowed.officeJsCdnUrl = result.value;
+      }
+      if (officeJsCustomUrl !== undefined) {
+        // Empty clears the field; it is only read when the mode is `custom`.
+        if (typeof officeJsCustomUrl === 'string' && officeJsCustomUrl.trim() === '') {
+          allowed.officeJsCustomUrl = '';
+        } else {
+          const result = validateOfficeJsUrl(officeJsCustomUrl);
+          if (result.error) return sendBadRequest(res, `officeJsCustomUrl: ${result.error}`);
+          allowed.officeJsCustomUrl = result.value;
+        }
+      }
+
+      // `custom` without a URL would leave the add-in with no library at all.
+      const effectiveMode = allowed.officeJsMode ?? platform?.officeIntegration?.officeJsMode;
+      const effectiveCustomUrl =
+        allowed.officeJsCustomUrl ?? platform?.officeIntegration?.officeJsCustomUrl;
+      if (effectiveMode === 'custom' && !effectiveCustomUrl) {
+        return sendBadRequest(res, 'officeJsCustomUrl is required when officeJsMode is "custom"');
       }
       if (startPage !== undefined) {
         // Replaces the whole block: the admin form always sends every field,
