@@ -9,6 +9,7 @@ import logger from '../utils/logger.js';
  * @param {boolean} [params.extractContent=false] - Whether to extract full content from result pages
  * @param {number} [params.maxResults=10] - Maximum number of results to return / pages to extract
  * @param {number} [params.contentMaxLength=3000] - Maximum characters of extracted content per page
+ * @param {string} [params.language] - Language/locale for the results (e.g. "de", "en-GB")
  * @param {string} [params.chatId] - The chat ID for context tracking
  * @returns {Promise<Object>} Search results, optionally with extracted page content
  * @throws {Error} If no query is provided
@@ -19,6 +20,7 @@ export default async function braveSearch({
   extractContent = false,
   maxResults = 10,
   contentMaxLength = 3000,
+  language,
   chatId
 }) {
   const searchQuery = query || q;
@@ -34,7 +36,8 @@ export default async function braveSearch({
     extractContent,
     maxResults,
     contentMaxLength,
-    chatId
+    chatId,
+    searchOptions: { language }
   });
 }
 

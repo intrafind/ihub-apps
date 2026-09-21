@@ -3,6 +3,7 @@ import {
   CpuChipIcon,
   BoltIcon,
   SparklesIcon,
+  LanguageIcon,
   Cog6ToothIcon,
   WindowIcon,
   DocumentTextIcon,
@@ -225,6 +226,13 @@ export function getAdminNavSections({ t, showAdminPage, featureFlags }) {
           label: t('admin.nav.ui', 'UI Customization'),
           href: '/admin/ui',
           icon: SparklesIcon,
+          visible: showAdminPage('ui')
+        },
+        {
+          key: 'localization',
+          label: t('admin.nav.localization', 'Localization'),
+          href: '/admin/localization',
+          icon: LanguageIcon,
           visible: showAdminPage('ui')
         },
         {

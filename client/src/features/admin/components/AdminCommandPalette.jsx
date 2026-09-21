@@ -21,6 +21,7 @@ const ADMIN_PAGES = [
   { label: 'OAuth', href: '/admin/oauth' },
   { label: 'Integrations', href: '/admin/integrations' },
   { label: 'UI Customization', href: '/admin/ui' },
+  { label: 'Localization', href: '/admin/localization' },
   { label: 'Pages', href: '/admin/pages' },
   { label: 'Short Links', href: '/admin/shortlinks' },
   { label: 'Usage Reports', href: '/admin/usage' },

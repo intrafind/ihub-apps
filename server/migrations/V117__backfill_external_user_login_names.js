@@ -1,5 +1,5 @@
 /**
- * Migration V115 — Backfill the login name on externally authenticated users
+ * Migration V117 — Backfill the login name on externally authenticated users
  *
  * Background: `createOrUpdateExternalUser()` wrote `username: externalUser.email
  * || externalUser.id` when it first created a user record, and never looked at
@@ -37,7 +37,7 @@
  * OIDC) are left alone.
  */
 
-export const version = '115';
+export const version = '117';
 export const description = 'Backfill directory login names onto external user records';
 
 /** Auth methods whose provider block carries a directory login name. */

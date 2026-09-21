@@ -1,16 +1,16 @@
 #!/usr/bin/env node
 
 /**
- * Migration V115 specs — backfilling directory login names.
+ * Migration V115 specs — the braveSearch `language` parameter reaches upgrades.
  *
- * The old create path wrote the email into `username` for every external user
- * who had one, and nothing ever wrote it again. This migration recovers the
- * real login name from the provider block — but only where doing so is
- * unambiguous, because `username` is a login credential for local accounts and
- * a uniqueness key for everyone.
+ * `copyDefaultConfiguration()` backfills whole files that are missing from
+ * `contents/`; it does not merge new fields into a file that is already there.
+ * So a new tool parameter needs a migration or existing installs keep the old
+ * schema indefinitely — and a model calling `braveSearch` with `language` would
+ * fail validation against it.
  *
- * So the specs pin both directions: the records it must fix, and the records it
- * must leave exactly as they are.
+ * What has to be right: add the property only when it is absent, and leave every
+ * other part of a tool an admin may have edited alone.
  */
 import fs from 'node:fs/promises';
 import os from 'node:os';
@@ -22,10 +22,8 @@ import {
   up,
   precondition,
   version,
-  description,
-  needsLoginNameBackfill,
-  recoverLoginName
-} from '../migrations/V115__backfill_external_user_login_names.js';
+  description
+} from '../migrations/V115__brave_search_language_parameter.js';
 
 let baseDir;
 
@@ -39,7 +37,11 @@ function makeCtx(dir) {
         .stat(path.join(dir, rel))
         .then(() => true)
         .catch(() => false),
-    readJson: async rel => JSON.parse(await fs.readFile(path.join(dir, rel), 'utf8')),
+    readJson: async rel =>
+      fs
+        .readFile(path.join(dir, rel), 'utf8')
+        .then(JSON.parse)
+        .catch(() => null),
     writeJson: async (rel, data) => {
       await fs.mkdir(path.dirname(path.join(dir, rel)), { recursive: true });
       await fs.writeFile(path.join(dir, rel), JSON.stringify(data, null, 2), 'utf8');
@@ -49,176 +51,105 @@ function makeCtx(dir) {
   };
 }
 
-/** Write a scratch contents dir holding these users, and return its ctx. */
-async function seed(users, platform = null) {
-  const dir = await fs.mkdtemp(path.join(baseDir, 'v115-'));
-  await fs.mkdir(path.join(dir, 'config'), { recursive: true });
-  await fs.writeFile(
-    path.join(dir, 'config/users.json'),
-    JSON.stringify({ users }, null, 2),
-    'utf8'
-  );
-  if (platform) {
-    await fs.writeFile(
-      path.join(dir, 'config/platform.json'),
-      JSON.stringify(platform, null, 2),
-      'utf8'
-    );
-  }
-  return { dir, ctx: makeCtx(dir) };
-}
-
-/** Read users.json back from a scratch dir. */
-async function readUsers(dir) {
-  return JSON.parse(await fs.readFile(path.join(dir, 'config/users.json'), 'utf8')).users;
-}
-
-/** The record the old create path produced for an AD user with an email. */
-function ldapUser(overrides = {}) {
+/** The braveSearch tool as it looked before this parameter existed. */
+function legacyTool() {
   return {
-    id: 'user_1',
-    username: 'Andreas.Leipold@bmas.bund.de',
-    email: 'Andreas.Leipold@bmas.bund.de',
-    name: 'Leipold, Andreas',
-    authMethods: ['ldap'],
-    ldapData: { subject: 'leipolda', username: 'leipolda', provider: 'corporate-ldap' },
-    ...overrides
+    id: 'braveSearch',
+    name: { en: 'Brave Web Search' },
+    script: 'braveSearch.js',
+    parameters: {
+      type: 'object',
+      properties: {
+        query: { type: 'string', description: { en: 'The search query' } },
+        maxResults: { type: 'integer', default: 10 }
+      },
+      required: ['query']
+    }
   };
 }
 
-before(async () => {
-  baseDir = await fs.mkdtemp(path.join(os.tmpdir(), 'ihub-v115-'));
-});
+async function seed(dir, tool) {
+  await fs.mkdir(path.join(dir, 'tools'), { recursive: true });
+  await fs.writeFile(
+    path.join(dir, 'tools/braveSearch.json'),
+    JSON.stringify(tool, null, 2),
+    'utf8'
+  );
+}
 
-after(async () => {
-  await fs.rm(baseDir, { recursive: true, force: true });
-});
+async function scratch(name) {
+  return fs.mkdtemp(path.join(baseDir, `${name}-`));
+}
 
-describe('V115 metadata', () => {
-  it('matches its filename', () => {
+describe('V115 — braveSearch language parameter', () => {
+  before(async () => {
+    baseDir = await fs.mkdtemp(path.join(os.tmpdir(), 'ihub-v115-'));
+  });
+  after(async () => {
+    await fs.rm(baseDir, { recursive: true, force: true });
+  });
+
+  it('declares its version and description', () => {
     assert.equal(version, '115');
-    assert.equal(typeof description, 'string');
+    assert.equal(description, 'Add the language parameter to the braveSearch tool');
   });
 
-  it('only runs when users.json exists', async () => {
-    const dir = await fs.mkdtemp(path.join(baseDir, 'empty-'));
+  it('skips an install that has no braveSearch tool file', async () => {
+    const dir = await scratch('nofile');
     assert.equal(await precondition(makeCtx(dir)), false);
-
-    const { ctx } = await seed({ user_1: ldapUser() });
-    assert.equal(await precondition(ctx), true);
   });
-});
 
-describe('V115 recovers the login name', () => {
-  it('replaces an email username with the LDAP login name', async () => {
-    const { dir, ctx } = await seed({ user_1: ldapUser() });
+  it('adds the parameter, localized, without disturbing the others', async () => {
+    const dir = await scratch('add');
+    await seed(dir, legacyTool());
+    const ctx = makeCtx(dir);
     await up(ctx);
 
-    const users = await readUsers(dir);
-    assert.equal(users.user_1.username, 'leipolda');
-    // The email itself is untouched — only the login name was wrong.
-    assert.equal(users.user_1.email, 'Andreas.Leipold@bmas.bund.de');
+    const tool = await ctx.readJson('tools/braveSearch.json');
+    const props = tool.parameters.properties;
+
+    assert.equal(props.language.type, 'string');
+    assert.ok(props.language.description.en);
+    assert.ok(props.language.description.de);
+    // The rest of the tool is untouched.
+    assert.deepEqual(props.query, legacyTool().parameters.properties.query);
+    assert.deepEqual(props.maxResults, legacyTool().parameters.properties.maxResults);
+    assert.deepEqual(tool.parameters.required, ['query']);
+    assert.equal(tool.script, 'braveSearch.js');
   });
 
-  it('falls back to ldapData.subject when no username was recorded', () => {
-    const user = ldapUser({ ldapData: { subject: 'leipolda', provider: 'corporate-ldap' } });
-    assert.equal(recoverLoginName(user), 'leipolda');
-  });
-
-  it('recovers the Windows account name for NTLM users', async () => {
-    const { dir, ctx } = await seed({
-      user_1: {
-        id: 'user_1',
-        username: 'a.leipold@corp.example',
-        email: 'a.leipold@corp.example',
-        authMethods: ['ntlm'],
-        ntlmData: { subject: 'leipolda', domain: 'ROCHUS' }
-      }
-    });
-    await up(ctx);
-
-    assert.equal((await readUsers(dir)).user_1.username, 'leipolda');
-  });
-});
-
-describe('V115 leaves everything else alone', () => {
-  it('skips records whose username is already a login name', async () => {
-    const { dir, ctx } = await seed({ user_1: ldapUser({ username: 'leipolda' }) });
-    await up(ctx);
-
-    assert.equal((await readUsers(dir)).user_1.username, 'leipolda');
-    assert.ok(ctx.logs.some(([, m]) => m.includes('nothing to backfill')));
-  });
-
-  it('skips accounts that also authenticate locally', async () => {
-    // `username` is a credential the user types there; rewriting it would
-    // change how they sign in.
-    const { dir, ctx } = await seed({
-      user_1: ldapUser({ authMethods: ['ldap', 'local'] })
-    });
-    await up(ctx);
-
-    assert.equal((await readUsers(dir)).user_1.username, 'Andreas.Leipold@bmas.bund.de');
-  });
-
-  it('skips providers that carry no login name', async () => {
-    const proxyUser = {
-      id: 'user_1',
-      username: 'someone@corp.example',
-      email: 'someone@corp.example',
-      authMethods: ['proxy'],
-      proxyData: { subject: 'someone@corp.example', provider: 'proxy' }
+  it('never overwrites a parameter an admin has already customised', async () => {
+    const dir = await scratch('custom');
+    const customised = legacyTool();
+    customised.parameters.properties.language = {
+      type: 'string',
+      description: { en: 'Our own wording' }
     };
-    assert.equal(needsLoginNameBackfill(proxyUser), false);
-
-    const { dir, ctx } = await seed({ user_1: proxyUser });
-    await up(ctx);
-    assert.equal((await readUsers(dir)).user_1.username, 'someone@corp.example');
-  });
-
-  it('does not rewrite one user onto a login name another already holds', async () => {
-    const { dir, ctx } = await seed({
-      user_1: ldapUser(),
-      user_2: { id: 'user_2', username: 'leipolda', authMethods: ['local'] }
-    });
+    await seed(dir, customised);
+    const ctx = makeCtx(dir);
     await up(ctx);
 
-    const users = await readUsers(dir);
-    assert.equal(users.user_1.username, 'Andreas.Leipold@bmas.bund.de');
-    assert.equal(users.user_2.username, 'leipolda');
-    assert.ok(ctx.logs.some(([level, m]) => level === 'warn' && m.includes('duplicate')));
+    const tool = await ctx.readJson('tools/braveSearch.json');
+    assert.equal(tool.parameters.properties.language.description.en, 'Our own wording');
   });
 
-  it('does not treat an email subject as a recovered login name', () => {
-    const user = ldapUser({
-      ldapData: { subject: 'Andreas.Leipold@bmas.bund.de', provider: 'corporate-ldap' }
-    });
-    assert.equal(recoverLoginName(user), null);
-    assert.equal(needsLoginNameBackfill(user), false);
+  it('is idempotent', async () => {
+    const dir = await scratch('idempotent');
+    await seed(dir, legacyTool());
+    const ctx = makeCtx(dir);
+    await up(ctx);
+    const first = await ctx.readJson('tools/braveSearch.json');
+    await up(ctx);
+    const second = await ctx.readJson('tools/braveSearch.json');
+    assert.deepEqual(second, first);
   });
-});
 
-describe('V115 honours a relocated users file', () => {
-  it('refuses a path outside the contents directory instead of writing nothing quietly', async () => {
-    const { dir, ctx } = await seed(
-      { user_1: ldapUser() },
-      { localAuth: { usersFile: '/srv/ihub-state/users.json' } }
-    );
+  it('warns instead of throwing on a tool file with no parameters block', async () => {
+    const dir = await scratch('malformed');
+    await seed(dir, { id: 'braveSearch' });
+    const ctx = makeCtx(dir);
     await up(ctx);
 
-    assert.equal((await readUsers(dir)).user_1.username, 'Andreas.Leipold@bmas.bund.de');
-    assert.ok(
-      ctx.logs.some(([level, m]) => level === 'warn' && m.includes('outside the contents'))
-    );
-  });
-
-  it('strips the contents/ prefix the setting is written with', async () => {
-    const { dir, ctx } = await seed(
-      { user_1: ldapUser() },
-      { localAuth: { usersFile: 'contents/config/users.json' } }
-    );
-    await up(ctx);
-
-    assert.equal((await readUsers(dir)).user_1.username, 'leipolda');
+    assert.ok(ctx.logs.some(([level]) => level === 'warn'));
   });
 });
