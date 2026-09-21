@@ -32,7 +32,7 @@
  */
 
 /** Human labels for the providers this test covers. */
-const PROVIDER_LABELS = { brave: 'Brave Search', qwant: 'Qwant' };
+const PROVIDER_LABELS = { brave: 'Brave Search', qwant: 'Qwant', staan: 'Staan' };
 
 /**
  * Label a provider for a message, falling back to its id.
@@ -160,6 +160,63 @@ export function diagnoseSearchError(error, provider) {
         retryable: true
       };
 
+    case 'STAAN_UNAUTHORIZED':
+      return {
+        status: 'unconfigured',
+        code,
+        title: `${label} rejected this server's API key`,
+        detail: `The request reached ${label}, so connectivity is fine — the credential was not accepted. ${message}`,
+        remediation: [
+          'Re-enter the API key on this page — a truncated, rotated or expired key looks exactly like this.',
+          'Check the key is still active in the staan.ai dashboard.',
+          'If the key is set through STAAN_API_KEY instead, restart the server after changing it.'
+        ],
+        blockedBy: null,
+        retryable: false
+      };
+
+    case 'STAAN_RATE_LIMITED':
+      return {
+        status: 'rate_limited',
+        code,
+        title: `${label} is rate-limiting this server`,
+        detail: `The provider accepted the request but asked us to slow down. ${message}`,
+        remediation: [
+          'Wait a moment and run the test again.',
+          "Raise the staanSearch tool's requestDelayMs if searches are issued in rapid bursts (the documented limit is 20 requests/second)."
+        ],
+        blockedBy: null,
+        retryable: true
+      };
+
+    case 'STAAN_BAD_REQUEST':
+      return {
+        status: 'error',
+        code,
+        title: `${label} rejected the search request`,
+        detail: `The provider answered HTTP 400 and said what was wrong with the request itself. ${message}`,
+        remediation: [
+          'Try the test with a plain one-word query, which rules out the query as the cause.',
+          'If a custom STAAN_SEARCH_ENDPOINT is set, check it still points at the v2 web search endpoint.'
+        ],
+        blockedBy: null,
+        retryable: false
+      };
+
+    case 'STAAN_INVALID_RESPONSE':
+      return {
+        status: 'error',
+        code,
+        title: `${label} returned something that is not JSON`,
+        detail: `The response body could not be parsed. This usually means an interception page — a corporate proxy notice or a login wall — was returned in place of the API response. ${message}`,
+        remediation: [
+          'Check whether an outbound proxy or filtering appliance is rewriting the response.',
+          'Verify that the configured endpoint still points at the provider’s API.'
+        ],
+        blockedBy: null,
+        retryable: true
+      };
+
     case 'NETWORK_ERROR':
     case 'ECONNREFUSED':
     case 'ECONNRESET':
@@ -195,7 +252,7 @@ export function diagnoseSearchError(error, provider) {
       detail: `${label} needs a key before it can answer any search.`,
       remediation: [
         `Enter the key on this page, or set the provider's API key environment variable and restart the server.`,
-        'Or switch the app to Qwant, which needs no API key.'
+        'Or switch the app to another engine: Staan (also keyed) or Qwant (no API key, but blocked on many cloud hosts).'
       ],
       blockedBy: null,
       retryable: false

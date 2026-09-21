@@ -59,6 +59,7 @@ function LdapProvidersSection({ config, onChange, t, availableGroups = [] }) {
       preset: DEFAULT_LDAP_PRESET,
       baseDn: '',
       adminDn: '',
+      domain: '',
       defaultGroups: [],
       sessionTimeoutMinutes: 480
     };
@@ -258,6 +259,18 @@ function LdapProvidersSection({ config, onChange, t, availableGroups = [] }) {
                 help={t(
                   'admin.auth.ldap.adminDnHelp',
                   'Service account used to find users and read their groups. Leave empty to bind as the user directly.'
+                )}
+              />
+
+              <Field
+                id={`ldap-domain-${index}`}
+                label={t('admin.auth.ldap.domain', 'Domain')}
+                value={provider.domain}
+                onChange={value => updateLdapProvider(index, 'domain', value)}
+                placeholder="CONTOSO"
+                help={t(
+                  'admin.auth.ldap.domainHelp',
+                  'NetBIOS/short domain name, used by integrations that identify users as DOMAIN\\username (iFinder). Leave empty for Active Directory to detect it from msDS-PrincipalName; required for other directories.'
                 )}
               />
 

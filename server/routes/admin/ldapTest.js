@@ -15,7 +15,8 @@ import {
   buildLdapAuthOptions,
   describeLdapProvider,
   extractGroupNames,
-  mapLdapUserAttributes
+  mapLdapUserAttributes,
+  resolveLdapDomain
 } from '../../utils/ldapProviderConfig.js';
 import { DiagnosticsReport, STATUS } from '../../services/integrations/integrationDiagnostics.js';
 import logger from '../../utils/logger.js';
@@ -536,6 +537,7 @@ export default function registerAdminLdapTestRoutes(app) {
 
       // Step 5 — the attributes, and which of them become the iHub user fields.
       const mapped = mapLdapUserAttributes(entry, resolved, username);
+      const domain = resolveLdapDomain(entry, resolved, username);
       report.add({
         id: 'attributes',
         label: 'Attributes read and mapped',
@@ -550,6 +552,9 @@ export default function registerAdminLdapTestRoutes(app) {
               `${candidates.join(' → ')}  (used: ${mapped.usedAttributes[field] || 'none, fell back to the login name'})`
             ])
           ),
+          domain: domain
+            ? `${domain}  (${resolved.domain ? 'configured' : 'detected from msDS-PrincipalName'})`
+            : 'none — integrations that identify users as DOMAIN\\username cannot work',
           entry: presentableAttributes(entry)
         },
         hints: mapped.email
@@ -623,6 +628,7 @@ export default function registerAdminLdapTestRoutes(app) {
         id: mapped.id,
         name: mapped.name,
         email: mapped.email,
+        ...(domain && { domain }),
         groups: finalGroups,
         authMethod: 'ldap',
         provider: resolved.name || 'ldap'

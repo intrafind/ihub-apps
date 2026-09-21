@@ -102,6 +102,11 @@ const ldapProviderSchema = z.object({
     .describe(
       'DN template used when no bind account is configured. Defaults to `<usernameAttribute>={{username}},<userSearchBase>`.'
     ),
+  // NetBIOS/short domain name (e.g. "ROCHUS"), used by the iFinder
+  // `domain\\username` JWT subject. Mirrors `ntlmAuth.domain`, which NTLM
+  // gets from the protocol handshake; LDAP has no equivalent, so it is either
+  // configured here or detected from the AD `msDS-PrincipalName` attribute.
+  domain: z.string().optional(),
   groupSearchBase: z
     .string()
     .optional()
@@ -241,6 +246,10 @@ export const proxyConfigSchema = z
 
 export const platformConfigSchema = z
   .object({
+    // The install-wide language: what the UI falls back to, and what web search
+    // runs in when a request carries no language of its own (a workflow or
+    // agent run). Edited in Admin → Customization → Localization.
+    defaultLanguage: z.string().min(2).max(11).prefault('en'),
     auth: z
       .object({
         mode: z.enum(['proxy', 'local', 'oidc', 'ldap', 'ntlm', 'anonymous']).prefault('local'),

@@ -1,5 +1,28 @@
 # Fixes — Unreleased
 
+## Web search now follows the user's language
+
+Web search ran in US English far more often than it should have. Each engine decided the search
+language on its own and each one got it wrong in a different way: Qwant defaulted to `en_US`,
+Staan to `en-us`, and **Brave sent no language at all**, leaving it to Brave's own default. None of
+them consulted the platform's `defaultLanguage`, so there was no setting anywhere that changed it.
+
+It is now resolved once, the same way for all three: the user's language for the request, then
+`defaultLanguage` from `platform.json`, then `en` only if the config cannot be read. Each provider
+maps that onto its own API — Brave's `search_lang` / `country`, Staan's `market`, Qwant's `locale`
+— and falls back to its own default only when the engine does not serve that language at all.
+
+The clearest win is where no user language exists at all: **workflow and agent runs**. Those pass no
+language on the tool call, so on a German install every research run was silently answered from the
+US market. They now land on the configured default instead — the providers resolve it themselves, so
+nothing about how a workflow renders its own prompts changes.
+
+- Brave searches are now language-targeted at all, which they previously never were.
+- A model can still override the language for a single search with the tool's `language` parameter.
+- Brave results are cached per language, so one user's language is no longer served to the next.
+
+Set the default language in **Admin → Customization → Localization** to match your install.
+
 ## `BRAVE_SEARCH_ENDPOINT` and `SEARCH_CACHE_TTL_MS` are read again
 
 Both were documented and both were ignored. The server exposes a fixed allowlist of environment
@@ -72,3 +95,23 @@ nothing in the log to say so:
 An `${ENV_VAR}` placeholder left in `proxy.http` or `proxy.https` is also no longer used as if it
 were a proxy address when the variable is not set; the connection goes direct instead of failing
 on an unparseable URL.
+
+## LDAP and NTLM users are stored under their directory login name
+
+A user signing in through LDAP or NTLM was created in **Admin → Users** with their email address
+as the account name, not the login name the directory knows them by — `sAMAccountName` for Active
+Directory, the Windows account for NTLM. Only users with no email in the directory got the right
+one, and re-signing in never corrected it, because nothing wrote the field again after the account
+was created.
+
+The login name was available the whole time and everything else used it: the session, the groups
+and the tokens iHub mints were all correct. Only the stored record disagreed, which is why this
+went unnoticed until something read it — the account name shown in the user list, and the admin
+user editor, which refused to open such a record at all because `@` is not valid in a username.
+
+Existing records are repaired on upgrade by migration V115, which recovers the login name the
+directory already recorded alongside each account. It leaves a record alone where the rewrite would
+not be unambiguous: accounts that also sign in locally, where the account name is a credential
+somebody types, and accounts whose login name another user already holds. Those are listed in the
+startup log with the duplicate to resolve. Anything it skips still heals by itself the next time
+that user signs in.

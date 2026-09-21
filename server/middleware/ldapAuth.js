@@ -7,8 +7,10 @@ import {
   escapeLdapFilterValue,
   extractGroupNames,
   mapLdapUserAttributes,
+  resolveLdapDomain,
   resolveLdapProvider
 } from '../utils/ldapProviderConfig.js';
+export { parsePrincipalName, resolveLdapDomain } from '../utils/ldapProviderConfig.js';
 import { generateJwt } from '../utils/tokenService.js';
 import { validateAndPersistExternalUser } from '../utils/userManager.js';
 import logger from '../utils/logger.js';
@@ -126,11 +128,17 @@ async function authenticateLdapUser(username, password, ldapConfig) {
       usedAttributes: mapped.usedAttributes
     });
 
+    // NetBIOS domain, for the iFinder `domain\\username` JWT subject. Null when
+    // neither configured nor present in the directory, which the subject
+    // resolver reports rather than silently dropping.
+    const domain = resolveLdapDomain(user, resolved, username);
+
     const normalizedUser = {
       id: mapped.id,
       name: mapped.name,
       email: mapped.email,
       groups: mappedGroups,
+      ...(domain && { domain }),
       authenticated: true,
       authMethod: 'ldap',
       provider: resolved.name || 'ldap',
@@ -189,12 +197,14 @@ export async function loginLdapUser(username, password, ldapConfig) {
     authMethod: 'ldap',
     provider: ldapConfig.name || 'ldap',
     groups: user.groups, // Already mapped groups (with authenticated, defaults)
+    ...(user.domain && { domain: user.domain }),
     // Don't pass externalGroups - would cause duplicate mapExternalGroups() call
     ldapData: {
       subject: user.id,
       provider: ldapConfig.name || 'ldap',
       lastProvider: ldapConfig.name || 'ldap',
       username: username,
+      ...(user.domain && { domain: user.domain }),
       // Store extracted LDAP groups for reference/debugging
       ldapGroups: user.extractedGroups || []
     }
@@ -214,15 +224,22 @@ export async function loginLdapUser(username, password, ldapConfig) {
   const { token, expiresIn } = generateJwt(persistedUser, {
     authMode: 'ldap',
     authProvider: persistedUser.provider,
-    expiresInMinutes: sessionTimeout
+    expiresInMinutes: sessionTimeout,
+    // Carried as a claim so it survives into `req.user` on every later request,
+    // the way NTLM already carries it. Without this the domain would exist only
+    // on the login request and the `domain\\username` subject would degrade
+    // back to a bare account name for the rest of the session.
+    ...(persistedUser.domain && { additionalClaims: { domain: persistedUser.domain } })
   });
 
   return {
     user: {
       id: persistedUser.id,
+      username: persistedUser.username,
       name: persistedUser.name,
       email: persistedUser.email,
       groups: persistedUser.groups,
+      ...(persistedUser.domain && { domain: persistedUser.domain }),
       authenticated: true,
       authMethod: 'ldap',
       provider: persistedUser.provider

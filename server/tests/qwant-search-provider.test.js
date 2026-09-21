@@ -287,6 +287,34 @@ describe('extractDatadomeCookie', () => {
   });
 });
 
+describe('QwantSearchProvider — search language', () => {
+  beforeEach(() => _clearSearchCache());
+
+  it("uses the install's configured language when the caller supplies none", async () => {
+    // The workflow/agent path passes no language; falling back to a hard-coded
+    // en_US answered a German install's research runs in English.
+    const fetchImpl = recordingFetch(jsonResponse(webPayload([{ url: 'https://x.example' }])));
+    const provider = new QwantSearchProvider({
+      fetchImpl,
+      languageResolver: () => 'de',
+      retryBackoffMs: 1
+    });
+    await provider.search('test');
+    assert.equal(new URL(fetchImpl.calls[0].url).searchParams.get('locale'), 'de_DE');
+  });
+
+  it("the user's language still beats the install default", async () => {
+    const fetchImpl = recordingFetch(jsonResponse(webPayload([{ url: 'https://x.example' }])));
+    const provider = new QwantSearchProvider({
+      fetchImpl,
+      languageResolver: language => language || 'de',
+      retryBackoffMs: 1
+    });
+    await provider.search('test', { language: 'fr' });
+    assert.equal(new URL(fetchImpl.calls[0].url).searchParams.get('locale'), 'fr_FR');
+  });
+});
+
 describe('QwantSearchProvider', () => {
   beforeEach(() => _clearSearchCache());
 

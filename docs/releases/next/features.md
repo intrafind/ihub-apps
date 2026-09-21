@@ -1,5 +1,56 @@
 # Features — Unreleased
 
+## The default language is configurable in the admin UI
+
+**Admin → Customization → Localization** is a new page for the installation's default language.
+It was previously only reachable by hand-editing `contents/config/platform.json`, which meant the
+setting effectively did not exist for most admins.
+
+The dropdown offers the languages this installation actually has translations for — the same set
+the language switcher shows end users — so it is not possible to select a language with nothing
+behind it. The change applies immediately; no restart is needed.
+
+The default language decides more than the interface:
+
+- the interface language for users who have not chosen one,
+- the language **web search** runs in when a request carries none of its own, which is every
+  workflow and agent run,
+- the fallback for any text with no translation in the requested language.
+
+It does not change the language a workflow renders its own prompts in — that follows the run, not
+this setting.
+
+## Web search with staan.ai
+
+`staanSearch` is a third script-backed search engine alongside `braveSearch` and `qwantSearch`,
+using the [staan.ai web search API](https://docs.staan.ai/docs/web-search). It fills the gap
+between the two that were already there: Brave needs a paid subscription, and Qwant — the keyless
+option — is fronted by DataDome, which answers requests from data-centre IP ranges with a captcha.
+An install on cloud hosting therefore had exactly one working choice, and it cost money. Staan
+needs an API key but answers from anywhere.
+
+- Select it per app in **Admin → Apps → Edit App → Web Search** as the **Staan** provider, or
+  leave the provider on **Auto**.
+- Configure the key in **Admin → Providers → Web Search Providers → Staan Search**, or set
+  `STAAN_API_KEY` in `config.env`. Keys entered in the admin UI are encrypted at rest.
+- **Auto** now means: Brave when a Brave API key is configured, then Staan when it has one, and
+  Qwant otherwise. An install that already had a Brave key keeps using Brave and is unaffected.
+- The connectivity test under **Admin → Providers** covers Staan too, and distinguishes a rejected
+  key from a rate limit, a malformed request and a proxy that swallowed the response.
+
+Two things Staan does that the other engines do not:
+
+- **Domain scoping.** `includeDomains` restricts a search to a set of sites and `excludeDomains`
+  keeps results away from them (10 domains each, and the two cannot be combined). The `site:` and
+  `-site:` query operators work as well.
+- **More than ten results.** Staan serves ten per request, so asking for more pages through
+  further requests, up to 40. `maxResults` above 10 is honoured rather than silently truncated.
+
+Results come back in the same shape as Brave's and Qwant's, so an app can be switched between
+engines without the model seeing a different tool. Search language follows the app as usual: Staan
+serves the German, French and English markets, and an unsupported region falls back to a supported
+one for the same language.
+
 ## Web search providers can be tested from the admin UI
 
 **Admin → Providers → Web Search Providers** gained a **Connectivity** column and a **Test**
@@ -173,6 +224,25 @@ interactive sign-in; **Admin → OAuth → Connections** is the immediate remedy
 
 Every action is audited: clients discovered, approved, blocked, unblocked, their policy changed,
 and connections revoked in bulk with the client and the count.
+
+## LDAP providers can supply the Windows domain name
+
+**Admin → Authentication → LDAP Providers** gained a **Domain** field for the short (NetBIOS)
+domain name, e.g. `CONTOSO`. It matters for integrations that identify people as `DOMAIN\username`
+rather than by email — iFinder does, through its `domain\username` JWT subject.
+
+NTLM has always had this, because the domain arrives in the protocol handshake. LDAP had no
+equivalent, so that subject form could not work for an LDAP user no matter how it was configured:
+the domain was simply never known, and the identifier went out without it.
+
+Against Active Directory the field can be left empty. iHub then reads the `msDS-PrincipalName`
+attribute of the user signing in, which AD returns in `DOMAIN\sAMAccountName` form, and takes the
+domain from there. A value typed into the field always wins over what the directory reports; a
+disagreement between them is logged. Other directories have no such attribute, so they need the
+field set.
+
+This replaces the workaround of hard-coding the domain into a JWT subject template such as
+`CONTOSO\${user.username}`. Those templates keep working unchanged.
 
 ## LDAP: one base DN instead of five, and a login you can test before anyone tries it
 

@@ -319,6 +319,12 @@ export async function createOrUpdateExternalUser(externalUser, usersFilePath) {
     // Update basic info from external provider
     user.name = externalUser.name || user.name;
     user.email = externalUser.email || user.email;
+    // Heal the login name. Records created before the directory login name was
+    // persisted carry the email here (see the create branch below), and nothing
+    // used to write it again, so the wrong value survived every later login.
+    // The directory owns this field for an external user, so take its value
+    // whenever the provider supplies one.
+    user.username = externalUser.username || user.username;
 
     // Store internal groups - groups manually assigned to users in the admin interface
     // External groups from auth providers are handled at runtime, not persisted
@@ -338,7 +344,11 @@ export async function createOrUpdateExternalUser(externalUser, usersFilePath) {
 
     const newUser = {
       id: userId,
-      username: externalUser.email || externalUser.id, // Use email or fallback to external id
+      // The directory login name first (sAMAccountName for LDAP/AD, the Windows
+      // account for NTLM). Email is not a login name — it is only the next-best
+      // identifier for providers that supply no username at all (proxy, Teams),
+      // which is why it stays in the chain rather than being dropped.
+      username: externalUser.username || externalUser.email || externalUser.id,
       email: externalUser.email || null,
       name: externalUser.name || externalUser.id,
       internalGroups: [], // Only store internal/manual groups, not external groups

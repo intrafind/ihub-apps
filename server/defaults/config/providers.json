@@ -87,6 +87,19 @@
       "category": "websearch"
     },
     {
+      "id": "staan",
+      "name": {
+        "en": "Staan Search",
+        "de": "Staan Suche"
+      },
+      "description": {
+        "en": "Staan (staan.ai) web search API — European search index, requires an API key",
+        "de": "Staan (staan.ai) Websuche-API – europäischer Suchindex, API-Schlüssel erforderlich"
+      },
+      "enabled": true,
+      "category": "websearch"
+    },
+    {
       "id": "qwant",
       "name": {
         "en": "Qwant Search",

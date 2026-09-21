@@ -106,6 +106,7 @@ const ENTRY = {
   displayName: 'Jane Doe',
   mail: 'jane@example.org',
   userPassword: '{SSHA}should-never-be-echoed',
+  'msDS-PrincipalName': 'CONTOSO\\jdoe',
   groups: [{ cn: 'ihub-admins' }, { cn: 'not-mapped' }]
 };
 
@@ -179,6 +180,26 @@ describe('POST /api/admin/auth/ldap/_test', () => {
       provider: 'corp'
     });
     expect(stepById(res.body, 'result').details.access.adminAccess).toBe(true);
+
+    // The NetBIOS domain the iFinder `domain\username` subject needs, detected
+    // from the entry because this provider configures none.
+    expect(attributes.details.domain).toContain('CONTOSO');
+    expect(attributes.details.domain).toContain('detected from msDS-PrincipalName');
+    expect(res.body.user.domain).toBe('CONTOSO');
+    // ...and the attribute it is read from is actually requested, since AD does
+    // not return constructed attributes under `*`.
+    expect(state.calls[0].attributes).toContain('msDS-PrincipalName');
+  });
+
+  it('reports a configured domain as configured, over what the directory says', async () => {
+    state.results = [{ code: AUTH_RESULT_SUCCESS, user: ENTRY, messages: ['ok'] }];
+
+    const res = await request(createTestApp())
+      .post('/api/admin/auth/ldap/_test')
+      .send({ provider: { ...PROVIDER, domain: 'FABRIKAM' }, username: 'jdoe' });
+
+    expect(stepById(res.body, 'attributes').details.domain).toBe('FABRIKAM  (configured)');
+    expect(res.body.user.domain).toBe('FABRIKAM');
   });
 
   it('never echoes a password attribute back to the admin', async () => {
