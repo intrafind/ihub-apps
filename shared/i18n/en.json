@@ -1636,7 +1636,8 @@
       "telemetry": "Telemetry",
       "voiceInput": "Voice Input",
       "changelog": "What's New",
-      "feedback": "Feedback"
+      "feedback": "Feedback",
+      "localization": "Localization"
     },
     "mcp": {
       "common": {
@@ -1912,8 +1913,9 @@
         "websearchProvider": "Provider",
         "websearchProviderAuto": "Auto",
         "websearchProviderBrave": "Brave",
+        "websearchProviderStaan": "Staan",
         "websearchProviderQwant": "Qwant (no API key)",
-        "websearchProviderDesc": "Search engine used when the model has no native search. Auto uses Brave when a Brave API key is configured and Qwant otherwise; Qwant needs no API key.",
+        "websearchProviderDesc": "Search engine used when the model has no native search. Auto uses Brave when a Brave API key is configured, then Staan when it has one, and Qwant otherwise. Brave and Staan need an API key; Qwant needs none but is blocked on many cloud hosts.",
         "websearchUseNative": "Use Native Search",
         "websearchUseNativeDesc": "Use the model's built-in search when available (e.g. Google, OpenAI, Anthropic)",
         "websearchMaxResults": "Max Results",
@@ -2383,6 +2385,22 @@
     },
     "usage": {
       "reviewFeedback": "Review feedback"
+    },
+    "localization": {
+      "title": "Localization",
+      "subtitle": "The language this installation falls back to when no other language applies.",
+      "defaultLanguage": "Default Language",
+      "defaultLanguageDesc": "Used for users who have not chosen a language, and wherever no request language exists at all.",
+      "whereItApplies": "Where this applies",
+      "appliesUi": "The interface language for users who have not picked one themselves.",
+      "appliesSearch": "The language web search runs in when a request carries none of its own — workflow and agent runs in particular, which have no browser behind them.",
+      "appliesFallback": "The fallback for any text that has no translation in the requested language.",
+      "save": "Save",
+      "saving": "Saving...",
+      "saveSuccess": "Default language saved",
+      "saveError": "Failed to save the default language",
+      "loadError": "Failed to load the platform configuration",
+      "noTranslations": "no translations"
     }
   },
   "cloudStorage": {

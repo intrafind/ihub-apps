@@ -35,6 +35,7 @@ describe('providerLabel', () => {
   it('names the providers the test covers', () => {
     assert.equal(providerLabel('brave'), 'Brave Search');
     assert.equal(providerLabel('qwant'), 'Qwant');
+    assert.equal(providerLabel('staan'), 'Staan');
   });
 
   it('falls back to the raw id for anything else', () => {
@@ -132,6 +133,60 @@ describe('diagnoseSearchError — configuration', () => {
   });
 });
 
+describe('diagnoseSearchError — Staan', () => {
+  const staan = code => diagnoseSearchError(wrapped(code), 'staan');
+
+  it('reads a rejected key as a configuration problem, not a network one', () => {
+    const d = staan('STAAN_UNAUTHORIZED');
+    assert.equal(d.status, 'unconfigured');
+    assert.equal(d.retryable, false);
+    assert.equal(d.blockedBy, null);
+    // The distinction that matters: the request arrived, so egress is fine.
+    assert.match(d.detail, /connectivity is fine/i);
+    assert.match(d.remediation.join(' '), /key/i);
+  });
+
+  it('detects a missing Staan key from its message, like Brave', () => {
+    const error = new Error(
+      'Search failed with staan: Staan Search API key is not configured. Please configure it in the admin panel or set the STAAN_API_KEY environment variable.'
+    );
+    const d = diagnoseSearchError(error, 'staan');
+    assert.equal(d.status, 'unconfigured');
+    assert.equal(d.code, 'MISSING_API_KEY');
+  });
+
+  it('marks rate limiting retryable and names the documented limit', () => {
+    const d = staan('STAAN_RATE_LIMITED');
+    assert.equal(d.status, 'rate_limited');
+    assert.equal(d.retryable, true);
+    assert.match(d.remediation.join(' '), /20 requests\/second/);
+  });
+
+  it('reports a rejected request as a request problem, and not worth retrying', () => {
+    const d = staan('STAAN_BAD_REQUEST');
+    assert.equal(d.status, 'error');
+    assert.equal(d.retryable, false);
+  });
+
+  it('points a non-JSON body at proxies rather than at the provider', () => {
+    const d = staan('STAAN_INVALID_RESPONSE');
+    assert.equal(d.status, 'error');
+    assert.match(d.remediation.join(' '), /proxy/i);
+  });
+
+  it('never blames bot protection — Staan has none', () => {
+    for (const code of [
+      'STAAN_UNAUTHORIZED',
+      'STAAN_RATE_LIMITED',
+      'STAAN_BAD_REQUEST',
+      'STAAN_INVALID_RESPONSE'
+    ]) {
+      assert.equal(staan(code).blockedBy, null, code);
+      assert.notEqual(staan(code).status, 'blocked', code);
+    }
+  });
+});
+
 describe('diagnoseSearchError — transient and transport', () => {
   it('marks rate limiting retryable', () => {
     for (const code of ['QWANT_RATE_LIMITED', 'HTTP_429']) {
@@ -183,6 +238,10 @@ describe('diagnosis shape', () => {
         'QWANT_RATE_LIMITED',
         'QWANT_ACCESS_DENIED',
         'QWANT_INVALID_RESPONSE',
+        'STAAN_UNAUTHORIZED',
+        'STAAN_RATE_LIMITED',
+        'STAAN_BAD_REQUEST',
+        'STAAN_INVALID_RESPONSE',
         'NETWORK_ERROR',
         'HTTP_401',
         'HTTP_429',

@@ -93,6 +93,21 @@ export async function scanMigrationFiles(migrationsDir) {
  */
 const RENAMED_MIGRATIONS = [
   {
+    // The staan provider was renumbered twice while its branch was open: the
+    // CIMD governance migrations took V112/V113 and the proxy-defaults fix took
+    // V114, both on main in parallel. Either old number reconciles to V116.
+    oldVersion: '112',
+    oldFile: 'V112__add_staan_websearch_provider.js',
+    newVersion: '116',
+    newFile: 'V116__add_staan_websearch_provider.js'
+  },
+  {
+    oldVersion: '114',
+    oldFile: 'V114__add_staan_websearch_provider.js',
+    newVersion: '116',
+    newFile: 'V116__add_staan_websearch_provider.js'
+  },
+  {
     oldVersion: '018',
     oldFile: 'V018__add_setup_configured_flag.js',
     newVersion: '075',
@@ -158,6 +173,18 @@ const RENAMED_MIGRATIONS = [
     oldFile: 'V112__grandfather_connected_cimd_clients.js',
     newVersion: '113',
     newFile: 'V113__grandfather_connected_cimd_clients.js'
+  },
+  // The Office.js source-mode migration was written as V115 while the brave
+  // search language parameter (V115) and the staan provider (V116) landed on
+  // main in parallel. It moved to V117 because those had already shipped.
+  // Without this entry, anyone who ran the branch before the merge has 115
+  // recorded against the Office.js file, which would mark the brave V115
+  // applied and silently skip it.
+  {
+    oldVersion: '115',
+    oldFile: 'V115__office_js_source_modes.js',
+    newVersion: '117',
+    newFile: 'V117__office_js_source_modes.js'
   }
 ];
 

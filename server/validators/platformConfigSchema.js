@@ -196,6 +196,10 @@ export const proxyConfigSchema = z
 
 export const platformConfigSchema = z
   .object({
+    // The install-wide language: what the UI falls back to, and what web search
+    // runs in when a request carries no language of its own (a workflow or
+    // agent run). Edited in Admin → Customization → Localization.
+    defaultLanguage: z.string().min(2).max(11).prefault('en'),
     auth: z
       .object({
         mode: z.enum(['proxy', 'local', 'oidc', 'ldap', 'ntlm', 'anonymous']).prefault('local'),

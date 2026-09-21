@@ -1,18 +1,16 @@
 #!/usr/bin/env node
 
 /**
- * Migration V115 specs — `useLocalOfficejs` becomes an Office.js source mode.
+ * Migration V115 specs — the braveSearch `language` parameter reaches upgrades.
  *
- * The boolean chose between Microsoft's CDN and the bundled npm snapshot. The
- * replacement adds two more options (proxy through this server, or a custom
- * CDN), so the migration has one job that matters: carry the existing choice
- * over unchanged. An install that was serving the bundled copy must keep
- * serving it — silently moving it to the CDN would break exactly the
- * air-gapped deployments the flag existed for, and silently moving a CDN
- * install to `bundled` would freeze it on a snapshot.
+ * `copyDefaultConfiguration()` backfills whole files that are missing from
+ * `contents/`; it does not merge new fields into a file that is already there.
+ * So a new tool parameter needs a migration or existing installs keep the old
+ * schema indefinitely — and a model calling `braveSearch` with `language` would
+ * fail validation against it.
  *
- * It also must not overwrite values an admin has already set, because a
- * migration runs on every install, not just a pristine one.
+ * What has to be right: add the property only when it is absent, and leave every
+ * other part of a tool an admin may have edited alone.
  */
 import fs from 'node:fs/promises';
 import os from 'node:os';
@@ -20,16 +18,12 @@ import path from 'node:path';
 import { after, before, describe, it } from 'node:test';
 import assert from 'node:assert/strict';
 
-import { setDefault, removeKey } from '../migrations/utils.js';
 import {
   up,
   precondition,
   version,
   description
-} from '../migrations/V115__office_js_source_modes.js';
-
-const DEFAULT_CDN_URL = 'https://officeapis.public.onecdn.static.microsoft/1/office.js';
-const LEGACY_CDN_URL = 'https://appsforoffice.microsoft.com/lib/1/hosted/office.js';
+} from '../migrations/V115__brave_search_language_parameter.js';
 
 let baseDir;
 
@@ -38,8 +32,6 @@ function makeCtx(dir) {
   const logs = [];
   return {
     logs,
-    setDefault,
-    removeKey,
     fileExists: async rel =>
       fs
         .stat(path.join(dir, rel))
@@ -59,118 +51,105 @@ function makeCtx(dir) {
   };
 }
 
-/** Write a platform.json into a fresh scratch dir and run the migration on it. */
-async function runWith(platform) {
-  const dir = await fs.mkdtemp(path.join(baseDir, 'case-'));
-  const ctx = makeCtx(dir);
-  await ctx.writeJson('config/platform.json', platform);
-  await up(ctx);
-  return { office: (await ctx.readJson('config/platform.json'))?.officeIntegration, ctx };
+/** The braveSearch tool as it looked before this parameter existed. */
+function legacyTool() {
+  return {
+    id: 'braveSearch',
+    name: { en: 'Brave Web Search' },
+    script: 'braveSearch.js',
+    parameters: {
+      type: 'object',
+      properties: {
+        query: { type: 'string', description: { en: 'The search query' } },
+        maxResults: { type: 'integer', default: 10 }
+      },
+      required: ['query']
+    }
+  };
 }
 
-before(async () => {
-  baseDir = await fs.mkdtemp(path.join(os.tmpdir(), 'ihub-v115-'));
-});
+async function seed(dir, tool) {
+  await fs.mkdir(path.join(dir, 'tools'), { recursive: true });
+  await fs.writeFile(
+    path.join(dir, 'tools/braveSearch.json'),
+    JSON.stringify(tool, null, 2),
+    'utf8'
+  );
+}
 
-after(async () => {
-  await fs.rm(baseDir, { recursive: true, force: true });
-});
+async function scratch(name) {
+  return fs.mkdtemp(path.join(baseDir, `${name}-`));
+}
 
-describe('V115 — Office.js source modes', () => {
-  it('is registered as version 115', () => {
+describe('V115 — braveSearch language parameter', () => {
+  before(async () => {
+    baseDir = await fs.mkdtemp(path.join(os.tmpdir(), 'ihub-v115-'));
+  });
+  after(async () => {
+    await fs.rm(baseDir, { recursive: true, force: true });
+  });
+
+  it('declares its version and description', () => {
     assert.equal(version, '115');
-    assert.equal(typeof description, 'string');
+    assert.equal(description, 'Add the language parameter to the braveSearch tool');
   });
 
-  it('only runs where platform.json exists', async () => {
-    const empty = await fs.mkdtemp(path.join(baseDir, 'empty-'));
-    assert.equal(await precondition(makeCtx(empty)), false);
+  it('skips an install that has no braveSearch tool file', async () => {
+    const dir = await scratch('nofile');
+    assert.equal(await precondition(makeCtx(dir)), false);
+  });
 
-    const dir = await fs.mkdtemp(path.join(baseDir, 'present-'));
+  it('adds the parameter, localized, without disturbing the others', async () => {
+    const dir = await scratch('add');
+    await seed(dir, legacyTool());
     const ctx = makeCtx(dir);
-    await ctx.writeJson('config/platform.json', { officeIntegration: {} });
-    assert.equal(await precondition(ctx), true);
+    await up(ctx);
+
+    const tool = await ctx.readJson('tools/braveSearch.json');
+    const props = tool.parameters.properties;
+
+    assert.equal(props.language.type, 'string');
+    assert.ok(props.language.description.en);
+    assert.ok(props.language.description.de);
+    // The rest of the tool is untouched.
+    assert.deepEqual(props.query, legacyTool().parameters.properties.query);
+    assert.deepEqual(props.maxResults, legacyTool().parameters.properties.maxResults);
+    assert.deepEqual(tool.parameters.required, ['query']);
+    assert.equal(tool.script, 'braveSearch.js');
   });
 
-  it('keeps an offline install on the bundled copy', async () => {
-    const { office } = await runWith({ officeIntegration: { useLocalOfficejs: true } });
-
-    assert.equal(office.officeJsMode, 'bundled');
-    assert.equal(office.officeJsCustomUrl, '');
-    assert.ok(!('useLocalOfficejs' in office), 'the replaced flag is removed');
-  });
-
-  it('leaves an upgraded install on the CDN host it was already using', async () => {
-    // The add-in HTML hard-coded appsforoffice.microsoft.com before this
-    // change. Moving an upgrade to the newer host would break any customer who
-    // allowlisted that exact FQDN, so only fresh installs get the new default.
-    const { office } = await runWith({ officeIntegration: { useLocalOfficejs: false } });
-    assert.equal(office.officeJsCdnUrl, LEGACY_CDN_URL);
-    assert.notEqual(office.officeJsCdnUrl, DEFAULT_CDN_URL);
-  });
-
-  it('keeps a normal install on the CDN', async () => {
-    const { office } = await runWith({ officeIntegration: { useLocalOfficejs: false } });
-
-    assert.equal(office.officeJsMode, 'cdn');
-    assert.ok(!('useLocalOfficejs' in office));
-  });
-
-  it('treats a missing flag as the CDN', async () => {
-    const { office } = await runWith({ officeIntegration: { enabled: true } });
-    assert.equal(office.officeJsMode, 'cdn');
-  });
-
-  it('leaves the rest of the Office block alone', async () => {
-    const { office } = await runWith({
-      officeIntegration: {
-        enabled: true,
-        oauthClientId: 'abc123',
-        useLocalOfficejs: true,
-        startPage: { defaultPage: 'apps', featuredAppIds: ['chat'] }
-      }
-    });
-
-    assert.equal(office.enabled, true);
-    assert.equal(office.oauthClientId, 'abc123');
-    assert.deepEqual(office.startPage, { defaultPage: 'apps', featuredAppIds: ['chat'] });
-  });
-
-  it('does not overwrite values an admin already set', async () => {
-    const { office } = await runWith({
-      officeIntegration: {
-        useLocalOfficejs: true,
-        officeJsMode: 'proxy',
-        officeJsCdnUrl: LEGACY_CDN_URL,
-        officeJsCustomUrl: 'https://cdn.corp/office/office.js'
-      }
-    });
-
-    assert.equal(office.officeJsMode, 'proxy');
-    assert.equal(office.officeJsCdnUrl, LEGACY_CDN_URL);
-    assert.equal(office.officeJsCustomUrl, 'https://cdn.corp/office/office.js');
-    assert.ok(!('useLocalOfficejs' in office), 'the replaced flag still goes');
-  });
-
-  it('is a no-op when there is no Office block at all', async () => {
-    const { office, ctx } = await runWith({ auth: { mode: 'local' } });
-
-    assert.equal(office, undefined);
-    assert.ok(ctx.logs.some(([, message]) => /nothing to migrate/i.test(message)));
-  });
-
-  it('is idempotent across repeated runs', async () => {
-    const dir = await fs.mkdtemp(path.join(baseDir, 'idem-'));
+  it('never overwrites a parameter an admin has already customised', async () => {
+    const dir = await scratch('custom');
+    const customised = legacyTool();
+    customised.parameters.properties.language = {
+      type: 'string',
+      description: { en: 'Our own wording' }
+    };
+    await seed(dir, customised);
     const ctx = makeCtx(dir);
-    await ctx.writeJson('config/platform.json', {
-      officeIntegration: { useLocalOfficejs: true }
-    });
-
     await up(ctx);
-    const first = (await ctx.readJson('config/platform.json')).officeIntegration;
-    await up(ctx);
-    const second = (await ctx.readJson('config/platform.json')).officeIntegration;
 
+    const tool = await ctx.readJson('tools/braveSearch.json');
+    assert.equal(tool.parameters.properties.language.description.en, 'Our own wording');
+  });
+
+  it('is idempotent', async () => {
+    const dir = await scratch('idempotent');
+    await seed(dir, legacyTool());
+    const ctx = makeCtx(dir);
+    await up(ctx);
+    const first = await ctx.readJson('tools/braveSearch.json');
+    await up(ctx);
+    const second = await ctx.readJson('tools/braveSearch.json');
     assert.deepEqual(second, first);
+  });
+
+  it('warns instead of throwing on a tool file with no parameters block', async () => {
+    const dir = await scratch('malformed');
+    await seed(dir, { id: 'braveSearch' });
+    const ctx = makeCtx(dir);
+    await up(ctx);
+
+    assert.ok(ctx.logs.some(([level]) => level === 'warn'));
   });
 });

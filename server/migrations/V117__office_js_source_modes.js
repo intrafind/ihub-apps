@@ -1,6 +1,11 @@
 /**
- * Migration V115 — replace `officeIntegration.useLocalOfficejs` with an
+ * Migration V117 — replace `officeIntegration.useLocalOfficejs` with an
  * Office.js source mode and URLs.
+ *
+ * Written as V115; renumbered to V117 because the brave search language
+ * parameter (V115) and the staan provider (V116) landed on main first. The
+ * runner refuses to start on a duplicate version, and `RENAMED_MIGRATIONS` in
+ * `runner.js` reconciles anyone who ran this branch under the old number.
  *
  * The boolean only chose between Microsoft's CDN and the bundled
  * `@microsoft/office-js` snapshot. That snapshot is frozen at whatever the
@@ -31,7 +36,7 @@
  * that domain does not catch it.
  */
 
-export const version = '115';
+export const version = '117';
 export const description = 'office_js_source_modes';
 
 /**

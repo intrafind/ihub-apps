@@ -22,6 +22,7 @@ function ToolsConfigSection({ selectedTools, onToolsChange, mcpToolIds }) {
             excludeToolIds={[
               'braveSearch',
               'qwantSearch',
+              'staanSearch',
               'enhancedWebSearch',
               'webContentExtractor',
               ...mcpToolIds
