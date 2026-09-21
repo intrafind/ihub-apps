@@ -37,3 +37,32 @@ connected through are left to be approved when somebody asks for them. To keep t
 behaviour, where the trusted-host list is the whole decision, set **New clients** to *Connect
 automatically* under **Admin → MCP gateway → Client identification** (`oauth.cimd.approvalMode:
 "auto"`).
+
+## The iFinder JWT subject uses the configured field, or fails
+
+**JWT Subject Field** under **Admin → Integrations → iFinder** decides which user attribute becomes
+the `sub` claim iFinder identifies people by. It used to be a preference rather than an
+instruction: with `email` selected, a user without an email was sent under their username, then
+their internal id; `domain\username` sent a bare account name whenever no domain was known; and a
+template placeholder with no value left a gap in the middle of the subject.
+
+Each of those produced a valid, signed token for the *wrong* principal. iFinder keys its user
+mapping on `sub`, so the mapping was created against whatever arrived — and nothing on either side
+reported a problem. A misconfiguration surfaced much later as one user seeing another's documents,
+or as permissions that made no sense.
+
+The configured field is now the only one consulted. When the authenticated user has no value for
+it, token generation fails with an error naming the setting and the missing attribute, and the
+request fails rather than reaching iFinder under a different identity.
+
+**Before upgrading:** run **Test connection** on the iFinder admin page. It mints a real token and
+reports the subject, so a setting that was only working through a fallback shows up there instead
+of at runtime. Two cases to look for:
+
+- **Subject Field is `email`, but some users have no email in the directory.** They were being sent
+  under their username or id; they will now be refused. Switch the field to `username`, or populate
+  the email attribute.
+- **Subject Field is `domain\username` with LDAP.** No LDAP user ever had a domain, so every such
+  token has been going out as a bare account name. Set **Domain** on the LDAP provider (or leave it
+  empty against Active Directory, which now detects it) — and check which form iFinder's user
+  mapping actually holds, since until now it can only have been the unqualified one.
