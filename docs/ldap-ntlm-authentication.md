@@ -32,7 +32,8 @@ As of version 4.2.0, the standard `/api/auth/login` endpoint supports both local
 
 ### Configuration
 
-Add LDAP configuration to your `contents/config/platform.json`:
+A provider needs three things: where the directory is, where its entries live,
+and which kind of directory it is. Everything else is derived from those.
 
 ```json
 {
@@ -43,82 +44,155 @@ Add LDAP configuration to your `contents/config/platform.json`:
         "name": "corporate-ldap",
         "displayName": "Corporate LDAP",
         "url": "ldap://ldap.example.com:389",
+        "preset": "openldap",
+        "baseDn": "dc=example,dc=org",
         "adminDn": "cn=admin,dc=example,dc=org",
-        "adminPassword": "${LDAP_ADMIN_PASSWORD}",
-        "userSearchBase": "ou=people,dc=example,dc=org",
-        "usernameAttribute": "uid",
-        "userDn": "uid={{username}},ou=people,dc=example,dc=org",
-        "groupSearchBase": "ou=groups,dc=example,dc=org",
-        "groupClass": "groupOfNames",
-        "defaultGroups": ["ldap-users"],
-        "sessionTimeoutMinutes": 480,
-        "tlsOptions": {
-          "rejectUnauthorized": false
-        }
+        "adminPasswordRef": "ldap_corporate-ldap",
+        "defaultGroups": ["ldap-users"]
       }
     ]
   }
 }
 ```
 
-### Active Directory Configuration
+That is the whole configuration. From `baseDn` and `preset`, iHub resolves:
 
-For Active Directory, use this configuration pattern:
+| Resolved value             | For this example                       |
+| -------------------------- | -------------------------------------- |
+| `userSearchBase`           | `dc=example,dc=org`                    |
+| `groupSearchBase`          | `dc=example,dc=org`                    |
+| `usernameAttribute`        | `uid`                                  |
+| `userDn`                   | `uid={{username}},dc=example,dc=org`   |
+| `groupClass`               | `groupOfNames`                         |
+| `groupMemberAttribute`     | `member`                               |
+| `groupMemberUserAttribute` | `dn`                                   |
+
+Any of them can still be set explicitly, and an explicit value always wins — so a
+directory that keeps users and groups in separate subtrees just names those two:
+
+```json
+{
+  "baseDn": "dc=example,dc=org",
+  "userSearchBase": "ou=people,dc=example,dc=org",
+  "groupSearchBase": "ou=groups,dc=example,dc=org"
+}
+```
+
+> **Upgrading:** nothing changes for a provider that spells every field out.
+> `baseDn` and `preset` are additions, not replacements, and a provider without
+> them resolves exactly as it did before — including group search staying off
+> when no `groupSearchBase` is set.
+
+### Directory Presets
+
+`preset` selects the attribute names that differ between directory products. It
+never overrides a value you set yourself.
+
+| Preset                     | `usernameAttribute` | `groupClass`   | id attributes                  | e-mail attributes         |
+| -------------------------- | ------------------- | -------------- | ------------------------------ | ------------------------- |
+| `openldap` (default)       | `uid`               | `groupOfNames` | `uid`, `sAMAccountName`, `cn`  | `mail`, `email`           |
+| `activeDirectory`          | `sAMAccountName`    | `group`        | `sAMAccountName`, `uid`, `cn`  | `mail`, `userPrincipalName` |
+
+Both presets use `member` / `dn` for group membership.
+
+### Active Directory Configuration
 
 ```json
 {
   "name": "active-directory",
   "displayName": "Active Directory",
-  "url": "ldap://ad.example.com:389",
-  "adminDn": "${AD_BIND_USER}@example.com",
-  "adminPassword": "${AD_BIND_PASSWORD}",
-  "userSearchBase": "dc=example,dc=com",
-  "usernameAttribute": "sAMAccountName",
-  "userDn": "{{username}}@example.com",
-  "groupSearchBase": "dc=example,dc=com",
-  "groupClass": "group",
-  "defaultGroups": ["ad-users"],
-  "sessionTimeoutMinutes": 480
+  "url": "ldaps://ad.example.com:636",
+  "preset": "activeDirectory",
+  "baseDn": "dc=example,dc=com",
+  "adminDn": "svc-ihub@example.com",
+  "adminPasswordRef": "ldap_active-directory",
+  "defaultGroups": ["ad-users"]
 }
 ```
 
-### Environment Variables
+### Attribute Mapping
 
-Set these environment variables for LDAP authentication:
+The user id, display name and e-mail come from the first LDAP attribute in the
+preset's list that actually carries a value. Override a slot when the directory
+uses something else — a single attribute name or an ordered list:
 
-```bash
-# For generic LDAP
-LDAP_ADMIN_PASSWORD=your_ldap_admin_password
-
-# For Active Directory
-AD_BIND_USER=your_ad_service_account
-AD_BIND_PASSWORD=your_ad_service_password
+```json
+{
+  "attributeMapping": {
+    "id": "employeeNumber",
+    "email": ["mail", "userPrincipalName"]
+  }
+}
 ```
 
-> **Security Note**: For enhanced security, you can encrypt these passwords using the **Value Encryption Tool** in the Admin System page. The application will automatically decrypt them at runtime. See [Value Encryption Tool](./value-encryption-tool.md) for details.
->
-> Example with encrypted password:
-> ```bash
-> LDAP_ADMIN_PASSWORD=ENC[AES256_GCM,data:...,iv:...,tag:...,type:str]
-> ```
+The connection test (below) reports which attribute each field was taken from.
+
+### Bind Credentials
+
+The bind password lives in the credential store, not in the provider: set
+`adminPasswordRef` to the id of a credential profile (Admin → Credentials). The
+profile's value may itself be an `${ENV_VAR}` placeholder or an `ENC[...]`
+encrypted value. See [Value Encryption Tool](./value-encryption-tool.md).
+
+Without `adminDn`, no service account is used and the user is bound directly as
+`userDn`. Group membership is then only visible if the directory lets users
+search it themselves.
+
+### Testing a Login
+
+Admin → Authentication → LDAP has a **Test a login** panel on every provider. It
+runs the configuration that is currently in the form — saved or not — and
+reports, step by step:
+
+1. **Effective configuration** — every resolved value, and whether it was typed
+   or derived
+2. **Connect to directory** — TCP/TLS reachability, including certificate trust
+3. **Bind and find the user** — the bind account and the entry that matched
+4. **Verify the password** — only when a password is supplied
+5. **Attributes read and mapped** — the entry's attributes, and which one became
+   the id, the name and the e-mail
+6. **LDAP groups** — the groups the directory returned
+7. **Internal groups** — what those map to via `groups.json`, which LDAP groups
+   have no mapping, and the final group list
+8. **Resulting iHub user** — the user that would be created, and what it grants
+
+The test creates no session, persists no user and issues no token. With a bind
+account configured the password is optional: everything except step 4 can be
+checked without knowing anyone's password.
+
+The same run is available as an API call:
+
+```bash
+curl -X POST https://ihub.example.com/api/admin/auth/ldap/_test \
+  -H "Authorization: Bearer $ADMIN_TOKEN" \
+  -H "Content-Type: application/json" \
+  -d '{"providerName": "corporate-ldap", "username": "jdoe"}'
+```
 
 ### Configuration Options
 
-| Option                  | Description                                    | Required | Default                                        |
-| ----------------------- | ---------------------------------------------- | -------- | ---------------------------------------------- |
-| `name`                  | Unique identifier for the LDAP provider        | Yes      | -                                              |
-| `displayName`           | Human-readable name                            | No       | Same as `name`                                 |
-| `url`                   | LDAP server URL (ldap:// or ldaps://)          | Yes      | -                                              |
-| `adminDn`               | DN for binding to LDAP (if required)           | No       | -                                              |
-| `adminPassword`         | Password for admin binding                     | No       | -                                              |
-| `userSearchBase`        | Base DN for user searches                      | Yes      | -                                              |
-| `usernameAttribute`     | Attribute to match username                    | No       | `uid`                                          |
-| `userDn`                | Pattern for user DN ({{username}} placeholder) | No       | `uid={{username}},ou=people,dc=example,dc=org` |
-| `groupSearchBase`       | Base DN for group searches                     | No       | -                                              |
-| `groupClass`            | LDAP class for groups                          | No       | `groupOfNames`                                 |
-| `defaultGroups`         | Default groups for authenticated users         | No       | `[]`                                           |
-| `sessionTimeoutMinutes` | JWT token timeout                              | No       | `480`                                          |
-| `tlsOptions`            | TLS connection options                         | No       | `{}`                                           |
+| Option                     | Description                                          | Required | Default                                              |
+| -------------------------- | ---------------------------------------------------- | -------- | ---------------------------------------------------- |
+| `name`                     | Unique identifier for the LDAP provider              | Yes      | -                                                    |
+| `displayName`              | Human-readable name                                  | No       | Same as `name`                                       |
+| `url`                      | LDAP server URL (ldap:// or ldaps://)                | Yes      | -                                                    |
+| `preset`                   | `openldap` or `activeDirectory`                      | No       | `openldap`                                           |
+| `baseDn`                   | Root DN of the directory                             | No\*     | -                                                    |
+| `adminDn`                  | DN of the bind (service) account                     | No       | -                                                    |
+| `adminPasswordRef`         | Id of the credential profile with the bind password  | No       | -                                                    |
+| `userSearchBase`           | Base DN for user searches                            | No\*     | `baseDn`                                             |
+| `usernameAttribute`        | Attribute to match username                          | No       | Preset (`uid` / `sAMAccountName`)                    |
+| `userDn`                   | User DN template, used when no `adminDn` is set      | No       | `<usernameAttribute>={{username}},<userSearchBase>`  |
+| `groupSearchBase`          | Base DN for group searches                           | No       | `baseDn`; without either, no groups are read         |
+| `groupClass`               | LDAP class for groups                                | No       | Preset (`groupOfNames` / `group`)                    |
+| `groupMemberAttribute`     | Group attribute listing members                      | No       | `member`                                             |
+| `groupMemberUserAttribute` | User attribute that group entries reference          | No       | `dn`                                                 |
+| `attributeMapping`         | Which attributes become id / name / email            | No       | Preset                                               |
+| `defaultGroups`            | Default groups for authenticated users               | No       | `[]`                                                 |
+| `sessionTimeoutMinutes`    | JWT token timeout                                    | No       | `480`                                                |
+| `tlsOptions`               | TLS connection options                               | No       | `{}`                                                 |
+
+\* Either `baseDn` or `userSearchBase` must be set.
 
 ## NTLM Authentication
 
@@ -196,14 +270,10 @@ The LDAP group lookup only happens during login (session start), not on every re
         "name": "corporate-ad",
         "displayName": "Corporate Active Directory",
         "url": "ldap://ad.example.com:389",
-        "adminDn": "${AD_BIND_USER}@example.com",
-        "adminPassword": "${AD_BIND_PASSWORD}",
-        "userSearchBase": "dc=example,dc=com",
-        "usernameAttribute": "sAMAccountName",
-        "groupSearchBase": "dc=example,dc=com",
-        "groupClass": "group",
-        "groupMemberAttribute": "member",
-        "groupMemberUserAttribute": "dn"
+        "preset": "activeDirectory",
+        "baseDn": "dc=example,dc=com",
+        "adminDn": "svc-ihub@example.com",
+        "adminPasswordRef": "ldap_corporate-ad"
       }
     ]
   },
@@ -220,9 +290,13 @@ The LDAP group lookup only happens during login (session start), not on every re
 
 #### Requirements
 
-- The LDAP provider **must** have `adminDn` and `adminPassword` configured (admin bind is used since the user's password is not available during NTLM auth)
-- The LDAP provider **should** have `groupSearchBase` configured for group membership queries
-- The `usernameAttribute` on the LDAP provider should match the NTLM username format (e.g., `sAMAccountName` for Active Directory)
+- The LDAP provider **must** have `adminDn` and `adminPasswordRef` configured (admin bind is used since the user's password is not available during NTLM auth)
+- The LDAP provider **must** have `baseDn` or `groupSearchBase` set, or no group membership is read
+- The `usernameAttribute` must match the NTLM username format — `preset: "activeDirectory"` sets it to `sAMAccountName`
+
+Use the provider's **Test a login** panel to confirm all three before relying on
+it: with a bind account configured it needs no password, which is exactly the
+situation NTLM group lookup runs in.
 
 #### Graceful Fallback
 

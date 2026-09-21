@@ -1257,6 +1257,66 @@
           "unblock": "Entsperren",
           "unblocked": "{{name}} entsperrt"
         }
+      },
+      "ldap": {
+        "title": "LDAP-Authentifizierungseinstellungen",
+        "subtitle": "LDAP-/Active-Directory-Authentifizierungsanbieter konfigurieren",
+        "add": "LDAP-Anbieter hinzufügen",
+        "empty": "Keine LDAP-Anbieter konfiguriert",
+        "emptyHint": "Klicken Sie auf „LDAP-Anbieter hinzufügen“, um zu beginnen",
+        "providerHeading": "LDAP-Anbieter {{number}}",
+        "remove": "Diesen LDAP-Anbieter entfernen",
+        "name": "Anbietername",
+        "nameHelp": "Interne Kennung dieses Anbieters",
+        "displayName": "Anzeigename",
+        "displayNameHelp": "Wird auf der Anmeldeseite angezeigt. Standard ist der Anbietername.",
+        "url": "LDAP-URL",
+        "urlHelp": "ldap://host:389 für unverschlüsselte Verbindungen, ldaps://host:636 für TLS",
+        "preset": "Verzeichnistyp",
+        "presetHelp": "Legt die Attribut-Standardwerte fest: {{attributes}}",
+        "presetLabel": {
+          "openldap": "OpenLDAP / generisches LDAP",
+          "activeDirectory": "Active Directory"
+        },
+        "baseDn": "Basis-DN",
+        "baseDnHelp": "Wurzel des Verzeichnisses. Benutzer und Gruppen werden hier gesucht, sofern nicht überschrieben.",
+        "adminDn": "Bind-DN",
+        "adminDnHelp": "Dienstkonto, mit dem Benutzer gesucht und deren Gruppen gelesen werden. Leer lassen, um den Benutzer direkt zu binden.",
+        "adminPassword": "Bind-Passwort",
+        "adminPasswordHelp": "Wählen Sie ein gespeichertes Zugangsdaten-Profil mit dem Bind-Passwort.",
+        "selfSigned": "Selbstsignierte Zertifikate / interne CA zulassen (ldaps://)",
+        "selfSignedHelp": "Aktivieren, wenn der LDAP-Server ein Zertifikat einer privaten oder internen CA verwendet. Für die meisten lokalen ldaps://-Installationen erforderlich.",
+        "advanced": "Erweitert: Suchbasen und Attribute",
+        "advancedHint": "Nur nötig, wenn das Verzeichnis von den Standardwerten des gewählten Typs abweicht.",
+        "derivedHelp": "Leer lassen, um den angezeigten Wert zu verwenden — er ergibt sich aus Verzeichnistyp und Basis-DN.",
+        "userSearchBase": "Benutzer-Suchbasis",
+        "usernameAttribute": "Benutzernamen-Attribut",
+        "userDn": "Benutzer-DN-Vorlage",
+        "userDnHelp": "Wird nur verwendet, wenn kein Bind-DN gesetzt ist. Leer lassen, um den angezeigten Wert zu verwenden.",
+        "groupSearchBase": "Gruppen-Suchbasis",
+        "groupSearchBaseHelp": "Leer lassen, um ab dem Basis-DN zu suchen. Ohne beides werden keine LDAP-Gruppen gelesen.",
+        "groupClass": "Gruppen-Objektklasse",
+        "groupMemberAttribute": "Gruppenmitglied-Attribut",
+        "groupMemberUserAttribute": "Referenziertes Benutzerattribut",
+        "groupMemberUserAttributeHelp": "Das Benutzerattribut, auf das Gruppeneinträge verweisen. Meist dn.",
+        "sessionTimeout": "Sitzungsdauer (Minuten)",
+        "sessionTimeoutHelp": "Gültigkeitsdauer des JWT-Tokens",
+        "attributeMapping": "Attributzuordnung",
+        "attributeMappingHelp": "Welche LDAP-Attribute zu Benutzer-ID, Name und E-Mail werden. Kommagetrennt: Das erste Attribut mit einem Wert gewinnt.",
+        "attribute": {
+          "id": "Benutzer-ID",
+          "name": "Anzeigename",
+          "email": "E-Mail"
+        },
+        "test": {
+          "title": "Anmeldung testen",
+          "help": "Führt diese Konfiguration gegen das Verzeichnis aus und zeigt, was gefunden und zugeordnet würde. Es wird nichts gespeichert und keine Sitzung erzeugt. Mit einem Bind-Konto ist das Passwort optional.",
+          "username": "Benutzername",
+          "password": "Passwort (optional)",
+          "run": "Anmeldung testen",
+          "running": "Test läuft…",
+          "resultTitle": "LDAP-Anmeldetest"
+        }
       }
     },
     "officeIntegration": {
