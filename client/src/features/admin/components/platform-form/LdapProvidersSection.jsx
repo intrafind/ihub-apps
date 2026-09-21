@@ -17,6 +17,7 @@ function LdapProvidersSection({ config, onChange, t, availableGroups = [] }) {
       adminPassword: '',
       userSearchBase: '',
       usernameAttribute: 'uid',
+      domain: '',
       userDn: '',
       groupSearchBase: '',
       groupClass: 'groupOfNames',
@@ -217,6 +218,24 @@ function LdapProvidersSection({ config, onChange, t, availableGroups = [] }) {
               />
               <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">
                 LDAP attribute for username (uid or sAMAccountName)
+              </p>
+            </div>
+
+            <div>
+              <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+                Domain
+              </label>
+              <input
+                type="text"
+                value={provider.domain || ''}
+                onChange={e => updateLdapProvider(index, 'domain', e.target.value)}
+                className="w-full px-3 py-2 border border-gray-300 rounded-md shadow-xs focus:ring-blue-500 focus:border-blue-500 sm:text-sm"
+                placeholder="CONTOSO"
+              />
+              <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">
+                NetBIOS/short domain name, used by integrations that identify users as
+                DOMAIN\username (iFinder). Leave empty for Active Directory to detect it from
+                msDS-PrincipalName; required for other directories.
               </p>
             </div>
 

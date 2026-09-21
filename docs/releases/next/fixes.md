@@ -72,3 +72,23 @@ nothing in the log to say so:
 An `${ENV_VAR}` placeholder left in `proxy.http` or `proxy.https` is also no longer used as if it
 were a proxy address when the variable is not set; the connection goes direct instead of failing
 on an unparseable URL.
+
+## LDAP and NTLM users are stored under their directory login name
+
+A user signing in through LDAP or NTLM was created in **Admin → Users** with their email address
+as the account name, not the login name the directory knows them by — `sAMAccountName` for Active
+Directory, the Windows account for NTLM. Only users with no email in the directory got the right
+one, and re-signing in never corrected it, because nothing wrote the field again after the account
+was created.
+
+The login name was available the whole time and everything else used it: the session, the groups
+and the tokens iHub mints were all correct. Only the stored record disagreed, which is why this
+went unnoticed until something read it — the account name shown in the user list, and the admin
+user editor, which refused to open such a record at all because `@` is not valid in a username.
+
+Existing records are repaired on upgrade by migration V115, which recovers the login name the
+directory already recorded alongside each account. It leaves a record alone where the rewrite would
+not be unambiguous: accounts that also sign in locally, where the account name is a credential
+somebody types, and accounts whose login name another user already holds. Those are listed in the
+startup log with the duplicate to resolve. Anything it skips still heals by itself the next time
+that user signs in.
