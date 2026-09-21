@@ -179,7 +179,8 @@ const RENAMED_MIGRATIONS = [
   // main in parallel. It moved to V117 because those had already shipped.
   // Without this entry, anyone who ran the branch before the merge has 115
   // recorded against the Office.js file, which would mark the brave V115
-  // applied and silently skip it.
+  // applied and silently skip it — the match on `file` as well as `version`
+  // is what keeps this entry off the brave migration's own history row.
   {
     oldVersion: '115',
     oldFile: 'V115__office_js_source_modes.js',

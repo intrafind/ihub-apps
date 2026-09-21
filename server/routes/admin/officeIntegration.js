@@ -15,7 +15,7 @@ import {
   validateOfficeJsUrl
 } from '../../utils/officeJsSource.js';
 import { probeOfficeJsUrl } from '../../services/OfficeJsProxyService.js';
-import { assertSafeHost } from '../../services/mcp/safeFetch.js';
+import { assertPublicTarget, createPinnedLookup } from '../../utils/ssrfGuard.js';
 
 /**
  * Merge updates into the platform configuration and publish them.
@@ -53,6 +53,7 @@ export default function registerAdminOfficeIntegrationRoutes(app) {
     const platform = configCache.getPlatform();
     const officeConfig = platform?.officeIntegration || {};
     const baseUrl = buildPublicBaseUrl(req);
+    const resolvedOfficeJs = resolveOfficeJsSource(platform);
 
     res.json({
       enabled: officeConfig.enabled || false,
@@ -75,7 +76,11 @@ export default function registerAdminOfficeIntegrationRoutes(app) {
       officeJsCdnPresets: OFFICE_JS_CDN_PRESETS,
       // What the add-in HTML will actually carry, so the admin can see the
       // effective URL without reading the page source.
-      officeJsResolvedUrl: resolveOfficeJsSource(platform).scriptUrl,
+      officeJsResolvedUrl: resolvedOfficeJs.scriptUrl,
+      // The mode that actually resolved. It differs from `officeJsMode` only
+      // when the configured source is unusable and resolution fell back, which
+      // the admin page surfaces rather than showing a silent contradiction.
+      officeJsResolvedMode: resolvedOfficeJs.mode,
       manifestUrl: `${baseUrl}/api/integrations/office-addin/manifest.xml`,
       taskpaneUrl: `${baseUrl}/office/taskpane.html`
     });
@@ -260,7 +265,7 @@ export default function registerAdminOfficeIntegrationRoutes(app) {
         officeJsCdnUrl,
         officeJsCustomUrl,
         startPage
-      } = req.body;
+      } = req.body || {};
       const platform = configCache.getPlatform();
 
       // Accept only `{ [lang: string]: string }` objects. Any non-string locale value
@@ -358,8 +363,15 @@ export default function registerAdminOfficeIntegrationRoutes(app) {
       const effectiveMode = allowed.officeJsMode ?? platform?.officeIntegration?.officeJsMode;
       const effectiveCustomUrl =
         allowed.officeJsCustomUrl ?? platform?.officeIntegration?.officeJsCustomUrl;
-      if (effectiveMode === 'custom' && !effectiveCustomUrl) {
-        return sendBadRequest(res, 'officeJsCustomUrl is required when officeJsMode is "custom"');
+      if (effectiveMode === 'custom') {
+        if (!effectiveCustomUrl) {
+          return sendBadRequest(res, 'officeJsCustomUrl is required when officeJsMode is "custom"');
+        }
+        // Truthiness is not enough: a stored value can arrive from an
+        // `IHUB_PLATFORM__…` env override without passing through this route,
+        // and an invalid one would silently resolve back to the CDN.
+        const stored = validateOfficeJsUrl(effectiveCustomUrl);
+        if (stored.error) return sendBadRequest(res, `officeJsCustomUrl: ${stored.error}`);
       }
       if (startPage !== undefined) {
         // Replaces the whole block: the admin form always sends every field,
@@ -450,24 +462,27 @@ export default function registerAdminOfficeIntegrationRoutes(app) {
 
         const results = await Promise.all(
           validated.map(async url => {
-            // Same posture as the proxy connectivity test: a target resolving
-            // into a private range is refused unless an admin listed it, so this
-            // endpoint cannot be turned into an internal port scanner. An
-            // internal Office.js mirror is testable once allowlisted.
-            try {
-              await assertSafeHost(new URL(url).hostname, [], true);
-            } catch (guardError) {
-              if (guardError.code === 'SSRF_BLOCKED') {
-                return {
-                  url,
-                  reachable: false,
-                  durationMs: 0,
-                  error: `${guardError.message}. Add the host to ssrf.allowedHosts (Security → SSRF Allowlist) to test against it.`
-                };
-              }
-              // A DNS failure is more useful reported as a probe result below.
+            // `assertPublicTarget` rather than `assertSafeHost`: it strips the
+            // brackets URL parsing leaves on an IPv6 literal, blocks localhost
+            // by name, and classifies IP literals without a DNS round trip. The
+            // bracket handling is load-bearing — `dns.lookup('[::1]')` fails
+            // ENOTFOUND, and a guard that treats a lookup failure as
+            // inconclusive would let `http://[::1]:<port>/office.js` through and
+            // turn this into a loopback port scanner.
+            const target = await assertPublicTarget(new URL(url));
+            if (!target.ok) {
+              return {
+                url,
+                reachable: false,
+                durationMs: 0,
+                error: `Refused: ${target.reason}. This check only probes public hosts.`
+              };
             }
-            return probeOfficeJsUrl(url);
+            // Pin the socket to the addresses the guard actually vetted, so a
+            // name that answers public-then-private between the two lookups
+            // cannot reach an internal host. (No effect when an HTTP proxy is
+            // configured — the proxy does egress DNS.)
+            return probeOfficeJsUrl(url, { lookup: createPinnedLookup(target.addresses) });
           })
         );
 

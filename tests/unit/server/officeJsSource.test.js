@@ -223,3 +223,67 @@ describe('OFFICE_JS_CDN_PRESETS', () => {
     expect(china?.url).toContain('office365.cn');
   });
 });
+
+describe('validateOfficeJsUrl normalizes rather than echoing its input', () => {
+  // The returned value is interpolated into a double-quoted `src` attribute in
+  // the add-in HTML. Returning the raw input let a URL carrying a quote close
+  // that attribute and open a second <script> tag, on pages that are served
+  // without authentication.
+  const BREAKOUT =
+    'https://cdn.example.com/x"></script><script>fetch("/api/apps")</script><script src="/office.js';
+
+  test('percent-encodes a quote rather than letting it close the attribute', () => {
+    const { value } = validateOfficeJsUrl(BREAKOUT);
+    expect(value).not.toContain('"');
+    expect(value).toContain('%22');
+  });
+
+  test('a breakout payload cannot introduce a second script tag', () => {
+    const { value } = validateOfficeJsUrl(BREAKOUT);
+    const html = '<script type="text/javascript" src="https://x/office.js"></script>';
+    const out = rewriteOfficeJsScriptSrc(html, value);
+
+    expect(out.match(/<script/gi)).toHaveLength(1);
+    expect(out).not.toMatch(/<\/script>\s*<script/i);
+  });
+
+  test('encodes a stray space instead of emitting markup that breaks at load time', () => {
+    // Previously accepted verbatim, so the browser read the attribute as ending
+    // at the space and Office.js 404ed — which the task pane then reported as a
+    // blocked network rather than a malformed URL.
+    const { value } = validateOfficeJsUrl('https://cdn.example.com/lib with space/office.js');
+    expect(value).toBe('https://cdn.example.com/lib%20with%20space/office.js');
+  });
+
+  test('leaves every shipped preset byte-identical', () => {
+    for (const preset of OFFICE_JS_CDN_PRESETS) {
+      expect(validateOfficeJsUrl(preset.url).value).toBe(preset.url);
+    }
+  });
+
+  test('preserves a cache-busting query string', () => {
+    const url = 'https://cdn.example.com/office/office.js?v=2026-09';
+    expect(validateOfficeJsUrl(url).value).toBe(url);
+  });
+});
+
+describe('rewriteOfficeJsScriptSrc escapes independently of the validator', () => {
+  // Defence in depth: the rewrite must stay safe for a value that did not come
+  // through validateOfficeJsUrl.
+  test('escapes a raw quote passed directly', () => {
+    const out = rewriteOfficeJsScriptSrc(
+      '<script src="https://x/office.js"></script>',
+      'https://evil/"><script>alert(1)</script>'
+    );
+    expect(out.match(/<script/gi)).toHaveLength(1);
+    expect(out).toContain('&quot;');
+  });
+
+  test('keeps an ampersand in a query string parseable', () => {
+    const out = rewriteOfficeJsScriptSrc(
+      '<script src="https://x/office.js"></script>',
+      'https://cdn.example.com/office/office.js?a=1&b=2'
+    );
+    expect(out).toContain('a=1&amp;b=2');
+  });
+});

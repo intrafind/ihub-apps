@@ -1074,7 +1074,9 @@
         "worldwideLegacy": "Microsoft CDN (legacy host)",
         "china": "China — 21Vianet",
         "preview": "Preview APIs (not for production)"
-      }
+      },
+      "officeJsPresetCustom": "Your custom URL",
+      "officeJsFallbackWarning": "The saved Office.js source could not be used, so the add-in is falling back to {{mode}}. Check the URL above."
     },
     "nextcloudEmbed": {
       "title": "Nextcloud Embed",

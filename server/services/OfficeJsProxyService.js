@@ -19,6 +19,7 @@
  */
 
 import path from 'path';
+import { createHash } from 'crypto';
 import { promises as fs } from 'fs';
 import config from '../config.js';
 import { getRootDir } from '../pathUtils.js';
@@ -100,8 +101,60 @@ export function getOfficeJsCacheDir() {
   return path.join(getRootDir(), config.CONTENTS_DIR, 'data', 'office-js-cache');
 }
 
+/**
+ * Cache directory for one upstream.
+ *
+ * Keyed by a hash of the base URL so that changing the configured CDN — from
+ * the legacy host to the current one, or to the China CDN, or between `/1/` and
+ * `/beta/` — does not keep serving the previous CDN's bytes for a TTL, or
+ * indefinitely if the new upstream is unreachable and the stale fallback kicks
+ * in. A pre-warmed air-gapped cache must be placed under the directory matching
+ * its configured CDN URL; the admin page shows which one is in effect.
+ *
+ * @param {string} upstreamBaseUrl
+ * @returns {string}
+ */
+export function getOfficeJsUpstreamCacheDir(upstreamBaseUrl) {
+  const key = createHash('sha256').update(String(upstreamBaseUrl)).digest('hex').slice(0, 12);
+  return path.join(getOfficeJsCacheDir(), key);
+}
+
 /** In-flight upstream fetches, keyed by cache path, to collapse stampedes. */
 const inFlight = new Map();
+
+/**
+ * When upstream last failed for a given asset, keyed by cache path.
+ *
+ * Without this, an air-gapped install — the case this module exists for —
+ * re-attempts upstream on *every* request before falling back to its
+ * pre-warmed cache. On a network that drops rather than refuses, that is a
+ * full `FETCH_TIMEOUT_MS` wait per asset, per pane load, per worker. Office.js
+ * loads its files in sequence and the host applies its own init timeout, so
+ * the add-in fails even though every byte it needs is already on disk.
+ */
+const lastFailure = new Map();
+
+/** How long a usable stale copy is served without re-attempting upstream. */
+const FAILURE_COOLDOWN_MS = 60_000;
+
+/**
+ * Hard cap on the failure map. The proxy mount is unauthenticated, so without a
+ * bound an anonymous caller could grow it without limit by requesting distinct
+ * invented paths.
+ */
+const MAX_FAILURE_ENTRIES = 512;
+
+/** Drop expired entries, and the oldest ones if the map is still over cap. */
+function pruneFailures() {
+  const now = Date.now();
+  for (const [key, at] of lastFailure) {
+    if (now - at >= FAILURE_COOLDOWN_MS) lastFailure.delete(key);
+  }
+  // Map iterates in insertion order, so the first keys are the oldest.
+  while (lastFailure.size > MAX_FAILURE_ENTRIES) {
+    lastFailure.delete(lastFailure.keys().next().value);
+  }
+}
 
 /**
  * Read a cached asset and report whether it is still fresh.
@@ -134,12 +187,20 @@ async function fetchAndCache(upstreamUrl, cachePath) {
   try {
     // httpFetch applies the platform's proxy and TLS settings, so the server
     // reaches the CDN through the customer's corporate proxy when one is set.
-    response = await httpFetch(upstreamUrl, { signal: controller.signal });
+    // `size` makes MAX_ASSET_BYTES real: node-fetch enforces it while
+    // streaming, so an oversized body is destroyed mid-flight rather than
+    // fully buffered and then rejected.
+    response = await httpFetch(upstreamUrl, {
+      signal: controller.signal,
+      size: MAX_ASSET_BYTES
+    });
   } finally {
     clearTimeout(timeout);
   }
 
   if (!response.ok) {
+    // Drain, or the socket can be held until GC under keep-alive.
+    response.body?.destroy?.();
     throw new Error(`Upstream returned ${response.status} for ${upstreamUrl}`);
   }
 
@@ -195,7 +256,7 @@ export async function getOfficeJsAsset(relPath, upstreamBaseUrl, options = {}) {
 
   // `resolveAndValidatePath` canonicalizes against an existing base, so the
   // cache directory has to exist before it can vouch for a path inside it.
-  const cacheDir = getOfficeJsCacheDir();
+  const cacheDir = getOfficeJsUpstreamCacheDir(upstreamBaseUrl);
   let cacheDirReady = true;
   try {
     await fs.mkdir(cacheDir, { recursive: true });
@@ -226,6 +287,12 @@ export async function getOfficeJsAsset(relPath, upstreamBaseUrl, options = {}) {
     return { body: cached.body, contentType, source: 'cache' };
   }
 
+  // Upstream failed recently and a usable copy is on disk: serve it without
+  // paying the timeout again. Recovery is immediate — a success clears this.
+  if (cached && Date.now() - (lastFailure.get(cachePath) ?? 0) < FAILURE_COOLDOWN_MS) {
+    return { body: cached.body, contentType, source: 'stale' };
+  }
+
   let pending = inFlight.get(cachePath);
   if (!pending) {
     pending = fetchAndCache(upstreamUrl, cachePath).finally(() => inFlight.delete(cachePath));
@@ -234,9 +301,15 @@ export async function getOfficeJsAsset(relPath, upstreamBaseUrl, options = {}) {
 
   try {
     const body = await pending;
+    lastFailure.delete(cachePath);
     return { body, contentType, source: 'upstream' };
   } catch (error) {
     if (cached) {
+      // Only recorded when a stale copy exists, because that is the only case
+      // the cooldown is ever read — and it keeps invented paths, which never
+      // have a cached copy, from populating the map at all.
+      lastFailure.set(cachePath, Date.now());
+      pruneFailures();
       logger.warn('Serving stale cached Office.js asset — upstream unreachable', {
         component: 'OfficeJsProxy',
         relPath,
@@ -262,6 +335,9 @@ export async function getOfficeJsAsset(relPath, upstreamBaseUrl, options = {}) {
  * @param {string} url - A URL that has passed `validateOfficeJsUrl`
  * @param {Object} [options]
  * @param {number} [options.timeoutMs]
+ * @param {Function} [options.lookup] - Pinned DNS lookup from the SSRF guard,
+ *   so the socket goes to the address the guard vetted rather than a second,
+ *   re-resolved one.
  * @returns {Promise<{url: string, reachable: boolean, status?: number, durationMs: number, error?: string}>}
  */
 export async function probeOfficeJsUrl(url, options = {}) {
@@ -283,6 +359,7 @@ export async function probeOfficeJsUrl(url, options = {}) {
       method: 'GET',
       redirect: 'manual',
       signal: controller.signal,
+      ...(options.lookup ? { lookup: options.lookup } : {}),
       headers: { 'user-agent': 'iHub-Apps Office.js reachability test' }
     });
     response.body?.destroy?.();
@@ -304,7 +381,8 @@ export async function probeOfficeJsUrl(url, options = {}) {
   }
 }
 
-/** Test seam: drop the in-flight map between cases. */
+/** Test seam: drop the in-flight and failure-cooldown state between cases. */
 export function _resetInFlight() {
   inFlight.clear();
+  lastFailure.clear();
 }

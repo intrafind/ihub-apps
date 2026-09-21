@@ -139,7 +139,13 @@ export function validateOfficeJsUrl(rawUrl) {
     };
   }
 
-  return { value: trimmed };
+  // Return the parsed form, not the raw input. `new URL()` percent-encodes the
+  // characters that would otherwise break out of the quoted `src` attribute
+  // this value is interpolated into (`"`, `<`, `>`, space). Returning `trimmed`
+  // let a URL carrying a quote emit a second `<script>` tag, and let a URL
+  // carrying a space render as broken markup that failed at load time with a
+  // message blaming the network.
+  return { value: parsed.toString() };
 }
 
 /**
@@ -177,6 +183,14 @@ export function resolveOfficeJsSource(platform) {
   // A stored CDN URL that no longer validates falls back to the default rather
   // than leaving the add-in with no library at all.
   const cdnCandidate = validateOfficeJsUrl(officeConfig.officeJsCdnUrl);
+  if (officeConfig.officeJsCdnUrl && cdnCandidate.error) {
+    // Silently swapping a typo'd China or beta URL for the worldwide CDN would
+    // look like the setting had no effect.
+    logger.warn('Invalid officeJsCdnUrl, falling back to the default Microsoft CDN', {
+      component: 'OfficeJsSource',
+      reason: cdnCandidate.error
+    });
+  }
   const cdnUrl = cdnCandidate.value || DEFAULT_OFFICE_JS_CDN_URL;
 
   if (mode === 'proxy' || mode === 'bundled') {
@@ -214,6 +228,25 @@ const OFFICE_JS_SCRIPT_SRC_PATTERN =
   /(<script[^>]*\ssrc=")([^"]*\/office(?:\.debug)?\.js(?:\?[^"]*)?)(")/gi;
 
 /**
+ * Escape a value for interpolation into a double-quoted HTML attribute.
+ *
+ * `validateOfficeJsUrl` already returns a percent-encoded URL, so this is
+ * defence in depth — it is what keeps the rewrite safe if a future caller
+ * passes a value that did not come through that validator. `&` becomes
+ * `&amp;`, which browsers parse back to `&`, so query strings survive intact.
+ *
+ * @param {string} value
+ * @returns {string}
+ */
+function escapeHtmlAttribute(value) {
+  return String(value)
+    .replace(/&/g, '&amp;')
+    .replace(/"/g, '&quot;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;');
+}
+
+/**
  * Rewrite the Office.js `<script src="...">` in an add-in HTML document to the
  * configured source.
  *
@@ -224,6 +257,6 @@ const OFFICE_JS_SCRIPT_SRC_PATTERN =
 export function rewriteOfficeJsScriptSrc(html, scriptUrl) {
   if (typeof html !== 'string' || !scriptUrl) return html;
   return html.replace(OFFICE_JS_SCRIPT_SRC_PATTERN, (_match, prefix, _url, suffix) => {
-    return `${prefix}${scriptUrl}${suffix}`;
+    return `${prefix}${escapeHtmlAttribute(scriptUrl)}${suffix}`;
   });
 }

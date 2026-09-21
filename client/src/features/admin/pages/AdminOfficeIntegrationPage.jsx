@@ -4,7 +4,7 @@ import { Link } from 'react-router-dom';
 import DynamicLanguageEditor from '../../../shared/components/DynamicLanguageEditor';
 import Icon from '../../../shared/components/Icon';
 import ReorderableList from '../components/ReorderableList';
-import { makeAdminApiCall } from '../../../api/adminApi';
+import { makeAdminApiCall, getAdminApiErrorMessage } from '../../../api/adminApi';
 import { fetchAdminApps } from '../../../api';
 import { buildApiUrl } from '../../../utils/runtimeBasePath';
 import { getLocalizedContent } from '../../../utils/localizeContent';
@@ -63,14 +63,25 @@ function ReachBadge({ state, label, detail }) {
       ? 'bg-green-100 text-green-800 dark:bg-green-900/30 dark:text-green-300'
       : state === 'blocked'
         ? 'bg-red-100 text-red-800 dark:bg-red-900/30 dark:text-red-300'
-        : 'bg-gray-100 text-gray-600 dark:bg-gray-700 dark:text-gray-300';
-  const mark = state === 'ok' ? '\u2713' : state === 'blocked' ? '\u2717' : '\u2026';
+        : state === 'opaque' || state === 'error'
+          ? 'bg-amber-100 text-amber-800 dark:bg-amber-900/30 dark:text-amber-300'
+          : 'bg-gray-100 text-gray-600 dark:bg-gray-700 dark:text-gray-300';
+  // Never colour alone: the mark carries the state too.
+  const mark =
+    state === 'ok'
+      ? '\u2713'
+      : state === 'blocked'
+        ? '\u2717'
+        : state === 'opaque' || state === 'error'
+          ? '?'
+          : '\u2026';
   return (
     <span
       className={`inline-block rounded px-1.5 py-0.5 text-[11px] font-medium ${tone}`}
       title={detail || undefined}
     >
       {mark} {label}
+      {detail ? <span className="sr-only"> — {detail}</span> : null}
     </span>
   );
 }
@@ -105,6 +116,7 @@ function AdminOfficeIntegrationPage() {
   const [officeJsCdnUrl, setOfficeJsCdnUrl] = useState('');
   const [officeJsCustomUrl, setOfficeJsCustomUrl] = useState('');
   const [officeJsResolvedUrl, setOfficeJsResolvedUrl] = useState('');
+  const [officeJsResolvedMode, setOfficeJsResolvedMode] = useState('');
   const [officeJsPresets, setOfficeJsPresets] = useState([]);
   // Reachability per URL, keyed by URL: { server, browser } where each is
   // 'checking' | 'ok' | 'blocked', plus the server's status/error detail.
@@ -148,6 +160,7 @@ function AdminOfficeIntegrationPage() {
       setOfficeJsCdnUrl(data.officeJsCdnUrl || '');
       setOfficeJsCustomUrl(data.officeJsCustomUrl || '');
       setOfficeJsResolvedUrl(data.officeJsResolvedUrl || '');
+      setOfficeJsResolvedMode(data.officeJsResolvedMode || '');
       setOfficeJsPresets(Array.isArray(data.officeJsCdnPresets) ? data.officeJsCdnPresets : []);
       setStartPage(readStartPage(data.startPage));
       setStarterPrompts(
@@ -271,19 +284,42 @@ function AdminOfficeIntegrationPage() {
    * `history.pushState` from this page.
    */
   const probeFromBrowser = async url => {
+    // A CORS fetch first, because it yields a real status. Every Office.js CDN
+    // Microsoft documents sends `access-control-allow-origin: *`, so this is
+    // the normal path and it can tell 200 apart from a 404 or — the case that
+    // matters on the networks this feature targets — an intercepting proxy's
+    // HTTP block page.
     try {
-      await fetch(url, { mode: 'no-cors', cache: 'no-store', redirect: 'follow' });
-      return 'ok';
+      const response = await fetch(url, { mode: 'cors', cache: 'no-store' });
+      return { state: response.ok ? 'ok' : 'blocked', detail: `HTTP ${response.status}` };
     } catch {
-      return 'blocked';
+      // No CORS headers (a mirror, typically). `no-cors` still tells us whether
+      // the request left the building, but the response is opaque: status is 0
+      // even on success, so a 404 or a block page is indistinguishable from a
+      // hit. Report that as its own weaker state rather than a tick.
+      try {
+        await fetch(url, { mode: 'no-cors', cache: 'no-store' });
+        return { state: 'opaque' };
+      } catch {
+        return { state: 'blocked' };
+      }
     }
   };
 
   const handleTestOfficeJs = async () => {
     // Whatever is on screen: every preset, plus the custom URL when that mode
     // is selected, so one click answers "which of these can we actually use?".
+    // In custom mode the URL the admin actually cares about is their own, so
+    // it is probed and rendered alongside the presets. In the other modes it is
+    // not in play — probing it would waste a request and, worse, a half-typed
+    // value would fail validation and fail the whole batch.
     const urls = [
-      ...new Set([...officeJsPresets.map(p => p.url), officeJsCustomUrl].filter(Boolean))
+      ...new Set(
+        [
+          ...officeJsPresets.map(p => p.url),
+          officeJsMode === 'custom' ? officeJsCustomUrl.trim() : ''
+        ].filter(Boolean)
+      )
     ];
     if (urls.length === 0) return;
 
@@ -310,20 +346,41 @@ function AdminOfficeIntegrationPage() {
           return next;
         });
       })
-      .catch(() => {
+      .catch(err => {
+        // The check itself failed (validation, expired session, 500). That is
+        // not evidence the CDN is unreachable, so it gets its own state rather
+        // than painting every row as blocked.
+        const detail = getAdminApiErrorMessage(err);
         setOfficeJsReach(prev =>
-          Object.fromEntries(Object.entries(prev).map(([u, v]) => [u, { ...v, server: 'blocked' }]))
+          Object.fromEntries(
+            Object.entries(prev).map(([u, v]) => [
+              u,
+              { ...v, server: 'error', serverDetail: detail }
+            ])
+          )
         );
       });
 
     const browserChecks = urls.map(async url => {
-      const verdict = await probeFromBrowser(url);
-      setOfficeJsReach(prev => ({ ...prev, [url]: { ...prev[url], browser: verdict } }));
+      const { state, detail } = await probeFromBrowser(url);
+      setOfficeJsReach(prev => ({
+        ...prev,
+        [url]: { ...prev[url], browser: state, browserDetail: detail }
+      }));
     });
 
     await Promise.allSettled([serverCheck, ...browserChecks]);
     setOfficeJsTesting(false);
   };
+
+  // What the reachability list renders. In custom mode the admin's own URL is
+  // listed first, because it is the one their deployment actually uses — a
+  // result for four Microsoft CDNs and none for their mirror answers the wrong
+  // question.
+  const officeJsTestTargets =
+    officeJsMode === 'custom' && officeJsCustomUrl.trim()
+      ? [{ id: '__custom', url: officeJsCustomUrl.trim(), isCustom: true }, ...officeJsPresets]
+      : officeJsPresets;
 
   const handleSaveConfig = async () => {
     try {
@@ -345,8 +402,12 @@ function AdminOfficeIntegrationPage() {
           description: trimLocalized(description),
           starterPrompts: cleanedPrompts,
           officeJsMode,
-          officeJsCdnUrl,
-          officeJsCustomUrl,
+          // An empty field would fail validation and 400 the WHOLE save,
+          // losing unrelated edits — and the field is hidden in bundled/custom
+          // mode, so the admin could not even see what was rejected. Omitting
+          // the key leaves the stored value untouched.
+          ...(officeJsCdnUrl.trim() ? { officeJsCdnUrl: officeJsCdnUrl.trim() } : {}),
+          officeJsCustomUrl: officeJsCustomUrl.trim(),
           startPage: {
             defaultPage: startPage.defaultPage,
             // '' means "automatic"; the server stores no id for it.
@@ -361,10 +422,13 @@ function AdminOfficeIntegrationPage() {
         text: t('admin.officeIntegration.saved', 'Configuration saved')
       });
       setTimeout(() => setMessage(null), 3000);
-    } catch (_err) {
+    } catch (err) {
+      // The server names the offending field; the generic string does not.
       setMessage({
         type: 'error',
-        text: t('admin.officeIntegration.saveError', 'Failed to save configuration')
+        text:
+          getAdminApiErrorMessage(err) ||
+          t('admin.officeIntegration.saveError', 'Failed to save configuration')
       });
     } finally {
       setSaving(false);
@@ -705,8 +769,8 @@ function AdminOfficeIntegrationPage() {
                     )}
                   </p>
 
-                  <ul className="space-y-2">
-                    {officeJsPresets.map(preset => {
+                  <ul className="space-y-2" aria-live="polite">
+                    {officeJsTestTargets.map(preset => {
                       const reach = officeJsReach[preset.url];
                       const selected =
                         officeJsMode === 'custom'
@@ -719,7 +783,15 @@ function AdminOfficeIntegrationPage() {
                         >
                           <div className="min-w-0">
                             <p className="text-sm font-medium text-gray-700 dark:text-gray-300">
-                              {t(`admin.officeIntegration.officeJsPreset.${preset.id}`, preset.id)}
+                              {preset.isCustom
+                                ? t(
+                                    'admin.officeIntegration.officeJsPresetCustom',
+                                    'Your custom URL'
+                                  )
+                                : t(
+                                    `admin.officeIntegration.officeJsPreset.${preset.id}`,
+                                    preset.id
+                                  )}
                             </p>
                             <code className="block truncate font-mono text-xs text-gray-500 dark:text-gray-400">
                               {preset.url}
@@ -733,6 +805,7 @@ function AdminOfficeIntegrationPage() {
                                 />{' '}
                                 <ReachBadge
                                   state={reach.browser}
+                                  detail={reach.browserDetail}
                                   label={t(
                                     'admin.officeIntegration.officeJsFromBrowser',
                                     'browser'
@@ -769,6 +842,16 @@ function AdminOfficeIntegrationPage() {
                     {officeJsResolvedUrl}
                   </code>
                 </p>
+              )}
+
+              {officeJsResolvedMode && officeJsResolvedMode !== status?.officeJsMode && (
+                <div className="mt-3 rounded-lg bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-700 px-4 py-3 text-sm text-red-800 dark:text-red-300">
+                  {t(
+                    'admin.officeIntegration.officeJsFallbackWarning',
+                    'The saved Office.js source could not be used, so the add-in is falling back to {{mode}}. Check the URL above.',
+                    { mode: officeJsResolvedMode }
+                  )}
+                </div>
               )}
 
               {officeJsMode !== 'cdn' && (

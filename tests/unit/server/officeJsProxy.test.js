@@ -52,6 +52,7 @@ import {
   _resetInFlight,
   contentTypeFor,
   getOfficeJsAsset,
+  getOfficeJsUpstreamCacheDir,
   isSafeOfficeJsAssetPath,
   probeOfficeJsUrl
 } from '../../../server/services/OfficeJsProxyService.js';
@@ -67,8 +68,12 @@ function okResponse(body) {
   };
 }
 
+/**
+ * Where an asset lands on disk. The cache is partitioned per upstream, so this
+ * goes through the same helper the service uses rather than assuming a layout.
+ */
 function cachedFilePath(...segments) {
-  return path.join(mockState.tempRoot, 'contents', 'data', 'office-js-cache', ...segments);
+  return path.join(getOfficeJsUpstreamCacheDir(UPSTREAM), ...segments);
 }
 
 beforeEach(async () => {
@@ -257,5 +262,109 @@ describe('probeOfficeJsUrl', () => {
 
     await probeOfficeJsUrl(URL_UNDER_TEST);
     expect(destroyed).toBe(true);
+  });
+});
+
+describe('getOfficeJsAsset refresh and failure-cooldown behaviour', () => {
+  /** Age a cached file past any plausible TTL. */
+  async function ageCacheEntry(relPath, days = 30) {
+    const when = new Date(Date.now() - days * 24 * 60 * 60 * 1000);
+    await fs.utimes(cachedFilePath(relPath), when, when);
+  }
+
+  test('refetches and rewrites the file once the TTL has expired', async () => {
+    await getOfficeJsAsset('office.js', UPSTREAM);
+    await ageCacheEntry('office.js');
+    mockState.fetchImpl = async () => okResponse('// office.js v2');
+    _resetInFlight();
+
+    const refreshed = await getOfficeJsAsset('office.js', UPSTREAM);
+    expect(refreshed.source).toBe('upstream');
+    expect(refreshed.body.toString()).toBe('// office.js v2');
+
+    // The rewrite must reset freshness, or the next request refetches again.
+    const next = await getOfficeJsAsset('office.js', UPSTREAM);
+    expect(next.source).toBe('cache');
+    expect(next.body.toString()).toBe('// office.js v2');
+  });
+
+  test('stops re-attempting a dead upstream once it has failed', async () => {
+    // The air-gapped case: a pre-warmed cache with a failing upstream must not
+    // pay the fetch timeout on every single request, or Office.js — which
+    // loads its files in sequence — never finishes starting.
+    await getOfficeJsAsset('office.js', UPSTREAM);
+    await ageCacheEntry('office.js');
+    mockState.fetchCalls = [];
+    mockState.fetchImpl = async () => {
+      throw new Error('ENOTFOUND');
+    };
+    _resetInFlight();
+
+    const first = await getOfficeJsAsset('office.js', UPSTREAM);
+    const second = await getOfficeJsAsset('office.js', UPSTREAM);
+    const third = await getOfficeJsAsset('office.js', UPSTREAM);
+
+    for (const result of [first, second, third]) {
+      expect(result.source).toBe('stale');
+      expect(result.body.toString()).toBe('// office.js');
+    }
+    // Only the first request talks to upstream; the rest ride the cooldown.
+    expect(mockState.fetchCalls).toHaveLength(1);
+  });
+
+  test('recovers immediately once upstream comes back', async () => {
+    await getOfficeJsAsset('office.js', UPSTREAM);
+    await ageCacheEntry('office.js');
+    mockState.fetchImpl = async () => {
+      throw new Error('ENOTFOUND');
+    };
+    _resetInFlight();
+    expect((await getOfficeJsAsset('office.js', UPSTREAM)).source).toBe('stale');
+
+    // A cooldown that outlived the outage would keep serving stale bytes.
+    mockState.fetchImpl = async () => okResponse('// office.js restored');
+    _resetInFlight();
+
+    const recovered = await getOfficeJsAsset('office.js', UPSTREAM);
+    expect(recovered.source).toBe('upstream');
+    expect(recovered.body.toString()).toBe('// office.js restored');
+  });
+
+  test('still serves the body when the cache write fails', async () => {
+    // A read-only or full disk must not take the add-in down.
+    const cacheRoot = getOfficeJsUpstreamCacheDir(UPSTREAM);
+    await fs.mkdir(cacheRoot, { recursive: true });
+    // A directory where the file belongs makes the write fail, not the mkdir.
+    await fs.mkdir(path.join(cacheRoot, 'office.js'), { recursive: true });
+
+    const result = await getOfficeJsAsset('office.js', UPSTREAM);
+    expect(result.body.toString()).toBe('// office.js');
+    expect(result.source).toBe('upstream');
+  });
+});
+
+describe('cache partitioning by upstream', () => {
+  const OTHER_UPSTREAM = 'https://appsforoffice.microsoft.com/lib/1/hosted/';
+
+  test("switching the configured CDN does not serve the previous one's bytes", async () => {
+    await getOfficeJsAsset('office.js', UPSTREAM);
+    expect(mockState.fetchCalls).toEqual([`${UPSTREAM}office.js`]);
+
+    // Same asset name, different CDN: must refetch, not reuse the cached copy.
+    mockState.fetchImpl = async () => okResponse('// office.js from the other CDN');
+    const other = await getOfficeJsAsset('office.js', OTHER_UPSTREAM);
+
+    expect(other.source).toBe('upstream');
+    expect(other.body.toString()).toBe('// office.js from the other CDN');
+    expect(mockState.fetchCalls).toContain(`${OTHER_UPSTREAM}office.js`);
+  });
+
+  test('each upstream keeps its own cached copy', async () => {
+    await getOfficeJsAsset('office.js', UPSTREAM);
+    mockState.fetchImpl = async () => okResponse('// other');
+    await getOfficeJsAsset('office.js', OTHER_UPSTREAM);
+
+    expect((await getOfficeJsAsset('office.js', UPSTREAM)).body.toString()).toBe('// office.js');
+    expect((await getOfficeJsAsset('office.js', OTHER_UPSTREAM)).body.toString()).toBe('// other');
   });
 });

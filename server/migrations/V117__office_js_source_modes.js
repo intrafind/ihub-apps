@@ -3,9 +3,12 @@
  * Office.js source mode and URLs.
  *
  * Written as V115; renumbered to V117 because the brave search language
- * parameter (V115) and the staan provider (V116) landed on main first. The
- * runner refuses to start on a duplicate version, and `RENAMED_MIGRATIONS` in
- * `runner.js` reconciles anyone who ran this branch under the old number.
+ * parameter (V115) and the staan provider (V116) landed on main first. A
+ * duplicate version aborts the whole migration run — `scanMigrationFiles`
+ * throws, and `server.js` catches it and boots on with *no* migrations
+ * applied — so the collision had to be resolved, not tolerated.
+ * `RENAMED_MIGRATIONS` in `runner.js` reconciles anyone who ran this branch
+ * under the old number.
  *
  * The boolean only chose between Microsoft's CDN and the bundled
  * `@microsoft/office-js` snapshot. That snapshot is frozen at whatever the

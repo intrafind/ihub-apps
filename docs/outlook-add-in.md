@@ -325,16 +325,23 @@ Each URL is checked twice, because the two modes ask different questions:
 | Badge | What it means | Matters for |
 | --- | --- | --- |
 | **server** | This iHub server can fetch the URL | **Proxy** mode, where the server does the fetching |
-| **browser** | The browser you have the admin page open in can fetch it | **Microsoft CDN** and **Custom** modes, where the Office client fetches it |
+| **browser** | The browser you have the admin page open in can reach it | **Microsoft CDN** and **Custom** modes, where the Office client fetches it |
 
 Your browser is a stand-in for an Outlook client, not a guarantee: both usually
 sit on the same corporate network, but a desktop Outlook webview can be subject
 to different policy. Treat a **browser** failure as conclusive and a
 **browser** success as strong evidence.
 
+A badge can also read **?**. From the browser that means the URL responded but
+the response was opaque — the host sends no CORS headers, which is normal for a
+private mirror — so the request was not blocked, but an HTTP error is
+indistinguishable from success. From the server it means the check itself
+failed (an expired session, or a URL that did not pass validation), which says
+nothing about the CDN; hover the badge for the reason.
+
 A private-range host is refused by the SSRF guard rather than probed; the result
-says so and names the allowlist to add it to. The check never follows redirects
-and never reads the response body.
+says so and names the allowlist to add it to. The server-side check never
+follows redirects and never reads the response body.
 
 The listed CDNs are:
 
@@ -364,10 +371,14 @@ comes from the `@microsoft/office-js` npm package, which Microsoft no longer
 maintains, so it never updates — including for security fixes — and it adds
 roughly 86 MB to the build.
 
-For a fully air-gapped install, prefer **Proxy** with a pre-populated cache:
-copy the Office.js files into `contents/data/office-js-cache/` at install time
-and the server serves them without ever attempting an outbound request. An
-Outlook add-in needs about 600 KB — `office.js`,
+For a fully air-gapped install, prefer **Proxy** with a pre-populated cache.
+The cache is partitioned per upstream, so the files go in a subdirectory of
+`contents/data/office-js-cache/` named for the configured CDN URL — start the
+server once with the URL set and it creates the directory, then drop the files
+in there. (The partitioning is what stops a CDN change from being masked by the
+previous CDN's cached bytes.) The server then serves them without ever
+attempting an outbound request. An Outlook add-in needs about 600 KB —
+`office.js`,
 `o15apptofilemappingtable.js`, `MicrosoftAjax.js`, the host payload
 (`outlook-win32-16.01.js` or `outlook-web-16.01.js`) and
 `<locale>/outlook_strings.js` for each language you support.
