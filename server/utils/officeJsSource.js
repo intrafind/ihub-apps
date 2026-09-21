@@ -50,6 +50,33 @@ export const LEGACY_OFFICE_JS_CDN_URL =
   'https://appsforoffice.microsoft.com/lib/1/hosted/office.js';
 
 /**
+ * The Office.js CDN URLs Microsoft documents, offered in the admin UI so an
+ * operator picks one rather than transcribing it.
+ *
+ * Which of these a network allows varies: a block written as a `microsoft.com`
+ * suffix rule catches `appsforoffice.microsoft.com` but not
+ * `*.static.microsoft`, so the legacy host and the current one can have
+ * different reachability on the same network. That is what the reachability
+ * probe is for.
+ *
+ * Labels live in the client i18n bundle; only the ids and URLs belong here.
+ */
+export const OFFICE_JS_CDN_PRESETS = [
+  { id: 'worldwide', url: DEFAULT_OFFICE_JS_CDN_URL },
+  { id: 'worldwideLegacy', url: LEGACY_OFFICE_JS_CDN_URL },
+  {
+    // 21Vianet operates Office 365 in China; tenants there must use this CDN.
+    id: 'china',
+    url: 'https://appsforoffice.cdn.partner.office365.cn/appsforoffice/lib/1/hosted/office.js'
+  },
+  {
+    // Preview APIs. Microsoft states these are not for production use.
+    id: 'preview',
+    url: 'https://officeapis.public.onecdn.static.microsoft/beta/office.js'
+  }
+];
+
+/**
  * Relative URL used for `proxy` and `bundled` modes. Relative (not
  * `/office/office-js/office.js`) so that subpath deployments keep working —
  * the add-in pages are served from `/office/`, so this resolves to

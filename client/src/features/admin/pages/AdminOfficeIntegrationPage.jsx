@@ -52,6 +52,29 @@ const OFFICE_JS_MODES = [
   }
 ];
 
+/**
+ * One reachability verdict. Kept deliberately small: the operator needs to see
+ * which URLs work, not a diagnostic report — the server's status code or error
+ * rides along in the title attribute for when they do.
+ */
+function ReachBadge({ state, label, detail }) {
+  const tone =
+    state === 'ok'
+      ? 'bg-green-100 text-green-800 dark:bg-green-900/30 dark:text-green-300'
+      : state === 'blocked'
+        ? 'bg-red-100 text-red-800 dark:bg-red-900/30 dark:text-red-300'
+        : 'bg-gray-100 text-gray-600 dark:bg-gray-700 dark:text-gray-300';
+  const mark = state === 'ok' ? '\u2713' : state === 'blocked' ? '\u2717' : '\u2026';
+  return (
+    <span
+      className={`inline-block rounded px-1.5 py-0.5 text-[11px] font-medium ${tone}`}
+      title={detail || undefined}
+    >
+      {mark} {label}
+    </span>
+  );
+}
+
 const DEFAULT_START_PAGE = { defaultPage: 'start', defaultAppId: '', featuredAppIds: [] };
 
 // Only the known fields, each well-formed, whatever the server sent.
@@ -82,6 +105,11 @@ function AdminOfficeIntegrationPage() {
   const [officeJsCdnUrl, setOfficeJsCdnUrl] = useState('');
   const [officeJsCustomUrl, setOfficeJsCustomUrl] = useState('');
   const [officeJsResolvedUrl, setOfficeJsResolvedUrl] = useState('');
+  const [officeJsPresets, setOfficeJsPresets] = useState([]);
+  // Reachability per URL, keyed by URL: { server, browser } where each is
+  // 'checking' | 'ok' | 'blocked', plus the server's status/error detail.
+  const [officeJsReach, setOfficeJsReach] = useState({});
+  const [officeJsTesting, setOfficeJsTesting] = useState(false);
   // The task pane's landing view: which view opens after sign-in, the app
   // whose chat input the start page shows, and the curated app shortcuts.
   const [startPage, setStartPage] = useState(DEFAULT_START_PAGE);
@@ -120,6 +148,7 @@ function AdminOfficeIntegrationPage() {
       setOfficeJsCdnUrl(data.officeJsCdnUrl || '');
       setOfficeJsCustomUrl(data.officeJsCustomUrl || '');
       setOfficeJsResolvedUrl(data.officeJsResolvedUrl || '');
+      setOfficeJsPresets(Array.isArray(data.officeJsCdnPresets) ? data.officeJsCdnPresets : []);
       setStartPage(readStartPage(data.startPage));
       setStarterPrompts(
         Array.isArray(data.starterPrompts)
@@ -226,6 +255,74 @@ function AdminOfficeIntegrationPage() {
       }
     }
     return out;
+  };
+
+  /**
+   * Can the operator's *browser* load this URL?
+   *
+   * This is the question that matters for the `cdn` and `custom` modes, where
+   * the Office client fetches Office.js itself and this server never does. The
+   * admin's browser sits on the same corporate network as the Outlook clients,
+   * so it is the closest available stand-in.
+   *
+   * `no-cors` keeps the check working against a mirror that sends no CORS
+   * headers: the response is opaque, but resolving at all means it loaded.
+   * Nothing is executed — loading Office.js for real would strip
+   * `history.pushState` from this page.
+   */
+  const probeFromBrowser = async url => {
+    try {
+      await fetch(url, { mode: 'no-cors', cache: 'no-store', redirect: 'follow' });
+      return 'ok';
+    } catch {
+      return 'blocked';
+    }
+  };
+
+  const handleTestOfficeJs = async () => {
+    // Whatever is on screen: every preset, plus the custom URL when that mode
+    // is selected, so one click answers "which of these can we actually use?".
+    const urls = [
+      ...new Set([...officeJsPresets.map(p => p.url), officeJsCustomUrl].filter(Boolean))
+    ];
+    if (urls.length === 0) return;
+
+    setOfficeJsTesting(true);
+    setOfficeJsReach(
+      Object.fromEntries(urls.map(u => [u, { server: 'checking', browser: 'checking' }]))
+    );
+
+    // The two halves answer different questions, so neither waits on the other.
+    const serverCheck = makeAdminApiCall('/admin/office-integration/office-js/test', {
+      method: 'POST',
+      body: { urls }
+    })
+      .then(res => {
+        setOfficeJsReach(prev => {
+          const next = { ...prev };
+          for (const r of res.data?.results || []) {
+            next[r.url] = {
+              ...next[r.url],
+              server: r.reachable ? 'ok' : 'blocked',
+              serverDetail: r.error || (r.status ? `HTTP ${r.status}` : undefined)
+            };
+          }
+          return next;
+        });
+      })
+      .catch(() => {
+        setOfficeJsReach(prev =>
+          Object.fromEntries(Object.entries(prev).map(([u, v]) => [u, { ...v, server: 'blocked' }]))
+        );
+      });
+
+    const browserChecks = urls.map(async url => {
+      const verdict = await probeFromBrowser(url);
+      setOfficeJsReach(prev => ({ ...prev, [url]: { ...prev[url], browser: verdict } }));
+    });
+
+    await Promise.allSettled([serverCheck, ...browserChecks]);
+    setOfficeJsTesting(false);
   };
 
   const handleSaveConfig = async () => {
@@ -549,7 +646,7 @@ function AdminOfficeIntegrationPage() {
                   <p className="mt-1 text-xs text-gray-500 dark:text-gray-400">
                     {t(
                       'admin.officeIntegration.officeJsCdnUrlHint',
-                      'Must end in /office.js. Use the China (21Vianet) CDN here if your tenant requires it.'
+                      'Must end in /office.js. Pick a known CDN below, or paste another.'
                     )}
                   </p>
                 </div>
@@ -577,6 +674,91 @@ function AdminOfficeIntegrationPage() {
                       'Must end in /office.js \u2014 Office.js derives the path to every other file it needs from this URL, and cannot find them without that filename. Point this at a pull-through mirror of the Microsoft CDN.'
                     )}
                   </p>
+                </div>
+              )}
+
+              {/* Known CDNs, with reachability. Which of these a network allows
+                  varies — a `microsoft.com` suffix block catches the legacy host
+                  but not `*.static.microsoft` — so the test is per URL. */}
+              {officeJsMode !== 'bundled' && officeJsPresets.length > 0 && (
+                <div className="mt-5 border-t border-gray-200 dark:border-gray-700 pt-4">
+                  <div className="flex items-center justify-between gap-3 mb-1">
+                    <h3 className="text-sm font-medium text-gray-700 dark:text-gray-300">
+                      {t('admin.officeIntegration.officeJsKnownCdns', 'Known Office.js CDNs')}
+                    </h3>
+                    <button
+                      type="button"
+                      onClick={handleTestOfficeJs}
+                      disabled={officeJsTesting}
+                      className="inline-flex items-center gap-1.5 rounded-lg border border-gray-300 dark:border-gray-600 px-3 py-1.5 text-xs font-medium text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-700 disabled:opacity-50"
+                    >
+                      <Icon name={officeJsTesting ? 'refresh' : 'play'} className="h-3.5 w-3.5" />
+                      {officeJsTesting
+                        ? t('admin.officeIntegration.officeJsTesting', 'Testing\u2026')
+                        : t('admin.officeIntegration.officeJsTest', 'Test reachability')}
+                    </button>
+                  </div>
+                  <p className="text-xs text-gray-500 dark:text-gray-400 mb-3">
+                    {t(
+                      'admin.officeIntegration.officeJsKnownCdnsDesc',
+                      'Checks each URL from this server and from your browser. The server result is what the Proxy mode needs; the browser result is the closer stand-in for an Outlook client, which loads Office.js itself in the Microsoft CDN and Custom modes.'
+                    )}
+                  </p>
+
+                  <ul className="space-y-2">
+                    {officeJsPresets.map(preset => {
+                      const reach = officeJsReach[preset.url];
+                      const selected =
+                        officeJsMode === 'custom'
+                          ? officeJsCustomUrl === preset.url
+                          : officeJsCdnUrl === preset.url;
+                      return (
+                        <li
+                          key={preset.id}
+                          className="flex items-start justify-between gap-3 rounded-lg border border-gray-200 dark:border-gray-700 px-3 py-2"
+                        >
+                          <div className="min-w-0">
+                            <p className="text-sm font-medium text-gray-700 dark:text-gray-300">
+                              {t(`admin.officeIntegration.officeJsPreset.${preset.id}`, preset.id)}
+                            </p>
+                            <code className="block truncate font-mono text-xs text-gray-500 dark:text-gray-400">
+                              {preset.url}
+                            </code>
+                            {reach && (
+                              <p className="mt-1 text-xs text-gray-500 dark:text-gray-400">
+                                <ReachBadge
+                                  state={reach.server}
+                                  label={t('admin.officeIntegration.officeJsFromServer', 'server')}
+                                  detail={reach.serverDetail}
+                                />{' '}
+                                <ReachBadge
+                                  state={reach.browser}
+                                  label={t(
+                                    'admin.officeIntegration.officeJsFromBrowser',
+                                    'browser'
+                                  )}
+                                />
+                              </p>
+                            )}
+                          </div>
+                          <button
+                            type="button"
+                            onClick={() =>
+                              officeJsMode === 'custom'
+                                ? setOfficeJsCustomUrl(preset.url)
+                                : setOfficeJsCdnUrl(preset.url)
+                            }
+                            disabled={selected}
+                            className="shrink-0 rounded-lg border border-gray-300 dark:border-gray-600 px-2.5 py-1 text-xs font-medium text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-700 disabled:opacity-50"
+                          >
+                            {selected
+                              ? t('admin.officeIntegration.officeJsPresetInUse', 'In use')
+                              : t('admin.officeIntegration.officeJsPresetUse', 'Use')}
+                          </button>
+                        </li>
+                      );
+                    })}
+                  </ul>
                 </div>
               )}
 

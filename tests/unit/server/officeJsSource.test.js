@@ -14,6 +14,7 @@ import { describe, expect, test } from '@jest/globals';
 import {
   DEFAULT_OFFICE_JS_CDN_URL,
   LEGACY_OFFICE_JS_CDN_URL,
+  OFFICE_JS_CDN_PRESETS,
   OFFICE_JS_LOCAL_URL,
   OFFICE_JS_MODES,
   deriveOfficeJsBaseUrl,
@@ -190,5 +191,35 @@ describe('rewriteOfficeJsScriptSrc', () => {
     expect(rewriteOfficeJsScriptSrc(withQuery, DEFAULT_OFFICE_JS_CDN_URL)).toBe(
       `<script src="${DEFAULT_OFFICE_JS_CDN_URL}"></script>`
     );
+  });
+});
+
+describe('OFFICE_JS_CDN_PRESETS', () => {
+  test('every preset URL would be accepted by the admin form', () => {
+    for (const preset of OFFICE_JS_CDN_PRESETS) {
+      expect(validateOfficeJsUrl(preset.url)).toEqual({ value: preset.url });
+    }
+  });
+
+  test('ids are unique, so the i18n lookup and React keys stay stable', () => {
+    const ids = OFFICE_JS_CDN_PRESETS.map(preset => preset.id);
+    expect(new Set(ids).size).toBe(ids.length);
+  });
+
+  test('offers both worldwide hosts — a microsoft.com block catches only one', () => {
+    const urls = OFFICE_JS_CDN_PRESETS.map(preset => preset.url);
+    expect(urls).toContain(DEFAULT_OFFICE_JS_CDN_URL);
+    expect(urls).toContain(LEGACY_OFFICE_JS_CDN_URL);
+  });
+
+  test('every preset yields a usable base path for the proxy to pull from', () => {
+    for (const preset of OFFICE_JS_CDN_PRESETS) {
+      expect(deriveOfficeJsBaseUrl(preset.url)).toMatch(/\/$/);
+    }
+  });
+
+  test('includes the 21Vianet CDN China tenants are required to use', () => {
+    const china = OFFICE_JS_CDN_PRESETS.find(preset => preset.id === 'china');
+    expect(china?.url).toContain('office365.cn');
   });
 });

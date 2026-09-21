@@ -306,15 +306,44 @@ the source under *Admin → Office Integration → Office.js Source*:
 
 Before changing the mode, two things are worth trying:
 
-1. **Check which host is blocked.** Microsoft's current CDN domain is
-   `officeapis.public.onecdn.static.microsoft` — it is *not* under
-   `microsoft.com`, so a block written as a `microsoft.com` suffix rule does
-   not catch it. Older deployments may still be pinned to
-   `appsforoffice.microsoft.com`; the CDN URL field lets you switch.
-2. **Ask for an allowlist entry.** Both hosts are `required: true` entries in
+1. **Find out which host is actually blocked.** The section lists the CDN URLs
+   Microsoft documents and has a **Test reachability** button that checks each
+   one. Networks differ in which they allow — a block written as a
+   `microsoft.com` suffix rule catches `appsforoffice.microsoft.com` but not
+   `officeapis.public.onecdn.static.microsoft`, so switching hosts can be the
+   whole fix. **Use** puts a listed URL into the field.
+2. **Ask for an allowlist entry.** Both worldwide hosts are `required: true`
+   entries in
    [Microsoft's published Microsoft 365 endpoint list](https://learn.microsoft.com/microsoft-365/enterprise/urls-and-ip-address-ranges)
    (IDs 70 and 193, *Microsoft 365 Common and Office Online*). Blocking them is
    an unsupported Microsoft 365 configuration, not only an iHub problem.
+
+### Reading the reachability results
+
+Each URL is checked twice, because the two modes ask different questions:
+
+| Badge | What it means | Matters for |
+| --- | --- | --- |
+| **server** | This iHub server can fetch the URL | **Proxy** mode, where the server does the fetching |
+| **browser** | The browser you have the admin page open in can fetch it | **Microsoft CDN** and **Custom** modes, where the Office client fetches it |
+
+Your browser is a stand-in for an Outlook client, not a guarantee: both usually
+sit on the same corporate network, but a desktop Outlook webview can be subject
+to different policy. Treat a **browser** failure as conclusive and a
+**browser** success as strong evidence.
+
+A private-range host is refused by the SSRF guard rather than probed; the result
+says so and names the allowlist to add it to. The check never follows redirects
+and never reads the response body.
+
+The listed CDNs are:
+
+| Entry | Use |
+| --- | --- |
+| Microsoft CDN (current) | The default, and Microsoft's currently documented URL |
+| Microsoft CDN (legacy host) | The pre-unified-domain host; still served, and still valid |
+| China — 21Vianet | Required for tenants on the 21Vianet-operated Office 365 in China |
+| Preview APIs | Preview build. Microsoft states it is not for production use |
 
 **Proxy through this server** is the best fit when the iHub server has outbound
 access — directly or through the corporate proxy configured under *Admin →

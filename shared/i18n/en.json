@@ -1055,12 +1055,26 @@
       "officeJsModeBundled": "Bundled copy (offline)",
       "officeJsModeBundledDesc": "Serve the copy shipped with this release. Needs no network at all, but never receives updates.",
       "officeJsCdnUrlLabel": "Microsoft CDN URL",
-      "officeJsCdnUrlHint": "Must end in /office.js. Use the China (21Vianet) CDN here if your tenant requires it.",
+      "officeJsCdnUrlHint": "Must end in /office.js. Pick a known CDN below, or paste another.",
       "officeJsCustomUrlLabel": "Custom Office.js URL",
       "officeJsCustomUrlHint": "Must end in /office.js — Office.js derives the path to every other file it needs from this URL, and cannot find them without that filename. Point this at a pull-through mirror of the Microsoft CDN.",
       "officeJsResolved": "Currently served to the add-in:",
       "officeJsAppSourceWarning": "Microsoft AppSource requires add-ins to load Office.js from the official CDN. Any other source is supported for internal enterprise deployments only — which is what sideloading or Microsoft 365 admin center deployment does.",
-      "officeJsBundledWarning": "The bundled copy comes from the @microsoft/office-js npm package, which Microsoft no longer maintains. It never updates — including for security fixes — and adds roughly 86 MB to the build. Prefer Proxy or Custom CDN, and use Bundled only where the server has no outbound access at all."
+      "officeJsBundledWarning": "The bundled copy comes from the @microsoft/office-js npm package, which Microsoft no longer maintains. It never updates — including for security fixes — and adds roughly 86 MB to the build. Prefer Proxy or Custom CDN, and use Bundled only where the server has no outbound access at all.",
+      "officeJsKnownCdns": "Known Office.js CDNs",
+      "officeJsKnownCdnsDesc": "Checks each URL from this server and from your browser. The server result is what the Proxy mode needs; the browser result is the closer stand-in for an Outlook client, which loads Office.js itself in the Microsoft CDN and Custom modes.",
+      "officeJsTest": "Test reachability",
+      "officeJsTesting": "Testing…",
+      "officeJsFromServer": "server",
+      "officeJsFromBrowser": "browser",
+      "officeJsPresetUse": "Use",
+      "officeJsPresetInUse": "In use",
+      "officeJsPreset": {
+        "worldwide": "Microsoft CDN (current)",
+        "worldwideLegacy": "Microsoft CDN (legacy host)",
+        "china": "China — 21Vianet",
+        "preview": "Preview APIs (not for production)"
+      }
     },
     "nextcloudEmbed": {
       "title": "Nextcloud Embed",

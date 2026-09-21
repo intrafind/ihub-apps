@@ -52,7 +52,8 @@ import {
   _resetInFlight,
   contentTypeFor,
   getOfficeJsAsset,
-  isSafeOfficeJsAssetPath
+  isSafeOfficeJsAssetPath,
+  probeOfficeJsUrl
 } from '../../../server/services/OfficeJsProxyService.js';
 
 /** A minimal stand-in for the subset of Response the service touches. */
@@ -193,5 +194,68 @@ describe('getOfficeJsAsset', () => {
 
   test('refuses to run without an upstream base URL', async () => {
     await expect(getOfficeJsAsset('office.js', null)).rejects.toThrow(/No upstream/);
+  });
+});
+
+describe('probeOfficeJsUrl', () => {
+  const URL_UNDER_TEST = 'https://cdn.example.com/office/office.js';
+
+  test('reports a 200 as reachable', async () => {
+    mockState.fetchImpl = async () => ({ status: 200, body: { destroy: () => {} } });
+
+    const result = await probeOfficeJsUrl(URL_UNDER_TEST);
+    expect(result).toMatchObject({ url: URL_UNDER_TEST, reachable: true, status: 200 });
+    expect(result.durationMs).toEqual(expect.any(Number));
+  });
+
+  test('reports a 403 as not reachable but still surfaces the status', async () => {
+    mockState.fetchImpl = async () => ({ status: 403, body: { destroy: () => {} } });
+
+    expect(await probeOfficeJsUrl(URL_UNDER_TEST)).toMatchObject({
+      reachable: false,
+      status: 403
+    });
+  });
+
+  test('treats a redirect as not reachable — Office.js would not follow one either', async () => {
+    mockState.fetchImpl = async () => ({ status: 302, body: { destroy: () => {} } });
+    expect((await probeOfficeJsUrl(URL_UNDER_TEST)).reachable).toBe(false);
+  });
+
+  test('returns a result rather than throwing when the host is blocked', async () => {
+    mockState.fetchImpl = async () => {
+      throw new Error('ENOTFOUND cdn.example.com');
+    };
+
+    const result = await probeOfficeJsUrl(URL_UNDER_TEST);
+    expect(result.reachable).toBe(false);
+    expect(result.error).toContain('ENOTFOUND');
+  });
+
+  test('reports a timeout in terms an operator can act on', async () => {
+    mockState.fetchImpl = async () => {
+      const error = new Error('aborted');
+      error.name = 'AbortError';
+      throw error;
+    };
+
+    const result = await probeOfficeJsUrl(URL_UNDER_TEST, { timeoutMs: 50 });
+    expect(result.reachable).toBe(false);
+    expect(result.error).toMatch(/Timed out after 50ms/);
+  });
+
+  test('does not read the response body', async () => {
+    let destroyed = false;
+    mockState.fetchImpl = async () => ({
+      status: 200,
+      body: {
+        destroy: () => {
+          destroyed = true;
+        }
+      }
+    });
+
+    await probeOfficeJsUrl(URL_UNDER_TEST);
+    expect(destroyed).toBe(true);
   });
 });

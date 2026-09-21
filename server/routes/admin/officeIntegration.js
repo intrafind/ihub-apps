@@ -9,10 +9,13 @@ import { sendInternalError, sendBadRequest } from '../../utils/responseHelpers.j
 import { sanitizeOfficeStartPage, validateOfficeStartPage } from '../../utils/officeStartPage.js';
 import {
   DEFAULT_OFFICE_JS_CDN_URL,
+  OFFICE_JS_CDN_PRESETS,
   OFFICE_JS_MODES,
   resolveOfficeJsSource,
   validateOfficeJsUrl
 } from '../../utils/officeJsSource.js';
+import { probeOfficeJsUrl } from '../../services/OfficeJsProxyService.js';
+import { assertSafeHost } from '../../services/mcp/safeFetch.js';
 
 /**
  * Merge updates into the platform configuration and publish them.
@@ -20,6 +23,9 @@ import {
  * @param {Object} updates - Top-level platform keys to overwrite
  * @returns {Promise<Object>} The merged configuration that was written
  */
+/** Enough to probe every known preset in one click, and no more. */
+const MAX_PROBE_URLS = 8;
+
 async function savePlatformConfig(updates) {
   const existing = configCache.getPlatform() || {};
   const merged = { ...existing, ...updates };
@@ -64,6 +70,9 @@ export default function registerAdminOfficeIntegrationRoutes(app) {
         : 'cdn',
       officeJsCdnUrl: officeConfig.officeJsCdnUrl || DEFAULT_OFFICE_JS_CDN_URL,
       officeJsCustomUrl: officeConfig.officeJsCustomUrl || '',
+      // Served rather than hard-coded in the client so the known CDN URLs live
+      // in one place.
+      officeJsCdnPresets: OFFICE_JS_CDN_PRESETS,
       // What the add-in HTML will actually carry, so the admin can see the
       // effective URL without reading the page source.
       officeJsResolvedUrl: resolveOfficeJsSource(platform).scriptUrl,
@@ -380,4 +389,98 @@ export default function registerAdminOfficeIntegrationRoutes(app) {
       return sendInternalError(res, error, 'update Office integration config');
     }
   });
+
+  /**
+   * @swagger
+   * /api/admin/office-integration/office-js/test:
+   *   post:
+   *     summary: Check whether Office.js URLs are reachable from this server
+   *     description: |
+   *       Probes each URL and reports whether this server can fetch it. This is
+   *       the question that matters for the `proxy` mode, where the server does
+   *       the fetching. For the `cdn` and `custom` modes the Office client
+   *       fetches the library itself, so the admin page pairs this with a check
+   *       from the operator's own browser.
+   *
+   *       Redirects are not followed and no response body is returned. An
+   *       unreachable URL is a 200 response with `reachable: false`, not an error.
+   *     tags:
+   *       - Admin - Office Integration
+   *     security:
+   *       - bearerAuth: []
+   *       - sessionAuth: []
+   *     requestBody:
+   *       required: true
+   *       content:
+   *         application/json:
+   *           schema:
+   *             type: object
+   *             properties:
+   *               urls:
+   *                 type: array
+   *                 items:
+   *                   type: string
+   *                 description: Office.js URLs to probe (each must end in /office.js)
+   *     responses:
+   *       200:
+   *         description: One result per URL
+   *       400:
+   *         description: A URL failed validation
+   */
+  app.post(
+    buildServerPath('/api/admin/office-integration/office-js/test'),
+    adminAuth,
+    async (req, res) => {
+      try {
+        const { urls } = req.body || {};
+        const candidates = Array.isArray(urls) ? urls : [urls];
+
+        if (candidates.length === 0 || candidates.length > MAX_PROBE_URLS) {
+          return sendBadRequest(res, `urls must hold between 1 and ${MAX_PROBE_URLS} entries`);
+        }
+
+        // Validated up front so a typo is a 400 naming the field rather than an
+        // "unreachable" result the operator would read as a network problem.
+        const validated = [];
+        for (const candidate of candidates) {
+          const result = validateOfficeJsUrl(candidate);
+          if (result.error) return sendBadRequest(res, `urls: ${result.error}`);
+          validated.push(result.value);
+        }
+
+        const results = await Promise.all(
+          validated.map(async url => {
+            // Same posture as the proxy connectivity test: a target resolving
+            // into a private range is refused unless an admin listed it, so this
+            // endpoint cannot be turned into an internal port scanner. An
+            // internal Office.js mirror is testable once allowlisted.
+            try {
+              await assertSafeHost(new URL(url).hostname, [], true);
+            } catch (guardError) {
+              if (guardError.code === 'SSRF_BLOCKED') {
+                return {
+                  url,
+                  reachable: false,
+                  durationMs: 0,
+                  error: `${guardError.message}. Add the host to ssrf.allowedHosts (Security → SSRF Allowlist) to test against it.`
+                };
+              }
+              // A DNS failure is more useful reported as a probe result below.
+            }
+            return probeOfficeJsUrl(url);
+          })
+        );
+
+        logger.info('Office.js reachability probed', {
+          component: 'AdminOfficeIntegration',
+          count: results.length,
+          reachable: results.filter(r => r.reachable).length
+        });
+
+        res.json({ results });
+      } catch (error) {
+        return sendInternalError(res, error, 'test Office.js URLs');
+      }
+    }
+  );
 }

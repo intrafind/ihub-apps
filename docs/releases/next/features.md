@@ -196,12 +196,20 @@ be served from somewhere the network allows.
 The page shows which URL is actually being served to the add-in, so a misconfiguration is visible
 without opening the task pane source.
 
-Two notes for blocked networks. Microsoft's current CDN host is
-`officeapis.public.onecdn.static.microsoft`, which is **not** under `microsoft.com` — a block
-written as a `microsoft.com` suffix rule does not catch it, and the CDN URL is now an editable
-field. And both that host and the older `appsforoffice.microsoft.com` are `required: true` entries
-in Microsoft's published Microsoft 365 endpoint list, so blocking them is an unsupported Microsoft
-365 configuration rather than only an iHub problem — often the faster route is an allowlist entry.
+The page also lists the CDN URLs Microsoft documents — the current host, the legacy
+`appsforoffice.microsoft.com`, the China (21Vianet) CDN and the preview endpoint — with a **Test
+reachability** button, so finding a host the network allows does not mean editing config and
+waiting for a user to complain. **Use** puts a listed URL into the field.
+
+Each URL is checked twice, because the modes ask different questions: **server** is whether this
+iHub server can fetch it, which is what **Proxy** needs, and **browser** is whether the browser you
+have the admin page open in can, which is the closer stand-in for an Outlook client under
+**Microsoft CDN** and **Custom**. Networks differ in which hosts they allow — a block written as a
+`microsoft.com` suffix rule catches `appsforoffice.microsoft.com` but not
+`officeapis.public.onecdn.static.microsoft` — so switching hosts is sometimes the whole fix. Both
+worldwide hosts are `required: true` entries in Microsoft's published Microsoft 365 endpoint list,
+so blocking them is an unsupported Microsoft 365 configuration rather than only an iHub problem;
+often the faster route is an allowlist entry.
 
 Prefer **Proxy** or **Custom CDN** over **Bundled** where either is possible: the bundled copy
 comes from the `@microsoft/office-js` npm package, which Microsoft no longer maintains, so it never

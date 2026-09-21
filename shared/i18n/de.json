@@ -1325,12 +1325,26 @@
       "officeJsModeBundled": "Mitgelieferte Kopie (offline)",
       "officeJsModeBundledDesc": "Die mit diesem Release ausgelieferte Kopie bereitstellen. Benötigt kein Netzwerk, erhält aber nie Updates.",
       "officeJsCdnUrlLabel": "Microsoft-CDN-URL",
-      "officeJsCdnUrlHint": "Muss auf /office.js enden. Verwenden Sie hier das China-CDN (21Vianet), falls Ihr Tenant dies erfordert.",
+      "officeJsCdnUrlHint": "Muss auf /office.js enden. Wählen Sie unten ein bekanntes CDN oder fügen Sie ein anderes ein.",
       "officeJsCustomUrlLabel": "Eigene Office.js-URL",
       "officeJsCustomUrlHint": "Muss auf /office.js enden – Office.js leitet aus dieser URL den Pfad zu allen weiteren benötigten Dateien ab und findet sie ohne diesen Dateinamen nicht. Verweisen Sie hier auf einen Pull-Through-Spiegel des Microsoft-CDN.",
       "officeJsResolved": "Aktuell an das Add-in ausgeliefert:",
       "officeJsAppSourceWarning": "Microsoft AppSource verlangt, dass Add-ins Office.js vom offiziellen CDN laden. Jede andere Quelle wird nur für interne Unternehmensbereitstellungen unterstützt – also für Sideloading oder die Verteilung über das Microsoft 365 Admin Center.",
-      "officeJsBundledWarning": "Die mitgelieferte Kopie stammt aus dem npm-Paket @microsoft/office-js, das Microsoft nicht mehr pflegt. Sie wird nie aktualisiert – auch nicht für Sicherheitskorrekturen – und vergrößert den Build um rund 86 MB. Bevorzugen Sie Proxy oder eigenes CDN und nutzen Sie Mitgeliefert nur dort, wo der Server überhaupt keinen ausgehenden Zugriff hat."
+      "officeJsBundledWarning": "Die mitgelieferte Kopie stammt aus dem npm-Paket @microsoft/office-js, das Microsoft nicht mehr pflegt. Sie wird nie aktualisiert – auch nicht für Sicherheitskorrekturen – und vergrößert den Build um rund 86 MB. Bevorzugen Sie Proxy oder eigenes CDN und nutzen Sie Mitgeliefert nur dort, wo der Server überhaupt keinen ausgehenden Zugriff hat.",
+      "officeJsKnownCdns": "Bekannte Office.js-CDNs",
+      "officeJsKnownCdnsDesc": "Prüft jede URL von diesem Server und aus Ihrem Browser. Das Serverergebnis zählt für den Proxy-Modus; das Browserergebnis kommt einem Outlook-Client näher, der Office.js in den Modi Microsoft-CDN und Eigenes CDN selbst lädt.",
+      "officeJsTest": "Erreichbarkeit testen",
+      "officeJsTesting": "Test läuft…",
+      "officeJsFromServer": "Server",
+      "officeJsFromBrowser": "Browser",
+      "officeJsPresetUse": "Verwenden",
+      "officeJsPresetInUse": "In Verwendung",
+      "officeJsPreset": {
+        "worldwide": "Microsoft-CDN (aktuell)",
+        "worldwideLegacy": "Microsoft-CDN (alter Host)",
+        "china": "China – 21Vianet",
+        "preview": "Vorschau-APIs (nicht für Produktion)"
+      }
     },
     "nextcloudEmbed": {
       "title": "Nextcloud-Embed",

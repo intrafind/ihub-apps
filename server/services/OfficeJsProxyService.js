@@ -35,6 +35,9 @@ const MAX_ASSET_BYTES = 32 * 1024 * 1024;
 
 const FETCH_TIMEOUT_MS = 30_000;
 
+/** Reachability probes answer an operator waiting on a button, so they are short. */
+const PROBE_TIMEOUT_MS = 8_000;
+
 /**
  * Office.js requests at most two path segments (`en-us/outlook_strings.js`);
  * three leaves headroom without opening the proxy up to arbitrary fetches.
@@ -242,6 +245,62 @@ export async function getOfficeJsAsset(relPath, upstreamBaseUrl, options = {}) {
       return { body: cached.body, contentType, source: 'stale' };
     }
     throw error;
+  }
+}
+
+/**
+ * Probe whether an Office.js URL is reachable **from this server**.
+ *
+ * That qualifier matters: it is the right question for `proxy` mode, where the
+ * server does the fetching, and the wrong one for `cdn` and `custom`, where the
+ * Office client does. The admin UI therefore pairs this with a check from the
+ * operator's own browser and labels both.
+ *
+ * Never throws for an unreachable target — an unreachable URL is a result, not
+ * an error. The response body is not read.
+ *
+ * @param {string} url - A URL that has passed `validateOfficeJsUrl`
+ * @param {Object} [options]
+ * @param {number} [options.timeoutMs]
+ * @returns {Promise<{url: string, reachable: boolean, status?: number, durationMs: number, error?: string}>}
+ */
+export async function probeOfficeJsUrl(url, options = {}) {
+  const timeoutMs =
+    Number.isFinite(options.timeoutMs) && options.timeoutMs > 0
+      ? options.timeoutMs
+      : PROBE_TIMEOUT_MS;
+
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), timeoutMs);
+  const startedAt = Date.now();
+
+  try {
+    // httpFetch is the platform's one outbound path, so the probe is
+    // transported exactly like the traffic it diagnoses — same proxy, same TLS
+    // decision. Redirects are not followed: the question is what *this* URL
+    // does, and Office.js would not follow one to find its base path either.
+    const response = await httpFetch(url, {
+      method: 'GET',
+      redirect: 'manual',
+      signal: controller.signal,
+      headers: { 'user-agent': 'iHub-Apps Office.js reachability test' }
+    });
+    response.body?.destroy?.();
+    return {
+      url,
+      reachable: response.status >= 200 && response.status < 300,
+      status: response.status,
+      durationMs: Date.now() - startedAt
+    };
+  } catch (error) {
+    return {
+      url,
+      reachable: false,
+      durationMs: Date.now() - startedAt,
+      error: error.name === 'AbortError' ? `Timed out after ${timeoutMs}ms` : error.message
+    };
+  } finally {
+    clearTimeout(timer);
   }
 }
 
