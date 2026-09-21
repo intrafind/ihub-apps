@@ -225,6 +225,25 @@ interactive sign-in; **Admin → OAuth → Connections** is the immediate remedy
 Every action is audited: clients discovered, approved, blocked, unblocked, their policy changed,
 and connections revoked in bulk with the client and the count.
 
+## LDAP providers can supply the Windows domain name
+
+**Admin → Authentication → LDAP Providers** gained a **Domain** field for the short (NetBIOS)
+domain name, e.g. `CONTOSO`. It matters for integrations that identify people as `DOMAIN\username`
+rather than by email — iFinder does, through its `domain\username` JWT subject.
+
+NTLM has always had this, because the domain arrives in the protocol handshake. LDAP had no
+equivalent, so that subject form could not work for an LDAP user no matter how it was configured:
+the domain was simply never known, and the identifier went out without it.
+
+Against Active Directory the field can be left empty. iHub then reads the `msDS-PrincipalName`
+attribute of the user signing in, which AD returns in `DOMAIN\sAMAccountName` form, and takes the
+domain from there. A value typed into the field always wins over what the directory reports; a
+disagreement between them is logged. Other directories have no such attribute, so they need the
+field set.
+
+This replaces the workaround of hard-coding the domain into a JWT subject template such as
+`CONTOSO\${user.username}`. Those templates keep working unchanged.
+
 ## Outlook Add-in: choose where Office.js is loaded from
 
 Networks that block Microsoft's CDN stopped the Outlook add-in from starting at all. **Admin →

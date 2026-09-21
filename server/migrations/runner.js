@@ -186,6 +186,18 @@ const RENAMED_MIGRATIONS = [
     oldFile: 'V115__office_js_source_modes.js',
     newVersion: '117',
     newFile: 'V117__office_js_source_modes.js'
+  },
+  // …and then collided a second time: the directory login-name backfill took
+  // V117 while the Office.js branch was still open, so it moved again to V118.
+  // Order matters here. Entries are applied in sequence, so a history still
+  // recorded at 115 is rewritten to 117 by the rule above and then to 118 by
+  // this one. Matching on the file keeps both rules off the two migrations
+  // that legitimately hold 115 and 117.
+  {
+    oldVersion: '117',
+    oldFile: 'V117__office_js_source_modes.js',
+    newVersion: '118',
+    newFile: 'V118__office_js_source_modes.js'
   }
 ];
 

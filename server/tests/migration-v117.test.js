@@ -1,18 +1,16 @@
 #!/usr/bin/env node
 
 /**
- * Migration V117 specs — `useLocalOfficejs` becomes an Office.js source mode.
+ * Migration V117 specs — backfilling directory login names.
  *
- * The boolean chose between Microsoft's CDN and the bundled npm snapshot. The
- * replacement adds two more options (proxy through this server, or a custom
- * CDN), so the migration has one job that matters: carry the existing choice
- * over unchanged. An install that was serving the bundled copy must keep
- * serving it — silently moving it to the CDN would break exactly the
- * air-gapped deployments the flag existed for, and silently moving a CDN
- * install to `bundled` would freeze it on a snapshot.
+ * The old create path wrote the email into `username` for every external user
+ * who had one, and nothing ever wrote it again. This migration recovers the
+ * real login name from the provider block — but only where doing so is
+ * unambiguous, because `username` is a login credential for local accounts and
+ * a uniqueness key for everyone.
  *
- * It also must not overwrite values an admin has already set, because a
- * migration runs on every install, not just a pristine one.
+ * So the specs pin both directions: the records it must fix, and the records it
+ * must leave exactly as they are.
  */
 import fs from 'node:fs/promises';
 import os from 'node:os';
@@ -20,16 +18,14 @@ import path from 'node:path';
 import { after, before, describe, it } from 'node:test';
 import assert from 'node:assert/strict';
 
-import { setDefault, removeKey } from '../migrations/utils.js';
 import {
   up,
   precondition,
   version,
-  description
-} from '../migrations/V117__office_js_source_modes.js';
-
-const DEFAULT_CDN_URL = 'https://officeapis.public.onecdn.static.microsoft/1/office.js';
-const LEGACY_CDN_URL = 'https://appsforoffice.microsoft.com/lib/1/hosted/office.js';
+  description,
+  needsLoginNameBackfill,
+  recoverLoginName
+} from '../migrations/V117__backfill_external_user_login_names.js';
 
 let baseDir;
 
@@ -38,18 +34,12 @@ function makeCtx(dir) {
   const logs = [];
   return {
     logs,
-    setDefault,
-    removeKey,
     fileExists: async rel =>
       fs
         .stat(path.join(dir, rel))
         .then(() => true)
         .catch(() => false),
-    readJson: async rel =>
-      fs
-        .readFile(path.join(dir, rel), 'utf8')
-        .then(JSON.parse)
-        .catch(() => null),
+    readJson: async rel => JSON.parse(await fs.readFile(path.join(dir, rel), 'utf8')),
     writeJson: async (rel, data) => {
       await fs.mkdir(path.dirname(path.join(dir, rel)), { recursive: true });
       await fs.writeFile(path.join(dir, rel), JSON.stringify(data, null, 2), 'utf8');
@@ -59,13 +49,41 @@ function makeCtx(dir) {
   };
 }
 
-/** Write a platform.json into a fresh scratch dir and run the migration on it. */
-async function runWith(platform) {
-  const dir = await fs.mkdtemp(path.join(baseDir, 'case-'));
-  const ctx = makeCtx(dir);
-  await ctx.writeJson('config/platform.json', platform);
-  await up(ctx);
-  return { office: (await ctx.readJson('config/platform.json'))?.officeIntegration, ctx };
+/** Write a scratch contents dir holding these users, and return its ctx. */
+async function seed(users, platform = null) {
+  const dir = await fs.mkdtemp(path.join(baseDir, 'v117-'));
+  await fs.mkdir(path.join(dir, 'config'), { recursive: true });
+  await fs.writeFile(
+    path.join(dir, 'config/users.json'),
+    JSON.stringify({ users }, null, 2),
+    'utf8'
+  );
+  if (platform) {
+    await fs.writeFile(
+      path.join(dir, 'config/platform.json'),
+      JSON.stringify(platform, null, 2),
+      'utf8'
+    );
+  }
+  return { dir, ctx: makeCtx(dir) };
+}
+
+/** Read users.json back from a scratch dir. */
+async function readUsers(dir) {
+  return JSON.parse(await fs.readFile(path.join(dir, 'config/users.json'), 'utf8')).users;
+}
+
+/** The record the old create path produced for an AD user with an email. */
+function ldapUser(overrides = {}) {
+  return {
+    id: 'user_1',
+    username: 'Andreas.Leipold@bmas.bund.de',
+    email: 'Andreas.Leipold@bmas.bund.de',
+    name: 'Leipold, Andreas',
+    authMethods: ['ldap'],
+    ldapData: { subject: 'leipolda', username: 'leipolda', provider: 'corporate-ldap' },
+    ...overrides
+  };
 }
 
 before(async () => {
@@ -76,101 +94,131 @@ after(async () => {
   await fs.rm(baseDir, { recursive: true, force: true });
 });
 
-describe('V117 — Office.js source modes', () => {
-  it('is registered as version 117', () => {
+describe('V117 metadata', () => {
+  it('matches its filename', () => {
     assert.equal(version, '117');
     assert.equal(typeof description, 'string');
   });
 
-  it('only runs where platform.json exists', async () => {
-    const empty = await fs.mkdtemp(path.join(baseDir, 'empty-'));
-    assert.equal(await precondition(makeCtx(empty)), false);
+  it('only runs when users.json exists', async () => {
+    const dir = await fs.mkdtemp(path.join(baseDir, 'empty-'));
+    assert.equal(await precondition(makeCtx(dir)), false);
 
-    const dir = await fs.mkdtemp(path.join(baseDir, 'present-'));
-    const ctx = makeCtx(dir);
-    await ctx.writeJson('config/platform.json', { officeIntegration: {} });
+    const { ctx } = await seed({ user_1: ldapUser() });
     assert.equal(await precondition(ctx), true);
   });
+});
 
-  it('keeps an offline install on the bundled copy', async () => {
-    const { office } = await runWith({ officeIntegration: { useLocalOfficejs: true } });
+describe('V117 recovers the login name', () => {
+  it('replaces an email username with the LDAP login name', async () => {
+    const { dir, ctx } = await seed({ user_1: ldapUser() });
+    await up(ctx);
 
-    assert.equal(office.officeJsMode, 'bundled');
-    assert.equal(office.officeJsCustomUrl, '');
-    assert.ok(!('useLocalOfficejs' in office), 'the replaced flag is removed');
+    const users = await readUsers(dir);
+    assert.equal(users.user_1.username, 'leipolda');
+    // The email itself is untouched — only the login name was wrong.
+    assert.equal(users.user_1.email, 'Andreas.Leipold@bmas.bund.de');
   });
 
-  it('leaves an upgraded install on the CDN host it was already using', async () => {
-    // The add-in HTML hard-coded appsforoffice.microsoft.com before this
-    // change. Moving an upgrade to the newer host would break any customer who
-    // allowlisted that exact FQDN, so only fresh installs get the new default.
-    const { office } = await runWith({ officeIntegration: { useLocalOfficejs: false } });
-    assert.equal(office.officeJsCdnUrl, LEGACY_CDN_URL);
-    assert.notEqual(office.officeJsCdnUrl, DEFAULT_CDN_URL);
+  it('falls back to ldapData.subject when no username was recorded', () => {
+    const user = ldapUser({ ldapData: { subject: 'leipolda', provider: 'corporate-ldap' } });
+    assert.equal(recoverLoginName(user), 'leipolda');
   });
 
-  it('keeps a normal install on the CDN', async () => {
-    const { office } = await runWith({ officeIntegration: { useLocalOfficejs: false } });
-
-    assert.equal(office.officeJsMode, 'cdn');
-    assert.ok(!('useLocalOfficejs' in office));
-  });
-
-  it('treats a missing flag as the CDN', async () => {
-    const { office } = await runWith({ officeIntegration: { enabled: true } });
-    assert.equal(office.officeJsMode, 'cdn');
-  });
-
-  it('leaves the rest of the Office block alone', async () => {
-    const { office } = await runWith({
-      officeIntegration: {
-        enabled: true,
-        oauthClientId: 'abc123',
-        useLocalOfficejs: true,
-        startPage: { defaultPage: 'apps', featuredAppIds: ['chat'] }
+  it('recovers the Windows account name for NTLM users', async () => {
+    const { dir, ctx } = await seed({
+      user_1: {
+        id: 'user_1',
+        username: 'a.leipold@corp.example',
+        email: 'a.leipold@corp.example',
+        authMethods: ['ntlm'],
+        ntlmData: { subject: 'leipolda', domain: 'ROCHUS' }
       }
     });
-
-    assert.equal(office.enabled, true);
-    assert.equal(office.oauthClientId, 'abc123');
-    assert.deepEqual(office.startPage, { defaultPage: 'apps', featuredAppIds: ['chat'] });
-  });
-
-  it('does not overwrite values an admin already set', async () => {
-    const { office } = await runWith({
-      officeIntegration: {
-        useLocalOfficejs: true,
-        officeJsMode: 'proxy',
-        officeJsCdnUrl: LEGACY_CDN_URL,
-        officeJsCustomUrl: 'https://cdn.corp/office/office.js'
-      }
-    });
-
-    assert.equal(office.officeJsMode, 'proxy');
-    assert.equal(office.officeJsCdnUrl, LEGACY_CDN_URL);
-    assert.equal(office.officeJsCustomUrl, 'https://cdn.corp/office/office.js');
-    assert.ok(!('useLocalOfficejs' in office), 'the replaced flag still goes');
-  });
-
-  it('is a no-op when there is no Office block at all', async () => {
-    const { office, ctx } = await runWith({ auth: { mode: 'local' } });
-
-    assert.equal(office, undefined);
-    assert.ok(ctx.logs.some(([, message]) => /nothing to migrate/i.test(message)));
-  });
-
-  it('is idempotent across repeated runs', async () => {
-    const dir = await fs.mkdtemp(path.join(baseDir, 'idem-'));
-    const ctx = makeCtx(dir);
-    await ctx.writeJson('config/platform.json', {
-      officeIntegration: { useLocalOfficejs: true }
-    });
-
     await up(ctx);
-    const first = (await ctx.readJson('config/platform.json')).officeIntegration;
-    await up(ctx);
-    const second = (await ctx.readJson('config/platform.json')).officeIntegration;
 
-    assert.deepEqual(second, first);
+    assert.equal((await readUsers(dir)).user_1.username, 'leipolda');
+  });
+});
+
+describe('V117 leaves everything else alone', () => {
+  it('skips records whose username is already a login name', async () => {
+    const { dir, ctx } = await seed({ user_1: ldapUser({ username: 'leipolda' }) });
+    await up(ctx);
+
+    assert.equal((await readUsers(dir)).user_1.username, 'leipolda');
+    assert.ok(ctx.logs.some(([, m]) => m.includes('nothing to backfill')));
+  });
+
+  it('skips accounts that also authenticate locally', async () => {
+    // `username` is a credential the user types there; rewriting it would
+    // change how they sign in.
+    const { dir, ctx } = await seed({
+      user_1: ldapUser({ authMethods: ['ldap', 'local'] })
+    });
+    await up(ctx);
+
+    assert.equal((await readUsers(dir)).user_1.username, 'Andreas.Leipold@bmas.bund.de');
+  });
+
+  it('skips providers that carry no login name', async () => {
+    const proxyUser = {
+      id: 'user_1',
+      username: 'someone@corp.example',
+      email: 'someone@corp.example',
+      authMethods: ['proxy'],
+      proxyData: { subject: 'someone@corp.example', provider: 'proxy' }
+    };
+    assert.equal(needsLoginNameBackfill(proxyUser), false);
+
+    const { dir, ctx } = await seed({ user_1: proxyUser });
+    await up(ctx);
+    assert.equal((await readUsers(dir)).user_1.username, 'someone@corp.example');
+  });
+
+  it('does not rewrite one user onto a login name another already holds', async () => {
+    const { dir, ctx } = await seed({
+      user_1: ldapUser(),
+      user_2: { id: 'user_2', username: 'leipolda', authMethods: ['local'] }
+    });
+    await up(ctx);
+
+    const users = await readUsers(dir);
+    assert.equal(users.user_1.username, 'Andreas.Leipold@bmas.bund.de');
+    assert.equal(users.user_2.username, 'leipolda');
+    assert.ok(ctx.logs.some(([level, m]) => level === 'warn' && m.includes('duplicate')));
+  });
+
+  it('does not treat an email subject as a recovered login name', () => {
+    const user = ldapUser({
+      ldapData: { subject: 'Andreas.Leipold@bmas.bund.de', provider: 'corporate-ldap' }
+    });
+    assert.equal(recoverLoginName(user), null);
+    assert.equal(needsLoginNameBackfill(user), false);
+  });
+});
+
+describe('V117 honours a relocated users file', () => {
+  it('refuses a path outside the contents directory instead of writing nothing quietly', async () => {
+    const { dir, ctx } = await seed(
+      { user_1: ldapUser() },
+      { localAuth: { usersFile: '/srv/ihub-state/users.json' } }
+    );
+    await up(ctx);
+
+    assert.equal((await readUsers(dir)).user_1.username, 'Andreas.Leipold@bmas.bund.de');
+    assert.ok(
+      ctx.logs.some(([level, m]) => level === 'warn' && m.includes('outside the contents'))
+    );
+  });
+
+  it('strips the contents/ prefix the setting is written with', async () => {
+    const { dir, ctx } = await seed(
+      { user_1: ldapUser() },
+      { localAuth: { usersFile: 'contents/config/users.json' } }
+    );
+    await up(ctx);
+
+    assert.equal((await readUsers(dir)).user_1.username, 'leipolda');
   });
 });
