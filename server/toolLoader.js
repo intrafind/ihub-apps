@@ -7,6 +7,7 @@ import { isFeatureEnabled } from './featureRegistry.js';
 import { isValidId } from './utils/pathSecurity.js';
 import mcpClientManager from './services/mcp/McpClientManager.js';
 import { isBraveSearchConfigured } from './services/search/braveApiKey.js';
+import { isStaanSearchConfigured } from './services/search/staanApiKey.js';
 import logger from './utils/logger.js';
 import { getLocalizedString } from './utils/localize.js';
 
@@ -243,32 +244,41 @@ export const NATIVE_WEB_SEARCH_FALLBACK_TOOL_ID = 'braveSearch';
 /** Script-backed search tool for each `websearch.provider` value. */
 export const WEBSEARCH_TOOL_IDS = Object.freeze({
   brave: 'braveSearch',
+  staan: 'staanSearch',
   qwant: 'qwantSearch'
 });
 
 /**
  * Resolve an app's `websearch.provider` onto the script-backed tool to offer.
  *
- * `"auto"` prefers Brave when it has an API key and otherwise falls back to
- * Qwant, which needs none — so an install with no search subscription gets
- * working web search instead of a tool that fails on every call. A named
- * provider is honoured as configured, even when unconfigured, so the resulting
- * error names the provider the admin actually chose.
+ * `"auto"` walks the keyed engines in registration order — Brave, then Staan —
+ * and falls back to Qwant, which needs no key at all. So an install with a
+ * search subscription keeps using it, an install with only a Staan key gets
+ * Staan, and an install with neither still gets working web search instead of a
+ * tool that fails on every call. Brave stays ahead of Staan deliberately: it
+ * was what `"auto"` already picked, and an install that has both keys should
+ * not change engine on upgrade.
+ *
+ * A named provider is honoured as configured, even when unconfigured, so the
+ * resulting error names the provider the admin actually chose.
  *
  * @param {string} [provider='auto'] - Value of `app.websearch.provider`
  * @param {Object} [deps]
- * @param {() => boolean} [deps.braveConfigured] - Injected by tests so both
- *   branches of `"auto"` can be exercised without a live provider config.
- * @returns {string} Tool id (`braveSearch` | `qwantSearch`)
+ * @param {() => boolean} [deps.braveConfigured] - Injected by tests so every
+ *   branch of `"auto"` can be exercised without a live provider config.
+ * @param {() => boolean} [deps.staanConfigured] - Likewise for Staan.
+ * @returns {string} Tool id (`braveSearch` | `staanSearch` | `qwantSearch`)
  */
 export function resolveWebsearchToolId(
   provider = 'auto',
-  { braveConfigured = isBraveSearchConfigured } = {}
+  { braveConfigured = isBraveSearchConfigured, staanConfigured = isStaanSearchConfigured } = {}
 ) {
   if (provider && provider !== 'auto') {
     return WEBSEARCH_TOOL_IDS[provider] || NATIVE_WEB_SEARCH_FALLBACK_TOOL_ID;
   }
-  return braveConfigured() ? WEBSEARCH_TOOL_IDS.brave : WEBSEARCH_TOOL_IDS.qwant;
+  if (braveConfigured()) return WEBSEARCH_TOOL_IDS.brave;
+  if (staanConfigured()) return WEBSEARCH_TOOL_IDS.staan;
+  return WEBSEARCH_TOOL_IDS.qwant;
 }
 
 function normalizeMaxUses(value) {
@@ -337,7 +347,7 @@ export function resolveAppNativeWebSearch(app, modelProvider, websearchEnabled, 
  * what the chosen tool accepts instead of being written through verbatim and
  * failing schema validation at call time.
  *
- * @param {Object} toolDef - Search tool definition (braveSearch, qwantSearch)
+ * @param {Object} toolDef - Search tool definition (braveSearch, staanSearch, qwantSearch)
  * @param {Object} [websearch] - app.websearch config
  * @returns {Object} tool definition ready to offer to the model
  */

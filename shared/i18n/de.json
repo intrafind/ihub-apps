@@ -1879,7 +1879,8 @@
       "telemetry": "Telemetrie",
       "voiceInput": "Spracheingabe",
       "changelog": "Neuigkeiten",
-      "feedback": "Feedback"
+      "feedback": "Feedback",
+      "localization": "Lokalisierung"
     },
     "mcp": {
       "common": {
@@ -2155,8 +2156,9 @@
         "websearchProvider": "Anbieter",
         "websearchProviderAuto": "Automatisch",
         "websearchProviderBrave": "Brave",
+        "websearchProviderStaan": "Staan",
         "websearchProviderQwant": "Qwant (ohne API-Schlüssel)",
-        "websearchProviderDesc": "Suchmaschine, die verwendet wird, wenn das Modell keine native Suche hat. Automatisch nutzt Brave, sofern ein Brave-API-Schlüssel konfiguriert ist, sonst Qwant; Qwant benötigt keinen API-Schlüssel.",
+        "websearchProviderDesc": "Suchmaschine, die verwendet wird, wenn das Modell keine native Suche hat. Automatisch nutzt Brave, sofern ein Brave-API-Schlüssel konfiguriert ist, dann Staan, sofern dafür ein Schlüssel vorliegt, sonst Qwant. Brave und Staan benötigen einen API-Schlüssel; Qwant benötigt keinen, wird aber auf vielen Cloud-Hosts blockiert.",
         "websearchUseNative": "Native Suche verwenden",
         "websearchUseNativeDesc": "Die integrierte Suche des Modells verwenden, wenn verfügbar (z. B. Google, OpenAI, Anthropic)",
         "websearchMaxResults": "Max. Ergebnisse",
@@ -2626,6 +2628,22 @@
     },
     "usage": {
       "reviewFeedback": "Feedback ansehen"
+    },
+    "localization": {
+      "title": "Lokalisierung",
+      "subtitle": "Die Sprache, auf die diese Installation zurückfällt, wenn keine andere Sprache greift.",
+      "defaultLanguage": "Standardsprache",
+      "defaultLanguageDesc": "Wird für Benutzer verwendet, die keine Sprache gewählt haben, und überall dort, wo überhaupt keine Anfragesprache vorliegt.",
+      "whereItApplies": "Wo dies gilt",
+      "appliesUi": "Die Oberflächensprache für Benutzer, die selbst keine gewählt haben.",
+      "appliesSearch": "Die Sprache, in der die Websuche läuft, wenn eine Anfrage keine eigene mitbringt — insbesondere Workflow- und Agentenläufe, hinter denen kein Browser steht.",
+      "appliesFallback": "Der Rückfall für Texte, die in der angeforderten Sprache keine Übersetzung haben.",
+      "save": "Speichern",
+      "saving": "Wird gespeichert...",
+      "saveSuccess": "Standardsprache gespeichert",
+      "saveError": "Standardsprache konnte nicht gespeichert werden",
+      "loadError": "Plattformkonfiguration konnte nicht geladen werden",
+      "noTranslations": "keine Übersetzungen"
     }
   },
   "cloudStorage": {

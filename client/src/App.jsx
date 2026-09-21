@@ -113,6 +113,9 @@ const AdminGroupEditPage = lazyWithRetry(() => import('./features/admin/pages/Ad
 const AdminUICustomization = lazyWithRetry(
   () => import('./features/admin/pages/AdminUICustomization')
 );
+const AdminLocalizationPage = lazyWithRetry(
+  () => import('./features/admin/pages/AdminLocalizationPage')
+);
 const AdminLoggingPage = lazyWithRetry(() => import('./features/admin/pages/AdminLoggingPage'));
 const AdminVoiceInputPage = lazyWithRetry(
   () => import('./features/admin/pages/AdminVoiceInputPage')
@@ -691,6 +694,12 @@ function App() {
             {/* Customization */}
             {showAdminPage('ui') && (
               <Route path="ui" element={<LazyAdminRoute component={AdminUICustomization} />} />
+            )}
+            {showAdminPage('ui') && (
+              <Route
+                path="localization"
+                element={<LazyAdminRoute component={AdminLocalizationPage} />}
+              />
             )}
             {showAdminPage('pages') && (
               <Route path="pages" element={<LazyAdminRoute component={AdminPagesPage} />} />
