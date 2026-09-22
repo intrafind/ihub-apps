@@ -74,6 +74,84 @@ export function appendWebSearchDisabledNotice(llmMessages, app, websearchEnabled
 }
 
 /**
+ * Default research guidance appended to the system prompt when web search is
+ * on for the turn. The loop allows several tool rounds per turn, but models do
+ * the minimum they are asked for: without this, a web search chat typically
+ * runs one search and answers. Admins can replace or turn it off per app via
+ * `websearch.researchGuidance`.
+ */
+export const DEFAULT_WEB_SEARCH_RESEARCH_GUIDANCE =
+  'Web search research: web search is available for this conversation, and you can search ' +
+  'several times before answering. When a question needs current or external information:\n' +
+  '- Break the question into its sub-questions.\n' +
+  '- Run several searches with different wording (and in another language where that ' +
+  'helps), not just one.\n' +
+  '- When results are thin or disagree, search again with more precise terms before ' +
+  'answering.\n' +
+  '- When the search excerpts are not enough, open the most relevant pages and read them ' +
+  'in full.\n' +
+  '- Check key claims against more than one source.\n' +
+  '- Combine the findings into one answer and cite the sources with their URLs.\n' +
+  '- Stop searching once the question is answered, and do not search for things you ' +
+  'already know reliably.';
+
+/**
+ * Resolve the research guidance text configured for an app.
+ * `websearch.researchGuidance` is `true`/unset (default text), `false` (off) or a
+ * custom string (replaces the default; blank falls back to the default).
+ *
+ * @param {Object} app - App configuration
+ * @returns {string|null} guidance text, or null when turned off
+ */
+export function resolveWebSearchResearchGuidance(app) {
+  const setting = app?.websearch?.researchGuidance;
+  if (setting === false) return null;
+  if (typeof setting === 'string' && setting.trim()) return setting.trim();
+  return DEFAULT_WEB_SEARCH_RESEARCH_GUIDANCE;
+}
+
+/**
+ * Positive counterpart of {@link appendWebSearchDisabledNotice}: when web search
+ * is on for this turn, append guidance telling the model to research in several
+ * steps (several searches, then combine) instead of answering after one search.
+ * No-op when web search is off for the turn, when the app has no web search
+ * configured, when the app turned the guidance off, when there is no system
+ * message to amend, or when the guidance is already there.
+ *
+ * With Google native search the adapter drops all function tools, so the
+ * guidance only steers Gemini's own grounding there.
+ *
+ * @param {Array} llmMessages - Prepared messages (mutated in place)
+ * @param {Object} app - App configuration
+ * @param {boolean|undefined} websearchEnabled - User toggle: undefined = use app default
+ * @returns {boolean} true when guidance was appended
+ */
+export function appendWebSearchResearchGuidance(llmMessages, app, websearchEnabled) {
+  if (!app?.websearch?.enabled) return false;
+
+  const enabledByDefault = app.websearch.enabledByDefault ?? false;
+  const effectiveEnabled = websearchEnabled !== undefined ? websearchEnabled : enabledByDefault;
+  if (!effectiveEnabled) return false;
+
+  const guidance = resolveWebSearchResearchGuidance(app);
+  if (!guidance) return false;
+
+  const systemMessage = llmMessages.find(m => m.role === 'system');
+  if (!systemMessage || typeof systemMessage.content !== 'string') return false;
+
+  if (systemMessage.content.includes(guidance)) return false;
+
+  systemMessage.content = systemMessage.content
+    ? `${systemMessage.content}\n\n${guidance}`
+    : guidance;
+  logger.info('Appended web search research guidance to system prompt', {
+    component: 'RequestBuilder',
+    appId: app.id
+  });
+  return true;
+}
+
+/**
  * Filter models based on app requirements
  * @param {Array} models - All available models
  * @param {Object} app - App configuration
@@ -440,6 +518,9 @@ class RequestBuilder {
       // that web search is unavailable removes the contradiction so the model
       // answers directly instead of attempting a phantom tool call.
       appendWebSearchDisabledNotice(llmMessages, app, websearchEnabled);
+      // The positive counterpart: with web search on, tell the model to research
+      // in several steps so the loop's room for several tool rounds is used.
+      appendWebSearchResearchGuidance(llmMessages, app, websearchEnabled);
 
       // Build imageConfig if image generation is supported and parameters are provided
       // Pass raw user parameters to adapter for provider-specific translation

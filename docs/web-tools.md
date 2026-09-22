@@ -67,6 +67,7 @@ Add a `websearch` object to your app configuration:
 | `contentMaxLength` | Number | `3000` | Maximum extracted content length per page (500-50,000 characters) |
 | `enabledByDefault` | Boolean | `false` | Whether web search is active by default (users can toggle it in the chat) |
 | `maxSearches` | Number | `5` | Cap on provider-run searches per model call when native search is used (sent to Anthropic as `max_uses`; 1-50). Anthropic bills each search separately |
+| `researchGuidance` | Boolean or String | `true` | Guidance added to the system prompt when web search is on, telling the model to research in several steps. `true` uses the built-in text, `false` turns it off, a string replaces the built-in text. See [Multi-Step Research](#multi-step-research) |
 
 ### How Provider Resolution Works
 
@@ -128,6 +129,53 @@ Web search settings can be configured through the admin panel:
 ### User Toggle
 
 When web search is enabled for an app, users see a toggle in the chat input area to enable/disable web search per conversation. The `enabledByDefault` setting controls whether this toggle starts in the on or off state.
+
+### Multi-Step Research
+
+A chat turn allows up to 25 tool rounds, so the model can search several times and read the most
+relevant pages before it answers.
+Models tend to do only what they are asked, though, so when web search is on for a turn the server
+adds a short research instruction to the end of the system prompt:
+
+- break the question into its sub-questions;
+- run several searches with different wording (and in another language where that helps);
+- search again with more precise terms when results are thin or disagree;
+- open the most relevant pages and read them in full when the search excerpts are not enough
+  (with script-backed search through the page reader, `webContentExtractor`);
+- check key claims against more than one source;
+- combine the findings into one answer with the source URLs;
+- stop once the question is answered, without searching for things the model already knows.
+
+It is only added when web search is actually on for the turn (the user toggle, or
+`enabledByDefault` when the user did not touch it). With web search off, the "web search is
+turned off" notice is added instead, never both. The instruction is added once per turn and
+only when the app has a system prompt.
+
+Per app, `websearch.researchGuidance` controls it — in the admin UI under **Web Search →
+Research in Several Steps**:
+
+```json
+"websearch": {
+  "enabled": true,
+  "researchGuidance": "Search at least twice, in English and German, and cite every source."
+}
+```
+
+`true` (or leaving it out) uses the built-in text, `false` turns it off, and a string
+replaces the built-in text (up to 4,000 characters).
+
+How much the model can act on it depends on the search path:
+
+- **Script-backed search (Brave, Staan, Qwant)**: each search is a tool call, so several searches
+  show up as several tool calls in the turn.
+- **OpenAI and Anthropic native search**: the provider runs the searches; the model can search
+  several times per model call (Anthropic up to `maxSearches`).
+- **Google native search**: the adapter sends Google Search grounding without any function
+  tools, so the guidance only steers how Gemini uses its own grounding.
+
+The default **Web Chat** app's prompt was reworded to match. Migration V124 updates an existing
+`contents/apps/web-chat.json` only in the languages whose prompt is still exactly the old shipped
+default; a prompt an admin changed is left as is (the added guidance applies to it anyway).
 
 ### Migration from Legacy Tool Configuration
 

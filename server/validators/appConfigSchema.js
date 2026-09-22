@@ -61,7 +61,11 @@ const websearchSchema = z
     contentMaxLength: z.number().int().min(500).max(50000).optional().prefault(3000),
     enabledByDefault: z.boolean().optional().prefault(false),
     // Cap on provider-run searches per model call (Anthropic web search `max_uses`).
-    maxSearches: z.number().int().min(1).max(50).optional().prefault(5)
+    maxSearches: z.number().int().min(1).max(50).optional().prefault(5),
+    // Guidance appended to the system prompt when web search is on, telling the
+    // model to research in several steps. true/unset = built-in text, false = off,
+    // string = custom text replacing the built-in one.
+    researchGuidance: z.union([z.boolean(), z.string().max(4000)]).optional()
   })
   .optional();
 
