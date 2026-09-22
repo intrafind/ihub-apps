@@ -1,7 +1,6 @@
 import { useEffect, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { useAuth } from '../../../shared/contexts/AuthContext';
-import { usePlatformConfig } from '../../../shared/contexts/PlatformConfigContext';
 import LoadingSpinner from '../../../shared/components/LoadingSpinner';
 import { buildApiUrl } from '../../../utils/runtimeBasePath';
 
@@ -39,7 +38,6 @@ const StandaloneWrapper = ({ children }) => (
 export default function LoginForm({ onSuccess, onCancel, embedded = false }) {
   const { t } = useTranslation();
   const { loginLocal, loginLdap, loginWithOidc, isLoading, error, authConfig } = useAuth();
-  const { platformConfig } = usePlatformConfig();
   const initialRememberedUsername = getRememberedUsername();
   const [formData, setFormData] = useState({
     username: initialRememberedUsername,
@@ -133,7 +131,7 @@ export default function LoginForm({ onSuccess, onCancel, embedded = false }) {
 
   // Show username/password form if either local or LDAP auth is enabled
   const hasUsernamePasswordAuth = hasLocalAuth || hasLdapAuth;
-  const showDemoAccounts = platformConfig?.localAuth?.showDemoAccounts === true;
+  const showDemoAccounts = authConfig?.authMethods?.local?.showDemoAccounts === true;
 
   // Determine if we should show method selection (both local and LDAP enabled)
   const showAuthMethodSelection = hasLocalAuth && hasLdapAuth && !selectedAuthMethod;

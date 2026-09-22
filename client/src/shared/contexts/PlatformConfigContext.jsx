@@ -83,8 +83,6 @@ export function PlatformConfigProvider({ children }) {
           : platformCfg.features || {},
 
         // Additional auth status fields
-        authenticated: authStatus.authenticated,
-        user: authStatus.user,
         autoRedirect: authStatus.autoRedirect,
 
         // Setup wizard state
