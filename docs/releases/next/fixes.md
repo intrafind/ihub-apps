@@ -315,3 +315,14 @@ Summarizing an email that has attachments labelled the answer "Based on external
 ("Basierend auf externem Wissen"), although everything came from the user's own mailbox. Email
 plus its attachments now shows **Based on email and attachments**, and answers that really combine
 several sources say **Based on multiple sources** instead of "external knowledge".
+
+## Chat Export: No Empty "Settings" Section in Word, Text and PowerPoint
+
+Chat exports to Word, plain text and PowerPoint ended with a "Settings" heading that had nothing
+under it. The section now only appears when there is a model, temperature, style or output format
+to list.
+
+- CSV exports now include a UTF-8 byte order mark and Windows line endings, so Excel opens them
+  with the correct encoding (umlauts, special characters).
+- CSV, Word and text downloads use a more robust download method for embedded hosts such as the
+  Outlook add-in and the browser extension side panel.
