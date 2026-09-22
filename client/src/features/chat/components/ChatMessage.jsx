@@ -1054,22 +1054,22 @@ function ChatMessage({
               <Icon name="chevron-down" size="sm" />
             </button>
             {showCopyMenu && (
-              <div className="absolute right-0 mt-1 bg-white border border-gray-200 rounded-sm shadow-sm z-10 text-gray-700">
+              <div className="absolute right-0 mt-1 w-40 max-w-[calc(100vw-2rem)] bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-sm shadow-sm z-50 text-gray-700 dark:text-gray-200">
                 <button
                   onClick={() => handleCopy('text')}
-                  className="block px-3 py-1 text-sm hover:bg-gray-100 w-full text-left whitespace-nowrap"
+                  className="block px-3 py-1 text-sm hover:bg-gray-100 dark:hover:bg-gray-700 w-full text-left whitespace-nowrap"
                 >
                   {t('canvas.export.copyText', 'as Text')}
                 </button>
                 <button
                   onClick={() => handleCopy('markdown')}
-                  className="block px-3 py-1 text-sm hover:bg-gray-100 w-full text-left whitespace-nowrap"
+                  className="block px-3 py-1 text-sm hover:bg-gray-100 dark:hover:bg-gray-700 w-full text-left whitespace-nowrap"
                 >
                   {t('canvas.export.copyMarkdown', 'as Markdown')}
                 </button>
                 <button
                   onClick={() => handleCopy('html')}
-                  className="block px-3 py-1 text-sm hover:bg-gray-100 w-full text-left whitespace-nowrap"
+                  className="block px-3 py-1 text-sm hover:bg-gray-100 dark:hover:bg-gray-700 w-full text-left whitespace-nowrap"
                 >
                   {t('canvas.export.copyHTML', 'as HTML')}
                 </button>

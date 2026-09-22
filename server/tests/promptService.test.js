@@ -234,6 +234,117 @@ async function testStringPromptTemplate() {
   logger.info('✓ String prompt template test passed');
 }
 
+// Test 7: Variable key with regex metacharacters should not throw and should substitute correctly
+async function testVariableKeyWithRegexMetacharacters() {
+  const messages = [
+    {
+      role: 'user',
+      content: '',
+      promptTemplate: { en: 'Value: {{foo(bar)}}' },
+      variables: { 'foo(bar)': 'baz' }
+    }
+  ];
+
+  const app = {
+    system: { en: 'You are a helpful assistant' }
+  };
+
+  const result = await PromptService.processMessageTemplates(
+    messages,
+    app,
+    null,
+    null,
+    'en',
+    null,
+    null,
+    null,
+    null
+  );
+
+  assert.strictEqual(result.length, 2, 'Should have 2 messages');
+  assert.strictEqual(
+    result[1].content,
+    'Value: baz',
+    'Variable key with regex metacharacters should substitute without throwing'
+  );
+
+  logger.info('✓ Variable key with regex metacharacters test passed');
+}
+
+// Test 8: Content with $-patterns should be substituted literally, not interpreted
+async function testContentWithDollarPatterns() {
+  const messages = [
+    {
+      role: 'user',
+      content: "Price is $& and $1 and $` and $'",
+      promptTemplate: { en: 'Echo: {{content}}' },
+      variables: {}
+    }
+  ];
+
+  const app = {
+    system: { en: 'You are a helpful assistant' }
+  };
+
+  const result = await PromptService.processMessageTemplates(
+    messages,
+    app,
+    null,
+    null,
+    'en',
+    null,
+    null,
+    null,
+    null
+  );
+
+  assert.strictEqual(result.length, 2, 'Should have 2 messages');
+  assert.strictEqual(
+    result[1].content,
+    "Echo: Price is $& and $1 and $` and $'",
+    '$-patterns in content should be preserved literally, not treated as replacement patterns'
+  );
+
+  logger.info('✓ Content with $-patterns test passed');
+}
+
+// Test 9: System prompt variable substitution should not interpret $-patterns in the value,
+// and a client-supplied variable key with regex metacharacters must not throw
+async function testSystemPromptWithDollarPatternAndMetacharacterKey() {
+  const messages = [
+    {
+      role: 'user',
+      content: 'Hi',
+      variables: { location: '$100 & change', 'weird(key)': 'still works' }
+    }
+  ];
+
+  const app = {
+    system: { en: 'Location: {{location}} / Weird: {{weird(key)}}' }
+  };
+
+  const result = await PromptService.processMessageTemplates(
+    messages,
+    app,
+    null,
+    null,
+    'en',
+    null,
+    null,
+    null,
+    null
+  );
+
+  const systemMessage = result.find(msg => msg.role === 'system');
+  assert.strictEqual(
+    systemMessage.content,
+    'Location: $100 & change / Weird: still works',
+    'System prompt should substitute $-pattern values literally and not throw on metacharacter keys'
+  );
+
+  logger.info('✓ System prompt with $-pattern value and metacharacter key test passed');
+}
+
 // Run all tests
 async function runTests() {
   try {
@@ -243,6 +354,9 @@ async function runTests() {
     await testPromptTemplateWithVariablesAndContent();
     await testEmptyContentWithVariables();
     await testStringPromptTemplate();
+    await testVariableKeyWithRegexMetacharacters();
+    await testContentWithDollarPatterns();
+    await testSystemPromptWithDollarPatternAndMetacharacterKey();
 
     logger.info('\n✅ All PromptService tests passed!');
   } catch (error) {
