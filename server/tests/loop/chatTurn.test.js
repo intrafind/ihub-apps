@@ -519,20 +519,45 @@ test('no tools: a message carrying fileData/imageData ends with run/ended.knowle
 
 test('no tools: the Office email marker yields knowledgeSources ["email"]; email + upload yields both', async t => {
   const email = await sourcesEmittedFor(t, 'email', [
-    { role: 'user', content: '--- Current email ---\nFrom: a@b.c\n\nSummarize this email' }
+    {
+      role: 'user',
+      content:
+        '<current_email>\nFrom: a@b.c\n</current_email>\n\n<user_instruction>\nSummarize this email\n</user_instruction>'
+    }
   ]);
   assert.deepEqual(email.ended.knowledgeSources, ['email']);
 
   const both = await sourcesEmittedFor(t, 'email-file', [
     {
       role: 'user',
-      content: '--- Current email ---\nFrom: a@b.c\n\nCheck the attachment',
+      content:
+        '<current_email>\nFrom: a@b.c\n</current_email>\n\n<user_instruction>\nCheck the attachment\n</user_instruction>',
       fileData: { fileName: 'deck.pdf', fileType: 'application/pdf', content: 'slides' }
     }
   ]);
   assert.deepEqual([...both.ended.knowledgeSources].sort(), ['email', 'file']);
   assert.deepEqual([...both.completed.sources].sort(), ['email', 'file']);
   assert.deepEqual([...both.summary.knowledgeSources].sort(), ['email', 'file']);
+});
+
+test('no tools: the Office pinned-emails and current-meeting tags each yield knowledgeSources ["email"]', async t => {
+  const pinned = await sourcesEmittedFor(t, 'pinned-emails', [
+    {
+      role: 'user',
+      content:
+        '<pinned_emails>\n<email index="1">\nFrom: a@b.c\n</email>\n</pinned_emails>\n\n<user_instruction>\nSummarize these\n</user_instruction>'
+    }
+  ]);
+  assert.deepEqual(pinned.ended.knowledgeSources, ['email']);
+
+  const meeting = await sourcesEmittedFor(t, 'meeting', [
+    {
+      role: 'user',
+      content:
+        '<current_meeting>\nSubject: Sync\n</current_meeting>\n\n<user_instruction>\nDraft an agenda\n</user_instruction>'
+    }
+  ]);
+  assert.deepEqual(meeting.ended.knowledgeSources, ['email']);
 });
 
 // ── 4. tool round ───────────────────────────────────────────────────────────
