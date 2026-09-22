@@ -163,3 +163,28 @@ not enable `ifinder_search` for itself, only the model could.
 
 They are declared now and work as documented. If an app already carries any of them, check it: they
 now actually apply.
+
+## Multi-worker mode no longer duplicates startup jobs, and a halted migration now actually halts
+
+Under the default clustered setup (`WORKERS=4`), every worker independently ran the hourly usage
+rollup, the daily audit-log cleanup, and an eager connection pass to configured MCP servers on
+startup — so those jobs wrote the same rollup and audit-log files on independent timers, and MCP
+servers saw several times the expected number of connections. Only one worker now runs these
+startup jobs; the rest keep serving requests normally and still connect to MCP tools on first use.
+
+Two related startup fixes:
+
+- The configuration-migration lock is now created atomically instead of checked-then-written,
+  closing a narrow window where two server processes starting at the same instant could both
+  believe they had acquired it and migrate concurrently.
+- A migration failure while `migrations.onFailure` is `"halt"` (the default) used to be logged as
+  an error but the server started anyway; it now stops the server from starting instead of serving
+  requests against configuration a migration never finished updating.
+
+A related request-time fix: opening a short link (`/s/:code`) right after it was created could
+answer "Not found" if the redirect landed on a different worker than the one that created it —
+each worker cached usage.json/shortlinks.json in memory from when it started and never looked at
+the file again. A worker now re-reads the file the moment it is asked for a code it does not
+recognise, so a link works on every worker as soon as it exists. The admin usage endpoint
+(`/api/admin/usage`) is similarly refreshed on every request instead of showing whichever worker's
+stale in-memory snapshot happened to answer.

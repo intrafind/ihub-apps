@@ -155,6 +155,56 @@ describe('onBeforeSave', () => {
   });
 });
 
+describe('reload', () => {
+  it('picks up a change written externally (e.g. by another worker) when not dirty', async () => {
+    const store = makeStore();
+    expect(await store.load()).toEqual({ count: 0 });
+
+    // Simulate a sibling process flushing its own copy to the same file.
+    fileContents = JSON.stringify({ count: 5 });
+
+    // Without a reload, load() would keep returning the stale cached object.
+    expect(await store.load()).toEqual({ count: 0 });
+    expect(await store.reload()).toEqual({ count: 5 });
+    expect(await store.load()).toEqual({ count: 5 });
+    store.stop();
+  });
+
+  it('flushes local dirty data first, so an unflushed local write is not lost', async () => {
+    const store = makeStore();
+    const data = await store.load();
+    data.count = 1;
+    store.markDirty();
+
+    expect(writeCount).toBe(0);
+    await store.reload();
+
+    // The local write reached disk before the reload read it back.
+    expect(writeCount).toBe(1);
+    expect(await store.load()).toEqual({ count: 1 });
+    store.stop();
+  });
+
+  it('keeps the last-known-good data if the file is unreadable when data was already loaded', async () => {
+    // A missing/unreadable file on reload is more likely a transient hiccup
+    // (e.g. racing another worker's atomic rename) than a real reset signal,
+    // so reload() does not discard perfectly good in-memory data over it.
+    const store = makeStore();
+    fileContents = JSON.stringify({ count: 5 });
+    await store.load();
+
+    fileContents = null;
+    expect(await store.reload()).toEqual({ count: 5 });
+    store.stop();
+  });
+
+  it('falls back to the default shape if the file has never loaded successfully', async () => {
+    const store = makeStore();
+    expect(await store.reload()).toEqual({ count: 0 });
+    store.stop();
+  });
+});
+
 describe('replace', () => {
   it('wholesale-swaps the in-memory data and marks it dirty', async () => {
     const store = makeStore();

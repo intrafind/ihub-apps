@@ -18,7 +18,9 @@ import {
   scanMigrationFiles,
   loadHistory,
   computeChecksum,
-  reconcileRenamedMigrations
+  reconcileRenamedMigrations,
+  acquireLock,
+  releaseLock
 } from '../migrations/runner.js';
 import fs from 'fs/promises';
 import path from 'path';
@@ -320,6 +322,55 @@ describe('Migration Runner', () => {
       await fs.writeFile(path.join(tmpDir, 'V002__second.js'), 'export const version = "002";');
 
       await expect(scanMigrationFiles(tmpDir)).resolves.toHaveLength(2);
+    });
+  });
+
+  describe('acquireLock / releaseLock', () => {
+    it('acquires a lock on an empty directory and writes lock metadata', async () => {
+      await acquireLock(tmpDir);
+      const raw = await fs.readFile(path.join(tmpDir, '.migration-lock'), 'utf8');
+      const lock = JSON.parse(raw);
+      expect(lock.pid).toBe(process.pid);
+      expect(typeof lock.startedAt).toBe('string');
+    });
+
+    it('rejects a second acquire while the lock is fresh', async () => {
+      await acquireLock(tmpDir);
+      await expect(acquireLock(tmpDir)).rejects.toThrow(/Migration lock held/);
+    });
+
+    it('lets exactly one of two concurrent acquires win instead of racing', async () => {
+      // Regression test for the read-then-write TOCTOU: two callers hitting
+      // acquireLock at the same instant used to both pass the "does it
+      // exist" check before either had written the lock file, so both
+      // resolved successfully and both went on to run migrations.
+      const results = await Promise.allSettled([acquireLock(tmpDir), acquireLock(tmpDir)]);
+      const fulfilled = results.filter(r => r.status === 'fulfilled');
+      const rejected = results.filter(r => r.status === 'rejected');
+      expect(fulfilled).toHaveLength(1);
+      expect(rejected).toHaveLength(1);
+      expect(rejected[0].reason.message).toMatch(/Migration lock held/);
+    });
+
+    it('steals a stale lock instead of blocking forever', async () => {
+      const lockPath = path.join(tmpDir, '.migration-lock');
+      const staleStartedAt = new Date(Date.now() - 10 * 60 * 1000).toISOString();
+      await fs.writeFile(
+        lockPath,
+        JSON.stringify({ pid: 999999, startedAt: staleStartedAt, hostname: 'stale-host' })
+      );
+
+      await expect(acquireLock(tmpDir)).resolves.toBeUndefined();
+      const raw = await fs.readFile(lockPath, 'utf8');
+      const lock = JSON.parse(raw);
+      expect(lock.pid).toBe(process.pid);
+    });
+
+    it('releaseLock removes the lock file and is a no-op when absent', async () => {
+      await acquireLock(tmpDir);
+      await releaseLock(tmpDir);
+      await expect(fs.access(path.join(tmpDir, '.migration-lock'))).rejects.toThrow();
+      await expect(releaseLock(tmpDir)).resolves.toBeUndefined();
     });
   });
 
