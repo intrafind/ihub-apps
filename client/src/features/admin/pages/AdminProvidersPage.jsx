@@ -9,6 +9,7 @@ import { getAdminApiErrorMessage, makeAdminApiCall } from '../../../api/adminApi
 import AdminPageSkeleton from '../components/AdminPageSkeleton';
 import AdminEmptyState from '../components/AdminEmptyState';
 import WebsearchTestResult from '../components/WebsearchTestResult';
+import { translateModelTestMessage } from '../utils/modelTestMessages';
 
 function HealthBadge({ status }) {
   const { t } = useTranslation();
@@ -141,19 +142,22 @@ function AdminProvidersPage() {
           method: 'POST'
         });
         const data = response?.data || {};
+        const successFallback =
+          data?.message || t('admin.providers.health.testSuccessful', 'Test successful');
         results.push({
           model,
           success: true,
-          message: data?.message || t('admin.providers.health.testSuccessful', 'Test successful'),
+          message: translateModelTestMessage(t, data?.messageKey, successFallback),
           response: data?.response
         });
       } catch (err) {
-        // Server body: { error: headline, details: remediation text, code }
+        // Server body: { error: headline, details: remediation text, code, messageKey }
         const body = err?.response?.data || {};
+        const failureFallback = body.error || t('admin.providers.health.testFailed', 'Test failed');
         results.push({
           model,
           success: false,
-          message: body.error || t('admin.providers.health.testFailed', 'Test failed'),
+          message: translateModelTestMessage(t, body.messageKey, failureFallback),
           error:
             body.details || (err?.response?.status ? `HTTP ${err.response.status}` : err.message)
         });
