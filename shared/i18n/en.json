@@ -2710,7 +2710,21 @@
     "passages": "{{count}} passage",
     "passages_plural": "{{count}} passages",
     "openExternal": "Open in browser",
-    "showInDocument": "Show this passage in the document"
+    "showInDocument": "Show this passage in the document",
+    "attachToEmail": "Add to email",
+    "attachedToEmail": "Added to your email as {{filename}}.",
+    "attaching": "Adding to your email…",
+    "downloading": "Downloading…",
+    "errors": {
+      "accessDenied": "You do not have access to this document.",
+      "notFound": "This document is no longer available.",
+      "unknown": "Something went wrong while fetching the document.",
+      "openBlocked": "This window cannot open links. Use the link under Details, or open the document in your browser.",
+      "downloadFailed": "Could not download this document. {{reason}}",
+      "attachFailed": "Could not attach this document. {{reason}}",
+      "attachNeedsDraft": "Open a new email or a reply first, then add the document from there.",
+      "attachTooLarge": "This document is too large to attach ({{size}} MB). Download it instead."
+    }
   },
   "chatMessage": {
     "user": "You",

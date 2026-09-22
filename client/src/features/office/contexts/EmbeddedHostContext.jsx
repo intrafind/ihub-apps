@@ -53,6 +53,21 @@ import * as React from 'react';
  *                                                        Outlook, `'office.insertIntoDocument'`
  *                                                        for Word/PowerPoint hosts.
  *
+ * @typedef {Object} HostFileAttachment
+ * @property {() => boolean} isAvailable                  Whether the host can take an attachment
+ *                                                        right now — in Outlook, whether the open
+ *                                                        item is a draft rather than a received
+ *                                                        mail. Re-read on `ihub:itemchanged`.
+ * @property {(file: { base64: string, filename: string }) => Promise<void>} attach
+ *                                                        Attach the file to the item being
+ *                                                        composed. Rejects with `NOT_COMPOSING`
+ *                                                        when the user is not writing anything.
+ * @property {number} [maxBytes]                          Largest file the host accepts.
+ * @property {string} labelKey                            i18n key for the action label, e.g.
+ *                                                        `'citations.attachToEmail'`.
+ * @property {string} [unavailableHintKey]                i18n key explaining what to do when
+ *                                                        `isAvailable()` is false.
+ *
  * @typedef {Object} EmbeddedHostAdapter
  * @property {string} kind                                'office' | 'extension' | 'nextcloud'
  * @property {string} loginSubtitle                       e.g. "iHub Apps for Outlook"
@@ -73,6 +88,22 @@ import * as React from 'react';
  *                                                        so the action becomes the dominant
  *                                                        call-to-action beneath each assistant
  *                                                        message — see issue #1450.
+ * @property {(url: string) => boolean|Promise<boolean>} [openExternalUrl]
+ *                                                        Opens a link outside the embedded view.
+ *                                                        Popups are blocked in the Outlook task
+ *                                                        pane and the extension side panel, where
+ *                                                        `window.open()` returns null and the
+ *                                                        click is a silent no-op (issue #2453), so
+ *                                                        those hosts pass their own opener
+ *                                                        (`Office.context.ui.openBrowserWindow`,
+ *                                                        `chrome.tabs.create`). Returns false when
+ *                                                        the link could not be opened. Omitted in
+ *                                                        the web app, which uses `window.open`.
+ * @property {HostFileAttachment} [fileAttachment]        Lets the host attach a document from the
+ *                                                        chat — an iAssistant citation, say — to
+ *                                                        the mail the user is writing. Only
+ *                                                        Outlook declares it; where it is missing
+ *                                                        the action is not offered.
  */
 
 /** @type {React.Context<EmbeddedHostAdapter|null>} */
@@ -102,6 +133,17 @@ export function useEmbeddedHost() {
  */
 export function useEmbeddedHostKind() {
   return React.useContext(EmbeddedHostContext)?.kind ?? null;
+}
+
+/**
+ * The host adapter when rendering inside an embed entry, or null in the
+ * regular web app. Like `useEmbeddedHostKind` — and unlike `useEmbeddedHost` —
+ * this does NOT fall back to the Outlook adapter, so host capabilities
+ * (`openExternalUrl`, `fileAttachment`) resolve to "this host has none" in the
+ * web app instead of to Outlook's.
+ */
+export function useEmbeddedHostAdapter() {
+  return React.useContext(EmbeddedHostContext) ?? null;
 }
 
 /**

@@ -483,7 +483,21 @@
     "passages": "{{count}} Passage",
     "passages_plural": "{{count}} Passagen",
     "openExternal": "Im Browser öffnen",
-    "showInDocument": "Diese Textstelle im Dokument anzeigen"
+    "showInDocument": "Diese Textstelle im Dokument anzeigen",
+    "attachToEmail": "An E-Mail anhängen",
+    "attachedToEmail": "Als {{filename}} an Ihre E-Mail angehängt.",
+    "attaching": "Wird an Ihre E-Mail angehängt…",
+    "downloading": "Wird heruntergeladen…",
+    "errors": {
+      "accessDenied": "Sie haben keinen Zugriff auf dieses Dokument.",
+      "notFound": "Dieses Dokument ist nicht mehr verfügbar.",
+      "unknown": "Beim Laden des Dokuments ist ein Fehler aufgetreten.",
+      "openBlocked": "In diesem Fenster können keine Links geöffnet werden. Nutzen Sie den Link unter „Details“ oder öffnen Sie das Dokument im Browser.",
+      "downloadFailed": "Das Dokument konnte nicht heruntergeladen werden. {{reason}}",
+      "attachFailed": "Das Dokument konnte nicht angehängt werden. {{reason}}",
+      "attachNeedsDraft": "Öffnen Sie zuerst eine neue E-Mail oder eine Antwort und hängen Sie das Dokument dort an.",
+      "attachTooLarge": "Dieses Dokument ist zu groß zum Anhängen ({{size}} MB). Laden Sie es stattdessen herunter."
+    }
   },
   "chatMessage": {
     "user": "Du",

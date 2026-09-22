@@ -12,7 +12,7 @@ import { fetchAppDetails, fetchChat } from '../../../api';
 import LoadingSpinner from '../../../shared/components/LoadingSpinner';
 import { useTranslation } from 'react-i18next';
 import { getLocalizedContent } from '../../../utils/localizeContent';
-import { buildApiUrl } from '../../../utils/runtimeBasePath';
+import { fetchIFinderDocument, fetchIFinderDocumentText } from '../../../api/endpoints/ifinder';
 import { debugLog } from '../../../utils/debugLog';
 import Icon from '../../../shared/components/Icon';
 import AppShareModal from '../components/AppShareModal';
@@ -909,36 +909,25 @@ function AppChat({ preloadedApp = null }) {
         let fileName = prefillMessage || 'document';
 
         if (documentId) {
-          // Fetch binary via iFinder proxy (resolves download link server-side)
-          const proxyParams = new URLSearchParams({ documentId });
-          if (searchProfileParam) proxyParams.set('searchProfile', searchProfileParam);
-          const proxyUrl = buildApiUrl(`integrations/ifinder/document?${proxyParams}`);
-          const resp = await fetch(proxyUrl, { credentials: 'include' });
-
-          if (resp.ok) {
-            const blob = await resp.blob();
-            const contentType = resp.headers.get('content-type') || 'application/octet-stream';
-
-            // Extract filename from content-disposition or use prefill title
-            const disposition = resp.headers.get('content-disposition');
-            if (disposition) {
-              const match = disposition.match(/filename\*?=(?:UTF-8''|"?)([^";]+)/i);
-              if (match) fileName = decodeURIComponent(match[1].replace(/"/g, ''));
-            }
-
+          // Both requests go through apiClient: embedded hosts authenticate
+          // with a Bearer token rather than the session cookie.
+          try {
+            const {
+              data: blob,
+              contentType,
+              filename
+            } = await fetchIFinderDocument({
+              documentId,
+              searchProfile: searchProfileParam
+            });
+            if (filename) fileName = filename;
             file = new File([blob], fileName, { type: contentType });
-          } else {
+          } catch {
             // Fallback: fetch text content via content endpoint
-            const contentUrl = buildApiUrl(
-              `integrations/ifinder/document/content?documentId=${encodeURIComponent(documentId)}` +
-                (searchProfileParam
-                  ? `&searchProfile=${encodeURIComponent(searchProfileParam)}`
-                  : '')
-            );
-            const contentResp = await fetch(contentUrl, { credentials: 'include' });
-            if (!contentResp.ok) throw new Error(`Content fetch failed: ${contentResp.status}`);
-
-            const text = await contentResp.text();
+            const text = await fetchIFinderDocumentText({
+              documentId,
+              searchProfile: searchProfileParam
+            });
             const txtName = fileName.endsWith('.txt') ? fileName : `${fileName}.txt`;
             file = new File([text], txtName, { type: 'text/plain' });
           }
@@ -1594,47 +1583,29 @@ function AppChat({ preloadedApp = null }) {
     ]
   );
 
-  // Handle citation document actions (openExternal, download, openInApp).
-  // "preview" is handled inside CitationPanel, which owns the passage texts the
-  // preview highlights.
+  // Opening a citation in another app — the one document action that needs
+  // this page's router. Opening the source document, downloading it and
+  // attaching it to an email are handled inside CitationPanel, which does it
+  // the same way in every host that renders the chat (issue #2453).
   const handleDocumentAction = useCallback(
     (action, item, targetAppId) => {
+      if (action !== 'openInApp' || !targetAppId) return;
+
       const getMeta = (doc, key) => {
         const val = doc?.additional_document_metadata?.[key];
         return Array.isArray(val) && val.length > 0 ? val[0] : val || '';
       };
-      const deepLink = getMeta(item, 'accessInfo.deepLink');
-
-      // Extract document access info from iFinder links
       const links = item?.links;
       const accessLink = Array.isArray(links) ? links.find(l => l.type === 'ACCESS') : null;
 
-      if (action === 'openExternal') {
-        if (deepLink) {
-          window.open(deepLink, '_blank', 'noopener,noreferrer');
-        }
-      } else if (action === 'download') {
-        if (accessLink?.documentId) {
-          const params = new URLSearchParams({
-            documentId: accessLink.documentId,
-            ...(accessLink.searchProfile ? { searchProfile: accessLink.searchProfile } : {})
-          });
-          window.open(
-            buildApiUrl(`integrations/ifinder/document?${params}`),
-            '_blank',
-            'noopener,noreferrer'
-          );
-        }
-      } else if (action === 'openInApp' && targetAppId) {
-        const title = item.title || getMeta(item, 'title') || '';
-        const params = new URLSearchParams({
-          prefill: title,
-          documentId: item.document_id || '',
-          ...(accessLink?.searchProfile ? { searchProfile: accessLink.searchProfile } : {}),
-          source: 'ifinder'
-        });
-        navigate(`/apps/${targetAppId}?${params.toString()}`);
-      }
+      const title = item.title || getMeta(item, 'title') || '';
+      const params = new URLSearchParams({
+        prefill: title,
+        documentId: item.document_id || '',
+        ...(accessLink?.searchProfile ? { searchProfile: accessLink.searchProfile } : {}),
+        source: 'ifinder'
+      });
+      navigate(`/apps/${targetAppId}?${params.toString()}`);
     },
     [navigate]
   );

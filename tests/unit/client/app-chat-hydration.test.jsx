@@ -50,6 +50,14 @@ jest.mock('../../../client/src/api/endpoints/apps', () => ({
   __esModule: true,
   getConversationMessages: jest.fn().mockResolvedValue({ messages: [] })
 }));
+// Reached only by the "Open in App" document prefill, which no test here
+// triggers — mocked so the real module does not drag the Axios client in.
+jest.mock('../../../client/src/api/endpoints/ifinder', () => ({
+  __esModule: true,
+  fetchIFinderDocument: jest.fn(),
+  fetchIFinderDocumentText: jest.fn(),
+  fetchIFinderDocumentMetadata: jest.fn()
+}));
 
 // The stream: record what was opened, deliver nothing.
 const mockStreams = [];

@@ -1,5 +1,29 @@
 # Fixes — Unreleased
 
+## Outlook: the document buttons under an answer work again
+
+No document action under an iAssistant answer worked in the Outlook task pane. Two separate
+reasons, neither of which said anything to the user:
+
+- **Open in browser** and **Download** opened a popup, and popups are blocked in the task pane and
+  in the browser extension's side panel: `window.open()` returns nothing, no window appears, and no
+  error is raised. The click was a complete no-op, which looked like a network or proxy problem —
+  it was not.
+- **Preview** and **Details** fetched the document with the session cookie, which only exists in
+  the browser. The task pane, the side panel and the Nextcloud embed authenticate with a token, so
+  both — and the document prefill behind **Open in App** — came back unauthorized there and showed
+  a load error.
+
+Links now go out through the host — Office hands them to the default browser, the extension opens a
+tab — and files are fetched on the authenticated path and saved directly, no popup involved. Every
+one of these actions reports what happened: a download that fails says why (no access, no longer
+available, …) on the document itself, and a link the host refuses to open says so instead of
+leaving a dead button.
+
+Two smaller corrections came with it: **Open in App**, which needs the full web app to navigate to,
+is no longer offered in the embedded panels where it could not work either, and the download in the
+PDF preview follows the same authenticated path as the preview itself.
+
 ## Web search now follows the user's language
 
 Web search ran in US English far more often than it should have. Each engine decided the search

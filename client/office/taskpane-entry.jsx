@@ -11,6 +11,12 @@ import OfficeApp from '../src/features/office/components/OfficeApp';
 import { installOfficeAuthInterceptor } from '../src/features/office/api/officeAuthBridge';
 import { openOfficeAuthDialog } from '../src/features/office/utilities/officeAuthDialog';
 import { fetchCurrentOutlookItemContext } from '../src/features/office/utilities/outlookMailContext';
+import { openExternalUrlInOffice } from '../src/features/office/utilities/officeExternalLinks';
+import {
+  attachFileToOutlookItem,
+  canAttachFileToOutlookItem,
+  MAX_ATTACHMENT_BYTES
+} from '../src/features/office/utilities/outlookAttachments';
 import { initOfficeTheme } from '../src/features/office/utilities/officeTheme';
 
 /**
@@ -126,6 +132,20 @@ Office.onReady(async () => {
     insertAction: {
       variant: 'primary',
       labelKey: insertLabelKey
+    },
+    // The task pane is a sandboxed WebView where `window.open()` is blocked and
+    // returns null, so links from citations (and anywhere else) are handed to
+    // the user's browser through Office instead. See issue #2453.
+    openExternalUrl: openExternalUrlInOffice,
+    // Outlook only: put a document found by iAssistant on the mail the user is
+    // writing. Available while composing — `isAvailable()` is re-read whenever
+    // the selected item changes, so it flips on as soon as a draft is open.
+    fileAttachment: {
+      isAvailable: canAttachFileToOutlookItem,
+      attach: attachFileToOutlookItem,
+      maxBytes: MAX_ATTACHMENT_BYTES,
+      labelKey: 'citations.attachToEmail',
+      unavailableHintKey: 'citations.errors.attachNeedsDraft'
     }
   };
 

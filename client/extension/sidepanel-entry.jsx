@@ -10,6 +10,7 @@ import { installExtensionAuth } from '../src/features/extension/installExtension
 import {
   runChromeIdentityAuth,
   getExtensionRedirectUri,
+  openExtensionTab,
   readActiveTabContext
 } from '../src/features/extension/extensionHost';
 // NB: i18next is loaded *dynamically* below (after installExtensionAuth).
@@ -112,6 +113,9 @@ initOfficeTheme();
     loginSubtitle: 'iHub Apps for the browser',
     runAuthDialog: runChromeIdentityAuth,
     readMessageContext: readActiveTabContext,
+    // Popups are blocked in the side panel, so document links from citations
+    // open as a normal tab instead (issue #2453).
+    openExternalUrl: openExtensionTab,
     // Single per-message toggle — "Include page" — surfaced under the
     // chat input's `+` menu. Defaults to ON since attaching the page
     // is the whole point of the extension; users can turn it off when

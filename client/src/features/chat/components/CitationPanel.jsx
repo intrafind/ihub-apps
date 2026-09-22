@@ -1,7 +1,8 @@
 import { useState, useCallback, useMemo, useRef, useEffect, lazy, Suspense } from 'react';
 import { useTranslation } from 'react-i18next';
 import { scrollToElement } from '../../../utils/citationTransformer';
-import { buildApiUrl } from '../../../utils/runtimeBasePath';
+import { fetchIFinderDocumentMetadata } from '../../../api/endpoints/ifinder';
+import useCitationDocumentActions from '../hooks/useCitationDocumentActions';
 import AppSelectionModal from '../../workflows/components/AppSelectionModal';
 import {
   hasPassageText,
@@ -128,7 +129,7 @@ function PassageText({ content, index, onJumpToPassage, t }) {
 /**
  * Overflow menu with click-outside dismiss.
  */
-function OverflowMenu({ item, onAction, onOpenInApp, t }) {
+function OverflowMenu({ item, onAction, onOpenInApp, attach, t }) {
   const [open, setOpen] = useState(false);
   const menuRef = useRef(null);
 
@@ -144,6 +145,10 @@ function OverflowMenu({ item, onAction, onOpenInApp, t }) {
   }, [open]);
 
   const canProxy = hasProxyAccess(item);
+
+  // Without a proxy-accessible document and without a page that can route to
+  // another app, every entry below is gone — so is the menu.
+  if (!canProxy && !onOpenInApp) return null;
 
   return (
     <div className="relative" ref={menuRef}>
@@ -202,25 +207,52 @@ function OverflowMenu({ item, onAction, onOpenInApp, t }) {
               {t('citations.download', 'Download')}
             </button>
           )}
-          {canProxy && <div className="border-t border-gray-200 dark:border-gray-700 my-1" />}
-          <button
-            onClick={e => {
-              e.stopPropagation();
-              onOpenInApp(item);
-              setOpen(false);
-            }}
-            className="w-full text-left px-3 py-2 text-sm text-gray-700 dark:text-gray-200 hover:bg-gray-100 dark:hover:bg-gray-700 flex items-center gap-2"
-          >
-            <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-              <path
-                strokeLinecap="round"
-                strokeLinejoin="round"
-                strokeWidth={2}
-                d="M4 6a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2H6a2 2 0 01-2-2V6zM14 6a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2h-2a2 2 0 01-2-2V6zM4 16a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2H6a2 2 0 01-2-2v-2zM14 16a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2h-2a2 2 0 01-2-2v-2z"
-              />
-            </svg>
-            {t('citations.openInApp', 'Open in App')}
-          </button>
+          {canProxy && attach?.supported && (
+            <button
+              onClick={e => {
+                e.stopPropagation();
+                if (!attach.enabled) return;
+                onAction('attachToEmail', item);
+                setOpen(false);
+              }}
+              disabled={!attach.enabled}
+              title={attach.enabled ? undefined : attach.hint}
+              className="w-full text-left px-3 py-2 text-sm text-gray-700 dark:text-gray-200 hover:bg-gray-100 dark:hover:bg-gray-700 flex items-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed disabled:hover:bg-transparent dark:disabled:hover:bg-transparent"
+            >
+              <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <path
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                  strokeWidth={2}
+                  d="M15.172 7l-6.586 6.586a2 2 0 102.828 2.828l6.414-6.586a4 4 0 00-5.656-5.656l-6.415 6.585a6 6 0 108.486 8.486L20.5 13"
+                />
+              </svg>
+              {attach.label}
+            </button>
+          )}
+          {canProxy && onOpenInApp && (
+            <div className="border-t border-gray-200 dark:border-gray-700 my-1" />
+          )}
+          {onOpenInApp && (
+            <button
+              onClick={e => {
+                e.stopPropagation();
+                onOpenInApp(item);
+                setOpen(false);
+              }}
+              className="w-full text-left px-3 py-2 text-sm text-gray-700 dark:text-gray-200 hover:bg-gray-100 dark:hover:bg-gray-700 flex items-center gap-2"
+            >
+              <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <path
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                  strokeWidth={2}
+                  d="M4 6a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2H6a2 2 0 01-2-2V6zM14 6a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2h-2a2 2 0 01-2-2V6zM4 16a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2H6a2 2 0 01-2-2v-2zM14 16a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2h-2a2 2 0 01-2-2v-2z"
+                />
+              </svg>
+              {t('citations.openInApp', 'Open in App')}
+            </button>
+          )}
           {canProxy && (
             <>
               <div className="border-t border-gray-200 dark:border-gray-700 my-1" />
@@ -266,26 +298,28 @@ function DocumentDetailsModal({ item, onClose, t }) {
       return;
     }
 
-    const params = new URLSearchParams({
+    // Goes through apiClient: the task pane, the side panel and the Nextcloud
+    // embed authenticate with a Bearer token, not the session cookie a bare
+    // fetch would rely on.
+    let cancelled = false;
+    fetchIFinderDocumentMetadata({
       documentId: access.documentId,
-      ...(access.searchProfile ? { searchProfile: access.searchProfile } : {})
-    });
-
-    fetch(buildApiUrl(`integrations/ifinder/document/metadata?${params}`), {
-      credentials: 'include'
+      searchProfile: access.searchProfile
     })
-      .then(res => {
-        if (!res.ok) throw new Error(`HTTP ${res.status}`);
-        return res.json();
-      })
       .then(data => {
+        if (cancelled) return;
         setMetadata(data);
         setLoading(false);
       })
       .catch(err => {
+        if (cancelled) return;
         setError(err.message);
         setLoading(false);
       });
+
+    return () => {
+      cancelled = true;
+    };
   }, [item]);
 
   const formatDate = dateStr => {
@@ -446,9 +480,16 @@ function DocumentDetailsModal({ item, onClose, t }) {
  * grouped by document_id. Documents with passages are marked as "Referenced",
  * documents without passages are marked as "Mentioned".
  *
+ * Opening, downloading and attaching a document are handled here for every
+ * host (see `useCitationDocumentActions`) — they used to be duplicated in the
+ * page that renders the chat, which is why they were dead in the Outlook task
+ * pane, where no such page exists. `onDocumentAction` is only asked about
+ * `openInApp`, which needs the surrounding router.
+ *
  * @param {Object} props
  * @param {Object} props.citations - { references: [], resultItems: [] }
- * @param {Function} [props.onDocumentAction] - Handler for document actions (preview, download, openInApp)
+ * @param {Function} [props.onDocumentAction] - Handler for `openInApp`. When omitted
+ *   (the Outlook task pane, the extension side panel) the action is not offered.
  */
 function CitationPanel({ citations, onDocumentAction }) {
   const { t } = useTranslation();
@@ -457,43 +498,66 @@ function CitationPanel({ citations, onDocumentAction }) {
   const [detailsDoc, setDetailsDoc] = useState(null);
   // { item, passages: string[], initialPassageIndex: number }
   const [previewDoc, setPreviewDoc] = useState(null);
+  const {
+    status: docStatus,
+    openExternal,
+    download,
+    attachToItem,
+    attachSupported,
+    canAttach,
+    attachLabelKey,
+    attachUnavailableHintKey
+  } = useCitationDocumentActions();
+
+  /** Everything the document actions need, pulled out of the citation item. */
+  const describeDocument = useCallback(item => {
+    const access = getDocumentAccess(item);
+    return {
+      documentId: access?.documentId,
+      searchProfile: access?.searchProfile,
+      fileName: getFileName(item),
+      title: item?.title || getMeta(item, 'title')
+    };
+  }, []);
 
   const handleDocAction = useCallback(
     (action, item, appId) => {
-      // Handle details locally — no need to bubble up
+      const docId = item?.document_id || getMeta(item, 'id') || '';
+
       if (action === 'details') {
         setDetailsDoc(item);
         return;
       }
-
-      if (onDocumentAction) {
-        onDocumentAction(action, item, appId);
+      if (action === 'openExternal') {
+        openExternal(docId, getDeepLink(item));
+        return;
+      }
+      if (action === 'download') {
+        download(docId, describeDocument(item));
+        return;
+      }
+      if (action === 'attachToEmail') {
+        attachToItem(docId, describeDocument(item));
         return;
       }
 
-      // Fallback: handle actions locally
-      const access = getDocumentAccess(item);
-      const deepLink = getDeepLink(item);
-
-      if (action === 'openExternal') {
-        if (deepLink) {
-          window.open(deepLink, '_blank', 'noopener,noreferrer');
-        }
-      } else if (action === 'download') {
-        if (access) {
-          const params = new URLSearchParams({
-            documentId: access.documentId,
-            ...(access.searchProfile ? { searchProfile: access.searchProfile } : {})
-          });
-          window.open(
-            buildApiUrl(`integrations/ifinder/document?${params}`),
-            '_blank',
-            'noopener,noreferrer'
-          );
-        }
-      }
+      // `openInApp` needs the router of the surrounding page.
+      if (onDocumentAction) onDocumentAction(action, item, appId);
     },
-    [onDocumentAction]
+    [attachToItem, describeDocument, download, onDocumentAction, openExternal]
+  );
+
+  const attachMenuState = useMemo(
+    () => ({
+      supported: attachSupported,
+      enabled: canAttach,
+      label: t(attachLabelKey, 'Add to email'),
+      hint: t(
+        attachUnavailableHintKey,
+        'Open a new email or a reply first, then add the document from there.'
+      )
+    }),
+    [attachSupported, canAttach, attachLabelKey, attachUnavailableHintKey, t]
   );
 
   /**
@@ -600,6 +664,7 @@ function CitationPanel({ citations, onDocumentAction }) {
           const hasPassages = passages.length > 0;
           const isExpanded = expandedDoc === docId;
           const canPreview = hasProxyAccess(doc);
+          const status = docStatus[docId];
           // Stable display order, also used for the preview's passage indices.
           const orderedPassages = [...passages].sort((a, b) => (a.index ?? 0) - (b.index ?? 0));
 
@@ -693,11 +758,54 @@ function CitationPanel({ citations, onDocumentAction }) {
                         ? openPreview(actionItem, orderedPassages)
                         : handleDocAction(action, actionItem)
                     }
-                    onOpenInApp={setAppPickerDoc}
+                    onOpenInApp={onDocumentAction ? setAppPickerDoc : null}
+                    attach={attachMenuState}
                     t={t}
                   />
                 </div>
               </div>
+
+              {/* What the last action did — progress, or why it did not work.
+                  Rendered on the document it belongs to so a failure is never
+                  silent (issue #2453). */}
+              {status && (
+                <div className="px-3 pb-2 -mt-1">
+                  {status.busy && (
+                    <p className="flex items-center gap-1.5 text-xs text-gray-500 dark:text-gray-400">
+                      <svg
+                        className="w-3.5 h-3.5 animate-spin shrink-0"
+                        fill="none"
+                        viewBox="0 0 24 24"
+                      >
+                        <circle
+                          className="opacity-25"
+                          cx="12"
+                          cy="12"
+                          r="10"
+                          stroke="currentColor"
+                          strokeWidth="4"
+                        />
+                        <path
+                          className="opacity-75"
+                          fill="currentColor"
+                          d="M4 12a8 8 0 018-8v4a4 4 0 00-4 4H4z"
+                        />
+                      </svg>
+                      {status.busy === 'attach'
+                        ? t('citations.attaching', 'Adding to your email…')
+                        : t('citations.downloading', 'Downloading…')}
+                    </p>
+                  )}
+                  {status.notice && (
+                    <p className="text-xs text-green-700 dark:text-green-400">{status.notice}</p>
+                  )}
+                  {status.error && (
+                    <p className="text-xs text-red-600 dark:text-red-400" role="alert">
+                      {status.error}
+                    </p>
+                  )}
+                </div>
+              )}
 
               {/* Expandable passages */}
               {hasPassages && isExpanded && (

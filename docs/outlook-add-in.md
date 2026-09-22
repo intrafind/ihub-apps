@@ -189,6 +189,42 @@ context for that app). It is a good choice for the start page's default chat app
 
 ---
 
+## Documents found by iAssistant
+
+When an app answers from iFinder, the sources appear under the answer as a list of documents. Each
+one carries the same actions in the task pane as in the browser:
+
+| Action | What it does |
+|---|---|
+| **Open in browser** | Opens the document at its source. In the task pane this goes through Office, which hands the link to the user's default browser. |
+| **Preview (PDF)** | Renders the document inside the pane with the cited passages highlighted. |
+| **Download** | Saves the file. |
+| **Add to email** | Attaches the document to the mail being written. Outlook only. |
+| **Details** | File type, size, author, source and the document's link. |
+
+**Add to email** is what turns a search hit into an attachment: the pane downloads the document
+with the user's own iFinder permissions and puts it on the draft — no link, no separate download
+step, and nothing the recipient needs access to iFinder for.
+
+It appears while the user is **composing**: a new mail, a reply, or a meeting invitation with the
+add-in open. Reading a mail, the action is shown but disabled, since a received message has nothing
+to attach to. Opening a reply switches the action on by itself on clients where the task pane
+follows the item (Outlook on the web, new Outlook for Windows); on classic desktop Outlook the
+reply opens in its own window, where the add-in has to be started again.
+
+Two limits are worth knowing:
+
+- Documents above **25 MB** are refused with a message pointing at **Download** instead. Your
+  Exchange message-size limit may be lower, in which case Outlook refuses the attachment itself and
+  says so on the document.
+- The attachment is named after what iFinder reports — its file name, or the document title with
+  the extension for its type.
+
+Everything above needs the user's iHub session in the pane; a document the user may not open in
+iFinder is refused there, not here.
+
+---
+
 ## Step 4 — Deploy the manifest via Microsoft 365 Admin Center (centralized deployment)
 
 The recommended way to roll the add-in out to all users is **Centralized Deployment** through the Microsoft 365 Admin Center. This installs the add-in tenant-wide; users do not need to add it themselves.
@@ -428,6 +464,18 @@ attempting an outbound request. An Outlook add-in needs about 600 KB —
 - Reading attachments needs Mailbox API **1.8+**. Outlook on the web and current desktop Outlook satisfy this; very old Outlook 2016 builds may not.
 - Inline images and item attachments are filtered out — only file attachments are forwarded as chat context.
 - Total attachment size is capped by iHub's normal upload limits — see [File Upload Feature](file-upload-feature.md).
+
+### "Add to email" is greyed out, or a document will not open
+
+- **Greyed out:** the pane is open on a message the user is *reading*. Attachments only go on a
+  draft — start a new mail or a reply and attach from there.
+- **A document refuses to open or download:** the pane fetches it with the signed-in user's own
+  iFinder permissions, so "You do not have access to this document" is an iFinder permission, not
+  an add-in problem. Check the user's iFinder access and the **JWT Subject Field** under
+  **Admin → Integrations → iFinder**.
+- **Nothing happens at all on a client older than the fix for issue #2453:** the buttons used to
+  open a popup, which Outlook blocks in the task pane. Upgrade iHub; the pane now opens links
+  through Office and saves files directly.
 
 ### CI / staging environments
 

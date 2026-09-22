@@ -1,5 +1,21 @@
 # Features — Unreleased
 
+## Outlook: add a document iAssistant found to the email you are writing
+
+Sources under an iAssistant answer carry a new action in the Outlook task pane: **Add to email**.
+It downloads the document with the signed-in user's own iFinder permissions and puts it on the
+draft as an attachment — the recipient needs no iFinder access, and the sender no separate
+download-then-attach detour.
+
+The action is there while composing: a new mail, a reply, or a meeting invitation with the add-in
+open. While a received message is being read it is shown but disabled, since there is nothing to
+attach to; opening a reply switches it on by itself where the task pane follows the item (Outlook
+on the web, new Outlook for Windows). Documents above 25 MB are refused with a pointer to
+**Download**, and a mailbox with a stricter limit says so on the document.
+
+Nothing to configure — it appears wherever the add-in is deployed and an app returns iFinder
+sources.
+
 ## The default language is configurable in the admin UI
 
 **Admin → Customization → Localization** is a new page for the installation's default language.
