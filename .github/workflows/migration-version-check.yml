@@ -1,0 +1,117 @@
+# Migration Version Check
+#
+# Two PRs opened from the same main both number their new migration
+# "highest + 1". Each is green on its own; whichever merges second leaves main
+# with a duplicate V<NNN> and the server refuses to boot.
+#
+# check: runs scripts/check-migration-versions.js on every PR. It fetches the
+#   *current* base branch (not the one the PR was built against) and fails if a
+#   migration the PR adds reuses a version on the base branch, sits below the
+#   base's highest version, or exports a version that differs from its name.
+#
+# recheck-open-prs: when migrations land on main/develop, re-runs `check` for
+#   every open PR against that branch that adds migrations. That is what turns
+#   the second PR red as soon as the first merges, instead of on its next push.
+
+name: Migration Version Check
+
+on:
+  pull_request:
+    branches: [main, develop]
+    types: [opened, synchronize, reopened]
+  push:
+    branches: [main, develop]
+    paths:
+      - 'server/migrations/V*.js'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: migration-version-check-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  check:
+    name: Migration versions
+    if: github.event_name == 'pull_request'
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout PR head
+        uses: actions/checkout@v7
+        with:
+          ref: ${{ github.event.pull_request.head.sha }}
+          fetch-depth: 0
+          filter: blob:none
+
+      - name: Fetch current base branch
+        run: git fetch --no-tags origin "+refs/heads/${BASE_REF}:refs/remotes/origin/${BASE_REF}"
+        env:
+          BASE_REF: ${{ github.event.pull_request.base.ref }}
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v7
+        with:
+          node-version: '24'
+
+      - name: Check migration versions against base branch
+        run: node scripts/check-migration-versions.js --base "origin/${BASE_REF}" --head HEAD
+        env:
+          BASE_REF: ${{ github.event.pull_request.base.ref }}
+
+  recheck-open-prs:
+    name: Re-check open PRs
+    if: github.event_name == 'push'
+    runs-on: ubuntu-latest
+    permissions:
+      actions: write
+      pull-requests: read
+
+    steps:
+      - name: Re-run migration check for open PRs that add migrations
+        uses: actions/github-script@v9
+        with:
+          script: |
+            const { owner, repo } = context.repo;
+            const base = context.ref.replace('refs/heads/', '');
+
+            const pulls = await github.paginate(github.rest.pulls.list, {
+              owner, repo, state: 'open', base, per_page: 100
+            });
+
+            for (const pr of pulls) {
+              const files = await github.paginate(github.rest.pulls.listFiles, {
+                owner, repo, pull_number: pr.number, per_page: 100
+              });
+              const addsMigrations = files.some(
+                f => ['added', 'renamed'].includes(f.status) &&
+                  /^server\/migrations\/V\d{3}__.+\.js$/.test(f.filename)
+              );
+              if (!addsMigrations) continue;
+
+              const { data } = await github.rest.actions.listWorkflowRuns({
+                owner, repo,
+                workflow_id: 'migration-version-check.yml',
+                event: 'pull_request',
+                head_sha: pr.head.sha,
+                per_page: 1
+              });
+              const run = data.workflow_runs[0];
+              if (!run) {
+                core.info(`#${pr.number}: no migration check run for ${pr.head.sha}, skipping`);
+                continue;
+              }
+              if (run.status !== 'completed') {
+                core.info(`#${pr.number}: run ${run.id} is ${run.status}, skipping`);
+                continue;
+              }
+
+              try {
+                await github.rest.actions.reRunWorkflow({ owner, repo, run_id: run.id });
+                core.info(`#${pr.number}: re-running migration check (run ${run.id})`);
+              } catch (error) {
+                core.warning(`#${pr.number}: could not re-run ${run.id}: ${error.message}`);
+              }
+            }
