@@ -88,6 +88,8 @@ export const DEFAULT_WEB_SEARCH_RESEARCH_GUIDANCE =
   'helps), not just one.\n' +
   '- When results are thin or disagree, search again with more precise terms before ' +
   'answering.\n' +
+  '- When the search excerpts are not enough, open the most relevant pages and read them ' +
+  'in full.\n' +
   '- Check key claims against more than one source.\n' +
   '- Combine the findings into one answer and cite the sources with their URLs.\n' +
   '- Stop searching once the question is answered, and do not search for things you ' +

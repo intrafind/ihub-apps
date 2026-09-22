@@ -3750,5 +3750,30 @@
     "searchedFor": "Gesucht nach",
     "documentsFound_one": "{{count}} Dokument gefunden",
     "documentsFound_other": "{{count}} Dokumente gefunden"
+  },
+  "toolActivity": {
+    "searching": "Durchsucht das Web…",
+    "searchingFor": "Sucht nach „{{query}}“",
+    "reading": "Liest {{host}}",
+    "runningTool": "Führt {{name}} aus",
+    "ranTool": "{{name}} ausgeführt",
+    "searchedWeb": "Web durchsucht",
+    "readWeb": "Webseiten gelesen",
+    "searchedFor": "Gesucht nach",
+    "readPage": "Gelesen",
+    "searches_one": "{{count}} Suche",
+    "searches_other": "{{count}} Suchen",
+    "sources_one": "{{count}} Quelle",
+    "sources_other": "{{count}} Quellen",
+    "pagesRead_one": "{{count}} Seite gelesen",
+    "pagesRead_other": "{{count}} Seiten gelesen",
+    "toolCalls_one": "{{count}} Tool-Aufruf",
+    "toolCalls_other": "{{count}} Tool-Aufrufe",
+    "read": "Gelesen",
+    "readTitle": "Die Seite wurde abgerufen und gelesen",
+    "readFailed": "Nicht lesbar",
+    "readFailedTitle": "Die Seite konnte nicht abgerufen werden",
+    "failed": "Fehlgeschlagen",
+    "stopped": "Abgebrochen"
   }
 }

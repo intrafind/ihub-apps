@@ -20,6 +20,7 @@ import CitationPanel from './CitationPanel';
 import GroundingSources from './GroundingSources';
 import SearchStatusIndicator from './SearchStatusIndicator';
 import SearchSummary from './SearchSummary';
+import ToolActivity from './ToolActivity';
 import WorkflowStepIndicator from './WorkflowStepIndicator';
 import HumanCheckpoint from '../../workflows/components/HumanCheckpoint';
 import useFeatureFlags from '../../../shared/hooks/useFeatureFlags';
@@ -826,6 +827,11 @@ function ChatMessage({
               </ul>
             )}
           </div>
+        )}
+        {/* Searches, sources and other tool calls behind the answer. Above it,
+            like the thoughts, so it stays put while the answer streams. */}
+        {!isUser && message.toolActivity && (
+          <ToolActivity activity={message.toolActivity} loading={!!message.loading} />
         )}
         {renderContent()}
         {isUser && hasVariables && <MessageVariables variables={message.variables} />}

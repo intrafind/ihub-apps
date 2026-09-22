@@ -1,5 +1,29 @@
 # Features — Unreleased
 
+## Web Search: The Model Can Open and Read Pages
+
+Apps with web search can now open a page, not just search. When web search runs through Brave,
+Staan or Qwant, the model also gets a page reader. It uses it to read a search result in full, or
+a URL the user pasted, where before it only saw short excerpts of the top results.
+
+- Works for web pages and PDFs. The same protection against internal and private addresses applies.
+- It is offered automatically. No app changes are needed. To turn it off, disable the
+  **Web Page Reader** tool (`webContentExtractor`) under **Admin → Tools**.
+- It is not added when the model's own native search (Gemini, OpenAI, Claude) handles the request.
+- 
+## Chat: See What the Web Search Did
+
+Answers that searched the web now show what they searched for and what they found. A panel above
+the answer lists each search query, the sources it returned and which of those pages were read,
+along with any other tools the turn called.
+
+- Open while the answer streams, so users can follow the search live ("Searching for …",
+  "Reading dwd.de"); collapsed to a one-line summary ("Searched the web · 2 searches · 12 sources ·
+  4 pages read") once the answer is complete.
+- Covers the built-in web search tools (Brave, Qwant, Staan), knowledge-source lookups and the
+  queries of provider web search (Google Search grounding, Anthropic web search).
+- Pages that could not be fetched are marked, and failed searches are shown as failed.
+- 
 ## Admin: Chat History Page
 
 Admins can now configure and monitor durable chats and the run ledger in **Admin → Observability →
@@ -27,6 +51,8 @@ one answer with source links.
 
 - Applies to every app with web search, whenever web search is on for the conversation. With web
   search off nothing changes.
+- A chat answer can now use up to 25 rounds of tool calls instead of 10, so there is room to search
+  several times and still open the most relevant pages.
 - Admins can turn it off or replace the instruction with their own text per app under
   **Admin → Apps → Edit App → Web Search → Research in Several Steps**
   (`websearch.researchGuidance`).

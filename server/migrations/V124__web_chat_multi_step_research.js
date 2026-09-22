@@ -1,5 +1,5 @@
 /**
- * Migration V123 — web-chat: research in several steps
+ * Migration V124 — web-chat: research in several steps
  *
  * Chat turns allow several tool rounds, but the shipped `web-chat` system
  * prompt described a single pass ("use the web search tool to find and analyze
@@ -13,7 +13,7 @@
  * to it anyway and their wording wins.
  */
 
-export const version = '123';
+export const version = '124';
 export const description = 'web_chat_multi_step_research_prompt';
 
 const APP_FILE = 'apps/web-chat.json';

@@ -211,7 +211,8 @@ export function chatToolSeam({ chatId, buildLogData, logInteraction }) {
         name: String(info.name || toolId),
         resultPreview: previewToolResult(outcome.rawResult),
         ...(Number.isInteger(outcome.durationMs) ? { durationMs: outcome.durationMs } : {}),
-        ...(outcome.knowledgeSource ? { knowledgeSource: outcome.knowledgeSource } : {})
+        ...(outcome.knowledgeSource ? { knowledgeSource: outcome.knowledgeSource } : {}),
+        ...(outcome.webSources?.length ? { webSources: outcome.webSources } : {})
       });
       await logInteraction(
         'tool_usage',

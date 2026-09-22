@@ -1,32 +1,54 @@
 #!/usr/bin/env node
 
 /**
- * Migration V123 specs — rewording the shipped web-chat prompt for multi-step
- * research (issue #2484). Only a locale whose prompt is still exactly the old
- * shipped default is rewritten; an admin's own wording is preserved.
+ * Migration V123 specs — an existing webContentExtractor definition is routed
+ * through `extractForTool` and stops offering `ignoreSSL` to the model, now
+ * that the tool is offered automatically with web search.
+ *
+ * Run: node --test server/tests/migration-v123.test.js
  */
 
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { readFile } from 'node:fs/promises';
-import {
-  up,
-  precondition,
-  version,
-  PROMPT_UPDATES
-} from '../migrations/V123__web_chat_multi_step_research.js';
+import { fileURLToPath } from 'node:url';
+import { up, precondition, version } from '../migrations/V123__web_page_reader_entry_point.js';
+
+const SHIPPED = JSON.parse(
+  await readFile(
+    fileURLToPath(new URL('../defaults/tools/webContentExtractor.json', import.meta.url)),
+    'utf-8'
+  )
+);
+
+/** A webContentExtractor definition as an older release shipped it. */
+function legacyTool(extra = {}) {
+  return {
+    id: 'webContentExtractor',
+    name: { en: 'My Page Reader' },
+    script: 'webContentExtractor.js',
+    enabled: false,
+    parameters: {
+      type: 'object',
+      properties: {
+        url: { type: 'string' },
+        maxLength: { type: 'integer', default: 5000 },
+        ignoreSSL: { type: 'boolean', default: true }
+      },
+      required: ['url', 'ignoreSSL']
+    },
+    ...extra
+  };
+}
 
 function fakeCtx(files) {
   const logs = [];
-  const writes = [];
   return {
     files,
     logs,
-    writes,
     fileExists: async p => p in files,
     readJson: async p => JSON.parse(JSON.stringify(files[p])),
     writeJson: async (p, d) => {
-      writes.push(p);
       files[p] = d;
     },
     log: m => logs.push(m),
@@ -34,69 +56,49 @@ function fakeCtx(files) {
   };
 }
 
-const webChat = system => ({
-  'apps/web-chat.json': { id: 'web-chat', enabled: true, websearch: { enabled: true }, system }
-});
-
 test('version is the next unused number', () => {
   assert.equal(version, '123');
 });
 
-test('precondition requires the web-chat app', async () => {
+test('precondition holds only where a tool definition can exist', async () => {
+  assert.equal(await precondition(fakeCtx({ 'tools/webContentExtractor.json': {} })), true);
+  assert.equal(await precondition(fakeCtx({ 'config/tools.json': [] })), true);
   assert.equal(await precondition(fakeCtx({})), false);
-  assert.equal(await precondition(fakeCtx(webChat({}))), true);
 });
 
-test('the new prompts match the shipped defaults', async () => {
-  const shipped = JSON.parse(
-    await readFile(new URL('../defaults/apps/web-chat.json', import.meta.url), 'utf8')
-  );
-  assert.equal(shipped.system.en, PROMPT_UPDATES.en.to);
-  assert.equal(shipped.system.de, PROMPT_UPDATES.de.to);
-  assert.notEqual(PROMPT_UPDATES.en.from, PROMPT_UPDATES.en.to);
-  assert.notEqual(PROMPT_UPDATES.de.from, PROMPT_UPDATES.de.to);
-});
-
-test('an unchanged default prompt is rewritten in every locale', async () => {
-  const ctx = fakeCtx(webChat({ en: PROMPT_UPDATES.en.from, de: PROMPT_UPDATES.de.from }));
-
+test('a legacy definition gains the entry point and loses ignoreSSL, keeping admin edits', async () => {
+  const ctx = fakeCtx({ 'tools/webContentExtractor.json': legacyTool() });
   await up(ctx);
-  const app = ctx.files['apps/web-chat.json'];
 
-  assert.equal(app.system.en, PROMPT_UPDATES.en.to);
-  assert.equal(app.system.de, PROMPT_UPDATES.de.to);
-  assert.deepEqual(app.websearch, { enabled: true });
-  assert.ok(ctx.logs.some(l => l.includes('en, de')));
+  const tool = ctx.files['tools/webContentExtractor.json'];
+  assert.equal(tool.method, 'extractForTool');
+  assert.deepEqual(Object.keys(tool.parameters.properties), ['url', 'maxLength']);
+  assert.deepEqual(tool.parameters.required, ['url']);
+  assert.equal(tool.enabled, false);
+  assert.deepEqual(tool.name, { en: 'My Page Reader' });
+  assert.equal(tool.parameters.properties.maxLength.default, 5000);
 });
 
-test('an edited locale is preserved while the unchanged one is updated', async () => {
-  const custom = 'Mein eigener Prompt.';
-  const ctx = fakeCtx(webChat({ en: PROMPT_UPDATES.en.from, de: custom, fr: 'Bonjour' }));
-
+test('the shipped definition is left untouched', async () => {
+  const ctx = fakeCtx({ 'tools/webContentExtractor.json': structuredClone(SHIPPED) });
   await up(ctx);
-  const { system } = ctx.files['apps/web-chat.json'];
-
-  assert.equal(system.en, PROMPT_UPDATES.en.to);
-  assert.equal(system.de, custom);
-  assert.equal(system.fr, 'Bonjour');
+  assert.deepEqual(ctx.files['tools/webContentExtractor.json'], SHIPPED);
 });
 
-test('a fully customized prompt is not written at all', async () => {
-  const ctx = fakeCtx(webChat({ en: 'Custom.', de: 'Eigen.' }));
+test('a definition pointed at another script is the admin’s to keep', async () => {
+  const custom = legacyTool({ script: 'myReader.js' });
+  const ctx = fakeCtx({ 'tools/webContentExtractor.json': structuredClone(custom) });
   await up(ctx);
-  assert.deepEqual(ctx.writes, []);
+  assert.deepEqual(ctx.files['tools/webContentExtractor.json'], custom);
 });
 
-test('re-running is a no-op', async () => {
-  const ctx = fakeCtx(webChat({ en: PROMPT_UPDATES.en.to, de: PROMPT_UPDATES.de.to }));
+test('the legacy config/tools.json entry is updated too', async () => {
+  const other = { id: 'braveSearch', script: 'braveSearch.js' };
+  const ctx = fakeCtx({ 'config/tools.json': [other, legacyTool()] });
   await up(ctx);
-  assert.deepEqual(ctx.writes, []);
-});
 
-test('a missing or plain-string system prompt is left alone', async () => {
-  for (const system of [undefined, 'plain string']) {
-    const ctx = fakeCtx(webChat(system));
-    await up(ctx);
-    assert.deepEqual(ctx.writes, []);
-  }
+  const [brave, reader] = ctx.files['config/tools.json'];
+  assert.deepEqual(brave, other);
+  assert.equal(reader.method, 'extractForTool');
+  assert.ok(!('ignoreSSL' in reader.parameters.properties));
 });

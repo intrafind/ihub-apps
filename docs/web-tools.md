@@ -21,7 +21,7 @@ iHub Apps provides a unified web search system that automatically selects the be
 
 | Tool | Purpose |
 |------|---------|
-| **webContentExtractor** | Extract clean content from web pages |
+| **webContentExtractor** | Open a web page or PDF by URL and read its main text (offered automatically with script-backed web search) |
 | **playwrightScreenshot** | Capture screenshots or PDFs using Playwright |
 | **seleniumScreenshot** | Capture screenshots or PDFs using Selenium |
 | **deepResearch** | Iterative multi-round web research |
@@ -99,6 +99,16 @@ The system automatically selects the best search tool at runtime based on the mo
 └─────────────────────────────────────────────────┘
 ```
 
+Whenever one of these script-backed search tools is offered — including when a
+provider turns native search down and the loop falls back to it — the page
+reader [`webContentExtractor`](#web-content-extractor-webcontentextractor) is
+offered next to it. The search tool's automatic extraction only copies a short
+excerpt of the top results (`contentMaxLength` each); the page reader lets the
+model open one specific result, or a URL the user pasted, and read it in full.
+It is not offered with native search (the provider's own search tool handles
+that request), and an admin can switch it off by disabling the tool under
+**Admin → Tools**.
+
 `"auto"` exists so an install without a Brave subscription still gets working
 web search. It walks the keyed engines first, in registration order, so an
 install that already had a Brave key keeps using it and does not change engine
@@ -122,13 +132,16 @@ When web search is enabled for an app, users see a toggle in the chat input area
 
 ### Multi-Step Research
 
-A chat turn allows up to 10 tool rounds, so the model can search several times before it answers.
+A chat turn allows up to 25 tool rounds, so the model can search several times and read the most
+relevant pages before it answers.
 Models tend to do only what they are asked, though, so when web search is on for a turn the server
 adds a short research instruction to the end of the system prompt:
 
 - break the question into its sub-questions;
 - run several searches with different wording (and in another language where that helps);
 - search again with more precise terms when results are thin or disagree;
+- open the most relevant pages and read them in full when the search excerpts are not enough
+  (with script-backed search through the page reader, `webContentExtractor`);
 - check key claims against more than one source;
 - combine the findings into one answer with the source URLs;
 - stop once the question is answered, without searching for things the model already knows.
@@ -160,7 +173,7 @@ How much the model can act on it depends on the search path:
 - **Google native search**: the adapter sends Google Search grounding without any function
   tools, so the guidance only steers how Gemini uses its own grounding.
 
-The default **Web Chat** app's prompt was reworded to match. Migration V123 updates an existing
+The default **Web Chat** app's prompt was reworded to match. Migration V124 updates an existing
 `contents/apps/web-chat.json` only in the languages whose prompt is still exactly the old shipped
 default; a prompt an admin changed is left as is (the added guidance applies to it anyway).
 
@@ -419,8 +432,11 @@ None of these take any parameters — they're automatically enabled when `websea
 **Parameters**:
 
 - `url` (string, required): The URL of the webpage to extract content from
-- `maxLength` (integer, optional): Maximum length of extracted content in characters (default: 5000)
-- `ignoreSSL` (boolean, optional, admin only): Ignore invalid HTTPS certificates. If omitted, the value configured in the tool's file under `contents/tools/` is used.
+- `maxLength` (integer, optional): Maximum length of extracted content in characters (default: 10000, clamped to 500-50,000)
+
+**Availability**: Shipped as `contents/tools/webContentExtractor.json` and offered automatically next to the script-backed search tool whenever an app has `websearch.enabled` (see [How Provider Resolution Works](#how-provider-resolution-works)). An app or workflow can also list it in `tools` directly; it is only offered once. Disable the tool to stop offering it.
+
+**Certificates**: The model cannot switch certificate checking off. Invalid certificates are accepted only when the platform's `ssl.ignoreInvalidCertificates` setting allows it; domains in the SSL whitelist also bypass the SSRF check below.
 
 **Returns**:
 
@@ -436,7 +452,6 @@ None of these take any parameters — they're automatically enabled when `websea
 - Handles various webpage structures
 - Provides metadata extraction
 - Error handling for invalid URLs or failed requests
-- Optional `ignoreSSL` flag to bypass invalid HTTPS certificates (value can be preset in the tool's file under `contents/tools/`)
 - Detects missing pages or authentication requirements and reports them clearly
 - Returned errors include a `code` field so applications can translate messages and the UI automatically shows a localized error when possible
 - **SSRF protection**: Blocks access to private/internal IP addresses. Domains listed in the SSL whitelist configuration bypass this check (added in v5.2.12)

@@ -243,6 +243,17 @@ export const toolCallData = z.object({
   parallelGroup: z.number().int().nonnegative().optional()
 });
 
+/**
+ * A page a search or fetch tool found (`read` when its content was fetched,
+ * `readFailed` when fetching it failed). See `services/loop/webSources.js`.
+ */
+export const webSourceSchema = z.object({
+  url: z.string(),
+  title: z.string().optional(),
+  read: z.boolean().optional(),
+  readFailed: z.boolean().optional()
+});
+
 export const toolResultData = z.object({
   step: z.number().int().nonnegative(),
   callId: z.string(),
@@ -260,7 +271,8 @@ export const toolResultData = z.object({
     .optional(),
   durationMs: z.number().int().nonnegative(),
   hasImage: z.boolean().optional(),
-  knowledgeSource: z.string().optional()
+  knowledgeSource: z.string().optional(),
+  webSources: z.array(webSourceSchema).optional()
 });
 
 export const toolDisabledData = z.object({
