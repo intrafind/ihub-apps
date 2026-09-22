@@ -165,6 +165,70 @@ describe('isLinkExpired', () => {
   });
 });
 
+describe('cross-worker visibility (reload on miss)', () => {
+  // Settle any dirty state left by earlier tests before each case: findByCode
+  // flushes local writes before it reloads, and a stale in-flight flush would
+  // silently overwrite the "remote worker" fileContents this suite injects
+  // below, rather than the reload actually being exercised.
+  beforeEach(async () => {
+    await jest.advanceTimersByTimeAsync(10000);
+  });
+
+  function simulateRemoteWorkerWrote(link) {
+    const known = fileContents ? JSON.parse(fileContents).links : [];
+    fileContents = JSON.stringify(
+      { links: [...known, link], lastUpdated: new Date().toISOString() },
+      null,
+      2
+    );
+  }
+
+  it('getLink finds a code that only exists on disk, written by another worker', async () => {
+    const remoteLink = {
+      code: 'remote-only-code',
+      appId: 'remote-app',
+      userId: 'remote-user',
+      path: null,
+      params: null,
+      url: '/apps/remote-app',
+      includeParams: false,
+      createdAt: new Date().toISOString(),
+      usage: 0,
+      expiresAt: null
+    };
+    expect(await getLink(remoteLink.code)).toBeUndefined();
+    simulateRemoteWorkerWrote(remoteLink);
+
+    expect(await getLink(remoteLink.code)).toEqual(remoteLink);
+  });
+
+  it('recordUsage finds and updates a code created by another worker', async () => {
+    const remoteLink = {
+      code: 'remote-only-code-2',
+      appId: 'remote-app',
+      userId: 'remote-user',
+      path: null,
+      params: null,
+      url: '/apps/remote-app',
+      includeParams: false,
+      createdAt: new Date().toISOString(),
+      usage: 0,
+      expiresAt: null
+    };
+    simulateRemoteWorkerWrote(remoteLink);
+
+    const updated = await recordUsage(remoteLink.code);
+    expect(updated).toMatchObject({ code: remoteLink.code, usage: 1 });
+    // Now resolved locally too, without a further reload.
+    expect(await getLink(remoteLink.code)).toMatchObject({ usage: 1 });
+  });
+
+  it('a code that truly does not exist anywhere still reports missing', async () => {
+    expect(await getLink('truly-does-not-exist-anywhere')).toBeUndefined();
+    expect(await isCodeAvailable('truly-does-not-exist-anywhere')).toBe(true);
+  });
+});
+
 describe('debounced save', () => {
   it('persists the link to disk once the debounce interval elapses', async () => {
     const link = await createLink({ appId: 'a1', userId: 'u1' });

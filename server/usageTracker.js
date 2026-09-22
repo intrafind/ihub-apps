@@ -339,6 +339,14 @@ export async function recordMagicPrompt({
 
 export async function getUsage() {
   await loadConfig();
+  // Force a fresh read rather than serving whatever this worker's process
+  // happened to have cached since it started: under WORKERS > 1 every
+  // worker accumulates its own view, so an admin's request landing on a
+  // different worker each time would otherwise see numbers frozen at
+  // whatever that worker first loaded. Low-frequency admin read, so the
+  // extra disk round trip is not a concern the way it would be on the
+  // per-message recording path below.
+  await store.reload();
   return loadUsage();
 }
 

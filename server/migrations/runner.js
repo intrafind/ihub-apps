@@ -15,7 +15,7 @@ import { pathToFileURL } from 'url';
 import os from 'os';
 import { getRootDir } from '../pathUtils.js';
 import config from '../config.js';
-import { atomicWriteJSON } from '../utils/atomicWrite.js';
+import { atomicWriteJSON, atomicCreateJSON } from '../utils/atomicWrite.js';
 import logger from '../utils/logger.js';
 import {
   setDefault,
@@ -337,45 +337,70 @@ function createMigrationContext(contentsDir, defaultsDir, migration) {
 
 /**
  * Acquire a lock file to prevent concurrent migration runs.
+ *
+ * Creates the lock with the 'wx' flag (create-or-fail) rather than the
+ * previous read-then-write: two processes racing to acquire at the same
+ * instant could both pass a plain existence check before either had written,
+ * and both proceed to migrate concurrently. 'wx' makes the create itself the
+ * check, so only one caller can ever win it.
  * @param {string} contentsDir
  */
-async function acquireLock(contentsDir) {
+export async function acquireLock(contentsDir) {
   const lockPath = join(contentsDir, LOCK_FILE);
-  try {
-    const existing = await fs.readFile(lockPath, 'utf8');
-    const lock = JSON.parse(existing);
-    const age = Date.now() - new Date(lock.startedAt).getTime();
 
-    if (age < LOCK_STALE_MS) {
+  // At most one retry: the first pass either creates the lock or, finding it
+  // held and stale, steals it; the second pass' create then either succeeds
+  // or (having lost a steal race to another process) reports who holds it.
+  for (let attempt = 0; attempt < 2; attempt++) {
+    const lockData = {
+      pid: process.pid,
+      startedAt: new Date().toISOString(),
+      hostname: os.hostname()
+    };
+
+    try {
+      await atomicCreateJSON(lockPath, lockData);
+      return;
+    } catch (error) {
+      if (error.code !== 'EEXIST') throw error;
+    }
+
+    let existing = null;
+    try {
+      existing = JSON.parse(await fs.readFile(lockPath, 'utf8'));
+    } catch (error) {
+      if (error.code === 'ENOENT') continue; // released between our create and this read — retry
+      // Corrupt/unreadable lock file: treat as stale rather than blocking forever.
+    }
+
+    const age = existing ? Date.now() - new Date(existing.startedAt).getTime() : Infinity;
+    if (existing && age < LOCK_STALE_MS) {
       throw new Error(
-        `Migration lock held by PID ${lock.pid} since ${lock.startedAt}. ` +
+        `Migration lock held by PID ${existing.pid} since ${existing.startedAt}. ` +
           `If the process is no longer running, delete ${lockPath}`
       );
     }
+
     logger.warn('Stale migration lock detected, overriding', {
       component: 'Migration',
-      ageSeconds: Math.round(age / 1000)
+      ageSeconds: existing ? Math.round(age / 1000) : undefined
     });
-  } catch (error) {
-    if (error.code !== 'ENOENT' && !(error instanceof SyntaxError)) {
-      // Re-throw if it's not a missing file or parse error, and not our own lock error
-      if (error.message?.includes('Migration lock held')) throw error;
+
+    try {
+      await fs.unlink(lockPath);
+    } catch {
+      // Already gone — the next iteration's create settles it either way.
     }
   }
 
-  const lockData = {
-    pid: process.pid,
-    startedAt: new Date().toISOString(),
-    hostname: os.hostname()
-  };
-  await fs.writeFile(lockPath, JSON.stringify(lockData, null, 2));
+  throw new Error(`Failed to acquire migration lock at ${lockPath} after stealing a stale lock`);
 }
 
 /**
  * Release the migration lock file.
  * @param {string} contentsDir
  */
-async function releaseLock(contentsDir) {
+export async function releaseLock(contentsDir) {
   try {
     await fs.unlink(join(contentsDir, LOCK_FILE));
   } catch {
@@ -572,9 +597,14 @@ export async function runConfigMigrations() {
         });
 
         if (migrationConfig.onFailure === 'halt') {
-          throw new Error(
+          const haltError = new Error(
             `Migration V${migration.version} (${migration.description}) failed: ${error.message}`
           );
+          // Distinguishes an operator-requested halt from an ordinary migration
+          // error, so the caller (server.js) can exit the process instead of
+          // logging a warning and serving traffic on unmigrated config.
+          haltError.migrationHalt = true;
+          throw haltError;
         }
       }
     }
