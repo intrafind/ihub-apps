@@ -27,6 +27,15 @@ jest.unstable_mockModule('fs/promises', () => ({
   }
 }));
 
+// debouncedJsonStore saves via atomicWriteJSON (write-temp-then-rename), which
+// internally imports { promises as fs } from 'fs' rather than 'fs/promises' —
+// mock the utility directly so tests never touch the real filesystem.
+jest.unstable_mockModule('../utils/atomicWrite.js', () => ({
+  atomicWriteJSON: jest.fn(async (_file, data) => {
+    fileContents = JSON.stringify(data, null, 2);
+  })
+}));
+
 jest.unstable_mockModule('../featureRegistry.js', () => ({
   isFeatureEnabled: () => true
 }));
@@ -109,5 +118,22 @@ describe('recordFeedback', () => {
     expect(usage.feedback.bad).toBe(0);
     expect(usage.feedback.total).toBe(0);
     expect(usage.feedback.perUser.u1.good).toBe(1);
+  });
+});
+
+describe('getUsage', () => {
+  it('reflects usage flushed by another worker instead of a permanently stale in-memory copy', async () => {
+    const before = await getUsage();
+    expect(before.messages.total).toBe(0);
+
+    // Simulate a sibling worker process — separate in-memory cache, same
+    // usage.json — having recorded and flushed its own usage independently.
+    // Nothing local has been recorded here, so this worker is not dirty and
+    // would otherwise keep serving the cached copy it loaded at start.
+    const remoteUsage = { ...before, messages: { ...before.messages, total: 7 } };
+    fileContents = JSON.stringify(remoteUsage, null, 2);
+
+    const after = await getUsage();
+    expect(after.messages.total).toBe(7);
   });
 });

@@ -40,7 +40,7 @@ function ActionButton({ action, row }) {
     : 'text-gray-500 hover:text-indigo-600 hover:bg-indigo-50 dark:text-gray-400 dark:hover:text-indigo-300 dark:hover:bg-indigo-900/30';
 
   const className = [
-    'p-1.5 rounded-md transition-colors focus:outline-none focus:ring-2 focus:ring-indigo-500',
+    'p-1.5 rounded-md transition-colors focus:outline-hidden focus:ring-2 focus:ring-indigo-500',
     colorClass,
     action.className || '',
     'disabled:opacity-50 disabled:cursor-not-allowed'

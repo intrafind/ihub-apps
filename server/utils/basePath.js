@@ -1,4 +1,5 @@
 import logger from './logger.js';
+import { getContext, setContext } from './requestContext.js';
 /**
  * Base path utilities for server-side routing and URL generation
  *
@@ -13,27 +14,15 @@ import logger from './logger.js';
  */
 
 /**
- * Get the detected base path from the current request's X-Forwarded-Prefix header.
+ * Get the detected base path for the current request.
  * At startup (no request), returns '' so routes register at root paths.
- * At request time, returns the forwarded prefix for response URL generation.
+ * At request time, returns the forwarded prefix (resolved once per request by
+ * basePathDetectionMiddleware and stored in the request-scoped AsyncLocalStorage
+ * context) for response URL generation.
  * @returns {string} Base path (e.g., '/ihub') or '' for root deployment
  */
 export const getBasePath = () => {
-  const headerName = process.env.BASE_PATH_HEADER || 'x-forwarded-prefix';
-
-  // Auto-detect from current request headers
-  if (global.currentRequest) {
-    const detectedPath = global.currentRequest.headers[headerName.toLowerCase()];
-    if (detectedPath) {
-      const normalized =
-        detectedPath.endsWith('/') && detectedPath !== '/'
-          ? detectedPath.slice(0, -1)
-          : detectedPath;
-      if (isValidBasePath(normalized)) return normalized;
-    }
-  }
-
-  return '';
+  return getContext()?.basePathPrefix || '';
 };
 
 /**
@@ -225,16 +214,30 @@ export const basePathRewriteMiddleware = (req, res, next) => {
 };
 
 /**
- * Middleware to store the current request for base path auto-detection.
- * This allows getBasePath() to read the X-Forwarded-Prefix header
- * at request time for response URL generation (e.g., manifest start_url).
+ * Middleware to detect the request's base path once and store it in the
+ * request-scoped AsyncLocalStorage context (see requestContext.js). This
+ * allows getBasePath() to return the X-Forwarded-Prefix header value for
+ * response URL generation (e.g., manifest start_url) without relying on a
+ * process-wide global, which would be subject to cross-request races under
+ * concurrent traffic.
+ *
+ * Must run after the request context is opened (see setup.js) so
+ * setContext() has a store to write into.
  *
  * @param {Object} req - Express request
  * @param {Object} res - Express response
  * @param {Function} next - Next middleware
  */
 export const basePathDetectionMiddleware = (req, res, next) => {
-  global.currentRequest = req;
+  const headerName = process.env.BASE_PATH_HEADER || 'x-forwarded-prefix';
+  const detectedPath = req.headers[headerName.toLowerCase()];
+  if (detectedPath) {
+    const normalized =
+      detectedPath.endsWith('/') && detectedPath !== '/' ? detectedPath.slice(0, -1) : detectedPath;
+    if (isValidBasePath(normalized)) {
+      setContext({ basePathPrefix: normalized });
+    }
+  }
   next();
 };
 

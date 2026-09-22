@@ -92,7 +92,7 @@ function ResourceSelector({
               type="checkbox"
               checked={isWildcard}
               onChange={e => handleWildcardToggle(e.target.checked)}
-              className="mr-2 h-4 w-4 text-blue-600 focus:ring-blue-500 border-gray-300 dark:border-gray-600 rounded"
+              className="mr-2 h-4 w-4 text-blue-600 focus:ring-blue-500 border-gray-300 dark:border-gray-600 rounded-sm"
             />
             <span className="text-sm text-gray-700 dark:text-gray-300">All (*)</span>
           </div>
@@ -100,7 +100,7 @@ function ResourceSelector({
       </div>
 
       {/* Selected Resources */}
-      <div className="min-h-[2rem]">
+      <div className="min-h-8">
         {selectedResourcesWithNames.length > 0 ? (
           <div className="flex flex-wrap gap-2">
             {selectedResourcesWithNames.map(resource => (
@@ -138,7 +138,7 @@ function ResourceSelector({
               onFocus={handleSearchFocus}
               onBlur={handleSearchBlur}
               placeholder={placeholder}
-              className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md shadow-sm bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100 focus:ring-blue-500 focus:border-blue-500 sm:text-sm placeholder-gray-400 dark:placeholder-gray-500"
+              className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md shadow-xs bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100 focus:ring-blue-500 focus:border-blue-500 sm:text-sm placeholder-gray-400 dark:placeholder-gray-500"
             />
             <Icon
               name="search"
@@ -149,13 +149,13 @@ function ResourceSelector({
 
           {/* Dropdown */}
           {showDropdown && (
-            <div className="absolute z-10 mt-1 w-full bg-white dark:bg-gray-800 shadow-lg max-h-60 rounded-md py-1 text-base ring-1 ring-black ring-opacity-5 dark:ring-gray-700 overflow-auto focus:outline-none sm:text-sm">
+            <div className="absolute z-10 mt-1 w-full bg-white dark:bg-gray-800 shadow-lg max-h-60 rounded-md py-1 text-base ring-1 ring-black/5 dark:ring-gray-700/5 overflow-auto focus:outline-hidden sm:text-sm">
               {filteredResources.length > 0 ? (
                 filteredResources.map(resource => (
                   <button
                     key={resource.id}
                     onClick={() => handleResourceAdd(resource.id)}
-                    className="w-full text-left px-4 py-2 hover:bg-gray-100 dark:hover:bg-gray-700 focus:bg-gray-100 dark:focus:bg-gray-700 focus:outline-none"
+                    className="w-full text-left px-4 py-2 hover:bg-gray-100 dark:hover:bg-gray-700 focus:bg-gray-100 dark:focus:bg-gray-700 focus:outline-hidden"
                   >
                     <div className="flex items-center">
                       <Icon

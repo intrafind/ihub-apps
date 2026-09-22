@@ -23,7 +23,8 @@ function DecisionForm({ config, onChange }) {
           rows={4}
           value={config.expression}
           onChange={v => onChange({ ...config, expression: v })}
-          placeholder="e.g. state.score > 0.8"
+          placeholder="e.g. $.data._docIndex < $.data._docsTotal"
+          helpText="Reference state variables as $.data.<variable> (bare names like score are not recognized). Supports comparisons (>, >=, ==, ===, !=, <, <=), && / || / !, parentheses, and the helpers exists(), empty(), length() — e.g. length($.data._corpus) > 0."
         />
       ) : (
         <>
@@ -31,7 +32,8 @@ function DecisionForm({ config, onChange }) {
             label="Variable"
             value={config.variable}
             onChange={v => onChange({ ...config, variable: v })}
-            placeholder="e.g. state.category"
+            placeholder="e.g. $.data.category"
+            helpText="State path of the value to compare, written as $.data.<variable>."
           />
           <FormField
             label="Default Branch"

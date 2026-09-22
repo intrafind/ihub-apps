@@ -218,20 +218,22 @@ export default function VariablesDialog({
 
   return (
     <div
-      className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-2 sm:p-4"
+      className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-2 sm:p-4 dark:bg-black/60"
       onClick={e => {
         if (e.target === e.currentTarget && !closeRequiresRequiredComplete) attemptDismiss();
       }}
     >
-      <div className="relative bg-white rounded-xl shadow-xl w-full max-w-sm sm:max-w-md max-h-[90vh] overflow-y-auto">
-        <div className="flex items-center justify-between px-3 py-2 sm:px-4 sm:py-3 border-b border-slate-200">
-          <h2 className="text-sm sm:text-base font-semibold text-slate-900">Variables</h2>
+      <div className="relative bg-white rounded-xl shadow-xl w-full max-w-sm sm:max-w-md max-h-[90vh] overflow-y-auto dark:bg-slate-800">
+        <div className="flex items-center justify-between px-3 py-2 sm:px-4 sm:py-3 border-b border-slate-200 dark:border-slate-700">
+          <h2 className="text-sm sm:text-base font-semibold text-slate-900 dark:text-slate-100">
+            Variables
+          </h2>
           {!closeRequiresRequiredComplete && (
             <button
               type="button"
               onClick={attemptDismiss}
               aria-label="Close"
-              className="rounded-full p-1 text-slate-500 hover:text-slate-900 hover:bg-slate-100"
+              className="rounded-full p-1 text-slate-500 hover:text-slate-900 hover:bg-slate-100 dark:text-slate-400 dark:hover:text-white dark:hover:bg-slate-700"
             >
               <XMarkIcon className="h-5 w-5" aria-hidden />
             </button>
@@ -239,10 +241,10 @@ export default function VariablesDialog({
         </div>
 
         <div className="p-3 sm:p-4 flex flex-col gap-3">
-          <p className="text-xs sm:text-sm text-slate-500">{subText}</p>
+          <p className="text-xs sm:text-sm text-slate-500 dark:text-slate-400">{subText}</p>
 
           {saveError && (
-            <p className="text-sm text-red-600 break-words" role="alert">
+            <p className="text-sm text-red-600 wrap-break-word dark:text-red-400" role="alert">
               {saveError}
             </p>
           )}
@@ -255,14 +257,14 @@ export default function VariablesDialog({
             if (presets.length > 0) {
               return (
                 <div key={def.name} className="flex flex-col gap-1">
-                  <label className="text-sm font-medium text-slate-700">
+                  <label className="text-sm font-medium text-slate-700 dark:text-slate-300">
                     {fieldLabel}
                     {required && <span className="text-red-500 ml-1">*</span>}
                   </label>
                   <select
                     value={values[def.name] ?? ''}
                     onChange={e => setField(def.name, e.target.value)}
-                    className="w-full rounded-md border border-slate-300 bg-white px-3 py-2 text-sm text-slate-900 focus:outline-none focus:ring-2 focus:ring-slate-400"
+                    className="w-full rounded-md border border-slate-300 bg-white px-3 py-2 text-sm text-slate-900 focus:outline-hidden focus:ring-2 focus:ring-slate-400 dark:border-slate-600 dark:bg-slate-900 dark:text-slate-100 dark:focus:ring-slate-500"
                   >
                     {presets.map(p => (
                       <option key={String(p.value)} value={String(p.value)}>
@@ -279,7 +281,7 @@ export default function VariablesDialog({
             if (isMultilineType(def.type)) {
               return (
                 <div key={def.name} className="flex flex-col gap-1">
-                  <label className="text-sm font-medium text-slate-700">
+                  <label className="text-sm font-medium text-slate-700 dark:text-slate-300">
                     {fieldLabel}
                     {required && <span className="text-red-500 ml-1">*</span>}
                   </label>
@@ -287,7 +289,7 @@ export default function VariablesDialog({
                     rows={4}
                     value={values[def.name] ?? ''}
                     onChange={e => setField(def.name, e.target.value)}
-                    className="w-full rounded-md border border-slate-300 px-3 py-2 text-sm text-slate-900 focus:outline-none focus:ring-2 focus:ring-slate-400 resize-none"
+                    className="w-full rounded-md border border-slate-300 bg-white px-3 py-2 text-sm text-slate-900 focus:outline-hidden focus:ring-2 focus:ring-slate-400 resize-none dark:border-slate-600 dark:bg-slate-900 dark:text-slate-100 dark:focus:ring-slate-500"
                   />
                 </div>
               );
@@ -295,7 +297,7 @@ export default function VariablesDialog({
 
             return (
               <div key={def.name} className="flex flex-col gap-1">
-                <label className="text-sm font-medium text-slate-700">
+                <label className="text-sm font-medium text-slate-700 dark:text-slate-300">
                   {fieldLabel}
                   {required && <span className="text-red-500 ml-1">*</span>}
                 </label>
@@ -303,28 +305,28 @@ export default function VariablesDialog({
                   type={htmlInputType(def.type)}
                   value={values[def.name] ?? ''}
                   onChange={e => setField(def.name, e.target.value)}
-                  className="w-full rounded-md border border-slate-300 px-3 py-2 text-sm text-slate-900 focus:outline-none focus:ring-2 focus:ring-slate-400"
+                  className="w-full rounded-md border border-slate-300 bg-white px-3 py-2 text-sm text-slate-900 focus:outline-hidden focus:ring-2 focus:ring-slate-400 dark:border-slate-600 dark:bg-slate-900 dark:text-slate-100 dark:focus:ring-slate-500"
                 />
               </div>
             );
           })}
         </div>
 
-        <div className="flex items-center justify-end gap-2 px-3 py-2 sm:px-4 sm:py-3 border-t border-slate-200">
+        <div className="flex items-center justify-end gap-2 px-3 py-2 sm:px-4 sm:py-3 border-t border-slate-200 dark:border-slate-700">
           <button
             type="button"
             onClick={() => {
               reset();
               (onCancel ?? onClose)?.();
             }}
-            className="rounded-lg px-3 sm:px-4 py-1.5 sm:py-2 text-sm font-medium text-slate-700 hover:bg-slate-100"
+            className="rounded-lg px-3 sm:px-4 py-1.5 sm:py-2 text-sm font-medium text-slate-700 hover:bg-slate-100 dark:text-slate-300 dark:hover:bg-slate-700"
           >
             Cancel
           </button>
           <button
             type="button"
             onClick={handleSave}
-            className="rounded-lg px-3 sm:px-4 py-1.5 sm:py-2 text-sm font-medium bg-slate-900 text-white hover:bg-slate-700"
+            className="rounded-lg px-3 sm:px-4 py-1.5 sm:py-2 text-sm font-medium bg-slate-900 text-white hover:bg-slate-700 dark:bg-slate-100 dark:text-slate-900 dark:hover:bg-white"
           >
             Save
           </button>

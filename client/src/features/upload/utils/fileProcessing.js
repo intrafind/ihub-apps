@@ -290,18 +290,179 @@ export const processTiffFile = async (file, options = {}) => {
 };
 
 /**
+ * Resize an already-loaded image to fit within `maxDimension` (longest edge)
+ * and re-encode it as JPEG. Shared canvas primitive used by both the
+ * uploader's processImageFile and the Office add-in's attachment resizer so
+ * the resize/re-encode behavior can't drift between the two call sites.
+ * @param {HTMLImageElement} img - A loaded image element
+ * @param {number} maxDimension - Maximum dimension for the longest edge
+ * @param {number} [quality] - JPEG re-encode quality (0-1)
+ * @returns {{ width: number, height: number, dataUrl: string }}
+ */
+export const resizeImageCanvas = (img, maxDimension, quality = 0.8) => {
+  let width = img.naturalWidth || img.width;
+  let height = img.naturalHeight || img.height;
+
+  if (width > height && width > maxDimension) {
+    height = Math.round((height * maxDimension) / width);
+    width = maxDimension;
+  } else if (height > maxDimension) {
+    width = Math.round((width * maxDimension) / height);
+    height = maxDimension;
+  }
+
+  const canvas = document.createElement('canvas');
+  canvas.width = width;
+  canvas.height = height;
+  const ctx = canvas.getContext('2d');
+  ctx.drawImage(img, 0, 0, width, height);
+  const dataUrl = canvas.toDataURL('image/jpeg', quality);
+
+  return { width, height, dataUrl };
+};
+
+/**
+ * Process an image (or TIFF) file into the uploader's preview/data shape.
+ * Handles multipage TIFF (optionally returning one result per page via
+ * `allowMultiple`), resizing regular images through `resizeImageCanvas`.
+ * @param {File} file - The image file to process
+ * @param {Object} [options] - Processing options
+ * @param {number} [options.maxDimension] - Maximum dimension for resizing
+ * @param {boolean} [options.resize] - Whether to resize images
+ * @param {boolean} [options.allowMultiple] - Return one result per TIFF page
+ * @param {number} [options.quality] - JPEG re-encode quality (0-1)
+ * @returns {Promise<Object>} `{ preview, data }` or `{ multipleResults }`
+ */
+export const processImageFile = async (file, options = {}) => {
+  const { maxDimension = 1024, resize = true, allowMultiple = false, quality = 0.8 } = options;
+  const isTiff = file.type === 'image/tiff' || file.type === 'image/tif';
+
+  if (isTiff) {
+    try {
+      const pages = await processTiffFile(file, { maxDimension, resize });
+
+      if (pages.length > 1 && allowMultiple) {
+        const pageResults = [];
+
+        for (let i = 0; i < pages.length; i++) {
+          const page = pages[i];
+
+          const response = await fetch(page.base64);
+          const blob = await response.blob();
+          const previewUrl = URL.createObjectURL(blob);
+
+          const baseFileName = file.name.replace(/\.tiff?$/i, '');
+          const fileName = `${baseFileName}_page${page.pageNumber}.png`;
+
+          pageResults.push({
+            preview: { type: 'image', url: previewUrl },
+            data: {
+              type: 'image',
+              source: 'local',
+              base64: page.base64,
+              fileName,
+              fileSize: blob.size,
+              fileType: 'image/png',
+              width: page.width,
+              height: page.height,
+              originalFileType: file.type,
+              originalFileName: file.name,
+              pageNumber: page.pageNumber,
+              totalPages: page.totalPages
+            }
+          });
+        }
+
+        return { multipleResults: pageResults };
+      }
+
+      const firstPage = pages[0];
+      const response = await fetch(firstPage.base64);
+      const blob = await response.blob();
+      const previewUrl = URL.createObjectURL(blob);
+
+      return {
+        preview: { type: 'image', url: previewUrl },
+        data: {
+          type: 'image',
+          source: 'local',
+          base64: firstPage.base64,
+          fileName: file.name.replace(/\.tiff?$/i, '.png'),
+          fileSize: blob.size,
+          fileType: 'image/png',
+          width: firstPage.width,
+          height: firstPage.height,
+          originalFileType: file.type,
+          originalFileName: file.name,
+          tiffPages: pages.length > 1 ? pages : undefined
+        }
+      };
+    } catch (error) {
+      console.error('Error processing TIFF file:', error);
+      throw new Error('tiff-processing-error');
+    }
+  }
+
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+
+    reader.onload = e => {
+      const img = new Image();
+      img.onload = () => {
+        const previewUrl = URL.createObjectURL(file);
+
+        if (!resize) {
+          return resolve({
+            preview: { type: 'image', url: previewUrl },
+            data: {
+              type: 'image',
+              source: 'local',
+              base64: e.target.result,
+              fileName: file.name,
+              fileSize: file.size,
+              fileType: file.type,
+              width: img.width,
+              height: img.height
+            }
+          });
+        }
+
+        const { width, height, dataUrl } = resizeImageCanvas(img, maxDimension, quality);
+
+        resolve({
+          preview: { type: 'image', url: previewUrl },
+          data: {
+            type: 'image',
+            source: 'local',
+            base64: dataUrl,
+            fileName: file.name,
+            fileSize: file.size,
+            fileType: 'image/jpeg',
+            width,
+            height
+          }
+        });
+      };
+      img.onerror = () => reject(new Error('invalid-image'));
+      img.src = e.target.result;
+    };
+
+    reader.onerror = () => reject(new Error('read-error'));
+    reader.readAsDataURL(file);
+  });
+};
+
+/**
  * Extract audio from a video file using Web Audio API
  * @param {File} file - The video file to extract audio from
  * @param {Object} options - Processing options
  * @param {string} options.format - Output format: 'wav' (default) or 'mp3'
  * @returns {Promise<Object>} Object with audioBuffer and metadata
  */
-export const extractAudioFromVideo = async (file, options = {}) => {
-  const { format = 'wav' } = options;
-
+export const extractAudioFromVideo = async file => {
+  let audioContext = null;
   try {
-    // Create audio context
-    const audioContext = new (window.AudioContext || window.webkitAudioContext)();
+    audioContext = new (window.AudioContext || window.webkitAudioContext)();
 
     // Read video file as ArrayBuffer
     const arrayBuffer = await file.arrayBuffer();
@@ -315,38 +476,20 @@ export const extractAudioFromVideo = async (file, options = {}) => {
       throw new Error('audio-decode-error');
     }
 
-    // Use OfflineAudioContext to render the audio
-    const offlineContext = new OfflineAudioContext(
-      audioBuffer.numberOfChannels,
-      audioBuffer.length,
-      audioBuffer.sampleRate
-    );
-
-    const source = offlineContext.createBufferSource();
-    source.buffer = audioBuffer;
-    source.connect(offlineContext.destination);
-    source.start();
-
-    const renderedBuffer = await offlineContext.startRendering();
-
-    // Convert to WAV format
-    const wavBlob = audioBufferToWav(renderedBuffer);
+    // decodeAudioData already yields the fully-decoded PCM. (An earlier version
+    // re-rendered it through a same-rate/same-channel OfflineAudioContext — a
+    // pure copy that doubled peak memory on long videos.)
+    const wavBlob = audioBufferToWav(audioBuffer);
     const wavBase64 = await blobToBase64(wavBlob);
 
-    // Get duration in seconds
-    const duration = renderedBuffer.duration;
-
-    // Clean up
-    await audioContext.close();
-
     return {
-      audioBuffer: renderedBuffer,
+      audioBuffer,
       base64: wavBase64,
       blob: wavBlob,
       format: 'audio/wav',
-      sampleRate: renderedBuffer.sampleRate,
-      channels: renderedBuffer.numberOfChannels,
-      duration,
+      sampleRate: audioBuffer.sampleRate,
+      channels: audioBuffer.numberOfChannels,
+      duration: audioBuffer.duration,
       size: wavBlob.size
     };
   } catch (error) {
@@ -355,6 +498,69 @@ export const extractAudioFromVideo = async (file, options = {}) => {
       throw error;
     }
     throw new Error('video-audio-extraction-error');
+  } finally {
+    // Close on EVERY path: browsers cap concurrent AudioContexts (~6 in
+    // Chrome), so leaking one per failed decode would break all audio features
+    // (recording, dictation, decoding) until the page reloads.
+    if (audioContext && audioContext.state !== 'closed') {
+      audioContext.close().catch(() => {});
+    }
+  }
+};
+
+/**
+ * Convert a base64 data URL (or bare base64 string) to an ArrayBuffer without
+ * relying on fetch(), which does not handle `data:` URLs consistently across
+ * environments.
+ */
+const dataUrlToArrayBuffer = dataUrl => {
+  const commaIdx = dataUrl.indexOf(',');
+  const meta = commaIdx >= 0 ? dataUrl.slice(0, commaIdx) : '';
+  const payload = commaIdx >= 0 ? dataUrl.slice(commaIdx + 1) : dataUrl;
+  const isBase64 = commaIdx < 0 || /;base64/i.test(meta);
+  const binary = isBase64 ? atob(payload) : decodeURIComponent(payload);
+  const bytes = new Uint8Array(binary.length);
+  for (let i = 0; i < binary.length; i++) bytes[i] = binary.charCodeAt(i);
+  return bytes.buffer;
+};
+
+/**
+ * Decode an uploaded audio source into an AudioBuffer using the Web Audio API.
+ *
+ * Used by the Voxtral transcription flow: the decoded buffer is re-rendered to
+ * 16 kHz mono PCM16 and streamed to the realtime endpoint. Decoding happens in
+ * the browser, so codec support varies (e.g. Safari lacks OGG); an undecodable
+ * source raises `audio-decode-error` so the caller can surface a clear message
+ * (issue #1927 gap G10).
+ *
+ * @param {string|ArrayBuffer|Blob} input - A base64 data URL, an ArrayBuffer, or a Blob/File.
+ * @returns {Promise<AudioBuffer>}
+ */
+export const decodeAudioFileToBuffer = async input => {
+  let arrayBuffer;
+  if (typeof input === 'string') {
+    arrayBuffer = dataUrlToArrayBuffer(input);
+  } else if (input instanceof ArrayBuffer) {
+    arrayBuffer = input;
+  } else if (input && typeof input.arrayBuffer === 'function') {
+    arrayBuffer = await input.arrayBuffer();
+  } else {
+    throw new Error('audio-decode-error');
+  }
+
+  const audioContext = new (window.AudioContext || window.webkitAudioContext)();
+  try {
+    // decodeAudioData may detach the input buffer, so decode a copy.
+    return await audioContext.decodeAudioData(arrayBuffer.slice(0));
+  } catch (decodeError) {
+    console.error('Audio decode error:', decodeError);
+    throw new Error('audio-decode-error');
+  } finally {
+    try {
+      await audioContext.close();
+    } catch {
+      /* ignore */
+    }
   }
 };
 
@@ -479,7 +685,7 @@ export const readTextFile = file => {
 export const processPdfFile = async file => {
   const arrayBuffer = await file.arrayBuffer();
   const pdfjsLib = await loadPdfjs();
-  const pdf = await pdfjsLib.getDocument(arrayBuffer).promise;
+  const pdf = await pdfjsLib.getDocument({ data: new Uint8Array(arrayBuffer) }).promise;
   let textContent = '';
 
   for (let i = 1; i <= pdf.numPages; i++) {
@@ -496,7 +702,7 @@ export const processPdfFile = async file => {
 export const renderPdfPagesToImages = async (file, maxPages = 5, scale = 1.5) => {
   const arrayBuffer = await file.arrayBuffer();
   const pdfjsLib = await loadPdfjs();
-  const pdf = await pdfjsLib.getDocument(arrayBuffer).promise;
+  const pdf = await pdfjsLib.getDocument({ data: new Uint8Array(arrayBuffer) }).promise;
   const pages = Math.min(pdf.numPages, maxPages);
   const images = [];
   for (let i = 1; i <= pages; i++) {

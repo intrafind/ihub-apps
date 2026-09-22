@@ -6,15 +6,15 @@
     "de": "Local vLLM"
   },
   "description": {
-    "en": "Advanced model with strong reasoning and knowledge capabilities",
-    "de": "Fortschrittliches Modell mit starken Argumentations- und Wissensfähigkeiten"
+    "en": "Template for a self-hosted vLLM / LM Studio / Jan.ai endpoint. Point the url at your server and enable it; autoDiscovery picks up whichever model is loaded.",
+    "de": "Vorlage für einen selbst gehosteten vLLM-/LM-Studio-/Jan.ai-Endpunkt. Richten Sie die URL auf Ihren Server und aktivieren Sie das Modell; autoDiscovery erkennt das geladene Modell."
   },
   "url": "http://localhost:8080/v1/chat/completions",
   "provider": "openai",
   "contextWindow": 32000,
   "maxOutputTokens": 8000,
   "supportsTools": false,
-  "enabled": true,
+  "enabled": false,
   "default": false,
   "autoDiscovery": true
 }

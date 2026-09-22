@@ -4,14 +4,20 @@ import { useFilterState } from '../hooks/useFilterState';
 import { useTranslation } from 'react-i18next';
 import { getLocalizedContent } from '../../../utils/localizeContent';
 import Icon from '../../../shared/components/Icon';
-import { fetchAdminTools, makeAdminApiCall, toggleTool, deleteTool } from '../../../api/adminApi';
+import {
+  deleteTool,
+  fetchAdminTools,
+  getAdminApiErrorMessage,
+  makeAdminApiCall,
+  toggleTool
+} from '../../../api/adminApi';
 import { DataTable, SearchInput, FilterSelect } from '../components/data-table';
 
 function ToolNameCell({ tool, currentLanguage }) {
   const iconName = tool.functions ? 'layers' : tool.isSpecialTool ? 'star' : 'wrench';
   return (
     <div className="flex items-center">
-      <div className="flex-shrink-0 h-8 w-8">
+      <div className="shrink-0 h-8 w-8">
         <div className="h-8 w-8 rounded-full bg-indigo-100 dark:bg-indigo-900/50 flex items-center justify-center">
           <Icon name={iconName} className="h-4 w-4 text-indigo-600 dark:text-indigo-400" />
         </div>
@@ -55,7 +61,7 @@ function AdminToolsPage() {
       const data = await fetchAdminTools();
       setTools(Array.isArray(data) ? data : []);
     } catch (err) {
-      setError(err.message);
+      setError(getAdminApiErrorMessage(err));
       setTools([]);
     } finally {
       setLoading(false);
@@ -67,7 +73,7 @@ function AdminToolsPage() {
       await toggleTool(toolId);
       await loadTools();
     } catch (err) {
-      setError(err.message);
+      setError(getAdminApiErrorMessage(err));
     }
   };
 
@@ -102,7 +108,7 @@ function AdminToolsPage() {
       document.body.removeChild(link);
       URL.revokeObjectURL(url);
     } catch (err) {
-      setError(`Failed to download tool config: ${err.message}`);
+      setError(`Failed to download tool config: ${getAdminApiErrorMessage(err)}`);
     }
   };
 
@@ -125,12 +131,12 @@ function AdminToolsPage() {
       await loadTools();
       event.target.value = '';
     } catch (err) {
-      if (err.message.includes('already exists')) {
+      if (getAdminApiErrorMessage(err).includes('already exists')) {
         setError(`Tool with ID "${toolConfig?.id || 'unknown'}" already exists`);
       } else if (err instanceof SyntaxError) {
         setError('Invalid JSON file format');
       } else {
-        setError(`Failed to upload tool config: ${err.message}`);
+        setError(`Failed to upload tool config: ${getAdminApiErrorMessage(err)}`);
       }
     } finally {
       setUploading(false);
@@ -209,7 +215,7 @@ function AdminToolsPage() {
       hideBelow: 'xl',
       render: tool =>
         tool.script ? (
-          <code className="text-xs bg-gray-100 dark:bg-gray-800 px-2 py-1 rounded">
+          <code className="text-xs bg-gray-100 dark:bg-gray-800 px-2 py-1 rounded-sm">
             {tool.script}
           </code>
         ) : tool.provider ? (
@@ -318,7 +324,7 @@ function AdminToolsPage() {
             <div className="flex flex-wrap gap-2">
               <button
                 onClick={() => navigate('/admin/tools/new')}
-                className="inline-flex items-center justify-center rounded-md border border-transparent bg-indigo-600 px-4 py-2 text-sm font-medium text-white shadow-sm hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:ring-offset-2 sm:w-auto"
+                className="inline-flex items-center justify-center rounded-md border border-transparent bg-indigo-600 px-4 py-2 text-sm font-medium text-white shadow-xs hover:bg-indigo-700 focus:outline-hidden focus:ring-2 focus:ring-indigo-500 focus:ring-offset-2 sm:w-auto"
               >
                 <Icon name="plus" className="h-4 w-4 mr-2" />
                 {t('admin.tools.createNew', 'Create New Tool')}
@@ -333,7 +339,7 @@ function AdminToolsPage() {
                 />
                 <button
                   type="button"
-                  className="inline-flex items-center justify-center rounded-md border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 px-4 py-2 text-sm font-medium text-gray-700 dark:text-gray-200 shadow-sm hover:bg-gray-50 dark:hover:bg-gray-600 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:ring-offset-2 disabled:opacity-50 disabled:cursor-not-allowed"
+                  className="inline-flex items-center justify-center rounded-md border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 px-4 py-2 text-sm font-medium text-gray-700 dark:text-gray-200 shadow-xs hover:bg-gray-50 dark:hover:bg-gray-600 focus:outline-hidden focus:ring-2 focus:ring-indigo-500 focus:ring-offset-2 disabled:opacity-50 disabled:cursor-not-allowed"
                   disabled={uploading}
                   title={t('admin.tools.uploadConfig', 'Upload Tool Config')}
                 >

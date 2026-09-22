@@ -25,7 +25,7 @@ export const auditSources = ['web', 'mcp', 'api', 'admin'];
 export const auditActorSchema = z.object({
   id: z.string().min(1),
   username: z.string(),
-  groups: z.array(z.string()).default([]),
+  groups: z.array(z.string()).prefault([]),
   authenticated: z.boolean()
 });
 
@@ -35,10 +35,10 @@ export const auditEntrySchema = z.object({
   actor: auditActorSchema,
   action: z.enum(auditActions),
   resource: z.string().min(1),
-  resourceId: z.string().default(''),
-  summary: z.string().default(''),
-  result: z.enum(auditResults).default('success'),
-  source: z.enum(auditSources).default('web'),
+  resourceId: z.string().prefault(''),
+  summary: z.string().prefault(''),
+  result: z.enum(auditResults).prefault('success'),
+  source: z.enum(auditSources).prefault('web'),
   requestId: z.string().optional(),
   // `null` is a valid value: when `audit.anonymizeIp: "drop"` the recorder
   // explicitly drops the IP to null so the field is preserved for log shape

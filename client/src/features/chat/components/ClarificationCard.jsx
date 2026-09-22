@@ -338,7 +338,7 @@ function ClarificationCard({
       {/* Question section */}
       <div className="mb-4">
         <div className="flex items-start gap-3">
-          <div className="flex-shrink-0 mt-0.5">
+          <div className="shrink-0 mt-0.5">
             <div className="w-8 h-8 rounded-full bg-indigo-100 dark:bg-indigo-900/50 flex items-center justify-center">
               <Icon
                 name="question-mark-circle"
@@ -375,7 +375,7 @@ function ClarificationCard({
               className={`
                 px-4 py-2.5 text-sm font-medium rounded-lg
                 transition-colors min-h-[44px]
-                focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-gray-400
+                focus:outline-hidden focus:ring-2 focus:ring-offset-2 focus:ring-gray-400
                 ${
                   disabled || isSubmitting
                     ? 'text-gray-300 cursor-not-allowed dark:text-gray-600'
@@ -397,7 +397,7 @@ function ClarificationCard({
           className={`
             flex items-center gap-2 px-5 py-2.5 text-sm font-medium rounded-lg
             transition-colors min-h-[44px]
-            focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500
+            focus:outline-hidden focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500
             ${
               !canSubmit()
                 ? 'bg-gray-200 text-gray-400 cursor-not-allowed dark:bg-gray-700 dark:text-gray-500'

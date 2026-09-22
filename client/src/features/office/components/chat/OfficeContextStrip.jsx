@@ -101,7 +101,7 @@ function OfficeContextStrip({
       <div
         role="status"
         aria-live="polite"
-        className="mx-3 mt-2 mb-1 flex items-center gap-2 rounded-md border border-slate-200 bg-slate-50 px-3 py-2 text-xs text-slate-600"
+        className="mx-3 mt-2 mb-1 flex items-center gap-2 rounded-md border border-slate-200 bg-slate-50 px-3 py-2 text-xs text-slate-600 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-300"
       >
         <svg className="animate-spin h-3 w-3 text-slate-400" fill="none" viewBox="0 0 24 24">
           <circle
@@ -186,36 +186,41 @@ function OfficeContextStrip({
   const headerTitle = hasBody || hasAttachments ? subject : 'Email context';
 
   return (
-    <div className="mx-3 mt-2 mb-1 rounded-lg border border-slate-200 bg-white shadow-sm">
+    <div className="mx-3 mt-2 mb-1 rounded-lg border border-slate-200 bg-white shadow-xs dark:border-slate-700 dark:bg-slate-800">
       <div className="flex items-center gap-2 px-3 py-2">
         <button
           type="button"
           onClick={() => setOverrideExpanded(!expanded)}
-          className="flex-1 min-w-0 flex items-center gap-2 text-left hover:bg-slate-50 transition-colors rounded-md px-1 py-0.5 -ml-1"
+          className="flex-1 min-w-0 flex items-center gap-2 text-left hover:bg-slate-50 transition-colors rounded-md px-1 py-0.5 -ml-1 dark:hover:bg-slate-700"
           aria-expanded={expanded}
           aria-label={expanded ? 'Collapse email context' : 'Expand email context'}
           title={expanded ? 'Collapse email context' : 'Expand email context'}
         >
-          <Icon name="mail" size="sm" className="flex-shrink-0 text-slate-500" />
+          <Icon name="mail" size="sm" className="shrink-0 text-slate-500 dark:text-slate-400" />
           <div className="flex-1 min-w-0">
-            <div className="text-xs font-medium text-slate-900 truncate" title={headerTitle}>
+            <div
+              className="text-xs font-medium text-slate-900 truncate dark:text-slate-100"
+              title={headerTitle}
+            >
               {headerTitle}
             </div>
             {summaryLine && (
-              <div className="text-[11px] text-slate-500 truncate">{summaryLine}</div>
+              <div className="text-[11px] text-slate-500 truncate dark:text-slate-400">
+                {summaryLine}
+              </div>
             )}
           </div>
           <Icon
             name={expanded ? 'chevronUp' : 'chevronDown'}
             size="sm"
-            className="flex-shrink-0 text-slate-400"
+            className="shrink-0 text-slate-400 dark:text-slate-500"
             aria-hidden
           />
         </button>
 
         {/* Show add-email button in the header when collapsed so it's always reachable */}
         {!expanded && hasPinControls && (
-          <div className="flex-shrink-0">
+          <div className="shrink-0">
             <PinnedEmailsBar
               pinned={[]}
               onUnpin={() => {}}
@@ -232,7 +237,7 @@ function OfficeContextStrip({
       </div>
 
       {expanded && (
-        <div className="border-t border-slate-100">
+        <div className="border-t border-slate-100 dark:border-slate-700">
           {(hasBody || hasAttachments) && (
             <OfficeMailContextBanner
               ctx={ctx}

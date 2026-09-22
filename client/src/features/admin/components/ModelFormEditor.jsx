@@ -8,7 +8,7 @@ import {
   isFieldRequired
 } from '../../../utils/schemaValidation';
 import Icon from '../../../shared/components/Icon';
-import { makeAdminApiCall } from '../../../api/adminApi';
+import { getAdminApiErrorMessage, makeAdminApiCall } from '../../../api/adminApi';
 import AdminFormErrorSummary from './AdminFormErrorSummary';
 import { FormValidationProvider } from './formValidationContext';
 
@@ -54,7 +54,7 @@ function JsonConfigField({ id, value, onChange, className }) {
       setError(null);
       onChange(parsed);
     } catch (err) {
-      setError(err.message);
+      setError(getAdminApiErrorMessage(err));
       // Intentionally do NOT call onChange — keep last valid value in model.config.
     }
   };
@@ -103,15 +103,22 @@ const getEnvironmentVariableNames = model => {
     anthropic: 'ANTHROPIC_API_KEY',
     mistral: 'MISTRAL_API_KEY',
     google: 'GOOGLE_API_KEY',
+    // Gemini transcription models reuse the same Google key as the chat models.
+    'google-live': 'GOOGLE_API_KEY',
+    'google-transcribe': 'GOOGLE_API_KEY',
     local: 'LOCAL_API_KEY'
     // Note: iAssistant uses JWT tokens (not static API keys), handled below
   };
+
+  // Providers with no provider-wide key: a self-hosted realtime endpoint is
+  // per-model (and often needs no auth at all), and iAssistant uses JWTs.
+  const noProviderWideKey = ['iassistant', 'iassistant-conversation', 'vllm-realtime'];
 
   const providerVar = providerMap[model.provider];
   if (providerVar) {
     // Known provider - show its env var
     envVars.push(providerVar);
-  } else if (model.provider !== 'iassistant' && model.provider !== 'iassistant-conversation') {
+  } else if (!noProviderWideKey.includes(model.provider)) {
     // Unknown provider - show generic pattern and default fallback
     envVars.push(`${model.provider.toUpperCase()}_API_KEY`);
     envVars.push('DEFAULT_API_KEY');
@@ -230,6 +237,8 @@ function ModelFormEditor({
     handleChange(name, type === 'checkbox' ? checked : value);
   };
 
+  const isTranscription = data.modelType === 'transcription';
+
   const providerOptions = [
     { value: 'openai', label: 'OpenAI' },
     { value: 'openai-responses', label: 'OpenAI (Responses API)' },
@@ -239,7 +248,10 @@ function ModelFormEditor({
     { value: 'local', label: 'Local' },
     { value: 'iassistant', label: 'iAssistant' },
     { value: 'iassistant-conversation', label: 'iAssistant Conversation' },
-    { value: 'bedrock', label: 'AWS Bedrock' }
+    { value: 'bedrock', label: 'AWS Bedrock' },
+    { value: 'vllm-realtime', label: 'vLLM Realtime (Transcription)' },
+    { value: 'google-live', label: 'Google Gemini Live (Transcription)' },
+    { value: 'google-transcribe', label: 'Google Gemini Batch (Transcription)' }
   ];
 
   // Memoize environment variables tooltip text for API Key field
@@ -278,7 +290,7 @@ function ModelFormEditor({
           title={t('admin.models.edit.fixErrors', 'Please fix the following errors')}
         />
         {/* Basic Information */}
-        <div className="bg-white dark:bg-gray-800 shadow px-4 py-5 sm:rounded-lg sm:p-6">
+        <div className="bg-white dark:bg-gray-800 shadow-sm px-4 py-5 sm:rounded-lg sm:p-6">
           <div className="md:grid md:grid-cols-3 md:gap-6">
             <div className="md:col-span-1">
               <h3 className="text-lg font-medium leading-6 text-gray-900 dark:text-gray-100">
@@ -305,7 +317,7 @@ function ModelFormEditor({
                     value={data.id || ''}
                     onChange={handleInputChange}
                     disabled={!isNewModel}
-                    className={`mt-1 focus:ring-indigo-500 focus:border-indigo-500 block w-full shadow-sm sm:text-sm border-gray-300 dark:border-gray-600 rounded-md disabled:bg-gray-100 dark:disabled:bg-gray-700 bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100 ${
+                    className={`mt-1 focus:ring-indigo-500 focus:border-indigo-500 block w-full shadow-xs sm:text-sm border-gray-300 dark:border-gray-600 rounded-md disabled:bg-gray-100 dark:disabled:bg-gray-700 bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100 ${
                       validationErrors.id || errors.id
                         ? 'border-red-300 text-red-900 placeholder-red-300'
                         : ''
@@ -345,6 +357,33 @@ function ModelFormEditor({
 
                 <div className="col-span-6 sm:col-span-3">
                   <label
+                    htmlFor="modelType"
+                    className="block text-sm font-medium text-gray-700 dark:text-gray-300"
+                  >
+                    {t('admin.models.fields.modelType', 'Model Type')}
+                  </label>
+                  <select
+                    id="modelType"
+                    name="modelType"
+                    value={data.modelType || 'chat'}
+                    onChange={handleInputChange}
+                    className="mt-1 block w-full py-2 px-3 border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100 rounded-md shadow-xs focus:outline-hidden focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm"
+                  >
+                    <option value="chat">{t('admin.models.modelType.chat', 'Chat')}</option>
+                    <option value="transcription">
+                      {t('admin.models.modelType.transcription', 'Transcription')}
+                    </option>
+                  </select>
+                  <p className="mt-2 text-sm text-gray-500 dark:text-gray-400">
+                    {t(
+                      'admin.models.hints.modelType',
+                      'Chat models answer prompts. Transcription models convert audio to text via a realtime endpoint (e.g. Voxtral).'
+                    )}
+                  </p>
+                </div>
+
+                <div className="col-span-6 sm:col-span-3">
+                  <label
                     htmlFor="provider"
                     className="block text-sm font-medium text-gray-700 dark:text-gray-300"
                   >
@@ -355,7 +394,7 @@ function ModelFormEditor({
                     name="provider"
                     value={data.provider || ''}
                     onChange={handleInputChange}
-                    className={`mt-1 block w-full py-2 px-3 border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100 rounded-md shadow-sm focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm ${
+                    className={`mt-1 block w-full py-2 px-3 border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100 rounded-md shadow-xs focus:outline-hidden focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm ${
                       errors.provider ? 'border-red-300 text-red-900' : ''
                     }`}
                     required
@@ -386,7 +425,7 @@ function ModelFormEditor({
                     value={data.modelId || ''}
                     onChange={handleInputChange}
                     placeholder={t('admin.models.placeholders.apiModelId')}
-                    className={`mt-1 focus:ring-indigo-500 focus:border-indigo-500 block w-full shadow-sm sm:text-sm border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100 rounded-md ${
+                    className={`mt-1 focus:ring-indigo-500 focus:border-indigo-500 block w-full shadow-xs sm:text-sm border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100 rounded-md ${
                       errors.modelId ? 'border-red-300 text-red-900 placeholder-red-300' : ''
                     }`}
                   />
@@ -411,17 +450,29 @@ function ModelFormEditor({
                       {t('admin.models.fields.url')} <span className="text-red-500">*</span>
                     </label>
                     <input
-                      type="url"
+                      type={isTranscription ? 'text' : 'url'}
                       name="url"
                       id="url"
                       value={data.url || ''}
                       onChange={handleInputChange}
-                      placeholder={t('admin.models.placeholders.apiUrl')}
-                      className={`mt-1 focus:ring-indigo-500 focus:border-indigo-500 block w-full shadow-sm sm:text-sm border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100 rounded-md ${
+                      placeholder={
+                        isTranscription
+                          ? t('admin.models.placeholders.realtimeUrl', 'ws://host:8080/v1/realtime')
+                          : t('admin.models.placeholders.apiUrl')
+                      }
+                      className={`mt-1 focus:ring-indigo-500 focus:border-indigo-500 block w-full shadow-xs sm:text-sm border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100 rounded-md ${
                         errors.url ? 'border-red-300 text-red-900 placeholder-red-300' : ''
                       }`}
                       required
                     />
+                    {isTranscription && (
+                      <p className="mt-2 text-sm text-gray-500 dark:text-gray-400">
+                        {t(
+                          'admin.models.hints.realtimeUrl',
+                          'WebSocket URL of the vLLM realtime endpoint. It stays server-side and never reaches the browser.'
+                        )}
+                      </p>
+                    )}
                     {errors.url && (
                       <p className="mt-2 text-sm text-red-600 dark:text-red-400">{errors.url}</p>
                     )}
@@ -445,7 +496,7 @@ function ModelFormEditor({
                       />
                     )}
                   </div>
-                  <div className="mt-1 relative rounded-md shadow-sm">
+                  <div className="mt-1 relative rounded-md shadow-xs">
                     <input
                       type="password"
                       name="apiKey"
@@ -484,7 +535,7 @@ function ModelFormEditor({
         </div>
 
         {/* Configuration */}
-        <div className="bg-white dark:bg-gray-800 shadow px-4 py-5 sm:rounded-lg sm:p-6">
+        <div className="bg-white dark:bg-gray-800 shadow-sm px-4 py-5 sm:rounded-lg sm:p-6">
           <div className="md:grid md:grid-cols-3 md:gap-6">
             <div className="md:col-span-1">
               <h3 className="text-lg font-medium leading-6 text-gray-900 dark:text-gray-100">
@@ -499,62 +550,66 @@ function ModelFormEditor({
             </div>
             <div className="mt-5 md:mt-0 md:col-span-2">
               <div className="grid grid-cols-6 gap-6">
-                <div className="col-span-6 sm:col-span-2">
-                  <label
-                    htmlFor="contextWindow"
-                    className="block text-sm font-medium text-gray-700 dark:text-gray-300"
-                  >
-                    {t('admin.models.fields.contextWindow', 'Context Window')}
-                    {isFieldRequired('contextWindow', jsonSchema) && (
-                      <span className="text-red-500"> *</span>
-                    )}
-                  </label>
-                  <input
-                    type="number"
-                    name="contextWindow"
-                    id="contextWindow"
-                    value={data.contextWindow || ''}
-                    onChange={handleInputChange}
-                    min="1"
-                    className={`mt-1 focus:ring-indigo-500 focus:border-indigo-500 block w-full shadow-sm sm:text-sm border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100 rounded-md ${
-                      errors.contextWindow ? 'border-red-300 text-red-900' : ''
-                    }`}
-                    required={isFieldRequired('contextWindow', jsonSchema)}
-                  />
-                  {errors.contextWindow && (
-                    <p className="mt-2 text-sm text-red-600 dark:text-red-400">
-                      {errors.contextWindow}
-                    </p>
-                  )}
-                </div>
-                <div className="col-span-6 sm:col-span-2">
-                  <label
-                    htmlFor="maxOutputTokens"
-                    className="block text-sm font-medium text-gray-700 dark:text-gray-300"
-                  >
-                    {t('admin.models.fields.maxOutputTokens', 'Max Output Tokens')}
-                    {isFieldRequired('maxOutputTokens', jsonSchema) && (
-                      <span className="text-red-500"> *</span>
-                    )}
-                  </label>
-                  <input
-                    type="number"
-                    name="maxOutputTokens"
-                    id="maxOutputTokens"
-                    value={data.maxOutputTokens || ''}
-                    onChange={handleInputChange}
-                    min="1"
-                    className={`mt-1 focus:ring-indigo-500 focus:border-indigo-500 block w-full shadow-sm sm:text-sm border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100 rounded-md ${
-                      errors.maxOutputTokens ? 'border-red-300 text-red-900' : ''
-                    }`}
-                    required={isFieldRequired('maxOutputTokens', jsonSchema)}
-                  />
-                  {errors.maxOutputTokens && (
-                    <p className="mt-2 text-sm text-red-600 dark:text-red-400">
-                      {errors.maxOutputTokens}
-                    </p>
-                  )}
-                </div>
+                {!isTranscription && (
+                  <>
+                    <div className="col-span-6 sm:col-span-2">
+                      <label
+                        htmlFor="contextWindow"
+                        className="block text-sm font-medium text-gray-700 dark:text-gray-300"
+                      >
+                        {t('admin.models.fields.contextWindow', 'Context Window')}
+                        {isFieldRequired('contextWindow', jsonSchema) && (
+                          <span className="text-red-500"> *</span>
+                        )}
+                      </label>
+                      <input
+                        type="number"
+                        name="contextWindow"
+                        id="contextWindow"
+                        value={data.contextWindow || ''}
+                        onChange={handleInputChange}
+                        min="1"
+                        className={`mt-1 focus:ring-indigo-500 focus:border-indigo-500 block w-full shadow-xs sm:text-sm border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100 rounded-md ${
+                          errors.contextWindow ? 'border-red-300 text-red-900' : ''
+                        }`}
+                        required={isFieldRequired('contextWindow', jsonSchema)}
+                      />
+                      {errors.contextWindow && (
+                        <p className="mt-2 text-sm text-red-600 dark:text-red-400">
+                          {errors.contextWindow}
+                        </p>
+                      )}
+                    </div>
+                    <div className="col-span-6 sm:col-span-2">
+                      <label
+                        htmlFor="maxOutputTokens"
+                        className="block text-sm font-medium text-gray-700 dark:text-gray-300"
+                      >
+                        {t('admin.models.fields.maxOutputTokens', 'Max Output Tokens')}
+                        {isFieldRequired('maxOutputTokens', jsonSchema) && (
+                          <span className="text-red-500"> *</span>
+                        )}
+                      </label>
+                      <input
+                        type="number"
+                        name="maxOutputTokens"
+                        id="maxOutputTokens"
+                        value={data.maxOutputTokens || ''}
+                        onChange={handleInputChange}
+                        min="1"
+                        className={`mt-1 focus:ring-indigo-500 focus:border-indigo-500 block w-full shadow-xs sm:text-sm border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100 rounded-md ${
+                          errors.maxOutputTokens ? 'border-red-300 text-red-900' : ''
+                        }`}
+                        required={isFieldRequired('maxOutputTokens', jsonSchema)}
+                      />
+                      {errors.maxOutputTokens && (
+                        <p className="mt-2 text-sm text-red-600 dark:text-red-400">
+                          {errors.maxOutputTokens}
+                        </p>
+                      )}
+                    </div>
+                  </>
+                )}
 
                 <div className="col-span-6 sm:col-span-2">
                   <label
@@ -570,7 +625,7 @@ function ModelFormEditor({
                     value={data.concurrency || ''}
                     onChange={handleInputChange}
                     min="1"
-                    className={`mt-1 focus:ring-indigo-500 focus:border-indigo-500 block w-full shadow-sm sm:text-sm border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100 rounded-md ${
+                    className={`mt-1 focus:ring-indigo-500 focus:border-indigo-500 block w-full shadow-xs sm:text-sm border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100 rounded-md ${
                       errors.concurrency ? 'border-red-300 text-red-900' : ''
                     }`}
                   />
@@ -595,13 +650,65 @@ function ModelFormEditor({
                     value={data.requestDelayMs || ''}
                     onChange={handleInputChange}
                     min="0"
-                    className={`mt-1 focus:ring-indigo-500 focus:border-indigo-500 block w-full shadow-sm sm:text-sm border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100 rounded-md ${
+                    className={`mt-1 focus:ring-indigo-500 focus:border-indigo-500 block w-full shadow-xs sm:text-sm border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100 rounded-md ${
                       errors.requestDelayMs ? 'border-red-300 text-red-900' : ''
                     }`}
                   />
                   {errors.requestDelayMs && (
                     <p className="mt-2 text-sm text-red-600 dark:text-red-400">
                       {errors.requestDelayMs}
+                    </p>
+                  )}
+                </div>
+
+                <div className="col-span-6 sm:col-span-2">
+                  <label
+                    htmlFor="connectTimeoutMs"
+                    className="block text-sm font-medium text-gray-700 dark:text-gray-300"
+                  >
+                    {t('admin.models.fields.connectTimeoutMs', 'Connect Timeout (ms)')}
+                  </label>
+                  <input
+                    type="number"
+                    name="connectTimeoutMs"
+                    id="connectTimeoutMs"
+                    value={data.connectTimeoutMs ?? ''}
+                    onChange={handleInputChange}
+                    min="0"
+                    max="300000"
+                    className={`mt-1 focus:ring-indigo-500 focus:border-indigo-500 block w-full shadow-xs sm:text-sm border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100 rounded-md ${
+                      errors.connectTimeoutMs ? 'border-red-300 text-red-900' : ''
+                    }`}
+                  />
+                  {errors.connectTimeoutMs && (
+                    <p className="mt-2 text-sm text-red-600 dark:text-red-400">
+                      {errors.connectTimeoutMs}
+                    </p>
+                  )}
+                </div>
+
+                <div className="col-span-6 sm:col-span-2">
+                  <label
+                    htmlFor="streamIdleTimeoutMs"
+                    className="block text-sm font-medium text-gray-700 dark:text-gray-300"
+                  >
+                    {t('admin.models.fields.streamIdleTimeoutMs', 'Stream Idle Timeout (ms)')}
+                  </label>
+                  <input
+                    type="number"
+                    name="streamIdleTimeoutMs"
+                    id="streamIdleTimeoutMs"
+                    value={data.streamIdleTimeoutMs ?? ''}
+                    onChange={handleInputChange}
+                    min="0"
+                    max="300000"
+                    className={`mt-1 focus:ring-indigo-500 focus:border-indigo-500 block w-full shadow-xs sm:text-sm border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100 rounded-md ${
+                      errors.streamIdleTimeoutMs ? 'border-red-300 text-red-900' : ''
+                    }`}
+                  />
+                  {errors.streamIdleTimeoutMs && (
+                    <p className="mt-2 text-sm text-red-600 dark:text-red-400">
+                      {errors.streamIdleTimeoutMs}
                     </p>
                   )}
                 </div>
@@ -620,7 +727,7 @@ function ModelFormEditor({
                             type="checkbox"
                             checked={data.supportsTools || false}
                             onChange={handleInputChange}
-                            className="focus:ring-indigo-500 h-4 w-4 text-indigo-600 border-gray-300 dark:border-gray-600 rounded"
+                            className="focus:ring-indigo-500 h-4 w-4 text-indigo-600 border-gray-300 dark:border-gray-600 rounded-sm"
                           />
                         </div>
                         <div className="ml-3 text-sm">
@@ -640,7 +747,7 @@ function ModelFormEditor({
                             type="checkbox"
                             checked={data.supportsVision || false}
                             onChange={handleInputChange}
-                            className="focus:ring-indigo-500 h-4 w-4 text-indigo-600 border-gray-300 dark:border-gray-600 rounded"
+                            className="focus:ring-indigo-500 h-4 w-4 text-indigo-600 border-gray-300 dark:border-gray-600 rounded-sm"
                           />
                         </div>
                         <div className="ml-3 text-sm">
@@ -666,7 +773,7 @@ function ModelFormEditor({
                             type="checkbox"
                             checked={data.supportsAudio || false}
                             onChange={handleInputChange}
-                            className="focus:ring-indigo-500 h-4 w-4 text-indigo-600 border-gray-300 dark:border-gray-600 rounded"
+                            className="focus:ring-indigo-500 h-4 w-4 text-indigo-600 border-gray-300 dark:border-gray-600 rounded-sm"
                           />
                         </div>
                         <div className="ml-3 text-sm">
@@ -692,7 +799,7 @@ function ModelFormEditor({
                             type="checkbox"
                             checked={data.enabled !== false}
                             onChange={handleInputChange}
-                            className="focus:ring-indigo-500 h-4 w-4 text-indigo-600 border-gray-300 dark:border-gray-600 rounded"
+                            className="focus:ring-indigo-500 h-4 w-4 text-indigo-600 border-gray-300 dark:border-gray-600 rounded-sm"
                           />
                         </div>
                         <div className="ml-3 text-sm">
@@ -712,7 +819,7 @@ function ModelFormEditor({
                             type="checkbox"
                             checked={data.default || false}
                             onChange={handleInputChange}
-                            className="focus:ring-indigo-500 h-4 w-4 text-indigo-600 border-gray-300 dark:border-gray-600 rounded"
+                            className="focus:ring-indigo-500 h-4 w-4 text-indigo-600 border-gray-300 dark:border-gray-600 rounded-sm"
                           />
                         </div>
                         <div className="ml-3 text-sm">
@@ -732,7 +839,7 @@ function ModelFormEditor({
                             type="checkbox"
                             checked={data.supportsImageGeneration || false}
                             onChange={handleInputChange}
-                            className="focus:ring-indigo-500 h-4 w-4 text-indigo-600 border-gray-300 dark:border-gray-600 rounded"
+                            className="focus:ring-indigo-500 h-4 w-4 text-indigo-600 border-gray-300 dark:border-gray-600 rounded-sm"
                           />
                         </div>
                         <div className="ml-3 text-sm">
@@ -762,7 +869,7 @@ function ModelFormEditor({
                             checked={data.autoDiscovery || false}
                             onChange={handleInputChange}
                             disabled={!(data.provider === 'openai' || data.provider === 'local')}
-                            className="focus:ring-indigo-500 h-4 w-4 text-indigo-600 border-gray-300 dark:border-gray-600 rounded disabled:opacity-50 disabled:cursor-not-allowed"
+                            className="focus:ring-indigo-500 h-4 w-4 text-indigo-600 border-gray-300 dark:border-gray-600 rounded-sm disabled:opacity-50 disabled:cursor-not-allowed"
                           />
                         </div>
                         <div className="ml-3 text-sm">
@@ -789,6 +896,144 @@ function ModelFormEditor({
                 </div>
 
                 {/* Image Generation Configuration */}
+                {['anthropic', 'google', 'openai-responses'].includes(data.provider) && (
+                  <div className="col-span-6">
+                    <fieldset>
+                      <legend className="text-base font-medium text-gray-900 dark:text-gray-100">
+                        {t('admin.models.sections.nativeWebSearch', 'Native Web Search')}
+                      </legend>
+                      <p className="mt-1 text-sm text-gray-500 dark:text-gray-400">
+                        {t(
+                          'admin.models.hints.nativeWebSearch',
+                          "Apps with web search use the provider's built-in search on this model. Turn it off for models or gateways that do not support it; they fall back to Brave Search."
+                        )}
+                      </p>
+                      <div className="mt-4 space-y-4">
+                        <div className="flex items-start">
+                          <div className="flex items-center h-5">
+                            <input
+                              id="nativeWebSearch.enabled"
+                              type="checkbox"
+                              checked={data.nativeWebSearch?.enabled !== false}
+                              onChange={e =>
+                                handleChange('nativeWebSearch', {
+                                  ...(data.nativeWebSearch || {}),
+                                  enabled: e.target.checked
+                                })
+                              }
+                              className="focus:ring-indigo-500 h-4 w-4 text-indigo-600 border-gray-300 dark:border-gray-600 rounded-sm"
+                            />
+                          </div>
+                          <div className="ml-3 text-sm">
+                            <label
+                              htmlFor="nativeWebSearch.enabled"
+                              className="font-medium text-gray-700 dark:text-gray-300"
+                            >
+                              {t(
+                                'admin.models.fields.nativeWebSearchEnabled',
+                                'Use native web search'
+                              )}
+                            </label>
+                          </div>
+                        </div>
+
+                        {data.provider === 'anthropic' &&
+                          data.nativeWebSearch?.enabled !== false && (
+                            <>
+                              <div>
+                                <label
+                                  htmlFor="nativeWebSearch.toolVersion"
+                                  className="block text-sm font-medium text-gray-700 dark:text-gray-300"
+                                >
+                                  {t(
+                                    'admin.models.fields.nativeWebSearchToolVersion',
+                                    'Web search tool version'
+                                  )}
+                                </label>
+                                <select
+                                  id="nativeWebSearch.toolVersion"
+                                  value={data.nativeWebSearch?.toolVersion || 'web_search_20250305'}
+                                  onChange={e =>
+                                    handleChange('nativeWebSearch', {
+                                      ...(data.nativeWebSearch || {}),
+                                      toolVersion: e.target.value
+                                    })
+                                  }
+                                  className="mt-1 block w-full py-2 px-3 border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100 rounded-md shadow-xs focus:outline-hidden focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm"
+                                >
+                                  <option value="web_search_20250305">
+                                    web_search_20250305 —{' '}
+                                    {t(
+                                      'admin.models.fields.nativeWebSearchVersionBasic',
+                                      'basic (all Claude models, Vertex AI, Foundry)'
+                                    )}
+                                  </option>
+                                  <option value="web_search_20260209">
+                                    web_search_20260209 —{' '}
+                                    {t(
+                                      'admin.models.fields.nativeWebSearchVersionFiltering',
+                                      'dynamic filtering (Claude 4.6 and later)'
+                                    )}
+                                  </option>
+                                  <option value="web_search_20260318">
+                                    web_search_20260318 —{' '}
+                                    {t(
+                                      'admin.models.fields.nativeWebSearchVersionInclusion',
+                                      'dynamic filtering + response inclusion (Claude 4.6 and later)'
+                                    )}
+                                  </option>
+                                </select>
+                                <p className="mt-2 text-sm text-gray-500 dark:text-gray-400">
+                                  {t(
+                                    'admin.models.hints.nativeWebSearchToolVersion',
+                                    'Newer versions let Claude filter search results in code before they reach the context window, which saves tokens on search-heavy prompts. Google Cloud and Azure-hosted Foundry only offer the basic version.'
+                                  )}
+                                </p>
+                              </div>
+                              <div className="flex items-start">
+                                <div className="flex items-center h-5">
+                                  <input
+                                    id="nativeWebSearch.dynamicFiltering"
+                                    type="checkbox"
+                                    disabled={
+                                      (data.nativeWebSearch?.toolVersion ||
+                                        'web_search_20250305') === 'web_search_20250305'
+                                    }
+                                    checked={data.nativeWebSearch?.dynamicFiltering === true}
+                                    onChange={e =>
+                                      handleChange('nativeWebSearch', {
+                                        ...(data.nativeWebSearch || {}),
+                                        dynamicFiltering: e.target.checked
+                                      })
+                                    }
+                                    className="focus:ring-indigo-500 h-4 w-4 text-indigo-600 border-gray-300 dark:border-gray-600 rounded-sm disabled:opacity-50"
+                                  />
+                                </div>
+                                <div className="ml-3 text-sm">
+                                  <label
+                                    htmlFor="nativeWebSearch.dynamicFiltering"
+                                    className="font-medium text-gray-700 dark:text-gray-300"
+                                  >
+                                    {t(
+                                      'admin.models.fields.nativeWebSearchDynamicFiltering',
+                                      'Enable dynamic filtering'
+                                    )}
+                                  </label>
+                                  <p className="text-gray-500 dark:text-gray-400">
+                                    {t(
+                                      'admin.models.hints.nativeWebSearchDynamicFiltering',
+                                      'Runs web search from code execution (Claude 4.6 or later on the Claude API). When off, the newer tool version is called directly.'
+                                    )}
+                                  </p>
+                                </div>
+                              </div>
+                            </>
+                          )}
+                      </div>
+                    </fieldset>
+                  </div>
+                )}
+
                 {data.supportsImageGeneration && (
                   <div className="col-span-6">
                     <fieldset>
@@ -812,7 +1057,7 @@ function ModelFormEditor({
                                 aspectRatio: e.target.value
                               })
                             }
-                            className="mt-1 block w-full py-2 px-3 border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100 rounded-md shadow-sm focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm"
+                            className="mt-1 block w-full py-2 px-3 border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100 rounded-md shadow-xs focus:outline-hidden focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm"
                           >
                             <option value="1:1">1:1 (Square)</option>
                             <option value="16:9">16:9 (Landscape)</option>
@@ -821,30 +1066,39 @@ function ModelFormEditor({
                             <option value="4:5">4:5</option>
                             <option value="3:2">3:2</option>
                             <option value="2:3">2:3</option>
+                            <option value="3:4">3:4</option>
+                            <option value="4:3">4:3</option>
+                            <option value="21:9">21:9 (Ultrawide)</option>
                           </select>
                         </div>
 
                         <div className="col-span-6 sm:col-span-3">
                           <label
-                            htmlFor="imageGeneration.imageSize"
+                            htmlFor="imageGeneration.quality"
                             className="block text-sm font-medium text-gray-700 dark:text-gray-300"
                           >
-                            {t('admin.models.fields.imageSize', 'Image Size')}
+                            {t('admin.models.fields.imageQuality', 'Image Quality')}
                           </label>
                           <select
-                            id="imageGeneration.imageSize"
-                            value={data.imageGeneration?.imageSize || '1K'}
+                            id="imageGeneration.quality"
+                            value={data.imageGeneration?.quality || 'Medium'}
                             onChange={e =>
                               handleChange('imageGeneration', {
                                 ...(data.imageGeneration || {}),
-                                imageSize: e.target.value
+                                quality: e.target.value
                               })
                             }
-                            className="mt-1 block w-full py-2 px-3 border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100 rounded-md shadow-sm focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm"
+                            className="mt-1 block w-full py-2 px-3 border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100 rounded-md shadow-xs focus:outline-hidden focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm"
                           >
-                            <option value="1K">1K (1024px)</option>
-                            <option value="2K">2K (2048px)</option>
-                            <option value="4K">4K (4096px)</option>
+                            <option value="Low">
+                              {t('admin.models.imageQuality.low', 'Low (1K)')}
+                            </option>
+                            <option value="Medium">
+                              {t('admin.models.imageQuality.medium', 'Medium (2K)')}
+                            </option>
+                            <option value="High">
+                              {t('admin.models.imageQuality.high', 'High (4K)')}
+                            </option>
                           </select>
                         </div>
 
@@ -867,7 +1121,7 @@ function ModelFormEditor({
                             }
                             min="1"
                             max="14"
-                            className="mt-1 focus:ring-indigo-500 focus:border-indigo-500 block w-full shadow-sm sm:text-sm border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100 rounded-md"
+                            className="mt-1 focus:ring-indigo-500 focus:border-indigo-500 block w-full shadow-xs sm:text-sm border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100 rounded-md"
                           />
                           <p className="mt-2 text-sm text-gray-500 dark:text-gray-400">
                             {t(
@@ -914,7 +1168,7 @@ function ModelFormEditor({
                                   id={inputId}
                                   value={data.config?.[field.key]}
                                   onChange={parsed => handleConfigChange(field.key, parsed)}
-                                  className="mt-1 focus:ring-indigo-500 focus:border-indigo-500 block w-full font-mono text-xs shadow-sm sm:text-sm border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100 rounded-md"
+                                  className="mt-1 focus:ring-indigo-500 focus:border-indigo-500 block w-full font-mono text-xs shadow-xs sm:text-sm border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100 rounded-md"
                                 />
                               ) : Array.isArray(field.enumHint) && field.enumHint.length > 0 ? (
                                 <input
@@ -923,7 +1177,7 @@ function ModelFormEditor({
                                   type="text"
                                   value={value}
                                   onChange={e => handleConfigChange(field.key, e.target.value)}
-                                  className="mt-1 focus:ring-indigo-500 focus:border-indigo-500 block w-full shadow-sm sm:text-sm border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100 rounded-md"
+                                  className="mt-1 focus:ring-indigo-500 focus:border-indigo-500 block w-full shadow-xs sm:text-sm border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100 rounded-md"
                                 />
                               ) : (
                                 <input
@@ -938,7 +1192,7 @@ function ModelFormEditor({
                                         : e.target.value
                                     )
                                   }
-                                  className="mt-1 focus:ring-indigo-500 focus:border-indigo-500 block w-full shadow-sm sm:text-sm border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100 rounded-md"
+                                  className="mt-1 focus:ring-indigo-500 focus:border-indigo-500 block w-full shadow-xs sm:text-sm border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100 rounded-md"
                                 />
                               )}
                               {Array.isArray(field.enumHint) && field.enumHint.length > 0 && (

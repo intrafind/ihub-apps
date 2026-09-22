@@ -1,7 +1,4 @@
-import { promises as fs } from 'fs';
-import { join } from 'path';
-import { getRootDir } from '../../pathUtils.js';
-import { atomicWriteJSON } from '../../utils/atomicWrite.js';
+import configStore from '../../services/config/ConfigStore.js';
 import configCache from '../../configCache.js';
 import { adminAuth } from '../../middleware/adminAuth.js';
 import { buildServerPath } from '../../utils/basePath.js';
@@ -28,13 +25,8 @@ import { validateCredential, SECRET_FIELDS_BY_TYPE } from '../../validators/cred
 const REDACTED = '***REDACTED***';
 const COMPONENT = 'AdminCredentials';
 
-/**
- * Absolute path to the credential store file.
- * @returns {string}
- */
-function getCredentialsFilePath() {
-  return join(getRootDir(), 'contents', 'config', 'credentials.json');
-}
+/** The credential store, as a path relative to `contents/`. */
+const CREDENTIALS_FILE = 'config/credentials.json';
 
 /**
  * Check whether a value is an environment variable placeholder (e.g. `${VAR}`).
@@ -77,22 +69,30 @@ function redactProfile(profile) {
 }
 
 /**
- * Read the raw (on-disk, possibly encrypted) credential store.
- * Missing/empty store is treated as `{ credentials: {} }`.
- * @returns {Promise<{ credentials: Record<string, object> }>}
+ * Read the raw (still-encrypted) credential store.
+ *
+ * An absent store is `{ credentials: {} }` — that is the ordinary first-run
+ * state. A store that exists but cannot be read is *not*: every caller of this
+ * writes the result straight back, so folding a corrupt file into an empty one
+ * would let the next save delete every credential in it.
+ *
+ * `readJsonStrict` is what separates the two. The first version of this guard
+ * asked the namespace listing whether the file was there — which cannot work,
+ * because a listing drops the documents it cannot parse, so the file was
+ * missing from it exactly when the guard needed it present. A truncated
+ * `credentials.json` therefore read as `{ credentials: {} }`, the admin page
+ * rendered as if nothing were configured, and the next create wrote every
+ * encrypted secret away with a 201 and no backup.
+ *
+ * @returns {Promise<{ credentials: Record<string, object> }>} The store
+ * @throws {Error} When the file is present but unreadable or malformed
  */
 async function readStore() {
-  try {
-    const raw = await fs.readFile(getCredentialsFilePath(), 'utf8');
-    const parsed = JSON.parse(raw);
-    if (!parsed || typeof parsed !== 'object' || !parsed.credentials) {
-      return { credentials: {} };
-    }
-    return parsed;
-  } catch (error) {
-    if (error.code === 'ENOENT') return { credentials: {} };
-    throw error;
+  const parsed = await configStore.readJsonStrict(CREDENTIALS_FILE);
+  if (!parsed || typeof parsed !== 'object' || !parsed.credentials) {
+    return { credentials: {} };
   }
+  return parsed;
 }
 
 /**
@@ -101,7 +101,7 @@ async function readStore() {
  * @returns {Promise<void>}
  */
 async function writeStore(store) {
-  await atomicWriteJSON(getCredentialsFilePath(), store);
+  await configStore.writeJson(CREDENTIALS_FILE, store);
   await configCache.refreshCredentialsCache();
 }
 

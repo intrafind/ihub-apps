@@ -4,7 +4,8 @@ import validate from '../validators/validate.js';
 import { magicPromptSchema } from '../validators/index.js';
 import config from '../config.js';
 import { authRequired } from '../middleware/authRequired.js';
-import { simpleCompletion } from '../utils.js';
+import llmClient, { isLLMError } from '../services/loop/LLMClient.js';
+import { sendLLMError } from '../services/loop/llmHttpErrors.js';
 import { buildServerPath } from '../utils/basePath.js';
 import logger from '../utils/logger.js';
 import {
@@ -13,7 +14,18 @@ import {
   sendFailedOperationError
 } from '../utils/responseHelpers.js';
 
+/** Output cap for the rewritten prompt. */
+const MAGIC_PROMPT_MAX_TOKENS = 8192;
+
 export default function registerMagicPromptRoutes(app) {
+  /**
+   * POST /api/magic-prompt
+   *
+   * Rewrites a user's draft prompt with a helper model. The model call goes
+   * through `LLMClient` (ledger kind `utility`, purpose `magic-prompt`);
+   * provider failures are answered with the mapped status from
+   * `sendLLMError` instead of a blanket 500.
+   */
   app.post(
     buildServerPath('/api/magic-prompt'),
     authRequired,
@@ -69,16 +81,26 @@ export default function registerMagicPromptRoutes(app) {
           { role: 'user', content: input }
         ];
 
-        // Use simpleCompletion instead of duplicating the LLM call logic
-        const result = await simpleCompletion(messages, {
+        // `retries: 0` — an interactive request must not stall on a provider's Retry-After.
+        const result = await llmClient.complete({
           modelId: selectedModelId,
-          maxTokens: 8192
+          messages,
+          options: { maxTokens: MAGIC_PROMPT_MAX_TOKENS },
+          retries: 0,
+          telemetry: {
+            kind: 'utility',
+            purpose: 'magic-prompt',
+            user: req.user,
+            refs: { appId }
+          }
         });
 
         const newPrompt = result.content;
 
-        const inputTokens = result.usage?.prompt_tokens ?? estimateTokens(input);
-        const outputTokens = result.usage?.completion_tokens ?? estimateTokens(newPrompt);
+        // Prefer provider-reported usage; fall back to an estimate when the
+        // provider sent none (or zero) so accounting never records 0/0.
+        const inputTokens = result.usage?.promptTokens || estimateTokens(input);
+        const outputTokens = result.usage?.completionTokens || estimateTokens(newPrompt);
 
         const userSessionId = req.headers['x-session-id'];
         await recordMagicPrompt({
@@ -92,6 +114,9 @@ export default function registerMagicPromptRoutes(app) {
 
         return res.json({ prompt: newPrompt });
       } catch (error) {
+        if (isLLMError(error)) {
+          return sendLLMError(res, error, { context: 'generate magic prompt' });
+        }
         return sendInternalError(res, error, 'generate magic prompt');
       }
     }

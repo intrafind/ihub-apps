@@ -105,8 +105,12 @@ Before configuring iFinder and iAssistant integration, ensure you have:
 - Administrative access to both iFinder and iAssistant configurations
 
 **Authentication Requirements:**
-- RSA private key for JWT token signing (RS256 algorithm)
-- Corresponding public key configured in iFinder/iAssistant
+- **Recommended (keyless):** enable `iFinder.useOidcKeyPair` so iHub signs tokens
+  with its own OIDC key and iFinder verifies them via iHub's JWKS endpoint — no
+  key pair to generate or exchange. See
+  [iFinder Keyless (OIDC/OAuth) JWT Integration](ifinder-oidc-jwt.md).
+- **Legacy alternative:** an RSA private key for JWT token signing (RS256), with
+  the corresponding public key configured in iFinder/iAssistant.
 - User directory integration (iFinder must recognize user identities from iHub Apps)
 
 **iHub Apps Prerequisites:**
@@ -179,6 +183,57 @@ cat ifinder_private_key.pem
 
 ## iFinder Configuration
 
+### 0. Recommended: Keyless (OIDC/OAuth) Authentication
+
+Before setting up a manual RSA key pair, consider the **keyless** approach. It
+removes JWT key management entirely: iHub signs the iFinder token with the same
+RSA key it uses for its OIDC server, and iFinder validates it by fetching iHub's
+public key from `/.well-known/jwks.json`.
+
+**iHub side** (Admin → iFinder Integration, or `platform.json`):
+
+```json
+{
+  "oauth": { "issuer": "https://your-ihub-instance.com" },
+  "iFinder": {
+    "enabled": true,
+    "baseUrl": "https://your-ifinder-instance.com",
+    "useOidcKeyPair": true,
+    "audience": "ifinder-api",
+    "defaultScope": "fa_index_read",
+    "jwtSubjectField": "email"
+  }
+}
+```
+
+> `oauth.issuer` **must** be set to your iHub public URL — the token issuer is
+> stamped from it and must match what iFinder is configured with. It cannot be
+> auto-detected at token-signing time.
+
+**iFinder side** (Spring Boot):
+
+```yaml
+intrafind:
+  security:
+    auth:
+      enable-oauth2-resource-server: true
+spring:
+  security:
+    oauth2:
+      resourceserver:
+        jwt:
+          issuer-uri: https://your-ihub-instance.com
+          principal-claim-name: email
+```
+
+That is the entire setup — no `openssl`, no private key on iHub, no public key
+upload into iFinder. For the full walkthrough, verification steps, and
+troubleshooting, see
+[iFinder Keyless (OIDC/OAuth) JWT Integration](ifinder-oidc-jwt.md).
+
+The remaining sections describe the **legacy manual key-exchange** setup, which
+you only need if you are not using the keyless approach.
+
 ### 1. Environment Variables Setup
 
 Set the required environment variables for iFinder integration:
@@ -210,14 +265,19 @@ MIIEvgIBADANBgkqhkiG9w0BAQEFAASCBKgwggSkAgEAAoIBAQDKrCFR...
 
 ### 2. Platform Configuration
 
-Add iFinder configuration to `contents/config/platform.json`:
+Set the non-secret fields from **Admin > Integrations > iFinder**, or add
+them directly to `contents/config/platform.json`. The private key itself is
+never stored inline: create a "Secret"-type credential under **Admin >
+Credentials** holding the PEM key, then reference it via `privateKeyRef`
+(the admin UI does this for you when you pick the credential from the
+**Private Key** field):
 
 ```json
 {
   "iFinder": {
     "baseUrl": "https://your-ifinder-instance.com",
     "defaultSearchProfile": "searchprofile-standard",
-    "privateKey": "-----BEGIN PRIVATE KEY-----\nMIIEvgIBADANBgkqhkiG9w0BAQEFAASCBKgwggSkAgEAAoIBAQDKrCFR...\n-----END PRIVATE KEY-----",
+    "privateKeyRef": "ifinder",
     "endpoints": {
       "search": "/public-api/retrieval/api/v1/search-profiles/{profileId}/_search",
       "document": "/public-api/retrieval/api/v1/search-profiles/{profileId}/docs/{docId}"
@@ -239,7 +299,7 @@ Add iFinder configuration to `contents/config/platform.json`:
 |-----------|-------------|----------|---------|
 | `baseUrl` | iFinder instance URL | Yes | - |
 | `defaultSearchProfile` | Default search profile ID | Yes | - |
-| `privateKey` | RSA private key (PEM format) | Yes | - |
+| `privateKeyRef` | ID of a "Secret" credential (Admin > Credentials) holding the RSA private key (PEM format). `IFINDER_PRIVATE_KEY` env var takes precedence when set | Yes (unless env var is set) | - |
 | `timeout` | Request timeout (ms) | No | 30000 |
 | `algorithm` | JWT signing algorithm | No | RS256 |
 | `issuer` | JWT issuer claim | No | ihub-apps |
@@ -495,13 +555,16 @@ IASSISTANT_BASE_URL=https://iassistant.company.com
 ```
 
 **Platform Configuration (contents/config/platform.json):**
+
+With `IFINDER_PRIVATE_KEY` set as above, no `privateKeyRef` is needed here —
+the environment variable always takes precedence:
+
 ```json
 {
   "serverName": "Company iHub Apps",
   "iFinder": {
     "baseUrl": "https://ifinder.company.com",
     "defaultSearchProfile": "searchprofile-standard",
-    "privateKey": "${IFINDER_PRIVATE_KEY}",
     "timeout": 30000
   },
   "iAssistant": {
@@ -515,13 +578,15 @@ IASSISTANT_BASE_URL=https://iassistant.company.com
 
 ### 2. Advanced Multi-Profile Setup
 
-**Platform Configuration:**
+**Platform Configuration** (`privateKeyRef` points at a "Secret" credential
+created under Admin > Credentials; omit it and set `IFINDER_PRIVATE_KEY`
+instead if you prefer the environment variable):
 ```json
 {
   "iFinder": {
     "baseUrl": "https://ifinder.company.com",
     "defaultSearchProfile": "searchprofile-standard",
-    "privateKey": "${IFINDER_PRIVATE_KEY}",
+    "privateKeyRef": "ifinder",
     "profiles": {
       "hr": "searchprofile-hr-docs",
       "technical": "searchprofile-tech-docs", 
@@ -565,7 +630,7 @@ IASSISTANT_BASE_URL=https://iassistant.company.com
   "iFinder": {
     "baseUrl": "https://ifinder.company.com",
     "defaultSearchProfile": "searchprofile-standard",
-    "privateKey": "${IFINDER_PRIVATE_KEY}",
+    "privateKeyRef": "ifinder",
     "algorithm": "RS256",
     "issuer": "ihub-apps-production",
     "audience": "ifinder-api-production",
@@ -595,13 +660,15 @@ IASSISTANT_BASE_URL=https://iassistant.company.com
 
 ### 4. Development/Testing Configuration
 
-**Development Platform Configuration:**
+**Development Platform Configuration** (a separate credential, e.g.
+`ifinder_dev`, keeps the dev key distinct from production — there is no
+per-environment env var name; `IFINDER_PRIVATE_KEY` is the only one read):
 ```json
 {
   "iFinder": {
     "baseUrl": "https://ifinder-dev.company.com",
     "defaultSearchProfile": "searchprofile-test",
-    "privateKey": "${IFINDER_DEV_PRIVATE_KEY}",
+    "privateKeyRef": "ifinder_dev",
     "timeout": 60000,
     "debug": true,
     "mockResponses": false
@@ -624,6 +691,13 @@ IASSISTANT_BASE_URL=https://iassistant.company.com
 ```
 
 ## Testing and Validation
+
+> **Use the built-in diagnostics first.** **Admin → iFinder Integration → Test iFinder** /
+> **Test iAssistant** performs every check below in one run — DNS, TLS, JWT generation, JWKS
+> reachability and a real API request — and shows the decoded token, the URLs used and what to check
+> for each failure. See [Connection Diagnostics](#0-start-here-connection-diagnostics). The manual
+> commands in this section remain useful for verifying reachability **from the iFinder host**, which
+> iHub cannot do for you.
 
 ### 1. Connection Testing
 
@@ -734,6 +808,70 @@ Use a JWT decoder tool to verify token structure:
 - [ ] Logging and monitoring operational
 
 ## Troubleshooting
+
+### 0. Start Here: Connection Diagnostics
+
+Before digging through logs, run the built-in diagnostics under **Admin → iFinder Integration →
+Test iFinder** / **Test iAssistant**. Instead of a single pass/fail message it walks the whole
+connection path and reports what it observed at every step, so you can see exactly where it breaks:
+
+| Step                       | What it proves                                                                                         |
+| -------------------------- | ------------------------------------------------------------------------------------------------------ |
+| Configuration              | Which key signs the JWT, which subject field is used, which endpoints and profile are configured         |
+| Base URL                   | Scheme, hostname, port, and whether the hostname is fully qualified                                      |
+| DNS resolution             | Whether the iHub server can resolve the hostname, and to which addresses                                 |
+| TCP / TLS connection       | Whether the port answers, plus the certificate subject, issuer, expiry, and trust result                 |
+| JWT generation             | The decoded header and payload, and the subject that was actually derived for the user                   |
+| JWT signature              | That iHub can verify its own token with the matching public key                                          |
+| Issuer reachable           | The issuer and JWKS URL **iFinder itself has to call back to** (OIDC key pair mode)                       |
+| JWKS endpoint              | That the endpoint publishes keys and that the token's `kid` is among them                                 |
+| API request                | The exact URL and method, the response status, the response headers, and a body excerpt                  |
+
+Every failing step lists concrete things to check. Expand a step to see the raw observations as JSON.
+
+#### Diagnostics Options
+
+Expand **Diagnostics options** above the buttons for:
+
+- **Test as email / username / domain** — mint the test JWT for a specific user instead of your own
+  admin account. Use this to confirm how the subject claim is built, for example whether iFinder
+  expects `DOMAIN\username` rather than an email address.
+- **Include the signed JWT** — returns the token itself plus a ready-to-run `curl` command. The token
+  is a working credential for the tested user, so treat it like a password. Without this option the
+  `curl` command references `$TOKEN` and is safe to share.
+- **Run conversation round-trip** — additionally creates and deletes an ephemeral iAssistant
+  conversation, which verifies write access rather than only authentication.
+
+#### Reading the Two Classic Failures
+
+**iFinder answers 500.** The request reached iFinder, so the cause is on its side — most often that
+iFinder cannot resolve or reach the JWKS URL of iHub while validating your token. Check the **Issuer
+reachable** step: if the advertised issuer is `localhost` or a short single-label hostname, iFinder
+can never fetch the keys. Set the externally reachable URL under **Admin → Authentication → OAuth
+Server** and verify it from the iFinder host with `curl -sv https://ihub.example.com/.well-known/jwks.json`.
+
+**iFinder answers 401 with an empty body.** The diagnostics print the claims that were sent
+(`sub`, `iss`, `aud`, `alg`, `kid`) so you can compare them against the trust configuration in
+iFinder, surface the `WWW-Authenticate` header when there is one, and remind you of the usual
+suspects: an issuer that does not match exactly (a trailing slash is enough), a `kid` that is not in
+the JWKS, a subject in the wrong format, or clock skew on the iHub server.
+
+The same checks are available over the API:
+
+```bash
+curl -X POST https://ihub.example.com/api/admin/integrations/ifinder/_test \
+  -H 'Content-Type: application/json' \
+  -H "Authorization: Bearer $ADMIN_TOKEN" \
+  -d '{"includeToken": false, "user": {"username": "jdoe", "domain": "EXAMPLE"}}'
+```
+
+The search term and the search profile are not accepted as parameters: the diagnostics
+deliberately exercise the configured profile with a fixed query, so that no value from the
+request can influence which URL iHub contacts. To test a different profile, change the
+**Default Search Profile** setting.
+
+The response contains `success`, a `summary` of step counts, and the ordered `steps` array with
+`status` (`ok` / `warn` / `fail` / `skip`), `message`, `details`, and `hints` per step.
 
 ### 1. Common Connection Issues
 

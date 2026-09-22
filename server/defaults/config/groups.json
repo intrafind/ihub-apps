@@ -33,7 +33,7 @@
       "permissions": {
         "apps": ["chat"],
         "prompts": ["*"],
-        "models": ["gemini-2.0-flash"],
+        "models": ["gemini-flash-latest"],
         "skills": [],
         "adminAccess": false
       },

@@ -80,14 +80,13 @@
     "mode": "oidc",
     "authenticatedGroup": "authenticated",
     "sessionTimeoutMinutes": 480,
-    "jwtSecret": "${JWT_SECRET}"
-  },
-  "authDebug": {
-    "enabled": true,
-    "consoleLogging": true,
-    "includeRawData": true,
-    "maskTokens": false,
-    "redactPasswords": false
+    "jwtSecret": "${JWT_SECRET}",
+    "debug": {
+      "enabled": true,
+      "includeRawData": true,
+      "maskTokens": false,
+      "redactPasswords": false
+    }
   },
   "anonymousAuth": {
     "enabled": true,
@@ -201,15 +200,11 @@
         "name": "corporate-ldap",
         "displayName": "Corporate LDAP",
         "url": "ldap://ldap.example.com:389",
+        "preset": "openldap",
+        "baseDn": "dc=example,dc=org",
         "adminDn": "cn=admin,dc=example,dc=org",
-        "adminPassword": "${LDAP_ADMIN_PASSWORD}",
-        "userSearchBase": "ou=people,dc=example,dc=org",
-        "usernameAttribute": "uid",
-        "userDn": "uid={{username}},ou=people,dc=example,dc=org",
-        "groupSearchBase": "ou=groups,dc=example,dc=org",
-        "groupClass": "groupOfNames",
+        "adminPasswordRef": "ldap_corporate-ldap",
         "defaultGroups": ["ldap-users"],
-        "sessionTimeoutMinutes": 480,
         "tlsOptions": {
           "rejectUnauthorized": false
         }
@@ -217,16 +212,12 @@
       {
         "name": "active-directory",
         "displayName": "Active Directory",
-        "url": "ldap://ad.example.com:389",
-        "adminDn": "${AD_BIND_USER}@example.com",
-        "adminPassword": "${AD_BIND_PASSWORD}",
-        "userSearchBase": "dc=example,dc=com",
-        "usernameAttribute": "sAMAccountName",
-        "userDn": "{{username}}@example.com",
-        "groupSearchBase": "dc=example,dc=com",
-        "groupClass": "group",
-        "defaultGroups": ["ad-users"],
-        "sessionTimeoutMinutes": 480
+        "url": "ldaps://ad.example.com:636",
+        "preset": "activeDirectory",
+        "baseDn": "dc=example,dc=com",
+        "adminDn": "svc-ihub@example.com",
+        "adminPasswordRef": "ldap_active-directory",
+        "defaultGroups": ["ad-users"]
       }
     ]
   },
@@ -245,7 +236,7 @@
   "iFinder": {
     "enabled": true,
     "baseUrl": "${IFINDER_API_URL}",
-    "privateKey": "${IFINDER_PRIVATE_KEY}",
+    "privateKeyRef": "ifinder",
     "algorithm": "RS256",
     "issuer": "ihub-apps",
     "audience": "ifinder-api",

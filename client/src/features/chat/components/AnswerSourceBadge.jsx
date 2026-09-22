@@ -116,9 +116,13 @@ function AnswerSourceBadge({ answerSource, workflowResult }) {
         // Keep default mixed styling
         break;
     }
-  } else if (sources.length > 1) {
-    // Multiple sources - show mixed with tooltip listing all sources
-    displayText = t('chatMessage.answerSource.mixed');
+  } else if (sources.includes('email') && sources.every(s => s === 'email' || s === 'file')) {
+    // Email plus its attachments is still the user's own content, not
+    // "external" knowledge — keep the email badge rather than the mixed one.
+    displayText = t('chatMessage.answerSource.emailWithFiles');
+    iconName = 'mail';
+    colorClasses =
+      'bg-amber-100 text-amber-700 dark:bg-amber-900/30 dark:text-amber-300 border-amber-200 dark:border-amber-800';
   }
 
   // Create tooltip text listing all sources

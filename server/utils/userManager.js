@@ -1,16 +1,26 @@
-import path from 'path';
 import fs from 'fs';
 import bcrypt from 'bcryptjs';
 import { v4 as uuidv4 } from 'uuid';
-import { fileURLToPath } from 'url';
 import { atomicWriteJSON } from './atomicWrite.js';
+import configStore from '../services/config/ConfigStore.js';
 import configCache from '../configCache.js';
+import { announceConfigChange } from '../configSync.js';
 import { mapExternalGroups, loadGroupsConfiguration } from './authorization.js';
 import logger from './logger.js';
 import { ensureFirstUserIsAdmin } from './adminRescue.js';
+import { locateConfigFile } from './configFileLocation.js';
 
-const __filename = fileURLToPath(import.meta.url);
-const __dirname = path.dirname(__filename);
+/**
+ * Where the users file lives — see {@link locateConfigFile}, which both this
+ * module and `oauthClientManager` share so the read path and the write path
+ * cannot drift apart.
+ *
+ * @param {string} usersFilePath - Path to users.json as configured
+ * @returns {{fullPath: string, cacheKey: string, relPath: string|null}}
+ */
+function locateUsersFile(usersFilePath) {
+  return locateConfigFile(usersFilePath);
+}
 
 /**
  * Hash password with user ID as salt for unique hashes
@@ -31,24 +41,12 @@ export async function hashPasswordWithUserId(password, userId) {
  */
 export function loadUsers(usersFilePath) {
   try {
-    // Convert file path to cache key format
-    // The cache stores keys without 'contents/' prefix, so we need to strip it
-    let cacheKey;
-    if (usersFilePath.startsWith('contents/')) {
-      // Remove 'contents/' prefix to match cache key format
-      cacheKey = usersFilePath.substring('contents/'.length);
-    } else {
-      cacheKey = path.relative(
-        path.join(__dirname, '../../'),
-        path.isAbsolute(usersFilePath)
-          ? usersFilePath
-          : path.join(__dirname, '../../', usersFilePath)
-      );
-      // Also remove contents/ prefix if it exists after path.relative
-      if (cacheKey.startsWith('contents/')) {
-        cacheKey = cacheKey.substring('contents/'.length);
-      }
-    }
+    // Through `locateUsersFile` so the read and the write derive the same cache
+    // key from the same path. They agreed when this was written twice; two
+    // copies of a rule with four branches is a coin toss on whether they still
+    // will, and a disagreement here is a permanent cache miss that only shows
+    // up as a warning nobody reads.
+    const { fullPath, cacheKey } = locateUsersFile(usersFilePath);
 
     // Try to get from cache first
     const cached = configCache.get(cacheKey);
@@ -61,10 +59,6 @@ export function loadUsers(usersFilePath) {
       component: 'Utils',
       cacheKey
     });
-
-    const fullPath = path.isAbsolute(usersFilePath)
-      ? usersFilePath
-      : path.join(__dirname, '../../', usersFilePath);
 
     // Check if file exists
     if (!fs.existsSync(fullPath)) {
@@ -126,9 +120,7 @@ export function loadUsers(usersFilePath) {
  */
 export async function saveUsers(usersConfig, usersFilePath) {
   try {
-    const fullPath = path.isAbsolute(usersFilePath)
-      ? usersFilePath
-      : path.join(__dirname, '../../', usersFilePath);
+    const { fullPath, cacheKey, relPath } = locateUsersFile(usersFilePath);
 
     // Update metadata
     if (!usersConfig.metadata) {
@@ -136,24 +128,24 @@ export async function saveUsers(usersConfig, usersFilePath) {
     }
     usersConfig.metadata.lastUpdated = new Date().toISOString();
 
-    // Write to file atomically
-    await atomicWriteJSON(fullPath, usersConfig);
-
-    // Update cache with the new data
-    // The cache stores keys without 'contents/' prefix, so we need to strip it
-    let cacheKey;
-    if (usersFilePath.startsWith('contents/')) {
-      // Remove 'contents/' prefix to match cache key format
-      cacheKey = usersFilePath.substring('contents/'.length);
+    // Write to file atomically. The store writes what it is handed, so the
+    // password hashes in here are stored exactly as this module produced them.
+    if (relPath) {
+      await configStore.writeJson(relPath, usersConfig);
     } else {
-      cacheKey = path.relative(path.join(__dirname, '../../'), fullPath);
-      // Also remove contents/ prefix if it exists after path.relative
-      if (cacheKey.startsWith('contents/')) {
-        cacheKey = cacheKey.substring('contents/'.length);
-      }
+      await atomicWriteJSON(fullPath, usersConfig);
     }
 
     configCache.setCacheEntry(cacheKey, usersConfig);
+
+    // Tell the other workers to re-read the file. Without this a user created or
+    // updated on one worker stays invisible to the rest until their TTL fires,
+    // and since every save rewrites the whole file from that worker's snapshot,
+    // a stale worker's next write would silently drop the change. This fires on
+    // each external login (`createOrUpdateExternalUser` always touches
+    // lastActiveDate), which is a login-rate broadcast of a small file — worth
+    // it for a config that decides authorization.
+    announceConfigChange(cacheKey);
   } catch (error) {
     logger.error('Could not save users configuration', {
       component: 'Utils',
@@ -161,6 +153,18 @@ export async function saveUsers(usersConfig, usersFilePath) {
     });
     throw error;
   }
+}
+
+/**
+ * Case-insensitively compare two identifier strings (username/email).
+ * Login-facing identifiers must not be treated as distinct just because
+ * they differ in case (e.g. "Daniel.Manzke" vs "daniel.manzke").
+ * @param {string} a
+ * @param {string} b
+ * @returns {boolean} True if both are strings and equal ignoring case
+ */
+export function equalsIgnoreCase(a, b) {
+  return typeof a === 'string' && typeof b === 'string' && a.toLowerCase() === b.toLowerCase();
 }
 
 /**
@@ -181,10 +185,11 @@ export function findUserByIdentifier(usersConfig, identifier, authMethod = null)
       continue;
     }
 
-    // Match by username, email, or auth-specific subject
+    // Match by username, email (both case-insensitive), or auth-specific subject
+    // (provider subject IDs are opaque and compared exactly)
     if (
-      user.username === identifier ||
-      (identifier && user.email === identifier) ||
+      equalsIgnoreCase(user.username, identifier) ||
+      (identifier && equalsIgnoreCase(user.email, identifier)) ||
       (user.oidcData && user.oidcData.subject === identifier) ||
       (user.proxyData && user.proxyData.subject === identifier) ||
       (user.teamsData && user.teamsData.subject === identifier) ||
@@ -196,6 +201,35 @@ export function findUserByIdentifier(usersConfig, identifier, authMethod = null)
   }
 
   return null;
+}
+
+/**
+ * Look up a **local** user by the subject a JWT carries.
+ *
+ * `sub` is the user's key in `users.json`, so this is a direct lookup rather
+ * than the identifier scan {@link findUserByIdentifier} performs. It returns
+ * null for a user who is not local, which is the point: group membership for
+ * an OIDC or proxy user lives in the identity provider and arrives at sign-in,
+ * so there is nothing authoritative here to re-read for them.
+ *
+ * @param {string} userId - The `sub` claim / user key
+ * @param {string} usersFilePath - Path to users.json
+ * @returns {Object|null} The local user, or null
+ */
+export function findLocalUserById(userId, usersFilePath) {
+  if (!userId || userId === '__proto__' || userId === 'constructor' || userId === 'prototype') {
+    return null;
+  }
+
+  const usersConfig = loadUsers(usersFilePath);
+  const users = usersConfig.users || {};
+  if (!Object.hasOwn(users, userId)) return null;
+
+  const user = users[userId];
+  const methods = Array.isArray(user?.authMethods) ? user.authMethods : [];
+  if (!methods.includes('local')) return null;
+
+  return { ...user, id: userId };
 }
 
 /**
@@ -285,6 +319,12 @@ export async function createOrUpdateExternalUser(externalUser, usersFilePath) {
     // Update basic info from external provider
     user.name = externalUser.name || user.name;
     user.email = externalUser.email || user.email;
+    // Heal the login name. Records created before the directory login name was
+    // persisted carry the email here (see the create branch below), and nothing
+    // used to write it again, so the wrong value survived every later login.
+    // The directory owns this field for an external user, so take its value
+    // whenever the provider supplies one.
+    user.username = externalUser.username || user.username;
 
     // Store internal groups - groups manually assigned to users in the admin interface
     // External groups from auth providers are handled at runtime, not persisted
@@ -304,7 +344,11 @@ export async function createOrUpdateExternalUser(externalUser, usersFilePath) {
 
     const newUser = {
       id: userId,
-      username: externalUser.email || externalUser.id, // Use email or fallback to external id
+      // The directory login name first (sAMAccountName for LDAP/AD, the Windows
+      // account for NTLM). Email is not a login name — it is only the next-best
+      // identifier for providers that supply no username at all (proxy, Teams),
+      // which is why it stays in the chain rather than being dropped.
+      username: externalUser.username || externalUser.email || externalUser.id,
       email: externalUser.email || null,
       name: externalUser.name || externalUser.id,
       internalGroups: [], // Only store internal/manual groups, not external groups
@@ -422,7 +466,7 @@ export async function validateAndPersistExternalUser(externalUser, platformConfi
       ? 'ldap'
       : externalUser.authMethod === 'ntlm' || externalUser.provider === 'ntlm'
         ? 'ntlm'
-        : externalUser.provider === 'proxy'
+        : externalUser.authMethod === 'proxy' || externalUser.provider === 'proxy'
           ? 'proxy'
           : externalUser.provider === 'teams'
             ? 'teams'

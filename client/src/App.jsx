@@ -1,19 +1,22 @@
-import { useEffect, useState, Suspense } from 'react';
+import { useEffect, useState, useSyncExternalStore, Suspense } from 'react';
 import { BrowserRouter, Routes, Route, Navigate, useNavigate } from 'react-router-dom';
 import './App.css';
 import { initializeBasePath, getBasePath } from './utils/runtimeBasePath';
+import { isTeamsEnvironment } from './utils/teamsEnvironment';
 import lazyWithRetry from './utils/lazyWithRetry';
 import Layout from './shared/components/Layout';
 import AppsList from './features/apps/pages/AppsList';
+import StartPage from './features/apps/pages/StartPage';
 import PromptsList from './features/prompts/pages/PromptsList';
 import AppRouterWrapper from './features/apps/components/AppRouterWrapper';
+const ChatHistoryPage = lazyWithRetry(() => import('./features/chat/pages/ChatHistoryPage'));
 // Lazy load workflow components
 const WorkflowsPage = lazyWithRetry(() => import('./features/workflows/pages/WorkflowsPage'));
 const SetupWizard = lazyWithRetry(() => import('./features/setup/SetupWizard'));
 const WorkflowExecutionPage = lazyWithRetry(
   () => import('./features/workflows/pages/WorkflowExecutionPage')
 );
-// Lazy load canvas (pulls in react-quill/ajv — vendor-forms chunk, ~370KB)
+// Lazy load canvas (pulls in react-quill-new/ajv — vendor-forms chunk, ~370KB)
 const AppCanvas = lazyWithRetry(() => import('./features/canvas/pages/AppCanvas'));
 import NotFound from './pages/error/NotFound';
 import Unauthorized from './pages/error/Unauthorized';
@@ -31,6 +34,7 @@ const AdminUpdatesPage = lazyWithRetry(() => import('./features/admin/pages/Admi
 const AdminAdvancedPage = lazyWithRetry(() => import('./features/admin/pages/AdminAdvancedPage'));
 // Lazy load admin components
 const AdminUsageReports = lazyWithRetry(() => import('./features/admin/pages/AdminUsageReports'));
+const AdminFeedbackPage = lazyWithRetry(() => import('./features/admin/pages/AdminFeedbackPage'));
 const AdminAppsPage = lazyWithRetry(() => import('./features/admin/pages/AdminAppsPage'));
 const AdminAppEditPage = lazyWithRetry(() => import('./features/admin/pages/AdminAppEditPage'));
 const AdminShortLinks = lazyWithRetry(() => import('./features/admin/pages/AdminShortLinks'));
@@ -92,6 +96,12 @@ const AdminOAuthClientsPage = lazyWithRetry(
 const AdminOAuthClientEditPage = lazyWithRetry(
   () => import('./features/admin/pages/AdminOAuthClientEditPage')
 );
+const AdminOAuthCimdClientEditPage = lazyWithRetry(
+  () => import('./features/admin/pages/AdminOAuthCimdClientEditPage')
+);
+const AdminOAuthConnectionsPage = lazyWithRetry(
+  () => import('./features/admin/pages/AdminOAuthConnectionsPage')
+);
 const AdminOAuthServerPage = lazyWithRetry(
   () => import('./features/admin/pages/AdminOAuthServerPage')
 );
@@ -103,7 +113,13 @@ const AdminGroupEditPage = lazyWithRetry(() => import('./features/admin/pages/Ad
 const AdminUICustomization = lazyWithRetry(
   () => import('./features/admin/pages/AdminUICustomization')
 );
+const AdminLocalizationPage = lazyWithRetry(
+  () => import('./features/admin/pages/AdminLocalizationPage')
+);
 const AdminLoggingPage = lazyWithRetry(() => import('./features/admin/pages/AdminLoggingPage'));
+const AdminVoiceInputPage = lazyWithRetry(
+  () => import('./features/admin/pages/AdminVoiceInputPage')
+);
 const AdminTelemetryPage = lazyWithRetry(() => import('./features/admin/pages/AdminTelemetryPage'));
 const AdminFeaturesPage = lazyWithRetry(() => import('./features/admin/pages/AdminFeaturesPage'));
 const AdminAuditLogPage = lazyWithRetry(() => import('./features/admin/pages/AdminAuditLogPage'));
@@ -154,12 +170,14 @@ import AppProviders from './features/apps/components/AppProviders';
 import { withSafeRoute } from './shared/components/SafeRoute';
 import useSessionManagement from './shared/hooks/useSessionManagement';
 import { useUIConfig } from './shared/contexts/UIConfigContext';
+import { resolveHomePath } from './utils/homePage';
 import { usePlatformConfig } from './shared/contexts/PlatformConfigContext';
 import DocumentTitle from './shared/components/DocumentTitle';
 import { AdminAuthProvider } from './features/admin/hooks/useAdminAuth';
 import { AuthProvider } from './shared/contexts/AuthContext';
 import MarkdownRenderer from './shared/components/MarkdownRenderer';
 import useFeatureFlags from './shared/hooks/useFeatureFlags';
+import { useChatHistoryRouteState } from './shared/hooks/useChats';
 // Lazy load Teams features (only needed in Microsoft Teams environment)
 const TeamsWrapper = lazyWithRetry(() => import('./features/teams/TeamsWrapper'));
 const TeamsAuthStart = lazyWithRetry(() => import('./features/teams/TeamsAuthStart'));
@@ -167,25 +185,36 @@ const TeamsAuthEnd = lazyWithRetry(() => import('./features/teams/TeamsAuthEnd')
 
 // Create safe versions of components that need error boundaries
 const SafeAppsList = withSafeRoute(AppsList);
+const SafeStartPage = withSafeRoute(StartPage);
 const SafeAppRouterWrapper = withSafeRoute(AppRouterWrapper);
 const SafeAppCanvas = withSafeRoute(AppCanvas);
 const SafeUnifiedPage = withSafeRoute(UnifiedPage);
 const SafePromptsList = withSafeRoute(PromptsList);
 
-// Detect Teams environment without loading the Teams SDK (~484KB)
+// Detect Teams environment without loading the Teams SDK (~484KB). The
+// detection is shared with Layout, which keeps the classic header in Teams.
 function useIsTeamsEnvironment() {
-  const [isTeams] = useState(() => {
-    const params = new URLSearchParams(window.location.search);
-    return (
-      params.has('loginHint') ||
-      params.has('userObjectId') ||
-      params.has('theme') ||
-      params.has('isTeams') ||
-      window.name === 'embedded' ||
-      window.location.hostname === 'teams.microsoft.com'
-    );
-  });
+  const [isTeams] = useState(isTeamsEnvironment);
   return isTeams;
+}
+
+// Chat-history preview page. Feature-flag gating has to happen INSIDE the
+// providers: App() renders above <AppProviders>, so hooks called there only
+// ever see the default (empty, still-loading) platform config and a route
+// conditionally rendered from App() could never turn on. Deciding in the
+// element also avoids flashing the 404 page while the config is loading.
+function ChatHistoryRoute() {
+  // The capability needs the auth status as well as the platform config, and
+  // the two resolve independently — see `useChatHistoryRouteState`, which owns
+  // the wait so a signed-in user is never shown the 404 while it is running.
+  const state = useChatHistoryRouteState();
+  if (state === 'loading') return <AdminLoading />;
+  if (state === 'unavailable') return <NotFound />;
+  return (
+    <Suspense fallback={<AdminLoading />}>
+      <ChatHistoryPage />
+    </Suspense>
+  );
 }
 
 // Loading component for lazy-loaded admin components
@@ -220,13 +249,19 @@ function LazyAdminRoute({ component: Component }) {
  * as a fast-path so navigation back to '/' doesn't re-trigger the redirect before the
  * refreshed platform config arrives.
  */
+// sessionStorage emits no change events, so subscribing is a no-op; each render
+// re-reads the current value — same semantics as a direct read, but pure.
+const subscribeToNothing = () => () => {};
+const useSessionFlag = key =>
+  useSyncExternalStore(subscribeToNothing, () => !!sessionStorage.getItem(key));
+
 function SetupCheck({ children }) {
   const navigate = useNavigate();
   const { platformConfig, isLoading: platformLoading } = usePlatformConfig();
   // User deliberately chose "Skip" this session — don't redirect again until next session
-  const sessionSkipped = !!sessionStorage.getItem('setup_skipped');
+  const sessionSkipped = useSessionFlag('setup_skipped');
   // Fast-path: wizard just completed in this session
-  const sessionConfigured = !!sessionStorage.getItem('setup_configured');
+  const sessionConfigured = useSessionFlag('setup_configured');
 
   // Derive setup state: null = still loading, true/false = known
   const setupConfigured =
@@ -243,7 +278,10 @@ function SetupCheck({ children }) {
     }
   }, [setupConfigured, navigate]);
 
-  if (setupConfigured === null) {
+  // Also covers `false`: the effect above is navigating to the wizard, and
+  // rendering children meanwhile would let the "/" redirect win the race and
+  // carry the user past setup.
+  if (!setupConfigured) {
     return (
       <div className="flex items-center justify-center min-h-screen">
         <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600" />
@@ -252,6 +290,17 @@ function SetupCheck({ children }) {
   }
 
   return children;
+}
+
+// The "/" route is a pointer, never a page of its own: every view it can send
+// users to has its own route (/start, /apps, /pages/:id, /apps/:id), so the URL,
+// the sidebar's active item and bookmarks always match what is on screen. Which
+// one is admin-configurable (Admin → UI Customization → Start Page) and lives in
+// the UI config, so wait for that to load before redirecting.
+function HomeRoute() {
+  const { uiConfig, isLoading } = useUIConfig();
+  if (isLoading) return <AdminLoading />;
+  return <Navigate to={resolveHomePath(uiConfig)} replace />;
 }
 
 function App() {
@@ -344,10 +393,18 @@ function App() {
             index
             element={
               <SetupCheck>
-                <SafeAppsList />
+                <HomeRoute />
               </SetupCheck>
             }
           />
+          {/* Start page — greeting, the default app's chat input and featured apps */}
+          <Route path="start" element={<SafeStartPage />} />
+          {/* Apps browser — full list with search/filter */}
+          <Route path="apps" element={<SafeAppsList />} />
+          {/* Chat history page — feature-flagged, uses mock data */}
+          {/* Chat history preview — the element gates on the feature flag (see
+              ChatHistoryRoute); the route itself is always registered. */}
+          <Route path="chats" element={<ChatHistoryRoute />} />
           {uiConfig?.promptsList?.enabled !== false &&
             featureFlags.isEnabled('promptsLibrary', true) && (
               <Route path="prompts" element={<SafePromptsList />} />
@@ -363,6 +420,13 @@ function App() {
             </>
           )}
           <Route path="apps/:appId" element={<SafeAppRouterWrapper />} />
+          {/* Opening a stored chat. Same element and guards as the bare app
+              route — AppChat reads `:chatId` and hydrates it from the durable
+              chat store instead of the id this tab holds in sessionStorage.
+              `apps` is already in both KNOWN_ROUTES lists and only the
+              top-level segment matters for base-path detection, so neither
+              list changes. */}
+          <Route path="apps/:appId/c/:chatId" element={<SafeAppRouterWrapper />} />
           <Route
             path="apps/:appId/canvas"
             element={
@@ -559,9 +623,20 @@ function App() {
               path="oauth/clients"
               element={<LazyAdminRoute component={AdminOAuthClientsPage} />}
             />
+            {/* Before the generic :clientId route: a metadata-document client's
+                id is a URL, so it travels base64url-encoded under its own
+                path rather than as a client id segment. */}
+            <Route
+              path="oauth/clients/cimd/:encodedClientId"
+              element={<LazyAdminRoute component={AdminOAuthCimdClientEditPage} />}
+            />
             <Route
               path="oauth/clients/:clientId"
               element={<LazyAdminRoute component={AdminOAuthClientEditPage} />}
+            />
+            <Route
+              path="oauth/connections"
+              element={<LazyAdminRoute component={AdminOAuthConnectionsPage} />}
             />
             <Route
               path="oauth/server"
@@ -620,6 +695,12 @@ function App() {
             {showAdminPage('ui') && (
               <Route path="ui" element={<LazyAdminRoute component={AdminUICustomization} />} />
             )}
+            {showAdminPage('ui') && (
+              <Route
+                path="localization"
+                element={<LazyAdminRoute component={AdminLocalizationPage} />}
+              />
+            )}
             {showAdminPage('pages') && (
               <Route path="pages" element={<LazyAdminRoute component={AdminPagesPage} />} />
             )}
@@ -643,11 +724,20 @@ function App() {
             {showAdminPage('usage') && (
               <Route path="usage" element={<LazyAdminRoute component={AdminUsageReports} />} />
             )}
+            {showAdminPage('feedback') && (
+              <Route path="feedback" element={<LazyAdminRoute component={AdminFeedbackPage} />} />
+            )}
             {showAdminPage('logging') && (
               <Route path="logging" element={<LazyAdminRoute component={AdminLoggingPage} />} />
             )}
             {showAdminPage('telemetry') && (
               <Route path="telemetry" element={<LazyAdminRoute component={AdminTelemetryPage} />} />
+            )}
+            {showAdminPage('system') && (
+              <Route
+                path="voice-input"
+                element={<LazyAdminRoute component={AdminVoiceInputPage} />}
+              />
             )}
 
             {/* Observability - Audit Log */}

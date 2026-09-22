@@ -27,7 +27,7 @@ const e = new PlannerNodeExecutor();
 const stepLogs = {
   'nelms-bio': { tokens: { input: 32884, output: 2469 } },
   'intrafind-ihub': { tokens: { input: 220446, output: 3726 } },
-  planner_r1: { tokens: null }, // planner has no token record — must be skipped
+  planner_r1: { tokens: null }, // step whose provider reported no usage — must be skipped
   r3_verify_market_guide_authors: { tokens: { input: 481724, output: 2481 } },
   weird: {}, // no tokens key — must be skipped
   alsoWeird: { tokens: { input: 'x' } } // non-numeric — treated as 0

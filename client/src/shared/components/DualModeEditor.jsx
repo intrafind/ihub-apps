@@ -141,7 +141,7 @@ const DualModeEditor = ({
                   onClick={() => handleModeSwitch('form')}
                   className={`flex items-center px-3 py-2 text-sm font-medium rounded-md transition-colors ${
                     editingMode === 'form'
-                      ? 'bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100 shadow-sm'
+                      ? 'bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100 shadow-xs'
                       : 'text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-300'
                   }`}
                 >
@@ -153,7 +153,7 @@ const DualModeEditor = ({
                   onClick={() => handleModeSwitch('json')}
                   className={`flex items-center px-3 py-2 text-sm font-medium rounded-md transition-colors ${
                     editingMode === 'json'
-                      ? 'bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100 shadow-sm'
+                      ? 'bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100 shadow-xs'
                       : 'text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-300'
                   }`}
                 >
@@ -198,7 +198,7 @@ const DualModeEditor = ({
               <button
                 type="button"
                 onClick={handleReset}
-                className="inline-flex items-center px-3 py-1.5 text-sm font-medium text-gray-700 dark:text-gray-200 bg-white dark:bg-gray-700 border border-gray-300 dark:border-gray-600 rounded-md hover:bg-gray-50 dark:hover:bg-gray-600 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500"
+                className="inline-flex items-center px-3 py-1.5 text-sm font-medium text-gray-700 dark:text-gray-200 bg-white dark:bg-gray-700 border border-gray-300 dark:border-gray-600 rounded-md hover:bg-gray-50 dark:hover:bg-gray-600 focus:outline-hidden focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500"
               >
                 <Icon name="arrow-path" className="h-4 w-4 mr-1" />
                 {t('admin.editor.reset', 'Reset')}

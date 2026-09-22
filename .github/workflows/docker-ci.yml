@@ -89,10 +89,10 @@ jobs:
       
     steps:
       - name: Checkout repository
-        uses: actions/checkout@v4
+        uses: actions/checkout@v7
 
       - name: Set up Node.js (for version sync)
-        uses: actions/setup-node@v4
+        uses: actions/setup-node@v7
         with:
           node-version: '24'
           cache: 'npm'
@@ -109,13 +109,22 @@ jobs:
           node scripts/sync-release-version.js $RELEASE_TAG
         shell: bash
 
+      # Release notes are written to docs/releases/next/ until a release is tagged. Publish them
+      # under this tag so the image's "What's New" lists the release by its number.
+      - name: Publish unreleased release notes under the release tag
+        if: github.event_name == 'release' && github.event.release.tag_name != ''
+        env:
+          RELEASE_TAG: ${{ github.event.release.tag_name }}
+        run: node scripts/finalize-release-notes.js "$RELEASE_TAG"
+        shell: bash
+
       - name: Set up Docker Buildx
-        uses: docker/setup-buildx-action@v3
+        uses: docker/setup-buildx-action@v4
         with:
           platforms: linux/amd64
 
       - name: Log in to Container Registry
-        uses: docker/login-action@v3
+        uses: docker/login-action@v4
         with:
           registry: ${{ env.REGISTRY }}
           username: ${{ github.actor }}
@@ -123,7 +132,7 @@ jobs:
 
       - name: Extract metadata
         id: meta
-        uses: docker/metadata-action@v5
+        uses: docker/metadata-action@v6
         with:
           images: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}
           tags: |
@@ -141,7 +150,7 @@ jobs:
 
       - name: Build and push Docker image
         id: build
-        uses: docker/build-push-action@v5
+        uses: docker/build-push-action@v7
         with:
           context: .
           file: ./docker/Dockerfile
@@ -188,8 +197,13 @@ jobs:
       security-events: write
 
     steps:
+      # Needed so Trivy can read .trivyignore and so the SARIF upload can
+      # associate the results with the scanned commit.
+      - name: Checkout repository
+        uses: actions/checkout@v7
+
       - name: Log in to Container Registry
-        uses: docker/login-action@v3
+        uses: docker/login-action@v4
         with:
           registry: ${{ env.REGISTRY }}
           username: ${{ github.actor }}
@@ -202,16 +216,17 @@ jobs:
           format: 'sarif'
           output: 'trivy-results.sarif'
           severity: 'CRITICAL,HIGH,MEDIUM'
+          trivyignores: '.trivyignore'
 
       - name: Upload Trivy scan results to GitHub Security
-        uses: github/codeql-action/upload-sarif@v3
+        uses: github/codeql-action/upload-sarif@v4
         if: always()
         continue-on-error: true  # Add this line
         with:
           sarif_file: 'trivy-results.sarif'          
 
       - name: Upload Trivy results as artifact
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: trivy-scan-results
           path: trivy-results.sarif
@@ -219,19 +234,70 @@ jobs:
 
       - name: Check for critical vulnerabilities
         run: |
-          # Extract critical and high severity issues
-          CRITICAL=$(cat trivy-results.sarif | jq -r '[.runs[].results[] | select(.level == "error")] | length')
-          HIGH=$(cat trivy-results.sarif | jq -r '[.runs[].results[] | select(.level == "warning")] | length')
-          
+          # Severity has to be read from the rule tags, not from the SARIF
+          # level: Trivy reports both CRITICAL and HIGH as "error" and MEDIUM as
+          # "warning", so counting levels reports highs as criticals.
+          count_severity() {
+            jq -r --arg severity "$1" '
+              [ .runs[]
+                | (.tool.driver.rules | map({key: .id, value: .}) | from_entries) as $rules
+                | .results[]
+                | select(($rules[.ruleId].properties.tags // []) | index($severity))
+              ] | length' trivy-results.sarif
+          }
+
+          list_severity() {
+            jq -r --arg severity "$1" '
+              def field($text; $name):
+                $text
+                | split("\n")
+                | map(select(startswith($name + ": ")))
+                | first // ""
+                | ltrimstr($name + ": ")
+                | if . == "" then "-" else . end;
+              .runs[]
+              | (.tool.driver.rules | map({key: .id, value: .}) | from_entries) as $rules
+              | .results[]
+              | select(($rules[.ruleId].properties.tags // []) | index($severity))
+              | ($rules[.ruleId].help.text // "") as $text
+              | "| \(.ruleId) | \(field($text; "Package")) | \(field($text; "Fixed Version")) |"
+            ' trivy-results.sarif | sort -u
+          }
+
+          CRITICAL=$(count_severity CRITICAL)
+          HIGH=$(count_severity HIGH)
+          MEDIUM=$(count_severity MEDIUM)
+
           echo "Critical vulnerabilities: $CRITICAL"
           echo "High vulnerabilities: $HIGH"
-          
-          # Fail if critical vulnerabilities found
+          echo "Medium vulnerabilities: $MEDIUM"
+
+          {
+            echo "## Trivy image scan"
+            echo ""
+            echo "| Severity | Findings |"
+            echo "| --- | --- |"
+            echo "| Critical | $CRITICAL |"
+            echo "| High | $HIGH |"
+            echo "| Medium | $MEDIUM |"
+            if [ "$((CRITICAL + HIGH))" -gt 0 ]; then
+              echo ""
+              echo "### Critical and high findings"
+              echo ""
+              echo "| CVE | Package | Fixed version |"
+              echo "| --- | --- | --- |"
+              list_severity CRITICAL
+              list_severity HIGH
+            fi
+          } >> "$GITHUB_STEP_SUMMARY"
+
+          # Fail if critical vulnerabilities found. Findings that cannot be
+          # fixed yet can be waived with an expiring entry in .trivyignore.
           if [ "$CRITICAL" -gt 0 ]; then
             echo "❌ Critical vulnerabilities found! Build failed."
             exit 1
           fi
-          
+
           # Warn about high vulnerabilities but don't fail
           if [ "$HIGH" -gt 0 ]; then
             echo "⚠️ High severity vulnerabilities found. Consider updating dependencies."

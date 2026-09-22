@@ -19,7 +19,9 @@ import {
   ArrowUpCircleIcon
 } from '@heroicons/react/24/outline';
 import { useOverviewData } from '../hooks/useOverviewData';
+import { useUpdateCheck } from '../hooks/useUpdateCheck';
 import { useUIConfig } from '../../../shared/contexts/UIConfigContext';
+import { useAuth } from '../../../shared/contexts/AuthContext';
 
 function StatCard({
   label,
@@ -35,7 +37,7 @@ function StatCard({
   return (
     <Link
       to={href}
-      className="block bg-white dark:bg-gray-800 rounded-lg border border-gray-200 dark:border-gray-700 p-5 hover:border-indigo-300 dark:hover:border-indigo-600 hover:shadow-sm transition-all group"
+      className="block bg-white dark:bg-gray-800 rounded-lg border border-gray-200 dark:border-gray-700 p-5 hover:border-indigo-300 dark:hover:border-indigo-600 hover:shadow-xs transition-all group"
     >
       <div className="flex items-start justify-between">
         <div className="flex-1 min-w-0">
@@ -213,7 +215,7 @@ function QuickActions() {
           <Link
             key={action.href}
             to={action.href}
-            className={`inline-flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-medium transition-colors shadow-sm ${action.color}`}
+            className={`inline-flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-medium transition-colors shadow-xs ${action.color}`}
           >
             <Icon className="w-4 h-4" aria-hidden="true" />
             {action.label}
@@ -224,10 +226,56 @@ function QuickActions() {
   );
 }
 
-function CommonPages({ className = '' }) {
+// Quick actions limited to the resources a content admin can manage.
+function ContentQuickActions() {
   const { t } = useTranslation();
 
-  const links = [
+  const actions = [
+    {
+      label: t('admin.overview.actions.newApp', 'New App'),
+      href: '/admin/apps',
+      icon: PlusIcon,
+      color: 'bg-indigo-600 hover:bg-indigo-700 text-white'
+    },
+    {
+      label: t('admin.overview.actions.managePrompts', 'Manage Prompts'),
+      href: '/admin/prompts',
+      icon: TagIcon,
+      color:
+        'bg-white dark:bg-gray-800 hover:bg-gray-50 dark:hover:bg-gray-700 text-gray-700 dark:text-gray-300 border border-gray-300 dark:border-gray-600'
+    },
+    {
+      label: t('admin.overview.actions.manageSources', 'Manage Sources'),
+      href: '/admin/sources',
+      icon: CircleStackIcon,
+      color:
+        'bg-white dark:bg-gray-800 hover:bg-gray-50 dark:hover:bg-gray-700 text-gray-700 dark:text-gray-300 border border-gray-300 dark:border-gray-600'
+    }
+  ];
+
+  return (
+    <div className="flex flex-wrap gap-3">
+      {actions.map(action => {
+        const Icon = action.icon;
+        return (
+          <Link
+            key={action.href}
+            to={action.href}
+            className={`inline-flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-medium transition-colors shadow-xs ${action.color}`}
+          >
+            <Icon className="w-4 h-4" aria-hidden="true" />
+            {action.label}
+          </Link>
+        );
+      })}
+    </div>
+  );
+}
+
+function CommonPages({ className = '', links: customLinks }) {
+  const { t } = useTranslation();
+
+  const links = customLinks || [
     { label: t('admin.nav.apps', 'Apps'), href: '/admin/apps' },
     { label: t('admin.nav.models', 'Models'), href: '/admin/models' },
     { label: t('admin.nav.users', 'Users'), href: '/admin/users' },
@@ -276,7 +324,7 @@ function InfoRow({ icon: Icon, label, value, href }) {
     return (
       <Link
         to={href}
-        className="block hover:bg-gray-50 dark:hover:bg-gray-700/50 -mx-2 px-2 rounded"
+        className="block hover:bg-gray-50 dark:hover:bg-gray-700/50 -mx-2 px-2 rounded-sm"
       >
         {content}
       </Link>
@@ -407,7 +455,7 @@ function RecentActivityCard({ entries }) {
   const { t } = useTranslation();
   if (!entries) return null;
   return (
-    <div className="bg-white dark:bg-gray-800 rounded-lg shadow-sm border border-gray-200 dark:border-gray-700">
+    <div className="bg-white dark:bg-gray-800 rounded-lg shadow-xs border border-gray-200 dark:border-gray-700">
       <div className="flex items-center justify-between px-4 py-3 border-b border-gray-200 dark:border-gray-700">
         <h2 className="text-sm font-semibold text-gray-900 dark:text-gray-100">
           {t('admin.overview.recentActivity', 'Recent activity')}
@@ -461,7 +509,24 @@ function RecentActivityCard({ entries }) {
 export default function AdminOverview() {
   const { t, i18n } = useTranslation();
   const { uiConfig } = useUIConfig();
-  const { stats, platformInfo, recentActivity, isLoading, isFreshInstance } = useOverviewData();
+  const { user } = useAuth();
+
+  // Content-admin-only users (contentAdmin permission, no full adminAccess) get a
+  // content-focused overview: only the apps/prompts/sources they can manage, and
+  // none of the platform-admin panels/links they'd hit 403 on (issue #1923).
+  const isContentAdminOnly = Boolean(
+    user?.permissions?.contentAdmin && !user?.permissions?.adminAccess && !user?.isAdmin
+  );
+
+  const { stats, platformInfo, recentActivity, isLoading, isFreshInstance } = useOverviewData({
+    contentAdminOnly: isContentAdminOnly
+  });
+
+  // Runs alongside the dashboard data rather than as part of it: this one
+  // reaches api.github.com, and the page must render before it answers — or not
+  // at all, in deployments without outbound internet access (issue #2150).
+  // Content admins aren't permitted on the endpoint and have no version card.
+  const { updateInfo } = useUpdateCheck({ enabled: !isContentAdminOnly });
 
   const currentLanguage = i18n.language;
   const { titleLight, titleBold, title } = uiConfig?.header ?? {};
@@ -470,48 +535,117 @@ export default function AdminOverview() {
       ? `${getLocalizedContent(titleLight, currentLanguage)}${getLocalizedContent(titleBold, currentLanguage)}`.trim()
       : getLocalizedContent(title, currentLanguage) || 'iHub Apps';
 
-  const statCards = stats
-    ? [
-        {
-          key: 'apps',
-          label: t('admin.overview.stats.apps', 'Apps'),
-          icon: WindowIcon,
-          iconColor: 'bg-indigo-100 dark:bg-indigo-900/30 text-indigo-600 dark:text-indigo-400',
-          ...stats.apps
-        },
-        {
-          key: 'users',
-          label: t('admin.overview.stats.users', 'Users'),
-          icon: UsersIcon,
-          iconColor: 'bg-blue-100 dark:bg-blue-900/30 text-blue-600 dark:text-blue-400',
-          ...stats.users
-        },
-        {
-          key: 'chats',
-          label: t('admin.overview.stats.conversations', 'Conversations'),
-          icon: ChatBubbleLeftRightIcon,
-          iconColor: 'bg-green-100 dark:bg-green-900/30 text-green-600 dark:text-green-400',
-          ...stats.chats
-        },
-        {
-          key: 'version',
-          label: t('admin.overview.stats.version', 'Version'),
-          icon: TagIcon,
-          iconColor: 'bg-gray-100 dark:bg-gray-700 text-gray-600 dark:text-gray-400',
-          ...stats.version
-        }
-      ]
-    : [];
+  let statCards = [];
+  if (stats && isContentAdminOnly) {
+    statCards = [
+      {
+        key: 'apps',
+        label: t('admin.overview.stats.apps', 'Apps'),
+        icon: WindowIcon,
+        iconColor: 'bg-indigo-100 dark:bg-indigo-900/30 text-indigo-600 dark:text-indigo-400',
+        ...stats.apps
+      },
+      {
+        key: 'prompts',
+        label: t('admin.overview.stats.prompts', 'Prompts'),
+        icon: TagIcon,
+        iconColor: 'bg-purple-100 dark:bg-purple-900/30 text-purple-600 dark:text-purple-400',
+        ...stats.prompts
+      },
+      {
+        key: 'sources',
+        label: t('admin.overview.stats.sources', 'Sources'),
+        icon: CircleStackIcon,
+        iconColor: 'bg-green-100 dark:bg-green-900/30 text-green-600 dark:text-green-400',
+        ...stats.sources
+      }
+    ];
+  } else if (stats) {
+    statCards = [
+      {
+        key: 'apps',
+        label: t('admin.overview.stats.apps', 'Apps'),
+        icon: WindowIcon,
+        iconColor: 'bg-indigo-100 dark:bg-indigo-900/30 text-indigo-600 dark:text-indigo-400',
+        ...stats.apps
+      },
+      {
+        key: 'users',
+        label: t('admin.overview.stats.users', 'Users'),
+        icon: UsersIcon,
+        iconColor: 'bg-blue-100 dark:bg-blue-900/30 text-blue-600 dark:text-blue-400',
+        ...stats.users
+      },
+      {
+        key: 'chats',
+        label: t('admin.overview.stats.conversations', 'Conversations'),
+        icon: ChatBubbleLeftRightIcon,
+        iconColor: 'bg-green-100 dark:bg-green-900/30 text-green-600 dark:text-green-400',
+        ...stats.chats
+      },
+      {
+        key: 'version',
+        label: t('admin.overview.stats.version', 'Version'),
+        icon: TagIcon,
+        iconColor: 'bg-gray-100 dark:bg-gray-700 text-gray-600 dark:text-gray-400',
+        ...stats.version,
+        updateAvailable: updateInfo?.updateAvailable ?? false,
+        latestVersion: updateInfo?.latestVersion
+      }
+    ];
+  }
 
   if (isLoading) {
     return (
       <div className="max-w-5xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
         <div className="animate-pulse space-y-6">
-          <div className="h-8 bg-gray-200 dark:bg-gray-700 rounded w-64" />
+          <div className="h-8 bg-gray-200 dark:bg-gray-700 rounded-sm w-64" />
           <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
             {[...Array(4)].map((_, i) => (
               <div key={i} className="h-28 bg-gray-200 dark:bg-gray-700 rounded-lg" />
             ))}
+          </div>
+        </div>
+      </div>
+    );
+  }
+
+  if (isContentAdminOnly) {
+    const contentPages = [
+      { label: t('admin.nav.apps', 'Apps'), href: '/admin/apps' },
+      { label: t('admin.nav.prompts', 'Prompts'), href: '/admin/prompts' },
+      { label: t('admin.nav.sources', 'Sources'), href: '/admin/sources' }
+    ];
+    return (
+      <div className="max-w-5xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
+        {/* Header */}
+        <div className="mb-6">
+          <h1 className="text-2xl font-bold text-gray-900 dark:text-gray-100">
+            {t('admin.overview.title', '{{name}} — Admin', { name: instanceName })}
+          </h1>
+          <p className="mt-1 text-sm text-gray-500 dark:text-gray-400">
+            {t('admin.overview.contentSubtitle', 'Manage apps, prompts, and sources')}
+          </p>
+        </div>
+
+        {/* Content stat cards */}
+        <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 mb-6">
+          {statCards.map(card => (
+            <StatCard key={card.key} {...card} />
+          ))}
+        </div>
+
+        <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+          <div className="lg:col-span-2 flex flex-col gap-6">
+            <div>
+              <h2 className="text-sm font-semibold text-gray-900 dark:text-gray-100 mb-3">
+                {t('admin.overview.quickActions', 'Quick actions')}
+              </h2>
+              <ContentQuickActions />
+            </div>
+          </div>
+          <div className="space-y-6">
+            <CommonPages links={contentPages} />
           </div>
         </div>
       </div>

@@ -1,9 +1,11 @@
 import configCache from '../../configCache.js';
-import { createCompletionRequest } from '../../adapters/index.js';
-import { getToolsForApp } from '../../toolLoader.js';
+import { isFeatureEnabled } from '../../featureRegistry.js';
+import { getToolsForApp, resolveAppNativeWebSearch } from '../../toolLoader.js';
 import ErrorHandler from '../../utils/ErrorHandler.js';
 import ApiKeyVerifier from '../../utils/ApiKeyVerifier.js';
+import { filterResourcesByPermissions } from '../../utils/authorization.js';
 import logger from '../../utils/logger.js';
+import { findByIdCaseInsensitive } from '../../utils/resourceLookup.js';
 
 function preprocessMessagesWithFileData(messages) {
   return messages.map(msg => {
@@ -71,6 +73,47 @@ function preprocessMessagesWithFileData(messages) {
 }
 
 /**
+ * When an app supports web search but it is disabled for this turn, append a
+ * short directive to the system prompt clarifying that web search is
+ * unavailable. Apps that advertise web search generally instruct the model to
+ * "use the web search tool"; without this note the model is told to call a tool
+ * that isn't in the request, which can produce empty/malformed responses (e.g.
+ * Gemini's MALFORMED_FUNCTION_CALL). No-op when web search is on for the turn,
+ * when the app has no web search configured, or when there is no system message
+ * to amend.
+ *
+ * @param {Array} llmMessages - Prepared messages (mutated in place)
+ * @param {Object} app - App configuration
+ * @param {boolean|undefined} websearchEnabled - User toggle: undefined = use app default
+ * @returns {boolean} true when a notice was appended
+ */
+export function appendWebSearchDisabledNotice(llmMessages, app, websearchEnabled) {
+  if (!app?.websearch?.enabled) return false;
+
+  const enabledByDefault = app.websearch.enabledByDefault ?? false;
+  const effectiveEnabled = websearchEnabled !== undefined ? websearchEnabled : enabledByDefault;
+  if (effectiveEnabled) return false;
+
+  const systemMessage = llmMessages.find(m => m.role === 'system');
+  if (!systemMessage || typeof systemMessage.content !== 'string') return false;
+
+  const notice =
+    'Note: Web search is currently turned off for this conversation, so you cannot ' +
+    'search the web or browse external websites right now. Answer using your existing ' +
+    'knowledge and do not attempt to call a web search tool or claim that you are ' +
+    'searching the web.';
+
+  if (systemMessage.content.includes(notice)) return false;
+
+  systemMessage.content = systemMessage.content ? `${systemMessage.content}\n\n${notice}` : notice;
+  logger.info('Appended web-search-disabled notice to system prompt', {
+    component: 'RequestBuilder',
+    appId: app.id
+  });
+  return true;
+}
+
+/**
  * Filter models based on app requirements
  * @param {Array} models - All available models
  * @param {Object} app - App configuration
@@ -84,8 +127,14 @@ function filterModelsForApp(models, app) {
     availableModels = availableModels.filter(model => app.allowedModels.includes(model.id));
   }
 
-  // Filter by tools requirement (app.tools array or websearch config both require tool support)
-  if ((app?.tools && app.tools.length > 0) || app?.websearch?.enabled) {
+  // Filter by tools requirement (app.tools, app.apps — apps invoked as tools —
+  // or websearch config all require tool support). app.apps only counts while
+  // the appAsTool feature is enabled: with the flag off no app__* tools are
+  // generated, so a configured-but-inactive delegation must not shrink the
+  // model list.
+  const appToolsActive =
+    app?.apps && app.apps.length > 0 && isFeatureEnabled('appAsTool', configCache.getFeatures());
+  if ((app?.tools && app.tools.length > 0) || appToolsActive || app?.websearch?.enabled) {
     availableModels = availableModels.filter(model => model.supportsTools);
   }
 
@@ -106,6 +155,33 @@ function filterModelsForApp(models, app) {
   return availableModels;
 }
 
+/**
+ * Narrow a model list down to what the requesting user's group permissions
+ * allow. Apps only express what they support; user.permissions.models is the
+ * separate, group-driven allowlist enforced everywhere else (/api/models,
+ * the OpenAI-compatible proxy) and must also bound chat model resolution.
+ * @param {Array} models - Models already filtered for app requirements
+ * @param {Object} user - Authenticated/anonymous principal, may be undefined
+ * @returns {Array} Models the user is permitted to use
+ */
+function filterModelsForUser(models, user) {
+  if (!user?.permissions) return models;
+  const allowedModels = user.permissions.models || new Set();
+  return filterResourcesByPermissions(models, allowedModels);
+}
+
+/**
+ * Whether the user is permitted to use a specific model id, per the same
+ * group-permission rules as filterModelsForUser (honors the `*` wildcard,
+ * matches ids case-insensitively). Returns true when no model-permission info
+ * is present so callers without an enhanced user object (e.g. internal/system
+ * flows) are not blocked.
+ */
+function isModelPermittedForUser(user, modelId) {
+  if (!user?.permissions) return true;
+  return filterModelsForUser([{ id: modelId }], user).length > 0;
+}
+
 class RequestBuilder {
   constructor() {
     this.errorHandler = new ErrorHandler();
@@ -122,7 +198,7 @@ class RequestBuilder {
     language,
     bypassAppPrompts = false,
     thinkingEnabled,
-    thinkingBudget,
+    thinkingLevel,
     thinkingThoughts,
     enabledTools,
     websearchEnabled,
@@ -131,8 +207,6 @@ class RequestBuilder {
     requestedSkill,
     documentIds,
     processMessageTemplates,
-    res,
-    clientRes,
     user,
     chatId
   }) {
@@ -144,7 +218,7 @@ class RequestBuilder {
         return { success: false, error };
       }
 
-      const app = apps.find(a => a.id === appId);
+      const app = findByIdCaseInsensitive(apps, appId);
       if (!app) {
         const error = await this.errorHandler.createModelError(appId, 'unknown', language);
         error.code = 'APP_NOT_FOUND';
@@ -158,17 +232,49 @@ class RequestBuilder {
         return { success: false, error };
       }
 
+      // A caller may request a specific model, but only one they're permitted
+      // to use. This runs before any app-level filtering so it also covers
+      // models the app would otherwise allow. An explicit request for a model
+      // that exists but sits outside `user.permissions.models` is a hard
+      // error — not a silent substitution — mirroring the enforcement already
+      // applied to /api/models and the OpenAI-compatible proxy
+      // (server/routes/openaiProxy.js). A model id that doesn't exist at all
+      // falls through to normal fallback resolution below, unchanged.
+      let requestedModelId = modelId;
+      if (requestedModelId) {
+        // Normalize to the configured casing up front so the permission
+        // check and every downstream `id === requestedModelId` comparison
+        // line up regardless of how the caller cased the model id.
+        const matchedModel = findByIdCaseInsensitive(models, requestedModelId);
+        if (matchedModel) {
+          requestedModelId = matchedModel.id;
+          if (!isModelPermittedForUser(user, requestedModelId)) {
+            const error = new Error(
+              `You don't have permission to use the model '${requestedModelId}'. Please contact your administrator to request access.`
+            );
+            error.code = 'modelAccessDeniedForUser';
+            return { success: false, error };
+          }
+        }
+      }
+
       // Filter models based on app requirements (allowedModels, tools, settings.model.filter)
       const filteredModels = filterModelsForApp(models, app);
+      // Then narrow to what the requesting user's group permissions allow —
+      // the app only expresses what it supports, user.permissions.models is
+      // the separate, group-driven allowlist that must also bound which
+      // model chat resolution can land on.
+      const permittedModels = filterModelsForUser(filteredModels, user);
       logger.info('Filtered compatible models for app', {
         component: 'RequestBuilder',
         appId: app.id,
         filteredCount: filteredModels.length,
+        permittedCount: permittedModels.length,
         totalCount: models.length
       });
 
       // Check if no models are available at all
-      if (filteredModels.length === 0) {
+      if (permittedModels.length === 0) {
         // Determine the most appropriate error message
         let errorCode;
 
@@ -177,10 +283,13 @@ class RequestBuilder {
           errorCode = 'noModelsAvailable';
         }
         // If models exist but none passed the app-specific filters
-        else if (app.allowedModels || app.tools || app.settings?.model?.filter) {
+        else if (
+          filteredModels.length === 0 &&
+          (app.allowedModels || app.tools || app.settings?.model?.filter)
+        ) {
           errorCode = 'noCompatibleModels';
         }
-        // Otherwise, likely a permissions issue
+        // Otherwise, the app permits models this user's group does not
         else {
           errorCode = 'noModelsForUser';
         }
@@ -196,13 +305,13 @@ class RequestBuilder {
         return { success: false, error };
       }
 
-      // Find the default model from filtered models, or fall back to global default
-      const defaultModelFromFiltered = filteredModels.find(m => m.default)?.id;
+      // Find the default model from the permitted list, or fall back to global default
+      const defaultModelFromFiltered = permittedModels.find(m => m.default)?.id;
       const globalDefaultModel = models.find(m => m.default)?.id;
       const defaultModel = defaultModelFromFiltered || globalDefaultModel;
 
       // Determine which model to use
-      let resolvedModelId = modelId || app.preferredModel || defaultModel;
+      let resolvedModelId = requestedModelId || app.preferredModel || defaultModel;
 
       // Check if we still don't have a model ID (all sources were null/undefined)
       if (!resolvedModelId) {
@@ -210,23 +319,23 @@ class RequestBuilder {
           component: 'RequestBuilder',
           appId: app.id
         });
-        // Use the first available model from filtered list as last resort
-        if (filteredModels.length > 0) {
-          resolvedModelId = filteredModels[0].id;
+        // Use the first available model from the permitted list as last resort
+        if (permittedModels.length > 0) {
+          resolvedModelId = permittedModels[0].id;
           logger.info('Using first available model as fallback', {
             component: 'RequestBuilder',
             resolvedModelId
           });
         } else {
-          // This shouldn't happen since we checked filteredModels.length above, but handle it anyway
+          // This shouldn't happen since we checked permittedModels.length above, but handle it anyway
           const error = new Error('No model ID provided and no default model available.');
           error.code = 'noModelIdProvided';
           return { success: false, error };
         }
       }
 
-      // Check if the resolved model is in the filtered list
-      const isModelInFilteredList = filteredModels.some(m => m.id === resolvedModelId);
+      // Check if the resolved model is in the permitted list
+      const isModelInFilteredList = permittedModels.some(m => m.id === resolvedModelId);
 
       if (!isModelInFilteredList) {
         logger.info('Model not compatible with app requirements, searching for fallback', {
@@ -238,15 +347,15 @@ class RequestBuilder {
         // Try to find a compatible fallback model
         let fallbackModel = null;
 
-        // 1. Try app's preferred model if it's in the filtered list
-        if (app.preferredModel && filteredModels.some(m => m.id === app.preferredModel)) {
+        // 1. Try app's preferred model if it's in the permitted list
+        if (app.preferredModel && permittedModels.some(m => m.id === app.preferredModel)) {
           fallbackModel = app.preferredModel;
           logger.info("Using app's preferred model as fallback", {
             component: 'RequestBuilder',
             fallbackModel
           });
         }
-        // 2. Try default model from filtered list
+        // 2. Try default model from the permitted list
         else if (defaultModelFromFiltered) {
           fallbackModel = defaultModelFromFiltered;
           logger.info('Using default model from filtered list as fallback', {
@@ -254,9 +363,9 @@ class RequestBuilder {
             fallbackModel
           });
         }
-        // 3. Try first available model from filtered list
-        else if (filteredModels.length > 0) {
-          fallbackModel = filteredModels[0].id;
+        // 3. Try first available model from the permitted list
+        else if (permittedModels.length > 0) {
+          fallbackModel = permittedModels[0].id;
           logger.info('Using first available compatible model as fallback', {
             component: 'RequestBuilder',
             fallbackModel
@@ -335,7 +444,10 @@ class RequestBuilder {
         contextWindow: model.contextWindow || null
       });
 
-      const apiKeyResult = await this.apiKeyVerifier.verifyApiKey(model, res, clientRes, language);
+      // Fail fast on a missing provider key so the route can answer with a
+      // clean HTTP error before any stream is opened. The verifier never
+      // writes to a response here — the caller owns the reply.
+      const apiKeyResult = await this.apiKeyVerifier.verifyApiKey(model, language);
       if (!apiKeyResult.success) {
         return { success: false, error: apiKeyResult.error };
       }
@@ -346,9 +458,28 @@ class RequestBuilder {
         language,
         enabledTools,
         modelProvider: model.provider,
+        model,
         websearchEnabled
       };
       const tools = await getToolsForApp(app, language, context);
+      const nativeWebSearch = resolveAppNativeWebSearch(
+        app,
+        model.provider,
+        websearchEnabled,
+        model
+      );
+
+      // A web-search-enabled app's system prompt typically instructs the model
+      // to "use the web search tool". When web search is toggled OFF for the
+      // turn, no such tool is sent — leaving the prompt telling the model to
+      // call a tool that isn't there. Some models (notably Gemini with thinking
+      // enabled) react by emitting a function call that can't be validated
+      // against any declaration, which Google returns as
+      // finishReason: MALFORMED_FUNCTION_CALL — i.e. an empty answer, seen
+      // intermittently and especially on a resend. Appending a short directive
+      // that web search is unavailable removes the contradiction so the model
+      // answers directly instead of attempting a phantom tool call.
+      appendWebSearchDisabledNotice(llmMessages, app, websearchEnabled);
 
       // Build imageConfig if image generation is supported and parameters are provided
       // Pass raw user parameters to adapter for provider-specific translation
@@ -376,21 +507,21 @@ class RequestBuilder {
         }
       }
 
-      const request = await createCompletionRequest(model, llmMessages, apiKeyResult.apiKey, {
-        temperature: parseFloat(temperature) || app.preferredTemperature || 0.7,
-        maxTokens: finalTokens,
-        stream: !!clientRes,
-        tools,
-        responseFormat: outputFormat,
-        responseSchema: app.outputSchema,
+      const resolvedTemperature = parseFloat(temperature) || app.preferredTemperature || 0.7;
+
+      // Provider-facing options for every model call of this turn. The loop
+      // hands them to LLMClient unchanged, so follow-up calls after tool
+      // results keep native web search, thinking and image settings.
+      const llmOptions = {
+        nativeWebSearch,
+        thinkingEnabled,
+        thinkingLevel,
+        thinkingThoughts,
+        imageConfig,
         user,
         chatId,
-        appConfig: documentIds ? { ...app, documentIds } : app,
-        thinkingEnabled,
-        thinkingBudget,
-        thinkingThoughts,
-        imageConfig
-      });
+        appConfig: documentIds ? { ...app, documentIds } : app
+      };
 
       return {
         success: true,
@@ -398,11 +529,13 @@ class RequestBuilder {
           app,
           model,
           llmMessages,
-          request,
           tools,
           apiKey: apiKeyResult.apiKey,
-          temperature: parseFloat(temperature) || app.preferredTemperature || 0.7,
+          temperature: resolvedTemperature,
           maxTokens: finalTokens,
+          responseFormat: outputFormat,
+          responseSchema: app.outputSchema,
+          llmOptions,
           userFileData
         }
       };

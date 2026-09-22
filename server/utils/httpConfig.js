@@ -11,6 +11,8 @@ import { HttpsProxyAgent } from 'https-proxy-agent';
 import configCache from '../configCache.js';
 import config from '../config.js';
 import logger from './logger.js';
+import { guardedLookup } from './dnsGuard.js';
+import tokenStorageService from '../services/TokenStorageService.js';
 
 /**
  * Workaround for `https-proxy-agent` >=7.0.0 (verified through 9.0.0).
@@ -197,20 +199,173 @@ export function shouldIgnoreSSLForURL(url, sslConfig = null) {
 }
 
 /**
- * Get proxy configuration from platform config and environment
- * @returns {Object} Proxy configuration object
+ * Detect a `${VAR}` placeholder that was never substituted.
+ *
+ * `configCache` resolves `${VAR}` from the environment but deliberately leaves
+ * the placeholder verbatim when the variable is undefined (see
+ * `utils/envVars.js`). For a proxy URL that is worse than an empty value: the
+ * literal string `"${HTTPS_PROXY}"` is truthy, so without this check it would be
+ * handed to `HttpsProxyAgent` as a proxy URL and every outbound call would fail
+ * with an unparseable-URL error instead of simply going direct.
+ *
+ * @param {*} value - Value to inspect
+ * @returns {boolean} True when the value still contains a placeholder
  */
-export function getProxyConfig() {
+export function isUnresolvedPlaceholder(value) {
+  return typeof value === 'string' && /\$\{[A-Za-z_][A-Za-z0-9_]*(?::-[^}]*)?\}/.test(value);
+}
+
+/**
+ * Proxy URLs may be stored encrypted (`ENC[...]`), and `getProxyConfig()` runs on
+ * every outbound request, so memoize by ciphertext. Bounded in practice: the only
+ * writer is an admin save.
+ */
+const decryptedProxyUrlCache = new Map();
+
+/**
+ * Normalize one proxy URL field: drop blanks and unresolved placeholders, and
+ * decrypt `ENC[...]` values so credentials can be stored encrypted at rest.
+ *
+ * @param {*} value - Raw value from platform config or the environment
+ * @returns {string|undefined} A usable proxy URL, or undefined when unset
+ */
+function normalizeProxyUrl(value) {
+  if (typeof value !== 'string') return undefined;
+  const trimmed = value.trim();
+  if (!trimmed) return undefined;
+  if (isUnresolvedPlaceholder(trimmed)) return undefined;
+  if (!tokenStorageService.isEncrypted(trimmed)) return trimmed;
+
+  if (decryptedProxyUrlCache.has(trimmed)) return decryptedProxyUrlCache.get(trimmed);
+  let usable;
+  try {
+    usable = tokenStorageService.decryptString(trimmed).trim() || undefined;
+  } catch (error) {
+    // Rotated or missing encryption key. Going direct is the safe failure here;
+    // handing ciphertext to a proxy agent only produces a confusing "Invalid URL"
+    // on every outbound call.
+    logger.error('Failed to decrypt proxy URL, ignoring it', {
+      component: 'HttpConfig',
+      error
+    });
+    usable = undefined;
+  }
+  decryptedProxyUrlCache.set(trimmed, usable);
+  return usable;
+}
+
+/**
+ * Normalize `noProxy` to an array of lower-cased entries.
+ *
+ * Admins supply either the shell-style comma-separated string
+ * (`"localhost,127.0.0.1,.local"`, matching `NO_PROXY`) or an array (matching the
+ * neighbouring `ssl.domainWhitelist`). Both are accepted. Anything else yields an
+ * empty list rather than throwing: a malformed bypass list must never silently
+ * disable every bypass, which is what happened while this was `String.split()`
+ * inside a swallowed try/catch.
+ *
+ * @param {string|Array<string>|undefined} noProxy - Raw bypass list
+ * @returns {Array<string>} Trimmed, lower-cased, non-empty entries
+ */
+export function normalizeNoProxy(noProxy) {
+  if (!noProxy) return [];
+  if (typeof noProxy !== 'string' && !Array.isArray(noProxy)) return [];
+  const raw = Array.isArray(noProxy) ? noProxy : noProxy.split(',');
+  const entries = [];
+  for (const item of raw) {
+    if (typeof item !== 'string') continue;
+    const trimmed = item.trim().toLowerCase();
+    if (trimmed && !isUnresolvedPlaceholder(trimmed)) entries.push(trimmed);
+  }
+  return entries;
+}
+
+/**
+ * Resolve the proxy configuration together with where each field came from.
+ *
+ * Used by the admin API (`GET /api/admin/proxy/config`) so an operator can tell
+ * whether a value is coming from `platform.json` or from the process
+ * environment — the difference decides whether editing it in the admin UI will
+ * have any effect.
+ *
+ * Provenance values:
+ * - `platform`    — set in `platform.json`
+ * - `environment` — from `config.env` / process environment
+ * - `default`     — not configured anywhere; the built-in default applies
+ *
+ * @returns {Object} `{ enabled, http, https, noProxy, urlPatterns }`, each
+ *   `{ value, source, placeholderIgnored? }`
+ */
+export function getProxyProvenance() {
   const platformConfig = configCache.getPlatform() || {};
   const proxyConfig = platformConfig.proxy || {};
 
+  const urlField = (platformValue, envValue) => {
+    const fromPlatform = normalizeProxyUrl(platformValue);
+    if (fromPlatform) return { value: fromPlatform, source: 'platform' };
+    const fromEnv = normalizeProxyUrl(envValue);
+    if (fromEnv) return { value: fromEnv, source: 'environment' };
+    return {
+      value: undefined,
+      source: 'default',
+      // Surfaced in the admin UI: an operator who wrote "${HTTPS_PROXY}" into
+      // platform.json needs to know the variable never resolved.
+      placeholderIgnored: isUnresolvedPlaceholder(platformValue) ? platformValue : undefined
+    };
+  };
+
+  const noProxyFromPlatform = normalizeNoProxy(proxyConfig.noProxy);
+  const noProxyFromEnv = normalizeNoProxy(
+    config.NO_PROXY || process.env.NO_PROXY || process.env.no_proxy
+  );
+  const noProxy =
+    noProxyFromPlatform.length > 0
+      ? { value: noProxyFromPlatform, source: 'platform' }
+      : noProxyFromEnv.length > 0
+        ? { value: noProxyFromEnv, source: 'environment' }
+        : { value: [], source: 'default' };
+
+  return {
+    enabled: {
+      // Historically absent means enabled, so an operator who only sets
+      // HTTP_PROXY in the environment still gets a proxy.
+      value: proxyConfig.enabled !== false,
+      source: typeof proxyConfig.enabled === 'boolean' ? 'platform' : 'default'
+    },
+    http: urlField(
+      proxyConfig.http,
+      config.HTTP_PROXY || process.env.HTTP_PROXY || process.env.http_proxy
+    ),
+    https: urlField(
+      proxyConfig.https,
+      config.HTTPS_PROXY || process.env.HTTPS_PROXY || process.env.https_proxy
+    ),
+    noProxy,
+    urlPatterns: {
+      value: Array.isArray(proxyConfig.urlPatterns)
+        ? proxyConfig.urlPatterns.filter(p => typeof p === 'string' && p.trim())
+        : [],
+      source:
+        Array.isArray(proxyConfig.urlPatterns) && proxyConfig.urlPatterns.length > 0
+          ? 'platform'
+          : 'default'
+    }
+  };
+}
+
+/**
+ * Get proxy configuration from platform config and environment
+ * @returns {Object} Proxy configuration object. `noProxy` is always an array —
+ *   normalization happens here so no caller has to repeat it.
+ */
+export function getProxyConfig() {
+  const provenance = getProxyProvenance();
   const result = {
-    enabled: proxyConfig.enabled !== false, // Default to true if not explicitly disabled
-    http: proxyConfig.http || config.HTTP_PROXY || process.env.HTTP_PROXY || process.env.http_proxy,
-    https:
-      proxyConfig.https || config.HTTPS_PROXY || process.env.HTTPS_PROXY || process.env.https_proxy,
-    noProxy: proxyConfig.noProxy || config.NO_PROXY || process.env.NO_PROXY || process.env.no_proxy,
-    urlPatterns: proxyConfig.urlPatterns || [] // Array of regex patterns for selective proxy
+    enabled: provenance.enabled.value,
+    http: provenance.http.value,
+    https: provenance.https.value,
+    noProxy: provenance.noProxy.value,
+    urlPatterns: provenance.urlPatterns.value
   };
 
   // Log proxy configuration on first access for debugging
@@ -218,9 +373,9 @@ export function getProxyConfig() {
     if (result.http || result.https) {
       logger.info('Proxy configuration loaded', {
         component: 'HttpConfig',
-        http: result.http || 'none',
-        https: result.https || 'none',
-        noProxy: result.noProxy || 'none'
+        http: result.http ? redactUrlSecrets(result.http) : 'none',
+        https: result.https ? redactUrlSecrets(result.https) : 'none',
+        noProxy: result.noProxy.length > 0 ? result.noProxy.join(',') : 'none'
       });
     } else {
       logger.info('No proxy configured', { component: 'HttpConfig' });
@@ -233,51 +388,81 @@ export function getProxyConfig() {
 
 /**
  * Check if a URL should bypass proxy based on NO_PROXY configuration
+ *
+ * Entry semantics (matching `isDomainWhitelisted` in this module):
+ * - `example.com`   — exact hostname match
+ * - `.example.com`  — subdomains only, not the bare domain
+ * - `*.example.com` — same as `.example.com`
+ *
+ * CIDR ranges, `host:port` entries and the catch-all `*` are **not** supported;
+ * see `docs/proxy-configuration.md`.
+ *
  * @param {string} url - The URL to check
- * @param {string} noProxy - NO_PROXY configuration string
+ * @param {string|Array<string>} noProxy - NO_PROXY configuration (comma-separated string or array)
  * @returns {boolean} True if proxy should be bypassed
  */
 export function shouldBypassProxy(url, noProxy) {
-  if (!noProxy || !url) return false;
+  const noProxyList = normalizeNoProxy(noProxy);
+  if (noProxyList.length === 0 || !url) return false;
 
+  let hostname;
   try {
-    const urlObj = new URL(url);
-    const hostname = urlObj.hostname;
-
-    // Split NO_PROXY by comma and check each entry
-    const noProxyList = noProxy.split(',').map(item => item.trim().toLowerCase());
-
-    for (const entry of noProxyList) {
-      if (!entry) continue;
-
-      // Match wildcard domains (e.g., *.example.com)
-      if (entry.startsWith('*.')) {
-        const domain = entry.slice(2);
-        if (hostname.toLowerCase().endsWith(domain)) {
-          return true;
-        }
-      }
-      // Match subdomains (e.g., .example.com matches sub.example.com)
-      else if (entry.startsWith('.')) {
-        if (hostname.toLowerCase().endsWith(entry)) {
-          return true;
-        }
-      }
-      // Exact hostname match
-      else if (hostname.toLowerCase() === entry) {
-        return true;
-      }
-      // CIDR notation and IP ranges are not fully supported here for simplicity
-    }
+    hostname = new URL(url).hostname.toLowerCase();
   } catch (error) {
-    logger.warn('Error parsing URL for proxy bypass', { component: 'HttpConfig', error });
+    logger.warn('Error parsing URL for proxy bypass', { component: 'HttpConfig', url, error });
+    return false;
+  }
+
+  for (const entry of noProxyList) {
+    // Wildcard domain (*.example.com) — subdomains only, like ssl.domainWhitelist
+    if (entry.startsWith('*.')) {
+      const domain = entry.slice(2);
+      if (domain && hostname.endsWith('.' + domain)) return true;
+    }
+    // Subdomain form (.example.com) — subdomains only
+    else if (entry.startsWith('.')) {
+      const domain = entry.slice(1);
+      if (domain && hostname.endsWith(entry)) return true;
+    }
+    // Exact hostname match
+    else if (hostname === entry) {
+      return true;
+    }
   }
 
   return false;
 }
 
 /**
- * Check if URL matches any of the configured URL patterns for selective proxy
+ * Compiled `urlPatterns` regexes, keyed by pattern source. `null` marks a pattern
+ * that does not compile, so it is reported once instead of on every request.
+ */
+const proxyPatternCache = new Map();
+
+function compileProxyPattern(pattern) {
+  if (proxyPatternCache.has(pattern)) return proxyPatternCache.get(pattern);
+  let regex = null;
+  try {
+    regex = new RegExp(pattern);
+  } catch (error) {
+    logger.warn('Ignoring proxy URL pattern that is not a valid regular expression', {
+      component: 'HttpConfig',
+      pattern,
+      error: error.message
+    });
+  }
+  proxyPatternCache.set(pattern, regex);
+  return regex;
+}
+
+/**
+ * Check if URL matches any of the configured URL patterns for selective proxy.
+ *
+ * Each pattern is compiled independently: one uncompilable entry is skipped with
+ * a warning naming it, and the remaining patterns are still evaluated. Wrapping
+ * the whole loop in a single try/catch (as this used to) meant a single bad entry
+ * aborted evaluation, silently sending every URL direct.
+ *
  * @param {string} url - The URL to check
  * @param {Array<string>} patterns - Array of regex pattern strings
  * @returns {boolean} True if URL matches any pattern
@@ -285,18 +470,57 @@ export function shouldBypassProxy(url, noProxy) {
 export function matchesProxyPattern(url, patterns) {
   if (!patterns || patterns.length === 0) return true; // If no patterns, apply proxy to all
 
-  try {
-    for (const pattern of patterns) {
-      const regex = new RegExp(pattern);
-      if (regex.test(url)) {
-        return true;
-      }
-    }
-  } catch (error) {
-    logger.warn('Error matching proxy pattern', { component: 'HttpConfig', error });
+  for (const pattern of patterns) {
+    if (typeof pattern !== 'string') continue;
+    const regex = compileProxyPattern(pattern);
+    if (regex && regex.test(url)) return true;
   }
 
   return false;
+}
+
+/**
+ * Decide how an outbound request to `url` is transported, without performing it.
+ *
+ * Single source of truth for the routing rules, so `createAgent()`, the
+ * integration diagnostics and the admin proxy test all report the same decision.
+ *
+ * @param {string} url - Request URL
+ * @param {Object} [proxyConfig] - Config to evaluate against; defaults to the live one
+ * @returns {{decision: string, proxyUrl: string|undefined, reason: string}}
+ *   `decision` is one of `proxied`, `disabled`, `bypassed`, `excluded`, `direct`.
+ */
+export function describeProxyRouting(url = '', proxyConfig = null) {
+  const cfg = proxyConfig || getProxyConfig();
+  const isHttps = url.startsWith('https://');
+  const isHttp = url.startsWith('http://');
+  const candidateProxy = isHttps ? cfg.https : isHttp ? cfg.http : undefined;
+
+  if (!cfg.enabled) {
+    return { decision: 'disabled', proxyUrl: undefined, reason: 'proxy.enabled is false' };
+  }
+  if (shouldBypassProxy(url, cfg.noProxy)) {
+    return { decision: 'bypassed', proxyUrl: undefined, reason: 'host matches proxy.noProxy' };
+  }
+  if (cfg.urlPatterns?.length > 0 && !matchesProxyPattern(url, cfg.urlPatterns)) {
+    return {
+      decision: 'excluded',
+      proxyUrl: undefined,
+      reason: 'URL matches none of proxy.urlPatterns'
+    };
+  }
+  if (candidateProxy) {
+    return {
+      decision: 'proxied',
+      proxyUrl: candidateProxy,
+      reason: isHttps ? 'proxy.https applies to this URL' : 'proxy.http applies to this URL'
+    };
+  }
+  return {
+    decision: 'direct',
+    proxyUrl: undefined,
+    reason: isHttps ? 'no proxy.https configured' : 'no proxy.http configured'
+  };
 }
 
 /**
@@ -333,20 +557,51 @@ function createDirectAgent(isHttps, shouldIgnoreSSL, lookup = null) {
 }
 
 /**
+ * Direct agent for a URL, resolving hostnames through the DNS guard.
+ *
+ * Without a caller-supplied lookup the agent is shared per (protocol, SSL
+ * bypass) so every outbound connection goes through `guardedLookup` (see
+ * dnsGuard.js): one getaddrinfo per hostname at a time, a bounded wait and a
+ * short negative cache, so an unreachable model endpoint cannot stall other
+ * requests by occupying the threadpool's DNS slots. A caller-supplied lookup
+ * (the SSRF guard's DNS pinning) is request-specific and gets its own agent.
+ */
+const sharedDirectAgents = new Map();
+function guardedDirectAgent(isHttps, shouldIgnoreSSL, lookup = null) {
+  if (typeof lookup === 'function') {
+    return createDirectAgent(isHttps, shouldIgnoreSSL, lookup);
+  }
+  const key = `${isHttps ? 'https' : 'http'}:${shouldIgnoreSSL ? 'insecure' : 'strict'}`;
+  let agent = sharedDirectAgents.get(key);
+  if (!agent) {
+    agent = createDirectAgent(isHttps, shouldIgnoreSSL, guardedLookup);
+    sharedDirectAgents.set(key, agent);
+  }
+  return agent;
+}
+
+/**
  * Create HTTP/HTTPS agent with global SSL and proxy configuration
  * @param {string} url - Request URL (used to determine protocol and proxy bypass)
  * @param {boolean} [forceIgnoreSSL] - Force ignore SSL (overrides global setting)
  * @param {Function} [lookup] - Optional dns.lookup-compatible function to pin DNS resolution
  *   for direct connections (used by the SSRF guard). Ignored for proxied requests.
+ * @param {Object} [proxyConfigOverride] - Evaluate against this proxy config instead of the
+ *   live one. Used by the admin proxy test so an unsaved draft can be probed through the
+ *   very same agent construction real traffic uses, rather than a copy that can drift.
  * @returns {http.Agent|https.Agent|HttpProxyAgent|HttpsProxyAgent|undefined} Agent with appropriate configuration
  */
-export function createAgent(url = '', forceIgnoreSSL = null, lookup = null) {
+export function createAgent(
+  url = '',
+  forceIgnoreSSL = null,
+  lookup = null,
+  proxyConfigOverride = null
+) {
   // Always call getSSLConfig() to ensure configuration is loaded
   const sslConfig = getSSLConfig();
-  const proxyConfig = getProxyConfig();
+  const proxyConfig = proxyConfigOverride || getProxyConfig();
 
   const isHttps = url.startsWith('https://');
-  const isHttp = url.startsWith('http://');
 
   // Determine if SSL should be ignored for this specific URL
   let shouldIgnoreSSL;
@@ -356,29 +611,30 @@ export function createAgent(url = '', forceIgnoreSSL = null, lookup = null) {
     shouldIgnoreSSL = shouldIgnoreSSLForURL(url, sslConfig);
   }
 
-  // Check if proxy should be bypassed for this URL
-  if (proxyConfig.enabled && proxyConfig.noProxy && shouldBypassProxy(url, proxyConfig.noProxy)) {
+  // One routing decision, shared with the diagnostics and the admin proxy test
+  // so all three can never disagree about how a URL is transported.
+  const routing = describeProxyRouting(url, proxyConfig);
+
+  if (routing.decision === 'bypassed') {
     logger.info('Bypassing proxy for URL', { component: 'HttpConfig', url });
     // Direct connection: apply SSL bypass and/or DNS pinning as needed.
-    return createDirectAgent(isHttps, shouldIgnoreSSL, lookup);
+    return guardedDirectAgent(isHttps, shouldIgnoreSSL, lookup);
   }
 
-  // Check if URL matches selective proxy patterns
-  if (
-    proxyConfig.enabled &&
-    proxyConfig.urlPatterns &&
-    proxyConfig.urlPatterns.length > 0 &&
-    !matchesProxyPattern(url, proxyConfig.urlPatterns)
-  ) {
+  if (routing.decision === 'excluded') {
     logger.info('URL does not match proxy patterns', { component: 'HttpConfig', url });
     // Direct connection: apply SSL bypass and/or DNS pinning as needed.
-    return createDirectAgent(isHttps, shouldIgnoreSSL, lookup);
+    return guardedDirectAgent(isHttps, shouldIgnoreSSL, lookup);
   }
 
   // Apply proxy configuration
-  if (proxyConfig.enabled && ((isHttps && proxyConfig.https) || (isHttp && proxyConfig.http))) {
-    const proxyUrl = isHttps ? proxyConfig.https : proxyConfig.http;
-    logger.info('Using proxy for URL', { component: 'HttpConfig', proxyUrl, url });
+  if (routing.decision === 'proxied') {
+    const proxyUrl = routing.proxyUrl;
+    logger.info('Using proxy for URL', {
+      component: 'HttpConfig',
+      proxyUrl: redactUrlSecrets(proxyUrl),
+      url
+    });
     if (shouldIgnoreSSL) {
       logger.info('SSL certificate verification disabled for proxied request', {
         component: 'HttpConfig'
@@ -415,7 +671,7 @@ export function createAgent(url = '', forceIgnoreSSL = null, lookup = null) {
       proxyConfigured: Boolean(proxyConfig.https)
     });
   }
-  return createDirectAgent(isHttps, shouldIgnoreSSL, lookup);
+  return guardedDirectAgent(isHttps, shouldIgnoreSSL, lookup);
 }
 
 /**
@@ -426,12 +682,18 @@ export function createAgent(url = '', forceIgnoreSSL = null, lookup = null) {
  * @param {Function} [lookup] - Optional dns.lookup-compatible function to pin DNS resolution
  * @returns {Object} Enhanced fetch options
  */
-export function enhanceFetchOptions(options = {}, url = '', forceIgnoreSSL = null, lookup = null) {
+export function enhanceFetchOptions(
+  options = {},
+  url = '',
+  forceIgnoreSSL = null,
+  lookup = null,
+  proxyConfigOverride = null
+) {
   const enhancedOptions = { ...options };
 
   // Only add agent if not already specified
   if (!enhancedOptions.agent) {
-    const agent = createAgent(url, forceIgnoreSSL, lookup);
+    const agent = createAgent(url, forceIgnoreSSL, lookup, proxyConfigOverride);
     if (agent) {
       enhancedOptions.agent = agent;
     }
@@ -470,7 +732,8 @@ export function redactUrlSecrets(url) {
  * @param {string} url - The URL to fetch
  * @param {Object} [options] - Standard fetch options (method, headers, body, signal, etc.).
  *   A `lookup` property (dns.lookup-compatible) is extracted to pin DNS resolution for
- *   direct connections and is not forwarded to the underlying fetch.
+ *   direct connections, and a `proxyConfig` property is extracted to route this one call
+ *   by a config other than the live one; neither is forwarded to the underlying fetch.
  * @param {boolean} [forceIgnoreSSL] - Force ignore SSL (overrides global setting)
  * @returns {Promise<Response>} node-fetch Response
  */
@@ -488,9 +751,11 @@ export async function httpFetch(url, options = {}, forceIgnoreSSL = null) {
       );
     }
   }
-  // `lookup` is not a node-fetch option; pull it out and apply it to the agent
-  // (used by the workflow SSRF guard to pin connections to validated IPs).
-  const { lookup = null, ...fetchOptions } = options;
-  const enhanced = enhanceFetchOptions(fetchOptions, url, forceIgnoreSSL, lookup);
+  // `lookup` and `proxyConfig` are not node-fetch options; pull them out and apply
+  // them to the agent. `lookup` is used by the workflow SSRF guard to pin
+  // connections to validated IPs; `proxyConfig` lets the admin proxy test probe an
+  // unsaved draft through this same path instead of a bespoke fetch of its own.
+  const { lookup = null, proxyConfig = null, ...fetchOptions } = options;
+  const enhanced = enhanceFetchOptions(fetchOptions, url, forceIgnoreSSL, lookup, proxyConfig);
   return nodeFetch(url, enhanced);
 }

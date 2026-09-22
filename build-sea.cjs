@@ -19,6 +19,7 @@ const defaultConfigDir = path.join(__dirname, 'server', 'defaults');
 const clientPublicDir = path.join(__dirname, 'client/dist');
 const browserExtensionDir = path.join(__dirname, 'browser-extension');
 const docsBookDir = path.join(__dirname, 'docs/book');
+const docsReleasesDir = path.join(__dirname, 'docs/releases');
 const serverDir = path.join(__dirname, 'server');
 const configEnvPath = path.join(__dirname, 'config.env');
 
@@ -475,6 +476,11 @@ try {
   // Copy generated documentation
   if (fs.existsSync(docsBookDir)) {
     fs.cpSync(docsBookDir, path.join(outputDir, 'docs'), { recursive: true });
+  }
+
+  // Copy release notes (read by the admin changelog endpoint at runtime)
+  if (fs.existsSync(docsReleasesDir)) {
+    fs.cpSync(docsReleasesDir, path.join(outputDir, 'docs', 'releases'), { recursive: true });
   }
 
   // Create a simple launcher shell script on Unix platforms

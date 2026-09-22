@@ -94,7 +94,7 @@ function AppShareModal({ appId, path, params, onClose }) {
   };
 
   return (
-    <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
+    <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
       <div className="bg-white rounded-lg shadow-lg max-w-md w-full p-6">
         <div className="flex justify-between items-center mb-4">
           <h2 className="text-lg font-semibold">{t('common.share')}</h2>
@@ -108,7 +108,7 @@ function AppShareModal({ appId, path, params, onClose }) {
             <div className="flex items-center gap-2">
               <button
                 onClick={handleCopy}
-                className="px-3 py-1 bg-indigo-600 text-white rounded hover:bg-indigo-700 flex items-center gap-1"
+                className="px-3 py-1 bg-indigo-600 text-white rounded-sm hover:bg-indigo-700 flex items-center gap-1"
               >
                 <Icon name="copy" /> {t('pages.promptsList.copyPrompt', 'Copy')}
               </button>
@@ -165,17 +165,17 @@ function AppShareModal({ appId, path, params, onClose }) {
                 type="datetime-local"
                 value={expiresAt}
                 onChange={e => setExpiresAt(e.target.value)}
-                className="mt-1 w-full border rounded px-2 py-1"
+                className="mt-1 w-full border rounded-sm px-2 py-1"
               />
             </label>
             <div className="flex justify-end gap-2">
-              <button onClick={onClose} className="px-3 py-1 border rounded">
+              <button onClick={onClose} className="px-3 py-1 border rounded-sm">
                 {t('common.cancel')}
               </button>
               <button
                 onClick={handleCreate}
                 disabled={!validLength || !available || creating}
-                className="px-3 py-1 bg-indigo-600 text-white rounded disabled:opacity-50"
+                className="px-3 py-1 bg-indigo-600 text-white rounded-sm disabled:opacity-50"
               >
                 {t('common.save')}
               </button>

@@ -26,17 +26,20 @@ function isEmbedMode() {
  */
 export const getIntegrationSettings = () => {
   if (isEmbedMode()) {
-    return { showHeader: false, showFooter: false, language: null };
+    return { showHeader: false, showFooter: false, showSidebar: false, language: null };
   }
   try {
     const savedSettings = localStorage.getItem('ihubIntegrationSettings');
     if (savedSettings) {
-      return JSON.parse(savedSettings);
+      const parsed = JSON.parse(savedSettings);
+      // showSidebar was added later; default to enabled when missing.
+      if (parsed.showSidebar === undefined) parsed.showSidebar = true;
+      return parsed;
     }
   } catch (error) {
     console.error('Error reading integration settings from localStorage:', error);
   }
-  return { showHeader: true, showFooter: true, language: null };
+  return { showHeader: true, showFooter: true, showSidebar: true, language: null };
 };
 
 /**
@@ -77,6 +80,13 @@ export const updateSettingsFromUrl = searchParams => {
     const footerParam = searchParams.get('footer');
     if (footerParam !== null) {
       settings.showFooter = footerParam !== 'false';
+      updated = true;
+    }
+
+    // Update sidebar setting if provided in URL (disable the left navigation bar)
+    const sidebarParam = searchParams.get('sidebar');
+    if (sidebarParam !== null) {
+      settings.showSidebar = sidebarParam !== 'false';
       updated = true;
     }
 

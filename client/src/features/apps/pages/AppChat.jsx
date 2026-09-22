@@ -1,13 +1,14 @@
 import { useState, useEffect, useRef, useCallback, useMemo } from 'react';
 import {
   getOrCreateChatId,
+  readChatId,
   resetChatId,
   getConversationId,
   clearConversationId
 } from '../../../utils/chatId';
 import { getConversationMessages } from '../../../api/endpoints/apps';
 import { useParams, useNavigate, useSearchParams } from 'react-router-dom';
-import { fetchAppDetails } from '../../../api';
+import { fetchAppDetails, fetchChat } from '../../../api';
 import LoadingSpinner from '../../../shared/components/LoadingSpinner';
 import { useTranslation } from 'react-i18next';
 import { getLocalizedContent } from '../../../utils/localizeContent';
@@ -15,16 +16,28 @@ import { buildApiUrl } from '../../../utils/runtimeBasePath';
 import { debugLog } from '../../../utils/debugLog';
 import Icon from '../../../shared/components/Icon';
 import AppShareModal from '../components/AppShareModal';
+import {
+  downloadCitationDocument,
+  getCitationDocumentAccess,
+  getCitationMeta,
+  openCitationDocument
+} from '../../chat/utils/citationDocuments';
 
 // Import our custom hooks and components
 import useAppChat from '../../chat/hooks/useAppChat';
 import useVoiceCommands from '../../voice/hooks/useVoiceCommands';
 import useAppSettings from '../../../shared/hooks/useAppSettings';
 import useFileUploadHandler from '../../../shared/hooks/useFileUploadHandler';
+import { consumePendingChatStart } from '../../chat/startChatHandoff';
 import useMagicPrompt from '../../../shared/hooks/useMagicPrompt';
 import { useIntegrationAuth } from '../../chat/hooks/useIntegrationAuth';
 import useNextcloudEmbedAttachments from '../../nextcloud-embed/hooks/useNextcloudEmbedAttachments';
 import useFeatureFlags from '../../../shared/hooks/useFeatureFlags';
+import {
+  invalidateChatsCache,
+  useChatPersistence,
+  useChatPersistenceResolving
+} from '../../../shared/hooks/useChats';
 import { ensureTokenizer, estimateTokensSync } from '../../../shared/utils/tokenEstimatorClient.js';
 import ChatInput from '../../chat/components/ChatInput';
 import ChatMessageList from '../../chat/components/ChatMessageList';
@@ -37,7 +50,9 @@ import SharedAppHeader from '../components/SharedAppHeader';
 import AIDisclaimerBanner from '../../chat/components/AIDisclaimerBanner';
 import { recordAppUsage } from '../../../utils/recentApps';
 import { saveAppSettings, loadAppSettings } from '../../../utils/appSettings';
-import { processDocumentFile } from '../../upload/utils/fileProcessing';
+import { processDocumentFile, decodeAudioFileToBuffer } from '../../upload/utils/fileProcessing';
+import { transcribeAudioBuffer } from '../../../utils/transcribeAudioBuffer';
+import { AudioBufferRecorder } from '../../../utils/audioRecorder';
 
 /**
  * Initialize variables with default values from app configuration
@@ -95,7 +110,30 @@ const getInitializedVariables = (app, currentLanguage) => {
   return initialVars;
 };
 
-const renderStartupState = (app, welcomeMessage, handleStarterPromptClick) => {
+const renderStartupState = (
+  app,
+  welcomeMessage,
+  handleStarterPromptClick,
+  hydrating,
+  modeResolving,
+  t
+) => {
+  // The app details can arrive before the platform config and the auth status
+  // do, and until both have, nothing here knows whether this chat is
+  // server-backed. Painting the greeting on that guess and correcting it a
+  // frame later is a visible flicker, so this window renders nothing at all —
+  // a spinner would only be a second flash for the installations that have no
+  // persistence to wait for.
+  if (modeResolving) return null;
+
+  // A server-backed chat starts with an empty `messages` whether it is brand
+  // new or holds a hundred turns — the difference only arrives with
+  // `GET /api/chats/:id`. Greeting the user as if this were a new chat and then
+  // swapping in the history a moment later is the flash this guard prevents.
+  if (hydrating) {
+    return <LoadingSpinner message={t('pages.appChat.loadingChat', 'Loading chat...')} />;
+  }
+
   const starterPrompts = app?.starterPrompts || [];
   if (starterPrompts.length > 0) {
     return (
@@ -110,10 +148,65 @@ const renderStartupState = (app, welcomeMessage, handleStarterPromptClick) => {
   return <NoMessagesView />;
 };
 
+/**
+ * Map a transcription failure (from decodeAudioFileToBuffer / transcribeAudioBuffer)
+ * to a clear, localized message shown in the assistant bubble.
+ */
+const getTranscriptionErrorMessage = (err, t) => {
+  const code = err?.code || err?.message;
+  switch (code) {
+    case 'audio-decode-error':
+      return t(
+        'transcription.errors.decode',
+        'Could not decode this audio in your browser. The format or codec may be unsupported (e.g. OGG in Safari).'
+      );
+    case 'empty-audio':
+      return t('transcription.errors.empty', 'No audio could be read from this file.');
+    case 'not-ready':
+      return t(
+        'transcription.errors.notReady',
+        'The transcription service did not become ready. Please check the model configuration and try again.'
+      );
+    case 'connect':
+    case 'closed':
+      return t(
+        'transcription.errors.connection',
+        'Could not reach the transcription service. Please try again later.'
+      );
+    case 'timeout':
+      return t(
+        'transcription.errors.timeout',
+        'Transcription timed out. The file may be too long.'
+      );
+    case 'aborted':
+      return t('transcription.errors.aborted', 'Transcription was cancelled.');
+    // Batch transcription models buffer the whole recording server-side, so
+    // they can reject it for size (this recording) or capacity (all of them).
+    case 'audio-too-long':
+      return t(
+        'transcription.errors.serverTooLong',
+        'This recording is too long for the configured transcription model. Please split it into shorter parts.'
+      );
+    case 'server-busy':
+      return t(
+        'transcription.errors.serverBusy',
+        'The transcription service is busy right now. Please try again in a moment.'
+      );
+    case 'service':
+      return err?.message
+        ? t('transcription.errors.serviceDetail', 'Transcription failed: {{detail}}', {
+            detail: err.message
+          })
+        : t('transcription.errors.service', 'Transcription failed.');
+    default:
+      return t('transcription.errors.generic', 'Transcription failed. Please try again.');
+  }
+};
+
 function AppChat({ preloadedApp = null }) {
   const { t, i18n } = useTranslation();
   const currentLanguage = i18n.language;
-  const { appId } = useParams();
+  const { appId, chatId: routeChatId } = useParams();
   const navigate = useNavigate();
   const [searchParams] = useSearchParams();
   const featureFlags = useFeatureFlags();
@@ -123,6 +216,11 @@ function AppChat({ preloadedApp = null }) {
   const documentSource = searchParams.get('source');
   const [app, setApp] = useState(preloadedApp);
   const [input, setInput] = useState(prefillMessage);
+  // Set by handleResendMessage once the resend content/variables/files have
+  // been applied to state; the effect below fires the actual submit only
+  // after React has committed that state, so handleSubmit's closure reads
+  // the resent values instead of racing them (see handleResendMessage).
+  const [pendingAutoSubmit, setPendingAutoSubmit] = useState(false);
   const [loading, setLoading] = useState(!preloadedApp);
   const [error, setError] = useState(null);
   const [showConfig, setShowConfig] = useState(false);
@@ -150,6 +248,14 @@ function AppChat({ preloadedApp = null }) {
     });
   }, []);
 
+  // How the chat being opened was last answered — read from the stored chat
+  // document on hydrate and handed to `useAppSettings` as its last layer, so
+  // reopening a chat comes back with the websearch toggle, tools and style it
+  // was using rather than the app's defaults. Null for a new chat, and reset
+  // to null the moment the chat changes so one chat's setup never leaks into
+  // the next.
+  const [chatSettings, setChatSettings] = useState(null);
+
   // Shared app settings hook
   const {
     selectedModel,
@@ -159,7 +265,7 @@ function AppChat({ preloadedApp = null }) {
     sendChatHistory,
     ephemeral,
     thinkingEnabled,
-    thinkingBudget,
+    thinkingLevel,
     thinkingThoughts,
     enabledTools,
     websearchEnabled,
@@ -174,14 +280,14 @@ function AppChat({ preloadedApp = null }) {
     setSendChatHistory,
     setEphemeral,
     setThinkingEnabled,
-    setThinkingBudget,
+    setThinkingLevel,
     setThinkingThoughts,
     setEnabledTools,
     setWebsearchEnabled,
     setImageAspectRatio,
     setImageQuality,
     modelsLoading
-  } = useAppSettings(appId, app);
+  } = useAppSettings(appId, app, { chatSettings });
 
   // When tools feature is disabled platform-wide, hide tool UI entirely
   const toolsFeatureEnabled = featureFlags.isEnabled('tools', true);
@@ -272,12 +378,61 @@ function AppChat({ preloadedApp = null }) {
   const fileUploadHandler = useFileUploadHandler();
   const magicPromptHandler = useMagicPrompt();
 
+  // True while a Voxtral transcription is streaming into the chat (upload /
+  // video / recording → assistant message). Used to gate the input.
+  const [isTranscribing, setIsTranscribing] = useState(false);
+
+  // Per-chat transcription toggle (like websearch). When on, audio/video
+  // submissions are transcribed by the transcription model; when off they fall
+  // through to the multimodal chat path. Seeded from the app's default.
+  const [transcriptionEnabled, setTranscriptionEnabled] = useState(true);
+  useEffect(() => {
+    if (app?.transcription?.enabled) {
+      setTranscriptionEnabled(app.transcription.defaultEnabled !== false);
+    }
+  }, [app?.transcription?.enabled, app?.transcription?.defaultEnabled]);
+
+  // Aborts an in-flight upload/video transcription (the Stop button).
+  const transcribeAbortRef = useRef(null);
+
   // Auto-attach files selected in Nextcloud (no-op outside the Nextcloud embed).
   const currentModelObject = useMemo(
     () => models?.find(m => m.id === selectedModel) || null,
     [models, selectedModel]
   );
   useNextcloudEmbedAttachments(fileUploadHandler, app, currentModelObject);
+
+  // Consume the start-page handoff: the already-processed file payload plus the
+  // feature toggles the user picked in that page's actions menu (web search,
+  // tools, image settings, transcription — issue #2322). The message text and
+  // auto-send still arrive via the `prefill` / `send=true` query params.
+  //
+  // Gated on `app && !modelsLoading` on purpose: `useAppSettings` seeds those
+  // same values from the app config on exactly that gate, and its effect is
+  // registered before this one, so applying here reliably lands *after* the
+  // seeding instead of being overwritten by it.
+  const handoffAppliedRef = useRef(false);
+  useEffect(() => {
+    handoffAppliedRef.current = false;
+  }, [appId]);
+  useEffect(() => {
+    if (handoffAppliedRef.current || !app || modelsLoading) return;
+    const handoff = consumePendingChatStart(appId);
+    handoffAppliedRef.current = true;
+    if (!handoff) return;
+    if (handoff.files) {
+      fileUploadHandler.setSelectedFile(handoff.files);
+    }
+    const settings = handoff.settings;
+    if (!settings) return;
+    if (Array.isArray(settings.enabledTools)) setEnabledTools(settings.enabledTools);
+    if (typeof settings.websearchEnabled === 'boolean')
+      setWebsearchEnabled(settings.websearchEnabled);
+    if (typeof settings.transcriptionEnabled === 'boolean')
+      setTranscriptionEnabled(settings.transcriptionEnabled);
+    if (settings.imageAspectRatio) setImageAspectRatio(settings.imageAspectRatio);
+    if (settings.imageQuality) setImageQuality(settings.imageQuality);
+  }, [app, appId, modelsLoading]); // eslint-disable-line @eslint-react/exhaustive-deps
 
   // Check document token size against model context window and warn user if needed
   useEffect(() => {
@@ -347,14 +502,51 @@ function AppChat({ preloadedApp = null }) {
 
   const inputRef = useRef(null);
   const formRef = useRef(null);
-  const chatId = useRef(getOrCreateChatId(appId));
+  // The chat this page is showing. `/apps/:appId/c/:chatId` names one outright
+  // — that is how the history opens a stored conversation — while `/apps/:appId`
+  // falls back to the id this tab already holds for the app. State rather than a
+  // ref, because changing it has to re-run the message hook, the stream state
+  // and the hydration below.
+  // Chat ids this tab minted itself. Such an id cannot exist in the durable
+  // store by construction, so asking for it can only ever 404 — and that round
+  // trip is paid for with a "Loading chat…" spinner where the greeting and the
+  // starter prompts belong, plus a red `API Error` in the console every time.
+  const mintedChatIdsRef = useRef(new Set());
+  const resolveChatId = useCallback(() => {
+    if (routeChatId) return routeChatId;
+    const stored = readChatId(appId);
+    if (stored) return stored;
+    const minted = getOrCreateChatId(appId);
+    mintedChatIdsRef.current.add(minted);
+    return minted;
+  }, [appId, routeChatId]);
+  const [chatId, setChatId] = useState(resolveChatId);
   // Ref to store variables for resend operations to avoid race condition with state updates
   const pendingVariablesRef = useRef(null);
 
-  // Restore existing chat ID when the appId changes
+  // Follow the URL: another app, or another chat under the same app.
   useEffect(() => {
-    chatId.current = getOrCreateChatId(appId);
-  }, [appId]);
+    const next = resolveChatId();
+    setChatId(current => (current === next ? current : next));
+  }, [resolveChatId]);
+
+  /**
+   * Leave the current chat and start a fresh one for this app. A URL that names
+   * a stored chat has to be dropped along with it, or the effect above would
+   * immediately pin the chat that was just left. Nothing is lost when chats are
+   * persisted — the old one simply stays in the history.
+   *
+   * @returns {string} The new chat id.
+   */
+  const startNewChat = useCallback(() => {
+    const nextChatId = resetChatId(appId);
+    // Minted here, so the store has never heard of it: skip the hydration
+    // round trip that could only 404.
+    mintedChatIdsRef.current.add(nextChatId);
+    setChatId(nextChatId);
+    if (routeChatId) navigate(`/apps/${appId}`, { replace: true });
+    return nextChatId;
+  }, [appId, navigate, routeChatId]);
 
   /**
    * Determine if the response should trigger auto-redirect to canvas mode
@@ -419,8 +611,23 @@ function AppChat({ preloadedApp = null }) {
     [shouldAutoRedirectToCanvas, handleOpenInCanvas, app]
   );
 
+  // Durable chats: the server owns the transcript, so the browser copy is
+  // skipped, a turn posts only the new message, and a past conversation gets
+  // back on screen through the hydration below. Incognito switches it off for
+  // this chat; anonymous viewers and installations without the capability never
+  // had it, and keep exactly the behaviour they have today.
+  const chatPersistence = useChatPersistence();
+  const serverBackedChat = chatPersistence && !ephemeral;
+  // `chatPersistence` answers false until the platform config and the auth
+  // status have both landed, so an early false is "not known yet", not "no".
+  // The startup state has to wait it out, or a persisted chat greets the user
+  // for a frame before its history arrives.
+  const chatModeResolving = useChatPersistenceResolving() && !ephemeral;
+
   const {
     messages,
+    hydrating,
+    finishHydration,
     processing,
     clarificationPending,
     sendMessage: sendChatMessage,
@@ -433,21 +640,187 @@ function AppChat({ preloadedApp = null }) {
     submitClarificationResponse,
     conversationTitle,
     loadServerMessages,
-    resetConversationState
+    reattachToRun,
+    resetConversationState,
+    addUserMessage,
+    addAssistantMessage,
+    updateAssistantMessage
   } = useAppChat({
     appId,
-    chatId: chatId.current,
+    chatId,
     onMessageComplete: handleMessageComplete,
     // Runtime-selectable: seeded from app.ephemeral but the user can toggle it in
     // the chat settings. When on, nothing is persisted to browser storage.
-    ephemeral
+    ephemeral,
+    serverBacked: serverBackedChat
   });
+
+  // Hydrate a server-backed chat from the durable store. That mode keeps no
+  // browser copy, so this fetch is the only thing that puts a stored transcript
+  // back on screen — both when the history opens a chat by URL and on a plain
+  // reload of `/apps/:appId`, where the id comes from sessionStorage. A chat
+  // this tab minted but never sent is not in the store yet: that 404 is the
+  // ordinary case for a new chat, not a failure worth reporting.
+  useEffect(() => {
+    // Switching chats drops the previous chat's setup immediately, rather than
+    // waiting for the new one's document to arrive. In the gap the app's own
+    // defaults apply, which is what a chat with no stored settings gets too —
+    // leaving the old ones in place would answer the new chat with the
+    // previous one's tools.
+    setChatSettings(null);
+  }, [chatId]);
+
+  // The hydration attempt that owns the transcript, as `<chatId>|<mode>`. Keyed
+  // on the mode too, because leaving and re-entering server-backed mode (the
+  // incognito toggle) is a second entry into the same chat — a chat-id-only
+  // guard would answer "already done" and then never fetch, never finish
+  // hydrating, and leave the surface spinning "Loading chat…" for good.
+  const chatHydratedRef = useRef(null);
+  // Whether the fetch below is still out. A re-run of the effect must not end
+  // hydration behind its back — that is the greeting flash all over again.
+  const hydrationPendingRef = useRef(false);
+  useEffect(() => {
+    if (!serverBackedChat || !app) return undefined;
+    const attempt = `${chatId}|${serverBackedChat}`;
+    if (chatHydratedRef.current === attempt) {
+      // This chat has already been fetched (or deliberately not fetched) in
+      // this mode. Nothing else clears the loading flag, so say so here.
+      if (!hydrationPendingRef.current) finishHydration();
+      return undefined;
+    }
+    // Already showing a conversation: the browser copy that becoming
+    // server-backed discards is cleared in the same commit, so a non-empty
+    // transcript here is one that belongs on screen — an incognito stretch, or
+    // a handoff that seeded it. Hydration is left alone rather than finished:
+    // the clearing case re-runs this effect a frame later with nothing on
+    // screen, and finishing here would uncover the greeting in between.
+    if (messages.length > 0) return undefined;
+    if (mintedChatIdsRef.current.has(chatId)) {
+      // This tab minted the id, so the store has never heard of it: asking
+      // would buy a guaranteed 404, a console error, and a spinner where the
+      // greeting and the starter prompts belong.
+      chatHydratedRef.current = attempt;
+      hydrationPendingRef.current = false;
+      finishHydration();
+      return undefined;
+    }
+    chatHydratedRef.current = attempt;
+    hydrationPendingRef.current = true;
+
+    // Superseded only by another attempt — a different chat, or a mode change
+    // — never by a re-render. A turn started during the round trip used to
+    // cancel this fetch through the effect's own cleanup and, because the
+    // guard above was already latched, the stored transcript was then lost for
+    // the rest of the chat's life.
+    const owns = () => chatHydratedRef.current === attempt;
+    (async () => {
+      try {
+        const result = await fetchChat(chatId);
+        if (!owns()) return;
+        // The store is the source of truth, so it replaces whatever is here —
+        // and an empty transcript still ends the loading state rather than
+        // letting the greeting appear a beat late. A turn started meanwhile is
+        // kept, with the stored history restored in front of it.
+        const storedMessages = Array.isArray(result?.messages) ? result.messages : [];
+        loadServerMessages(storedMessages, { preserveLocal: true });
+        // `modelId` lives on the chat document rather than inside `settings`,
+        // so it is folded in here; `useAppSettings` still checks the app
+        // allows it before selecting it.
+        const stored = result?.chat?.settings;
+        const storedModelId = result?.chat?.modelId;
+        setChatSettings(
+          stored || storedModelId
+            ? { ...(stored || {}), ...(storedModelId ? { modelId: storedModelId } : {}) }
+            : null
+        );
+        // Opening a chat is what "seen" means: this same GET cleared the
+        // chat's unseen flag server-side, so every list already on screen is
+        // now showing a badge the server no longer reports.
+        invalidateChatsCache();
+
+        // The turn may still be generating. A durable chat's run outlives the
+        // browser that started it, so reopening the chat has to re-attach to
+        // it — replay what the ledger already holds, then follow the stream —
+        // or the answer only appears after the turn ends and the page is
+        // loaded a second time. `onSettled` re-reads the transcript once it
+        // finishes, because the store, not this surface, is what the answer
+        // finally was.
+        // ...unless its answer is already in the transcript we just read.
+        // The server stores the answer *before* it releases the run — the two
+        // take the chat lock separately, and the other order lets a reader see
+        // a settled chat whose answer is not stored yet and clear the unseen
+        // flag on it permanently. The cost of the safe order is this window:
+        // `status` still says `running` while the reply is already here. Keying
+        // off the status alone, the client renders the stored answer and then
+        // mints a second bubble and replays the same tokens into it — and it
+        // never recovers on its own, because the run has ended and `onSettled`
+        // has no end to wait for, so `processing` sticks until a reload.
+        const activeRunId =
+          result?.chat?.status === 'running' ? result.chat.activeRunId || null : null;
+        const answered =
+          activeRunId !== null &&
+          storedMessages.some(
+            message => message.role === 'assistant' && message.runId === activeRunId
+          );
+        const runningRunId = answered ? null : activeRunId;
+        if (runningRunId) {
+          reattachToRun(runningRunId, {
+            onSettled: async () => {
+              if (!owns()) return;
+              try {
+                const settled = await fetchChat(chatId);
+                if (!owns()) return;
+                // Replaces the transcript outright, placeholder included: the
+                // store now holds the assistant message this surface was
+                // rendering live, and it is the version that survives a
+                // reload.
+                loadServerMessages(Array.isArray(settled?.messages) ? settled.messages : []);
+                invalidateChatsCache();
+              } catch (err) {
+                // The live projection stays on screen. It is very probably
+                // right — this re-read only exists to close the gap between
+                // the replay and the stream.
+                console.warn('Could not re-read the settled chat:', err.message);
+              }
+            }
+          });
+        }
+      } catch (err) {
+        if (!owns()) return;
+        if (err?.status !== 404) {
+          console.warn('Failed to load the stored chat, starting empty:', err.message);
+        }
+        finishHydration();
+      } finally {
+        if (owns()) hydrationPendingRef.current = false;
+      }
+    })();
+
+    return undefined;
+  }, [serverBackedChat, app, chatId, messages.length, loadServerMessages, finishHydration]);
+
+  // A finished turn is what changes the chat list: a brand-new chat appears in
+  // it, an existing one moves to the top and may have gained a derived title,
+  // and opening this chat cleared its unseen flag. The sidebar is mounted once
+  // in Layout for the whole session, so without this its Recents would keep
+  // showing the list it fetched when the page first loaded. Every terminal
+  // branch of a turn clears `processing`, so the transition covers a failed
+  // turn too — that one is stored as well.
+  const wasProcessingRef = useRef(false);
+  useEffect(() => {
+    const wasProcessing = wasProcessingRef.current;
+    wasProcessingRef.current = processing;
+    if (serverBackedChat && wasProcessing && !processing) invalidateChatsCache();
+  }, [processing, serverBackedChat]);
 
   // Resume conversation from conversation API on mount (iAssistant Conversation)
   const conversationResumed = useRef(false);
   useEffect(() => {
     if (conversationResumed.current || !app || messages.length > 0) return;
-    if (ephemeral) return;
+    // A server-backed chat hydrates from the durable store instead, and that
+    // store is the source of truth for it. Two loaders replacing the same array
+    // would race, and the loser would silently win on a slow network.
+    if (ephemeral || serverBackedChat) return;
 
     const existingConversationId = getConversationId(appId);
     if (!existingConversationId) return;
@@ -467,35 +840,55 @@ function AppChat({ preloadedApp = null }) {
         clearConversationId(appId);
       }
     })();
-  }, [app, appId, messages.length, loadServerMessages, ephemeral]);
+  }, [app, appId, messages.length, loadServerMessages, ephemeral, serverBackedChat]);
 
   // Auto-send message if send=true query parameter is present
   const autoSendTriggered = useRef(false);
+  // The intent has to be latched on the first render that sees it: the
+  // URL-parameter effect above strips `send` and `prefill` as soon as it
+  // applies anything, so by the time the settings below are ready the query
+  // string no longer says the message should be sent.
+  const autoSendPending = useRef(false);
 
   // Reset auto-send trigger when appId changes
   useEffect(() => {
     autoSendTriggered.current = false;
+    autoSendPending.current = false;
   }, [appId]);
 
   useEffect(() => {
-    const shouldAutoSend = searchParams.get('send') === 'true';
-
-    if (shouldAutoSend && !autoSendTriggered.current && prefillMessage && app && !processing) {
-      autoSendTriggered.current = true;
-
-      // Clean up the send parameter from URL
-      const newSearch = new URLSearchParams(searchParams);
-      newSearch.delete('send');
-      navigate(`${window.location.pathname}?${newSearch.toString()}`, { replace: true });
-
-      // Trigger the form submission after a short delay to ensure everything is initialized
-      setTimeout(() => {
-        if (formRef.current) {
-          formRef.current.dispatchEvent(new Event('submit', { cancelable: true, bubbles: true }));
-        }
-      }, 100);
+    if (searchParams.get('send') === 'true' && prefillMessage && !autoSendTriggered.current) {
+      autoSendPending.current = true;
     }
-  }, [app, processing, prefillMessage, searchParams, navigate]);
+    if (!autoSendPending.current || autoSendTriggered.current) return;
+    if (!app || processing) return;
+    // Wait for the model catalogue before firing. `useAppSettings` resolves
+    // the app's initial model (and its temperature, output format, …) only
+    // once the catalogue has loaded, and a model carried over from the start
+    // page arrives via `?model=` which the URL-parameter effect above applies
+    // on the same gate. Sending before that goes out as `modelId: null`,
+    // which the server rejects with `400 Invalid request` — a race only slow
+    // devices lost, so on a phone the handoff from the start page failed
+    // while on a desktop the 100 ms below always covered it.
+    if (modelsLoading || !selectedModel) return;
+
+    autoSendTriggered.current = true;
+    autoSendPending.current = false;
+
+    // Clean up the send and prefill parameters from URL so a later reload
+    // doesn't repopulate the input with the already-sent message
+    const newSearch = new URLSearchParams(searchParams);
+    newSearch.delete('send');
+    newSearch.delete('prefill');
+    navigate(`${window.location.pathname}?${newSearch.toString()}`, { replace: true });
+
+    // Trigger the form submission after a short delay to ensure everything is initialized
+    setTimeout(() => {
+      if (formRef.current) {
+        formRef.current.dispatchEvent(new Event('submit', { cancelable: true, bubbles: true }));
+      }
+    }, 100);
+  }, [app, processing, prefillMessage, searchParams, navigate, modelsLoading, selectedModel]);
 
   // Fetch and attach document when navigated from "Open in App" with source params
   const documentAttached = useRef(false);
@@ -603,13 +996,29 @@ function AppChat({ preloadedApp = null }) {
   // Reset auto-start trigger when appId or chatId changes
   useEffect(() => {
     autoStartTriggered.current = false;
-  }, [appId, chatId.current]);
+  }, [appId, chatId]);
+
+  // The latest values the delayed send below has to re-check. Hydration can
+  // land inside those 300 ms, and the timer closes over nothing else.
+  const autoStartGateRef = useRef(null);
+  autoStartGateRef.current = {
+    hydrating,
+    chatModeResolving,
+    messageCount: messages.length
+  };
 
   useEffect(() => {
     // Check if we should auto-start the conversation
     const shouldAutoStart =
       app?.autoStart === true && // App has autoStart enabled
       messages.length === 0 && // No messages yet
+      // …and an empty transcript really does mean "new chat". In server-backed
+      // mode it is also what a chat with a hundred stored turns looks like
+      // until `GET /api/chats/:id` answers, so firing here would append a
+      // blank turn — and re-prompt the model with the whole history — every
+      // single time the user opens that chat from the history.
+      !hydrating &&
+      !chatModeResolving &&
       !processing && // Not currently processing
       !autoStartTriggered.current && // Haven't triggered yet
       selectedModel && // Model is selected
@@ -622,6 +1031,13 @@ function AppChat({ preloadedApp = null }) {
       // Send an empty message to trigger the LLM
       // The empty user message will be filtered out in ChatMessageList
       setTimeout(() => {
+        // Re-check: the stored transcript may have landed while this timer
+        // was pending, and this was never a new chat after all.
+        const gate = autoStartGateRef.current;
+        if (gate.hydrating || gate.chatModeResolving || gate.messageCount > 0) {
+          debugLog('Auto-start abandoned: the chat is not empty after all');
+          return;
+        }
         const params = {
           modelId: selectedModel,
           style: selectedStyle,
@@ -629,7 +1045,7 @@ function AppChat({ preloadedApp = null }) {
           outputFormat: selectedOutputFormat,
           language: currentLanguage,
           ...(thinkingEnabled !== null ? { thinkingEnabled } : {}),
-          ...(thinkingBudget !== null ? { thinkingBudget } : {}),
+          ...(thinkingLevel !== null ? { thinkingLevel } : {}),
           ...(thinkingThoughts !== null ? { thinkingThoughts } : {}),
           ...(effectiveEnabledTools !== null && effectiveEnabledTools !== undefined
             ? { enabledTools: effectiveEnabledTools }
@@ -690,6 +1106,8 @@ function AppChat({ preloadedApp = null }) {
   }, [
     app,
     messages.length,
+    hydrating,
+    chatModeResolving,
     processing,
     appId,
     selectedModel,
@@ -700,7 +1118,7 @@ function AppChat({ preloadedApp = null }) {
     currentLanguage,
     variables,
     thinkingEnabled,
-    thinkingBudget,
+    thinkingLevel,
     thinkingThoughts,
     effectiveEnabledTools,
     imageAspectRatio,
@@ -743,7 +1161,7 @@ function AppChat({ preloadedApp = null }) {
       cancelGeneration();
       clearMessages();
       resetConversationState();
-      chatId.current = resetChatId(appId);
+      startNewChat();
       clearConversationId(appId);
       conversationResumed.current = false;
 
@@ -774,14 +1192,7 @@ function AppChat({ preloadedApp = null }) {
     sendMessage: text => {
       setInput(text);
       setTimeout(() => {
-        const form = document.querySelector('form');
-        if (form) {
-          const submitEvent = new Event('submit', {
-            cancelable: true,
-            bubbles: true
-          });
-          form.dispatchEvent(submitEvent);
-        }
+        formRef.current?.requestSubmit();
       }, 0);
     },
     isProcessing: processing,
@@ -888,8 +1299,10 @@ function AppChat({ preloadedApp = null }) {
 
   // Calculate the welcome message to display (if any) - show greeting when configured
   const welcomeMessage = useMemo(() => {
-    // Don't show welcome message if there are any messages
-    if (!app || loading || messages.length > 0) return null;
+    // Don't show welcome message if there are any messages, while the chat mode
+    // is still unknown, or while a stored transcript is still on its way — see
+    // renderStartupState.
+    if (!app || loading || hydrating || chatModeResolving || messages.length > 0) return null;
 
     // Skip if starter prompts are configured - they take priority
     if (app.starterPrompts && app.starterPrompts.length > 0) {
@@ -910,7 +1323,7 @@ function AppChat({ preloadedApp = null }) {
     }
 
     return greeting;
-  }, [app, loading, currentLanguage, messages.length]);
+  }, [app, loading, hydrating, chatModeResolving, currentLanguage, messages.length]);
 
   // Determine if input should be centered (only when showing example prompts)
   const shouldCenterInput = useMemo(() => {
@@ -948,7 +1361,7 @@ function AppChat({ preloadedApp = null }) {
         outputFormat: selectedOutputFormat,
         language: currentLanguage,
         ...(thinkingEnabled !== null ? { thinkingEnabled } : {}),
-        ...(thinkingBudget !== null ? { thinkingBudget } : {}),
+        ...(thinkingLevel !== null ? { thinkingLevel } : {}),
         ...(thinkingThoughts !== null ? { thinkingThoughts } : {}),
         ...(effectiveEnabledTools !== null && effectiveEnabledTools !== undefined
           ? { enabledTools: effectiveEnabledTools }
@@ -990,7 +1403,7 @@ function AppChat({ preloadedApp = null }) {
       currentLanguage,
       sendChatHistory,
       thinkingEnabled,
-      thinkingBudget,
+      thinkingLevel,
       thinkingThoughts,
       effectiveEnabledTools,
       imageAspectRatio,
@@ -1114,17 +1527,24 @@ function AppChat({ preloadedApp = null }) {
       }
     }
 
-    setTimeout(() => {
-      const form = document.querySelector('form');
-      if (form) {
-        const submitEvent = new Event('submit', {
-          cancelable: true,
-          bubbles: true
-        });
-        form.dispatchEvent(submitEvent);
-      }
-    }, 0);
+    // Submitting via a bare setTimeout races React's commit of the state set
+    // above: when this whole resend is itself already running inside a
+    // setTimeout (ChatMessage's edit-then-resend flow), the update can still
+    // be pending when the timer fires, so handleSubmit reads the stale
+    // (often empty) input and silently no-ops — the edited text is left
+    // sitting in the box instead of being resent. Flagging it here and
+    // submitting from the effect below guarantees the state is committed
+    // first.
+    setPendingAutoSubmit(true);
   };
+
+  // Fires the actual resubmission only after the state handleResendMessage
+  // just set (input/variables/files) has committed — see the comment there.
+  useEffect(() => {
+    if (!pendingAutoSubmit) return;
+    setPendingAutoSubmit(false);
+    formRef.current?.requestSubmit();
+  }, [pendingAutoSubmit]);
 
   /**
    * Handle clarification response submission.
@@ -1180,58 +1600,32 @@ function AppChat({ preloadedApp = null }) {
     ]
   );
 
-  // Handle citation document actions (openExternal, preview, download, openInApp)
+  // Handle citation document actions (openExternal, download, openInApp).
+  // "preview" is handled inside CitationPanel, which owns the passage texts the
+  // preview highlights.
+  //
+  // openExternal/download go through the shared helpers so this page and the
+  // panel's own fallback behave identically — including reporting back a
+  // `{ ok: false }` result the panel turns into a visible message instead of a
+  // dead button (issue #2453). Only openInApp is specific to this page: it
+  // needs the app router, which the embedded hosts do not have.
   const handleDocumentAction = useCallback(
-    (action, item, targetAppId) => {
-      const getMeta = (doc, key) => {
-        const val = doc?.additional_document_metadata?.[key];
-        return Array.isArray(val) && val.length > 0 ? val[0] : val || '';
-      };
-      const deepLink = getMeta(item, 'accessInfo.deepLink');
+    async (action, item, targetAppId) => {
+      if (action === 'openExternal') return openCitationDocument(item);
+      if (action === 'download') return downloadCitationDocument(item);
 
-      // Extract document access info from iFinder links
-      const links = item?.links;
-      const accessLink = Array.isArray(links) ? links.find(l => l.type === 'ACCESS') : null;
-
-      if (action === 'openExternal') {
-        if (deepLink) {
-          window.open(deepLink, '_blank', 'noopener,noreferrer');
-        }
-      } else if (action === 'preview') {
-        if (accessLink?.documentId) {
-          const params = new URLSearchParams({
-            documentId: accessLink.documentId,
-            ...(accessLink.searchProfile ? { searchProfile: accessLink.searchProfile } : {}),
-            convertToPdf: 'true'
-          });
-          window.open(
-            buildApiUrl(`integrations/ifinder/document?${params}`),
-            '_blank',
-            'noopener,noreferrer'
-          );
-        }
-      } else if (action === 'download') {
-        if (accessLink?.documentId) {
-          const params = new URLSearchParams({
-            documentId: accessLink.documentId,
-            ...(accessLink.searchProfile ? { searchProfile: accessLink.searchProfile } : {})
-          });
-          window.open(
-            buildApiUrl(`integrations/ifinder/document?${params}`),
-            '_blank',
-            'noopener,noreferrer'
-          );
-        }
-      } else if (action === 'openInApp' && targetAppId) {
-        const title = item.title || getMeta(item, 'title') || '';
+      if (action === 'openInApp' && targetAppId) {
+        const access = getCitationDocumentAccess(item);
         const params = new URLSearchParams({
-          prefill: title,
+          prefill: item.title || getCitationMeta(item, 'title') || '',
           documentId: item.document_id || '',
-          ...(accessLink?.searchProfile ? { searchProfile: accessLink.searchProfile } : {}),
+          ...(access?.searchProfile ? { searchProfile: access.searchProfile } : {}),
           source: 'ifinder'
         });
         navigate(`/apps/${targetAppId}?${params.toString()}`);
       }
+
+      return undefined;
     },
     [navigate]
   );
@@ -1251,7 +1645,7 @@ function AppChat({ preloadedApp = null }) {
         // Clear regular chat
         clearMessages();
         resetConversationState();
-        chatId.current = resetChatId(appId);
+        startNewChat();
         clearConversationId(appId);
         conversationResumed.current = false;
       }
@@ -1282,11 +1676,270 @@ function AppChat({ preloadedApp = null }) {
     }
   };
 
+  // Transcribe one or more audio sources with the app's Voxtral transcription
+  // model and render each transcript as an assistant chat turn (streaming the
+  // deltas). A source is either an uploaded/extracted audio selected-file
+  // ({ base64, fileName, ... }) or a recording ({ audioBuffer, fileName }). The
+  // user turn carries only a text label — never raw audio — so follow-up
+  // questions don't ship audio to the (non-audio) chat model.
+  const transcribeToChat = useCallback(
+    async audioSources => {
+      const transcription = app?.transcription || {};
+      const modelId = transcription.modelId;
+      if (!modelId) {
+        addSystemMessage(
+          t('transcription.errors.noModel', 'No transcription model is configured for this app.'),
+          true
+        );
+        return;
+      }
+      const streaming = transcription.streaming !== false;
+      const maxDurationSeconds = transcription.maxDurationSeconds || 900;
+      const sources = Array.isArray(audioSources) ? audioSources : [audioSources];
+
+      // One transcription run at a time — a second run would overwrite the
+      // abort controller and orphan the first run's Stop button.
+      if (transcribeAbortRef.current) {
+        addSystemMessage(
+          t('transcription.errors.busy', 'A transcription is already running. Stop it first.'),
+          true
+        );
+        return;
+      }
+      const abortController = new AbortController();
+      transcribeAbortRef.current = abortController;
+      setIsTranscribing(true);
+      try {
+        for (const source of sources) {
+          if (!source) continue;
+          // Cancelled: the current message already carries the cancellation
+          // notice — don't spawn message bubbles for the remaining sources.
+          if (abortController.signal.aborted) break;
+          const sourceName = source.extractedFromVideo
+            ? source.originalVideoName || source.fileName
+            : source.fileName;
+          const label = `🎙 ${sourceName || t('transcription.recording', 'Recording')}`;
+          addUserMessage(label, { rawContent: label });
+          const assistantId = addAssistantMessage();
+          // Latest streamed text (declared out here so the catch block can keep
+          // the partial transcript on cancellation).
+          let lastText = '';
+
+          try {
+            const audioBuffer = source.audioBuffer
+              ? source.audioBuffer
+              : await decodeAudioFileToBuffer(source.base64);
+
+            if (audioBuffer?.duration > maxDurationSeconds) {
+              updateAssistantMessage(
+                assistantId,
+                t(
+                  'transcription.errors.tooLong',
+                  'This audio is {{duration}}s long, which exceeds the {{max}}s limit for transcription.',
+                  {
+                    duration: Math.round(audioBuffer.duration),
+                    max: maxDurationSeconds
+                  }
+                ),
+                false,
+                { isError: true }
+              );
+              continue;
+            }
+
+            const transcript = await transcribeAudioBuffer(audioBuffer, {
+              modelId,
+              signal: abortController.signal,
+              onDelta: streaming
+                ? text => {
+                    lastText = text;
+                    updateAssistantMessage(assistantId, text, true);
+                  }
+                : undefined
+            });
+            updateAssistantMessage(
+              assistantId,
+              transcript || t('transcription.empty', '_(No speech detected)_'),
+              false
+            );
+          } catch (err) {
+            // Whenever partial text exists, keep it and append a notice on a new
+            // line instead of replacing everything: cancels are user-initiated,
+            // and interruptions/timeouts mean the text so far is still valuable
+            // (but must be marked as incomplete, never presented as complete).
+            const keepPartial =
+              ['aborted', 'interrupted', 'timeout'].includes(err?.code) && lastText.trim();
+            if (keepPartial) {
+              const notice =
+                err.code === 'aborted'
+                  ? t('transcription.errors.aborted', 'Transcription was cancelled.')
+                  : t(
+                      'transcription.errors.interrupted',
+                      'Transcription was interrupted — the transcript may be incomplete.'
+                    );
+              updateAssistantMessage(assistantId, `${lastText.trim()}\n\n_${notice}_`, false);
+            } else {
+              updateAssistantMessage(assistantId, getTranscriptionErrorMessage(err, t), false, {
+                isError: true
+              });
+            }
+          }
+        }
+      } finally {
+        setIsTranscribing(false);
+        transcribeAbortRef.current = null;
+      }
+    },
+    [app, addUserMessage, addAssistantMessage, updateAssistantMessage, addSystemMessage, t]
+  );
+
+  // Cancel an in-flight upload/video transcription (wired to the Stop button).
+  const cancelTranscription = useCallback(() => {
+    if (transcribeAbortRef.current) transcribeAbortRef.current.abort();
+  }, []);
+
+  // --- Record → transcribe control ---
+  const recorderRef = useRef(null);
+  // True while rec.start() is awaiting getUserMedia — the window in which
+  // recorderRef is still null but a recording IS being established.
+  const recorderStartingRef = useRef(false);
+  // Set on unmount so async work resolving afterwards (a permission prompt
+  // granted post-navigation) releases the microphone instead of capturing on.
+  const disposedRef = useRef(false);
+  const [isRecordingTranscription, setIsRecordingTranscription] = useState(false);
+  const [recordElapsed, setRecordElapsed] = useState(0);
+
+  const stopRecordingAndTranscribe = useCallback(async () => {
+    const rec = recorderRef.current;
+    if (!rec) return;
+    recorderRef.current = null;
+    setIsRecordingTranscription(false);
+    try {
+      const { audioBuffer } = await rec.stop();
+      if (audioBuffer && audioBuffer.length) {
+        await transcribeToChat([{ audioBuffer }]);
+      }
+    } catch (err) {
+      addSystemMessage(getTranscriptionErrorMessage(err, t), true);
+    }
+  }, [transcribeToChat, addSystemMessage, t]);
+
+  const startRecordingTranscription = useCallback(async () => {
+    // Re-entrancy: a second click while getUserMedia's permission prompt is
+    // open would start a second recorder and orphan the first (hot mic).
+    if (recorderRef.current || recorderStartingRef.current) return;
+    recorderStartingRef.current = true;
+    const maxDurationSeconds = app?.transcription?.maxDurationSeconds || 900;
+    const rec = new AudioBufferRecorder({
+      maxDurationSeconds,
+      onTick: setRecordElapsed,
+      onMaxDuration: () => stopRecordingAndTranscribe()
+    });
+    try {
+      await rec.start();
+      if (disposedRef.current) {
+        // Unmounted while the permission prompt was open — release the mic.
+        rec.cancel();
+        return;
+      }
+      recorderRef.current = rec;
+      setIsRecordingTranscription(true);
+      setRecordElapsed(0);
+    } catch {
+      addSystemMessage(
+        t(
+          'transcription.errors.mic',
+          'Could not access the microphone. Please grant permission and try again.'
+        ),
+        true
+      );
+    } finally {
+      recorderStartingRef.current = false;
+    }
+  }, [app, stopRecordingAndTranscribe, addSystemMessage, t]);
+
+  const handleRecordTranscription = useCallback(() => {
+    if (recorderRef.current) stopRecordingAndTranscribe();
+    else startRecordingTranscription();
+  }, [startRecordingTranscription, stopRecordingAndTranscribe]);
+
+  // Stop any active recording and abort an in-flight transcription if the
+  // component unmounts, so no microphone stream or WebSocket is left open.
+  useEffect(() => {
+    disposedRef.current = false;
+    return () => {
+      disposedRef.current = true;
+      if (recorderRef.current) {
+        recorderRef.current.cancel();
+        recorderRef.current = null;
+      }
+      if (transcribeAbortRef.current) {
+        transcribeAbortRef.current.abort();
+        transcribeAbortRef.current = null;
+      }
+    };
+  }, []);
+
   const handleSubmit = async e => {
     e.preventDefault();
 
+    // While recording, "send" means: finish the recording and transcribe it.
+    // Anything typed stays in the input (nothing is cleared here), and this
+    // prevents a file transcription from racing the recorder's own flow.
+    if (recorderRef.current || recorderStartingRef.current) {
+      stopRecordingAndTranscribe();
+      return;
+    }
+
     if (!input.trim() && !fileUploadHandler.selectedFile && !app?.allowEmptyContent) {
       return;
+    }
+
+    // Transcription rerouting: when the app opts into transcription and the
+    // selection contains audio (uploaded audio, or audio extracted from an
+    // uploaded video), transcribe it into an assistant turn instead of shipping
+    // audioData to the chat model. Not applied in compare mode.
+    if (!compareModeActive && app?.transcription?.enabled && fileUploadHandler.selectedFile) {
+      const selected = Array.isArray(fileUploadHandler.selectedFile)
+        ? fileUploadHandler.selectedFile
+        : [fileUploadHandler.selectedFile];
+      const audioFiles = selected.filter(f => f?.type === 'audio');
+      if (audioFiles.length > 0 && transcriptionEnabled) {
+        // Only the audio is consumed by transcription. Typed text and other
+        // attachments are restored afterwards so nothing is silently dropped —
+        // the user can then send them with the transcript in the history.
+        const typedText = input;
+        const remainingFiles = selected.filter(f => f?.type !== 'audio');
+        setInput('');
+        magicPromptHandler.resetMagicPrompt();
+        fileUploadHandler.clearSelectedFile();
+        fileUploadHandler.hideUploader();
+        pendingVariablesRef.current = null;
+        await transcribeToChat(audioFiles);
+        if (typedText.trim()) setInput(typedText);
+        // Non-empty only when the original selection was an array (a single
+        // attachment that reached this branch was itself the audio file).
+        if (remainingFiles.length > 0) {
+          fileUploadHandler.setSelectedFile(remainingFiles);
+        }
+        return;
+      }
+      // Toggle off: audio falls through to the multimodal chat path, which only
+      // works when the selected chat model actually accepts audio. Fail fast
+      // with guidance instead of shipping audio the model will reject.
+      if (audioFiles.length > 0 && !transcriptionEnabled) {
+        const currentModel = models?.find(m => m.id === selectedModel);
+        if (currentModel?.supportsAudio !== true) {
+          addSystemMessage(
+            t(
+              'transcription.errors.audioNeedsTranscription',
+              'The selected chat model cannot process audio directly. Enable Transcription in the actions menu, or remove the audio attachment.'
+            ),
+            true
+          );
+          return;
+        }
+      }
     }
 
     // Use pending variables from ref if available (for resend operations),
@@ -1391,7 +2044,7 @@ function AppChat({ preloadedApp = null }) {
       outputFormat: selectedOutputFormat,
       language: currentLanguage,
       ...(thinkingEnabled !== null ? { thinkingEnabled } : {}),
-      ...(thinkingBudget !== null ? { thinkingBudget } : {}),
+      ...(thinkingLevel !== null ? { thinkingLevel } : {}),
       ...(thinkingThoughts !== null ? { thinkingThoughts } : {}),
       ...(effectiveEnabledTools !== null && effectiveEnabledTools !== undefined
         ? { enabledTools: effectiveEnabledTools }
@@ -1576,10 +2229,15 @@ function AppChat({ preloadedApp = null }) {
     const currentModel = models.find(m => m.id === selectedModel);
 
     // In compare mode, processing/cancel must reflect every panel — not the regular chat.
-    const effectiveProcessing = compareModeActive ? compareIsProcessing : processing;
-    const effectiveCancel = compareModeActive
-      ? () => compareViewRef.current?.cancelAll()
-      : cancelGeneration;
+    // A running transcription also counts as "processing" so the Send button
+    // becomes a Stop button that cancels it.
+    const effectiveProcessing =
+      (compareModeActive ? compareIsProcessing : processing) || isTranscribing;
+    const effectiveCancel = isTranscribing
+      ? cancelTranscription
+      : compareModeActive
+        ? () => compareViewRef.current?.cancelAll()
+        : cancelGeneration;
 
     const commonProps = {
       app,
@@ -1595,6 +2253,24 @@ function AppChat({ preloadedApp = null }) {
       onVoiceCommand:
         (app?.inputMode?.microphone?.enabled ?? app?.microphone?.enabled) !== false
           ? handleVoiceCommand
+          : undefined,
+      // Voxtral record → transcribe control (separate from dictation mic above).
+      // Shown only when transcription is available AND the per-chat toggle is on.
+      transcriptionRecordEnabled:
+        !compareModeActive &&
+        app?.transcription?.enabled === true &&
+        transcriptionEnabled &&
+        !!app?.transcription?.modelId &&
+        app?.transcription?.inputs?.record !== false,
+      onRecordTranscription: isTranscribing ? undefined : handleRecordTranscription,
+      isRecordingTranscription,
+      recordTranscriptionElapsed: recordElapsed,
+      // Per-chat transcription toggle (actions menu).
+      transcriptionAvailable: !compareModeActive && app?.transcription?.enabled === true,
+      transcriptionEnabled,
+      onTranscriptionEnabledChange:
+        !compareModeActive && app?.transcription?.enabled === true
+          ? setTranscriptionEnabled
           : undefined,
       onFileSelect: fileUploadHandler.handleFileSelect,
       uploadConfig: fileUploadHandler.createUploadConfig(app, currentModel),
@@ -1632,7 +2308,12 @@ function AppChat({ preloadedApp = null }) {
       // Clarification state
       clarificationPending,
       // Document token size warning
-      fileTokenWarning
+      fileTokenWarning,
+      // Conversation so far + the history toggle, so the context-window
+      // indicator reflects everything the next turn will send — not just the
+      // pending message (issue #2283).
+      messages,
+      sendChatHistory
     };
 
     // Always use ChatInput (which now has the NextGen design with model selector)
@@ -1667,7 +2348,7 @@ function AppChat({ preloadedApp = null }) {
           <p>{error}</p>
           <button
             onClick={clearAppCache}
-            className="mt-3 bg-red-500 hover:bg-red-600 text-white font-bold py-2 px-4 rounded"
+            className="mt-3 bg-red-500 hover:bg-red-600 text-white font-bold py-2 px-4 rounded-sm"
           >
             {t('pages.appChat.clearCache', 'Clear Cache & Reload')}
           </button>
@@ -1677,12 +2358,12 @@ function AppChat({ preloadedApp = null }) {
   }
 
   return (
-    <div className="flex flex-col h-[calc(100vh-6rem)] max-h-[calc(100vh-6rem)] min-h-0 overflow-hidden pt-4 pb-2">
+    <div className="flex flex-col flex-1 h-full max-h-full min-h-0 overflow-hidden px-4 md:px-6 pt-2 sm:pt-4 pb-2">
       {/* Shared App Header */}
       <SharedAppHeader
         app={app}
         appId={appId}
-        chatId={chatId.current}
+        chatId={chatId}
         mode="chat"
         messages={messages}
         variables={variables}
@@ -1696,7 +2377,7 @@ function AppChat({ preloadedApp = null }) {
         sendChatHistory={sendChatHistory}
         temperature={temperature}
         thinkingEnabled={thinkingEnabled}
-        thinkingBudget={thinkingBudget}
+        thinkingLevel={thinkingLevel}
         thinkingThoughts={thinkingThoughts}
         enabledTools={effectiveEnabledTools}
         imageAspectRatio={imageAspectRatio}
@@ -1707,7 +2388,7 @@ function AppChat({ preloadedApp = null }) {
         onSendChatHistoryChange={setSendChatHistory}
         onTemperatureChange={setTemperature}
         onThinkingEnabledChange={setThinkingEnabled}
-        onThinkingBudgetChange={setThinkingBudget}
+        onThinkingLevelChange={setThinkingLevel}
         onThinkingThoughtsChange={setThinkingThoughts}
         onEnabledToolsChange={setEnabledTools}
         onImageAspectRatioChange={setImageAspectRatio}
@@ -1727,7 +2408,7 @@ function AppChat({ preloadedApp = null }) {
 
       {app?.variables && app.variables.length > 0 && showParameters && (
         <div
-          className="md:hidden fixed inset-0 bg-black bg-opacity-50 z-50 flex items-center justify-center p-4"
+          className="md:hidden fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4"
           onClick={e => {
             // Close modal when clicking backdrop
             if (e.target === e.currentTarget) {
@@ -1736,7 +2417,7 @@ function AppChat({ preloadedApp = null }) {
           }}
         >
           <div className="w-full bg-white dark:bg-gray-800 rounded-lg max-h-[90vh] overflow-hidden flex flex-col shadow-xl">
-            <div className="flex justify-between items-center p-4 border-b dark:border-gray-700 flex-shrink-0">
+            <div className="flex justify-between items-center p-4 border-b dark:border-gray-700 shrink-0">
               <h3 className="font-medium text-gray-900 dark:text-gray-100">
                 {t('pages.appChat.inputParameters')}
               </h3>
@@ -1754,7 +2435,7 @@ function AppChat({ preloadedApp = null }) {
                 localizedVariables={localizedVariables}
               />
             </div>
-            <div className="flex gap-3 p-4 border-t dark:border-gray-700 bg-gray-50 dark:bg-gray-900 flex-shrink-0">
+            <div className="flex gap-3 p-4 border-t dark:border-gray-700 bg-gray-50 dark:bg-gray-900 shrink-0">
               <button
                 onClick={handleParametersCancel}
                 className="flex-1 px-4 py-2 text-gray-700 dark:text-gray-300 bg-white dark:bg-gray-800 border border-gray-300 dark:border-gray-600 rounded-lg hover:bg-gray-50 dark:hover:bg-gray-700 font-medium"
@@ -1798,7 +2479,7 @@ function AppChat({ preloadedApp = null }) {
                   ephemeral={ephemeral}
                 />
               </div>
-              <div className="flex-shrink-0 px-4 pt-2">
+              <div className="shrink-0 px-4 pt-2">
                 <div className="w-full max-w-4xl mx-auto">{renderChatInput()}</div>
               </div>
             </>
@@ -1818,8 +2499,9 @@ function AppChat({ preloadedApp = null }) {
                         onResend={handleResendMessage}
                         editable={true}
                         appId={appId}
-                        chatId={chatId.current}
+                        chatId={chatId}
                         modelId={selectedModel}
+                        imagesPersisted={serverBackedChat}
                         onOpenInCanvas={handleOpenInCanvas}
                         canvasEnabled={app?.features?.canvas === true}
                         requiredIntegrations={requiredIntegrations}
@@ -1835,13 +2517,20 @@ function AppChat({ preloadedApp = null }) {
                     <div className="w-full h-full overflow-y-auto">
                       <div className="min-h-full flex items-center justify-center p-4">
                         <div className="w-full max-w-4xl">
-                          {renderStartupState(app, welcomeMessage, handleStarterPromptClick)}
+                          {renderStartupState(
+                            app,
+                            welcomeMessage,
+                            handleStarterPromptClick,
+                            hydrating,
+                            chatModeResolving,
+                            t
+                          )}
                         </div>
                       </div>
                     </div>
                   )}
                 </div>
-                <div className="flex-shrink-0 px-4 pt-2">
+                <div className="shrink-0 px-4 pt-2">
                   <div className="w-full max-w-4xl mx-auto">{renderChatInput()}</div>
                 </div>
               </div>
@@ -1859,8 +2548,9 @@ function AppChat({ preloadedApp = null }) {
                         onResend={handleResendMessage}
                         editable={true}
                         appId={appId}
-                        chatId={chatId.current}
+                        chatId={chatId}
                         modelId={selectedModel}
+                        imagesPersisted={serverBackedChat}
                         onOpenInCanvas={handleOpenInCanvas}
                         canvasEnabled={app?.features?.canvas === true}
                         requiredIntegrations={requiredIntegrations}
@@ -1874,7 +2564,14 @@ function AppChat({ preloadedApp = null }) {
                     </div>
                   ) : (
                     <div className="mb-8">
-                      {renderStartupState(app, welcomeMessage, handleStarterPromptClick)}
+                      {renderStartupState(
+                        app,
+                        welcomeMessage,
+                        handleStarterPromptClick,
+                        hydrating,
+                        chatModeResolving,
+                        t
+                      )}
                     </div>
                   )}
                   <div>{renderChatInput()}</div>
@@ -1895,8 +2592,9 @@ function AppChat({ preloadedApp = null }) {
                     onResend={handleResendMessage}
                     editable={true}
                     appId={appId}
-                    chatId={chatId.current}
+                    chatId={chatId}
                     modelId={selectedModel}
+                    imagesPersisted={serverBackedChat}
                     starterPrompts={app?.starterPrompts || []}
                     onSelectPrompt={handleStarterPromptClick}
                     welcomeMessage={welcomeMessage}
@@ -1912,7 +2610,7 @@ function AppChat({ preloadedApp = null }) {
                     onDocumentAction={handleDocumentAction}
                   />
                 </div>
-                <div className="flex-shrink-0 px-4 pt-2">{renderChatInput()}</div>
+                <div className="shrink-0 px-4 pt-2">{renderChatInput()}</div>
               </div>
 
               {/* Desktop layout: normal flex column */}
@@ -1925,8 +2623,9 @@ function AppChat({ preloadedApp = null }) {
                   onResend={handleResendMessage}
                   editable={true}
                   appId={appId}
-                  chatId={chatId.current}
+                  chatId={chatId}
                   modelId={selectedModel}
+                  imagesPersisted={serverBackedChat}
                   starterPrompts={app?.starterPrompts || []}
                   onSelectPrompt={handleStarterPromptClick}
                   welcomeMessage={welcomeMessage}
@@ -1949,7 +2648,7 @@ function AppChat({ preloadedApp = null }) {
         </div>
 
         {app?.variables && app.variables.length > 0 && (
-          <div className="hidden md:block w-80 lg:w-96 overflow-y-auto p-4 bg-gray-50 dark:bg-gray-800 rounded-lg flex-shrink-0">
+          <div className="hidden md:block w-80 lg:w-96 overflow-y-auto p-4 bg-gray-50 dark:bg-gray-800 rounded-lg shrink-0">
             <h3 className="font-medium mb-3 text-gray-900 dark:text-gray-100">
               {t('pages.appChat.inputParameters')}
             </h3>
@@ -1964,7 +2663,13 @@ function AppChat({ preloadedApp = null }) {
       {shareEnabled && showShare && (
         <AppShareModal
           appId={appId}
-          path={window.location.pathname}
+          // A share link points at the app, never at one stored chat: the
+          // recipient does not own it and could only ever get a 404 from it.
+          path={
+            routeChatId
+              ? window.location.pathname.replace(/\/c\/[^/]+$/, '')
+              : window.location.pathname
+          }
           params={{
             model: selectedModel,
             style: selectedStyle,

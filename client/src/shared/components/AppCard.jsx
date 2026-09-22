@@ -34,7 +34,7 @@ function AppCard({
   if (variant === 'compact') {
     return (
       <div
-        className="relative bg-white rounded-lg shadow hover:shadow-md transition-shadow duration-200 w-full"
+        className="relative bg-white rounded-lg shadow-sm hover:shadow-md transition-shadow duration-200 w-full dark:bg-slate-800 dark:ring-1 dark:ring-slate-700"
         // rem (not px) so the row scales with the Office task pane's responsive
         // root font-size on small / high-DPI panes. 4.6875rem = 75px, 4.5rem = 72px
         // at the default 16px base — identical sizing in the main web app.
@@ -49,7 +49,7 @@ function AppCard({
               e.stopPropagation();
               onToggleFavorite(e, app.id);
             }}
-            className="absolute top-1 right-1 z-10 p-1 rounded-full hover:bg-slate-100 focus:outline-none focus:ring-2 focus:ring-indigo-300"
+            className="absolute top-1 right-1 z-10 p-1 rounded-full hover:bg-slate-100 focus:outline-hidden focus:ring-2 focus:ring-indigo-300 dark:hover:bg-slate-700"
             title={isFavorite ? t('pages.appsList.unfavorite') : t('pages.appsList.favorite')}
             aria-label={isFavorite ? t('pages.appsList.unfavorite') : t('pages.appsList.favorite')}
           >
@@ -67,7 +67,7 @@ function AppCard({
           onClick={() => onClick?.(app)}
         >
           <div
-            className="flex items-center justify-center w-10 h-full flex-shrink-0 rounded-l-lg"
+            className="flex items-center justify-center w-10 h-full shrink-0 rounded-l-lg"
             style={{ backgroundColor: app.color || '#4F46E5' }}
           >
             <div className="w-8 h-8 bg-white/30 rounded-full flex items-center justify-center">
@@ -79,10 +79,16 @@ function AppCard({
               onToggleFavorite ? 'pl-4 pr-9' : 'px-4'
             }`}
           >
-            <h4 className="font-semibold text-sm text-slate-900 truncate" title={name}>
+            <h4
+              className="font-semibold text-sm text-slate-900 truncate dark:text-slate-100"
+              title={name}
+            >
               {name}
             </h4>
-            <p className="text-slate-500 text-xs truncate mt-0.5" title={description}>
+            <p
+              className="text-slate-500 text-xs truncate mt-0.5 dark:text-slate-400"
+              title={description}
+            >
               {description}
             </p>
           </div>
@@ -94,7 +100,7 @@ function AppCard({
   const innerContent = (
     <div className="flex flex-row sm:flex-col h-full">
       <div
-        className="flex items-center justify-center w-20 h-full flex-shrink-0 rounded-l-lg sm:rounded-t-lg sm:rounded-l-none sm:w-full sm:h-24 relative"
+        className="flex items-center justify-center w-20 h-full shrink-0 rounded-l-lg sm:rounded-t-lg sm:rounded-l-none sm:w-full sm:h-24 relative"
         style={{ backgroundColor: app.color || '#4f46e5' }}
       >
         <div className="w-12 h-12 bg-white/30 rounded-full flex items-center justify-center">
@@ -108,7 +114,7 @@ function AppCard({
         )}
       </div>
       <div className="px-4 py-2 flex flex-col flex-1">
-        <h3 className="font-bold text-lg mb-1 break-words">
+        <h3 className="font-bold text-lg mb-1 wrap-break-word">
           {name}
           {isFavorite && (
             <span className="ml-2 hidden sm:inline-block" aria-label="Favorite">
@@ -125,7 +131,7 @@ function AppCard({
             </span>
           )}
         </h3>
-        <p className="text-gray-600 dark:text-gray-400 text-sm flex-grow">{description}</p>
+        <p className="text-gray-600 dark:text-gray-400 text-sm grow">{description}</p>
       </div>
     </div>
   );
@@ -142,7 +148,7 @@ function AppCard({
             e.stopPropagation();
             onToggleFavorite(e, app.id);
           }}
-          className="absolute top-2 right-2 z-10 p-1 bg-white dark:bg-gray-700 bg-opacity-70 rounded-full hover:bg-opacity-100 transition-all"
+          className="absolute top-2 right-2 z-10 p-1 bg-white/70 dark:bg-gray-700/70 rounded-full hover:bg-white dark:hover:bg-gray-700 transition-all"
           title={isFavorite ? t('pages.appsList.unfavorite') : t('pages.appsList.favorite')}
           aria-label={isFavorite ? t('pages.appsList.unfavorite') : t('pages.appsList.favorite')}
         >

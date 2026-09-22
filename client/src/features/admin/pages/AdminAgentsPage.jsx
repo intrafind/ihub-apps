@@ -12,6 +12,7 @@ import { useFilterState } from '../hooks/useFilterState';
 import { DataTable, SearchInput, FilterSelect } from '../components/data-table';
 import AdminBreadcrumb from '../components/AdminBreadcrumb';
 
+import { getAdminApiErrorMessage } from '../../../api/adminApi';
 export default function AdminAgentsPage() {
   const { t } = useTranslation();
   const navigate = useNavigate();
@@ -45,7 +46,7 @@ export default function AdminAgentsPage() {
       const newEnabled = res?.data?.enabled;
       setProfiles(prev => prev.map(p => (p.id === id ? { ...p, enabled: newEnabled } : p)));
     } catch (err) {
-      setError(err.message);
+      setError(getAdminApiErrorMessage(err));
     }
   }
 
@@ -57,7 +58,7 @@ export default function AdminAgentsPage() {
       await deleteAgentProfile(id);
       setProfiles(prev => prev.filter(p => p.id !== id));
     } catch (err) {
-      setError(err.message);
+      setError(getAdminApiErrorMessage(err));
     }
   }
 
@@ -230,7 +231,7 @@ export default function AdminAgentsPage() {
           </div>
 
           {error && (
-            <div className="mb-4 p-3 bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 text-red-800 dark:text-red-300 rounded">
+            <div className="mb-4 p-3 bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 text-red-800 dark:text-red-300 rounded-sm">
               {error}
             </div>
           )}

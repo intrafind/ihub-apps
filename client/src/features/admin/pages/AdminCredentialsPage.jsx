@@ -29,7 +29,7 @@ import {
  */
 
 const INPUT_CLASS =
-  'w-full rounded-md border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100 shadow-sm px-3 py-2 text-sm focus:border-blue-500 focus:ring-blue-500';
+  'w-full rounded-md border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100 shadow-xs px-3 py-2 text-sm focus:border-blue-500 focus:ring-blue-500';
 const MONO_INPUT_CLASS = `${INPUT_CLASS} font-mono`;
 const REDACTED = '***REDACTED***';
 
@@ -469,7 +469,7 @@ function AdminCredentialsPage() {
         </div>
         <button
           onClick={startCreate}
-          className="inline-flex items-center px-4 py-2 border border-transparent text-sm font-medium rounded-md shadow-sm text-white bg-blue-600 hover:bg-blue-700"
+          className="inline-flex items-center px-4 py-2 border border-transparent text-sm font-medium rounded-md shadow-xs text-white bg-blue-600 hover:bg-blue-700"
         >
           <Icon name="plus" size="md" className="mr-2" />
           {t('admin.credentials.create', 'Add credential')}
@@ -489,14 +489,14 @@ function AdminCredentialsPage() {
       )}
 
       {credentials.length === 0 ? (
-        <div className="text-center py-12 bg-white dark:bg-gray-800 rounded-lg shadow">
+        <div className="text-center py-12 bg-white dark:bg-gray-800 rounded-lg shadow-sm">
           <Icon name="key" className="mx-auto h-12 w-12 text-gray-400" />
           <h3 className="mt-2 text-sm font-medium text-gray-900 dark:text-gray-100">
             {t('admin.credentials.empty', 'No credentials configured')}
           </h3>
         </div>
       ) : (
-        <div className="bg-white dark:bg-gray-800 shadow overflow-hidden sm:rounded-md">
+        <div className="bg-white dark:bg-gray-800 shadow-sm overflow-hidden sm:rounded-md">
           <ul className="divide-y divide-gray-200 dark:divide-gray-700">
             {credentials.map(c => (
               <li key={c.id} className="px-4 py-4 sm:px-6">
@@ -522,13 +522,13 @@ function AdminCredentialsPage() {
                   <div className="flex space-x-2 ml-4">
                     <button
                       onClick={() => startEdit(c)}
-                      className="inline-flex items-center px-3 py-2 border border-gray-300 dark:border-gray-600 shadow-sm text-sm leading-4 font-medium rounded-md text-gray-700 dark:text-gray-200 bg-white dark:bg-gray-700 hover:bg-gray-50 dark:hover:bg-gray-600"
+                      className="inline-flex items-center px-3 py-2 border border-gray-300 dark:border-gray-600 shadow-xs text-sm leading-4 font-medium rounded-md text-gray-700 dark:text-gray-200 bg-white dark:bg-gray-700 hover:bg-gray-50 dark:hover:bg-gray-600"
                     >
                       <Icon name="pencil" size="sm" />
                     </button>
                     <button
                       onClick={() => remove(c.id)}
-                      className="inline-flex items-center px-3 py-2 border border-red-300 dark:border-red-700 shadow-sm text-sm leading-4 font-medium rounded-md text-red-700 dark:text-red-400 bg-white dark:bg-gray-700 hover:bg-red-50 dark:hover:bg-red-900/50"
+                      className="inline-flex items-center px-3 py-2 border border-red-300 dark:border-red-700 shadow-xs text-sm leading-4 font-medium rounded-md text-red-700 dark:text-red-400 bg-white dark:bg-gray-700 hover:bg-red-50 dark:hover:bg-red-900/50"
                     >
                       <Icon name="trash" size="sm" />
                     </button>
@@ -543,7 +543,7 @@ function AdminCredentialsPage() {
       {editing !== null && (
         <div className="fixed z-10 inset-0 overflow-y-auto">
           <div className="flex items-center justify-center min-h-screen px-4">
-            <div className="fixed inset-0 bg-gray-500 dark:bg-gray-900 bg-opacity-75 dark:bg-opacity-75" />
+            <div className="fixed inset-0 bg-gray-500/75 dark:bg-gray-900/75" />
             <div className="relative bg-white dark:bg-gray-800 rounded-lg p-6 max-w-2xl w-full shadow-xl space-y-4 max-h-[90vh] overflow-y-auto">
               <h2 className="text-xl font-bold text-gray-900 dark:text-gray-100">
                 {isEdit
@@ -617,7 +617,7 @@ function AdminCredentialsPage() {
                 )}
               </div>
 
-              <fieldset className="border border-gray-200 dark:border-gray-700 rounded p-3 space-y-3">
+              <fieldset className="border border-gray-200 dark:border-gray-700 rounded-sm p-3 space-y-3">
                 <legend className="text-sm font-medium text-gray-700 dark:text-gray-300 px-1">
                   {t('admin.credentials.form.details', 'Credential details')}
                 </legend>
@@ -627,14 +627,14 @@ function AdminCredentialsPage() {
               <div className="flex justify-end space-x-2 pt-2">
                 <button
                   onClick={closeDialog}
-                  className="px-4 py-2 border border-gray-300 dark:border-gray-600 rounded text-gray-700 dark:text-gray-200 bg-white dark:bg-gray-700"
+                  className="px-4 py-2 border border-gray-300 dark:border-gray-600 rounded-sm text-gray-700 dark:text-gray-200 bg-white dark:bg-gray-700"
                 >
                   {t('common.cancel', 'Cancel')}
                 </button>
                 <button
                   onClick={save}
                   disabled={saving || !form.id}
-                  className="px-4 py-2 rounded text-white bg-blue-600 hover:bg-blue-700 disabled:opacity-50"
+                  className="px-4 py-2 rounded-sm text-white bg-blue-600 hover:bg-blue-700 disabled:opacity-50"
                 >
                   {saving ? t('common.saving', 'Saving…') : t('common.save', 'Save')}
                 </button>

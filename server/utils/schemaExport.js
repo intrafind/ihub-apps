@@ -1,5 +1,4 @@
 import { z } from 'zod';
-import { zodToJsonSchema } from 'zod-to-json-schema';
 import { appConfigSchema } from '../validators/appConfigSchema.js';
 import { modelConfigSchema } from '../validators/modelConfigSchema.js';
 import { promptConfigSchema } from '../validators/promptConfigSchema.js';
@@ -12,24 +11,6 @@ import { userConfigSchema } from '../validators/userConfigSchema.js';
  * This utility maintains a single source of truth for validation rules
  * while providing JSON Schema compatibility for Monaco editor and other tools
  */
-
-/**
- * Configuration options for JSON Schema generation
- */
-const jsonSchemaOptions = {
-  // Use JSON Schema Draft-07 for compatibility
-  target: 'jsonSchema7',
-  // Generate descriptive titles and descriptions
-  title: true,
-  // Include examples where available
-  markdownDescription: true,
-  // Remove Zod-specific annotations
-  removeAdditionalStrategy: 'strict',
-  // Generate proper error messages
-  errorMessages: true,
-  // Include pattern properties for localized strings
-  patternStrategy: 'union'
-};
 
 /**
  * Schema metadata for enhanced JSON Schema output
@@ -166,16 +147,32 @@ const schemaMetadata = {
  * @returns {object} Enhanced JSON Schema object
  */
 function generateEnhancedJsonSchema(schemaType, zodSchema) {
-  const baseJsonSchema = zodToJsonSchema(zodSchema, {
-    ...jsonSchemaOptions,
-    name: schemaType
+  const baseJsonSchema = z.toJSONSchema(zodSchema, {
+    target: 'draft-7',
+    // These schemas validate what an admin TYPES into an editor, i.e. the
+    // input side of the Zod schema, so describe the input type.
+    //
+    // `z.toJSONSchema` defaults to `io: 'output'`, which describes the value a
+    // successful parse RETURNS: every `.prefault()`/`.default()` field is
+    // present there, so it lands in `required`, and a plain `z.object()` is
+    // emitted with `additionalProperties: false` because parsing strips the
+    // keys it does not know. Against a real config that rejects documents the
+    // server accepts — a group without `enabled` reads as "enabled is
+    // required", and `permissions.contentAdmin` as "must NOT have additional
+    // properties" — even though both round-trip through the schema fine.
+    io: 'input',
+    // A handful of config fields (e.g. cloud storage driveId) normalize an
+    // empty string to undefined via .transform() with no .pipe() target, so
+    // there's no static type to describe — fall back to an unconstrained
+    // schema for just that field instead of failing the whole conversion.
+    unrepresentable: 'any'
   });
 
   const metadata = schemaMetadata[schemaType] || {};
 
   return {
-    $schema: 'http://json-schema.org/draft-07/schema#',
     ...baseJsonSchema,
+    $schema: 'http://json-schema.org/draft-07/schema#',
     title: metadata.title || baseJsonSchema.title,
     description: metadata.description || baseJsonSchema.description,
     examples: metadata.examples || baseJsonSchema.examples
@@ -266,23 +263,5 @@ export function getJsonSchemaByType(type) {
       return getUserJsonSchema();
     default:
       return null;
-  }
-}
-
-/**
- * Validate that zod-to-json-schema is available
- * This function will throw an error if the required dependency is missing
- */
-export function validateDependencies() {
-  try {
-    // Test that zodToJsonSchema function works
-    const testSchema = z.object({ test: z.string() });
-    zodToJsonSchema(testSchema);
-    return true;
-  } catch {
-    throw new Error(
-      'Missing required dependency: zod-to-json-schema. ' +
-        'Please install it with: npm install zod-to-json-schema'
-    );
   }
 }

@@ -1,4 +1,18 @@
 {
+  "speech": {
+    "realtime": {
+      "enabled": false,
+      "url": "ws://localhost:8080/v1/realtime",
+      "model": "mistralai/Voxtral-Mini-4B-Realtime-2602",
+      "apiKey": ""
+    },
+    "azure": {
+      "enabled": false,
+      "host": "",
+      "region": "",
+      "subscriptionKey": ""
+    }
+  },
   "skills": {
     "skillsDirectory": "contents/skills",
     "maxSkillBodyTokens": 5000
@@ -78,6 +92,11 @@
     }
   },
   "requestConcurrency": 5,
+  "llm": {
+    "connectTimeoutMs": 30000,
+    "streamIdleTimeoutMs": 60000
+  },
+  "trustProxy": 1,
   "refreshSalt": {
     "salt": 1,
     "lastUpdated": "2025-07-08T17:00:38.743Z"
@@ -85,7 +104,30 @@
   "auth": {
     "mode": "local",
     "authenticatedGroup": "authenticated",
-    "sessionTimeoutMinutes": 480
+    "sessionTimeoutMinutes": 480,
+    "debug": {
+      "enabled": false,
+      "maskTokens": true,
+      "redactPasswords": true,
+      "includeRawData": false,
+      "providers": {
+        "oidc": {
+          "enabled": true
+        },
+        "local": {
+          "enabled": true
+        },
+        "proxy": {
+          "enabled": true
+        },
+        "ldap": {
+          "enabled": true
+        },
+        "ntlm": {
+          "enabled": true
+        }
+      }
+    }
   },
   "oauth": {
     "enabled": {
@@ -101,7 +143,57 @@
     "refreshTokenEnabled": false,
     "refreshTokenExpirationDays": 30,
     "consentRequired": true,
-    "consentMemoryDays": 90
+    "consentMemoryDays": 90,
+    "dcr": {
+      "enabled": false,
+      "maxClients": 100
+    },
+    "cimd": {
+      "enabled": false,
+      "allowedClientHosts": ["claude.ai"],
+      "blockedClientHosts": [],
+      "approvalMode": "approval",
+      "allowedGroups": [],
+      "allowedScopes": [],
+      "allowedApps": [],
+      "allowedModels": [],
+      "allowedPrompts": [],
+      "cacheMaxSeconds": 86400,
+      "fetchTimeoutMs": 5000
+    },
+    "personalKeys": {
+      "enabled": false,
+      "allowedGroups": [],
+      "maxKeysPerUser": 5,
+      "defaultExpirationDays": 90,
+      "maxExpirationDays": 365,
+      "allowClientCredentials": true,
+      "scopes": []
+    }
+  },
+  "mcpServer": {
+    "enabled": false,
+    "requireConsent": true,
+    "publicUrl": "",
+    "transports": {
+      "streamableHttp": {
+        "enabled": true,
+        "stateless": false
+      },
+      "sse": {
+        "enabled": true
+      }
+    },
+    "a2a": {
+      "enabled": false
+    },
+    "expose": {
+      "tools": true,
+      "apps": true,
+      "workflows": true,
+      "resources": false
+    },
+    "defaultScopes": ["mcp:tools:read", "mcp:tools:call"]
   },
   "anonymousAuth": {
     "enabled": true,
@@ -209,7 +301,7 @@
     "enabled": false,
     "baseUrl": "",
     "useOidcKeyPair": false,
-    "privateKey": "",
+    "privateKeyRef": "",
     "algorithm": "RS256",
     "issuer": "ihub-apps",
     "audience": "ifinder-api",
@@ -219,20 +311,31 @@
   },
   "iAssistant": {
     "defaultProfileId": "",
-    "timeout": 60000
+    "defaultSearchProfile": "searchprofile-standard",
+    "resolveSearchProfileFromProfile": true,
+    "groundedOnly": false
   },
   "officeIntegration": {
     "enabled": false,
     "oauthClientId": "",
-    "displayName": { "en": "iHub Apps", "de": "iHub Apps" },
+    "displayName": {
+      "en": "iHub Apps",
+      "de": "iHub Apps"
+    },
     "description": {
       "en": "AI-powered assistant for Outlook",
       "de": "KI-gestützter Assistent für Outlook"
     },
     "starterPrompts": [
       {
-        "title": { "en": "Summarize this email", "de": "Fasse diese E-Mail zusammen" },
-        "message": { "en": "Summarize this email", "de": "Fasse diese E-Mail zusammen" }
+        "title": {
+          "en": "Summarize this email",
+          "de": "Fasse diese E-Mail zusammen"
+        },
+        "message": {
+          "en": "Summarize this email",
+          "de": "Fasse diese E-Mail zusammen"
+        }
       },
       {
         "title": {
@@ -287,6 +390,42 @@
         }
       }
     ],
-    "useLocalOfficejs": false
+    "startPage": {
+      "defaultPage": "start",
+      "featuredAppIds": []
+    },
+    "officeJsMode": "cdn",
+    "officeJsCdnUrl": "https://officeapis.public.onecdn.static.microsoft/1/office.js",
+    "officeJsCustomUrl": ""
+  },
+  "runLog": {
+    "enabled": true,
+    "identityMode": "default",
+    "retentionDays": 90,
+    "cleanupEnabled": true,
+    "flushIntervalMs": 2000,
+    "spillThresholdBytes": 65536
+  },
+  "chats": {
+    "enabled": true,
+    "retentionDays": 90,
+    "maxChatsPerUser": 200,
+    "maxMessagesPerChat": 2000
+  },
+  "artifacts": {
+    "enabled": true,
+    "maxBytes": 10485760,
+    "maxPerBatch": 8
+  },
+  "workflowState": {
+    "retentionDays": 30,
+    "cleanupEnabled": true
+  },
+  "storage": {
+    "provider": "filesystem",
+    "filesystem": {
+      "dataDir": "data",
+      "flushIntervalMs": 2000
+    }
   }
 }

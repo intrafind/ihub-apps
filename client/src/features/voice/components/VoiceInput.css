@@ -174,3 +174,34 @@
 [data-theme='dark'] .voice-transcript {
   color: #fff;
 }
+
+/* Error state */
+.voice-error-icon {
+  width: 40px;
+  height: 40px;
+  margin: 0 auto 16px;
+  border-radius: 50%;
+  background-color: #dc2626;
+  color: #fff;
+  font-size: 1.5em;
+  font-weight: 700;
+  line-height: 40px;
+  text-align: center;
+}
+
+.voice-feedback.error .voice-text {
+  color: #dc2626;
+}
+
+.voice-error-message {
+  display: block;
+  font-size: 0.95em;
+  color: #dc2626;
+  max-width: 20rem;
+  margin: 0 auto;
+}
+
+[data-theme='dark'] .voice-error-message,
+[data-theme='dark'] .voice-feedback.error .voice-text {
+  color: #f87171;
+}

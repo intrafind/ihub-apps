@@ -64,7 +64,7 @@ export default function OfflineOverlay() {
   if (isOnline) return null;
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 dark:bg-black/60 backdrop-blur-sm">
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 dark:bg-black/60 backdrop-blur-xs">
       <div className="bg-white dark:bg-gray-800 rounded-xl shadow-2xl p-8 max-w-md mx-4 text-center">
         <WifiOffIcon className="w-16 h-16 mx-auto text-red-500 mb-4" />
 
@@ -88,7 +88,7 @@ export default function OfflineOverlay() {
 
         <button
           onClick={() => window.location.reload()}
-          className="w-full bg-indigo-600 hover:bg-indigo-700 text-white py-2 px-4 rounded transition-colors"
+          className="w-full bg-indigo-600 hover:bg-indigo-700 text-white py-2 px-4 rounded-sm transition-colors"
         >
           {t('network.offline.reloadPage', 'Reload Page')}
         </button>

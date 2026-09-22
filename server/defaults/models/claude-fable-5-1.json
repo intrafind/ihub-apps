@@ -1,0 +1,29 @@
+{
+  "id": "claude-fable-5-1",
+  "modelId": "claude-fable-5-1",
+  "name": {
+    "en": "Claude Fable 5.1",
+    "de": "Claude Fable 5.1"
+  },
+  "description": {
+    "en": "Anthropic's most capable model, for the hardest reasoning and long-horizon agentic work. Thinking is always on and single turns can run for minutes.",
+    "de": "Anthropics leistungsfähigstes Modell für schwierigstes Reasoning und langlaufende agentische Aufgaben. Denken ist immer aktiv, einzelne Antworten können Minuten dauern."
+  },
+  "url": "https://api.anthropic.com/v1/messages",
+  "provider": "anthropic",
+  "contextWindow": 1000000,
+  "maxOutputTokens": 32000,
+  "supportsTools": true,
+  "supportsVision": true,
+  "supportsImages": true,
+  "supportsTemperature": false,
+  "hint": {
+    "message": {
+      "en": "Claude Fable 5.1 rejects forced tool choice, so apps that define an output schema (structured output) will fail on this model. It is also slower and more expensive than Claude Opus 5 — pick it only for the hardest tasks.",
+      "de": "Claude Fable 5.1 unterstützt keine erzwungene Tool-Auswahl; Apps mit Ausgabeschema (strukturierte Ausgabe) schlagen mit diesem Modell fehl. Es ist zudem langsamer und teurer als Claude Opus 5 — wählen Sie es nur für die schwierigsten Aufgaben."
+    },
+    "level": "warning"
+  },
+  "enabled": false,
+  "default": false
+}

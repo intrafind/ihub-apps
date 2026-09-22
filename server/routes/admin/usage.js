@@ -3,7 +3,7 @@ import { join } from 'path';
 import { adminAuth } from '../../middleware/adminAuth.js';
 import { buildServerPath } from '../../utils/basePath.js';
 import { getRootDir } from '../../pathUtils.js';
-import { atomicWriteJSON } from '../../utils/atomicWrite.js';
+import configStore from '../../services/config/ConfigStore.js';
 import configCache from '../../configCache.js';
 import config from '../../config.js';
 import { getTrackingMode, reloadConfig } from '../../usageTracker.js';
@@ -155,19 +155,14 @@ export default function registerAdminUsageRoutes(app) {
         );
       }
 
-      const rootDir = getRootDir();
-      const platformPath = join(rootDir, 'contents', 'config', 'platform.json');
-      let platform = {};
-      try {
-        const data = await fs.readFile(platformPath, 'utf8');
-        platform = JSON.parse(data);
-      } catch {
-        // Start fresh if file doesn't exist
-      }
+      // An unreadable platform.json starts fresh here, as it always has: the
+      // tracking mode is a single flag and refusing to set it would strand the
+      // admin with no way to turn tracking off.
+      const platform = (await configStore.readJson('config/platform.json')) || {};
 
       if (!platform.features) platform.features = {};
       platform.features.usageTrackingMode = trackingMode;
-      await atomicWriteJSON(platformPath, platform);
+      await configStore.writeJson('config/platform.json', platform);
       await configCache.refreshCacheEntry('config/platform.json');
       reloadConfig();
 

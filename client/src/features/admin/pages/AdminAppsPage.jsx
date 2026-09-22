@@ -7,15 +7,22 @@ import AppDetailsPopup from '../../apps/components/AppDetailsPopup';
 import AppCreationWizard from '../../apps/components/AppCreationWizard';
 import AppTemplateSelector from '../../apps/components/AppTemplateSelector';
 import Icon from '../../../shared/components/Icon';
-import { fetchAdminApps, makeAdminApiCall, toggleApps } from '../../../api/adminApi';
+import {
+  fetchAdminApps,
+  getAdminApiErrorMessage,
+  makeAdminApiCall,
+  reorderApps,
+  toggleApps
+} from '../../../api/adminApi';
 import { fetchUIConfig } from '../../../api';
 import ConfirmDialog from '../../../shared/components/ConfirmDialog';
+import ReorderableList from '../components/ReorderableList';
 import { DataTable, SearchInput, FilterSelect } from '../components/data-table';
 
 function AppNameCell({ app, currentLanguage }) {
   return (
     <div className="flex items-center">
-      <div className="flex-shrink-0 h-10 w-10">
+      <div className="shrink-0 h-10 w-10">
         <div
           className="h-10 w-10 rounded-full flex items-center justify-center text-white font-bold"
           style={{ backgroundColor: app.color || '#6B7280' }}
@@ -51,6 +58,10 @@ function AdminAppsPage() {
   const [uiConfig, setUiConfig] = useState(null);
   const [uploading, setUploading] = useState(false);
   const [confirmDialog, setConfirmDialog] = useState(null);
+  // Reorder mode replaces the table with a draggable list; `orderDraft` holds
+  // the pending order until it is saved, so cancelling changes nothing.
+  const [orderDraft, setOrderDraft] = useState(null);
+  const [savingOrder, setSavingOrder] = useState(false);
 
   useEffect(() => {
     loadApps();
@@ -72,9 +83,42 @@ function AdminAppsPage() {
       const data = await fetchAdminApps();
       setApps(data);
     } catch (err) {
-      setError(err.message);
+      setError(getAdminApiErrorMessage(err));
     } finally {
       setLoading(false);
+    }
+  };
+
+  // The order the apps browser, the start page and the sidebar rank by:
+  // `order` ascending, unset last, then by name so the list never jitters.
+  const byDisplayOrder = (a, b) => {
+    const orderA = a.order ?? Infinity;
+    const orderB = b.order ?? Infinity;
+    if (orderA !== orderB) return orderA - orderB;
+    return getLocalizedContent(a.name, currentLanguage).localeCompare(
+      getLocalizedContent(b.name, currentLanguage)
+    );
+  };
+
+  // Reordering renumbers every app, so it deliberately ignores the filters —
+  // saving a filtered subset would leave the apps outside it with stale numbers.
+  const startReordering = () => {
+    setError(null);
+    setOrderDraft([...apps].sort(byDisplayOrder));
+  };
+
+  const saveOrder = async () => {
+    if (!orderDraft || orderDraft.length === 0) return;
+    try {
+      setSavingOrder(true);
+      setError(null);
+      await reorderApps(orderDraft.map(app => app.id));
+      setOrderDraft(null);
+      await loadApps();
+    } catch (err) {
+      setError(getAdminApiErrorMessage(err));
+    } finally {
+      setSavingOrder(false);
     }
   };
 
@@ -86,7 +130,7 @@ function AdminAppsPage() {
         prev.map(app => (app.id === appId ? { ...app, enabled: result.enabled } : app))
       );
     } catch (err) {
-      setError(err.message);
+      setError(getAdminApiErrorMessage(err));
     }
   };
 
@@ -95,7 +139,7 @@ function AdminAppsPage() {
       await toggleApps('*', true);
       setApps(prev => prev.map(app => ({ ...app, enabled: true })));
     } catch (err) {
-      setError(err.message);
+      setError(getAdminApiErrorMessage(err));
     }
   };
 
@@ -104,7 +148,7 @@ function AdminAppsPage() {
       await toggleApps('*', false);
       setApps(prev => prev.map(app => ({ ...app, enabled: false })));
     } catch (err) {
-      setError(err.message);
+      setError(getAdminApiErrorMessage(err));
     }
   };
 
@@ -119,7 +163,7 @@ function AdminAppsPage() {
           await makeAdminApiCall(`/admin/apps/${appId}`, { method: 'DELETE' });
           setApps(prev => prev.filter(app => app.id !== appId));
         } catch (err) {
-          setError(err.message);
+          setError(getAdminApiErrorMessage(err));
         }
       }
     });
@@ -180,7 +224,7 @@ function AdminAppsPage() {
       document.body.removeChild(link);
       URL.revokeObjectURL(url);
     } catch (err) {
-      setError(`Failed to download app config: ${err.message}`);
+      setError(`Failed to download app config: ${getAdminApiErrorMessage(err)}`);
     }
   };
 
@@ -203,12 +247,12 @@ function AdminAppsPage() {
       await loadApps();
       event.target.value = '';
     } catch (err) {
-      if (err.message.includes('already exists')) {
+      if (getAdminApiErrorMessage(err).includes('already exists')) {
         setError(`App with ID "${appConfig?.id || 'unknown'}" already exists`);
       } else if (err instanceof SyntaxError) {
         setError('Invalid JSON file format');
       } else {
-        setError(`Failed to upload app config: ${err.message}`);
+        setError(`Failed to upload app config: ${getAdminApiErrorMessage(err)}`);
       }
     } finally {
       setUploading(false);
@@ -330,51 +374,85 @@ function AdminAppsPage() {
         </div>
         <div className="mt-4 sm:mt-0 sm:ml-16 sm:flex-none">
           <div className="flex flex-wrap gap-2">
-            <button
-              type="button"
-              className="inline-flex items-center justify-center rounded-md border border-transparent bg-indigo-600 px-4 py-2 text-sm font-medium text-white shadow-sm hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:ring-offset-2 sm:w-auto"
-              onClick={handleCreateApp}
-            >
-              <Icon name="plus" className="h-4 w-4 mr-2" />
-              {t('admin.apps.createApp', 'Create App')}
-            </button>
-            <div className="relative">
-              <input
-                type="file"
-                accept=".json"
-                onChange={handleUploadConfig}
-                className="absolute inset-0 w-full h-full opacity-0 cursor-pointer"
-                disabled={uploading}
-              />
-              <button
-                type="button"
-                className="inline-flex items-center justify-center rounded-md border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 px-4 py-2 text-sm font-medium text-gray-700 dark:text-gray-200 shadow-sm hover:bg-gray-50 dark:hover:bg-gray-600 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:ring-offset-2 disabled:opacity-50 disabled:cursor-not-allowed"
-                disabled={uploading}
-                title={t('admin.apps.uploadConfig', 'Upload App Config')}
-              >
-                <Icon
-                  name={uploading ? 'refresh' : 'upload'}
-                  className={`h-4 w-4 mr-2 ${uploading ? 'animate-spin' : ''}`}
-                />
-                {uploading
-                  ? t('admin.apps.uploading', 'Uploading...')
-                  : t('admin.apps.uploadConfig', 'Upload Config')}
-              </button>
-            </div>
-            <button
-              type="button"
-              className="inline-flex items-center justify-center rounded-md border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 px-3 py-2 text-sm font-medium text-gray-700 dark:text-gray-200 shadow-sm hover:bg-gray-50 dark:hover:bg-gray-600"
-              onClick={enableAllApps}
-            >
-              {t('admin.common.enableAll', 'Enable All')}
-            </button>
-            <button
-              type="button"
-              className="inline-flex items-center justify-center rounded-md border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 px-3 py-2 text-sm font-medium text-gray-700 dark:text-gray-200 shadow-sm hover:bg-gray-50 dark:hover:bg-gray-600"
-              onClick={disableAllApps}
-            >
-              {t('admin.common.disableAll', 'Disable All')}
-            </button>
+            {orderDraft ? (
+              <>
+                <button
+                  type="button"
+                  className="inline-flex items-center justify-center rounded-md border border-transparent bg-indigo-600 px-4 py-2 text-sm font-medium text-white shadow-xs hover:bg-indigo-700 focus:outline-hidden focus:ring-2 focus:ring-indigo-500 focus:ring-offset-2 disabled:opacity-50 disabled:cursor-not-allowed"
+                  onClick={saveOrder}
+                  disabled={savingOrder}
+                >
+                  {savingOrder
+                    ? t('admin.apps.savingOrder', 'Saving order...')
+                    : t('admin.apps.saveOrder', 'Save order')}
+                </button>
+                <button
+                  type="button"
+                  className="inline-flex items-center justify-center rounded-md border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 px-4 py-2 text-sm font-medium text-gray-700 dark:text-gray-200 shadow-xs hover:bg-gray-50 dark:hover:bg-gray-600 disabled:opacity-50 disabled:cursor-not-allowed"
+                  onClick={() => setOrderDraft(null)}
+                  disabled={savingOrder}
+                >
+                  {t('common.cancel', 'Cancel')}
+                </button>
+              </>
+            ) : (
+              <>
+                <button
+                  type="button"
+                  className="inline-flex items-center justify-center rounded-md border border-transparent bg-indigo-600 px-4 py-2 text-sm font-medium text-white shadow-xs hover:bg-indigo-700 focus:outline-hidden focus:ring-2 focus:ring-indigo-500 focus:ring-offset-2 sm:w-auto"
+                  onClick={handleCreateApp}
+                >
+                  <Icon name="plus" className="h-4 w-4 mr-2" />
+                  {t('admin.apps.createApp', 'Create App')}
+                </button>
+                <div className="relative">
+                  <input
+                    type="file"
+                    accept=".json"
+                    onChange={handleUploadConfig}
+                    className="absolute inset-0 w-full h-full opacity-0 cursor-pointer"
+                    disabled={uploading}
+                  />
+                  <button
+                    type="button"
+                    className="inline-flex items-center justify-center rounded-md border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 px-4 py-2 text-sm font-medium text-gray-700 dark:text-gray-200 shadow-xs hover:bg-gray-50 dark:hover:bg-gray-600 focus:outline-hidden focus:ring-2 focus:ring-indigo-500 focus:ring-offset-2 disabled:opacity-50 disabled:cursor-not-allowed"
+                    disabled={uploading}
+                    title={t('admin.apps.uploadConfig', 'Upload App Config')}
+                  >
+                    <Icon
+                      name={uploading ? 'refresh' : 'upload'}
+                      className={`h-4 w-4 mr-2 ${uploading ? 'animate-spin' : ''}`}
+                    />
+                    {uploading
+                      ? t('admin.apps.uploading', 'Uploading...')
+                      : t('admin.apps.uploadConfig', 'Upload Config')}
+                  </button>
+                </div>
+                <button
+                  type="button"
+                  className="inline-flex items-center justify-center rounded-md border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 px-3 py-2 text-sm font-medium text-gray-700 dark:text-gray-200 shadow-xs hover:bg-gray-50 dark:hover:bg-gray-600"
+                  onClick={enableAllApps}
+                >
+                  {t('admin.common.enableAll', 'Enable All')}
+                </button>
+                <button
+                  type="button"
+                  className="inline-flex items-center justify-center rounded-md border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 px-3 py-2 text-sm font-medium text-gray-700 dark:text-gray-200 shadow-xs hover:bg-gray-50 dark:hover:bg-gray-600"
+                  onClick={disableAllApps}
+                >
+                  {t('admin.common.disableAll', 'Disable All')}
+                </button>
+                <button
+                  type="button"
+                  className="inline-flex items-center justify-center rounded-md border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 px-3 py-2 text-sm font-medium text-gray-700 dark:text-gray-200 shadow-xs hover:bg-gray-50 dark:hover:bg-gray-600 disabled:opacity-50 disabled:cursor-not-allowed"
+                  onClick={startReordering}
+                  disabled={loading || apps.length === 0}
+                >
+                  <Icon name="menu" className="h-4 w-4 mr-2" />
+                  {t('admin.apps.reorder', 'Reorder')}
+                </button>
+              </>
+            )}
           </div>
         </div>
       </div>
@@ -385,85 +463,132 @@ function AdminAppsPage() {
         </div>
       )}
 
-      <div className="mt-6 flex flex-wrap items-center gap-3">
-        <SearchInput
-          value={searchTerm}
-          onChange={setSearchTerm}
-          placeholder={t('admin.apps.searchPlaceholder', 'Search apps...')}
-        />
-        <FilterSelect
-          label={t('admin.apps.statusLabel', 'Status')}
-          value={filterEnabled}
-          onChange={setFilterEnabled}
-          options={[
-            { value: 'all', label: t('admin.apps.filterAll', 'All Apps') },
-            { value: 'enabled', label: t('admin.apps.filterEnabled', 'Enabled Only') },
-            { value: 'disabled', label: t('admin.apps.filterDisabled', 'Disabled Only') }
-          ]}
-        />
-      </div>
-
-      {uiConfig?.appsList?.categories?.enabled && (
-        <div className="mt-4 flex flex-wrap gap-2">
-          <button
-            onClick={() => setSelectedCategory('all')}
-            className={`px-3 py-1.5 rounded-full text-sm font-medium transition-all ${
-              selectedCategory === 'all'
-                ? 'bg-gray-900 text-white dark:bg-gray-100 dark:text-gray-900'
-                : 'text-gray-600 dark:text-gray-300 bg-gray-100 dark:bg-gray-700 hover:bg-gray-200 dark:hover:bg-gray-600'
-            }`}
-          >
-            {t('admin.apps.allCategories', 'All Categories')}
-          </button>
-          {uiConfig.appsList.categories.list.map(category => (
-            <button
-              key={category.id}
-              onClick={() => setSelectedCategory(category.id)}
-              className={`px-3 py-1.5 rounded-full text-sm font-medium transition-all ${
-                selectedCategory === category.id
-                  ? 'text-white shadow'
-                  : 'text-gray-600 dark:text-gray-300 bg-gray-100 dark:bg-gray-700 hover:bg-gray-200 dark:hover:bg-gray-600'
-              }`}
-              style={{
-                backgroundColor: selectedCategory === category.id ? category.color : undefined
-              }}
-            >
-              {getLocalizedContent(category.name, currentLanguage)}
-            </button>
-          ))}
+      {orderDraft ? (
+        <div className="mt-6">
+          <p className="mb-3 text-sm text-gray-600 dark:text-gray-300">
+            {t(
+              'admin.apps.reorderHelp',
+              'Drag a row or use the arrows to set the order apps appear in for users — in the apps browser, on the start page and in the sidebar. Every app is listed, so search and filters do not apply here. Nothing is saved until you choose "Save order".'
+            )}
+          </p>
+          <ReorderableList
+            items={orderDraft}
+            onReorder={setOrderDraft}
+            getKey={app => app.id}
+            getLabel={app => getLocalizedContent(app.name, currentLanguage) || app.id}
+            renderItem={(app, index) => (
+              <div className="flex min-w-0 items-center gap-3">
+                <span className="w-8 shrink-0 text-right text-xs font-semibold text-gray-400 dark:text-gray-500">
+                  {index + 1}
+                </span>
+                <span
+                  className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full text-sm font-bold text-white"
+                  style={{ backgroundColor: app.color || '#6B7280' }}
+                >
+                  {(getLocalizedContent(app.name, currentLanguage) || app.id)
+                    .charAt(0)
+                    .toUpperCase()}
+                </span>
+                <span className="min-w-0">
+                  <span className="block truncate text-sm font-medium text-gray-900 dark:text-gray-100">
+                    {getLocalizedContent(app.name, currentLanguage) || app.id}
+                    {app.enabled === false && (
+                      <span className="ml-2 text-xs font-normal text-gray-500 dark:text-gray-400">
+                        ({t('admin.apps.status.disabled', 'Disabled')})
+                      </span>
+                    )}
+                  </span>
+                  <span className="block truncate text-xs text-gray-500 dark:text-gray-400">
+                    {app.id}
+                  </span>
+                </span>
+              </div>
+            )}
+          />
         </div>
-      )}
+      ) : (
+        <>
+          <div className="mt-6 flex flex-wrap items-center gap-3">
+            <SearchInput
+              value={searchTerm}
+              onChange={setSearchTerm}
+              placeholder={t('admin.apps.searchPlaceholder', 'Search apps...')}
+            />
+            <FilterSelect
+              label={t('admin.apps.statusLabel', 'Status')}
+              value={filterEnabled}
+              onChange={setFilterEnabled}
+              options={[
+                { value: 'all', label: t('admin.apps.filterAll', 'All Apps') },
+                { value: 'enabled', label: t('admin.apps.filterEnabled', 'Enabled Only') },
+                { value: 'disabled', label: t('admin.apps.filterDisabled', 'Disabled Only') }
+              ]}
+            />
+          </div>
 
-      <div className="mt-6">
-        <DataTable
-          columns={columns}
-          data={filteredApps}
-          getRowId={app => app.id}
-          actions={actions}
-          loading={loading}
-          onRowClick={app => {
-            setSelectedApp(app);
-            setShowAppDetails(true);
-          }}
-          empty={{
-            icon: 'sparkles',
-            title: t('admin.apps.noApps', 'No apps found'),
-            description: t(
-              'admin.apps.noAppsDescription',
-              'Try adjusting your search or filter criteria.'
-            ),
-            action: (
+          {uiConfig?.appsList?.categories?.enabled && (
+            <div className="mt-4 flex flex-wrap gap-2">
               <button
-                onClick={handleCreateApp}
-                className="inline-flex items-center px-4 py-2 border border-transparent shadow-sm text-sm font-medium rounded-md text-white bg-indigo-600 hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500"
+                onClick={() => setSelectedCategory('all')}
+                className={`px-3 py-1.5 rounded-full text-sm font-medium transition-all ${
+                  selectedCategory === 'all'
+                    ? 'bg-gray-900 text-white dark:bg-gray-100 dark:text-gray-900'
+                    : 'text-gray-600 dark:text-gray-300 bg-gray-100 dark:bg-gray-700 hover:bg-gray-200 dark:hover:bg-gray-600'
+                }`}
               >
-                <Icon name="plus" className="h-4 w-4 mr-2" />
-                {t('admin.apps.createApp', 'Create App')}
+                {t('admin.apps.allCategories', 'All Categories')}
               </button>
-            )
-          }}
-        />
-      </div>
+              {uiConfig.appsList.categories.list.map(category => (
+                <button
+                  key={category.id}
+                  onClick={() => setSelectedCategory(category.id)}
+                  className={`px-3 py-1.5 rounded-full text-sm font-medium transition-all ${
+                    selectedCategory === category.id
+                      ? 'text-white shadow-sm'
+                      : 'text-gray-600 dark:text-gray-300 bg-gray-100 dark:bg-gray-700 hover:bg-gray-200 dark:hover:bg-gray-600'
+                  }`}
+                  style={{
+                    backgroundColor: selectedCategory === category.id ? category.color : undefined
+                  }}
+                >
+                  {getLocalizedContent(category.name, currentLanguage)}
+                </button>
+              ))}
+            </div>
+          )}
+
+          <div className="mt-6">
+            <DataTable
+              columns={columns}
+              data={filteredApps}
+              getRowId={app => app.id}
+              actions={actions}
+              loading={loading}
+              onRowClick={app => {
+                setSelectedApp(app);
+                setShowAppDetails(true);
+              }}
+              empty={{
+                icon: 'sparkles',
+                title: t('admin.apps.noApps', 'No apps found'),
+                description: t(
+                  'admin.apps.noAppsDescription',
+                  'Try adjusting your search or filter criteria.'
+                ),
+                action: (
+                  <button
+                    onClick={handleCreateApp}
+                    className="inline-flex items-center px-4 py-2 border border-transparent shadow-xs text-sm font-medium rounded-md text-white bg-indigo-600 hover:bg-indigo-700 focus:outline-hidden focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500"
+                  >
+                    <Icon name="plus" className="h-4 w-4 mr-2" />
+                    {t('admin.apps.createApp', 'Create App')}
+                  </button>
+                )
+              }}
+            />
+          </div>
+        </>
+      )}
 
       <AppDetailsPopup
         app={selectedApp}

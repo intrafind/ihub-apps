@@ -75,14 +75,14 @@ function AppListPanel({
     <div className="flex flex-col h-full min-h-0">
       {header}
       {(shouldShowSearch || (favoritesEnabled && hasFavorites)) && (
-        <div className="px-4 py-2 border-b border-slate-100 flex items-center gap-2">
+        <div className="px-4 py-2 border-b border-slate-100 flex items-center gap-2 dark:border-slate-800">
           {shouldShowSearch && (
             <input
               type="search"
               value={searchQuery}
               onChange={e => setSearchQuery(e.target.value)}
               placeholder={t('pages.appsList.searchPlaceholder', 'Search apps...')}
-              className="flex-1 px-3 py-1.5 text-sm border border-slate-200 rounded-lg bg-white focus:outline-none focus:ring-2 focus:ring-indigo-300"
+              className="flex-1 px-3 py-1.5 text-sm border border-slate-200 rounded-lg bg-white focus:outline-hidden focus:ring-2 focus:ring-indigo-300 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-100 dark:placeholder:text-slate-500"
             />
           )}
           {favoritesEnabled && hasFavorites && (
@@ -93,8 +93,8 @@ function AppListPanel({
               title={favoritesOnly ? 'Show all apps' : 'Show favourites only'}
               className={`flex items-center gap-1 rounded-full px-2 py-1 text-xs font-medium border transition-colors shrink-0 ${
                 favoritesOnly
-                  ? 'bg-yellow-50 border-yellow-300 text-yellow-700'
-                  : 'bg-white border-slate-200 text-slate-600 hover:bg-slate-50'
+                  ? 'bg-yellow-50 border-yellow-300 text-yellow-700 dark:bg-yellow-900/40 dark:border-yellow-600 dark:text-yellow-300'
+                  : 'bg-white border-slate-200 text-slate-600 hover:bg-slate-50 dark:bg-slate-800 dark:border-slate-600 dark:text-slate-300 dark:hover:bg-slate-700'
               }`}
             >
               <Icon
@@ -122,7 +122,7 @@ function AppListPanel({
             />
           ))}
           {!isLoading && visibleApps.length === 0 && (
-            <p className="text-sm text-slate-400 text-center py-8">
+            <p className="text-sm text-slate-400 text-center py-8 dark:text-slate-500">
               {favoritesEnabled && favoritesOnly
                 ? t('pages.appsList.noFavorites', 'No favourite apps yet')
                 : t('pages.appsList.noApps', 'No apps available')}
@@ -130,10 +130,10 @@ function AppListPanel({
           )}
         </div>
         {isLoading && (
-          <div className="absolute inset-0 flex items-center justify-center bg-white/70">
+          <div className="absolute inset-0 flex items-center justify-center bg-white/70 dark:bg-slate-900/70">
             <div className="flex flex-col items-center gap-2">
-              <div className="w-6 h-6 border-2 border-slate-300 border-t-slate-700 rounded-full animate-spin" />
-              <span className="text-sm text-slate-500">
+              <div className="w-6 h-6 border-2 border-slate-300 border-t-slate-700 rounded-full animate-spin dark:border-slate-600 dark:border-t-slate-200" />
+              <span className="text-sm text-slate-500 dark:text-slate-400">
                 {t('pages.appsList.loading', 'Loading…')}
               </span>
             </div>

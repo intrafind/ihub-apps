@@ -7,13 +7,17 @@ import {
   logAudit
 } from '../../services/AuditLogService.js';
 import { sendBadRequest, sendInternalError } from '../../utils/responseHelpers.js';
+import {
+  BadFilterError,
+  MAX_PAGE_SIZE,
+  clampInt,
+  isFlagSet,
+  parseAuditLogQuery
+} from './auditLogQueryParams.js';
 import { buildCsv } from '../../utils/csv.js';
 import configCache from '../../configCache.js';
 import logger from '../../utils/logger.js';
-import { promises as fs } from 'fs';
-import { join } from 'path';
-import { getRootDir } from '../../pathUtils.js';
-import { atomicWriteJSON } from '../../utils/atomicWrite.js';
+import configStore from '../../services/config/ConfigStore.js';
 
 // Accept the platform.json shape exactly: false (off), true (mask),
 // or one of 'off' | 'mask' | 'drop'. Anything else is a 400 — we don't
@@ -50,35 +54,28 @@ export default function registerAdminAuditLogRoutes(app) {
   /**
    * GET /api/admin/audit-log
    * Query audit log entries with optional filters and pagination.
+   *
+   * Each of actor/resource/action/result/source accepts an include parameter
+   * and a `<field>Exclude` parameter subtracted from it, with `*` meaning
+   * "every value". `?q=` is a free-text search over the summary, resource id,
+   * IP, request id and actor name. `?facets=1` additionally returns the value
+   * counts per field over the date range, which is what the filter UI renders
+   * its checkbox lists from.
    */
   app.get(buildServerPath('/api/admin/audit-log'), adminAuth, async (req, res) => {
     try {
-      const {
-        from,
-        to,
-        actor,
-        resource,
-        action,
-        result: outcome,
-        source,
-        limit,
-        offset
-      } = req.query;
+      const filters = parseAuditLogQuery(req.query);
 
       const result = await queryAuditLog({
-        from,
-        to,
-        actor,
-        resource,
-        action,
-        result: outcome,
-        source,
-        limit: limit ? parseInt(limit, 10) : 50,
-        offset: offset ? parseInt(offset, 10) : 0
+        ...filters,
+        facets: isFlagSet(req.query.facets),
+        limit: clampInt(req.query.limit, 50, 1, MAX_PAGE_SIZE),
+        offset: clampInt(req.query.offset, 0, 0, Number.MAX_SAFE_INTEGER)
       });
 
       res.json(result);
     } catch (error) {
+      if (error instanceof BadFilterError) return sendBadRequest(res, error.message);
       return sendInternalError(res, error, 'query audit log');
     }
   });
@@ -89,18 +86,12 @@ export default function registerAdminAuditLogRoutes(app) {
    */
   app.get(buildServerPath('/api/admin/audit-log/export'), adminAuth, async (req, res) => {
     try {
-      const { from, to, actor, resource, action, result: outcome, source } = req.query;
+      const filters = parseAuditLogQuery(req.query);
 
       // Cap the export so a wide date range can't build an unbounded CSV string
       // in memory. Admins can narrow the date range to export more granularly.
       const { entries, total } = await queryAuditLog({
-        from,
-        to,
-        actor,
-        resource,
-        action,
-        result: outcome,
-        source,
+        ...filters,
         limit: MAX_EXPORT_ROWS,
         offset: 0
       });
@@ -139,6 +130,7 @@ export default function registerAdminAuditLogRoutes(app) {
       res.setHeader('Content-Disposition', 'attachment; filename="audit-log.csv"');
       res.send(buildCsv(headers, rows));
     } catch (error) {
+      if (error instanceof BadFilterError) return sendBadRequest(res, error.message);
       return sendInternalError(res, error, 'export audit log');
     }
   });
@@ -200,19 +192,15 @@ export default function registerAdminAuditLogRoutes(app) {
         );
       }
 
-      const rootDir = getRootDir();
-      const contentsDir = process.env.CONTENTS_DIR || 'contents';
-      const platformPath = join(rootDir, contentsDir, 'config', 'platform.json');
-
-      const platformContent = await fs.readFile(platformPath, 'utf8');
-      const platformConfig = JSON.parse(platformContent);
+      const platformConfig = await configStore.readJson('config/platform.json');
+      if (!platformConfig) throw new Error('Unable to read config/platform.json');
 
       if (!platformConfig.audit) platformConfig.audit = {};
       if (anonymizeIp !== undefined) {
         platformConfig.audit.anonymizeIp = anonymizeIp;
       }
 
-      await atomicWriteJSON(platformPath, platformConfig);
+      await configStore.writeJson('config/platform.json', platformConfig);
       await configCache.refreshCacheEntry('config/platform.json');
 
       logAudit({

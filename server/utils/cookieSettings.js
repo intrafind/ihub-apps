@@ -63,26 +63,38 @@ export function getCookieSecureFlag(req) {
  * Get standard cookie options for authentication tokens
  * @param {number} maxAge - Maximum age in milliseconds
  * @param {Object} req - Express request object (optional for backward compatibility)
+ * @param {object} [overrides] - Per-cookie overrides (e.g. a stricter `sameSite`
+ *   or a narrower `path`). Merged last so callers can tighten, never loosen by
+ *   accident: `httpOnly` and `secure` stay as computed unless deliberately
+ *   overridden here.
  * @returns {object} Cookie options object
  */
-export function getAuthCookieOptions(maxAge, req) {
+export function getAuthCookieOptions(maxAge, req, overrides = {}) {
   return {
     httpOnly: true,
     secure: getCookieSecureFlag(req),
     sameSite: 'lax',
-    maxAge: maxAge
+    maxAge: maxAge,
+    ...overrides
   };
 }
 
 /**
  * Get cookie options for clearing authentication tokens
+ *
+ * NOTE: `path` and `sameSite` must match the values the cookie was SET with,
+ * or the browser keeps the original cookie. Any caller that passes a custom
+ * `path` to getAuthCookieOptions() must pass the same one here.
+ *
  * @param {Object} req - Express request object (optional for backward compatibility)
+ * @param {object} [overrides] - Per-cookie overrides; see getAuthCookieOptions
  * @returns {object} Cookie options object for clearing cookies
  */
-export function getClearAuthCookieOptions(req) {
+export function getClearAuthCookieOptions(req, overrides = {}) {
   return {
     httpOnly: true,
     secure: getCookieSecureFlag(req),
-    sameSite: 'lax'
+    sameSite: 'lax',
+    ...overrides
   };
 }

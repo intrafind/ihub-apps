@@ -26,7 +26,7 @@ const optionalLocalizedStringSchema = z.record(
 // Dynamic-Tasks settings. For `external` refs `workflowId` is required.
 const workflowRefSchema = z
   .object({
-    ref: z.enum(['embedded', 'external']).optional().default('embedded'),
+    ref: z.enum(['embedded', 'external']).optional().prefault('embedded'),
     workflowId: z.string().optional(),
     definition: z
       .object({
@@ -49,9 +49,9 @@ const workflowRefSchema = z
 
 const memorySchema = z
   .object({
-    enabled: z.boolean().optional().default(true),
-    autoInclude: z.boolean().optional().default(true),
-    maxBytes: z.number().int().min(0).max(1_000_000).optional().default(8192),
+    enabled: z.boolean().optional().prefault(true),
+    autoInclude: z.boolean().optional().prefault(true),
+    maxBytes: z.number().int().min(0).max(1_000_000).optional().prefault(8192),
     // Memory composer — explicit LLM step that decides what to commit to
     // long-term memory at the end of a run. Only used when enabled=true.
     modelId: z.string().optional(),
@@ -63,14 +63,14 @@ const memorySchema = z
 
 const hitlSchema = z
   .object({
-    approverGroups: z.array(z.string()).optional().default([])
+    approverGroups: z.array(z.string()).optional().prefault([])
   })
   .strict();
 
 const plannerSchema = z
   .object({
-    enabled: z.boolean().optional().default(false),
-    maxTasks: z.number().int().min(1).max(50).optional().default(10),
+    enabled: z.boolean().optional().prefault(false),
+    maxTasks: z.number().int().min(1).max(50).optional().prefault(10),
     // Planner-specific instructions (separate from profile.system which is the
     // agent persona used for task execution). The serializer wires this into
     // the planner LLM call only.
@@ -88,7 +88,7 @@ const plannerSchema = z
 // output as the final artifact, so the LLM never needs to call write_artifact.
 const synthesizerSchema = z
   .object({
-    enabled: z.boolean().optional().default(true),
+    enabled: z.boolean().optional().prefault(true),
     system: optionalLocalizedStringSchema.optional(),
     // Prompt template — supports `${$.data.brief}`, `${$.data.currentInboxItem}`,
     // and `{{previousTaskResults}}` injected by the runtime.
@@ -97,14 +97,14 @@ const synthesizerSchema = z
     // Output token budget for the one-shot synthesis call. Comprehensive
     // research reports routinely exceed provider defaults (4-8K). Setting
     // this higher trades cost for coverage. 0 → use the serializer default.
-    maxTokens: z.number().int().min(0).max(32000).optional().default(8000)
+    maxTokens: z.number().int().min(0).max(32000).optional().prefault(8000)
   })
   .strict();
 
 const dynamicTasksSchema = z
   .object({
-    enabled: z.boolean().optional().default(false),
-    maxDepth: z.number().int().min(0).max(10).optional().default(3),
+    enabled: z.boolean().optional().prefault(false),
+    maxDepth: z.number().int().min(0).max(10).optional().prefault(3),
     // Preferred model for dynamic task_runner executions. Falls back to
     // profile.preferredModel when omitted. Different from the agent's
     // model so operators can use a cheaper / faster model for the
@@ -120,7 +120,7 @@ const dynamicTasksSchema = z
 // planner emits ONLY new gap-closing tasks (with `r{round}_` id namespacing).
 const reviewSchema = z
   .object({
-    enabled: z.boolean().optional().default(false),
+    enabled: z.boolean().optional().prefault(false),
     // Strictness preset for the adversarial review acceptance bar + round budget.
     // See server/agents/profile/reviewSettings.js.
     //
@@ -130,7 +130,7 @@ const reviewSchema = z
     // applyReviewSettings(). The DEFAULT serializer-built (embedded) agent
     // workflow uses a prompt-based reviewer loop instead and honors ONLY
     // maxRounds; strictness/stallLimit/criteria have no effect there.
-    strictness: z.enum(['lenient', 'balanced', 'strict']).optional().default('balanced'),
+    strictness: z.enum(['lenient', 'balanced', 'strict']).optional().prefault('balanced'),
     // Round budget. Optional (NO default) so an unset value means "use the
     // strictness preset"; when set it overrides the preset's maxRetries. This is
     // the one review knob the embedded planner loop also honors.
@@ -147,35 +147,35 @@ const reviewSchema = z
 
 const budgetsSchema = z
   .object({
-    maxWallTimeSec: z.number().int().min(10).max(86_400).optional().default(600),
+    maxWallTimeSec: z.number().int().min(10).max(86_400).optional().prefault(600),
     // Per-run token budget across all LLM iterations (input + output). 0 means
     // unlimited. When the running spend reaches this ceiling, the agent's tool
     // loop is nudged to wrap up: it answers the current round's tool calls,
     // then does one final tool-less turn to produce its answer instead of
     // continuing to call tools. Modeled on Claude Code's token-budget gating.
-    maxTokensPerRun: z.number().int().min(0).max(100_000_000).optional().default(0),
+    maxTokensPerRun: z.number().int().min(0).max(100_000_000).optional().prefault(0),
     // Per-node cap on tool-calling rounds (safety backstop above the budget).
     // 0 falls back to the node/executor default (10).
-    maxToolRoundsPerNode: z.number().int().min(0).max(200).optional().default(0)
+    maxToolRoundsPerNode: z.number().int().min(0).max(200).optional().prefault(0)
   })
   .strict();
 
 const concurrencySchema = z
   .object({
-    maxConcurrent: z.number().int().min(1).max(10).optional().default(1)
+    maxConcurrent: z.number().int().min(1).max(10).optional().prefault(1)
   })
   .strict();
 
 const artifactsSchema = z
   .object({
-    outputDir: z.string().optional().default('auto'),
-    primary: z.string().optional().default('report.md')
+    outputDir: z.string().optional().prefault('auto'),
+    primary: z.string().optional().prefault('report.md')
   })
   .strict();
 
 const serviceAccountSchema = z
   .object({
-    groups: z.array(z.string()).optional().default(['agents', 'authenticated'])
+    groups: z.array(z.string()).optional().prefault(['agents', 'authenticated'])
   })
   .strict();
 
@@ -194,10 +194,10 @@ const baseAgentProfileSchema = z.object({
     .string()
     .regex(HEX_COLOR_PATTERN, 'Color must be a valid hex code (e.g. #6366F1)')
     .optional()
-    .default('#6366F1'),
-  icon: z.string().min(1).optional().default('robot'),
+    .prefault('#6366F1'),
+  icon: z.string().min(1).optional().prefault('robot'),
 
-  workflow: workflowRefSchema.optional().default({}),
+  workflow: workflowRefSchema.optional().prefault({}),
 
   // ── Agent brief: what it is, what model + capabilities it gets ──────────
   // These are convenience fields on the Profile. The profileWorkflowSerializer
@@ -214,9 +214,9 @@ const baseAgentProfileSchema = z.object({
   nodeModels: z.record(z.string(), z.string()).optional(),
   preferredTemperature: z.number().min(0).max(2).optional(),
   maxIterations: z.number().int().min(1).max(50).optional(),
-  tools: z.array(z.string()).optional().default([]),
-  sources: z.array(z.string()).optional().default([]),
-  apps: z.array(z.string()).optional().default([]),
+  tools: z.array(z.string()).optional().prefault([]),
+  sources: z.array(z.string()).optional().prefault([]),
+  apps: z.array(z.string()).optional().prefault([]),
   // Skills: instructional knowledge the agent can activate at runtime.
   // Mirrors the same field on apps; the agent's planner / task executors /
   // dynamic-task workers all see `<available_skills>` metadata in their
@@ -224,23 +224,23 @@ const baseAgentProfileSchema = z.object({
   // load its full procedural body. The planner can also pre-activate skills
   // by listing them in its plan JSON (`skills_used`) and may re-plan once
   // after activation (`activate_then_replan`).
-  skills: z.array(z.string()).optional().default([]),
+  skills: z.array(z.string()).optional().prefault([]),
 
-  memory: memorySchema.optional().default({}),
+  memory: memorySchema.optional().prefault({}),
   inboxId: z.string().optional(),
-  hitl: hitlSchema.optional().default({}),
-  planner: plannerSchema.optional().default({}),
-  synthesizer: synthesizerSchema.optional().default({}),
-  dynamicTasks: dynamicTasksSchema.optional().default({}),
-  review: reviewSchema.optional().default({}),
-  budgets: budgetsSchema.optional().default({}),
-  concurrency: concurrencySchema.optional().default({}),
-  artifacts: artifactsSchema.optional().default({}),
+  hitl: hitlSchema.optional().prefault({}),
+  planner: plannerSchema.optional().prefault({}),
+  synthesizer: synthesizerSchema.optional().prefault({}),
+  dynamicTasks: dynamicTasksSchema.optional().prefault({}),
+  review: reviewSchema.optional().prefault({}),
+  budgets: budgetsSchema.optional().prefault({}),
+  concurrency: concurrencySchema.optional().prefault({}),
+  artifacts: artifactsSchema.optional().prefault({}),
 
-  groups: z.array(z.string()).optional().default([]),
-  serviceAccount: serviceAccountSchema.optional().default({}),
+  groups: z.array(z.string()).optional().prefault([]),
+  serviceAccount: serviceAccountSchema.optional().prefault({}),
 
-  enabled: z.boolean().optional().default(true),
+  enabled: z.boolean().optional().prefault(true),
   order: z.number().int().min(0).optional()
 });
 

@@ -6,7 +6,9 @@ import { generateJwt } from '../utils/tokenService.js';
 import { validateAndPersistExternalUser } from '../utils/userManager.js';
 import { getLdapProviderByName, lookupLdapGroupsForUser } from './ldapAuth.js';
 import logger from '../utils/logger.js';
+import authDebugService from '../utils/authDebugService.js';
 import { getAuthCookieOptions } from '../utils/cookieSettings.js';
+import { clearOidcLogoutHint } from '../utils/oidcLogoutHint.js';
 
 /**
  * NTLM/Windows Authentication middleware and utilities
@@ -31,11 +33,16 @@ function createNtlmMiddleware(ntlmConfig = {}) {
     credentialService.tryResolveSecret(ntlmConfig.domainControllerPasswordRef) ||
     process.env.NTLM_LDAP_PASSWORD;
 
+  // NTLM tracing is driven either by the provider-local `ntlmAuth.debug` flag or
+  // by the central authentication-debug toggle (auth.debug), so admins can turn
+  // it on from the single Logging page without a second, NTLM-only switch.
+  const ntlmDebug = ntlmConfig.debug === true || authDebugService.isDebugEnabled('ntlm');
+
   // express-ntlm calls this for every internal step (negotiate, bind, parse).
-  // When ntlmConfig.debug is true, forward each line to our logger so admins can
+  // When NTLM debug is on, forward each line to our logger so admins can
   // see exactly where the handshake is failing — particularly important for
   // diagnosing 403 responses from the AD SASL bind step.
-  const debugFn = ntlmConfig.debug
+  const debugFn = ntlmDebug
     ? (...args) => {
         // First arg is the prefix ("[express-ntlm]"); strip it so we don't double-tag.
         const [, ...rest] = args;
@@ -166,7 +173,7 @@ function createNtlmMiddleware(ntlmConfig = {}) {
     getGroups: options.getGroups,
     ldapBindUserConfigured: !!options.domaincontrolleruser,
     ldapBindPasswordConfigured: !!options.domaincontrollerpassword,
-    debugMode: !!ntlmConfig.debug,
+    debugMode: ntlmDebug,
     challengeScheme: ntlmConfig.type === 'negotiate' ? 'Negotiate' : 'NTLM',
     tlsOptions: tlsOptionsSummary
   });
@@ -200,8 +207,14 @@ function createNtlmMiddleware(ntlmConfig = {}) {
  * @returns {Function} Express middleware instance
  */
 function getNtlmMiddleware(ntlmConfig) {
-  // Check if config changed, if so, recreate middleware
-  const configHash = JSON.stringify(ntlmConfig);
+  // Check if config changed, if so, recreate middleware. The central auth-debug
+  // toggle also feeds NTLM tracing, so fold it into the hash — otherwise
+  // flipping auth.debug wouldn't take effect until the NTLM config itself
+  // changed or the server restarted.
+  const configHash = JSON.stringify({
+    ...ntlmConfig,
+    __authDebug: authDebugService.isDebugEnabled('ntlm')
+  });
   if (!ntlmMiddlewareInstance || ntlmMiddlewareConfig !== configHash) {
     ntlmMiddlewareInstance = createNtlmMiddleware(ntlmConfig);
     ntlmMiddlewareConfig = configHash;
@@ -672,6 +685,10 @@ export function ntlmAuthMiddleware(req, res, next) {
 
             // Set HTTP-only cookie for authentication
             res.cookie('authToken', token, getAuthCookieOptions(expiresIn * 1000, req));
+            // Drop any oidcLogoutHint left over from an earlier OIDC login on this
+            // browser: it would keep an ID token around and send this session's logout
+            // through an unrelated provider. See utils/oidcLogoutHint.js.
+            clearOidcLogoutHint(res, req);
           } catch (tokenError) {
             logger.error('NTLM Auth: JWT token generation failed', {
               component: 'NtlmAuth',

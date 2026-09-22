@@ -23,7 +23,7 @@ const BLANK_FORM = {
 // explicit border, padding, text colour, and focus ring so inputs are legible
 // in both light and dark mode.
 const INPUT_CLASS =
-  'w-full rounded-md border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100 shadow-sm px-3 py-2 text-sm focus:border-blue-500 focus:ring-blue-500';
+  'w-full rounded-md border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100 shadow-xs px-3 py-2 text-sm focus:border-blue-500 focus:ring-blue-500';
 const MONO_INPUT_CLASS = `${INPUT_CLASS} font-mono`;
 
 function transportFields(transport, onChange, t) {
@@ -420,7 +420,7 @@ function AdminMcpServersPage() {
         </div>
         <button
           onClick={startCreate}
-          className="inline-flex items-center px-4 py-2 border border-transparent text-sm font-medium rounded-md shadow-sm text-white bg-blue-600 hover:bg-blue-700"
+          className="inline-flex items-center px-4 py-2 border border-transparent text-sm font-medium rounded-md shadow-xs text-white bg-blue-600 hover:bg-blue-700"
         >
           <Icon name="plus" size="md" className="mr-2" />
           {t('admin.mcp.servers.create', 'Add MCP server')}
@@ -443,14 +443,14 @@ function AdminMcpServersPage() {
         )}
 
         {servers.length === 0 ? (
-          <div className="text-center py-12 bg-white dark:bg-gray-800 rounded-lg shadow">
+          <div className="text-center py-12 bg-white dark:bg-gray-800 rounded-lg shadow-sm">
             <Icon name="globe" className="mx-auto h-12 w-12 text-gray-400" />
             <h3 className="mt-2 text-sm font-medium text-gray-900 dark:text-gray-100">
               {t('admin.mcp.servers.empty', 'No MCP servers configured')}
             </h3>
           </div>
         ) : (
-          <div className="bg-white dark:bg-gray-800 shadow overflow-hidden sm:rounded-md">
+          <div className="bg-white dark:bg-gray-800 shadow-sm overflow-hidden sm:rounded-md">
             <ul className="divide-y divide-gray-200 dark:divide-gray-700">
               {servers.map(s => (
                 <li key={s.id} className="px-4 py-4 sm:px-6">
@@ -482,20 +482,20 @@ function AdminMcpServersPage() {
                     <div className="flex space-x-2 ml-4">
                       <button
                         onClick={() => test(s.id)}
-                        className="inline-flex items-center px-3 py-2 border border-gray-300 dark:border-gray-600 shadow-sm text-sm leading-4 font-medium rounded-md text-gray-700 dark:text-gray-200 bg-white dark:bg-gray-700 hover:bg-gray-50 dark:hover:bg-gray-600"
+                        className="inline-flex items-center px-3 py-2 border border-gray-300 dark:border-gray-600 shadow-xs text-sm leading-4 font-medium rounded-md text-gray-700 dark:text-gray-200 bg-white dark:bg-gray-700 hover:bg-gray-50 dark:hover:bg-gray-600"
                         title={t('admin.mcp.servers.actions.test', 'Test connection')}
                       >
                         <Icon name="play" size="sm" />
                       </button>
                       <button
                         onClick={() => startEdit(s)}
-                        className="inline-flex items-center px-3 py-2 border border-gray-300 dark:border-gray-600 shadow-sm text-sm leading-4 font-medium rounded-md text-gray-700 dark:text-gray-200 bg-white dark:bg-gray-700 hover:bg-gray-50 dark:hover:bg-gray-600"
+                        className="inline-flex items-center px-3 py-2 border border-gray-300 dark:border-gray-600 shadow-xs text-sm leading-4 font-medium rounded-md text-gray-700 dark:text-gray-200 bg-white dark:bg-gray-700 hover:bg-gray-50 dark:hover:bg-gray-600"
                       >
                         <Icon name="pencil" size="sm" />
                       </button>
                       <button
                         onClick={() => remove(s.id)}
-                        className="inline-flex items-center px-3 py-2 border border-red-300 dark:border-red-700 shadow-sm text-sm leading-4 font-medium rounded-md text-red-700 dark:text-red-400 bg-white dark:bg-gray-700 hover:bg-red-50 dark:hover:bg-red-900/50"
+                        className="inline-flex items-center px-3 py-2 border border-red-300 dark:border-red-700 shadow-xs text-sm leading-4 font-medium rounded-md text-red-700 dark:text-red-400 bg-white dark:bg-gray-700 hover:bg-red-50 dark:hover:bg-red-900/50"
                       >
                         <Icon name="trash" size="sm" />
                       </button>
@@ -511,7 +511,7 @@ function AdminMcpServersPage() {
       {editing !== null && (
         <div className="fixed z-10 inset-0 overflow-y-auto">
           <div className="flex items-center justify-center min-h-screen px-4">
-            <div className="fixed inset-0 bg-gray-500 dark:bg-gray-900 bg-opacity-75 dark:bg-opacity-75" />
+            <div className="fixed inset-0 bg-gray-500/75 dark:bg-gray-900/75" />
             <div className="relative bg-white dark:bg-gray-800 rounded-lg p-6 max-w-2xl w-full shadow-xl space-y-4 max-h-[90vh] overflow-y-auto">
               <h2 className="text-xl font-bold text-gray-900 dark:text-gray-100">
                 {editing === 'new'
@@ -567,7 +567,7 @@ function AdminMcpServersPage() {
                 </label>
               </div>
 
-              <fieldset className="border border-gray-200 dark:border-gray-700 rounded p-3">
+              <fieldset className="border border-gray-200 dark:border-gray-700 rounded-sm p-3">
                 <legend className="text-sm font-medium text-gray-700 dark:text-gray-300 px-1">
                   {t('admin.mcp.servers.form.transport', 'Transport')}
                 </legend>
@@ -606,7 +606,7 @@ function AdminMcpServersPage() {
                 </div>
               </fieldset>
 
-              <fieldset className="border border-gray-200 dark:border-gray-700 rounded p-3">
+              <fieldset className="border border-gray-200 dark:border-gray-700 rounded-sm p-3">
                 <legend className="text-sm font-medium text-gray-700 dark:text-gray-300 px-1">
                   {t('admin.mcp.servers.form.authType', 'Authentication')}
                 </legend>
@@ -680,7 +680,7 @@ function AdminMcpServersPage() {
                         )}
                       </div>
                       {draftTest.tools.length > 0 ? (
-                        <ul className="mt-3 max-h-56 overflow-y-auto divide-y divide-gray-200 dark:divide-gray-700 rounded border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800">
+                        <ul className="mt-3 max-h-56 overflow-y-auto divide-y divide-gray-200 dark:divide-gray-700 rounded-sm border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800">
                           {draftTest.tools.map(tool => (
                             <li key={tool.name} className="px-3 py-2">
                               <div className="font-mono text-xs text-gray-900 dark:text-gray-100">
@@ -705,7 +705,7 @@ function AdminMcpServersPage() {
                     </div>
                   ) : (
                     <div className="flex items-start text-sm text-red-700 dark:text-red-400">
-                      <Icon name="x-circle" size="sm" className="mr-1.5 mt-0.5 flex-shrink-0" />
+                      <Icon name="x-circle" size="sm" className="mr-1.5 mt-0.5 shrink-0" />
                       <span>
                         {t('admin.mcp.servers.test.failed', 'Connection failed: {{error}}', {
                           error: draftTest?.error || 'unknown error'
@@ -720,7 +720,7 @@ function AdminMcpServersPage() {
                 <button
                   onClick={testDraft}
                   disabled={draftTesting}
-                  className="inline-flex items-center px-4 py-2 border border-gray-300 dark:border-gray-600 rounded text-gray-700 dark:text-gray-200 bg-white dark:bg-gray-700 hover:bg-gray-50 dark:hover:bg-gray-600 disabled:opacity-50"
+                  className="inline-flex items-center px-4 py-2 border border-gray-300 dark:border-gray-600 rounded-sm text-gray-700 dark:text-gray-200 bg-white dark:bg-gray-700 hover:bg-gray-50 dark:hover:bg-gray-600 disabled:opacity-50"
                 >
                   <Icon name="play" size="sm" className="mr-1.5" />
                   {t('admin.mcp.servers.test.button', 'Test connection')}
@@ -728,13 +728,13 @@ function AdminMcpServersPage() {
                 <div className="flex space-x-2">
                   <button
                     onClick={closeDialog}
-                    className="px-4 py-2 border border-gray-300 dark:border-gray-600 rounded text-gray-700 dark:text-gray-200 bg-white dark:bg-gray-700"
+                    className="px-4 py-2 border border-gray-300 dark:border-gray-600 rounded-sm text-gray-700 dark:text-gray-200 bg-white dark:bg-gray-700"
                   >
                     {t('common.cancel', 'Cancel')}
                   </button>
                   <button
                     onClick={save}
-                    className="px-4 py-2 rounded text-white bg-blue-600 hover:bg-blue-700"
+                    className="px-4 py-2 rounded-sm text-white bg-blue-600 hover:bg-blue-700"
                   >
                     {t('common.save', 'Save')}
                   </button>

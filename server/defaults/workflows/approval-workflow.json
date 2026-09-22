@@ -57,7 +57,7 @@
           "de": "[Schritt {{_currentStep}}/{{_totalNodes}}, Iteration {{_currentNodeIteration}}] Recherchieren Sie das folgende Thema und liefern Sie 3-5 Kernpunkte: {{topic}}\n\n{{#if humanResponse_approval.data.feedback}}Vorheriges Feedback zu berücksichtigen: {{humanResponse_approval.data.feedback}}{{/if}}"
         },
         "outputVariable": "research_results",
-        "tools": ["googleSearch"]
+        "tools": ["webSearch"]
       }
     },
     {

@@ -1,10 +1,9 @@
 /* Microsoft Teams Integration */
-@import './features/teams/teams.css';
+@import './features/teams/teams.css' layer(base);
 
 /* Base Styles */
-@tailwind base;
-@tailwind components;
-@tailwind utilities;
+@import 'tailwindcss' source(none);
+@import '../tailwind.css';
 
 @layer base {
   html,
@@ -320,7 +319,7 @@ div .markdown-content .code-block-toolbar > div,
 }
 
 .rendered-html-content img {
-  @apply max-w-full h-auto my-4 rounded;
+  @apply max-w-full h-auto my-4 rounded-sm;
 }
 
 .rendered-html-content div {
@@ -338,7 +337,7 @@ div .markdown-content .code-block-toolbar > div,
 .rendered-html-content input,
 .rendered-html-content select,
 .rendered-html-content textarea {
-  @apply border border-gray-300 rounded px-3 py-2 mb-2 w-full;
+  @apply border border-gray-300 rounded-sm px-3 py-2 mb-2 w-full;
 }
 
 [data-theme='dark'] .rendered-html-content input,

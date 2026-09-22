@@ -71,12 +71,12 @@ function MimeTypeSelector({ categoryType, selectedFormats = [], onChange, defaul
 
   return (
     <div className="space-y-2">
-      <div className="flex items-center mb-3 p-2 bg-indigo-50 rounded">
+      <div className="flex items-center mb-3 p-2 bg-indigo-50 rounded-sm">
         <input
           type="checkbox"
           checked={useCategory || isAllSelected}
           onChange={e => handleCategoryToggle(e.target.checked)}
-          className="h-4 w-4 text-indigo-600 focus:ring-indigo-500 border-gray-300 rounded"
+          className="h-4 w-4 text-indigo-600 focus:ring-indigo-500 border-gray-300 rounded-sm"
         />
         <label className="ml-2 block text-xs font-medium text-indigo-900">
           {t(
@@ -102,7 +102,7 @@ function MimeTypeSelector({ categoryType, selectedFormats = [], onChange, defaul
                   type="checkbox"
                   checked={selectedFormats.includes(mimeType)}
                   onChange={e => handleMimeTypeToggle(mimeType, e.target.checked)}
-                  className="h-3 w-3 text-indigo-600 focus:ring-indigo-500 border-gray-300 rounded"
+                  className="h-3 w-3 text-indigo-600 focus:ring-indigo-500 border-gray-300 rounded-sm"
                 />
                 <label className="ml-2 block text-xs text-gray-700">
                   {displayName}

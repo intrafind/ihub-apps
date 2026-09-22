@@ -109,7 +109,6 @@ examples/
 samples/
 
 # Development scripts
-dev.sh
 test-authentication.sh
 concatenate-code.sh
 

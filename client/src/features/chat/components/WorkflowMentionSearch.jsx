@@ -164,7 +164,7 @@ const WorkflowMentionSearch = forwardRef(({ isOpen, query, onClose, onSelect, ap
               onMouseEnter={() => setSelectedIndex(idx)}
             >
               <div className="flex items-center gap-2">
-                <Icon name="cog" size="sm" className="text-indigo-500 flex-shrink-0" />
+                <Icon name="cog" size="sm" className="text-indigo-500 shrink-0" />
                 <div className="min-w-0">
                   <div className="font-medium text-gray-900 dark:text-gray-100 truncate">
                     {wf.localizedName || wf.id}

@@ -16,6 +16,8 @@ This document is the primary developer reference for implementing OAuth 2.0 Auth
    - [Introspection Endpoint](#introspection-endpoint-rfc-7662)
    - [Discovery Endpoint](#discovery-endpoint)
 6. [Client Configuration Reference](#client-configuration-reference)
+   - [URL client IDs (Client ID Metadata Documents)](#url-client-ids-client-id-metadata-documents)
+   - [Loopback redirect URIs](#loopback-redirect-uris)
 7. [Complete Code Example](#complete-code-example)
 8. [Token Format and Claims](#token-format-and-claims)
 9. [Scopes](#scopes)
@@ -542,6 +544,58 @@ To skip the consent screen entirely (appropriate for first-party applications):
 
 > Use trusted clients carefully. They bypass user consent, meaning users cannot deny access.
 
+### URL client IDs (Client ID Metadata Documents)
+
+A `client_id` may also be an **HTTPS URL** pointing at a JSON metadata
+document the client publishes, instead of an identifier issued by this
+server. Such a client has no record in `oauth-clients.json` at all: the
+URL is the identity, and the document supplies `client_name`,
+`redirect_uris`, `grant_types` and `token_endpoint_auth_method`.
+
+A URL is treated as a client metadata document identifier when it is
+`https`, has a non-empty path, carries no fragment and no embedded
+credentials, and is at most 2000 characters. Anything else is looked up
+as a stored client ID, so existing client IDs are never mistaken for
+URLs.
+
+The server only resolves documents from hosts an administrator listed in
+`platform.oauth.cimd.allowedClientHosts`, and only while
+`platform.oauth.cimd.enabled` is true. Every such client is a **public**
+client: PKCE with `S256` is mandatory, `token_endpoint_auth_method` must
+be `none`, and it can never be `trusted` — the consent screen always
+shows, with the hostname of the `client_id` next to the client name.
+
+The remaining fields (`scopes`, `allowedGroups`, `allowedApps`,
+`allowedModels`, `allowedPrompts`, `tokenExpirationMinutes`) come from
+`platform.oauth.cimd` rather than from the document, so an administrator
+still controls what such a client may be granted. See
+[MCP integration](mcp-integration.md#client-id-metadata-documents-cimd)
+for the fetch, caching and SSRF rules.
+
+### Loopback redirect URIs
+
+Redirect URI matching is exact, with one exception from RFC 8252 §7.3: a
+registered **loopback** URI matches a request that differs only in its
+**port**.
+
+```text
+registered:  http://localhost/callback
+accepted:    http://localhost:53421/callback     ✔ same host and path
+rejected:    http://localhost:53421/other        ✘ different path
+rejected:    http://127.0.0.1:53421/callback     ✘ different host
+rejected:    https://localhost:53421/callback    ✘ different scheme
+```
+
+A native application cannot reserve a port in advance, so it registers
+the port-less form and listens on whichever ephemeral port it is given.
+`localhost` and `127.0.0.1` are **not** interchangeable — a client
+registers the forms it actually uses — and the rule never applies to
+`https` or to any non-loopback host.
+
+When *every* registered redirect URI is loopback, the consent screen adds
+a warning: any local process can bind a port, so only the user can tell
+whether the application asking is the one they started.
+
 ## Complete Code Example
 
 The following is a minimal but complete implementation of the Authorization Code Flow for a Node.js web application.
@@ -823,7 +877,10 @@ The `redirect_uri` in your request must exactly match one of the URIs registered
 
 - Protocol mismatch (`http` vs `https`)
 - Trailing slash differences (`/callback` vs `/callback/`)
-- Port differences (`localhost:4000` vs `localhost:4001`)
+- Port differences on a **non-loopback** host (loopback URIs match on any
+  port — see [Loopback redirect URIs](#loopback-redirect-uris))
+- `localhost` registered but `127.0.0.1` presented, or the other way
+  round; the two are not interchangeable
 
 Update the registered `redirectUris` in the admin UI or admin API to match exactly.
 
@@ -843,6 +900,13 @@ Restart the flow by redirecting the user to the authorization endpoint again.
 ### "invalid_client" on token exchange
 
 For confidential clients, ensure you are sending the correct `client_secret`. For public clients, ensure you are sending `code_verifier` (not `client_secret`).
+
+For a URL `client_id`, `invalid_client` at the **authorization** endpoint
+means the metadata document could not be resolved: the host is not in
+`platform.oauth.cimd.allowedClientHosts`, `platform.oauth.cimd.enabled`
+is false, or the document failed validation. The token endpoint never
+depends on a live fetch, so this error there means the policy itself no
+longer accepts the client.
 
 ### User is redirected to login repeatedly
 

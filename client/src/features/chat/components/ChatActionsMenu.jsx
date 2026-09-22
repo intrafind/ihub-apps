@@ -61,7 +61,7 @@ function ChatActionsMenu({
         <Icon name="menu" size="sm" />
       </button>
       {open && (
-        <div className="absolute right-0 mt-2 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded shadow-lg z-20 min-w-40">
+        <div className="absolute right-0 mt-2 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-sm shadow-lg z-20 min-w-40">
           {user?.isAdmin && appId && (
             <button
               onClick={() => {

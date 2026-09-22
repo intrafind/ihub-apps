@@ -6,8 +6,10 @@ import react from '@vitejs/plugin-react';
 import authGatePlugin from './vite-plugins/vite-plugin-auth-gate.js';
 
 // Plugin that copies @microsoft/office-js/dist to dist/office/office-js after build.
-// This makes the full Office.js library available locally so that deployments that
-// block appsforoffice.microsoft.com can serve it from their own origin.
+// This backs the `bundled` Office.js mode (see server/utils/officeJsSource.js) for
+// deployments with no outbound access at all. The package is no longer maintained
+// upstream, so the copy never updates — the `proxy` and `custom` modes are the
+// preferred way to serve Office.js from somewhere other than Microsoft's CDN.
 function copyOfficeJsPlugin() {
   return {
     name: 'copy-office-js',
@@ -78,7 +80,7 @@ export default defineConfig({
             // Vendor chunks
             'vendor-react': ['react', 'react-dom', 'react-router-dom'],
             'vendor-ui': ['@heroicons/react', 'react-icons', 'tailwindcss'],
-            'vendor-forms': ['react-quill', 'ajv', 'ajv-formats'],
+            'vendor-forms': ['react-quill-new', 'ajv', 'ajv-formats'],
             'vendor-utils': ['axios', 'uuid', 'file-saver', 'fuse.js', 'marked', 'turndown'],
 
             // Heavy dependencies that should be separate
@@ -139,11 +141,24 @@ export default defineConfig({
             target: 'http://localhost:3000',
             changeOrigin: true,
             xfwd: true,
+            // Proxy WebSocket upgrades for the API (e.g. the realtime
+            // speech-to-text endpoint at /api/voice/realtime). Scoped to /api
+            // so Vite's own HMR socket is untouched.
+            ws: path === '/api/',
             configure: proxy => {
               // xfwd adds X-Forwarded-For/Port/Proto but NOT X-Forwarded-Host.
               // changeOrigin replaces Host with the target, so Express can't see
               // the original browser-facing host without this header.
               proxy.on('proxyReq', (proxyReq, req) => {
+                if (req.headers.host) {
+                  proxyReq.setHeader('X-Forwarded-Host', req.headers.host);
+                }
+              });
+              // The proxyReq handler above fires for HTTP only. WebSocket
+              // upgrades (e.g. /api/voice/realtime) need the same header set via
+              // proxyReqWs, otherwise the server sees the rewritten target host
+              // and can't verify the browser-facing origin.
+              proxy.on('proxyReqWs', (proxyReq, req) => {
                 if (req.headers.host) {
                   proxyReq.setHeader('X-Forwarded-Host', req.headers.host);
                 }

@@ -17,11 +17,13 @@
  * instead of /ihub).
  */
 export const KNOWN_ROUTES = [
+  'start', // Start page (greeting, chat input, featured apps)
   'apps', // App listing and individual app routes
   'admin', // Admin panel and all admin sub-routes
   'login', // Standalone login page
   'pages', // Dynamic content pages
   'prompts', // Prompts listing
+  'chats', // Chat history overview
   'settings', // Settings pages (integrations, etc.)
   'teams', // Microsoft Teams embed routes
   'workflows', // Workflow management and execution
@@ -214,6 +216,27 @@ export const buildApiUrl = endpoint => {
     return apiBaseUrlOverride + '/api/' + cleanEndpoint;
   }
   return buildPath('api/' + cleanEndpoint);
+};
+
+/**
+ * Build an absolute WebSocket URL for an API endpoint.
+ * Uses ws:// or wss:// to match the current page protocol and respects the
+ * runtime base path (and any absolute API base override).
+ * @param {string} endpoint - API endpoint (e.g., "/voice/realtime")
+ * @returns {string} Complete ws(s):// URL
+ */
+export const buildWsUrl = endpoint => {
+  const apiPath = buildApiUrl(endpoint); // handles base path + override
+
+  // Already absolute (http/https override) → just swap the scheme.
+  if (/^https?:\/\//i.test(apiPath)) {
+    return apiPath.replace(/^http/i, 'ws');
+  }
+
+  const { protocol, host } = window.location;
+  const wsProtocol = protocol === 'https:' ? 'wss:' : 'ws:';
+  const path = apiPath.startsWith('/') ? apiPath : `/${apiPath}`;
+  return `${wsProtocol}//${host}${path}`;
 };
 
 /**

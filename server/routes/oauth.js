@@ -1,11 +1,20 @@
 import crypto from 'crypto';
+import { validateClientCredentials } from '../utils/oauthClientManager.js';
+import { buildPolicyCimdClient, resolveOAuthClient } from '../utils/oauthClientResolver.js';
+import { intersectScopes, isUserAllowedByGroups } from '../utils/oauthClientPolicy.js';
+import { findLocalUserById } from '../utils/userManager.js';
 import {
-  validateClientCredentials,
-  findClientById,
-  loadOAuthClients
-} from '../utils/oauthClientManager.js';
-import { generateOAuthToken, introspectOAuthToken } from '../utils/oauthTokenService.js';
+  generateOAuthToken,
+  introspectOAuthToken,
+  isPersonalClient
+} from '../utils/oauthTokenService.js';
+import {
+  getPersonalKeyConfig,
+  isPersonalKeyExpired,
+  isPersonalKeysEnabled
+} from '../utils/personalApiKeyManager.js';
 import { buildServerPath } from '../utils/basePath.js';
+import { touchConsentLastUsed } from '../utils/consentStore.js';
 import configCache from '../configCache.js';
 import logger from '../utils/logger.js';
 import { consumeCode } from '../utils/authorizationCodeStore.js';
@@ -71,6 +80,29 @@ function sendOAuthError(res, status, error, description) {
 }
 
 /**
+ * Resolve the client behind a grant that is already bound to it.
+ *
+ * Deliberately never fetches. On the token endpoint the grant being presented
+ * carries the binding a metadata document would add: the authorization code
+ * pins `client_id`, `redirect_uri` and the PKCE challenge, and a refresh entry
+ * pins `client_id`. Making the exchange depend on the client's host being
+ * reachable would turn a hiccup at claude.ai into "sign in again" for every
+ * user mid-flow, so a CIMD client falls back to one built from policy alone —
+ * which still enforces the parts that must stay live: CIMD enabled, host still
+ * allowed. The draft's "abort when the document cannot be fetched" rule applies
+ * to the *authorization* request, where oauthAuthorize.js enforces it.
+ *
+ * @param {string} clientId - Client ID carried by the grant
+ * @param {Object} platform - Platform configuration
+ * @returns {Promise<Object|null>} Client object, or null when unknown/refused
+ */
+async function resolveGrantClient(clientId, platform) {
+  const resolved = await resolveOAuthClient(clientId, platform, { allowFetch: false });
+  if (resolved.ok) return resolved.client;
+  return buildPolicyCimdClient(clientId, platform);
+}
+
+/**
  * Extract client credentials from Authorization: Basic header (RFC 6749 §2.3.1)
  * @param {Object} req - Express request object
  * @returns {{ clientId: string, clientSecret: string } | null}
@@ -97,6 +129,20 @@ function extractBasicCredentials(req) {
     return null;
   }
 }
+
+import rateLimit from 'express-rate-limit';
+
+// Mitigates brute-force / resource-exhaustion attacks: each request to the
+// token endpoint triggers an expensive bcrypt client-secret comparison, so an
+// unauthenticated flood can exhaust CPU. Limit per-IP independently of any
+// broader shared limiter.
+const oauthTokenLimiter = rateLimit({
+  windowMs: 15 * 60 * 1000,
+  limit: 20,
+  standardHeaders: true,
+  legacyHeaders: false,
+  message: { error: 'Too many token requests from this IP, please try again later.' }
+});
 
 export default function registerOAuthRoutes(app) {
   /**
@@ -160,7 +206,7 @@ export default function registerOAuthRoutes(app) {
    *       403:
    *         description: Client suspended
    */
-  app.post(buildServerPath('/api/oauth/token'), async (req, res) => {
+  app.post(buildServerPath('/api/oauth/token'), oauthTokenLimiter, async (req, res) => {
     try {
       const platform = configCache.getPlatform() || {};
       const oauthConfig = platform.oauth || {};
@@ -228,8 +274,9 @@ export default function registerOAuthRoutes(app) {
           return sendOAuthError(res, 400, 'invalid_request', 'redirect_uri is required');
         }
 
-        // Consume the authorization code (single-use)
-        const codeData = consumeCode(sanitizedCode);
+        // Consume the authorization code (single-use). In cluster mode this may
+        // resolve against the worker that minted it, so it is asynchronous.
+        const codeData = await consumeCode(sanitizedCode);
         if (!codeData) {
           return sendOAuthError(
             res,
@@ -242,10 +289,9 @@ export default function registerOAuthRoutes(app) {
         // Validate client
         const authCodeClientsFilePath =
           oauthConfig.clientsFile || 'contents/config/oauth-clients.json';
-        const authCodeClientsConfig = loadOAuthClients(authCodeClientsFilePath);
-        const authClient = findClientById(
-          authCodeClientsConfig,
-          sanitizedClientId || codeData.clientId
+        const authClient = await resolveGrantClient(
+          sanitizedClientId || codeData.clientId,
+          platform
         );
 
         if (!authClient) {
@@ -311,7 +357,6 @@ export default function registerOAuthRoutes(app) {
           provider: 'oauth'
         };
 
-        const platform = configCache.getPlatform() || {};
         const authCodeExpiresInMinutes = authClient.tokenExpirationMinutes || 60;
 
         const { token: accessToken, expiresIn: authCodeExpiresIn } = generateJwt(userForAuthCode, {
@@ -404,13 +449,29 @@ export default function registerOAuthRoutes(app) {
         }
 
         // Validate client still exists and is active
-        const refreshClientsFilePath =
-          oauthConfig.clientsFile || 'contents/config/oauth-clients.json';
-        const refreshClientsConfig = loadOAuthClients(refreshClientsFilePath);
-        const refreshClient = findClientById(refreshClientsConfig, tokenData.clientId);
+        const refreshClient = await resolveGrantClient(tokenData.clientId, platform);
 
         if (!refreshClient || !refreshClient.active) {
           return sendOAuthError(res, 401, 'invalid_client', 'Client not found or suspended');
+        }
+
+        // The refresh-token entry carries the groups the user had when they
+        // first authorized. For a **local** user that snapshot is stale the
+        // moment an administrator edits their groups, and the user store is
+        // authoritative — so it is re-read here and the snapshot refreshed.
+        // For an OIDC or proxy user the groups come from the identity provider
+        // at sign-in and iHub holds nothing newer, so the snapshot stands; the
+        // remedies there are an admin revoke and `refreshTokenExpirationDays`.
+        const usersFilePath = platform.localAuth?.usersFile || 'contents/config/users.json';
+        let currentGroups = tokenData.userGroups || [];
+        try {
+          const localUser = findLocalUserById(tokenData.userId, usersFilePath);
+          if (localUser) currentGroups = Array.isArray(localUser.groups) ? localUser.groups : [];
+        } catch (error) {
+          logger.warn('[OAuth] Could not re-read group membership on refresh', {
+            component: 'OAuth',
+            error: error.message
+          });
         }
 
         // Build user object for the new access token
@@ -419,9 +480,44 @@ export default function registerOAuthRoutes(app) {
           username: tokenData.userUsername || tokenData.userId,
           name: tokenData.userName || tokenData.userId,
           email: tokenData.userEmail || '',
-          groups: tokenData.userGroups || [],
+          groups: currentGroups,
           provider: 'oauth'
         };
+
+        // The client's *current* group policy, not the one that applied when
+        // the connection was made. Narrowing a client's `allowedGroups` — or
+        // taking the user out of one — therefore ends the connection at the
+        // next rotation instead of never.
+        if (!isUserAllowedByGroups(refreshClient, userForRefresh)) {
+          logger.info('[OAuth] Refresh denied by client group policy', {
+            component: 'OAuth',
+            clientId: tokenData.clientId,
+            userId: tokenData.userId
+          });
+          return sendOAuthError(
+            res,
+            400,
+            'invalid_grant',
+            'This client is no longer available to your groups'
+          );
+        }
+
+        // Narrowing what a client may be granted has to narrow the connections
+        // that already hold those scopes, not only the ones made from now on.
+        const refreshedScopes = intersectScopes(tokenData.scopes, refreshClient.scopes);
+        if (refreshedScopes.length === 0) {
+          logger.info('[OAuth] Refresh denied: no granted scope survives the client policy', {
+            component: 'OAuth',
+            clientId: tokenData.clientId,
+            userId: tokenData.userId
+          });
+          return sendOAuthError(
+            res,
+            400,
+            'invalid_grant',
+            'None of the granted scopes are still available to this client'
+          );
+        }
 
         const refreshExpiresInMinutes = refreshClient.tokenExpirationMinutes || 60;
         const { token: newAccessToken, expiresIn: newExpiresIn } = generateJwt(userForRefresh, {
@@ -429,7 +525,7 @@ export default function registerOAuthRoutes(app) {
           expiresInMinutes: refreshExpiresInMinutes,
           additionalClaims: {
             client_id: tokenData.clientId,
-            scopes: tokenData.scopes || [],
+            scopes: refreshedScopes,
             aud: tokenData.clientId
           }
         });
@@ -445,11 +541,20 @@ export default function registerOAuthRoutes(app) {
             userEmail: tokenData.userEmail || '',
             userName: tokenData.userName || '',
             userUsername: tokenData.userUsername || '',
-            userGroups: tokenData.userGroups || [],
-            scopes: tokenData.scopes || []
+            // Re-stamped rather than copied: rotation is where a stale group
+            // snapshot would otherwise live forever.
+            userGroups: currentGroups,
+            scopes: refreshedScopes
           },
           refreshPlatform.oauth?.refreshTokenExpirationDays || 30
         );
+
+        // Rotation is the only moment a long-lived connection makes itself
+        // known — access tokens are verified statelessly and leave no trace —
+        // so it is where "last used" on the connections list comes from.
+        touchConsentLastUsed(tokenData.clientId, tokenData.userId).catch(err => {
+          logger.warn('Failed to record connection usage', { component: 'OAuth', error: err });
+        });
 
         logger.info('[OAuth] Refresh token rotated', {
           component: 'OAuth',
@@ -460,7 +565,7 @@ export default function registerOAuthRoutes(app) {
           access_token: newAccessToken,
           token_type: 'Bearer',
           expires_in: newExpiresIn,
-          scope: (tokenData.scopes || []).join(' '),
+          scope: refreshedScopes.join(' '),
           refresh_token: rotatedRefreshToken
         });
       }
@@ -496,6 +601,48 @@ export default function registerOAuthRoutes(app) {
           'access_denied',
           'Client account is suspended. Please contact your administrator'
         );
+      }
+
+      // A personal key acts as its owner, so it may only exchange credentials
+      // while the administrator still offers the feature and the key was issued
+      // with the client-credentials grant.
+      if (isPersonalClient(client)) {
+        if (!isPersonalKeysEnabled(platform)) {
+          return sendOAuthError(
+            res,
+            400,
+            'invalid_client',
+            'Personal API keys are not enabled on this server'
+          );
+        }
+
+        // The API key itself carries an `exp`; the client credentials do not.
+        // Without this check they would keep minting owner-bound tokens forever,
+        // and `maxExpirationDays` would bind only the key the user was shown.
+        if (isPersonalKeyExpired(client)) {
+          return sendOAuthError(
+            res,
+            400,
+            'invalid_client',
+            'This API key has expired. Generate a new one to continue'
+          );
+        }
+
+        // Both the grant recorded on the key and the policy in force right now:
+        // turning the administrator's switch off has to stop the keys that
+        // already exist, not only the ones created afterwards.
+        const clientCredentialsAllowed =
+          getPersonalKeyConfig(platform).allowClientCredentials &&
+          (client.grantTypes || []).includes('client_credentials');
+
+        if (!clientCredentialsAllowed) {
+          return sendOAuthError(
+            res,
+            400,
+            'unauthorized_client',
+            'This API key is not authorized for the client_credentials grant'
+          );
+        }
       }
 
       // Generate token
@@ -849,9 +996,10 @@ export default function registerOAuthRoutes(app) {
         }
 
         if (clientId) {
-          const clientsFilePath = oauthConfig.clientsFile || 'contents/config/oauth-clients.json';
-          const clientsConfig = loadOAuthClients(clientsFilePath);
-          const client = findClientById(clientsConfig, clientId);
+          // A metadata document declares no post-logout URIs, so a CIMD client
+          // resolves with an empty list and falls through to the local page —
+          // which is the correct outcome, not an oversight.
+          const client = await resolveGrantClient(clientId, platform);
 
           if (client && (client.postLogoutRedirectUris || []).includes(post_logout_redirect_uri)) {
             const redirectUrl = new URL(post_logout_redirect_uri);

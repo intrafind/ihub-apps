@@ -1,7 +1,8 @@
-import { actionTracker } from '../../actionTracker.js';
+import { emitToolProgress } from '../loop/RunStream.js';
 import config from '../../config.js';
 import { throttledFetch } from '../../requestThrottler.js';
 import { getIFinderAuthorizationHeader } from '../../utils/iFinderJwt.js';
+import { isValidId } from '../../utils/pathSecurity.js';
 import configCache from '../../configCache.js';
 import authDebugService from '../../utils/authDebugService.js';
 import fs from 'fs';
@@ -49,7 +50,16 @@ class IFinderService {
             '/public-api/retrieval/api/v1/search-profiles/{profileId}/_search',
           document:
             iFinderConfig.endpoints?.document ||
-            '/public-api/retrieval/api/v1/search-profiles/{profileId}/docs/{docId}'
+            '/public-api/retrieval/api/v1/search-profiles/{profileId}/docs/{docId}',
+          // Discovery endpoints. `fields` is profile-independent — it describes the
+          // index schema, not a profile's view of it.
+          fields:
+            iFinderConfig.endpoints?.fields ||
+            '/public-api/retrieval/api/v1/schema-types/{schemaType}/fields',
+          facets:
+            iFinderConfig.endpoints?.facets ||
+            '/public-api/retrieval/api/v1/search-profiles/{profileId}/facets/{facetId}/_search',
+          assistants: iFinderConfig.endpoints?.assistants || '/public-api/v0/assistants'
         },
         defaultSearchProfile:
           iFinderConfig.defaultSearchProfile ||
@@ -157,11 +167,10 @@ class IFinderService {
     });
 
     // Track the action
-    actionTracker.trackAction(chatId, {
-      action: 'ifinder_search',
-      query: query,
-      searchProfile: profileId,
-      user: user.email
+    emitToolProgress(chatId, {
+      phase: 'ifinder_search',
+      message: query,
+      data: { query, searchProfile: profileId }
     });
 
     try {
@@ -219,10 +228,9 @@ class IFinderService {
           query_type: 'QueryStringQuery'
         }
       };
-      if (Array.isArray(filter) && filter.length > 0) {
-        requestBody.filters = filter
-          .filter(f => typeof f === 'string' && f.trim())
-          .map(f => ({ query: f.trim(), query_type: 'QueryStringQuery' }));
+      const filterQueries = this._buildFilterQueries(filter);
+      if (filterQueries) {
+        requestBody.filters = filterQueries;
       }
 
       const searchUrl = `${baseUrl}?${params.toString()}`;
@@ -409,11 +417,9 @@ class IFinderService {
     const profileId = searchProfile || config.defaultSearchProfile;
 
     // Track the action
-    actionTracker.trackAction(chatId, {
-      action: 'ifinder_content',
-      documentId: documentId,
-      searchProfile: profileId,
-      user: user.email
+    emitToolProgress(chatId, {
+      phase: 'ifinder_content',
+      data: { documentId, searchProfile: profileId }
     });
 
     try {
@@ -493,7 +499,14 @@ class IFinderService {
         rawApiMetadata: apiMetadata
       };
 
-      // Validate and truncate content if necessary
+      // Apply the caller's length cap and report the outcome explicitly.
+      // `truncated` is always a boolean and `maxLength` is echoed back, so a
+      // caller can branch on the result alone without re-deriving the limit
+      // or comparing lengths itself.
+      result.maxLength = maxLength;
+      result.originalContentLength = content.length;
+      result.truncated = false;
+
       if (result.content.length === 0) {
         logger.warn('No content extracted for document', {
           component: 'IFinderService',
@@ -504,6 +517,7 @@ class IFinderService {
         result.content = result.content.substring(0, maxLength) + '... [Content truncated]';
         result.truncated = true;
       }
+      result.returnedContentLength = result.content.length;
 
       logger.info('Successfully fetched document content', {
         component: 'IFinderService',
@@ -545,6 +559,13 @@ class IFinderService {
   }) {
     if (!documentId) {
       throw new Error('Document ID parameter is required');
+    }
+
+    // The ID is embedded in a quoted _id:"…" query below. Document IDs can
+    // arrive from model/tool parameters, so validate against the central safe
+    // ID allowlist to prevent query injection.
+    if (!isValidId(documentId)) {
+      throw new Error('Invalid document ID format');
     }
 
     // Use the search method with _id:documentId query
@@ -615,6 +636,331 @@ class IFinderService {
   }
 
   /**
+   * Issue an authenticated request against an iFinder public-API endpoint and
+   * return the parsed JSON body.
+   *
+   * Every discovery call needs the same four things — a user-scoped JWT, an
+   * absolute URL built from the configured base, a timeout, and iFinder's
+   * RFC-9457 `application/problem+json` error body turned into a readable
+   * Error — so they share this instead of each repeating it.
+   *
+   * @param {Object} params
+   * @param {string} params.path     Endpoint path, already interpolated.
+   * @param {Object} params.user     Authenticated user (JWT subject).
+   * @param {string} [params.label]  Throttle bucket / log label.
+   * @param {string} [params.method] HTTP method, default GET.
+   * @param {Object} [params.body]   JSON body for POST.
+   * @param {AbortSignal} [params.signal]
+   * @returns {Promise<Object>} Parsed JSON response
+   */
+  async _apiRequest({ path, user, label = 'iFinderApi', method = 'GET', body, signal }) {
+    const cfg = this.getConfig();
+    const url = `${cfg.baseUrl.replace(/\/+$/, '')}${path}`;
+    const authHeader = getIFinderAuthorizationHeader(user);
+
+    const headers = { Authorization: authHeader, Accept: 'application/json' };
+    if (body !== undefined) headers['Content-Type'] = 'application/json';
+
+    const response = await throttledFetch(label, url, {
+      method,
+      headers,
+      ...(body !== undefined ? { body: JSON.stringify(body) } : {}),
+      timeout: cfg.timeout,
+      signal
+    });
+
+    if (!response.ok) {
+      const errorText = await response.text();
+      logger.error('iFinder API request failed', {
+        component: 'IFinderService',
+        label,
+        status: response.status,
+        error: errorText
+      });
+      throw new Error(`${label} failed with status ${response.status}: ${errorText}`);
+    }
+
+    return response.json();
+  }
+
+  /**
+   * Fetch the index field catalog from iFinder.
+   *
+   * Calls `GET /public-api/retrieval/api/v1/schema-types/{schemaType}/fields`,
+   * which reads the live OpenSearch mapping and reports, per field, which name
+   * to use for each purpose:
+   *
+   *   `full_text_search` — the analyzed name to put in a query (`creators`)
+   *   `filter`           — the exact-match name (`creators.keyword`)
+   *   `aggregation`      — the name valid as a facet id (`creators.keyword`)
+   *   `sort`             — the name valid in a `sort` criterion
+   *
+   * A `null` means the field does not serve that purpose at all — the catalog
+   * is therefore the authoritative answer to "does this field need `.keyword`?"
+   * for a given deployment, including custom (`cust.*`) fields that no static
+   * documentation can list.
+   *
+   * @param {Object} params
+   * @param {Object} params.user
+   * @param {string} params.chatId
+   * @param {string} [params.schemaType] Schema type to describe. Only `document` exists today.
+   * @param {string} [params.filterPrefix] Return only fields whose name starts with this prefix.
+   * @param {AbortSignal} [params.signal]
+   * @returns {Promise<Object>} { schemaType, totalFields, fields, filterable, aggregatable, sortable, fullTextSearchable }
+   */
+  async getFields({ user, chatId, schemaType = 'document', filterPrefix, signal }) {
+    this.validateCommon(user, chatId);
+
+    if (!isValidId(schemaType)) {
+      throw new Error('Invalid schema type');
+    }
+
+    emitToolProgress(chatId, {
+      phase: 'ifinder_fields',
+      data: { schemaType }
+    });
+
+    try {
+      const cfg = this.getConfig();
+      const path = cfg.endpoints.fields.replace('{schemaType}', encodeURIComponent(schemaType));
+      const data = await this._apiRequest({ path, user, label: 'iFinderFields', signal });
+
+      const raw = data && typeof data === 'object' ? data : {};
+      const prefix = typeof filterPrefix === 'string' && filterPrefix ? filterPrefix : null;
+
+      const fields = {};
+      for (const [name, descriptor] of Object.entries(raw)) {
+        if (prefix && !name.startsWith(prefix)) continue;
+        const d = descriptor || {};
+        fields[name] = {
+          type: d.type ?? null,
+          // Name to use in a query string for relevance-ranked matching.
+          fullTextSearch: d.full_text_search ?? null,
+          // Name to use in a filter / exact match — this is where `.keyword` shows up.
+          filter: d.filter ?? null,
+          // Name valid as a `returnFacets` entry.
+          aggregation: d.aggregation ?? null,
+          // Name valid in a `sort` criterion.
+          sort: d.sort ?? null
+        };
+      }
+
+      const pick = key =>
+        Object.values(fields)
+          .map(f => f[key])
+          .filter(Boolean)
+          .sort();
+
+      const result = {
+        schemaType,
+        totalFields: Object.keys(fields).length,
+        fields,
+        fullTextSearchable: pick('fullTextSearch'),
+        filterable: pick('filter'),
+        aggregatable: pick('aggregation'),
+        sortable: pick('sort')
+      };
+
+      logger.info('Fetched iFinder field catalog', {
+        component: 'IFinderService',
+        schemaType,
+        totalFields: result.totalFields
+      });
+
+      return result;
+    } catch (error) {
+      logger.error('Field catalog error', { component: 'IFinderService', error });
+      this._handleError(error);
+    }
+  }
+
+  /**
+   * Enumerate the values of a single facet.
+   *
+   * Calls `POST /public-api/retrieval/api/v1/search-profiles/{profileId}/facets/{facetId}/_search`,
+   * which returns far more values than the capped facet block riding along with
+   * a search response — the way to answer "which sources / authors / languages
+   * exist here?" without paging through documents.
+   *
+   * `facet` must name an *aggregatable* field, which for text fields means the
+   * `.keyword` variant (`creators.keyword`, not `creators`). `getFields()`
+   * reports the correct name per field in its `aggregation` entry.
+   *
+   * @param {Object} params
+   * @param {string} params.facet          Facet id — an aggregatable field name.
+   * @param {Object} params.user
+   * @param {string} params.chatId
+   * @param {string} [params.query]        Scope query. Defaults to `*` (everything).
+   * @param {Array<string>} [params.filter] Filter query strings, ANDed with the query.
+   * @param {number} [params.maxValues]    Max values to return (default 50).
+   * @param {string} [params.sort]         `count:desc` (default), `value:asc` or `value:desc`.
+   * @param {string} [params.searchProfile]
+   * @param {AbortSignal} [params.signal]
+   * @returns {Promise<Object>} { facet, searchProfile, query, totalValues, hasMore, values }
+   */
+  async getFacetValues({
+    facet,
+    user,
+    chatId,
+    query = '*',
+    filter,
+    maxValues = 50,
+    sort = 'count:desc',
+    searchProfile,
+    signal
+  }) {
+    if (!facet || typeof facet !== 'string') {
+      throw new Error('facet parameter is required');
+    }
+    this.validateCommon(user, chatId);
+
+    const cfg = this.getConfig();
+    const profileId = searchProfile || cfg.defaultSearchProfile;
+
+    emitToolProgress(chatId, {
+      phase: 'ifinder_facet_values',
+      message: facet,
+      data: { facet, searchProfile: profileId }
+    });
+
+    try {
+      const endpoint = cfg.endpoints.facets
+        .replace('{profileId}', encodeURIComponent(profileId))
+        .replace('{facetId}', encodeURIComponent(facet));
+
+      const params = new URLSearchParams();
+      params.append('size', String(Math.min(Math.max(maxValues, 1), 1000)));
+      if (sort) params.append('sort', sort);
+
+      // POST so filters can be applied; the GET variant takes a query string only.
+      const body = { query: { query, query_type: 'QueryStringQuery' } };
+      const filters = this._buildFilterQueries(filter);
+      if (filters) body.filters = filters;
+
+      const data = await this._apiRequest({
+        path: `${endpoint}?${params.toString()}`,
+        user,
+        label: 'iFinderFacetValues',
+        method: 'POST',
+        body,
+        signal
+      });
+
+      const blocks = this._normaliseFacets(data);
+      const block = blocks.find(b => b.field === facet) ||
+        blocks[0] || { values: [], hasMore: false };
+
+      logger.info('Fetched iFinder facet values', {
+        component: 'IFinderService',
+        facet,
+        profileId,
+        valueCount: block.values.length
+      });
+
+      return {
+        facet,
+        searchProfile: profileId,
+        query,
+        totalValues: block.values.length,
+        hasMore: Boolean(block.hasMore),
+        values: block.values
+      };
+    } catch (error) {
+      logger.error('Facet values error', { component: 'IFinderService', facet, error });
+      this._handleError(error);
+    }
+  }
+
+  /**
+   * List the search profiles reachable by the calling user.
+   *
+   * The public API has no "list search profiles" endpoint — profile listing
+   * lives on the admin API, which an end-user token cannot reach. What it does
+   * expose is `GET /public-api/v0/assistants`, and every iAssistant names the
+   * search profile it is composed with, filtered to the ones the caller may
+   * use. That makes the assistants list the only user-scoped source of profile
+   * ids available here, so this derives the profiles from it and always
+   * includes the configured default.
+   *
+   * A deployment with no iAssistants configured therefore reports just the
+   * configured default. That is a limitation of the upstream API, not an error.
+   *
+   * @param {Object} params
+   * @param {Object} params.user
+   * @param {string} params.chatId
+   * @param {AbortSignal} [params.signal]
+   * @returns {Promise<Object>} { defaultSearchProfile, profiles, assistants, source }
+   */
+  async listProfiles({ user, chatId, signal }) {
+    this.validateCommon(user, chatId);
+
+    const cfg = this.getConfig();
+    const defaultProfile = cfg.defaultSearchProfile;
+
+    emitToolProgress(chatId, { phase: 'ifinder_profiles', data: {} });
+
+    let assistants = [];
+    let source = 'configured-default';
+
+    try {
+      const data = await this._apiRequest({
+        path: `${cfg.endpoints.assistants}?size=100`,
+        user,
+        label: 'iFinderAssistants',
+        signal
+      });
+      assistants = Array.isArray(data?.assistants) ? data.assistants : [];
+      source = 'assistants';
+    } catch (error) {
+      // A deployment older than the iAssistants API answers 404 here, and a
+      // deployment without the feature answers 403. Neither is fatal: the
+      // configured default is still a usable answer, so degrade instead of
+      // failing the whole discovery flow.
+      logger.warn('Could not list iFinder assistants; falling back to configured default', {
+        component: 'IFinderService',
+        error: error.message
+      });
+    }
+
+    const byProfile = new Map();
+    byProfile.set(defaultProfile, {
+      id: defaultProfile,
+      isDefault: true,
+      assistants: []
+    });
+
+    for (const assistant of assistants) {
+      const profileId = assistant?.search_profile_id;
+      if (!profileId) continue;
+      if (!byProfile.has(profileId)) {
+        byProfile.set(profileId, { id: profileId, isDefault: false, assistants: [] });
+      }
+      byProfile.get(profileId).assistants.push({
+        id: assistant.id,
+        name: assistant.name,
+        description: assistant.description ?? null
+      });
+    }
+
+    logger.info('Listed iFinder search profiles', {
+      component: 'IFinderService',
+      profileCount: byProfile.size,
+      source
+    });
+
+    return {
+      defaultSearchProfile: defaultProfile,
+      profiles: Array.from(byProfile.values()),
+      assistants: assistants.map(a => ({
+        id: a.id,
+        name: a.name,
+        searchProfileId: a.search_profile_id ?? null
+      })),
+      source
+    };
+  }
+
+  /**
    * Probe a search profile to surface what is queryable.
    *
    * Runs one search() call with `return_facets` and a small sample size and
@@ -630,7 +976,8 @@ class IFinderService {
    * @param {string} [params.query]        Optional scope query. Defaults to `*:*`.
    * @param {Array<string>} [params.facets] Facet fields to probe.
    * @param {number} [params.sampleSize]   Max sample documents to list.
-   * @returns {Object} { searchProfile, query, totalFound, facets, sampleDocs, markdown }
+   * @param {boolean} [params.includeFields] Also fetch the field catalog (default true).
+   * @returns {Object} { searchProfile, query, totalFound, facets, fields, sampleDocs, markdown }
    */
   async discover({
     searchProfile,
@@ -644,7 +991,8 @@ class IFinderService {
       'creators.keyword',
       'navigationTree'
     ],
-    sampleSize = 10
+    sampleSize = 10,
+    includeFields = true
   }) {
     if (!searchProfile || typeof searchProfile !== 'string') {
       throw new Error('searchProfile is required for discovery');
@@ -677,36 +1025,75 @@ class IFinderService {
       language: hit.language
     }));
 
+    const facetBlocks = this._normaliseFacets(searchResult.facets);
+
+    // The field catalog is profile-independent and a separate call, so a
+    // deployment that cannot serve it (older iFinder, endpoint disabled) must
+    // not take the rest of the probe down with it.
+    let fieldCatalog = null;
+    if (includeFields) {
+      try {
+        fieldCatalog = await this.getFields({ user, chatId });
+      } catch (error) {
+        logger.warn('Discovery could not fetch the field catalog', {
+          component: 'IFinderService',
+          error: error.message
+        });
+      }
+    }
+
     const markdown = this._buildDiscoveryMarkdown({
       searchProfile,
       query,
       totalFound: searchResult.totalFound,
-      facets: searchResult.facets,
-      sampleDocs
+      facetBlocks,
+      sampleDocs,
+      fieldCatalog
     });
 
     return {
       searchProfile,
       query,
       totalFound: searchResult.totalFound,
-      facets: searchResult.facets || null,
+      facets: facetBlocks,
+      fields: fieldCatalog,
       sampleDocs,
       probedAt: new Date().toISOString(),
       markdown
     };
   }
 
-  _buildDiscoveryMarkdown({ searchProfile, query, totalFound, facets, sampleDocs }) {
+  /**
+   * Render a discovery probe as markdown.
+   *
+   * Written to be pasted straight into an agent's long-term memory, so it
+   * carries the field names a follow-up query needs (`.keyword` variants
+   * included) rather than prose about them.
+   *
+   * @param {Object} params
+   * @returns {string} Markdown body
+   */
+  _buildDiscoveryMarkdown({
+    searchProfile,
+    query,
+    totalFound,
+    facetBlocks = [],
+    sampleDocs = [],
+    fieldCatalog = null
+  }) {
     const lines = [];
     lines.push(`_Profile_: \`${searchProfile}\`  •  _Probed_: ${new Date().toISOString()}`);
     lines.push(`_Query_: \`${query}\`  •  _Hits_: ${totalFound ?? 0}`);
     lines.push('');
 
-    const facetBlocks = this._normaliseFacets(facets);
     for (const block of facetBlocks) {
+      if (block.values.length === 0) continue;
       lines.push(`**${block.field}**`);
       for (const entry of block.values.slice(0, 8)) {
         lines.push(`- ${entry.value} — ${entry.count} docs`);
+      }
+      if (block.hasMore) {
+        lines.push(`- … more values — enumerate with \`getFacetValues\` on \`${block.field}\``);
       }
       lines.push('');
     }
@@ -720,25 +1107,81 @@ class IFinderService {
       lines.push('');
     }
 
+    if (fieldCatalog) {
+      lines.push(`**Fields** — ${fieldCatalog.totalFields} in the index schema`);
+      lines.push(`- Filterable: \`${fieldCatalog.filterable.slice(0, 25).join('`, `')}\``);
+      lines.push(`- Facetable: \`${fieldCatalog.aggregatable.slice(0, 25).join('`, `')}\``);
+      lines.push(`- Sortable: \`${fieldCatalog.sortable.slice(0, 25).join('`, `')}\``);
+      lines.push('');
+      lines.push('Call `getFields` for the full catalog with the exact name to use per purpose.');
+      lines.push('');
+    }
+
     return lines.join('\n');
   }
 
+  /**
+   * Turn a list of filter query strings into the `filters` array iFinder's
+   * search and facet endpoints expect: each entry is ANDed with the main query
+   * but, unlike the query itself, contributes nothing to relevance ranking.
+   *
+   * @param {Array<string>} filter
+   * @returns {Array<Object>|null} `filters` payload, or null when there is nothing to send
+   */
+  _buildFilterQueries(filter) {
+    if (!Array.isArray(filter) || filter.length === 0) return null;
+    const queries = filter
+      .filter(f => typeof f === 'string' && f.trim())
+      .map(f => ({ query: f.trim(), query_type: 'QueryStringQuery' }));
+    return queries.length > 0 ? queries : null;
+  }
+
+  /**
+   * Normalise a facet payload into `[{ field, values: [{value, count}], hasMore }]`.
+   *
+   * The public API answers with `FacetsResult` — `{ metadata, results: [{ id,
+   * type, has_more, values: [{ value, count }] }] }` — on both the search
+   * response's `facets` block and the dedicated facet endpoint. That envelope
+   * is unwrapped first; without it `Object.entries` reads `metadata` and
+   * `results` as if they were facet names and every value comes back as
+   * `(unknown)`.
+   *
+   * Bare arrays and plain `{ field: values }` maps are still accepted so a
+   * caller holding an already-unwrapped block keeps working.
+   *
+   * @param {Object|Array} facets
+   * @returns {Array<{field: string, values: Array<{value: string, count: number}>, hasMore: boolean}>}
+   */
   _normaliseFacets(facets) {
     if (!facets) return [];
+
+    // `FacetsResult` envelope — unwrap to the facet list it carries.
+    if (
+      !Array.isArray(facets) &&
+      typeof facets === 'object' &&
+      ('results' in facets || 'metadata' in facets)
+    ) {
+      return Array.isArray(facets.results) ? this._normaliseFacets(facets.results) : [];
+    }
+
     if (Array.isArray(facets)) {
       return facets
         .filter(f => f && typeof f === 'object')
         .map(f => ({
-          field: f.field || f.name || f.id || 'facet',
-          values: this._normaliseFacetValues(f.values || f.buckets || [])
+          field: f.id || f.field || f.name || 'facet',
+          values: this._normaliseFacetValues(f.values || f.buckets || []),
+          hasMore: Boolean(f.has_more ?? f.hasMore ?? false)
         }));
     }
+
     if (typeof facets === 'object') {
       return Object.entries(facets).map(([field, values]) => ({
         field,
-        values: this._normaliseFacetValues(values)
+        values: this._normaliseFacetValues(values),
+        hasMore: false
       }));
     }
+
     return [];
   }
 
@@ -777,12 +1220,9 @@ class IFinderService {
     const profileId = searchProfile || config.defaultSearchProfile;
 
     // Track the action
-    actionTracker.trackAction(chatId, {
-      action: 'ifinder_download',
-      documentId: documentId,
-      searchProfile: profileId,
-      downloadAction: action,
-      user: user.email
+    emitToolProgress(chatId, {
+      phase: 'ifinder_download',
+      data: { documentId, searchProfile: profileId, downloadAction: action }
     });
 
     try {
@@ -987,9 +1427,10 @@ class IFinderService {
     const baseUrl = config.baseUrl.replace(/\/+$/, '');
     const authHeader = getIFinderAuthorizationHeader(user);
 
-    // Validate documentId to prevent query injection: allow only alphanumeric, hyphens, underscores, dots
-    if (!/^[\w.\-]+$/.test(documentId)) {
-      throw new Error(`Invalid document ID format: ${documentId}`);
+    // Validate documentId against the central safe ID allowlist to prevent
+    // query injection into the sSearchTerm below.
+    if (!isValidId(documentId)) {
+      throw new Error('Invalid document ID format');
     }
 
     const searchUrl =

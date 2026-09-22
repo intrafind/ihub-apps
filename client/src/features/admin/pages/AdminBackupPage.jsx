@@ -107,9 +107,9 @@ function AdminBackupPage() {
       </div>
 
       <div className="space-y-6">
-        <div className="bg-white dark:bg-gray-800 rounded-lg shadow-sm border border-gray-200 dark:border-gray-700 p-6">
+        <div className="bg-white dark:bg-gray-800 rounded-lg shadow-xs border border-gray-200 dark:border-gray-700 p-6">
           <div className="flex items-start space-x-4">
-            <div className="flex-shrink-0 mt-1">
+            <div className="shrink-0 mt-1">
               <div className="p-3 rounded-full bg-green-100 dark:bg-green-900/50">
                 <Icon name="archive-box" size="lg" className="text-green-600 dark:text-green-400" />
               </div>
@@ -182,10 +182,10 @@ function AdminBackupPage() {
                 <button
                   onClick={handleExportConfig}
                   disabled={exportLoading}
-                  className={`inline-flex items-center px-4 py-2 border border-transparent text-sm font-medium rounded-md shadow-sm text-white ${
+                  className={`inline-flex items-center px-4 py-2 border border-transparent text-sm font-medium rounded-md shadow-xs text-white ${
                     exportLoading
                       ? 'bg-gray-400 cursor-not-allowed'
-                      : 'bg-green-600 hover:bg-green-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-green-500'
+                      : 'bg-green-600 hover:bg-green-700 focus:outline-hidden focus:ring-2 focus:ring-offset-2 focus:ring-green-500'
                   }`}
                 >
                   {exportLoading ? (
@@ -231,10 +231,10 @@ function AdminBackupPage() {
                   />
                   <button
                     disabled={importLoading}
-                    className={`inline-flex items-center px-4 py-2 border border-gray-300 dark:border-gray-600 text-sm font-medium rounded-md shadow-sm text-gray-700 dark:text-gray-300 bg-white dark:bg-gray-700 ${
+                    className={`inline-flex items-center px-4 py-2 border border-gray-300 dark:border-gray-600 text-sm font-medium rounded-md shadow-xs text-gray-700 dark:text-gray-300 bg-white dark:bg-gray-700 ${
                       importLoading
                         ? 'cursor-not-allowed opacity-50'
-                        : 'hover:bg-gray-50 dark:hover:bg-gray-600 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-green-500'
+                        : 'hover:bg-gray-50 dark:hover:bg-gray-600 focus:outline-hidden focus:ring-2 focus:ring-offset-2 focus:ring-green-500'
                     }`}
                   >
                     {importLoading ? (

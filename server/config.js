@@ -1,4 +1,4 @@
-import { cleanEnv, str, num } from 'envalid';
+import { cleanEnv, str, num, bool } from 'envalid';
 import dotenv from 'dotenv';
 
 dotenv.config();
@@ -14,8 +14,24 @@ const env = cleanEnv(
     PORT: num({ default: 3000 }),
     HOST: str({ default: '0.0.0.0' }),
     REQUEST_TIMEOUT: num({ default: 300000 }), // 5 minutes for streaming/generation requests
+    // Ceiling for the phase before a provider's first response byte, per
+    // attempt (see services/loop/LLMClient.js). Every provider call streams,
+    // so that phase is reach rather than generation. 0 disables it.
+    // Overridable per deployment via platform.json `llm` and per model via
+    // the model config's `connectTimeoutMs` — image models set 60000 there,
+    // because they withhold their headers until the render is ready.
+    LLM_CONNECT_TIMEOUT_MS: num({ default: 30000 }),
+    // Ceiling for the gap between two chunks of a stream that has already
+    // produced one. 0 disables it.
+    LLM_STREAM_IDLE_TIMEOUT_MS: num({ default: 60000 }),
     WORKERS: num({ default: undefined, optional: true }),
     NUM_WORKERS: num({ default: undefined, optional: true }),
+    // Opt back in to pinning each client to one worker by hashing its TCP peer
+    // address. Chat no longer needs it — cross-worker state is relayed over the
+    // cluster bus — and behind a proxy the hash collapses all traffic onto a
+    // single worker, so it defaults off. Only useful when iHub is exposed
+    // directly to clients and some other worker-local state must stay pinned.
+    STICKY_SESSIONS: bool({ default: false }),
     SSL_KEY: str({ optional: true }),
     SSL_CERT: str({ optional: true }),
     SSL_CA: str({ optional: true }),
@@ -31,8 +47,29 @@ const env = cleanEnv(
     HTTP_PROXY: str({ optional: true }),
     HTTPS_PROXY: str({ optional: true }),
     NO_PROXY: str({ optional: true }),
+    // Documented defaults for the magic-prompt feature (model id / system prompt).
+    MAGIC_PROMPT_MODEL: str({ optional: true }),
+    MAGIC_PROMPT_PROMPT: str({ optional: true }),
     USE_HTTPS: str({ default: 'false', optional: true }),
-    NODE_ENV: str({ default: 'development', optional: true })
+    NODE_ENV: str({ default: 'development', optional: true }),
+    // RSA/EC private key (PEM) used to sign iFinder JWTs when iFinder.useOidcKeyPair
+    // is off and iFinder.privateKeyRef is not set. See server/utils/iFinderJwt.js.
+    IFINDER_PRIVATE_KEY: str({ optional: true }),
+    // Web search (services/WebSearchService.js). These are read off the frozen
+    // config object below, so they have to be declared here — only *_API_KEY
+    // names are passed through dynamically, which is why BRAVE_SEARCH_API_KEY
+    // worked while BRAVE_SEARCH_ENDPOINT silently did not.
+    BRAVE_SEARCH_ENDPOINT: str({ optional: true }),
+    // Base URL of Qwant's JSON search API; the category ("web") is appended.
+    QWANT_SEARCH_ENDPOINT: str({ optional: true }),
+    // Qwant answers a default Node user agent with a bot challenge, so the
+    // provider sends a browser one. Override it if Qwant starts rejecting it.
+    QWANT_SEARCH_USER_AGENT: str({ optional: true }),
+    // Staan's web search endpoint. STAAN_API_KEY needs no declaration: it
+    // reaches `config` through the dynamic `*_API_KEY` pass-through below.
+    STAAN_SEARCH_ENDPOINT: str({ optional: true }),
+    // TTL of the in-memory web-search result cache (services/searchCache.js).
+    SEARCH_CACHE_TTL_MS: num({ default: 600000 })
   },
   {
     reporter: () => {}, // Disable envalid's default reporter that shows missing variables
@@ -55,7 +92,10 @@ const config = Object.freeze({
   PORT: env.PORT,
   HOST: env.HOST,
   REQUEST_TIMEOUT: env.REQUEST_TIMEOUT,
+  LLM_CONNECT_TIMEOUT_MS: env.LLM_CONNECT_TIMEOUT_MS,
+  LLM_STREAM_IDLE_TIMEOUT_MS: env.LLM_STREAM_IDLE_TIMEOUT_MS,
   WORKERS: env.WORKERS ?? env.NUM_WORKERS ?? 4,
+  STICKY_SESSIONS: env.STICKY_SESSIONS,
   SSL_KEY: env.SSL_KEY,
   SSL_CERT: env.SSL_CERT,
   SSL_CA: env.SSL_CA,
@@ -71,8 +111,16 @@ const config = Object.freeze({
   HTTP_PROXY: env.HTTP_PROXY,
   HTTPS_PROXY: env.HTTPS_PROXY,
   NO_PROXY: env.NO_PROXY,
+  MAGIC_PROMPT_MODEL: env.MAGIC_PROMPT_MODEL,
+  MAGIC_PROMPT_PROMPT: env.MAGIC_PROMPT_PROMPT,
   USE_HTTPS: env.USE_HTTPS,
-  NODE_ENV: env.NODE_ENV
+  NODE_ENV: env.NODE_ENV,
+  IFINDER_PRIVATE_KEY: env.IFINDER_PRIVATE_KEY,
+  BRAVE_SEARCH_ENDPOINT: env.BRAVE_SEARCH_ENDPOINT,
+  QWANT_SEARCH_ENDPOINT: env.QWANT_SEARCH_ENDPOINT,
+  QWANT_SEARCH_USER_AGENT: env.QWANT_SEARCH_USER_AGENT,
+  STAAN_SEARCH_ENDPOINT: env.STAAN_SEARCH_ENDPOINT,
+  SEARCH_CACHE_TTL_MS: env.SEARCH_CACHE_TTL_MS
 });
 
 export default config;

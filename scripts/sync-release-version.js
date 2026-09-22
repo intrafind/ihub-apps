@@ -27,6 +27,13 @@ async function syncReleaseVersion() {
     // Remove 'v' prefix if present
     const version = releaseTag.startsWith('v') ? releaseTag.slice(1) : releaseTag;
 
+    if (!/^\d+\.\d+\.\d+(-[0-9A-Za-z-.]+)?$/.test(version)) {
+      console.error(
+        `❌ Error: "${releaseTag}" is not a valid semver version (expected e.g. 1.2.3 or v1.2.3)`
+      );
+      process.exit(1);
+    }
+
     console.log(`🔄 Syncing version with release tag: ${releaseTag}`);
     console.log(`📦 Target version: ${version}`);
 

@@ -8,7 +8,7 @@ function LocalizedField({ label, value, onChange, placeholder, rows = 4 }) {
   const [activeLang, setActiveLang] = useState(langs[0] || 'en');
 
   const inputClass =
-    'w-full text-sm border border-gray-300 dark:border-gray-600 rounded px-2 py-1.5 bg-white dark:bg-gray-900 text-gray-900 dark:text-gray-100 font-mono';
+    'w-full text-sm border border-gray-300 dark:border-gray-600 rounded-sm px-2 py-1.5 bg-white dark:bg-gray-900 text-gray-900 dark:text-gray-100 font-mono';
   const labelClass = 'block text-xs font-medium text-gray-600 dark:text-gray-400 mb-1';
 
   if (!isObject) {
@@ -80,7 +80,7 @@ function LocalizedField({ label, value, onChange, placeholder, rows = 4 }) {
             onChange={e => {
               if (e.target.value) addLang(e.target.value);
             }}
-            className="text-xs border border-dashed border-gray-300 dark:border-gray-600 rounded px-1 py-0.5 bg-transparent text-gray-500"
+            className="text-xs border border-dashed border-gray-300 dark:border-gray-600 rounded-sm px-1 py-0.5 bg-transparent text-gray-500"
           >
             <option value="">+</option>
             {availableToAdd.map(l => (

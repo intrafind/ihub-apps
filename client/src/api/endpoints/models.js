@@ -29,6 +29,19 @@ export const fetchModels = async (options = {}) => {
   );
 };
 
+// Fetch transcription models (modelType: 'transcription'). The public /models
+// endpoint returns chat models by default; `?type=transcription` returns the
+// permitted transcription models (sanitized — no url/apiKey). Not cached to
+// avoid colliding with the chat models list cache key.
+export const fetchTranscriptionModels = async () => {
+  return handleApiResponse(
+    () => apiClient.get('/models', { params: { type: 'transcription' } }),
+    null,
+    null,
+    false
+  );
+};
+
 export const fetchModelDetails = async (modelId, options = {}) => {
   const { skipCache = false } = options;
   const cacheKey = skipCache ? null : buildCacheKey(CACHE_KEYS.MODEL_DETAILS, { id: modelId });

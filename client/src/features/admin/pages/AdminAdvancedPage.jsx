@@ -48,9 +48,9 @@ function AdminAdvancedPage() {
 
       <div className="space-y-6">
         {/* Force Refresh Section */}
-        <div className="bg-white dark:bg-gray-800 rounded-lg shadow-sm border border-gray-200 dark:border-gray-700 p-6">
+        <div className="bg-white dark:bg-gray-800 rounded-lg shadow-xs border border-gray-200 dark:border-gray-700 p-6">
           <div className="flex items-start space-x-4">
-            <div className="flex-shrink-0 mt-1">
+            <div className="shrink-0 mt-1">
               <div className="p-3 rounded-full bg-orange-100 dark:bg-orange-900/50">
                 <Icon name="refresh" size="lg" className="text-orange-600 dark:text-orange-400" />
               </div>
@@ -115,10 +115,10 @@ function AdminAdvancedPage() {
               <button
                 onClick={handleForceRefresh}
                 disabled={forceRefreshLoading}
-                className={`inline-flex items-center px-4 py-2 border border-transparent text-sm font-medium rounded-md shadow-sm text-white ${
+                className={`inline-flex items-center px-4 py-2 border border-transparent text-sm font-medium rounded-md shadow-xs text-white ${
                   forceRefreshLoading
                     ? 'bg-gray-400 cursor-not-allowed'
-                    : 'bg-orange-600 hover:bg-orange-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-orange-500'
+                    : 'bg-orange-600 hover:bg-orange-700 focus:outline-hidden focus:ring-2 focus:ring-offset-2 focus:ring-orange-500'
                 }`}
               >
                 {forceRefreshLoading ? (

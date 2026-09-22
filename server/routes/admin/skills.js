@@ -2,7 +2,7 @@ import { promises as fs } from 'fs';
 import { existsSync } from 'fs';
 import path from 'path';
 import JSZip from 'jszip';
-import archiver from 'archiver';
+import { ZipArchive } from 'archiver';
 import { adminAuth } from '../../middleware/adminAuth.js';
 import { buildServerPath } from '../../utils/basePath.js';
 import { validateIdForPath, resolveAndValidatePath } from '../../utils/pathSecurity.js';
@@ -230,7 +230,7 @@ export default function registerAdminSkillsRoutes(app) {
           return sendNotFound(res, 'Skill');
         }
 
-        const archive = archiver('zip', { zlib: { level: 9 } });
+        const archive = new ZipArchive({ zlib: { level: 9 } });
         const fileName = `${skillName}.zip`;
 
         res.setHeader('Content-Type', 'application/zip');
@@ -333,14 +333,17 @@ export default function registerAdminSkillsRoutes(app) {
    * GET /api/admin/skills/:name/files/* - Read a skill resource file (admin view)
    */
   app.get(
-    buildServerPath('/api/admin/skills/:name/files/*'),
+    buildServerPath('/api/admin/skills/:name/files/*filePath'),
     adminAuth,
     requireFeature('skills'),
     async (req, res) => {
       try {
         if (!validateIdForPath(req.params.name, 'skill', res)) return;
 
-        const filePath = req.params[0];
+        // Express 5 named wildcards arrive as an array of path segments
+        const filePath = Array.isArray(req.params.filePath)
+          ? req.params.filePath.join('/')
+          : req.params.filePath;
         if (!filePath) {
           return sendBadRequest(res, 'File path is required');
         }

@@ -31,7 +31,11 @@ export const feedbackSchema = {
         message: 'Rating must be in 0.5 increments (0.5, 1.0, 1.5, ..., 5.0)'
       }),
     feedback: z.string().optional(),
-    modelId: z.string().optional()
+    modelId: z.string().optional(),
+    conversationId: z.string().optional(),
+    ifinderMessageId: z.string().optional(),
+    /** Run the rated message belongs to — records a `human/event` on its ledger. */
+    runId: z.string().optional()
   })
 };
 
@@ -75,13 +79,33 @@ export const chatPostSchema = {
     language: z.string().optional(),
     bypassAppPrompts: z.any().optional(),
     thinkingEnabled: z.boolean().optional(),
-    thinkingBudget: z.number().optional(),
+    thinkingLevel: z
+      .enum(['minimal', 'low', 'medium', 'high', 'MINIMAL', 'LOW', 'MEDIUM', 'HIGH'])
+      .optional(),
     thinkingThoughts: z.boolean().optional(),
     enabledTools: z.array(z.string()).optional(),
     websearchEnabled: z.boolean().optional(),
     imageAspectRatio: z.string().optional(),
     imageQuality: z.string().optional(),
     requestedSkill: z.string().optional(),
-    documentIds: z.array(z.string()).optional()
+    documentIds: z.array(z.string()).optional(),
+    /**
+     * Stored message id to fork the persisted history from (inclusive) — an
+     * edit or a regenerate. Ignored unless the chat is persisted.
+     */
+    replaceFromMessageId: z.string().optional(),
+    /**
+     * The turn is incognito: never written to the chat store. Client-asserted
+     * and therefore advisory — it can only ever turn persistence off.
+     */
+    ephemeral: z.boolean().optional(),
+    /**
+     * The viewer's "Include chat history in requests" setting, off. Every
+     * non-persisted surface says this by posting a one-element array; a
+     * persisted chat posts one message whatever the setting, so it has to say
+     * so out loud or the server would prepend the stored transcript anyway.
+     * Like the app-level flag it can only ever remove history, never add it.
+     */
+    sendChatHistory: z.boolean().optional()
   })
 };

@@ -20,21 +20,23 @@
  */
 
 import { BaseNodeExecutor } from './BaseNodeExecutor.js';
-import WorkflowLLMHelper from '../WorkflowLLMHelper.js';
+import llmClient, { usageToBudget } from '../../loop/LLMClient.js';
 import { thinkingConfigToOptions } from '../thinkingOptions.js';
 import configCache from '../../../configCache.js';
 import logger from '../../../utils/logger.js';
 import { actionTracker } from '../../../actionTracker.js';
+import { findByIdCaseInsensitive } from '../../../utils/resourceLookup.js';
 
 export class VerifierNodeExecutor extends BaseNodeExecutor {
   /**
    * Create a new VerifierNodeExecutor
    * @param {Object} options - Executor options
-   * @param {WorkflowLLMHelper} [options.llmHelper] - LLM helper instance for API calls
+   * @param {import('../../loop/LLMClient.js').LLMClient} [options.llmClient] - LLM client used
+   *   for the verification call (defaults to the shared singleton; tests inject a stub)
    */
   constructor(options = {}) {
     super(options);
-    this.llmHelper = options.llmHelper || new WorkflowLLMHelper();
+    this.llmClient = options.llmClient || llmClient;
     // Lazily-created PromptNodeExecutor used to run the tool-enabled
     // adversarial verifier (so it can actually run checks/searches before
     // its verdict). Dynamic-imported to avoid an executor-index import cycle.
@@ -50,7 +52,7 @@ export class VerifierNodeExecutor extends BaseNodeExecutor {
   async getPromptExecutor() {
     if (!this._promptExecutor) {
       const { PromptNodeExecutor } = await import('./PromptNodeExecutor.js');
-      this._promptExecutor = new PromptNodeExecutor({ llmHelper: this.llmHelper });
+      this._promptExecutor = new PromptNodeExecutor({ llmClient: this.llmClient });
     }
     return this._promptExecutor;
   }
@@ -238,10 +240,8 @@ export class VerifierNodeExecutor extends BaseNodeExecutor {
         return this.createErrorResult('No model available for verification', { nodeId: node.id });
       }
 
-      const apiKeyResult = await this.llmHelper.verifyApiKey(model, language);
-      if (!apiKeyResult.success) {
-        throw new Error(apiKeyResult.error?.message || 'API key verification failed');
-      }
+      // API-key resolution happens inside LLMClient.complete(); a missing key
+      // throws an LLMError (AUTH_FAILED) caught by the outer try/catch below.
 
       const criteria =
         config.criteria || 'Evaluate the quality, completeness, and accuracy of the output.';
@@ -292,20 +292,21 @@ export class VerifierNodeExecutor extends BaseNodeExecutor {
         // executeLLMWithTools already returns an { input, output } accumulator.
         responseTokens = toolResp.tokens || null;
       } else {
-        const response = await this.llmHelper.executeStreamingRequest({
+        const response = await this.llmClient.complete({
           model,
           messages,
-          apiKey: apiKeyResult.apiKey,
           options: { temperature: 0.3, ...thinkingConfigToOptions(node.config?.thinking) },
-          language
+          language,
+          signal: context.abortSignal,
+          telemetry: {
+            runId: context.runId || context.executionId || state?.executionId,
+            step: context.iteration ?? 0,
+            purpose: 'verifier',
+            refs: { executionId: state?.executionId, nodeId: node.id }
+          }
         });
         responseContent = response.content || '';
-        const u = response.usage;
-        if (u) {
-          const input = u.prompt_tokens || u.input_tokens || 0;
-          const output = u.completion_tokens || u.output_tokens || 0;
-          responseTokens = input || output ? { input, output } : null;
-        }
+        responseTokens = usageToBudget(response.usage);
       }
 
       // Parse a JSON object out of the response (both modes return JSON).
@@ -454,20 +455,29 @@ export class VerifierNodeExecutor extends BaseNodeExecutor {
    * @returns {{ passed: boolean, score: number, feedback: string, verdict: string, failures: string[] }}
    */
   /**
-   * Resolve the verification model with the same precedence the prompt node
-   * uses: explicit per-node `config.modelId` → the run's workflow-level
-   * `defaultModelId` (published from the agent profile's preferredModel) →
-   * the global default → the first available model. Pure, so it's unit-tested
+   * Resolve the verification model. This intentionally OVERRIDES
+   * `BaseNodeExecutor.resolveModel` with a precedence tuned for agent runs:
+   * explicit per-node `config.modelId` → the run's workflow-level
+   * `defaultModelId` (published from the agent profile's preferredModel) → the
+   * DURABLE per-run agent model config → the global default → the first
+   * available model.
+   *
+   * Two deliberate differences from the base (prompt-node) precedence: the
+   * workflow/profile default is preferred OVER the durable per-node override so
+   * a verifier follows the operator-configured run model, and `_modelOverride`
+   * (the chat-selected model) is not consulted. Pure, so it's unit-tested
    * directly without configCache. Returns null when no models are available.
    *
    * @param {Array} models
    * @param {Object} config - node config (may carry modelId)
    * @param {Object} context - execution context (carries workflow.config)
+   * @param {Object} [state] - workflow state (durable agent model config)
+   * @param {string} [nodeId] - node id for the per-node durable lookup
    * @returns {Object|null}
    */
   resolveModel(models, config = {}, context = {}, state = null, nodeId = undefined) {
     if (!Array.isArray(models) || models.length === 0) return null;
-    const byId = id => (id ? models.find(m => m.id === id) : null);
+    const byId = id => (id ? findByIdCaseInsensitive(models, id) : null);
     return (
       byId(config.modelId) ||
       byId(context?.workflow?.config?.defaultModelId) ||

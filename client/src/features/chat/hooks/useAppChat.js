@@ -1,4 +1,4 @@
-import { useState, useRef, useCallback } from 'react';
+import { useState, useRef, useCallback, useEffect } from 'react';
 import { v4 as uuidv4 } from 'uuid';
 import { useTranslation } from 'react-i18next';
 import useChatMessages from './useChatMessages';
@@ -7,10 +7,26 @@ import { sendAppChatMessage } from '../../../api';
 import { buildApiUrl } from '../../../utils/runtimeBasePath';
 import { setConversationId } from '../../../utils/chatId';
 import { debugLog } from '../../../utils/debugLog';
+import {
+  createStreamState,
+  reduceRunEvent,
+  getRun,
+  RUN_EVENTS,
+  getRuns
+} from '../../../shared/run/runReducer';
+import { projectMessageRuns } from '../runToMessage';
+import { fetchAllLedgerEvents } from '../../../shared/run/ledgerPages';
+import { fetchWithAuthRetry } from '../../../shared/utils/openSseStream';
 
 /**
  * High level hook combining chat message management with streaming
  * communication for both chat and canvas pages.
+ *
+ * Streaming dialect: SSE v2 envelopes (`{ v: 2, seq, runId, ts, type, data }`).
+ * Every envelope is folded into a per-chat StreamState by the shared run
+ * reducer; the run is bound to the assistant placeholder via
+ * `run/started.data.refs.messageId` and projected onto the message with
+ * `projectRunToMessage`. This hook never interprets event payloads itself.
  *
  * @param {Object} options - Configuration options
  * @param {string} options.appId - The app ID
@@ -21,18 +37,30 @@ import { debugLog } from '../../../utils/debugLog';
  *   that share an appId so they don't race/overwrite each other. Defaults to true.
  * @param {boolean} options.ephemeral - When true, chat is never persisted to browser storage
  *   and no conversationId is stored.
+ * @param {boolean} options.serverBacked - When true, the durable chat store owns the
+ *   transcript: the request carries only the new message (a persisted chat rejects a
+ *   longer array with `CLIENT_HISTORY_NOT_ALLOWED`), an edit or a regenerate travels as
+ *   `replaceFromMessageId`, and the turn is not flagged ephemeral on the wire. Every
+ *   other surface keeps posting its whole local history exactly as before.
  */
 function useAppChat({
   appId,
   chatId: initialChatId,
   onMessageComplete,
   persistConversationId = true,
-  ephemeral = false
+  ephemeral = false,
+  serverBacked = false
 }) {
   const { t } = useTranslation();
   // Use the chatId directly instead of storing it in a ref
-  // This allows the useChatMessages hook to properly react to chatId changes
-  const chatId = initialChatId || `chat-${uuidv4()}`;
+  // This allows the useChatMessages hook to properly react to chatId changes.
+  //
+  // The fallback is minted once and then kept. Evaluating `chat-${uuidv4()}`
+  // inline made every render of a caller with a falsy chatId a *different*
+  // chat: a fresh sessionStorage key, a reset stream state, and a new chat id
+  // on the wire for every keystroke that re-rendered the surface.
+  const [fallbackChatId] = useState(() => `chat-${uuidv4()}`);
+  const chatId = initialChatId || fallbackChatId;
   const [processing, setProcessing] = useState(false);
   const [conversationTitle, setConversationTitle] = useState(null);
   // Clarification state - tracks when a clarification question is pending
@@ -45,320 +73,420 @@ function useAppChat({
   const lastUserMessageRef = useRef(null);
   const isCancellingRef = useRef(false);
   const messageMetadataRef = useRef(null); // Store metadata for the current message
+  // Stored id of the message an edit, a regenerate or a delete replaces.
+  // Latched by `deleteFromMessage`, consumed by the next send. It survives an
+  // abandoned resend on purpose: the local transcript was already truncated,
+  // so forking the stored one at the same point is what puts the two back in
+  // agreement.
+  const pendingReplaceFromRef = useRef(null);
+  // The run this surface re-attached to after reopening the chat, and what to
+  // do when it settles. Set by `reattachToRun`, consumed once by `handleEvent`.
+  const reattachedRunRef = useRef(null);
 
   // Never persist the iAssistant conversationId for ephemeral chats.
   const shouldPersistConversationId = persistConversationId && !ephemeral;
 
+  // Reacts to chatId changes, and owns which of the three transcript modes
+  // (browser-persisted, ephemeral, server-backed) is in force.
   const {
     messages,
     messagesRef,
+    hydrating,
+    finishHydration,
     addUserMessage,
     addAssistantMessage,
     updateAssistantMessage,
     appendToAssistantMessage,
-    appendWorkflowStep,
     deleteMessage,
     editMessage,
     addSystemMessage,
     clearMessages,
     getMessagesForApi,
-    loadServerMessages,
-    mergeCitations
-  } = useChatMessages(chatId, { ephemeral }); // Now this will properly react to chatId changes
+    loadServerMessages
+  } = useChatMessages(chatId, { ephemeral, serverBacked });
 
   const cleanupEventSourceRef = useRef();
 
+  // Per-chat SSE v2 stream state (one reducer for every surface). Kept in a
+  // ref: it is the authoritative accumulation and is folded synchronously per
+  // envelope, so no React batching race can drop a frame.
+  const streamStateRef = useRef(createStreamState(chatId));
+  // runId → assistant message id (bound on run/started via refs.messageId).
+  const runMessageMapRef = useRef(new Map());
+
+  // `/apps/:appId/c/:chatId` swaps chats without remounting this hook, so a
+  // chat change has to tear the current turn down the way `clearChat` does.
+  // The first run is the mount, where there is nothing to tear down.
+  const chatMountedRef = useRef(false);
+  useEffect(() => {
+    streamStateRef.current = createStreamState(chatId);
+    runMessageMapRef.current = new Map();
+    // A pending fork belongs to the chat it was latched in.
+    pendingReplaceFromRef.current = null;
+    if (!chatMountedRef.current) {
+      chatMountedRef.current = true;
+      return;
+    }
+    // Leaving a chat mid-turn: `useEventSource` has already released this
+    // surface's stream slot, but nothing else knows the turn is over. Without
+    // this the composer of the chat just opened stays disabled behind a Stop
+    // button, and a queued-but-unsent message would be posted to the wrong
+    // chat as soon as the new stream connected.
+    setProcessing(false);
+    setClarificationPending(false);
+    activeClarificationRef.current = null;
+    lastMessageIdRef.current = null;
+    // The prompt of the chat being left. It used to survive the switch, and
+    // `reattachToRun` folds a ledger replay through the *live* `handleEvent` —
+    // so a replayed `run/ended` for the chat just opened reached
+    // `onMessageComplete(content, lastUserMessageRef.current)` carrying the
+    // previous chat's question. On a canvas-enabled app that is enough to
+    // navigate the user out of the chat they just opened, into canvas, with
+    // one chat's answer under another's prompt.
+    lastUserMessageRef.current = null;
+    pendingMessageDataRef.current = null;
+    isCancellingRef.current = false;
+  }, [chatId]);
+
+  /**
+   * The protocol fields every send shares, consumed once per request.
+   *
+   * @param {boolean} [sendChatHistory=true] - The viewer's "Include chat history in
+   *   requests" setting. A server-backed chat no longer communicates it by
+   *   truncating the array it posts — it posts one message either way — so it
+   *   has to travel as a field of its own.
+   * @returns {Object} Extra request params.
+   */
+  const takeProtocolParams = useCallback(
+    (sendChatHistory = true) => {
+      const replaceFromMessageId = pendingReplaceFromRef.current;
+      pendingReplaceFromRef.current = null;
+      return {
+        // A turn the server must not store. Every surface that is not running
+        // the server-backed protocol has to say so, because it still posts its
+        // whole local history and a persisted chat rejects that outright with
+        // `CLIENT_HISTORY_NOT_ALLOWED`. That covers the incognito toggle, the
+        // compare panels and the canvas — the last two mint their own chat ids
+        // (`compare-<uuid>`, `canvas-<uuid>`) and fan a single user submit out
+        // to several of them, so they never belong in a history list either.
+        ...(serverBacked ? {} : { ephemeral: true }),
+        // Edit and regenerate no longer speak through a truncated array: the
+        // server forks its stored history here instead.
+        ...(serverBacked && replaceFromMessageId ? { replaceFromMessageId } : {}),
+        // "Include chat history in requests". Every other mode says this by
+        // posting a one-element array; a server-backed chat posts one message
+        // whatever the setting, so without this field the server would keep
+        // prepending the stored transcript and the opt-out would be inert.
+        //
+        // Sent in *both* directions, not only when off. The chat document
+        // merges settings, so a turn that omits the key leaves the stored
+        // value alone — which meant the toggle could be turned off and never
+        // back on: every later reopen restored `false` from the document, and
+        // ticking it on again recorded nothing. `sessionRoutes` only tests
+        // `=== false`, so the wire behaviour is unchanged; only what gets
+        // recorded is fixed.
+        ...(serverBacked ? { sendChatHistory: sendChatHistory !== false } : {})
+      };
+    },
+    [serverBacked]
+  );
+
+  /**
+   * Truncate the transcript from `messageId` (inclusive) — the local half of a
+   * delete, an edit or a regenerate.
+   *
+   * That truncated array used to be the whole message to the server, since the
+   * client posted it. A server-backed chat posts only the new message, so the
+   * same intent has to travel explicitly: latch the id the stored history knows
+   * this message by and let the next send carry it as `replaceFromMessageId`.
+   *
+   * A hydrated message carries the store's own id on `serverId`. A turn made in
+   * this same session has none — no stream frame reports the id the store
+   * minted for it — but the store did record the exchange id this client sent
+   * as `clientMessageId`, and the fork lookup accepts either. Without that the
+   * majority case (regenerate the answer you just got) would send no fork id at
+   * all and the server would append the retry onto the untouched history,
+   * duplicating the exchange in the stored transcript on every retry.
+   *
+   * @param {string} messageId - Message to truncate from.
+   */
+  const deleteFromMessage = useCallback(
+    messageId => {
+      if (serverBacked) {
+        const target = messagesRef.current.find(m => m.id === messageId);
+        const forkFrom =
+          typeof target?.serverId === 'string'
+            ? target.serverId
+            : typeof target?.clientMessageId === 'string'
+              ? target.clientMessageId
+              : null;
+        pendingReplaceFromRef.current = forkFrom;
+      }
+      deleteMessage(messageId);
+    },
+    [deleteMessage, messagesRef, serverBacked]
+  );
+
+  /**
+   * Send the message queued by sendMessage / submitClarificationResponse once
+   * the stream is connected. On failure the error is rendered into the
+   * assistant placeholder (401 → session expired) and the stream is closed.
+   */
+  const sendPendingMessage = useCallback(async () => {
+    if (!pendingMessageDataRef.current) return;
+    try {
+      const { appId, chatId, messages, params } = pendingMessageDataRef.current;
+      await sendAppChatMessage(appId, chatId, messages, params);
+      pendingMessageDataRef.current = null;
+    } catch (error) {
+      if (lastMessageIdRef.current && !isCancellingRef.current) {
+        // Only show error if this wasn't a manual cancellation
+        let errorMessage;
+
+        // Check if this is a session expiration error (401)
+        if (error.isAuthRequired || error.status === 401) {
+          errorMessage = t(
+            'error.sessionExpired',
+            'Your session has expired. Please log in again to continue.'
+          );
+          debugLog('🔐 Session expired during chat message send');
+          // The authTokenExpired event should already be dispatched by the API client
+          // which will trigger the auto-redirect flow in AuthContext
+        } else {
+          // Use the userFriendlyMessage from the enhanced error, or fall back to a generic message
+          errorMessage =
+            error.userFriendlyMessage ||
+            error.message ||
+            t(
+              'error.failedToGenerateResponse',
+              'Failed to generate response. Please try again or select a different model.'
+            );
+        }
+
+        // Preserve any streamed content that might have been accumulated
+        const currentMessage = messagesRef.current.find(m => m.id === lastMessageIdRef.current);
+        updateAssistantMessage(
+          lastMessageIdRef.current,
+          (currentMessage?.content || '') + '\n\n' + errorMessage,
+          false
+        );
+      }
+      cleanupEventSourceRef.current?.();
+      setProcessing(false);
+    }
+  }, [t, messagesRef, updateAssistantMessage]);
+
+  /**
+   * Resolve the assistant message a run belongs to. `run/started` binds the
+   * run via `refs.messageId` (the exchange id we handed the server); anything
+   * else falls back to the current placeholder.
+   */
+  const bindRunToMessage = useCallback(
+    envelope => {
+      const runId = envelope.runId;
+      if (envelope.type === RUN_EVENTS.RUN_STARTED) {
+        const refMessageId = envelope.data?.refs?.messageId;
+        const known =
+          typeof refMessageId === 'string' && messagesRef.current.some(m => m.id === refMessageId);
+        // A child run (workflow launched by a tool inside the turn) belongs to
+        // its parent's message.
+        const parentMessageId = envelope.data?.parentRunId
+          ? runMessageMapRef.current.get(envelope.data.parentRunId)
+          : null;
+        runMessageMapRef.current.set(
+          runId,
+          known ? refMessageId : parentMessageId || lastMessageIdRef.current
+        );
+      }
+      return runMessageMapRef.current.get(runId) || lastMessageIdRef.current;
+    },
+    [messagesRef]
+  );
+
+  /**
+   * Settle a re-attached run once, when it reaches a terminal frame.
+   *
+   * Guarded on the run id: a chat can have several runs in flight (a workflow
+   * child, a superseded turn), and only the one this surface re-attached to
+   * should trigger the caller's re-read.
+   *
+   * `transportFailure` is the exception, and it has to be: a stream-level
+   * error carries the *chat* id as its `runId` (`syntheticStreamError` stamps
+   * `runId: streamId`), so there is no run to match against. Re-attaching is
+   * the case that needs it most — the turn it follows outlived the browser
+   * that started it, so the connection dropping or timing out is the ordinary
+   * ending, not an exceptional one. Without it the attachment stayed latched
+   * forever: `onSettled` never ran, the caller never re-read the store, and
+   * the chat kept a partial projection and a running badge until a reload.
+   *
+   * @param {string|null} runId - The run that reached a terminal frame
+   * @param {Object} [options]
+   * @param {boolean} [options.transportFailure=false] - Settle whatever is
+   *   attached, because the stream itself failed and named no run
+   */
+  const settleReattachedRun = useCallback((runId, { transportFailure = false } = {}) => {
+    const pending = reattachedRunRef.current;
+    if (!pending || (!transportFailure && pending.runId !== runId)) return;
+    reattachedRunRef.current = null;
+    pending.onSettled?.();
+  }, []);
+
   const handleEvent = useCallback(
     async event => {
-      const { type, fullContent, data } = event;
-      switch (type) {
-        case 'connected':
-          if (pendingMessageDataRef.current) {
-            try {
-              const { appId, chatId, messages, params } = pendingMessageDataRef.current;
-              await sendAppChatMessage(appId, chatId, messages, params);
-              pendingMessageDataRef.current = null;
-            } catch (error) {
-              if (lastMessageIdRef.current && !isCancellingRef.current) {
-                // Only show error if this wasn't a manual cancellation
-                let errorMessage;
+      const envelope = event?.envelope;
+      if (!envelope) {
+        debugLog('🔍 Ignoring non-envelope stream event:', event?.type);
+        return;
+      }
+      const { type, runId, data } = envelope;
 
-                // Check if this is a session expiration error (401)
-                if (error.isAuthRequired || error.status === 401) {
-                  errorMessage = t(
-                    'error.sessionExpired',
-                    'Your session has expired. Please log in again to continue.'
-                  );
-                  debugLog('🔐 Session expired during chat message send');
-                  // The authTokenExpired event should already be dispatched by the API client
-                  // which will trigger the auto-redirect flow in AuthContext
-                } else {
-                  // Use the userFriendlyMessage from the enhanced error, or fall back to a generic message
-                  errorMessage =
-                    error.userFriendlyMessage ||
-                    error.message ||
-                    t(
-                      'error.failedToGenerateResponse',
-                      'Failed to generate response. Please try again or select a different model.'
-                    );
-                }
+      // Fold into the per-chat stream state. Turn boundaries legitimately skip
+      // stream seqs (the server keeps emitting after we abort), so the chat
+      // surface never re-syncs on a gap.
+      const streamState = { ...reduceRunEvent(streamStateRef.current, envelope), gap: null };
+      streamStateRef.current = streamState;
 
-                // Preserve any streamed content that might have been accumulated
-                const currentMessage = messagesRef.current.find(
-                  m => m.id === lastMessageIdRef.current
-                );
-                updateAssistantMessage(
-                  lastMessageIdRef.current,
-                  (currentMessage?.content || '') + '\n\n' + errorMessage,
-                  false
-                );
-              }
-              cleanupEventSourceRef.current?.();
-              setProcessing(false);
-            }
-          }
-          break;
-        case 'chunk':
-          if (lastMessageIdRef.current) {
-            updateAssistantMessage(lastMessageIdRef.current, fullContent, true);
-          }
-          break;
-        case 'image':
-          if (lastMessageIdRef.current) {
-            // Add image to the current assistant message
-            const currentMessage = messagesRef.current.find(m => m.id === lastMessageIdRef.current);
-            const existingImages = currentMessage?.images || [];
-            updateAssistantMessage(lastMessageIdRef.current, fullContent, true, {
-              images: [
-                ...existingImages,
-                {
-                  mimeType: data?.mimeType,
-                  data: data?.data,
-                  thoughtSignature: data?.thoughtSignature
-                }
-              ]
-            });
-          }
-          break;
-        case 'thinking':
-          if (lastMessageIdRef.current) {
-            // Add thinking content to the current assistant message
-            const currentMessage = messagesRef.current.find(m => m.id === lastMessageIdRef.current);
-            const existingThoughts = currentMessage?.thoughts || [];
-            updateAssistantMessage(lastMessageIdRef.current, fullContent, true, {
-              thoughts: [
-                ...existingThoughts,
-                data?.name ? { name: data.name, content: data.content } : data?.content
-              ]
-            });
-          }
-          break;
-        case 'clarification':
-          if (lastMessageIdRef.current && data) {
-            debugLog('📝 Clarification event received:', data);
-            // Store the clarification data and set pending state
-            activeClarificationRef.current = data;
+      if (type === RUN_EVENTS.STREAM_CONNECTED) {
+        await sendPendingMessage();
+        return;
+      }
+
+      const messageId = bindRunToMessage(envelope);
+      const run = getRun(streamState, runId);
+
+      if (type === RUN_EVENTS.META) {
+        if (data?.title) setConversationTitle(data.title);
+        if (data?.conversationId && appId && shouldPersistConversationId) {
+          setConversationId(appId, data.conversationId);
+        }
+      }
+
+      // Stream-level error (transport failure / error before any run started):
+      // nothing to project, append the message like the legacy 'error' case.
+      if (type === RUN_EVENTS.STREAM_ERROR && !run) {
+        // Before the early return below, which is what used to strand a
+        // re-attached turn: the stream names the chat rather than the run, so
+        // nothing further down could ever have matched it.
+        settleReattachedRun(null, { transportFailure: true });
+        if (messageId && !isCancellingRef.current) {
+          const currentMessage = messagesRef.current.find(m => m.id === messageId);
+          const errorMessage =
+            data?.message || t('error.streamingError', 'An error occurred during streaming');
+          updateAssistantMessage(
+            messageId,
+            (currentMessage?.content || '') + '\n\n' + errorMessage,
+            false
+          );
+        }
+        setProcessing(false);
+        return;
+      }
+
+      if (!run || !messageId) {
+        debugLog('🔍 Stream event without a bound message:', type, runId);
+        return;
+      }
+
+      if (type === RUN_EVENTS.STREAM_ERROR && isCancellingRef.current) {
+        // Manual cancellation — don't render the error, just stop.
+        setProcessing(false);
+        return;
+      }
+
+      // A workflow launched by a tool inside the turn is its own run, a child
+      // of the chat run (`parentRunId`). The message shows the chat run's
+      // answer plus the workflow state of its children; a child's lifecycle
+      // frames only refresh the message — the chat run completes it.
+      const parentRun = run.parentRunId ? getRun(streamState, run.parentRunId) : null;
+      const rootRun = parentRun || run;
+      const isChildFrame = rootRun !== run;
+      const childRuns = getRuns(streamState).filter(r => r.parentRunId === rootRun.runId);
+      const { content, loading, extras } = projectMessageRuns(rootRun, childRuns, {
+        fallbackErrorMessage: t('error.streamingError', 'An error occurred during streaming')
+      });
+
+      switch (isChildFrame ? 'child-frame' : type) {
+        case RUN_EVENTS.INTERACTION_RAISED:
+          if (extras.awaitingInput && extras.clarification) {
+            debugLog('📝 Clarification raised:', extras.clarification);
+            activeClarificationRef.current = extras.clarification;
             setClarificationPending(true);
-            // Update the assistant message with clarification data
-            // Keep loading=true since we're waiting for user input
-            updateAssistantMessage(lastMessageIdRef.current, fullContent, true, {
-              clarification: {
-                questionId: data.questionId,
-                question: data.question,
-                inputType: data.inputType || 'text',
-                options: data.options || [],
-                allowOther: data.allowOther || false,
-                allowSkip: data.allowSkip || false,
-                context: data.context
-              },
+          }
+          updateAssistantMessage(messageId, content, loading, extras);
+          break;
+
+        case RUN_EVENTS.RUN_PAUSED:
+          updateAssistantMessage(messageId, content, loading, extras);
+          if (extras.awaitingInput) {
+            // Legacy done{finishReason:'clarification'}: the turn hands control
+            // back to the user; processing stops but the clarification stays pending.
+            setProcessing(false);
+          }
+          break;
+
+        case RUN_EVENTS.RUN_ENDED: {
+          // A re-attached turn is settled: hand back to the caller so it can
+          // re-read the stored transcript. The replay and the live stream meet
+          // at a fetch boundary, so what is on screen may be missing a delta
+          // that fell in it; the store is what the answer actually was.
+          settleReattachedRun(rootRun.runId);
+          // Include stored metadata (customResponseRenderer, outputFormat) in the message.
+          // Preserve workflow-set outputFormat — don't let the app default overwrite it.
+          const metadata = {
+            finishReason: rootRun.finishReason,
+            ...(messageMetadataRef.current || {}),
+            ...(extras.outputFormat && { outputFormat: extras.outputFormat })
+          };
+
+          if (extras.awaitingInput || rootRun.finishReason === 'clarification') {
+            debugLog('📝 Run ended while a clarification is pending');
+            // Keep the message in awaiting-input state, don't mark it complete
+            updateAssistantMessage(messageId, content, false, {
+              ...extras,
+              ...metadata,
               awaitingInput: true
             });
+            // Processing stops but clarification is still pending
+            setProcessing(false);
+            // Don't call onMessageComplete yet - wait for clarification response
+            break;
           }
-          break;
-        case 'workflow.checkpoint':
-          // Human-in-the-loop pause from a chat-launched workflow. Attach
-          // the checkpoint payload to the current assistant message so the
-          // chat UI can render an interactive prompt (HumanCheckpoint).
-          if (lastMessageIdRef.current && data) {
-            updateAssistantMessage(lastMessageIdRef.current, fullContent, true, {
-              workflowCheckpoint: {
-                checkpoint: data.checkpoint,
-                executionId: data.executionId
-              }
-            });
-          }
-          break;
-        case 'workflow.step': {
-          if (lastMessageIdRef.current && data) {
-            const newStep = {
-              nodeName: data.nodeName,
-              nodeType: data.nodeType,
-              status: data.status,
-              workflowName: data.workflowName,
-              chatVisible: data.chatVisible
-            };
 
-            // Functional update — reads prev steps from the LIVE state, not
-            // from `messagesRef.current` which lags one render. The old
-            // read-then-write pattern dropped events when many fired in
-            // rapid succession (e.g. a long string of "Skipped (already
-            // searched): …" emissions or a fast iFinder paging loop).
-            appendWorkflowStep(lastMessageIdRef.current, newStep, {
-              workflowStep: data.status === 'running' ? newStep : null
-            });
-          }
-          break;
-        }
-        case 'workflow.result':
-          if (lastMessageIdRef.current && data) {
-            const currentMsg = messagesRef.current.find(m => m.id === lastMessageIdRef.current);
-            const prevSteps = currentMsg?.workflowSteps || [];
-            // Mark any still-running steps based on workflow result status
-            const finalSteps = prevSteps.map(s => {
-              if (s.status === 'running') {
-                // If workflow failed, mark running steps as error
-                // If workflow cancelled or completed, mark as completed
-                return {
-                  ...s,
-                  status: data.status === 'failed' ? 'error' : 'completed'
-                };
-              }
-              return s;
-            });
+          updateAssistantMessage(messageId, content, false, { ...extras, ...metadata });
 
-            updateAssistantMessage(lastMessageIdRef.current, fullContent, true, {
-              workflowStep: null,
-              workflowSteps: finalSteps,
-              workflowCheckpoint: null,
-              workflowResult: {
-                status: data.status,
-                executionId: data.executionId,
-                workflowName: data.workflowName
-              },
-              outputFormat: data.outputFormat || 'markdown'
-            });
+          if (rootRun.status === 'error' || rootRun.error) {
+            // Legacy error path: content already carries the stream/error message.
+            setProcessing(false);
+            break;
           }
-          break;
-        case 'skill.activation':
-          if (lastMessageIdRef.current && data) {
-            const currentMsg = messagesRef.current.find(m => m.id === lastMessageIdRef.current);
-            const prevSkills = currentMsg?.activeSkills || [];
-            updateAssistantMessage(lastMessageIdRef.current, fullContent, true, {
-              activeSkills: [...prevSkills, { name: data.skillName, description: data.description }]
-            });
-          }
-          break;
-        case 'citation':
-          if (lastMessageIdRef.current && data) {
-            // Use mergeCitations for race-safe merging via functional updater
-            mergeCitations(lastMessageIdRef.current, data);
-          }
-          break;
-        case 'search.status':
-          if (data && lastMessageIdRef.current) {
-            updateAssistantMessage(lastMessageIdRef.current, fullContent, true, {
-              searchStatus: data
-            });
-          }
-          break;
-        case 'conversation.title':
-          if (data?.title) {
-            setConversationTitle(data.title);
-          }
-          break;
-        case 'conversation.id':
-          if (data?.conversationId && appId && shouldPersistConversationId) {
-            setConversationId(appId, data.conversationId);
-          }
-          break;
-        case 'response.message.id':
-          // Store the iFinder message ID for feedback submission. This event
-          // is emitted before 'done', so the message is still streaming —
-          // preserve its current content and loading state and only attach
-          // the id via the shared updater (there is no standalone setMessages).
-          if (data?.messageId && lastMessageIdRef.current) {
-            const currentMessage = messagesRef.current.find(m => m.id === lastMessageIdRef.current);
-            if (currentMessage) {
-              updateAssistantMessage(
-                lastMessageIdRef.current,
-                currentMessage.content || '',
-                currentMessage.loading,
-                { ifinderMessageId: data.messageId }
-              );
-            }
-          }
-          break;
-        case 'answer.source':
-          // Store answer source information
-          if (data && lastMessageIdRef.current) {
-            updateAssistantMessage(lastMessageIdRef.current, fullContent, true, {
-              answerSource: data
-            });
-          }
-          break;
-        case 'done':
-          if (lastMessageIdRef.current) {
-            // Include stored metadata (customResponseRenderer, outputFormat) in the message
-            // Preserve workflow-set outputFormat — don't let app default overwrite it
-            const currentMsg = messagesRef.current.find(m => m.id === lastMessageIdRef.current);
-            const metadata = {
-              finishReason: data?.finishReason,
-              ...(messageMetadataRef.current || {}),
-              ...(currentMsg?.outputFormat && { outputFormat: currentMsg.outputFormat })
-            };
 
-            // Check if this is a clarification finish reason
-            if (data?.finishReason === 'clarification') {
-              debugLog('📝 Done event with clarification finish reason');
-              // Keep the message in awaiting input state, don't mark as complete
-              updateAssistantMessage(lastMessageIdRef.current, fullContent, false, {
-                ...metadata,
-                awaitingInput: true
-              });
-              // Processing stops but clarification is still pending
-              setProcessing(false);
-              // Don't call onMessageComplete yet - wait for clarification response
-              break;
-            }
-
-            updateAssistantMessage(lastMessageIdRef.current, fullContent, false, metadata);
-            if (onMessageComplete) {
-              onMessageComplete(fullContent, lastUserMessageRef.current);
-            }
+          if (onMessageComplete) {
+            onMessageComplete(content, lastUserMessageRef.current);
           }
           setProcessing(false);
           // Reset clarification state when done normally
           setClarificationPending(false);
           activeClarificationRef.current = null;
           break;
-        case 'error':
-          if (lastMessageIdRef.current && !isCancellingRef.current) {
-            // Only show error if this wasn't a manual cancellation
-            // Preserve any streamed content that was accumulated before the error
-            const currentMessage = messagesRef.current.find(m => m.id === lastMessageIdRef.current);
-            const errorMessage =
-              data?.message || t('error.streamingError', 'An error occurred during streaming');
-            updateAssistantMessage(
-              lastMessageIdRef.current,
-              (currentMessage?.content || '') + '\n\n' + errorMessage,
-              false
-            );
-          }
+        }
+
+        case RUN_EVENTS.STREAM_ERROR:
+          // Preserve any streamed content (the projection appends the error text)
+          updateAssistantMessage(messageId, content, false, extras);
+          settleReattachedRun(rootRun.runId);
           setProcessing(false);
           break;
+
         default:
-          // TODO Implement proper handling of unknown messages as well as display them in the frontend
-          // if (data?.message) {
-          //   addSystemMessage('🔍 ' + data.message, false);
-          // }
-          debugLog('🔍 Unknown event type:', type, data);
+          updateAssistantMessage(messageId, content, loading, extras);
       }
     },
     [
       appId,
-      pendingMessageDataRef,
+      bindRunToMessage,
+      sendPendingMessage,
+      settleReattachedRun,
       updateAssistantMessage,
-      mergeCitations,
       onMessageComplete,
       t,
       messagesRef,
@@ -369,8 +497,15 @@ function useAppChat({
   const { initEventSource, cleanupEventSource } = useEventSource({
     appId,
     chatId: chatId,
+    // A stored chat's turn outlives this surface: leaving it must not stop it.
+    durable: serverBacked,
     onEvent: handleEvent,
-    onProcessingChange: setProcessing
+    onProcessingChange: setProcessing,
+    // True only while this surface is following a turn it did not start, which
+    // is what makes the heartbeat's "nothing is running on this chat" answer
+    // safe to act on. A turn this surface sent itself is briefly connected
+    // before its POST lands, and acting on it there would cancel it.
+    isFollowingExistingRun: () => reattachedRunRef.current !== null
   });
 
   // Store cleanup function in ref for access in callbacks
@@ -415,6 +550,11 @@ function useAppChat({
 
         addUserMessage(contentToAdd, {
           ...(displayMessage?.meta || {}),
+          // The exchange id is what the store files this turn under
+          // (`clientMessageId`), so it is the only handle an edit or a
+          // regenerate of a turn made in this session can fork the stored
+          // history by. Only server-backed chats have a store to address.
+          ...(serverBacked ? { clientMessageId: exchangeId } : {}),
           imageData: apiMessage.imageData,
           fileData: apiMessage.fileData,
           audioData: apiMessage.audioData
@@ -438,7 +578,8 @@ function useAppChat({
           messages: messagesForAPI,
           params: {
             ...params,
-            ...(requestedSkill ? { requestedSkill } : {})
+            ...(requestedSkill ? { requestedSkill } : {}),
+            ...takeProtocolParams(sendChatHistory)
           }
         };
 
@@ -461,6 +602,8 @@ function useAppChat({
       getMessagesForApi,
       initEventSource,
       addSystemMessage,
+      takeProtocolParams,
+      serverBacked,
       t,
       appId,
       chatId
@@ -498,9 +641,9 @@ function useAppChat({
             ? prevUser.rawContent || ''
             : prevUser.rawContent || prevUser.content;
         variablesToRestore = prevUser.meta?.variables || null;
-        deleteMessage(prevUser.id);
+        deleteFromMessage(prevUser.id);
       } else {
-        deleteMessage(messageId);
+        deleteFromMessage(messageId);
         if (contentToResend === undefined) {
           imageDataToRestore = messageToResend.imageData || null;
           fileDataToRestore = messageToResend.fileData || null;
@@ -527,7 +670,7 @@ function useAppChat({
         audioData: audioDataToRestore
       };
     },
-    [messages, deleteMessage]
+    [messages, deleteFromMessage]
   );
 
   const cancelGeneration = useCallback(() => {
@@ -644,7 +787,10 @@ function useAppChat({
             value: response.value,
             skipped: response.skipped
           },
-          isClarificationAnswer: true
+          isClarificationAnswer: true,
+          // Same reason as `sendMessage`: the store files this turn under the
+          // exchange id, so an edit of it later has something to fork from.
+          ...(serverBacked ? { clientMessageId: exchangeId } : {})
         });
 
         // Add placeholder for assistant response
@@ -672,7 +818,10 @@ function useAppChat({
               questionId: response.questionId,
               value: response.value,
               skipped: response.skipped
-            }
+            },
+            // Same protocol as `sendMessage`: this path builds its own body
+            // and would otherwise fork away from it.
+            ...takeProtocolParams()
           }
         };
 
@@ -698,6 +847,8 @@ function useAppChat({
       initEventSource,
       addSystemMessage,
       messagesRef,
+      takeProtocolParams,
+      serverBacked,
       t,
       appId,
       chatId
@@ -708,22 +859,116 @@ function useAppChat({
     setConversationTitle(null);
   }, []);
 
+  /**
+   * Re-attach to a turn that is still running on the server.
+   *
+   * A durable chat outlives the browser: its turn keeps generating after the
+   * tab closes, and the answer is written to the store when it ends. Until
+   * this existed, reopening such a chat showed the stored transcript — the
+   * question, and nothing after it — and then sat there. The stream was never
+   * connected, so no frame could arrive, and the partial answer already in the
+   * ledger was never asked for. The chat looked stuck until the turn ended and
+   * the page was reloaded a second time.
+   *
+   * Two steps, in this order:
+   *
+   * 1. **Replay the ledger.** The run's events are fetched and folded through
+   *    the same `handleEvent` the live stream uses, so tool calls, progress
+   *    and partial text are reconstructed exactly as they were rendered the
+   *    first time rather than through a second, parallel projection.
+   * 2. **Then connect.** Connecting first would interleave live frames with
+   *    replayed ones out of order. This way every live frame folds on top of a
+   *    finished replay.
+   *
+   * The window between the two is a fetch apart, and a delta emitted inside it
+   * is not in the replay and not yet on the stream. `onSettled` is the answer
+   * to that: the caller re-reads the stored transcript when the turn ends, and
+   * the store is the authority on what the answer finally was.
+   *
+   * @param {string} runId - The run the chat document reports as active
+   * @param {Object} [options]
+   * @param {Function} [options.onSettled] - Called once the turn is no longer running
+   * @returns {Promise<boolean>} Whether the surface attached to a live turn
+   */
+  const reattachToRun = useCallback(
+    async (runId, { onSettled } = {}) => {
+      if (!runId || !appId || !chatId) return false;
+
+      // The replay needs somewhere to write. `bindRunToMessage` falls back to
+      // `lastMessageIdRef` for a run whose `run/started` names no message id —
+      // which is every run replayed from the ledger, since the message id it
+      // referenced belongs to the browser session that started the turn.
+      const placeholderId = addAssistantMessage();
+      lastMessageIdRef.current = placeholderId;
+      setProcessing(true);
+
+      let ended = false;
+      try {
+        const { events } = await fetchAllLedgerEvents(async (after, limit) => {
+          const res = await fetchWithAuthRetry(
+            buildApiUrl(
+              `runs/${encodeURIComponent(runId)}/events?after=${after}&limit=${limit}&view=sse`
+            ),
+            { method: 'GET', headers: { Accept: 'application/json' } }
+          );
+          if (!res.ok) throw new Error(`Run replay failed (${res.status})`);
+          return res.json();
+        });
+        for (const envelope of events) {
+          if (!envelope || envelope.v !== 2) continue;
+          // The ledger numbers a run's own events; the live stream numbers the
+          // chat's. Folding a ledger seq would poison gap detection with a
+          // counter from the wrong space.
+          const { seq: _ledgerSeq, ...live } = envelope;
+          if (live.type === RUN_EVENTS.RUN_ENDED) ended = true;
+          await handleEvent({ envelope: live });
+        }
+      } catch (err) {
+        console.warn('Could not replay the running turn:', err.message);
+      }
+
+      if (ended) {
+        // It finished between the chat document being read and this replay.
+        // Nothing to attach to, and the store already has the answer.
+        setProcessing(false);
+        onSettled?.();
+        return false;
+      }
+
+      reattachedRunRef.current = { runId, onSettled };
+      initEventSource(buildApiUrl(`apps/${appId}/chat/${chatId}`));
+      return true;
+    },
+    [appId, chatId, addAssistantMessage, handleEvent, initEventSource]
+  );
+
   return {
     chatId: chatId,
     messages,
     processing,
+    // True while a server-backed transcript is still being fetched, so a
+    // surface can render a loading state instead of flashing its greeting.
+    hydrating,
+    finishHydration,
     clarificationPending,
     conversationTitle,
     sendMessage,
     resendMessage,
-    deleteMessage,
+    deleteMessage: deleteFromMessage,
     editMessage,
     clearMessages,
     cancelGeneration,
     addSystemMessage,
     submitClarificationResponse,
     loadServerMessages,
-    resetConversationState
+    reattachToRun,
+    resetConversationState,
+    // Exposed so the transcription flow can render a transcript as a
+    // locally-built assistant turn (streaming deltas), without going through the
+    // chat LLM pipeline.
+    addUserMessage,
+    addAssistantMessage,
+    updateAssistantMessage
   };
 }
 

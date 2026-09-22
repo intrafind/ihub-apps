@@ -4,11 +4,20 @@
  *   GET  /api/agents/runs                     — list agent runs
  *   GET  /api/agents/runs/:runId              — single run state
  *   POST /api/agents/runs/:runId/cancel       — cancel a running run
- *   POST /api/agents/runs/:runId/approve      — HITL approval
- *   GET  /api/agents/approvals                — cross-profile pending queue
+ *
+ * HITL: a paused run's checkpoint is an interaction — answer it through
+ * `POST /api/runs/:runId/interactions/:id/answer`; the queue is
+ * `GET /api/interactions/pending?kind=approval` (routes/runs.js).
  */
 
 import { authRequired, authenticatedOnly } from '../../middleware/authRequired.js';
+import {
+  translateInternalEvent,
+  buildEnvelope,
+  currentSeq,
+  stampSeq
+} from '../../services/loop/RunStream.js';
+import { SSE_V2_EVENTS } from '../../../shared/runEvents.js';
 import {
   sendBadRequest,
   sendNotFound,
@@ -17,27 +26,24 @@ import {
 import { buildServerPath } from '../../utils/basePath.js';
 import { validateIdForPath } from '../../utils/pathSecurity.js';
 import configCache from '../../configCache.js';
-import { WorkflowEngine, getExecutionRegistry } from '../../services/workflow/index.js';
+import { getWorkflowEngine, getExecutionRegistry } from '../../services/workflow/index.js';
 import { buildAgentPrincipal } from '../../utils/authorization.js';
 import { serializeProfile } from '../../agents/profile/profileWorkflowSerializer.js';
 import { resolveReviewSettings } from '../../agents/profile/reviewSettings.js';
 import { generateRunTitleAsync } from '../../agents/runtime/titleGenerator.js';
-import { HumanNodeExecutor } from '../../services/workflow/executors/HumanNodeExecutor.js';
 import { actionTracker } from '../../actionTracker.js';
 import { createSseChannel, startInactiveClientSweep } from '../../utils/sseChannel.js';
 import logger from '../../utils/logger.js';
 
-// Lazy-shared engine. WorkflowEngine state lives in StateManager (filesystem),
-// so multiple instances see the same executions; we use one per-worker.
-// 30-minute default node timeout: the phased planner node blocks while its
-// entire sub-workflow runs (up to 6 tasks × several minutes each), so the
-// 5-minute DEFAULT_NODE_TIMEOUT would kill it mid-run. 30 min matches
-// MAX_NODE_TIMEOUT in WorkflowEngine and is the ceiling _normalizeTimeout allows.
-let _engine = null;
+// Shared WorkflowEngine singleton — see getWorkflowEngine() for why this must
+// be shared rather than a per-module instance (abort/cancel coherence).
 function getEngine() {
-  if (!_engine) _engine = new WorkflowEngine({ defaultTimeout: 30 * 60 * 1000 });
-  return _engine;
+  return getWorkflowEngine();
 }
+
+// Passed per-call (not via the engine constructor) since the engine instance
+// is shared with non-agent workflow entry points that keep the shorter default.
+import { AGENT_NODE_TIMEOUT_MS } from '../../services/workflow/checkpointResume.js';
 
 function lookupProfile(profileId) {
   const { data: profiles = [] } = configCache.getAgentProfiles(true);
@@ -88,13 +94,22 @@ export function applyReviewSettings(workflow, resolved) {
   return workflow;
 }
 
-function countRunningProfileRuns(profileId) {
+/**
+ * How many runs of one agent profile are still in flight.
+ *
+ * Reads the profile's own principal (`agent:<profileId>`) rather than every
+ * execution ever recorded: that principal is the owner of its runs, so this
+ * is an indexed lookup instead of a scan of the whole run namespace — and it
+ * sits on the run-start path, in front of the concurrency guard.
+ *
+ * @param {string} profileId - Agent profile id.
+ * @returns {Promise<number>} Runs currently running, pending or paused.
+ */
+async function countRunningProfileRuns(profileId) {
   try {
     const registry = getExecutionRegistry();
-    const all = registry.getAll ? registry.getAll() : [];
-    return all.filter(
-      r => r?.userId === `agent:${profileId}` && ['running', 'pending', 'paused'].includes(r.status)
-    ).length;
+    const runs = await registry.getByUser(`agent:${profileId}`, { includeArchived: true });
+    return runs.filter(r => ['running', 'pending', 'paused'].includes(r.status)).length;
   } catch {
     return 0;
   }
@@ -175,7 +190,7 @@ export default function registerAgentRunRoutes(app) {
 
         // Concurrency guard
         const maxConcurrent = profile.concurrency?.maxConcurrent ?? 1;
-        const running = countRunningProfileRuns(profileId);
+        const running = await countRunningProfileRuns(profileId);
         if (running >= maxConcurrent) {
           return res.status(409).json({
             error: 'CONCURRENCY_LIMIT',
@@ -299,7 +314,8 @@ export default function registerAgentRunRoutes(app) {
         // dominated by the LLM call time, so the I/O is negligible.
         const state = await getEngine().start(workflow, initialData, {
           user: principal,
-          checkpointOnNode: true
+          checkpointOnNode: true,
+          timeout: AGENT_NODE_TIMEOUT_MS
         });
 
         // Register the run in the ExecutionRegistry so the /api/agents/runs
@@ -391,7 +407,7 @@ export default function registerAgentRunRoutes(app) {
     async (req, res) => {
       try {
         const registry = getExecutionRegistry();
-        const all = registry.getAll ? registry.getAll() : [];
+        const all = registry.getAll ? await registry.getAll() : [];
         const { profileId, status } = req.query;
         let runs = all.filter(r => {
           if (typeof r?.userId !== 'string' || !r.userId.startsWith('agent:')) return false;
@@ -531,7 +547,15 @@ export default function registerAgentRunRoutes(app) {
         onClose: () => actionTracker.off('fire-sse', handleEvent)
       });
 
-      channel.send('connected', { runId });
+      const connected = buildEnvelope({
+        streamId: runId,
+        runId,
+        type: SSE_V2_EVENTS.STREAM_CONNECTED,
+        data: { runId, lastSeq: currentSeq(runId) }
+      });
+      // Direct channel writes bypass `sse.js` delivery, so this route stamps
+      // the stream sequence on every frame it sends.
+      channel.send(connected.type, stampSeq(runId, connected));
 
       logger.info('SSE connection established for agent run', {
         component: 'AgentRuns',
@@ -589,9 +613,26 @@ export default function registerAgentRunRoutes(app) {
           (eventData.executionId && trackedIds.has(eventData.executionId));
         if (!matchesRun) return;
 
-        // Always tag the event with the parent runId so the client can route
-        // it consistently regardless of which (sub)workflow emitted it.
-        channel.send(eventType, { ...eventData, _parentRunId: runId });
+        // Child sub-workflow events keep their own executionId as the envelope
+        // runId; the client reducer merges every run on this stream.
+        for (const frame of translateInternalEvent(eventData)) {
+          try {
+            const envelope = buildEnvelope({
+              streamId: runId,
+              runId: frame.runId || runId,
+              type: frame.type,
+              data: frame.data
+            });
+            channel.send(envelope.type, stampSeq(runId, envelope));
+          } catch (err) {
+            logger.warn('Dropped agent run event that does not fit the SSE v2 contract', {
+              component: 'AgentRuns',
+              runId,
+              eventType,
+              error: err.message
+            });
+          }
+        }
       };
 
       actionTracker.on('fire-sse', handleEvent);
@@ -608,8 +649,13 @@ export default function registerAgentRunRoutes(app) {
         const { runId } = req.params;
         if (!validateIdForPath(runId, 'run', res)) return;
         if (!(await authorizeRunAccess(req, res, runId))) return;
-        const state = await getEngine().cancel(runId, req.body?.reason || 'user_cancelled');
-        res.json({ ok: true, status: state.status });
+        // The run may execute on another worker: the engine relays the cancel.
+        const state = await getEngine().cancelAnywhere(runId, req.body?.reason || 'user_cancelled');
+        res.json({
+          ok: true,
+          status: state.status,
+          ...(state.cancelRelayed ? { relayed: true } : {})
+        });
       } catch (error) {
         sendFailedOperationError(res, 'cancel agent run', error);
       }
@@ -642,7 +688,7 @@ export default function registerAgentRunRoutes(app) {
         let profileId = state.data?._agent?.profileId;
         if (!profileId) {
           const registry = getExecutionRegistry();
-          const entry = registry.get ? registry.get(runId) : null;
+          const entry = registry.get ? await registry.get(runId) : null;
           if (typeof entry?.userId === 'string' && entry.userId.startsWith('agent:')) {
             profileId = entry.userId.slice('agent:'.length);
           }
@@ -692,7 +738,8 @@ export default function registerAgentRunRoutes(app) {
         const newState = await getEngine().resumeFromTerminated(runId, {
           user: req.user,
           workflow,
-          checkpointOnNode: true
+          checkpointOnNode: true,
+          timeout: AGENT_NODE_TIMEOUT_MS
         });
         logger.info('Agent run resumed from terminated state', {
           component: 'AgentRunsRoute',
@@ -717,106 +764,6 @@ export default function registerAgentRunRoutes(app) {
           return sendBadRequest(res, error.message);
         }
         sendFailedOperationError(res, 'resume agent run', error);
-      }
-    }
-  );
-
-  // ── HITL approval ─────────────────────────────────────────────────────────
-  app.post(
-    buildServerPath('/api/agents/runs/:runId/approve'),
-    authRequired,
-    authenticatedOnly,
-    async (req, res) => {
-      try {
-        const { runId } = req.params;
-        if (!validateIdForPath(runId, 'run', res)) return;
-        if (!(await authorizeRunAccess(req, res, runId))) return;
-        const { checkpointId, response, data, note } = req.body || {};
-        if (!checkpointId || !response) {
-          return sendBadRequest(res, 'checkpointId and response are required');
-        }
-
-        const state = await getEngine().getState(runId);
-        if (!state) return sendNotFound(res, `Run ${runId} not found`);
-        if (state.status !== 'paused') {
-          return sendBadRequest(res, `Run is not paused (status=${state.status})`);
-        }
-
-        const checkpoint = state.data?.pendingCheckpoint;
-        if (!checkpoint || checkpoint.id !== checkpointId) {
-          return sendBadRequest(res, 'pendingCheckpoint mismatch');
-        }
-
-        const workflow = state.data?._workflowDefinition;
-        if (!workflow) return sendBadRequest(res, 'Workflow definition not available');
-        const humanNode = workflow.nodes.find(n => n.id === checkpoint.nodeId);
-        if (!humanNode) return sendBadRequest(res, 'Human node not found');
-
-        // HumanNodeExecutor.resume enforces approver-group validation when the
-        // workflow is an agent run.
-        const executor = new HumanNodeExecutor();
-        const resumeResult = await executor.resume(
-          humanNode,
-          state,
-          { checkpointId, response, data, note },
-          { executionId: runId, user: req.user }
-        );
-
-        if (resumeResult.status === 'failed') {
-          return res.status(403).json({ error: 'NOT_AUTHORIZED', message: resumeResult.error });
-        }
-
-        const scheduler = getEngine().scheduler;
-        const branch = resumeResult.branch;
-        const humanResult = { branch, response, ...resumeResult.output };
-        const nextNodes = scheduler.getNextNodes(humanNode.id, humanResult, workflow, state);
-
-        await getEngine().stateManager.update(runId, {
-          completedNodes: [...(state.completedNodes || []), humanNode.id],
-          currentNodes: nextNodes,
-          data: {
-            ...state.data,
-            ...(resumeResult.stateUpdates || {}),
-            [`_humanResult_${humanNode.id}`]: humanResult,
-            nodeResults: {
-              ...(state.data?.nodeResults || {}),
-              [humanNode.id]: humanResult
-            }
-          }
-        });
-
-        const newState = await getEngine().resume(runId, {}, { user: req.user, workflow });
-        res.json({ ok: true, status: newState.status });
-      } catch (error) {
-        if (error.code === 'EXECUTION_NOT_FOUND') return sendNotFound(res, 'Run');
-        sendFailedOperationError(res, 'approve agent run', error);
-      }
-    }
-  );
-
-  // ── Cross-profile pending approvals queue ────────────────────────────────
-  app.get(
-    buildServerPath('/api/agents/approvals'),
-    authRequired,
-    authenticatedOnly,
-    async (req, res) => {
-      try {
-        const registry = getExecutionRegistry();
-        const all = registry.getAll ? registry.getAll() : [];
-        const pending = [];
-        for (const r of all) {
-          if (typeof r?.userId !== 'string' || !r.userId.startsWith('agent:')) continue;
-          if (r.status !== 'paused' || !r.pendingCheckpoint) continue;
-          pending.push({
-            runId: r.executionId,
-            profileId: r.userId.slice('agent:'.length),
-            checkpoint: r.pendingCheckpoint,
-            pausedAt: r.pausedAt || null
-          });
-        }
-        res.json(pending);
-      } catch (error) {
-        sendFailedOperationError(res, 'list pending approvals', error);
       }
     }
   );

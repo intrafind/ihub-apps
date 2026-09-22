@@ -61,7 +61,7 @@ function ConfirmDialog({
   return (
     <div className="fixed inset-0 z-50 overflow-y-auto" role="presentation">
       <div
-        className="fixed inset-0 bg-black bg-opacity-50 transition-opacity"
+        className="fixed inset-0 bg-black/50 transition-opacity"
         onClick={onDeny}
         aria-hidden="true"
       />
@@ -78,7 +78,7 @@ function ConfirmDialog({
             <div className="flex items-start gap-4">
               {danger && (
                 <div
-                  className="flex-shrink-0 w-10 h-10 rounded-full bg-red-100 dark:bg-red-900/40 flex items-center justify-center"
+                  className="shrink-0 w-10 h-10 rounded-full bg-red-100 dark:bg-red-900/40 flex items-center justify-center"
                   aria-hidden="true"
                 >
                   <Icon
@@ -108,14 +108,14 @@ function ConfirmDialog({
               ref={denyButtonRef}
               type="button"
               onClick={onDeny}
-              className="px-4 py-2 text-gray-700 dark:text-gray-200 bg-white dark:bg-gray-700 border border-gray-300 dark:border-gray-600 rounded-lg font-medium hover:bg-gray-100 dark:hover:bg-gray-600 transition-colors focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500"
+              className="px-4 py-2 text-gray-700 dark:text-gray-200 bg-white dark:bg-gray-700 border border-gray-300 dark:border-gray-600 rounded-lg font-medium hover:bg-gray-100 dark:hover:bg-gray-600 transition-colors focus:outline-hidden focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500"
             >
               {denyLabel || t('common.cancel', 'Cancel')}
             </button>
             <button
               type="button"
               onClick={onConfirm}
-              className={`px-4 py-2 rounded-lg font-medium transition-colors focus:outline-none focus:ring-2 focus:ring-offset-2 ${confirmClasses}`}
+              className={`px-4 py-2 rounded-lg font-medium transition-colors focus:outline-hidden focus:ring-2 focus:ring-offset-2 ${confirmClasses}`}
             >
               {confirmLabel || t('common.confirm', 'Confirm')}
             </button>

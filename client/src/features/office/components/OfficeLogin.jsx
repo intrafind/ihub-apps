@@ -123,27 +123,29 @@ const OfficeLogin = ({ onSuccess, initialError = null }) => {
   };
 
   return (
-    <div className="w-full h-full flex items-center justify-center bg-slate-50">
+    <div className="w-full h-full flex items-center justify-center bg-slate-50 dark:bg-slate-900">
       <div className="relative w-full max-w-sm px-4">
-        <div className="w-full shadow-lg rounded-xl overflow-hidden bg-white">
-          <div className="flex flex-col items-center px-6 pt-6 pb-4 border-b border-slate-200">
-            <div className="w-12 h-12 rounded-lg bg-slate-900 flex items-center justify-center mb-3">
+        <div className="w-full shadow-lg rounded-xl overflow-hidden bg-white dark:bg-slate-800">
+          <div className="flex flex-col items-center px-6 pt-6 pb-4 border-b border-slate-200 dark:border-slate-700">
+            <div className="w-12 h-12 rounded-lg bg-slate-900 flex items-center justify-center mb-3 dark:bg-slate-700">
               <img
                 src={buildAssetUrl('icons/apps-svg-logo.svg')}
                 alt="iHub Apps"
                 className="w-8 h-8"
               />
             </div>
-            <h1 className="text-lg font-semibold text-slate-900">Welcome</h1>
-            <p className="text-sm text-slate-500 mt-1">{host.loginSubtitle}</p>
+            <h1 className="text-lg font-semibold text-slate-900 dark:text-slate-100">Welcome</h1>
+            <p className="text-sm text-slate-500 mt-1 dark:text-slate-400">{host.loginSubtitle}</p>
           </div>
 
           <div className="px-6 pt-4 pb-6 flex flex-col gap-4">
             {(sessionBanner || apiError) && (
-              <div className="text-xs text-red-600 bg-red-50 border border-red-100 rounded px-3 py-2 space-y-1">
+              <div className="text-xs text-red-600 bg-red-50 border border-red-100 rounded-sm px-3 py-2 space-y-1 dark:text-red-300 dark:bg-red-950/50 dark:border-red-900">
                 {sessionBanner && <p className="m-0">{sessionBanner}</p>}
                 {apiError && (
-                  <p className={`m-0 ${sessionBanner ? 'pt-1 border-t border-red-100' : ''}`}>
+                  <p
+                    className={`m-0 ${sessionBanner ? 'pt-1 border-t border-red-100 dark:border-red-900' : ''}`}
+                  >
                     {apiError}
                   </p>
                 )}
@@ -155,8 +157,13 @@ const OfficeLogin = ({ onSuccess, initialError = null }) => {
                 const Icon = b.icon || SparklesIcon;
                 return (
                   <li key={i} className="flex gap-3 items-start">
-                    <Icon className="h-5 w-5 shrink-0 text-slate-600 mt-0.5" aria-hidden />
-                    <span className="text-sm text-slate-700 leading-snug">{b.text}</span>
+                    <Icon
+                      className="h-5 w-5 shrink-0 text-slate-600 mt-0.5 dark:text-slate-400"
+                      aria-hidden
+                    />
+                    <span className="text-sm text-slate-700 leading-snug dark:text-slate-300">
+                      {b.text}
+                    </span>
                   </li>
                 );
               })}
@@ -166,7 +173,7 @@ const OfficeLogin = ({ onSuccess, initialError = null }) => {
               type="button"
               disabled={isLoading}
               onClick={handleAuthenticateClick}
-              className="w-full mt-1 rounded-lg bg-slate-900 px-4 py-2.5 text-sm font-semibold text-white hover:bg-slate-700 disabled:opacity-60 disabled:cursor-not-allowed"
+              className="w-full mt-1 rounded-lg bg-slate-900 px-4 py-2.5 text-sm font-semibold text-white hover:bg-slate-700 disabled:opacity-60 disabled:cursor-not-allowed dark:bg-slate-100 dark:text-slate-900 dark:hover:bg-white"
             >
               {isLoading ? loadingMessage : 'Authenticate'}
             </button>

@@ -1,5 +1,8 @@
 import registerAdminAuthRoutes from './admin/auth.js';
+import registerAdminLdapTestRoutes from './admin/ldapTest.js';
 import registerAdminOAuthRoutes from './admin/oauthClients.js';
+import registerAdminOAuthCimdRoutes from './admin/oauthCimdClients.js';
+import registerAdminOAuthConnectionRoutes from './admin/oauthConnections.js';
 import registerAdminCacheRoutes from './admin/cache.js';
 import registerAdminConfigRoutes from './admin/configs.js';
 import registerAdminAppsRoutes from './admin/apps.js';
@@ -8,6 +11,7 @@ import registerAdminProvidersRoutes from './admin/providers.js';
 import registerAdminPromptsRoutes from './admin/prompts.js';
 import registerAdminSourcesRoutes from './admin/sources.js';
 import registerAdminGroupRoutes from './admin/groups.js';
+import registerAdminContentAccessRoutes from './admin/contentAccess.js';
 import registerAdminTranslateRoute from './admin/translate.js';
 import registerAdminPagesRoutes from './admin/pages.js';
 import registerAdminUIRoutes from './admin/ui.js';
@@ -21,6 +25,7 @@ import registerAdminLoggingRoutes from './admin/logging.js';
 import registerAdminSSLRoutes from './admin/ssl.js';
 import registerAdminCorsRoutes from './admin/cors.js';
 import registerAdminSsrfRoutes from './admin/ssrf.js';
+import registerAdminProxyRoutes from './admin/proxy.js';
 import registerAdminFeaturesRoutes from './admin/features.js';
 import registerAdminUsageRoutes from './admin/usage.js';
 import registerAdminUpdateRoutes from './admin/update.js';
@@ -40,7 +45,10 @@ import registerAdminOverviewRoutes from './admin/overview.js';
 
 export default async function registerAdminRoutes(app) {
   registerAdminAuthRoutes(app);
+  registerAdminLdapTestRoutes(app);
   registerAdminOAuthRoutes(app);
+  registerAdminOAuthCimdRoutes(app);
+  registerAdminOAuthConnectionRoutes(app);
   registerAdminCacheRoutes(app);
   registerAdminConfigRoutes(app);
   registerAdminAppsRoutes(app);
@@ -49,6 +57,7 @@ export default async function registerAdminRoutes(app) {
   registerAdminPromptsRoutes(app);
   registerAdminSourcesRoutes(app);
   registerAdminGroupRoutes(app);
+  registerAdminContentAccessRoutes(app);
   registerAdminTranslateRoute(app);
   registerAdminPagesRoutes(app);
   registerAdminUIRoutes(app);
@@ -62,6 +71,7 @@ export default async function registerAdminRoutes(app) {
   registerAdminSSLRoutes(app);
   registerAdminCorsRoutes(app);
   registerAdminSsrfRoutes(app);
+  registerAdminProxyRoutes(app);
   registerAdminFeaturesRoutes(app);
   registerAdminUsageRoutes(app);
   registerAdminUpdateRoutes(app);

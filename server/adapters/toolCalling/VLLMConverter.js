@@ -10,49 +10,27 @@ import {
   createGenericTool,
   createGenericToolCall,
   createGenericStreamingResponse,
-  normalizeFinishReason
+  normalizeFinishReason,
+  cloneAndWalkSchema
 } from './GenericToolCalling.js';
 import logger from '../../utils/logger.js';
 import { parseJsonAsync } from '../../utils/asyncJson.js';
 
 /**
- * Sanitize JSON Schema for vLLM compatibility
- * vLLM has more restrictive JSON schema support than OpenAI
+ * Sanitize a JSON Schema for vLLM's tool `parameters`. vLLM has more
+ * restrictive JSON schema support than OpenAI, so a few annotation keywords
+ * are stripped.
  * @param {Object} schema - JSON Schema
  * @returns {Object} Sanitized schema
  */
-function sanitizeSchemaForVLLM(schema) {
-  if (!schema || typeof schema !== 'object') {
-    return { type: 'object', properties: {} };
-  }
-
-  const sanitized = JSON.parse(JSON.stringify(schema)); // Deep clone
-
-  function cleanObject(obj) {
-    if (!obj || typeof obj !== 'object') return obj;
-
-    // Remove vLLM-incompatible fields
+export function sanitizeSchema(schema) {
+  return cloneAndWalkSchema(schema, obj => {
     delete obj.format; // vLLM doesn't support format validation like "uri"
     delete obj.exclusiveMaximum;
     delete obj.exclusiveMinimum;
     delete obj.title; // Some vLLM versions don't support title
     // Keep minLength/maxLength as they're more widely supported
-
-    // Recursively clean nested objects
-    for (const key in obj) {
-      if (obj[key] && typeof obj[key] === 'object') {
-        if (Array.isArray(obj[key])) {
-          obj[key] = obj[key].map(item => cleanObject(item));
-        } else {
-          obj[key] = cleanObject(obj[key]);
-        }
-      }
-    }
-
-    return obj;
-  }
-
-  return cleanObject(sanitized);
+  });
 }
 
 /**
@@ -93,7 +71,7 @@ export function convertGenericToolsToVLLM(genericTools = []) {
     function: {
       name: tool.id,
       description: tool.description,
-      parameters: sanitizeSchemaForVLLM(tool.parameters)
+      parameters: sanitizeSchema(tool.parameters)
     }
   }));
 }

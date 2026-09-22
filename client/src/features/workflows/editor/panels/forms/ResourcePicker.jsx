@@ -94,7 +94,7 @@ function ResourcePicker({
   };
 
   const inputClass =
-    'w-full text-sm border border-gray-300 dark:border-gray-600 rounded px-2 py-1.5 bg-white dark:bg-gray-900 text-gray-900 dark:text-gray-100';
+    'w-full text-sm border border-gray-300 dark:border-gray-600 rounded-sm px-2 py-1.5 bg-white dark:bg-gray-900 text-gray-900 dark:text-gray-100';
   const labelClass = 'block text-xs font-medium text-gray-600 dark:text-gray-400 mb-1';
 
   const renderTags = ids =>
@@ -103,7 +103,7 @@ function ResourcePicker({
       return (
         <span
           key={id}
-          className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-xs bg-blue-100 dark:bg-blue-900/50 text-blue-800 dark:text-blue-300"
+          className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded-sm text-xs bg-blue-100 dark:bg-blue-900/50 text-blue-800 dark:text-blue-300"
         >
           {item ? itemLabel(item) : id}
           <button
@@ -157,7 +157,7 @@ function ResourcePicker({
 
         {/* Dropdown */}
         {open && (
-          <div className="absolute z-20 mt-1 w-full bg-white dark:bg-gray-800 border border-gray-300 dark:border-gray-600 rounded shadow-lg max-h-48 overflow-auto">
+          <div className="absolute z-20 mt-1 w-full bg-white dark:bg-gray-800 border border-gray-300 dark:border-gray-600 rounded-sm shadow-lg max-h-48 overflow-auto">
             {loading ? (
               <div className="px-2 py-1.5 text-xs text-gray-500 dark:text-gray-400">Loading...</div>
             ) : filtered.length > 0 ? (

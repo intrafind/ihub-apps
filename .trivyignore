@@ -1,0 +1,10 @@
+# Trivy ignore file for the container image scan (.github/workflows/docker-ci.yml).
+#
+# Only waive findings that we cannot act on yet — typically an OS package CVE
+# whose fix has not been published for the Alpine release of the base image.
+# Every entry needs a reason and an expiry date so the waiver is revisited:
+#
+#   # openssl fix not yet in Alpine 3.x — recheck when the base image updates
+#   CVE-0000-00000 exp:2026-12-31
+#
+# Fixable findings belong in a dependency or base image update, not here.

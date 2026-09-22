@@ -9,11 +9,13 @@ import ChangeHistoryDrawer from '../components/ChangeHistoryDrawer';
 import AdminBreadcrumb from '../components/AdminBreadcrumb';
 import { useUnsavedChanges } from '../hooks/useUnsavedChanges';
 import ConfirmDialog from '../../../shared/components/ConfirmDialog';
+import ContentAccessSection from '../components/ContentAccessSection';
 import {
-  fetchAdminTools,
   createTool,
-  updateTool,
+  fetchAdminTools,
   fetchToolScript,
+  getAdminApiErrorMessage,
+  updateTool,
   updateToolScript
 } from '../../../api/adminApi';
 import { clearApiCache } from '../../../api';
@@ -117,7 +119,7 @@ function AdminToolEditPage() {
       }
     } catch (err) {
       console.error('Error loading tool:', err);
-      setError(err.message);
+      setError(getAdminApiErrorMessage(err));
     } finally {
       setLoading(false);
     }
@@ -264,7 +266,7 @@ function AdminToolEditPage() {
               <button
                 type="button"
                 onClick={() => setHistoryOpen(true)}
-                className="inline-flex items-center px-4 py-2 border border-gray-300 dark:border-gray-600 rounded-md shadow-sm text-sm font-medium text-gray-700 dark:text-gray-200 bg-white dark:bg-gray-700 hover:bg-gray-50 dark:hover:bg-gray-600 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500"
+                className="inline-flex items-center px-4 py-2 border border-gray-300 dark:border-gray-600 rounded-md shadow-xs text-sm font-medium text-gray-700 dark:text-gray-200 bg-white dark:bg-gray-700 hover:bg-gray-50 dark:hover:bg-gray-600 focus:outline-hidden focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500"
               >
                 <Icon name="clock" className="h-4 w-4 mr-2" />
                 {t('admin.tools.history', 'History')}
@@ -272,7 +274,7 @@ function AdminToolEditPage() {
             )}
             <button
               onClick={() => navigate('/admin/tools')}
-              className="inline-flex items-center px-4 py-2 border border-gray-300 dark:border-gray-600 rounded-md shadow-sm text-sm font-medium text-gray-700 dark:text-gray-200 bg-white dark:bg-gray-700 hover:bg-gray-50 dark:hover:bg-gray-600 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500"
+              className="inline-flex items-center px-4 py-2 border border-gray-300 dark:border-gray-600 rounded-md shadow-xs text-sm font-medium text-gray-700 dark:text-gray-200 bg-white dark:bg-gray-700 hover:bg-gray-50 dark:hover:bg-gray-600 focus:outline-hidden focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500"
             >
               <Icon name="arrow-left" className="h-4 w-4 mr-2" />
               {t('common.back', 'Back')}
@@ -361,7 +363,7 @@ function AdminToolEditPage() {
             <button
               type="button"
               onClick={startOpenApiTool}
-              className="inline-flex items-center px-4 py-2 border border-transparent rounded-md shadow-sm text-sm font-medium text-white bg-indigo-600 hover:bg-indigo-700"
+              className="inline-flex items-center px-4 py-2 border border-transparent rounded-md shadow-xs text-sm font-medium text-white bg-indigo-600 hover:bg-indigo-700"
             >
               <Icon name="globe" className="h-4 w-4 mr-2" />
               {t('admin.tools.useOpenApi', 'Use OpenAPI editor')}
@@ -371,7 +373,7 @@ function AdminToolEditPage() {
 
         {/* OpenAPI Tab */}
         {activeTab === 'openapi' && isOpenApiTool && (
-          <div className="bg-white dark:bg-gray-800 shadow rounded-lg p-6">
+          <div className="bg-white dark:bg-gray-800 shadow-sm rounded-lg p-6">
             <OpenApiToolEditor tool={toolData} onSave={handleSaveOpenApiTool} saving={saving} />
           </div>
         )}
@@ -409,14 +411,14 @@ function AdminToolEditPage() {
           <div className="mt-6 flex justify-end space-x-3">
             <button
               onClick={() => navigate('/admin/tools')}
-              className="px-4 py-2 border border-gray-300 dark:border-gray-600 rounded-md shadow-sm text-sm font-medium text-gray-700 dark:text-gray-200 bg-white dark:bg-gray-700 hover:bg-gray-50 dark:hover:bg-gray-600 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500"
+              className="px-4 py-2 border border-gray-300 dark:border-gray-600 rounded-md shadow-xs text-sm font-medium text-gray-700 dark:text-gray-200 bg-white dark:bg-gray-700 hover:bg-gray-50 dark:hover:bg-gray-600 focus:outline-hidden focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500"
             >
               {t('common.cancel', 'Cancel')}
             </button>
             <button
               onClick={handleSaveConfig}
               disabled={saving}
-              className="inline-flex items-center px-4 py-2 border border-transparent rounded-md shadow-sm text-sm font-medium text-white bg-indigo-600 hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500 disabled:opacity-50"
+              className="inline-flex items-center px-4 py-2 border border-transparent rounded-md shadow-xs text-sm font-medium text-white bg-indigo-600 hover:bg-indigo-700 focus:outline-hidden focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500 disabled:opacity-50"
             >
               {saving ? (
                 <>
@@ -433,16 +435,23 @@ function AdminToolEditPage() {
           </div>
         )}
 
+        {/* Group access — which groups may call this tool directly (groups.json) */}
+        {!isNewTool &&
+          ((activeTab === 'config' && !isOpenApiTool) ||
+            (activeTab === 'openapi' && isOpenApiTool)) && (
+            <ContentAccessSection resourceType="tools" resourceId={toolId} className="mt-6" />
+          )}
+
         {/* Script Editor Tab */}
         {activeTab === 'script' && !isNewTool && toolData.script && (
-          <div className="bg-white dark:bg-gray-800 shadow rounded-lg p-6">
+          <div className="bg-white dark:bg-gray-800 shadow-sm rounded-lg p-6">
             <div className="mb-4">
               <p className="text-sm text-gray-600 dark:text-gray-400">
                 {t(
                   'admin.tools.scriptEditorInfo',
                   'Edit the JavaScript code for this tool. Changes will be saved to server/tools/'
                 )}{' '}
-                <code className="bg-gray-100 dark:bg-gray-700 px-2 py-1 rounded text-xs">
+                <code className="bg-gray-100 dark:bg-gray-700 px-2 py-1 rounded-sm text-xs">
                   {toolData.script}
                 </code>
               </p>
@@ -453,7 +462,7 @@ function AdminToolEditPage() {
                 value={scriptContent}
                 onChange={e => setScriptContent(e.target.value)}
                 rows={25}
-                className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md shadow-sm focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 font-mono text-sm bg-white dark:bg-gray-900 text-gray-900 dark:text-gray-100"
+                className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md shadow-xs focus:outline-hidden focus:ring-indigo-500 focus:border-indigo-500 font-mono text-sm bg-white dark:bg-gray-900 text-gray-900 dark:text-gray-100"
                 style={{ fontFamily: 'monospace' }}
               />
             </div>
@@ -461,14 +470,14 @@ function AdminToolEditPage() {
             <div className="flex justify-end space-x-3">
               <button
                 onClick={() => setActiveTab('config')}
-                className="px-4 py-2 border border-gray-300 dark:border-gray-600 rounded-md shadow-sm text-sm font-medium text-gray-700 dark:text-gray-200 bg-white dark:bg-gray-700 hover:bg-gray-50 dark:hover:bg-gray-600 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500"
+                className="px-4 py-2 border border-gray-300 dark:border-gray-600 rounded-md shadow-xs text-sm font-medium text-gray-700 dark:text-gray-200 bg-white dark:bg-gray-700 hover:bg-gray-50 dark:hover:bg-gray-600 focus:outline-hidden focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500"
               >
                 {t('common.cancel', 'Cancel')}
               </button>
               <button
                 onClick={handleSaveScript}
                 disabled={saving}
-                className="inline-flex items-center px-4 py-2 border border-transparent rounded-md shadow-sm text-sm font-medium text-white bg-indigo-600 hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500 disabled:opacity-50"
+                className="inline-flex items-center px-4 py-2 border border-transparent rounded-md shadow-xs text-sm font-medium text-white bg-indigo-600 hover:bg-indigo-700 focus:outline-hidden focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500 disabled:opacity-50"
               >
                 {saving ? (
                   <>

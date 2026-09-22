@@ -11,7 +11,7 @@ function AppConfigForm({
   sendChatHistory,
   temperature,
   thinkingEnabled,
-  thinkingBudget,
+  thinkingLevel,
   thinkingThoughts,
   imageAspectRatio: _imageAspectRatio,
   imageQuality: _imageQuality,
@@ -21,7 +21,7 @@ function AppConfigForm({
   onSendChatHistoryChange,
   onTemperatureChange,
   onThinkingEnabledChange,
-  onThinkingBudgetChange,
+  onThinkingLevelChange,
   onThinkingThoughtsChange,
   onImageAspectRatioChange: _onImageAspectRatioChange,
   onImageQualityChange: _onImageQualityChange,
@@ -92,7 +92,7 @@ function AppConfigForm({
           <select
             value={selectedModel}
             onChange={e => onModelChange(e.target.value)}
-            className="w-full p-2 border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100 rounded focus:ring-indigo-500 focus:border-indigo-500"
+            className="w-full p-2 border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100 rounded-sm focus:ring-indigo-500 focus:border-indigo-500"
           >
             {filteredModels.map(model => {
               const name = getLocalizedContent(model.name, currentLanguage);
@@ -117,7 +117,7 @@ function AppConfigForm({
           <select
             value={selectedStyle}
             onChange={e => onStyleChange(e.target.value)}
-            className="w-full p-2 border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100 rounded focus:ring-indigo-500 focus:border-indigo-500"
+            className="w-full p-2 border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100 rounded-sm focus:ring-indigo-500 focus:border-indigo-500"
           >
             {Object.entries(styles).map(([id]) => (
               <option key={id} value={id}>
@@ -159,7 +159,7 @@ function AppConfigForm({
           <select
             value={selectedOutputFormat}
             onChange={e => onOutputFormatChange(e.target.value)}
-            className="w-full p-2 border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100 rounded focus:ring-indigo-500 focus:border-indigo-500"
+            className="w-full p-2 border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100 rounded-sm focus:ring-indigo-500 focus:border-indigo-500"
           >
             {outputFormats.map(format => (
               <option key={format.id} value={format.id}>
@@ -178,7 +178,7 @@ function AppConfigForm({
               type="checkbox"
               checked={sendChatHistory}
               onChange={e => onSendChatHistoryChange(e.target.checked)}
-              className="rounded border-gray-300 dark:border-gray-600 text-indigo-600 focus:ring-indigo-500 h-4 w-4 mr-2"
+              className="rounded-sm border-gray-300 dark:border-gray-600 text-indigo-600 focus:ring-indigo-500 h-4 w-4 mr-2"
             />
             {t('appConfig.includeChatHistory', 'Include chat history in requests')}
           </label>
@@ -201,35 +201,43 @@ function AppConfigForm({
                 type="checkbox"
                 checked={thinkingEnabled ?? app?.thinking?.enabled ?? true}
                 onChange={e => onThinkingEnabledChange?.(e.target.checked)}
-                className="rounded border-gray-300 dark:border-gray-600 text-indigo-600 focus:ring-indigo-500 h-4 w-4 mr-2"
+                className="rounded-sm border-gray-300 dark:border-gray-600 text-indigo-600 focus:ring-indigo-500 h-4 w-4 mr-2"
               />
               {t('appConfig.enableThinking', 'Enable thinking mode')}
             </label>
           </div>
 
-          {/* Thinking Budget */}
+          {/* Reasoning effort */}
           {(thinkingEnabled ?? app?.thinking?.enabled ?? true) && (
             <>
               <div>
-                <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
-                  {t('appConfig.thinkingBudget', 'Thinking Budget')}
+                <label
+                  htmlFor="thinkingLevel"
+                  className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1"
+                >
+                  {t('appConfig.thinkingLevel', 'Reasoning Effort')}
                 </label>
-                <input
-                  type="number"
-                  min="0"
-                  max="32768"
-                  step="1024"
+                <select
+                  id="thinkingLevel"
                   value={
-                    thinkingBudget ??
-                    app?.thinking?.budget ??
-                    selectedModelData?.thinking?.budget ??
-                    8192
+                    thinkingLevel ??
+                    app?.thinking?.level ??
+                    selectedModelData?.thinking?.level ??
+                    'medium'
                   }
-                  onChange={e => onThinkingBudgetChange?.(parseInt(e.target.value))}
-                  className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100 rounded-md text-sm focus:outline-none focus:ring-1 focus:ring-indigo-500"
-                />
+                  onChange={e => onThinkingLevelChange?.(e.target.value)}
+                  className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100 rounded-md text-sm focus:outline-hidden focus:ring-1 focus:ring-indigo-500"
+                >
+                  <option value="minimal">{t('appConfig.thinkingLevelMinimal', 'Minimal')}</option>
+                  <option value="low">{t('appConfig.thinkingLevelLow', 'Low')}</option>
+                  <option value="medium">{t('appConfig.thinkingLevelMedium', 'Medium')}</option>
+                  <option value="high">{t('appConfig.thinkingLevelHigh', 'High')}</option>
+                </select>
                 <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">
-                  {t('appConfig.thinkingBudgetHelp', 'Maximum tokens for thinking (0 = unlimited)')}
+                  {t(
+                    'appConfig.thinkingLevelHelp',
+                    'How much the model reasons before answering. More effort is slower and costs more tokens.'
+                  )}
                 </p>
               </div>
 
@@ -245,7 +253,7 @@ function AppConfigForm({
                       true
                     }
                     onChange={e => onThinkingThoughtsChange?.(e.target.checked)}
-                    className="rounded border-gray-300 dark:border-gray-600 text-indigo-600 focus:ring-indigo-500 h-4 w-4 mr-2"
+                    className="rounded-sm border-gray-300 dark:border-gray-600 text-indigo-600 focus:ring-indigo-500 h-4 w-4 mr-2"
                   />
                   {t('appConfig.showThoughts', 'Show thinking process')}
                 </label>

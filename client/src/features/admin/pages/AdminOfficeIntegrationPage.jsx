@@ -1,12 +1,113 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
 import { Link } from 'react-router-dom';
 import DynamicLanguageEditor from '../../../shared/components/DynamicLanguageEditor';
-import { makeAdminApiCall } from '../../../api/adminApi';
+import Icon from '../../../shared/components/Icon';
+import ReorderableList from '../components/ReorderableList';
+import { makeAdminApiCall, getAdminApiErrorMessage } from '../../../api/adminApi';
+import { fetchAdminApps } from '../../../api';
 import { buildApiUrl } from '../../../utils/runtimeBasePath';
+import { getLocalizedContent } from '../../../utils/localizeContent';
+
+/** The values the task pane's landing view accepts; mirrored in server/utils/officeStartPage.js. */
+const START_PAGE_CHOICES = ['start', 'apps'];
+
+/**
+ * What the answer button in the task pane does by default; mirrored in
+ * server/utils/officeMailActions.js. `auto` follows the open item — reply all
+ * in the reading pane, insert while the user is composing.
+ */
+const MAIL_ACTION_CHOICES = ['auto', 'answerAll', 'answer', 'forward', 'new', 'insert'];
+const DEFAULT_MAIL_ACTION = 'auto';
+
+/**
+ * Office.js delivery modes, in the order they are offered. Kept beside the
+ * component so the radio list stays declarative; the ids match
+ * `OFFICE_JS_MODES` in server/utils/officeJsSource.js.
+ */
+const OFFICE_JS_MODES = [
+  {
+    id: 'cdn',
+    labelKey: 'admin.officeIntegration.officeJsModeCdn',
+    labelFallback: 'Microsoft CDN (recommended)',
+    descKey: 'admin.officeIntegration.officeJsModeCdnDesc',
+    descFallback:
+      'Clients load Office.js straight from Microsoft. Always current, and the only option Microsoft AppSource accepts.'
+  },
+  {
+    id: 'proxy',
+    labelKey: 'admin.officeIntegration.officeJsModeProxy',
+    labelFallback: 'Proxy through this server',
+    descKey: 'admin.officeIntegration.officeJsModeProxyDesc',
+    descFallback:
+      'This server fetches Office.js from the CDN and caches it. Clients never contact Microsoft \u2014 only this server needs outbound access, and the cached copy stays up to date.'
+  },
+  {
+    id: 'custom',
+    labelKey: 'admin.officeIntegration.officeJsModeCustom',
+    labelFallback: 'Custom CDN or mirror',
+    descKey: 'admin.officeIntegration.officeJsModeCustomDesc',
+    descFallback:
+      'Load from a URL you control \u2014 a corporate CDN or an artifact proxy mirroring the Microsoft CDN. Neither clients nor this server need access to Microsoft.'
+  },
+  {
+    id: 'bundled',
+    labelKey: 'admin.officeIntegration.officeJsModeBundled',
+    labelFallback: 'Bundled copy (offline)',
+    descKey: 'admin.officeIntegration.officeJsModeBundledDesc',
+    descFallback:
+      'Serve the copy shipped with this release. Needs no network at all, but never receives updates.'
+  }
+];
+
+/**
+ * One reachability verdict. Kept deliberately small: the operator needs to see
+ * which URLs work, not a diagnostic report — the server's status code or error
+ * rides along in the title attribute for when they do.
+ */
+function ReachBadge({ state, label, detail }) {
+  const tone =
+    state === 'ok'
+      ? 'bg-green-100 text-green-800 dark:bg-green-900/30 dark:text-green-300'
+      : state === 'blocked'
+        ? 'bg-red-100 text-red-800 dark:bg-red-900/30 dark:text-red-300'
+        : state === 'opaque' || state === 'error'
+          ? 'bg-amber-100 text-amber-800 dark:bg-amber-900/30 dark:text-amber-300'
+          : 'bg-gray-100 text-gray-600 dark:bg-gray-700 dark:text-gray-300';
+  // Never colour alone: the mark carries the state too.
+  const mark =
+    state === 'ok'
+      ? '\u2713'
+      : state === 'blocked'
+        ? '\u2717'
+        : state === 'opaque' || state === 'error'
+          ? '?'
+          : '\u2026';
+  return (
+    <span
+      className={`inline-block rounded px-1.5 py-0.5 text-[11px] font-medium ${tone}`}
+      title={detail || undefined}
+    >
+      {mark} {label}
+      {detail ? <span className="sr-only"> — {detail}</span> : null}
+    </span>
+  );
+}
+
+const DEFAULT_START_PAGE = { defaultPage: 'start', defaultAppId: '', featuredAppIds: [] };
+
+// Only the known fields, each well-formed, whatever the server sent.
+const readStartPage = value => ({
+  defaultPage: START_PAGE_CHOICES.includes(value?.defaultPage) ? value.defaultPage : 'start',
+  defaultAppId: typeof value?.defaultAppId === 'string' ? value.defaultAppId : '',
+  featuredAppIds: Array.isArray(value?.featuredAppIds)
+    ? value.featuredAppIds.filter(id => typeof id === 'string' && id.length > 0)
+    : []
+});
 
 function AdminOfficeIntegrationPage() {
-  const { t } = useTranslation();
+  const { t, i18n } = useTranslation();
+  const currentLanguage = i18n.language;
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [toggling, setToggling] = useState(false);
@@ -16,7 +117,28 @@ function AdminOfficeIntegrationPage() {
   const [displayName, setDisplayName] = useState({});
   const [description, setDescription] = useState({});
   const [starterPrompts, setStarterPrompts] = useState([]);
-  const [useLocalOfficejs, setUseLocalOfficejs] = useState(false);
+  // Where the add-in loads Office.js from. Office.js derives the base path for
+  // every other file it needs from this one URL, so a proxy or a custom CDN
+  // serves the whole library — see server/utils/officeJsSource.js.
+  const [officeJsMode, setOfficeJsMode] = useState('cdn');
+  const [officeJsCdnUrl, setOfficeJsCdnUrl] = useState('');
+  const [officeJsCustomUrl, setOfficeJsCustomUrl] = useState('');
+  const [officeJsResolvedUrl, setOfficeJsResolvedUrl] = useState('');
+  const [officeJsResolvedMode, setOfficeJsResolvedMode] = useState('');
+  const [officeJsPresets, setOfficeJsPresets] = useState([]);
+  // Reachability per URL, keyed by URL: { server, browser } where each is
+  // 'checking' | 'ok' | 'blocked', plus the server's status/error detail.
+  const [officeJsReach, setOfficeJsReach] = useState({});
+  const [officeJsTesting, setOfficeJsTesting] = useState(false);
+  // The task pane's landing view: which view opens after sign-in, the app
+  // whose chat input the start page shows, and the curated app shortcuts.
+  const [startPage, setStartPage] = useState(DEFAULT_START_PAGE);
+  // What the answer button under each assistant reply does by default. Users
+  // may override it per device in the pane's Settings dialog (issue #2446).
+  const [defaultMailAction, setDefaultMailAction] = useState(DEFAULT_MAIL_ACTION);
+  // Every configured app (admin endpoint), for the two app pickers below.
+  const [apps, setApps] = useState([]);
+  const [appsLoading, setAppsLoading] = useState(true);
 
   // Stable client-side ids are used as React keys while the prompt list is edited.
   // They are stripped before persisting so the server never sees them.
@@ -45,7 +167,18 @@ function AdminOfficeIntegrationPage() {
       setStatus(data);
       setDisplayName(sanitizeLocalized(data.displayName));
       setDescription(sanitizeLocalized(data.description));
-      setUseLocalOfficejs(data.useLocalOfficejs === true);
+      setOfficeJsMode(data.officeJsMode || 'cdn');
+      setOfficeJsCdnUrl(data.officeJsCdnUrl || '');
+      setOfficeJsCustomUrl(data.officeJsCustomUrl || '');
+      setOfficeJsResolvedUrl(data.officeJsResolvedUrl || '');
+      setOfficeJsResolvedMode(data.officeJsResolvedMode || '');
+      setOfficeJsPresets(Array.isArray(data.officeJsCdnPresets) ? data.officeJsCdnPresets : []);
+      setStartPage(readStartPage(data.startPage));
+      setDefaultMailAction(
+        MAIL_ACTION_CHOICES.includes(data.defaultMailAction)
+          ? data.defaultMailAction
+          : DEFAULT_MAIL_ACTION
+      );
       setStarterPrompts(
         Array.isArray(data.starterPrompts)
           ? data.starterPrompts.map(p => ({
@@ -69,6 +202,62 @@ function AdminOfficeIntegrationPage() {
     loadStatus();
     // eslint-disable-next-line @eslint-react/exhaustive-deps
   }, []);
+
+  useEffect(() => {
+    let mounted = true;
+    fetchAdminApps()
+      .then(data => {
+        const list = Array.isArray(data) ? data : Array.isArray(data?.apps) ? data.apps : [];
+        if (mounted) setApps(list);
+      })
+      .catch(() => {})
+      .finally(() => {
+        if (mounted) setAppsLoading(false);
+      });
+    return () => {
+      mounted = false;
+    };
+  }, []);
+
+  // The start page needs a chat to send the message to — iframe/redirect
+  // apps cannot be its default app. Any app may be a shortcut.
+  const chatApps = useMemo(() => apps.filter(app => (app.type || 'chat') === 'chat'), [apps]);
+
+  const appLabel = app =>
+    `${getLocalizedContent(app.name, currentLanguage) || app.id}${
+      app.enabled === false ? ` (${t('admin.officeIntegration.disabledApp', 'disabled')})` : ''
+    }`;
+
+  const updateStartPage = patch => setStartPage(prev => ({ ...prev, ...patch }));
+
+  const mailActionLabels = {
+    auto: t(
+      'admin.officeIntegration.mailActionAuto',
+      'Automatic \u2014 reply all in the reading pane, insert while composing'
+    ),
+    answerAll: t('admin.officeIntegration.mailActionAnswerAll', 'Reply all'),
+    answer: t('admin.officeIntegration.mailActionAnswer', 'Reply to sender'),
+    forward: t('admin.officeIntegration.mailActionForward', 'Forward'),
+    new: t('admin.officeIntegration.mailActionNew', 'New email'),
+    insert: t('admin.officeIntegration.mailActionInsert', 'Insert into the open draft')
+  };
+
+  // Keep ids that no longer resolve to an app in the list so they stay
+  // removable instead of silently occupying a slot.
+  const featuredItems = startPage.featuredAppIds.map(id => ({
+    id,
+    app: apps.find(app => app.id === id) || null
+  }));
+  const addableApps = apps.filter(app => !startPage.featuredAppIds.includes(app.id));
+  const featuredLabel = item =>
+    item.app ? getLocalizedContent(item.app.name, currentLanguage) || item.id : item.id;
+  const addFeaturedApp = id => {
+    if (!id || startPage.featuredAppIds.includes(id)) return;
+    updateStartPage({ featuredAppIds: [...startPage.featuredAppIds, id] });
+  };
+  const removeFeaturedApp = id => {
+    updateStartPage({ featuredAppIds: startPage.featuredAppIds.filter(entry => entry !== id) });
+  };
 
   const handleToggle = async () => {
     if (!status) return;
@@ -109,6 +298,118 @@ function AdminOfficeIntegrationPage() {
     return out;
   };
 
+  /**
+   * Can the operator's *browser* load this URL?
+   *
+   * This is the question that matters for the `cdn` and `custom` modes, where
+   * the Office client fetches Office.js itself and this server never does. The
+   * admin's browser sits on the same corporate network as the Outlook clients,
+   * so it is the closest available stand-in.
+   *
+   * `no-cors` keeps the check working against a mirror that sends no CORS
+   * headers: the response is opaque, but resolving at all means it loaded.
+   * Nothing is executed — loading Office.js for real would strip
+   * `history.pushState` from this page.
+   */
+  const probeFromBrowser = async url => {
+    // A CORS fetch first, because it yields a real status. Every Office.js CDN
+    // Microsoft documents sends `access-control-allow-origin: *`, so this is
+    // the normal path and it can tell 200 apart from a 404 or — the case that
+    // matters on the networks this feature targets — an intercepting proxy's
+    // HTTP block page.
+    try {
+      const response = await fetch(url, { mode: 'cors', cache: 'no-store' });
+      return { state: response.ok ? 'ok' : 'blocked', detail: `HTTP ${response.status}` };
+    } catch {
+      // No CORS headers (a mirror, typically). `no-cors` still tells us whether
+      // the request left the building, but the response is opaque: status is 0
+      // even on success, so a 404 or a block page is indistinguishable from a
+      // hit. Report that as its own weaker state rather than a tick.
+      try {
+        await fetch(url, { mode: 'no-cors', cache: 'no-store' });
+        return { state: 'opaque' };
+      } catch {
+        return { state: 'blocked' };
+      }
+    }
+  };
+
+  const handleTestOfficeJs = async () => {
+    // Whatever is on screen: every preset, plus the custom URL when that mode
+    // is selected, so one click answers "which of these can we actually use?".
+    // In custom mode the URL the admin actually cares about is their own, so
+    // it is probed and rendered alongside the presets. In the other modes it is
+    // not in play — probing it would waste a request and, worse, a half-typed
+    // value would fail validation and fail the whole batch.
+    const urls = [
+      ...new Set(
+        [
+          ...officeJsPresets.map(p => p.url),
+          officeJsMode === 'custom' ? officeJsCustomUrl.trim() : ''
+        ].filter(Boolean)
+      )
+    ];
+    if (urls.length === 0) return;
+
+    setOfficeJsTesting(true);
+    setOfficeJsReach(
+      Object.fromEntries(urls.map(u => [u, { server: 'checking', browser: 'checking' }]))
+    );
+
+    // The two halves answer different questions, so neither waits on the other.
+    const serverCheck = makeAdminApiCall('/admin/office-integration/office-js/test', {
+      method: 'POST',
+      body: { urls }
+    })
+      .then(res => {
+        setOfficeJsReach(prev => {
+          const next = { ...prev };
+          for (const r of res.data?.results || []) {
+            next[r.url] = {
+              ...next[r.url],
+              server: r.reachable ? 'ok' : 'blocked',
+              serverDetail: r.error || (r.status ? `HTTP ${r.status}` : undefined)
+            };
+          }
+          return next;
+        });
+      })
+      .catch(err => {
+        // The check itself failed (validation, expired session, 500). That is
+        // not evidence the CDN is unreachable, so it gets its own state rather
+        // than painting every row as blocked.
+        const detail = getAdminApiErrorMessage(err);
+        setOfficeJsReach(prev =>
+          Object.fromEntries(
+            Object.entries(prev).map(([u, v]) => [
+              u,
+              { ...v, server: 'error', serverDetail: detail }
+            ])
+          )
+        );
+      });
+
+    const browserChecks = urls.map(async url => {
+      const { state, detail } = await probeFromBrowser(url);
+      setOfficeJsReach(prev => ({
+        ...prev,
+        [url]: { ...prev[url], browser: state, browserDetail: detail }
+      }));
+    });
+
+    await Promise.allSettled([serverCheck, ...browserChecks]);
+    setOfficeJsTesting(false);
+  };
+
+  // What the reachability list renders. In custom mode the admin's own URL is
+  // listed first, because it is the one their deployment actually uses — a
+  // result for four Microsoft CDNs and none for their mirror answers the wrong
+  // question.
+  const officeJsTestTargets =
+    officeJsMode === 'custom' && officeJsCustomUrl.trim()
+      ? [{ id: '__custom', url: officeJsCustomUrl.trim(), isCustom: true }, ...officeJsPresets]
+      : officeJsPresets;
+
   const handleSaveConfig = async () => {
     try {
       setSaving(true);
@@ -128,7 +429,20 @@ function AdminOfficeIntegrationPage() {
           displayName: trimLocalized(displayName),
           description: trimLocalized(description),
           starterPrompts: cleanedPrompts,
-          useLocalOfficejs
+          officeJsMode,
+          // An empty field would fail validation and 400 the WHOLE save,
+          // losing unrelated edits — and the field is hidden in bundled/custom
+          // mode, so the admin could not even see what was rejected. Omitting
+          // the key leaves the stored value untouched.
+          ...(officeJsCdnUrl.trim() ? { officeJsCdnUrl: officeJsCdnUrl.trim() } : {}),
+          officeJsCustomUrl: officeJsCustomUrl.trim(),
+          startPage: {
+            defaultPage: startPage.defaultPage,
+            // '' means "automatic"; the server stores no id for it.
+            defaultAppId: startPage.defaultAppId || '',
+            featuredAppIds: startPage.featuredAppIds
+          },
+          defaultMailAction
         }
       });
       await loadStatus();
@@ -137,10 +451,13 @@ function AdminOfficeIntegrationPage() {
         text: t('admin.officeIntegration.saved', 'Configuration saved')
       });
       setTimeout(() => setMessage(null), 3000);
-    } catch (_err) {
+    } catch (err) {
+      // The server names the offending field; the generic string does not.
       setMessage({
         type: 'error',
-        text: t('admin.officeIntegration.saveError', 'Failed to save configuration')
+        text:
+          getAdminApiErrorMessage(err) ||
+          t('admin.officeIntegration.saveError', 'Failed to save configuration')
       });
     } finally {
       setSaving(false);
@@ -177,6 +494,11 @@ function AdminOfficeIntegrationPage() {
     });
   };
 
+  const selectClass =
+    'block w-full rounded-md border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 dark:text-gray-100 px-3 py-2 text-sm focus:outline-hidden focus:ring-2 focus:ring-indigo-500 disabled:opacity-50 disabled:cursor-not-allowed';
+  const labelClass = 'block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1';
+  const helpClass = 'mt-2 text-xs text-gray-500 dark:text-gray-400';
+
   const manifestUrl = status?.manifestUrl || buildApiUrl('integrations/office-addin/manifest.xml');
   const manifestApiPath = buildApiUrl('integrations/office-addin/manifest.xml');
 
@@ -202,7 +524,7 @@ function AdminOfficeIntegrationPage() {
   return (
     <div className="min-h-screen bg-gray-50 dark:bg-gray-900">
       {/* Header */}
-      <div className="bg-white dark:bg-gray-800 shadow-sm border-b border-gray-200 dark:border-gray-700">
+      <div className="bg-white dark:bg-gray-800 shadow-xs border-b border-gray-200 dark:border-gray-700">
         <div className="max-w-4xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
           <h1 className="text-3xl font-bold text-gray-900 dark:text-gray-100">
             {t('admin.officeIntegration.title', 'Office Integration')}
@@ -237,7 +559,7 @@ function AdminOfficeIntegrationPage() {
         ) : (
           <>
             {/* Enable / Disable */}
-            <div className="bg-white dark:bg-gray-800 rounded-xl shadow-sm border border-gray-200 dark:border-gray-700 p-6">
+            <div className="bg-white dark:bg-gray-800 rounded-xl shadow-xs border border-gray-200 dark:border-gray-700 p-6">
               <div className="flex items-center justify-between">
                 <div>
                   <h2 className="text-lg font-semibold text-gray-900 dark:text-gray-100">
@@ -278,7 +600,7 @@ function AdminOfficeIntegrationPage() {
                   <span className="font-medium text-gray-700 dark:text-gray-300">
                     OAuth Client ID:
                   </span>{' '}
-                  <code className="font-mono text-xs bg-gray-100 dark:bg-gray-700 px-2 py-0.5 rounded">
+                  <code className="font-mono text-xs bg-gray-100 dark:bg-gray-700 px-2 py-0.5 rounded-sm">
                     {status.oauthClientId}
                   </code>
                   {' — '}
@@ -294,7 +616,7 @@ function AdminOfficeIntegrationPage() {
 
             {/* Manifest */}
             {status?.enabled && (
-              <div className="bg-white dark:bg-gray-800 rounded-xl shadow-sm border border-gray-200 dark:border-gray-700 p-6">
+              <div className="bg-white dark:bg-gray-800 rounded-xl shadow-xs border border-gray-200 dark:border-gray-700 p-6">
                 <h2 className="text-lg font-semibold text-gray-900 dark:text-gray-100 mb-4">
                   {t('admin.officeIntegration.manifestTitle', 'Office Manifest')}
                 </h2>
@@ -309,7 +631,7 @@ function AdminOfficeIntegrationPage() {
                     type="text"
                     readOnly
                     value={manifestUrl}
-                    className="flex-1 rounded-lg border border-gray-300 dark:border-gray-600 bg-gray-50 dark:bg-gray-700 px-3 py-2 text-sm font-mono text-gray-700 dark:text-gray-300 focus:outline-none"
+                    className="flex-1 rounded-lg border border-gray-300 dark:border-gray-600 bg-gray-50 dark:bg-gray-700 px-3 py-2 text-sm font-mono text-gray-700 dark:text-gray-300 focus:outline-hidden"
                     onClick={e => e.target.select()}
                   />
                   <button
@@ -331,7 +653,7 @@ function AdminOfficeIntegrationPage() {
             )}
 
             {/* Display Settings */}
-            <div className="bg-white dark:bg-gray-800 rounded-xl shadow-sm border border-gray-200 dark:border-gray-700 p-6">
+            <div className="bg-white dark:bg-gray-800 rounded-xl shadow-xs border border-gray-200 dark:border-gray-700 p-6">
               <h2 className="text-lg font-semibold text-gray-900 dark:text-gray-100 mb-4">
                 {t('admin.officeIntegration.displayTitle', 'Display Settings')}
               </h2>
@@ -351,43 +673,450 @@ function AdminOfficeIntegrationPage() {
               </div>
             </div>
 
-            {/* Offline / Local Office.js */}
-            <div className="bg-white dark:bg-gray-800 rounded-xl shadow-sm border border-gray-200 dark:border-gray-700 p-6">
+            {/* Office.js source */}
+            <div className="bg-white dark:bg-gray-800 rounded-xl shadow-xs border border-gray-200 dark:border-gray-700 p-6">
               <h2 className="text-lg font-semibold text-gray-900 dark:text-gray-100 mb-1">
-                {t('admin.officeIntegration.offlineTitle', 'Offline Mode (Local Office.js)')}
+                {t('admin.officeIntegration.officeJsTitle', 'Office.js Source')}
               </h2>
               <p className="text-sm text-gray-500 dark:text-gray-400 mb-4">
                 {t(
-                  'admin.officeIntegration.offlineDesc',
-                  'Enable this if your environment blocks access to appsforoffice.microsoft.com. The add-in will then load the Office JavaScript library from this server instead of the Microsoft CDN.'
+                  'admin.officeIntegration.officeJsDesc',
+                  'Where the add-in loads the Office JavaScript library from. Change this if your network blocks Microsoft\u2019s CDN. Office.js loads the rest of the library relative to this URL, so one setting covers the whole library.'
                 )}
               </p>
-              <label className="flex items-center gap-3 cursor-pointer">
-                <input
-                  type="checkbox"
-                  checked={useLocalOfficejs}
-                  onChange={e => setUseLocalOfficejs(e.target.checked)}
-                  className="h-4 w-4 rounded border-gray-300 text-indigo-600 focus:ring-indigo-500"
-                />
-                <span className="text-sm font-medium text-gray-700 dark:text-gray-300">
+
+              <div className="space-y-3">
+                {OFFICE_JS_MODES.map(({ id, labelKey, labelFallback, descKey, descFallback }) => (
+                  <div
+                    key={id}
+                    className="flex items-start gap-3 rounded-lg border border-gray-200 dark:border-gray-700 px-4 py-3 hover:bg-gray-50 dark:hover:bg-gray-700/40"
+                  >
+                    <input
+                      id={`officeJsMode-${id}`}
+                      type="radio"
+                      name="officeJsMode"
+                      value={id}
+                      checked={officeJsMode === id}
+                      onChange={() => setOfficeJsMode(id)}
+                      aria-describedby={`officeJsMode-${id}-desc`}
+                      className="mt-0.5 h-4 w-4 border-gray-300 text-indigo-600 focus:ring-indigo-500"
+                    />
+                    <div>
+                      <label
+                        htmlFor={`officeJsMode-${id}`}
+                        className="block text-sm font-medium text-gray-700 dark:text-gray-300 cursor-pointer"
+                      >
+                        {t(labelKey, labelFallback)}
+                      </label>
+                      <p
+                        id={`officeJsMode-${id}-desc`}
+                        className="text-xs text-gray-500 dark:text-gray-400 mt-0.5"
+                      >
+                        {t(descKey, descFallback)}
+                      </p>
+                    </div>
+                  </div>
+                ))}
+              </div>
+
+              {/* Upstream CDN: used directly by `cdn`, and as the proxy origin. */}
+              {(officeJsMode === 'cdn' || officeJsMode === 'proxy') && (
+                <div className="mt-4">
+                  <label
+                    htmlFor="officeJsCdnUrl"
+                    className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1"
+                  >
+                    {t('admin.officeIntegration.officeJsCdnUrlLabel', 'Microsoft CDN URL')}
+                  </label>
+                  <input
+                    id="officeJsCdnUrl"
+                    type="url"
+                    value={officeJsCdnUrl}
+                    onChange={e => setOfficeJsCdnUrl(e.target.value)}
+                    className="w-full rounded-lg border border-gray-300 dark:border-gray-600 dark:bg-gray-900 px-3 py-2 text-sm text-gray-900 dark:text-gray-100 focus:border-indigo-500 focus:ring-indigo-500"
+                    placeholder="https://officeapis.public.onecdn.static.microsoft/1/office.js"
+                  />
+                  <p className="mt-1 text-xs text-gray-500 dark:text-gray-400">
+                    {t(
+                      'admin.officeIntegration.officeJsCdnUrlHint',
+                      'Must end in /office.js. Pick a known CDN below, or paste another.'
+                    )}
+                  </p>
+                </div>
+              )}
+
+              {officeJsMode === 'custom' && (
+                <div className="mt-4">
+                  <label
+                    htmlFor="officeJsCustomUrl"
+                    className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1"
+                  >
+                    {t('admin.officeIntegration.officeJsCustomUrlLabel', 'Custom Office.js URL')}
+                  </label>
+                  <input
+                    id="officeJsCustomUrl"
+                    type="url"
+                    value={officeJsCustomUrl}
+                    onChange={e => setOfficeJsCustomUrl(e.target.value)}
+                    className="w-full rounded-lg border border-gray-300 dark:border-gray-600 dark:bg-gray-900 px-3 py-2 text-sm text-gray-900 dark:text-gray-100 focus:border-indigo-500 focus:ring-indigo-500"
+                    placeholder="https://cdn.example.com/office/office.js"
+                  />
+                  <p className="mt-1 text-xs text-gray-500 dark:text-gray-400">
+                    {t(
+                      'admin.officeIntegration.officeJsCustomUrlHint',
+                      'Must end in /office.js \u2014 Office.js derives the path to every other file it needs from this URL, and cannot find them without that filename. Point this at a pull-through mirror of the Microsoft CDN.'
+                    )}
+                  </p>
+                </div>
+              )}
+
+              {/* Known CDNs, with reachability. Which of these a network allows
+                  varies — a `microsoft.com` suffix block catches the legacy host
+                  but not `*.static.microsoft` — so the test is per URL. */}
+              {officeJsMode !== 'bundled' && officeJsPresets.length > 0 && (
+                <div className="mt-5 border-t border-gray-200 dark:border-gray-700 pt-4">
+                  <div className="flex items-center justify-between gap-3 mb-1">
+                    <h3 className="text-sm font-medium text-gray-700 dark:text-gray-300">
+                      {t('admin.officeIntegration.officeJsKnownCdns', 'Known Office.js CDNs')}
+                    </h3>
+                    <button
+                      type="button"
+                      onClick={handleTestOfficeJs}
+                      disabled={officeJsTesting}
+                      className="inline-flex items-center gap-1.5 rounded-lg border border-gray-300 dark:border-gray-600 px-3 py-1.5 text-xs font-medium text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-700 disabled:opacity-50"
+                    >
+                      <Icon name={officeJsTesting ? 'refresh' : 'play'} className="h-3.5 w-3.5" />
+                      {officeJsTesting
+                        ? t('admin.officeIntegration.officeJsTesting', 'Testing\u2026')
+                        : t('admin.officeIntegration.officeJsTest', 'Test reachability')}
+                    </button>
+                  </div>
+                  <p className="text-xs text-gray-500 dark:text-gray-400 mb-3">
+                    {t(
+                      'admin.officeIntegration.officeJsKnownCdnsDesc',
+                      'Checks each URL from this server and from your browser. The server result is what the Proxy mode needs; the browser result is the closer stand-in for an Outlook client, which loads Office.js itself in the Microsoft CDN and Custom modes.'
+                    )}
+                  </p>
+
+                  <ul className="space-y-2" aria-live="polite">
+                    {officeJsTestTargets.map(preset => {
+                      const reach = officeJsReach[preset.url];
+                      const selected =
+                        officeJsMode === 'custom'
+                          ? officeJsCustomUrl === preset.url
+                          : officeJsCdnUrl === preset.url;
+                      return (
+                        <li
+                          key={preset.id}
+                          className="flex items-start justify-between gap-3 rounded-lg border border-gray-200 dark:border-gray-700 px-3 py-2"
+                        >
+                          <div className="min-w-0">
+                            <p className="text-sm font-medium text-gray-700 dark:text-gray-300">
+                              {preset.isCustom
+                                ? t(
+                                    'admin.officeIntegration.officeJsPresetCustom',
+                                    'Your custom URL'
+                                  )
+                                : t(
+                                    `admin.officeIntegration.officeJsPreset.${preset.id}`,
+                                    preset.id
+                                  )}
+                            </p>
+                            <code className="block truncate font-mono text-xs text-gray-500 dark:text-gray-400">
+                              {preset.url}
+                            </code>
+                            {reach && (
+                              <p className="mt-1 text-xs text-gray-500 dark:text-gray-400">
+                                <ReachBadge
+                                  state={reach.server}
+                                  label={t('admin.officeIntegration.officeJsFromServer', 'server')}
+                                  detail={reach.serverDetail}
+                                />{' '}
+                                <ReachBadge
+                                  state={reach.browser}
+                                  detail={reach.browserDetail}
+                                  label={t(
+                                    'admin.officeIntegration.officeJsFromBrowser',
+                                    'browser'
+                                  )}
+                                />
+                              </p>
+                            )}
+                          </div>
+                          <button
+                            type="button"
+                            onClick={() =>
+                              officeJsMode === 'custom'
+                                ? setOfficeJsCustomUrl(preset.url)
+                                : setOfficeJsCdnUrl(preset.url)
+                            }
+                            disabled={selected}
+                            className="shrink-0 rounded-lg border border-gray-300 dark:border-gray-600 px-2.5 py-1 text-xs font-medium text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-700 disabled:opacity-50"
+                          >
+                            {selected
+                              ? t('admin.officeIntegration.officeJsPresetInUse', 'In use')
+                              : t('admin.officeIntegration.officeJsPresetUse', 'Use')}
+                          </button>
+                        </li>
+                      );
+                    })}
+                  </ul>
+                </div>
+              )}
+
+              {officeJsResolvedUrl && (
+                <p className="mt-4 text-xs text-gray-500 dark:text-gray-400">
+                  {t('admin.officeIntegration.officeJsResolved', 'Currently served to the add-in:')}{' '}
+                  <code className="font-mono text-gray-700 dark:text-gray-300">
+                    {officeJsResolvedUrl}
+                  </code>
+                </p>
+              )}
+
+              {officeJsResolvedMode && officeJsResolvedMode !== status?.officeJsMode && (
+                <div className="mt-3 rounded-lg bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-700 px-4 py-3 text-sm text-red-800 dark:text-red-300">
                   {t(
-                    'admin.officeIntegration.offlineLabel',
-                    'Serve Office.js from this server (offline mode)'
+                    'admin.officeIntegration.officeJsFallbackWarning',
+                    'The saved Office.js source could not be used, so the add-in is falling back to {{mode}}. Check the URL above.',
+                    { mode: officeJsResolvedMode }
                   )}
-                </span>
-              </label>
-              {useLocalOfficejs && (
+                </div>
+              )}
+
+              {officeJsMode !== 'cdn' && (
                 <div className="mt-3 rounded-lg bg-amber-50 dark:bg-amber-900/20 border border-amber-200 dark:border-amber-700 px-4 py-3 text-sm text-amber-800 dark:text-amber-300">
                   {t(
-                    'admin.officeIntegration.offlineWarning',
-                    'Offline mode is active. The add-in will load Office.js from /office/office-js/office.js on this server. Note: Microsoft AppSource will reject add-ins that do not use the official CDN URL — this mode is intended for internal enterprise deployments only.'
+                    'admin.officeIntegration.officeJsAppSourceWarning',
+                    'Microsoft AppSource requires add-ins to load Office.js from the official CDN. Any other source is supported for internal enterprise deployments only \u2014 which is what sideloading or Microsoft 365 admin center deployment does.'
+                  )}
+                </div>
+              )}
+
+              {officeJsMode === 'bundled' && (
+                <div className="mt-3 rounded-lg bg-amber-50 dark:bg-amber-900/20 border border-amber-200 dark:border-amber-700 px-4 py-3 text-sm text-amber-800 dark:text-amber-300">
+                  {t(
+                    'admin.officeIntegration.officeJsBundledWarning',
+                    'The bundled copy comes from the @microsoft/office-js npm package, which Microsoft no longer maintains. It never updates \u2014 including for security fixes \u2014 and adds roughly 86 MB to the build. Prefer Proxy or Custom CDN, and use Bundled only where the server has no outbound access at all.'
                   )}
                 </div>
               )}
             </div>
 
+            {/* Start page: the pane's landing view */}
+            <div className="bg-white dark:bg-gray-800 rounded-xl shadow-xs border border-gray-200 dark:border-gray-700 p-6">
+              <h2 className="text-lg font-semibold text-gray-900 dark:text-gray-100 mb-1">
+                {t('admin.officeIntegration.startPageTitle', 'Start Page')}
+              </h2>
+              <p className="text-sm text-gray-500 dark:text-gray-400 mb-4">
+                {t(
+                  'admin.officeIntegration.startPageDesc',
+                  'What the task pane shows after sign-in — and which app answers there. Messages typed on the start page open that app and are sent right away, with the open email and any collected emails as context.'
+                )}
+              </p>
+
+              <div className="max-w-lg space-y-5">
+                <div>
+                  <label htmlFor="office-startPage-defaultPage" className={labelClass}>
+                    {t('admin.officeIntegration.defaultPage', 'Landing view')}
+                  </label>
+                  <select
+                    id="office-startPage-defaultPage"
+                    value={startPage.defaultPage}
+                    onChange={e => updateStartPage({ defaultPage: e.target.value })}
+                    className={selectClass}
+                  >
+                    <option value="start">
+                      {t(
+                        'admin.officeIntegration.defaultPageStart',
+                        'Start page (greeting, chat input and app shortcuts)'
+                      )}
+                    </option>
+                    <option value="apps">
+                      {t('admin.officeIntegration.defaultPageApps', 'All apps (the app list)')}
+                    </option>
+                  </select>
+                  <p className={helpClass}>
+                    {t(
+                      'admin.officeIntegration.defaultPageHelp',
+                      'Where the pane lands after sign-in and where the back button in a chat leads. The app list stays one tap away from the start page either way.'
+                    )}
+                  </p>
+                </div>
+
+                <div>
+                  <label htmlFor="office-startPage-defaultAppId" className={labelClass}>
+                    {t('admin.officeIntegration.defaultApp', 'Default chat app')}
+                  </label>
+                  <select
+                    id="office-startPage-defaultAppId"
+                    value={startPage.defaultAppId}
+                    disabled={appsLoading || startPage.defaultPage !== 'start'}
+                    onChange={e => updateStartPage({ defaultAppId: e.target.value })}
+                    className={selectClass}
+                  >
+                    <option value="">
+                      {t(
+                        'admin.officeIntegration.defaultAppAutomatic',
+                        'First available app (automatic)'
+                      )}
+                    </option>
+                    {chatApps.map(app => (
+                      <option key={app.id} value={app.id}>
+                        {appLabel(app)}
+                      </option>
+                    ))}
+                    {/* Keep a stored id visible even if the app no longer exists. */}
+                    {!appsLoading &&
+                      startPage.defaultAppId &&
+                      !chatApps.some(app => app.id === startPage.defaultAppId) && (
+                        <option value={startPage.defaultAppId}>
+                          {startPage.defaultAppId} (
+                          {t('admin.officeIntegration.unknownApp', 'not found')})
+                        </option>
+                      )}
+                  </select>
+                  <p className={helpClass}>
+                    {t(
+                      'admin.officeIntegration.defaultAppHelp',
+                      'The app whose chat input the start page shows. When unset — or when a user cannot access it — the top-ranked chat app that user can access is used: favorites first, then the default apps below.'
+                    )}
+                  </p>
+                </div>
+
+                <div>
+                  <span className={labelClass}>
+                    {t('admin.officeIntegration.featuredApps', 'Default apps')}
+                  </span>
+                  {featuredItems.length === 0 ? (
+                    <p className="rounded-md border border-dashed border-gray-300 dark:border-gray-600 px-3 py-4 text-xs text-gray-500 dark:text-gray-400">
+                      {t(
+                        'admin.officeIntegration.featuredAppsEmpty',
+                        'No default apps yet — the start page lists apps in their configured order, favorites first.'
+                      )}
+                    </p>
+                  ) : (
+                    <ReorderableList
+                      items={featuredItems}
+                      onReorder={items =>
+                        updateStartPage({ featuredAppIds: items.map(item => item.id) })
+                      }
+                      getKey={item => item.id}
+                      getLabel={featuredLabel}
+                      renderItem={(item, index) => (
+                        <span className="flex min-w-0 items-center gap-2">
+                          <span className="w-5 shrink-0 text-xs font-semibold text-gray-400 dark:text-gray-500">
+                            {index + 1}.
+                          </span>
+                          {item.app && (
+                            <span
+                              className="flex h-6 w-6 shrink-0 items-center justify-center rounded-md text-white"
+                              style={{ backgroundColor: item.app.color || '#4f46e5' }}
+                            >
+                              <Icon name={item.app.icon} size="sm" className="h-3.5 w-3.5" />
+                            </span>
+                          )}
+                          <span className="min-w-0 flex-1 truncate text-sm text-gray-900 dark:text-gray-100">
+                            {featuredLabel(item)}
+                            {!item.app && !appsLoading && (
+                              <span className="ml-1 text-xs text-amber-600 dark:text-amber-400">
+                                ({t('admin.officeIntegration.unknownApp', 'not found')})
+                              </span>
+                            )}
+                            {item.app?.enabled === false && (
+                              <span className="ml-1 text-xs text-gray-500 dark:text-gray-400">
+                                ({t('admin.officeIntegration.disabledApp', 'disabled')})
+                              </span>
+                            )}
+                          </span>
+                        </span>
+                      )}
+                      renderActions={item => (
+                        <button
+                          type="button"
+                          onClick={() => removeFeaturedApp(item.id)}
+                          aria-label={t(
+                            'admin.officeIntegration.removeFeaturedApp',
+                            'Remove {{name}}',
+                            {
+                              name: featuredLabel(item)
+                            }
+                          )}
+                          title={t('admin.officeIntegration.removeFeaturedApp', 'Remove {{name}}', {
+                            name: featuredLabel(item)
+                          })}
+                          className="rounded-md p-1 text-gray-400 hover:bg-red-50 hover:text-red-600 dark:hover:bg-red-900/30"
+                        >
+                          <Icon name="trash" size="sm" />
+                        </button>
+                      )}
+                    />
+                  )}
+                  <select
+                    id="office-startPage-addFeaturedApp"
+                    value=""
+                    disabled={appsLoading || addableApps.length === 0}
+                    onChange={e => addFeaturedApp(e.target.value)}
+                    aria-label={t('admin.officeIntegration.addFeaturedApp', 'Add a default app')}
+                    className={`${selectClass} mt-2`}
+                  >
+                    <option value="">
+                      {t('admin.officeIntegration.addFeaturedApp', 'Add a default app')}
+                    </option>
+                    {addableApps.map(app => (
+                      <option key={app.id} value={app.id}>
+                        {appLabel(app)}
+                      </option>
+                    ))}
+                  </select>
+                  <p className={helpClass}>
+                    {t(
+                      'admin.officeIntegration.featuredAppsHelp',
+                      "Shown on the start page in this order, right after each user's favorites. Users who cannot access an app never see it. Drag a row or use the arrows to reorder."
+                    )}
+                  </p>
+                </div>
+              </div>
+            </div>
+
+            {/* Answer actions: what the button under an assistant reply does */}
+            <div className="bg-white dark:bg-gray-800 rounded-xl shadow-xs border border-gray-200 dark:border-gray-700 p-6">
+              <h2 className="text-lg font-semibold text-gray-900 dark:text-gray-100 mb-1">
+                {t('admin.officeIntegration.mailActionTitle', 'Answer Actions')}
+              </h2>
+              <p className="text-sm text-gray-500 dark:text-gray-400 mb-4">
+                {t(
+                  'admin.officeIntegration.mailActionDesc',
+                  'What the button under each assistant answer does in Outlook. Every action stays available in the button\u2019s menu \u2014 this only picks the one that needs no extra tap.'
+                )}
+              </p>
+
+              <div className="max-w-lg">
+                <label htmlFor="office-defaultMailAction" className={labelClass}>
+                  {t('admin.officeIntegration.defaultMailAction', 'Default action')}
+                </label>
+                <select
+                  id="office-defaultMailAction"
+                  value={defaultMailAction}
+                  onChange={e => setDefaultMailAction(e.target.value)}
+                  className={selectClass}
+                >
+                  {MAIL_ACTION_CHOICES.map(choice => (
+                    <option key={choice} value={choice}>
+                      {mailActionLabels[choice]}
+                    </option>
+                  ))}
+                </select>
+                <p className={helpClass}>
+                  {t(
+                    'admin.officeIntegration.defaultMailActionHelp',
+                    'Users can override this per device in the task pane\u2019s Settings dialog. A choice Outlook cannot offer for the open item falls back to one it can \u2014 pick Reply all and a user composing a draft still gets Insert.'
+                  )}
+                </p>
+              </div>
+            </div>
+
             {/* Starter Prompts */}
-            <div className="bg-white dark:bg-gray-800 rounded-xl shadow-sm border border-gray-200 dark:border-gray-700 p-6">
+            <div className="bg-white dark:bg-gray-800 rounded-xl shadow-xs border border-gray-200 dark:border-gray-700 p-6">
               <div className="flex items-start justify-between gap-4">
                 <div>
                   <h2 className="text-lg font-semibold text-gray-900 dark:text-gray-100">
@@ -434,7 +1163,7 @@ function AdminOfficeIntegrationPage() {
                             type="button"
                             onClick={() => handleMovePrompt(index, -1)}
                             disabled={index === 0}
-                            className="rounded px-2 py-1 text-xs text-gray-600 dark:text-gray-300 hover:bg-gray-200 dark:hover:bg-gray-700 disabled:opacity-40 disabled:hover:bg-transparent"
+                            className="rounded-sm px-2 py-1 text-xs text-gray-600 dark:text-gray-300 hover:bg-gray-200 dark:hover:bg-gray-700 disabled:opacity-40 disabled:hover:bg-transparent"
                             aria-label={t('admin.officeIntegration.moveUp', 'Move up')}
                           >
                             ↑
@@ -443,7 +1172,7 @@ function AdminOfficeIntegrationPage() {
                             type="button"
                             onClick={() => handleMovePrompt(index, 1)}
                             disabled={index === starterPrompts.length - 1}
-                            className="rounded px-2 py-1 text-xs text-gray-600 dark:text-gray-300 hover:bg-gray-200 dark:hover:bg-gray-700 disabled:opacity-40 disabled:hover:bg-transparent"
+                            className="rounded-sm px-2 py-1 text-xs text-gray-600 dark:text-gray-300 hover:bg-gray-200 dark:hover:bg-gray-700 disabled:opacity-40 disabled:hover:bg-transparent"
                             aria-label={t('admin.officeIntegration.moveDown', 'Move down')}
                           >
                             ↓
@@ -451,7 +1180,7 @@ function AdminOfficeIntegrationPage() {
                           <button
                             type="button"
                             onClick={() => handleRemovePrompt(index)}
-                            className="rounded px-2 py-1 text-xs text-red-600 hover:bg-red-50 dark:hover:bg-red-900/30"
+                            className="rounded-sm px-2 py-1 text-xs text-red-600 hover:bg-red-50 dark:hover:bg-red-900/30"
                           >
                             {t('admin.officeIntegration.remove', 'Remove')}
                           </button>

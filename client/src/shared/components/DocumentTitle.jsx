@@ -56,16 +56,19 @@ function DocumentTitle() {
       '/admin': 'documentTitle.admin',
       '/settings': 'documentTitle.settings',
       '/workflows': 'documentTitle.workflows',
-      '/prompts': 'documentTitle.prompts'
+      '/prompts': 'documentTitle.prompts',
+      '/chats': 'documentTitle.chats'
     };
 
     // Determine page-specific prefix based on route
     let pagePrefix = '';
     const pathname = location.pathname;
 
-    // Check route mappings
+    // Check route mappings ("/apps" is the apps browser; "/apps/:id" is an app page)
     const matchedRoute = Object.keys(routeTitleMap).find(route => pathname.startsWith(route));
-    if (matchedRoute) {
+    if (pathname === '/apps') {
+      pagePrefix = t('documentTitle.apps', 'Apps');
+    } else if (matchedRoute) {
       const translationKey = routeTitleMap[matchedRoute];
       const defaultValue = translationKey.split('.')[1]; // Extract default from key
       pagePrefix = t(translationKey, defaultValue.charAt(0).toUpperCase() + defaultValue.slice(1));

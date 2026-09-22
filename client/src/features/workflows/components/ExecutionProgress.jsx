@@ -86,7 +86,7 @@ function ParameterRow({ name, value }) {
     <div className="px-3 py-2 text-xs">
       <div className="flex items-start gap-2">
         <span className="font-mono text-gray-500 dark:text-gray-400 min-w-0 shrink-0">{name}</span>
-        <span className="text-gray-900 dark:text-gray-100 break-words flex-1 min-w-0">
+        <span className="text-gray-900 dark:text-gray-100 wrap-break-word flex-1 min-w-0">
           {inlineDisplay}
         </span>
       </div>
@@ -95,7 +95,7 @@ function ParameterRow({ name, value }) {
           <summary className="cursor-pointer text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-200">
             show full
           </summary>
-          <pre className="mt-1 p-2 bg-gray-50 dark:bg-gray-900 rounded border border-gray-200 dark:border-gray-700 overflow-auto max-h-96 whitespace-pre-wrap break-words">
+          <pre className="mt-1 p-2 bg-gray-50 dark:bg-gray-900 rounded-sm border border-gray-200 dark:border-gray-700 overflow-auto max-h-96 whitespace-pre-wrap wrap-break-word">
             {typeof value === 'string' ? value : JSON.stringify(value, null, 2)}
           </pre>
         </details>
@@ -148,7 +148,7 @@ function ItemDetails({ item, t, showTechnical }) {
           <div className="text-xs font-medium text-gray-500 dark:text-gray-400 mb-1">
             {t('workflows.progress.parameters', 'Parameters')}
           </div>
-          <div className="bg-white dark:bg-gray-800 rounded border border-gray-200 dark:border-gray-700 divide-y divide-gray-100 dark:divide-gray-700">
+          <div className="bg-white dark:bg-gray-800 rounded-sm border border-gray-200 dark:border-gray-700 divide-y divide-gray-100 dark:divide-gray-700">
             {inputEntries.map(([key, value]) => (
               <ParameterRow key={key} name={key} value={value} />
             ))}
@@ -162,7 +162,7 @@ function ItemDetails({ item, t, showTechnical }) {
           <div className="text-xs font-medium text-red-600 dark:text-red-400 mb-1">
             {t('workflows.progress.error', 'Error')}
           </div>
-          <div className="text-sm bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800/50 text-red-900 dark:text-red-200 rounded px-3 py-2 whitespace-pre-wrap break-words">
+          <div className="text-sm bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800/50 text-red-900 dark:text-red-200 rounded-sm px-3 py-2 whitespace-pre-wrap wrap-break-word">
             {item.rawResult.error}
           </div>
         </div>
@@ -177,7 +177,7 @@ function ItemDetails({ item, t, showTechnical }) {
               {item.outputVariable}
             </span>
           </div>
-          <pre className="text-xs bg-white dark:bg-gray-800 p-2 rounded border border-gray-200 dark:border-gray-700 overflow-auto max-h-48">
+          <pre className="text-xs bg-white dark:bg-gray-800 p-2 rounded-sm border border-gray-200 dark:border-gray-700 overflow-auto max-h-48">
             {typeof item.outputValue === 'string'
               ? item.outputValue
               : JSON.stringify(item.outputValue, null, 2)}
@@ -187,7 +187,7 @@ function ItemDetails({ item, t, showTechnical }) {
 
       {/* Plain summary of agent output when toggle is off */}
       {!showTechnical && typeof item.outputValue === 'string' && item.outputValue && (
-        <div className="mb-3 text-sm text-gray-700 dark:text-gray-300 whitespace-pre-wrap break-words max-h-48 overflow-y-auto">
+        <div className="mb-3 text-sm text-gray-700 dark:text-gray-300 whitespace-pre-wrap wrap-break-word max-h-48 overflow-y-auto">
           {item.outputValue.length > 600
             ? item.outputValue.substring(0, 600) + '…'
             : item.outputValue}
@@ -248,7 +248,7 @@ function ItemDetails({ item, t, showTechnical }) {
             <div className="text-xs font-medium text-gray-500 dark:text-gray-400 mb-1">
               {t('workflows.progress.rawOutput', 'Output')}
             </div>
-            <pre className="text-xs bg-white dark:bg-gray-800 p-2 rounded border border-gray-200 dark:border-gray-700 overflow-auto max-h-32">
+            <pre className="text-xs bg-white dark:bg-gray-800 p-2 rounded-sm border border-gray-200 dark:border-gray-700 overflow-auto max-h-32">
               {JSON.stringify(item.rawResult.output, null, 2)}
             </pre>
           </div>
@@ -582,7 +582,7 @@ function ExecutionProgress({ state, nodes = [] }) {
                       <span className="font-medium text-gray-900 dark:text-white">
                         {firstItem.name}
                       </span>
-                      <span className="text-xs bg-indigo-100 text-indigo-700 dark:bg-indigo-900/50 dark:text-indigo-300 px-2 py-0.5 rounded">
+                      <span className="text-xs bg-indigo-100 text-indigo-700 dark:bg-indigo-900/50 dark:text-indigo-300 px-2 py-0.5 rounded-sm">
                         {items.length} {t('workflows.progress.iterations', 'iterations')}
                       </span>
                     </div>
@@ -594,7 +594,7 @@ function ExecutionProgress({ state, nodes = [] }) {
                   </div>
                   <Icon
                     name={isGroupExpanded ? 'chevron-up' : 'chevron-down'}
-                    className="w-5 h-5 text-gray-400 flex-shrink-0"
+                    className="w-5 h-5 text-gray-400 shrink-0"
                   />
                 </button>
 
@@ -623,11 +623,11 @@ function ExecutionProgress({ state, nodes = [] }) {
                             <NodeStatus status={item.status} />
                             <div className="flex-1 min-w-0">
                               <div className="flex items-center gap-2 flex-wrap">
-                                <span className="text-xs bg-gray-100 text-gray-600 dark:bg-gray-700 dark:text-gray-400 px-2 py-0.5 rounded">
+                                <span className="text-xs bg-gray-100 text-gray-600 dark:bg-gray-700 dark:text-gray-400 px-2 py-0.5 rounded-sm">
                                   #{item.iteration}
                                 </span>
                                 {showTechnical && item.type === 'prompt' && item.model && (
-                                  <span className="text-xs bg-purple-100 text-purple-700 dark:bg-purple-900/50 dark:text-purple-300 px-2 py-0.5 rounded">
+                                  <span className="text-xs bg-purple-100 text-purple-700 dark:bg-purple-900/50 dark:text-purple-300 px-2 py-0.5 rounded-sm">
                                     {item.model}
                                   </span>
                                 )}
@@ -635,7 +635,7 @@ function ExecutionProgress({ state, nodes = [] }) {
                                   item.tokens &&
                                   (item.tokens.input > 0 || item.tokens.output > 0) && (
                                     <span
-                                      className="text-xs bg-gray-100 text-gray-600 dark:bg-gray-700 dark:text-gray-400 px-2 py-0.5 rounded"
+                                      className="text-xs bg-gray-100 text-gray-600 dark:bg-gray-700 dark:text-gray-400 px-2 py-0.5 rounded-sm"
                                       title={`Input: ${item.tokens.input}, Output: ${item.tokens.output}`}
                                     >
                                       {(item.tokens.input + item.tokens.output).toLocaleString()}{' '}
@@ -674,7 +674,7 @@ function ExecutionProgress({ state, nodes = [] }) {
                             {hasDetails && (
                               <Icon
                                 name={isItemExpanded ? 'chevron-up' : 'chevron-down'}
-                                className="w-5 h-5 text-gray-400 flex-shrink-0"
+                                className="w-5 h-5 text-gray-400 shrink-0"
                                 aria-hidden="true"
                               />
                             )}
@@ -715,7 +715,7 @@ function ExecutionProgress({ state, nodes = [] }) {
                     <Icon name={getTypeIcon(item.type)} className="w-4 h-4 text-gray-400" />
                     <span className="font-medium text-gray-900 dark:text-white">{item.name}</span>
                     {showTechnical && item.type === 'prompt' && item.model && (
-                      <span className="text-xs bg-purple-100 text-purple-700 dark:bg-purple-900/50 dark:text-purple-300 px-2 py-0.5 rounded">
+                      <span className="text-xs bg-purple-100 text-purple-700 dark:bg-purple-900/50 dark:text-purple-300 px-2 py-0.5 rounded-sm">
                         {item.model}
                       </span>
                     )}
@@ -723,7 +723,7 @@ function ExecutionProgress({ state, nodes = [] }) {
                       item.tokens &&
                       (item.tokens.input > 0 || item.tokens.output > 0) && (
                         <span
-                          className="text-xs bg-gray-100 text-gray-600 dark:bg-gray-700 dark:text-gray-400 px-2 py-0.5 rounded"
+                          className="text-xs bg-gray-100 text-gray-600 dark:bg-gray-700 dark:text-gray-400 px-2 py-0.5 rounded-sm"
                           title={`Input: ${item.tokens.input}, Output: ${item.tokens.output}`}
                         >
                           {(item.tokens.input + item.tokens.output).toLocaleString()} tokens
@@ -759,7 +759,7 @@ function ExecutionProgress({ state, nodes = [] }) {
                 {hasDetails && (
                   <Icon
                     name={isExpanded ? 'chevron-up' : 'chevron-down'}
-                    className="w-5 h-5 text-gray-400 flex-shrink-0"
+                    className="w-5 h-5 text-gray-400 shrink-0"
                     aria-hidden="true"
                   />
                 )}
@@ -793,7 +793,7 @@ function ExecutionProgress({ state, nodes = [] }) {
           <ol className="space-y-2">
             {(state.data.planCreated.tasks || []).map((task, idx) => (
               <li key={task.id || idx} className="flex items-start gap-2">
-                <span className="flex-shrink-0 w-5 h-5 rounded-full bg-purple-200 dark:bg-purple-800 text-purple-700 dark:text-purple-300 text-xs flex items-center justify-center font-medium">
+                <span className="shrink-0 w-5 h-5 rounded-full bg-purple-200 dark:bg-purple-800 text-purple-700 dark:text-purple-300 text-xs flex items-center justify-center font-medium">
                   {idx + 1}
                 </span>
                 <div className="flex-1 min-w-0">
@@ -805,7 +805,7 @@ function ExecutionProgress({ state, nodes = [] }) {
                       {task.tools.map(tool => (
                         <span
                           key={tool}
-                          className="text-xs bg-purple-100 text-purple-600 dark:bg-purple-900/50 dark:text-purple-400 px-1.5 py-0.5 rounded"
+                          className="text-xs bg-purple-100 text-purple-600 dark:bg-purple-900/50 dark:text-purple-400 px-1.5 py-0.5 rounded-sm"
                         >
                           {tool}
                         </span>

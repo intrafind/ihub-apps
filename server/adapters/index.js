@@ -46,20 +46,11 @@ export function getAdapter(provider) {
  * @param {Object} options - Additional options like temperature
  * @returns {Promise<Object>} Request details including URL, headers, and body
  */
-export async function createCompletionRequest(model, messages, apiKey, options = {}) {
+export async function createCompletionRequest(model, messages, apiKey, options = {}, context = {}) {
   const adapter = getAdapter(model.provider);
-  return await adapter.createCompletionRequest(model, messages, apiKey, options);
-}
-
-/**
- * Process a streaming response from the model
- * @param {string} provider - The provider name
- * @param {string} buffer - The response buffer to process
- * @returns {Promise<Object>} Result containing content, completion status and a normalized finish reason
- */
-export async function processResponseBuffer(provider, buffer) {
-  const adapter = getAdapter(provider);
-  return await adapter.processResponseBuffer(buffer);
+  // `context.signal` is the caller's abort / deadline signal: adapters that do
+  // network work while building the request (model discovery) honour it.
+  return await adapter.createCompletionRequest(model, messages, apiKey, options, context);
 }
 
 /**

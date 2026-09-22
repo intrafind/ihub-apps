@@ -128,6 +128,12 @@ The Docker build process uses **multi-stage builds**:
 3. **Development Stage**: Includes dev dependencies and source code mounting
 4. **Production Stage**: Optimized build with only production dependencies
 
+Every stage applies the Alpine security updates published since the base image was built. The
+production stage additionally removes the npm CLI: the runtime only executes `node`, and npm's
+bundled dependency tree is a recurring source of image vulnerabilities. `npm` and `npx` are
+therefore not available inside a running production container — use the development image (or the
+host) for anything that needs them.
+
 ### Build Arguments
 
 ```bash
@@ -296,10 +302,8 @@ npm run docker:test
 
 ### Production Volumes
 
-- **Configuration**: Initialized from host, mounted read-only
-- **Data**: Persistent volumes for runtime data
-- **Uploads**: Persistent volumes for user files
-- **Logs**: Persistent volumes for application logs
+- **Contents**: Single named volume (`ihub-contents`) mounted read-write at `/app/contents` — config, apps, models, prompts, locales, pages, sources, data, and uploads all live here. Seeded from the image's bundled defaults on first boot when empty (same `performInitialSetup` logic as the quickstart/dev setups), and written to at runtime by config migrations and admin-UI saves.
+- **Logs**: Separate persistent volume (`ihub-logs`) for application logs
 
 ## Environment Configuration
 
@@ -434,8 +438,8 @@ docker-compose -f docker-compose.prod.yml logs -f
 ### Backup Procedures
 
 ```bash
-# Backup volumes
-docker run --rm -v ihub-data:/data -v $(pwd)/backups:/backup alpine tar czf /backup/data-$(date +%Y%m%d).tar.gz -C /data .
+# Backup the whole contents/ volume (config, apps, models, prompts, data, uploads, ...)
+docker run --rm -v ihub-contents:/data -v $(pwd)/backups:/backup alpine tar czf /backup/contents-$(date +%Y%m%d).tar.gz -C /data .
 
 # Backup database (if using PostgreSQL)
 docker-compose exec ihub-db pg_dump -U ihub ihub > backup-$(date +%Y%m%d).sql
@@ -447,17 +451,14 @@ docker-compose exec ihub-db pg_dump -U ihub ihub > backup-$(date +%Y%m%d).sql
 # 1. Stop current application
 npm run server:stop
 
-# 2. Backup current data
-cp -r contents/data contents/data.backup
-cp -r contents/uploads contents/uploads.backup
+# 2. Backup current contents (optional, belt-and-suspenders)
+cp -r contents contents.backup
 
-# 3. Create Docker volumes
-docker volume create ihub-data
-docker volume create ihub-uploads
+# 3. Create the Docker volume
+docker volume create ihub-contents
 
-# 4. Copy data to volumes
-docker run --rm -v $(pwd)/contents/data:/source -v ihub-data:/dest alpine cp -r /source/* /dest/
-docker run --rm -v $(pwd)/contents/uploads:/source -v ihub-uploads:/dest alpine cp -r /source/* /dest/
+# 4. Copy contents/ into the volume
+docker run --rm -v $(pwd)/contents:/source -v ihub-contents:/dest alpine cp -r /source/* /dest/
 
 # 5. Start Docker environment
 npm run docker:up

@@ -150,7 +150,7 @@ export default function JobListPage() {
                         {job.status === 'completed' && (
                           <button
                             onClick={() => handleDownload(job.id)}
-                            className="px-2 py-1 text-xs bg-green-600 text-white rounded hover:bg-green-700 transition-colors"
+                            className="px-2 py-1 text-xs bg-green-600 text-white rounded-sm hover:bg-green-700 transition-colors"
                           >
                             Download
                           </button>
@@ -158,7 +158,7 @@ export default function JobListPage() {
                         {isActive && (
                           <button
                             onClick={() => handleCancel(job.id)}
-                            className="px-2 py-1 text-xs bg-red-100 text-red-700 dark:bg-red-900/30 dark:text-red-300 rounded hover:bg-red-200 dark:hover:bg-red-900/50 transition-colors"
+                            className="px-2 py-1 text-xs bg-red-100 text-red-700 dark:bg-red-900/30 dark:text-red-300 rounded-sm hover:bg-red-200 dark:hover:bg-red-900/50 transition-colors"
                           >
                             Cancel
                           </button>

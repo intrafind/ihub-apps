@@ -473,7 +473,7 @@ These optional fields work for all app types:
 | Field | Type | Default | Description |
 |-------|------|---------|-------------|
 | `enabled` | Boolean | `true` | Whether the app is enabled |
-| `order` | Number | - | Display order in app list |
+| `order` | Number | - | Display order in the apps browser, the start page and the sidebar. Editable by drag and drop under Admin → Apps → Reorder |
 | `category` | String | - | App category for grouping |
 
 ### Chat-Specific Fields Not Used in Redirect/Iframe Apps
@@ -528,7 +528,7 @@ Each app is defined with the following essential properties:
 | `icon`                  | String  | **Required.** Icon identifier for the app (see [Available Icons](#available-icons))                                      |
 | `system`                | Object  | **Required for chat type.** Localized system prompts/instructions for the AI model                                       |
 | `type`                  | String  | Optional. App type: `"chat"` (default), `"redirect"`, or `"iframe"`                                                     |
-| `order`                 | Number  | Optional. Display order in the app list                                                                                  |
+| `order`                 | Number  | Optional. Display order in the apps browser, the start page and the sidebar. Editable by drag and drop under Admin → Apps → Reorder |
 | `enabled`               | Boolean | Optional. Whether the app is enabled. Default: `true`                                                                    |
 | `category`              | String  | Optional. Category label for grouping apps in the UI                                                                     |
 | `preferredModel`        | String  | Optional. Default AI model to use with this app. If omitted, uses the model marked as default in `models.json`          |
@@ -549,6 +549,7 @@ Each app is defined with the following essential properties:
 | `imageGeneration`       | Object  | Optional. Default image generation parameters for this app. See [Image Generation](#image-generation-configuration) below |
 | `thinking`              | Object  | Optional. Extended thinking configuration for supported models. See [Thinking Configuration](#thinking-configuration) below |
 | `tools`                 | Array   | Optional. Array of tool identifiers available in this app                                                                |
+| `apps`                  | Array   | Optional. Array of app IDs this app may invoke as tools (`app__<id>`). Requires the `appAsTool` platform feature. See [Apps as Tools](#apps-as-tools-concierge-pattern) below |
 | `websearch`             | Object  | Optional. Unified web search configuration. See [Web Search Configuration](#web-search-configuration) below             |
 | `sources`               | Array   | Optional. Array of source reference IDs for knowledge base access                                                       |
 | `allowInheritance`      | Boolean | Optional. Allow child apps to inherit configuration from this app. Default: `false`                                      |
@@ -684,6 +685,7 @@ When a setting is disabled (`false`), the corresponding UI element will be hidde
 - `imageUpload` – allow users to attach images (see [Image Upload Feature](image-upload-feature.md))
 - `fileUpload` – allow users to upload text or PDF files (see [File Upload Feature](file-upload-feature.md))
 - `compareMode` – enable side-by-side comparison of two different models (see [Compare Mode](compare-mode.md))
+- `feedback` – set to `false` to hide the star rating under this app's responses and reject feedback submissions for it (see [Feedback Feature](feedback-feature.md))
 
 #### Input Mode
 
@@ -894,6 +896,40 @@ The `skills` array specifies which skill identifiers are available for an app. S
 | `skillSettings.autoActivate`   | Boolean | -       | When `true`, all listed skills are activated automatically when the app opens        |
 | `skillSettings.maxActiveSkills`| Number  | -       | Maximum number of skills that can be active at the same time (1-10)                 |
 
+#### Apps as Tools (Concierge Pattern)
+
+The `apps` array lets an app delegate to other apps. Each listed app is exposed to the model
+as a synthetic tool named `app__<appId>` — its description is the target app's description and
+its parameters are derived from the target app's `variables` (plus a required `message`
+parameter). When the model calls the tool, the target app runs its full chat pipeline
+**server-side and in-process** (own system prompt, own preferred model, own tools and
+sources — no REST round-trip) and returns its answer as the tool result.
+
+This enables a "concierge" bot that routes requests to specialist bots:
+
+```json
+{
+  "id": "concierge",
+  "name": { "en": "Concierge" },
+  "description": { "en": "Routes your request to the right assistant" },
+  "system": {
+    "en": "You are a concierge. Delegate domain questions to the available app tools and synthesize their answers. State which specialist you consulted."
+  },
+  "apps": ["hr-bot", "it-support-bot", "travel-bot"]
+}
+```
+
+Requirements and behavior:
+
+| Aspect            | Behavior                                                                                                          |
+| ----------------- | ----------------------------------------------------------------------------------------------------------------- |
+| Feature flag      | The `appAsTool` platform feature must be enabled (Admin → Features). Off by default.                               |
+| Permissions       | Users can only reach target apps their groups allow — the same check as opening the app directly. Apps the user may not access are not offered to the model at all. |
+| Nesting           | One level only. A called app runs without `app__*` tools, so chains like A → B → C (or loops) cannot form. Self-references are ignored. |
+| Model             | Each target app resolves its own model (`preferredModel` or platform default). The target model must support tools only if the target app itself uses tools. The calling app's model must support tool calling. |
+| Statelessness     | Each call is a fresh, single-turn invocation of the target app — no chat history is shared in either direction.    |
+| Tool description  | Write target app descriptions as if instructing the concierge's model when to pick that specialist — the description **is** the tool description. |
+
 #### iAssistant Configuration
 
 The `iassistant` property configures app-specific overrides for the iAssistant search integration. When set, these values take precedence over the global `iAssistant` settings in `platform.json`.
@@ -923,7 +959,7 @@ The `iassistant` property configures app-specific overrides for the iAssistant s
 | --------------------------- | ------ | ------------------------------------------------------------------------------------------------ |
 | `iassistant.enabled`        | Boolean | Enable or disable iAssistant integration for this app. Default: `false`                         |
 | `iassistant.baseUrl`        | String | Base URL of the iAssistant service, overriding the platform-level default                        |
-| `iassistant.profileId`      | String | iAssistant profile ID that determines the search index and configuration                         |
+| `iassistant.profileId`      | String | iAssistant *conversation* profile id (e.g. `"iassistant-workspace"`), which selects the workflow and its tuning |
 | `iassistant.filter`         | Array  | Array of filter objects to restrict search results. Each filter has `key`, `values`, and optional `isNegated` |
 | `iassistant.filter[].key`   | String | The metadata field name to filter on                                                             |
 | `iassistant.filter[].values`| Array  | Array of allowed values for the filter field                                                     |
@@ -931,6 +967,48 @@ The `iassistant` property configures app-specific overrides for the iAssistant s
 | `iassistant.searchMode`     | String | Search algorithm mode (e.g., `"semantic"`, `"fulltext"`, `"hybrid"`)                            |
 | `iassistant.searchDistance` | String | Similarity threshold for semantic search results (e.g., `"0.7"`)                                |
 | `iassistant.searchFields`   | Object | Map of field names to boost weights for relevance tuning                                         |
+| `iassistant.searchProfile`  | String | iFinder search profile used for retrieval (e.g., `"searchprofile-standard"`). Only a fallback — the conversation profile is asked first, see below |
+| `iassistant.extraContext`   | String | Additional context sent to the iAssistant when a conversation starts. Supports global prompt variables (see below) |
+| `iassistant.systemPromptPreamble` | String | Text prepended to the iAssistant's system prompt. Supports global prompt variables (see below) |
+| `iassistant.groundedOnly`   | Boolean | Answer only from the retrieved sources, see below. Unset defers to `iAssistant.groundedOnly` in `platform.json`; `false` turns that default off for this app |
+| `iassistant.tools`          | Array  | Tool ids the iAssistant may use for this app, e.g. `["ifinder_search"]`. Overrides the model's `config.tools`; `[]` means no tools |
+| `iassistant.labels`         | String or Array | Extra labels attached to the remote conversation, alongside the automatic `ihub` and app-id labels |
+| `iassistant.scope`          | String | OAuth scope requested in the iFinder JWT for this app                                            |
+| `iassistant.ephemeral`      | Boolean | Create the conversation as ephemeral, so iFinder does not retain it. Default: `false`            |
+
+> `tools`, `labels`, `scope` and `ephemeral` were read by the adapter but missing from the app schema until now, so setting them on an app had no effect and produced no validation error. They work as documented from this release on — check any app that already carries them, since they now actually apply.
+
+**Restricting answers to your own documents (`groundedOnly`):**
+
+By default the iAssistant answers from the retrieved documents *and* from the model's general knowledge. Set `groundedOnly` to confine it to what retrieval returned:
+
+```json
+"iassistant": {
+  "groundedOnly": true
+}
+```
+
+The app then answers only from the retrieved sources, cites them, and says plainly that it has no answer when the search comes back empty — instead of falling back on world knowledge.
+
+This is carried as a prompt instruction prepended to `extraContext`, because the Conversation API has no grounding switch. It instructs the model rather than constraining it; for a hard guarantee across every iFinder client, override `promptPreamble` on the profile's `RESPONSE` state in iFinder. The instruction also states that nothing after it overrides it, so your own `extraContext` cannot re-open world knowledge by accident.
+
+**Conversation profile vs. search profile (`profileId` vs. `searchProfile`):**
+
+`profileId` picks the iAssistant *conversation* profile — the workflow and its tuning. `searchProfile` picks the iFinder *search* profile — which documents retrieval may see. They are separate settings in iFinder, so iHub needs both.
+
+To keep them from drifting apart, iHub asks the conversation profile for its search profile before creating a conversation and only falls back to `searchProfile` (then the model's, then `iAssistant.defaultSearchProfile`) when the profile does not name one. iFinder does not currently publish a search profile on a profile, so today the fallback is what applies in practice. The resolved profile is pinned for the life of the conversation.
+
+**Prompt variables in `extraContext` and `systemPromptPreamble`:**
+
+Both fields support the same global prompt variables as system prompts — built-ins like `{{user_name}}`, `{{user_email}}`, `{{date}}`, `{{date_iso}}`, `{{time}}`, `{{timezone}}`, `{{locale}}`, plus any custom variables defined under **Admin → Prompts → Global Variables**. Values resolve against the requesting user when the conversation is created, so every user gets a personalized context:
+
+```json
+"iassistant": {
+  "extraContext": "You are talking to {{user_name}} ({{user_email}}). Today is {{date}} ({{date_iso}}), the user's timezone is {{timezone}}."
+}
+```
+
+Unknown placeholders are left in the text unchanged (the same behavior as system prompts), so typos are visible instead of silently disappearing. Note that the context is fixed when the conversation is created: date and time variables reflect the start of the conversation, not each individual message.
 
 #### Image Generation Configuration
 
@@ -955,7 +1033,7 @@ The `thinking` property enables extended thinking for models that support it (e.
 ```json
 "thinking": {
   "enabled": true,
-  "budget": 5000,
+  "level": "medium",
   "thoughts": true
 }
 ```
@@ -963,8 +1041,11 @@ The `thinking` property enables extended thinking for models that support it (e.
 | Property           | Type    | Default | Description                                                                                             |
 | ------------------ | ------- | ------- | ------------------------------------------------------------------------------------------------------- |
 | `thinking.enabled` | Boolean | `false` | Enable extended thinking mode                                                                           |
-| `thinking.budget`  | Number  | -       | Token budget allocated for internal thinking steps. A positive integer sets a specific budget           |
+| `thinking.level`   | String  | `medium`| Reasoning effort: `minimal`, `low`, `medium` or `high`. More effort is slower and costs more tokens     |
 | `thinking.thoughts`| Boolean | `false` | When `true`, the model's internal thinking steps are included and displayed in the response             |
+
+An app's `thinking` block overrides the model's for that app. `thinking.budget`
+is no longer accepted — see [Models](models.md#model-thinking-configuration).
 
 #### Other Options
 
@@ -1223,13 +1304,14 @@ Web search is configured per-app using the `websearch` object. This replaces the
 |----------|------|---------|-------------|
 | `enabled` | Boolean | `false` | Enable web search for this app |
 | `provider` | String | `"auto"` | Search provider: `"auto"` or `"brave"` |
-| `useNativeSearch` | Boolean | `true` | Prefer native search (Google Search for Gemini, OpenAI Web Search for GPT) when the model supports it |
+| `useNativeSearch` | Boolean | `true` | Prefer native search (Google Search for Gemini, OpenAI Web Search for GPT, Anthropic Web Search for Claude) when the model supports it |
 | `maxResults` | Number | `5` | Maximum number of search results (1-20) |
 | `extractContent` | Boolean | `true` | Extract full page content from search results |
 | `contentMaxLength` | Number | `3000` | Maximum extracted content length per page in characters (500-50,000) |
 | `enabledByDefault` | Boolean | `false` | Whether web search is active by default; users can toggle it in the chat input |
+| `maxSearches` | Number | `5` | Cap on provider-run searches per model call when native search is used (Anthropic `max_uses`; 1-50) |
 
-The server automatically selects the best search tool at runtime: native Google/OpenAI search when the model supports it, or Brave for other models.
+The server automatically selects the best search tool at runtime: native Google/OpenAI/Anthropic search when the model supports it, or Brave for other models.
 
 For full details including provider setup and API keys, see **[Web Tools](web-tools.md)**.
 

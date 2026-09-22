@@ -1,5 +1,13 @@
-import { loadOAuthClients, findClientById } from '../utils/oauthClientManager.js';
-import { loadUsers, isUserActive } from '../utils/userManager.js';
+import {
+  loadOAuthClients,
+  findClientById,
+  updateClientLastUsed
+} from '../utils/oauthClientManager.js';
+import { buildPolicyCimdClient } from '../utils/oauthClientResolver.js';
+import { isClientIdUrl } from '../utils/clientIdMetadata.js';
+import { isPersonalKeyExpired, isPersonalKeysEnabled } from '../utils/personalApiKeyManager.js';
+import { isCurrentKeyGeneration } from '../utils/oauthTokenService.js';
+import { loadUsers, isUserActive, equalsIgnoreCase } from '../utils/userManager.js';
 import { verifyJwt, decodeJwt } from '../utils/tokenService.js';
 import { recordAuthEvent } from '../telemetry/metrics.js';
 import configCache from '../configCache.js';
@@ -54,8 +62,15 @@ export default function jwtAuthMiddleware(req, res, next) {
       if (oauthConfig.enabled?.clients) {
         try {
           const clientsFilePath = oauthConfig.clientsFile || 'contents/config/oauth-clients.json';
-          const clientsConfig = loadOAuthClients(clientsFilePath);
-          if (clientsConfig.clients[peeked.payload.aud]) {
+          // A client identified by a metadata document has a policy record in
+          // the same store, so bare store presence would accept its audience
+          // while skipping the four conditions that are not `record.active`.
+          // Ask the resolver instead: it returns null unless CIMD is on, the
+          // host is allowed and not blocked, and the client is approved.
+          const audienceIsKnown = isClientIdUrl(peeked.payload.aud)
+            ? buildPolicyCimdClient(peeked.payload.aud, platform) !== null
+            : !!loadOAuthClients(clientsFilePath).clients[peeked.payload.aud];
+          if (audienceIsKnown) {
             decoded = verifyJwt(token, { audience: peeked.payload.aud });
           }
         } catch {
@@ -212,9 +227,138 @@ export default function jwtAuthMiddleware(req, res, next) {
           error_description: 'OAuth clients are not enabled'
         });
       }
+    } else if (decoded.authMode === 'oauth_personal_key') {
+      // Personal API key - a user minted this for themselves from the
+      // integrations page. The token carries no identity of its own: the acting
+      // user is resolved from the backing client on every request, so revoking
+      // the key, suspending it, or turning the feature off cuts access at once.
+      if (!isPersonalKeysEnabled(platform)) {
+        logger.warn('Personal API key rejected: feature not enabled', { component: 'JwtAuth' });
+        return res.status(401).json({
+          error: 'invalid_token',
+          error_description: 'Personal API keys are not enabled'
+        });
+      }
+
+      let client;
+      try {
+        const clientsFilePath = platform.oauth?.clientsFile || 'contents/config/oauth-clients.json';
+        const clientsConfig = loadOAuthClients(clientsFilePath);
+
+        // loadOAuthClients() catches internally and returns a safe empty config
+        // with metadata.error set. Fail closed rather than reporting the key as
+        // unknown, which would read like a revocation that never happened.
+        if (clientsConfig?.metadata?.error) {
+          logger.error('OAuth clients configuration unavailable for personal key', {
+            component: 'JwtAuth',
+            clientId: decoded.client_id,
+            loaderError: clientsConfig.metadata.error
+          });
+          return res.status(503).json({
+            error: 'service_unavailable',
+            error_description: 'Unable to validate the API key. Please try again later.'
+          });
+        }
+
+        client = findClientById(clientsConfig, decoded.client_id);
+      } catch (loadError) {
+        logger.error('Failed to load OAuth clients for personal key', {
+          component: 'JwtAuth',
+          error: loadError
+        });
+        return res.status(503).json({
+          error: 'service_unavailable',
+          error_description: 'Unable to validate the API key. Please try again later.'
+        });
+      }
+
+      if (!client || client.personal !== true || client.ownerUserId !== decoded.sub) {
+        logger.warn('Personal API key rejected: key revoked or not owned by the token subject', {
+          component: 'JwtAuth',
+          clientId: decoded.client_id
+        });
+        return res.status(401).json({
+          error: 'invalid_token',
+          error_description: 'API key has been revoked'
+        });
+      }
+
+      if (!client.active) {
+        logger.warn('Personal API key rejected: key suspended', {
+          component: 'JwtAuth',
+          clientId: decoded.client_id
+        });
+        return res.status(403).json({
+          error: 'access_denied',
+          error_description: 'API key has been suspended'
+        });
+      }
+
+      // The API key JWT carries its own `exp`, already verified, so its
+      // lifetime needs no second opinion from the store. A token exchanged from
+      // this key's client credentials has a short lifetime of its own that can
+      // outlast the key, so for those the key's expiry is what keeps
+      // `maxExpirationDays` binding.
+      if (!decoded.static_key && isPersonalKeyExpired(client)) {
+        logger.warn('Personal API key rejected: key expired', {
+          component: 'JwtAuth',
+          clientId: decoded.client_id
+        });
+        return res.status(401).json({
+          error: 'invalid_token',
+          error_description: 'API key has expired'
+        });
+      }
+
+      // Rotating a key invalidates every credential issued for an earlier
+      // generation. A counter rather than a timestamp: `iat` has second
+      // granularity, so a credential minted in the same second as the rotation
+      // that replaced it compares equal and would survive.
+      if (!isCurrentKeyGeneration(decoded, client)) {
+        logger.warn('Personal API key rejected: issued before the last rotation', {
+          component: 'JwtAuth',
+          clientId: decoded.client_id
+        });
+        return res.status(401).json({
+          error: 'invalid_token',
+          error_description: 'API key was issued before the last rotation'
+        });
+      }
+
+      user = {
+        id: client.ownerUserId,
+        username: client.ownerUsername || client.ownerUserId,
+        name: client.ownerName || client.ownerUsername || client.ownerUserId,
+        email: client.ownerEmail || '',
+        groups: Array.isArray(client.ownerGroups) ? client.ownerGroups : [],
+        authMode: 'oauth_personal_key',
+        timestamp: Date.now(),
+        isPersonalApiKey: true,
+        clientId: client.clientId,
+        scopes: decoded.scopes || [],
+        // Same filter semantics as an authorization-code token: an empty list
+        // means the owner's group permissions apply unchanged.
+        clientAllowedApps: Array.isArray(client.allowedApps) ? client.allowedApps : [],
+        clientAllowedModels: Array.isArray(client.allowedModels) ? client.allowedModels : [],
+        clientAllowedPrompts: Array.isArray(client.allowedPrompts) ? client.allowedPrompts : []
+      };
+
+      // Record the use so the integrations page reports keys used through the
+      // HTTP APIs, not only those exchanged at the token endpoint. Best effort:
+      // a failed bookkeeping write must not fail the request.
+      updateClientLastUsed(
+        client.clientId,
+        platform.oauth?.clientsFile || 'contents/config/oauth-clients.json'
+      ).catch(error => {
+        logger.error('Failed to record personal API key usage', {
+          component: 'JwtAuth',
+          clientId: client.clientId,
+          error
+        });
+      });
     } else if (decoded.authMode === 'oauth_authorization_code') {
-      // OAuth authorization code - this is a user-delegated token
-      // The token carries user identity, validate the user is still active
+      // OAuth authorization code - this is a user-delegated token.
+      // The token carries user identity, validate the user is still active.
       const oauthConfig = platform.oauth || {};
       if (oauthConfig.enabled?.authz) {
         try {
@@ -261,7 +405,16 @@ export default function jwtAuthMiddleware(req, res, next) {
                 });
               }
 
-              const client = findClientById(clientsConfig, decoded.client_id);
+              // Same split as the gateway (`mcpAuth`): a metadata-document
+              // client's policy is the *layered* result of its record over
+              // `platform.oauth.cimd`, and it is refused outright when CIMD is
+              // off, its host is blocked or dropped, or its approval has not
+              // been given. Reading the raw record with `findClientById` would
+              // enforce only `active` and silently drop the platform-wide
+              // allowedApps/Models/Prompts narrowing.
+              const client = isClientIdUrl(decoded.client_id)
+                ? buildPolicyCimdClient(decoded.client_id, platform)
+                : findClientById(clientsConfig, decoded.client_id);
 
               if (!client) {
                 logger.warn('OAuth auth-code token rejected: client no longer exists', {
@@ -425,7 +578,7 @@ export default function jwtAuthMiddleware(req, res, next) {
         // If not found by ID, try to find by email (OIDC users may have different IDs)
         if (!userRecord && decoded.email) {
           userRecord = Object.values(usersConfig.users || {}).find(
-            u => u.email === decoded.email && u.authMethods?.includes('oidc')
+            u => equalsIgnoreCase(u.email, decoded.email) && u.authMethods?.includes('oidc')
           );
         }
 
@@ -475,13 +628,15 @@ export default function jwtAuthMiddleware(req, res, next) {
 
         if (!userRecord && decoded.email) {
           userRecord = Object.values(usersConfig.users || {}).find(
-            u => u.email === decoded.email && u.authMethods?.includes('ldap')
+            u => equalsIgnoreCase(u.email, decoded.email) && u.authMethods?.includes('ldap')
           );
         }
 
         if (!userRecord && decoded.username) {
           userRecord = Object.values(usersConfig.users || {}).find(
-            u => u.ldapData?.username === decoded.username && u.authMethods?.includes('ldap')
+            u =>
+              equalsIgnoreCase(u.ldapData?.username, decoded.username) &&
+              u.authMethods?.includes('ldap')
           );
         }
 
@@ -502,6 +657,11 @@ export default function jwtAuthMiddleware(req, res, next) {
           name: decoded.name || decoded.displayName || decoded.username,
           email: decoded.email || decoded.mail || '',
           groups: decoded.groups || [],
+          // Minted by loginLdapUser when the provider has a NetBIOS domain
+          // configured or detected. Needed here for the iFinder
+          // `domain\\username` subject, which is otherwise only resolvable on
+          // the login request itself.
+          domain: decoded.domain,
           authMode: 'ldap',
           timestamp: Date.now()
         };
@@ -528,7 +688,7 @@ export default function jwtAuthMiddleware(req, res, next) {
         // If not found by ID, try to find by email
         if (!userRecord && decoded.email) {
           userRecord = Object.values(usersConfig.users || {}).find(
-            u => u.email === decoded.email && u.authMethods?.includes('teams')
+            u => equalsIgnoreCase(u.email, decoded.email) && u.authMethods?.includes('teams')
           );
         }
 
@@ -577,7 +737,9 @@ export default function jwtAuthMiddleware(req, res, next) {
           userRecord = Object.values(usersConfig.users || {}).find(
             u =>
               (u.ntlmData?.subject === userId && u.authMethods?.includes('ntlm')) ||
-              (decoded.email && u.email === decoded.email && u.authMethods?.includes('ntlm'))
+              (decoded.email &&
+                equalsIgnoreCase(u.email, decoded.email) &&
+                u.authMethods?.includes('ntlm'))
           );
         }
 

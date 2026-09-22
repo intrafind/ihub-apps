@@ -79,7 +79,7 @@ function OfficeAppointmentContextBanner({
       <div
         role="status"
         aria-live="polite"
-        className="mx-3 mt-2 mb-1 flex items-center gap-2 rounded-md border border-slate-200 bg-slate-50 px-3 py-2 text-xs text-slate-600"
+        className="mx-3 mt-2 mb-1 flex items-center gap-2 rounded-md border border-slate-200 bg-slate-50 px-3 py-2 text-xs text-slate-600 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-300"
       >
         <svg className="animate-spin h-3 w-3 text-slate-400" fill="none" viewBox="0 0 24 24">
           <circle
@@ -113,26 +113,29 @@ function OfficeAppointmentContextBanner({
   const bodySent = includeBody !== false && hasBody;
   const outerClassName = embedded
     ? ''
-    : 'mx-3 mt-2 mb-1 rounded-lg border border-slate-200 bg-white shadow-sm';
+    : 'mx-3 mt-2 mb-1 rounded-lg border border-slate-200 bg-white shadow-xs dark:border-slate-700 dark:bg-slate-800';
 
   return (
     <div className={outerClassName}>
       <div className="flex items-start gap-2 px-3 py-2">
-        <div className="flex-shrink-0 mt-0.5 text-slate-500">
+        <div className="shrink-0 mt-0.5 text-slate-500 dark:text-slate-400">
           <Icon name="calendar" size="sm" />
         </div>
         <div className="flex-1 min-w-0">
           <div className="flex items-center justify-between gap-2">
-            <div className="text-sm font-medium text-slate-900 truncate" title={subject}>
+            <div
+              className="text-sm font-medium text-slate-900 truncate dark:text-slate-100"
+              title={subject}
+            >
               {subject}
             </div>
             {hasBody && (
-              <label className="flex items-center gap-1.5 text-xs text-slate-600 select-none cursor-pointer flex-shrink-0">
+              <label className="flex items-center gap-1.5 text-xs text-slate-600 select-none cursor-pointer shrink-0 dark:text-slate-300">
                 <input
                   type="checkbox"
                   checked={bodySent}
                   onChange={e => onToggleBody?.(e.target.checked)}
-                  className="h-3.5 w-3.5 rounded border-slate-300 text-indigo-600 focus:ring-indigo-500"
+                  className="h-3.5 w-3.5 rounded-sm border-slate-300 text-indigo-600 focus:ring-indigo-500 dark:border-slate-600 dark:bg-slate-900"
                 />
                 Include body
               </label>
@@ -140,47 +143,65 @@ function OfficeAppointmentContextBanner({
           </div>
 
           {timeLine && (
-            <div className="mt-0.5 text-[11px] text-slate-500 flex items-center gap-1">
-              <Icon name="clock" size="xs" className="flex-shrink-0 text-slate-400" />
+            <div className="mt-0.5 text-[11px] text-slate-500 flex items-center gap-1 dark:text-slate-400">
+              <Icon
+                name="clock"
+                size="xs"
+                className="shrink-0 text-slate-400 dark:text-slate-500"
+              />
               <span className="truncate" title={timeLine}>
                 {timeLine}
               </span>
             </div>
           )}
           {ctx?.location && (
-            <div className="mt-0.5 text-[11px] text-slate-500 flex items-center gap-1">
-              <Icon name="globe" size="xs" className="flex-shrink-0 text-slate-400" />
+            <div className="mt-0.5 text-[11px] text-slate-500 flex items-center gap-1 dark:text-slate-400">
+              <Icon
+                name="globe"
+                size="xs"
+                className="shrink-0 text-slate-400 dark:text-slate-500"
+              />
               <span className="truncate" title={ctx.location}>
                 {ctx.location}
               </span>
             </div>
           )}
           {ctx?.organizer && (
-            <div className="mt-0.5 text-[11px] text-slate-500 truncate">
-              <span className="font-medium text-slate-600">Organizer:</span>{' '}
+            <div className="mt-0.5 text-[11px] text-slate-500 truncate dark:text-slate-400">
+              <span className="font-medium text-slate-600 dark:text-slate-300">Organizer:</span>{' '}
               {ctx.organizer.name || ctx.organizer.email}
               {ctx?.isOrganizer && (
-                <span className="ml-1.5 inline-flex items-center rounded bg-indigo-50 px-1.5 py-0.5 text-[10px] font-medium text-indigo-700">
+                <span className="ml-1.5 inline-flex items-center rounded-sm bg-indigo-50 px-1.5 py-0.5 text-[10px] font-medium text-indigo-700 dark:bg-indigo-900/50 dark:text-indigo-300">
                   You
                 </span>
               )}
             </div>
           )}
           {requiredNames && (
-            <div className="mt-0.5 text-[11px] text-slate-500 truncate" title={requiredNames}>
-              <span className="font-medium text-slate-600">Required:</span> {requiredNames}
+            <div
+              className="mt-0.5 text-[11px] text-slate-500 truncate dark:text-slate-400"
+              title={requiredNames}
+            >
+              <span className="font-medium text-slate-600 dark:text-slate-300">Required:</span>{' '}
+              {requiredNames}
             </div>
           )}
           {optionalNames && (
-            <div className="mt-0.5 text-[11px] text-slate-500 truncate" title={optionalNames}>
-              <span className="font-medium text-slate-600">Optional:</span> {optionalNames}
+            <div
+              className="mt-0.5 text-[11px] text-slate-500 truncate dark:text-slate-400"
+              title={optionalNames}
+            >
+              <span className="font-medium text-slate-600 dark:text-slate-300">Optional:</span>{' '}
+              {optionalNames}
             </div>
           )}
 
           {bodyPreview && (
             <div
               className={`mt-1 text-xs ${
-                bodySent ? 'text-slate-500' : 'text-slate-400 italic line-through'
+                bodySent
+                  ? 'text-slate-500 dark:text-slate-400'
+                  : 'text-slate-400 italic line-through dark:text-slate-500'
               } line-clamp-2`}
               title={bodyPreview}
             >
@@ -188,7 +209,7 @@ function OfficeAppointmentContextBanner({
             </div>
           )}
           {hasBody && !bodySent && (
-            <div className="mt-0.5 text-[11px] text-amber-600">
+            <div className="mt-0.5 text-[11px] text-amber-600 dark:text-amber-400">
               Meeting description will not be sent.
             </div>
           )}

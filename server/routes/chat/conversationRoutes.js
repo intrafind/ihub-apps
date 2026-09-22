@@ -8,6 +8,7 @@ import conversationApiService from '../../services/integrations/ConversationApiS
 import iAssistantService from '../../services/integrations/iAssistantService.js';
 import { buildServerPath } from '../../utils/basePath.js';
 import { sendInternalError, sendNotFound, sendBadRequest } from '../../utils/responseHelpers.js';
+import { findByIdCaseInsensitive } from '../../utils/resourceLookup.js';
 
 /**
  * Resolve the iAssistant base URL for an app's conversation API calls.
@@ -21,7 +22,7 @@ function resolveBaseUrl(app) {
   const modelId = app?.preferredModel;
   if (modelId) {
     const { data: models = [] } = configCache.getModels() || {};
-    const model = models.find(m => m.id === modelId);
+    const model = findByIdCaseInsensitive(models, modelId);
     if (model?.config?.baseUrl) return model.config.baseUrl;
   }
 
@@ -102,7 +103,7 @@ export default function registerConversationRoutes(app) {
 
         // Load app config to get baseUrl
         const { data: apps = [] } = configCache.getApps() || {};
-        const appConfig = apps.find(a => a.id === appId);
+        const appConfig = findByIdCaseInsensitive(apps, appId);
         if (!appConfig) {
           return sendNotFound(res, 'App');
         }
@@ -177,7 +178,7 @@ export default function registerConversationRoutes(app) {
         const user = req.user;
 
         const { data: apps = [] } = configCache.getApps() || {};
-        const appConfig = apps.find(a => a.id === appId);
+        const appConfig = findByIdCaseInsensitive(apps, appId);
         if (!appConfig) {
           return sendNotFound(res, 'App');
         }
@@ -244,7 +245,7 @@ export default function registerConversationRoutes(app) {
         const user = req.user;
 
         const { data: apps = [] } = configCache.getApps() || {};
-        const appConfig = apps.find(a => a.id === appId);
+        const appConfig = findByIdCaseInsensitive(apps, appId);
         if (!appConfig) {
           return sendNotFound(res, 'App');
         }

@@ -1,6 +1,6 @@
 /**
- * Tests for the shared provider/operation resolver used by both
- * NonStreamingHandler / llmInstrumentation and StreamingHandler.
+ * Tests for the shared provider/operation resolver used by llmInstrumentation
+ * for streaming and non-streaming model calls alike.
  * The two paths must agree on `gen_ai.provider.name` and
  * `gen_ai.operation.name` so dashboards aren't fragmented.
  */

@@ -27,7 +27,7 @@ function InputVariables({ variables, setVariables, localizedVariables, className
                   [variable.name]: e.target.value
                 })
               }
-              className="p-2 border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 rounded focus:ring-indigo-500 focus:border-indigo-500"
+              className="p-2 border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 rounded-sm focus:ring-indigo-500 focus:border-indigo-500"
               required={variable.required}
             >
               <option value="">
@@ -52,7 +52,7 @@ function InputVariables({ variables, setVariables, localizedVariables, className
                 })
               }
               rows={4}
-              className="p-2 border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 rounded focus:ring-indigo-500 focus:border-indigo-500"
+              className="p-2 border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 rounded-sm focus:ring-indigo-500 focus:border-indigo-500"
               placeholder={
                 variable.localizedPlaceholder ||
                 t('variables.enterLabel', { label: variable.localizedLabel })
@@ -72,7 +72,7 @@ function InputVariables({ variables, setVariables, localizedVariables, className
                   [variable.name]: e.target.value
                 })
               }
-              className="p-2 border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 rounded focus:ring-indigo-500 focus:border-indigo-500"
+              className="p-2 border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 rounded-sm focus:ring-indigo-500 focus:border-indigo-500"
               placeholder={
                 variable.localizedPlaceholder ||
                 t('variables.enterLabel', { label: variable.localizedLabel })

@@ -125,7 +125,7 @@ function GlobalPromptVariablesEditor({ value, onChange }) {
           value={context}
           onChange={handleContextChange}
           rows={6}
-          className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md shadow-sm focus:outline-none focus:ring-2 focus:ring-blue-500 dark:bg-gray-700 dark:text-white font-mono text-sm"
+          className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md shadow-xs focus:outline-hidden focus:ring-2 focus:ring-blue-500 dark:bg-gray-700 dark:text-white font-mono text-sm"
           placeholder="e.g., Current date: {{date}}. Company: {{company}}. User: {{user_name}}"
         />
       </div>
@@ -145,7 +145,7 @@ function GlobalPromptVariablesEditor({ value, onChange }) {
           {builtInVariables.map(variable => (
             <div
               key={variable.key}
-              className="flex items-center justify-between p-2 bg-white dark:bg-gray-700 rounded border border-gray-200 dark:border-gray-600"
+              className="flex items-center justify-between p-2 bg-white dark:bg-gray-700 rounded-sm border border-gray-200 dark:border-gray-600"
             >
               <div className="flex-1">
                 <code className="text-sm font-mono text-blue-600 dark:text-blue-400">
@@ -175,7 +175,7 @@ function GlobalPromptVariablesEditor({ value, onChange }) {
           </h3>
           <button
             onClick={() => setShowAddVariable(!showAddVariable)}
-            className="px-3 py-1 text-sm bg-blue-600 text-white rounded hover:bg-blue-700 flex items-center gap-2"
+            className="px-3 py-1 text-sm bg-blue-600 text-white rounded-sm hover:bg-blue-700 flex items-center gap-2"
           >
             <Icon name="plus" className="w-4 h-4" />
             {t('admin.platform.addVariable', 'Add Variable')}
@@ -201,7 +201,7 @@ function GlobalPromptVariablesEditor({ value, onChange }) {
                   value={newVariableKey}
                   onChange={e => setNewVariableKey(e.target.value)}
                   placeholder="e.g., company, department, region"
-                  className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 dark:bg-gray-700 dark:text-white"
+                  className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md focus:outline-hidden focus:ring-2 focus:ring-blue-500 dark:bg-gray-700 dark:text-white"
                 />
                 <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">
                   {t(
@@ -219,14 +219,14 @@ function GlobalPromptVariablesEditor({ value, onChange }) {
                   onChange={e => setNewVariableValue(e.target.value)}
                   rows={3}
                   placeholder="e.g., We are a leading provider of AI solutions..."
-                  className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 dark:bg-gray-700 dark:text-white"
+                  className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md focus:outline-hidden focus:ring-2 focus:ring-blue-500 dark:bg-gray-700 dark:text-white"
                 />
               </div>
               {error && <div className="text-sm text-red-600 dark:text-red-400">{error}</div>}
               <div className="flex gap-2">
                 <button
                   onClick={handleAddVariable}
-                  className="px-4 py-2 bg-blue-600 text-white rounded hover:bg-blue-700"
+                  className="px-4 py-2 bg-blue-600 text-white rounded-sm hover:bg-blue-700"
                 >
                   {t('common.add', 'Add')}
                 </button>
@@ -237,7 +237,7 @@ function GlobalPromptVariablesEditor({ value, onChange }) {
                     setNewVariableKey('');
                     setNewVariableValue('');
                   }}
-                  className="px-4 py-2 bg-gray-200 dark:bg-gray-700 text-gray-700 dark:text-gray-300 rounded hover:bg-gray-300 dark:hover:bg-gray-600"
+                  className="px-4 py-2 bg-gray-200 dark:bg-gray-700 text-gray-700 dark:text-gray-300 rounded-sm hover:bg-gray-300 dark:hover:bg-gray-600"
                 >
                   {t('common.cancel', 'Cancel')}
                 </button>
@@ -279,7 +279,7 @@ function GlobalPromptVariablesEditor({ value, onChange }) {
                       value={value}
                       onChange={e => handleUpdateVariable(key, e.target.value)}
                       rows={3}
-                      className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 dark:bg-gray-600 dark:text-white text-sm"
+                      className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md focus:outline-hidden focus:ring-2 focus:ring-blue-500 dark:bg-gray-600 dark:text-white text-sm"
                     />
                   </div>
                   <button
@@ -301,7 +301,7 @@ function GlobalPromptVariablesEditor({ value, onChange }) {
         <div className="flex">
           <Icon
             name="lightbulb"
-            className="w-5 h-5 text-yellow-600 dark:text-yellow-400 mr-2 flex-shrink-0 mt-0.5"
+            className="w-5 h-5 text-yellow-600 dark:text-yellow-400 mr-2 shrink-0 mt-0.5"
           />
           <div>
             <h4 className="font-medium text-gray-900 dark:text-white mb-1">

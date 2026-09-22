@@ -133,10 +133,9 @@ async function run() {
 
   console.log('\n🧪 reconsideration hook — execute() surfaces gaps\n');
   {
-    // Stub the LLM helper so execute() returns a FAIL verdict with failures.
-    const llmHelper = {
-      verifyApiKey: async () => ({ success: true, apiKey: 'k' }),
-      executeStreamingRequest: async () => ({
+    // Stub the LLM client so execute() returns a FAIL verdict with failures.
+    const llmClient = {
+      complete: async () => ({
         content: JSON.stringify({
           verdict: 'FAIL',
           failures: ['Section 3 is unsupported', 'No handling for empty input'],
@@ -144,7 +143,7 @@ async function run() {
         })
       })
     };
-    const exec = new VerifierNodeExecutor({ llmHelper });
+    const exec = new VerifierNodeExecutor({ llmClient });
     const node = { id: 'verify1', config: { mode: 'adversarial', criteria: 'Be complete' } };
     const state = { data: { nodeResults: { synth: { output: { content: 'a partial report' } } } } };
 
@@ -259,11 +258,10 @@ async function run() {
     // verdict, interpretResult defaulted to a contentless FAIL, and the run
     // burned retries then hard-failed an okish draft. Now an inconclusive verdict
     // passes through with a warning and does NOT spend a retry.
-    const llmHelper = {
-      verifyApiKey: async () => ({ success: true, apiKey: 'k' }),
-      executeStreamingRequest: async () => ({ content: 'I am not sure how to judge this.' })
+    const llmClient = {
+      complete: async () => ({ content: 'I am not sure how to judge this.' })
     };
-    const exec = new VerifierNodeExecutor({ llmHelper });
+    const exec = new VerifierNodeExecutor({ llmClient });
     const node = {
       id: 'verify',
       config: { mode: 'adversarial', inputVariable: 'draft', maxRetries: 2 }

@@ -1,10 +1,18 @@
 import { apiClient } from './client.js';
-import { buildPath } from '../utils/runtimeBasePath';
+import { buildApiUrl } from '../utils/runtimeBasePath';
 
 const isPlainObjectForBody = value =>
   value !== null &&
   !Array.isArray(value) &&
   Object.prototype.toString.call(value) === '[object Object]';
+
+// Extracts the server-provided error message from a failed admin API call,
+// falling back to the generic axios message (e.g. network errors with no response).
+export const getAdminApiErrorMessage = err =>
+  err?.response?.data?.error ||
+  err?.response?.data?.message ||
+  err?.message ||
+  'An unexpected error occurred';
 
 // Utility function to make authenticated API calls to admin endpoints
 export const makeAdminApiCall = async (url, options = {}) => {
@@ -42,12 +50,22 @@ export const makeAdminApiCall = async (url, options = {}) => {
 
     axiosConfig.data = body;
     if (isFormData) {
-      // Let axios/browser set the multipart boundary for FormData bodies
+      // Let axios/browser set the multipart boundary for FormData bodies.
+      //
+      // Deleting the key from this per-request object is NOT enough: the shared
+      // axios instance declares `Content-Type: application/json` as an *instance
+      // default* (see api/client.js), and that default still applies to a request
+      // whose own headers simply omit the key. Axios' default transformRequest
+      // then sees a JSON content type on a FormData payload and serialises the
+      // form to JSON (`{"backup":{}}`), so the file never leaves the browser and
+      // the server reports a missing upload. Setting the header to `undefined`
+      // overrides the instance default and tells axios to omit it entirely.
       Object.keys(axiosConfig.headers).forEach(headerKey => {
         if (headerKey.toLowerCase() === 'content-type') {
           delete axiosConfig.headers[headerKey];
         }
       });
+      axiosConfig.headers['Content-Type'] = undefined;
     } else {
       axiosConfig.headers = {
         'Content-Type': 'application/json',
@@ -91,11 +109,15 @@ export const makeAdminApiCall = async (url, options = {}) => {
         // Dispatching is idempotent: handleTokenExpired guards against re-entry
         // and the auth gate won't re-show while it is already visible.
         window.dispatchEvent(new CustomEvent('authTokenExpired'));
-      } else if (window.location.pathname.startsWith('/admin')) {
-        // 403: authenticated but lacking admin permission. Send the user to the
-        // admin root, which renders an "Admin Access Required" message.
-        window.location.href = buildPath('/admin');
       }
+      // 403 (authenticated but not permitted for THIS endpoint) is intentionally
+      // NOT handled with a redirect. Entry to the admin area is already gated by
+      // AdminLayout via /admin/auth/status; individual endpoints are permission-
+      // scoped (e.g. content admins may call /admin/apps but not /admin/usage).
+      // A hard `window.location` redirect here caused an infinite reload loop for
+      // content admins: the Overview page fires full-admin-only calls that 403,
+      // the redirect reloaded /admin, which re-fired them, and so on (issue #1923).
+      // Let the 403 propagate so the calling component can handle it locally.
     }
     throw error;
   }
@@ -182,6 +204,18 @@ export const toggleApps = async (ids, enabled) => {
   const response = await makeAdminApiCall(`/admin/apps/${idParam}/_toggle`, {
     method: 'POST',
     body: { enabled }
+  });
+  return response.data;
+};
+
+/**
+ * Save the display order of apps: the first id becomes `order: 1`, the second
+ * `order: 2`, and so on. Apps left out of `ids` keep the order they have.
+ */
+export const reorderApps = async ids => {
+  const response = await makeAdminApiCall('/admin/apps/_reorder', {
+    method: 'POST',
+    body: { ids }
   });
   return response.data;
 };
@@ -375,6 +409,27 @@ export const toggleAdminWorkflow = async id => {
 
 export const fetchAdminGroups = async () => {
   const response = await makeAdminApiCall('/admin/groups');
+  return response.data;
+};
+
+// Content access: which groups may use one app / prompt / skill / tool /
+// workflow. Content admins get only the groups they belong to (and the groups
+// inheriting from those); full admins get every group.
+export const fetchContentAccess = async (type, id) => {
+  const response = await makeAdminApiCall(
+    `/admin/content-access/${encodeURIComponent(type)}/${encodeURIComponent(id)}`
+  );
+  return response.data;
+};
+
+export const updateContentAccess = async (type, id, { grant = [], revoke = [] } = {}) => {
+  const response = await makeAdminApiCall(
+    `/admin/content-access/${encodeURIComponent(type)}/${encodeURIComponent(id)}`,
+    {
+      method: 'PUT',
+      body: { grant, revoke }
+    }
+  );
   return response.data;
 };
 
@@ -653,8 +708,7 @@ export const importSkill = async formData => {
  * @param {string} skillName - The unique name identifier of the skill
  */
 export const exportSkill = skillName => {
-  const baseURL = import.meta.env.VITE_API_URL || '/api';
-  window.open(`${baseURL}/admin/skills/${encodeURIComponent(skillName)}/export`, '_blank');
+  window.open(buildApiUrl(`admin/skills/${encodeURIComponent(skillName)}/export`), '_blank');
 };
 
 // Marketplace - Registry management
@@ -906,6 +960,14 @@ export const fetchAdminUsageModels = async (range = '30d') => {
   return response.data;
 };
 
+export const setAppFeedbackEnabled = async (appId, enabled) => {
+  const response = await makeAdminApiCall(`/admin/apps/${appId}/features/feedback`, {
+    method: 'POST',
+    body: { enabled }
+  });
+  return response.data;
+};
+
 export const fetchAdminFeedbackEntries = async (limit = 100, offset = 0) => {
   const response = await makeAdminApiCall(`/admin/usage/feedback?limit=${limit}&offset=${offset}`);
   return response.data;
@@ -924,6 +986,7 @@ export const adminApi = {
   fetchAdminUsageApps,
   fetchAdminUsageModels,
   fetchAdminFeedbackEntries,
+  setAppFeedbackEnabled,
   fetchAdminCacheStats,
   fetchAdminApps,
   fetchAdminModels,
@@ -934,6 +997,7 @@ export const adminApi = {
   updatePrompt,
   translateText,
   toggleApps,
+  reorderApps,
   fetchAdminPages,
   fetchAdminPage,
   createPage,
@@ -967,6 +1031,10 @@ export const adminApi = {
   deleteAdminWorkflow,
   toggleAdminWorkflow,
   fetchAdminGroups,
+
+  // Content access functions
+  fetchContentAccess,
+  updateContentAccess,
 
   // Workflow Execution functions
   fetchAdminExecutions,

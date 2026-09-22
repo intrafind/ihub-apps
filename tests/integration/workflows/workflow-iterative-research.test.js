@@ -19,7 +19,7 @@ describe('Iterative Research Workflow - Structure Tests', () => {
     });
 
     test('has agent node with proper config', () => {
-      const agentNode = simpleAgentWorkflow.nodes.find(n => n.type === 'prompt');
+      const agentNode = simpleAgentWorkflow.nodes.find(n => n.type === 'agent');
       expect(agentNode).toBeDefined();
       expect(agentNode.id).toBe('summarize');
       expect(agentNode.config.system).toBeDefined();
@@ -84,7 +84,7 @@ describe('Iterative Research Workflow - Structure Tests', () => {
     test('has research agent node', () => {
       const researchNode = iterativeResearchWorkflow.nodes.find(n => n.id === 'research');
       expect(researchNode).toBeDefined();
-      expect(researchNode.type).toBe('prompt');
+      expect(researchNode.type).toBe('agent');
       expect(researchNode.config.outputVariable).toBe('currentFinding');
       expect(researchNode.config.outputSchema).toBeDefined();
       expect(researchNode.config.outputSchema.properties.finding).toBeDefined();

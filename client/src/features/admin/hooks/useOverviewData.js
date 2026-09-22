@@ -1,12 +1,29 @@
 import { useState, useEffect } from 'react';
 import { useTranslation } from 'react-i18next';
-import { fetchAdminApps, makeAdminApiCall } from '../../../api/adminApi';
+import {
+  fetchAdminApps,
+  fetchAdminPrompts,
+  fetchAdminSources,
+  makeAdminApiCall
+} from '../../../api/adminApi';
 
 /**
  * Fetches and computes data for the admin Overview dashboard.
  * Uses Promise.allSettled so individual endpoint failures don't block others.
+ *
+ * Every endpoint below is server-local. Nothing that reaches the internet
+ * belongs in this batch: `allSettled` only settles once the slowest request
+ * does, so one unreachable host holds the whole dashboard on its loading
+ * skeletons. The GitHub update check lives in `useUpdateCheck` for exactly that
+ * reason (issue #2150).
+ *
+ * @param {Object} [options]
+ * @param {boolean} [options.contentAdminOnly] - When true, the caller is a
+ *   content-admin-only user (no full admin access). Only content endpoints
+ *   (apps/prompts/sources) are queried; the platform/usage/audit endpoints are
+ *   skipped because they require full admin and would return 403 (issue #1923).
  */
-export function useOverviewData() {
+export function useOverviewData({ contentAdminOnly = false } = {}) {
   const { t } = useTranslation();
   const [stats, setStats] = useState(null);
   const [platformInfo, setPlatformInfo] = useState(null);
@@ -17,13 +34,54 @@ export function useOverviewData() {
   useEffect(() => {
     let cancelled = false;
 
+    // Content-admin-only view: fetch just the resources they manage. These all
+    // pass contentAdminAuth on the server, so no 403s are triggered.
+    const loadContentAdmin = async () => {
+      const [appsResult, promptsResult, sourcesResult] = await Promise.allSettled([
+        fetchAdminApps(),
+        fetchAdminPrompts(),
+        fetchAdminSources()
+      ]);
+
+      if (cancelled) return;
+
+      const apps = appsResult.status === 'fulfilled' ? appsResult.value : [];
+      const prompts = promptsResult.status === 'fulfilled' ? promptsResult.value : [];
+      const sources = sourcesResult.status === 'fulfilled' ? sourcesResult.value : [];
+
+      const appCount = Array.isArray(apps) ? apps.length : 0;
+      const enabledApps = Array.isArray(apps) ? apps.filter(a => a.enabled !== false).length : 0;
+
+      setStats({
+        apps: {
+          value: appCount,
+          sub: t('admin.overview.apps.enabledCount', '{{count}} enabled', { count: enabledApps }),
+          href: '/admin/apps'
+        },
+        prompts: {
+          value: Array.isArray(prompts) ? prompts.length : 0,
+          sub: t('admin.overview.prompts.label', 'prompts'),
+          href: '/admin/prompts'
+        },
+        sources: {
+          value: Array.isArray(sources) ? sources.length : 0,
+          sub: t('admin.overview.sources.label', 'sources'),
+          href: '/admin/sources'
+        }
+      });
+
+      setPlatformInfo(null);
+      setRecentActivity(null);
+      setIsFreshInstance(appCount === 0);
+      setIsLoading(false);
+    };
+
     const load = async () => {
       const [
         appsResult,
         sessionsResult,
         timelineResult,
         versionResult,
-        updateResult,
         overviewResult,
         auditResult
       ] = await Promise.allSettled([
@@ -31,7 +89,6 @@ export function useOverviewData() {
         makeAdminApiCall('/admin/usage/users'),
         makeAdminApiCall('/admin/usage/timeline'),
         makeAdminApiCall('/admin/version'),
-        makeAdminApiCall('/admin/version/check-update'),
         makeAdminApiCall('/admin/overview/stats'),
         makeAdminApiCall('/admin/audit-log?limit=8')
       ]);
@@ -44,7 +101,6 @@ export function useOverviewData() {
       const timelineData =
         timelineResult.status === 'fulfilled' ? timelineResult.value?.data : null;
       const versionData = versionResult.status === 'fulfilled' ? versionResult.value?.data : null;
-      const updateData = updateResult.status === 'fulfilled' ? updateResult.value?.data : null;
       const overview = overviewResult.status === 'fulfilled' ? overviewResult.value?.data : null;
 
       const appCount = Array.isArray(apps) ? apps.length : 0;
@@ -88,9 +144,7 @@ export function useOverviewData() {
           sub: t('admin.overview.version.node', 'Node {{version}}', {
             version: versionData?.node ?? '—'
           }),
-          href: '/admin/updates',
-          updateAvailable: updateData?.updateAvailable ?? false,
-          latestVersion: updateData?.latestVersion
+          href: '/admin/updates'
         }
       });
 
@@ -112,11 +166,15 @@ export function useOverviewData() {
       setIsLoading(false);
     };
 
-    load();
+    if (contentAdminOnly) {
+      loadContentAdmin();
+    } else {
+      load();
+    }
     return () => {
       cancelled = true;
     };
-  }, [t]);
+  }, [t, contentAdminOnly]);
 
   return { stats, platformInfo, recentActivity, isLoading, isFreshInstance };
 }

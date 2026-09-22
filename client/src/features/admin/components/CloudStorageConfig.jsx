@@ -260,7 +260,7 @@ function CloudStorageConfig({ filterType } = {}) {
 
   if (loading) {
     return (
-      <div className="bg-white dark:bg-gray-800 rounded-lg shadow-sm border border-gray-200 dark:border-gray-700 p-6">
+      <div className="bg-white dark:bg-gray-800 rounded-lg shadow-xs border border-gray-200 dark:border-gray-700 p-6">
         <div className="flex items-center justify-center">
           <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-indigo-600"></div>
         </div>
@@ -301,9 +301,9 @@ function CloudStorageConfig({ filterType } = {}) {
   };
 
   return (
-    <div className="bg-white dark:bg-gray-800 rounded-lg shadow-sm border border-gray-200 dark:border-gray-700 p-6">
+    <div className="bg-white dark:bg-gray-800 rounded-lg shadow-xs border border-gray-200 dark:border-gray-700 p-6">
       <div className="flex items-start space-x-4">
-        <div className="flex-shrink-0 mt-1">
+        <div className="shrink-0 mt-1">
           <div className="p-3 rounded-full bg-indigo-100 dark:bg-indigo-900/50">
             <Icon name="cloud" size="lg" className="text-indigo-600 dark:text-indigo-400" />
           </div>
@@ -338,7 +338,7 @@ function CloudStorageConfig({ filterType } = {}) {
               id="cloudStorageEnabled"
               checked={config.enabled}
               onChange={handleToggleEnabled}
-              className="h-4 w-4 text-indigo-600 focus:ring-indigo-500 border-gray-300 dark:border-gray-600 rounded"
+              className="h-4 w-4 text-indigo-600 focus:ring-indigo-500 border-gray-300 dark:border-gray-600 rounded-sm"
             />
             <label
               htmlFor="cloudStorageEnabled"
@@ -357,7 +357,7 @@ function CloudStorageConfig({ filterType } = {}) {
                 </h4>
                 <button
                   onClick={handleAddProvider}
-                  className="inline-flex items-center px-3 py-1.5 border border-transparent text-xs font-medium rounded-md text-white bg-indigo-600 hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500"
+                  className="inline-flex items-center px-3 py-1.5 border border-transparent text-xs font-medium rounded-md text-white bg-indigo-600 hover:bg-indigo-700 focus:outline-hidden focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500"
                 >
                   <Icon name="plus" size="sm" className="mr-1" />
                   {t('admin.cloudStorage.addProvider')}
@@ -419,7 +419,7 @@ function CloudStorageConfig({ filterType } = {}) {
 
           {/* Provider Editor Modal */}
           {showAddProvider && editingProvider && (
-            <div className="fixed inset-0 bg-gray-500 dark:bg-gray-900 bg-opacity-75 dark:bg-opacity-75 flex items-center justify-center z-50">
+            <div className="fixed inset-0 bg-gray-500/75 dark:bg-gray-900/75 flex items-center justify-center z-50">
               <div className="bg-white dark:bg-gray-800 rounded-lg shadow-xl max-w-2xl w-full max-h-[90vh] overflow-y-auto m-4">
                 <div className="p-6">
                   <h3 className="text-lg font-semibold text-gray-900 dark:text-gray-100 mb-4">
@@ -444,7 +444,7 @@ function CloudStorageConfig({ filterType } = {}) {
                             name: e.target.value // Keep name in sync with id
                           })
                         }
-                        className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md shadow-sm focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 bg-white dark:bg-gray-900 text-gray-900 dark:text-gray-100"
+                        className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md shadow-xs focus:outline-hidden focus:ring-indigo-500 focus:border-indigo-500 bg-white dark:bg-gray-900 text-gray-900 dark:text-gray-100"
                         placeholder="office365-main"
                       />
                     </div>
@@ -460,7 +460,7 @@ function CloudStorageConfig({ filterType } = {}) {
                         onChange={e =>
                           setEditingProvider({ ...editingProvider, displayName: e.target.value })
                         }
-                        className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md shadow-sm focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 bg-white dark:bg-gray-900 text-gray-900 dark:text-gray-100"
+                        className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md shadow-xs focus:outline-hidden focus:ring-indigo-500 focus:border-indigo-500 bg-white dark:bg-gray-900 text-gray-900 dark:text-gray-100"
                         placeholder="Company Office 365"
                       />
                     </div>
@@ -495,7 +495,7 @@ function CloudStorageConfig({ filterType } = {}) {
                           }
                           setEditingProvider(newProvider);
                         }}
-                        className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md shadow-sm focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 bg-white dark:bg-gray-900 text-gray-900 dark:text-gray-100"
+                        className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md shadow-xs focus:outline-hidden focus:ring-indigo-500 focus:border-indigo-500 bg-white dark:bg-gray-900 text-gray-900 dark:text-gray-100"
                       >
                         <option value="office365">{t('admin.cloudStorage.office365')}</option>
                         <option value="googledrive">{t('admin.cloudStorage.googledrive')}</option>
@@ -531,7 +531,7 @@ function CloudStorageConfig({ filterType } = {}) {
                             onChange={e =>
                               setEditingProvider({ ...editingProvider, clientId: e.target.value })
                             }
-                            className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md shadow-sm focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 bg-white dark:bg-gray-900 text-gray-900 dark:text-gray-100"
+                            className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md shadow-xs focus:outline-hidden focus:ring-indigo-500 focus:border-indigo-500 bg-white dark:bg-gray-900 text-gray-900 dark:text-gray-100"
                             placeholder="your-client-id"
                           />
                         </div>
@@ -559,7 +559,7 @@ function CloudStorageConfig({ filterType } = {}) {
                             onChange={e =>
                               setEditingProvider({ ...editingProvider, siteUrl: e.target.value })
                             }
-                            className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md shadow-sm focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 bg-white dark:bg-gray-900 text-gray-900 dark:text-gray-100"
+                            className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md shadow-xs focus:outline-hidden focus:ring-indigo-500 focus:border-indigo-500 bg-white dark:bg-gray-900 text-gray-900 dark:text-gray-100"
                             placeholder="https://yourcompany.sharepoint.com"
                           />
                         </div>
@@ -574,7 +574,7 @@ function CloudStorageConfig({ filterType } = {}) {
                             onChange={e =>
                               setEditingProvider({ ...editingProvider, driveId: e.target.value })
                             }
-                            className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md shadow-sm focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 bg-white dark:bg-gray-900 text-gray-900 dark:text-gray-100"
+                            className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md shadow-xs focus:outline-hidden focus:ring-indigo-500 focus:border-indigo-500 bg-white dark:bg-gray-900 text-gray-900 dark:text-gray-100"
                             placeholder="drive-id"
                           />
                         </div>
@@ -598,7 +598,7 @@ function CloudStorageConfig({ filterType } = {}) {
                                     }
                                   })
                                 }
-                                className="h-4 w-4 text-indigo-600 focus:ring-indigo-500 border-gray-300 rounded"
+                                className="h-4 w-4 text-indigo-600 focus:ring-indigo-500 border-gray-300 rounded-sm"
                               />
                               <span className="ml-2 text-sm text-gray-700">
                                 {t('admin.cloudStorage.personalOneDrive', 'Personal OneDrive')}
@@ -617,7 +617,7 @@ function CloudStorageConfig({ filterType } = {}) {
                                     }
                                   })
                                 }
-                                className="h-4 w-4 text-indigo-600 focus:ring-indigo-500 border-gray-300 rounded"
+                                className="h-4 w-4 text-indigo-600 focus:ring-indigo-500 border-gray-300 rounded-sm"
                               />
                               <span className="ml-2 text-sm text-gray-700">
                                 {t(
@@ -639,7 +639,7 @@ function CloudStorageConfig({ filterType } = {}) {
                                     }
                                   })
                                 }
-                                className="h-4 w-4 text-indigo-600 focus:ring-indigo-500 border-gray-300 rounded"
+                                className="h-4 w-4 text-indigo-600 focus:ring-indigo-500 border-gray-300 rounded-sm"
                               />
                               <span className="ml-2 text-sm text-gray-700">
                                 {t('admin.cloudStorage.microsoftTeams', 'Microsoft Teams')}
@@ -663,7 +663,7 @@ function CloudStorageConfig({ filterType } = {}) {
                             onChange={e =>
                               setEditingProvider({ ...editingProvider, clientId: e.target.value })
                             }
-                            className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md shadow-sm focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 bg-white dark:bg-gray-900 text-gray-900 dark:text-gray-100"
+                            className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md shadow-xs focus:outline-hidden focus:ring-indigo-500 focus:border-indigo-500 bg-white dark:bg-gray-900 text-gray-900 dark:text-gray-100"
                             placeholder="your-client-id.apps.googleusercontent.com"
                           />
                         </div>
@@ -700,7 +700,7 @@ function CloudStorageConfig({ filterType } = {}) {
                                     }
                                   })
                                 }
-                                className="h-4 w-4 text-indigo-600 focus:ring-indigo-500 border-gray-300 rounded"
+                                className="h-4 w-4 text-indigo-600 focus:ring-indigo-500 border-gray-300 rounded-sm"
                               />
                               <span className="ml-2 text-sm text-gray-700 dark:text-gray-300">
                                 {t('admin.cloudStorage.myDrive', 'My Drive')}
@@ -719,7 +719,7 @@ function CloudStorageConfig({ filterType } = {}) {
                                     }
                                   })
                                 }
-                                className="h-4 w-4 text-indigo-600 focus:ring-indigo-500 border-gray-300 rounded"
+                                className="h-4 w-4 text-indigo-600 focus:ring-indigo-500 border-gray-300 rounded-sm"
                               />
                               <span className="ml-2 text-sm text-gray-700 dark:text-gray-300">
                                 {t('admin.cloudStorage.sharedDrives', 'Shared Drives')}
@@ -738,7 +738,7 @@ function CloudStorageConfig({ filterType } = {}) {
                                     }
                                   })
                                 }
-                                className="h-4 w-4 text-indigo-600 focus:ring-indigo-500 border-gray-300 rounded"
+                                className="h-4 w-4 text-indigo-600 focus:ring-indigo-500 border-gray-300 rounded-sm"
                               />
                               <span className="ml-2 text-sm text-gray-700 dark:text-gray-300">
                                 {t('admin.cloudStorage.sharedWithMe', 'Shared with Me')}
@@ -765,7 +765,7 @@ function CloudStorageConfig({ filterType } = {}) {
                                 serverUrl: e.target.value
                               })
                             }
-                            className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md shadow-sm focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 bg-white dark:bg-gray-900 text-gray-900 dark:text-gray-100"
+                            className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md shadow-xs focus:outline-hidden focus:ring-indigo-500 focus:border-indigo-500 bg-white dark:bg-gray-900 text-gray-900 dark:text-gray-100"
                             placeholder="https://nextcloud.example.com"
                           />
                           <p className="mt-1 text-xs text-gray-500 dark:text-gray-400">
@@ -786,7 +786,7 @@ function CloudStorageConfig({ filterType } = {}) {
                             onChange={e =>
                               setEditingProvider({ ...editingProvider, clientId: e.target.value })
                             }
-                            className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md shadow-sm focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 bg-white dark:bg-gray-900 text-gray-900 dark:text-gray-100"
+                            className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md shadow-xs focus:outline-hidden focus:ring-indigo-500 focus:border-indigo-500 bg-white dark:bg-gray-900 text-gray-900 dark:text-gray-100"
                             placeholder="your-client-id"
                           />
                         </div>
@@ -836,7 +836,7 @@ function CloudStorageConfig({ filterType } = {}) {
                               'Enter a Name above to generate the callback URL'
                             )
                           }
-                          className="flex-1 px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-l-md shadow-sm bg-gray-50 dark:bg-gray-900 text-gray-900 dark:text-gray-100 font-mono text-xs focus:outline-none"
+                          className="flex-1 px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-l-md shadow-xs bg-gray-50 dark:bg-gray-900 text-gray-900 dark:text-gray-100 font-mono text-xs focus:outline-hidden"
                           onFocus={e => e.target.select()}
                         />
                         <button
@@ -890,7 +890,7 @@ function CloudStorageConfig({ filterType } = {}) {
                         onChange={e =>
                           setEditingProvider({ ...editingProvider, redirectUri: e.target.value })
                         }
-                        className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md shadow-sm focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 bg-white dark:bg-gray-900 text-gray-900 dark:text-gray-100"
+                        className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md shadow-xs focus:outline-hidden focus:ring-indigo-500 focus:border-indigo-500 bg-white dark:bg-gray-900 text-gray-900 dark:text-gray-100"
                         placeholder="https://your-app.com/auth/callback"
                       />
                       <p className="mt-1 text-xs text-gray-500 dark:text-gray-400">
@@ -910,7 +910,7 @@ function CloudStorageConfig({ filterType } = {}) {
                         onChange={e =>
                           setEditingProvider({ ...editingProvider, enabled: e.target.checked })
                         }
-                        className="h-4 w-4 text-indigo-600 focus:ring-indigo-500 border-gray-300 rounded"
+                        className="h-4 w-4 text-indigo-600 focus:ring-indigo-500 border-gray-300 rounded-sm"
                       />
                       <label htmlFor="providerEnabled" className="ml-2 block text-sm text-gray-900">
                         {t('admin.cloudStorage.providerEnabled')}
@@ -922,13 +922,13 @@ function CloudStorageConfig({ filterType } = {}) {
                   <div className="mt-6 flex justify-end space-x-3">
                     <button
                       onClick={handleCancelEdit}
-                      className="px-4 py-2 border border-gray-300 rounded-md shadow-sm text-sm font-medium text-gray-700 bg-white hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500"
+                      className="px-4 py-2 border border-gray-300 rounded-md shadow-xs text-sm font-medium text-gray-700 bg-white hover:bg-gray-50 focus:outline-hidden focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500"
                     >
                       {t('common.cancel')}
                     </button>
                     <button
                       onClick={handleSaveProvider}
-                      className="px-4 py-2 border border-transparent rounded-md shadow-sm text-sm font-medium text-white bg-indigo-600 hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500"
+                      className="px-4 py-2 border border-transparent rounded-md shadow-xs text-sm font-medium text-white bg-indigo-600 hover:bg-indigo-700 focus:outline-hidden focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500"
                     >
                       {t('common.save')}
                     </button>
@@ -972,11 +972,11 @@ function CloudStorageConfig({ filterType } = {}) {
             disabled={saving}
             className={`
               inline-flex items-center px-4 py-2 border border-transparent text-sm font-medium 
-              rounded-md shadow-sm text-white 
+              rounded-md shadow-xs text-white 
               ${
                 saving
                   ? 'bg-gray-400 cursor-not-allowed'
-                  : 'bg-indigo-600 hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500'
+                  : 'bg-indigo-600 hover:bg-indigo-700 focus:outline-hidden focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500'
               }
             `}
           >

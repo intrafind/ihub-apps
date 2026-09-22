@@ -1,6 +1,5 @@
 import { getApiKeyForModel } from '../utils.js';
 import ErrorHandler from './ErrorHandler.js';
-import { sendSSE } from '../sse.js';
 import configCache from '../configCache.js';
 import logger from './logger.js';
 
@@ -9,7 +8,14 @@ class ApiKeyVerifier {
     this.errorHandler = new ErrorHandler();
   }
 
-  async verifyApiKey(model, res = null, clientRes = null, language = null) {
+  /**
+   * Resolve the API key for a model. Never writes to a response: the caller
+   * owns the reply (HTTP status or stream error) when `success` is false.
+   * @param {Object} model
+   * @param {string|null} [language] - for the localized error message
+   * @returns {Promise<{success: boolean, apiKey?: string|null, error?: Error}>}
+   */
+  async verifyApiKey(model, language = null) {
     const defaultLang = configCache.getPlatform()?.defaultLanguage || 'en';
     const lang = language || defaultLang;
 
@@ -28,15 +34,6 @@ class ApiKeyVerifier {
         );
 
         const error = await this.errorHandler.createApiKeyError(model.provider, lang);
-
-        if (clientRes) {
-          sendSSE(clientRes, 'error', { message: error.message });
-        }
-
-        if (res) {
-          res.status(401).json(this.errorHandler.formatErrorResponse(error));
-        }
-
         return { success: false, error };
       }
 
@@ -51,15 +48,6 @@ class ApiKeyVerifier {
       const internalError = await this.errorHandler.getLocalizedError('internalError', {}, lang);
       const chatError = new Error(internalError);
       chatError.code = 'INTERNAL_ERROR';
-
-      if (clientRes) {
-        sendSSE(clientRes, 'error', { message: internalError });
-      }
-
-      if (res) {
-        res.status(500).json({ error: internalError, code: 'INTERNAL_ERROR' });
-      }
-
       return { success: false, error: chatError };
     }
   }

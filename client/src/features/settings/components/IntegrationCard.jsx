@@ -21,7 +21,7 @@ export default function IntegrationCard({
   return (
     <div className="border border-gray-200 dark:border-gray-700 rounded-lg p-6">
       <div className="flex items-start space-x-4">
-        <div className="flex-shrink-0">
+        <div className="shrink-0">
           <div
             className={`w-12 h-12 ${iconBgClassName} rounded-lg flex items-center justify-center`}
           >
@@ -100,7 +100,7 @@ export default function IntegrationCard({
               <ul className="text-sm text-gray-700 dark:text-gray-300 space-y-1">
                 {features.map(feature => (
                   <li key={feature} className="flex items-center">
-                    <Icon name="check" className="w-4 h-4 text-green-500 mr-2 flex-shrink-0" />
+                    <Icon name="check" className="w-4 h-4 text-green-500 mr-2 shrink-0" />
                     {feature}
                   </li>
                 ))}

@@ -4,6 +4,7 @@ import Icon from '../../../shared/components/Icon';
 import SSLConfig from '../components/SSLConfig';
 import CorsConfig from '../components/CorsConfig';
 import SsrfConfig from '../components/SsrfConfig';
+import ProxyConfig from '../components/ProxyConfig';
 import CookieSettingsConfig from '../components/CookieSettingsConfig';
 import AdminSettingsPage from '../components/AdminSettingsPage';
 import { makeAdminApiCall } from '../../../api/adminApi';
@@ -71,9 +72,9 @@ function AdminSecurityPage() {
   const encryptionSection = (
     <div className="space-y-6">
       {/* Value Encryption Tool */}
-      <div className="bg-white dark:bg-gray-800 rounded-lg shadow-sm border border-gray-200 dark:border-gray-700 p-6">
+      <div className="bg-white dark:bg-gray-800 rounded-lg shadow-xs border border-gray-200 dark:border-gray-700 p-6">
         <div className="flex items-start space-x-4">
-          <div className="flex-shrink-0 mt-1">
+          <div className="shrink-0 mt-1">
             <div className="p-3 rounded-full bg-blue-100 dark:bg-blue-900/50">
               <Icon name="shield-check" size="lg" className="text-blue-600 dark:text-blue-400" />
             </div>
@@ -171,7 +172,7 @@ function AdminSecurityPage() {
                   onKeyDown={e => {
                     if (e.key === 'Enter' && !encryptLoading) handleEncryptValue();
                   }}
-                  className="block w-full px-3 py-2 border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100 rounded-md shadow-sm focus:ring-blue-500 focus:border-blue-500 sm:text-sm"
+                  className="block w-full px-3 py-2 border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100 rounded-md shadow-xs focus:ring-blue-500 focus:border-blue-500 sm:text-sm"
                   placeholder={t(
                     'admin.system.encryptInputPlaceholder',
                     'Enter value to encrypt (password, API key, etc.)'
@@ -183,10 +184,10 @@ function AdminSecurityPage() {
               <button
                 onClick={handleEncryptValue}
                 disabled={encryptLoading || !encryptValue}
-                className={`inline-flex items-center px-4 py-2 border border-transparent text-sm font-medium rounded-md shadow-sm text-white ${
+                className={`inline-flex items-center px-4 py-2 border border-transparent text-sm font-medium rounded-md shadow-xs text-white ${
                   encryptLoading || !encryptValue
                     ? 'bg-gray-400 cursor-not-allowed'
-                    : 'bg-blue-600 hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500'
+                    : 'bg-blue-600 hover:bg-blue-700 focus:outline-hidden focus:ring-2 focus:ring-offset-2 focus:ring-blue-500'
                 }`}
               >
                 {encryptLoading ? (
@@ -230,13 +231,13 @@ function AdminSecurityPage() {
                     <textarea
                       readOnly
                       value={encryptedResult}
-                      className="block w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md shadow-sm bg-gray-50 dark:bg-gray-700 text-gray-900 dark:text-gray-100 font-mono text-xs sm:text-sm"
+                      className="block w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md shadow-xs bg-gray-50 dark:bg-gray-700 text-gray-900 dark:text-gray-100 font-mono text-xs sm:text-sm"
                       rows={4}
                       onClick={e => e.target.select()}
                     />
                     <button
                       onClick={handleCopyEncrypted}
-                      className="absolute top-2 right-2 inline-flex items-center px-3 py-1 border border-gray-300 dark:border-gray-600 shadow-sm text-xs font-medium rounded-md text-gray-700 dark:text-gray-300 bg-white dark:bg-gray-600 hover:bg-gray-50 dark:hover:bg-gray-500 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500"
+                      className="absolute top-2 right-2 inline-flex items-center px-3 py-1 border border-gray-300 dark:border-gray-600 shadow-xs text-xs font-medium rounded-md text-gray-700 dark:text-gray-300 bg-white dark:bg-gray-600 hover:bg-gray-50 dark:hover:bg-gray-500 focus:outline-hidden focus:ring-2 focus:ring-offset-2 focus:ring-blue-500"
                     >
                       <Icon name="clipboard" size="sm" className="mr-1" />
                       {t('admin.system.copyButton', 'Copy')}
@@ -262,7 +263,7 @@ function AdminSecurityPage() {
       title={t('admin.nav.security', 'Security')}
       description={t(
         'admin.security.description',
-        'SSL, CORS, cookie settings, and encryption configuration'
+        'SSL, CORS, cookie settings, outbound proxy, and encryption configuration'
       )}
       sections={[
         {
@@ -284,6 +285,11 @@ function AdminSecurityPage() {
           id: 'ssrf',
           label: t('admin.security.sections.ssrf', 'SSRF Allowlist'),
           children: <SsrfConfig />
+        },
+        {
+          id: 'proxy',
+          label: t('admin.security.sections.proxy', 'Outbound Proxy'),
+          children: <ProxyConfig />
         },
         {
           id: 'encryption',

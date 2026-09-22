@@ -1,0 +1,618 @@
+{
+  "id": "stellungnahmen-review-ifinder-v2",
+  "name": {
+    "en": "Stellungnahmen Review — iFinder corpus (audit-grade) (v2)",
+    "de": "Stellungnahmen-Auswertung aus iFinder (revisionssicher) (v2)"
+  },
+  "description": {
+    "en": "Same audit-grade extract-and-report flow as 'Stellungnahmen Review', but candidates are pulled from iFinder by topic and each document's fulltext is loaded one at a time inside the iteration loop. Useful for ministry-scale corpora that exceed chat upload limits. Version 2: both iterations are visual loop containers — the search-refinement rounds and the per-document analysis — instead of cursor variables, decision nodes and back-edges.",
+    "de": "Gleicher revisionssicherer Extraktions- und Berichtsablauf wie 'Stellungnahmen-Auswertung', jedoch werden die Kandidaten themenbezogen aus iFinder gezogen und der Volltext jedes Dokuments wird einzeln innerhalb der Iterationsschleife geladen. Geeignet für Ministeriums-Korpora, die das Chat-Upload-Limit übersteigen. Version 2: Beide Wiederholungen sind visuelle Loop-Container — die Such-Verfeinerungsrunden und die Analyse pro Dokument — statt Zählervariablen, Entscheidungsknoten und Rückwärtskanten."
+  },
+  "version": "2.0.0",
+  "enabled": true,
+  "config": {
+    "observability": "standard",
+    "persistence": "session",
+    "errorHandling": "fail",
+    "humanInLoop": "none",
+    "maxExecutionTime": 3600000,
+    "maxNodes": 50,
+    "maxIterations": 1000,
+    "allowCycles": true,
+    "defaultModelId": "gemini-flash-latest"
+  },
+  "nodes": [
+    {
+      "id": "start",
+      "type": "start",
+      "name": {
+        "en": "Configure iFinder corpus",
+        "de": "iFinder-Korpus konfigurieren"
+      },
+      "position": {
+        "x": 100,
+        "y": 50
+      },
+      "config": {
+        "defaults": {
+          "searchProfile": "searchprofile-standard",
+          "queryLanguage": "de",
+          "agentProfileId": "law-consultation-agent",
+          "maxFulltextChars": 50000,
+          "filter": ["sourceLocations.label:bmg", "sourceLocations.label:Public"],
+          "_maxSearchIterations": 3
+        },
+        "inputVariables": [
+          {
+            "name": "userPrompt",
+            "type": "string",
+            "required": true,
+            "label": {
+              "en": "Focus prompt",
+              "de": "Fokus-Anweisung"
+            },
+            "description": {
+              "en": "Free-form prompt: what to focus on, which law, which paragraphs, which topics. Example: 'Krankengeld, § 48 SGB V — Begrenzung der Bezugsdauer'. When triggered via @mention, the chat message lands here.",
+              "de": "Freier Text: worauf der Fokus liegen soll, welches Gesetz, welche Paragraphen, welche Themen. Beispiel: 'Krankengeld, § 48 SGB V — Begrenzung der Bezugsdauer'. Bei @Mention landet die Chat-Nachricht hier."
+            }
+          },
+          {
+            "name": "searchProfile",
+            "type": "string",
+            "required": true,
+            "label": {
+              "en": "iFinder search profile ID",
+              "de": "iFinder-Suchprofil-ID"
+            },
+            "description": {
+              "en": "ID of the iFinder search profile that indexes the Stellungnahmen corpus (e.g. 'searchprofile-stellungnahmen').",
+              "de": "ID des iFinder-Suchprofils, das den Stellungnahmen-Korpus indexiert (z. B. 'searchprofile-stellungnahmen')."
+            }
+          },
+          {
+            "name": "agentProfileId",
+            "type": "string",
+            "required": false,
+            "label": {
+              "en": "Agent profile for corpus map (optional)",
+              "de": "Agentenprofil für Korpusübersicht (optional)"
+            },
+            "description": {
+              "en": "If set, the workflow reads '## iFinder corpus map' from this agent profile's memory and feeds it into the query planner. Populate it via the admin endpoint POST /api/admin/agents/profiles/<id>/memory/from-tool.",
+              "de": "Wenn gesetzt, liest der Workflow den Abschnitt '## iFinder corpus map' aus dem Memory dieses Agentenprofils und übergibt ihn dem Query-Planner. Befüllen über den Admin-Endpunkt POST /api/admin/agents/profiles/<id>/memory/from-tool."
+            }
+          },
+          {
+            "name": "queryLanguage",
+            "type": "select",
+            "required": false,
+            "label": {
+              "en": "Query language (corpus language)",
+              "de": "Suchsprache (Korpussprache)"
+            },
+            "description": {
+              "en": "Language the corpus is indexed in. The LLM-generated iFinder queries will be written in this language regardless of the chat language. Default: German.",
+              "de": "Sprache, in der der Korpus indiziert ist. Die vom LLM erzeugten iFinder-Anfragen werden in dieser Sprache verfasst, unabhängig von der Chat-Sprache. Standard: Deutsch."
+            },
+            "options": [
+              {
+                "value": "de",
+                "label": {
+                  "en": "German",
+                  "de": "Deutsch"
+                }
+              },
+              {
+                "value": "en",
+                "label": {
+                  "en": "English",
+                  "de": "Englisch"
+                }
+              },
+              {
+                "value": "fr",
+                "label": {
+                  "en": "French",
+                  "de": "Französisch"
+                }
+              },
+              {
+                "value": "es",
+                "label": {
+                  "en": "Spanish",
+                  "de": "Spanisch"
+                }
+              },
+              {
+                "value": "it",
+                "label": {
+                  "en": "Italian",
+                  "de": "Italienisch"
+                }
+              }
+            ]
+          },
+          {
+            "name": "maxFulltextChars",
+            "type": "number",
+            "required": false,
+            "label": {
+              "en": "Max fulltext chars per document",
+              "de": "Maximale Volltext-Zeichen pro Dokument"
+            },
+            "description": {
+              "en": "Truncate each document's fulltext to this many characters before extracting demands. Lower = faster + cheaper but risks missing content from long Stellungnahmen. Default: 50000 (~12k tokens). Use 0 or empty to inherit the default.",
+              "de": "Volltext jedes Dokuments vor der Extraktion auf so viele Zeichen kürzen. Niedriger = schneller + günstiger, übersieht aber ggf. Inhalte langer Stellungnahmen. Standard: 50000 (~12k Tokens). 0 oder leer = Standard übernehmen."
+            }
+          },
+          {
+            "name": "filter",
+            "type": "textarea",
+            "required": false,
+            "label": {
+              "en": "iFinder filters (optional, one per line)",
+              "de": "iFinder-Filter (optional, einer pro Zeile)"
+            },
+            "description": {
+              "en": "Narrow the corpus before searching. One filter per line, iFinder syntax (e.g. 'sourceType.keyword:pdf', 'language.keyword:de', 'application.keyword:stellungnahmen'). Combined with AND. Leave empty to search the whole profile.",
+              "de": "Schränkt den Korpus vor der Suche ein. Ein Filter pro Zeile in iFinder-Syntax (z. B. 'sourceType.keyword:pdf', 'language.keyword:de', 'application.keyword:stellungnahmen'). Mit UND verknüpft. Leer lassen, um das gesamte Profil zu durchsuchen."
+            }
+          }
+        ]
+      }
+    },
+    {
+      "id": "read-corpus-map",
+      "type": "memory",
+      "name": {
+        "en": "Read corpus map from agent memory",
+        "de": "Korpusübersicht aus Agent-Memory laden"
+      },
+      "position": {
+        "x": 100,
+        "y": 320
+      },
+      "config": {
+        "chatVisible": false,
+        "operation": "read",
+        "profileIdPath": "agentProfileId",
+        "section": "iFinder corpus map",
+        "outputVariable": "_corpusMap"
+      }
+    },
+    {
+      "id": "seed-plan",
+      "type": "query-plan",
+      "name": {
+        "en": "Expand focus into search plan",
+        "de": "Fokus in Suchplan expandieren"
+      },
+      "position": {
+        "x": 100,
+        "y": 460
+      },
+      "config": {
+        "questionPath": "$.data.userPrompt",
+        "seedsPath": "$.data._corpusMap",
+        "outputVar": "_queryPlan",
+        "maxTopics": 6,
+        "maxSynonymsPerTopic": 4
+      }
+    },
+    {
+      "id": "refine-search",
+      "type": "loop",
+      "name": {
+        "en": "Search until the corpus is complete",
+        "de": "Suchen bis der Korpus vollständig ist"
+      },
+      "description": {
+        "en": "Repeats search + refinement rounds while the reviewer model still proposes extra topics, capped at _maxSearchIterations rounds.",
+        "de": "Wiederholt Such- und Verfeinerungsrunden, solange das Modell weitere Themen vorschlägt — begrenzt durch _maxSearchIterations."
+      },
+      "position": {
+        "x": 380,
+        "y": 700
+      },
+      "size": {
+        "width": 620,
+        "height": 460
+      },
+      "config": {
+        "chatVisible": false,
+        "mode": "while",
+        "condition": "(data._refineDecision === undefined) || (data._refineDecision.done === false && data._searchIterations < data._maxSearchIterations)",
+        "maxIterations": 3,
+        "countInto": "_searchIterations"
+      }
+    },
+    {
+      "id": "search-corpus",
+      "type": "corpus-search",
+      "name": {
+        "en": "Search iFinder (metadata only)",
+        "de": "iFinder durchsuchen (nur Metadaten)"
+      },
+      "position": {
+        "x": 40,
+        "y": 60
+      },
+      "config": {
+        "planPath": "$.data._queryPlan",
+        "corpusVar": "_corpus",
+        "coverageVar": "_coverage",
+        "searchProfile": "$.data.searchProfile",
+        "maxPerTopic": 0,
+        "maxTotalDocs": 500,
+        "fetchFulltext": false,
+        "extraQueries": ["$.data.userPrompt", "*"]
+      },
+      "parentId": "refine-search"
+    },
+    {
+      "id": "refine-decision",
+      "type": "prompt",
+      "name": {
+        "en": "Decide whether to widen the search",
+        "de": "Entscheiden, ob die Suche erweitert werden soll"
+      },
+      "position": {
+        "x": 40,
+        "y": 250
+      },
+      "config": {
+        "chatVisible": false,
+        "temperature": 0.1,
+        "system": {
+          "en": "You are a corpus-completeness referee. You look at the candidate list and the user's focus and decide whether the corpus is broad enough to support an audit-grade Stellungnahmen review. Return ONLY JSON.",
+          "de": "Sie sind ein Korpus-Vollständigkeits-Schiedsrichter. Sie prüfen die Kandidatenliste und den Nutzer-Fokus und entscheiden, ob der Korpus breit genug für eine revisionssichere Stellungnahmen-Auswertung ist. Antworten Sie NUR mit JSON."
+        },
+        "prompt": {
+          "en": "## User focus\n{{userPrompt}}\n\n## Current query plan\nTopics: {{#each _queryPlan.topics}}\"{{this}}\"  {{/each}}\nExpansions: {{#each _queryPlan.expansions}}\"{{this}}\"  {{/each}}\n\n## Candidates so far ({{_corpus.length}} hits in round {{_loopHuman}}/{{_maxSearchIterations}})\n{{#each _corpus}}\n- {{this.displayName}}  ({{this.docId}})  source={{this.sourceName}}  query=\"{{this.matchedQuery}}\"\n{{/each}}\n\n## Decision\nReturn JSON:\n{\n  \"done\": <bool>,                          // true if corpus is sufficient OR you are out of iterations\n  \"reason\": \"<one short sentence, max 25 words — never repeat yourself>\",\n  \"extraTopics\": [\"<additional iFinder query string>\"]  // empty when done=true\n}\n\nRules: if `_searchIterations >= _maxSearchIterations`, ALWAYS return `done: true` (we have hit the cap). Otherwise: if the candidate list clearly misses obvious paragraphs/themes from the user focus, propose 1-3 extra topics; if not, return done=true.",
+          "de": "## Nutzer-Fokus\n{{userPrompt}}\n\n## Aktueller Suchplan\nThemen: {{#each _queryPlan.topics}}\"{{this}}\"  {{/each}}\nErweiterungen: {{#each _queryPlan.expansions}}\"{{this}}\"  {{/each}}\n\n## Bisherige Kandidaten ({{_corpus.length}} Treffer in Runde {{_loopHuman}}/{{_maxSearchIterations}})\n{{#each _corpus}}\n- {{this.displayName}}  ({{this.docId}})  quelle={{this.sourceName}}  query=\"{{this.matchedQuery}}\"\n{{/each}}\n\n## Entscheidung\nJSON zurückgeben:\n{\n  \"done\": <bool>,\n  \"reason\": \"<ein kurzer Satz, max. 25 Wörter — niemals wiederholen>\",\n  \"extraTopics\": [\"<zusätzliche iFinder-Anfrage>\"]\n}\n\nRegeln: wenn `_searchIterations >= _maxSearchIterations`, IMMER `done: true` zurückgeben (Obergrenze erreicht). Andernfalls: wenn die Kandidatenliste offensichtliche Paragraphen/Themen aus dem Fokus übergeht, 1-3 zusätzliche Themen vorschlagen; sonst `done: true` zurückgeben."
+        },
+        "outputVariable": "_refineDecision",
+        "thinking": {
+          "enabled": false
+        },
+        "maxIterations": 1,
+        "maxTokens": 1024,
+        "outputSchema": {
+          "type": "object",
+          "properties": {
+            "done": {
+              "type": "boolean"
+            },
+            "reason": {
+              "type": "string"
+            },
+            "extraTopics": {
+              "type": "array",
+              "items": {
+                "type": "string"
+              }
+            }
+          },
+          "required": ["done"]
+        }
+      },
+      "execution": {
+        "timeout": 60000,
+        "retries": 1,
+        "retryDelay": 1000
+      },
+      "parentId": "refine-search"
+    },
+    {
+      "id": "merge-refined-plan",
+      "type": "transform",
+      "name": {
+        "en": "Merge refined topics into plan",
+        "de": "Verfeinerte Themen in Plan einfügen"
+      },
+      "position": {
+        "x": 40,
+        "y": 345
+      },
+      "config": {
+        "chatVisible": false,
+        "operations": [
+          {
+            "copy": "_refineDecision.extraTopics",
+            "to": "_queryPlan.expansions"
+          }
+        ]
+      },
+      "parentId": "refine-search"
+    },
+    {
+      "id": "analyse-documents",
+      "type": "loop",
+      "name": {
+        "en": "Analyse every document",
+        "de": "Jedes Dokument analysieren"
+      },
+      "description": {
+        "en": "Runs the extraction steps once per document found in the corpus. Sequential on purpose: each round appends to the shared evidence record and coverage counters.",
+        "de": "Führt die Extraktionsschritte einmal pro gefundenem Dokument aus. Bewusst sequenziell: Jede Runde ergänzt den gemeinsamen Evidenz-Datensatz und die Abdeckungszähler."
+      },
+      "position": {
+        "x": 380,
+        "y": 1260
+      },
+      "size": {
+        "width": 660,
+        "height": 840
+      },
+      "config": {
+        "chatVisible": false,
+        "mode": "forEach",
+        "array": "_corpus",
+        "maxIterations": 500,
+        "itemVariable": "_currentDoc",
+        "countInto": "_coverage.processed",
+        "onItemError": "skip",
+        "recordFailuresInto": "_coverage.failed"
+      }
+    },
+    {
+      "id": "fetch-doc",
+      "type": "tool",
+      "name": {
+        "en": "Fetch document fulltext from iFinder",
+        "de": "Volltext aus iFinder laden"
+      },
+      "position": {
+        "x": 40,
+        "y": 250
+      },
+      "config": {
+        "chatVisible": false,
+        "toolId": "iFinder_getContent",
+        "parameters": {
+          "documentId": "$.data._currentDoc.docId",
+          "searchProfile": "$.data.searchProfile",
+          "maxLength": "$.data.maxFulltextChars"
+        },
+        "outputVariable": "_currentDocContent",
+        "timeout": 90000,
+        "progress": {
+          "message": {
+            "de": "📄 Lade Dokument {{_loopHuman}} / {{_loopTotal}} — \"{{_currentDoc.displayName}}\"",
+            "en": "📄 Loading document {{_loopHuman}} / {{_loopTotal}} — \"{{_currentDoc.displayName}}\""
+          }
+        }
+      },
+      "parentId": "analyse-documents"
+    },
+    {
+      "id": "extract-evidence",
+      "type": "prompt",
+      "name": {
+        "en": "Extract demanded changes",
+        "de": "Geforderte Änderungen extrahieren"
+      },
+      "position": {
+        "x": 40,
+        "y": 535
+      },
+      "config": {
+        "chatVisible": false,
+        "system": {
+          "en": "You are an AI assistant analysing a single Stellungnahme (formal note on a draft law). Strictly observe these rules:\n- Always answer in the language of the analysed document. Do not mix languages.\n- Base every claim on the document. Never invent.\n- Quotes are character-for-character from the source. Never paraphrase. Do not drop intermediate sentences from a quoted passage.\n- Internally repeat the analysis and improve your result before returning. Output only the improved result.",
+          "de": "Sie sind ein KI-Assistent, der eine einzelne Stellungnahme zu einem Gesetzentwurf analysiert. Halten Sie sich strikt an folgende Regeln:\n- Antworten Sie immer in der Sprache des analysierten Dokuments. Vermischen Sie keine Sprachen.\n- Stützen Sie jede Aussage auf das Dokument. Niemals erfinden.\n- Zitate sind Zeichen für Zeichen aus der Quelle übernommen. Niemals paraphrasieren. Lassen Sie keine Zwischensätze aus einem zitierten Abschnitt weg.\n- Wiederholen Sie den Analyseprozess intern und verbessern Sie Ihr Ergebnis, bevor Sie es zurückgeben. Geben Sie ausschließlich das verbesserte Ergebnis aus."
+        },
+        "prompt": {
+          "en": "## Document\nTitle: {{_currentDoc.displayName}}\nDocId: {{_currentDoc.docId}}\nSource: {{_currentDoc.sourceName}}\n\n{{#if _currentDocContent.truncated}}\n**⚠ Truncation warning:** Only the first {{_currentDocContent.maxLength}} of {{_currentDocContent.originalContentLength}} characters of this document were loaded (limit: {{_currentDocContent.maxLength}}). The unread tail may contain additional demands. Output only what you can verify from the visible text; do not invent content from the truncated portion. The final report will mark this document as truncated.\n{{/if}}\n\n### Content\n{{_currentDocContent.content}}\n\n## User focus\n{{userPrompt}}\n\nThe user focus names the law, paragraphs, or topics the user cares about. When checking relevance, consider word families and synonyms (e.g. \"Krankengeld\" matches \"§ 48 SGB V\", \"Höchstbezugsdauer\", \"Anspruchsdauer\"). If the user focus is empty, treat ALL demanded changes as in-scope.\n\n## Procedure\n\n**Step 1 — Inventory.** Privately list every legislative paragraph and every distinct topic this Stellungnahme demands a change to. Do not output this list.\n\n**Step 2 — Filter against the user focus.** This is the most important step. Apply it strictly:\n- If the user focus is **non-empty** AND nothing in your Step-1 inventory matches it (even via synonyms / word families), the correct output is `demandedChanges: []`. Do NOT include unrelated demands. Returning off-topic demands is a failure.\n- If at least one inventoried demand matches the focus, keep ONLY those.\n- If the user focus is empty, keep all of them.\n\n**Step 3 — Extract the kept demands.** For each one:\n1. `summary` — one sentence describing the demand.\n2. `paragraphReference` — the exact paragraph reference (e.g. '§ 113c Abs. 5 Satz 1 Nr. 3'). Empty string if no paragraph is named.\n3. `sourceQuote` — the EXACT verbatim quote from the document. Character-for-character. Findable by plain substring search. Do not omit middle sentences — \"Sentence 1. Sentence 2. Sentence 3.\" must be quoted in full even if Sentence 2 is not directly relevant.\n4. Sort by paragraph and subsection; if no paragraph, sort by topic.\n\n**Step 4 — Metadata.** Determine `organisation` (the submitting body, not the individual person) and `title` of the Stellungnahme.\n\n**Step 5 — Self-check.** Re-apply Step 2 to your extracted list. Drop any entry whose paragraph reference and topic do not actually match the user focus. Returning `demandedChanges: []` is the correct and expected answer when this document does not address the user focus.\n\n## Output (JSON only, no prose, no markdown fences)\n\n{\n  \"organisation\": \"<submitting organisation>\",\n  \"title\": \"<title of the Stellungnahme>\",\n  \"demandedChanges\": [\n    {\n      \"paragraphReference\": \"<e.g. '§ 113c Abs. 5 Satz 1 Nr. 3' or empty>\",\n      \"summary\": \"<one-sentence description of the demand>\",\n      \"sourceQuote\": \"<EXACT verbatim quote from the document>\"\n    }\n  ],\n  \"quotes\": [\n    { \"text\": \"<each verbatim quote used above, one entry per demand>\" }\n  ]\n}",
+          "de": "## Dokument\nTitel: {{_currentDoc.displayName}}\nDocId: {{_currentDoc.docId}}\nQuelle: {{_currentDoc.sourceName}}\n\n{{#if _currentDocContent.truncated}}\n**⚠ Hinweis zur Kürzung:** Es wurden nur die ersten {{_currentDocContent.maxLength}} von {{_currentDocContent.originalContentLength}} Zeichen dieses Dokuments geladen (Limit: {{_currentDocContent.maxLength}}). Im nicht gelesenen Rest können weitere Forderungen stehen. Geben Sie nur Forderungen aus, die Sie im sichtbaren Text belegen können — erfinden Sie KEINE Inhalte aus dem gekürzten Teil. Der Endbericht kennzeichnet dieses Dokument als gekürzt.\n{{/if}}\n\n### Inhalt\n{{_currentDocContent.content}}\n\n## Nutzer-Fokus\n{{userPrompt}}\n\nDer Nutzer-Fokus nennt das Gesetz, die Paragraphen oder Themen, auf die es dem Nutzer ankommt. Bei der Relevanzprüfung sind Wortfamilien und Synonyme zu berücksichtigen (z. B. „Krankengeld\" trifft auf „§ 48 SGB V\", „Höchstbezugsdauer\", „Anspruchsdauer\" zu). Wenn der Nutzer-Fokus leer ist, gelten ALLE Forderungen als relevant.\n\n## Vorgehen\n\n**Schritt 1 — Inventur.** Listen Sie intern jeden Paragraphen und jedes eigenständige Thema auf, zu dem diese Stellungnahme eine Änderung fordert. Diese Liste nicht ausgeben.\n\n**Schritt 2 — Filtern gegen den Nutzer-Fokus.** Dies ist der wichtigste Schritt. Streng anwenden:\n- Wenn der Nutzer-Fokus **nicht leer** ist UND nichts in Ihrer Schritt-1-Inventur (auch unter Berücksichtigung von Synonymen / Wortfamilien) dazu passt, ist die korrekte Ausgabe `demandedChanges: []`. KEINE themenfremden Forderungen aufnehmen. Themenfremde Forderungen auszugeben ist ein Fehler.\n- Wenn mindestens eine inventarisierte Forderung zum Fokus passt, behalten Sie NUR diese.\n- Wenn der Nutzer-Fokus leer ist, behalten Sie alle.\n\n**Schritt 3 — Extraktion der gefilterten Forderungen.** Für jede:\n1. `summary` — ein Satz, der die Forderung beschreibt.\n2. `paragraphReference` — der exakte Paragraphenbezug (z. B. '§ 113c Abs. 5 Satz 1 Nr. 3'). Leerstring wenn kein Paragraph genannt wird.\n3. `sourceQuote` — das EXAKTE wörtliche Zitat aus dem Dokument. Zeichen für Zeichen. Per Substring-Suche im Originaltext auffindbar. Mittelsätze nicht weglassen — „Satz 1. Satz 2. Satz 3.\" muss vollständig zitiert werden, auch wenn Satz 2 nicht unmittelbar relevant ist.\n4. Nach Paragraph und Absatz sortieren; wenn kein Paragraph, nach Thema.\n\n**Schritt 4 — Metadaten.** Bestimmen Sie `organisation` (die einreichende Stelle, nicht die Person) und `title` der Stellungnahme.\n\n**Schritt 5 — Eigenkontrolle.** Wenden Sie Schritt 2 erneut auf Ihre extrahierte Liste an. Verwerfen Sie jede Forderung, deren Paragraphenbezug und Thema nicht zum Nutzer-Fokus passen. `demandedChanges: []` zurückzugeben ist die korrekte und erwartete Antwort, wenn dieses Dokument den Nutzer-Fokus nicht behandelt.\n\n## Ausgabe (NUR JSON, kein Fließtext, keine Markdown-Fences)\n\n{\n  \"organisation\": \"<einreichende Organisation>\",\n  \"title\": \"<Titel der Stellungnahme>\",\n  \"demandedChanges\": [\n    {\n      \"paragraphReference\": \"<z. B. '§ 113c Abs. 5 Satz 1 Nr. 3' oder leer>\",\n      \"summary\": \"<Beschreibung der Forderung in einem Satz>\",\n      \"sourceQuote\": \"<EXAKTES wörtliches Zitat aus dem Dokument>\"\n    }\n  ],\n  \"quotes\": [\n    { \"text\": \"<jedes oben verwendete wörtliche Zitat — ein Eintrag pro Forderung>\" }\n  ]\n}"
+        },
+        "outputVariable": "_extractionOutput",
+        "maxTokens": 16000,
+        "outputSchema": {
+          "type": "object",
+          "properties": {
+            "organisation": {
+              "type": "string"
+            },
+            "title": {
+              "type": "string"
+            },
+            "demandedChanges": {
+              "type": "array",
+              "items": {
+                "type": "object",
+                "properties": {
+                  "paragraphReference": {
+                    "type": "string"
+                  },
+                  "summary": {
+                    "type": "string"
+                  },
+                  "sourceQuote": {
+                    "type": "string"
+                  }
+                },
+                "required": ["summary"]
+              }
+            },
+            "quotes": {
+              "type": "array",
+              "items": {
+                "type": "object",
+                "properties": {
+                  "text": {
+                    "type": "string"
+                  }
+                },
+                "required": ["text"]
+              }
+            }
+          },
+          "required": ["organisation", "title", "demandedChanges", "quotes"]
+        },
+        "progress": {
+          "message": {
+            "de": "✂️ Volltext gekürzt: {{_currentDoc.displayName}} — Dokument hat {{_currentDocContent.originalContentLength}} Zeichen, nur die ersten {{_currentDocContent.maxLength}} werden ausgewertet",
+            "en": "✂️ Full text truncated: {{_currentDoc.displayName}} — the document has {{_currentDocContent.originalContentLength}} characters; only the first {{_currentDocContent.maxLength}} are analysed"
+          },
+          "when": "$.data._currentDocContent.truncated === true"
+        }
+      },
+      "execution": {
+        "timeout": 300000,
+        "retries": 1,
+        "retryDelay": 1000
+      },
+      "parentId": "analyse-documents"
+    },
+    {
+      "id": "collect-evidence",
+      "type": "structured-record",
+      "name": {
+        "en": "Capture structured evidence",
+        "de": "Strukturierte Evidenz erfassen"
+      },
+      "position": {
+        "x": 40,
+        "y": 630
+      },
+      "config": {
+        "chatVisible": false,
+        "schema": {
+          "type": "object",
+          "properties": {
+            "organisation": {
+              "type": "string"
+            },
+            "title": {
+              "type": "string"
+            },
+            "demandedChanges": {
+              "type": "array",
+              "items": {
+                "type": "object",
+                "properties": {
+                  "paragraphReference": {
+                    "type": "string"
+                  },
+                  "summary": {
+                    "type": "string"
+                  },
+                  "sourceQuote": {
+                    "type": "string"
+                  }
+                },
+                "required": ["summary"]
+              }
+            }
+          },
+          "required": ["organisation", "title", "demandedChanges"]
+        },
+        "inputPath": "$.data._extractionOutput",
+        "sourcePath": "$.data._currentDoc",
+        "sourceSystem": "ifinder",
+        "recordsVar": "_records",
+        "iterationIndexPath": "$.data._loopIndex"
+      },
+      "parentId": "analyse-documents"
+    },
+    {
+      "id": "compose-report",
+      "type": "template-render",
+      "name": {
+        "en": "Render audit report",
+        "de": "Auditbericht erzeugen"
+      },
+      "position": {
+        "x": 400,
+        "y": 2100
+      },
+      "config": {
+        "recordsVar": "_records",
+        "coverageVar": "_coverage",
+        "artifactName": "stellungnahmen-review-ifinder.md",
+        "outputVariable": "finalReport",
+        "template": "# Stellungnahmen-Auswertung (iFinder)\n\n## Quelle\n\nQuelle: iFinder — Suchprofil `{{data.searchProfile}}` ({{data._corpus.length}} Treffer in {{data._searchIterations}} Suchrunden)\n\n## Abdeckung\n\n- **Dokumente identifiziert:** {{coverage.candidates.total}}\n- **Dokumente verarbeitet:** {{coverage.processed}}\n\n{{#each records}}\n**Autor:** {{this.data.organisation}}\n\n**Titel:** {{this.data.title}}\n\n**Dokument:** `{{this.source.docId}}`\n\n{{#if this.source.truncated}}\n> ⚠ _Volltext gekürzt: nur die ersten {{this.source.maxFulltextChars}} von {{this.source.contentLength}} Zeichen ausgewertet (Limit: {{this.source.maxFulltextChars}}). Forderungen aus dem nicht gelesenen Teil können fehlen._\n\n{{/if}}\n{{#if this.data.demandedChanges}}\n| Nr | Paragraph | Forderung (mit Originalzitat) |\n|----|-----------|-------------------------------|\n{{#each this.data.demandedChanges}}\n| {{@index}} | {{this.paragraphReference}} | {{this.summary}} _({{this.sourceQuote}})_ |\n{{/each}}\n{{/if}}\n{{#unless this.data.demandedChanges}}\n> _Keine geforderten Gesetzesänderungen zu den angegebenen Themen in diesem Dokument gefunden._\n{{/unless}}\n\n{{#if this.failures}}\n_Hinweise:_\n{{#each this.failures}}\n- ⚠ [{{this.code}}] {{this.message}}\n{{/each}}\n{{/if}}\n\n---\n\n{{/each}}\n"
+      }
+    },
+    {
+      "id": "end",
+      "type": "end",
+      "name": {
+        "en": "Done",
+        "de": "Fertig"
+      },
+      "position": {
+        "x": 400,
+        "y": 2240
+      },
+      "config": {
+        "outputVariables": ["finalReport"]
+      }
+    }
+  ],
+  "edges": [
+    {
+      "id": "e-map",
+      "source": "read-corpus-map",
+      "target": "seed-plan"
+    },
+    {
+      "id": "e-seed-plan-refine-search",
+      "source": "seed-plan",
+      "target": "refine-search"
+    },
+    {
+      "id": "e-refine-search-analyse-documents",
+      "source": "refine-search",
+      "target": "analyse-documents"
+    },
+    {
+      "id": "e-analyse-documents-compose-report",
+      "source": "analyse-documents",
+      "target": "compose-report"
+    },
+    {
+      "id": "e-compose-report-end",
+      "source": "compose-report",
+      "target": "end"
+    },
+    {
+      "id": "e-refine-decision-merge-refined-plan",
+      "source": "refine-decision",
+      "target": "merge-refined-plan",
+      "condition": {
+        "type": "expression",
+        "expression": "$.data._refineDecision.done === false && $.data._searchIterations < $.data._maxSearchIterations"
+      }
+    },
+    {
+      "id": "e-extract-evidence-collect-evidence",
+      "source": "extract-evidence",
+      "target": "collect-evidence"
+    },
+    {
+      "id": "e-search-corpus-refine-decision",
+      "source": "search-corpus",
+      "target": "refine-decision"
+    },
+    {
+      "id": "e-fetch-doc-extract-evidence",
+      "source": "fetch-doc",
+      "target": "extract-evidence"
+    },
+    {
+      "id": "e-start-read-corpus-map",
+      "source": "start",
+      "target": "read-corpus-map"
+    }
+  ],
+  "allowedGroups": [],
+  "chatIntegration": {
+    "enabled": true,
+    "passthroughResult": false,
+    "primaryOutput": "finalReport",
+    "outputFormat": "markdown"
+  },
+  "status": "draft"
+}

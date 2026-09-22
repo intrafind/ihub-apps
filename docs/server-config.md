@@ -55,6 +55,13 @@ The server reads settings from the environment or a `.env` file such as `config.
 | `HOST`                     | Host interface to bind to. Use `0.0.0.0` to listen on all interfaces (recommended), then access via `localhost` or `127.0.0.1` in your browser. **Never access via `http://0.0.0.0:*` as browsers will reject cookies.** | `0.0.0.0`                                        |
 | `NODE_ENV`                 | Runtime environment (`development`, `production`, `test`). Affects cookie security flags, debug logging, and cache TTLs. | – |
 | `REQUEST_TIMEOUT`          | LLM request timeout in milliseconds                               | `300000`                                         |
+| `LLM_TRANSIENT_RETRIES`    | How often a transient provider failure (429, 5xx, network) is retried with backoff before an LLM call fails. `WORKFLOW_LLM_TRANSIENT_RETRIES` is still honoured. | `3`                                              |
+| `LLM_CONNECT_TIMEOUT_MS`   | Longest a provider call waits for the response headers before failing as unreachable, per attempt. Every provider call streams, so those headers arrive as soon as the request is accepted; time queued in the per-model throttle does not count. `0` disables it. Overridable per installation via `llm.connectTimeoutMs` in `platform.json` and per model via `connectTimeoutMs`. See [Stream deadlines](llm-client.md#stream-deadlines). | `30000` |
+| `LLM_STREAM_IDLE_TIMEOUT_MS` | Longest gap between two chunks of a stream that has already produced one, before the turn is ended. Armed only after the first chunk, so a model that thinks for minutes is not cut off. `0` disables it. Overridable via `llm.streamIdleTimeoutMs` and a model's `streamIdleTimeoutMs`. | `60000` |
+| `UV_THREADPOOL_SIZE`       | Size of the libuv threadpool that runs DNS lookups, file I/O and crypto. iHub sets `16` when the variable is unset (Node's own default is `4`, which lets two hung DNS lookups stall every outbound request). Must come from the environment or `.env`; it is read once at startup. | `16`                                             |
+| `DNS_LOOKUP_TIMEOUT_MS`    | Longest an outbound connection waits for a hostname lookup before failing with a DNS error. `0` disables the limit. See [Outbound DNS guard](llm-client.md#outbound-dns-guard). | `5000`                                           |
+| `DNS_NEGATIVE_CACHE_MS`    | How long a failed or overdue hostname lookup is remembered so new requests to that host fail immediately instead of queueing another lookup. `0` disables it. | `30000`                                          |
+| `LLM_DEBUG_DUMP_ALL`       | Set to `1` to write every outbound LLM request body to `contents/data/debug/llm-request/` (auth headers and URL keys redacted). Diagnostics only. | –                                                |
 | `WORKERS`                  | Number of Node.js cluster workers (alias: `NUM_WORKERS`). Set to `1` to disable clustering. See [Scaling with Multiple Workers](scaling.md). | `4`                                              |
 | `NUM_WORKERS`              | Number of Node.js cluster workers (alias of `WORKERS`)            | `4`                                              |
 | `OPENAI_API_KEY`           | API key for OpenAI models                                         | –                                                |
@@ -90,6 +97,8 @@ For Model Context Protocol (MCP) servers, see [MCP Integration](mcp-integration.
 | `AZURE_TENANT_ID`          | Azure tenant ID for the Office 365 / Microsoft Teams cloud storage integration. | – |
 | `NTLM_LDAP_USER`           | LDAP bind user for NTLM authentication domain controller queries. Overrides `ntlmAuth.domainControllerUser` in `platform.json`. | – |
 | `NTLM_LDAP_PASSWORD`       | LDAP bind password for NTLM authentication domain controller queries. Overrides `ntlmAuth.domainControllerPassword` in `platform.json`. | – |
+| `NO_VERSION_CHECK`         | Skip the release lookup against `api.github.com` entirely (alias: `IHUB_NO_VERSION_CHECK`). Truthy: `1`, `true`, `yes`, `on`. See [Update Procedures](INSTALLATION.md#update-procedures). | – |
+| `VERSION_CHECK_TIMEOUT_MS` | Abort deadline in milliseconds for the release lookup (alias: `IHUB_VERSION_CHECK_TIMEOUT_MS`). Clamped to 500–60000. | `1000` |
 
 The concurrency of outbound requests is configured via `requestConcurrency` in `contents/config/platform.json` and can be overridden per model or tool. If this value is omitted or below `1`, requests are not throttled.
 The delay between requests can be adjusted with `requestDelayMs` in the same configuration files. A value of `0` disables the delay.
@@ -147,8 +156,10 @@ iHub Apps supports routing all external HTTP/HTTPS requests through a proxy serv
 ### Configuration Methods
 
 Proxy configuration can be provided through:
-1. **Environment Variables** (recommended for simple setups)
-2. **Platform Configuration** (`contents/config/platform.json`) for advanced features
+1. **Admin UI** — Admin → Security → Outbound Proxy, including a connectivity
+   test. See [Proxy Configuration](proxy-configuration.md).
+2. **Environment Variables** (simple setups)
+3. **Platform Configuration** (`contents/config/platform.json`) for advanced features
 
 ### Environment Variables
 
@@ -161,8 +172,10 @@ NO_PROXY=localhost,127.0.0.1,.local,.company.com
 
 The `NO_PROXY` variable accepts:
 - **Exact hostnames**: `localhost`, `api.internal.com`
-- **Domain suffixes**: `.company.com` (matches all subdomains)
-- **Wildcard domains**: `*.internal.com`
+- **Domain suffixes**: `.company.com` (matches all subdomains, not the bare domain)
+- **Wildcard domains**: `*.internal.com` (same as `.internal.com`)
+
+CIDR ranges, `host:port` entries and the catch-all `*` are **not** supported.
 
 ### Platform Configuration
 
@@ -184,11 +197,16 @@ For advanced proxy features, configure in `contents/config/platform.json`:
 ```
 
 **Configuration Options**:
-- `enabled` (boolean): Enable/disable proxy globally (default: `false`)
-- `http` (string): HTTP proxy URL
-- `https` (string): HTTPS proxy URL
-- `noProxy` (string): Comma-separated bypass list
+- `enabled` (boolean): Enable/disable proxy globally (default when absent: `true`,
+  so `HTTP_PROXY`/`HTTPS_PROXY` from the environment apply without a `proxy` block)
+- `http` (string): HTTP proxy URL — an `${ENV_VAR}` placeholder is also accepted
+- `https` (string): HTTPS proxy URL — same
+- `noProxy` (string **or** array of strings): Bypass list, either comma-separated
+  (`"localhost,.local"`) or as an array (`["localhost", ".local"]`)
 - `urlPatterns` (array): Regex patterns for selective proxy (empty = all URLs)
+
+Proxy URLs saved from the admin UI are encrypted at rest and their passwords are
+redacted in API responses and logs.
 
 ### Use Cases
 

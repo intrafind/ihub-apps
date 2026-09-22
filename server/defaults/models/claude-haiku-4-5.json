@@ -2,18 +2,20 @@
   "id": "claude-haiku-4-5",
   "modelId": "claude-haiku-4-5",
   "name": {
-    "en": "Claude 4 Haiku",
-    "de": "Claude 4 Haiku"
+    "en": "Claude Haiku 4.5",
+    "de": "Claude Haiku 4.5"
   },
   "description": {
-    "en": "Anthropic's most capable model with exceptional reasoning abilities",
-    "de": "Anthropics leistungsfähigstes Modell mit außergewöhnlichen Argumentationsfähigkeiten"
+    "en": "Anthropic's fastest and most cost-efficient Claude model for high-volume tasks.",
+    "de": "Anthropics schnellstes und kostengünstigstes Claude-Modell für Aufgaben mit hohem Volumen."
   },
   "url": "https://api.anthropic.com/v1/messages",
   "provider": "anthropic",
   "contextWindow": 200000,
   "maxOutputTokens": 8000,
   "supportsTools": true,
+  "supportsVision": true,
+  "supportsImages": true,
   "enabled": false,
   "default": false
 }

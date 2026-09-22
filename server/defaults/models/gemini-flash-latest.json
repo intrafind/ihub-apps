@@ -2,17 +2,17 @@
   "id": "gemini-flash-latest",
   "modelId": "gemini-flash-latest",
   "name": {
-    "en": "Gemini Flash Latest",
-    "de": "Gemini Flash Latest"
+    "en": "Gemini Flash (latest)",
+    "de": "Gemini Flash (aktuellste)"
   },
   "description": {
-    "en": "Google's versatile model optimized for text and code tasks",
-    "de": "Googles vielseitiges Modell, optimiert für Text- und Code-Aufgaben"
+    "en": "Google's fast all-round model. This alias always resolves to the newest Gemini Flash release, so it follows Google's releases without a config change.",
+    "de": "Googles schnelles Allround-Modell. Dieser Alias verweist immer auf die neueste Gemini-Flash-Version und folgt damit Googles Releases ohne Konfigurationsänderung."
   },
   "url": "https://generativelanguage.googleapis.com/v1beta/models/gemini-flash-latest:streamGenerateContent",
   "provider": "google",
-  "contextWindow": 1000000,
-  "maxOutputTokens": 8192,
+  "contextWindow": 1048576,
+  "maxOutputTokens": 65536,
   "supportsTools": true,
   "supportsVision": true,
   "supportsAudio": true,
@@ -21,7 +21,6 @@
   "default": true,
   "thinking": {
     "enabled": true,
-    "budget": -1,
-    "thoughts": true
+    "level": "medium"
   }
 }

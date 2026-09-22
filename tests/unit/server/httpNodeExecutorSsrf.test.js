@@ -13,7 +13,7 @@ import {
   ipv6ToBytes,
   assertPublicTarget,
   createPinnedLookup
-} from '../../../server/services/workflow/executors/ssrfGuard.js';
+} from '../../../server/utils/ssrfGuard.js';
 
 describe('isPrivateIP — IPv4-mapped IPv6 hex bypass (GHSA-fp9c-pq7w-vr34)', () => {
   test('blocks the canonical mapped-hex form of AWS IMDS', () => {

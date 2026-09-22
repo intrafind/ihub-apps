@@ -217,7 +217,7 @@ export default function SetupWizard() {
   const progressWidth = `${(step / TOTAL_STEPS) * 100}%`;
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-blue-50 to-indigo-100 dark:from-gray-900 dark:to-gray-800 flex items-center justify-center p-4">
+    <div className="min-h-screen bg-linear-to-br from-blue-50 to-indigo-100 dark:from-gray-900 dark:to-gray-800 flex items-center justify-center p-4">
       <div className="bg-white dark:bg-gray-900 rounded-2xl shadow-xl w-full max-w-lg">
         {/* Progress bar */}
         <div className="h-1.5 bg-gray-100 dark:bg-gray-800 rounded-t-2xl overflow-hidden">
@@ -359,7 +359,7 @@ export default function SetupWizard() {
                     setTestResult(null);
                   }}
                   placeholder={selectedProvider.placeholder}
-                  className="w-full border border-gray-300 dark:border-gray-600 rounded-xl px-4 py-2.5 text-sm bg-white dark:bg-gray-800 text-gray-900 dark:text-white placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                  className="w-full border border-gray-300 dark:border-gray-600 rounded-xl px-4 py-2.5 text-sm bg-white dark:bg-gray-800 text-gray-900 dark:text-white placeholder-gray-400 focus:outline-hidden focus:ring-2 focus:ring-blue-500 focus:border-transparent"
                   autoComplete="off"
                 />
                 {isLocal && (
@@ -415,7 +415,7 @@ export default function SetupWizard() {
                 <button
                   onClick={handleSave}
                   disabled={saving || (!isLocal && !apiKey.trim())}
-                  className="flex-[2] bg-blue-600 hover:bg-blue-700 disabled:bg-blue-400 disabled:cursor-not-allowed text-white font-semibold py-2.5 px-6 rounded-xl transition-colors"
+                  className="flex-2 bg-blue-600 hover:bg-blue-700 disabled:bg-blue-400 disabled:cursor-not-allowed text-white font-semibold py-2.5 px-6 rounded-xl transition-colors"
                 >
                   {saving
                     ? t('setup.step2.savingButton')
@@ -465,7 +465,7 @@ export default function SetupWizard() {
                   }}
                   className="w-full flex items-center gap-4 rounded-xl border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800 hover:border-blue-400 dark:hover:border-blue-500 hover:bg-blue-50 dark:hover:bg-blue-900/20 p-4 text-left transition-colors group"
                 >
-                  <span className="flex-shrink-0 w-10 h-10 rounded-lg bg-blue-100 dark:bg-blue-900/40 flex items-center justify-center text-xl">
+                  <span className="shrink-0 w-10 h-10 rounded-lg bg-blue-100 dark:bg-blue-900/40 flex items-center justify-center text-xl">
                     🛠️
                   </span>
                   <span className="flex-1 min-w-0">
@@ -491,7 +491,7 @@ export default function SetupWizard() {
                   }}
                   className="w-full flex items-center gap-4 rounded-xl border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800 hover:border-blue-400 dark:hover:border-blue-500 hover:bg-blue-50 dark:hover:bg-blue-900/20 p-4 text-left transition-colors group"
                 >
-                  <span className="flex-shrink-0 w-10 h-10 rounded-lg bg-green-100 dark:bg-green-900/40 flex items-center justify-center text-xl">
+                  <span className="shrink-0 w-10 h-10 rounded-lg bg-green-100 dark:bg-green-900/40 flex items-center justify-center text-xl">
                     👥
                   </span>
                   <span className="flex-1 min-w-0">
@@ -514,7 +514,7 @@ export default function SetupWizard() {
                   }}
                   className="w-full flex items-center gap-4 rounded-xl border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800 hover:border-blue-400 dark:hover:border-blue-500 hover:bg-blue-50 dark:hover:bg-blue-900/20 p-4 text-left transition-colors group"
                 >
-                  <span className="flex-shrink-0 w-10 h-10 rounded-lg bg-purple-100 dark:bg-purple-900/40 flex items-center justify-center text-xl">
+                  <span className="shrink-0 w-10 h-10 rounded-lg bg-purple-100 dark:bg-purple-900/40 flex items-center justify-center text-xl">
                     🔐
                   </span>
                   <span className="flex-1 min-w-0">

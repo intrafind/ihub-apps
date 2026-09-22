@@ -7,8 +7,11 @@
 # -----------------------------------------------------------------------------
 FROM node:24-alpine AS dependencies
 
-# Install system dependencies required for build
-RUN apk add --update --no-cache \
+# Apply pending Alpine security patches, then install build dependencies.
+# The base image is only rebuilt periodically, so it regularly lags behind
+# fixes that are already published in the Alpine repositories.
+RUN apk upgrade --no-cache && \
+    apk add --update --no-cache \
     dumb-init \
     git \
     python3 \
@@ -16,13 +19,6 @@ RUN apk add --update --no-cache \
     g++ \
     curl \
     musl-dev
-
-# Install Rust (required for mdbook and mdbook-mermaid)
-RUN curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh -s -- -y
-ENV PATH="/root/.cargo/bin:${PATH}"
-
-# Install mdbook and mdbook-mermaid
-RUN cargo install mdbook mdbook-mermaid
 
 # Create app directory
 WORKDIR /app
@@ -43,7 +39,8 @@ FROM dependencies AS builder
 # Copy source code
 COPY . .
 
-# Build the complete application (client + server) - skip docs for Docker
+# Build the complete application (client + server), skipping the mdBook/Rust
+# documentation build — the docs site isn't shipped in the container image.
 RUN npm run build:docker
 
 # -----------------------------------------------------------------------------
@@ -81,12 +78,27 @@ ENV NODE_ENV=production
 # running binary out of sync with already-migrated persistent state.
 ENV IHUB_CONTAINER=true
 
-# Install runtime dependencies
-RUN apk add --update --no-cache \
+# Build timestamp, passed by the CI workflow. Referencing it in the layer below
+# keeps the security patches out of the build cache: without it, a cached layer
+# would freeze the runtime at the patch level of the first build that produced
+# it, even when Alpine has published fixes since.
+ARG BUILDTIME=unknown
+
+# Apply pending Alpine security patches, then install runtime dependencies
+RUN echo "Applying Alpine security patches (build ${BUILDTIME})" && \
+    apk upgrade --no-cache && \
+    apk add --update --no-cache \
     dumb-init \
     curl \
     tini \
     netcat-openbsd
+
+# Drop the npm CLI that ships with the base image. The runtime only ever runs
+# `node` (entrypoint, healthcheck and CMD), while npm carries a large vendored
+# dependency tree that is a recurring source of image CVEs we cannot patch.
+RUN rm -rf /usr/local/lib/node_modules/npm \
+    /usr/local/bin/npm \
+    /usr/local/bin/npx
 
 # Create non-root user for security
 RUN addgroup -S ihub && \

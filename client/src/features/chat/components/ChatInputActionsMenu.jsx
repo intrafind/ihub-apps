@@ -45,6 +45,11 @@ function ChatInputActionsMenu({
   // Websearch props
   websearchEnabled = false,
   onWebsearchEnabledChange = null,
+  // Transcription toggle props: available = admin enabled it; enabled
+  // = the per-chat user toggle state.
+  transcriptionAvailable = false,
+  transcriptionEnabled = false,
+  onTranscriptionEnabledChange = null,
   // Host-context toggles (Outlook taskpane / browser-extension side panel).
   // The host adapter declares which toggles to render via
   // EmbeddedHostAdapter.contextToggles (read below via useEmbeddedHost).
@@ -191,6 +196,7 @@ function ChatInputActionsMenu({
   const toolCount = app?.tools?.length || 0;
   const enabledCount = hasTools ? app.tools.filter(t => enabledTools.includes(t)).length : 0;
   const hasWebsearch = app?.websearch?.enabled === true && onWebsearchEnabledChange !== null;
+  const hasTranscription = transcriptionAvailable === true && onTranscriptionEnabledChange !== null;
 
   // Local upload covers the paper-clip / drop-zone affordance. Cloud storage
   // providers are rendered separately so they must remain available even when
@@ -208,7 +214,12 @@ function ChatInputActionsMenu({
   // Check if we have any actions to show
   const hasHostContextToggles = hostContextToggles.length > 0;
   const hasActions =
-    hasTools || hasWebsearch || hasHostContextToggles || hasCloudProviders || quickActionCount > 0;
+    hasTools ||
+    hasWebsearch ||
+    hasTranscription ||
+    hasHostContextToggles ||
+    hasCloudProviders ||
+    quickActionCount > 0;
 
   if (!hasActions) return null;
 
@@ -218,6 +229,7 @@ function ChatInputActionsMenu({
     quickActionCount +
     (hasTools ? 1 : 0) +
     (hasWebsearch ? 1 : 0) +
+    (hasTranscription ? 1 : 0) +
     (hasHostContextToggles ? 1 : 0);
 
   if (totalActions === 1 && quickActionCount === 1 && !hasTools && !hasCloudProviders) {
@@ -290,6 +302,7 @@ function ChatInputActionsMenu({
   enabledCloudProviders.forEach(p => {
     if (!(disabled || isProcessing)) menuNavItems.push(`cloud-${p.id}`);
   });
+  if (hasWebsearch) menuNavItems.push('websearch');
   grouped.forEach(g => menuNavItems.push(`group-${g.id}`));
   individual.forEach(id => menuNavItems.push(`tool-${id}`));
   const navTabIndex = key => (menuNavItems.indexOf(key) === menuActiveIndex ? 0 : -1);
@@ -298,7 +311,11 @@ function ChatInputActionsMenu({
   // Quick Actions and Image Generation are hidden on desktop with md:hidden
   // So only Cloud Storage, Web Search, and Tools remain visible on desktop
   const hasDesktopMenuContent =
-    enabledCloudProviders.length > 0 || hasWebsearch || hasTools || hasHostContextToggles;
+    enabledCloudProviders.length > 0 ||
+    hasWebsearch ||
+    hasTranscription ||
+    hasTools ||
+    hasHostContextToggles;
 
   return (
     <div className="relative" ref={dropdownRef}>
@@ -430,7 +447,7 @@ function ChatInputActionsMenu({
                     disabled={disabled || isProcessing}
                     className="w-full flex items-center p-3 hover:bg-gray-50 dark:hover:bg-gray-700 focus:bg-gray-50 dark:focus:bg-gray-700 focus:ring-2 focus:ring-indigo-500 focus:ring-inset rounded-lg disabled:opacity-50 transition-colors text-left"
                   >
-                    <div className="flex-shrink-0 w-10 h-10 flex items-center justify-center bg-blue-100 dark:bg-blue-900 rounded-lg">
+                    <div className="shrink-0 w-10 h-10 flex items-center justify-center bg-blue-100 dark:bg-blue-900 rounded-lg">
                       <Icon name="cloud" size="md" className="text-blue-600 dark:text-blue-300" />
                     </div>
                     <div className="ml-3 flex-1 min-w-0">
@@ -493,7 +510,7 @@ function ChatInputActionsMenu({
                           onChange={e => onHostContextFlagChange?.(toggle.key, e.target.checked)}
                           className="sr-only peer"
                         />
-                        <div className="w-11 h-6 bg-gray-200 peer-focus:outline-none peer-focus:ring-4 peer-focus:ring-indigo-300 dark:peer-focus:ring-indigo-800 rounded-full peer dark:bg-gray-700 peer-checked:after:translate-x-full rtl:peer-checked:after:-translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:start-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all dark:border-gray-600 peer-checked:bg-indigo-600"></div>
+                        <div className="w-11 h-6 bg-gray-200 peer-focus:outline-hidden peer-focus:ring-4 peer-focus:ring-indigo-300 dark:peer-focus:ring-indigo-800 rounded-full peer dark:bg-gray-700 peer-checked:after:translate-x-full peer-checked:rtl:after:-translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:inset-s-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all dark:border-gray-600 peer-checked:bg-indigo-600"></div>
                       </label>
                     </div>
                   );
@@ -507,7 +524,19 @@ function ChatInputActionsMenu({
             <div
               className={`p-3 ${hasTools ? 'border-b border-gray-200 dark:border-gray-700' : ''}`}
             >
-              <div className="flex items-center justify-between p-2 hover:bg-gray-50 dark:hover:bg-gray-700 rounded-lg">
+              <div
+                role="menuitemcheckbox"
+                aria-checked={websearchEnabled}
+                tabIndex={navTabIndex('websearch')}
+                className="flex items-center justify-between p-2 hover:bg-gray-50 dark:hover:bg-gray-700 focus:bg-gray-50 dark:focus:bg-gray-700 focus:ring-2 focus:ring-indigo-500 focus:ring-inset rounded-lg cursor-pointer"
+                onClick={() => onWebsearchEnabledChange?.(!websearchEnabled)}
+                onKeyDown={e => {
+                  if (e.key === ' ' || e.key === 'Enter') {
+                    e.preventDefault();
+                    onWebsearchEnabledChange?.(!websearchEnabled);
+                  }
+                }}
+              >
                 <div className="flex-1 min-w-0 mr-3">
                   <div className="text-sm font-medium text-gray-900 dark:text-gray-100">
                     {t('websearch.toggleLabel', 'Web Search')}
@@ -516,14 +545,50 @@ function ChatInputActionsMenu({
                     {t('websearch.toggleDescription', 'Search the web for up-to-date information')}
                   </div>
                 </div>
-                <label className="relative inline-flex items-center cursor-pointer">
+                {/* Purely visual switch: the row owns the role, the state and
+                    the interaction, so the checkbox only drives the `peer-*`
+                    styling and is kept out of the tab order, out of the
+                    accessibility tree and out of the click target. */}
+                <span className="relative inline-flex items-center pointer-events-none">
                   <input
                     type="checkbox"
                     checked={websearchEnabled}
-                    onChange={e => onWebsearchEnabledChange?.(e.target.checked)}
+                    readOnly
+                    tabIndex={-1}
+                    aria-hidden="true"
                     className="sr-only peer"
                   />
-                  <div className="w-11 h-6 bg-gray-200 peer-focus:outline-none peer-focus:ring-4 peer-focus:ring-indigo-300 dark:peer-focus:ring-indigo-800 rounded-full peer dark:bg-gray-700 peer-checked:after:translate-x-full rtl:peer-checked:after:-translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:start-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all dark:border-gray-600 peer-checked:bg-indigo-600"></div>
+                  <div className="w-11 h-6 bg-gray-200 rounded-full peer dark:bg-gray-700 peer-checked:after:translate-x-full peer-checked:rtl:after:-translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:inset-s-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all dark:border-gray-600 peer-checked:bg-indigo-600"></div>
+                </span>
+              </div>
+            </div>
+          )}
+
+          {/* Transcription Section */}
+          {hasTranscription && (
+            <div
+              className={`p-3 ${hasTools || hasWebsearch ? 'border-b border-gray-200 dark:border-gray-700' : ''}`}
+            >
+              <div className="flex items-center justify-between p-2 hover:bg-gray-50 dark:hover:bg-gray-700 rounded-lg">
+                <div className="flex-1 min-w-0 mr-3">
+                  <div className="text-sm font-medium text-gray-900 dark:text-gray-100">
+                    {t('transcription.toggleLabel', 'Transcription')}
+                  </div>
+                  <div className="text-xs text-gray-500 dark:text-gray-400 mt-0.5">
+                    {t(
+                      'transcription.toggleDescription',
+                      'Transcribe uploaded audio/video with the transcription model instead of the chat model'
+                    )}
+                  </div>
+                </div>
+                <label className="relative inline-flex items-center cursor-pointer">
+                  <input
+                    type="checkbox"
+                    checked={transcriptionEnabled}
+                    onChange={e => onTranscriptionEnabledChange?.(e.target.checked)}
+                    className="sr-only peer"
+                  />
+                  <div className="w-11 h-6 bg-gray-200 peer-focus:outline-hidden peer-focus:ring-4 peer-focus:ring-indigo-300 dark:peer-focus:ring-indigo-800 rounded-full peer dark:bg-gray-700 peer-checked:after:translate-x-full peer-checked:rtl:after:-translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:inset-s-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all dark:border-gray-600 peer-checked:bg-indigo-600"></div>
                 </label>
               </div>
             </div>
@@ -593,7 +658,7 @@ function ChatInputActionsMenu({
                             onChange={() => toggleTool(group.id, true, group.matchedTools)}
                             className="sr-only peer"
                           />
-                          <div className="w-11 h-6 bg-gray-200 peer-focus:outline-none peer-focus:ring-4 peer-focus:ring-indigo-300 dark:peer-focus:ring-indigo-800 rounded-full peer dark:bg-gray-700 peer-checked:after:translate-x-full rtl:peer-checked:after:-translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:start-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all dark:border-gray-600 peer-checked:bg-indigo-600"></div>
+                          <div className="w-11 h-6 bg-gray-200 peer-focus:outline-hidden peer-focus:ring-4 peer-focus:ring-indigo-300 dark:peer-focus:ring-indigo-800 rounded-full peer dark:bg-gray-700 peer-checked:after:translate-x-full peer-checked:rtl:after:-translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:inset-s-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all dark:border-gray-600 peer-checked:bg-indigo-600"></div>
                         </label>
                       </div>
                     );
@@ -641,7 +706,7 @@ function ChatInputActionsMenu({
                             onChange={() => toggleTool(toolId)}
                             className="sr-only peer"
                           />
-                          <div className="w-11 h-6 bg-gray-200 peer-focus:outline-none peer-focus:ring-4 peer-focus:ring-indigo-300 dark:peer-focus:ring-indigo-800 rounded-full peer dark:bg-gray-700 peer-checked:after:translate-x-full rtl:peer-checked:after:-translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:start-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all dark:border-gray-600 peer-checked:bg-indigo-600"></div>
+                          <div className="w-11 h-6 bg-gray-200 peer-focus:outline-hidden peer-focus:ring-4 peer-focus:ring-indigo-300 dark:peer-focus:ring-indigo-800 rounded-full peer dark:bg-gray-700 peer-checked:after:translate-x-full peer-checked:rtl:after:-translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:inset-s-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all dark:border-gray-600 peer-checked:bg-indigo-600"></div>
                         </label>
                       </div>
                     );

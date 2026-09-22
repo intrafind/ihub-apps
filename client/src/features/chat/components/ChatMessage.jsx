@@ -1,6 +1,7 @@
 import { useState, useEffect, useRef } from 'react';
 import { useTranslation } from 'react-i18next';
-import { sendMessageFeedback } from '../../../api';
+import DOMPurify from 'dompurify';
+import { sendMessageFeedback, answerInteraction } from '../../../api';
 import { getConversationId } from '../../../utils/chatId';
 import StarRating from '../../../shared/components/StarRating';
 import MessageVariables from './MessageVariables';
@@ -14,19 +15,23 @@ import {
 } from '../../../utils/markdownUtils';
 import CustomResponseRenderer from '../../../shared/components/CustomResponseRenderer';
 import ClarificationCard from './ClarificationCard';
+import GeneratedImage from './GeneratedImage';
 import CitationPanel from './CitationPanel';
+import GroundingSources from './GroundingSources';
 import SearchStatusIndicator from './SearchStatusIndicator';
+import SearchSummary from './SearchSummary';
 import WorkflowStepIndicator from './WorkflowStepIndicator';
 import HumanCheckpoint from '../../workflows/components/HumanCheckpoint';
-import { apiClient } from '../../../api/client';
+import useFeatureFlags from '../../../shared/hooks/useFeatureFlags';
 
 /**
- * Renders a workflow checkpoint inline in a chat bubble. Tracks which
- * checkpoint id the user already responded to so the card disappears after
- * submit (preventing double-submit 400s) while still rendering the next
- * checkpoint when a new one arrives. Keys the inner component by checkpoint
- * id so internal state (selectedOption, submitting, etc.) resets between
- * sequential checkpoints in the same workflow.
+ * Renders a workflow checkpoint inline in a chat bubble. The checkpoint is an
+ * interaction of the workflow's run (run id === execution id), answered
+ * through the one answer endpoint. Tracks which checkpoint id the user already
+ * responded to so the card disappears after submit (preventing double-submit
+ * 400s) while still rendering the next checkpoint when a new one arrives. Keys
+ * the inner component by checkpoint id so internal state (selectedOption,
+ * submitting, etc.) resets between sequential checkpoints in the same workflow.
  */
 function ChatCheckpoint({ executionId, checkpoint }) {
   const [respondedId, setRespondedId] = useState(null);
@@ -37,12 +42,13 @@ function ChatCheckpoint({ executionId, checkpoint }) {
         key={checkpoint.id}
         checkpoint={checkpoint}
         displayData={checkpoint.displayData}
-        onRespond={async ({ checkpointId, response, data }) => {
-          await apiClient.post(`/workflows/executions/${executionId}/respond`, {
+        onRespond={async ({ checkpointId, response, data, skipped = false }) => {
+          await answerInteraction(
+            executionId,
             checkpointId,
-            response,
-            data
-          });
+            skipped ? { skipped: true } : { value: response, ...(data ? { data } : {}) },
+            { channel: 'chat' }
+          );
           setRespondedId(checkpointId);
         }}
       />
@@ -66,10 +72,22 @@ function ChatMessage({
   compact = false, // New prop to indicate compact mode (for widget or mobile)
   onOpenInCanvas,
   onInsert,
-  onInsertNew = null,
   insertAction = null, // { variant: 'icon'|'primary', labelKey: string } — Office host promotes the per-message insert action to a labelled primary button; web app default keeps the legacy icon button on the action row.
+  // The host's answer actions, rendered as a split button under the primary
+  // variant: `[{ id, label, icon }]` in menu order. Outlook passes the actions
+  // its current mode supports — answer / answer all / forward / new in read
+  // mode, insert while composing (issue #2446). Omitted or empty keeps the
+  // single-action button driven by `onInsert`.
+  insertActions = null,
+  defaultInsertActionId = null, // Which of `insertActions` the main button runs.
+  onInsertAction = null, // (actionId, content) => void
   isLatestAssistantMessage = false, // Keeps the primary insert button always-visible on the most recent assistant response inside small Outlook panes.
   canvasEnabled = false,
+  // Whether this chat stores the images its turns generate (durable chats do;
+  // the compare panels, the canvas and an incognito turn do not). It only
+  // decides whether the "download it or lose it" note is shown — a stored
+  // image is identified by its descriptor, not by this flag.
+  imagesPersisted = false,
   app = null, // App configuration for custom response rendering
   models = [], // Available models for determining if model param should be included in link
   onClarificationSubmit = null, // Callback when a clarification response is submitted
@@ -77,6 +95,11 @@ function ChatMessage({
   onDocumentAction = null // Callback for citation document actions (preview, download, openInApp)
 }) {
   const { t } = useTranslation();
+  const featureFlags = useFeatureFlags();
+  // Response feedback is off when either the platform flag or this app's
+  // `features.feedback` says so. One check for every surface: ChatMessage is
+  // what main chat, compare mode, canvas and the Office add-in all render.
+  const feedbackEnabled = featureFlags.isBothEnabled(app, 'feedback', true);
 
   // Debug loading state changes
   // useEffect(() => {
@@ -424,7 +447,8 @@ function ChatMessage({
         feedback: feedbackText,
         messageContent: message.content.substring(0, 300), // Send a snippet for context
         conversationId, // Include for iAssistant messages
-        ifinderMessageId // Include iFinder message ID for routing to iFinder API
+        ifinderMessageId, // Include iFinder message ID for routing to iFinder API
+        ...(message.runId ? { runId: message.runId } : {}) // Recorded as a human/event on the run
       });
 
       // Keep the feedback button activated only after successful submission
@@ -466,8 +490,23 @@ function ChatMessage({
   // Render the message content based on the output format
   const renderContent = () => {
     // Ensure content is always a string for rendering
-    const contentToRender =
+    const storedContent =
       typeof message.content === 'string' ? message.content : message.content || '';
+
+    // A turn that was stopped or that failed is reconstructed here when the
+    // chat is reopened from the store. The live paths write their notice into
+    // the message content as it happens; a hydrated message carries only the
+    // flag and, for a failure, the stored reason. Without this the bubble
+    // renders empty — a stopped answer and a crashed one both look like the
+    // model replied with nothing.
+    const cancelledNote = t('message.generationCancelled', ' [Generation cancelled]');
+    let contentToRender = storedContent;
+    if (message.fromServer && message.cancelled && !storedContent.includes(cancelledNote)) {
+      contentToRender = `${storedContent}${cancelledNote}`;
+    } else if (message.fromServer && isError && !storedContent) {
+      contentToRender =
+        message.errorMessage || t('error.streamingError', 'An error occurred during streaming');
+    }
 
     // For HTML content, check if it contains image tags or file indicators and render them properly
     const hasImageContent =
@@ -495,7 +534,7 @@ function ChatMessage({
             value={editedContent}
             onChange={e => setEditedContent(e.target.value)}
             onKeyDown={handleEditKeyDown}
-            className="w-full px-3 py-2 text-sm text-slate-900 bg-white border border-slate-300 rounded-lg shadow-sm focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 resize-none"
+            className="w-full px-3 py-2 text-sm text-slate-900 bg-white border border-slate-300 rounded-lg shadow-xs focus:outline-hidden focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 resize-none"
             style={{ minHeight: compact ? '80px' : '96px' }}
             aria-label={t('chatMessage.editMessage', 'Edit message')}
           />
@@ -535,6 +574,10 @@ function ChatMessage({
     if (message.loading) {
       // console.log('🔄 Rendering loading state for message:', contentToRender);
 
+      // A known phase means SearchStatusIndicator is showing, and it brings
+      // its own animation — see the fallback dots below.
+      const hasSearchStatus = !isUser && !!message.searchStatus;
+
       // Check if we should use custom renderer (prioritize message metadata over app prop)
       const customRendererName = customRendererFromMessage || app?.customResponseRenderer;
       const effectiveOutputFormat = outputFormatFromMessage || outputFormat;
@@ -561,20 +604,24 @@ function ChatMessage({
         return (
           <div className="flex flex-col">
             <StreamingMarkdown content={mdContent} hasCitations={!!message.citations} streaming />
-            {message.searchStatus && message.loading && (
-              <SearchStatusIndicator status={message.searchStatus} />
+            {hasSearchStatus && <SearchStatusIndicator status={message.searchStatus} />}
+            <SearchSummary summary={message.searchSummary} />
+            {/* The generic three-dot pulse is the fallback indicator only.
+                SearchStatusIndicator animates its own dots and names the phase
+                it is in, so showing both put two loaders on one message. */}
+            {!hasSearchStatus && (
+              <div className="flex mt-2">
+                <span className="inline-block w-2 h-2 bg-gray-500 rounded-full animate-pulse"></span>
+                <span
+                  className="ml-1 inline-block w-2 h-2 bg-gray-500 rounded-full animate-pulse"
+                  style={{ animationDelay: '0.2s' }}
+                ></span>
+                <span
+                  className="ml-1 inline-block w-2 h-2 bg-gray-500 rounded-full animate-pulse"
+                  style={{ animationDelay: '0.4s' }}
+                ></span>
+              </div>
             )}
-            <div className="flex mt-2">
-              <span className="inline-block w-2 h-2 bg-gray-500 rounded-full animate-pulse"></span>
-              <span
-                className="ml-1 inline-block w-2 h-2 bg-gray-500 rounded-full animate-pulse"
-                style={{ animationDelay: '0.2s' }}
-              ></span>
-              <span
-                className="ml-1 inline-block w-2 h-2 bg-gray-500 rounded-full animate-pulse"
-                style={{ animationDelay: '0.4s' }}
-              ></span>
-            </div>
           </div>
         );
       }
@@ -598,7 +645,7 @@ function ChatMessage({
     if (isError) {
       return (
         <div className="flex items-center">
-          <Icon name="exclamation-circle" className="mr-1.5 text-red-500 flex-shrink-0" />
+          <Icon name="exclamation-circle" className="mr-1.5 text-red-500 shrink-0" />
           <span className="break-all">{contentToRender}</span>
         </div>
       );
@@ -608,8 +655,8 @@ function ChatMessage({
     if (hasHTMLContent && isUser) {
       return (
         <div
-          className="break-words whitespace-normal"
-          dangerouslySetInnerHTML={{ __html: contentToRender }}
+          className="wrap-break-word whitespace-normal"
+          dangerouslySetInnerHTML={{ __html: DOMPurify.sanitize(contentToRender) }}
         />
       );
     }
@@ -673,7 +720,7 @@ function ChatMessage({
 
     return (
       <div
-        className="break-words whitespace-normal"
+        className="wrap-break-word whitespace-normal"
         style={{ boxSizing: 'content-box', display: 'inline-block' }}
       >
         {contentToRender}
@@ -684,11 +731,17 @@ function ChatMessage({
   // Don't apply bubble styling when showing ClarificationCard (it has its own styling)
   const hasPendingClarification = message.clarification && !message.clarificationAnswered;
   const showBubble = !hasPendingClarification;
-  // Dropdown is email-specific: only show it when both onInsertNew is provided AND the
-  // insert action is for email (not Word/PowerPoint). This keeps the rounding and the
-  // dropdown chevron in sync regardless of how future hosts wire onInsertNew.
-  const showInsertDropdown =
-    Boolean(onInsertNew) && insertAction?.labelKey === 'office.insertIntoEmail';
+  // The host's answer actions, when it supplies more than the single insert.
+  // Every entry is a distinct action with its own handler; the main button runs
+  // the resolved default and the chevron opens the rest (issue #2446).
+  const messageActions = Array.isArray(insertActions) && onInsertAction ? insertActions : [];
+  const defaultMessageAction =
+    messageActions.find(action => action.id === defaultInsertActionId) || messageActions[0] || null;
+  const showInsertDropdown = messageActions.length > 1;
+  const runMessageAction = action => {
+    if (action) onInsertAction(action.id, message.content);
+    else onInsert(message.content);
+  };
 
   return (
     <div
@@ -747,9 +800,31 @@ function ChatMessage({
             <Icon
               name="question-mark-circle"
               size="sm"
-              className="text-indigo-500 dark:text-indigo-400 mt-0.5 flex-shrink-0"
+              className="text-indigo-500 dark:text-indigo-400 mt-0.5 shrink-0"
             />
             <p className="text-slate-800 dark:text-slate-200">{message.clarification.question}</p>
+          </div>
+        )}
+        {/* Thinking/thoughts toggle: kept above the answer so it stays put while the
+            answer streams in below it, instead of being pushed down as content grows. */}
+        {!isUser && message.thoughts && message.thoughts.length > 0 && (
+          <div className="mb-2 text-xs text-gray-600 dark:text-gray-400">
+            <button onClick={() => setShowThoughts(!showThoughts)} className="underline">
+              {showThoughts ? t('pages.appChat.hideThoughts') : t('pages.appChat.showThoughts')}
+            </button>
+            {showThoughts && (
+              <ul className="list-disc pl-4 mt-1 space-y-1">
+                {message.thoughts.map((th, idx) => (
+                  <li key={idx}>
+                    {typeof th === 'string'
+                      ? th
+                      : t(`thoughts.${th.name}`, {
+                          defaultValue: th.content || JSON.stringify(th)
+                        })}
+                  </li>
+                ))}
+              </ul>
+            )}
           </div>
         )}
         {renderContent()}
@@ -758,77 +833,15 @@ function ChatMessage({
         {/* Display generated images */}
         {message.images && message.images.length > 0 && (
           <div className="mt-3 space-y-2">
-            {message.images.map((image, idx) => {
-              // Check if image has data or was lost due to storage limitations
-              if (image.data) {
-                return (
-                  <div key={idx} className="space-y-2">
-                    <div className="relative inline-block">
-                      <img
-                        src={`data:${image.mimeType || 'image/png'};base64,${image.data}`}
-                        alt={t('chatMessage.generatedImage', `Generated image ${idx + 1}`)}
-                        className="max-w-full rounded-lg shadow-md"
-                        style={{ maxHeight: '512px' }}
-                      />
-                      <button
-                        onClick={() => {
-                          const link = document.createElement('a');
-                          link.href = `data:${image.mimeType || 'image/png'};base64,${image.data}`;
-                          link.download = `generated-image-${Date.now()}.png`;
-                          link.click();
-                        }}
-                        className="absolute top-2 right-2 bg-white/90 hover:bg-white p-2 rounded-full shadow-lg transition-colors"
-                        title={t('chatMessage.downloadImage', 'Download image')}
-                        aria-label={t('chatMessage.downloadImage', 'Download image')}
-                      >
-                        <Icon name="download" size="sm" aria-hidden="true" />
-                      </button>
-                    </div>
-                    {/* Proactive warning to save images */}
-                    <div className="flex items-start space-x-2 p-3 bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-800 rounded-lg">
-                      <Icon
-                        name="information-circle"
-                        className="text-blue-600 dark:text-blue-400 flex-shrink-0 mt-0.5"
-                        size="sm"
-                      />
-                      <p className="text-xs text-blue-800 dark:text-blue-200">
-                        {t(
-                          'chatMessage.saveImageWarning',
-                          'Download this image to save it permanently. Images are not persisted when you navigate away due to browser storage limitations.'
-                        )}
-                      </p>
-                    </div>
-                  </div>
-                );
-              } else if (image._hadImageData) {
-                // Image was present but not persisted due to storage quota
-                return (
-                  <div
-                    key={idx}
-                    className="mt-3 p-4 bg-yellow-50 dark:bg-yellow-900/20 border border-yellow-200 dark:border-yellow-800 rounded-lg"
-                  >
-                    <div className="flex items-start space-x-2">
-                      <Icon
-                        name="exclamation-circle"
-                        className="text-yellow-600 dark:text-yellow-500 flex-shrink-0 mt-0.5"
-                      />
-                      <div className="text-sm text-yellow-800 dark:text-yellow-200">
-                        <p className="font-medium">
-                          {t('chatMessage.imageNotPersisted', 'Image not available')}
-                        </p>
-                        <p className="mt-1 text-yellow-700 dark:text-yellow-300">
-                          {t(
-                            'chatMessage.imageNotPersistedDetail',
-                            'Generated images are not persisted when navigating away due to browser storage limitations. Images remain visible during the active session.'
-                          )}
-                        </p>
-                      </div>
-                    </div>
-                  </div>
-                );
-              }
-              return null;
-            })}
+            {message.images.map((image, idx) => (
+              <GeneratedImage
+                key={image.id || idx}
+                image={image}
+                chatId={chatId}
+                index={idx}
+                persisted={imagesPersisted}
+              />
+            ))}
           </div>
         )}
 
@@ -873,27 +886,6 @@ function ChatMessage({
           </div>
         )}
 
-        {!isUser && message.thoughts && message.thoughts.length > 0 && (
-          <div className="mt-1 text-xs text-gray-600">
-            <button onClick={() => setShowThoughts(!showThoughts)} className="underline">
-              {showThoughts ? t('pages.appChat.hideThoughts') : t('pages.appChat.showThoughts')}
-            </button>
-            {showThoughts && (
-              <ul className="list-disc pl-4 mt-1 space-y-1">
-                {message.thoughts.map((th, idx) => (
-                  <li key={idx}>
-                    {typeof th === 'string'
-                      ? th
-                      : t(`thoughts.${th.name}`, {
-                          defaultValue: th.content || JSON.stringify(th)
-                        })}
-                  </li>
-                ))}
-              </ul>
-            )}
-          </div>
-        )}
-
         {/* Clarification UI - show card for pending clarifications */}
         {!isUser && message.clarification && !message.clarificationAnswered && (
           <ClarificationCard
@@ -903,9 +895,20 @@ function ChatMessage({
           />
         )}
 
+        {/* What the finished turn searched for and found. Rendered here rather
+            than inside the loading branch above so it survives the answer:
+            while streaming it sits under the partial text, afterwards it sits
+            with the other provenance. */}
+        {!isUser && !message.loading && <SearchSummary summary={message.searchSummary} />}
+
         {/* Citation panel for iAssistant Conversation */}
         {!isUser && message.citations && !message.loading && (
           <CitationPanel citations={message.citations} onDocumentAction={onDocumentAction} />
+        )}
+
+        {/* Sources behind a grounded answer (provider-run web search) */}
+        {!isUser && !message.loading && message.groundingSources && (
+          <GroundingSources sources={message.groundingSources} />
         )}
 
         {/* Workflow result attribution — handled by unified WorkflowStepIndicator above */}
@@ -932,7 +935,7 @@ function ChatMessage({
       {!isUser &&
         !isError &&
         !message.loading &&
-        onInsert &&
+        (onInsert || defaultMessageAction) &&
         insertAction?.variant === 'primary' && (
           <div
             className={`mt-2 w-full transition-opacity duration-200 ${
@@ -943,17 +946,22 @@ function ChatMessage({
               {/* Main action button — square-right when the chevron is shown, fully rounded otherwise */}
               <button
                 type="button"
-                onClick={() => onInsert(message.content)}
-                className={`inline-flex flex-1 items-center justify-center gap-2 px-3 py-2 text-sm font-semibold bg-indigo-600 text-white shadow-sm hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:ring-offset-1 transition-colors ${showInsertDropdown ? 'rounded-l-md' : 'rounded-md'}`}
+                onClick={() => runMessageAction(defaultMessageAction)}
+                className={`inline-flex flex-1 items-center justify-center gap-2 px-3 py-2 text-sm font-semibold bg-indigo-600 text-white shadow-xs hover:bg-indigo-700 focus:outline-hidden focus:ring-2 focus:ring-indigo-500 focus:ring-offset-1 transition-colors ${showInsertDropdown ? 'rounded-l-md' : 'rounded-md'}`}
               >
-                <Icon name="arrow-right" size="sm" className="text-white" />
+                <Icon
+                  name={defaultMessageAction?.icon || 'arrow-right'}
+                  size="sm"
+                  className="text-white"
+                />
                 <span>
-                  {t(
-                    insertAction.labelKey || 'office.insertIntoDocument',
-                    insertAction.labelKey === 'office.insertIntoEmail'
-                      ? 'Add to email'
-                      : 'Add to document'
-                  )}
+                  {defaultMessageAction?.label ||
+                    t(
+                      insertAction.labelKey || 'office.insertIntoDocument',
+                      insertAction.labelKey === 'office.insertIntoEmail'
+                        ? 'Add to email'
+                        : 'Add to document'
+                    )}
                 </span>
               </button>
 
@@ -963,7 +971,7 @@ function ChatMessage({
                   <button
                     type="button"
                     onClick={() => setInsertDropdownOpen(prev => !prev)}
-                    className="inline-flex items-center px-2 py-2 rounded-r-md text-sm font-semibold bg-indigo-700 text-white shadow-sm hover:bg-indigo-800 border-l border-indigo-500 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:ring-offset-1 transition-colors"
+                    className="inline-flex items-center px-2 py-2 rounded-r-md text-sm font-semibold bg-indigo-700 text-white shadow-xs hover:bg-indigo-800 border-l border-indigo-500 focus:outline-hidden focus:ring-2 focus:ring-indigo-500 focus:ring-offset-1 transition-colors"
                     aria-haspopup="menu"
                     aria-expanded={insertDropdownOpen}
                     title={t('office.insertOptions', 'More options')}
@@ -978,33 +986,27 @@ function ChatMessage({
                   {insertDropdownOpen && (
                     <div
                       role="menu"
-                      className="absolute bottom-full mb-1 right-0 z-50 w-48 rounded-md bg-white dark:bg-gray-800 shadow-lg ring-1 ring-black ring-opacity-5 focus:outline-none"
+                      className="absolute bottom-full mb-1 right-0 z-50 w-48 rounded-md bg-white dark:bg-gray-800 shadow-lg ring-1 ring-black/5 focus:outline-hidden"
                     >
                       <div className="py-1">
-                        <button
-                          type="button"
-                          role="menuitem"
-                          onClick={() => {
-                            onInsert(message.content);
-                            setInsertDropdownOpen(false);
-                          }}
-                          className="flex w-full items-center gap-2 px-4 py-2 text-sm text-gray-700 dark:text-gray-200 hover:bg-gray-100 dark:hover:bg-gray-700"
-                        >
-                          <Icon name="arrow-right" size="sm" />
-                          {t('office.replyToEmail', 'Reply to email')}
-                        </button>
-                        <button
-                          type="button"
-                          role="menuitem"
-                          onClick={() => {
-                            onInsertNew(message.content);
-                            setInsertDropdownOpen(false);
-                          }}
-                          className="flex w-full items-center gap-2 px-4 py-2 text-sm text-gray-700 dark:text-gray-200 hover:bg-gray-100 dark:hover:bg-gray-700"
-                        >
-                          <Icon name="pencil" size="sm" />
-                          {t('office.newEmail', 'New email')}
-                        </button>
+                        {messageActions.map(action => (
+                          <button
+                            key={action.id}
+                            type="button"
+                            role="menuitem"
+                            onClick={() => {
+                              runMessageAction(action);
+                              setInsertDropdownOpen(false);
+                            }}
+                            className="flex w-full items-center gap-2 px-4 py-2 text-sm text-gray-700 dark:text-gray-200 hover:bg-gray-100 dark:hover:bg-gray-700"
+                          >
+                            <Icon name={action.icon || 'arrow-right'} size="sm" />
+                            <span className="flex-1 text-left">{action.label}</span>
+                            {action.id === defaultMessageAction?.id && (
+                              <Icon name="check" size="sm" className="text-indigo-600" />
+                            )}
+                          </button>
+                        ))}
                       </div>
                     </div>
                   )}
@@ -1052,22 +1054,22 @@ function ChatMessage({
               <Icon name="chevron-down" size="sm" />
             </button>
             {showCopyMenu && (
-              <div className="absolute right-0 mt-1 bg-white border border-gray-200 rounded shadow z-10 text-gray-700">
+              <div className="absolute right-0 mt-1 w-40 max-w-[calc(100vw-2rem)] bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-sm shadow-sm z-50 text-gray-700 dark:text-gray-200">
                 <button
                   onClick={() => handleCopy('text')}
-                  className="block px-3 py-1 text-sm hover:bg-gray-100 w-full text-left whitespace-nowrap"
+                  className="block px-3 py-1 text-sm hover:bg-gray-100 dark:hover:bg-gray-700 w-full text-left whitespace-nowrap"
                 >
                   {t('canvas.export.copyText', 'as Text')}
                 </button>
                 <button
                   onClick={() => handleCopy('markdown')}
-                  className="block px-3 py-1 text-sm hover:bg-gray-100 w-full text-left whitespace-nowrap"
+                  className="block px-3 py-1 text-sm hover:bg-gray-100 dark:hover:bg-gray-700 w-full text-left whitespace-nowrap"
                 >
                   {t('canvas.export.copyMarkdown', 'as Markdown')}
                 </button>
                 <button
                   onClick={() => handleCopy('html')}
-                  className="block px-3 py-1 text-sm hover:bg-gray-100 w-full text-left whitespace-nowrap"
+                  className="block px-3 py-1 text-sm hover:bg-gray-100 dark:hover:bg-gray-700 w-full text-left whitespace-nowrap"
                 >
                   {t('canvas.export.copyHTML', 'as HTML')}
                 </button>
@@ -1142,7 +1144,7 @@ function ChatMessage({
           </button>
 
           {/* Add star rating for AI responses only */}
-          {!isUser && !isError && !message.loading && (
+          {feedbackEnabled && !isUser && !isError && !message.loading && (
             <>
               {!compact && <div className="mx-2 h-4 border-l border-gray-300"></div>}
               <div className="flex items-center gap-2">
@@ -1152,7 +1154,7 @@ function ChatMessage({
                   allowHalfStars={true}
                   size="w-4 h-4"
                   showTooltip={true}
-                  className="flex-shrink-0"
+                  className="shrink-0"
                 />
               </div>
             </>
@@ -1161,8 +1163,8 @@ function ChatMessage({
       </div>
 
       {/* Feedback form modal */}
-      {showFeedbackForm && (
-        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+      {feedbackEnabled && showFeedbackForm && (
+        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
           <div className="bg-white rounded-lg shadow-lg max-w-md w-full p-6 animate-fade-in mx-4">
             <h3 className="text-lg font-medium mb-4">
               {t('feedback.ratingHeading', 'Rate this response')}

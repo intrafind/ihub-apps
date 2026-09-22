@@ -64,7 +64,7 @@ function AdminLayoutInner() {
       {/* Skip to admin content */}
       <a
         href="#admin-main-content"
-        className="sr-only focus:not-sr-only focus:absolute focus:z-50 focus:top-2 focus:left-2 focus:px-3 focus:py-2 focus:bg-white dark:focus:bg-gray-800 focus:text-indigo-600 focus:rounded focus:shadow-lg focus:text-sm focus:font-medium"
+        className="sr-only focus:not-sr-only focus:absolute focus:z-50 focus:top-2 focus:left-2 focus:px-3 focus:py-2 focus:bg-white dark:focus:bg-gray-800 focus:text-indigo-600 focus:rounded-sm focus:shadow-lg focus:text-sm focus:font-medium"
       >
         {t('admin.skipToContent', 'Skip to content')}
       </a>
@@ -77,7 +77,7 @@ function AdminLayoutInner() {
         <main
           ref={mainRef}
           id="admin-main-content"
-          className="flex-1 overflow-y-auto bg-gray-50 dark:bg-gray-950 focus:outline-none"
+          className="flex-1 overflow-y-auto bg-gray-50 dark:bg-gray-950 focus:outline-hidden"
           tabIndex={-1}
         >
           <Outlet />

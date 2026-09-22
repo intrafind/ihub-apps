@@ -1,67 +1,57 @@
+/**
+ * Configuration reads, as the rest of the server has always called them.
+ *
+ * `loadJson` and `loadText` keep their signatures and their semantics — every
+ * failure resolves to `null` — but the file access now happens in
+ * {@link module:services/config/ConfigStore}, which routes it through the
+ * storage provider. The 60-second TTL cache that used to live here is gone:
+ * it was invisible to `configCache.refreshCacheEntry()`, so an admin save was
+ * followed by up to a minute in which readers still saw the old value.
+ *
+ * The builtin locale helpers below stay on the filesystem deliberately. They
+ * read `shared/i18n/`, which ships with the application rather than living in
+ * an installation's `contents/`, so no configuration provider owns it.
+ *
+ * @module configLoader
+ */
 import fs from 'fs/promises';
 import path from 'path';
 import { getRootDir } from './pathUtils.js';
-import config from './config.js';
 import logger from './utils/logger.js';
 import { resolveAndValidatePath } from './utils/pathSecurity.js';
+import configStore from './services/config/ConfigStore.js';
 
-const cache = new Map();
-const CACHE_TTL = 60 * 1000; // 60 seconds
-
-async function resolvePath(relativePath) {
-  const rootDir = getRootDir();
-  const contentsDir = config.CONTENTS_DIR;
-  const baseDir = path.join(rootDir, contentsDir);
-  const resolved = await resolveAndValidatePath(relativePath, baseDir);
-  if (!resolved) {
-    logger.warn(`Path traversal blocked in configLoader: ${relativePath}`);
-    return path.join(baseDir, path.basename(relativePath));
-  }
-  return resolved;
-}
-
-async function loadFile(relativePath, { useCache = true, parse = 'text' } = {}) {
-  const cacheKey = `${relativePath}:${parse}`;
-
-  try {
-    if (useCache && cache.has(cacheKey)) {
-      const cached = cache.get(cacheKey);
-      if (Date.now() - cached.timestamp < CACHE_TTL) {
-        return cached.data;
-      }
-      cache.delete(cacheKey);
-    }
-
-    const filePath = await resolvePath(relativePath);
-    const data = await fs.readFile(filePath, 'utf8');
-    const result = parse === 'json' ? JSON.parse(data) : data;
-
-    if (useCache) {
-      cache.set(cacheKey, { data: result, timestamp: Date.now() });
-    }
-
-    return result;
-  } catch (error) {
-    // For locale files, ENOENT is expected when no overrides exist
-    if (error.code === 'ENOENT' && relativePath.includes('locales/')) {
-      return null; // Silent fail for missing locale override files
-    }
-    logger.error(`Error loading ${parse === 'json' ? 'JSON' : 'text'} ${relativePath}:`, {
-      component: 'ConfigLoader',
-      error
-    });
-    return null;
-  }
-}
-
+/**
+ * Load a JSON file from an installation's `contents/` directory.
+ *
+ * @param {string} relativePath - Path relative to `contents/`, e.g. `config/ui.json`
+ * @param {Object} [options] - Reserved; the former `useCache` flag no longer
+ *   has an effect because there is no cache below `configCache` any more
+ * @returns {Promise<any|null>} The parsed contents, or null when the file is
+ *   missing, unreadable or malformed
+ */
 export function loadJson(relativePath, options = {}) {
-  return loadFile(relativePath, { ...options, parse: 'json' });
+  return configStore.readJson(relativePath, options);
 }
 
-export function loadText(relativePath, options = {}) {
-  return loadFile(relativePath, { ...options, parse: 'text' });
+/**
+ * Load a text file from an installation's `contents/` directory — a page body,
+ * a renderer, a markdown source.
+ *
+ * @param {string} relativePath - Path relative to `contents/`, e.g. `pages/en/faq.md`
+ * @param {Object} [_options] - Reserved; see {@link loadJson}
+ * @returns {Promise<string|null>} The file contents, or null when it cannot be read
+ */
+export function loadText(relativePath, _options = {}) {
+  return configStore.readText(relativePath);
 }
 
+/**
+ * Load a locale file that ships with the application.
+ *
+ * @param {string} relativePath - Path relative to `shared/i18n/`, e.g. `en.json`
+ * @returns {Promise<any|null>} The parsed contents, or null on any failure
+ */
 export async function loadBuiltinLocaleJson(relativePath) {
   try {
     const rootDir = getRootDir();

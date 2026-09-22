@@ -48,7 +48,7 @@ function SearchableAppsSelector({ apps, value, onChange, placeholder, currentLan
         <button
           type="button"
           onClick={() => setIsOpen(!isOpen)}
-          className="relative w-full bg-white dark:bg-gray-700 border border-gray-300 dark:border-gray-600 rounded-md shadow-sm pl-3 pr-10 py-2 text-left cursor-pointer focus:outline-none focus:ring-1 focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm"
+          className="relative w-full bg-white dark:bg-gray-700 border border-gray-300 dark:border-gray-600 rounded-md shadow-xs pl-3 pr-10 py-2 text-left cursor-pointer focus:outline-hidden focus:ring-1 focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm"
         >
           <span className="block truncate">
             {selectedApp ? (
@@ -81,7 +81,7 @@ function SearchableAppsSelector({ apps, value, onChange, placeholder, currentLan
       </div>
 
       {isOpen && (
-        <div className="absolute z-10 mt-1 w-full bg-white dark:bg-gray-800 shadow-lg max-h-60 rounded-md py-1 text-base ring-1 ring-black ring-opacity-5 dark:ring-gray-700 overflow-auto focus:outline-none sm:text-sm">
+        <div className="absolute z-10 mt-1 w-full bg-white dark:bg-gray-800 shadow-lg max-h-60 rounded-md py-1 text-base ring-1 ring-black/5 dark:ring-gray-700/5 overflow-auto focus:outline-hidden sm:text-sm">
           {/* Search input */}
           <div className="sticky top-0 bg-white dark:bg-gray-800 px-3 py-2 border-b border-gray-200 dark:border-gray-700">
             <div className="relative">
@@ -93,7 +93,7 @@ function SearchableAppsSelector({ apps, value, onChange, placeholder, currentLan
                 type="text"
                 value={searchTerm}
                 onChange={e => setSearchTerm(e.target.value)}
-                className="block w-full pl-10 pr-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md text-sm bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100 focus:outline-none focus:ring-1 focus:ring-indigo-500 focus:border-indigo-500 placeholder-gray-400 dark:placeholder-gray-500"
+                className="block w-full pl-10 pr-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md text-sm bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100 focus:outline-hidden focus:ring-1 focus:ring-indigo-500 focus:border-indigo-500 placeholder-gray-400 dark:placeholder-gray-500"
                 placeholder={t('admin.prompts.edit.searchApps', 'Search apps...')}
                 autoComplete="off"
               />
@@ -126,7 +126,7 @@ function SearchableAppsSelector({ apps, value, onChange, placeholder, currentLan
               >
                 <div className="flex items-center">
                   <div
-                    className="flex-shrink-0 h-6 w-6 rounded-md flex items-center justify-center text-white text-xs font-bold mr-3"
+                    className="shrink-0 h-6 w-6 rounded-md flex items-center justify-center text-white text-xs font-bold mr-3"
                     style={{ backgroundColor: app.color || '#6B7280' }}
                   >
                     <Icon name={app.icon || 'chat-bubbles'} className="h-3 w-3" />

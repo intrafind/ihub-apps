@@ -1,16 +1,19 @@
 # Release Process
 
-This document describes the automated release process for iHub Apps, including version synchronization between GitHub releases and package.json files.
+This document describes the automated release process for iHub Apps: version synchronization
+between GitHub releases and the `package.json` files, and how release notes reach the in-product
+changelog.
 
 ## Overview
 
 When creating a GitHub release, the system automatically:
 
-1. **Syncs version numbers** between the release tag and all package.json files
-2. **Builds binaries** for Linux, macOS, and Windows
-3. **Builds Docker images** and publishes them to GitHub Container Registry
-4. **Updates documentation** with the new version
-5. **Commits version changes** back to the repository
+1. **Syncs version numbers** between the release tag and all `package.json` files
+2. **Publishes the release notes** written in `docs/releases/next/` under the release's version
+3. **Builds binaries** for Linux, macOS, and Windows
+4. **Builds Docker images** and publishes them to GitHub Container Registry
+5. **Updates documentation** with the new version
+6. **Commits the version and release-notes changes** back to the default branch
 
 ## Release Workflow
 
@@ -27,27 +30,55 @@ The system automatically updates:
 
 - **Root package.json**: `3.3.0` → `3.4.0`
 - **client/package.json**: Updates to match release version
-- **server/package.json**: Updates to match release version  
+- **server/package.json**: Updates to match release version
 - **Documentation**: Updates version display in README.md and HTML metadata
 
-### 3. Build Process
+### 3. Release Notes
+
+Release notes live in `docs/releases/` and are shown in **Admin → What's New**:
+
+- `docs/releases/next/` holds the entries for everything merged since the last release. Every PR
+  with a visible change adds its entry there (the `/document-feature` skill enforces the rules).
+- `docs/releases/<version>/` holds exactly what shipped in that release.
+
+During a release, `scripts/finalize-release-notes.js` moves `next/` under the version:
+
+1. In the build jobs it runs on the tagged checkout without committing, so the binaries and the
+   Docker image ship `docs/releases/3.4.0/` and their changelog lists the release by number.
+2. In the commit-back job it runs on the default branch with `--from-ref v3.4.0 --commit`: the
+   entries `next/` held **at the tag** are written to `docs/releases/3.4.0/`, only the files with
+   entries are created, and entries that were merged after the tag stay in `next/`.
+3. If `next/` had no entries, nothing is created and the changelog does not list the release.
+   If `docs/releases/3.4.0/` already exists (a re-run), nothing is changed.
+
+### 4. Build Process
 
 **Binary Builds:**
+
 - Creates standalone executables for Linux, macOS, Windows
 - Uses Node.js SEA (Single Executable Application) feature
 - Archives binaries with versioned names: `ihub-apps-v3.4.0-linux.tar.gz`
 
 **Docker Builds:**
+
 - Builds and publishes Docker images with proper version tags
 - Performs security scanning with Trivy
 - Tests container startup before publishing
 
-### 4. Automated Commit Back
+### 5. Automated Commit Back
 
-After successful builds, the system:
-- Commits the updated package.json files back to the repository
-- Uses commit message format: `chore: update version to 3.4.0 for release v3.4.0`
-- Pushes changes to the main branch
+After a successful build, the `commit-version` job checks out the **default branch** and pushes
+two commits to it:
+
+- `chore: update version to 3.4.0 for release v3.4.0` — the `package.json` and documentation
+  version bump
+- `docs(releases): publish release notes for v3.4.0` — `docs/releases/next/` →
+  `docs/releases/3.4.0/`
+
+If another merge lands on the branch meanwhile, the job rebases and retries the push a few times.
+The job pushes to the default branch by name: the release event checks out the tag, and pushing to
+`github.ref_name` would try to move the tag instead. Attaching the binaries to the release does not
+depend on this job succeeding.
 
 ## Manual Version Sync
 
@@ -61,6 +92,16 @@ npm run version:sync v3.4.0
 node scripts/sync-release-version.js v3.4.0 --commit
 ```
 
+## Manual Release Notes Publishing
+
+```bash
+# Move what docs/releases/next/ holds in the working tree under 3.4.0
+node scripts/finalize-release-notes.js v3.4.0
+
+# Take the entries as they were at the tag, keep later ones in next/, and commit
+node scripts/finalize-release-notes.js v3.4.0 --from-ref v3.4.0 --commit
+```
+
 ## Script Details
 
 ### `scripts/sync-release-version.js`
@@ -72,55 +113,91 @@ This script handles:
 - **Documentation Updates**: Calls `npm run docs:update-version` to update docs
 - **Git Commits**: Optional automatic commit with `--commit` flag
 
-### Features
+Features:
 
 - **Idempotent**: Safe to run multiple times with same version
 - **Comprehensive**: Updates all package.json files and documentation
 - **Flexible**: Works with or without 'v' prefix in version tags
 - **Safe**: Validates input and provides clear error messages
 
-## Workflow Files Modified
+### `scripts/finalize-release-notes.js`
+
+This script handles:
+
+- **Publishing**: Writes the entries of `docs/releases/next/` to `docs/releases/<version>/`,
+  one file per section that has entries, with the version in each file's title
+- **Source selection**: The working tree by default, or `--from-ref <ref>` to read `next/` as it
+  was at a git ref (the tag) when the branch has moved on
+- **Trimming `next/`**: Removes the published entries from `next/` (matched by title) and leaves
+  the three heading-only files behind
+- **Git Commits**: Optional automatic commit with `--commit`
+
+It exits successfully without changes when there is nothing to publish or when the version's
+directory already exists, so a release build never fails on its notes. The parsing rules it shares
+with the admin endpoint live in `server/utils/releaseNotes.js`.
+
+## Workflow Files
 
 1. **`.github/workflows/build-binaries.yml`**:
-   - Added version sync step before building
-   - Added commit-version job to push changes back
-   - Enhanced with proper permissions and error handling
+   - Version sync and release-notes publishing before building
+   - `commit-version` job pushing both commits to the default branch
+   - `release` job attaching binaries regardless of the commit-back's outcome
 
 2. **`.github/workflows/docker-ci.yml`**:
-   - Added version sync step for Docker builds
-   - Ensures Docker images have correct version metadata
+   - Version sync and release-notes publishing before the Docker build
+   - Ensures Docker images have correct version metadata and release notes
 
 ## Version Format
 
 - **Release Tags**: `v3.4.0` (with 'v' prefix)
 - **Package.json**: `3.4.0` (semantic version without prefix)
+- **Release notes directory**: `docs/releases/3.4.0/`
 - **Documentation**: `Version: 3.4.0` (displayed in README)
 - **HTML Metadata**: `<meta name="version" content="3.4.0">`
 
 ## Troubleshooting
 
 ### Version Mismatch
+
 If versions get out of sync, manually run:
+
 ```bash
 node scripts/sync-release-version.js v3.4.0
 ```
 
+### Release Notes Missing From a Release
+
+If a release shows no entry in **What's New** although `next/` had entries at the tag, run the
+publish step by hand on the default branch and push:
+
+```bash
+git fetch --tags
+node scripts/finalize-release-notes.js v3.4.0 --from-ref v3.4.0 --commit
+```
+
 ### Failed Builds
+
 Check GitHub Actions logs for:
+
 - Permission issues (needs `contents: write`)
-- Git configuration (automatically handled by the script)
+- Git configuration (automatically handled by the scripts)
 - Network issues during npm install or git operations
 
 ### Commit Failures
-The commit step includes error handling:
-- Configures git user if not set
-- Checks for changes before attempting commit
-- Provides clear error messages on failure
+
+The commit-back job:
+
+- Configures the git user if not set
+- Checks for changes before attempting a commit
+- Rebases onto the latest default branch and retries the push
+- Fails visibly (without blocking the release assets) when the push is rejected — for example by a
+  branch protection rule that GitHub Actions is not allowed to bypass
 
 ## Future Enhancements
 
 Potential improvements to consider:
-- **Changelog Generation**: Automatically generate CHANGELOG.md
+
+- **GitHub release body**: Copy the published release notes into the GitHub release description
 - **Pre-release Support**: Handle alpha, beta, rc versions
 - **Multi-branch Support**: Support releases from different branches
 - **Rollback Mechanism**: Ability to revert failed releases

@@ -4,13 +4,13 @@ import { useFilterState } from '../hooks/useFilterState';
 import { useTranslation } from 'react-i18next';
 import Icon from '../../../shared/components/Icon';
 import {
-  fetchAdminSkills,
-  toggleSkill,
   deleteSkill,
   exportSkill,
-  importSkill
+  fetchAdminSkills,
+  getAdminApiErrorMessage,
+  importSkill,
+  toggleSkill
 } from '../../../api/adminApi';
-
 /**
  * AdminSkillsPage - List page for managing installed skills.
  *
@@ -52,7 +52,7 @@ function AdminSkillsPage() {
       }
     } catch (err) {
       console.error('Error loading skills:', err);
-      setError(err.message);
+      setError(getAdminApiErrorMessage(err));
       setSkills([]);
     } finally {
       setLoading(false);
@@ -68,7 +68,7 @@ function AdminSkillsPage() {
       await toggleSkill(skillName);
       await loadSkills();
     } catch (err) {
-      setError(err.message);
+      setError(getAdminApiErrorMessage(err));
     }
   };
 
@@ -124,10 +124,12 @@ function AdminSkillsPage() {
       await loadSkills();
       event.target.value = '';
     } catch (err) {
-      if (err.message.includes('already exists')) {
+      if (getAdminApiErrorMessage(err).includes('already exists')) {
         setError(t('admin.skills.importAlreadyExists', 'A skill with this name already exists'));
       } else {
-        setError(`${t('admin.skills.importFailed', 'Failed to import skill')}: ${err.message}`);
+        setError(
+          `${t('admin.skills.importFailed', 'Failed to import skill')}: ${getAdminApiErrorMessage(err)}`
+        );
       }
     } finally {
       setUploading(false);
@@ -233,7 +235,7 @@ function AdminSkillsPage() {
                 />
                 <button
                   type="button"
-                  className="inline-flex items-center justify-center rounded-md border border-transparent bg-indigo-600 px-4 py-2 text-sm font-medium text-white shadow-sm hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:ring-offset-2 disabled:opacity-50 disabled:cursor-not-allowed"
+                  className="inline-flex items-center justify-center rounded-md border border-transparent bg-indigo-600 px-4 py-2 text-sm font-medium text-white shadow-xs hover:bg-indigo-700 focus:outline-hidden focus:ring-2 focus:ring-indigo-500 focus:ring-offset-2 disabled:opacity-50 disabled:cursor-not-allowed"
                   disabled={uploading}
                   title={t('admin.skills.importSkill', 'Import Skill (.zip)')}
                 >
@@ -277,7 +279,7 @@ function AdminSkillsPage() {
               </div>
               <input
                 type="text"
-                className="block w-full pl-10 pr-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md leading-5 bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 placeholder-gray-500 dark:placeholder-gray-400 focus:outline-none focus:ring-1 focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm"
+                className="block w-full pl-10 pr-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md leading-5 bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 placeholder-gray-500 dark:placeholder-gray-400 focus:outline-hidden focus:ring-1 focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm"
                 placeholder={t('admin.skills.searchPlaceholder', 'Search skills...')}
                 value={searchTerm}
                 onChange={e => setSearchTerm(e.target.value)}
@@ -288,7 +290,7 @@ function AdminSkillsPage() {
             <select
               value={filterEnabled}
               onChange={e => setFilterEnabled(e.target.value)}
-              className="block w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md shadow-sm bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm"
+              className="block w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md shadow-xs bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 focus:outline-hidden focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm"
             >
               <option value="all">{t('admin.skills.filterAll', 'All Skills')}</option>
               <option value="enabled">{t('admin.skills.filterEnabled', 'Enabled Only')}</option>
@@ -301,7 +303,7 @@ function AdminSkillsPage() {
         <div className="mt-8 flex flex-col">
           <div className="-my-2 -mx-4 overflow-x-auto sm:-mx-6 lg:-mx-8">
             <div className="inline-block min-w-full py-2 align-middle md:px-6 lg:px-8">
-              <div className="overflow-hidden shadow ring-1 ring-black ring-opacity-5 md:rounded-lg">
+              <div className="overflow-hidden shadow-sm ring-1 ring-black/5 md:rounded-lg">
                 <table className="min-w-full divide-y divide-gray-300 dark:divide-gray-700">
                   <thead className="bg-gray-50 dark:bg-gray-800">
                     <tr>
@@ -346,7 +348,7 @@ function AdminSkillsPage() {
                         {/* Name cell */}
                         <td className="px-6 py-4">
                           <div className="flex items-center">
-                            <div className="flex-shrink-0 h-8 w-8">
+                            <div className="shrink-0 h-8 w-8">
                               <div className="h-8 w-8 rounded-full bg-indigo-100 dark:bg-indigo-900 flex items-center justify-center">
                                 <Icon
                                   name="sparkles"
@@ -375,7 +377,7 @@ function AdminSkillsPage() {
                         {/* Version cell */}
                         <td className="px-6 py-4 text-sm text-gray-900 dark:text-gray-100">
                           {skill.metadata?.version ? (
-                            <code className="text-xs bg-gray-100 dark:bg-gray-700 px-2 py-1 rounded">
+                            <code className="text-xs bg-gray-100 dark:bg-gray-700 px-2 py-1 rounded-sm">
                               {skill.metadata.version}
                             </code>
                           ) : (

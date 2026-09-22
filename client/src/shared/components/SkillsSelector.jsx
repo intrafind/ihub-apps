@@ -122,7 +122,7 @@ function SkillsSelector({ selectedSkills = [], onSkillsChange }) {
                 {displayName}
                 <button
                   onClick={() => handleRemoveSkill(skillName)}
-                  className="ml-1 flex-shrink-0 text-indigo-600 dark:text-indigo-400 hover:text-indigo-800 dark:hover:text-indigo-300"
+                  className="ml-1 shrink-0 text-indigo-600 dark:text-indigo-400 hover:text-indigo-800 dark:hover:text-indigo-300"
                   aria-label={`Remove ${displayName}`}
                 >
                   <Icon name="x" className="w-3 h-3" />
@@ -164,7 +164,7 @@ function SkillsSelector({ selectedSkills = [], onSkillsChange }) {
                 <button
                   key={skill.name}
                   onClick={() => handleAddSkill(skill)}
-                  className="w-full text-left px-3 py-3 text-sm text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700 focus:bg-gray-100 dark:focus:bg-gray-700 focus:outline-none border-b border-gray-100 dark:border-gray-700 last:border-b-0"
+                  className="w-full text-left px-3 py-3 text-sm text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700 focus:bg-gray-100 dark:focus:bg-gray-700 focus:outline-hidden border-b border-gray-100 dark:border-gray-700 last:border-b-0"
                 >
                   <div className="font-medium text-gray-900 dark:text-gray-100">{skill.name}</div>
                   {skill.description && (

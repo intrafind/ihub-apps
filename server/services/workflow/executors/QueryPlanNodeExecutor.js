@@ -19,14 +19,19 @@
  */
 
 import { BaseNodeExecutor } from './BaseNodeExecutor.js';
-import WorkflowLLMHelper from '../WorkflowLLMHelper.js';
+import llmClient from '../../loop/LLMClient.js';
 import { thinkingConfigToOptions } from '../thinkingOptions.js';
 import configCache from '../../../configCache.js';
 
 export class QueryPlanNodeExecutor extends BaseNodeExecutor {
+  /**
+   * @param {Object} options - Executor options
+   * @param {import('../../loop/LLMClient.js').LLMClient} [options.llmClient] - LLM client used
+   *   for the planning call (defaults to the shared singleton; tests inject a stub)
+   */
   constructor(options = {}) {
     super(options);
-    this.llmHelper = options.llmHelper || new WorkflowLLMHelper();
+    this.llmClient = options.llmClient || llmClient;
   }
 
   async execute(node, state, context) {
@@ -35,7 +40,6 @@ export class QueryPlanNodeExecutor extends BaseNodeExecutor {
       questionPath = '$.data.userQuestion',
       seedsPath,
       outputVar = '_queryPlan',
-      modelId,
       maxTopics = 8,
       maxSynonymsPerTopic = 5,
       queryLanguage: configQueryLanguage,
@@ -71,18 +75,16 @@ export class QueryPlanNodeExecutor extends BaseNodeExecutor {
     const seeds = seedsPath ? this.resolveVariable(seedsPath, state) : null;
 
     const { data: models } = configCache.getModels();
-    const model =
-      models?.find(m => m.id === modelId) || models?.find(m => m.default) || models?.[0];
+    // Use the shared prompt-node precedence (config.modelId → _modelOverride →
+    // workflow defaultModelId → context → global default) so the seed-plan step
+    // honors the chat-selected model and the workflow default instead of
+    // silently dropping to the global default model.
+    const model = this.resolveModel(models, config, context, state, node.id);
     if (!model) {
       return this.createErrorResult('No model available for query planning', { nodeId: node.id });
     }
-    const apiKeyResult = await this.llmHelper.verifyApiKey(model, language);
-    if (!apiKeyResult.success) {
-      return this.createErrorResult(
-        apiKeyResult.error?.message || 'API key verification failed for query-plan',
-        { nodeId: node.id }
-      );
-    }
+    // API-key resolution happens inside LLMClient.complete(); a missing key is
+    // reported through the same "query-plan LLM call failed" error path below.
 
     const system =
       `You build search-query plans for an enterprise document index (iFinder, Elasticsearch-style query DSL). ` +
@@ -111,15 +113,21 @@ export class QueryPlanNodeExecutor extends BaseNodeExecutor {
 
     let plan = null;
     try {
-      const response = await this.llmHelper.executeStreamingRequest({
+      const response = await this.llmClient.complete({
         model,
         messages: [
           { role: 'system', content: system },
           { role: 'user', content: userParts.join('\n\n') }
         ],
-        apiKey: apiKeyResult.apiKey,
         options: { temperature: 0.2, ...thinkingConfigToOptions(config.thinking) },
-        language
+        language,
+        signal: context?.abortSignal,
+        telemetry: {
+          runId: context?.runId || context?.executionId || state?.executionId,
+          step: context?.iteration ?? 0,
+          purpose: 'query-plan',
+          refs: { executionId: state?.executionId, nodeId: node.id }
+        }
       });
       plan = parsePlan(response?.content || '');
     } catch (err) {

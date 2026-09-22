@@ -124,7 +124,7 @@ async function run() {
 
   console.log('\n🧪 B — braveSearch is recognized as citation-producing\n');
   {
-    const p = new PromptNodeExecutor({ llmHelper: {}, chatService: {} });
+    const p = new PromptNodeExecutor({ llmClient: {}, chatService: {} });
     check('braveSearch → citation-producing', p._isCitationProducingTool('braveSearch') === true);
     check('webSearch → citation-producing', p._isCitationProducingTool('webSearch') === true);
     check(

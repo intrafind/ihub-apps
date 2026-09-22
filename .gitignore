@@ -92,3 +92,6 @@ contents*/
 ihub_chat.tar.gz
 # Generated at build time by scripts/export-docs-markdown.js
 server/defaults/sources/ihub-documentation.md
+
+# Boot smoke test throwaway contents dirs (scripts/smoke-boot.js)
+.smoke-contents/

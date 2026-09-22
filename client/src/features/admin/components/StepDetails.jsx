@@ -12,7 +12,7 @@ import { useState } from 'react';
 function CollapsibleBlock({ title, defaultOpen = false, count, children }) {
   const [open, setOpen] = useState(defaultOpen);
   return (
-    <div className="border border-gray-200 rounded">
+    <div className="border border-gray-200 rounded-sm">
       <button
         type="button"
         onClick={() => setOpen(v => !v)}
@@ -45,10 +45,10 @@ function PromptMessage({ role, content }) {
         : 'text-gray-700 bg-gray-50 border-gray-200';
   return (
     <div className="mb-2">
-      <span className={`inline-block px-1.5 py-0.5 rounded border text-xs ${labelColor}`}>
+      <span className={`inline-block px-1.5 py-0.5 rounded-sm border text-xs ${labelColor}`}>
         {label}
       </span>
-      <pre className="mt-1 whitespace-pre-wrap break-words text-gray-800 font-sans text-xs leading-relaxed">
+      <pre className="mt-1 whitespace-pre-wrap wrap-break-word text-gray-800 font-sans text-xs leading-relaxed">
         {typeof content === 'string' ? content : JSON.stringify(content, null, 2)}
       </pre>
     </div>
@@ -62,7 +62,7 @@ function ToolCallRow({ call }) {
       <div className="flex items-center gap-2 flex-wrap">
         <span className="font-mono font-medium text-gray-800">{call.name}</span>
         {call.appId && (
-          <span className="text-xs px-1.5 py-0.5 rounded bg-orange-100 text-orange-800">
+          <span className="text-xs px-1.5 py-0.5 rounded-sm bg-orange-100 text-orange-800">
             app · {call.appId}
           </span>
         )}
@@ -77,7 +77,7 @@ function ToolCallRow({ call }) {
           </span>
         )}
         {isError && (
-          <span className="text-xs px-1.5 py-0.5 rounded bg-red-100 text-red-800">
+          <span className="text-xs px-1.5 py-0.5 rounded-sm bg-red-100 text-red-800">
             {call.error}
           </span>
         )}
@@ -85,7 +85,7 @@ function ToolCallRow({ call }) {
       {call.args && (
         <details className="mt-1">
           <summary className="cursor-pointer text-gray-500 hover:text-gray-700">args</summary>
-          <pre className="mt-1 whitespace-pre-wrap break-words bg-gray-50 p-2 rounded text-gray-700 text-xs">
+          <pre className="mt-1 whitespace-pre-wrap wrap-break-word bg-gray-50 p-2 rounded-sm text-gray-700 text-xs">
             {String(call.args)}
           </pre>
         </details>
@@ -93,7 +93,7 @@ function ToolCallRow({ call }) {
       {call.result && (
         <details className="mt-1">
           <summary className="cursor-pointer text-gray-500 hover:text-gray-700">result</summary>
-          <pre className="mt-1 whitespace-pre-wrap break-words bg-gray-50 p-2 rounded text-gray-700 text-xs">
+          <pre className="mt-1 whitespace-pre-wrap wrap-break-word bg-gray-50 p-2 rounded-sm text-gray-700 text-xs">
             {String(call.result)}
           </pre>
         </details>
@@ -206,7 +206,7 @@ function StepDetails({ log }) {
       )}
 
       {log.groundingSwap && (
-        <div className="text-xs bg-amber-50 border border-amber-300 rounded p-2">
+        <div className="text-xs bg-amber-50 border border-amber-300 rounded-sm p-2">
           <div className="font-medium text-amber-900">⚠ Function tools dropped on this step</div>
           <p className="text-amber-800 mt-1">{log.groundingSwap.reason}</p>
           {Array.isArray(log.groundingSwap.droppedToolIds) &&
@@ -270,7 +270,7 @@ function StepDetails({ log }) {
               return (
                 <li key={`${s.id || i}`} className="flex items-center gap-2 flex-wrap">
                   <span className="font-mono text-gray-800">{s.id}</span>
-                  <span className={`text-xs px-1.5 py-0.5 rounded ${status.cls}`}>
+                  <span className={`text-xs px-1.5 py-0.5 rounded-sm ${status.cls}`}>
                     {status.label}
                   </span>
                   {typeof s.bytesApprox === 'number' && s.bytesApprox > 0 && (
@@ -302,12 +302,12 @@ function StepDetails({ log }) {
               <li key={`${a.id || i}`} className="flex items-center gap-2 flex-wrap">
                 <span className="font-mono text-gray-800">app__{a.id}</span>
                 {a.registered ? (
-                  <span className="text-xs px-1.5 py-0.5 rounded bg-emerald-100 text-emerald-800">
+                  <span className="text-xs px-1.5 py-0.5 rounded-sm bg-emerald-100 text-emerald-800">
                     registered
                   </span>
                 ) : (
                   <>
-                    <span className="text-xs px-1.5 py-0.5 rounded bg-red-100 text-red-800">
+                    <span className="text-xs px-1.5 py-0.5 rounded-sm bg-red-100 text-red-800">
                       not registered
                     </span>
                     <span className="text-gray-600">

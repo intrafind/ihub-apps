@@ -108,7 +108,7 @@ function PromptSearch({ isOpen, onClose, onSelect, appId, appSkills = [], prompt
       renderResult={item =>
         item._type === 'skill' ? (
           <div className="flex items-start space-x-3">
-            <div className="flex-shrink-0 w-6 h-6 bg-purple-100 rounded-lg flex items-center justify-center">
+            <div className="shrink-0 w-6 h-6 bg-purple-100 rounded-lg flex items-center justify-center">
               <Icon name="sparkles" className="w-3.5 h-3.5 text-purple-600" />
             </div>
             <div className="flex-1 min-w-0">
@@ -132,7 +132,7 @@ function PromptSearch({ isOpen, onClose, onSelect, appId, appSkills = [], prompt
           </div>
         ) : (
           <div className="flex items-start space-x-3">
-            <div className="flex-shrink-0 w-6 h-6 bg-indigo-100 rounded-lg flex items-center justify-center">
+            <div className="shrink-0 w-6 h-6 bg-indigo-100 rounded-lg flex items-center justify-center">
               <Icon name={item.icon || 'clipboard'} className="w-3.5 h-3.5 text-indigo-600" />
             </div>
             <div className="flex-1 min-w-0">

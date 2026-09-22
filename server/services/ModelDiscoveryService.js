@@ -15,6 +15,31 @@
 import logger from '../utils/logger.js';
 import { throttledFetch } from '../requestThrottler.js';
 
+/**
+ * Wait for `promise`, but give up as soon as `signal` aborts (rejecting with
+ * an AbortError). The promise itself keeps running for its other waiters.
+ */
+function raceSignal(promise, signal) {
+  if (!signal) return promise;
+  const abortError = () =>
+    Object.assign(new Error('Model discovery abandoned: request aborted'), { name: 'AbortError' });
+  if (signal.aborted) return Promise.reject(abortError());
+  return new Promise((resolve, reject) => {
+    const onAbort = () => reject(abortError());
+    signal.addEventListener('abort', onAbort, { once: true });
+    promise.then(
+      value => {
+        signal.removeEventListener('abort', onAbort);
+        resolve(value);
+      },
+      err => {
+        signal.removeEventListener('abort', onAbort);
+        reject(err);
+      }
+    );
+  });
+}
+
 class ModelDiscoveryService {
   constructor() {
     /**
@@ -28,6 +53,13 @@ class ModelDiscoveryService {
      * Prevents excessive API calls while allowing timely model updates
      */
     this.DEFAULT_CACHE_TTL_MS = 5 * 60 * 1000;
+
+    /**
+     * How long a failed discovery is remembered. Without this every message to
+     * an unreachable endpoint paid the discovery timeout again — and each
+     * attempt queued another blocking DNS lookup on the shared threadpool.
+     */
+    this.FAILURE_CACHE_TTL_MS = 60 * 1000;
 
     /**
      * Track ongoing discovery requests to prevent duplicate simultaneous calls
@@ -46,7 +78,7 @@ class ModelDiscoveryService {
   async discoverModel(model, apiKey, cacheTtlMs = this.DEFAULT_CACHE_TTL_MS) {
     // Return cached result if still valid
     const cached = this.cache.get(model.id);
-    if (cached && Date.now() - cached.timestamp < cacheTtlMs) {
+    if (cached && Date.now() - cached.timestamp < (cached.ttlMs ?? cacheTtlMs)) {
       logger.debug('Using cached model discovery result', {
         component: 'ModelDiscoveryService',
         modelConfigId: model.id,
@@ -66,7 +98,7 @@ class ModelDiscoveryService {
     }
 
     // Create and track the discovery request
-    const discoveryPromise = this._performDiscovery(model, apiKey, cacheTtlMs);
+    const discoveryPromise = this._performDiscovery(model, apiKey);
     this.pendingRequests.set(model.id, discoveryPromise);
 
     try {
@@ -82,7 +114,7 @@ class ModelDiscoveryService {
    * Internal method to perform the actual model discovery
    * @private
    */
-  async _performDiscovery(model, apiKey, cacheTtlMs) {
+  async _performDiscovery(model, apiKey) {
     if (!model.url) {
       logger.warn('Cannot discover model: no URL configured', {
         component: 'ModelDiscoveryService',
@@ -114,7 +146,9 @@ class ModelDiscoveryService {
       const response = await throttledFetch(model.id, modelsUrl, {
         method: 'GET',
         headers,
-        signal: AbortSignal.timeout(10000) // 10 second timeout for discovery
+        // 10 second timeout for discovery. Callers' own deadlines are applied
+        // per waiter (getEffectiveModelId), never to this shared request.
+        signal: AbortSignal.timeout(10000)
       });
 
       if (!response.ok) {
@@ -124,7 +158,7 @@ class ModelDiscoveryService {
           status: response.status,
           statusText: response.statusText
         });
-        return null;
+        return this._rememberFailure(model.id);
       }
 
       const data = await response.json();
@@ -136,7 +170,7 @@ class ModelDiscoveryService {
           modelConfigId: model.id,
           responseKeys: Object.keys(data)
         });
-        return null;
+        return this._rememberFailure(model.id);
       }
 
       // Get the first available model (vLLM typically serves one model at a time)
@@ -164,8 +198,23 @@ class ModelDiscoveryService {
         error: error.message,
         errorCode: error.code
       });
-      return null;
+      return this._rememberFailure(model.id);
     }
+  }
+
+  /**
+   * Record a failed discovery so the next calls within FAILURE_CACHE_TTL_MS
+   * fall back to the configured modelId immediately instead of waiting on the
+   * endpoint again.
+   * @private
+   */
+  _rememberFailure(modelConfigId) {
+    this.cache.set(modelConfigId, {
+      modelId: null,
+      timestamp: Date.now(),
+      ttlMs: this.FAILURE_CACHE_TTL_MS
+    });
+    return null;
   }
 
   /**
@@ -185,15 +234,20 @@ class ModelDiscoveryService {
    * Get the effective model ID, using discovery if enabled
    * @param {Object} model - Model configuration object
    * @param {string} apiKey - API key for authentication
+   * @param {Object} [opts]
+   * @param {AbortSignal} [opts.signal] - the calling request's abort / deadline signal
    * @returns {Promise<string>} - Model ID to use for the request
    */
-  async getEffectiveModelId(model, apiKey) {
+  async getEffectiveModelId(model, apiKey, { signal } = {}) {
     // Skip discovery if not enabled or not supported for this provider
     if (!model.autoDiscovery || !this._supportsDiscovery(model)) {
       return model.modelId;
     }
 
-    const discoveredModelId = await this.discoverModel(model, apiKey);
+    // The discovery request is shared by every concurrent caller and bounded
+    // by its own timeout; each caller waits only as long as its own signal
+    // allows, so one caller's abort or deadline never affects the others.
+    const discoveredModelId = await raceSignal(this.discoverModel(model, apiKey), signal);
 
     // Fall back to configured modelId if discovery fails
     if (!discoveredModelId) {

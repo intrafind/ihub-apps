@@ -16,8 +16,70 @@ import logger from '../utils/logger.js';
 const promptKnowledgeSources = new Map();
 
 /**
+ * Escape regex metacharacters so arbitrary keys can be used inside `new RegExp(...)`.
+ * @param {string} str
+ * @returns {string}
+ */
+function escapeRegExp(str) {
+  return str.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+}
+
+/**
+ * Replace all `{{key}}` occurrences in text with value, treating both as literal
+ * text: the key is regex-escaped so metacharacters (e.g. from a client-supplied
+ * variable name) can't throw a SyntaxError, and the value is applied via a
+ * function replacer so `$&`, `$1`, etc. inside it are never reinterpreted by
+ * String.replace's replacement-pattern syntax.
+ * @param {string} text
+ * @param {string} key
+ * @param {string} value
+ * @returns {string}
+ */
+function replaceTemplateVar(text, key, value) {
+  return text.replace(new RegExp(`\\{\\{${escapeRegExp(key)}\\}\\}`, 'g'), () => value);
+}
+
+/**
  * Service for handling prompt processing and template resolution
  */
+/**
+ * ISO-8601 calendar date (YYYY-MM-DD) for `now` in `timeZone`.
+ *
+ * `toISOString()` would give the UTC day, which is the wrong day for anyone
+ * east or west of UTC around midnight. `en-CA` renders exactly YYYY-MM-DD.
+ *
+ * @param {Date} now
+ * @param {string} timeZone - IANA zone
+ * @returns {string} e.g. "2026-09-03"
+ */
+/**
+ * Pick a locale Intl accepts for date/time formatting. Falls back to
+ * `fallback` when `language` is missing, not a BCP 47 tag (`*`), or unknown.
+ */
+function resolveFormattingLocale(language, fallback) {
+  if (typeof language === 'string' && language.trim()) {
+    try {
+      if (Intl.DateTimeFormat.supportedLocalesOf([language]).length > 0) return language;
+    } catch {
+      // RangeError: not a structurally valid language tag
+    }
+  }
+  return fallback;
+}
+
+function isoDateInTimeZone(now, timeZone) {
+  try {
+    return new Intl.DateTimeFormat('en-CA', {
+      timeZone,
+      year: 'numeric',
+      month: '2-digit',
+      day: '2-digit'
+    }).format(now);
+  } catch {
+    return now.toISOString().slice(0, 10);
+  }
+}
+
 class PromptService {
   /**
    * Track that prompt-based sources were used for a chat
@@ -70,11 +132,25 @@ class PromptService {
     // Get timezone from user or default to UTC
     const timezone = user?.timezone || user?.settings?.timezone || 'UTC';
 
-    // Create timezone-aware date formatter
+    // Create timezone-aware date formatter.
+    // `dateStyle: 'full'` on purpose: the default numeric style renders
+    // 2026-09-03 as "9/3/2026" under `en`, which a model reading a German
+    // conversation takes for 9 March — six months off, and indistinguishable
+    // from a correct answer. The spelled-out form ("Thursday, September 3,
+    // 2026" / "Donnerstag, 3. September 2026") cannot be misread whichever
+    // locale it is rendered in, and `date_iso` below is the unambiguous
+    // machine form for prompts that want to compare dates.
     const tzOptions = { timeZone: timezone };
     const defaultLang = platformConfig.defaultLanguage || 'en';
-    const dateFormatter = new Intl.DateTimeFormat(language || defaultLang, tzOptions);
-    const timeFormatter = new Intl.DateTimeFormat(language || defaultLang, {
+    // Clients may send a language that is not a BCP 47 tag (Node's fetch sends
+    // `Accept-Language: *`); Intl throws on those, which used to fail the whole
+    // chat request. Fall back to the platform default instead.
+    const locale = resolveFormattingLocale(language, defaultLang);
+    const dateFormatter = new Intl.DateTimeFormat(locale, {
+      ...tzOptions,
+      dateStyle: 'full'
+    });
+    const timeFormatter = new Intl.DateTimeFormat(locale, {
       ...tzOptions,
       timeStyle: 'medium'
     });
@@ -84,6 +160,8 @@ class PromptService {
       year: now.getFullYear().toString(),
       month: (now.getMonth() + 1).toString().padStart(2, '0'),
       date: dateFormatter.format(now),
+      /** ISO-8601 calendar date in the resolved timezone — never ambiguous. */
+      date_iso: isoDateInTimeZone(now, timezone),
       time: timeFormatter.format(now),
       day_of_week: now.toLocaleDateString(language || defaultLang, {
         ...tzOptions,
@@ -114,11 +192,7 @@ class PromptService {
       // Replace variables in platform_context with their resolved values
       for (const [key, value] of Object.entries(globalPromptVars)) {
         if (value !== null && value !== undefined && value !== '') {
-          const strValue = String(value);
-          platformContext = platformContext.replace(
-            new RegExp(`\\{\\{${key}\\}\\}`, 'g'),
-            strValue
-          );
+          platformContext = replaceTemplateVar(platformContext, key, String(value));
         }
       }
     }
@@ -144,6 +218,26 @@ class PromptService {
     }
 
     return filteredVars;
+  }
+
+  /**
+   * Replace {{variable}} placeholders in a text with the given values.
+   * Unknown placeholders are left intact — the same semantics as system
+   * prompt processing, so a typo shows up literally instead of vanishing.
+   * @param {string} text - Text containing {{variable}} placeholders
+   * @param {Object} variables - Variable name/value map (e.g. from resolveGlobalPromptVariables)
+   * @returns {string} Text with known placeholders replaced
+   */
+  substituteVariables(text, variables) {
+    if (!text || typeof text !== 'string' || !text.includes('{{')) {
+      return text;
+    }
+    let result = text;
+    for (const [key, value] of Object.entries(variables || {})) {
+      if (value === null || value === undefined) continue;
+      result = replaceTemplateVar(result, key, String(value));
+    }
+    return result;
   }
 
   /**
@@ -189,17 +283,22 @@ class PromptService {
             ? getLocalizedContent(msg.promptTemplate, lang)
             : msg.promptTemplate || msg.content;
         if (typeof processedContent !== 'string') processedContent = String(processedContent || '');
-        // Combine user-defined variables with global prompt variables (user variables take precedence)
-        const variables = { ...globalPromptVariables, ...msg.variables, content: msg.content };
-        if (variables && Object.keys(variables).length > 0) {
-          for (const [key, value] of Object.entries(variables)) {
-            const strValue = typeof value === 'string' ? value : String(value || '');
-            processedContent = processedContent.replace(
-              new RegExp(`\\{\\{${key}\\}\\}`, 'g'),
-              strValue
-            );
-          }
+        // Combine user-defined variables with global prompt variables (user
+        // variables take precedence). The user's content goes in last and
+        // through a function replacer: "{{...}}" placeholders and dollar
+        // patterns inside an email body or a pasted document are literal
+        // text — never re-expanded, never interpreted by String.replace.
+        const { content: _contentVariable, ...variables } = {
+          ...globalPromptVariables,
+          ...msg.variables
+        };
+        for (const [key, value] of Object.entries(variables)) {
+          const strValue = typeof value === 'string' ? value : String(value || '');
+          processedContent = replaceTemplateVar(processedContent, key, strValue);
         }
+        const userContent =
+          typeof msg.content === 'string' ? msg.content : String(msg.content || '');
+        processedContent = processedContent.replace(/\{\{content\}\}/g, () => userContent);
         // Ensure user content is always included: if template is empty or doesn't contain {{content}},
         // append the user's actual content to make sure it's not lost
         if (msg.content && msg.content.trim()) {
@@ -238,10 +337,7 @@ class PromptService {
       ) {
         for (const [key, value] of Object.entries(globalPromptVariables)) {
           const strValue = typeof value === 'string' ? value : String(value || '');
-          processedContent = processedContent.replace(
-            new RegExp(`\\{\\{${key}\\}\\}`, 'g'),
-            strValue
-          );
+          processedContent = replaceTemplateVar(processedContent, key, strValue);
         }
       }
       const processedMsg = { role: msg.role, content: processedContent };
@@ -262,6 +358,12 @@ class PromptService {
         typeof app.system === 'object' ? getLocalizedContent(app.system, lang) : app.system || '';
       if (typeof systemPrompt !== 'string') systemPrompt = String(systemPrompt || '');
 
+      // Does the app place the temporal context itself? Checked on the RAW
+      // template, before substitution replaces the placeholders away.
+      const placesTemporalContext = /\{\{(platform_context|date|year|day_of_week)\}\}/.test(
+        systemPrompt
+      );
+
       // Combine user variables with global prompt variables for system prompt processing
       const allVariables = { ...globalPromptVariables, ...userVariables };
       if (Object.keys(allVariables).length > 0) {
@@ -269,8 +371,25 @@ class PromptService {
           if (typeof value === 'function' || (typeof value === 'object' && value !== null))
             continue;
           const strValue = String(value || '');
-          systemPrompt = systemPrompt.replace(new RegExp(`\\{\\{${key}\\}\\}`, 'g'), strValue);
+          systemPrompt = replaceTemplateVar(systemPrompt, key, strValue);
         }
+      }
+
+      // Temporal grounding. An app that does not position the context itself
+      // gets it prepended, so every chat app knows the current date instead of
+      // falling back to training-era "today" - the same grounding workflow
+      // nodes get from BaseNodeExecutor.buildTemporalContextBlock. Mirrors the
+      // {{sources}} pattern below: honour an explicit placeholder, otherwise
+      // inject. Admins switch this off by clearing
+      // platform.globalPromptVariables.context.
+      const temporalContext =
+        typeof globalPromptVariables.platform_context === 'string'
+          ? globalPromptVariables.platform_context.trim()
+          : '';
+      if (!placesTemporalContext && temporalContext) {
+        systemPrompt = systemPrompt.trim()
+          ? `${temporalContext}\n\n${systemPrompt}`
+          : temporalContext;
       }
 
       // Process sources using unified source resolution system
@@ -328,11 +447,11 @@ class PromptService {
           const hasSourcePlaceholder = systemPrompt.includes('{{source}}');
 
           if (hasSourcesPlaceholder) {
-            systemPrompt = systemPrompt.replace('{{sources}}', sourceContent || '');
+            systemPrompt = systemPrompt.replace('{{sources}}', () => sourceContent || '');
           }
           // Also support legacy {{source}} template
           if (hasSourcePlaceholder) {
-            systemPrompt = systemPrompt.replace('{{source}}', sourceContent || '');
+            systemPrompt = systemPrompt.replace('{{source}}', () => sourceContent || '');
           }
 
           // If no placeholder was found but we have source content, append it automatically
@@ -375,7 +494,7 @@ class PromptService {
         } catch (error) {
           logger.error('Error loading skills for system prompt', {
             component: 'PromptService',
-            error: err
+            error
           });
         }
       }
@@ -403,7 +522,7 @@ class PromptService {
           logger.error('Error pre-activating skill', {
             component: 'PromptService',
             requestedSkill,
-            error: err
+            error
           });
         }
       }
@@ -422,7 +541,7 @@ class PromptService {
             });
           }
         } catch (error) {
-          logger.error('Error loading styles', { component: 'PromptService', error: err });
+          logger.error('Error loading styles', { component: 'PromptService', error });
         }
       }
 

@@ -302,7 +302,7 @@ function AdminSourceEditPage() {
                 <button
                   type="button"
                   onClick={() => setHistoryOpen(true)}
-                  className="inline-flex items-center justify-center rounded-md border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 px-4 py-2 text-sm font-medium text-gray-700 dark:text-gray-200 shadow-sm hover:bg-gray-50 dark:hover:bg-gray-600 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:ring-offset-2 sm:w-auto"
+                  className="inline-flex items-center justify-center rounded-md border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 px-4 py-2 text-sm font-medium text-gray-700 dark:text-gray-200 shadow-xs hover:bg-gray-50 dark:hover:bg-gray-600 focus:outline-hidden focus:ring-2 focus:ring-indigo-500 focus:ring-offset-2 sm:w-auto"
                 >
                   History
                 </button>
@@ -344,7 +344,7 @@ function AdminSourceEditPage() {
 
         <div className="space-y-6">
           {/* Main Form */}
-          <div className="bg-white dark:bg-gray-800 rounded-lg shadow-sm">
+          <div className="bg-white dark:bg-gray-800 rounded-lg shadow-xs">
             <div className="p-6">
               <SourceConfigForm
                 source={source}
@@ -358,7 +358,7 @@ function AdminSourceEditPage() {
 
           {/* Test Results */}
           {testResult && (
-            <div className="bg-white dark:bg-gray-800 rounded-lg shadow-sm p-6">
+            <div className="bg-white dark:bg-gray-800 rounded-lg shadow-xs p-6">
               <h3 className="text-lg font-medium text-gray-900 dark:text-gray-100 mb-4 flex items-center">
                 <Icon name="beaker" className="h-5 w-5 mr-2" />
                 {t('admin.sources.testResults', 'Test Results')}
@@ -404,7 +404,7 @@ function AdminSourceEditPage() {
                 )}
 
                 {testResult.result && (
-                  <pre className="mt-2 text-xs text-gray-600 dark:text-gray-400 bg-white dark:bg-gray-900 p-2 rounded border dark:border-gray-700 overflow-auto max-h-32">
+                  <pre className="mt-2 text-xs text-gray-600 dark:text-gray-400 bg-white dark:bg-gray-900 p-2 rounded-sm border dark:border-gray-700 overflow-auto max-h-32">
                     {JSON.stringify(testResult.result, null, 2)}
                   </pre>
                 )}

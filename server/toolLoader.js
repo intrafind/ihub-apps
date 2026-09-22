@@ -2,10 +2,14 @@ import configCache from './configCache.js';
 import { createSourceManager } from './sources/index.js';
 import { getSkillContent, getSkillResource } from './services/skillLoader.js';
 import { actionTracker } from './actionTracker.js';
+import { emitToolProgress } from './services/loop/RunStream.js';
 import { isFeatureEnabled } from './featureRegistry.js';
 import { isValidId } from './utils/pathSecurity.js';
 import mcpClientManager from './services/mcp/McpClientManager.js';
+import { isBraveSearchConfigured } from './services/search/braveApiKey.js';
+import { isStaanSearchConfigured } from './services/search/staanApiKey.js';
 import logger from './utils/logger.js';
+import { getLocalizedString } from './utils/localize.js';
 
 /**
  * Build JSON Schema parameters from a workflow's start node inputVariables
@@ -65,7 +69,7 @@ function buildWorkflowToolParams(workflow, language = 'en') {
           description:
             typeof descriptionRaw === 'string'
               ? descriptionRaw
-              : extractLanguageValue(descriptionRaw, language)
+              : getLocalizedString(descriptionRaw, language)
         };
 
         // Enrich select types with enum values so the LLM knows valid choices
@@ -88,39 +92,6 @@ function buildWorkflowToolParams(workflow, language = 'en') {
     properties,
     required
   };
-}
-
-/**
- * Extract language-specific value from a multilingual object or return the value as-is
- * @param {any} value - Value that might be a multilingual object {en: "...", de: "..."}
- * @param {string} language - Target language (e.g., 'en', 'de')
- * @param {string} fallbackLanguage - Fallback language (default: 'en')
- * @returns {any} - Language-specific value or original value
- */
-function extractLanguageValue(value, language = 'en', fallbackLanguage = null) {
-  // Get platform default language if not provided
-  if (!fallbackLanguage) {
-    const platformConfig = configCache.getPlatform() || {};
-    fallbackLanguage = platformConfig?.defaultLanguage || 'en';
-  }
-  if (value && typeof value === 'object' && !Array.isArray(value)) {
-    // Check if this looks like a multilingual object
-    if (value[language] !== undefined) {
-      return value[language];
-    }
-    if (value[fallbackLanguage] !== undefined) {
-      return value[fallbackLanguage];
-    }
-    // If it has language keys but not the requested one, try first available
-    const availableLanguages = Object.keys(value).filter(
-      key => typeof value[key] === 'string' && key.length === 2
-    );
-    if (availableLanguages.length > 0) {
-      return value[availableLanguages[0]];
-    }
-  }
-
-  return value;
 }
 
 /**
@@ -154,7 +125,7 @@ function extractLanguageFromObject(obj, language = 'en', fallbackLanguage = null
         Object.keys(value).some(k => k.length === 2 && typeof value[k] === 'string')
       ) {
         // This is a multilingual field - an object with language codes as keys
-        result[key] = extractLanguageValue(value, language, fallbackLanguage);
+        result[key] = getLocalizedString(value, language, fallbackLanguage);
       } else {
         result[key] = extractLanguageFromObject(value, language, fallbackLanguage);
       }
@@ -251,55 +222,227 @@ export async function loadTools(language = null) {
 }
 
 /**
- * Resolve the appropriate websearch tool based on app config and model provider.
- * Overrides tool parameter defaults with the values from app.websearch config.
+ * Model providers that can run web search themselves (server-side), without
+ * a script-backed tool. Native search is a request-time capability the
+ * adapter enables directly on the provider request — never a "tool" the
+ * generic tool-calling pipeline has to know about or convert.
+ * @type {Set<string>}
+ */
+const NATIVE_WEB_SEARCH_PROVIDERS = new Set(['google', 'openai-responses', 'anthropic']);
+
+/**
+ * Default cap on provider-run searches per model call. Anthropic bills every
+ * search separately, so an uncapped research prompt can fan out into dozens of
+ * billable searches for one answer. Overridable per app
+ * (`websearch.maxSearches`) and per workflow node (`maxWebSearches`).
+ */
+export const DEFAULT_NATIVE_WEB_SEARCH_MAX_USES = 5;
+
+/** Script-backed search tool offered when native search cannot be used. */
+export const NATIVE_WEB_SEARCH_FALLBACK_TOOL_ID = 'braveSearch';
+
+/** Script-backed search tool for each `websearch.provider` value. */
+export const WEBSEARCH_TOOL_IDS = Object.freeze({
+  brave: 'braveSearch',
+  staan: 'staanSearch',
+  qwant: 'qwantSearch'
+});
+
+/**
+ * Resolve an app's `websearch.provider` onto the script-backed tool to offer.
+ *
+ * `"auto"` walks the keyed engines in registration order — Brave, then Staan —
+ * and falls back to Qwant, which needs no key at all. So an install with a
+ * search subscription keeps using it, an install with only a Staan key gets
+ * Staan, and an install with neither still gets working web search instead of a
+ * tool that fails on every call. Brave stays ahead of Staan deliberately: it
+ * was what `"auto"` already picked, and an install that has both keys should
+ * not change engine on upgrade.
+ *
+ * A named provider is honoured as configured, even when unconfigured, so the
+ * resulting error names the provider the admin actually chose.
+ *
+ * @param {string} [provider='auto'] - Value of `app.websearch.provider`
+ * @param {Object} [deps]
+ * @param {() => boolean} [deps.braveConfigured] - Injected by tests so every
+ *   branch of `"auto"` can be exercised without a live provider config.
+ * @param {() => boolean} [deps.staanConfigured] - Likewise for Staan.
+ * @returns {string} Tool id (`braveSearch` | `staanSearch` | `qwantSearch`)
+ */
+export function resolveWebsearchToolId(
+  provider = 'auto',
+  { braveConfigured = isBraveSearchConfigured, staanConfigured = isStaanSearchConfigured } = {}
+) {
+  if (provider && provider !== 'auto') {
+    return WEBSEARCH_TOOL_IDS[provider] || NATIVE_WEB_SEARCH_FALLBACK_TOOL_ID;
+  }
+  if (braveConfigured()) return WEBSEARCH_TOOL_IDS.brave;
+  if (staanConfigured()) return WEBSEARCH_TOOL_IDS.staan;
+  return WEBSEARCH_TOOL_IDS.qwant;
+}
+
+function normalizeMaxUses(value) {
+  const n = Number(value);
+  return Number.isInteger(n) && n > 0 ? n : DEFAULT_NATIVE_WEB_SEARCH_MAX_USES;
+}
+
+/**
+ * Resolve the native web search directive for a model.
+ *
+ * Native search is a request-time capability the adapter enables directly on
+ * the provider request — never a "tool" the generic tool-calling pipeline has
+ * to know about. A model config can opt out with `nativeWebSearch.enabled:
+ * false` (an Anthropic-compatible gateway without the server tool, an older
+ * model); callers then fall back to the script-backed braveSearch tool, the
+ * same tool the loop switches to when the provider rejects the directive.
+ *
+ * @param {string} modelProvider - Provider of the selected model
+ * @param {Object} [options]
+ * @param {Object} [options.model] - Full model config (per-model opt-out)
+ * @param {number} [options.maxUses] - Per-call search cap (Anthropic `max_uses`)
+ * @returns {{provider: string, maxUses: number, fallback: string} | null}
+ */
+export function resolveNativeWebSearchProvider(modelProvider, { model, maxUses } = {}) {
+  if (!NATIVE_WEB_SEARCH_PROVIDERS.has(modelProvider)) return null;
+  if (model?.nativeWebSearch?.enabled === false) return null;
+  return {
+    provider: modelProvider,
+    maxUses: normalizeMaxUses(maxUses),
+    fallback: NATIVE_WEB_SEARCH_FALLBACK_TOOL_ID
+  };
+}
+
+/**
+ * Resolve native web search for an app's unified `websearch` config + model provider.
+ * Returns null when native search doesn't apply — the caller (getToolsForApp) falls
+ * back to the script-backed `braveSearch` tool in that case.
  * @param {Object} app - App configuration with optional websearch field
  * @param {string} modelProvider - Provider of the selected model (e.g. 'google', 'openai-responses')
- * @param {Array} allTools - All available tool definitions
  * @param {boolean|undefined} websearchEnabled - User toggle: undefined = use enabledByDefault, false = disabled
- * @returns {Array} Zero or one tool definition to inject
+ * @param {Object} [model] - Full model config (per-model opt-out)
+ * @returns {{provider: string, maxUses: number, fallback: string} | null}
  */
-function resolveWebsearchTool(app, modelProvider, allTools, websearchEnabled) {
-  if (!app.websearch?.enabled) return [];
+export function resolveAppNativeWebSearch(app, modelProvider, websearchEnabled, model) {
+  if (!app?.websearch?.enabled) return null;
 
-  const {
-    enabledByDefault = false,
-    useNativeSearch = true,
-    maxResults = 5,
-    extractContent = true,
-    contentMaxLength = 3000
-  } = app.websearch;
+  const { enabledByDefault = false, useNativeSearch = true } = app.websearch;
 
   // When websearchEnabled is undefined (client didn't send a toggle value),
   // fall back to the admin-configured enabledByDefault setting.
   const effectiveEnabled = websearchEnabled !== undefined ? websearchEnabled : enabledByDefault;
-  if (!effectiveEnabled) return [];
+  if (!effectiveEnabled || !useNativeSearch) return null;
 
-  let toolId;
-  if (useNativeSearch && modelProvider === 'google') {
-    toolId = 'googleSearch';
-  } else if (useNativeSearch && modelProvider === 'openai-responses') {
-    toolId = 'webSearch';
-  } else {
-    toolId = 'braveSearch';
-  }
+  return resolveNativeWebSearchProvider(modelProvider, {
+    model,
+    maxUses: app.websearch.maxSearches
+  });
+}
 
-  const toolDef = allTools.find(t => t.id === toolId);
-  if (!toolDef) {
-    logger.warn('Websearch tool definition not found', { component: 'ToolLoader', toolId });
-    return [];
-  }
-
-  // Deep-clone so we don't mutate the cached tool definition
+/**
+ * Clone a script-backed search tool definition with an app's `websearch`
+ * parameter defaults applied (never mutates the cached definition).
+ *
+ * Each provider's tool declares its own bounds — Qwant returns at most 10
+ * results per search where Brave allows 20 — so an admin value is clamped to
+ * what the chosen tool accepts instead of being written through verbatim and
+ * failing schema validation at call time.
+ *
+ * @param {Object} toolDef - Search tool definition (braveSearch, staanSearch, qwantSearch)
+ * @param {Object} [websearch] - app.websearch config
+ * @returns {Object} tool definition ready to offer to the model
+ */
+function buildWebsearchTool(toolDef, websearch = {}) {
+  const { maxResults = 5, extractContent = true, contentMaxLength = 3000 } = websearch || {};
   const cloned = JSON.parse(JSON.stringify(toolDef));
   const props = cloned.parameters?.properties || {};
 
   // Override parameter defaults with admin-configured websearch values
-  if (props.maxResults) props.maxResults.default = maxResults;
+  if (props.maxResults) props.maxResults.default = clampToSchema(maxResults, props.maxResults);
   if (props.extractContent) props.extractContent.default = extractContent;
-  if (props.contentMaxLength) props.contentMaxLength.default = contentMaxLength;
+  if (props.contentMaxLength) {
+    props.contentMaxLength.default = clampToSchema(contentMaxLength, props.contentMaxLength);
+  }
 
-  return [cloned];
+  return cloned;
+}
+
+/**
+ * Clamp a number into a JSON Schema property's `minimum`/`maximum`.
+ * @param {number} value
+ * @param {{minimum?: number, maximum?: number}} schema
+ * @returns {number}
+ */
+function clampToSchema(value, schema) {
+  let n = Number(value);
+  if (!Number.isFinite(n)) return value;
+  if (Number.isFinite(schema?.minimum)) n = Math.max(schema.minimum, n);
+  if (Number.isFinite(schema?.maximum)) n = Math.min(schema.maximum, n);
+  return n;
+}
+
+/**
+ * Tools to offer instead of a native web search directive the provider turned
+ * down (see services/loop/nativeWebSearchFallback.js). Empty when the fallback
+ * tool is not installed.
+ * @param {{fallback?: string}|null} directive - the rejected directive
+ * @param {{app?: Object, language?: string}} [context]
+ * @returns {Promise<Object[]>}
+ */
+export async function resolveNativeWebSearchFallbackTools(directive, { app, language } = {}) {
+  // With an app in hand, fall back to the search provider that app is
+  // configured for — an app set to Qwant should not silently answer from Brave
+  // just because the model turned native search down.
+  const toolId = app?.websearch
+    ? resolveWebsearchToolId(app.websearch.provider)
+    : directive?.fallback || NATIVE_WEB_SEARCH_FALLBACK_TOOL_ID;
+  const allTools = await loadTools(language);
+  const toolDef = allTools.find(t => t.id === toolId);
+  if (!toolDef) {
+    logger.warn('Native web search fallback tool not found', { component: 'ToolLoader', toolId });
+    return [];
+  }
+  return [
+    Object.values(WEBSEARCH_TOOL_IDS).includes(toolId)
+      ? buildWebsearchTool(toolDef, app?.websearch)
+      : toolDef
+  ];
+}
+
+/**
+ * Resolve the script-backed search tool to inject based on app config and model
+ * provider. Only used when native search doesn't apply — native search
+ * (Google/OpenAI/Anthropic) is resolved separately by resolveAppNativeWebSearch
+ * and passed straight to the adapter, not through the tools pipeline.
+ * Overrides tool parameter defaults with the values from app.websearch config.
+ * @param {Object} app - App configuration with optional websearch field
+ * @param {string} modelProvider - Provider of the selected model
+ * @param {Array} allTools - All available tool definitions
+ * @param {boolean|undefined} websearchEnabled - User toggle: undefined = use enabledByDefault, false = disabled
+ * @param {Object} [model] - Full model config (per-model native search opt-out)
+ * @returns {Array} Zero or one tool definition to inject
+ */
+function resolveWebsearchTool(app, modelProvider, allTools, websearchEnabled, model) {
+  if (!app.websearch?.enabled) return [];
+
+  const { enabledByDefault = false } = app.websearch;
+
+  const effectiveEnabled = websearchEnabled !== undefined ? websearchEnabled : enabledByDefault;
+  if (!effectiveEnabled) return [];
+
+  // Native search handles this app/model combination — no tool needed.
+  if (resolveAppNativeWebSearch(app, modelProvider, websearchEnabled, model)) return [];
+
+  const toolId = resolveWebsearchToolId(app.websearch.provider);
+  const toolDef = allTools.find(t => t.id === toolId);
+  if (!toolDef) {
+    logger.warn('Websearch tool definition not found', {
+      component: 'ToolLoader',
+      toolId
+    });
+    return [];
+  }
+
+  return [buildWebsearchTool(toolDef, app.websearch)];
 }
 
 /**
@@ -347,7 +490,8 @@ export async function getToolsForApp(app, language = null, context = {}) {
     app,
     context.modelProvider,
     allTools,
-    context.websearchEnabled
+    context.websearchEnabled,
+    context.model
   );
   appTools = appTools.concat(websearchTools);
 
@@ -376,11 +520,11 @@ export async function getToolsForApp(app, language = null, context = {}) {
         const wf = configCache.getWorkflowById(wfId);
         if (!wf || wf.enabled === false || !wf.chatIntegration?.enabled) continue;
 
-        let toolDescription = extractLanguageValue(
+        let toolDescription = getLocalizedString(
           wf.chatIntegration?.toolDescription || wf.description,
           language || 'en'
         );
-        const toolName = extractLanguageValue(wf.name, language || 'en');
+        const toolName = getLocalizedString(wf.name, language || 'en');
 
         // If the workflow has file/image input variables, hint that attached files
         // are passed automatically so the LLM knows to call this tool
@@ -413,6 +557,33 @@ export async function getToolsForApp(app, language = null, context = {}) {
     }
   }
 
+  // App-as-tool: surface other apps as synthetic `app__<id>` tools (the
+  // "concierge" pattern — a bot delegating to specialist bots). Skipped for
+  // principals that are themselves serving an app-as-tool call, so App→App
+  // chains stop at one level of nesting.
+  if (
+    Array.isArray(app.apps) &&
+    app.apps.length > 0 &&
+    context.user?.isInvokedViaAppAsTool !== true &&
+    isFeatureEnabled('appAsTool', configCache.getFeatures())
+  ) {
+    try {
+      const { getAppAsTools } = await import('./services/chat/appToolsGateway.js');
+      // Never expose an app to itself — a direct self-call can only loop.
+      const targetAppIds = app.apps.filter(id => typeof id === 'string' && id && id !== app.id);
+      const appAsTools = await getAppAsTools(targetAppIds, language || 'en', {
+        user: context.user
+      });
+      appTools = appTools.concat(appAsTools);
+    } catch (error) {
+      logger.error('Error generating app-as-tool tools', {
+        component: 'ToolLoader',
+        appId: app.id,
+        error
+      });
+    }
+  }
+
   // Add skill activation tools if the skills feature is enabled and the app has skills configured
   if (
     isFeatureEnabled('skills', configCache.getFeatures()) &&
@@ -431,8 +602,8 @@ export async function getToolsForApp(app, language = null, context = {}) {
 
     appTools.push({
       id: 'activate_skill',
-      name: extractLanguageValue({ en: 'Activate Skill', de: 'Skill aktivieren' }, lang),
-      description: extractLanguageValue(activateDesc, lang),
+      name: getLocalizedString({ en: 'Activate Skill', de: 'Skill aktivieren' }, lang),
+      description: getLocalizedString(activateDesc, lang),
       isInternalTool: true,
       parameters: {
         type: 'object',
@@ -448,8 +619,8 @@ export async function getToolsForApp(app, language = null, context = {}) {
 
     appTools.push({
       id: 'read_skill_resource',
-      name: extractLanguageValue({ en: 'Read Skill Resource', de: 'Skill-Ressource lesen' }, lang),
-      description: extractLanguageValue(readDesc, lang),
+      name: getLocalizedString({ en: 'Read Skill Resource', de: 'Skill-Ressource lesen' }, lang),
+      description: getLocalizedString(readDesc, lang),
       isInternalTool: true,
       parameters: {
         type: 'object',
@@ -507,9 +678,10 @@ export async function runTool(toolId, params = {}) {
     // Emit skill activation SSE event for UI indicators
     const chatId = params.chatId;
     if (chatId) {
-      actionTracker.trackSkillActivation(chatId, {
-        skillName,
-        description: content.description || ''
+      emitToolProgress(chatId, {
+        phase: 'skill.activation',
+        message: skillName,
+        data: { skillName, description: content.description || '' }
       });
     }
 
@@ -561,6 +733,22 @@ export async function runTool(toolId, params = {}) {
       return `Resource '${filePath}' not found in skill '${skillName}' or access denied.`;
     }
     return content;
+  }
+
+  // App-as-tool (`app__<appId>`): invoke another iHub app through the shared
+  // gateway. Runs the callee's full chat pipeline in-process (no REST hop);
+  // permission, feature-flag, and nesting guards live in the gateway.
+  if (toolId.startsWith('app__')) {
+    const { invokeAppTool } = await import('./services/chat/appToolsGateway.js');
+    const { chatId, user, appConfig, language, ...args } = params;
+    return await invokeAppTool({
+      toolId,
+      args,
+      user,
+      chatId,
+      language,
+      callerAppId: appConfig?.id
+    });
   }
 
   // Check if this is a workflow tool (starts with 'workflow_')

@@ -30,7 +30,7 @@ function SharedAppHeader({
   sendChatHistory,
   temperature,
   thinkingEnabled,
-  thinkingBudget,
+  thinkingLevel,
   thinkingThoughts,
   enabledTools: _enabledTools,
   imageAspectRatio,
@@ -41,7 +41,7 @@ function SharedAppHeader({
   onSendChatHistoryChange,
   onTemperatureChange,
   onThinkingEnabledChange,
-  onThinkingBudgetChange,
+  onThinkingLevelChange,
   onThinkingThoughtsChange,
   onEnabledToolsChange: _onEnabledToolsChange,
   onImageAspectRatioChange,
@@ -114,7 +114,7 @@ function SharedAppHeader({
   return (
     <>
       {/* Header */}
-      <div className="flex-shrink-0">
+      <div className="shrink-0">
         <ChatHeader
           app={app}
           title={app?.name}
@@ -150,7 +150,7 @@ function SharedAppHeader({
       {/* Configuration Panel */}
       {showConfig && (
         <div
-          className={`relative flex-shrink-0 bg-white dark:bg-gray-800 p-4 rounded-lg mb-4 shadow-sm border border-gray-200 dark:border-gray-700 ${
+          className={`relative shrink-0 bg-white dark:bg-gray-800 p-4 rounded-lg mb-4 shadow-xs border border-gray-200 dark:border-gray-700 ${
             mode === 'canvas' ? 'canvas-config-panel' : 'bg-gray-100 dark:bg-gray-800'
           }`}
         >
@@ -171,7 +171,7 @@ function SharedAppHeader({
             sendChatHistory={sendChatHistory}
             temperature={temperature}
             thinkingEnabled={thinkingEnabled}
-            thinkingBudget={thinkingBudget}
+            thinkingLevel={thinkingLevel}
             thinkingThoughts={thinkingThoughts}
             imageAspectRatio={imageAspectRatio}
             imageQuality={imageQuality}
@@ -181,7 +181,7 @@ function SharedAppHeader({
             onSendChatHistoryChange={onSendChatHistoryChange}
             onTemperatureChange={onTemperatureChange}
             onThinkingEnabledChange={onThinkingEnabledChange}
-            onThinkingBudgetChange={onThinkingBudgetChange}
+            onThinkingLevelChange={onThinkingLevelChange}
             onThinkingThoughtsChange={onThinkingThoughtsChange}
             onImageAspectRatioChange={onImageAspectRatioChange}
             onImageQualityChange={onImageQualityChange}

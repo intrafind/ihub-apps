@@ -95,6 +95,16 @@ export function useEmbeddedHost() {
 }
 
 /**
+ * The host kind ('office' | 'extension' | 'nextcloud') when rendering inside
+ * an embed entry, or null in the regular web app. Unlike `useEmbeddedHost`
+ * this does NOT fall back to the Outlook adapter, so layout code can tell
+ * "embedded" from "not embedded".
+ */
+export function useEmbeddedHostKind() {
+  return React.useContext(EmbeddedHostContext)?.kind ?? null;
+}
+
+/**
  * Default adapter — preserves the pre-context Outlook behaviour. Built lazily
  * to avoid pulling Office.js / the popup helper into every consumer at
  * module-evaluation time.

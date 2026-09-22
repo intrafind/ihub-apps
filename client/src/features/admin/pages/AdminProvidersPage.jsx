@@ -5,9 +5,11 @@ import { getLocalizedContent } from '../../../utils/localizeContent';
 import Icon from '../../../shared/components/Icon';
 import IFinderConfig from '../components/IFinderConfig';
 import { useFeatureFlags } from '../../../shared/hooks/useFeatureFlags';
-import { makeAdminApiCall } from '../../../api/adminApi';
+import { getAdminApiErrorMessage, makeAdminApiCall } from '../../../api/adminApi';
 import AdminPageSkeleton from '../components/AdminPageSkeleton';
 import AdminEmptyState from '../components/AdminEmptyState';
+import WebsearchTestResult from '../components/WebsearchTestResult';
+import { translateModelTestMessage } from '../utils/modelTestMessages';
 
 function HealthBadge({ status }) {
   const { t } = useTranslation();
@@ -41,6 +43,14 @@ function HealthBadge({ status }) {
       bg: 'bg-red-100 dark:bg-red-900',
       text: 'text-red-800 dark:text-red-200',
       label: t('admin.providers.health.failed', 'Failed')
+    },
+    // A provider refusing this server's IP is not a failed configuration, and
+    // labelling it "Failed" sends the admin looking for a setting to fix. It
+    // gets its own state so the row agrees with the diagnosis panel below it.
+    blocked: {
+      bg: 'bg-orange-100 dark:bg-orange-900',
+      text: 'text-orange-800 dark:text-orange-200',
+      label: t('admin.providers.health.blocked', 'Blocked')
     }
   };
 
@@ -91,7 +101,7 @@ function AdminProvidersPage() {
       }
     } catch (err) {
       console.error('Error loading data:', err);
-      setError(err.message);
+      setError(getAdminApiErrorMessage(err));
       setProviders([]);
       setModels([]);
     } finally {
@@ -121,45 +131,35 @@ function AdminProvidersPage() {
       [providerId]: { status: 'testing', results: [], expanded: true }
     }));
 
-    // Use fetch directly to bypass the axios auth interceptor.
-    // The model test endpoint returns 401 when a model has no API key configured —
-    // a normal testable condition, not an auth failure. Using makeAdminApiCall here
-    // would cause the axios interceptor to clear tokens and redirect the admin.
-    const API_URL = import.meta.env.VITE_API_URL || '/api';
-    const authToken = localStorage.getItem('authToken') || localStorage.getItem('adminToken');
-    const fetchHeaders = { 'Content-Type': 'application/json' };
-    if (authToken) fetchHeaders['Authorization'] = `Bearer ${authToken}`;
-
+    // The model test endpoint maps a provider rejecting the server's key onto
+    // 502 (not 401), so the shared admin client is safe here: a 401 really is
+    // an expired admin session and must go through the global
+    // re-authentication flow.
     const results = [];
     for (const model of providerModels) {
       try {
-        const fetchResponse = await fetch(`${API_URL}/admin/models/${model.id}/test`, {
-          method: 'POST',
-          headers: fetchHeaders,
-          credentials: 'include'
+        const response = await makeAdminApiCall(`/admin/models/${model.id}/test`, {
+          method: 'POST'
         });
-        const data = await fetchResponse.json().catch(() => ({}));
-        if (fetchResponse.ok) {
-          results.push({
-            model,
-            success: true,
-            message: data?.message || t('admin.providers.health.testSuccessful', 'Test successful'),
-            response: data?.response
-          });
-        } else {
-          results.push({
-            model,
-            success: false,
-            message: data?.message || t('admin.providers.health.testFailed', 'Test failed'),
-            error: data?.error || `HTTP ${fetchResponse.status}`
-          });
-        }
+        const data = response?.data || {};
+        const successFallback =
+          data?.message || t('admin.providers.health.testSuccessful', 'Test successful');
+        results.push({
+          model,
+          success: true,
+          message: translateModelTestMessage(t, data?.messageKey, successFallback),
+          response: data?.response
+        });
       } catch (err) {
+        // Server body: { error: headline, details: remediation text, code, messageKey }
+        const body = err?.response?.data || {};
+        const failureFallback = body.error || t('admin.providers.health.testFailed', 'Test failed');
         results.push({
           model,
           success: false,
-          message: t('admin.providers.health.testFailed', 'Test failed'),
-          error: err.message
+          message: translateModelTestMessage(t, body.messageKey, failureFallback),
+          error:
+            body.details || (err?.response?.status ? `HTTP ${err.response.status}` : err.message)
         });
       }
       // Update incrementally so user sees progress
@@ -185,6 +185,64 @@ function AdminProvidersPage() {
     }));
   };
 
+  /**
+   * Run one live, cache-bypassing search against a web search provider.
+   *
+   * Unlike the model test, a failure here comes back as HTTP 200 with a
+   * diagnosis: "Qwant blocks this server's IP" is the test working, not the
+   * request failing. Only a genuinely broken call (bad id, expired admin
+   * session) throws, and that is what the catch renders.
+   */
+  const testWebsearchProvider = async providerId => {
+    setHealthStatus(prev => ({
+      ...prev,
+      [providerId]: { status: 'testing', websearch: null, expanded: true }
+    }));
+
+    try {
+      const response = await makeAdminApiCall(`/admin/providers/${providerId}/websearch-test`, {
+        method: 'POST',
+        body: {}
+      });
+      const data = response?.data || {};
+      // Map the diagnosis onto a badge. `blocked` and `rate_limited` are kept
+      // out of `error` deliberately: neither is something the admin broke, and
+      // a red "Failed" would send them hunting for a misconfiguration.
+      const BADGE_BY_DIAGNOSIS = {
+        ok: 'ok',
+        empty: 'partial',
+        rate_limited: 'partial',
+        blocked: 'blocked'
+      };
+      const status = BADGE_BY_DIAGNOSIS[data?.diagnosis?.status] || 'error';
+
+      setHealthStatus(prev => ({
+        ...prev,
+        [providerId]: { status, websearch: data, expanded: true }
+      }));
+    } catch (err) {
+      const body = err?.response?.data || {};
+      setHealthStatus(prev => ({
+        ...prev,
+        [providerId]: {
+          status: 'error',
+          websearch: {
+            diagnosis: {
+              status: 'error',
+              title: t('admin.providers.websearchTest.couldNotRun', 'Could not run the test'),
+              detail:
+                body.error || (err?.response?.status ? `HTTP ${err.response.status}` : err.message),
+              remediation: []
+            },
+            results: [],
+            environment: {}
+          },
+          expanded: true
+        }
+      }));
+    }
+  };
+
   const testAllProviders = async () => {
     setTestingAll(true);
     const llmProviders = providers.filter(
@@ -192,6 +250,10 @@ function AdminProvidersPage() {
     );
     for (const provider of llmProviders) {
       await testProvider(provider.id);
+    }
+    // Web search providers have no models to iterate; each is one live search.
+    for (const provider of providers.filter(p => p.category === 'websearch')) {
+      await testWebsearchProvider(provider.id);
     }
     setTestingAll(false);
   };
@@ -226,7 +288,7 @@ function AdminProvidersPage() {
       await loadData();
     } catch (err) {
       console.error('Error deleting provider:', err);
-      setError(err.message);
+      setError(getAdminApiErrorMessage(err));
     }
   };
 
@@ -338,13 +400,17 @@ function AdminProvidersPage() {
               const categoryProviders = groupedProviders[category] || [];
               if (categoryProviders.length === 0) return null;
               const isLlm = category === 'llm';
+              // Web search providers are testable too — one live search rather
+              // than one call per model — so they get the same column.
+              const isWebsearch = category === 'websearch';
+              const hasConnectivity = isLlm || isWebsearch;
 
               return (
                 <div key={category}>
                   <h2 className="text-lg font-semibold text-gray-900 dark:text-white mb-3 px-2">
                     {categoryLabels[category]}
                   </h2>
-                  <div className="bg-white dark:bg-gray-800 shadow rounded-lg overflow-hidden">
+                  <div className="bg-white dark:bg-gray-800 shadow-sm rounded-lg overflow-hidden">
                     <table className="min-w-full divide-y divide-gray-200 dark:divide-gray-700">
                       <thead className="bg-gray-50 dark:bg-gray-900">
                         <tr>
@@ -365,7 +431,7 @@ function AdminProvidersPage() {
                               {t('admin.providers.table.models', 'Models')}
                             </th>
                           )}
-                          {isLlm && (
+                          {hasConnectivity && (
                             <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">
                               {t('admin.providers.table.connectivity', 'Connectivity')}
                             </th>
@@ -381,8 +447,9 @@ function AdminProvidersPage() {
                           const enabledModels = enabledModelsByProvider[provider.id] || [];
                           const isExpanded = providerHealth.expanded;
                           const hasResults =
-                            providerHealth.results && providerHealth.results.length > 0;
-                          const colSpan = isLlm ? 7 : 5;
+                            (providerHealth.results && providerHealth.results.length > 0) ||
+                            Boolean(providerHealth.websearch);
+                          const colSpan = isLlm ? 7 : isWebsearch ? 6 : 5;
 
                           return (
                             <Fragment key={provider.id}>
@@ -408,7 +475,13 @@ function AdminProvidersPage() {
                                   </div>
                                 </td>
                                 <td className="px-6 py-4 whitespace-nowrap">
-                                  {provider.apiKeySet ? (
+                                  {provider.requiresApiKey === false ? (
+                                    // Keyless provider (e.g. Qwant): "Not Configured" would
+                                    // read as broken when there is nothing to configure.
+                                    <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-blue-100 dark:bg-blue-900 text-blue-800 dark:text-blue-200">
+                                      {t('admin.providers.noApiKeyRequired', 'No API key required')}
+                                    </span>
+                                  ) : provider.apiKeySet ? (
                                     <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-green-100 dark:bg-green-900 text-green-800 dark:text-green-200">
                                       <Icon name="KeyIcon" className="w-3 h-3 mr-1" />
                                       {t('admin.providers.configured', 'Configured')}
@@ -445,7 +518,7 @@ function AdminProvidersPage() {
                                     </span>
                                   </td>
                                 )}
-                                {isLlm && (
+                                {hasConnectivity && (
                                   <td className="px-6 py-4 whitespace-nowrap">
                                     <div className="flex items-center gap-2">
                                       <HealthBadge status={providerHealth.status || 'idle'} />
@@ -491,6 +564,22 @@ function AdminProvidersPage() {
                                         {t('admin.providers.test', 'Test')}
                                       </button>
                                     )}
+                                    {isWebsearch && (
+                                      <button
+                                        onClick={e => {
+                                          e.stopPropagation();
+                                          testWebsearchProvider(provider.id);
+                                        }}
+                                        disabled={providerHealth.status === 'testing' || testingAll}
+                                        className="text-green-600 hover:text-green-900 dark:text-green-400 dark:hover:text-green-300 disabled:opacity-50 disabled:cursor-not-allowed"
+                                        title={t(
+                                          'admin.providers.websearchTest.buttonTitle',
+                                          'Run one live search and report whether this server can reach the provider'
+                                        )}
+                                      >
+                                        {t('admin.providers.test', 'Test')}
+                                      </button>
+                                    )}
                                     <button
                                       onClick={e => {
                                         e.stopPropagation();
@@ -517,6 +606,17 @@ function AdminProvidersPage() {
                                   </div>
                                 </td>
                               </tr>
+                              {/* Expandable web search diagnosis row */}
+                              {isWebsearch && isExpanded && providerHealth.websearch && (
+                                <tr>
+                                  <td
+                                    colSpan={colSpan}
+                                    className="px-6 py-3 bg-gray-50 dark:bg-gray-900/50"
+                                  >
+                                    <WebsearchTestResult result={providerHealth.websearch} />
+                                  </td>
+                                </tr>
+                              )}
                               {/* Expandable model test results row */}
                               {isLlm && isExpanded && hasResults && (
                                 <tr>
@@ -541,7 +641,7 @@ function AdminProvidersPage() {
                                             name={
                                               result.success ? 'CheckCircleIcon' : 'XCircleIcon'
                                             }
-                                            className={`w-4 h-4 mt-0.5 flex-shrink-0 ${
+                                            className={`w-4 h-4 mt-0.5 shrink-0 ${
                                               result.success
                                                 ? 'text-green-600 dark:text-green-400'
                                                 : 'text-red-600 dark:text-red-400'
@@ -632,7 +732,7 @@ function AdminProvidersPage() {
           <div className="flex items-start">
             <Icon
               name="InformationCircleIcon"
-              className="w-5 h-5 text-blue-600 dark:text-blue-400 mt-0.5 mr-2 flex-shrink-0"
+              className="w-5 h-5 text-blue-600 dark:text-blue-400 mt-0.5 mr-2 shrink-0"
             />
             <div className="text-sm text-blue-700 dark:text-blue-300">
               <p className="font-medium mb-1">

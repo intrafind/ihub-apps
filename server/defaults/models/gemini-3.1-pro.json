@@ -6,13 +6,13 @@
     "de": "Gemini 3.1 Pro"
   },
   "description": {
-    "en": "Google's versatile model optimized for text and code tasks",
-    "de": "Googles vielseitiges Modell, optimiert für Text- und Code-Aufgaben"
+    "en": "Google's most capable Gemini model, for complex reasoning, long documents and code. Still a preview release.",
+    "de": "Googles leistungsfähigstes Gemini-Modell für komplexes Reasoning, lange Dokumente und Code. Noch eine Preview-Version."
   },
   "url": "https://generativelanguage.googleapis.com/v1beta/models/gemini-3.1-pro-preview:streamGenerateContent",
   "provider": "google",
-  "contextWindow": 1000000,
-  "maxOutputTokens": 8192,
+  "contextWindow": 1048576,
+  "maxOutputTokens": 65536,
   "supportsTools": true,
   "supportsVision": true,
   "supportsAudio": true,
@@ -21,7 +21,6 @@
   "default": false,
   "thinking": {
     "enabled": true,
-    "budget": -1,
-    "thoughts": true
+    "level": "high"
   }
 }

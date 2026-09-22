@@ -57,9 +57,7 @@ function TeamsWrapper({ children }) {
 
   // If we're in Teams, apply Teams-specific styling
   if (isInTeams) {
-    return (
-      <div className="teams-container min-h-screen bg-[var(--teams-bg,#f5f5f5)]">{children}</div>
-    );
+    return <div className="teams-container min-h-screen bg-(--teams-bg,#f5f5f5)">{children}</div>;
   }
 
   // Not in Teams, render children normally

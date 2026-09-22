@@ -3,53 +3,45 @@
  *
  * The in-memory engine instance is the only thing keeping a workflow alive — if
  * the Node process dies (crash, restart, deploy) mid-execution, the persisted
- * state file is left with `status: "running"` and the execution registry shows
- * the workflow as still active forever.
+ * state is left with `status: "running"` and the execution registry shows the
+ * workflow as still active forever.
  *
- * On every boot we walk `contents/data/workflow-state/<id>/latest.json` and
- * rewrite any orphaned executions to `status: "failed"` with
- * `reason: "server_restart"` so users see a final state in the UI and "My
- * Executions" stops listing dead runs as running.
+ * On every boot we walk the stored workflow states and rewrite any orphaned
+ * executions to `status: "failed"` with `reason: "server_restart"` so users see
+ * a final state in the UI and "My Executions" stops listing dead runs as
+ * running.
+ *
+ * State is read and written through {@link WorkflowStateRepository}, which
+ * covers both the `workflow-state` documents and the legacy
+ * `<id>/latest.json` directories. That union matters here more than anywhere
+ * else: a half-imported installation that looked empty to this sweeper would
+ * leave every interrupted run stuck at `running` forever.
+ *
+ * @module services/workflow/orphanSweeper
  */
 
-import fs from 'fs/promises';
-import path from 'path';
-import config from '../../config.js';
-import { getRootDir } from '../../pathUtils.js';
 import logger from '../../utils/logger.js';
 import { getExecutionRegistry } from './ExecutionRegistry.js';
 import { getStateManager } from './StateManager.js';
+import {
+  DEFAULT_STATE_DIR,
+  resolveWorkflowStateRepository,
+  workflowStateOwnerId
+} from './WorkflowStateRepository.js';
 import { isSchedulerOwner } from './triggers/schedulerLock.js';
-
-const STATE_DIR = path.join(getRootDir(), config.CONTENTS_DIR, 'data', 'workflow-state');
 
 // Statuses that indicate the workflow was mid-execution when the process died.
 const ORPHAN_STATUSES = new Set(['running', 'pending']);
 
-async function readJsonSafe(filePath) {
-  try {
-    const raw = await fs.readFile(filePath, 'utf8');
-    return JSON.parse(raw);
-  } catch (error) {
-    if (error.code === 'ENOENT') return null;
-    logger.warn('Failed to read workflow state file', {
-      component: 'OrphanSweeper',
-      filePath,
-      error: error.message
-    });
-    return null;
-  }
-}
-
-async function writeJsonSafe(filePath, data) {
-  const json = JSON.stringify(data, null, 2);
-  const tmp = `${filePath}.tmp`;
-  await fs.writeFile(tmp, json, 'utf8');
-  await fs.rename(tmp, filePath);
-}
+/**
+ * Execution ids this sweeper considers. Sub-workflow states (`wf-child-*`)
+ * are excluded, as they always have been: they are not listed in the UI and
+ * marking one failed on its own would contradict its parent.
+ */
+const ORPHAN_ID_PREFIX = 'wf-exec-';
 
 /**
- * Scan the workflow state directory and mark stuck `running`/`pending`
+ * Scan the stored workflow states and mark stuck `running`/`pending`
  * executions as failed.
  *
  * Safe to call on every server boot — entries already in a terminal state are
@@ -65,9 +57,18 @@ async function writeJsonSafe(filePath, data) {
  * @param {Object} [opts]
  * @param {boolean} [opts.requireSchedulerOwner=true] - Only sweep if this
  *   instance owns the scheduler lock.
+ * @param {string} [opts.stateDir] - Directory holding the legacy state layout;
+ *   the installation's own directory resolves to the shared, provider-backed
+ *   repository.
+ * @param {import('./WorkflowStateRepository.js').WorkflowStateRepository} [opts.repository]
+ *   Store to sweep. Resolved from `stateDir` when omitted.
  * @returns {Promise<{ scanned: number, marked: number }>}
  */
-export async function sweepOrphanedExecutions({ requireSchedulerOwner = true } = {}) {
+export async function sweepOrphanedExecutions({
+  requireSchedulerOwner = true,
+  stateDir = DEFAULT_STATE_DIR,
+  repository = null
+} = {}) {
   if (requireSchedulerOwner && !isSchedulerOwner()) {
     logger.debug('Not the scheduler-lock owner — skipping orphan sweep', {
       component: 'OrphanSweeper'
@@ -75,17 +76,15 @@ export async function sweepOrphanedExecutions({ requireSchedulerOwner = true } =
     return { scanned: 0, marked: 0 };
   }
 
-  let entries;
-  try {
-    entries = await fs.readdir(STATE_DIR, { withFileTypes: true });
-  } catch (error) {
-    if (error.code === 'ENOENT') return { scanned: 0, marked: 0 };
-    logger.warn('Cannot read workflow state directory', {
+  const store = repository || resolveWorkflowStateRepository(stateDir);
+  // Metadata only: the guard below rejects most candidates without ever
+  // needing the state, and a state can carry a whole workflow definition.
+  const { items, truncated } = await store.listSummaries({ prefix: ORPHAN_ID_PREFIX });
+  if (truncated) {
+    logger.warn('Orphan sweep stopped scanning at the cap', {
       component: 'OrphanSweeper',
-      stateDir: STATE_DIR,
-      error: error.message
+      scanned: items.length
     });
-    return { scanned: 0, marked: 0 };
   }
 
   let scanned = 0;
@@ -93,18 +92,14 @@ export async function sweepOrphanedExecutions({ requireSchedulerOwner = true } =
   const registry = getExecutionRegistry();
   const stateManager = getStateManager();
 
-  for (const entry of entries) {
-    if (!entry.isDirectory()) continue;
-    if (!entry.name.startsWith('wf-exec-')) continue;
-
+  for (const { executionId } of items) {
     scanned++;
 
     // Skip executions that are live in memory — e.g. a run the resume manager
     // just picked up on boot. Failing those would clobber an active run.
-    if (stateManager.activeStates?.has(entry.name)) continue;
+    if (stateManager.activeStates?.has(executionId)) continue;
 
-    const latestPath = path.join(STATE_DIR, entry.name, 'latest.json');
-    const state = await readJsonSafe(latestPath);
+    const state = await store.read(executionId);
     if (!state) continue;
 
     if (!ORPHAN_STATUSES.has(state.status)) continue;
@@ -128,26 +123,26 @@ export async function sweepOrphanedExecutions({ requireSchedulerOwner = true } =
     });
 
     try {
-      await writeJsonSafe(latestPath, state);
+      await store.write(executionId, state, { ownerId: workflowStateOwnerId(state) });
       try {
-        registry.updateStatus(entry.name, 'failed', { reason: 'server_restart' });
+        registry.updateStatus(executionId, 'failed', { reason: 'server_restart' });
       } catch (registryError) {
         // Registry may not have this execution loaded yet — non-fatal.
         logger.debug('Registry update skipped during orphan sweep', {
           component: 'OrphanSweeper',
-          executionId: entry.name,
+          executionId,
           error: registryError.message
         });
       }
       marked++;
       logger.info('Marked orphaned workflow as failed', {
         component: 'OrphanSweeper',
-        executionId: entry.name
+        executionId
       });
     } catch (error) {
       logger.warn('Failed to rewrite orphaned workflow state', {
         component: 'OrphanSweeper',
-        executionId: entry.name,
+        executionId,
         error: error.message
       });
     }

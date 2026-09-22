@@ -23,9 +23,16 @@ function ChatMessageList({
   compact = false,
   onOpenInCanvas,
   onInsert,
-  onInsertNew = null,
   insertAction = null,
+  // Host answer actions for the Office task pane's split button — see ChatMessage.
+  insertActions = null,
+  defaultInsertActionId = null,
+  onInsertAction = null,
   canvasEnabled = false,
+  // Whether this surface's chat stores the images its turns generate. Only the
+  // durable chat page does; the compare panels, the canvas and the Office pane
+  // all mint ephemeral chats, so the default is the honest one.
+  imagesPersisted = false,
   // Integration auth props
   requiredIntegrations = [],
   onConnectIntegration,
@@ -148,7 +155,7 @@ function ChatMessageList({
           >
             {/* Message sender icon */}
             {showAvatars && (
-              <div className="flex-shrink-0 mt-1">
+              <div className="shrink-0 mt-1">
                 {message.role === 'assistant' ? (
                   <Icon name={assistantIcon} size="2xl" className="text-blue-500" />
                 ) : message.role === 'user' ? (
@@ -174,10 +181,13 @@ function ChatMessageList({
                 compact={compact}
                 onOpenInCanvas={onOpenInCanvas}
                 onInsert={onInsert}
-                onInsertNew={onInsertNew}
                 insertAction={insertAction}
+                insertActions={insertActions}
+                defaultInsertActionId={defaultInsertActionId}
+                onInsertAction={onInsertAction}
                 isLatestAssistantMessage={index === lastAssistantIndex}
                 canvasEnabled={canvasEnabled}
+                imagesPersisted={imagesPersisted}
                 app={app}
                 models={models}
                 onClarificationSubmit={onClarificationSubmit}

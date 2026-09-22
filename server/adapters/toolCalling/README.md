@@ -171,9 +171,9 @@ Normalize tool names to be compatible with all providers.
 
 Normalize finish reasons across providers (`"stop"`, `"length"`, `"tool_calls"`, `"content_filter"`).
 
-#### `sanitizeSchemaForProvider(schema, provider)`
+#### `cloneAndWalkSchema(schema, visitSchemaNode)`
 
-Clean JSON Schema for provider-specific compatibility.
+Deep-clone a JSON Schema and recursively visit each schema node, skipping `properties` containers. Provider-specific field deletions/normalizations live in each converter's own `sanitizeSchema(schema)` (e.g. `GoogleConverter.sanitizeSchema`, `AnthropicConverter.sanitizeSchema`), which pass their cleanup logic in as `visitSchemaNode`.
 
 ### Error Handling
 
@@ -210,7 +210,7 @@ const openaiResponse = convertResponseFromGeneric(genericResponse, 'openai', opt
 
 ### Breaking Changes
 
-1. **`processResponseBuffer` deprecated** - Use `convertResponseToGeneric` instead
+1. **`processResponseBuffer` removed** - Per-adapter response parsing was replaced by `convertResponseToGeneric`. The `iassistant-conversation` adapter keeps its own `processResponseBuffer` for its line-delimited SSE format, which the generic converters don't model.
 2. **Provider-specific formatters deprecated** - Use `convertToolsBetweenProviders` instead
 3. **Manual response transformation removed** - System handles all conversions automatically
 

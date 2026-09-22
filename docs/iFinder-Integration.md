@@ -14,6 +14,8 @@ The iFinder integration allows iHub Apps to search, retrieve, and analyze docume
 - **📄 Content Retrieval**: Fetch full document content for analysis and summarization
 - **ℹ️ Metadata Access**: Get detailed document metadata (author, creation date, file type, etc.)
 - **💾 Document Download**: Save documents locally or get download information
+- **🖍️ Passage Highlighting**: Jump from a cited passage to its position in the source document and
+  highlight it in the in-app PDF preview
 - **🔐 Secure Authentication**: User-based JWT authentication for all operations
 - **👤 User Context**: All operations respect the authenticated user's permissions
 
@@ -38,6 +40,7 @@ IFINDER_SEARCH_PROFILE=your-default-search-profile
 IFINDER_PRIVATE_KEY="-----BEGIN PRIVATE KEY-----
 MIIEvgIBADANBgkqhkiG9w0BAQEFAASCBKgwggSkAgEAAoIBAQDKrCFR...
 -----END PRIVATE KEY-----"
+# Takes precedence over a credential selected in Admin > Integrations > iFinder.
 
 # Optional: Advanced Configuration
 IFINDER_TIMEOUT=30000
@@ -52,14 +55,19 @@ IFINDER_DOWNLOAD_DIR=/tmp/ifinder-downloads
 
 ### 2. Platform Configuration
 
-Alternatively, configure iFinder in your `platform.json`:
+Alternatively, configure iFinder from **Admin > Integrations > iFinder** — the
+base URL, search profile and other settings are stored in `platform.json`,
+but the private key itself is never stored there in plaintext. Select or
+create a credential (Admin > Credentials, type "Secret", pasting the PEM key
+as its value) and pick it from the **Private Key** field; iHub stores a
+`privateKeyRef` pointing at it:
 
 ```json
 {
   "iFinder": {
     "baseUrl": "https://your-ifinder-instance.com",
     "defaultSearchProfile": "your-default-search-profile",
-    "privateKey": "-----BEGIN PRIVATE KEY-----\nMIIEvgIBADANBgkqhkiG9w0BAQEFAASCBKgwggSkAgEAAoIBAQDKrCFR...\n-----END PRIVATE KEY-----",
+    "privateKeyRef": "ifinder",
     "endpoints": {
       "search": "/public-api/retrieval/api/v1/search-profiles/{profileId}/_search",
       "document": "/public-api/retrieval/api/v1/search-profiles/{profileId}/docs/{docId}"
@@ -76,6 +84,14 @@ Alternatively, configure iFinder in your `platform.json`:
 ```
 
 ### 3. JWT Configuration
+
+> **Recommended: keyless authentication.** Instead of generating and exchanging
+> an RSA key pair, enable `iFinder.useOidcKeyPair`. iHub then signs the iFinder
+> JWT with its built-in OIDC signing key and iFinder verifies it by fetching the
+> public key from iHub's JWKS endpoint — no `privateKey`/`IFINDER_PRIVATE_KEY`
+> and no manual key upload into iFinder. See
+> [iFinder Keyless (OIDC/OAuth) JWT Integration](ifinder-oidc-jwt.md). The manual
+> key configuration described below is the legacy alternative.
 
 The iFinder integration uses JWT tokens for authentication with the following structure:
 
@@ -106,7 +122,22 @@ Users must be authenticated to use iFinder features. The system supports:
 
 ## Available Tools
 
-The iFinder integration provides four main tools accessible through the `iFinder.` namespace:
+The iFinder integration exposes these functions under the `iFinder.` namespace
+(`iFinder_<function>` when called over the MCP gateway):
+
+| Function | Purpose |
+| --- | --- |
+| `search` | Find documents with a Lucene query, filters, facets, sorting and paging |
+| `getContent` | Fetch a document's extracted text |
+| `getMetadata` | Fetch a document's metadata without its text |
+| `download` | Download or save a document's binary |
+| `getFields` | The index field catalog — which fields exist and which need `.keyword` |
+| `getFacetValues` | Enumerate the values of one facet |
+| `listProfiles` | The search profiles this user can reach |
+| `discover` | One probe returning totals, top facets, sample titles and the field catalog |
+
+The last four are the **discovery** surface; see
+[Discovering what is searchable](#discovering-what-is-searchable).
 
 ### iFinder.search
 
@@ -114,12 +145,24 @@ Search for documents using natural language queries.
 
 **Parameters:**
 
-- `query` (required): Search query string
+- `query` (required): Lucene query string — `AND`/`OR`/`NOT`, quoted phrases,
+  `field:value`, wildcards and ranges. `*` matches everything.
 - `maxResults` (optional): Maximum results to return (default: 10, max: 100)
+- `from` (optional): Offset of the first hit, for paging past the 100-hit cap
+- `filter` (optional): Array of Lucene query strings ANDed with the query but
+  excluded from relevance ranking — the right place for narrowing criteria
 - `searchProfile` (optional): Specific search profile ID
-- `returnFields` (optional): Array of specific fields to return
-- `returnFacets` (optional): Array of facets to include
-- `sort` (optional): Array of sort criteria
+- `returnFields` (optional): Array of specific fields to return (`*` for all)
+- `returnFacets` (optional): Array of facet fields to aggregate alongside the hits
+- `sort` (optional): Array of `field:asc` / `field:desc` criteria
+
+**Field names and `.keyword`.** Every text field is indexed twice: the plain
+name (`creators`) is analyzed for relevance-ranked matching, and the `.keyword`
+name (`creators.keyword`) holds the exact value used for filtering, faceting and
+sorting. Dates, numbers and booleans take no suffix, and some text fields
+(`title`, `content`, `url`, `subject`) have no `.keyword` variant at all — a
+filter on one of those matches nothing rather than erroring. `iFinder.getFields`
+reports the correct name per field per purpose.
 
 **Example Usage:**
 
@@ -131,8 +174,10 @@ iFinder.search({ query: 'contract proposals 2024' });
 iFinder.search({
   query: 'technical documentation',
   maxResults: 20,
-  returnFields: ['title', 'author', 'createdDate'],
-  sort: ['createdDate:desc']
+  filter: ['application.keyword:PDF', 'modificationDate:[2026-01-01 TO *]'],
+  returnFields: ['id', 'title', 'creators', 'modificationDate'],
+  returnFacets: ['sourceName.keyword', 'language.keyword'],
+  sort: ['modificationDate:desc']
 });
 ```
 
@@ -158,6 +203,45 @@ iFinder.search({
   "facets": {...}
 }
 ```
+
+### The IntraFind query syntax
+
+iFinder does not run a plain Lucene query parser. The search service hands
+OpenSearch the query as `intrafind_query_string` — a query type the IntraFind
+Insight plugin registers — instead of the built-in `query_string`. That parser
+takes all of Lucene's syntax plus a set of IntraFind operators, and they are
+available in `query` and in `filter` through the public API's `_search`
+endpoint:
+
+| Operator | Does |
+| --- | --- |
+| `MODE/e&Müller` | Exact — no lemma, compound or diacritic loosening |
+| `MODE/c&Bundesligaspiel` | Decompound — also matches documents saying just "Liga" |
+| `THES/&Stiefel` | Expand with thesaurus synonyms, broader and narrower terms |
+| `ENTITY/PERS` | Any person name, whatever it says — also `LOC`, `ORG`, `EMAIL`, `PHONE` |
+| `NEAR/S(vertrag kündigung)` | Both terms in the same sentence (`P` paragraph, `5` within 5 tokens) |
+| `UNIT/>=(5 kg)` | A weight over 5 kg written in the text, units converted |
+| `DATE/>=(2026-01-01)` | A date in the text, however it is written |
+| `NUMBER/[10 TO 100]` | A number in that range in the text |
+| `OR/2(a b c d)` | OR group where at least 2 clauses must match |
+
+Boolean operators also accept German aliases (`UND`, `ODER`, `NICHT`), and a
+field prefix goes in front of any operator:
+`content:NEAR/S(ENTITY/PERS AND Kündigungsfrist)`.
+
+Do not confuse these with the request body's `"query_type": "QueryStringQuery"`.
+That is the API's own discriminator for the *shape* of the query object; the
+engine-level query type is chosen server-side.
+
+The search service enables the IntraFind parser by default
+(`searchservice.use-intrafind-queryparser`), and a search profile can override
+the engine query type, so the operators are normally on but a deployment can
+have them off. A parser that does not know an operator treats it as a literal
+term and quietly matches nothing, so verify by running a query with and without
+the operator and comparing `totalFound`.
+
+The `ifinder-search` skill documents the full grammar, every option and worked
+examples in `references/intrafind-query-syntax.md`.
 
 ### iFinder.getContent
 
@@ -355,6 +439,48 @@ The system includes a pre-configured app called "iFinder Document Explorer" that
    - AI searches for recent contracts
    - Provides download information or saves locally
 
+### Passage Highlighting in the Document Preview
+
+When an answer cites iFinder documents, the **Documents** section below the answer lists each
+document with the passages the search backend returned. Those passages can be located and
+highlighted in the source document:
+
+- Expanding a document shows its passages; each has a magnifier button that opens the document at
+  that passage.
+- The document's overflow menu offers **Preview (PDF)**, which opens the same viewer with all of
+  that document's cited passages highlighted.
+- The viewer navigates highlight to highlight (buttons, or `Enter` / `Shift+Enter`), supports zoom
+  and download, and — when a document is cited more than once — can filter down to a single
+  passage.
+
+Both entries appear only for documents that expose an `ACCESS` link, which is what the
+`/api/integrations/ifinder/document` proxy needs to resolve the binary. The preview requests that
+proxy with `convertToPdf=true`, i.e. the PDF rendition iFinder generates for the document.
+
+**How passages are located.** A passage is a substring of the fulltext that the converter put into
+the search index, but the preview is a *generated* PDF whose text layer differs from that fulltext:
+whitespace and line breaks fall differently, ligatures may be expanded or not, words can be
+hyphenated across lines, and page headers or footers appear in the middle of the text stream.
+Matching therefore does not compare the strings directly. Both the passage and the page text are
+reduced to their Unicode letters and digits (NFKC-folded, lowercased), and the passage is searched
+in that reduced form, with an offset map back to the real text-layer positions. Consequences worth
+knowing:
+
+- Punctuation, spacing, casing and ligature differences never prevent a match, and matches are not
+  script-specific — Cyrillic, Greek and CJK passages work the same as Latin ones.
+- Passages that straddle a page break are highlighted on both pages.
+- If a header or footer interrupts a passage at a page break, the passage is split into
+  sentence-like fragments and matched individually, so it is highlighted partially rather than not
+  at all.
+- Highlights begin and end on a letter or digit, so trailing punctuation of a passage is not
+  included in the highlight.
+- If a passage genuinely does not occur in the generated PDF, the preview still opens and reports
+  "Passage not found".
+
+The matcher (`client/src/features/documentPreview/utils/passageMatcher.js`) is a port of the same
+module used by the iFinder searchbar preview, so both products resolve passages identically. Keep
+the two in sync when changing either.
+
 ## Security Considerations
 
 ### Authentication & Authorization
@@ -430,13 +556,14 @@ Test your iFinder configuration:
 
 ### Configuration Options
 
-| Setting        | Environment Variable     | Platform Config                | Default                           | Description                          |
-| -------------- | ------------------------ | ------------------------------ | --------------------------------- | ------------------------------------ |
-| Base URL       | `IFINDER_API_URL`        | `iFinder.baseUrl`              | `https://api.ifinder.example.com` | iFinder instance URL                 |
-| Search Profile | `IFINDER_SEARCH_PROFILE` | `iFinder.defaultSearchProfile` | `default`                         | Default search profile ID            |
-| Private Key    | `IFINDER_PRIVATE_KEY`    | `iFinder.privateKey`           | -                                 | JWT signing private key (PEM format) |
-| Timeout        | `IFINDER_TIMEOUT`        | `iFinder.timeout`              | `30000`                           | Request timeout (milliseconds)       |
-| Download Dir   | `IFINDER_DOWNLOAD_DIR`   | `iFinder.downloadDir`          | `/tmp/ifinder-downloads`          | Local download directory             |
+| Setting          | Environment Variable     | Platform Config                | Default                           | Description                                                                    |
+| ---------------- | ------------------------ | ------------------------------ | --------------------------------- | ------------------------------------------------------------------------------ |
+| Base URL         | `IFINDER_API_URL`        | `iFinder.baseUrl`              | `https://api.ifinder.example.com` | iFinder instance URL                                                           |
+| Search Profile   | `IFINDER_SEARCH_PROFILE` | `iFinder.defaultSearchProfile` | `default`                         | Default search profile ID                                                      |
+| Keyless (OIDC)   | -                        | `iFinder.useOidcKeyPair`       | `false`                           | Sign with iHub's OIDC key and verify via JWKS — no key exchange (recommended)  |
+| Private Key      | `IFINDER_PRIVATE_KEY`    | `iFinder.privateKeyRef`        | -                                 | JWT signing private key (PEM format, env var) or credential ref (Admin > Credentials); ignored when `useOidcKeyPair` is `true`. Env var takes precedence over the credential |
+| Timeout          | `IFINDER_TIMEOUT`        | `iFinder.timeout`              | `30000`                           | Request timeout (milliseconds)                                                 |
+| Download Dir     | `IFINDER_DOWNLOAD_DIR`   | `iFinder.downloadDir`          | `/tmp/ifinder-downloads`          | Local download directory                                                       |
 
 ### Error Codes
 
@@ -515,6 +642,135 @@ equal; when refinement filtering prunes candidates, lazy wins.
 Trigger via chat with `@workflow stellungnahmen-review-ifinder` and
 supply the focus prompt + search profile ID.
 
+## Discovering what is searchable
+
+A caller that has to guess field names gets silent empty result sets, because a
+filter on a field that carries no `.keyword` variant matches nothing rather than
+failing. These four functions let a client — an app, an agent, or an MCP client
+such as Claude — read the answer off the deployment instead.
+
+### iFinder.getFields
+
+Returns the index field catalog, straight from the live OpenSearch mapping via
+`GET /public-api/retrieval/api/v1/schema-types/{schemaType}/fields`.
+
+**Parameters:**
+
+- `schemaType` (optional): Schema type to describe, default `document`
+- `filterPrefix` (optional): Only return fields whose name starts with this
+  prefix, e.g. `file.` or `cust.`
+
+**Response:**
+
+```json
+{
+  "schemaType": "document",
+  "totalFields": 157,
+  "fields": {
+    "creators": {
+      "type": "text",
+      "fullTextSearch": "creators",
+      "filter": "creators.keyword",
+      "aggregation": "creators.keyword",
+      "sort": "creators.keyword"
+    },
+    "content": {
+      "type": "text",
+      "fullTextSearch": "content",
+      "filter": null,
+      "aggregation": null,
+      "sort": null
+    },
+    "modificationDate": {
+      "type": "date",
+      "fullTextSearch": null,
+      "filter": "modificationDate",
+      "aggregation": "modificationDate",
+      "sort": "modificationDate"
+    }
+  },
+  "fullTextSearchable": ["..."],
+  "filterable": ["..."],
+  "aggregatable": ["..."],
+  "sortable": ["..."]
+}
+```
+
+A `null` means the field does not serve that purpose. This is also the only way
+to learn a deployment's custom `cust.*` fields, which no static documentation
+can list.
+
+### iFinder.getFacetValues
+
+Enumerates the values of a single facet — which sources, authors, applications
+or languages actually exist — with a document count per value. Returns far more
+values than the capped facet block that rides along with a search response.
+
+**Parameters:**
+
+- `facet` (required): An aggregatable field name. Text fields need their
+  `.keyword` variant (`creators.keyword`).
+- `query` (optional): Scope query, default `*`
+- `filter` (optional): Additional Lucene filters narrowing what is counted
+- `maxValues` (optional): Default 50, max 1000
+- `sort` (optional): `count:desc` (default), `value:asc`, `value:desc`
+- `searchProfile` (optional)
+
+```javascript
+iFinder.getFacetValues({ facet: 'application.keyword', maxValues: 100 });
+// → { facet, values: [{ value: 'PDF', count: 4210 }, ...], hasMore: false }
+```
+
+Use it before filtering on a value: casing and spelling are deployment data, so
+`application.keyword:pdf` and `application.keyword:PDF` are not the same query.
+
+### iFinder.listProfiles
+
+Lists the search profiles the calling user can reach.
+
+The iFinder public API has no "list search profiles" endpoint — profile listing
+lives on the administration API, which an end-user token cannot reach. What the
+public API does expose is `GET /public-api/v0/assistants`, and every iAssistant
+names the search profile it is composed with, already filtered to the ones the
+caller may use. This function derives the profile list from there and always
+includes the configured default.
+
+A deployment with no iAssistants configured therefore reports only the
+configured default. That is a limit of the upstream API, not an error; the call
+degrades to the default rather than failing when the assistants endpoint is
+unavailable.
+
+### iFinder.discover
+
+One probe over a search profile, returning its document count, the top values of
+the main facets, sample document titles, the field catalog, and a ready-to-paste
+markdown summary.
+
+**Parameters:**
+
+- `searchProfile` (required)
+- `query` (optional): Scope query, default `*:*`
+- `facets` (optional): Facet fields to probe
+- `sampleSize` (optional): Sample documents to list, default 10
+- `includeFields` (optional): Also fetch the field catalog, default `true`
+
+Run it once against an unfamiliar profile before searching it. The `markdown`
+field is what the admin "build memory from tool" endpoint writes into an agent
+profile's long-term memory — see
+[Admin-driven corpus discovery](#admin-driven-corpus-discovery).
+
+### Using it from an MCP client
+
+Over the MCP gateway these are `iFinder_getFields`, `iFinder_getFacetValues`,
+`iFinder_listProfiles` and `iFinder_discover`, and they need the calling group
+to hold the `iFinder` tool permission (`permissions.tools` in `groups.json`).
+
+The **`ifinder-search` skill** shipped in `contents/skills/` teaches a client the
+whole surface — query syntax, the `.keyword` rule, filters versus query terms,
+facets, paging, and the discovery loop — with a full field reference and a query
+cookbook alongside it. Grant it to a group and it is offered over the gateway as
+an MCP resource (`ihub://skill/ifinder-search`).
+
 ## Admin-driven corpus discovery
 
 Some workflows benefit from a precomputed "corpus map" — which sources
@@ -546,4 +802,4 @@ significantly.
 
 ---
 
-_Last updated: June 2026_
+_Last updated: September 2026_

@@ -20,6 +20,11 @@
  * // Now you have a uniform response format regardless of provider
  */
 
+// Local imports: the re-exports below do NOT bind these names in module scope,
+// and `createConverter` / `ToolCallPatterns` call them directly.
+import { createUnifiedInterface } from './ToolCallingConverter.js';
+import { normalizeToolName } from './GenericToolCalling.js';
+
 // Export main converter interface
 export {
   convertToolsToGeneric,
@@ -47,7 +52,9 @@ export {
   createGenericToolResult,
   createGenericStreamingResponse,
   normalizeFinishReason,
-  sanitizeSchemaForProvider
+  isFailureFinishReason,
+  FAILURE_FINISH_REASONS,
+  cloneAndWalkSchema
 } from './GenericToolCalling.js';
 
 // Export individual provider converters for advanced use cases

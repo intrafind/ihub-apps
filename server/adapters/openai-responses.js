@@ -6,7 +6,6 @@
 import { convertToolsFromGeneric } from './toolCalling/index.js';
 import { BaseAdapter } from './BaseAdapter.js';
 import logger from '../utils/logger.js';
-import { parseJsonAsync } from '../utils/asyncJson.js';
 
 class OpenAIResponsesAdapterClass extends BaseAdapter {
   /**
@@ -114,8 +113,15 @@ class OpenAIResponsesAdapterClass extends BaseAdapter {
    * Create a completion request for OpenAI Responses API
    */
   async createCompletionRequest(model, messages, apiKey, options = {}) {
-    const { stream, tools, toolChoice, responseFormat, responseSchema, maxTokens } =
-      this.extractRequestOptions(options);
+    const {
+      stream,
+      tools,
+      toolChoice,
+      responseFormat,
+      responseSchema,
+      maxTokens,
+      nativeWebSearch
+    } = this.extractRequestOptions(options);
 
     const formattedMessages = this.formatMessages(messages);
     this.debugLogMessages(messages, formattedMessages, 'OpenAI Responses');
@@ -139,23 +145,14 @@ class OpenAIResponsesAdapterClass extends BaseAdapter {
     // GPT-5 models use a fixed temperature of 1.0
     // Use verbosity and reasoning.effort parameters instead for control
 
-    // Configure reasoning effort based on thinking budget
+    // Reasoning effort comes from the level, through the same resolver the
+    // OpenAI and vLLM adapters use — this adapter used to carry its own copy of
+    // a budget-to-effort ladder, which is how the two could drift.
     const thinkingEnabled = options.thinkingEnabled ?? true;
-    const thinkingBudget = options.thinkingBudget ?? -1;
     const thinkingThoughts = options.thinkingThoughts ?? false;
-
-    let reasoningEffort = 'medium'; // default
-    if (!thinkingEnabled || thinkingBudget === 0) {
-      reasoningEffort = 'minimal';
-    } else if (thinkingBudget === -1) {
-      reasoningEffort = 'medium'; // dynamic budget defaults to medium
-    } else if (thinkingBudget > 0 && thinkingBudget <= 100) {
-      reasoningEffort = 'low';
-    } else if (thinkingBudget > 100 && thinkingBudget <= 500) {
-      reasoningEffort = 'medium';
-    } else if (thinkingBudget > 500) {
-      reasoningEffort = 'high';
-    }
+    const reasoningEffort = thinkingEnabled
+      ? this.resolveReasoningEffort(options, model)
+      : 'minimal';
 
     // Map thoughts flag to verbosity (controls detail level)
     const verbosity = thinkingThoughts ? 'high' : 'medium';
@@ -184,9 +181,17 @@ class OpenAIResponsesAdapterClass extends BaseAdapter {
     }
 
     // Add tools if present - function calling API shape is different in Responses
-    if (tools && tools.length > 0) {
-      // Convert tools to Responses API format (internally-tagged vs externally-tagged)
-      body.tools = convertToolsFromGeneric(tools, 'openai-responses');
+    const responsesTools =
+      tools && tools.length > 0 ? convertToolsFromGeneric(tools, 'openai-responses') : [];
+
+    // OpenAI's server-side web search tool. Like Anthropic (and unlike Google),
+    // it can be combined with client-defined function tools in the same request.
+    if (nativeWebSearch?.provider === 'openai-responses') {
+      responsesTools.unshift({ type: 'web_search' });
+    }
+
+    if (responsesTools.length > 0) {
+      body.tools = responsesTools;
     }
     if (toolChoice) body.tool_choice = toolChoice;
 
@@ -195,10 +200,6 @@ class OpenAIResponsesAdapterClass extends BaseAdapter {
       // Deep clone incoming schema and enforce additionalProperties:false on all objects
       const schemaClone = JSON.parse(JSON.stringify(responseSchema));
       const enforceNoExtras = node => {
-        logger.info('Enforcing no extras on schema node', {
-          component: 'OpenAIResponsesAdapter',
-          nodeType: node?.type
-        });
         if (node && node.type === 'object') {
           node.additionalProperties = false;
         }
@@ -220,18 +221,19 @@ class OpenAIResponsesAdapterClass extends BaseAdapter {
         strict: true,
         schema: schemaClone
       };
-      logger.info('Using response schema for structured output', {
-        component: 'OpenAIResponsesAdapter',
-        textFormat: JSON.stringify(body.text, null, 2)
+      logger.debug('Using response schema for structured output', {
+        component: 'OpenAIResponsesAdapter'
       });
     } else if (responseFormat === 'json') {
       // For simple JSON mode - merge with existing text configuration
       body.text.format = { type: 'json_object' };
     }
 
-    logger.info('OpenAI Responses API request body', {
+    logger.debug('OpenAI Responses API request prepared', {
       component: 'OpenAIResponsesAdapter',
-      body: JSON.stringify(body, null, 2)
+      model: body.model,
+      hasTools: Boolean(body.tools?.length),
+      hasStructuredOutput: Boolean(responseSchema)
     });
 
     return {
@@ -240,143 +242,6 @@ class OpenAIResponsesAdapterClass extends BaseAdapter {
       headers: this.createRequestHeaders(apiKey),
       body
     };
-  }
-
-  /**
-   * Process streaming response from OpenAI Responses API
-   * The Responses API returns output as an array of Items instead of choices
-   */
-  async processResponseBuffer(data) {
-    const result = {
-      content: [],
-      tool_calls: [],
-      complete: false,
-      error: false,
-      errorMessage: null,
-      finishReason: null,
-      usage: null
-    };
-
-    if (!data) return result;
-    if (data === '[DONE]') {
-      result.complete = true;
-      return result;
-    }
-
-    try {
-      const parsed = await parseJsonAsync(data);
-
-      // Add debugging to see what we're receiving
-      logger.debug('Received chunk', {
-        component: 'OpenAIResponsesAdapter',
-        chunk: JSON.stringify(parsed, null, 2)
-      });
-
-      // Extract usage from Responses API (available on response.completed or full response)
-      const usageData = parsed.response?.usage || parsed.usage;
-      if (usageData) {
-        result.usage = {
-          promptTokens: usageData.input_tokens || 0,
-          completionTokens: usageData.output_tokens || 0,
-          totalTokens: usageData.total_tokens || 0
-        };
-      }
-
-      // Handle full response object (non-streaming)
-      if (parsed.output && Array.isArray(parsed.output)) {
-        // Process output items
-        for (const item of parsed.output) {
-          if (item.type === 'message' && item.content) {
-            // Extract text from message items
-            for (const contentItem of item.content) {
-              if (contentItem.type === 'output_text' && contentItem.text) {
-                result.content.push(contentItem.text);
-              }
-            }
-          } else if (item.type === 'function_call' && item.function) {
-            // Handle function calls
-            result.tool_calls.push({
-              id: item.id,
-              type: 'function',
-              function: {
-                name: item.function.name,
-                arguments: item.function.arguments
-              }
-            });
-          }
-          // Reasoning items are ignored for now (summary only available, not full reasoning)
-        }
-        result.complete = true;
-      }
-      // Handle streaming delta chunks - Responses API streaming format
-      else if (parsed.type === 'response.output_chunk.delta' || parsed.delta) {
-        // Extract delta from either parsed.delta or parsed itself
-        const delta = parsed.delta || parsed;
-
-        if (delta.type === 'message' && delta.content) {
-          for (const contentItem of delta.content) {
-            if (contentItem.type === 'output_text' && contentItem.text) {
-              result.content.push(contentItem.text);
-            }
-          }
-        } else if (delta.type === 'function_call' && delta.function) {
-          const normalized = { index: delta.index || 0 };
-          if (delta.id) normalized.id = delta.id;
-          if (delta.function) {
-            normalized.function = { ...delta.function };
-          }
-          normalized.type = 'function';
-          result.tool_calls.push(normalized);
-        }
-      }
-      // Legacy format check for output_chunk
-      else if (parsed.output_chunk) {
-        const chunk = parsed.output_chunk;
-        if (chunk.type === 'message' && chunk.delta) {
-          if (chunk.delta.content) {
-            for (const contentItem of chunk.delta.content) {
-              if (contentItem.type === 'output_text' && contentItem.text) {
-                result.content.push(contentItem.text);
-              }
-            }
-          }
-        } else if (chunk.type === 'function_call' && chunk.delta) {
-          // Handle streaming function calls
-          const normalized = { index: chunk.index || 0 };
-          if (chunk.id) normalized.id = chunk.id;
-          if (chunk.delta.function) {
-            normalized.function = { ...chunk.delta.function };
-          }
-          normalized.type = 'function';
-          result.tool_calls.push(normalized);
-        }
-      }
-
-      // Check for completion
-      if (
-        parsed.type === 'response.completed' ||
-        parsed.status === 'completed' ||
-        parsed.output_status === 'completed'
-      ) {
-        result.complete = true;
-        // The Responses API doesn't have finish_reason field
-        // Determine finish reason based on whether tool calls are present
-        result.finishReason = result.tool_calls.length > 0 ? 'tool_calls' : 'stop';
-      } else if (parsed.status === 'failed' || parsed.type === 'response.failed') {
-        result.error = true;
-        result.errorMessage = parsed.error?.message || 'Response generation failed';
-      }
-    } catch (error) {
-      logger.error('Error parsing OpenAI Responses API response chunk', {
-        component: 'OpenAIResponsesAdapter',
-        error,
-        data
-      });
-      result.error = true;
-      result.errorMessage = `Error parsing OpenAI Responses API response: ${error.message}`;
-    }
-
-    return result;
   }
 }
 

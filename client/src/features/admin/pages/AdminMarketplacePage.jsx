@@ -274,7 +274,7 @@ function AdminMarketplacePage() {
                       <button
                         disabled={page <= 1}
                         onClick={() => setPage(p => p - 1)}
-                        className="px-3 py-1 border border-gray-300 dark:border-gray-600 rounded text-sm disabled:opacity-50 text-gray-700 dark:text-gray-300"
+                        className="px-3 py-1 border border-gray-300 dark:border-gray-600 rounded-sm text-sm disabled:opacity-50 text-gray-700 dark:text-gray-300"
                       >
                         &#x2190;
                       </button>
@@ -284,7 +284,7 @@ function AdminMarketplacePage() {
                       <button
                         disabled={page >= totalPages}
                         onClick={() => setPage(p => p + 1)}
-                        className="px-3 py-1 border border-gray-300 dark:border-gray-600 rounded text-sm disabled:opacity-50 text-gray-700 dark:text-gray-300"
+                        className="px-3 py-1 border border-gray-300 dark:border-gray-600 rounded-sm text-sm disabled:opacity-50 text-gray-700 dark:text-gray-300"
                       >
                         &#x2192;
                       </button>

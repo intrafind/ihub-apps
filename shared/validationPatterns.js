@@ -5,14 +5,15 @@
 
 /**
  * App ID validation
- * Must contain only alphanumeric characters, underscores, dots, and hyphens
+ * Must contain only lowercase alphanumeric characters, underscores, dots, and hyphens
+ * (lowercase-only so ids stay unambiguous now that lookups are case-insensitive)
  * Length: 1-50 characters
  */
-export const APP_ID_PATTERN = /^[a-zA-Z0-9._-]+$/;
+export const APP_ID_PATTERN = /^[a-z0-9._-]+$/;
 export const APP_ID_MIN_LENGTH = 1;
 export const APP_ID_MAX_LENGTH = 50;
 export const APP_ID_ERROR_MESSAGE =
-  'App ID can only contain letters, numbers, dots (.), underscores (_), and hyphens (-)';
+  'App ID can only contain lowercase letters, numbers, dots (.), underscores (_), and hyphens (-)';
 
 /**
  * Model ID validation

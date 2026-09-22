@@ -11,7 +11,7 @@ function StatusRow({ icon, iconColor, title, description, enabled, count, onClic
     <button
       type="button"
       onClick={onClick}
-      className="w-full text-left bg-white dark:bg-gray-800 rounded-lg shadow-sm border border-gray-200 dark:border-gray-700 hover:shadow-md hover:border-gray-300 dark:hover:border-gray-600 p-5 transition-all active:scale-[0.99]"
+      className="w-full text-left bg-white dark:bg-gray-800 rounded-lg shadow-xs border border-gray-200 dark:border-gray-700 hover:shadow-md hover:border-gray-300 dark:hover:border-gray-600 p-5 transition-all active:scale-[0.99]"
     >
       <div className="flex items-center justify-between gap-4">
         <div className="flex items-start gap-4 min-w-0">
@@ -52,6 +52,7 @@ function AdminOAuthPage() {
   const [oauthEnabled, setOAuthEnabled] = useState(false);
   const [clientsEnabled, setClientsEnabled] = useState(false);
   const [clientCount, setClientCount] = useState(0);
+  const [connectionCount, setConnectionCount] = useState(0);
 
   useEffect(() => {
     const load = async () => {
@@ -70,6 +71,13 @@ function AdminOAuthPage() {
             setClientCount(clients.length);
           } catch {
             setClientCount(0);
+          }
+
+          try {
+            const connectionsResponse = await makeAdminApiCall('/admin/oauth/connections');
+            setConnectionCount((connectionsResponse.data?.connections || []).length);
+          } catch {
+            setConnectionCount(0);
           }
         }
       } catch (error) {
@@ -94,7 +102,10 @@ function AdminOAuthPage() {
 
   return (
     <div className="max-w-6xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
-      <OAuthTabsHeader clientCount={clientsEnabled ? clientCount : undefined} />
+      <OAuthTabsHeader
+        clientCount={clientsEnabled ? clientCount : undefined}
+        connectionCount={clientsEnabled ? connectionCount : undefined}
+      />
 
       <div className="space-y-4">
         <StatusRow
@@ -120,6 +131,19 @@ function AdminOAuthPage() {
           enabled={clientsEnabled}
           count={clientsEnabled ? clientCount : undefined}
           onClick={() => navigate('/admin/oauth/clients')}
+          t={t}
+        />
+        <StatusRow
+          icon="link"
+          iconColor="bg-teal-50 dark:bg-teal-900/30 text-teal-600 dark:text-teal-400"
+          title={t('admin.auth.oauth.tabs.connections', 'Connections')}
+          description={t(
+            'admin.auth.oauth.overview.connectionsDesc',
+            'See which users have granted which applications access, and revoke any of those grants.'
+          )}
+          enabled={clientsEnabled}
+          count={clientsEnabled ? connectionCount : undefined}
+          onClick={() => navigate('/admin/oauth/connections')}
           t={t}
         />
       </div>

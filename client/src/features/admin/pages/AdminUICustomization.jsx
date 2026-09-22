@@ -6,6 +6,8 @@ import AssetManager from '../components/AssetManager';
 import StyleEditor from '../components/StyleEditor';
 import ContentEditor from '../components/ContentEditor';
 import PwaCustomization from '../components/PwaCustomization';
+import StartPageCustomization from '../components/StartPageCustomization';
+import ErrorPagesCustomization from '../components/ErrorPagesCustomization';
 import { makeAdminApiCall } from '../../../api/adminApi';
 import { useUIConfig } from '../../../shared/contexts/UIConfigContext';
 
@@ -112,10 +114,12 @@ function AdminUICustomization() {
 
   const tabs = [
     { id: 'header', label: t('admin.ui.tabs.header', 'Header'), icon: '🎨' },
+    { id: 'startPage', label: t('admin.ui.tabs.startPage', 'Start Page'), icon: '🏠' },
     { id: 'footer', label: t('admin.ui.tabs.footer', 'Footer'), icon: '📄' },
     { id: 'assets', label: t('admin.ui.tabs.assets', 'Assets'), icon: '🖼️' },
     { id: 'styles', label: t('admin.ui.tabs.styles', 'Styles'), icon: '🎯' },
     { id: 'content', label: t('admin.ui.tabs.content', 'Content'), icon: '📝' },
+    { id: 'errorPages', label: t('admin.ui.tabs.errorPages', 'Error Pages'), icon: '⚠️' },
     { id: 'pwa', label: t('admin.ui.tabs.pwa', 'PWA'), icon: '📱' }
   ];
 
@@ -147,7 +151,7 @@ function AdminUICustomization() {
   return (
     <div className="min-h-screen bg-gray-50 dark:bg-gray-900">
       {/* Header */}
-      <div className="bg-white dark:bg-gray-800 shadow-sm border-b border-gray-200 dark:border-gray-700">
+      <div className="bg-white dark:bg-gray-800 shadow-xs border-b border-gray-200 dark:border-gray-700">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
           <div className="sm:flex sm:items-center sm:justify-between">
             <div>
@@ -164,16 +168,16 @@ function AdminUICustomization() {
             <div className="mt-4 sm:mt-0 sm:flex sm:space-x-3">
               <button
                 onClick={handleBackup}
-                className="inline-flex items-center px-4 py-2 border border-gray-300 dark:border-gray-600 rounded-md shadow-sm text-sm font-medium text-gray-700 dark:text-gray-200 bg-white dark:bg-gray-700 hover:bg-gray-50 dark:hover:bg-gray-600 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500"
+                className="inline-flex items-center px-4 py-2 border border-gray-300 dark:border-gray-600 rounded-md shadow-xs text-sm font-medium text-gray-700 dark:text-gray-200 bg-white dark:bg-gray-700 hover:bg-gray-50 dark:hover:bg-gray-600 focus:outline-hidden focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500"
               >
                 {t('admin.ui.backup', 'Backup Config')}
               </button>
               <button
                 onClick={handleSave}
                 disabled={saving}
-                className={`inline-flex items-center px-4 py-2 border border-transparent rounded-md shadow-sm text-sm font-medium text-white ${
+                className={`inline-flex items-center px-4 py-2 border border-transparent rounded-md shadow-xs text-sm font-medium text-white ${
                   saving ? 'bg-indigo-400 cursor-not-allowed' : 'bg-indigo-600 hover:bg-indigo-700'
-                } focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500`}
+                } focus:outline-hidden focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500`}
               >
                 {saving ? t('admin.ui.saving', 'Saving...') : t('admin.ui.save', 'Save Changes')}
               </button>
@@ -186,7 +190,7 @@ function AdminUICustomization() {
       {error && (
         <div className="bg-red-50 dark:bg-red-900/30 border border-red-200 dark:border-red-800 rounded-md p-4 mx-4 mt-4">
           <div className="flex">
-            <div className="flex-shrink-0">
+            <div className="shrink-0">
               <svg className="h-5 w-5 text-red-400" viewBox="0 0 20 20" fill="currentColor">
                 <path
                   fillRule="evenodd"
@@ -220,7 +224,7 @@ function AdminUICustomization() {
       {successMessage && (
         <div className="bg-green-50 dark:bg-green-900/30 border border-green-200 dark:border-green-800 rounded-md p-4 mx-4 mt-4">
           <div className="flex">
-            <div className="flex-shrink-0">
+            <div className="shrink-0">
               <svg className="h-5 w-5 text-green-400" viewBox="0 0 20 20" fill="currentColor">
                 <path
                   fillRule="evenodd"
@@ -274,11 +278,19 @@ function AdminUICustomization() {
         </div>
 
         {/* Tab Content */}
-        <div className="bg-white dark:bg-gray-800 rounded-lg shadow">
+        <div className="bg-white dark:bg-gray-800 rounded-lg shadow-sm">
           {activeTab === 'header' && (
             <HeaderCustomization
               config={config.header || {}}
               onUpdate={updates => updateConfig('header', updates)}
+              t={t}
+            />
+          )}
+          {activeTab === 'startPage' && (
+            <StartPageCustomization
+              config={config.startPage || {}}
+              pages={config.pages || {}}
+              onUpdate={updates => updateConfig('startPage', updates)}
               t={t}
             />
           )}
@@ -292,6 +304,13 @@ function AdminUICustomization() {
           {activeTab === 'assets' && <AssetManager t={t} />}
           {activeTab === 'styles' && <StyleEditor config={config} onUpdate={setConfig} t={t} />}
           {activeTab === 'content' && <ContentEditor config={config} onUpdate={setConfig} t={t} />}
+          {activeTab === 'errorPages' && (
+            <ErrorPagesCustomization
+              config={config.errorPages || {}}
+              onUpdate={updates => updateConfig('errorPages', updates)}
+              t={t}
+            />
+          )}
           {activeTab === 'pwa' && (
             <PwaCustomization
               config={config.pwa || {}}

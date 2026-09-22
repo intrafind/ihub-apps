@@ -113,7 +113,7 @@ const StarRating = ({
       <button
         key={starIndex}
         type="button"
-        className={`relative ${readonly ? 'cursor-default' : 'cursor-pointer focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:ring-offset-2 rounded'}`}
+        className={`relative ${readonly ? 'cursor-default' : 'cursor-pointer focus:outline-hidden focus:ring-2 focus:ring-indigo-500 focus:ring-offset-2 rounded-sm'}`}
         onClick={e => handleStarClick(starIndex, e)}
         onKeyDown={e => handleStarKeyDown(starIndex, e)}
         onMouseMove={e => handleStarHover(starIndex, e)}

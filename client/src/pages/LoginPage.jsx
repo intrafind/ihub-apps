@@ -1,7 +1,6 @@
 import { useEffect } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
 import { useAuth } from '../shared/contexts/AuthContext.jsx';
-import LoginForm from '../features/auth/components/LoginForm.jsx';
 
 export default function LoginPage() {
   const [searchParams] = useSearchParams();
@@ -58,19 +57,12 @@ export default function LoginPage() {
   }
 
   // The auth gate (full-page overlay) renders the login UI on top of this page.
-  // Show a spinner underneath while it loads. Fall back to the in-page form only
-  // if the gate is somehow unavailable (it is inlined on every index.html entry).
-  if (window.__authGate) {
-    return (
-      <div className="min-h-screen flex items-center justify-center bg-gray-50">
-        <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600"></div>
-      </div>
-    );
-  }
-
+  // It is inlined into every index.html entry that renders this route (see
+  // vite-plugin-auth-gate.js), so window.__authGate is always defined here —
+  // just show a spinner underneath while it loads.
   return (
     <div className="min-h-screen flex items-center justify-center bg-gray-50">
-      <LoginForm />
+      <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600"></div>
     </div>
   );
 }

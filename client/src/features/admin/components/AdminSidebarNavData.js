@@ -3,6 +3,7 @@ import {
   CpuChipIcon,
   BoltIcon,
   SparklesIcon,
+  LanguageIcon,
   Cog6ToothIcon,
   WindowIcon,
   DocumentTextIcon,
@@ -23,7 +24,9 @@ import {
   ArrowPathIcon,
   ExclamationTriangleIcon,
   ClipboardDocumentCheckIcon,
-  NewspaperIcon
+  NewspaperIcon,
+  MicrophoneIcon,
+  StarIcon
 } from '@heroicons/react/24/outline';
 
 /**
@@ -226,6 +229,13 @@ export function getAdminNavSections({ t, showAdminPage, featureFlags }) {
           visible: showAdminPage('ui')
         },
         {
+          key: 'localization',
+          label: t('admin.nav.localization', 'Localization'),
+          href: '/admin/localization',
+          icon: LanguageIcon,
+          visible: showAdminPage('ui')
+        },
+        {
           key: 'pages',
           label: t('admin.nav.pages', 'Pages'),
           href: '/admin/pages',
@@ -252,6 +262,13 @@ export function getAdminNavSections({ t, showAdminPage, featureFlags }) {
           href: '/admin/usage',
           icon: ChartBarIcon,
           visible: showAdminPage('usage')
+        },
+        {
+          key: 'feedback',
+          label: t('admin.nav.feedback', 'Feedback'),
+          href: '/admin/feedback',
+          icon: StarIcon,
+          visible: showAdminPage('feedback')
         },
         {
           key: 'logging',
@@ -287,6 +304,13 @@ export function getAdminNavSections({ t, showAdminPage, featureFlags }) {
           href: '/admin/features',
           icon: FlagIcon,
           visible: showAdminPage('features')
+        },
+        {
+          key: 'voice-input',
+          label: t('admin.nav.voiceInput', 'Voice Input'),
+          href: '/admin/voice-input',
+          icon: MicrophoneIcon,
+          visible: showAdminPage('system')
         },
         {
           key: 'security',

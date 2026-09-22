@@ -1,14 +1,32 @@
-import path from 'path';
 import fs from 'fs';
 import { v4 as uuidv4 } from 'uuid';
-import { fileURLToPath } from 'url';
 import bcrypt from 'bcryptjs';
 import { atomicWriteJSON } from './atomicWrite.js';
+import configStore from '../services/config/ConfigStore.js';
 import configCache from '../configCache.js';
+import { announceConfigChange } from '../configSync.js';
 import logger from './logger.js';
+import { locateConfigFile } from './configFileLocation.js';
+import { clientIdHost, isClientIdUrl } from './clientIdMetadata.js';
 
-const __filename = fileURLToPath(import.meta.url);
-const __dirname = path.dirname(__filename);
+/**
+ * Where an OAuth clients file lives, as both a cache key and an absolute path.
+ *
+ * `oauth.clientsFile` is a path relative to the installation root and the
+ * cache is keyed on the same file's path relative to `contents/`, which is
+ * also how the configuration store addresses it: `contents/config/
+ * oauth-clients.json` is the key `config/oauth-clients.json`.
+ *
+ * A `clientsFile` pointing outside `contents/` is supported and has no place
+ * in the store, so `relPath` is null and the caller writes the absolute path
+ * directly rather than relocating the file into `contents/`.
+ *
+ * @param {string} clientsFilePath - Path to oauth-clients.json as configured
+ * @returns {{fullPath: string, cacheKey: string, relPath: string|null}}
+ */
+function locateClientsFile(clientsFilePath) {
+  return locateConfigFile(clientsFilePath);
+}
 
 /**
  * Load OAuth clients from the OAuth clients file
@@ -17,21 +35,10 @@ const __dirname = path.dirname(__filename);
  */
 export function loadOAuthClients(clientsFilePath) {
   try {
-    // Convert file path to cache key format
-    let cacheKey;
-    if (clientsFilePath.startsWith('contents/')) {
-      cacheKey = clientsFilePath.substring('contents/'.length);
-    } else {
-      cacheKey = path.relative(
-        path.join(__dirname, '../../'),
-        path.isAbsolute(clientsFilePath)
-          ? clientsFilePath
-          : path.join(__dirname, '../../', clientsFilePath)
-      );
-      if (cacheKey.startsWith('contents/')) {
-        cacheKey = cacheKey.substring('contents/'.length);
-      }
-    }
+    // Through `locateClientsFile`, for the same reason as `loadUsers`: the read
+    // and the write have to agree on the cache key, and two copies of the rule
+    // are a coin toss on whether they keep agreeing.
+    const { fullPath, cacheKey } = locateClientsFile(clientsFilePath);
 
     // Try to get from cache first
     const cached = configCache.get(cacheKey);
@@ -44,10 +51,6 @@ export function loadOAuthClients(clientsFilePath) {
       component: 'OAuthClientManager',
       cacheKey
     });
-
-    const fullPath = path.isAbsolute(clientsFilePath)
-      ? clientsFilePath
-      : path.join(__dirname, '../../', clientsFilePath);
 
     // Check if file exists
     if (!fs.existsSync(fullPath)) {
@@ -111,12 +114,14 @@ export function loadOAuthClients(clientsFilePath) {
  * Save OAuth clients to the OAuth clients file
  * @param {Object} clientsConfig - OAuth clients configuration object
  * @param {string} clientsFilePath - Path to oauth-clients.json file
+ * @param {Object} [options]
+ * @param {boolean} [options.announce=true] - Tell the other cluster workers to
+ *   re-read the file. Pass false for writes that only record usage metadata, so
+ *   a per-minute `lastUsed` touch does not make every worker reload the file.
  */
-export async function saveOAuthClients(clientsConfig, clientsFilePath) {
+export async function saveOAuthClients(clientsConfig, clientsFilePath, { announce = true } = {}) {
   try {
-    const fullPath = path.isAbsolute(clientsFilePath)
-      ? clientsFilePath
-      : path.join(__dirname, '../../', clientsFilePath);
+    const { fullPath, cacheKey, relPath } = locateClientsFile(clientsFilePath);
 
     // Update metadata
     if (!clientsConfig.metadata) {
@@ -124,21 +129,19 @@ export async function saveOAuthClients(clientsConfig, clientsFilePath) {
     }
     clientsConfig.metadata.lastUpdated = new Date().toISOString();
 
-    // Write to file atomically
-    await atomicWriteJSON(fullPath, clientsConfig);
-
-    // Update cache with the new data
-    let cacheKey;
-    if (clientsFilePath.startsWith('contents/')) {
-      cacheKey = clientsFilePath.substring('contents/'.length);
+    // Write to file atomically. The store writes what it is handed, so the
+    // hashed client secrets in here are stored exactly as generated.
+    if (relPath) {
+      await configStore.writeJson(relPath, clientsConfig);
     } else {
-      cacheKey = path.relative(path.join(__dirname, '../../'), fullPath);
-      if (cacheKey.startsWith('contents/')) {
-        cacheKey = cacheKey.substring('contents/'.length);
-      }
+      await atomicWriteJSON(fullPath, clientsConfig);
     }
 
     configCache.setCacheEntry(cacheKey, clientsConfig);
+
+    // Otherwise a client registered on one worker cannot authenticate against
+    // the others until their cache TTL expires.
+    if (announce) announceConfigChange(cacheKey);
   } catch (error) {
     logger.error('Could not save OAuth clients configuration', {
       component: 'OAuthClientManager',
@@ -274,9 +277,19 @@ export async function createOAuthClient(clientData, clientsFilePath, createdBy) 
     consentRequired: clientData.consentRequired !== false,
     // trusted: when true the client is pre-approved and bypasses the consent
     //   screen even when consentRequired is true at the platform level.
-    trusted: clientData.trusted || false
+    trusted: clientData.trusted || false,
+    // personal / owner*: set for clients a user created for themselves from the
+    //   integrations page. Tokens issued for a personal client authenticate as
+    //   the owner instead of as a standalone service account, and the owner
+    //   snapshot below is what jwtAuth/mcpAuth resolve the identity from on
+    //   every request.
+    personal: clientData.personal === true,
+    ownerUserId: clientData.ownerUserId || null,
+    ownerUsername: clientData.ownerUsername || null,
+    ownerName: clientData.ownerName || null,
+    ownerEmail: clientData.ownerEmail || null,
+    ownerGroups: clientData.ownerGroups || []
   };
-
   clientsConfig.clients[clientId] = newClient;
   await saveOAuthClients(clientsConfig, clientsFilePath);
 
@@ -444,6 +457,61 @@ export function listOAuthClients(clientsFilePath) {
 }
 
 /**
+ * List the personal OAuth clients owned by a user (without secrets)
+ * @param {string} clientsFilePath - Path to oauth-clients.json file
+ * @param {string} ownerUserId - Owner user ID
+ * @returns {Array<Object>} Array of the user's personal clients, newest first
+ */
+export function listPersonalClientsByOwner(clientsFilePath, ownerUserId) {
+  if (!ownerUserId) return [];
+
+  const clientsConfig = loadOAuthClients(clientsFilePath);
+  const clients = clientsConfig.clients || {};
+
+  return Object.values(clients)
+    .filter(client => client.personal === true && client.ownerUserId === ownerUserId)
+    .map(client => {
+      const { clientSecret: _clientSecret, ...clientWithoutSecret } = client;
+      return clientWithoutSecret;
+    })
+    .sort((a, b) => String(b.createdAt || '').localeCompare(String(a.createdAt || '')));
+}
+
+/**
+ * Refresh the owner identity snapshot stored on a personal OAuth client.
+ *
+ * jwtAuth resolves the acting user from this snapshot on every request, so
+ * refreshing it (on key rotation, for instance) is what propagates a group
+ * change to keys that were issued earlier.
+ *
+ * @param {string} clientId - Client ID
+ * @param {Object} owner - Current owner details
+ * @param {string} clientsFilePath - Path to oauth-clients.json file
+ * @returns {Promise<Object|null>} Updated client without secret, or null if not found
+ */
+export async function updatePersonalClientOwner(clientId, owner, clientsFilePath) {
+  const clientsConfig = loadOAuthClients(clientsFilePath);
+  const client = Object.hasOwn(clientsConfig.clients || {}, clientId)
+    ? clientsConfig.clients[clientId]
+    : undefined;
+
+  if (!client || client.personal !== true || client.ownerUserId !== owner?.id) {
+    return null;
+  }
+
+  client.ownerUsername = owner.username || client.ownerUsername || null;
+  client.ownerName = owner.name || client.ownerName || null;
+  client.ownerEmail = owner.email || client.ownerEmail || null;
+  client.ownerGroups = Array.isArray(owner.groups) ? owner.groups : client.ownerGroups || [];
+  client.updatedAt = new Date().toISOString();
+
+  await saveOAuthClients(clientsConfig, clientsFilePath);
+
+  const { clientSecret: _clientSecret, ...clientWithoutSecret } = client;
+  return clientWithoutSecret;
+}
+
+/**
  * Update last used timestamp for a client
  * @param {string} clientId - Client ID
  * @param {string} clientsFilePath - Path to oauth-clients.json file
@@ -464,7 +532,7 @@ export async function updateClientLastUsed(clientId, clientsFilePath) {
     // Only update if it's been more than 1 minute since last update (reduce writes)
     if (!client.lastUsed || new Date(now) - new Date(client.lastUsed) > 60000) {
       client.lastUsed = now;
-      await saveOAuthClients(clientsConfig, clientsFilePath);
+      await saveOAuthClients(clientsConfig, clientsFilePath, { announce: false });
     }
   } catch (error) {
     logger.error('OAuth failed to update last used for client', {
@@ -499,6 +567,18 @@ export async function validateClientCredentials(clientId, clientSecret, clientsF
     return null;
   }
 
+  // A record with no stored secret cannot authenticate with one. CIMD policy
+  // records are exactly that — their client authenticates with `none` — and
+  // bcrypt throws rather than returning false when handed a null hash, so the
+  // refusal has to be explicit.
+  if (typeof client.clientSecret !== 'string' || client.clientSecret.length === 0) {
+    logger.info('OAuth client has no secret to authenticate with', {
+      component: 'OAuthClientManager',
+      clientId
+    });
+    return null;
+  }
+
   // Verify secret
   const isValid = await verifyClientSecret(clientSecret, client.clientSecret);
 
@@ -525,4 +605,326 @@ export async function validateClientCredentials(clientId, clientSecret, clientsF
 
   const { clientSecret: _, ...clientWithoutSecret } = client;
   return clientWithoutSecret;
+}
+
+/**
+ * Find an active, dynamically registered client by its metadata fingerprint.
+ *
+ * Only public (`token_endpoint_auth_method: "none"`) registrations are ever
+ * de-duplicated, so the caller filters on that before asking; confidential
+ * registrations mint a secret and must stay distinct records.
+ *
+ * @param {Object} clientsConfig - OAuth clients configuration
+ * @param {string} fingerprint - Fingerprint from `computeClientFingerprint`
+ * @returns {Object|null} Matching client, or null when none exists
+ */
+export function findDcrClientByFingerprint(clientsConfig, fingerprint) {
+  if (!fingerprint) return null;
+  const clients = clientsConfig.clients || {};
+  for (const client of Object.values(clients)) {
+    if (
+      client?.active === true &&
+      client?.metadata?.dcr === true &&
+      client?.metadata?.fingerprint === fingerprint
+    ) {
+      return { ...client };
+    }
+  }
+  return null;
+}
+
+/**
+ * Record that an existing dynamic registration was handed out again.
+ *
+ * Bookkeeping only — written without a cluster announce for the same reason
+ * `updateClientLastUsed` is: every worker re-reading the whole client file on
+ * a counter bump would be pure overhead.
+ *
+ * @param {string} clientId - Client ID that was returned to the registrant
+ * @param {string} clientsFilePath - Path to oauth-clients.json file
+ * @returns {Promise<void>}
+ */
+export async function recordDcrReRegistration(clientId, clientsFilePath) {
+  try {
+    const clientsConfig = loadOAuthClients(clientsFilePath);
+    const client = Object.hasOwn(clientsConfig.clients || {}, clientId)
+      ? clientsConfig.clients[clientId]
+      : undefined;
+    if (!client) return;
+
+    client.metadata = client.metadata || {};
+    client.metadata.registrationCount = (client.metadata.registrationCount || 1) + 1;
+    client.metadata.lastRegisteredAt = new Date().toISOString();
+
+    await saveOAuthClients(clientsConfig, clientsFilePath, { announce: false });
+  } catch (error) {
+    logger.error('OAuth failed to record repeat dynamic registration', {
+      component: 'OAuthClientManager',
+      clientId,
+      error
+    });
+    // Non-critical: the registration response is already correct without it.
+  }
+}
+
+/**
+ * Stamp the first user who consented to a dynamically registered client.
+ *
+ * Registration is unauthenticated, so a DCR record carries no owner. The
+ * earliest moment the server knows a person is the first consent, and that
+ * attribution is display-only: it is what turns an indistinguishable "Claude"
+ * row in the admin list into one an administrator can place. A second user of
+ * the same registration does not overwrite it.
+ *
+ * @param {string} clientId - Client ID that was just consented to
+ * @param {Object} user - Decoded JWT payload of the consenting user
+ * @param {string} clientsFilePath - Path to oauth-clients.json file
+ * @returns {Promise<void>}
+ */
+export async function stampDcrFirstUser(clientId, user, clientsFilePath) {
+  try {
+    const clientsConfig = loadOAuthClients(clientsFilePath);
+    const client = Object.hasOwn(clientsConfig.clients || {}, clientId)
+      ? clientsConfig.clients[clientId]
+      : undefined;
+    if (!client || client.metadata?.dcr !== true || client.metadata?.firstUserId) return;
+
+    client.metadata.firstUserId = user?.sub || '';
+    client.metadata.firstUserName = user?.name || user?.username || user?.sub || '';
+    client.metadata.firstConsentAt = new Date().toISOString();
+
+    await saveOAuthClients(clientsConfig, clientsFilePath, { announce: false });
+  } catch (error) {
+    logger.error('OAuth failed to stamp first consenting user', {
+      component: 'OAuthClientManager',
+      clientId,
+      error
+    });
+    // Non-critical: attribution is cosmetic, the authorization already happened.
+  }
+}
+
+/**
+ * Delete dynamically registered clients that have not been used recently.
+ *
+ * Only `metadata.dcr` records are considered, and only those whose `lastUsed`
+ * is older than `unusedForDays` or was never set. Deleting a client
+ * invalidates its users' consent memory and refresh tokens (they reconnect),
+ * which is why this is an explicit administrator action rather than a
+ * migration or a background job.
+ *
+ * @param {number} unusedForDays - Age threshold in days
+ * @param {string} clientsFilePath - Path to oauth-clients.json file
+ * @param {string} deletedBy - User ID performing the clean-up
+ * @returns {Promise<{deleted: number, clientIds: Array<string>}>} What was removed
+ */
+export async function deleteUnusedDynamicClients(unusedForDays, clientsFilePath, deletedBy) {
+  const clientsConfig = loadOAuthClients(clientsFilePath);
+  const cutoff = Date.now() - unusedForDays * 24 * 60 * 60 * 1000;
+  const clientIds = [];
+
+  for (const [clientId, client] of Object.entries(clientsConfig.clients || {})) {
+    if (client?.metadata?.dcr !== true) continue;
+
+    const lastUsed = client.lastUsed ? new Date(client.lastUsed).getTime() : null;
+    // A record that was never used is judged by when it was registered, so a
+    // connection someone started minutes ago is not swept away mid-flow.
+    const reference = lastUsed ?? (client.createdAt ? new Date(client.createdAt).getTime() : 0);
+    if (Number.isFinite(reference) && reference < cutoff) {
+      clientIds.push(clientId);
+    }
+  }
+
+  for (const clientId of clientIds) {
+    delete clientsConfig.clients[clientId];
+  }
+
+  if (clientIds.length > 0) {
+    await saveOAuthClients(clientsConfig, clientsFilePath);
+    logger.info('OAuth unused dynamic clients removed', {
+      component: 'OAuthClientManager',
+      count: clientIds.length,
+      unusedForDays,
+      deletedBy
+    });
+  }
+
+  return { deleted: clientIds.length, clientIds };
+}
+
+/**
+ * Policy fields an administrator may set on a CIMD client record.
+ *
+ * Deliberately short. Identity — `name`, `redirectUris`, `grantTypes`,
+ * `clientType`, `token_endpoint_auth_method` — never comes from the record,
+ * only from the document the client publishes, which is the property that
+ * keeps "nothing stored" true for CIMD identity. `trusted`, `consentRequired`
+ * and `clientSecret` are absent for a stronger reason: they are locked by
+ * definition, so a CIMD client always goes through sign-in and consent and
+ * never holds a shared secret, and no write path may change that.
+ */
+export const CIMD_POLICY_FIELDS = Object.freeze([
+  'active',
+  'allowedGroups',
+  'allowedApps',
+  'allowedModels',
+  'allowedPrompts',
+  'scopes',
+  'tokenExpirationMinutes',
+  'approvalState'
+]);
+
+/**
+ * Bookkeeping keys the policy record carries under `metadata`.
+ *
+ * `displayName` is a snapshot for the admin list — the same trick the consent
+ * store plays with `clientName` — and is never consulted for identity. A
+ * client that was refused before it ever connected has no consent entry to
+ * take a name from, so without it a pending row would read as a bare URL.
+ */
+const CIMD_METADATA_FIELDS = Object.freeze([
+  'displayName',
+  'firstSeenAt',
+  'firstUserId',
+  'firstUserName',
+  'approvedBy',
+  'approvedAt',
+  'blockedBy',
+  'blockedAt'
+]);
+
+/**
+ * Create or update the **policy** record for a client identified by a metadata
+ * document.
+ *
+ * `createOAuthClient` cannot be reused: it mints a UUID-ish client id and a
+ * bcrypt secret, and a CIMD client has neither — its id is the document URL
+ * and it authenticates with `none`. What is written here is only the set of
+ * administrator decisions, keyed by the exact URL.
+ *
+ * @param {string} clientId - CIMD client identifier (the document URL)
+ * @param {Object} patch - Policy fields (see {@link CIMD_POLICY_FIELDS}) and an
+ *   optional `metadata` object of bookkeeping keys
+ * @param {string} clientsFilePath - Path to oauth-clients.json
+ * @param {string} savedBy - User ID making the change
+ * @param {Object} [options]
+ * @param {boolean} [options.announce=true] - Announce a cluster-wide cache
+ *   invalidation. Blocking must; a discovery stamp on the authorize path need
+ *   not, and pays a file reload on every worker if it does.
+ * @returns {Promise<Object>} The stored record
+ */
+export async function upsertCimdClientPolicy(
+  clientId,
+  patch = {},
+  clientsFilePath,
+  savedBy,
+  { announce = true } = {}
+) {
+  if (!isClientIdUrl(clientId)) {
+    throw new Error('A CIMD policy record requires an https client_id URL');
+  }
+
+  const clientsConfig = loadOAuthClients(clientsFilePath);
+  if (clientsConfig?.metadata?.error) {
+    throw new Error('OAuth client store unavailable');
+  }
+
+  const clients = clientsConfig.clients || (clientsConfig.clients = {});
+  const existing = Object.hasOwn(clients, clientId) ? clients[clientId] : undefined;
+  const now = new Date().toISOString();
+
+  if (existing && existing.metadata?.cimd !== true) {
+    // A stored client that happens to be keyed by a URL is not a CIMD record
+    // and must not be reshaped into one by this path.
+    throw new Error(`Client ${clientId} is not a client-metadata-document client`);
+  }
+
+  const record = existing || {
+    id: clientId,
+    clientId,
+    description: `Client metadata document at ${clientIdHost(clientId)}`,
+    // No secret, ever: CIMD clients authenticate with `none`.
+    clientSecret: null,
+    active: true,
+    approvalState: 'auto',
+    createdAt: now,
+    createdBy: savedBy || 'system',
+    lastUsed: null,
+    lastRotated: null,
+    metadata: { cimd: true, host: clientIdHost(clientId) },
+    clientType: 'public',
+    // Locked. Written once here so the record is a complete client object for
+    // anything that reads the store directly, and refused by every update.
+    consentRequired: true,
+    trusted: false,
+    personal: false
+  };
+
+  for (const field of CIMD_POLICY_FIELDS) {
+    if (patch[field] !== undefined) record[field] = patch[field];
+  }
+
+  record.metadata = { ...(record.metadata || {}), cimd: true, host: clientIdHost(clientId) };
+  for (const field of CIMD_METADATA_FIELDS) {
+    if (patch.metadata?.[field] !== undefined) record.metadata[field] = patch.metadata[field];
+  }
+
+  // Locked on every write, not merely on creation: the point of the lock is
+  // that no path can turn a self-declared client into a trusted one.
+  record.consentRequired = true;
+  record.trusted = false;
+  record.clientSecret = null;
+
+  record.updatedAt = now;
+  record.updatedBy = savedBy || 'system';
+  clients[clientId] = record;
+
+  await saveOAuthClients(clientsConfig, clientsFilePath, { announce });
+
+  logger.info('[OAuth CIMD] Client policy saved', {
+    component: 'OAuthClientManager',
+    clientId,
+    savedBy: savedBy || 'system',
+    fields: Object.keys(patch).join(',')
+  });
+
+  return { ...record };
+}
+
+/**
+ * The stored policy record for a CIMD client, or null when there is none.
+ *
+ * Null is the normal state for a client nobody has decided anything about
+ * yet — under `approvalMode: 'approval'` that is exactly the case the gate
+ * refuses.
+ *
+ * @param {string} clientId - CIMD client identifier
+ * @param {string} clientsFilePath - Path to oauth-clients.json
+ * @returns {Object|null} The record, or null
+ */
+export function findCimdClientPolicy(clientId, clientsFilePath) {
+  if (!isClientIdUrl(clientId)) return null;
+  try {
+    const clientsConfig = loadOAuthClients(clientsFilePath);
+    if (clientsConfig?.metadata?.error) return null;
+    const record = (clientsConfig.clients || {})[clientId];
+    return record && record.metadata?.cimd === true ? { ...record } : null;
+  } catch {
+    // The resolver treats "no record" and "store unreadable" alike: neither is
+    // an approval, and neither is a block.
+    return null;
+  }
+}
+
+/**
+ * Every stored CIMD policy record.
+ *
+ * @param {string} clientsFilePath - Path to oauth-clients.json
+ * @returns {Array<Object>} Records, in store order
+ */
+export function listCimdClientPolicies(clientsFilePath) {
+  const clientsConfig = loadOAuthClients(clientsFilePath);
+  return Object.values(clientsConfig.clients || {}).filter(
+    client => client?.metadata?.cimd === true
+  );
 }

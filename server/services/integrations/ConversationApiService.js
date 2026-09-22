@@ -51,7 +51,8 @@ class ConversationApiService {
     labels,
     retrievalScope,
     ephemeral,
-    responseGeneration
+    responseGeneration,
+    signal
   }) {
     const url = this.buildUrl(baseUrl, '/conversations');
     const headers = this.buildHeaders(user);
@@ -78,7 +79,8 @@ class ConversationApiService {
     const response = await throttledFetch('iAssistantConversation', url, {
       method: 'POST',
       headers,
-      body: JSON.stringify(body)
+      body: JSON.stringify(body),
+      ...(signal ? { signal } : {})
     });
 
     if (!response.ok) {
@@ -275,6 +277,38 @@ class ConversationApiService {
     }
 
     return response.status === 204 ? null : response.json();
+  }
+
+  /**
+   * Get a single conversation profile, including its workflow configuration.
+   *
+   * The list endpoint returns {@link ProfileSummary} objects, which the API
+   * documents as "without configuration details", so a caller that needs the
+   * workflow configuration has to read the profile itself.
+   *
+   * @param {string} profileId - Profile id, e.g. "iassistant-workspace"
+   * @param {Object} params
+   * @param {Object} params.user - Authenticated user
+   * @param {string} params.baseUrl - iFinder base URL
+   * @param {AbortSignal} [params.signal]
+   * @returns {Promise<Object>} the profile
+   */
+  async getProfile(profileId, { user, baseUrl, signal }) {
+    const url = this.buildUrl(baseUrl, `/profiles/${encodeURIComponent(profileId)}`);
+    const headers = this.buildHeaders(user);
+
+    const response = await throttledFetch('iAssistantConversation', url, {
+      method: 'GET',
+      headers,
+      ...(signal ? { signal } : {})
+    });
+
+    if (!response.ok) {
+      const errorText = await response.text();
+      throw new Error(`Failed to get profile ${profileId} (${response.status}): ${errorText}`);
+    }
+
+    return response.json();
   }
 
   /**

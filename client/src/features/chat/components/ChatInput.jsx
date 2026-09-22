@@ -13,8 +13,30 @@ import { useUIConfig } from '../../../shared/contexts/UIConfigContext';
 import { usePlatformConfig } from '../../../shared/contexts/PlatformConfigContext';
 import useFeatureFlags from '../../../shared/hooks/useFeatureFlags';
 import MagicPromptLoader from '../../../shared/components/MagicPromptLoader';
-import { computeContextUsage } from '../../../shared/utils/tokenEstimatorClient.js';
-import { useEstimatedTokenCount } from '../../../shared/hooks/useEstimatedTokenCount.js';
+import {
+  computeContextUsage,
+  conversationTokenFragments
+} from '../../../shared/utils/tokenEstimatorClient.js';
+import {
+  useEstimatedTokenCount,
+  useEstimatedTokensForFragments
+} from '../../../shared/hooks/useEstimatedTokenCount.js';
+import { getLocalizedContent } from '../../../utils/localizeContent';
+
+/**
+ * Stable empty default for the `messages` prop: a fresh `[]` per render would
+ * invalidate the memoized history fragments and re-run the token estimate on
+ * every render for surfaces that don't pass a conversation.
+ */
+const NO_MESSAGES = [];
+
+/** Format elapsed seconds as m:ss for the recording timer. */
+const formatElapsed = seconds => {
+  const total = Math.floor(seconds || 0);
+  const m = Math.floor(total / 60);
+  const s = total % 60;
+  return `${m}:${String(s).padStart(2, '0')}`;
+};
 
 /**
  * Chat input component following Claude's design
@@ -31,6 +53,17 @@ function ChatInput({
   onCancel,
   onVoiceInput,
   onVoiceCommand,
+  // Record→transcribe control (distinct from dictation onVoiceInput):
+  // records audio and renders the transcript as an assistant chat turn.
+  onRecordTranscription = null,
+  transcriptionRecordEnabled = false,
+  isRecordingTranscription = false,
+  recordTranscriptionElapsed = 0,
+  // Per-chat transcription toggle (like websearch): when on, audio/video
+  // uploads are transcribed by the transcription model instead of the chat LLM.
+  transcriptionAvailable = false,
+  transcriptionEnabled = false,
+  onTranscriptionEnabledChange = null,
   onFileSelect,
   allowEmptySubmit = false,
   inputRef = null,
@@ -79,6 +112,14 @@ function ChatInput({
   onSkillSelect = null,
   // Skills slash command gating (when skills feature is enabled and app has skills)
   skillsSlashEnabled = false,
+  // Conversation so far. Every prior message is re-sent on each turn, so the
+  // context-window indicator has to count the whole history — not just the
+  // pending message (issue #2283). Optional: surfaces without it simply show
+  // the pending input's share of the window.
+  messages = NO_MESSAGES,
+  // Mirrors the app/user "send chat history" setting. When off, no history is
+  // re-sent and the estimate covers the pending message only.
+  sendChatHistory = true,
   // Clarification state
   clarificationPending = false, // When true, input is disabled waiting for clarification answer
   // Document token size warning
@@ -156,23 +197,53 @@ function ChatInput({
   // navigates emails or pins/unpins — not on every keystroke.
   const extraContextTokens = useEstimatedTokenCount(extraContextText || '', { debounceMs: 150 });
 
-  // Estimate how much of the model's context window the pending input would
-  // consume. This is a live, client-side estimate using the shared tokenizer;
-  // the provider-reported count after each turn is authoritative. Only shown
-  // when the model exposes a context window and inputTokens is non-zero.
+  // The conversation so far, flattened into the text fragments that go back to
+  // the model on the next turn (message content plus attached document text).
+  // Re-tokenized only when the message list actually changes, and per-fragment
+  // counts are memoized, so a long conversation is not re-scanned per render.
+  const historyFragments = useMemo(
+    () => conversationTokenFragments(messages, { includeHistory: sendChatHistory !== false }),
+    [messages, sendChatHistory]
+  );
+  const historyTokens = useEstimatedTokensForFragments(historyFragments, { debounceMs: 150 });
+
+  // The app's system prompt is part of every request. Sources, style/output-format
+  // instructions and tool definitions are resolved server-side and stay invisible
+  // here, so the estimate remains a lower bound on the real prompt size.
+  const systemPromptText = useMemo(
+    () => getLocalizedContent(app?.system, currentLanguage) || '',
+    [app?.system, currentLanguage]
+  );
+  const systemTokens = useEstimatedTokenCount(systemPromptText);
+
+  // Estimate how much of the model's context window the next request would
+  // consume: system prompt + full conversation + pending input. This is a live,
+  // client-side estimate using the shared tokenizer; the provider-reported count
+  // after each turn is authoritative. Only shown when the model exposes a context
+  // window and there is something to report — a fresh, untouched chat stays quiet.
   // Note: extraContextTokens (e.g. Outlook email body / pinned emails) can make
-  // inputTokens non-zero even when no text has been typed and no files attached.
+  // pendingTokens non-zero even when no text has been typed and no files attached.
   const contextUsage = useMemo(() => {
     const contextWindow = selectedModelData?.contextWindow;
     if (!contextWindow) return null;
-    const inputTokens = valueTokens + fileTokens + extraContextTokens;
-    if (inputTokens === 0) return null;
+    const pendingTokens = valueTokens + fileTokens + extraContextTokens;
+    if (pendingTokens === 0 && historyTokens === 0) return null;
     return computeContextUsage({
       contextWindow,
-      inputTokens,
+      inputTokens: systemTokens + historyTokens + pendingTokens,
       maxOutputTokens: selectedModelData?.maxOutputTokens || 0
     });
-  }, [selectedModelData, fileTokens, valueTokens, extraContextTokens]);
+  }, [selectedModelData, fileTokens, valueTokens, extraContextTokens, historyTokens, systemTokens]);
+
+  // Warn as the window fills up: the indicator is the only place a user can see
+  // a multiturn conversation approaching the limit.
+  const contextUsageTone = !contextUsage
+    ? ''
+    : contextUsage.remaining <= 0
+      ? 'text-red-600 dark:text-red-400'
+      : contextUsage.usedRatio >= 0.85
+        ? 'text-amber-600 dark:text-amber-400'
+        : 'text-gray-400 dark:text-gray-500';
 
   // Determine input mode configuration
   const inputMode = app?.inputMode;
@@ -432,7 +503,7 @@ function ChatInput({
 
       {fileTokenWarning && (
         <div className="mx-2 mb-2 flex items-start gap-2 rounded-lg border border-amber-300 bg-amber-50 p-2 text-sm text-amber-800 dark:border-amber-700 dark:bg-amber-900/20 dark:text-amber-200">
-          <span className="mt-0.5 flex-shrink-0">⚠️</span>
+          <span className="mt-0.5 shrink-0">⚠️</span>
           <div className="flex flex-col gap-1">
             <span>
               {(fileTokenWarning.files?.length || 0) > 1
@@ -466,16 +537,19 @@ function ChatInput({
       {/* Status line above the input: ephemeral "not saved" notice centered,
           token count right. Rendered as one row to keep vertical space tight. */}
       {(ephemeral || (contextUsage && !fileTokenWarning)) && (
-        <div className="mx-2 mb-0.5 grid grid-cols-[1fr_auto_1fr] items-center gap-2 text-xs">
-          <span />
-          <span className="text-center text-violet-600 dark:text-violet-400">
+        /* Flex on mobile so the token count gets the width it needs: in the
+           three-column grid it was squeezed into a 1fr column and wrapped
+           ("~290 / 32,768 context" + "tokens" on a second line). */
+        <div className="mx-2 mb-0.5 flex items-center justify-between gap-2 text-xs sm:grid sm:grid-cols-[1fr_auto_1fr]">
+          <span className="hidden sm:block" />
+          <span className="min-w-0 truncate text-center text-violet-600 dark:text-violet-400">
             {ephemeral &&
               t(
                 'chat.ephemeral.activeNotice',
                 'Messages are not saved and disappear when you leave or reload.'
               )}
           </span>
-          <span className="justify-self-end text-gray-400 dark:text-gray-500">
+          <span className={`shrink-0 whitespace-nowrap justify-self-end ${contextUsageTone}`}>
             {contextUsage &&
               !fileTokenWarning &&
               t('chat.contextUsage', {
@@ -521,7 +595,7 @@ function ChatInput({
           ref={formRef}
           onSubmit={handleSubmit}
           autoComplete="off"
-          className={`flex flex-col border rounded-2xl bg-white dark:bg-gray-800 shadow-sm focus-within:ring-2 mb-1 ${
+          className={`flex flex-col border rounded-2xl bg-white dark:bg-gray-800 shadow-xs focus-within:ring-2 mb-1 ${
             ephemeral
               ? 'border-violet-400 dark:border-violet-500 focus-within:ring-violet-500 focus-within:border-violet-500'
               : 'border-gray-300 dark:border-gray-600 focus-within:ring-indigo-500 focus-within:border-indigo-500'
@@ -538,7 +612,7 @@ function ChatInput({
               onChange={handleInputChange}
               onKeyDown={handleKeyDown}
               disabled={isInputDisabled || isProcessing}
-              className="w-full px-3 py-2 pr-10 bg-transparent border-0 focus:ring-0 focus:outline-none resize-none dark:text-gray-100 rounded-t-2xl"
+              className="w-full px-3 py-2 pr-10 bg-transparent border-0 focus:ring-0 focus:outline-hidden resize-none dark:text-gray-100 rounded-t-2xl"
               placeholder={defaultPlaceholder}
               ref={actualInputRef}
               aria-label={t('chat.inputLabel', 'Type your message')}
@@ -575,7 +649,7 @@ function ChatInput({
           </div>
 
           {/* Bottom line: Actions menu, model selector, send/stop button */}
-          <div className="flex items-center gap-2 px-3 pb-2 border-t border-gray-100 dark:border-gray-700/50 pt-2">
+          <div className="flex items-center gap-2 px-3 pb-1.5 border-t border-gray-100 dark:border-gray-700/50 pt-1.5 sm:pb-2 sm:pt-2">
             {/* Chat Input Actions Menu */}
             <ChatInputActionsMenu
               app={app}
@@ -601,6 +675,9 @@ function ChatInput({
               onImageQualityChange={onImageQualityChange}
               websearchEnabled={websearchEnabled}
               onWebsearchEnabledChange={onWebsearchEnabledChange}
+              transcriptionAvailable={transcriptionAvailable}
+              transcriptionEnabled={transcriptionEnabled}
+              onTranscriptionEnabledChange={onTranscriptionEnabledChange}
               hostContextFlags={hostContextFlags}
               onHostContextFlagChange={onHostContextFlagChange}
             />
@@ -659,6 +736,43 @@ function ChatInput({
               </div>
             )}
 
+            {/* Record → transcribe. Distinct from dictation: the
+                recording is transcribed into an assistant chat message. */}
+            {transcriptionRecordEnabled && onRecordTranscription && (
+              <button
+                type="button"
+                onClick={onRecordTranscription}
+                disabled={isInputDisabled}
+                aria-pressed={isRecordingTranscription}
+                title={
+                  isRecordingTranscription
+                    ? t('transcription.stopRecording', 'Stop recording & transcribe')
+                    : t('transcription.record', 'Record audio to transcribe')
+                }
+                className={`flex items-center gap-1.5 p-2 rounded-lg transition-colors disabled:opacity-50 ${
+                  isRecordingTranscription
+                    ? 'bg-red-100 text-red-600 dark:bg-red-900/40 dark:text-red-400'
+                    : 'text-red-600 dark:text-red-400 hover:bg-gray-100 dark:hover:bg-gray-700'
+                }`}
+              >
+                {/* Record = red dot; stop = red square (distinct from the
+                    dictation microphone icon). */}
+                <span
+                  className={`inline-block bg-red-600 dark:bg-red-500 ${
+                    isRecordingTranscription
+                      ? 'w-3 h-3 rounded-xs animate-pulse'
+                      : 'w-3.5 h-3.5 rounded-full'
+                  }`}
+                  aria-hidden="true"
+                />
+                {isRecordingTranscription && (
+                  <span className="text-xs tabular-nums">
+                    {formatElapsed(recordTranscriptionElapsed)}
+                  </span>
+                )}
+              </button>
+            )}
+
             {/* Image Generation Controls - Show on desktop only if model supports it */}
             {model?.supportsImageGeneration && (
               <div className="hidden md:flex gap-2">
@@ -701,7 +815,7 @@ function ChatInput({
               type="button"
               onClick={isProcessing ? handleCancel : handleSubmit}
               disabled={isInputDisabled || (!allowEmptySubmit && !value.trim() && !isProcessing)}
-              className={`p-2.5 rounded-lg font-medium flex items-center justify-center transition-colors ${
+              className={`p-2 sm:p-2.5 rounded-lg font-medium flex items-center justify-center transition-colors ${
                 disabled || (!allowEmptySubmit && !value.trim() && !isProcessing)
                   ? 'bg-gray-200 text-gray-400 cursor-not-allowed dark:bg-gray-700 dark:text-gray-500'
                   : isProcessing
@@ -720,16 +834,19 @@ function ChatInput({
             (incognito) toggle right-aligned under the send button. The active
             "not saved" notice lives in the status line above the input. */}
         {(ephemeralToggleAvailable || disclaimer) && (
-          <div className="grid grid-cols-[1fr_auto_1fr] items-center gap-2">
-            <span />
-            <div className="text-center">{disclaimer}</div>
-            <div className="justify-self-end">
+          <div className="flex items-center justify-between gap-2 sm:grid sm:grid-cols-[1fr_auto_1fr]">
+            <span className="hidden sm:block" />
+            <div className="min-w-0 flex-1 text-center sm:flex-none">{disclaimer}</div>
+            <div className="shrink-0 justify-self-end">
               {ephemeralToggleAvailable && (
                 <button
                   type="button"
                   onClick={() => onEphemeralChange(!ephemeral)}
                   disabled={isInputDisabled || isProcessing}
                   aria-pressed={ephemeral}
+                  // Explicit name: below `sm` the visible label is hidden, and
+                  // a `title` alone is an unreliable accessible name.
+                  aria-label={t('chat.ephemeral.label', 'Incognito mode')}
                   title={
                     ephemeral
                       ? t('chat.ephemeral.disable', 'Turn off ephemeral chat')
@@ -745,7 +862,13 @@ function ChatInput({
                   }`}
                 >
                   <Icon name="ghost" size="sm" solid={ephemeral} />
-                  <span>{t('chat.ephemeral.label', 'Incognito mode')}</span>
+                  {/* Icon-only below `sm` (phones and the Outlook taskpane):
+                      the label cost ~110px of the row and pushed the
+                      disclaimer onto a third line. The button's `title` and
+                      `aria-pressed` still name it for assistive tech. */}
+                  <span className="hidden sm:inline">
+                    {t('chat.ephemeral.label', 'Incognito mode')}
+                  </span>
                 </button>
               )}
             </div>

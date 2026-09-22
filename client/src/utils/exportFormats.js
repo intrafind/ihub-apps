@@ -1,4 +1,6 @@
-import writeXlsxFile from 'write-excel-file';
+// write-excel-file v4 dropped the root entry point in favor of per-runtime
+// subpaths ('/browser', '/node', '/universal').
+import writeXlsxFile from 'write-excel-file/browser';
 import { Document, Paragraph, TextRun, HeadingLevel, Table, TableRow, TableCell } from 'docx';
 import PptxGenJS from 'pptxgenjs';
 
@@ -21,6 +23,43 @@ export const sanitizeForSpreadsheet = value => {
   if (value === null || value === undefined) return '';
   const stringValue = String(value);
   return /^[=+\-@\t\r]/.test(stringValue) ? `'${stringValue}` : stringValue;
+};
+
+/**
+ * Settings rows printed in the "Settings" section of TXT/DOCX/XLSX/PPTX
+ * exports. The export dialog always passes a settings object (its fields may
+ * all be undefined), so exporters must decide on the rendered rows, not on the
+ * object's truthiness — otherwise an empty "Settings" heading is emitted.
+ */
+export const getExportSettingsRows = settings => {
+  if (!settings) return [];
+  const rows = [];
+  if (settings.model) rows.push(['Model', String(settings.model)]);
+  if (settings.temperature !== undefined && settings.temperature !== null) {
+    rows.push(['Temperature', String(settings.temperature)]);
+  }
+  if (settings.style) rows.push(['Style', String(settings.style)]);
+  if (settings.outputFormat) rows.push(['Output Format', String(settings.outputFormat)]);
+  return rows;
+};
+
+/**
+ * Trigger a browser download for a Blob. The anchor is attached to the
+ * document and the object URL revoked asynchronously: revoking synchronously
+ * after click() or clicking a detached anchor can yield empty or missing
+ * downloads in some browsers and embedded hosts (Office task pane, extension
+ * side panel).
+ */
+const downloadBlob = (blob, filename) => {
+  const url = URL.createObjectURL(blob);
+  const link = document.createElement('a');
+  link.href = url;
+  link.download = filename;
+  link.style.display = 'none';
+  document.body.appendChild(link);
+  link.click();
+  document.body.removeChild(link);
+  setTimeout(() => URL.revokeObjectURL(url), 1000);
 };
 
 /** Strip markdown noise, collapse whitespace, ASCII-kebab-case, cap length. */
@@ -684,16 +723,13 @@ export const exportToXLSX = async (
   });
 
   // Add settings section if available
-  if (settings && Object.keys(settings).filter(k => settings[k]).length > 0) {
+  const settingsRows = getExportSettingsRows(settings);
+  if (settingsRows.length > 0) {
     data.push([{ value: '', span: 3 }]);
     data.push([{ value: 'Settings', ...headerStyle, span: 3 }]);
-
-    if (settings.model) data.push([{ value: 'Model' }, { value: settings.model, span: 2 }]);
-    if (settings.temperature !== undefined)
-      data.push([{ value: 'Temperature' }, { value: String(settings.temperature), span: 2 }]);
-    if (settings.style) data.push([{ value: 'Style' }, { value: settings.style, span: 2 }]);
-    if (settings.outputFormat)
-      data.push([{ value: 'Output Format' }, { value: settings.outputFormat, span: 2 }]);
+    settingsRows.forEach(([label, value]) => {
+      data.push([{ value: label }, { value: sanitizeForSpreadsheet(value), span: 2 }]);
+    });
   }
 
   // Define column widths
@@ -733,7 +769,7 @@ export const exportToCSV = async (
   const escapeCSV = value => {
     const stringValue = sanitizeForSpreadsheet(value);
     // Escape quotes and wrap in quotes if contains comma, quote, or newline
-    if (stringValue.includes(',') || stringValue.includes('"') || stringValue.includes('\n')) {
+    if (/[",\r\n]/.test(stringValue)) {
       return `"${stringValue.replace(/"/g, '""')}"`;
     }
     return stringValue;
@@ -760,15 +796,13 @@ export const exportToCSV = async (
   });
 
   // Create CSV content
-  const csvContent = rows.join('\n');
+  const csvContent = rows.join('\r\n');
 
   // Download file
-  const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8' });
-  const link = document.createElement('a');
-  link.href = URL.createObjectURL(blob);
-  link.download = filename;
-  link.click();
-  URL.revokeObjectURL(link.href);
+  // Prepend a UTF-8 BOM so Excel detects the encoding instead of falling back
+  // to the system code page (mangled umlauts / unreadable file).
+  const blob = new Blob(['\uFEFF' + csvContent], { type: 'text/csv;charset=utf-8' });
+  downloadBlob(blob, filename);
 
   return { success: true, filename };
 };
@@ -868,7 +902,8 @@ export const exportToDOCX = async (
   });
 
   // Add settings section if available
-  if (settings) {
+  const settingsRows = getExportSettingsRows(settings);
+  if (settingsRows.length > 0) {
     children.push(
       new Paragraph({
         text: 'Settings',
@@ -876,43 +911,13 @@ export const exportToDOCX = async (
       })
     );
 
-    if (settings.model) {
+    settingsRows.forEach(([label, value]) => {
       children.push(
         new Paragraph({
-          children: [new TextRun({ text: 'Model: ', bold: true }), new TextRun(settings.model)]
+          children: [new TextRun({ text: `${label}: `, bold: true }), new TextRun(value)]
         })
       );
-    }
-
-    if (settings.temperature !== undefined) {
-      children.push(
-        new Paragraph({
-          children: [
-            new TextRun({ text: 'Temperature: ', bold: true }),
-            new TextRun(String(settings.temperature))
-          ]
-        })
-      );
-    }
-
-    if (settings.style) {
-      children.push(
-        new Paragraph({
-          children: [new TextRun({ text: 'Style: ', bold: true }), new TextRun(settings.style)]
-        })
-      );
-    }
-
-    if (settings.outputFormat) {
-      children.push(
-        new Paragraph({
-          children: [
-            new TextRun({ text: 'Output Format: ', bold: true }),
-            new TextRun(settings.outputFormat)
-          ]
-        })
-      );
-    }
+    });
   }
 
   // Create document with proper numbering support
@@ -950,11 +955,7 @@ export const exportToDOCX = async (
   const blob = await Packer.toBlob(doc);
 
   // Download file
-  const link = document.createElement('a');
-  link.href = URL.createObjectURL(blob);
-  link.download = filename;
-  link.click();
-  URL.revokeObjectURL(link.href);
+  downloadBlob(blob, filename);
 
   return { success: true, filename };
 };
@@ -1001,24 +1002,19 @@ export const exportToTXT = (
   });
 
   // Add settings section
-  if (settings) {
+  const settingsRows = getExportSettingsRows(settings);
+  if (settingsRows.length > 0) {
     content += '='.repeat(50) + '\n';
     content += 'Settings\n';
     content += '='.repeat(50) + '\n\n';
-
-    if (settings.model) content += `Model: ${settings.model}\n`;
-    if (settings.temperature !== undefined) content += `Temperature: ${settings.temperature}\n`;
-    if (settings.style) content += `Style: ${settings.style}\n`;
-    if (settings.outputFormat) content += `Output Format: ${settings.outputFormat}\n`;
+    settingsRows.forEach(([label, value]) => {
+      content += `${label}: ${value}\n`;
+    });
   }
 
   // Create blob and download
   const blob = new Blob([content], { type: 'text/plain;charset=utf-8' });
-  const link = document.createElement('a');
-  link.href = URL.createObjectURL(blob);
-  link.download = filename;
-  link.click();
-  URL.revokeObjectURL(link.href);
+  downloadBlob(blob, filename);
 
   return { success: true, filename };
 };
@@ -1169,7 +1165,8 @@ export const exportToPPTX = async (
   });
 
   // Settings slide
-  if (settings && Object.keys(settings).length > 0) {
+  const settingsRows = getExportSettingsRows(settings);
+  if (settingsRows.length > 0) {
     const settingsSlide = pres.addSlide();
     settingsSlide.background = { color: 'F9FAFB' };
 
@@ -1183,12 +1180,7 @@ export const exportToPPTX = async (
       color: '1F2937'
     });
 
-    let settingsText = '';
-    if (settings.model) settingsText += `Model: ${settings.model}\n`;
-    if (settings.temperature !== undefined)
-      settingsText += `Temperature: ${settings.temperature}\n`;
-    if (settings.style) settingsText += `Style: ${settings.style}\n`;
-    if (settings.outputFormat) settingsText += `Output Format: ${settings.outputFormat}\n`;
+    const settingsText = settingsRows.map(([label, value]) => `${label}: ${value}\n`).join('');
 
     settingsSlide.addText(settingsText, {
       x: 0.5,

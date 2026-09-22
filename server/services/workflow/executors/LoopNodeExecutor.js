@@ -21,6 +21,8 @@
 
 import vm from 'node:vm';
 import { BaseNodeExecutor } from './BaseNodeExecutor.js';
+import { DAGScheduler } from '../DAGScheduler.js';
+import { emitNodeProgress } from '../nodeProgress.js';
 import logger from '../../../utils/logger.js';
 import { actionTracker } from '../../../actionTracker.js';
 
@@ -60,6 +62,39 @@ const ENGINE_INTERNAL_STATE_KEYS = new Set([
   '_currentStep',
   '_totalNodes'
 ]);
+
+/** State keys the loop owns while iterating; restored when the loop ends. */
+const LOOP_SCOPE_KEYS = ['_loopIndex', '_loopHuman', '_loopItem', '_loopTotal'];
+
+/**
+ * Per-worker copy of workflow state data for parallel iteration.
+ *
+ * Engine-internal keys hold live references the engine mutates after the
+ * executor returns (see the note on `propagatedData` below), so they are
+ * carried over by reference rather than cloned; everything else is deep
+ * copied so one worker's writes cannot reach another's.
+ *
+ * @param {Object} data - Workflow state data
+ * @returns {Object} A copy safe to hand a single parallel worker
+ */
+function cloneData(data) {
+  const source = data || {};
+  const internals = {};
+  const clonable = {};
+  for (const [key, value] of Object.entries(source)) {
+    if (ENGINE_INTERNAL_STATE_KEYS.has(key)) internals[key] = value;
+    else clonable[key] = value;
+  }
+  let copied;
+  try {
+    copied = structuredClone(clonable);
+  } catch {
+    // Functions, class instances and other non-clonable values fall back to a
+    // shallow copy rather than failing the loop.
+    copied = { ...clonable };
+  }
+  return { ...copied, ...internals };
+}
 
 /**
  * Executor that runs a list of body nodes repeatedly based on the configured loop mode.
@@ -112,6 +147,8 @@ export class LoopNodeExecutor extends BaseNodeExecutor {
    */
   constructor(options = {}) {
     super(options);
+    /** Reused for evaluating edge conditions inside a loop body. */
+    this.scheduler = new DAGScheduler();
   }
 
   /**
@@ -131,9 +168,29 @@ export class LoopNodeExecutor extends BaseNodeExecutor {
       array,
       condition,
       maxIterations = 50,
-      body = [],
-      outputVariable
+      body: inlineBody = [],
+      outputVariable,
+      // Bookkeeping the loop owns, so a body doesn't need plumbing steps:
+      itemVariable, // name the current item, e.g. '_currentDoc'
+      countInto, // path incremented once per completed round, e.g. '_coverage.processed'
+      // 'stop' (default) ends the loop at the first failed round; 'skip' moves
+      // on to the next item. A pass over documents wants 'skip': one file the
+      // corpus cannot read should not cost you the other thirteen.
+      onItemError = 'stop',
+      // Optional state path collecting one entry per skipped round, so a
+      // report can say what was left out instead of quietly under-counting.
+      recordFailuresInto
     } = config;
+
+    // Body resolution order:
+    // 1. Inline `config.body` (legacy / serializer-generated workflows)
+    // 2. Container children — workflow nodes whose `parentId` is this loop
+    //    node, ordered by the edges between them (visual editor containers)
+    const usingInlineBody = Array.isArray(inlineBody) && inlineBody.length > 0;
+    const body = usingInlineBody ? inlineBody : this.resolveContainerBody(node, context);
+    // Edges *between* body nodes drive conditional paths inside one iteration.
+    // Inline bodies have no edges and always run straight through.
+    const bodyEdges = usingInlineBody ? [] : this.resolveBodyEdges(body, context);
 
     // Hard cap prevents runaway loops regardless of user configuration.
     // Raised from 200 → 500 to support per-document analysis over larger
@@ -162,6 +219,27 @@ export class LoopNodeExecutor extends BaseNodeExecutor {
     try {
       const results = [];
       let currentState = { ...state, data: { ...state.data } };
+      // A body step that reports an *error* (as opposed to merely failing an
+      // iteration) makes the whole loop fail. Today only the pause guard does
+      // this: continuing past it would run the rest of the workflow on state a
+      // human was supposed to shape. Ordinary iteration failures keep their
+      // existing behaviour of being recorded and tolerated.
+      let bodyError = null;
+
+      // Snapshot any loop variables already in scope (we are nested inside
+      // another container) so they can be restored when this loop finishes.
+      const scopeKeys = itemVariable ? [...LOOP_SCOPE_KEYS, itemVariable] : LOOP_SCOPE_KEYS;
+      const enclosingLoopVars = {};
+      for (const key of scopeKeys) {
+        if (key in currentState.data) enclosingLoopVars[key] = currentState.data[key];
+      }
+
+      // A loop that counts defines its own counter. Without this the path is
+      // undefined until the first round finishes, so a `while` condition that
+      // reads it (`data.rounds < data.maxRounds`) compares against undefined
+      // on the very first check — and no workflow should need a seeding step
+      // just to make its own loop condition evaluable.
+      if (countInto) this.seedCounter(currentState, countInto);
 
       switch (mode) {
         case 'for': {
@@ -175,6 +253,7 @@ export class LoopNodeExecutor extends BaseNodeExecutor {
             const bodyResult = await this.executeBodyNodes(body, currentState, context, {
               loopNodeId: node.id,
               chatId,
+              bodyEdges,
               iteration: results.length,
               total:
                 mode === 'for'
@@ -184,6 +263,7 @@ export class LoopNodeExecutor extends BaseNodeExecutor {
                     : null
             });
             results.push(bodyResult.output);
+            if (bodyResult.error && !bodyError) bodyError = bodyResult;
             iterationTimings.push({
               iteration: results.length - 1,
               startedAt: bodyResult.startedAt || null,
@@ -192,8 +272,20 @@ export class LoopNodeExecutor extends BaseNodeExecutor {
               ...(bodyResult.failedAtNodeId ? { failedAtNodeId: bodyResult.failedAtNodeId } : {})
             });
             currentState = bodyResult.state;
+            // Bump AFTER adopting the body's state: `executeBodyNodes`
+            // returns a fresh object copied before this point, so a bump
+            // applied to the previous one is thrown away.
+            if (countInto && !bodyResult.failed) this.bumpCounter(currentState, countInto);
 
-            if (bodyResult.failed) break;
+            if (bodyResult.failed) {
+              this.noteFailedRound(
+                currentState,
+                recordFailuresInto,
+                bodyResult,
+                results.length - 1
+              );
+              if (onItemError !== 'skip') break;
+            }
           }
           break;
         }
@@ -210,16 +302,52 @@ export class LoopNodeExecutor extends BaseNodeExecutor {
           }
 
           const iterArr = resolvedArray.slice(0, hardCap);
+
+          // Optional bounded parallelism for forEach: run up to `concurrency`
+          // iterations at once. Each iteration works on a snapshot of the
+          // PRE-LOOP state — cross-iteration state writes are intentionally
+          // NOT propagated in parallel mode (only the collected results in
+          // `outputVariable` and step logs survive), because concurrent
+          // last-write-wins merging would be non-deterministic.
+          const concurrency = Math.max(1, Math.min(parseInt(config.concurrency, 10) || 1, 10));
+          if (concurrency > 1) {
+            const parallelOutcome = await this.executeForEachParallel(
+              node,
+              // `currentState`, not the pre-loop `state`: the counter seeded
+              // by `seedCounter` lives on the former, and a body step reading
+              // it must see 0 rather than undefined.
+              currentState,
+              context,
+              iterArr,
+              body,
+              bodyEdges,
+              concurrency,
+              chatId,
+              itemVariable,
+              onItemError
+            );
+            results.push(...parallelOutcome.results);
+            iterationTimings.push(...parallelOutcome.iterationTimings);
+            if (parallelOutcome.error) bodyError = parallelOutcome.error;
+            if (countInto) {
+              const done = parallelOutcome.iterationTimings.filter(tm => !tm.failed).length;
+              for (let n = 0; n < done; n++) this.bumpCounter(currentState, countInto);
+            }
+            break;
+          }
+
           for (let i = 0; i < iterArr.length; i++) {
             if (context.abortSignal?.aborted) break;
             currentState.data._loopIndex = i;
             currentState.data._loopHuman = i + 1;
             currentState.data._loopItem = iterArr[i];
             currentState.data._loopTotal = iterArr.length;
+            if (itemVariable) currentState.data[itemVariable] = iterArr[i];
 
             const bodyResult = await this.executeBodyNodes(body, currentState, context, {
               loopNodeId: node.id,
               chatId,
+              bodyEdges,
               iteration: results.length,
               total:
                 mode === 'for'
@@ -229,6 +357,7 @@ export class LoopNodeExecutor extends BaseNodeExecutor {
                     : null
             });
             results.push(bodyResult.output);
+            if (bodyResult.error && !bodyError) bodyError = bodyResult;
             iterationTimings.push({
               iteration: results.length - 1,
               startedAt: bodyResult.startedAt || null,
@@ -237,8 +366,20 @@ export class LoopNodeExecutor extends BaseNodeExecutor {
               ...(bodyResult.failedAtNodeId ? { failedAtNodeId: bodyResult.failedAtNodeId } : {})
             });
             currentState = bodyResult.state;
+            // Bump AFTER adopting the body's state: `executeBodyNodes`
+            // returns a fresh object copied before this point, so a bump
+            // applied to the previous one is thrown away.
+            if (countInto && !bodyResult.failed) this.bumpCounter(currentState, countInto);
 
-            if (bodyResult.failed) break;
+            if (bodyResult.failed) {
+              this.noteFailedRound(
+                currentState,
+                recordFailuresInto,
+                bodyResult,
+                results.length - 1
+              );
+              if (onItemError !== 'skip') break;
+            }
           }
           break;
         }
@@ -264,9 +405,11 @@ export class LoopNodeExecutor extends BaseNodeExecutor {
             const bodyResult = await this.executeBodyNodes(body, currentState, context, {
               loopNodeId: node.id,
               chatId,
+              bodyEdges,
               iteration: results.length
             });
             results.push(bodyResult.output);
+            if (bodyResult.error && !bodyError) bodyError = bodyResult;
             iterationTimings.push({
               iteration: results.length - 1,
               startedAt: bodyResult.startedAt || null,
@@ -276,8 +419,20 @@ export class LoopNodeExecutor extends BaseNodeExecutor {
             });
             // Use returned state so the next condition evaluation sees updated data
             currentState = bodyResult.state;
+            // Bump AFTER adopting the body's state: `executeBodyNodes`
+            // returns a fresh object copied before this point, so a bump
+            // applied to the previous one is thrown away.
+            if (countInto && !bodyResult.failed) this.bumpCounter(currentState, countInto);
 
-            if (bodyResult.failed) break;
+            if (bodyResult.failed) {
+              this.noteFailedRound(
+                currentState,
+                recordFailuresInto,
+                bodyResult,
+                results.length - 1
+              );
+              if (onItemError !== 'skip') break;
+            }
             i++;
           }
           break;
@@ -322,9 +477,11 @@ export class LoopNodeExecutor extends BaseNodeExecutor {
             const bodyResult = await this.executeBodyNodes(resolvedBody, currentState, context, {
               loopNodeId: node.id,
               chatId,
+              bodyEdges,
               iteration: results.length
             });
             results.push(bodyResult.output);
+            if (bodyResult.error && !bodyError) bodyError = bodyResult;
             iterationTimings.push({
               iteration: results.length - 1,
               startedAt: bodyResult.startedAt || null,
@@ -333,6 +490,10 @@ export class LoopNodeExecutor extends BaseNodeExecutor {
               ...(bodyResult.failedAtNodeId ? { failedAtNodeId: bodyResult.failedAtNodeId } : {})
             });
             currentState = bodyResult.state;
+            // Bump AFTER adopting the body's state: `executeBodyNodes`
+            // returns a fresh object copied before this point, so a bump
+            // applied to the previous one is thrown away.
+            if (countInto && !bodyResult.failed) this.bumpCounter(currentState, countInto);
 
             // Resolve the task object in the new state (executeBodyNodes
             // shallow-copies state.data, so we have to look it up again).
@@ -370,11 +531,13 @@ export class LoopNodeExecutor extends BaseNodeExecutor {
           });
       }
 
-      // Clean up temporary loop variables from state
-      delete currentState.data._loopIndex;
-      delete currentState.data._loopHuman;
-      delete currentState.data._loopItem;
-      delete currentState.data._loopTotal;
+      // Restore the loop variables to what they were before this loop ran.
+      // For a nested container that hands the ENCLOSING loop its item back,
+      // so body steps after an inner loop still see the outer item.
+      for (const key of scopeKeys) {
+        if (key in enclosingLoopVars) currentState.data[key] = enclosingLoopVars[key];
+        else delete currentState.data[key];
+      }
 
       // Build stateUpdates from body-produced data ONLY. We must NOT spread
       // engine-internal keys (nodeResults, nodeInvocations, _workflow*, etc.)
@@ -431,6 +594,17 @@ export class LoopNodeExecutor extends BaseNodeExecutor {
         _stepLogs: { ...priorStepLogs, [node.id]: stepLog }
       };
 
+      if (bodyError) {
+        // Note: an error result carries no stateUpdates, so a loop that fails
+        // this way discards what its completed rounds produced. That matches
+        // how every other executor reports a failure; preserving partial
+        // state on failure would be an engine-wide change.
+        return this.createErrorResult(bodyError.error, {
+          nodeId: node.id,
+          failedAtNodeId: bodyError.failedAtNodeId
+        });
+      }
+
       return this.createSuccessResult({ results, iterations: results.length }, { stateUpdates });
     } catch (error) {
       emitSse(
@@ -451,6 +625,241 @@ export class LoopNodeExecutor extends BaseNodeExecutor {
         error: error.message
       });
     }
+  }
+
+  /**
+   * Resolve the loop body from container children: workflow nodes whose
+   * `parentId` is this loop node, ordered by the edges between siblings
+   * (Kahn topological order; entry = child with no incoming sibling edge).
+   * Children not reachable through sibling edges are appended in their
+   * original array order so a disconnected body node still executes.
+   *
+   * @param {import('./BaseNodeExecutor.js').WorkflowNode} node - The loop node
+   * @param {import('./BaseNodeExecutor.js').ExecutionContext} context - Execution context
+   * @returns {Array<import('./BaseNodeExecutor.js').WorkflowNode>} Ordered body nodes
+   */
+  resolveContainerBody(node, context) {
+    const wfNodes = context?.workflow?.nodes;
+    if (!Array.isArray(wfNodes)) return [];
+    const children = wfNodes.filter(n => n?.parentId === node.id);
+    if (children.length <= 1) return children;
+
+    const childIds = new Set(children.map(c => c.id));
+    const wfEdges = (context.workflow.edges || []).filter(
+      e => childIds.has(e.source) && childIds.has(e.target)
+    );
+
+    const inDegree = new Map(children.map(c => [c.id, 0]));
+    const adjacency = new Map(children.map(c => [c.id, []]));
+    for (const edge of wfEdges) {
+      adjacency.get(edge.source).push(edge.target);
+      inDegree.set(edge.target, inDegree.get(edge.target) + 1);
+    }
+
+    const queue = children.filter(c => inDegree.get(c.id) === 0).map(c => c.id);
+    const ordered = [];
+    const seen = new Set();
+    while (queue.length > 0) {
+      const id = queue.shift();
+      if (seen.has(id)) continue;
+      seen.add(id);
+      ordered.push(id);
+      for (const next of adjacency.get(id) || []) {
+        inDegree.set(next, inDegree.get(next) - 1);
+        if (inDegree.get(next) === 0) queue.push(next);
+      }
+    }
+    // Guard against sibling cycles: append anything Kahn couldn't order.
+    for (const child of children) {
+      if (!seen.has(child.id)) ordered.push(child.id);
+    }
+
+    const byId = new Map(children.map(c => [c.id, c]));
+    return ordered.map(id => byId.get(id));
+  }
+
+  /**
+   * Appends one entry to the loop's failure log, when the loop configures a
+   * path for it. Without this a skipped round is invisible: the counters only
+   * ever move for rounds that succeeded, so a report would show fewer
+   * processed items with nothing to explain the gap.
+   *
+   * @param {import('./BaseNodeExecutor.js').WorkflowState} state - Loop state
+   * @param {string} [path] - Dotted state path holding an array
+   * @param {Object} bodyResult - The failed iteration's result
+   * @param {number} iteration - 0-based round number
+   */
+  noteFailedRound(state, path, bodyResult, iteration) {
+    if (!path) return;
+    const parts = String(path).split('.');
+    let target = state.data;
+    for (let i = 0; i < parts.length - 1; i++) {
+      const key = parts[i];
+      if (key === '__proto__' || key === 'constructor' || key === 'prototype') return;
+      if (typeof target[key] !== 'object' || target[key] === null) target[key] = {};
+      target = target[key];
+    }
+    const last = parts[parts.length - 1];
+    if (last === '__proto__' || last === 'constructor' || last === 'prototype') return;
+    if (!Array.isArray(target[last])) target[last] = [];
+    target[last].push({
+      iteration,
+      item: state.data._loopItem ?? null,
+      failedAtNodeId: bodyResult.failedAtNodeId || null,
+      error: bodyResult.error || null
+    });
+  }
+
+  /**
+   * Defines a `countInto` path as 0 when it is not already a number, so the
+   * loop's own condition and any body step can read it from the first round.
+   *
+   * @param {import('./BaseNodeExecutor.js').WorkflowState} state - Loop state
+   * @param {string} path - Dotted state path, e.g. '_coverage.processed'
+   */
+  seedCounter(state, path) {
+    const parts = String(path).split('.');
+    let target = state.data;
+    for (let i = 0; i < parts.length - 1; i++) {
+      const key = parts[i];
+      if (key === '__proto__' || key === 'constructor' || key === 'prototype') return;
+      if (typeof target[key] !== 'object' || target[key] === null) target[key] = {};
+      target = target[key];
+    }
+    const last = parts[parts.length - 1];
+    if (last === '__proto__' || last === 'constructor' || last === 'prototype') return;
+    // Never reset a counter an outer step already set — only define a missing one.
+    if (typeof target[last] !== 'number') target[last] = 0;
+  }
+
+  /**
+   * Increments a (possibly nested) counter path by one on the live state.
+   * Used for the loop's `countInto` option so a body needs no counting step.
+   *
+   * @param {import('./BaseNodeExecutor.js').WorkflowState} state - Loop state
+   * @param {string} path - Dotted state path, e.g. '_coverage.processed'
+   */
+  bumpCounter(state, path) {
+    const parts = String(path).split('.');
+    let target = state.data;
+    for (let i = 0; i < parts.length - 1; i++) {
+      const key = parts[i];
+      if (key === '__proto__' || key === 'constructor' || key === 'prototype') return;
+      if (typeof target[key] !== 'object' || target[key] === null) target[key] = {};
+      target = target[key];
+    }
+    const last = parts[parts.length - 1];
+    if (last === '__proto__' || last === 'constructor' || last === 'prototype') return;
+    target[last] = (typeof target[last] === 'number' ? target[last] : 0) + 1;
+  }
+
+  /**
+   * Collects the workflow edges that connect two body nodes of this container.
+   * These drive conditional paths *within* one iteration (e.g. skip a step
+   * unless a flag is set); edges leaving the container are not included.
+   *
+   * @param {Array<import('./BaseNodeExecutor.js').WorkflowNode>} body - Body nodes
+   * @param {import('./BaseNodeExecutor.js').ExecutionContext} context - Execution context
+   * @returns {Array<object>} Edges whose source and target are both body nodes
+   */
+  resolveBodyEdges(body, context) {
+    const edges = context?.workflow?.edges;
+    if (!Array.isArray(edges) || !Array.isArray(body) || body.length < 2) return [];
+    const ids = new Set(body.map(n => n?.id));
+    return edges.filter(e => ids.has(e?.source) && ids.has(e?.target));
+  }
+
+  /**
+   * Run forEach iterations with bounded parallelism. Each iteration executes
+   * the body against a snapshot of the pre-loop state; results are collected
+   * in item order. When an iteration fails, no new iterations are scheduled
+   * (in-flight ones finish). Cross-iteration state updates are discarded —
+   * only the returned results (and step logs) survive, keeping parallel runs
+   * deterministic.
+   *
+   * @param {import('./BaseNodeExecutor.js').WorkflowNode} node - The loop node
+   * @param {import('./BaseNodeExecutor.js').WorkflowState} state - Pre-loop workflow state
+   * @param {import('./BaseNodeExecutor.js').ExecutionContext} context - Execution context
+   * @param {Array<*>} items - Array items to iterate over (already capped)
+   * @param {Array<import('./BaseNodeExecutor.js').WorkflowNode>} body - Body nodes
+   * @param {Array<object>} bodyEdges - Edges between body nodes (conditional paths)
+   * @param {number} concurrency - Max iterations in flight (2-10)
+   * @param {string} chatId - SSE channel id
+   * @param {string} [itemVariable] - Name to publish the current item under
+   * @param {string} [onItemError='stop'] - 'skip' keeps scheduling after a failed item
+   * @returns {Promise<{results: Array<*>, iterationTimings: Array<object>, error?: object}>}
+   */
+  async executeForEachParallel(
+    node,
+    state,
+    context,
+    items,
+    body,
+    bodyEdges,
+    concurrency,
+    chatId,
+    itemVariable,
+    onItemError = 'stop'
+  ) {
+    const results = new Array(items.length);
+    const iterationTimings = new Array(items.length);
+    let nextIndex = 0;
+    let parallelError = null;
+    let stopScheduling = false;
+
+    const runOne = async i => {
+      const iterationState = {
+        ...state,
+        // A spread copies only the top level, so every worker would share the
+        // same nested objects and arrays — a body step mutating one would
+        // leak across iterations and make a parallel run non-deterministic,
+        // which is exactly what the snapshot is supposed to prevent.
+        data: {
+          ...cloneData(state.data),
+          _loopIndex: i,
+          _loopHuman: i + 1,
+          _loopItem: items[i],
+          _loopTotal: items.length,
+          ...(itemVariable ? { [itemVariable]: items[i] } : {})
+        }
+      };
+      const bodyResult = await this.executeBodyNodes(body, iterationState, context, {
+        loopNodeId: node.id,
+        chatId,
+        bodyEdges,
+        iteration: i,
+        total: items.length
+      });
+      results[i] = bodyResult.output;
+      iterationTimings[i] = {
+        iteration: i,
+        startedAt: bodyResult.startedAt || null,
+        durationMs: bodyResult.durationMs || null,
+        failed: bodyResult.failed,
+        ...(bodyResult.failedAtNodeId ? { failedAtNodeId: bodyResult.failedAtNodeId } : {})
+      };
+      // With 'skip' a failed item must not stop the remaining work.
+      if (bodyResult.failed && onItemError !== 'skip') stopScheduling = true;
+      // Same rule as the sequential paths: an errored body step (today, one
+      // that tried to pause) ends the loop rather than being tolerated.
+      if (bodyResult.error && !parallelError) parallelError = bodyResult;
+    };
+
+    const worker = async () => {
+      while (!stopScheduling && !context.abortSignal?.aborted && nextIndex < items.length) {
+        const i = nextIndex++;
+        await runOne(i);
+      }
+    };
+
+    const workerCount = Math.min(concurrency, items.length);
+    await Promise.all(Array.from({ length: workerCount }, () => worker()));
+
+    return {
+      results: results.filter((_, i) => iterationTimings[i] !== undefined),
+      iterationTimings: iterationTimings.filter(t => t !== undefined),
+      ...(parallelError ? { error: parallelError } : {})
+    };
   }
 
   /**
@@ -488,14 +897,72 @@ export class LoopNodeExecutor extends BaseNodeExecutor {
       );
     }
 
+    // Walk the body. With edges between body nodes we follow every edge whose
+    // condition holds — matching the outer graph, where `getNextNodes` queues
+    // all matching targets — so an iteration can branch, fan out, and skip
+    // steps. Without edges we run every node in order.
+    const { bodyEdges = [] } = meta;
+    const byId = new Map(bodyNodes.map(n => [n.id, n]));
+    const stepCap = bodyNodes.length * 10 + 10;
+    // Entry points are every body node with no incoming sibling edge, not just
+    // the first: a body may have two independent chains, and a step wired to
+    // nothing at all still has to run.
+    const hasIncoming = new Set(bodyEdges.filter(e => byId.has(e.target)).map(e => e.target));
+    let pending =
+      bodyEdges.length > 0 ? bodyNodes.filter(n => !hasIncoming.has(n.id)) : bodyNodes.slice();
+    // A step runs at most once per iteration, so a diamond rejoins instead of
+    // running its join twice.
+    const seen = new Set(pending.map(n => n.id));
+    let steps = 0;
+
     let failedAtNodeId = null;
-    for (const bodyNode of bodyNodes) {
+    while (pending.length > 0) {
+      if (steps++ > stepCap) {
+        logger.warn('Loop body exceeded its step cap — stopping this iteration', {
+          component: 'LoopNodeExecutor',
+          loopNodeId,
+          stepCap
+        });
+        break;
+      }
+      const bodyNode = pending.shift();
+      emitNodeProgress(bodyNode, currentState, context);
       const executor = getExecutor(bodyNode.type);
       const result = await executor.execute(bodyNode, currentState, context);
       lastOutput = result.output;
 
       if (result.stateUpdates) {
         currentState.data = { ...currentState.data, ...result.stateUpdates };
+      }
+
+      // A body step that wants to pause the whole workflow (human-in-the-loop)
+      // cannot work here: pause/resume is driven by the outer scheduler, which
+      // only sees the loop node. Fail loudly instead of silently running on.
+      if (result.status === 'paused') {
+        logger.warn('Loop body attempted to pause the workflow', {
+          component: 'LoopNodeExecutor',
+          loopNodeId,
+          nodeId: bodyNode.id
+        });
+        return {
+          output: result.output,
+          state: currentState,
+          failed: true,
+          failedAtNodeId: bodyNode.id,
+          error: `Node '${bodyNode.id}' pauses the workflow, which is not supported inside a loop container. Move human steps outside the loop.`,
+          startedAt: iterStartedAt.toISOString(),
+          durationMs: Date.now() - iterStartMs
+        };
+      }
+
+      if (bodyEdges.length > 0 && result.status !== 'failed') {
+        for (const edge of bodyEdges.filter(e => e.source === bodyNode.id)) {
+          if (!this.scheduler.evaluateCondition(edge, result.output, currentState)) continue;
+          const nextNode = byId.get(edge.target);
+          if (!nextNode || seen.has(nextNode.id)) continue;
+          seen.add(nextNode.id);
+          pending.push(nextNode);
+        }
       }
 
       if (result.status === 'failed') {

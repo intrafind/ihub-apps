@@ -53,7 +53,7 @@
  * @property {boolean} complete - Whether the response is complete
  * @property {boolean} error - Whether there was an error
  * @property {string|null} errorMessage - Error message if error occurred
- * @property {string|null} finishReason - Normalized finish reason ('stop', 'length', 'tool_calls', 'content_filter')
+ * @property {string|null} finishReason - Normalized finish reason ('stop', 'length', 'tool_calls', 'content_filter', 'pause_turn')
  * @property {Object} [metadata] - Provider-specific metadata for handling streaming state
  */
 
@@ -118,7 +118,7 @@ export function createGenericToolCall(id, name, arguments_, index = 0, metadata 
     arguments: arguments_ || {},
     index,
     metadata,
-    // Add OpenAI-compatible format for ToolExecutor compatibility
+    // Add OpenAI-compatible format for tool-loop compatibility
     function: {
       name: normalizeToolName(name),
       arguments: functionArguments
@@ -185,6 +185,42 @@ export function createGenericStreamingResponse(
 }
 
 /**
+ * Raw provider finish reasons that mean the model FAILED to produce a usable
+ * answer (as opposed to a normal `stop`/`length`/`content_filter`/`tool_calls`).
+ *
+ * These have no clean cross-provider mapping, so `normalizeFinishReason` passes
+ * them through unchanged. A stream can therefore complete carrying one of these
+ * with empty content — most notably Gemini's `MALFORMED_FUNCTION_CALL`, which
+ * fires intermittently (often on a resend) when the model tries to emit a
+ * function call it cannot form. Handlers use this set to surface a clear error
+ * instead of a silent empty answer.
+ *
+ * Kept uppercase to match the raw provider strings. `SAFETY`/`RECITATION` are
+ * intentionally excluded — they normalize to `content_filter` and are handled
+ * separately.
+ */
+export const FAILURE_FINISH_REASONS = new Set([
+  'MALFORMED_FUNCTION_CALL',
+  'UNEXPECTED_TOOL_CALL',
+  'BLOCKLIST',
+  'PROHIBITED_CONTENT',
+  'SPII',
+  'IMAGE_SAFETY',
+  'OTHER'
+]);
+
+/**
+ * Whether a (possibly normalized) finish reason indicates the model failed to
+ * produce a usable answer. Accepts any case.
+ * @param {string|null|undefined} finishReason
+ * @returns {boolean}
+ */
+export function isFailureFinishReason(finishReason) {
+  if (!finishReason || typeof finishReason !== 'string') return false;
+  return FAILURE_FINISH_REASONS.has(finishReason.toUpperCase());
+}
+
+/**
  * Normalize finish reasons across providers
  * @param {string} providerFinishReason - Provider-specific finish reason
  * @param {string} provider - Provider name
@@ -202,6 +238,9 @@ export function normalizeFinishReason(providerFinishReason, provider) {
   if (reason === 'tool_calls' || reason === 'tool_use') return 'tool_calls';
   if (reason === 'content_filter' || reason === 'safety' || reason === 'recitation')
     return 'content_filter';
+  // A server-tool turn the provider paused (Anthropic web search); LLMClient
+  // continues it on a new request, so this never ends a turn on its own.
+  if (reason === 'pause_turn') return 'pause_turn';
 
   // Provider-specific mappings
   switch (provider) {
@@ -222,31 +261,37 @@ export function normalizeFinishReason(providerFinishReason, provider) {
 }
 
 /**
- * Sanitize JSON Schema for provider compatibility
+ * Deep-clone a JSON Schema and recursively visit every schema node, letting
+ * `visitSchemaNode` mutate it in place. This is the provider-agnostic part of
+ * schema sanitization; provider-specific field deletions/normalizations live
+ * in each converter's own `sanitizeSchema()` (see AnthropicConverter.js,
+ * GoogleConverter.js, etc.) and are passed in as `visitSchemaNode`.
+ *
+ * A node is a "schema" (where keywords like `title`/`format`/`minLength`
+ * are JSON Schema annotations a provider might want to strip) only if it
+ * declares a `type`. A `properties` container — whose keys ARE property
+ * names — has no `type` of its own, so it is never passed to
+ * `visitSchemaNode`. Otherwise a property literally named
+ * `title`/`format`/`minLength` would get deleted from its parent's
+ * `properties`, and any `required: ['title']` pointing at it would then fail
+ * the provider's strict schema check.
+ *
  * @param {Object} schema - JSON Schema
- * @param {string} provider - Target provider
+ * @param {(node: Object) => void} visitSchemaNode - mutates a schema node in place
  * @returns {Object} Sanitized schema
  */
-//FIXME: This function is used to normalize finish reasons from different providers. the specific handling should be done in the provider-specific adapters.
-export function sanitizeSchemaForProvider(schema, provider) {
+export function cloneAndWalkSchema(schema, visitSchemaNode) {
   if (!schema || typeof schema !== 'object') {
     return { type: 'object', properties: {} };
   }
 
   const sanitized = JSON.parse(JSON.stringify(schema)); // Deep clone
 
-  // A node is a "schema" (where keywords like `title`/`format`/`minLength`
-  // are JSON Schema annotations we want to strip) only if it declares a
-  // `type`. A `properties` container — whose keys ARE property names — has
-  // no `type` of its own, so we must NOT apply the keyword strip there.
-  // Otherwise a property literally named `title`/`format`/`minLength` gets
-  // deleted from its parent's `properties`, then any `required: ['title']`
-  // pointing at it fails the provider's strict schema check.
   function isSchemaNode(obj) {
     return obj && typeof obj === 'object' && typeof obj.type === 'string';
   }
 
-  function cleanObject(obj, parentKey) {
+  function walk(obj, parentKey) {
     if (!obj || typeof obj !== 'object') return obj;
 
     // Inside a `properties` container, each key is a user-defined property
@@ -255,47 +300,16 @@ export function sanitizeSchemaForProvider(schema, provider) {
     const isPropertiesContainer = parentKey === 'properties' && !isSchemaNode(obj);
 
     if (!isPropertiesContainer) {
-      // Remove provider-specific incompatible fields
-      if (provider === 'google') {
-        // Normalize non-standard type values to valid JSON Schema types
-        if (
-          obj.type &&
-          !['string', 'number', 'integer', 'boolean', 'array', 'object'].includes(obj.type)
-        ) {
-          obj.type = 'string';
-        }
-        // Ensure description is a plain string (not a multilingual object)
-        if (obj.description && typeof obj.description === 'object') {
-          obj.description = obj.description.en || Object.values(obj.description)[0] || '';
-        }
-        delete obj.exclusiveMaximum;
-        delete obj.exclusiveMinimum;
-        delete obj.title;
-        delete obj.format; // Google has limited format support
-        delete obj.minLength; // Use 'minimum' instead for strings
-        delete obj.maxLength; // Use 'maximum' instead for strings
-        // JSON Schema meta keywords that Google's restricted OpenAPI subset
-        // rejects with HTTP 400 ("Unknown name ..."). MCP tools routinely emit
-        // these ($schema + additionalProperties: false from their JSON Schema
-        // draft), so strip them or every MCP tool call to Gemini fails.
-        delete obj.$schema;
-        delete obj.$id;
-        delete obj.additionalProperties;
-        delete obj.patternProperties;
-      }
-
-      if (provider === 'anthropic') {
-        // Anthropic is generally more flexible, but we might need to add restrictions here
-      }
+      visitSchemaNode(obj);
     }
 
-    // Recursively clean nested objects
+    // Recursively walk nested objects
     for (const key in obj) {
       if (obj[key] && typeof obj[key] === 'object') {
         if (Array.isArray(obj[key])) {
-          obj[key] = obj[key].map(item => cleanObject(item, key));
+          obj[key] = obj[key].map(item => walk(item, key));
         } else {
-          obj[key] = cleanObject(obj[key], key);
+          obj[key] = walk(obj[key], key);
         }
       }
     }
@@ -303,5 +317,5 @@ export function sanitizeSchemaForProvider(schema, provider) {
     return obj;
   }
 
-  return cleanObject(sanitized);
+  return walk(sanitized);
 }

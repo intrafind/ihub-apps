@@ -20,6 +20,7 @@ describe('pathSecurity', () => {
 
     it('should reject IDs with double dots (path traversal)', () => {
       assert.strictEqual(isValidId('..'), false);
+      assert.strictEqual(isValidId('.'), false);
       assert.strictEqual(isValidId('model..id'), false);
       assert.strictEqual(isValidId('..config'), false);
       assert.strictEqual(isValidId('model/../other'), false);

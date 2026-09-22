@@ -73,7 +73,10 @@ jest.unstable_mockModule('../configCache.js', () => ({
 jest.unstable_mockModule('../utils/authorization.js', () => ({
   loadGroupsConfiguration: () => ({ groups: mockGroups }),
   enhanceUserWithPermissions: user => user,
-  isAnonymousAccessAllowed: () => false
+  isAnonymousAccessAllowed: () => false,
+  // contentAdminAuth consults this before looking at groups; the test user is a
+  // plain admin session, which is always eligible.
+  isAdminEligiblePrincipal: () => true
 }));
 
 // Replace the real source manager with one that records its inputs and

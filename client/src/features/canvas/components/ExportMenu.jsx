@@ -66,21 +66,21 @@ export default function ExportMenu({ app, content, onClose }) {
         </div>
         <button
           onClick={handleCopyText}
-          className="w-full text-left px-3 py-2 text-sm text-gray-700 hover:bg-gray-100 rounded flex items-center gap-2 transition-colors whitespace-nowrap"
+          className="w-full text-left px-3 py-2 text-sm text-gray-700 hover:bg-gray-100 rounded-sm flex items-center gap-2 transition-colors whitespace-nowrap"
         >
           <Icon name="document-text" size="sm" />
           {t('canvas.export.copyText', 'as Text')}
         </button>
         <button
           onClick={handleCopyMarkdown}
-          className="w-full text-left px-3 py-2 text-sm text-gray-700 hover:bg-gray-100 rounded flex items-center gap-2 transition-colors whitespace-nowrap"
+          className="w-full text-left px-3 py-2 text-sm text-gray-700 hover:bg-gray-100 rounded-sm flex items-center gap-2 transition-colors whitespace-nowrap"
         >
           <Icon name="code" size="sm" />
           {t('canvas.export.copyMarkdown', 'as Markdown')}
         </button>
         <button
           onClick={handleCopyHTML}
-          className="w-full text-left px-3 py-2 text-sm text-gray-700 hover:bg-gray-100 rounded flex items-center gap-2 transition-colors whitespace-nowrap"
+          className="w-full text-left px-3 py-2 text-sm text-gray-700 hover:bg-gray-100 rounded-sm flex items-center gap-2 transition-colors whitespace-nowrap"
         >
           <Icon name="code" size="sm" />
           {t('canvas.export.copyHTML', 'as HTML')}
@@ -93,7 +93,7 @@ export default function ExportMenu({ app, content, onClose }) {
         </div>
         <button
           onClick={handlePrintPDF}
-          className="w-full text-left px-3 py-2 text-sm text-gray-700 hover:bg-gray-100 rounded flex items-center gap-2 transition-colors"
+          className="w-full text-left px-3 py-2 text-sm text-gray-700 hover:bg-gray-100 rounded-sm flex items-center gap-2 transition-colors"
         >
           <Icon name="printer" size="sm" />
           {t('canvas.export.printPDF', 'Print as PDF')}

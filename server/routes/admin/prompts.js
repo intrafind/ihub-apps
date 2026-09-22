@@ -1,18 +1,12 @@
-import { readFileSync, existsSync } from 'fs';
-import { promises as fs } from 'fs';
-import { join, resolve } from 'path';
-import path from 'path';
-import { getRootDir } from '../../pathUtils.js';
+import configStore from '../../services/config/ConfigStore.js';
 import configCache from '../../configCache.js';
 import { contentAdminAuth } from '../../middleware/contentAdminAuth.js';
 import { buildServerPath } from '../../utils/basePath.js';
 import { logAudit } from '../../services/AuditLogService.js';
 import { saveSnapshot } from '../../services/ChangeHistoryService.js';
-import {
-  validateIdForPath,
-  validateIdsForPath,
-  resolveAndValidatePath
-} from '../../utils/pathSecurity.js';
+import llmClient, { usageToOpenAI, isLLMError } from '../../services/loop/LLMClient.js';
+import { sendLLMError } from '../../services/loop/llmHttpErrors.js';
+import { validateIdForPath, validateIdsForPath } from '../../utils/pathSecurity.js';
 import logger from '../../utils/logger.js';
 import { removeMarketplaceInstallation } from '../../utils/installationCleanup.js';
 import {
@@ -22,6 +16,22 @@ import {
   sendErrorResponse,
   sendFailedOperationError
 } from '../../utils/responseHelpers.js';
+
+/**
+ * The file a prompt id lives in.
+ *
+ * A prompt file's name is allowed to diverge from the `id` inside it, so the
+ * path is resolved instead of assumed: writing straight to `<id>.json` would
+ * fork such a prompt into two files. A prompt that exists nowhere resolves to
+ * `<id>.json`, which is the right answer when one is being created.
+ *
+ * @param {string} promptId - Prompt id
+ * @returns {Promise<string|null>} Path relative to `contents/`, or null when
+ *   the id is not usable as a file name
+ */
+function promptPath(promptId) {
+  return configStore.resolveIdToPath('prompts', promptId);
+}
 
 /**
  * @swagger
@@ -324,6 +334,115 @@ export default function registerAdminPromptsRoutes(app) {
 
   /**
    * @swagger
+   * /api/admin/prompts/app-generator:
+   *   get:
+   *     summary: Get the app generator prompt template for a specific language
+   *     description: |
+   *       Retrieves the app generator prompt template localized for the specified language.
+   *       This special endpoint provides access to the app generation prompt used by the
+   *       iHub Apps platform to create new application configurations.
+   *
+   *       **Admin Access Required**: This endpoint requires administrator authentication.
+   *
+   *       **Language Fallback**: If the requested language is not available, falls back to the default platform language.
+   *
+   *       **Special Purpose**: This endpoint is specifically designed for the app generator functionality
+   *       and returns the prompt text rather than the full configuration object.
+   *     tags:
+   *       - Admin - Prompts
+   *     security:
+   *       - bearerAuth: []
+   *       - sessionAuth: []
+   *     parameters:
+   *       - in: query
+   *         name: lang
+   *         required: false
+   *         description: Language code for localization (defaults to platform default language)
+   *         schema:
+   *           type: string
+   *         example: "en"
+   *     responses:
+   *       200:
+   *         description: App generator prompt successfully retrieved
+   *         content:
+   *           application/json:
+   *             schema:
+   *               $ref: '#/components/schemas/AppGeneratorPrompt'
+   *             example:
+   *               id: "app-generator"
+   *               prompt: "You are an expert in the iHub Apps platform. Your job is to help users create complete and valid JSON configurations..."
+   *               language: "en"
+   *       401:
+   *         description: Authentication required
+   *         content:
+   *           application/json:
+   *             schema:
+   *               $ref: '#/components/schemas/AdminError'
+   *             example:
+   *               error: "Admin authentication required"
+   *       403:
+   *         description: Forbidden - insufficient admin privileges
+   *         content:
+   *           application/json:
+   *             schema:
+   *               $ref: '#/components/schemas/AdminError'
+   *             example:
+   *               error: "Admin access required"
+   *       404:
+   *         description: App-generator prompt not found
+   *         content:
+   *           application/json:
+   *             schema:
+   *               $ref: '#/components/schemas/AdminError'
+   *             example:
+   *               error: "App-generator prompt not found"
+   *       500:
+   *         description: Internal server error
+   *         content:
+   *           application/json:
+   *             schema:
+   *               $ref: '#/components/schemas/AdminError'
+   *             examples:
+   *               configError:
+   *                 summary: Configuration load error
+   *                 value:
+   *                   error: "Failed to load prompts configuration"
+   *               internalError:
+   *                 summary: General internal error
+   *                 value:
+   *                   error: "Internal server error"
+   */
+  app.get(
+    buildServerPath('/api/admin/prompts/app-generator'),
+    contentAdminAuth,
+    async (req, res) => {
+      try {
+        const platformConfig = configCache.getPlatform();
+        const defaultLanguage = platformConfig?.defaultLanguage || 'en';
+        const { lang = defaultLanguage } = req.query;
+        const { data: prompts } = configCache.getPrompts(true);
+        if (!prompts) {
+          return sendFailedOperationError(
+            res,
+            'load prompts configuration',
+            new Error('prompts is null')
+          );
+        }
+        const appGeneratorPrompt = prompts.find(p => p.id === 'app-generator');
+        if (!appGeneratorPrompt) {
+          return sendNotFound(res, 'App-generator prompt');
+        }
+        const promptText =
+          appGeneratorPrompt.prompt[lang] || appGeneratorPrompt.prompt[defaultLanguage];
+        res.json({ id: appGeneratorPrompt.id, prompt: promptText, language: lang });
+      } catch (error) {
+        return sendInternalError(res, error, 'fetch app-generator prompt');
+      }
+    }
+  );
+
+  /**
+   * @swagger
    * /api/admin/prompts/{promptId}:
    *   get:
    *     summary: Get a specific prompt template by ID
@@ -541,9 +660,7 @@ export default function registerAdminPromptsRoutes(app) {
       }
       const { data: currentPrompts } = configCache.getPrompts(true);
       const oldPrompt = currentPrompts.find(p => p.id === promptId);
-      const rootDir = getRootDir();
-      const promptFilePath = join(rootDir, 'contents', 'prompts', `${promptId}.json`);
-      await fs.writeFile(promptFilePath, JSON.stringify(updatedPrompt, null, 2));
+      await configStore.writeJson(await promptPath(promptId), updatedPrompt);
       await configCache.refreshPromptsCache();
       if (oldPrompt) {
         await saveSnapshot({
@@ -676,15 +793,14 @@ export default function registerAdminPromptsRoutes(app) {
         return;
       }
 
-      const rootDir = getRootDir();
-      const promptFilePath = join(rootDir, 'contents', 'prompts', `${newPrompt.id}.json`);
       try {
-        readFileSync(promptFilePath, 'utf8');
+        // Create-only: the file-exists check and the write are one step, so two
+        // concurrent creates cannot both decide the name is free.
+        await configStore.createJson(`prompts/${newPrompt.id}.json`, newPrompt);
+      } catch (error) {
+        if (error.code !== 'EEXIST') throw error;
         return sendErrorResponse(res, 409, 'Prompt with this ID already exists');
-      } catch {
-        // file not found
       }
-      await fs.writeFile(promptFilePath, JSON.stringify(newPrompt, null, 2));
       await configCache.refreshPromptsCache();
       await logAudit({
         req,
@@ -794,9 +910,7 @@ export default function registerAdminPromptsRoutes(app) {
         }
         const newEnabledState = !prompt.enabled;
         prompt.enabled = newEnabledState;
-        const rootDir = getRootDir();
-        const promptFilePath = join(rootDir, 'contents', 'prompts', `${promptId}.json`);
-        await fs.writeFile(promptFilePath, JSON.stringify(prompt, null, 2));
+        await configStore.writeJson(await promptPath(promptId), prompt);
         await configCache.refreshPromptsCache();
         await logAudit({
           req,
@@ -940,15 +1054,13 @@ export default function registerAdminPromptsRoutes(app) {
 
         const { data: prompts } = configCache.getPrompts(true);
         const resolvedIds = ids.includes('*') ? prompts.map(p => p.id) : ids;
-        const rootDir = getRootDir();
 
         for (const id of resolvedIds) {
           const prompt = prompts.find(p => p.id === id);
           if (!prompt) continue;
           if (prompt.enabled !== enabled) {
             prompt.enabled = enabled;
-            const promptFilePath = join(rootDir, 'contents', 'prompts', `${id}.json`);
-            await fs.writeFile(promptFilePath, JSON.stringify(prompt, null, 2));
+            await configStore.writeJson(await promptPath(id), prompt);
           }
         }
 
@@ -1059,20 +1171,13 @@ export default function registerAdminPromptsRoutes(app) {
 
         const { data: currentPrompts } = configCache.getPrompts(true);
         const oldPrompt = currentPrompts.find(p => p.id === promptId);
-        const rootDir = getRootDir();
-        const promptsDir = join(rootDir, 'contents', 'prompts');
-        const normalizedPromptFilePath = await resolveAndValidatePath(
-          `${promptId}.json`,
-          promptsDir
-        );
-        if (!normalizedPromptFilePath) {
+        const promptFilePath = await promptPath(promptId);
+        if (!promptFilePath) {
           return sendBadRequest(res, 'Invalid prompt path');
         }
-
-        if (!existsSync(normalizedPromptFilePath)) {
+        if (!(await configStore.remove(promptFilePath))) {
           return sendNotFound(res, 'Prompt file');
         }
-        await fs.unlink(normalizedPromptFilePath);
         await configCache.refreshPromptsCache();
         await removeMarketplaceInstallation('prompt', promptId);
         if (oldPrompt) {
@@ -1229,36 +1334,37 @@ export default function registerAdminPromptsRoutes(app) {
       if (!modelConfig) {
         return sendBadRequest(res, `Model not found: ${modelId}`);
       }
-      const { verifyApiKey } = await import('../../serverHelpers.js');
-      const apiKey = await verifyApiKey(modelConfig, res);
-      if (!apiKey) {
-        return;
-      }
-      const { simpleCompletion } = await import('../../utils.js');
-      const result = await simpleCompletion(messages, {
-        modelId: modelId,
-        temperature: temperature,
-        responseFormat: responseFormat,
-        responseSchema: responseSchema,
-        maxTokens: maxTokens,
-        apiKey: apiKey
+      // API key resolution lives in LLMClient; `retries: 0` keeps this
+      // interactive admin request from stalling on a provider's Retry-After.
+      const result = await llmClient.complete({
+        modelId,
+        messages,
+        options: { temperature, maxTokens, responseFormat, responseSchema },
+        retries: 0,
+        telemetry: { kind: 'utility', purpose: 'admin-completions', user: req.user }
       });
-      logger.info('Completion result', {
+      logger.debug('Completion result', {
         component: 'AdminPrompts',
-        result: JSON.stringify(result, null, 2)
+        modelId,
+        contentLength: result.content?.length ?? 0,
+        finishReason: result.finishReason,
+        usage: result.usage
       });
       res.json({
         choices: [
           {
             message: { role: 'assistant', content: result.content },
-            finish_reason: 'stop',
+            finish_reason: result.finishReason || 'stop',
             index: 0
           }
         ],
         model: modelId,
-        usage: result.usage
+        usage: usageToOpenAI(result.usage)
       });
     } catch (error) {
+      if (isLLMError(error)) {
+        return sendLLMError(res, error, { context: 'completions' });
+      }
       logger.error('Error in completions endpoint', { component: 'AdminPrompts', error });
       const { getLocalizedError } = await import('../../serverHelpers.js');
       const defaultLang = configCache.getPlatform()?.defaultLanguage || 'en';
@@ -1274,113 +1380,4 @@ export default function registerAdminPromptsRoutes(app) {
       sendErrorResponse(res, 500, errorMessage, { details: error.message });
     }
   });
-
-  /**
-   * @swagger
-   * /api/admin/prompts/app-generator:
-   *   get:
-   *     summary: Get the app generator prompt template for a specific language
-   *     description: |
-   *       Retrieves the app generator prompt template localized for the specified language.
-   *       This special endpoint provides access to the app generation prompt used by the
-   *       iHub Apps platform to create new application configurations.
-   *
-   *       **Admin Access Required**: This endpoint requires administrator authentication.
-   *
-   *       **Language Fallback**: If the requested language is not available, falls back to the default platform language.
-   *
-   *       **Special Purpose**: This endpoint is specifically designed for the app generator functionality
-   *       and returns the prompt text rather than the full configuration object.
-   *     tags:
-   *       - Admin - Prompts
-   *     security:
-   *       - bearerAuth: []
-   *       - sessionAuth: []
-   *     parameters:
-   *       - in: query
-   *         name: lang
-   *         required: false
-   *         description: Language code for localization (defaults to platform default language)
-   *         schema:
-   *           type: string
-   *         example: "en"
-   *     responses:
-   *       200:
-   *         description: App generator prompt successfully retrieved
-   *         content:
-   *           application/json:
-   *             schema:
-   *               $ref: '#/components/schemas/AppGeneratorPrompt'
-   *             example:
-   *               id: "app-generator"
-   *               prompt: "You are an expert in the iHub Apps platform. Your job is to help users create complete and valid JSON configurations..."
-   *               language: "en"
-   *       401:
-   *         description: Authentication required
-   *         content:
-   *           application/json:
-   *             schema:
-   *               $ref: '#/components/schemas/AdminError'
-   *             example:
-   *               error: "Admin authentication required"
-   *       403:
-   *         description: Forbidden - insufficient admin privileges
-   *         content:
-   *           application/json:
-   *             schema:
-   *               $ref: '#/components/schemas/AdminError'
-   *             example:
-   *               error: "Admin access required"
-   *       404:
-   *         description: App-generator prompt not found
-   *         content:
-   *           application/json:
-   *             schema:
-   *               $ref: '#/components/schemas/AdminError'
-   *             example:
-   *               error: "App-generator prompt not found"
-   *       500:
-   *         description: Internal server error
-   *         content:
-   *           application/json:
-   *             schema:
-   *               $ref: '#/components/schemas/AdminError'
-   *             examples:
-   *               configError:
-   *                 summary: Configuration load error
-   *                 value:
-   *                   error: "Failed to load prompts configuration"
-   *               internalError:
-   *                 summary: General internal error
-   *                 value:
-   *                   error: "Internal server error"
-   */
-  app.get(
-    buildServerPath('/api/admin/prompts/app-generator'),
-    contentAdminAuth,
-    async (req, res) => {
-      try {
-        const platformConfig = configCache.getPlatform();
-        const defaultLanguage = platformConfig?.defaultLanguage || 'en';
-        const { lang = defaultLanguage } = req.query;
-        const { data: prompts } = configCache.getPrompts(true);
-        if (!prompts) {
-          return sendFailedOperationError(
-            res,
-            'load prompts configuration',
-            new Error('prompts is null')
-          );
-        }
-        const appGeneratorPrompt = prompts.find(p => p.id === 'app-generator');
-        if (!appGeneratorPrompt) {
-          return sendNotFound(res, 'App-generator prompt');
-        }
-        const promptText =
-          appGeneratorPrompt.prompt[lang] || appGeneratorPrompt.prompt[defaultLanguage];
-        res.json({ id: appGeneratorPrompt.id, prompt: promptText, language: lang });
-      } catch (error) {
-        return sendInternalError(res, error, 'fetch app-generator prompt');
-      }
-    }
-  );
 }

@@ -113,7 +113,7 @@ function DataTableKebabMenu({ items, label = 'More actions', row }) {
         aria-label={label}
         onClick={() => setOpen(v => !v)}
         onKeyDown={handleTriggerKeyDown}
-        className="p-1.5 rounded-md text-gray-500 hover:text-gray-900 hover:bg-gray-100 dark:text-gray-400 dark:hover:text-gray-100 dark:hover:bg-gray-700 focus:outline-none focus:ring-2 focus:ring-indigo-500"
+        className="p-1.5 rounded-md text-gray-500 hover:text-gray-900 hover:bg-gray-100 dark:text-gray-400 dark:hover:text-gray-100 dark:hover:bg-gray-700 focus:outline-hidden focus:ring-2 focus:ring-indigo-500"
       >
         <Icon name="ellipsis-vertical" size="sm" />
       </button>
@@ -146,7 +146,7 @@ function DataTableKebabMenu({ items, label = 'More actions', row }) {
                   role="menuitem"
                   disabled={disabled}
                   onClick={onSelect}
-                  className={`flex w-full items-center gap-2 px-3 py-1.5 text-left text-sm focus:outline-none disabled:opacity-50 disabled:cursor-not-allowed ${colorClass}`}
+                  className={`flex w-full items-center gap-2 px-3 py-1.5 text-left text-sm focus:outline-hidden disabled:opacity-50 disabled:cursor-not-allowed ${colorClass}`}
                 >
                   {item.icon && <Icon name={item.icon} size="sm" />}
                   <span>{item.label}</span>

@@ -26,7 +26,7 @@ function PageButton({ children, disabled, active, onClick, label }) {
       aria-label={label}
       aria-current={active ? 'page' : undefined}
       className={[
-        'inline-flex items-center justify-center min-w-[2rem] h-8 px-2 rounded-md text-sm',
+        'inline-flex items-center justify-center min-w-8 h-8 px-2 rounded-md text-sm',
         'border border-gray-200 dark:border-gray-700',
         active
           ? 'bg-indigo-600 text-white border-indigo-600 hover:bg-indigo-700'
@@ -68,7 +68,7 @@ function DataTablePagination({
           <select
             value={pageSize}
             onChange={e => onPageSizeChange && onPageSizeChange(Number(e.target.value))}
-            className="text-sm rounded-md border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-900 text-gray-700 dark:text-gray-200 px-2 py-1 focus:outline-none focus:ring-2 focus:ring-indigo-500"
+            className="text-sm rounded-md border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-900 text-gray-700 dark:text-gray-200 px-2 py-1 focus:outline-hidden focus:ring-2 focus:ring-indigo-500"
           >
             {pageSizeOptions.map(size => (
               <option key={size} value={size}>

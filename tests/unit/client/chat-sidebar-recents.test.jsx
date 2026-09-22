@@ -1,0 +1,363 @@
+import '@testing-library/jest-dom';
+import { act, fireEvent, render, screen, waitFor } from '@testing-library/react';
+import { MemoryRouter, useLocation } from 'react-router-dom';
+
+/**
+ * The sidebar's Recents section.
+ *
+ * Its rows carry the same actions as the full history page, but in a much
+ * tighter target: the row is a link, the rename and delete buttons are
+ * siblings of it, and on a phone the whole thing lives inside the navigation
+ * drawer. What is pinned here is what that costs — a delete that has to hold
+ * even if the refetch behind it fails, actions that must be visible where
+ * there is no hover to reveal them, and exactly one link claiming to be the
+ * current page.
+ */
+
+const mockT = (key, options) => {
+  if (typeof options === 'string') return options;
+  if (options && typeof options === 'object') {
+    const template = options.defaultValue ?? key;
+    return String(template)
+      .replace('{{count}}', String(options.count ?? ''))
+      .replace('{{title}}', String(options.title ?? ''));
+  }
+  return key;
+};
+const mockTranslation = { t: mockT, i18n: { language: 'en' } };
+jest.mock('react-i18next', () => ({
+  __esModule: true,
+  useTranslation: () => mockTranslation
+}));
+
+const mockApi = {
+  fetchChats: jest.fn(),
+  renameChat: jest.fn(),
+  deleteChat: jest.fn()
+};
+jest.mock('../../../client/src/api', () => ({
+  __esModule: true,
+  fetchChats: (...args) => mockApi.fetchChats(...args),
+  renameChat: (...args) => mockApi.renameChat(...args),
+  deleteChat: (...args) => mockApi.deleteChat(...args)
+}));
+
+const mockApps = [
+  { id: 'acme', name: { en: 'Acme' }, color: '#4f46e5', icon: 'chat', order: 1 },
+  { id: 'legal-review', name: { en: 'Legal Review' }, color: '#059669', icon: 'chat', order: 2 }
+];
+jest.mock('../../../client/src/shared/hooks/useApps', () => ({
+  __esModule: true,
+  default: () => ({ apps: mockApps, loading: false, error: null })
+}));
+jest.mock('../../../client/src/shared/contexts/AuthContext', () => ({
+  __esModule: true,
+  useAuth: () => ({ isAuthenticated: true, isLoading: false, user: { id: 'u1', name: 'Ada' } })
+}));
+jest.mock('../../../client/src/shared/contexts/PlatformConfigContext', () => ({
+  __esModule: true,
+  usePlatformConfig: () => ({ platformConfig: { chats: { persistence: true } }, isLoading: false })
+}));
+jest.mock('../../../client/src/shared/hooks/useAuthKey', () => ({
+  __esModule: true,
+  default: () => 'user:u1'
+}));
+const mockUiConfig = { uiConfig: {} };
+jest.mock('../../../client/src/shared/contexts/UIConfigContext', () => ({
+  __esModule: true,
+  useUIConfig: () => mockUiConfig
+}));
+const mockFlags = {
+  isEnabled: (_flag, fallback = false) => fallback,
+  isBothEnabled: (_app, _flag, fallback = false) => fallback,
+  isAppFeatureEnabled: (_app, _path, fallback = false) => fallback
+};
+jest.mock('../../../client/src/shared/hooks/useFeatureFlags', () => ({
+  __esModule: true,
+  default: () => mockFlags
+}));
+jest.mock('../../../client/src/shared/hooks/useMediaQuery', () => ({
+  __esModule: true,
+  default: () => true
+}));
+jest.mock('../../../client/src/shared/components/Icon', () => ({
+  __esModule: true,
+  default: () => null
+}));
+jest.mock('../../../client/src/shared/components/IHubLogo', () => ({
+  __esModule: true,
+  default: () => null
+}));
+jest.mock('../../../client/src/shared/components/BrandTitle', () => ({
+  __esModule: true,
+  default: () => null
+}));
+jest.mock('../../../client/src/shared/components/LanguageSelector', () => ({
+  __esModule: true,
+  default: () => null
+}));
+jest.mock('../../../client/src/shared/components/DarkModeToggle', () => ({
+  __esModule: true,
+  default: () => null
+}));
+jest.mock('../../../client/src/features/auth/components/UserAuthMenu', () => ({
+  __esModule: true,
+  default: () => null
+}));
+jest.mock('../../../client/src/utils/runtimeBasePath', () => ({
+  __esModule: true,
+  buildAssetUrl: path => `/${path}`,
+  buildApiUrl: path => `/api/${path}`
+}));
+
+const AppSidebar = require('../../../client/src/shared/components/AppSidebar').default;
+const { invalidateChatsCache } = require('../../../client/src/shared/hooks/useChats');
+
+const chatDoc = (id, title, appId = 'acme') => ({
+  id,
+  appId,
+  title,
+  messageCount: 2,
+  lastMessageAt: new Date().toISOString(),
+  hasUnseenActivity: false
+});
+
+/** Renders the current path so a test can assert on where the router went. */
+function LocationProbe() {
+  return <span data-testid="location">{useLocation().pathname}</span>;
+}
+
+/** Mount the sidebar at one location and wait for the chat list. */
+async function renderSidebar(path = '/apps/acme') {
+  const view = render(
+    <MemoryRouter initialEntries={[path]}>
+      <AppSidebar />
+      <LocationProbe />
+    </MemoryRouter>
+  );
+  await waitFor(() => expect(mockApi.fetchChats).toHaveBeenCalled());
+  return view;
+}
+
+/** Click a row's delete button and confirm the dialog it opens. */
+async function deleteFirstChat(container) {
+  const remove = container.querySelector('[aria-label="Delete chat"]');
+  await act(async () => {
+    fireEvent.click(remove);
+  });
+  const dialog = screen.getByRole('alertdialog');
+  const confirm = Array.from(dialog.querySelectorAll('button')).find(
+    b => b.textContent === 'Delete'
+  );
+  await act(async () => {
+    fireEvent.click(confirm);
+  });
+}
+
+beforeEach(() => {
+  invalidateChatsCache();
+  localStorage.clear();
+  sessionStorage.clear();
+  mockApi.fetchChats.mockReset();
+  mockApi.renameChat.mockReset();
+  mockApi.deleteChat.mockReset();
+  mockApi.fetchChats.mockResolvedValue({
+    items: [chatDoc('chat-1', 'First chat'), chatDoc('chat-2', 'Second chat', 'legal-review')],
+    nextCursor: null
+  });
+  mockApi.deleteChat.mockResolvedValue({ deleted: true });
+});
+
+describe('the row actions', () => {
+  test('are visible on a touch device, where nothing can hover them out of hiding', async () => {
+    // `opacity-0` still lays out and still takes taps, and `group-hover:` is
+    // compiled behind `@media (hover: hover)`, so without a touch fallback the
+    // right edge of every Recents row is an invisible 56px strip that deletes
+    // the chat the user meant to open. The history page already does this.
+    const { container } = await renderSidebar();
+    await waitFor(() => expect(screen.getByText('First chat')).toBeInTheDocument());
+
+    const rename = container.querySelector('[aria-label="Rename chat"]');
+    const remove = container.querySelector('[aria-label="Delete chat"]');
+
+    expect(rename.className).toContain('opacity-0');
+    expect(rename.className).toContain('max-md:opacity-100');
+    expect(remove.className).toContain('opacity-0');
+    expect(remove.className).toContain('max-md:opacity-100');
+  });
+});
+
+describe('deleting a chat from the sidebar', () => {
+  test('the row goes at once and stays gone when the refetch fails', async () => {
+    // The DELETE succeeded, so there is no error to show. Leaning on the
+    // refetch alone leaves the deleted chat in Recents for the rest of the
+    // session — and clicking it opens a blank chat under a dead id.
+    const { container } = await renderSidebar();
+    await waitFor(() => expect(screen.getByText('First chat')).toBeInTheDocument());
+
+    mockApi.fetchChats.mockRejectedValue(new Error('offline'));
+
+    const remove = container.querySelector('[aria-label="Delete chat"]');
+    await act(async () => {
+      fireEvent.click(remove);
+    });
+    const dialog = screen.getByRole('alertdialog');
+    const confirm = Array.from(dialog.querySelectorAll('button')).find(
+      b => b.textContent === 'Delete'
+    );
+    await act(async () => {
+      fireEvent.click(confirm);
+    });
+
+    await waitFor(() => expect(screen.queryByText('First chat')).toBeNull());
+    expect(screen.getByText('Second chat')).toBeInTheDocument();
+  });
+
+  test('deleting the chat that is open leaves it, rather than sitting on a dead transcript', async () => {
+    // The sidebar sits next to the chat it deletes. The row went, and the pane
+    // kept the conversation on screen — a transcript of something that no
+    // longer exists, with a composer that would post the next message into a
+    // chat id the store had forgotten.
+    sessionStorage.setItem('ai_hub_chat_id_acme', 'chat-1');
+    const { container } = await renderSidebar('/apps/acme/c/chat-1');
+    await waitFor(() => expect(screen.getByText('First chat')).toBeInTheDocument());
+
+    await deleteFirstChat(container);
+
+    await waitFor(() => expect(screen.getByTestId('location')).toHaveTextContent('/apps/acme'));
+    expect(screen.getByTestId('location').textContent).toBe('/apps/acme');
+    // And the id this tab holds for the app is dropped, or opening the app
+    // would resolve straight back to the chat that was just deleted.
+    expect(sessionStorage.getItem('ai_hub_chat_id_acme')).not.toBe('chat-1');
+  });
+
+  test('deleting some other chat leaves the one in front of the user alone', async () => {
+    sessionStorage.setItem('ai_hub_chat_id_acme', 'chat-9');
+    mockApi.fetchChats.mockResolvedValue({
+      items: [
+        {
+          ...chatDoc('chat-2', 'Second chat', 'legal-review'),
+          lastMessageAt: '2026-03-15T09:00:00.000Z'
+        },
+        { ...chatDoc('chat-9', 'Open chat'), lastMessageAt: '2026-03-14T09:00:00.000Z' }
+      ],
+      nextCursor: null
+    });
+    const { container } = await renderSidebar('/apps/acme/c/chat-9');
+    await waitFor(() => expect(screen.getByText('Second chat')).toBeInTheDocument());
+
+    await deleteFirstChat(container);
+
+    expect(mockApi.deleteChat).toHaveBeenCalledWith('chat-2');
+    expect(screen.getByTestId('location').textContent).toBe('/apps/acme/c/chat-9');
+    expect(sessionStorage.getItem('ai_hub_chat_id_acme')).toBe('chat-9');
+  });
+});
+
+describe('what a failed action tells the user', () => {
+  test('a failed delete is reported, and announced, from outside the Recents section', async () => {
+    // Deleting from the mobile drawer closes it before the confirmation opens
+    // — two focus traps on one Tab key is worse — which unmounts the Recents
+    // section. With the error rendered inside it, a failed delete told the
+    // mobile user nothing at all, and then replayed the stale banner the next
+    // time the drawer was opened.
+    const { container } = await renderSidebar();
+    await waitFor(() => expect(screen.getByText('First chat')).toBeInTheDocument());
+
+    mockApi.deleteChat.mockRejectedValue(new Error('offline'));
+
+    const remove = container.querySelector('[aria-label="Delete chat"]');
+    await act(async () => {
+      fireEvent.click(remove);
+    });
+    const dialog = screen.getByRole('alertdialog');
+    const confirm = Array.from(dialog.querySelectorAll('button')).find(
+      b => b.textContent === 'Delete'
+    );
+    await act(async () => {
+      fireEvent.click(confirm);
+    });
+
+    const alert = await screen.findByRole('alert');
+    expect(alert).toHaveTextContent('The chat could not be deleted. Please try again.');
+    // Outside the Recents list, so collapsing or closing the drawer cannot
+    // take it away before it has been read.
+    const recents = screen.getByText('Recents').closest('div');
+    expect(recents?.contains(alert)).toBe(false);
+  });
+
+  test('deleting a row keeps the keyboard inside the sidebar', async () => {
+    // The row unmounts in the same commit the confirmation is torn down, so
+    // the dialog's focus trap restores focus onto a detached button and the
+    // keyboard lands on <body> — outside the sidebar, with nothing to Tab back
+    // into. The history page already solves this; the sidebar did not.
+    const { container } = await renderSidebar();
+    await waitFor(() => expect(screen.getByText('First chat')).toBeInTheDocument());
+
+    // The refetch that follows the delete must agree that the chat is gone, or
+    // it puts the row straight back.
+    mockApi.fetchChats.mockResolvedValue({
+      items: [chatDoc('chat-2', 'Second chat', 'legal-review')],
+      nextCursor: null
+    });
+
+    const remove = container.querySelector('[aria-label="Delete chat"]');
+    await act(async () => {
+      fireEvent.click(remove);
+    });
+    const dialog = screen.getByRole('alertdialog');
+    const confirm = Array.from(dialog.querySelectorAll('button')).find(
+      b => b.textContent === 'Delete'
+    );
+    await act(async () => {
+      fireEvent.click(confirm);
+    });
+
+    await waitFor(() => expect(screen.queryByText('First chat')).toBeNull());
+    expect(document.activeElement).not.toBe(document.body);
+    expect(document.activeElement?.getAttribute('tabindex')).toBe('-1');
+    expect(document.activeElement?.contains(screen.getByText('Second chat'))).toBe(true);
+  });
+
+  test('a successful delete is announced, not only rendered away', async () => {
+    // A row simply vanishing is nothing a screen reader reports. The history
+    // page already says so; the same action here was silent.
+    const { container } = await renderSidebar();
+    await waitFor(() => expect(screen.getByText('First chat')).toBeInTheDocument());
+
+    const remove = container.querySelector('[aria-label="Delete chat"]');
+    await act(async () => {
+      fireEvent.click(remove);
+    });
+    const dialog = screen.getByRole('alertdialog');
+    const confirm = Array.from(dialog.querySelectorAll('button')).find(
+      b => b.textContent === 'Delete'
+    );
+    await act(async () => {
+      fireEvent.click(confirm);
+    });
+
+    await waitFor(() => expect(screen.getByRole('status')).toHaveTextContent('Chat deleted'));
+  });
+});
+
+describe('which link says it is the current page', () => {
+  test('only the chat row, not the app row it is nested under', async () => {
+    // `/apps/acme/c/chat-1` matches the app row's prefix test as well. Two
+    // links with different hrefs both announcing "current page" tells a
+    // screen-reader user nothing about where they are.
+    const { container } = await renderSidebar('/apps/acme/c/chat-1');
+    await waitFor(() => expect(screen.getByText('First chat')).toBeInTheDocument());
+
+    const current = Array.from(container.querySelectorAll('[aria-current="page"]'));
+    expect(current.map(el => el.getAttribute('href'))).toEqual(['/apps/acme/c/chat-1']);
+  });
+
+  test('the app row still says so on the app route itself', async () => {
+    const { container } = await renderSidebar('/apps/acme');
+    await waitFor(() => expect(screen.getByText('First chat')).toBeInTheDocument());
+
+    const current = Array.from(container.querySelectorAll('[aria-current="page"]'));
+    expect(current.map(el => el.getAttribute('href'))).toEqual(['/apps/acme']);
+  });
+});

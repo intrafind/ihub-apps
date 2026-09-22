@@ -2,6 +2,7 @@ import { useState, useEffect } from 'react';
 import { useTranslation } from 'react-i18next';
 import Icon from '../../../shared/components/Icon';
 import ResourceSelector from './ResourceSelector';
+import GroupMultiSelect from './GroupMultiSelect';
 import {
   validateWithSchema,
   errorsToFieldErrors,
@@ -17,7 +18,7 @@ function GroupFormEditor({
   value: group,
   onChange,
   onValidationChange,
-  resources = { apps: [], models: [], prompts: [], workflows: [], skills: [] },
+  resources = { apps: [], models: [], prompts: [], workflows: [], skills: [], tools: [] },
   jsonSchema
 }) {
   const { t } = useTranslation();
@@ -93,12 +94,7 @@ function GroupFormEditor({
     onChange(updatedGroup);
   };
 
-  const handleMappingChange = mappings => {
-    const mappingArray = mappings
-      .split(',')
-      .map(m => m.trim())
-      .filter(m => m.length > 0);
-
+  const handleMappingChange = mappingArray => {
     handleInputChange('mappings', mappingArray);
   };
 
@@ -135,7 +131,7 @@ function GroupFormEditor({
           title={t('admin.groups.edit.fixErrors', 'Please fix the following errors')}
         />
         {/* Basic Information */}
-        <div className="bg-white dark:bg-gray-800 shadow dark:shadow-gray-900/20 px-4 py-5 sm:rounded-lg sm:p-6">
+        <div className="bg-white dark:bg-gray-800 shadow-sm dark:shadow-gray-900/20 px-4 py-5 sm:rounded-lg sm:p-6">
           <div className="md:grid md:grid-cols-3 md:gap-6">
             <div className="md:col-span-1">
               <h3 className="text-lg font-medium leading-6 text-gray-900 dark:text-gray-100">
@@ -163,7 +159,7 @@ function GroupFormEditor({
                     value={group.id || ''}
                     onChange={e => handleInputChange('id', e.target.value)}
                     disabled={isProtectedGroup(group.id)}
-                    className={`mt-1 block w-full rounded-md border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm disabled:bg-gray-100 dark:disabled:bg-gray-700 ${
+                    className={`mt-1 block w-full rounded-md border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100 shadow-xs focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm disabled:bg-gray-100 dark:disabled:bg-gray-700 ${
                       validationErrors.id ? 'border-red-300' : ''
                     }`}
                     placeholder="Enter unique group ID"
@@ -192,7 +188,7 @@ function GroupFormEditor({
                     required={isFieldRequired('name', jsonSchema)}
                     value={group.name || ''}
                     onChange={e => handleInputChange('name', e.target.value)}
-                    className={`mt-1 block w-full rounded-md border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm ${
+                    className={`mt-1 block w-full rounded-md border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100 shadow-xs focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm ${
                       validationErrors.name ? 'border-red-300' : ''
                     }`}
                     placeholder="Enter group display name"
@@ -212,7 +208,7 @@ function GroupFormEditor({
                     value={group.description || ''}
                     onChange={e => handleInputChange('description', e.target.value)}
                     rows={3}
-                    className="mt-1 block w-full rounded-md border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm"
+                    className="mt-1 block w-full rounded-md border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100 shadow-xs focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm"
                     placeholder="Enter group description"
                   />
                 </div>
@@ -223,7 +219,7 @@ function GroupFormEditor({
                       type="checkbox"
                       checked={group.permissions?.adminAccess || false}
                       onChange={e => handlePermissionChange('adminAccess', e.target.checked)}
-                      className="h-4 w-4 text-indigo-600 focus:ring-indigo-500 border-gray-300 dark:border-gray-600 rounded"
+                      className="h-4 w-4 text-indigo-600 focus:ring-indigo-500 border-gray-300 dark:border-gray-600 rounded-sm"
                     />
                     <label className="ml-2 block text-sm text-gray-900 dark:text-gray-100">
                       {t('admin.groups.adminAccess', 'Admin Access')}
@@ -240,7 +236,7 @@ function GroupFormEditor({
                       type="checkbox"
                       checked={group.permissions?.contentAdmin || false}
                       onChange={e => handlePermissionChange('contentAdmin', e.target.checked)}
-                      className="h-4 w-4 text-indigo-600 focus:ring-indigo-500 border-gray-300 dark:border-gray-600 rounded"
+                      className="h-4 w-4 text-indigo-600 focus:ring-indigo-500 border-gray-300 dark:border-gray-600 rounded-sm"
                     />
                     <label className="ml-2 block text-sm text-gray-900 dark:text-gray-100">
                       {t('admin.groups.contentAdmin', 'Content Admin (Apps, Prompts, Sources)')}
@@ -257,7 +253,7 @@ function GroupFormEditor({
                       type="checkbox"
                       checked={group.enabled !== false}
                       onChange={e => handleInputChange('enabled', e.target.checked)}
-                      className="h-4 w-4 text-indigo-600 focus:ring-indigo-500 border-gray-300 dark:border-gray-600 rounded"
+                      className="h-4 w-4 text-indigo-600 focus:ring-indigo-500 border-gray-300 dark:border-gray-600 rounded-sm"
                     />
                     <label className="ml-2 block text-sm text-gray-900 dark:text-gray-100">
                       {t('admin.groups.enabled', 'Enabled')}
@@ -270,39 +266,42 @@ function GroupFormEditor({
         </div>
 
         {/* External Group Mappings */}
-        <div className="bg-white dark:bg-gray-800 shadow dark:shadow-gray-900/20 px-4 py-5 sm:rounded-lg sm:p-6">
+        <div className="bg-white dark:bg-gray-800 shadow-sm dark:shadow-gray-900/20 px-4 py-5 sm:rounded-lg sm:p-6">
           <div className="md:grid md:grid-cols-3 md:gap-6">
             <div className="md:col-span-1">
               <h3 className="text-lg font-medium leading-6 text-gray-900 dark:text-gray-100">
-                External Group Mappings
+                {t('admin.groups.externalMappings', 'External Group Mappings')}
               </h3>
               <p className="mt-1 text-sm text-gray-500 dark:text-gray-400">
-                Map external groups from OIDC, LDAP, or other providers to this internal group
+                {t(
+                  'admin.groups.externalMappingsDescription',
+                  'Map external groups from OIDC, LDAP, or other providers to this internal group'
+                )}
               </p>
             </div>
             <div className="mt-5 md:col-span-2 md:mt-0">
-              <div>
-                <label className="block text-sm font-medium text-gray-700 dark:text-gray-300">
-                  External Group Names (comma-separated)
-                </label>
-                <input
-                  type="text"
-                  value={(group.mappings || []).join(', ')}
-                  onChange={e => handleMappingChange(e.target.value)}
-                  className="mt-1 block w-full rounded-md border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm"
-                  placeholder="IT-Admin, Platform-Admins, HR-Team"
-                />
-                <p className="mt-1 text-xs text-gray-500 dark:text-gray-400">
-                  Enter external group names that should be mapped to this group. Users with these
-                  external groups will automatically be assigned to this internal group.
-                </p>
-              </div>
+              <GroupMultiSelect
+                id="group-external-mappings"
+                label={t('admin.groups.externalGroupNames', 'External Group Names')}
+                value={group.mappings || []}
+                onChange={handleMappingChange}
+                warnOnCustom={false}
+                placeholder={t(
+                  'admin.groups.externalMappingsPlaceholder',
+                  'Type a group name and press Enter…'
+                )}
+                emptyMessage={t('admin.groups.externalMappingsEmpty', 'No external mappings yet')}
+                helpText={t(
+                  'admin.groups.externalMappingsHelp',
+                  'Enter external group names that should be mapped to this group. Users with these external groups will automatically be assigned to this internal group.'
+                )}
+              />
             </div>
           </div>
         </div>
 
         {/* Permissions */}
-        <div className="bg-white dark:bg-gray-800 shadow dark:shadow-gray-900/20 px-4 py-5 sm:rounded-lg sm:p-6">
+        <div className="bg-white dark:bg-gray-800 shadow-sm dark:shadow-gray-900/20 px-4 py-5 sm:rounded-lg sm:p-6">
           <div className="md:grid md:grid-cols-3 md:gap-6">
             <div className="md:col-span-1">
               <h3 className="text-lg font-medium leading-6 text-gray-900 dark:text-gray-100">
@@ -362,6 +361,16 @@ function GroupFormEditor({
                   onSelectionChange={selected => handlePermissionChange('skills', selected)}
                   placeholder="Search skills to add..."
                   emptyMessage="No skills selected - users can't use any agent skills"
+                />
+
+                {/* Tools Permission */}
+                <ResourceSelector
+                  label="Tools (MCP / A2A direct access)"
+                  resources={resources.tools || []}
+                  selectedResources={group.permissions?.tools || []}
+                  onSelectionChange={selected => handlePermissionChange('tools', selected)}
+                  placeholder="Search tools to add..."
+                  emptyMessage="No tools selected - tools are only reachable through apps that declare them"
                 />
               </div>
             </div>

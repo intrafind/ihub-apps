@@ -1,0 +1,26 @@
+{
+  "id": "gemini-3.5-flash-lite",
+  "modelId": "gemini-3.5-flash-lite",
+  "name": {
+    "en": "Gemini 3.5 Flash Lite",
+    "de": "Gemini 3.5 Flash Lite"
+  },
+  "description": {
+    "en": "Google's current stable Flash Lite model, pinned to a specific version. Optimized for cost and latency.",
+    "de": "Googles aktuelles stabiles Flash-Lite-Modell, auf eine feste Version fixiert. Optimiert für Kosten und Latenz."
+  },
+  "url": "https://generativelanguage.googleapis.com/v1beta/models/gemini-3.5-flash-lite:streamGenerateContent",
+  "provider": "google",
+  "contextWindow": 1048576,
+  "maxOutputTokens": 65536,
+  "supportsTools": true,
+  "supportsVision": true,
+  "supportsAudio": true,
+  "supportsImageGeneration": false,
+  "enabled": true,
+  "default": false,
+  "thinking": {
+    "enabled": true,
+    "level": "low"
+  }
+}

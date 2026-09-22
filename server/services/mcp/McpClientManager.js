@@ -47,7 +47,7 @@ class McpClientManager {
     if (!parsed.success) {
       logger.error('Invalid mcpServers.json — refusing to load MCP client config', {
         component: 'McpClientManager',
-        errors: parsed.error.errors
+        errors: parsed.error.issues
       });
       this.security = { blockPrivateIps: true, allowedHosts: [] };
       // Tear down any existing connections so a broken edit doesn't leave a
@@ -253,7 +253,7 @@ class McpClientManager {
     const parsed = mcpServerConfigSchema.safeParse(rawServerConfig);
     if (!parsed.success) {
       const err = new Error('Invalid server config');
-      err.details = parsed.error.errors;
+      err.details = parsed.error.issues;
       throw err;
     }
     // Force-enable for the probe: the admin explicitly asked to test it, even

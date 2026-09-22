@@ -51,7 +51,7 @@ function StartForm({ config, onChange }) {
   };
 
   const inputClass =
-    'w-full text-sm border border-gray-300 dark:border-gray-600 rounded px-2 py-1.5 bg-white dark:bg-gray-900 text-gray-900 dark:text-gray-100';
+    'w-full text-sm border border-gray-300 dark:border-gray-600 rounded-sm px-2 py-1.5 bg-white dark:bg-gray-900 text-gray-900 dark:text-gray-100';
   const labelClass = 'block text-xs font-medium text-gray-600 dark:text-gray-400 mb-1';
 
   return (
@@ -62,20 +62,26 @@ function StartForm({ config, onChange }) {
           {vars.map((v, index) => (
             <div
               key={index}
-              className="border border-gray-200 dark:border-gray-700 rounded p-2 space-y-1.5"
+              className="border border-gray-200 dark:border-gray-700 rounded-sm p-2 space-y-1.5"
             >
+              {/*
+                The name gets a row of its own: sharing one row with the type
+                select left it too narrow to read even a short name, and a
+                real variable name rarely fits beside a dropdown in a 320px
+                panel.
+              */}
+              <input
+                type="text"
+                value={v.name || ''}
+                onChange={e => updateVar(index, 'name', e.target.value)}
+                placeholder="Variable name"
+                className={`${inputClass} font-mono`}
+              />
               <div className="flex items-center gap-1.5">
-                <input
-                  type="text"
-                  value={v.name || ''}
-                  onChange={e => updateVar(index, 'name', e.target.value)}
-                  placeholder="Variable name"
-                  className={`flex-1 ${inputClass}`}
-                />
                 <select
                   value={v.type || 'string'}
                   onChange={e => updateVar(index, 'type', e.target.value)}
-                  className={`w-24 ${inputClass}`}
+                  className={`flex-1 min-w-0 ${inputClass}`}
                 >
                   {TYPE_OPTIONS.map(opt => (
                     <option key={opt.value} value={opt.value}>
@@ -88,7 +94,7 @@ function StartForm({ config, onChange }) {
                     type="checkbox"
                     checked={!!v.required}
                     onChange={e => updateVar(index, 'required', e.target.checked)}
-                    className="rounded border-gray-300 dark:border-gray-600"
+                    className="rounded-sm border-gray-300 dark:border-gray-600"
                   />
                   Req
                 </label>

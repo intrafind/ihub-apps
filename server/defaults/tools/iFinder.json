@@ -12,8 +12,8 @@
   "functions": {
     "search": {
       "description": {
-        "en": "Search for documents in the iFinder system",
-        "de": "Nach Dokumenten im iFinder-System suchen"
+        "en": "Search documents in iFinder using the IntraFind query syntax (Lucene plus NEAR/, MODE/, THES/, ENTITY/ and other operators). Field-qualified terms (title:budget, creators:\"DOE, John\") search the analyzed field; exact-value matching, faceting and sorting need the `.keyword` variant of a text field. Call iFinder_getFields first when unsure which name a field takes.",
+        "de": "Dokumente in iFinder mit der IntraFind-Syntax suchen (Lucene plus die Operatoren NEAR/, MODE/, THES/, ENTITY/ und weitere). Feldbezogene Terme (title:budget, creators:\"DOE, John\") durchsuchen das analysierte Feld; exakte Werte, Facetten und Sortierung benötigen die `.keyword`-Variante eines Textfelds. Bei Unsicherheit zuerst iFinder_getFields aufrufen."
       },
       "parameters": {
         "type": "object",
@@ -21,8 +21,8 @@
           "query": {
             "type": "string",
             "description": {
-              "en": "Search query to find documents in iFinder. Example: 'contract proposals' or 'technical documentation'",
-              "de": "Suchanfrage zum Finden von Dokumenten in iFinder. Beispiel: 'Vertragsvorschläge' oder 'technische Dokumentation'"
+              "en": "IntraFind query string: Lucene syntax (AND/OR/NOT, quoted phrases, field:value, wildcards, ranges) plus IntraFind operators — `NEAR/S(a b)` both terms in one sentence, `MODE/e&term` exact / `MODE/c&term` decompound, `THES/&term` thesaurus expansion, `ENTITY/PERS` any person name (also LOC, ORG, EMAIL, PHONE), `UNIT/>=(5 kg)`, `DATE/>=(2026-01-01)`, `NUMBER/[10 TO 100]`, `OR/2(a b c)`. Use `*` to match everything.",
+              "de": "IntraFind-Suchanfrage: Lucene-Syntax (AND/OR/NOT, Phrasen in Anführungszeichen, field:value, Wildcards, Bereiche) plus IntraFind-Operatoren — `NEAR/S(a b)` beide Begriffe in einem Satz, `MODE/e&term` exakt / `MODE/c&term` Dekomposition, `THES/&term` Thesaurus-Erweiterung, `ENTITY/PERS` beliebiger Personenname (auch LOC, ORG, EMAIL, PHONE), `UNIT/>=(5 kg)`, `DATE/>=(2026-01-01)`, `NUMBER/[10 TO 100]`, `OR/2(a b c)`. `*` trifft alles."
             }
           },
           "maxResults": {
@@ -48,8 +48,47 @@
               "type": "string"
             },
             "description": {
-              "en": "Fields to return in search results (optional)",
-              "de": "In Suchergebnissen zurückzugebende Felder (optional)"
+              "en": "Document fields to return. Use `*` for every field. Defaults to a broad set covering title, source, dates, file info and access links.",
+              "de": "Zurückzugebende Dokumentfelder. `*` liefert alle Felder. Standard ist ein breiter Satz mit Titel, Quelle, Daten, Dateiinfos und Zugriffslinks."
+            }
+          },
+          "from": {
+            "type": "integer",
+            "description": {
+              "en": "Offset of the first hit, for paging beyond the first page. iFinder caps `maxResults` at 100, so page by raising `from` in steps of `maxResults`.",
+              "de": "Offset des ersten Treffers zum Blättern über die erste Seite hinaus. iFinder begrenzt `maxResults` auf 100, daher `from` in Schritten von `maxResults` erhöhen."
+            },
+            "default": 0,
+            "minimum": 0
+          },
+          "filter": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            },
+            "description": {
+              "en": "Query strings ANDed with the query but excluded from relevance ranking — the right place for narrowing criteria. Same syntax as `query`. Use the `.keyword` variant for exact text matches, e.g. `creators.keyword:\"DOE, John\"`, `application.keyword:PDF`, `modificationDate:[2026-01-01 TO *]`.",
+              "de": "Ausdrücke, die mit UND an die Anfrage gehängt werden, aber die Relevanz nicht beeinflussen — der richtige Ort für Einschränkungen. Gleiche Syntax wie `query`. Für exakte Textwerte die `.keyword`-Variante nutzen, z. B. `creators.keyword:\"DOE, John\"`, `application.keyword:PDF`, `modificationDate:[2026-01-01 TO *]`."
+            }
+          },
+          "returnFacets": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            },
+            "description": {
+              "en": "Facet fields to aggregate alongside the hits, giving the value distribution of the result set. Text fields need their `.keyword` variant, e.g. `sourceName.keyword`, `application.keyword`. `navigationTree` is faceted under its plain name.",
+              "de": "Facettenfelder, die zusätzlich zu den Treffern aggregiert werden und die Werteverteilung der Ergebnismenge zeigen. Textfelder benötigen ihre `.keyword`-Variante, z. B. `sourceName.keyword`, `application.keyword`. `navigationTree` wird unter seinem einfachen Namen facettiert."
+            }
+          },
+          "sort": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            },
+            "description": {
+              "en": "Sort criteria as `field:asc` or `field:desc`, applied in order — e.g. `modificationDate:desc`. Analyzed text fields cannot be sorted on; use the `.keyword` variant (`creators.keyword:asc`). Omit to sort by relevance.",
+              "de": "Sortierkriterien als `field:asc` oder `field:desc`, in dieser Reihenfolge angewendet — z. B. `modificationDate:desc`. Analysierte Textfelder sind nicht sortierbar; die `.keyword`-Variante verwenden (`creators.keyword:asc`). Ohne Angabe wird nach Relevanz sortiert."
             }
           }
         },
@@ -94,8 +133,8 @@
     },
     "discover": {
       "description": {
-        "en": "Probe an iFinder search profile and return a markdown corpus map (facets, sources, sample titles). Intended for admin-driven memory population — NOT for agent runtime use.",
-        "de": "Ein iFinder-Suchprofil untersuchen und eine Markdown-Korpusübersicht zurückgeben (Facetten, Quellen, Beispieltitel). Für admin-gesteuerten Memory-Aufbau gedacht — NICHT für Agent-Laufzeit."
+        "en": "Probe a search profile and return a corpus map: total documents, the top values of the main facets, sample document titles and the field catalog. Run it once before searching an unfamiliar profile to learn what is in it and which fields can be filtered on.",
+        "de": "Ein Suchprofil sondieren und eine Korpus-Karte zurückgeben: Gesamtzahl der Dokumente, häufigste Facettenwerte, Beispieltitel und den Feldkatalog. Einmal vor der Suche in einem unbekannten Profil ausführen, um zu erfahren, was darin liegt und welche Felder gefiltert werden können."
       },
       "parameters": {
         "type": "object",
@@ -141,6 +180,14 @@
             "default": 10,
             "minimum": 0,
             "maximum": 50
+          },
+          "includeFields": {
+            "type": "boolean",
+            "description": {
+              "en": "Also fetch the field catalog (default: true). Set false to keep the response small when the fields are already known.",
+              "de": "Auch den Feldkatalog abrufen (Standard: true). Auf false setzen, um die Antwort klein zu halten, wenn die Felder bereits bekannt sind."
+            },
+            "default": true
           }
         },
         "required": ["searchProfile"]
@@ -195,6 +242,107 @@
           }
         },
         "required": ["documentId"]
+      }
+    },
+    "getFields": {
+      "description": {
+        "en": "List every field in the iFinder index with the exact field name to use for each purpose: full-text search, filtering, faceting and sorting. This is the authoritative answer to which fields exist in this deployment (including custom `cust.*` fields) and which of them need a `.keyword` suffix. Call it before constructing a filter, facet or sort you are not certain about.",
+        "de": "Alle Felder des iFinder-Index auflisten, mit dem exakten Feldnamen je Verwendungszweck: Volltextsuche, Filter, Facetten und Sortierung. Dies ist die verbindliche Auskunft darüber, welche Felder in dieser Installation existieren (auch eigene `cust.*`-Felder) und welche davon ein `.keyword`-Suffix benötigen. Vor unsicheren Filtern, Facetten oder Sortierungen aufrufen."
+      },
+      "parameters": {
+        "type": "object",
+        "properties": {
+          "schemaType": {
+            "type": "string",
+            "description": {
+              "en": "Schema type to describe. Only `document` exists today.",
+              "de": "Zu beschreibender Schematyp. Aktuell existiert nur `document`."
+            },
+            "default": "document"
+          },
+          "filterPrefix": {
+            "type": "string",
+            "description": {
+              "en": "Return only fields whose name starts with this prefix, e.g. `file.` or `cust.`. Useful to keep the response small.",
+              "de": "Nur Felder zurückgeben, deren Name mit diesem Präfix beginnt, z. B. `file.` oder `cust.`. Hält die Antwort klein."
+            }
+          }
+        },
+        "required": []
+      }
+    },
+    "getFacetValues": {
+      "description": {
+        "en": "Enumerate the values of a single facet — which sources, authors, applications or languages actually exist in a search profile, with a document count per value. Returns far more values than the facet block that rides along with a search, so use it to learn the vocabulary of a field before filtering on it.",
+        "de": "Die Werte einer einzelnen Facette aufzählen — welche Quellen, Autoren, Anwendungen oder Sprachen in einem Suchprofil tatsächlich vorkommen, mit Dokumentanzahl je Wert. Liefert deutlich mehr Werte als der Facettenblock einer Suche und eignet sich daher, um das Vokabular eines Feldes vor dem Filtern kennenzulernen."
+      },
+      "parameters": {
+        "type": "object",
+        "properties": {
+          "facet": {
+            "type": "string",
+            "description": {
+              "en": "Aggregatable field name. Text fields need their `.keyword` variant, e.g. `creators.keyword`, `sourceName.keyword`, `application.keyword`. `iFinder_getFields` reports the correct name per field in its `aggregation` entry.",
+              "de": "Aggregierbarer Feldname. Textfelder benötigen ihre `.keyword`-Variante, z. B. `creators.keyword`, `sourceName.keyword`, `application.keyword`. `iFinder_getFields` nennt je Feld den korrekten Namen im Eintrag `aggregation`."
+            }
+          },
+          "query": {
+            "type": "string",
+            "description": {
+              "en": "Scope query — facet values are counted over the documents it matches. Defaults to `*` (the whole profile).",
+              "de": "Bereichsanfrage — Facettenwerte werden über die passenden Dokumente gezählt. Standard ist `*` (gesamtes Profil)."
+            },
+            "default": "*"
+          },
+          "filter": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            },
+            "description": {
+              "en": "Additional Lucene filters narrowing the documents the values are counted over.",
+              "de": "Zusätzliche Lucene-Filter, die die gezählten Dokumente einschränken."
+            }
+          },
+          "maxValues": {
+            "type": "integer",
+            "description": {
+              "en": "Maximum number of facet values to return (default: 50).",
+              "de": "Maximale Anzahl zurückgegebener Facettenwerte (Standard: 50)."
+            },
+            "default": 50,
+            "minimum": 1,
+            "maximum": 1000
+          },
+          "sort": {
+            "type": "string",
+            "description": {
+              "en": "Value order: `count:desc` (most documents first, the default), `value:asc` or `value:desc` (alphabetical).",
+              "de": "Sortierung der Werte: `count:desc` (häufigste zuerst, Standard), `value:asc` oder `value:desc` (alphabetisch)."
+            },
+            "enum": ["count:desc", "value:asc", "value:desc"],
+            "default": "count:desc"
+          },
+          "searchProfile": {
+            "type": "string",
+            "description": {
+              "en": "Search profile ID (optional, uses default if not specified)",
+              "de": "Suchprofil-ID (optional, verwendet Standard wenn nicht angegeben)"
+            }
+          }
+        },
+        "required": ["facet"]
+      }
+    },
+    "listProfiles": {
+      "description": {
+        "en": "List the iFinder search profiles this user can reach, derived from the iAssistants the deployment exposes plus the configured default profile. Use it when a question names a corpus (\"the legal documents\") rather than a profile id. A deployment without iAssistants reports only the configured default — that is the upstream API’s limit, not an error.",
+        "de": "Die für diesen Benutzer erreichbaren iFinder-Suchprofile auflisten, abgeleitet aus den iAssistants der Installation plus dem konfigurierten Standardprofil. Nützlich, wenn eine Frage einen Korpus benennt („die juristischen Dokumente“) statt einer Profil-ID. Eine Installation ohne iAssistants meldet nur das konfigurierte Standardprofil — eine Grenze der Upstream-API, kein Fehler."
+      },
+      "parameters": {
+        "type": "object",
+        "properties": {},
+        "required": []
       }
     }
   }

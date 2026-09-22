@@ -2,9 +2,14 @@
  * Workflow run resume manager.
  *
  * Counterpart to the orphan sweeper: instead of marking every interrupted run
- * as failed on boot, this scans `contents/data/workflow-state/<id>/latest.json`
- * for runs left in a non-terminal state by a crashed/restarted process and
- * resumes them from their last checkpoint via `WorkflowEngine.resume()`.
+ * as failed on boot, this looks for runs left in a non-terminal state by a
+ * crashed/restarted process and resumes them from their last checkpoint via
+ * `WorkflowEngine.resume()`.
+ *
+ * State comes from {@link WorkflowStateRepository}, which reads both the
+ * `workflow-state` documents and the legacy `<id>/latest.json` directories —
+ * so an installation half way through the one-time import still has all of
+ * its interrupted runs found, rather than looking empty and losing them.
  *
  * Definition reconstruction is delegated to a caller-supplied
  * `resolveDefinition(state)` because only a workflow *summary* is persisted in
@@ -18,50 +23,41 @@
  * @module services/workflow/resumeManager
  */
 
-import fs from 'fs/promises';
-import path from 'path';
-import config from '../../config.js';
-import { getRootDir } from '../../pathUtils.js';
 import logger from '../../utils/logger.js';
+import { DEFAULT_STATE_DIR, resolveWorkflowStateRepository } from './WorkflowStateRepository.js';
 import { isSchedulerOwner } from './triggers/schedulerLock.js';
 
-const DEFAULT_STATE_DIR = path.join(getRootDir(), config.CONTENTS_DIR, 'data', 'workflow-state');
+/** Only these two statuses mean "was mid-flight when the process died". */
 const RESUMABLE_STATUSES = new Set(['running', 'pending']);
 
-async function readJsonSafe(filePath) {
-  try {
-    return JSON.parse(await fs.readFile(filePath, 'utf8'));
-  } catch {
-    return null;
-  }
-}
+/**
+ * Execution ids this manager considers. Sub-workflow states (`wf-child-*`)
+ * are deliberately excluded: they are driven by their parent's execution and
+ * resuming one on its own would run half a workflow with no one to hand the
+ * result to.
+ */
+const RESUMABLE_ID_PREFIX = 'wf-exec-';
 
 /**
- * Scan the workflow state directory for runs that are eligible to resume
- * (status `running` or `pending`).
+ * Scan for runs that are eligible to resume (status `running` or `pending`).
  *
- * @param {string} [stateDir]
+ * @param {string} [stateDir] - Directory holding the legacy state layout.
+ *   The installation's own directory resolves to the shared, provider-backed
+ *   repository; anything else is read as a private directory.
  * @returns {Promise<Array<{ executionId: string, state: Object }>>}
  */
 export async function findResumableExecutions(stateDir = DEFAULT_STATE_DIR) {
-  let entries;
-  try {
-    entries = await fs.readdir(stateDir, { withFileTypes: true });
-  } catch (error) {
-    if (error.code === 'ENOENT') return [];
-    throw error;
+  const repository = resolveWorkflowStateRepository(stateDir);
+  const { items, truncated } = await repository.list({ prefix: RESUMABLE_ID_PREFIX });
+  if (truncated) {
+    logger.warn({
+      component: 'ResumeManager',
+      message: `Stopped scanning for resumable runs at the cap; ${items.length} states examined`
+    });
   }
-
-  const out = [];
-  for (const entry of entries) {
-    if (!entry.isDirectory()) continue;
-    if (!entry.name.startsWith('wf-exec-')) continue;
-    const state = await readJsonSafe(path.join(stateDir, entry.name, 'latest.json'));
-    if (!state) continue;
-    if (!RESUMABLE_STATUSES.has(state.status)) continue;
-    out.push({ executionId: entry.name, state });
-  }
-  return out;
+  return items
+    .filter(({ state }) => RESUMABLE_STATUSES.has(state.status))
+    .map(({ executionId, state }) => ({ executionId, state }));
 }
 
 /**

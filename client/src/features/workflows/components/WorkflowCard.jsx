@@ -32,7 +32,7 @@ function WorkflowCard({ workflow, onStart, onEdit }) {
       <div className="p-4 flex-1 flex flex-col">
         <div className="flex items-start gap-3 mb-3">
           <div
-            className="flex-shrink-0 w-10 h-10 bg-indigo-100 dark:bg-indigo-900/40 rounded-full flex items-center justify-center"
+            className="shrink-0 w-10 h-10 bg-indigo-100 dark:bg-indigo-900/40 rounded-full flex items-center justify-center"
             aria-hidden="true"
           >
             <Icon name="workflow" className="text-indigo-600 dark:text-indigo-400 w-5 h-5" />
@@ -43,7 +43,7 @@ function WorkflowCard({ workflow, onStart, onEdit }) {
           {onEdit && (
             <button
               onClick={() => onEdit(workflow)}
-              className="flex-shrink-0 p-1.5 -m-1.5 text-gray-400 hover:text-indigo-600 dark:text-gray-500 dark:hover:text-indigo-400 rounded focus:outline-none focus:ring-2 focus:ring-indigo-500"
+              className="shrink-0 p-1.5 -m-1.5 text-gray-400 hover:text-indigo-600 dark:text-gray-500 dark:hover:text-indigo-400 rounded-sm focus:outline-hidden focus:ring-2 focus:ring-indigo-500"
               aria-label={t('workflows.card.edit', 'Edit workflow')}
               title={t('workflows.card.edit', 'Edit workflow')}
             >
@@ -99,7 +99,7 @@ function WorkflowCard({ workflow, onStart, onEdit }) {
 
         <button
           onClick={() => onStart(workflow)}
-          className="w-full bg-indigo-600 hover:bg-indigo-700 text-white font-medium py-2 px-4 rounded-lg transition-colors flex items-center justify-center gap-2 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500"
+          className="w-full bg-indigo-600 hover:bg-indigo-700 text-white font-medium py-2 px-4 rounded-lg transition-colors flex items-center justify-center gap-2 focus:outline-hidden focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500"
         >
           <Icon name="play" className="w-4 h-4" aria-hidden="true" />
           {t('workflows.start', 'Start workflow')}

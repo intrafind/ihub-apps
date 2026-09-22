@@ -1,0 +1,62 @@
+{
+  "id": "qwantSearch",
+  "name": {
+    "en": "Qwant Web / Internet Search",
+    "de": "Qwant Web- / Internetsuche"
+  },
+  "description": {
+    "en": "Search the web / internet using Qwant for up-to-date information. Needs no API key. Optionally extracts full page content from the top results. Use the 'query' parameter with your search terms.",
+    "de": "Durchsuchen Sie das Web / Internet mit Qwant für aktuelle Informationen. Benötigt keinen API-Schlüssel. Extrahiert optional vollständige Seiteninhalte aus den Top-Ergebnissen. Verwenden Sie den 'query' Parameter mit Ihren Suchbegriffen."
+  },
+  "script": "qwantSearch.js",
+  "concurrency": 1,
+  "requestDelayMs": 1100,
+  "parameters": {
+    "type": "object",
+    "properties": {
+      "query": {
+        "type": "string",
+        "description": {
+          "en": "The search query or search terms to find on the web. Example: 'latest AI news' or 'Python programming tutorial'",
+          "de": "Die Suchanfrage oder Suchbegriffe für die Websuche. Beispiel: 'neueste KI-Nachrichten' oder 'Python Programmier-Tutorial'"
+        }
+      },
+      "extractContent": {
+        "type": "boolean",
+        "description": {
+          "en": "Whether to extract full page content from the top search results (default: false)",
+          "de": "Ob vollständige Seiteninhalte aus den Top-Suchergebnissen extrahiert werden sollen (Standard: false)"
+        },
+        "default": false
+      },
+      "maxResults": {
+        "type": "integer",
+        "description": {
+          "en": "Maximum number of results to return / pages to extract content from (default: 10). Qwant returns at most 10 results per search.",
+          "de": "Maximale Anzahl der zurückzugebenden Ergebnisse / Seiten, von denen Inhalte extrahiert werden (Standard: 10). Qwant liefert maximal 10 Ergebnisse pro Suche."
+        },
+        "default": 10,
+        "minimum": 1,
+        "maximum": 10
+      },
+      "contentMaxLength": {
+        "type": "integer",
+        "description": {
+          "en": "Maximum length of extracted content per page in characters (default: 3000)",
+          "de": "Maximale Länge der extrahierten Inhalte pro Seite in Zeichen (Standard: 3000)"
+        },
+        "default": 3000,
+        "minimum": 500,
+        "maximum": 50000
+      },
+      "language": {
+        "type": "string",
+        "description": {
+          "en": "Language or locale for the search results, e.g. 'en', 'de' or 'de-CH' (default: English/US)",
+          "de": "Sprache oder Gebietsschema für die Suchergebnisse, z. B. 'en', 'de' oder 'de-CH' (Standard: Englisch/US)"
+        }
+      }
+    },
+    "required": ["query"]
+  }
+}

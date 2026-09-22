@@ -39,8 +39,8 @@ function PinnedEmailsBar({
 
   const compact = collapsedMode;
   const buttonClass = compact
-    ? 'inline-flex items-center gap-1 rounded-md border border-slate-200 bg-white px-2 py-1 text-slate-700 hover:bg-slate-100 disabled:opacity-50 disabled:cursor-not-allowed transition-colors text-xs'
-    : 'inline-flex items-center gap-1 rounded-md border border-slate-200 bg-white px-2 py-1 text-slate-700 hover:bg-slate-100 disabled:opacity-50 disabled:cursor-not-allowed transition-colors';
+    ? 'inline-flex items-center gap-1 rounded-md border border-slate-200 bg-white px-2 py-1 text-slate-700 hover:bg-slate-100 disabled:opacity-50 disabled:cursor-not-allowed transition-colors dark:border-slate-600 dark:bg-slate-800 dark:text-slate-200 dark:hover:bg-slate-700 text-xs'
+    : 'inline-flex items-center gap-1 rounded-md border border-slate-200 bg-white px-2 py-1 text-slate-700 hover:bg-slate-100 disabled:opacity-50 disabled:cursor-not-allowed transition-colors dark:border-slate-600 dark:bg-slate-800 dark:text-slate-200 dark:hover:bg-slate-700';
 
   const addButton = canAddEmails ? (
     <button
@@ -79,8 +79,8 @@ function PinnedEmailsBar({
   if (!hasPins && !canAddEmails) return null;
 
   const outerClassName = embedded
-    ? 'office-pinned-bar bg-slate-50/70 px-3 py-2 text-xs'
-    : 'office-pinned-bar border-t border-slate-100 bg-slate-50/70 px-3 py-2 text-xs';
+    ? 'office-pinned-bar bg-slate-50/70 px-3 py-2 text-xs dark:bg-slate-900/40'
+    : 'office-pinned-bar border-t border-slate-100 bg-slate-50/70 px-3 py-2 text-xs dark:border-slate-700 dark:bg-slate-900/40';
 
   return (
     <div className={outerClassName}>
@@ -92,7 +92,7 @@ function PinnedEmailsBar({
             type="button"
             onClick={onClearAll}
             title={t('office.pinned.clearAllTooltip', 'Remove every pinned email')}
-            className="ml-auto inline-flex items-center gap-1 rounded-md px-2 py-1 text-slate-500 hover:bg-slate-100 hover:text-slate-700 transition-colors"
+            className="ml-auto inline-flex items-center gap-1 rounded-md px-2 py-1 text-slate-500 hover:bg-slate-100 hover:text-slate-700 transition-colors dark:text-slate-400 dark:hover:bg-slate-700 dark:hover:text-slate-200"
           >
             <Icon name="trash" size="sm" />
             <span>{t('office.pinned.clearAll', 'Clear')}</span>
@@ -108,7 +108,7 @@ function PinnedEmailsBar({
             return (
               <span
                 key={key}
-                className="inline-flex items-center gap-1 rounded-full bg-indigo-50 text-indigo-700 border border-indigo-100 px-2 py-0.5"
+                className="inline-flex items-center gap-1 rounded-full bg-indigo-50 text-indigo-700 border border-indigo-100 px-2 py-0.5 dark:bg-indigo-900/40 dark:text-indigo-300 dark:border-indigo-800"
                 title={p.subject || ''}
               >
                 <Icon name="paper-clip" size="xs" />
@@ -117,7 +117,7 @@ function PinnedEmailsBar({
                   type="button"
                   onClick={() => onUnpin?.(p.itemId)}
                   title={t('office.pinned.removeOne', 'Remove from chat')}
-                  className="ml-0.5 rounded-full p-0.5 hover:bg-indigo-100"
+                  className="ml-0.5 rounded-full p-0.5 hover:bg-indigo-100 dark:hover:bg-indigo-800"
                   aria-label={t('office.pinned.removeOne', 'Remove from chat')}
                 >
                   <Icon name="x" size="xs" />

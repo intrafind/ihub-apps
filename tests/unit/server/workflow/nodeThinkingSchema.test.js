@@ -17,10 +17,18 @@ describe('nodeConfigSchema — per-node thinking', () => {
     expect(r.success).toBe(true);
   });
 
-  it('accepts the Gemini 2.5 budget shape', () => {
+  it('rejects the retired budget shape', () => {
     const r = nodeConfigSchema.safeParse({
       ...baseNode,
       config: { thinking: { enabled: true, budget: 512, thoughts: false } }
+    });
+    expect(r.success).toBe(false);
+  });
+
+  it('accepts a level with the thoughts flag', () => {
+    const r = nodeConfigSchema.safeParse({
+      ...baseNode,
+      config: { thinking: { enabled: true, level: 'high', thoughts: false } }
     });
     expect(r.success).toBe(true);
   });
