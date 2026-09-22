@@ -241,3 +241,12 @@ way `/api/models` and the OpenAI-compatible API already are:
 
 No admin action is required: groups that already restrict **Models** to specific entries are now
 fully enforced for chat, including apps invoked as tools through the MCP gateway.
+
+## Transient server errors no longer get cached and served back as real data
+
+A single failed request to the server — a brief 5xx while loading something like UI styles or
+platform configuration — could get cached in the browser and served back as if it were successful
+data for up to a minute, so the affected screen crashed or rendered blank instead of showing an
+error or simply retrying. Failed requests are no longer written into the client-side response
+cache, so a retry after a transient error always fetches fresh data instead of replaying the
+earlier failure.
