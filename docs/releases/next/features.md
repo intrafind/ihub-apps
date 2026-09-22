@@ -146,6 +146,10 @@ product to confirm the change had landed.
 - Each field says whether the value in effect comes from `platform.json` or from the environment,
   and an `${ENV_VAR}` placeholder that no variable resolves is called out instead of silently
   doing nothing.
+- **In effect right now** lists every setting the server is using — both proxy URLs, the bypass
+  list and the URL patterns — and marks the fields you have edited but not yet saved, showing what
+  each one becomes once you press Save. An entry you have just added therefore no longer reads as
+  "not set" with nothing to explain it.
 - The page opens on what is actually happening: routed through a named proxy, no proxy in use, or
   switched off. A fresh installation is in the second state — no `proxy` block is written to
   `platform.json` and nothing is proxied until a URL is set here or `HTTP_PROXY`/`HTTPS_PROXY` is

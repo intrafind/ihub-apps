@@ -25,9 +25,17 @@ function isValidRegex(pattern) {
   }
 }
 
+/** Same entries in the same order? Used to spot unsaved list edits. */
+function sameList(a = [], b = []) {
+  return a.length === b.length && a.every((entry, index) => entry === b[index]);
+}
+
 function ProxyConfig() {
   const { t } = useTranslation();
   const [config, setConfig] = useState(EMPTY_CONFIG);
+  // The last state the server confirmed, so the editor can tell which fields
+  // carry an edit that has not been saved yet.
+  const [savedConfig, setSavedConfig] = useState(EMPTY_CONFIG);
   const [provenance, setProvenance] = useState({});
   const [effective, setEffective] = useState(null);
   const [unresolvedPlaceholders, setUnresolvedPlaceholders] = useState({});
@@ -43,13 +51,15 @@ function ProxyConfig() {
   const [testError, setTestError] = useState('');
 
   const applyResponse = useCallback(data => {
-    setConfig({
+    const next = {
       enabled: data.config?.enabled !== false,
       http: data.config?.http || '',
       https: data.config?.https || '',
       noProxy: Array.isArray(data.config?.noProxy) ? data.config.noProxy : [],
       urlPatterns: Array.isArray(data.config?.urlPatterns) ? data.config.urlPatterns : []
-    });
+    };
+    setConfig(next);
+    setSavedConfig(next);
     setProvenance(data.provenance || {});
     setEffective(data.effective || null);
     setUnresolvedPlaceholders(data.unresolvedPlaceholders || {});
@@ -96,6 +106,62 @@ function ProxyConfig() {
     return 'active';
   }, [effective]);
 
+  /** Which fields the editor holds an unsaved edit for. */
+  const dirtyFields = useMemo(
+    () => ({
+      enabled: config.enabled !== savedConfig.enabled,
+      http: config.http.trim() !== savedConfig.http.trim(),
+      https: config.https.trim() !== savedConfig.https.trim(),
+      noProxy: !sameList(config.noProxy, savedConfig.noProxy),
+      urlPatterns: !sameList(config.urlPatterns, savedConfig.urlPatterns)
+    }),
+    [config, savedConfig]
+  );
+
+  const hasUnsavedChanges = useMemo(() => Object.values(dirtyFields).some(Boolean), [dirtyFields]);
+
+  /**
+   * Rows of the "In effect right now" panel: what the runtime uses, plus what
+   * saving would make of a field the editor has since changed.
+   *
+   * Both halves are needed. The panel reports the server's state, so an admin
+   * who has just added a bypass host sees their entry listed above and "not
+   * set" here, and reasonably reads that as the panel failing to show a value
+   * that *is* set — the edit simply has not reached the server yet. The whole
+   * editable set is listed too: `urlPatterns` used to be missing here, so a
+   * saved pattern list was never reflected at all.
+   */
+  const effectiveRows = useMemo(() => {
+    if (!effective) return [];
+    const asText = value => (Array.isArray(value) && value.length > 0 ? value.join(', ') : '');
+    return [
+      {
+        key: 'http',
+        label: t('admin.system.proxy.effectiveHttp', 'HTTP'),
+        value: effective.http || '',
+        pending: config.http.trim()
+      },
+      {
+        key: 'https',
+        label: t('admin.system.proxy.effectiveHttps', 'HTTPS'),
+        value: effective.https || '',
+        pending: config.https.trim()
+      },
+      {
+        key: 'noProxy',
+        label: t('admin.system.proxy.effectiveNoProxy', 'No proxy'),
+        value: asText(effective.noProxy),
+        pending: asText(config.noProxy)
+      },
+      {
+        key: 'urlPatterns',
+        label: t('admin.system.proxy.effectiveUrlPatterns', 'URL patterns'),
+        value: asText(effective.urlPatterns),
+        pending: asText(config.urlPatterns)
+      }
+    ];
+  }, [config, effective, t]);
+
   const sourceLabel = field => {
     switch (provenance[field]) {
       case 'platform':
@@ -106,6 +172,23 @@ function ProxyConfig() {
         return t('admin.system.proxy.source.default', 'Not configured');
     }
   };
+
+  /**
+   * The provenance note shown under a field, with an unsaved edit called out:
+   * "Not configured" on its own reads as a contradiction next to a value the
+   * admin has just typed.
+   */
+  const fieldNote = field => (
+    <>
+      {sourceLabel(field)}
+      {dirtyFields[field] && (
+        <span className="text-amber-600 dark:text-amber-400">
+          {' · '}
+          {t('admin.system.proxy.unsavedField', 'unsaved change')}
+        </span>
+      )}
+    </>
+  );
 
   const addNoProxyEntry = () => {
     const trimmed = newNoProxy.trim();
@@ -353,7 +436,7 @@ function ProxyConfig() {
                 'admin.system.proxy.enabledHint',
                 'On its own this switch proxies nothing — a URL below has to be set. Switch it off to go direct even when a proxy is set in the environment.'
               )}{' '}
-              {sourceLabel('enabled')}
+              {fieldNote('enabled')}
             </p>
           </div>
         </div>
@@ -382,7 +465,7 @@ function ProxyConfig() {
               )}
               className={inputClass}
             />
-            <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">{sourceLabel(field)}</p>
+            <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">{fieldNote(field)}</p>
             {unresolvedPlaceholders[field] && (
               <p className="text-xs text-amber-600 dark:text-amber-400 mt-1">
                 {t(
@@ -413,7 +496,7 @@ function ProxyConfig() {
             'admin.system.proxy.noProxyHelp',
             'Exact hostname (api.example.com), subdomains (.example.com or *.example.com). CIDR ranges, host:port entries and a bare * are not supported.'
           )}{' '}
-          {sourceLabel('noProxy')}
+          {fieldNote('noProxy')}
         </p>
         <div className="flex gap-2 mb-2">
           <input
@@ -477,7 +560,7 @@ function ProxyConfig() {
             'admin.system.proxy.urlPatternsHelp',
             'Regular expressions tested against the full URL. Leave the list empty to proxy everything; with entries, only matching URLs are proxied.'
           )}{' '}
-          {sourceLabel('urlPatterns')}
+          {fieldNote('urlPatterns')}
         </p>
         <div className="flex gap-2 mb-1">
           <input
@@ -550,32 +633,40 @@ function ProxyConfig() {
       {/* Effective configuration */}
       {effective && (
         <div className="mb-6 p-4 bg-gray-50 dark:bg-gray-700/40 border border-gray-200 dark:border-gray-700 rounded-lg">
-          <h3 className="text-sm font-medium text-gray-900 dark:text-gray-100 mb-2">
-            {t('admin.system.proxy.effectiveTitle', 'In effect right now')}
-          </h3>
+          <div className="flex items-start justify-between gap-2 mb-1">
+            <h3 className="text-sm font-medium text-gray-900 dark:text-gray-100">
+              {t('admin.system.proxy.effectiveTitle', 'In effect right now')}
+            </h3>
+            {hasUnsavedChanges && (
+              <span className="shrink-0 px-2 py-0.5 rounded-full text-xs font-medium bg-amber-100 dark:bg-amber-900/40 text-amber-800 dark:text-amber-200">
+                {t('admin.system.proxy.effectiveUnsaved', 'Unsaved changes')}
+              </span>
+            )}
+          </div>
+          <p className="text-xs text-gray-500 dark:text-gray-400 mb-2">
+            {t(
+              'admin.system.proxy.effectiveHint',
+              'What the server uses for outbound requests right now, including anything coming from the environment. Changes above apply once you save.'
+            )}
+          </p>
           <dl className="text-xs text-gray-600 dark:text-gray-400 space-y-1">
-            <div className="flex gap-2">
-              <dt className="w-28 shrink-0">{t('admin.system.proxy.effectiveHttp', 'HTTP')}</dt>
-              <dd className="font-mono break-all">
-                {effective.http || t('admin.system.proxy.notSet', 'not set')}
-              </dd>
-            </div>
-            <div className="flex gap-2">
-              <dt className="w-28 shrink-0">{t('admin.system.proxy.effectiveHttps', 'HTTPS')}</dt>
-              <dd className="font-mono break-all">
-                {effective.https || t('admin.system.proxy.notSet', 'not set')}
-              </dd>
-            </div>
-            <div className="flex gap-2">
-              <dt className="w-28 shrink-0">
-                {t('admin.system.proxy.effectiveNoProxy', 'No proxy')}
-              </dt>
-              <dd className="font-mono break-all">
-                {effective.noProxy?.length
-                  ? effective.noProxy.join(', ')
-                  : t('admin.system.proxy.notSet', 'not set')}
-              </dd>
-            </div>
+            {effectiveRows.map(row => (
+              <div key={row.key} className="flex gap-2">
+                <dt className="w-28 shrink-0">{row.label}</dt>
+                <dd className="min-w-0">
+                  <span className="font-mono break-all">
+                    {row.value || t('admin.system.proxy.notSet', 'not set')}
+                  </span>
+                  {dirtyFields[row.key] && (
+                    <span className="block break-words text-amber-600 dark:text-amber-400">
+                      {t('admin.system.proxy.effectivePending', 'after saving: {{value}}', {
+                        value: row.pending || t('admin.system.proxy.notSet', 'not set')
+                      })}
+                    </span>
+                  )}
+                </dd>
+              </div>
+            ))}
           </dl>
         </div>
       )}
