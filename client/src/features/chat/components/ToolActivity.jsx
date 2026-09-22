@@ -2,10 +2,12 @@ import { useId, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import Icon from '../../../shared/components/Icon';
 import { hostnameOf } from '../groundingSources';
+import { sourceKey } from '../toolActivity';
 
 /**
- * What the turn did before it answered: the web searches it ran, the pages
- * they found and which of those were read, and the other tools it called.
+ * What the turn did before it answered: the searches it ran (web or the
+ * organisation's documents), the pages or documents they found and which of
+ * those were read, and the other tools it called.
  *
  * Open while the answer streams, so the user can follow the search as it
  * happens; collapsed to a one-line summary once the answer is complete, where
@@ -26,6 +28,7 @@ function ToolActivity({ activity, loading = false }) {
   const open = expanded ?? loading;
 
   const searches = items.filter(item => item.kind === 'search');
+  const onlyDocuments = items.every(item => item.kind === 'tool' || item.scope === 'documents');
   const running = items.some(item => item.status === 'running');
   const headline = running
     ? runningHeadline(t, items, activity.reading)
@@ -44,7 +47,13 @@ function ToolActivity({ activity, loading = false }) {
           <Icon name="spinner" size="sm" className="shrink-0 animate-spin" />
         ) : (
           <Icon
-            name={searches.length ? 'globe-alt' : 'wrench'}
+            name={
+              items.every(item => item.kind === 'tool')
+                ? 'wrench'
+                : onlyDocuments
+                  ? 'document-text'
+                  : 'globe-alt'
+            }
             size="sm"
             className="shrink-0 text-gray-400 dark:text-gray-500"
           />
@@ -70,12 +79,16 @@ function ToolActivity({ activity, loading = false }) {
   );
 }
 
-function countRead(items) {
-  return items.reduce((sum, item) => sum + item.sources.filter(source => source.read).length, 0);
+/** Sources read, by scope — a document shows up on its search hit and on the read that fetched it. */
+function countRead(items, scope) {
+  const keys = items
+    .filter(item => (item.scope === 'documents') === (scope === 'documents'))
+    .flatMap(item => item.sources.filter(source => source.read).map(sourceKey));
+  return new Set(keys).size;
 }
 
 function countSources(items) {
-  return new Set(items.flatMap(item => item.sources.map(source => source.url))).size;
+  return new Set(items.flatMap(item => item.sources.map(sourceKey))).size;
 }
 
 function runningHeadline(t, items, reading) {
@@ -85,9 +98,15 @@ function runningHeadline(t, items, reading) {
   const current = [...items].reverse().find(item => item.status === 'running');
   if (current?.kind === 'search') {
     const query = current.query || current.queries?.[current.queries.length - 1];
-    return query
-      ? t('toolActivity.searchingFor', 'Searching for “{{query}}”', { query })
+    if (query) return t('toolActivity.searchingFor', 'Searching for “{{query}}”', { query });
+    return current.scope === 'documents'
+      ? t('toolActivity.searchingDocuments', 'Searching documents…')
       : t('toolActivity.searching', 'Searching the web…');
+  }
+  if (current?.kind === 'fetch' && current.scope === 'documents') {
+    return current.title
+      ? t('toolActivity.readingDocument', 'Reading “{{title}}”', { title: current.title })
+      : t('toolActivity.readingDocuments', 'Reading documents…');
   }
   if (current?.kind === 'fetch') {
     return current.url
@@ -100,7 +119,12 @@ function runningHeadline(t, items, reading) {
 function finishedHeadline(t, items, searches) {
   const parts = [];
   if (searches.length) {
-    parts.push(t('toolActivity.searchedWeb', 'Searched the web'));
+    if (searches.some(item => item.scope !== 'documents')) {
+      parts.push(t('toolActivity.searchedWeb', 'Searched the web'));
+    }
+    if (searches.some(item => item.scope === 'documents')) {
+      parts.push(t('toolActivity.searchedDocuments', 'Searched documents'));
+    }
     const queryCount = searches.reduce(
       (sum, item) => sum + (item.native ? item.queries.length : 1),
       0
@@ -108,11 +132,19 @@ function finishedHeadline(t, items, searches) {
     parts.push(t('toolActivity.searches', { count: queryCount }));
     const sources = countSources(items);
     if (sources) parts.push(t('toolActivity.sources', { count: sources }));
-  } else if (items.some(item => item.kind === 'fetch')) {
-    parts.push(t('toolActivity.readWeb', 'Read the web'));
+  } else {
+    const fetches = items.filter(item => item.kind === 'fetch');
+    if (fetches.some(item => item.scope !== 'documents')) {
+      parts.push(t('toolActivity.readWeb', 'Read the web'));
+    }
+    if (fetches.some(item => item.scope === 'documents')) {
+      parts.push(t('toolActivity.readDocuments', 'Read documents'));
+    }
   }
-  const read = countRead(items);
-  if (read) parts.push(t('toolActivity.pagesRead', { count: read }));
+  const pagesRead = countRead(items, 'web');
+  if (pagesRead) parts.push(t('toolActivity.pagesRead', { count: pagesRead }));
+  const documentsRead = countRead(items, 'documents');
+  if (documentsRead) parts.push(t('toolActivity.documentsRead', { count: documentsRead }));
   const others = items.filter(item => item.kind === 'tool').length;
   if (others) parts.push(t('toolActivity.toolCalls', { count: others }));
   return parts.join(' · ');
@@ -160,7 +192,7 @@ function ActivityItem({ item }) {
         {item.sources.length > 0 && (
           <ul className="mt-1 ms-5 space-y-0.5">
             {item.sources.map(source => (
-              <SourceRow key={source.url} source={source} />
+              <SourceRow key={sourceKey(source)} source={source} />
             ))}
           </ul>
         )}
@@ -170,19 +202,22 @@ function ActivityItem({ item }) {
 
   if (item.kind === 'fetch') {
     const url = item.url || item.sources[0]?.url;
+    const label = item.sources[0]?.title || item.title || (url ? hostnameOf(url) : item.documentId);
     return (
       <li className="flex flex-wrap items-center gap-1.5">
         <StatusIcon item={item} fallback="document-text" />
         <span>{t('toolActivity.readPage', 'Read')}</span>
-        {url && (
+        {url ? (
           <a
             href={url}
             target="_blank"
             rel="noopener noreferrer"
             className="text-indigo-600 dark:text-indigo-400 hover:underline break-all"
           >
-            {item.sources[0]?.title || hostnameOf(url)}
+            {label}
           </a>
+        ) : (
+          label && <span className="text-gray-700 dark:text-gray-300 break-all">{label}</span>
         )}
         <ItemStatus item={item} />
       </li>
@@ -219,25 +254,35 @@ function ItemStatus({ item }) {
 
 function SourceRow({ source }) {
   const { t } = useTranslation();
-  const host = hostnameOf(source.url);
+  const host = source.url ? hostnameOf(source.url) : null;
   return (
     <li className="flex items-baseline gap-1.5 min-w-0">
-      <a
-        href={source.url}
-        target="_blank"
-        rel="noopener noreferrer"
-        className="text-indigo-600 dark:text-indigo-400 hover:underline truncate"
-        title={source.url}
-      >
-        {source.title || host}
-      </a>
+      {source.url ? (
+        <a
+          href={source.url}
+          target="_blank"
+          rel="noopener noreferrer"
+          className="text-indigo-600 dark:text-indigo-400 hover:underline truncate"
+          title={source.url}
+        >
+          {source.title || host}
+        </a>
+      ) : (
+        <span className="text-gray-700 dark:text-gray-300 truncate">
+          {source.title || source.documentId}
+        </span>
+      )}
       {source.title && host && (
         <span className="shrink-0 text-gray-400 dark:text-gray-500">{host}</span>
       )}
       {source.read && (
         <span
           className="shrink-0 inline-flex items-center gap-0.5 text-emerald-600 dark:text-emerald-400"
-          title={t('toolActivity.readTitle', 'The page was fetched and read')}
+          title={
+            source.documentId
+              ? t('toolActivity.readDocumentTitle', 'The document was read')
+              : t('toolActivity.readTitle', 'The page was fetched and read')
+          }
         >
           <Icon name="eye" size="xs" />
           {t('toolActivity.read', 'Read')}

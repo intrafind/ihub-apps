@@ -1007,6 +1007,9 @@
                     "url": {
                       "type": "string"
                     },
+                    "documentId": {
+                      "type": "string"
+                    },
                     "title": {
                       "type": "string"
                     },
@@ -1017,7 +1020,6 @@
                       "type": "boolean"
                     }
                   },
-                  "required": ["url"],
                   "additionalProperties": false
                 }
               }
@@ -4213,6 +4215,9 @@
                     "url": {
                       "type": "string"
                     },
+                    "documentId": {
+                      "type": "string"
+                    },
                     "title": {
                       "type": "string"
                     },
@@ -4223,7 +4228,6 @@
                       "type": "boolean"
                     }
                   },
-                  "required": ["url"],
                   "additionalProperties": false
                 }
               }

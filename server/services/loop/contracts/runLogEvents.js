@@ -248,7 +248,9 @@ export const toolCallData = z.object({
  * `readFailed` when fetching it failed). See `services/loop/webSources.js`.
  */
 export const webSourceSchema = z.object({
-  url: z.string(),
+  url: z.string().optional(),
+  // iFinder document id, so a document read later matches the hit that found it.
+  documentId: z.string().optional(),
   title: z.string().optional(),
   read: z.boolean().optional(),
   readFailed: z.boolean().optional()
