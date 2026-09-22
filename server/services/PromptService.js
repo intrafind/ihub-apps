@@ -16,6 +16,30 @@ import logger from '../utils/logger.js';
 const promptKnowledgeSources = new Map();
 
 /**
+ * Escape regex metacharacters so arbitrary keys can be used inside `new RegExp(...)`.
+ * @param {string} str
+ * @returns {string}
+ */
+function escapeRegExp(str) {
+  return str.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+}
+
+/**
+ * Replace all `{{key}}` occurrences in text with value, treating both as literal
+ * text: the key is regex-escaped so metacharacters (e.g. from a client-supplied
+ * variable name) can't throw a SyntaxError, and the value is applied via a
+ * function replacer so `$&`, `$1`, etc. inside it are never reinterpreted by
+ * String.replace's replacement-pattern syntax.
+ * @param {string} text
+ * @param {string} key
+ * @param {string} value
+ * @returns {string}
+ */
+function replaceTemplateVar(text, key, value) {
+  return text.replace(new RegExp(`\\{\\{${escapeRegExp(key)}\\}\\}`, 'g'), () => value);
+}
+
+/**
  * Service for handling prompt processing and template resolution
  */
 /**
@@ -168,11 +192,7 @@ class PromptService {
       // Replace variables in platform_context with their resolved values
       for (const [key, value] of Object.entries(globalPromptVars)) {
         if (value !== null && value !== undefined && value !== '') {
-          const strValue = String(value);
-          platformContext = platformContext.replace(
-            new RegExp(`\\{\\{${key}\\}\\}`, 'g'),
-            () => strValue
-          );
+          platformContext = replaceTemplateVar(platformContext, key, String(value));
         }
       }
     }
@@ -215,8 +235,7 @@ class PromptService {
     let result = text;
     for (const [key, value] of Object.entries(variables || {})) {
       if (value === null || value === undefined) continue;
-      const escapedKey = key.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
-      result = result.replace(new RegExp(`\\{\\{${escapedKey}\\}\\}`, 'g'), String(value));
+      result = replaceTemplateVar(result, key, String(value));
     }
     return result;
   }
@@ -275,10 +294,7 @@ class PromptService {
         };
         for (const [key, value] of Object.entries(variables)) {
           const strValue = typeof value === 'string' ? value : String(value || '');
-          processedContent = processedContent.replace(
-            new RegExp(`\\{\\{${key}\\}\\}`, 'g'),
-            () => strValue
-          );
+          processedContent = replaceTemplateVar(processedContent, key, strValue);
         }
         const userContent =
           typeof msg.content === 'string' ? msg.content : String(msg.content || '');
@@ -321,10 +337,7 @@ class PromptService {
       ) {
         for (const [key, value] of Object.entries(globalPromptVariables)) {
           const strValue = typeof value === 'string' ? value : String(value || '');
-          processedContent = processedContent.replace(
-            new RegExp(`\\{\\{${key}\\}\\}`, 'g'),
-            () => strValue
-          );
+          processedContent = replaceTemplateVar(processedContent, key, strValue);
         }
       }
       const processedMsg = { role: msg.role, content: processedContent };
@@ -358,10 +371,7 @@ class PromptService {
           if (typeof value === 'function' || (typeof value === 'object' && value !== null))
             continue;
           const strValue = String(value || '');
-          systemPrompt = systemPrompt.replace(
-            new RegExp(`\\{\\{${key}\\}\\}`, 'g'),
-            () => strValue
-          );
+          systemPrompt = replaceTemplateVar(systemPrompt, key, strValue);
         }
       }
 
@@ -437,11 +447,11 @@ class PromptService {
           const hasSourcePlaceholder = systemPrompt.includes('{{source}}');
 
           if (hasSourcesPlaceholder) {
-            systemPrompt = systemPrompt.replace('{{sources}}', sourceContent || '');
+            systemPrompt = systemPrompt.replace('{{sources}}', () => sourceContent || '');
           }
           // Also support legacy {{source}} template
           if (hasSourcePlaceholder) {
-            systemPrompt = systemPrompt.replace('{{source}}', sourceContent || '');
+            systemPrompt = systemPrompt.replace('{{source}}', () => sourceContent || '');
           }
 
           // If no placeholder was found but we have source content, append it automatically
