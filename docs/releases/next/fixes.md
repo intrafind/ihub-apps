@@ -308,3 +308,10 @@ different email".
   the typed text back.
 - Removed attachments and the email-body opt-out in the context strip stay as set while the same
   email remains open.
+
+## Outlook Add-in: answers about an email no longer say "Based on external knowledge"
+
+Summarizing an email that has attachments labelled the answer "Based on external knowledge"
+("Basierend auf externem Wissen"), although everything came from the user's own mailbox. Email
+plus its attachments now shows **Based on email and attachments**, and answers that really combine
+several sources say **Based on multiple sources** instead of "external knowledge".

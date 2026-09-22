@@ -545,7 +545,8 @@
       "grounding": "Basierend auf Such-Grounding",
       "email": "Basierend auf E-Mail-Inhalt",
       "file": "Basierend auf hochgeladener Datei",
-      "mixed": "Basierend auf externem Wissen",
+      "emailWithFiles": "Basierend auf E-Mail und Anhängen",
+      "mixed": "Basierend auf mehreren Quellen",
       "workflow": "Erzeugt durch Workflow",
       "workflowTooltip": "Workflow-Ausführung öffnen",
       "tooltip": "Diese Antwort wurde generiert unter Verwendung von:"
