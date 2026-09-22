@@ -5,16 +5,20 @@
  * - Every outgoing request carries the Office Bearer token (Authorization header).
  * - 401 responses automatically attempt a silent token refresh and retry once.
  * - If the refresh fails, the session-expired callback is invoked (navigates to login).
+ * - The shared SSE transport (openSseStream) gets the same Bearer token and
+ *   401-refresh behaviour via setSseAuthProvider().
  *
  * Call installOfficeAuthInterceptor(config) once from taskpane-entry.jsx after Office.onReady.
  * The config object ({ baseUrl, clientId, redirectUri }) is stored in officeAuth so that
- * the SSE hook and other modules can also call refreshTokenOrExpireSession() without
- * needing to thread the config through their call stacks.
+ * other modules can also call refreshTokenOrExpireSession() without needing to thread
+ * the config through their call stacks.
  */
 import { apiClient, streamingApiClient } from '../../../api/client';
+import { setSseAuthProvider } from '../../../shared/utils/openSseStream';
 import {
   OFFICE_TOKEN_KEY,
   getAccessToken,
+  getRefreshToken,
   setOfficeConfig,
   refreshTokenOrExpireSession
 } from './officeAuth';
@@ -40,9 +44,24 @@ import {
  *     login) and the error propagates.
  */
 export function installOfficeAuthInterceptor(config) {
-  // Store config so refreshTokenOrExpireSession() and the SSE hook can use it
-  // without needing the config threaded through every call site.
+  // Store config so refreshTokenOrExpireSession() can be used without needing
+  // the config threaded through every call site.
   setOfficeConfig(config);
+
+  // SSE streams use fetch, not Axios, so they get the same token and
+  // 401-refresh behaviour through the shared transport's provider hook.
+  // The refresh is keyed off getRefreshToken() so it is attempted even when the
+  // access token is already gone (expired and removed) but a refresh token
+  // exists. refreshTokenOrExpireSession() invokes the session-expired callback
+  // and throws when the refresh itself fails.
+  setSseAuthProvider({
+    getToken: getAccessToken,
+    onUnauthorized: async () => {
+      if (!getRefreshToken()) return false;
+      await refreshTokenOrExpireSession(config);
+      return true;
+    }
+  });
 
   const addInterceptor = client => {
     // --- Request interceptor ---

@@ -5,7 +5,7 @@ import DynamicLanguageEditor from '../../../shared/components/DynamicLanguageEdi
 import SearchableAppsSelector from '../../apps/components/SearchableAppsSelector';
 import Icon from '../../../shared/components/Icon';
 import AdminFormErrorSummary from './AdminFormErrorSummary';
-import { FormValidationProvider } from './formValidationContext';
+import { FormValidationProvider } from '../../../shared/contexts/formValidationContext';
 import {
   validateWithSchema,
   errorsToFieldErrors,
