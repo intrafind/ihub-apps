@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
-import { buildApiUrl } from '../../../utils/runtimeBasePath';
+import { fetchIFinderDocument } from '../../../api/endpoints/documents';
+import { filenameFromContentDisposition, saveBlobAs } from '../../../utils/externalNavigation';
 import PdfPassageViewer from './PdfPassageViewer';
 
 const MIN_SCALE = 0.5;
@@ -14,7 +15,9 @@ const SCALE_STEP = 0.2;
  * The PDF comes from the existing `integrations/ifinder/document` proxy with
  * `convertToPdf=true`, i.e. the same generated PDF the "Preview" action used to
  * open in a browser tab. Fetching it as an ArrayBuffer (instead of handing the
- * URL to pdf.js) keeps the request on the app's `credentials: 'include'` path.
+ * URL to pdf.js) keeps the request on the app's authenticated `apiClient` path,
+ * which also carries the Bearer token the Outlook task pane and the extension
+ * side panel sign requests with.
  *
  * @param {Object} props
  * @param {string} props.documentId iFinder document id from the ACCESS link.
@@ -48,43 +51,35 @@ function DocumentPreviewModal({
   });
   const controlRef = useRef(null);
 
-  const documentParams = useMemo(() => {
-    const params = new URLSearchParams({ documentId });
-    if (searchProfile) params.set('searchProfile', searchProfile);
-    return params;
-  }, [documentId, searchProfile]);
-
   // Fetch the generated PDF.
   useEffect(() => {
     let cancelled = false;
     const controller = new AbortController();
 
-    const params = new URLSearchParams(documentParams);
-    params.set('convertToPdf', 'true');
-
     setData(null);
     setLoadError(null);
 
-    fetch(buildApiUrl(`integrations/ifinder/document?${params}`), {
-      credentials: 'include',
+    fetchIFinderDocument({
+      documentId,
+      searchProfile,
+      convertToPdf: true,
+      responseType: 'arraybuffer',
       signal: controller.signal
     })
-      .then(res => {
-        if (!res.ok) throw new Error(`HTTP ${res.status}`);
-        return res.arrayBuffer();
-      })
-      .then(buffer => {
-        if (!cancelled) setData(buffer);
+      .then(response => {
+        if (!cancelled) setData(response.data);
       })
       .catch(err => {
-        if (!cancelled && err.name !== 'AbortError') setLoadError(err.message);
+        if (!cancelled && err.name !== 'AbortError' && err.code !== 'ERR_CANCELED') {
+          setLoadError(err.message);
+        }
       });
 
     return () => {
       cancelled = true;
       controller.abort();
     };
-  }, [documentParams]);
+  }, [documentId, searchProfile]);
 
   // Close on Escape, navigate matches with Enter / Shift+Enter.
   useEffect(() => {
@@ -120,7 +115,34 @@ function DocumentPreviewModal({
 
   const handleStateChange = useCallback(state => setViewerState(state), []);
 
-  const downloadUrl = buildApiUrl(`integrations/ifinder/document?${documentParams}`);
+  // Downloading through an authenticated blob fetch rather than a link to the
+  // API URL: a plain anchor carries no Bearer token in the embedded hosts, and
+  // its `target="_blank"` is popup-blocked there anyway (issue #2453).
+  const [downloading, setDownloading] = useState(false);
+  const [downloadError, setDownloadError] = useState(null);
+
+  const handleDownload = useCallback(async () => {
+    setDownloading(true);
+    setDownloadError(null);
+    try {
+      const response = await fetchIFinderDocument({ documentId, searchProfile });
+      const filename =
+        filenameFromContentDisposition(response.headers?.['content-disposition']) ||
+        title ||
+        documentId;
+      if (!saveBlobAs(response.data, filename)) {
+        setDownloadError(
+          t('citations.downloadFailed', 'The document could not be downloaded. Please try again.')
+        );
+      }
+    } catch {
+      setDownloadError(
+        t('citations.downloadFailed', 'The document could not be downloaded. Please try again.')
+      );
+    } finally {
+      setDownloading(false);
+    }
+  }, [documentId, searchProfile, title, t]);
 
   const { loading, numPages, totalMatches, currentMatch } = viewerState;
   const passageCount = passages.length;
@@ -137,11 +159,17 @@ function DocumentPreviewModal({
             <p className="text-sm font-semibold text-gray-900 dark:text-white truncate">
               {title || t('documentPreview.title', 'Document preview')}
             </p>
-            <p className="text-xs text-gray-500 dark:text-gray-400">
-              {loading
-                ? t('documentPreview.loading', 'Loading document…')
-                : t('documentPreview.pageCount', '{{count}} pages', { count: numPages })}
-            </p>
+            {downloadError ? (
+              <p role="alert" className="text-xs text-red-600 dark:text-red-400">
+                {downloadError}
+              </p>
+            ) : (
+              <p className="text-xs text-gray-500 dark:text-gray-400">
+                {loading
+                  ? t('documentPreview.loading', 'Loading document…')
+                  : t('documentPreview.pageCount', '{{count}} pages', { count: numPages })}
+              </p>
+            )}
           </div>
 
           {/* Match navigation */}
@@ -228,11 +256,11 @@ function DocumentPreviewModal({
             </button>
           </div>
 
-          <a
-            href={downloadUrl}
-            target="_blank"
-            rel="noopener noreferrer"
-            className="p-1.5 rounded-sm hover:bg-gray-100 dark:hover:bg-gray-700 text-gray-600 dark:text-gray-300"
+          <button
+            type="button"
+            onClick={handleDownload}
+            disabled={downloading}
+            className="p-1.5 rounded-sm hover:bg-gray-100 dark:hover:bg-gray-700 text-gray-600 dark:text-gray-300 disabled:opacity-50"
             title={t('citations.download', 'Download')}
             aria-label={t('citations.download', 'Download')}
           >
@@ -244,7 +272,7 @@ function DocumentPreviewModal({
                 d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4"
               />
             </svg>
-          </a>
+          </button>
 
           <button
             onClick={onClose}

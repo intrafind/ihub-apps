@@ -213,3 +213,19 @@ behind it, and had no width limit, letting it grow past the edge of a narrow pan
 
 The panel now follows the theme like the rest of the message actions, always renders above
 neighbouring menus, and is capped to a fixed width.
+
+## Outlook Add-in: the document buttons on a citation work again
+
+In the Outlook task pane and the browser-extension side panel, the "Open in browser" and
+"Download" buttons on a cited document did nothing at all — no window, no file, no error. Those
+hosts block pop-ups, and the buttons opened the document in one; the same buttons worked in the
+browser, which made it look like a network or firewall problem. They now use the host's own
+mechanism instead: Outlook opens the link in the user's browser, the side panel opens it in a new
+tab, and the web app is unchanged.
+
+- Downloads are fetched over the signed-in connection and saved as a file, so they also work in
+  the add-in, where the previous link carried no session and would have been rejected.
+- The document preview and its Details dialog load over the same connection, for the same reason.
+- When an action cannot be carried out, the citation list now says so instead of leaving a button
+  that appears to do nothing.
+- "Open in App" is hidden in the add-in and the side panel, where there is no app page to open.

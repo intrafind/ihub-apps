@@ -483,7 +483,12 @@
     "passages": "{{count}} Passage",
     "passages_plural": "{{count}} Passagen",
     "openExternal": "Im Browser öffnen",
-    "showInDocument": "Diese Textstelle im Dokument anzeigen"
+    "showInDocument": "Diese Textstelle im Dokument anzeigen",
+    "openExternalBlocked": "Das Dokument konnte nicht ge\u00f6ffnet werden \u2013 dieses Fenster hat es blockiert. \u00d6ffnen Sie es stattdessen \u00fcber iHub im Browser.",
+    "openExternalUnavailable": "F\u00fcr dieses Dokument gibt es keinen Link zum \u00d6ffnen.",
+    "downloadFailed": "Das Dokument konnte nicht heruntergeladen werden. Bitte erneut versuchen.",
+    "downloadUnavailable": "Dieses Dokument kann hier nicht heruntergeladen werden.",
+    "documentActionFailed": "Diese Aktion konnte nicht ausgef\u00fchrt werden."
   },
   "chatMessage": {
     "user": "Du",
