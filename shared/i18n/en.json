@@ -2768,7 +2768,13 @@
     "openExternalUnavailable": "This document has no link to open.",
     "downloadFailed": "The document could not be downloaded. Please try again.",
     "downloadUnavailable": "This document cannot be downloaded from here.",
-    "documentActionFailed": "That action could not be completed."
+    "documentActionFailed": "That action could not be completed.",
+    "attachToMail": "Add to email",
+    "attachedToMail": "Added to your email as {{filename}}.",
+    "attachNeedsDraft": "Open a new email or a reply first, then add the document from there.",
+    "attachTooLarge": "This document is too large to attach. Download it instead.",
+    "attachUnavailable": "This document cannot be attached from here.",
+    "attachFailed": "The document could not be attached to your email."
   },
   "chatMessage": {
     "user": "You",

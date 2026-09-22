@@ -283,6 +283,18 @@ error or simply retrying. Failed requests are no longer written into the client-
 cache, so a retry after a transient error always fetches fresh data instead of replaying the
 earlier failure.
 
+## vLLM: tools with a parameter named `title` or `format` work again
+
+On vLLM models, a tool whose parameter was literally named after a JSON Schema keyword — `title`,
+`format`, `exclusiveMinimum` or `exclusiveMaximum` — had that parameter silently removed from the
+schema sent to the model, while the schema still listed it as required. The model then either
+rejected the request or called the tool without ever being told the parameter existed. MCP tools
+are the common case, since a `title` or `format` field is ordinary in tool definitions generated
+from JSON Schema.
+
+vLLM still drops those keywords where they are genuine schema annotations; it no longer confuses a
+property's *name* with one.
+
 ## Outlook Add-in: the chat no longer resets on its own and loses answers
 
 The task pane sometimes cleared the whole conversation — including finished answers and a

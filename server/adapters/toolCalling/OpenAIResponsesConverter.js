@@ -11,10 +11,22 @@ import {
   createGenericToolCall,
   createGenericStreamingResponse,
   normalizeFinishReason,
-  sanitizeSchemaForProvider
+  cloneAndWalkSchema
 } from './GenericToolCalling.js';
 import logger from '../../utils/logger.js';
 import { parseJsonAsync } from '../../utils/asyncJson.js';
+
+/**
+ * Sanitize a JSON Schema for the OpenAI Responses API's tool `parameters`.
+ * The Responses API has no known schema restrictions beyond strict mode
+ * (handled separately by `addStrictModeToSchema`), so this currently only
+ * deep-clones the schema — kept as an explicit hook for future rules.
+ * @param {Object} schema - JSON Schema
+ * @returns {Object} Sanitized schema
+ */
+export function sanitizeSchema(schema) {
+  return cloneAndWalkSchema(schema, () => {});
+}
 
 /**
  * Add strict mode requirements to a schema for OpenAI Responses API
@@ -117,7 +129,7 @@ export function convertGenericToolsToOpenaiResponses(genericTools = []) {
   });
 
   return functionTools.map(tool => {
-    const sanitizedParams = sanitizeSchemaForProvider(tool.parameters, 'openai-responses');
+    const sanitizedParams = sanitizeSchema(tool.parameters);
     const strictParams = addStrictModeToSchema(sanitizedParams);
 
     return {
