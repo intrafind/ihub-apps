@@ -16,6 +16,12 @@ import { buildApiUrl } from '../../../utils/runtimeBasePath';
 import { debugLog } from '../../../utils/debugLog';
 import Icon from '../../../shared/components/Icon';
 import AppShareModal from '../components/AppShareModal';
+import {
+  downloadCitationDocument,
+  getCitationDocumentAccess,
+  getCitationMeta,
+  openCitationDocument
+} from '../../chat/utils/citationDocuments';
 
 // Import our custom hooks and components
 import useAppChat from '../../chat/hooks/useAppChat';
@@ -1597,44 +1603,29 @@ function AppChat({ preloadedApp = null }) {
   // Handle citation document actions (openExternal, download, openInApp).
   // "preview" is handled inside CitationPanel, which owns the passage texts the
   // preview highlights.
+  //
+  // openExternal/download go through the shared helpers so this page and the
+  // panel's own fallback behave identically — including reporting back a
+  // `{ ok: false }` result the panel turns into a visible message instead of a
+  // dead button (issue #2453). Only openInApp is specific to this page: it
+  // needs the app router, which the embedded hosts do not have.
   const handleDocumentAction = useCallback(
-    (action, item, targetAppId) => {
-      const getMeta = (doc, key) => {
-        const val = doc?.additional_document_metadata?.[key];
-        return Array.isArray(val) && val.length > 0 ? val[0] : val || '';
-      };
-      const deepLink = getMeta(item, 'accessInfo.deepLink');
+    async (action, item, targetAppId) => {
+      if (action === 'openExternal') return openCitationDocument(item);
+      if (action === 'download') return downloadCitationDocument(item);
 
-      // Extract document access info from iFinder links
-      const links = item?.links;
-      const accessLink = Array.isArray(links) ? links.find(l => l.type === 'ACCESS') : null;
-
-      if (action === 'openExternal') {
-        if (deepLink) {
-          window.open(deepLink, '_blank', 'noopener,noreferrer');
-        }
-      } else if (action === 'download') {
-        if (accessLink?.documentId) {
-          const params = new URLSearchParams({
-            documentId: accessLink.documentId,
-            ...(accessLink.searchProfile ? { searchProfile: accessLink.searchProfile } : {})
-          });
-          window.open(
-            buildApiUrl(`integrations/ifinder/document?${params}`),
-            '_blank',
-            'noopener,noreferrer'
-          );
-        }
-      } else if (action === 'openInApp' && targetAppId) {
-        const title = item.title || getMeta(item, 'title') || '';
+      if (action === 'openInApp' && targetAppId) {
+        const access = getCitationDocumentAccess(item);
         const params = new URLSearchParams({
-          prefill: title,
+          prefill: item.title || getCitationMeta(item, 'title') || '',
           documentId: item.document_id || '',
-          ...(accessLink?.searchProfile ? { searchProfile: accessLink.searchProfile } : {}),
+          ...(access?.searchProfile ? { searchProfile: access.searchProfile } : {}),
           source: 'ifinder'
         });
         navigate(`/apps/${targetAppId}?${params.toString()}`);
       }
+
+      return undefined;
     },
     [navigate]
   );

@@ -2759,7 +2759,12 @@
     "passages": "{{count}} passage",
     "passages_plural": "{{count}} passages",
     "openExternal": "Open in browser",
-    "showInDocument": "Show this passage in the document"
+    "showInDocument": "Show this passage in the document",
+    "openExternalBlocked": "The document could not be opened — this window blocked it. Try opening it from iHub in your browser.",
+    "openExternalUnavailable": "This document has no link to open.",
+    "downloadFailed": "The document could not be downloaded. Please try again.",
+    "downloadUnavailable": "This document cannot be downloaded from here.",
+    "documentActionFailed": "That action could not be completed."
   },
   "chatMessage": {
     "user": "You",
