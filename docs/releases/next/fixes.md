@@ -46,13 +46,26 @@ marked "Failed", next to the new email — also on the start page. The add-in no
 torn read (every attachment fetch failing with "attachment identifier does not exist") and reads
 the email again after a short pause.
 
-## Dollar signs inside message text are no longer altered
+## Dollar signs inside message text and sources are no longer altered
 
-Text inserted into an app's prompt template — an email body, a pasted document — could change on
-the way to the model: `$&`, `$'`, `` $` `` and `$$` were treated as replacement patterns when
-`{{content}}` was filled in, so an email quoting "$$" arrived with a single dollar sign. The
-inserted text now reaches the model exactly as written; only the template's own placeholders are
-expanded.
+Text inserted into an app's prompt template could change on the way to the model: `$&`, `$'`,
+`` $` `` and `$$` were treated as replacement patterns wherever a value was substituted into a
+`{{placeholder}}`, so a dollar sequence in the source text came out altered instead of verbatim.
+This is now fixed everywhere a template value is inserted; only the template's own placeholders
+are expanded, never anything inside the values themselves.
+
+- **Message text:** an email body or pasted document inserted at `{{content}}` — for example an
+  email quoting "$$" used to arrive with a single dollar sign.
+- **Knowledge sources:** document, web page, or iFinder content inserted at `{{sources}}` /
+  `{{source}}` could be altered the same way; that content now reaches the model unchanged even
+  when it contains a `$1`- or `$&`-shaped sequence.
+
+## A variable name with special characters no longer crashes the chat request
+
+An app's prompt template can carry variables sent from the client or defined by an admin. A
+variable name containing a regex-special character — an unmatched `(`, `[`, or similar — made the
+whole chat request fail with a server error instead of just substituting that one variable. Such
+names now substitute correctly like any other variable name.
 
 ## iFinder: the private key field now actually takes effect
 
