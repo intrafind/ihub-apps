@@ -35,9 +35,6 @@ import { dedupeCitations } from '../citationUtils.js';
 import { getLocalizedString } from '../../../utils/localize.js';
 import SourceResolutionService from '../../SourceResolutionService.js';
 import { createSourceManager } from '../../../sources/index.js';
-import config from '../../../config.js';
-import { getRootDir } from '../../../pathUtils.js';
-import path from 'path';
 import logger from '../../../utils/logger.js';
 import { getAgentToolIds } from '../../../agents/runtime/agentToolRegistrar.js';
 import { readMemoryBodyForPrompt } from '../../../agents/memory/memoryFile.js';
@@ -1384,12 +1381,11 @@ export class PromptNodeExecutor extends BaseNodeExecutor {
         };
       }
 
-      // Load content from resolved sources
-      const sourceManager = createSourceManager({
-        filesystem: {
-          basePath: path.resolve(getRootDir(), config.CONTENTS_DIR)
-        }
-      });
+      // Load content from resolved sources.
+      // createSourceManager() is a process-wide singleton; config is only
+      // honored on the very first call, so we rely on FileSystemHandler's
+      // own default basePath here instead of passing a redundant override.
+      const sourceManager = createSourceManager();
 
       const result = await sourceManager.loadSources(resolvedSources, sourceContext);
 

@@ -3,6 +3,8 @@ import {
   findClientById,
   updateClientLastUsed
 } from '../utils/oauthClientManager.js';
+import { buildPolicyCimdClient } from '../utils/oauthClientResolver.js';
+import { isClientIdUrl } from '../utils/clientIdMetadata.js';
 import { isPersonalKeyExpired, isPersonalKeysEnabled } from '../utils/personalApiKeyManager.js';
 import { isCurrentKeyGeneration } from '../utils/oauthTokenService.js';
 import { loadUsers, isUserActive, equalsIgnoreCase } from '../utils/userManager.js';
@@ -11,6 +13,7 @@ import { recordAuthEvent } from '../telemetry/metrics.js';
 import configCache from '../configCache.js';
 import logger from '../utils/logger.js';
 import { getClearAuthCookieOptions } from '../utils/cookieSettings.js';
+import { localUsersFile, oauthClientsFile } from '../utils/contentsPath.js';
 
 /**
  * JWT authentication middleware
@@ -59,9 +62,16 @@ export default function jwtAuthMiddleware(req, res, next) {
       const oauthConfig = platform.oauth || {};
       if (oauthConfig.enabled?.clients) {
         try {
-          const clientsFilePath = oauthConfig.clientsFile || 'contents/config/oauth-clients.json';
-          const clientsConfig = loadOAuthClients(clientsFilePath);
-          if (clientsConfig.clients[peeked.payload.aud]) {
+          const clientsFilePath = oauthClientsFile(oauthConfig);
+          // A client identified by a metadata document has a policy record in
+          // the same store, so bare store presence would accept its audience
+          // while skipping the four conditions that are not `record.active`.
+          // Ask the resolver instead: it returns null unless CIMD is on, the
+          // host is allowed and not blocked, and the client is approved.
+          const audienceIsKnown = isClientIdUrl(peeked.payload.aud)
+            ? buildPolicyCimdClient(peeked.payload.aud, platform) !== null
+            : !!loadOAuthClients(clientsFilePath).clients[peeked.payload.aud];
+          if (audienceIsKnown) {
             decoded = verifyJwt(token, { audience: peeked.payload.aud });
           }
         } catch {
@@ -121,7 +131,7 @@ export default function jwtAuthMiddleware(req, res, next) {
       const oauthConfig = platform.oauth || {};
       if (oauthConfig.enabled?.clients) {
         try {
-          const clientsFilePath = oauthConfig.clientsFile || 'contents/config/oauth-clients.json';
+          const clientsFilePath = oauthClientsFile(oauthConfig);
           const clientsConfig = loadOAuthClients(clientsFilePath);
           const client = findClientById(clientsConfig, decoded.client_id);
 
@@ -233,7 +243,7 @@ export default function jwtAuthMiddleware(req, res, next) {
 
       let client;
       try {
-        const clientsFilePath = platform.oauth?.clientsFile || 'contents/config/oauth-clients.json';
+        const clientsFilePath = oauthClientsFile(platform.oauth);
         const clientsConfig = loadOAuthClients(clientsFilePath);
 
         // loadOAuthClients() catches internally and returns a safe empty config
@@ -337,10 +347,7 @@ export default function jwtAuthMiddleware(req, res, next) {
       // Record the use so the integrations page reports keys used through the
       // HTTP APIs, not only those exchanged at the token endpoint. Best effort:
       // a failed bookkeeping write must not fail the request.
-      updateClientLastUsed(
-        client.clientId,
-        platform.oauth?.clientsFile || 'contents/config/oauth-clients.json'
-      ).catch(error => {
+      updateClientLastUsed(client.clientId, oauthClientsFile(platform.oauth)).catch(error => {
         logger.error('Failed to record personal API key usage', {
           component: 'JwtAuth',
           clientId: client.clientId,
@@ -353,7 +360,7 @@ export default function jwtAuthMiddleware(req, res, next) {
       const oauthConfig = platform.oauth || {};
       if (oauthConfig.enabled?.authz) {
         try {
-          const usersFilePath = platform.localAuth?.usersFile || 'contents/config/users.json';
+          const usersFilePath = localUsersFile(platform.localAuth);
           const usersConfig = loadUsers(usersFilePath);
           const userId = decoded.sub || decoded.username || decoded.id;
           const userRecord = usersConfig.users?.[userId];
@@ -377,8 +384,7 @@ export default function jwtAuthMiddleware(req, res, next) {
           let clientAllowedPrompts = [];
           if (decoded.client_id) {
             try {
-              const clientsFilePath =
-                oauthConfig.clientsFile || 'contents/config/oauth-clients.json';
+              const clientsFilePath = oauthClientsFile(oauthConfig);
               const clientsConfig = loadOAuthClients(clientsFilePath);
 
               // loadOAuthClients() catches internally and returns a safe empty config with
@@ -396,7 +402,16 @@ export default function jwtAuthMiddleware(req, res, next) {
                 });
               }
 
-              const client = findClientById(clientsConfig, decoded.client_id);
+              // Same split as the gateway (`mcpAuth`): a metadata-document
+              // client's policy is the *layered* result of its record over
+              // `platform.oauth.cimd`, and it is refused outright when CIMD is
+              // off, its host is blocked or dropped, or its approval has not
+              // been given. Reading the raw record with `findClientById` would
+              // enforce only `active` and silently drop the platform-wide
+              // allowedApps/Models/Prompts narrowing.
+              const client = isClientIdUrl(decoded.client_id)
+                ? buildPolicyCimdClient(decoded.client_id, platform)
+                : findClientById(clientsConfig, decoded.client_id);
 
               if (!client) {
                 logger.warn('OAuth auth-code token rejected: client no longer exists', {
@@ -481,7 +496,7 @@ export default function jwtAuthMiddleware(req, res, next) {
       const localAuthConfig = platform.localAuth || {};
       if (localAuthConfig.enabled) {
         try {
-          const usersFilePath = localAuthConfig.usersFile || 'contents/config/users.json';
+          const usersFilePath = localUsersFile(localAuthConfig);
           const usersConfig = loadUsers(usersFilePath);
           const userId = decoded.sub || decoded.username || decoded.id;
 
@@ -550,7 +565,7 @@ export default function jwtAuthMiddleware(req, res, next) {
       // For OIDC auth, validate that user still exists and is active
       // OIDC users are persisted to users.json via validateAndPersistExternalUser
       try {
-        const usersFilePath = platform.localAuth?.usersFile || 'contents/config/users.json';
+        const usersFilePath = localUsersFile(platform.localAuth);
         const usersConfig = loadUsers(usersFilePath);
 
         // OIDC users can be identified by their subject ID or email
@@ -600,7 +615,7 @@ export default function jwtAuthMiddleware(req, res, next) {
       // For LDAP auth, validate that user still exists and is active
       // LDAP users may be persisted to users.json
       try {
-        const usersFilePath = platform.localAuth?.usersFile || 'contents/config/users.json';
+        const usersFilePath = localUsersFile(platform.localAuth);
         const usersConfig = loadUsers(usersFilePath);
 
         // users.json is keyed by the persisted UUID (decoded.sub). Fall back to
@@ -639,6 +654,11 @@ export default function jwtAuthMiddleware(req, res, next) {
           name: decoded.name || decoded.displayName || decoded.username,
           email: decoded.email || decoded.mail || '',
           groups: decoded.groups || [],
+          // Minted by loginLdapUser when the provider has a NetBIOS domain
+          // configured or detected. Needed here for the iFinder
+          // `domain\\username` subject, which is otherwise only resolvable on
+          // the login request itself.
+          domain: decoded.domain,
           authMode: 'ldap',
           timestamp: Date.now()
         };
@@ -656,7 +676,7 @@ export default function jwtAuthMiddleware(req, res, next) {
       // For Teams auth, validate that user still exists and is active
       // Teams users are persisted to users.json via validateAndPersistExternalUser
       try {
-        const usersFilePath = platform.localAuth?.usersFile || 'contents/config/users.json';
+        const usersFilePath = localUsersFile(platform.localAuth);
         const usersConfig = loadUsers(usersFilePath);
 
         const userId = decoded.id || decoded.sub;
@@ -703,7 +723,7 @@ export default function jwtAuthMiddleware(req, res, next) {
       // For NTLM auth, validate that user still exists and is active
       // NTLM users are persisted to users.json via validateAndPersistExternalUser
       try {
-        const usersFilePath = platform.localAuth?.usersFile || 'contents/config/users.json';
+        const usersFilePath = localUsersFile(platform.localAuth);
         const usersConfig = loadUsers(usersFilePath);
 
         const userId = decoded.id || decoded.sub;

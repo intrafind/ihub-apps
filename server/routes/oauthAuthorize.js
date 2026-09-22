@@ -1,5 +1,7 @@
 import { stampDcrFirstUser } from '../utils/oauthClientManager.js';
 import { resolveOAuthClient } from '../utils/oauthClientResolver.js';
+import { isUserAllowedByGroups } from '../utils/oauthClientPolicy.js';
+import { recordCimdDiscovery } from '../services/oauth/CimdGovernanceService.js';
 import { logAudit } from '../services/AuditLogService.js';
 import { generateCode, storeCode } from '../utils/authorizationCodeStore.js';
 import { buildServerPath } from '../utils/basePath.js';
@@ -8,6 +10,7 @@ import configCache from '../configCache.js';
 import logger from '../utils/logger.js';
 import { hasConsent, grantConsent } from '../utils/consentStore.js';
 import { issueConsentTicket, verifyConsentTicket } from '../utils/consentTicket.js';
+import { oauthClientsFile } from '../utils/contentsPath.js';
 
 /**
  * OAuth 2.0 Authorization Code Flow - Authorization Endpoint
@@ -107,22 +110,6 @@ export function allRedirectUrisAreLoopback(allowedUris) {
 }
 
 /**
- * Check whether the authenticated user is allowed to use a given OAuth client.
- * Empty/missing allowlist or `['*']` (the wildcard) means unrestricted; otherwise
- * the user must be a member of at least one listed group.
- *
- * @param {Object} client - Loaded OAuth client.
- * @param {Object} user - Decoded JWT payload (with `groups` array).
- * @returns {boolean} True if the user passes the group check.
- */
-function isUserAllowedByGroups(client, user) {
-  const allowed = Array.isArray(client?.allowedGroups) ? client.allowedGroups : [];
-  if (allowed.length === 0 || allowed.includes('*')) return true;
-  const userGroups = Array.isArray(user?.groups) ? user.groups : [];
-  return userGroups.some(g => allowed.includes(g));
-}
-
-/**
  * Render a minimal "access denied — group restriction" HTML page for users who
  * are signed in but not in any of the client's allowed groups.
  */
@@ -180,6 +167,108 @@ function renderClientNotAllowedPage({ host, reason, lang = 'en' }) {
     <h1>This client is not allowed on this server</h1>
     <p>An application identifying itself as <code>${safeHost}</code> asked for access to your iHub account. Your administrator has not listed that host as a trusted client, so the request was refused.</p>
     <p class="reason">${escapeHtml(reason || '')}</p>
+  </div>
+</body>
+</html>`;
+}
+
+/**
+ * Turn a client that has just completed an authorization into a real, editable
+ * row, if it is not one already.
+ *
+ * Fire-and-forget, and idempotent: the authorization has already been granted
+ * by the time this runs, so a write failure must not change its outcome, and a
+ * busy client must not rewrite the store on every flow.
+ *
+ * @param {Object} client - The resolved client
+ * @param {Object} user - The user who authorized it
+ * @param {Object} platform - Platform configuration
+ * @returns {void}
+ */
+function stampCimdDiscovery(client, user, platform) {
+  if (client?.kind !== 'cimd' || client.hasPolicyRecord) return;
+
+  recordCimdDiscovery({
+    clientId: client.clientId,
+    platform,
+    clientName: client.name,
+    user
+  }).catch(error => {
+    logger.warn('Failed to record client discovery', {
+      component: 'OAuthAuthorize',
+      error: error.message
+    });
+  });
+}
+
+/**
+ * Render the refusal page for a client an administrator has blocked.
+ *
+ * Separate from {@link renderClientNotAllowedPage} because the two say
+ * different things to the person reading them: "your administrator has not
+ * listed that host" is a configuration gap, while this one is a decision that
+ * was taken about this exact software. Naming the client is what makes the
+ * difference visible.
+ */
+function renderClientBlockedPage({ name, host, lang = 'en' }) {
+  const safeName = escapeHtml(name || host || 'this application');
+  const safeHost = escapeHtml(host || '');
+  return `<!DOCTYPE html>
+<html lang="${lang}">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Client blocked - iHub</title>
+  <style>
+    body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; background: #f3f4f6; display: flex; align-items: center; justify-content: center; min-height: 100vh; padding: 16px; }
+    .card { background: white; border-radius: 12px; box-shadow: 0 4px 24px rgba(0,0,0,0.12); max-width: 420px; width: 100%; padding: 32px; text-align: center; }
+    h1 { font-size: 20px; color: #111827; margin-bottom: 12px; }
+    p { font-size: 14px; color: #4b5563; line-height: 1.5; }
+    code { font-size: 13px; background: #f3f4f6; padding: 2px 6px; border-radius: 4px; }
+  </style>
+</head>
+<body>
+  <div class="card">
+    <h1>${safeName} is blocked</h1>
+    <p>Your administrator has blocked this application${safeHost ? ` (<code>${safeHost}</code>)` : ''} from connecting to iHub. Please contact your administrator if you need access through it.</p>
+  </div>
+</body>
+</html>`;
+}
+
+/**
+ * Render the refusal page for a client that no administrator has approved yet.
+ *
+ * This page *is* the feature, not a side effect of the gate: a user who adds
+ * the connector in a Claude surface nobody has approved gets a sentence saying
+ * exactly what to ask for, and the administrator gets a named, pending row to
+ * approve rather than discovering the client later in a connections list.
+ */
+function renderApprovalPendingPage({ name, host, clientId, lang = 'en' }) {
+  const safeName = escapeHtml(name || host || 'This application');
+  const safeHost = escapeHtml(host || '');
+  const safeClientId = escapeHtml(clientId || '');
+  return `<!DOCTYPE html>
+<html lang="${lang}">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Waiting for approval - iHub</title>
+  <style>
+    body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; background: #f3f4f6; display: flex; align-items: center; justify-content: center; min-height: 100vh; padding: 16px; }
+    .card { background: white; border-radius: 12px; box-shadow: 0 4px 24px rgba(0,0,0,0.12); max-width: 460px; width: 100%; padding: 32px; text-align: center; }
+    h1 { font-size: 20px; color: #111827; margin-bottom: 12px; }
+    p { font-size: 14px; color: #4b5563; line-height: 1.5; }
+    code { font-size: 12px; background: #f3f4f6; padding: 2px 6px; border-radius: 4px; word-break: break-all; }
+    .id { margin-top: 16px; }
+  </style>
+</head>
+<body>
+  <div class="card">
+    <h1>${safeName} needs to be approved</h1>
+    <p>An application${safeHost ? ` from <code>${safeHost}</code>` : ''} asked for access to your iHub account. Applications have to be approved by an administrator before anyone can connect them.</p>
+    <p>Ask your administrator to approve it under <strong>Admin &rarr; OAuth &rarr; Clients</strong>; it is already listed there as waiting. Then try connecting again.</p>
+    <p class="id"><code>${safeClientId}</code></p>
   </div>
 </body>
 </html>`;
@@ -414,6 +503,63 @@ export default function registerOAuthAuthorizeRoutes(app) {
       const resolved = await resolveOAuthClient(client_id, platform, { allowFetch: true });
 
       if (!resolved.ok) {
+        // A client that has never been approved becomes a pending row here, so
+        // the administrator the refusal page sends the user to has something
+        // named to approve. Awaited: the page promises the row exists.
+        if (resolved.code === 'approval_pending') {
+          await recordCimdDiscovery({
+            clientId: client_id,
+            platform,
+            clientName: resolved.clientName,
+            user: null
+          });
+          logAudit({
+            req,
+            action: 'create',
+            resource: 'oauthCimdClient',
+            resourceId: client_id,
+            summary: `Refused ${resolved.clientName || resolved.host}: the client is waiting for an administrator to approve it`,
+            result: 'failure',
+            source: 'api'
+          });
+          res.setHeader('Content-Type', 'text/html; charset=utf-8');
+          res.setHeader('Cache-Control', 'no-store');
+          return res.status(403).send(
+            renderApprovalPendingPage({
+              name: resolved.clientName,
+              host: resolved.host,
+              clientId: client_id,
+              lang: requestLang(req)
+            })
+          );
+        }
+
+        if (resolved.code === 'client_blocked' || resolved.code === 'host_blocked') {
+          logger.warn('[OAuth Authorize] Blocked client refused', {
+            component: 'OAuthAuthorize',
+            host: resolved.host,
+            code: resolved.code
+          });
+          logAudit({
+            req,
+            action: 'delete',
+            resource: 'oauthCimdClient',
+            resourceId: client_id,
+            summary: `Refused ${resolved.clientName || resolved.host}: the client is blocked`,
+            result: 'failure',
+            source: 'api'
+          });
+          res.setHeader('Content-Type', 'text/html; charset=utf-8');
+          res.setHeader('Cache-Control', 'no-store');
+          return res.status(403).send(
+            renderClientBlockedPage({
+              name: resolved.clientName,
+              host: resolved.host,
+              lang: requestLang(req)
+            })
+          );
+        }
+
         // A rejected CIMD host is the failure a user can act on, so it gets a
         // page naming the host rather than a bare error string.
         if (resolved.host) {
@@ -580,6 +726,7 @@ export default function registerOAuthAuthorizeRoutes(app) {
         callbackUrl.searchParams.set('code', code);
         if (state) callbackUrl.searchParams.set('state', state);
 
+        stampCimdDiscovery(client, currentUser, platform);
         logger.info('[OAuth Authorize] Code issued (trusted client)', {
           component: 'OAuthAuthorize',
           clientId: client_id,
@@ -611,6 +758,7 @@ export default function registerOAuthAuthorizeRoutes(app) {
         callbackUrl.searchParams.set('code', code);
         if (state) callbackUrl.searchParams.set('state', state);
 
+        stampCimdDiscovery(client, currentUser, platform);
         logger.info('[OAuth Authorize] Code issued (remembered consent)', {
           component: 'OAuthAuthorize',
           clientId: client_id,
@@ -740,7 +888,7 @@ export default function registerOAuthAuthorizeRoutes(app) {
       // registration (or metadata document) changed since. A fetch is allowed
       // here for the same reason as on GET: in cluster mode this POST can land
       // on a worker whose document cache is cold.
-      const clientsFilePath = oauthConfig.clientsFile || 'contents/config/oauth-clients.json';
+      const clientsFilePath = oauthClientsFile(oauthConfig);
       const resolved = await resolveOAuthClient(client_id, platform, { allowFetch: true });
       const client = resolved.ok ? resolved.client : null;
 
@@ -831,6 +979,11 @@ export default function registerOAuthAuthorizeRoutes(app) {
           });
         });
       }
+
+      // The first consent is also the moment a metadata-document client stops
+      // being anonymous to the administrator: it becomes a row with a name, a
+      // first-seen date and the person who brought it in.
+      stampCimdDiscovery(client, currentUser, platform);
 
       const callbackUrl = new URL(redirect_uri);
       callbackUrl.searchParams.set('code', code);

@@ -52,19 +52,69 @@ const rateLimitConfigSchema = z.object({
   skipFailedRequests: z.boolean().prefault(false)
 });
 
+/**
+ * Which LDAP attribute an iHub user field is read from. A single attribute name
+ * or an ordered list — the first attribute the directory returns a value for
+ * wins. Unset means the directory preset decides.
+ */
+const ldapAttributeMappingSchema = z.object({
+  id: z.union([z.string(), z.array(z.string())]).optional(),
+  name: z.union([z.string(), z.array(z.string())]).optional(),
+  email: z.union([z.string(), z.array(z.string())]).optional()
+});
+
+/**
+ * An LDAP provider. Only `name`, `url` and `baseDn` are really needed: the
+ * search bases, the user DN template, the group object class and the attribute
+ * mapping are derived from `baseDn` and `preset` (see
+ * `server/utils/ldapProviderConfig.js`). Every derived field below can still be
+ * set explicitly, and an explicit value always wins.
+ */
 const ldapProviderSchema = z.object({
   name: z.string(),
-  displayName: z.string(),
-  url: z.string(),
-  adminDn: z.string().optional(),
-  adminPassword: z.string().optional(),
-  userSearchBase: z.string(),
-  usernameAttribute: z.string().prefault('uid'),
-  userDn: z.string().optional(),
-  groupSearchBase: z.string().optional(),
-  groupClass: z.string().optional(),
-  groupMemberAttribute: z.string().optional(),
-  groupMemberUserAttribute: z.string().optional(),
+  displayName: z.string().optional().describe('Name shown on the login page. Defaults to `name`.'),
+  url: z.string().describe('ldap://host:389 or ldaps://host:636'),
+  preset: z
+    .enum(['openldap', 'activeDirectory'])
+    .optional()
+    .describe(
+      'Directory flavour. Supplies the attribute defaults that differ between products (uid vs sAMAccountName, groupOfNames vs group). Defaults to "openldap".'
+    ),
+  baseDn: z
+    .string()
+    .optional()
+    .describe(
+      'Root DN of the directory, e.g. dc=example,dc=org. Used as the default user and group search base.'
+    ),
+  adminDn: z.string().optional().describe('DN of the bind (service) account, if one is needed.'),
+  adminPasswordRef: z
+    .string()
+    .optional()
+    .describe('Id of the credential profile holding the bind password.'),
+  userSearchBase: z.string().optional().describe('Defaults to `baseDn`.'),
+  usernameAttribute: z
+    .string()
+    .optional()
+    .describe('Defaults to the preset (uid / sAMAccountName).'),
+  userDn: z
+    .string()
+    .optional()
+    .describe(
+      'DN template used when no bind account is configured. Defaults to `<usernameAttribute>={{username}},<userSearchBase>`.'
+    ),
+  // NetBIOS/short domain name (e.g. "ROCHUS"), used by the iFinder
+  // `domain\\username` JWT subject. Mirrors `ntlmAuth.domain`, which NTLM
+  // gets from the protocol handshake; LDAP has no equivalent, so it is either
+  // configured here or detected from the AD `msDS-PrincipalName` attribute.
+  domain: z.string().optional(),
+  groupSearchBase: z
+    .string()
+    .optional()
+    .describe('Defaults to `baseDn`. Without either, no LDAP groups are read.'),
+  groupClass: z.string().optional().describe('Defaults to the preset (groupOfNames / group).'),
+  groupMemberAttribute: z.string().optional().describe('Defaults to `member`.'),
+  groupMemberUserAttribute: z.string().optional().describe('Defaults to `dn`.'),
+  attributeMapping: ldapAttributeMappingSchema.optional(),
   defaultGroups: z.array(z.string()).prefault([]),
   sessionTimeoutMinutes: z.number().min(1).prefault(480),
   tlsOptions: z.record(z.any()).optional()
@@ -119,8 +169,87 @@ const usageTrackingRetentionSchema = z
   })
   .passthrough();
 
+/**
+ * A proxy URL field. Accepts:
+ *  - an absolute http(s) URL, optionally with basic-auth credentials
+ *  - an `${ENV_VAR}` placeholder (resolved by configCache at load time)
+ *  - an `ENC[...]` value (encrypted at rest, decrypted by getProxyConfig())
+ *  - the empty string, meaning "not set"
+ *
+ * Anything else is rejected by name so an admin save fails loudly instead of
+ * silently producing an unusable agent on every outbound request.
+ */
+const proxyUrlSchema = z
+  .string()
+  .prefault('')
+  .refine(
+    value => {
+      const trimmed = value.trim();
+      if (!trimmed) return true;
+      if (/^\$\{[A-Za-z_][A-Za-z0-9_]*(?::-[^}]*)?\}$/.test(trimmed)) return true;
+      if (trimmed.startsWith('ENC[') && trimmed.endsWith(']')) return true;
+      try {
+        const parsed = new URL(trimmed);
+        return parsed.protocol === 'http:' || parsed.protocol === 'https:';
+      } catch {
+        return false;
+      }
+    },
+    {
+      message:
+        'must be an absolute http(s) URL (e.g. http://proxy.example.com:8080), an ${ENV_VAR} placeholder, or empty'
+    }
+  );
+
+/**
+ * Outbound HTTP(S) proxy for everything iHub calls out to: LLM providers, web
+ * search, Jira, OIDC and MCP servers. Unrelated to `proxyAuth` (inbound
+ * header-based login) and `trustProxy` (inbound hop count).
+ */
+export const proxyConfigSchema = z
+  .object({
+    enabled: z
+      .boolean()
+      .prefault(true)
+      .describe(
+        'Master switch. When false no request is proxied, whatever http/https hold. Absent means enabled, so HTTP_PROXY/HTTPS_PROXY from the environment still apply.'
+      ),
+    http: proxyUrlSchema.describe('Proxy URL used for http:// targets'),
+    https: proxyUrlSchema.describe('Proxy URL used for https:// targets'),
+    noProxy: z
+      .union([z.string(), z.array(z.string())])
+      .prefault('')
+      .describe(
+        'Hosts that bypass the proxy. Comma-separated string ("localhost,.local") or array (["localhost", ".local"]). Entries: exact hostname, .example.com or *.example.com for subdomains. CIDR ranges, host:port and the catch-all "*" are not supported.'
+      ),
+    urlPatterns: z
+      .array(z.string())
+      .prefault([])
+      .superRefine((patterns, ctx) => {
+        patterns.forEach((pattern, index) => {
+          try {
+            new RegExp(pattern);
+          } catch (error) {
+            ctx.addIssue({
+              code: z.ZodIssueCode.custom,
+              path: [index],
+              message: `"${pattern}" is not a valid regular expression: ${error.message}`
+            });
+          }
+        });
+      })
+      .describe(
+        'Optional regex allowlist. When non-empty only URLs matching at least one pattern are proxied; everything else goes direct.'
+      )
+  })
+  .passthrough();
+
 export const platformConfigSchema = z
   .object({
+    // The install-wide language: what the UI falls back to, and what web search
+    // runs in when a request carries no language of its own (a workflow or
+    // agent run). Edited in Admin → Customization → Localization.
+    defaultLanguage: z.string().min(2).max(11).prefault('en'),
     auth: z
       .object({
         mode: z.enum(['proxy', 'local', 'oidc', 'ldap', 'ntlm', 'anonymous']).prefault('local'),
@@ -162,7 +291,9 @@ export const platformConfigSchema = z
     localAuth: z
       .object({
         enabled: z.boolean().prefault(false),
-        usersFile: z.string().prefault('contents/config/users.json'),
+        // Unset means `config/users.json` in the contents directory, which
+        // follows CONTENTS_DIR — see localUsersFile() in utils/contentsPath.js.
+        usersFile: z.string().optional(),
         sessionTimeoutMinutes: z.number().min(1).prefault(480),
         showDemoAccounts: z.boolean().prefault(true)
       })
@@ -227,6 +358,7 @@ export const platformConfigSchema = z
           )
       })
       .prefault({}),
+    proxy: proxyConfigSchema.prefault({}),
     cloudStorage: cloudStorageConfigSchema.prefault({}),
     // Single source of truth for audit logging: retention + behavior + privacy.
     // (The legacy top-level `auditLog` block is migrated into here by V059.)

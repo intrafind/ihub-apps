@@ -2,6 +2,7 @@ import { useState, useRef, useCallback, useEffect, useMemo } from 'react';
 import { useNavigate, Navigate } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
 import { v4 as uuidv4 } from 'uuid';
+import Icon from '../../../shared/components/Icon';
 import ChatMessageList from '../../chat/components/ChatMessageList';
 import ChatInput from '../../chat/components/ChatInput';
 import ChatHeader from './chat/ChatHeader';
@@ -18,18 +19,21 @@ import useOfficeChatAdapter from '../hooks/useOfficeChatAdapter';
 import useOutlookMailContextSnapshot from '../hooks/useOutlookMailContextSnapshot';
 import useAppSettings from '../../../shared/hooks/useAppSettings';
 import useFileUploadHandler from '../../../shared/hooks/useFileUploadHandler';
-import {
-  displayReplyFormWithAssistantResponse,
-  displayNewEmailFormWithAssistantResponse
-} from '../utilities/replyForm';
+import useOutlookMailActions from '../hooks/useOutlookMailActions';
 import {
   buildPromptTemplate,
-  combineUserTextWithEmailContext,
+  buildHostContext,
   buildFileDataFromMailAttachments,
-  collectAttachmentsForSend,
-  formatFileDataAsPromptText
+  collectAttachmentsForSend
 } from '../utilities/buildChatApiMessages';
+import { renderUserMessage } from '../../../../../shared/promptContext.js';
 import { isOutlookAppointmentMode } from '../utilities/officeCapabilities';
+import { getLiveItemId } from '../utilities/outlookMailContext';
+import {
+  ITEM_CHANGED_EVENT,
+  getItemChangeSource,
+  shouldStartNewChatForItemChange
+} from '../utilities/officeItemChange';
 import {
   buildOfficeStarterPrompts,
   combineStarterPromptWithTypedText
@@ -123,18 +127,14 @@ function OfficeChatPanel({
     multiSelectSupported
   } = usePinnedEmails();
 
-  // Build the email-context text that will be appended to the outgoing message
-  // so ChatInput can include it in the live token-count estimate. This mirrors
-  // what combineUserTextWithEmailContext does at send time — the snapshot
-  // override already carries the user's body opt-out and attachment removals —
-  // but with an empty userText so we only get the email blocks (the typed text
-  // is already counted separately by ChatInput).
+  // The host item as the adapter will send it, for the live token estimate.
+  // Mirrors what useOfficeChatAdapter sends — the snapshot override already
+  // carries the user's body opt-out and attachment removals.
   const { buildSnapshotOverride, ctx: mailCtx } = mailSnapshot;
-  const emailContextText = useMemo(
+  const estimateHostContext = useMemo(
     () =>
-      combineUserTextWithEmailContext({
-        userText: '',
-        currentEmail: buildSnapshotOverride(),
+      buildHostContext({
+        item: buildSnapshotOverride(),
         currentItemId: mailCtx?.itemId,
         pinned: pinnedEmails
       }),
@@ -146,11 +146,11 @@ function OfficeChatPanel({
   // the server stitches their content into the prompt — so they must be counted
   // too, or the indicator wildly undercounts (a single document can dwarf the
   // email body). Mirrors the send path: same attachment merge, same extraction
-  // pipeline, same [File: ...] block format the server prepends. Extraction is
+  // pipeline. Extraction is
   // async (JSZip/pdfjs/mammoth), so this lives in state guarded against stale
   // results; attachments only change on email navigation, pin/unpin, or
   // banner removals, so the cost stays off the keystroke path.
-  const [attachmentContextText, setAttachmentContextText] = useState('');
+  const [attachmentFiles, setAttachmentFiles] = useState(null);
   const attachmentsForEstimate = useMemo(() => {
     const removed = mailSnapshot.removedAttachmentIds;
     const current = (mailSnapshot.ctx?.attachments ?? []).filter(a => !removed?.has(a?.id));
@@ -164,19 +164,22 @@ function OfficeChatPanel({
         : buildFileDataFromMailAttachments(attachmentsForEstimate);
     extraction
       .then(files => {
-        if (!stale) setAttachmentContextText(formatFileDataAsPromptText(files));
+        if (!stale) setAttachmentFiles(files);
       })
       .catch(() => {
-        if (!stale) setAttachmentContextText('');
+        if (!stale) setAttachmentFiles(null);
       });
     return () => {
       stale = true;
     };
   }, [attachmentsForEstimate]);
 
+  // The blocks exactly as the server renders them, without the typed text
+  // (ChatInput counts that separately).
   const estimateContextText = useMemo(
-    () => [emailContextText, attachmentContextText].filter(Boolean).join('\n\n'),
-    [emailContextText, attachmentContextText]
+    () =>
+      renderUserMessage({ content: '', hostContext: estimateHostContext, files: attachmentFiles }),
+    [estimateHostContext, attachmentFiles]
   );
   // itemId of the email currently open in Outlook. Lets us hide the
   // "Add this email" affordance once it's already in the pin list, and
@@ -236,32 +239,88 @@ function OfficeChatPanel({
     adapterRef.current = adapter;
   });
 
+  // Latest input, for the item-change handler (bound once, like the refs above).
+  const inputValueRef = useRef(inputValue);
   useEffect(() => {
-    const handler = () => {
+    inputValueRef.current = inputValue;
+  }, [inputValue]);
+
+  // itemId the current conversation belongs to. The chat only starts over
+  // when Outlook reports a genuinely different item — see issue #2450.
+  const chatItemIdRef = useRef(getLiveItemId());
+
+  // The conversation set aside by the last automatic new chat, so the user
+  // can bring it back. Its transcript stays in session storage under its own
+  // chatId; restoring the id reloads it.
+  const [previousChat, setPreviousChat] = useState(null);
+
+  useEffect(() => {
+    const handler = event => {
+      const liveItemId = getLiveItemId();
+      const startNewChat = shouldStartNewChatForItemChange({
+        source: getItemChangeSource(event),
+        liveItemId,
+        lastItemId: chatItemIdRef.current
+      });
+      if (!startNewChat) return;
+      chatItemIdRef.current = liveItemId;
+
       // Pinned emails are the whole point of the feature, so they must
       // survive ItemChanged. We only reset the chat history (and the
       // staged input) when the user has nothing pinned — otherwise we'd
-      // silently throw away the context they were assembling.
-      if (pinnedEmailsRef.current.length === 0) {
-        chatIdRef.current = `office-${uuidv4()}`;
-        selectedStarterPromptRef.current = null;
-        adapterRef.current.clearMessages();
-        setInputValue('');
+      // silently throw away the context they were assembling. A response
+      // still streaming belongs to the conversation on screen; clearing now
+      // would drop it mid-answer.
+      if (pinnedEmailsRef.current.length > 0) return;
+      if (adapterRef.current.processing) return;
+
+      const hadMessages = adapterRef.current.messages.length > 0;
+      const typed = inputValueRef.current;
+      // Keep an earlier restorable chat when the one on screen is empty —
+      // clicking through several emails must not lose the offer.
+      if (hadMessages || typed) {
+        setPreviousChat({
+          chatId: chatIdRef.current,
+          inputValue: typed,
+          starterPrompt: selectedStarterPromptRef.current
+        });
       }
+      chatIdRef.current = `office-${uuidv4()}`;
+      selectedStarterPromptRef.current = null;
+      adapterRef.current.clearMessages();
+      setInputValue('');
     };
-    document.addEventListener('ihub:itemchanged', handler);
+    document.addEventListener(ITEM_CHANGED_EVENT, handler);
     return () => {
-      document.removeEventListener('ihub:itemchanged', handler);
+      document.removeEventListener(ITEM_CHANGED_EVENT, handler);
     };
   }, []);
 
-  const handleInsert = useCallback(content => {
-    displayReplyFormWithAssistantResponse(content);
-  }, []);
+  const handleRestorePreviousChat = useCallback(() => {
+    if (!previousChat) return;
+    // The chatId change makes the chat hook reload that transcript.
+    chatIdRef.current = previousChat.chatId;
+    selectedStarterPromptRef.current = previousChat.starterPrompt;
+    setInputValue(previousChat.inputValue);
+    setPreviousChat(null);
+  }, [previousChat]);
 
-  const handleInsertNew = useCallback(content => {
-    displayNewEmailFormWithAssistantResponse(content);
-  }, []);
+  // Once the new conversation has its own content, the offer is stale.
+  const showRestorePreviousChat = !!previousChat && adapter.messages.length === 0;
+
+  // Answer actions for the item the pane is attached to: reply / reply all /
+  // forward / new in read mode, insert while the user is composing (#2446).
+  const mailActions = useOutlookMailActions({ officeConfig });
+
+  // The compact icon button (hosts that do not promote the action to a primary
+  // button — the browser-extension side panel) and any surface that renders no
+  // action list. Running the resolved default keeps the notice strip as the one
+  // place the outcome is reported, including "there is no mail item here".
+  const { runAction: runMailAction, defaultActionId: defaultMailActionId } = mailActions;
+  const handleInsert = useCallback(
+    content => runMailAction(defaultMailActionId, content),
+    [runMailAction, defaultMailActionId]
+  );
 
   const submitMessage = useCallback(
     (messageText, overrides = {}) => {
@@ -490,6 +549,7 @@ function OfficeChatPanel({
       adapter.clearMessages();
       setInputValue('');
       setPinnedEmails([]);
+      setPreviousChat(null);
       setSelectedApp(newApp);
       setIsSelectorOpen(false);
     },
@@ -502,6 +562,7 @@ function OfficeChatPanel({
     adapter.clearMessages();
     setInputValue('');
     setPinnedEmails([]);
+    setPreviousChat(null);
   }, [adapter, setPinnedEmails]);
 
   if (!authData) return null;
@@ -607,8 +668,10 @@ function OfficeChatPanel({
                 editable={true}
                 compact={true}
                 onInsert={handleInsert}
-                onInsertNew={handleInsertNew}
                 insertAction={embeddedHost?.insertAction}
+                insertActions={mailActions.actions}
+                defaultInsertActionId={defaultMailActionId}
+                onInsertAction={runMailAction}
                 appId={selectedApp?.id}
                 chatId={chatIdRef.current}
                 app={selectedApp}
@@ -648,6 +711,61 @@ function OfficeChatPanel({
               }
               collapseOnMessageSent={collapseStripCounter}
             />
+
+            {/* The pane started a new chat because the user opened a
+                different email. Offer the previous conversation back
+                instead of discarding it silently (issue #2450). */}
+            {showRestorePreviousChat && (
+              <div
+                role="status"
+                className="shrink-0 flex items-center gap-2 border-t border-slate-200 bg-slate-50 px-3 py-2 text-xs text-slate-700 dark:border-slate-700 dark:bg-slate-800/60 dark:text-slate-200"
+              >
+                <span className="flex-1">
+                  {t('office.chatReset.message', 'New chat started for this email.')}
+                </span>
+                <button
+                  type="button"
+                  onClick={handleRestorePreviousChat}
+                  className="shrink-0 rounded px-1.5 py-0.5 font-medium text-indigo-700 hover:bg-black/5 dark:text-indigo-300 dark:hover:bg-white/10"
+                >
+                  {t('office.chatReset.restore', 'Restore previous chat')}
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setPreviousChat(null)}
+                  aria-label={t('common.close', 'Close')}
+                  className="shrink-0 rounded p-0.5 hover:bg-black/5 dark:hover:bg-white/10"
+                >
+                  <Icon name="close" size="sm" />
+                </button>
+              </div>
+            )}
+
+            {/* Outcome of the last answer action. Replaces the bare
+                window.alert the reply/insert helpers used to raise: a failed
+                Office call names the error here (and the answer is on the
+                clipboard where one could be lost), an attached-original
+                forward explains itself. See issue #2446. */}
+            {mailActions.notice && (
+              <div
+                role={mailActions.notice.tone === 'error' ? 'alert' : 'status'}
+                className={`shrink-0 flex items-start gap-2 border-t px-3 py-2 text-xs ${
+                  mailActions.notice.tone === 'error'
+                    ? 'border-red-200 bg-red-50 text-red-800 dark:border-red-900 dark:bg-red-950/50 dark:text-red-200'
+                    : 'border-slate-200 bg-slate-50 text-slate-700 dark:border-slate-700 dark:bg-slate-800/60 dark:text-slate-200'
+                }`}
+              >
+                <span className="flex-1">{mailActions.notice.message}</span>
+                <button
+                  type="button"
+                  onClick={mailActions.dismissNotice}
+                  aria-label={t('common.close', 'Close')}
+                  className="shrink-0 rounded p-0.5 hover:bg-black/5 dark:hover:bg-white/10"
+                >
+                  <Icon name="close" size="sm" />
+                </button>
+              </div>
+            )}
 
             {/* Input */}
             <div className="office-chat-input border-t border-gray-200 bg-white shrink-0 dark:border-slate-700 dark:bg-slate-900">

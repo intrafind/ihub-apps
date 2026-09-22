@@ -3,6 +3,7 @@ import {
   CpuChipIcon,
   BoltIcon,
   SparklesIcon,
+  LanguageIcon,
   Cog6ToothIcon,
   WindowIcon,
   DocumentTextIcon,
@@ -24,7 +25,9 @@ import {
   ExclamationTriangleIcon,
   ClipboardDocumentCheckIcon,
   NewspaperIcon,
-  MicrophoneIcon
+  MicrophoneIcon,
+  StarIcon,
+  ChatBubbleLeftRightIcon
 } from '@heroicons/react/24/outline';
 
 /**
@@ -227,6 +230,13 @@ export function getAdminNavSections({ t, showAdminPage, featureFlags }) {
           visible: showAdminPage('ui')
         },
         {
+          key: 'localization',
+          label: t('admin.nav.localization', 'Localization'),
+          href: '/admin/localization',
+          icon: LanguageIcon,
+          visible: showAdminPage('ui')
+        },
+        {
           key: 'pages',
           label: t('admin.nav.pages', 'Pages'),
           href: '/admin/pages',
@@ -255,6 +265,13 @@ export function getAdminNavSections({ t, showAdminPage, featureFlags }) {
           visible: showAdminPage('usage')
         },
         {
+          key: 'feedback',
+          label: t('admin.nav.feedback', 'Feedback'),
+          href: '/admin/feedback',
+          icon: StarIcon,
+          visible: showAdminPage('feedback')
+        },
+        {
           key: 'logging',
           label: t('admin.nav.logging', 'Logging'),
           href: '/admin/logging',
@@ -267,6 +284,13 @@ export function getAdminNavSections({ t, showAdminPage, featureFlags }) {
           href: '/admin/telemetry',
           icon: SignalIcon,
           visible: showAdminPage('telemetry')
+        },
+        {
+          key: 'chat-history',
+          label: t('admin.nav.chatHistory', 'Chat History'),
+          href: '/admin/chat-history',
+          icon: ChatBubbleLeftRightIcon,
+          visible: showAdminPage('chatHistory')
         },
         {
           key: 'audit-log',

@@ -1,34 +1,64 @@
 # Features — Unreleased
 
-## Outlook Add-in: the model sees who wrote the email and what you told it to do
+## Web Search: The Model Can Open and Read Pages
 
-The task pane now sends the open email as one structured block — sender, recipients, date,
-subject, the signed-in mailbox user and the body — followed by the note you typed in a separate
-`<user_instruction>` block. Until now the note was glued in front of the raw email text with no
-label, so models regularly read it as one more quoted paragraph and answered the thread instead of
-following the note — for example committing you to a task you had just assigned to a colleague.
+Apps with web search can now open a page, not just search. When web search runs through Brave,
+Staan or Qwant, the model also gets a page reader. It uses it to read a search result in full, or
+a URL the user pasted, where before it only saw short excerpts of the top results.
 
-- Sender, To, Cc, date and subject are read from Outlook and included even when the body is
-  excluded; the greeting no longer has to be guessed from the quoted thread.
-- Your note always comes last, right where the app's prompt continues.
-- Collected emails and calendar items use the same tagged shape; the browser extension sends the
-  page as `<current_page>` with its title and URL.
-- A fixed `<context_rules>` note marks the blocks as quoted material, and the add-in's own tag
-  names inside email text are escaped, so an email cannot close a block early or smuggle in a fake
-  `<user_instruction>`.
+- Works for web pages and PDFs. The same protection against internal and private addresses applies.
+- It is offered automatically. No app changes are needed. To turn it off, disable the
+  **Web Page Reader** tool (`webContentExtractor`) under **Admin → Tools**.
+- It is not added when the model's own native search (Gemini, OpenAI, Claude) handles the request.
+- 
+## Chat: See What the Web Search Did
 
-## New app: Outlook – Reply Directly
+Answers that searched the web now show what they searched for and what they found. A panel above
+the answer lists each search query, the sources it returned and which of those pages were read,
+along with any other tools the turn called.
 
-A reply-drafting app built for the Outlook task pane ships as a default app (`outlook-reply`). It
-produces only the insertable reply body, answers in the language of the email, signs with the
-user's profile name and treats the note typed into the chat as the content of the reply — a request
-in the email is never confirmed unless the user says so.
+- Open while the answer streams, so users can follow the search live ("Searching for …",
+  "Reading dwd.de"); collapsed to a one-line summary ("Searched the web · 2 searches · 12 sources ·
+  4 pages read") once the answer is complete.
+- Covers the built-in web search tools (Brave, Qwant, Staan), knowledge-source lookups and the
+  queries of provider web search (Google Search grounding, Anthropic web search).
+- Pages that could not be fetched are marked, and failed searches are shown as failed.
+- 
+## Admin: Chat History Page
 
-- Starter prompts: Generate a reply, Say thanks briefly, Politely decline
-- Works with a typed note alone, a starter prompt alone, or both together
-- Knows today's date and the signed-in user, so it can tell whether a deadline in the email has
-  passed and which messages in the thread are the user's own
-- Recommended as the default chat app of the task pane's start page
+Admins can now configure and monitor durable chats and the run ledger in **Admin → Observability →
+Chat History**, without editing `platform.json`.
+
+- **Status** shows each condition that decides whether chats are stored (Durable Chats feature,
+  chat storage switch, storage provider) and whether the run ledger is recording.
+- **Stored chats** shows chats, messages, users with chats, recent activity, top apps and top
+  users — plus how many chats the next retention sweep would remove and how many are at or near
+  the per-chat message limit.
+- **Settings** cover chat retention (days, chats per user, messages per chat) and the run ledger
+  (enabled, identity mode, retention, daily cleanup, advanced write settings). Changes apply
+  without a restart, except the ledger flush interval, and every save is audit-logged.
+- **Run retention now** applies the saved rules immediately instead of waiting for the daily
+  sweep, after a confirmation.
+- The page warns before switching the identity mode to or from pseudonymized, because chats stored
+  before the switch drop out of their owners' history lists.
+
+## Web Search: Research in Several Steps
+
+With web search turned on, the assistant now researches a question in several steps instead of
+answering after a single search: it breaks the question into parts, searches several times with
+different wording, checks key claims against more than one source and combines the findings into
+one answer with source links.
+
+- Applies to every app with web search, whenever web search is on for the conversation. With web
+  search off nothing changes.
+- A chat answer can now use up to 25 rounds of tool calls instead of 10, so there is room to search
+  several times and still open the most relevant pages.
+- Admins can turn it off or replace the instruction with their own text per app under
+  **Admin → Apps → Edit App → Web Search → Research in Several Steps**
+  (`websearch.researchGuidance`).
+- The default **Web Chat** prompt was reworded to match. It is updated on upgrade only where it is
+  still the shipped default; a prompt you changed is kept.
+- With Gemini's built-in Google Search, the instruction only steers how Gemini uses its own search.
 
 ## MCP: a skill's reference files are readable, and the iFinder tools point at theirs
 
@@ -37,8 +67,8 @@ did — every "see references/…" link inside it was a dead end, because the to
 files wrap filesystem access and are deliberately kept out of the gateway. The bundled files are
 now resources of their own.
 
-- `ihub://skill/ifinder-search/references/query-cookbook.md` and every other file a skill ships
-  under `references/`, `scripts/` or `assets/` appear in `resources/list` and can be read
+- `ihub://skill/ifinder-search/references/query-cookbook.md` and every other text file a skill
+  ships under `references/`, `scripts/` or `assets/` appear in `resources/list` and can be read
 - A read resolves only paths the skill loader itself enumerated, so a crafted `../` never reaches
   the filesystem
 - The `iFinder_search` description now names the `ifinder-search` skill and its resource URI — MCP

@@ -43,8 +43,11 @@ client. There is no half-persisted state.
 1. **Turn on the feature flag.** Admin → Platform → Features → **Durable
    Chats**, or `"chatPersistence": true` in `contents/config/features.json`. No
    restart needed.
-2. **Check `platform.json → chats`.** Migration V095 writes the defaults into
-   an existing installation, so the section is already there after an upgrade:
+2. **Check the settings in Admin → Observability → Chat History.** The page
+   edits `platform.json → chats` (and the run ledger's `runLog` block) with
+   validation, and shows which of the conditions above currently holds.
+   Migration V097 writes the defaults into an existing installation, so the
+   section is already there after an upgrade:
 
 ```json
 {
@@ -52,20 +55,19 @@ client. There is no half-persisted state.
     "enabled": true,
     "retentionDays": 90,
     "maxChatsPerUser": 200,
-    "storeArtifacts": true,
-    "maxArtifactBytes": 10485760,
-    "maxArtifactsPerMessage": 8
+    "maxMessagesPerChat": 2000
   }
 }
 ```
 
-| Key                   | Default    | Meaning                                                                      |
-| --------------------- | ---------- | ---------------------------------------------------------------------------- |
-| `enabled`             | `true`     | Second switch under the feature flag; `false` stops the write path entirely   |
-| `retentionDays`       | `90`       | Chats whose last message is older than this are deleted by the daily sweep    |
-| `maxChatsPerUser`     | `200`      | Chats kept per owner; the oldest beyond the cap are deleted by the same sweep |
+| Key                  | Default | Meaning                                                                          |
+| -------------------- | ------- | -------------------------------------------------------------------------------- |
+| `enabled`            | `true`  | Second switch under the feature flag; `false` stops the write path entirely      |
+| `retentionDays`      | `90`    | Chats whose last message is older than this are deleted by the daily sweep       |
+| `maxChatsPerUser`    | `200`   | Chats kept per owner; the oldest beyond the cap are deleted by the same sweep    |
+| `maxMessagesPerChat` | `2000`  | Messages kept in one chat; the oldest are dropped on write once a chat is over it |
 
-Both retention rules are switched **off** by a value of zero or less — see
+All three limits are switched **off** by a value of zero or less — see
 [Retention](#retention). What a turn *produced* is stored separately and
 configured separately, under `platform.artifacts` — see
 [Artifacts](artifacts.md).
@@ -85,6 +87,38 @@ durable chats automatically. That flag gated a sidebar list drawn from sample
 data, so enabling it said nothing about storing real conversations on the
 server; the upgrade logs a warning naming this switch and leaves it off until
 an admin turns it on.
+
+## Admin → Chat History
+
+Admin → Observability → **Chat History** (`/admin/chat-history`) is where an
+administrator configures and reviews durable chats and the run ledger:
+
+- **Status** — each condition from [When a turn is persisted](#when-a-turn-is-persisted)
+  on its own (feature flag, `chats.enabled`, storage provider), plus whether the
+  ledger is recording and whether it is only recording because durable chats
+  need it.
+- **Stored chats** — chats, messages, users with chats, activity in the last
+  24 hours and 7 days, status breakdown, oldest and latest activity, and the top
+  apps and users by chat count. Counted from chat metadata only; no transcript
+  is read.
+- **Next retention sweep** — how many chats the saved rules would remove by age
+  and by the per-user limit, and how many chats are at or near the message
+  limit. Computed with the same rules the sweep applies.
+- **Run ledger** — recorded runs by kind and status.
+- **Settings** — `platform.chats` and `platform.runLog` (enabled, identity mode,
+  retention, daily cleanup, spill threshold, flush interval). Changes apply
+  without a restart, except `runLog.flushIntervalMs`. Only changed values are
+  written, and every save is audit-logged.
+- **Run retention now** — applies the saved rules immediately instead of waiting
+  for the daily sweep, under the same guards: stored chats are only swept while
+  durable chats are active, and the ledger only while its cleanup is enabled.
+
+The page warns before a switch to or from `pseudonymized` identity mode, since
+that changes the owner id chats are listed under (see
+[Ownership and identity](#ownership-and-identity)).
+
+API: `GET /api/admin/chat-history`, `PUT /api/admin/chat-history/settings`,
+`POST /api/admin/chat-history/retention/run` (body `{ "target": "chats" | "ledger" | "all" }`).
 
 ## The chat history UI
 

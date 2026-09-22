@@ -17,13 +17,14 @@ import TranscriptionSection from './app-form/TranscriptionSection';
 import MagicPromptSection from './app-form/MagicPromptSection';
 import ExportConfigSection from './app-form/ExportConfigSection';
 import CompareModeSection from './app-form/CompareModeSection';
+import FeedbackSection from './app-form/FeedbackSection';
 import SystemInstructionsSection from './app-form/SystemInstructionsSection';
 import SourcesConfigSection from './app-form/SourcesConfigSection';
 import SettingsConfigSection from './app-form/SettingsConfigSection';
 import { validateWithSchema, errorsToFieldErrors } from '../../../utils/schemaValidation';
 import useFeatureFlags from '../../../shared/hooks/useFeatureFlags';
 import AdminFormErrorSummary from './AdminFormErrorSummary';
-import { FormValidationProvider } from './formValidationContext';
+import { FormValidationProvider } from '../../../shared/contexts/formValidationContext';
 import { fetchTranscriptionModels } from '../../../api/endpoints/models';
 import BasicInfoSection from './app-form/BasicInfoSection';
 import InputModeSection from './app-form/InputModeSection';
@@ -307,6 +308,9 @@ function AppFormEditor({
 
             {/* Compare Mode Configuration */}
             <CompareModeSection app={app} onChange={onChange} />
+
+            {/* Response Feedback */}
+            <FeedbackSection app={app} onChange={onChange} />
 
             <InputModeSection app={app} onChange={onChange} t={t} />
 

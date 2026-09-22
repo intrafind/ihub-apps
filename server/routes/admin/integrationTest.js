@@ -1,5 +1,6 @@
 import { adminAuth } from '../../middleware/adminAuth.js';
 import { buildServerPath } from '../../utils/basePath.js';
+import config from '../../config.js';
 import iFinderService from '../../services/integrations/iFinderService.js';
 import iAssistantService from '../../services/integrations/iAssistantService.js';
 import conversationApiService from '../../services/integrations/ConversationApiService.js';
@@ -43,6 +44,15 @@ const MAX_OVERRIDE_LENGTH = 320;
 
 /** Search term used for the iFinder test request. Constant on purpose — see buildIntegrationUrl. */
 const TEST_SEARCH_QUERY = 'test';
+
+/**
+ * Ceiling for the iAssistant diagnostic probes. An admin waits on these in the
+ * browser, so they stay short; a real conversation turn is bounded by the
+ * model's `streamIdleTimeoutMs` and the whole-call `REQUEST_TIMEOUT` instead.
+ * This used to read `iAssistant.timeout`, a platform setting that looked like
+ * it governed chat turns and never did.
+ */
+const IASSISTANT_DIAGNOSTIC_TIMEOUT_MS = 60000;
 
 /**
  * Build the URL for an integration request.
@@ -176,7 +186,10 @@ function describeSigningKey(iFinderConfig) {
       description: 'iHub OIDC RSA key pair (published via /.well-known/jwks.json)'
     };
   }
-  if (process.env.IFINDER_PRIVATE_KEY) {
+  // Checks the same source generateIFinderJWT() actually signs with
+  // (config.IFINDER_PRIVATE_KEY, not process.env directly) so this can never
+  // report "available" for a key the real signing path won't see.
+  if (config.IFINDER_PRIVATE_KEY) {
     return {
       mode: 'privateKey',
       available: true,
@@ -380,14 +393,15 @@ async function runJwtSteps(report, { user, iFinderConfig, userOverride, includeT
     const subjectField = iFinderConfig.jwtSubjectField || 'email';
     const hints = [];
 
-    // The subject resolution falls back through email → username → id. When the
-    // configured field was empty the token still gets signed, and iFinder then
-    // rejects a subject the admin never intended to send.
-    if (subjectField === 'email' && !String(info.subject).includes('@')) {
-      hints.push(
-        `JWT Subject Field is "email" but the subject "${info.subject}" is not an email address — the user has no email, so iHub fell back to the username or id. iFinder has to know the subject in exactly this form.`
-      );
-    }
+    // Subject resolution is strict: the configured field is the only one read,
+    // and a missing value throws rather than silently substituting another
+    // identifier. So reaching this point means the subject really is the field
+    // the admin configured — there is no fallback left to warn about. What is
+    // still worth saying is that iFinder has to know the subject in this exact
+    // form, because that is what the user mapping is keyed on.
+    hints.push(
+      `iFinder must know this user as "${info.subject}" exactly — the subject is what the user mapping is keyed on, and it is compared verbatim.`
+    );
 
     // The scope claim is read back from the signed token, so it is the value
     // iFinder will really see. Flag the implicit fallback, which does not match
@@ -434,7 +448,8 @@ async function runJwtSteps(report, { user, iFinderConfig, userOverride, includeT
     // things that can break signing so the message is actionable.
     generation.hints = [
       'Check the signing key: OIDC key pair mode needs an initialized iHub RSA key pair, private key mode needs IFINDER_PRIVATE_KEY or iFinder.privateKeyRef in PEM format.',
-      'A subject that cannot be resolved also fails here — see the JWT Subject Field setting.'
+      'A subject that cannot be resolved also fails here — see the JWT Subject Field setting. Resolution is strict: the configured field is the only one read, so a user without that field fails instead of being sent under a different identifier.',
+      'For "domain\\username" the user needs a NetBIOS domain. NTLM takes it from the handshake; LDAP takes it from the "Domain" field on the provider, or detects it from the Active Directory msDS-PrincipalName attribute.'
     ];
     return null;
   }
@@ -990,7 +1005,7 @@ export default function registerIntegrationTestRoutes(app) {
                   'Set "jwt.algorithm" to RS256 under Admin > Authentication so iHub generates an RSA key pair, then restart the server.'
                 ]
               : [
-                  'Store the private key as the iFinder credential (iFinder.privateKeyRef) or provide the IFINDER_PRIVATE_KEY environment variable in PEM format.',
+                  'Select or create the private key credential under Admin > Integrations > iFinder, or set the IFINDER_PRIVATE_KEY environment variable on the server (PEM format) and restart it.',
                   'Alternatively enable "Use OIDC key pair" to sign with the key pair iHub already publishes via JWKS.'
                 ]
           });
@@ -1192,7 +1207,11 @@ export default function registerIntegrationTestRoutes(app) {
         const iFinderConfig = platformConfig.iFinder || {};
         const config = iAssistantService.getConfig();
         const signingKey = describeSigningKey(iFinderConfig);
-        const timeout = config.timeout || 60000;
+        // Bounds the diagnostic probes below, not a chat turn: these are
+        // reachability and round-trip checks an admin waits on in the browser.
+        // A real iAssistant turn is bounded by the model's streamIdleTimeoutMs
+        // and the whole-call REQUEST_TIMEOUT instead.
+        const timeout = IASSISTANT_DIAGNOSTIC_TIMEOUT_MS;
 
         logger.info('Running iAssistant integration diagnostics', {
           component: 'IntegrationTest',

@@ -8,7 +8,7 @@ import {
   isFieldRequired
 } from '../../../utils/schemaValidation';
 import AdminFormErrorSummary from './AdminFormErrorSummary';
-import { FormValidationProvider } from './formValidationContext';
+import { FormValidationProvider } from '../../../shared/contexts/formValidationContext';
 import GroupMultiSelect from './GroupMultiSelect';
 
 /**

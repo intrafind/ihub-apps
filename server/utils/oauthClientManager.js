@@ -7,6 +7,7 @@ import configCache from '../configCache.js';
 import { announceConfigChange } from '../configSync.js';
 import logger from './logger.js';
 import { locateConfigFile } from './configFileLocation.js';
+import { clientIdHost, isClientIdUrl } from './clientIdMetadata.js';
 
 /**
  * Where an OAuth clients file lives, as both a cache key and an absolute path.
@@ -566,6 +567,18 @@ export async function validateClientCredentials(clientId, clientSecret, clientsF
     return null;
   }
 
+  // A record with no stored secret cannot authenticate with one. CIMD policy
+  // records are exactly that — their client authenticates with `none` — and
+  // bcrypt throws rather than returning false when handed a null hash, so the
+  // refusal has to be explicit.
+  if (typeof client.clientSecret !== 'string' || client.clientSecret.length === 0) {
+    logger.info('OAuth client has no secret to authenticate with', {
+      component: 'OAuthClientManager',
+      clientId
+    });
+    return null;
+  }
+
   // Verify secret
   const isValid = await verifyClientSecret(clientSecret, client.clientSecret);
 
@@ -737,4 +750,181 @@ export async function deleteUnusedDynamicClients(unusedForDays, clientsFilePath,
   }
 
   return { deleted: clientIds.length, clientIds };
+}
+
+/**
+ * Policy fields an administrator may set on a CIMD client record.
+ *
+ * Deliberately short. Identity — `name`, `redirectUris`, `grantTypes`,
+ * `clientType`, `token_endpoint_auth_method` — never comes from the record,
+ * only from the document the client publishes, which is the property that
+ * keeps "nothing stored" true for CIMD identity. `trusted`, `consentRequired`
+ * and `clientSecret` are absent for a stronger reason: they are locked by
+ * definition, so a CIMD client always goes through sign-in and consent and
+ * never holds a shared secret, and no write path may change that.
+ */
+export const CIMD_POLICY_FIELDS = Object.freeze([
+  'active',
+  'allowedGroups',
+  'allowedApps',
+  'allowedModels',
+  'allowedPrompts',
+  'scopes',
+  'tokenExpirationMinutes',
+  'approvalState'
+]);
+
+/**
+ * Bookkeeping keys the policy record carries under `metadata`.
+ *
+ * `displayName` is a snapshot for the admin list — the same trick the consent
+ * store plays with `clientName` — and is never consulted for identity. A
+ * client that was refused before it ever connected has no consent entry to
+ * take a name from, so without it a pending row would read as a bare URL.
+ */
+const CIMD_METADATA_FIELDS = Object.freeze([
+  'displayName',
+  'firstSeenAt',
+  'firstUserId',
+  'firstUserName',
+  'approvedBy',
+  'approvedAt',
+  'blockedBy',
+  'blockedAt'
+]);
+
+/**
+ * Create or update the **policy** record for a client identified by a metadata
+ * document.
+ *
+ * `createOAuthClient` cannot be reused: it mints a UUID-ish client id and a
+ * bcrypt secret, and a CIMD client has neither — its id is the document URL
+ * and it authenticates with `none`. What is written here is only the set of
+ * administrator decisions, keyed by the exact URL.
+ *
+ * @param {string} clientId - CIMD client identifier (the document URL)
+ * @param {Object} patch - Policy fields (see {@link CIMD_POLICY_FIELDS}) and an
+ *   optional `metadata` object of bookkeeping keys
+ * @param {string} clientsFilePath - Path to oauth-clients.json
+ * @param {string} savedBy - User ID making the change
+ * @param {Object} [options]
+ * @param {boolean} [options.announce=true] - Announce a cluster-wide cache
+ *   invalidation. Blocking must; a discovery stamp on the authorize path need
+ *   not, and pays a file reload on every worker if it does.
+ * @returns {Promise<Object>} The stored record
+ */
+export async function upsertCimdClientPolicy(
+  clientId,
+  patch = {},
+  clientsFilePath,
+  savedBy,
+  { announce = true } = {}
+) {
+  if (!isClientIdUrl(clientId)) {
+    throw new Error('A CIMD policy record requires an https client_id URL');
+  }
+
+  const clientsConfig = loadOAuthClients(clientsFilePath);
+  if (clientsConfig?.metadata?.error) {
+    throw new Error('OAuth client store unavailable');
+  }
+
+  const clients = clientsConfig.clients || (clientsConfig.clients = {});
+  const existing = Object.hasOwn(clients, clientId) ? clients[clientId] : undefined;
+  const now = new Date().toISOString();
+
+  if (existing && existing.metadata?.cimd !== true) {
+    // A stored client that happens to be keyed by a URL is not a CIMD record
+    // and must not be reshaped into one by this path.
+    throw new Error(`Client ${clientId} is not a client-metadata-document client`);
+  }
+
+  const record = existing || {
+    id: clientId,
+    clientId,
+    description: `Client metadata document at ${clientIdHost(clientId)}`,
+    // No secret, ever: CIMD clients authenticate with `none`.
+    clientSecret: null,
+    active: true,
+    approvalState: 'auto',
+    createdAt: now,
+    createdBy: savedBy || 'system',
+    lastUsed: null,
+    lastRotated: null,
+    metadata: { cimd: true, host: clientIdHost(clientId) },
+    clientType: 'public',
+    // Locked. Written once here so the record is a complete client object for
+    // anything that reads the store directly, and refused by every update.
+    consentRequired: true,
+    trusted: false,
+    personal: false
+  };
+
+  for (const field of CIMD_POLICY_FIELDS) {
+    if (patch[field] !== undefined) record[field] = patch[field];
+  }
+
+  record.metadata = { ...(record.metadata || {}), cimd: true, host: clientIdHost(clientId) };
+  for (const field of CIMD_METADATA_FIELDS) {
+    if (patch.metadata?.[field] !== undefined) record.metadata[field] = patch.metadata[field];
+  }
+
+  // Locked on every write, not merely on creation: the point of the lock is
+  // that no path can turn a self-declared client into a trusted one.
+  record.consentRequired = true;
+  record.trusted = false;
+  record.clientSecret = null;
+
+  record.updatedAt = now;
+  record.updatedBy = savedBy || 'system';
+  clients[clientId] = record;
+
+  await saveOAuthClients(clientsConfig, clientsFilePath, { announce });
+
+  logger.info('[OAuth CIMD] Client policy saved', {
+    component: 'OAuthClientManager',
+    clientId,
+    savedBy: savedBy || 'system',
+    fields: Object.keys(patch).join(',')
+  });
+
+  return { ...record };
+}
+
+/**
+ * The stored policy record for a CIMD client, or null when there is none.
+ *
+ * Null is the normal state for a client nobody has decided anything about
+ * yet — under `approvalMode: 'approval'` that is exactly the case the gate
+ * refuses.
+ *
+ * @param {string} clientId - CIMD client identifier
+ * @param {string} clientsFilePath - Path to oauth-clients.json
+ * @returns {Object|null} The record, or null
+ */
+export function findCimdClientPolicy(clientId, clientsFilePath) {
+  if (!isClientIdUrl(clientId)) return null;
+  try {
+    const clientsConfig = loadOAuthClients(clientsFilePath);
+    if (clientsConfig?.metadata?.error) return null;
+    const record = (clientsConfig.clients || {})[clientId];
+    return record && record.metadata?.cimd === true ? { ...record } : null;
+  } catch {
+    // The resolver treats "no record" and "store unreadable" alike: neither is
+    // an approval, and neither is a block.
+    return null;
+  }
+}
+
+/**
+ * Every stored CIMD policy record.
+ *
+ * @param {string} clientsFilePath - Path to oauth-clients.json
+ * @returns {Array<Object>} Records, in store order
+ */
+export function listCimdClientPolicies(clientsFilePath) {
+  const clientsConfig = loadOAuthClients(clientsFilePath);
+  return Object.values(clientsConfig.clients || {}).filter(
+    client => client?.metadata?.cimd === true
+  );
 }

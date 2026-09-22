@@ -12,6 +12,7 @@ import { generatePersonalApiKey, personalKeyGeneration } from './oauthTokenServi
 import { buildPublicBaseUrl } from './publicBaseUrl.js';
 import { MCP_SCOPES } from '../services/mcp/scopes.js';
 import logger from './logger.js';
+import { oauthClientsFile } from './contentsPath.js';
 
 /**
  * Personal API keys let a user mint credentials for themselves from the
@@ -362,7 +363,7 @@ export class PersonalKeyError extends Error {
 }
 
 function resolveClientsFilePath(platform) {
-  return platform.oauth?.clientsFile || 'contents/config/oauth-clients.json';
+  return oauthClientsFile(platform.oauth);
 }
 
 /**

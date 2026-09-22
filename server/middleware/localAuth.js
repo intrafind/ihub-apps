@@ -10,6 +10,7 @@ import {
 } from '../utils/userManager.js';
 import configCache from '../configCache.js';
 import { ensureFirstUserIsAdmin } from '../utils/adminRescue.js';
+import { localUsersFile } from '../utils/contentsPath.js';
 
 const DUMMY_USER_ID = 'nonexistent-user';
 const DUMMY_PASSWORD_HASH = '$2a$12$n6wyln4ERyOHBD6UAx2fAOkt0F7nX0x6X2ZiYAbBVvK7i7diOaJjG';
@@ -52,7 +53,7 @@ export default function localAuthMiddleware(req, res, next) {
  * @returns {Object} Login result with user and token
  */
 export async function loginUser(username, password, localAuthConfig) {
-  const usersConfig = loadUsers(localAuthConfig.usersFile || 'contents/config/users.json');
+  const usersConfig = loadUsers(localUsersFile(localAuthConfig));
   const users = usersConfig.users || {};
 
   // Find user by username or email (case-insensitive)
@@ -94,7 +95,7 @@ export async function loginUser(username, password, localAuthConfig) {
   userResponse = enhanceUserGroups(userResponse, authConfig);
 
   // Admin rescue: Ensure first user gets admin rights if no admin exists
-  const usersFilePath = localAuthConfig.usersFile || 'contents/config/users.json';
+  const usersFilePath = localUsersFile(localAuthConfig);
   userResponse = await ensureFirstUserIsAdmin(userResponse, 'local', usersFilePath);
 
   // Create JWT token using centralized token service

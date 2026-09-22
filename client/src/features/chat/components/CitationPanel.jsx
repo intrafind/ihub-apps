@@ -1,8 +1,20 @@
 import { useState, useCallback, useMemo, useRef, useEffect, lazy, Suspense } from 'react';
 import { useTranslation } from 'react-i18next';
 import { scrollToElement } from '../../../utils/citationTransformer';
-import { buildApiUrl } from '../../../utils/runtimeBasePath';
+import { fetchIFinderDocumentMetadata } from '../../../api/endpoints/documents';
 import AppSelectionModal from '../../workflows/components/AppSelectionModal';
+import {
+  attachCitationDocumentToMail,
+  canAttachCitationDocument,
+  downloadCitationDocument,
+  getCitationDeepLink as getDeepLink,
+  getCitationDocumentAccess as getDocumentAccess,
+  getCitationFileName as getFileName,
+  getCitationMeta as getMeta,
+  hasCitationProxyAccess as hasProxyAccess,
+  isCitationAttachSupported,
+  openCitationDocument
+} from '../utils/citationDocuments';
 import {
   hasPassageText,
   selectPreviewPassages
@@ -17,39 +29,13 @@ const DocumentPreviewModal = lazy(
 
 const PASSAGE_TRUNCATE_LENGTH = 150;
 
-/**
- * Safely extract a value from additional_document_metadata.
- * Values are typically arrays (e.g. ["Filesystem"]), so we unwrap the first element.
- */
-const getMeta = (item, key, fallback = '') => {
-  const val = item?.additional_document_metadata?.[key];
-  return Array.isArray(val) && val.length > 0 ? val[0] : val || fallback;
-};
-
-const getDeepLink = item => getMeta(item, 'accessInfo.deepLink');
-
-const getFileName = item => getMeta(item, 'file.name');
+// getMeta / getDeepLink / getFileName / getDocumentAccess / hasProxyAccess are
+// imported from ../utils/citationDocuments so this panel and AppChat's
+// `onDocumentAction` override read the same metadata the same way.
 
 const getSourceType = item => getMeta(item, 'sourceType');
 
 const getApplication = item => getMeta(item, 'application').toLowerCase();
-
-/**
- * Extract document access info (documentId + searchProfile) from a citation item's links array.
- * Returns null if no ACCESS link is present.
- */
-const getDocumentAccess = item => {
-  const links = item?.links;
-  if (!Array.isArray(links)) return null;
-  const accessLink = links.find(l => l.type === 'ACCESS');
-  if (!accessLink?.documentId) return null;
-  return { documentId: accessLink.documentId, searchProfile: accessLink.searchProfile };
-};
-
-/**
- * Check if the document can be accessed via the iFinder proxy.
- */
-const hasProxyAccess = item => !!getDocumentAccess(item);
 
 /**
  * Returns a document type icon based on the `application` metadata field.
@@ -127,8 +113,18 @@ function PassageText({ content, index, onJumpToPassage, t }) {
 
 /**
  * Overflow menu with click-outside dismiss.
+ *
+ * `canOpenInApp` is false when no `onDocumentAction` handler is mounted above
+ * the panel — the Outlook task pane and the extension side panel have no
+ * router to navigate to `/apps/:id`, so the entry would be a dead button
+ * there (issue #2453).
+ *
+ * `attach` describes the "Add to email" entry: rendered only in the Outlook
+ * task pane (`supported`), and enabled there only while the user is writing a
+ * mail (`enabled`) — a received message has nothing to attach to, which the
+ * disabled entry says rather than leaving it to be discovered by clicking.
  */
-function OverflowMenu({ item, onAction, onOpenInApp, t }) {
+function OverflowMenu({ item, onAction, onOpenInApp, canOpenInApp, attach, t }) {
   const [open, setOpen] = useState(false);
   const menuRef = useRef(null);
 
@@ -202,25 +198,52 @@ function OverflowMenu({ item, onAction, onOpenInApp, t }) {
               {t('citations.download', 'Download')}
             </button>
           )}
-          {canProxy && <div className="border-t border-gray-200 dark:border-gray-700 my-1" />}
-          <button
-            onClick={e => {
-              e.stopPropagation();
-              onOpenInApp(item);
-              setOpen(false);
-            }}
-            className="w-full text-left px-3 py-2 text-sm text-gray-700 dark:text-gray-200 hover:bg-gray-100 dark:hover:bg-gray-700 flex items-center gap-2"
-          >
-            <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-              <path
-                strokeLinecap="round"
-                strokeLinejoin="round"
-                strokeWidth={2}
-                d="M4 6a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2H6a2 2 0 01-2-2V6zM14 6a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2h-2a2 2 0 01-2-2V6zM4 16a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2H6a2 2 0 01-2-2v-2zM14 16a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2h-2a2 2 0 01-2-2v-2z"
-              />
-            </svg>
-            {t('citations.openInApp', 'Open in App')}
-          </button>
+          {canProxy && attach?.supported && (
+            <button
+              onClick={e => {
+                e.stopPropagation();
+                if (!attach.enabled) return;
+                onAction('attachToMail', item);
+                setOpen(false);
+              }}
+              disabled={!attach.enabled}
+              title={attach.enabled ? undefined : attach.hint}
+              className="w-full text-left px-3 py-2 text-sm text-gray-700 dark:text-gray-200 hover:bg-gray-100 dark:hover:bg-gray-700 flex items-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed disabled:hover:bg-transparent dark:disabled:hover:bg-transparent"
+            >
+              <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <path
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                  strokeWidth={2}
+                  d="M15.172 7l-6.586 6.586a2 2 0 102.828 2.828l6.414-6.586a4 4 0 00-5.656-5.656l-6.415 6.585a6 6 0 108.486 8.486L20.5 13"
+                />
+              </svg>
+              {attach.label}
+            </button>
+          )}
+          {canProxy && canOpenInApp && (
+            <div className="border-t border-gray-200 dark:border-gray-700 my-1" />
+          )}
+          {canOpenInApp && (
+            <button
+              onClick={e => {
+                e.stopPropagation();
+                onOpenInApp(item);
+                setOpen(false);
+              }}
+              className="w-full text-left px-3 py-2 text-sm text-gray-700 dark:text-gray-200 hover:bg-gray-100 dark:hover:bg-gray-700 flex items-center gap-2"
+            >
+              <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <path
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                  strokeWidth={2}
+                  d="M4 6a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2H6a2 2 0 01-2-2V6zM14 6a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2h-2a2 2 0 01-2-2V6zM4 16a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2H6a2 2 0 01-2-2v-2zM14 16a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2h-2a2 2 0 01-2-2v-2z"
+                />
+              </svg>
+              {t('citations.openInApp', 'Open in App')}
+            </button>
+          )}
           {canProxy && (
             <>
               <div className="border-t border-gray-200 dark:border-gray-700 my-1" />
@@ -266,26 +289,28 @@ function DocumentDetailsModal({ item, onClose, t }) {
       return;
     }
 
-    const params = new URLSearchParams({
-      documentId: access.documentId,
-      ...(access.searchProfile ? { searchProfile: access.searchProfile } : {})
-    });
+    let cancelled = false;
 
-    fetch(buildApiUrl(`integrations/ifinder/document/metadata?${params}`), {
-      credentials: 'include'
+    // Via apiClient, not a bare cookie `fetch`: the Outlook task pane and the
+    // extension side panel carry their session in an Authorization header.
+    fetchIFinderDocumentMetadata({
+      documentId: access.documentId,
+      searchProfile: access.searchProfile
     })
-      .then(res => {
-        if (!res.ok) throw new Error(`HTTP ${res.status}`);
-        return res.json();
-      })
       .then(data => {
+        if (cancelled) return;
         setMetadata(data);
         setLoading(false);
       })
       .catch(err => {
+        if (cancelled) return;
         setError(err.message);
         setLoading(false);
       });
+
+    return () => {
+      cancelled = true;
+    };
   }, [item]);
 
   const formatDate = dateStr => {
@@ -448,7 +473,12 @@ function DocumentDetailsModal({ item, onClose, t }) {
  *
  * @param {Object} props
  * @param {Object} props.citations - { references: [], resultItems: [] }
- * @param {Function} [props.onDocumentAction] - Handler for document actions (preview, download, openInApp)
+ * @param {Function} [props.onDocumentAction] - Handler for document actions
+ *   (openExternal, download, openInApp). May return a
+ *   `{ ok: false, reason }` result (or a promise of one) to report that the
+ *   action did not happen; the panel then shows the user why. When omitted,
+ *   the panel handles openExternal/download itself and the "Open in App"
+ *   entry — which needs a router the embedded hosts do not have — is hidden.
  */
 function CitationPanel({ citations, onDocumentAction }) {
   const { t } = useTranslation();
@@ -457,43 +487,123 @@ function CitationPanel({ citations, onDocumentAction }) {
   const [detailsDoc, setDetailsDoc] = useState(null);
   // { item, passages: string[], initialPassageIndex: number }
   const [previewDoc, setPreviewDoc] = useState(null);
+  // Message shown when a document action could not be carried out. Before
+  // issue #2453 these failures were invisible: in the Outlook task pane the
+  // popup-based open/download simply did nothing at all.
+  const [actionError, setActionError] = useState(null);
+  // Confirmation for an action whose result is not visible in the panel —
+  // today only "Add to email", where the document lands in a draft the user
+  // may not be looking at.
+  const [actionNotice, setActionNotice] = useState(null);
+  // Whether the host can take an attachment right now. In Outlook this
+  // depends on the open item, so it is re-read on every `ihub:itemchanged`:
+  // opening a reply turns the entry on without a reload.
+  const [attachEnabled, setAttachEnabled] = useState(canAttachCitationDocument);
+  const attachSupported = isCitationAttachSupported();
+
+  useEffect(() => {
+    if (!attachSupported) return undefined;
+    const handler = () => setAttachEnabled(canAttachCitationDocument());
+    document.addEventListener('ihub:itemchanged', handler);
+    return () => document.removeEventListener('ihub:itemchanged', handler);
+  }, [attachSupported]);
+
+  const attachMenu = useMemo(
+    () => ({
+      supported: attachSupported,
+      enabled: attachEnabled,
+      label: t('citations.attachToMail', 'Add to email'),
+      hint: t(
+        'citations.attachNeedsDraft',
+        'Open a new email or a reply first, then add the document from there.'
+      )
+    }),
+    [attachSupported, attachEnabled, t]
+  );
+
+  const describeFailure = useCallback(
+    (action, reason) => {
+      if (action === 'download') {
+        return reason === 'unavailable'
+          ? t('citations.downloadUnavailable', 'This document cannot be downloaded from here.')
+          : t(
+              'citations.downloadFailed',
+              'The document could not be downloaded. Please try again.'
+            );
+      }
+      if (action === 'openExternal') {
+        return reason === 'unavailable'
+          ? t('citations.openExternalUnavailable', 'This document has no link to open.')
+          : t(
+              'citations.openExternalBlocked',
+              'The document could not be opened — this window blocked it. Try opening it from iHub in your browser.'
+            );
+      }
+      if (action === 'attachToMail') {
+        if (reason === 'notComposing') {
+          return t(
+            'citations.attachNeedsDraft',
+            'Open a new email or a reply first, then add the document from there.'
+          );
+        }
+        if (reason === 'tooLarge') {
+          return t(
+            'citations.attachTooLarge',
+            'This document is too large to attach. Download it instead.'
+          );
+        }
+        return reason === 'unavailable'
+          ? t('citations.attachUnavailable', 'This document cannot be attached from here.')
+          : t('citations.attachFailed', 'The document could not be attached to your email.');
+      }
+      return t('citations.documentActionFailed', 'That action could not be completed.');
+    },
+    [t]
+  );
 
   const handleDocAction = useCallback(
-    (action, item, appId) => {
+    async (action, item, appId) => {
+      setActionError(null);
+      setActionNotice(null);
+
       // Handle details locally — no need to bubble up
       if (action === 'details') {
         setDetailsDoc(item);
         return;
       }
 
-      if (onDocumentAction) {
-        onDocumentAction(action, item, appId);
+      // Attaching is the panel's own: it is offered only in the Outlook task
+      // pane, which mounts no `onDocumentAction` handler to delegate to.
+      if (action === 'attachToMail') {
+        const attached = await attachCitationDocumentToMail(item);
+        if (attached.ok) {
+          setActionNotice(
+            t('citations.attachedToMail', 'Added to your email as {{filename}}.', {
+              filename: attached.filename
+            })
+          );
+        } else {
+          setActionError(describeFailure(action, attached.reason));
+        }
         return;
       }
 
-      // Fallback: handle actions locally
-      const access = getDocumentAccess(item);
-      const deepLink = getDeepLink(item);
+      // A host-supplied handler owns the action; it may report the outcome so
+      // a blocked window or a failed download surfaces instead of looking
+      // like a dead button. Legacy handlers return nothing — treated as OK.
+      const result = onDocumentAction
+        ? await onDocumentAction(action, item, appId)
+        : action === 'openExternal'
+          ? openCitationDocument(item)
+          : action === 'download'
+            ? await downloadCitationDocument(item)
+            : { ok: false, reason: 'unsupported' };
 
-      if (action === 'openExternal') {
-        if (deepLink) {
-          window.open(deepLink, '_blank', 'noopener,noreferrer');
-        }
-      } else if (action === 'download') {
-        if (access) {
-          const params = new URLSearchParams({
-            documentId: access.documentId,
-            ...(access.searchProfile ? { searchProfile: access.searchProfile } : {})
-          });
-          window.open(
-            buildApiUrl(`integrations/ifinder/document?${params}`),
-            '_blank',
-            'noopener,noreferrer'
-          );
-        }
+      if (result && result.ok === false) {
+        setActionError(describeFailure(action, result.reason));
       }
     },
-    [onDocumentAction]
+    [onDocumentAction, describeFailure, t]
   );
 
   /**
@@ -589,6 +699,54 @@ function CitationPanel({ citations, onDocumentAction }) {
       <h4 className="text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wider mb-2">
         {t('citations.documents', 'Documents')}
       </h4>
+      {actionError && (
+        <div
+          role="alert"
+          className="mb-2 flex items-start gap-2 rounded-md border border-red-200 bg-red-50 px-2.5 py-2 text-xs text-red-700 dark:border-red-900/50 dark:bg-red-900/20 dark:text-red-300"
+        >
+          <span className="flex-1">{actionError}</span>
+          <button
+            type="button"
+            onClick={() => setActionError(null)}
+            className="shrink-0 rounded-sm p-0.5 hover:bg-red-100 dark:hover:bg-red-900/40"
+            title={t('common.close', 'Close')}
+            aria-label={t('common.close', 'Close')}
+          >
+            <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+              <path
+                strokeLinecap="round"
+                strokeLinejoin="round"
+                strokeWidth={2}
+                d="M6 18L18 6M6 6l12 12"
+              />
+            </svg>
+          </button>
+        </div>
+      )}
+      {actionNotice && (
+        <div
+          role="status"
+          className="mb-2 flex items-start gap-2 rounded-md border border-green-200 bg-green-50 px-2.5 py-2 text-xs text-green-800 dark:border-green-900/50 dark:bg-green-900/20 dark:text-green-300"
+        >
+          <span className="flex-1">{actionNotice}</span>
+          <button
+            type="button"
+            onClick={() => setActionNotice(null)}
+            className="shrink-0 rounded-sm p-0.5 hover:bg-green-100 dark:hover:bg-green-900/40"
+            title={t('common.close', 'Close')}
+            aria-label={t('common.close', 'Close')}
+          >
+            <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+              <path
+                strokeLinecap="round"
+                strokeLinejoin="round"
+                strokeWidth={2}
+                d="M6 18L18 6M6 6l12 12"
+              />
+            </svg>
+          </button>
+        </div>
+      )}
       <div className="space-y-2">
         {mergedDocuments.map(({ doc, passages, resultIndex }, index) => {
           const docId = doc.document_id || getMeta(doc, 'id') || `doc-${index}`;
@@ -694,6 +852,8 @@ function CitationPanel({ citations, onDocumentAction }) {
                         : handleDocAction(action, actionItem)
                     }
                     onOpenInApp={setAppPickerDoc}
+                    canOpenInApp={!!onDocumentAction}
+                    attach={attachMenu}
                     t={t}
                   />
                 </div>

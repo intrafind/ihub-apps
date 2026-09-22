@@ -34,6 +34,7 @@ const AdminUpdatesPage = lazyWithRetry(() => import('./features/admin/pages/Admi
 const AdminAdvancedPage = lazyWithRetry(() => import('./features/admin/pages/AdminAdvancedPage'));
 // Lazy load admin components
 const AdminUsageReports = lazyWithRetry(() => import('./features/admin/pages/AdminUsageReports'));
+const AdminFeedbackPage = lazyWithRetry(() => import('./features/admin/pages/AdminFeedbackPage'));
 const AdminAppsPage = lazyWithRetry(() => import('./features/admin/pages/AdminAppsPage'));
 const AdminAppEditPage = lazyWithRetry(() => import('./features/admin/pages/AdminAppEditPage'));
 const AdminShortLinks = lazyWithRetry(() => import('./features/admin/pages/AdminShortLinks'));
@@ -95,6 +96,9 @@ const AdminOAuthClientsPage = lazyWithRetry(
 const AdminOAuthClientEditPage = lazyWithRetry(
   () => import('./features/admin/pages/AdminOAuthClientEditPage')
 );
+const AdminOAuthCimdClientEditPage = lazyWithRetry(
+  () => import('./features/admin/pages/AdminOAuthCimdClientEditPage')
+);
 const AdminOAuthConnectionsPage = lazyWithRetry(
   () => import('./features/admin/pages/AdminOAuthConnectionsPage')
 );
@@ -109,11 +113,17 @@ const AdminGroupEditPage = lazyWithRetry(() => import('./features/admin/pages/Ad
 const AdminUICustomization = lazyWithRetry(
   () => import('./features/admin/pages/AdminUICustomization')
 );
+const AdminLocalizationPage = lazyWithRetry(
+  () => import('./features/admin/pages/AdminLocalizationPage')
+);
 const AdminLoggingPage = lazyWithRetry(() => import('./features/admin/pages/AdminLoggingPage'));
 const AdminVoiceInputPage = lazyWithRetry(
   () => import('./features/admin/pages/AdminVoiceInputPage')
 );
 const AdminTelemetryPage = lazyWithRetry(() => import('./features/admin/pages/AdminTelemetryPage'));
+const AdminChatHistoryPage = lazyWithRetry(
+  () => import('./features/admin/pages/AdminChatHistoryPage')
+);
 const AdminFeaturesPage = lazyWithRetry(() => import('./features/admin/pages/AdminFeaturesPage'));
 const AdminAuditLogPage = lazyWithRetry(() => import('./features/admin/pages/AdminAuditLogPage'));
 const AdminChangelogPage = lazyWithRetry(() => import('./features/admin/pages/AdminChangelogPage'));
@@ -616,6 +626,13 @@ function App() {
               path="oauth/clients"
               element={<LazyAdminRoute component={AdminOAuthClientsPage} />}
             />
+            {/* Before the generic :clientId route: a metadata-document client's
+                id is a URL, so it travels base64url-encoded under its own
+                path rather than as a client id segment. */}
+            <Route
+              path="oauth/clients/cimd/:encodedClientId"
+              element={<LazyAdminRoute component={AdminOAuthCimdClientEditPage} />}
+            />
             <Route
               path="oauth/clients/:clientId"
               element={<LazyAdminRoute component={AdminOAuthClientEditPage} />}
@@ -681,6 +698,12 @@ function App() {
             {showAdminPage('ui') && (
               <Route path="ui" element={<LazyAdminRoute component={AdminUICustomization} />} />
             )}
+            {showAdminPage('ui') && (
+              <Route
+                path="localization"
+                element={<LazyAdminRoute component={AdminLocalizationPage} />}
+              />
+            )}
             {showAdminPage('pages') && (
               <Route path="pages" element={<LazyAdminRoute component={AdminPagesPage} />} />
             )}
@@ -704,11 +727,20 @@ function App() {
             {showAdminPage('usage') && (
               <Route path="usage" element={<LazyAdminRoute component={AdminUsageReports} />} />
             )}
+            {showAdminPage('feedback') && (
+              <Route path="feedback" element={<LazyAdminRoute component={AdminFeedbackPage} />} />
+            )}
             {showAdminPage('logging') && (
               <Route path="logging" element={<LazyAdminRoute component={AdminLoggingPage} />} />
             )}
             {showAdminPage('telemetry') && (
               <Route path="telemetry" element={<LazyAdminRoute component={AdminTelemetryPage} />} />
+            )}
+            {showAdminPage('chatHistory') && (
+              <Route
+                path="chat-history"
+                element={<LazyAdminRoute component={AdminChatHistoryPage} />}
+              />
             )}
             {showAdminPage('system') && (
               <Route

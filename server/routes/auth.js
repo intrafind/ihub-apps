@@ -22,6 +22,7 @@ import { logAudit } from '../services/AuditLogService.js';
 import { getAuthCookieOptions, getClearAuthCookieOptions } from '../utils/cookieSettings.js';
 import { buildPublicBaseUrl } from '../utils/publicBaseUrl.js';
 import { clearOidcLogoutHint, readOidcLogoutHint } from '../utils/oidcLogoutHint.js';
+import { localUsersFile } from '../utils/contentsPath.js';
 
 /**
  * Sanitize and validate authentication input
@@ -636,7 +637,7 @@ export default function registerAuthRoutes(app) {
         }
 
         const userData = req.body;
-        const usersFilePath = localAuthConfig.usersFile || 'contents/config/users.json';
+        const usersFilePath = localUsersFile(localAuthConfig);
 
         const newUser = await createUser(userData, usersFilePath);
 

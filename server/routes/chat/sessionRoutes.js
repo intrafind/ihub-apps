@@ -56,6 +56,7 @@ import {
 } from '../../utils/responseHelpers.js';
 import { drainPendingFinish } from '../../services/workflow/chatBridge.js';
 import { cancelChatWorkflow, replayChatWorkflowProgress } from '../../tools/workflowRunner.js';
+import { renderUserMessage } from '../../../shared/promptContext.js';
 
 /**
  * Report a failure that happened before (or instead of) a model turn on the
@@ -227,6 +228,15 @@ export default function registerSessionRoutes(app, { getLocalizedError, DEFAULT_
    *         imageData:
    *           type: object
    *           description: Optional attached image data
+   *         hostContext:
+   *           type: object
+   *           description: >-
+   *             Optional item the host shows next to the chat — `currentEmail`,
+   *             `currentPage`, `currentMeeting` and `addedEmails`, each field a
+   *             display-ready string. The server renders it, together with
+   *             `fileData`, as `<content>` blocks around `content` (see
+   *             docs/apps.md, "What {{content}} contains"); `content` stays what the user
+   *             typed.
    *
    *     ChatRequest:
    *       type: object
@@ -819,6 +829,19 @@ export default function registerSessionRoutes(app, { getLocalizedError, DEFAULT_
    *                   type: string
    *       401:
    *         description: Authentication required
+   *       403:
+   *         description: >-
+   *           The requested `modelId` exists but is outside the user's group-permitted
+   *           models (`modelAccessDeniedForUser`)
+   *         content:
+   *           application/json:
+   *             schema:
+   *               type: object
+   *               properties:
+   *                 error:
+   *                   type: string
+   *                 code:
+   *                   type: string
    *       404:
    *         description: App or model not found
    *         content:
@@ -1080,8 +1103,12 @@ export default function registerSessionRoutes(app, { getLocalizedError, DEFAULT_
               chatId
             });
 
-            // Strip the @mention from the input
-            const strippedInput = lastUserContent.replace(/@[\w.-]+/, '').trim();
+            // Strip the @mention from the input; the host item (email, page,
+            // meeting) goes along as tagged blocks, the files as inputFiles.
+            const strippedInput = renderUserMessage({
+              content: lastUserContent.replace(/@[\w.-]+/, '').trim(),
+              hostContext: lastUserMsg.hostContext
+            });
 
             // Collect file data from the last message
             const fileData = lastUserMsg.fileData || null;
@@ -1239,12 +1266,14 @@ export default function registerSessionRoutes(app, { getLocalizedError, DEFAULT_
               .status(
                 prep.error.code === 'APP_NOT_FOUND' || prep.error.code === 'MODEL_NOT_FOUND'
                   ? 404
-                  : prep.error.code === 'noModelsAvailable' ||
-                      prep.error.code === 'noCompatibleModels' ||
-                      prep.error.code === 'noModelIdProvided' ||
-                      prep.error.code === 'noModelsForUser'
-                    ? 400
-                    : 500
+                  : prep.error.code === 'modelAccessDeniedForUser'
+                    ? 403
+                    : prep.error.code === 'noModelsAvailable' ||
+                        prep.error.code === 'noCompatibleModels' ||
+                        prep.error.code === 'noModelIdProvided' ||
+                        prep.error.code === 'noModelsForUser'
+                      ? 400
+                      : 500
               )
               .json({ error: errMsg, code: prep.error.code });
           }

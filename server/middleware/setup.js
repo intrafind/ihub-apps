@@ -543,6 +543,18 @@ export function setupMiddleware(app, platformConfig = {}) {
       origin: resolvedOrigin,
       methods: corsConfig.methods || ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS', 'HEAD', 'PATCH'],
       allowedHeaders,
+      // Response headers the browser lets cross-origin callers read. Without
+      // Content-Disposition a download started from the browser extension's
+      // side panel (origin chrome-extension://<id>) cannot see the filename
+      // the server sent and has to fall back to the document title.
+      exposedHeaders: Array.isArray(corsConfig.exposedHeaders)
+        ? [
+            ...corsConfig.exposedHeaders,
+            ...['Content-Disposition'].filter(
+              h => !corsConfig.exposedHeaders.some(e => String(e).toLowerCase() === h.toLowerCase())
+            )
+          ]
+        : ['Content-Disposition'],
       credentials,
       optionsSuccessStatus: corsConfig.optionsSuccessStatus || 200,
       maxAge: corsConfig.maxAge || 86400,

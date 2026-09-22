@@ -6,6 +6,8 @@ import { emitToolProgress } from './services/loop/RunStream.js';
 import { isFeatureEnabled } from './featureRegistry.js';
 import { isValidId } from './utils/pathSecurity.js';
 import mcpClientManager from './services/mcp/McpClientManager.js';
+import { isBraveSearchConfigured } from './services/search/braveApiKey.js';
+import { isStaanSearchConfigured } from './services/search/staanApiKey.js';
 import logger from './utils/logger.js';
 import { getLocalizedString } from './utils/localize.js';
 
@@ -239,6 +241,53 @@ export const DEFAULT_NATIVE_WEB_SEARCH_MAX_USES = 5;
 /** Script-backed search tool offered when native search cannot be used. */
 export const NATIVE_WEB_SEARCH_FALLBACK_TOOL_ID = 'braveSearch';
 
+/**
+ * Page reader offered next to the script-backed search tool, so the model can
+ * open a result (or a URL the user gave it) in full instead of relying on the
+ * search tool's short automatic excerpts.
+ */
+export const WEB_CONTENT_EXTRACTOR_TOOL_ID = 'webContentExtractor';
+
+/** Script-backed search tool for each `websearch.provider` value. */
+export const WEBSEARCH_TOOL_IDS = Object.freeze({
+  brave: 'braveSearch',
+  staan: 'staanSearch',
+  qwant: 'qwantSearch'
+});
+
+/**
+ * Resolve an app's `websearch.provider` onto the script-backed tool to offer.
+ *
+ * `"auto"` walks the keyed engines in registration order — Brave, then Staan —
+ * and falls back to Qwant, which needs no key at all. So an install with a
+ * search subscription keeps using it, an install with only a Staan key gets
+ * Staan, and an install with neither still gets working web search instead of a
+ * tool that fails on every call. Brave stays ahead of Staan deliberately: it
+ * was what `"auto"` already picked, and an install that has both keys should
+ * not change engine on upgrade.
+ *
+ * A named provider is honoured as configured, even when unconfigured, so the
+ * resulting error names the provider the admin actually chose.
+ *
+ * @param {string} [provider='auto'] - Value of `app.websearch.provider`
+ * @param {Object} [deps]
+ * @param {() => boolean} [deps.braveConfigured] - Injected by tests so every
+ *   branch of `"auto"` can be exercised without a live provider config.
+ * @param {() => boolean} [deps.staanConfigured] - Likewise for Staan.
+ * @returns {string} Tool id (`braveSearch` | `staanSearch` | `qwantSearch`)
+ */
+export function resolveWebsearchToolId(
+  provider = 'auto',
+  { braveConfigured = isBraveSearchConfigured, staanConfigured = isStaanSearchConfigured } = {}
+) {
+  if (provider && provider !== 'auto') {
+    return WEBSEARCH_TOOL_IDS[provider] || NATIVE_WEB_SEARCH_FALLBACK_TOOL_ID;
+  }
+  if (braveConfigured()) return WEBSEARCH_TOOL_IDS.brave;
+  if (staanConfigured()) return WEBSEARCH_TOOL_IDS.staan;
+  return WEBSEARCH_TOOL_IDS.qwant;
+}
+
 function normalizeMaxUses(value) {
   const n = Number(value);
   return Number.isInteger(n) && n > 0 ? n : DEFAULT_NATIVE_WEB_SEARCH_MAX_USES;
@@ -297,23 +346,45 @@ export function resolveAppNativeWebSearch(app, modelProvider, websearchEnabled, 
 }
 
 /**
- * Clone the braveSearch tool definition with an app's `websearch` parameter
- * defaults applied (never mutates the cached definition).
- * @param {Object} toolDef - braveSearch tool definition
+ * Clone a script-backed search tool definition with an app's `websearch`
+ * parameter defaults applied (never mutates the cached definition).
+ *
+ * Each provider's tool declares its own bounds — Qwant returns at most 10
+ * results per search where Brave allows 20 — so an admin value is clamped to
+ * what the chosen tool accepts instead of being written through verbatim and
+ * failing schema validation at call time.
+ *
+ * @param {Object} toolDef - Search tool definition (braveSearch, staanSearch, qwantSearch)
  * @param {Object} [websearch] - app.websearch config
  * @returns {Object} tool definition ready to offer to the model
  */
-function buildBraveSearchTool(toolDef, websearch = {}) {
+function buildWebsearchTool(toolDef, websearch = {}) {
   const { maxResults = 5, extractContent = true, contentMaxLength = 3000 } = websearch || {};
   const cloned = JSON.parse(JSON.stringify(toolDef));
   const props = cloned.parameters?.properties || {};
 
   // Override parameter defaults with admin-configured websearch values
-  if (props.maxResults) props.maxResults.default = maxResults;
+  if (props.maxResults) props.maxResults.default = clampToSchema(maxResults, props.maxResults);
   if (props.extractContent) props.extractContent.default = extractContent;
-  if (props.contentMaxLength) props.contentMaxLength.default = contentMaxLength;
+  if (props.contentMaxLength) {
+    props.contentMaxLength.default = clampToSchema(contentMaxLength, props.contentMaxLength);
+  }
 
   return cloned;
+}
+
+/**
+ * Clamp a number into a JSON Schema property's `minimum`/`maximum`.
+ * @param {number} value
+ * @param {{minimum?: number, maximum?: number}} schema
+ * @returns {number}
+ */
+function clampToSchema(value, schema) {
+  let n = Number(value);
+  if (!Number.isFinite(n)) return value;
+  if (Number.isFinite(schema?.minimum)) n = Math.max(schema.minimum, n);
+  if (Number.isFinite(schema?.maximum)) n = Math.min(schema.maximum, n);
+  return n;
 }
 
 /**
@@ -325,23 +396,42 @@ function buildBraveSearchTool(toolDef, websearch = {}) {
  * @returns {Promise<Object[]>}
  */
 export async function resolveNativeWebSearchFallbackTools(directive, { app, language } = {}) {
-  const toolId = directive?.fallback || NATIVE_WEB_SEARCH_FALLBACK_TOOL_ID;
+  // With an app in hand, fall back to the search provider that app is
+  // configured for — an app set to Qwant should not silently answer from Brave
+  // just because the model turned native search down.
+  const toolId = app?.websearch
+    ? resolveWebsearchToolId(app.websearch.provider)
+    : directive?.fallback || NATIVE_WEB_SEARCH_FALLBACK_TOOL_ID;
   const allTools = await loadTools(language);
   const toolDef = allTools.find(t => t.id === toolId);
   if (!toolDef) {
     logger.warn('Native web search fallback tool not found', { component: 'ToolLoader', toolId });
     return [];
   }
-  return [
-    toolId === NATIVE_WEB_SEARCH_FALLBACK_TOOL_ID
-      ? buildBraveSearchTool(toolDef, app?.websearch)
-      : toolDef
-  ];
+  return withPageReader(
+    Object.values(WEBSEARCH_TOOL_IDS).includes(toolId)
+      ? buildWebsearchTool(toolDef, app?.websearch)
+      : toolDef,
+    allTools
+  );
 }
 
 /**
- * Resolve the braveSearch tool to inject based on app config and model provider.
- * Only used as a fallback when native search doesn't apply — native search
+ * Pair a script-backed search tool with the page reader, so the model can open
+ * what it found. The reader is left out when it is not installed or an admin
+ * disabled it (`loadTools` only returns enabled tools).
+ * @param {Object} searchTool - Search tool definition to offer
+ * @param {Object[]} allTools - All available tool definitions
+ * @returns {Object[]} The search tool, followed by the page reader when available
+ */
+function withPageReader(searchTool, allTools) {
+  const reader = allTools.find(t => t.id === WEB_CONTENT_EXTRACTOR_TOOL_ID);
+  return reader ? [searchTool, reader] : [searchTool];
+}
+
+/**
+ * Resolve the script-backed search tool to inject based on app config and model
+ * provider. Only used when native search doesn't apply — native search
  * (Google/OpenAI/Anthropic) is resolved separately by resolveAppNativeWebSearch
  * and passed straight to the adapter, not through the tools pipeline.
  * Overrides tool parameter defaults with the values from app.websearch config.
@@ -350,7 +440,7 @@ export async function resolveNativeWebSearchFallbackTools(directive, { app, lang
  * @param {Array} allTools - All available tool definitions
  * @param {boolean|undefined} websearchEnabled - User toggle: undefined = use enabledByDefault, false = disabled
  * @param {Object} [model] - Full model config (per-model native search opt-out)
- * @returns {Array} Zero or one tool definition to inject
+ * @returns {Array} No tools, or the search tool followed by the page reader
  */
 function resolveWebsearchTool(app, modelProvider, allTools, websearchEnabled, model) {
   if (!app.websearch?.enabled) return [];
@@ -363,16 +453,17 @@ function resolveWebsearchTool(app, modelProvider, allTools, websearchEnabled, mo
   // Native search handles this app/model combination — no tool needed.
   if (resolveAppNativeWebSearch(app, modelProvider, websearchEnabled, model)) return [];
 
-  const toolDef = allTools.find(t => t.id === 'braveSearch');
+  const toolId = resolveWebsearchToolId(app.websearch.provider);
+  const toolDef = allTools.find(t => t.id === toolId);
   if (!toolDef) {
     logger.warn('Websearch tool definition not found', {
       component: 'ToolLoader',
-      toolId: 'braveSearch'
+      toolId
     });
     return [];
   }
 
-  return [buildBraveSearchTool(toolDef, app.websearch)];
+  return withPageReader(buildWebsearchTool(toolDef, app.websearch), allTools);
 }
 
 /**
@@ -423,7 +514,8 @@ export async function getToolsForApp(app, language = null, context = {}) {
     context.websearchEnabled,
     context.model
   );
-  appTools = appTools.concat(websearchTools);
+  // An app may also list the page reader in `tools` — offer it only once.
+  appTools = appTools.concat(websearchTools.filter(t => !appTools.some(a => a.id === t.id)));
 
   // Add source-generated tools
   if (Array.isArray(app.sources) && app.sources.length > 0) {

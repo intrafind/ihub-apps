@@ -1,10 +1,8 @@
 import { getLocalizedContent } from '../../shared/localize.js';
+import { renderUserMessage } from '../../shared/promptContext.js';
 import configCache from '../configCache.js';
 import { createSourceManager } from '../sources/index.js';
 import SourceResolutionService from './SourceResolutionService.js';
-import config from '../config.js';
-import { getRootDir } from '../pathUtils.js';
-import path from 'path';
 import { isFeatureEnabled } from '../featureRegistry.js';
 import logger from '../utils/logger.js';
 
@@ -14,6 +12,30 @@ import logger from '../utils/logger.js';
  * @type {Map<string, Set<string>>}
  */
 const promptKnowledgeSources = new Map();
+
+/**
+ * Escape regex metacharacters so arbitrary keys can be used inside `new RegExp(...)`.
+ * @param {string} str
+ * @returns {string}
+ */
+function escapeRegExp(str) {
+  return str.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+}
+
+/**
+ * Replace all `{{key}}` occurrences in text with value, treating both as literal
+ * text: the key is regex-escaped so metacharacters (e.g. from a client-supplied
+ * variable name) can't throw a SyntaxError, and the value is applied via a
+ * function replacer so `$&`, `$1`, etc. inside it are never reinterpreted by
+ * String.replace's replacement-pattern syntax.
+ * @param {string} text
+ * @param {string} key
+ * @param {string} value
+ * @returns {string}
+ */
+function replaceTemplateVar(text, key, value) {
+  return text.replace(new RegExp(`\\{\\{${escapeRegExp(key)}\\}\\}`, 'g'), () => value);
+}
 
 /**
  * Service for handling prompt processing and template resolution
@@ -168,11 +190,7 @@ class PromptService {
       // Replace variables in platform_context with their resolved values
       for (const [key, value] of Object.entries(globalPromptVars)) {
         if (value !== null && value !== undefined && value !== '') {
-          const strValue = String(value);
-          platformContext = platformContext.replace(
-            new RegExp(`\\{\\{${key}\\}\\}`, 'g'),
-            () => strValue
-          );
+          platformContext = replaceTemplateVar(platformContext, key, String(value));
         }
       }
     }
@@ -215,8 +233,7 @@ class PromptService {
     let result = text;
     for (const [key, value] of Object.entries(variables || {})) {
       if (value === null || value === undefined) continue;
-      const escapedKey = key.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
-      result = result.replace(new RegExp(`\\{\\{${escapedKey}\\}\\}`, 'g'), String(value));
+      result = replaceTemplateVar(result, key, String(value));
     }
     return result;
   }
@@ -257,77 +274,69 @@ class PromptService {
       count: Object.keys(globalPromptVariables).length
     });
 
+    const applyGlobalVariables = text => {
+      let out = text;
+      for (const [key, value] of Object.entries(globalPromptVariables || {})) {
+        const strValue = typeof value === 'string' ? value : String(value || '');
+        out = replaceTemplateVar(out, key, strValue);
+      }
+      return out;
+    };
+
     let llmMessages = [...messages].map(msg => {
-      if (msg.role === 'user' && msg.promptTemplate && msg.variables) {
-        let processedContent =
+      if (msg.role !== 'user') {
+        const processedMsg = {
+          role: msg.role,
+          content: typeof msg.content === 'string' ? applyGlobalVariables(msg.content) : msg.content
+        };
+        if (msg.imageData) processedMsg.imageData = msg.imageData;
+        if (msg.fileData) processedMsg.fileData = msg.fileData;
+        if (msg.audioData) processedMsg.audioData = msg.audioData;
+        return processedMsg;
+      }
+
+      // The user's message: host context (email, meeting, page) and uploaded
+      // files become tagged blocks around the typed text — see
+      // shared/promptContext.js. Only the typed text of a message without an
+      // app template has global variables applied; the blocks are source
+      // material and reach the model as written.
+      const templated = Boolean(msg.promptTemplate && msg.variables);
+      const typed = typeof msg.content === 'string' ? msg.content : String(msg.content || '');
+      const body = renderUserMessage({
+        content: templated ? typed : applyGlobalVariables(typed),
+        hostContext: msg.hostContext,
+        files: msg.fileData
+      });
+
+      let processedContent = body;
+      if (templated) {
+        processedContent =
           typeof msg.promptTemplate === 'object'
             ? getLocalizedContent(msg.promptTemplate, lang)
-            : msg.promptTemplate || msg.content;
+            : msg.promptTemplate;
         if (typeof processedContent !== 'string') processedContent = String(processedContent || '');
         // Combine user-defined variables with global prompt variables (user
-        // variables take precedence). The user's content goes in last and
-        // through a function replacer: "{{...}}" placeholders and dollar
-        // patterns inside an email body or a pasted document are literal
-        // text — never re-expanded, never interpreted by String.replace.
+        // variables take precedence). The message goes in last and through a
+        // function replacer: "{{...}}" placeholders and dollar patterns inside
+        // an email body or a document are literal text — never re-expanded,
+        // never interpreted by String.replace.
         const { content: _contentVariable, ...variables } = {
           ...globalPromptVariables,
           ...msg.variables
         };
         for (const [key, value] of Object.entries(variables)) {
           const strValue = typeof value === 'string' ? value : String(value || '');
-          processedContent = processedContent.replace(
-            new RegExp(`\\{\\{${key}\\}\\}`, 'g'),
-            () => strValue
-          );
+          processedContent = replaceTemplateVar(processedContent, key, strValue);
         }
-        const userContent =
-          typeof msg.content === 'string' ? msg.content : String(msg.content || '');
-        processedContent = processedContent.replace(/\{\{content\}\}/g, () => userContent);
-        // Ensure user content is always included: if template is empty or doesn't contain {{content}},
-        // append the user's actual content to make sure it's not lost
-        if (msg.content && msg.content.trim()) {
-          const templateHadContentPlaceholder =
-            (msg.promptTemplate &&
-              ((typeof msg.promptTemplate === 'object' &&
-                Object.values(msg.promptTemplate).some(
-                  v => typeof v === 'string' && v.includes('{{content}}')
-                )) ||
-                (typeof msg.promptTemplate === 'string' &&
-                  msg.promptTemplate.includes('{{content}}')))) ||
-            false;
+        processedContent = processedContent.replace(/\{\{content\}\}/g, () => body);
+        // A template without {{content}} (in this language) still gets the
+        // message, appended, so what the user sent is never lost.
+        if (body.trim() && !processedContent.includes(body)) {
+          processedContent = processedContent.trim() ? `${processedContent}\n\n${body}` : body;
+        }
+      }
 
-          // If template was empty or didn't have {{content}}, append user content
-          if (
-            !processedContent.trim() ||
-            (!templateHadContentPlaceholder && !processedContent.includes(msg.content))
-          ) {
-            processedContent = processedContent.trim()
-              ? `${processedContent}\n\n${msg.content}`
-              : msg.content;
-          }
-        }
-        const processedMsg = { role: 'user', content: processedContent };
-        if (msg.imageData) processedMsg.imageData = msg.imageData;
-        if (msg.fileData) processedMsg.fileData = msg.fileData;
-        if (msg.audioData) processedMsg.audioData = msg.audioData;
-        return processedMsg;
-      }
-      // Apply global prompt variables to normal prompts as well
-      let processedContent = msg.content;
-      if (
-        typeof processedContent === 'string' &&
-        globalPromptVariables &&
-        Object.keys(globalPromptVariables).length > 0
-      ) {
-        for (const [key, value] of Object.entries(globalPromptVariables)) {
-          const strValue = typeof value === 'string' ? value : String(value || '');
-          processedContent = processedContent.replace(
-            new RegExp(`\\{\\{${key}\\}\\}`, 'g'),
-            () => strValue
-          );
-        }
-      }
-      const processedMsg = { role: msg.role, content: processedContent };
+      const processedMsg = { role: 'user', content: processedContent };
       if (msg.imageData) processedMsg.imageData = msg.imageData;
       if (msg.fileData) processedMsg.fileData = msg.fileData;
       if (msg.audioData) processedMsg.audioData = msg.audioData;
@@ -358,10 +367,7 @@ class PromptService {
           if (typeof value === 'function' || (typeof value === 'object' && value !== null))
             continue;
           const strValue = String(value || '');
-          systemPrompt = systemPrompt.replace(
-            new RegExp(`\\{\\{${key}\\}\\}`, 'g'),
-            () => strValue
-          );
+          systemPrompt = replaceTemplateVar(systemPrompt, key, strValue);
         }
       }
 
@@ -402,12 +408,10 @@ class PromptService {
           const resolvedSources = await sourceResolutionService.resolveAppSources(app, context);
 
           if (resolvedSources.length > 0) {
-            // Create source manager for content loading
-            const sourceManager = createSourceManager({
-              filesystem: {
-                basePath: path.resolve(getRootDir(), config.CONTENTS_DIR)
-              }
-            });
+            // createSourceManager() is a process-wide singleton; config is only
+            // honored on the very first call, so we rely on FileSystemHandler's
+            // own default basePath here instead of passing a redundant override.
+            const sourceManager = createSourceManager();
 
             // Load content from resolved sources
             const result = await sourceManager.loadSources(resolvedSources, context);
@@ -437,11 +441,11 @@ class PromptService {
           const hasSourcePlaceholder = systemPrompt.includes('{{source}}');
 
           if (hasSourcesPlaceholder) {
-            systemPrompt = systemPrompt.replace('{{sources}}', sourceContent || '');
+            systemPrompt = systemPrompt.replace('{{sources}}', () => sourceContent || '');
           }
           // Also support legacy {{source}} template
           if (hasSourcePlaceholder) {
-            systemPrompt = systemPrompt.replace('{{source}}', sourceContent || '');
+            systemPrompt = systemPrompt.replace('{{source}}', () => sourceContent || '');
           }
 
           // If no placeholder was found but we have source content, append it automatically

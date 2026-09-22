@@ -5,6 +5,7 @@ import {
   updateClientLastUsed
 } from '../utils/oauthClientManager.js';
 import { buildPolicyCimdClient } from '../utils/oauthClientResolver.js';
+import { isUserAllowedByGroups } from '../utils/oauthClientPolicy.js';
 import { isClientIdUrl } from '../utils/clientIdMetadata.js';
 import { isPersonalKeyExpired, isPersonalKeysEnabled } from '../utils/personalApiKeyManager.js';
 import { enhanceUserWithPermissions } from '../utils/authorization.js';
@@ -12,6 +13,7 @@ import { hasAnyScope, MCP_METHOD_SCOPES, MCP_SCOPES } from '../services/mcp/scop
 import { buildServerPath } from '../utils/basePath.js';
 import configCache from '../configCache.js';
 import logger from '../utils/logger.js';
+import { oauthClientsFile } from '../utils/contentsPath.js';
 
 /**
  * Resolve the URL of the RFC 9728 protected-resource metadata document.
@@ -79,16 +81,17 @@ export default async function mcpAuth(req, res, next) {
 
   // Look up the OAuth client. Required for both auth_code (per-client
   // allowlist application) and client_credentials (service-account identity).
-  const clientsFilePath = oauthConfig.clientsFile || 'contents/config/oauth-clients.json';
+  const clientsFilePath = oauthClientsFile(oauthConfig);
   let client = null;
 
   if (isClientIdUrl(decoded.client_id)) {
-    // A Client ID Metadata Document client has no stored record, so there is
-    // nothing to look up and — this being the request path — nothing to fetch.
-    // The client is built from policy, which makes the `active` check "CIMD
-    // still on and this host still allowed": turning the feature off or
-    // dropping a host is then an immediate kill switch for every token already
-    // issued to that client, exactly as suspending a stored client is.
+    // A Client ID Metadata Document client's identity is the document it
+    // publishes, so there is nothing to look up here and — this being the
+    // request path — nothing to fetch. The client is built from policy alone,
+    // which makes `active` mean "CIMD still on, host still allowed and not
+    // blocked, client not blocked, approval still standing". Each of those is
+    // then an immediate kill switch for every token already issued to it,
+    // exactly as suspending a stored client is.
     client = buildPolicyCimdClient(decoded.client_id, platform);
     if (!client) {
       return sendUnauthorized(
@@ -211,6 +214,29 @@ export default async function mcpAuth(req, res, next) {
   } else {
     // Reject any non-OAuth token — only OAuth-issued tokens are valid for MCP.
     return sendUnauthorized(req, res, 'invalid_token', 'Only OAuth tokens are accepted on /mcp');
+  }
+
+  // Re-check the client's group policy on every request, against the groups on
+  // the token rather than the ones frozen at consent time. This is what makes
+  // narrowing a client's `allowedGroups` — or removing a user from the group —
+  // end live access within one access-token lifetime, instead of waiting for
+  // an administrator to revoke the connection by hand.
+  //
+  // Only delegated user tokens are checked: a client-credentials token has no
+  // user to place in a group, and a personal API key's identity comes from the
+  // client record it was minted from.
+  if (decoded.authMode === 'oauth_authorization_code' && !isUserAllowedByGroups(client, user)) {
+    logger.info('Gateway request denied by client group policy', {
+      component: 'McpAuth',
+      clientId: decoded.client_id,
+      userId: user.id
+    });
+    return sendError(
+      res,
+      403,
+      'access_denied',
+      'This client is no longer available to your groups'
+    );
   }
 
   // Enforce that the token bears at least one MCP scope. Method-level scope

@@ -54,14 +54,18 @@ const starterPromptSchema = z.object({
 const websearchSchema = z
   .object({
     enabled: z.boolean().optional().prefault(false),
-    provider: z.enum(['auto', 'brave']).optional().prefault('auto'),
+    provider: z.enum(['auto', 'brave', 'staan', 'qwant']).optional().prefault('auto'),
     useNativeSearch: z.boolean().optional().prefault(true),
     maxResults: z.number().int().min(1).max(20).optional().prefault(5),
     extractContent: z.boolean().optional().prefault(true),
     contentMaxLength: z.number().int().min(500).max(50000).optional().prefault(3000),
     enabledByDefault: z.boolean().optional().prefault(false),
     // Cap on provider-run searches per model call (Anthropic web search `max_uses`).
-    maxSearches: z.number().int().min(1).max(50).optional().prefault(5)
+    maxSearches: z.number().int().min(1).max(50).optional().prefault(5),
+    // Guidance appended to the system prompt when web search is on, telling the
+    // model to research in several steps. true/unset = built-in text, false = off,
+    // string = custom text replacing the built-in one.
+    researchGuidance: z.union([z.boolean(), z.string().max(4000)]).optional()
   })
   .optional();
 
@@ -276,7 +280,11 @@ const featuresSchema = z
         // unset, treat it as enabled. The client uses `enabled !== false` for the same reason.
         enabled: z.boolean().optional().prefault(true)
       })
-      .optional()
+      .optional(),
+    // Response feedback (star rating + comment) for this app. Absent means
+    // enabled: only an explicit `false` opts the app out, and the platform-wide
+    // `feedback` feature flag still has to be on for it to show at all.
+    feedback: z.boolean().optional()
   })
   .passthrough(); // Allow additional feature flags
 
@@ -354,7 +362,28 @@ const iAssistantConfigSchema = z
       .or(z.literal('')),
     searchProfile: z.string().min(1, 'Search profile cannot be empty').optional().or(z.literal('')),
     extraContext: z.string().optional(),
-    systemPromptPreamble: z.string().optional()
+    systemPromptPreamble: z.string().optional(),
+
+    // Answer only from what retrieval returned, and say so when it returned
+    // nothing, instead of falling back on the model's world knowledge. The
+    // Conversation API has no such switch, so this is carried as a prompt —
+    // see services/integrations/iAssistantGrounding.js. Tri-state on purpose:
+    // undefined defers to the platform's `iAssistant.groundedOnly`, false
+    // turns that default off for this app.
+    groundedOnly: z.boolean().optional(),
+
+    // The four below are read by the iAssistant adapter's resolveConfig but
+    // were never declared here. Zod strips unknown keys and the resource
+    // loader keeps the parsed object, so setting any of them on an app used
+    // to do nothing at all — silently, with no validation error.
+    //
+    // `tools` in particular defaulted to [] at app level, which meant an app
+    // could not enable ifinder_search for itself; only the model's own
+    // `config.tools` ever reached the API.
+    tools: z.array(z.string()).optional(),
+    labels: z.union([z.string(), z.array(z.string())]).optional(),
+    scope: z.string().optional(),
+    ephemeral: z.boolean().optional()
   })
   .optional();
 

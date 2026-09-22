@@ -40,6 +40,7 @@ IFINDER_SEARCH_PROFILE=your-default-search-profile
 IFINDER_PRIVATE_KEY="-----BEGIN PRIVATE KEY-----
 MIIEvgIBADANBgkqhkiG9w0BAQEFAASCBKgwggSkAgEAAoIBAQDKrCFR...
 -----END PRIVATE KEY-----"
+# Takes precedence over a credential selected in Admin > Integrations > iFinder.
 
 # Optional: Advanced Configuration
 IFINDER_TIMEOUT=30000
@@ -54,14 +55,19 @@ IFINDER_DOWNLOAD_DIR=/tmp/ifinder-downloads
 
 ### 2. Platform Configuration
 
-Alternatively, configure iFinder in your `platform.json`:
+Alternatively, configure iFinder from **Admin > Integrations > iFinder** — the
+base URL, search profile and other settings are stored in `platform.json`,
+but the private key itself is never stored there in plaintext. Select or
+create a credential (Admin > Credentials, type "Secret", pasting the PEM key
+as its value) and pick it from the **Private Key** field; iHub stores a
+`privateKeyRef` pointing at it:
 
 ```json
 {
   "iFinder": {
     "baseUrl": "https://your-ifinder-instance.com",
     "defaultSearchProfile": "your-default-search-profile",
-    "privateKey": "-----BEGIN PRIVATE KEY-----\nMIIEvgIBADANBgkqhkiG9w0BAQEFAASCBKgwggSkAgEAAoIBAQDKrCFR...\n-----END PRIVATE KEY-----",
+    "privateKeyRef": "ifinder",
     "endpoints": {
       "search": "/public-api/retrieval/api/v1/search-profiles/{profileId}/_search",
       "document": "/public-api/retrieval/api/v1/search-profiles/{profileId}/docs/{docId}"
@@ -555,7 +561,7 @@ Test your iFinder configuration:
 | Base URL         | `IFINDER_API_URL`        | `iFinder.baseUrl`              | `https://api.ifinder.example.com` | iFinder instance URL                                                           |
 | Search Profile   | `IFINDER_SEARCH_PROFILE` | `iFinder.defaultSearchProfile` | `default`                         | Default search profile ID                                                      |
 | Keyless (OIDC)   | -                        | `iFinder.useOidcKeyPair`       | `false`                           | Sign with iHub's OIDC key and verify via JWKS — no key exchange (recommended)  |
-| Private Key      | `IFINDER_PRIVATE_KEY`    | `iFinder.privateKey`           | -                                 | JWT signing private key (PEM format); ignored when `useOidcKeyPair` is `true`  |
+| Private Key      | `IFINDER_PRIVATE_KEY`    | `iFinder.privateKeyRef`        | -                                 | JWT signing private key (PEM format, env var) or credential ref (Admin > Credentials); ignored when `useOidcKeyPair` is `true`. Env var takes precedence over the credential |
 | Timeout          | `IFINDER_TIMEOUT`        | `iFinder.timeout`              | `30000`                           | Request timeout (milliseconds)                                                 |
 | Download Dir     | `IFINDER_DOWNLOAD_DIR`   | `iFinder.downloadDir`          | `/tmp/ifinder-downloads`          | Local download directory                                                       |
 

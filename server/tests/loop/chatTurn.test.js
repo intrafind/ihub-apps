@@ -517,22 +517,47 @@ test('no tools: a message carrying fileData/imageData ends with run/ended.knowle
   assert.deepEqual(many.ended.knowledgeSources, ['file']);
 });
 
-test('no tools: the Office email marker yields knowledgeSources ["email"]; email + upload yields both', async t => {
+test('no tools: an open email yields knowledgeSources ["email"]; email + upload yields both', async t => {
   const email = await sourcesEmittedFor(t, 'email', [
-    { role: 'user', content: '--- Current email ---\nFrom: a@b.c\n\nSummarize this email' }
+    {
+      role: 'user',
+      content:
+        '<content type="email" origin="open">\n<from>a@b.c</from>\n</content>\n\n<user_instruction>\nSummarize this email\n</user_instruction>'
+    }
   ]);
   assert.deepEqual(email.ended.knowledgeSources, ['email']);
 
   const both = await sourcesEmittedFor(t, 'email-file', [
     {
       role: 'user',
-      content: '--- Current email ---\nFrom: a@b.c\n\nCheck the attachment',
+      content:
+        '<content type="email" origin="open">\n<from>a@b.c</from>\n</content>\n\n<user_instruction>\nCheck the attachment\n</user_instruction>',
       fileData: { fileName: 'deck.pdf', fileType: 'application/pdf', content: 'slides' }
     }
   ]);
   assert.deepEqual([...both.ended.knowledgeSources].sort(), ['email', 'file']);
   assert.deepEqual([...both.completed.sources].sort(), ['email', 'file']);
   assert.deepEqual([...both.summary.knowledgeSources].sort(), ['email', 'file']);
+});
+
+test('no tools: added emails and an open meeting each yield knowledgeSources ["email"]', async t => {
+  const pinned = await sourcesEmittedFor(t, 'pinned-emails', [
+    {
+      role: 'user',
+      content:
+        '<content type="email" origin="added">\n<from>a@b.c</from>\n</content>\n\n<user_instruction>\nSummarize these\n</user_instruction>'
+    }
+  ]);
+  assert.deepEqual(pinned.ended.knowledgeSources, ['email']);
+
+  const meeting = await sourcesEmittedFor(t, 'meeting', [
+    {
+      role: 'user',
+      content:
+        '<content type="meeting" origin="open">\n<subject>Sync</subject>\n</content>\n\n<user_instruction>\nDraft an agenda\n</user_instruction>'
+    }
+  ]);
+  assert.deepEqual(meeting.ended.knowledgeSources, ['email']);
 });
 
 // ── 4. tool round ───────────────────────────────────────────────────────────
@@ -631,6 +656,42 @@ test('tools path: step/completed{tool_calls} → tool/started → tool/completed
 
   assert.equal(telemetry.recordChatCallStart.calls.length, 2);
   assert.deepEqual(endOutcomes(telemetry), ['completed', 'completed']);
+});
+
+test('search tool: tool/completed carries the pages found and read, even when the preview is truncated', async t => {
+  const chatId = newChatId('web-sources');
+  const frames = captureFrames(t, chatId);
+  const page = 'x'.repeat(5000);
+  const { service } = makeService(
+    [toolTurn([{ name: 'webSearch', args: { query: 'berlin' } }]), textTurn('Sunny.')],
+    {
+      runTool: async () => ({
+        query: 'berlin',
+        results: [
+          { title: 'Weather', url: 'https://weather.example/berlin' },
+          { title: 'News', url: 'https://news.example/' }
+        ],
+        extractedContent: [
+          {
+            title: 'Weather',
+            url: 'https://weather.example/berlin',
+            extractedContent: { content: page },
+            contentExtracted: true
+          },
+          { title: 'News', url: 'https://news.example/', contentExtracted: false }
+        ]
+      })
+    }
+  );
+
+  await runTurn(service, { chatId, prep: makePrep({ tools: [webSearchTool] }) });
+
+  const done = frame(frames, TOOL_COMPLETED).data;
+  assert.equal(typeof done.resultPreview, 'string', 'the preview itself is truncated text');
+  assert.deepEqual(done.webSources, [
+    { url: 'https://weather.example/berlin', title: 'Weather', read: true },
+    { url: 'https://news.example/', title: 'News', readFailed: true }
+  ]);
 });
 
 // ── 5. tool failure ─────────────────────────────────────────────────────────

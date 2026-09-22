@@ -14,7 +14,6 @@
     }
   },
   "skills": {
-    "skillsDirectory": "contents/skills",
     "maxSkillBodyTokens": 5000
   },
   "globalPromptVariables": {
@@ -134,7 +133,6 @@
       "authz": false,
       "clients": false
     },
-    "clientsFile": "contents/config/oauth-clients.json",
     "defaultTokenExpirationMinutes": 60,
     "maxTokenExpirationMinutes": 1440,
     "authorizationCodeEnabled": false,
@@ -151,6 +149,8 @@
     "cimd": {
       "enabled": false,
       "allowedClientHosts": ["claude.ai"],
+      "blockedClientHosts": [],
+      "approvalMode": "approval",
       "allowedGroups": [],
       "allowedScopes": [],
       "allowedApps": [],
@@ -202,7 +202,6 @@
   },
   "localAuth": {
     "enabled": true,
-    "usersFile": "contents/config/users.json",
     "showDemoAccounts": true
   },
   "swagger": {
@@ -299,7 +298,7 @@
     "enabled": false,
     "baseUrl": "",
     "useOidcKeyPair": false,
-    "privateKey": "",
+    "privateKeyRef": "",
     "algorithm": "RS256",
     "issuer": "ihub-apps",
     "audience": "ifinder-api",
@@ -309,7 +308,9 @@
   },
   "iAssistant": {
     "defaultProfileId": "",
-    "timeout": 60000
+    "defaultSearchProfile": "searchprofile-standard",
+    "resolveSearchProfileFromProfile": true,
+    "groundedOnly": false
   },
   "officeIntegration": {
     "enabled": false,
@@ -390,7 +391,9 @@
       "defaultPage": "start",
       "featuredAppIds": []
     },
-    "useLocalOfficejs": false
+    "officeJsMode": "cdn",
+    "officeJsCdnUrl": "https://officeapis.public.onecdn.static.microsoft/1/office.js",
+    "officeJsCustomUrl": ""
   },
   "runLog": {
     "enabled": true,

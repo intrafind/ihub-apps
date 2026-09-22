@@ -314,14 +314,14 @@ If you already run iFinder with a manually exchanged key pair, switch over like
 this:
 
 1. **iHub:** set `oauth.issuer` to your public URL, enable
-   `iFinder.useOidcKeyPair`, and save. You can leave the old `privateKey` /
-   `privateKeyRef` in place — it is ignored while keyless mode is on.
+   `iFinder.useOidcKeyPair`, and save. You can leave the old `privateKeyRef`
+   (or `IFINDER_PRIVATE_KEY`) in place — it is ignored while keyless mode is on.
 2. **iFinder:** replace the `public-key-location` configuration with
    `issuer-uri` (or `jwk-set-uri`) as shown in [Step 2](#step-2--configure-ifinder).
 3. **Restart** iFinder (and iHub, since `oauth.issuer` is an auth setting) and
    run the connection test.
 4. Once verified, you can remove the old public key file from iFinder and delete
-   the `IFINDER_PRIVATE_KEY` env var / `iFinder.privateKey` value from iHub.
+   the `IFINDER_PRIVATE_KEY` env var / `iFinder.privateKeyRef` credential from iHub.
 
 Because iFinder now trusts iHub's OIDC signing key, no future key rotation
 requires touching iFinder — new keys are discovered through JWKS.
@@ -347,7 +347,7 @@ requires touching iFinder — new keys are discovered through JWKS.
 | `platform.jwt.algorithm` | jwt block | Must be `RS256` (default) so JWKS is populated | Yes (default) |
 
 Settings that are **ignored** while `useOidcKeyPair` is `true`:
-`iFinder.privateKey`, `iFinder.privateKeyRef`, `IFINDER_PRIVATE_KEY`,
+`iFinder.privateKeyRef`, `IFINDER_PRIVATE_KEY`,
 `iFinder.algorithm`, and `iFinder.issuer` (the OIDC issuer URL is used instead).
 
 ### iFinder — Spring Boot

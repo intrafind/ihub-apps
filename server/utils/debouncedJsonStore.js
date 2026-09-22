@@ -48,6 +48,33 @@ export function createDebouncedJsonStore({
     dirty = false;
   }
 
+  /**
+   * Force a fresh read from disk, replacing the in-memory copy — for a
+   * multi-worker deployment, where another process may have written since
+   * this one last loaded. Flushes first, so a write this process already
+   * made (and hasn't hit its debounce interval yet) is captured on disk
+   * rather than being silently dropped by the reload.
+   *
+   * This does not make concurrent cross-worker writes merge correctly —
+   * two workers can still flush the same window and one whole-file write
+   * overwrites the other's — it only stops a worker's cached copy from
+   * being permanently frozen at whatever it first loaded.
+   *
+   * A read failure (missing/unreadable file — e.g. racing another worker's
+   * atomic rename) keeps whatever is already in memory rather than
+   * resetting to the default shape, unless nothing had loaded yet.
+   */
+  async function reload() {
+    if (dirty) await flush();
+    try {
+      const raw = await fs.readFile(filePath, 'utf8');
+      data = JSON.parse(raw);
+    } catch {
+      if (!data) data = createDefault();
+    }
+    return data;
+  }
+
   function scheduleSave() {
     if (saveTimer) return;
     saveTimer = setTimeout(async () => {
@@ -93,5 +120,5 @@ export function createDebouncedJsonStore({
     }
   }
 
-  return { load, markDirty, replace, flush, stop };
+  return { load, markDirty, replace, flush, reload, stop };
 }

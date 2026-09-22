@@ -17,10 +17,8 @@ import net from 'net';
 import tls from 'tls';
 import jwt from 'jsonwebtoken';
 import {
-  getProxyConfig,
+  describeProxyRouting,
   getSSLConfig,
-  matchesProxyPattern,
-  shouldBypassProxy,
   shouldIgnoreSSLForURL
 } from '../../utils/httpConfig.js';
 
@@ -409,25 +407,13 @@ export function isCertificateError(error) {
  * @returns {Object} `{ viaProxy, proxyUrl, ignoreInvalidCertificates }`
  */
 export function describeTransport(url) {
-  const proxyConfig = getProxyConfig();
-  const isHttps = url.startsWith('https://');
-  const candidateProxy = isHttps ? proxyConfig.https : proxyConfig.http;
-
-  let viaProxy = Boolean(proxyConfig.enabled && candidateProxy);
-  if (viaProxy && proxyConfig.noProxy && shouldBypassProxy(url, proxyConfig.noProxy)) {
-    viaProxy = false;
-  }
-  if (
-    viaProxy &&
-    proxyConfig.urlPatterns?.length > 0 &&
-    !matchesProxyPattern(url, proxyConfig.urlPatterns)
-  ) {
-    viaProxy = false;
-  }
+  // Shares createAgent()'s routing rules via describeProxyRouting(), so a
+  // diagnostic can never claim a transport the real request would not use.
+  const routing = describeProxyRouting(url);
 
   return {
-    viaProxy,
-    proxyUrl: viaProxy ? candidateProxy : undefined,
+    viaProxy: routing.decision === 'proxied',
+    proxyUrl: routing.proxyUrl,
     ignoreInvalidCertificates: shouldIgnoreSSLForURL(url, getSSLConfig())
   };
 }

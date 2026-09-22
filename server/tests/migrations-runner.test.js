@@ -18,7 +18,9 @@ import {
   scanMigrationFiles,
   loadHistory,
   computeChecksum,
-  reconcileRenamedMigrations
+  reconcileRenamedMigrations,
+  acquireLock,
+  releaseLock
 } from '../migrations/runner.js';
 import fs from 'fs/promises';
 import path from 'path';
@@ -323,6 +325,55 @@ describe('Migration Runner', () => {
     });
   });
 
+  describe('acquireLock / releaseLock', () => {
+    it('acquires a lock on an empty directory and writes lock metadata', async () => {
+      await acquireLock(tmpDir);
+      const raw = await fs.readFile(path.join(tmpDir, '.migration-lock'), 'utf8');
+      const lock = JSON.parse(raw);
+      expect(lock.pid).toBe(process.pid);
+      expect(typeof lock.startedAt).toBe('string');
+    });
+
+    it('rejects a second acquire while the lock is fresh', async () => {
+      await acquireLock(tmpDir);
+      await expect(acquireLock(tmpDir)).rejects.toThrow(/Migration lock held/);
+    });
+
+    it('lets exactly one of two concurrent acquires win instead of racing', async () => {
+      // Regression test for the read-then-write TOCTOU: two callers hitting
+      // acquireLock at the same instant used to both pass the "does it
+      // exist" check before either had written the lock file, so both
+      // resolved successfully and both went on to run migrations.
+      const results = await Promise.allSettled([acquireLock(tmpDir), acquireLock(tmpDir)]);
+      const fulfilled = results.filter(r => r.status === 'fulfilled');
+      const rejected = results.filter(r => r.status === 'rejected');
+      expect(fulfilled).toHaveLength(1);
+      expect(rejected).toHaveLength(1);
+      expect(rejected[0].reason.message).toMatch(/Migration lock held/);
+    });
+
+    it('steals a stale lock instead of blocking forever', async () => {
+      const lockPath = path.join(tmpDir, '.migration-lock');
+      const staleStartedAt = new Date(Date.now() - 10 * 60 * 1000).toISOString();
+      await fs.writeFile(
+        lockPath,
+        JSON.stringify({ pid: 999999, startedAt: staleStartedAt, hostname: 'stale-host' })
+      );
+
+      await expect(acquireLock(tmpDir)).resolves.toBeUndefined();
+      const raw = await fs.readFile(lockPath, 'utf8');
+      const lock = JSON.parse(raw);
+      expect(lock.pid).toBe(process.pid);
+    });
+
+    it('releaseLock removes the lock file and is a no-op when absent', async () => {
+      await acquireLock(tmpDir);
+      await releaseLock(tmpDir);
+      await expect(fs.access(path.join(tmpDir, '.migration-lock'))).rejects.toThrow();
+      await expect(releaseLock(tmpDir)).resolves.toBeUndefined();
+    });
+  });
+
   describe('reconcileRenamedMigrations', () => {
     it('rewrites a history entry recorded under a renamed migration file', () => {
       const history = {
@@ -364,6 +415,90 @@ describe('Migration Runner', () => {
       expect(changed).toBe(false);
       expect(history.migrations[0].version).toBe('018');
       expect(history.migrations[0].file).toBe('V018__add_cookie_settings.js');
+    });
+
+    it('rewrites the Qwant provider entry that was renumbered V110 -> V111', () => {
+      const history = {
+        schemaVersion: '1.0',
+        migrations: [
+          {
+            version: '110',
+            description: 'add_qwant_websearch_provider',
+            file: 'V110__add_qwant_websearch_provider.js',
+            checksum: 'abc123',
+            status: 'success'
+          },
+          {
+            version: '110',
+            description: 'add_proxy_defaults',
+            file: 'V110__add_proxy_defaults.js',
+            checksum: 'def456',
+            status: 'success'
+          }
+        ]
+      };
+
+      const changed = reconcileRenamedMigrations(history);
+
+      expect(changed).toBe(true);
+      expect(history.migrations[0].version).toBe('111');
+      expect(history.migrations[0].file).toBe('V111__add_qwant_websearch_provider.js');
+      // The proxy migration kept V110, so its history entry must not move.
+      expect(history.migrations[1].version).toBe('110');
+      expect(history.migrations[1].file).toBe('V110__add_proxy_defaults.js');
+    });
+
+    it('rewrites both CIMD governance entries, V111/V112 -> V112/V113', () => {
+      // The chain is the interesting part: the governance migration moves onto
+      // the number the grandfathering one is vacating, so a rule that matched
+      // on version alone would rewrite the same entry twice.
+      const history = {
+        schemaVersion: '1.0',
+        migrations: [
+          {
+            version: '111',
+            description: 'add_oauth_cimd_governance',
+            file: 'V111__add_oauth_cimd_governance.js',
+            checksum: 'abc123',
+            status: 'success'
+          },
+          {
+            version: '112',
+            description: 'grandfather_connected_cimd_clients',
+            file: 'V112__grandfather_connected_cimd_clients.js',
+            checksum: 'def456',
+            status: 'skipped'
+          }
+        ]
+      };
+
+      const changed = reconcileRenamedMigrations(history);
+
+      expect(changed).toBe(true);
+      expect(history.migrations[0].version).toBe('112');
+      expect(history.migrations[0].file).toBe('V112__add_oauth_cimd_governance.js');
+      expect(history.migrations[1].version).toBe('113');
+      expect(history.migrations[1].file).toBe('V113__grandfather_connected_cimd_clients.js');
+    });
+
+    it('leaves the Qwant provider on V111 when it is already reconciled', () => {
+      // V111 now belongs to Qwant. Its entry must not be dragged to V112 by the
+      // governance rule, which is why the match is on (version, file).
+      const history = {
+        schemaVersion: '1.0',
+        migrations: [
+          {
+            version: '111',
+            description: 'add_qwant_websearch_provider',
+            file: 'V111__add_qwant_websearch_provider.js',
+            checksum: 'abc123',
+            status: 'success'
+          }
+        ]
+      };
+
+      expect(reconcileRenamedMigrations(history)).toBe(false);
+      expect(history.migrations[0].version).toBe('111');
     });
 
     it('is a no-op on a fresh install with no matching history entries', () => {

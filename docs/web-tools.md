@@ -13,13 +13,15 @@ iHub Apps provides a unified web search system that automatically selects the be
 | **Google Search** | Native (Gemini models) | Grounded answers with Google Search citations |
 | **OpenAI Web Search** | Native (GPT models via Responses API) | Web-augmented responses with inline citations |
 | **Anthropic Web Search** | Native (Claude models) | Web-augmented responses with inline citations |
-| **Brave Search** | Server-side | Privacy-focused search, any model |
+| **Brave Search** | Server-side | Privacy-focused search, any model (needs an API key) |
+| **Staan Search** | Server-side | European search index, any model, works from cloud hosting (needs an API key) |
+| **Qwant Search** | Server-side | Privacy-focused search, any model, **no API key required** |
 
 ### Additional Web Tools
 
 | Tool | Purpose |
 |------|---------|
-| **webContentExtractor** | Extract clean content from web pages |
+| **webContentExtractor** | Open a web page or PDF by URL and read its main text (offered automatically with script-backed web search) |
 | **playwrightScreenshot** | Capture screenshots or PDFs using Playwright |
 | **seleniumScreenshot** | Capture screenshots or PDFs using Selenium |
 | **deepResearch** | Iterative multi-round web research |
@@ -58,13 +60,14 @@ Add a `websearch` object to your app configuration:
 | Property | Type | Default | Description |
 |----------|------|---------|-------------|
 | `enabled` | Boolean | `false` | Enable web search for this app |
-| `provider` | String | `"auto"` | Search provider: `"auto"` or `"brave"` |
+| `provider` | String | `"auto"` | Search engine used when native search does not apply: `"auto"`, `"brave"`, `"staan"` or `"qwant"`. `"auto"` picks Brave when a Brave API key is configured, then Staan when it has one, and Qwant otherwise |
 | `useNativeSearch` | Boolean | `true` | Prefer native search (Google Search for Gemini, OpenAI Web Search for GPT, Anthropic Web Search for Claude) when available |
 | `maxResults` | Number | `5` | Maximum number of search results (1-20) |
 | `extractContent` | Boolean | `true` | Extract full page content from search results |
 | `contentMaxLength` | Number | `3000` | Maximum extracted content length per page (500-50,000 characters) |
 | `enabledByDefault` | Boolean | `false` | Whether web search is active by default (users can toggle it in the chat) |
 | `maxSearches` | Number | `5` | Cap on provider-run searches per model call when native search is used (sent to Anthropic as `max_uses`; 1-50). Anthropic bills each search separately |
+| `researchGuidance` | Boolean or String | `true` | Guidance added to the system prompt when web search is on, telling the model to research in several steps. `true` uses the built-in text, `false` turns it off, a string replaces the built-in text. See [Multi-Step Research](#multi-step-research) |
 
 ### How Provider Resolution Works
 
@@ -86,10 +89,32 @@ The system automatically selects the best search tool at runtime based on the mo
 │  useNativeSearch + Anthropic model?              │
 │    → Anthropic Web Search                        │
 │                                                  │
-│  Otherwise (provider = "auto" or "brave")        │
-│    → Brave Search                                │
+│  Otherwise → provider:                           │
+│    "brave" → Brave Search                        │
+│    "staan" → Staan Search                        │
+│    "qwant" → Qwant Search                        │
+│    "auto"  → Brave if a Brave API key is set,    │
+│              else Staan if a Staan key is set,   │
+│              else Qwant (needs no key)           │
 └─────────────────────────────────────────────────┘
 ```
+
+Whenever one of these script-backed search tools is offered — including when a
+provider turns native search down and the loop falls back to it — the page
+reader [`webContentExtractor`](#web-content-extractor-webcontentextractor) is
+offered next to it. The search tool's automatic extraction only copies a short
+excerpt of the top results (`contentMaxLength` each); the page reader lets the
+model open one specific result, or a URL the user pasted, and read it in full.
+It is not offered with native search (the provider's own search tool handles
+that request), and an admin can switch it off by disabling the tool under
+**Admin → Tools**.
+
+`"auto"` exists so an install without a Brave subscription still gets working
+web search. It walks the keyed engines first, in registration order, so an
+install that already had a Brave key keeps using it and does not change engine
+on upgrade. A named provider is always honoured as configured — even when it is
+unconfigured — so the resulting error names the engine the admin actually chose
+rather than silently answering from a different one.
 
 ### Admin UI Configuration
 
@@ -104,6 +129,53 @@ Web search settings can be configured through the admin panel:
 ### User Toggle
 
 When web search is enabled for an app, users see a toggle in the chat input area to enable/disable web search per conversation. The `enabledByDefault` setting controls whether this toggle starts in the on or off state.
+
+### Multi-Step Research
+
+A chat turn allows up to 25 tool rounds, so the model can search several times and read the most
+relevant pages before it answers.
+Models tend to do only what they are asked, though, so when web search is on for a turn the server
+adds a short research instruction to the end of the system prompt:
+
+- break the question into its sub-questions;
+- run several searches with different wording (and in another language where that helps);
+- search again with more precise terms when results are thin or disagree;
+- open the most relevant pages and read them in full when the search excerpts are not enough
+  (with script-backed search through the page reader, `webContentExtractor`);
+- check key claims against more than one source;
+- combine the findings into one answer with the source URLs;
+- stop once the question is answered, without searching for things the model already knows.
+
+It is only added when web search is actually on for the turn (the user toggle, or
+`enabledByDefault` when the user did not touch it). With web search off, the "web search is
+turned off" notice is added instead, never both. The instruction is added once per turn and
+only when the app has a system prompt.
+
+Per app, `websearch.researchGuidance` controls it — in the admin UI under **Web Search →
+Research in Several Steps**:
+
+```json
+"websearch": {
+  "enabled": true,
+  "researchGuidance": "Search at least twice, in English and German, and cite every source."
+}
+```
+
+`true` (or leaving it out) uses the built-in text, `false` turns it off, and a string
+replaces the built-in text (up to 4,000 characters).
+
+How much the model can act on it depends on the search path:
+
+- **Script-backed search (Brave, Staan, Qwant)**: each search is a tool call, so several searches
+  show up as several tool calls in the turn.
+- **OpenAI and Anthropic native search**: the provider runs the searches; the model can search
+  several times per model call (Anthropic up to `maxSearches`).
+- **Google native search**: the adapter sends Google Search grounding without any function
+  tools, so the guidance only steers how Gemini uses its own grounding.
+
+The default **Web Chat** app's prompt was reworded to match. Migration V124 updates an existing
+`contents/apps/web-chat.json` only in the languages whose prompt is still exactly the old shipped
+default; a prompt an admin changed is left as is (the added guidance applies to it anyway).
 
 ### Migration from Legacy Tool Configuration
 
@@ -137,13 +209,17 @@ When multiple sources are used, a tooltip lists all contributing sources.
 
 ### API Key Setup
 
-Search providers require API keys, which can be configured in two ways:
+Brave Search and Staan Search each require an API key. **Qwant requires none** —
+it is listed under **Admin → Providers → Web Search Providers** as "No API key
+required" and works as soon as an app selects it.
 
 #### Admin Panel (Recommended)
 
 1. Navigate to **Admin → Providers**
 2. Find your provider under **Web Search Providers**:
    - **Brave Search**: Click "Configure" and enter your Brave API key
+   - **Staan Search**: Click "Configure" and enter your staan.ai API key
+   - **Qwant Search**: nothing to configure
 3. Save changes — no server restart required
 
 API keys are encrypted at rest using AES-256-GCM.
@@ -154,9 +230,91 @@ Add to your `config.env` file:
 
 ```env
 BRAVE_SEARCH_API_KEY=your_brave_api_key_here
+STAAN_API_KEY=your_staan_api_key_here
 ```
 
 The system checks admin panel configuration first, then falls back to environment variables.
+
+### Search Language
+
+Every engine searches in **the user's language**. It is resolved once, the same
+way for all three:
+
+1. The language of the request — the chat/app language, which comes from the
+   client's explicit choice and otherwise from the browser's `Accept-Language`.
+2. `defaultLanguage` in `contents/config/platform.json`, the install-wide
+   default the rest of the platform already uses for localization.
+3. `en`, only if the platform config cannot be read at all.
+
+Each provider then maps that language onto whatever its own API expects, and
+falls back to its own default only when the engine does not serve that language:
+
+| Provider | Sends | Falls back to |
+|----------|-------|---------------|
+| Brave | `search_lang` (ISO 639-1) and `country` (2-letter), when the language is one Brave lists | no language parameters — an untargeted search |
+| Staan | `market` (`de-de`, `en-gb`, …) | `en-us` |
+| Qwant | `locale` (`de_DE`, `en_GB`, …) | `en_US` |
+
+Step 2 is what makes a German install behave correctly in the places where no
+user language exists — a workflow or agent run, which has no browser request
+behind it. Set `defaultLanguage` to `de` there and those runs search the German
+market instead of the US one. It changes only the search language: a workflow
+still renders its own prompts in the language the run was started with.
+
+Set it in **Admin → Customization → Localization**, which offers the languages
+this installation has translations for. It takes effect immediately — the
+platform cache is refreshed on save, so no restart is needed. It can also be
+edited directly in `contents/config/platform.json`.
+
+A model can still override the language for one search by passing the tool's
+`language` parameter, which beats both of the above.
+
+### Connectivity Test (Admin UI)
+
+Whether a search provider *can be reached from this server* is a separate
+question from whether it is configured correctly, and for Qwant it is the one
+that usually decides the outcome. **Admin → Providers → Web Search Providers**
+answers it directly:
+
+- **Test** on a provider row runs one live search and fills in the
+  **Connectivity** column. **Test All** covers every web search provider too.
+- **Configure → Connectivity Test** does the same on the provider's own page,
+  with an optional custom query, so a configuration can be saved and checked
+  in one place.
+
+Each test issues one real search and **bypasses the result cache**, so it
+reports the provider's behaviour right now rather than replaying an earlier
+success. The verdict names what to do next:
+
+| Result | Means | Next step |
+|--------|-------|-----------|
+| **All OK** | The provider answered with results | Nothing — search works from this server |
+| **Partial** | It answered, but returned nothing, or rate-limited the request | Try a broader query, or wait and retest |
+| **Blocked** | Bot protection (DataDome) refused this server's IP | Change egress, or use Brave — see below |
+| **Failed** | No API key, a rejected key, or the request never arrived | Fix the key, or check proxy/TLS settings |
+
+A **Blocked** result is deliberately not labelled a failure. It means the
+request reached Qwant and Qwant declined to answer *this IP address*; no setting
+on the page will change that, and retrying will not either. The panel shows the
+endpoint and the egress route (the outbound proxy, or `direct`) used for the
+request, because that is the variable in play.
+
+The same check is available without the UI:
+
+```bash
+node tests/manual/manual-test-qwant-search.js "your query" [--language=de]
+node tests/manual/manual-test-staan-search.js "your query" [--language=de] [--max-results=20]
+```
+
+All three engines also accept an endpoint override, which is only needed to
+point at a different host:
+
+```env
+BRAVE_SEARCH_ENDPOINT=https://api.search.brave.com/res/v1/web/search
+QWANT_SEARCH_ENDPOINT=https://api.qwant.com/v3/search/
+QWANT_SEARCH_USER_AGENT=          # override the browser UA Qwant is sent
+STAAN_SEARCH_ENDPOINT=https://api.staan.ai/v2/search/web
+```
 
 ### Native Search Providers
 
@@ -187,8 +345,73 @@ The billable search count (`server_tool_use.web_search_requests`) is recorded as
 - `extractContent` (boolean, optional): Extract full content from top results (default: configured by app)
 - `maxResults` (number, optional): Maximum results to return (default: configured by app, max: 10)
 - `contentMaxLength` (number, optional): Maximum content length per page (default: configured by app)
+- `language` (string, optional): Language or locale for the results, e.g. `en`, `de` or `en-GB` (default: the user's language — see [Search Language](#search-language))
 
 **Returns**: Array of search results with titles, URLs, descriptions, and optionally extracted page content.
+
+### Qwant Search (`qwantSearch`)
+
+**Purpose**: Search the web using Qwant for up-to-date information, without an API key or an account.
+
+Qwant is the keyless counterpart to `braveSearch`. It returns the same result
+shape, so an app can switch `websearch.provider` between the two without the
+model seeing a different contract. Like `braveSearch`, it is injected from the
+app's `websearch` config rather than listed in the app's `tools` array.
+
+**Parameters**:
+
+- `query` (string, required): Search query
+- `extractContent` (boolean, optional): Extract full content from top results (default: configured by app)
+- `maxResults` (number, optional): Maximum results to return (default: configured by app, max: 10 — one Qwant web request pages in tens)
+- `contentMaxLength` (number, optional): Maximum content length per page (default: configured by app)
+- `language` (string, optional): Language or locale for the results, e.g. `en`, `de`, `de-CH` (default: `en_US`)
+
+**Returns**: Array of search results with titles, URLs, descriptions, an optional `publishedDate`, and optionally extracted page content.
+
+> **Egress IP matters.** Qwant fronts its API with DataDome, which answers
+> requests from data-centre IP ranges with a captcha instead of results. On a
+> cloud VM or behind a hosting-network egress proxy, `qwantSearch` fails with
+> `QWANT_CAPTCHA` however it is configured — that is a property of where the
+> server runs, not of the setup. Check it before enabling Qwant with the
+> [connectivity test](#connectivity-test-admin-ui) in the admin UI, and use
+> Brave Search where Qwant is blocked.
+
+### Staan Search (`staanSearch`)
+
+**Purpose**: Search the web using [Staan](https://docs.staan.ai/docs/web-search) for up-to-date information.
+
+Staan is the second keyed engine alongside `braveSearch`. It returns the same
+result shape as the other two, so an app can switch `websearch.provider`
+between them without the model seeing a different contract, and like them it is
+injected from the app's `websearch` config rather than listed in the app's
+`tools` array. Two things set it apart:
+
+- It answers requests from data-centre IP ranges, so it works on the cloud
+  hosting where Qwant is blocked.
+- It takes **domain scoping** as a request parameter, which neither of the
+  others does.
+
+**Parameters**:
+
+- `query` (string, required): Search query. Supports the `site:` and `-site:` operators; trimmed to 400 characters
+- `extractContent` (boolean, optional): Extract full content from top results (default: configured by app)
+- `maxResults` (number, optional): Maximum results to return (default: configured by app, max: 40). Staan serves 10 results per request, so more than 10 costs one extra request per further 10
+- `contentMaxLength` (number, optional): Maximum content length per page (default: configured by app)
+- `language` (string, optional): Language or locale for the results, e.g. `en`, `de`, `en-GB` (default: `en-us`)
+- `includeDomains` (string[], optional): Only return results from these domains (max 10)
+- `excludeDomains` (string[], optional): Drop results from these domains (max 10)
+
+`includeDomains` and `excludeDomains` are mutually exclusive — the API rejects a
+request carrying both, so `includeDomains` wins when both are given.
+
+**Returns**: Array of search results with titles, URLs, descriptions, an optional `hostname`, and optionally extracted page content.
+
+> **Markets.** Staan serves the German, French and English markets
+> (`de-de`, `fr-fr`, `en-us`, `en-gb`, `en-fr`, `en-ca`, `en-au`, `en-in`,
+> `en-ie`, `en-nz`, `en-za`, `en-sg`). An unsupported region falls back to a
+> supported one for the same language (`de-CH` → `de-de`), and an unsupported
+> language to `en-us`. Note that iHub defaults to `en-us` rather than to the
+> API's own default of `fr-fr`.
 
 ### Native Search Providers (Google, OpenAI, Anthropic)
 
@@ -209,8 +432,11 @@ None of these take any parameters — they're automatically enabled when `websea
 **Parameters**:
 
 - `url` (string, required): The URL of the webpage to extract content from
-- `maxLength` (integer, optional): Maximum length of extracted content in characters (default: 5000)
-- `ignoreSSL` (boolean, optional, admin only): Ignore invalid HTTPS certificates. If omitted, the value configured in the tool's file under `contents/tools/` is used.
+- `maxLength` (integer, optional): Maximum length of extracted content in characters (default: 10000, clamped to 500-50,000)
+
+**Availability**: Shipped as `contents/tools/webContentExtractor.json` and offered automatically next to the script-backed search tool whenever an app has `websearch.enabled` (see [How Provider Resolution Works](#how-provider-resolution-works)). An app or workflow can also list it in `tools` directly; it is only offered once. Disable the tool to stop offering it.
+
+**Certificates**: The model cannot switch certificate checking off. Invalid certificates are accepted only when the platform's `ssl.ignoreInvalidCertificates` setting allows it; domains in the SSL whitelist also bypass the SSRF check below.
 
 **Returns**:
 
@@ -226,7 +452,6 @@ None of these take any parameters — they're automatically enabled when `websea
 - Handles various webpage structures
 - Provides metadata extraction
 - Error handling for invalid URLs or failed requests
-- Optional `ignoreSSL` flag to bypass invalid HTTPS certificates (value can be preset in the tool's file under `contents/tools/`)
 - Detects missing pages or authentication requirements and reports them clearly
 - Returned errors include a `code` field so applications can translate messages and the UI automatically shows a localized error when possible
 - **SSRF protection**: Blocks access to private/internal IP addresses. Domains listed in the SSL whitelist configuration bypass this check (added in v5.2.12)
@@ -411,30 +636,45 @@ The web content extractor includes protection against Server-Side Request Forger
 1. **"BRAVE_SEARCH_API_KEY is not set"**
    - Configure the key via Admin → Providers → Brave Search (recommended)
    - Or set the API key in your `config.env` file and restart the server
+   - Or switch the app to Qwant (`websearch.provider: "qwant"`), which needs no key.
+     `"auto"` already does this on an install with no Brave key
 
-2. **"Failed to extract content"**
+2. **Qwant search fails with `QWANT_CAPTCHA`**
+   - Qwant's API is behind DataDome, which challenges data-centre IP ranges —
+     so this is about where the server sends its traffic from, not how it is
+     configured, and no retry or setting will clear it
+   - Confirm it for the host with **Admin → Providers → Qwant Search → Test**,
+     or `node tests/manual/manual-test-qwant-search.js`
+   - Route outbound search traffic through an egress IP Qwant accepts, or
+     configure Brave Search for that install
+
+3. **"Failed to extract content"**
    - Check if the URL is accessible
    - Some websites may block automated requests
    - Try with a different URL to test functionality
 
-3. **"Request timeout"**
+4. **"Request timeout"**
    - The webpage is taking too long to load
    - Consider increasing timeout or trying a different URL
 
-4. **Web search not working after upgrade**
+5. **Web search not working after upgrade**
    - Migration V025 automatically converts old tool-based configs to the new `websearch` format
    - Check server logs for migration output
    - Verify the app has `websearch.enabled: true` in its configuration
 
-5. **Native search not activating for Gemini/GPT/Claude models**
+6. **Native search not activating for Gemini/GPT/Claude models**
    - Ensure `useNativeSearch` is `true` (default)
    - Verify the model's provider is correctly identified as `google`, `openai-responses`, or `anthropic`
    - Check the model configuration: `nativeWebSearch.enabled: false` switches that model to Brave Search
 
-6. **Answers on a Claude model come from Brave Search although native search is on** (log line `Native web search unavailable — falling back to a search tool`)
+7. **Answers on a Claude model come from Brave Search although native search is on** (log line `Native web search unavailable — falling back to a search tool`)
    - The provider rejected the native search request. On Anthropic, check that web search is enabled for your organisation in the Claude Console and that the model supports the configured `nativeWebSearch.toolVersion` (the basic `web_search_20250305` works everywhere)
    - Gateways or proxies that do not implement the server tool: set `nativeWebSearch.enabled: false` on that model so it uses Brave Search without the failed attempt
    - The rejection is remembered for 15 minutes per model; restart the server to reset it earlier
+
+8. **Brave Search requests hang or time out**
+   - A search that works when called directly (e.g. from a browser or Postman on your own machine) but times out from iHub is usually the server's outbound proxy — either not configured when the network requires it, or configured but blocking/excluding Brave's domain
+   - See [Proxy Testing Guide → Still Getting Timeout Errors?](proxy-testing-guide.md#still-getting-timeout-errors) for Linux/macOS and Windows commands that reproduce the exact request iHub sends, with and without the proxy, so you can tell which side is failing
 
 ### Debugging
 

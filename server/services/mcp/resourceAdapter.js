@@ -49,13 +49,39 @@ function isSourceVisible(source, visibleSourceIds) {
   return visibleSourceIds.has('*') || visibleSourceIds.has(source.id);
 }
 
-/** The files a skill bundles next to its SKILL.md, as the loader reports them. */
-function skillResourceEntries(content) {
-  return [...(content?.references || []), ...(content?.scripts || []), ...(content?.assets || [])];
-}
+/**
+ * Text formats a skill may bundle, by extension. The loader reads a resource
+ * as UTF-8, so a binary asset (an image, a font) would reach the caller
+ * corrupted, and a subdirectory is not readable at all — anything without one
+ * of these extensions is neither listed nor readable.
+ */
+const TEXT_MIME_TYPES = {
+  '.md': 'text/markdown',
+  '.txt': 'text/plain',
+  '.json': 'application/json',
+  '.yaml': 'application/yaml',
+  '.yml': 'application/yaml',
+  '.csv': 'text/csv',
+  '.xml': 'application/xml',
+  '.html': 'text/html',
+  '.js': 'text/javascript',
+  '.mjs': 'text/javascript',
+  '.ts': 'text/plain',
+  '.py': 'text/x-python',
+  '.sh': 'text/x-shellscript'
+};
 
 function resourceMimeType(relativePath) {
-  return relativePath.endsWith('.md') ? 'text/markdown' : 'text/plain';
+  return TEXT_MIME_TYPES[path.extname(relativePath).toLowerCase()] || null;
+}
+
+/** The text files a skill bundles next to its SKILL.md, as the loader reports them. */
+function skillResourceEntries(content) {
+  return [
+    ...(content?.references || []),
+    ...(content?.scripts || []),
+    ...(content?.assets || [])
+  ].filter(entry => resourceMimeType(entry) !== null);
 }
 
 /** `ihub://skill/<name>/<relative/path>`, each segment encoded on its own. */
@@ -125,14 +151,14 @@ export async function listMcpResources({ user, platform, expose }) {
       // that tool wraps filesystem access and is deliberately kept out of the
       // gateway — without this, every "see references/…" link in a skill is a
       // dead end for an external caller.
-      // ponytail: one SKILL.md read per visible skill per gateway build.
-      // Cache in skillLoader if a deployment ever ships enough skills to notice.
+      // Cost: one SKILL.md read per visible skill per gateway build. Cache in
+      // skillLoader if a deployment ever ships enough skills to notice.
       const content = await getSkillContent(skill.name);
       for (const entry of skillResourceEntries(content)) {
         resources.push({
           uri: skillResourceUri(skill.name, entry),
           name: `${skill.name}/${entry}`,
-          description: `Reference bundled with the ${skill.name} skill: ${entry}`,
+          description: `File bundled with the ${skill.name} skill: ${entry}`,
           mimeType: resourceMimeType(entry),
           kind: 'skill-resource',
           ref: skill

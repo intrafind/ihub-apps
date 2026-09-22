@@ -47,32 +47,37 @@ const MODEL_TEST_TIMEOUT_MS = 60000;
 const MODEL_TEST_NETWORK_CAUSES = Object.freeze({
   UND_ERR_CONNECT_TIMEOUT: {
     userMessage: 'Connection timeout',
+    messageKey: 'connectionTimeout',
     errorMessage:
       'The model service did not respond within the timeout period. Please check if the model URL is correct and the service is running.'
   },
   ECONNREFUSED: {
     userMessage: 'Connection refused',
+    messageKey: 'connectionRefused',
     errorMessage:
       'Unable to connect to the model service. Please verify the URL and ensure the service is running.'
   },
   ENOTFOUND: {
     userMessage: 'Service not found',
+    messageKey: 'serviceNotFound',
     errorMessage:
       'The model service hostname could not be resolved. Please check the URL configuration.'
   }
 });
 
 /**
- * Translate an `LLMError` raised by a model connectivity test into the two
- * strings the admin UI shows: a short `userMessage` headline and a longer
- * `errorMessage` with remediation hints.
+ * Translate an `LLMError` raised by a model connectivity test into the
+ * strings the admin UI shows: a short `userMessage` headline (English,
+ * used as a fallback and in logs), a longer `errorMessage` with remediation
+ * hints, and a `messageKey` — a stable identifier the client maps to a
+ * translated headline (see shared/i18n/*.json `admin.models.testResults.messages`).
  *
  * Keys off `err.code` (and the underlying socket error code for network
  * failures) — never off message substrings, which differ per provider and
  * language.
  *
  * @param {import('../../services/loop/contracts/errors.js').LLMError} err
- * @returns {{ userMessage: string, errorMessage: string }}
+ * @returns {{ userMessage: string, errorMessage: string, messageKey: string }}
  */
 function describeModelTestFailure(err) {
   // `fetch failed` wraps the socket error one level deeper (err.cause.cause);
@@ -84,6 +89,7 @@ function describeModelTestFailure(err) {
 
   const fallback = {
     userMessage: 'Model test failed',
+    messageKey: 'testFailed',
     errorMessage: err.message || 'Unknown error occurred'
   };
 
@@ -95,45 +101,56 @@ function describeModelTestFailure(err) {
           : err.cause?.message || err.message;
       return {
         userMessage: 'Network error',
+        messageKey: 'networkError',
         errorMessage: `Network connection failed: ${detail}`
       };
     }
     case LLM_ERROR_CODES.TIMEOUT:
       return {
         userMessage: 'Request timeout',
+        messageKey: 'requestTimeout',
         errorMessage:
           'The model service took too long to respond. Please try again or check the service status.'
       };
     case LLM_ERROR_CODES.AUTH_FAILED:
       if (isMissingApiKeyError(err)) {
-        return { userMessage: 'API key not configured', errorMessage: err.message };
+        return {
+          userMessage: 'API key not configured',
+          messageKey: 'apiKeyNotConfigured',
+          errorMessage: err.message
+        };
       }
       if (err.status === 403) {
         return {
           userMessage: 'Access denied',
+          messageKey: 'accessDenied',
           errorMessage: 'Access denied by the model service. Please check your API key permissions.'
         };
       }
       return {
         userMessage: 'Authentication failed',
+        messageKey: 'authenticationFailed',
         errorMessage:
           'Invalid API key or authentication credentials. Please check your model configuration.'
       };
     case LLM_ERROR_CODES.MODEL_NOT_FOUND:
       return {
         userMessage: 'Model not found',
+        messageKey: 'modelNotFound',
         errorMessage:
           'The specified model was not found on the service. Please check the model ID configuration.'
       };
     case LLM_ERROR_CODES.RATE_LIMITED:
       return {
         userMessage: 'Rate limit exceeded',
+        messageKey: 'rateLimitExceeded',
         errorMessage: 'Too many requests to the model service. Please try again later.'
       };
     case LLM_ERROR_CODES.PROVIDER_ERROR:
       if (typeof err.status === 'number' && err.status >= 500) {
         return {
           userMessage: 'Server error',
+          messageKey: 'serverError',
           errorMessage: 'The model service encountered an internal error. Please try again later.'
         };
       }
@@ -142,6 +159,8 @@ function describeModelTestFailure(err) {
       return fallback;
   }
 }
+
+export { describeModelTestFailure };
 
 export default function registerAdminModelsRoutes(app) {
   /**
@@ -577,6 +596,7 @@ export default function registerAdminModelsRoutes(app) {
         res.json({
           success: true,
           message: 'Model test successful',
+          messageKey: 'testSuccessful',
           response: result.content,
           model: safeModel
         });
@@ -593,12 +613,12 @@ export default function registerAdminModelsRoutes(app) {
           upstreamStatus: testError.status,
           error: testError.message
         });
-        const { userMessage, errorMessage } = describeModelTestFailure(testError);
+        const { userMessage, errorMessage, messageKey } = describeModelTestFailure(testError);
         const mappedStatus = llmErrorToHttpStatus(testError);
         const httpStatus = mappedStatus >= 400 ? mappedStatus : 502;
         res
           .status(httpStatus)
-          .json({ error: userMessage, details: errorMessage, code: testError.code });
+          .json({ error: userMessage, details: errorMessage, code: testError.code, messageKey });
       }
     } catch (error) {
       logger.error('Error testing model', { component: 'ModelsRoutes', error });

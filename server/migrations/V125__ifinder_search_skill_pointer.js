@@ -1,5 +1,5 @@
 /**
- * Migration V109 — point the iFinder search tool at the ifinder-search skill
+ * Migration V125 — point the iFinder search tool at the ifinder-search skill
  *
  * `performInitialSetup` only copies files that are *missing* from contents/, so
  * an installation that already has `tools/iFinder.json` never picks up a
@@ -20,7 +20,7 @@
  * in every language they declared.
  */
 
-export const version = '109';
+export const version = '125';
 export const description = 'ifinder_search_skill_pointer';
 
 /**

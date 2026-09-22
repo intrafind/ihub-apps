@@ -154,8 +154,6 @@
     "insertIntoEmail": "In E-Mail einfügen",
     "insertIntoDocument": "In Dokument einfügen",
     "insertOptions": "Weitere Optionen",
-    "replyToEmail": "Auf E-Mail antworten",
-    "newEmail": "Neue E-Mail",
     "pinned": {
       "addEmails": "E-Mail(s) hinzufügen",
       "addEmailsTooltip": "Die geöffnete E-Mail – oder alle in Outlook ausgewählten E-Mails – an den Chat anhängen",
@@ -176,7 +174,28 @@
       "appearanceHintOffice": "Automatisch folgt dem Outlook-Design (bzw. der Systemeinstellung bei älteren Outlook-Versionen).",
       "appearanceHintSystem": "Automatisch folgt der Systemeinstellung.",
       "cancel": "Abbrechen",
-      "save": "Speichern"
+      "save": "Speichern",
+      "answerAction": "Standardaktion für Antworten",
+      "answerActionAuto": "Automatisch (allen antworten bzw. in den Entwurf einfügen)",
+      "answerActionHint": "Was die Schaltfläche unter einer Antwort auslöst. Die übrigen Aktionen bleiben einen Klick entfernt im Menü, und eine für die geöffnete E-Mail nicht mögliche Auswahl fällt auf eine mögliche zurück."
+    },
+    "mailActions": {
+      "answer": "Antworten",
+      "answerAll": "Allen antworten",
+      "forward": "Weiterleiten",
+      "new": "Neue E-Mail",
+      "insert": "In Entwurf einfügen",
+      "forwardedMessage": "Weitergeleitete Nachricht",
+      "forwardFrom": "Von",
+      "forwardSent": "Gesendet",
+      "forwardTo": "An",
+      "forwardCc": "Cc",
+      "forwardSubject": "Betreff",
+      "originalAttached": "Outlook-Add-ins können eine Weiterleitung nicht mit ihren Anhängen nachbauen. Die ursprüngliche Nachricht ist deshalb angehängt \u2014 es geht nichts verloren."
+    },
+    "chatReset": {
+      "message": "Neuer Chat für diese E-Mail gestartet.",
+      "restore": "Vorherigen Chat wiederherstellen"
     },
     "menu": {
       "settings": "Einstellungen",
@@ -483,7 +502,18 @@
     "passages": "{{count}} Passage",
     "passages_plural": "{{count}} Passagen",
     "openExternal": "Im Browser öffnen",
-    "showInDocument": "Diese Textstelle im Dokument anzeigen"
+    "showInDocument": "Diese Textstelle im Dokument anzeigen",
+    "openExternalBlocked": "Das Dokument konnte nicht ge\u00f6ffnet werden \u2013 dieses Fenster hat es blockiert. \u00d6ffnen Sie es stattdessen \u00fcber iHub im Browser.",
+    "openExternalUnavailable": "F\u00fcr dieses Dokument gibt es keinen Link zum \u00d6ffnen.",
+    "downloadFailed": "Das Dokument konnte nicht heruntergeladen werden. Bitte erneut versuchen.",
+    "downloadUnavailable": "Dieses Dokument kann hier nicht heruntergeladen werden.",
+    "documentActionFailed": "Diese Aktion konnte nicht ausgef\u00fchrt werden.",
+    "attachToMail": "An E-Mail anh\u00e4ngen",
+    "attachedToMail": "Als {{filename}} an Ihre E-Mail angeh\u00e4ngt.",
+    "attachNeedsDraft": "\u00d6ffnen Sie zuerst eine neue E-Mail oder eine Antwort und h\u00e4ngen Sie das Dokument dort an.",
+    "attachTooLarge": "Dieses Dokument ist zu gro\u00df zum Anh\u00e4ngen. Laden Sie es stattdessen herunter.",
+    "attachUnavailable": "Dieses Dokument kann von hier aus nicht angeh\u00e4ngt werden.",
+    "attachFailed": "Das Dokument konnte nicht an Ihre E-Mail angeh\u00e4ngt werden."
   },
   "chatMessage": {
     "user": "Du",
@@ -515,7 +545,8 @@
       "grounding": "Basierend auf Such-Grounding",
       "email": "Basierend auf E-Mail-Inhalt",
       "file": "Basierend auf hochgeladener Datei",
-      "mixed": "Basierend auf externem Wissen",
+      "emailWithFiles": "Basierend auf E-Mail und Anhängen",
+      "mixed": "Basierend auf mehreren Quellen",
       "workflow": "Erzeugt durch Workflow",
       "workflowTooltip": "Workflow-Ausführung öffnen",
       "tooltip": "Diese Antwort wurde generiert unter Verwendung von:"
@@ -579,6 +610,7 @@
     "networkError": "Netzwerkfehler bei der Verbindung zur {provider} API für Modell {model}: {error}. Überprüfen Sie Ihre Netzwerkverbindung und Proxy-Konfiguration.",
     "unauthorized": "Ungültiger API-Schlüssel",
     "modelAccessDenied": "API-Schlüssel darf dieses Modell nicht verwenden",
+    "modelAccessDeniedForUser": "Sie haben keine Berechtigung, dieses KI-Modell zu verwenden. Bitte wenden Sie sich an Ihren Administrator, um Zugriff anzufordern.",
     "noModelsAvailable": "Für diese Anwendung sind keine KI-Modelle verfügbar. Bitte wenden Sie sich an Ihren Administrator, um Modelle und Berechtigungen zu konfigurieren.",
     "noCompatibleModels": "Keine kompatiblen KI-Modelle für diese Anwendung gefunden. Die Anwendung erfordert spezifische Modellfunktionen, die nicht verfügbar sind. Bitte wenden Sie sich an Ihren Administrator.",
     "noModelIdProvided": "Kein Modell ausgewählt. Bitte wählen Sie ein KI-Modell, um fortzufahren.",
@@ -676,6 +708,104 @@
     }
   },
   "admin": {
+    "chatHistory": {
+      "chats": {
+        "enabled": "Chats speichern",
+        "enabledHelp": "Hauptschalter für das Speichern von Chats. Erfordert zusätzlich die Funktion „Dauerhafte Chats“. Ausschalten stoppt neue Schreibvorgänge, blendet den Verlauf für Benutzer aus und pausiert die Aufbewahrungsbereinigung; gespeicherte Chats bleiben erhalten.",
+        "maxChatsPerUser": "Chats pro Benutzer",
+        "maxChatsPerUserHelp": "Jeder Benutzer behält so viele seiner neuesten Chats; ältere werden von der täglichen Bereinigung gelöscht. 0 hebt das Limit auf.",
+        "maxMessagesPerChat": "Nachrichten pro Chat",
+        "maxMessagesPerChatHelp": "Sobald ein Chat darüber hinauswächst, werden die ältesten Nachrichten entfernt. Gilt bei jedem Schreibvorgang, ohne Neustart. 0 hebt das Limit auf.",
+        "retentionDays": "Aufbewahrung (Tage)",
+        "retentionDaysHelp": "Chats ohne Aktivität seit so vielen Tagen werden von der täglichen Bereinigung gelöscht. 0 bewahrt Chats unbegrenzt auf.",
+        "title": "Dauerhafte Chats"
+      },
+      "description": "Legen Sie fest, wie lange gespeicherte Chats und das Run-Ledger aufbewahrt werden, und prüfen Sie, was gespeichert ist.",
+      "ledger": {
+        "advanced": "Erweitert",
+        "cleanupEnabled": "Alte Läufe täglich löschen",
+        "cleanupEnabledHelp": "Wenn ausgeschaltet, bleiben Ledger-Läufe unabhängig von der Aufbewahrung unten erhalten.",
+        "description": "Ein anhängbares Ereignisprotokoll pro Lauf (Chats, Workflows, Agenten). Dauerhafte Chats werden daraus wiederhergestellt, daher zeichnet es immer auf, wenn dauerhafte Chats aktiv sind.",
+        "enabled": "Run-Ledger aufzeichnen",
+        "enabledHelp": "Erfordert zusätzlich die Funktion „Run-Ledger“.",
+        "flushIntervalMs": "Flush-Intervall (ms)",
+        "flushIntervalMsHelp": "Wie lange Ledger-Schreibvorgänge gepuffert werden, bevor sie auf die Festplatte gelangen. Erfordert einen Neustart.",
+        "identityDefault": "Standard – Benutzer-ID",
+        "identityFull": "Vollständig – Benutzer-ID, Name, E-Mail und Gruppen",
+        "identityMode": "Identität im Ledger",
+        "identityModeHelp": "Gilt für Läufe und Chats, die nach dem Speichern beginnen. Bestehende behalten die Identität, mit der sie aufgezeichnet wurden.",
+        "identityModeWarning": "Ein Wechsel zu oder von „Pseudonymisiert“ ändert die ID, unter der Chats aufgelistet werden: Vor dem Wechsel gespeicherte Chats erscheinen nicht mehr im Verlauf ihrer Besitzer.",
+        "identityPseudonymized": "Pseudonymisiert – ein stabiler Hash statt der Benutzer-ID",
+        "retentionDays": "Aufbewahrung (Tage)",
+        "retentionDaysHelp": "Ältere Läufe werden von der täglichen Bereinigung gelöscht. 0 bewahrt Läufe unbegrenzt auf.",
+        "spillThresholdBytes": "Auslagerungsschwelle (Bytes)",
+        "spillThresholdBytesHelp": "Ereignisdaten, die größer sind, werden als separate Datei statt inline gespeichert.",
+        "title": "Run-Ledger"
+      },
+      "loadError": "Chatverlauf-Übersicht konnte nicht geladen werden",
+      "refresh": "Aktualisieren",
+      "retention": {
+        "chatsRemoved": "{{count}} Chat(s) entfernt",
+        "chatsSkipped": "Chats nicht bereinigt: Dauerhafte Chats sind nicht aktiv",
+        "confirm": "Jetzt löschen",
+        "confirmMessage": "Alles, was über die gespeicherten Aufbewahrungsregeln hinausgeht, wird dauerhaft gelöscht – Chats samt Verläufen und Ledger-Läufe. Nicht gespeicherte Änderungen auf dieser Seite werden nicht verwendet.",
+        "confirmTitle": "Aufbewahrung jetzt ausführen?",
+        "error": "Aufbewahrung konnte nicht ausgeführt werden",
+        "run": "Aufbewahrung jetzt ausführen",
+        "running": "Wird ausgeführt…",
+        "runsRemoved": "{{count}} Ledger-Lauf/Läufe entfernt",
+        "runsSkipped": "Ledger nicht bereinigt: Die Ledger-Bereinigung ist deaktiviert"
+      },
+      "saveError": "Einstellungen konnten nicht gespeichert werden",
+      "saveSuccess": "Einstellungen gespeichert und angewendet.",
+      "saveSuccessRestart": "Einstellungen gespeichert. Das Flush-Intervall des Ledgers wird nach einem Serverneustart wirksam.",
+      "stats": {
+        "active": "Aktiv (24 Std. / 7 Tage)",
+        "activity": "Aktivität",
+        "app": "App",
+        "atCap": "Am Nachrichtenlimit",
+        "byKind": "Nach Art",
+        "byStatus": "Nach Status",
+        "chats": "Chats",
+        "expiring": "Nach Alter abgelaufen",
+        "ledgerTitle": "Run-Ledger",
+        "ledgerUsers": "Benutzer",
+        "messages": "Nachrichten",
+        "nearCap": "Nahe am Nachrichtenlimit",
+        "newest": "Letzte Aktivität",
+        "nextSweep": "Nächste Aufbewahrungsbereinigung",
+        "oldest": "Älteste Aktivität",
+        "overQuota": "Über dem Limit pro Benutzer",
+        "runs": "Aufgezeichnete Läufe",
+        "title": "Gespeicherte Chats",
+        "topApps": "Top-Apps",
+        "topUsers": "Top-Benutzer",
+        "truncated": "Nur die ersten {{count}} Chats wurden gezählt; die folgenden Zahlen sind unvollständig.",
+        "unavailable": "Der Speicheranbieter ist nicht verfügbar, daher können gespeicherte Chats nicht gezählt werden.",
+        "user": "Benutzer",
+        "users": "Benutzer mit Chats",
+        "usersCount": "{{count}} Benutzer"
+      },
+      "status": {
+        "active": "Chats angemeldeter Benutzer werden auf dem Server gespeichert.",
+        "chatsEnabled": "Chat-Speicherung aktiviert",
+        "chatsEnabledHelp": "Die Einstellung „Chats speichern“ weiter unten.",
+        "chatsHeading": "Dauerhafte Chats",
+        "feature": "Funktion „Dauerhafte Chats“",
+        "featureHelp": "Wird unter Admin → Funktionen aktiviert.",
+        "inactive": "Chats werden nicht auf dem Server gespeichert. Alle folgenden Prüfungen müssen erfüllt sein.",
+        "ledgerActive": "Ledger zeichnet auf",
+        "ledgerEnabled": "Ledger aktiviert",
+        "ledgerEnabledHelp": "Die Einstellung „Run-Ledger aufzeichnen“ weiter unten.",
+        "ledgerFeature": "Funktion „Run-Ledger“",
+        "ledgerForced": "Aktiv, weil dauerhafte Chats es benötigen – auch wenn die Funktion oder Einstellung Run-Ledger ausgeschaltet ist.",
+        "ledgerHeading": "Run-Ledger",
+        "openFeatures": "Funktionen öffnen",
+        "storage": "Speicheranbieter bereit",
+        "title": "Status"
+      },
+      "title": "Chatverlauf"
+    },
     "voiceInput": {
       "title": "Spracheingabe (Speech-to-Text)",
       "description": "Konfigurieren Sie die für Apps verfügbaren Speech-to-Text-Backends. Aktivieren Sie hier ein Backend und wählen Sie es dann pro App im App-Editor unter „Spracherkennungsdienst“ aus.",
@@ -733,10 +863,17 @@
       "search": "Anbieter suchen...",
       "noResults": "Keine Anbieter gefunden, die Ihrer Suche entsprechen.",
       "noProviders": "Keine Anbieter konfiguriert.",
+      "adjustSearch": "Versuchen Sie, Ihren Suchbegriff anzupassen.",
+      "createFirst": "Erstellen Sie Ihren ersten Anbieter, um loszulegen.",
       "configured": "Konfiguriert",
       "notConfigured": "Nicht konfiguriert",
+      "noApiKeyRequired": "Kein API-Schlüssel erforderlich",
       "enabled": "Aktiviert",
       "disabled": "Deaktiviert",
+      "test": "Testen",
+      "testAll": "Alle testen",
+      "modelResults": "Modelltest-Ergebnisse",
+      "testingMore": "Weitere Modelle werden getestet...",
       "configure": "Konfigurieren",
       "delete": "Löschen",
       "createNew": "Neuen Anbieter erstellen",
@@ -752,6 +889,8 @@
         "description": "Beschreibung",
         "apiKey": "API-Schlüssel",
         "status": "Status",
+        "models": "Modelle",
+        "connectivity": "Konnektivität",
         "actions": "Aktionen"
       },
       "edit": {
@@ -793,6 +932,38 @@
       "info": {
         "title": "API-Schlüssel-Priorität",
         "description": "Wenn ein Modell einen API-Schlüssel anfordert, prüft das System in dieser Reihenfolge: 1) Modell-spezifischer API-Schlüssel, 2) Anbieter-Level-API-Schlüssel (hier konfiguriert), 3) Umgebungsvariable. Dies ermöglicht es Ihnen, einen Standard-API-Schlüssel für alle Modelle eines Anbieters festzulegen, während einzelne Modelle ihn überschreiben können."
+      },
+      "websearchTest": {
+        "title": "Verbindungstest",
+        "description": "Führt eine echte Suche von diesem Server aus – unter Umgehung des Ergebnis-Caches – und meldet, ob der Anbieter geantwortet hat. Nur so lässt sich feststellen, ob ein Bot-Schutz (etwa die DataDome-Schicht vor Qwant) die IP-Adresse dieses Servers blockiert. Das hängt davon ab, von wo der Server seine Anfragen sendet, nicht von den Einstellungen auf dieser Seite.",
+        "savedConfigHint": "Der Test verwendet die gespeicherte Konfiguration – speichern Sie Ihre Änderungen zuerst, um sie zu testen.",
+        "queryLabel": "Testanfrage (optional)",
+        "queryPlaceholder": "open source software",
+        "run": "Test ausführen",
+        "running": "Test läuft...",
+        "buttonTitle": "Eine echte Suche ausführen und melden, ob dieser Server den Anbieter erreichen kann",
+        "couldNotRun": "Test konnte nicht ausgeführt werden",
+        "blockedBy": "Durch {{vendor}}-Bot-Schutz blockiert",
+        "whatToDo": "Was zu tun ist",
+        "sampleResults": "Beispielergebnisse",
+        "query": "Anfrage",
+        "results": "Ergebnisse",
+        "duration": "Dauer",
+        "endpoint": "Endpunkt",
+        "egress": "Ausgang",
+        "egressDirect": "direkt (kein Proxy)"
+      },
+      "health": {
+        "notTested": "Nicht getestet",
+        "testing": "Test läuft...",
+        "allOk": "Alles OK",
+        "partial": "Teilweise",
+        "failed": "Fehlgeschlagen",
+        "blocked": "Blockiert",
+        "testSuccessful": "Test erfolgreich",
+        "testFailed": "Test fehlgeschlagen",
+        "hideResults": "Ergebnisse ausblenden",
+        "showResults": "Ergebnisse anzeigen"
       }
     },
     "models": {
@@ -812,9 +983,25 @@
       "disabled": "Deaktiviert",
       "default": "Standard",
       "actions": "Aktionen",
-      "test": {
+      "test": "Testen",
+      "testResults": {
         "success": "Test erfolgreich",
-        "failed": "Test fehlgeschlagen"
+        "failed": "Test fehlgeschlagen",
+        "messages": {
+          "testSuccessful": "Modelltest erfolgreich",
+          "testFailed": "Modelltest fehlgeschlagen",
+          "connectionTimeout": "Verbindungs-Timeout",
+          "connectionRefused": "Verbindung abgelehnt",
+          "serviceNotFound": "Dienst nicht gefunden",
+          "networkError": "Netzwerkfehler",
+          "requestTimeout": "Anfrage-Timeout",
+          "apiKeyNotConfigured": "API-Schlüssel nicht konfiguriert",
+          "accessDenied": "Zugriff verweigert",
+          "authenticationFailed": "Authentifizierung fehlgeschlagen",
+          "modelNotFound": "Modell nicht gefunden",
+          "rateLimitExceeded": "Ratenlimit überschritten",
+          "serverError": "Serverfehler"
+        }
       },
       "enable": "Aktivieren",
       "disable": "Deaktivieren",
@@ -1156,7 +1343,7 @@
         "connectionsLabel": "Verbindungen",
         "connectionsCount": "{{count}} Verbindungen",
         "cimdTitle": "Über Metadaten-Dokument identifizierte Clients",
-        "cimdDesc": "Schreibgeschützt. Die Client-ID ist die URL eines vom Client veröffentlichten Dokuments — es gibt hier keinen Eintrag zum Bearbeiten. Die Rechte werden unter MCP-Gateway → Client-Identifikation festgelegt.",
+        "cimdDesc": "Ihre Client-ID ist die URL eines Dokuments, das sie veröffentlichen — Name, Redirect-URIs und Grant-Typen werden hier also nie gespeichert. Was sie dürfen, legen Sie fest: je Client oder global unter MCP-Gateway → Client-Identifikation.",
         "connections": {
           "loadError": "Verbindungen konnten nicht geladen werden",
           "revoke": "Widerrufen",
@@ -1175,13 +1362,116 @@
           "lastUsed": "Zuletzt genutzt",
           "count": "{{count}} Verbindungen",
           "cimdTitle": "Über Metadaten-Dokument identifizierte Clients",
-          "cimdDesc": "Diese Clients haben keinen Eintrag in der Client-Liste — ihre ID ist die URL eines von ihnen veröffentlichten Dokuments. Sie erscheinen hier, weil Personen über sie verbunden sind."
+          "cimdDesc": "Ihre Client-ID ist die URL eines Dokuments, das sie veröffentlichen. Sie stehen hier, weil Benutzer über sie verbunden sind — und weil Sie hier alle Verbindungen auf einmal trennen können."
         },
         "tabs": {
           "connections": "Verbindungen"
         },
         "overview": {
           "connectionsDesc": "Sehen Sie, welche Nutzer welchen Anwendungen Zugriff gewährt haben, und widerrufen Sie einzelne Freigaben."
+        },
+        "cimd": {
+          "allowedGroups": "Erlaubte Gruppen",
+          "allowedGroupsHelp": "Kommagetrennte Gruppen-IDs. Nur Mitglieder dürfen diesen Client verbinden; wer keine der genannten Gruppen mehr hat, verliert den Zugriff bei der nächsten Gateway-Anfrage. Leer bedeutet jede Gruppe.",
+          "approve": "Freigeben",
+          "approved": "{{name}} freigegeben",
+          "block": "Sperren",
+          "blockConfirm": "{{name}} sperren? Die {{count}} Verbindung(en) werden sofort widerrufen und niemand kann sich verbinden, bis Sie die Sperre aufheben. Ein bereits ausgestelltes Access-Token bleibt bis zu seinem Ablauf gültig — höchstens {{minutes}} Minuten.",
+          "blockTitle": "Diesen Client sperren",
+          "blocked": "{{name}} gesperrt",
+          "blockedBadge": "Gesperrt",
+          "blockedWithRevoke": "{{name}} gesperrt und {{count}} Verbindung(en) widerrufen",
+          "documentUrl": "Dokument-URL",
+          "editPolicy": "Richtlinie bearbeiten",
+          "editSubtitle": "Nur die Richtlinie ist bearbeitbar. Name, Redirect-URIs und Grant-Typen dieses Clients stammen aus dem Dokument, das er veröffentlicht.",
+          "firstSeen": "Zuerst gesehen",
+          "host": "Host",
+          "identityDesc": "Wird bei jeder Autorisierung aus dem Metadaten-Dokument unter der folgenden URL gelesen. Hier wird nichts gespeichert, also kann es weder veralten noch hier bearbeitet werden.",
+          "identityTitle": "Identität",
+          "inactive": "Nicht verbindbar",
+          "inherit": "Globale Voreinstellung übernehmen",
+          "inheriting": "Übernommen: {{value}}",
+          "loadError": "Client konnte nicht geladen werden",
+          "neverTrusted": "Dieser Client gilt nie als vertrauenswürdig und erfordert immer eine Zustimmung, unabhängig vom Freigabestatus. Die Freigabe erlaubt das Verbinden; sie überspringt den Zustimmungsdialog nicht.",
+          "noRestriction": "keine Einschränkung",
+          "noneSelected": "Nichts ausgewählt — keine Einschränkung durch diesen Client; der Benutzer behält alles, was seine Gruppen erlauben. Einträge hinzufügen, um ihn einzuschränken.",
+          "pending": "Wartet auf Freigabe",
+          "policyDesc": "Jedes Feld gilt entweder nur für diesen Client oder übernimmt die globale Voreinstellung für Clients mit Metadaten-Dokument. Änderungen greifen bei der nächsten Gateway-Anfrage und beim nächsten Token-Refresh.",
+          "policyTitle": "Richtlinie",
+          "revokeAll": "Alle Verbindungen widerrufen",
+          "revokeAllConfirm": "Alle {{count}} Benutzer von {{name}} trennen? Sie können sich durch erneutes Anmelden und Zustimmen wieder verbinden — sperren Sie den Client zuerst, wenn Sie das nicht möchten.",
+          "revokeAllError": "Verbindungen konnten nicht widerrufen werden",
+          "revokeAllSuccess": "{{count}} Verbindung(en) von {{name}} widerrufen",
+          "revokeAllTitle": "Alle Verbindungen widerrufen",
+          "saveError": "Richtlinie konnte nicht gespeichert werden",
+          "saved": "Richtlinie gespeichert",
+          "scopes": "Vergebbare Scopes",
+          "scopesHelp": "Kommagetrennte OAuth-Scopes, die dieser Client erhalten darf. Eine Einschränkung wirkt beim nächsten Token-Refresh auch auf bestehende Verbindungen. Eine leere Liste bedeutet gar keine Einschränkung — und damit mehr als die übernommene Voreinstellung.",
+          "tokenExpirationHelp": "Zugleich das Zeitfenster, bis eine Sperre greift: ein bereits ausgestelltes Access-Token bleibt bis zu seinem Ablauf gültig.",
+          "unblock": "Entsperren",
+          "unblocked": "{{name}} entsperrt"
+        }
+      },
+      "ldap": {
+        "title": "LDAP-Authentifizierungseinstellungen",
+        "subtitle": "LDAP-/Active-Directory-Authentifizierungsanbieter konfigurieren",
+        "add": "LDAP-Anbieter hinzufügen",
+        "empty": "Keine LDAP-Anbieter konfiguriert",
+        "emptyHint": "Klicken Sie auf „LDAP-Anbieter hinzufügen“, um zu beginnen",
+        "providerHeading": "LDAP-Anbieter {{number}}",
+        "remove": "Diesen LDAP-Anbieter entfernen",
+        "name": "Anbietername",
+        "nameHelp": "Interne Kennung dieses Anbieters",
+        "displayName": "Anzeigename",
+        "displayNameHelp": "Wird auf der Anmeldeseite angezeigt. Standard ist der Anbietername.",
+        "url": "LDAP-URL",
+        "urlHelp": "ldap://host:389 für unverschlüsselte Verbindungen, ldaps://host:636 für TLS",
+        "preset": "Verzeichnistyp",
+        "presetHelp": "Legt die Attribut-Standardwerte fest: {{attributes}}",
+        "presetLabel": {
+          "openldap": "OpenLDAP / generisches LDAP",
+          "activeDirectory": "Active Directory"
+        },
+        "baseDn": "Basis-DN",
+        "baseDnHelp": "Wurzel des Verzeichnisses. Benutzer und Gruppen werden hier gesucht, sofern nicht überschrieben.",
+        "adminDn": "Bind-DN",
+        "adminDnHelp": "Dienstkonto, mit dem Benutzer gesucht und deren Gruppen gelesen werden. Leer lassen, um den Benutzer direkt zu binden.",
+        "adminPassword": "Bind-Passwort",
+        "adminPasswordHelp": "Wählen Sie ein gespeichertes Zugangsdaten-Profil mit dem Bind-Passwort.",
+        "domain": "Domäne",
+        "domainHelp": "Kurzer NetBIOS-Domänenname, genutzt von Integrationen, die Benutzer als DOMAIN\\username identifizieren (iFinder). Für Active Directory leer lassen, um ihn aus msDS-PrincipalName zu ermitteln; für andere Verzeichnisse erforderlich.",
+        "selfSigned": "Selbstsignierte Zertifikate / interne CA zulassen (ldaps://)",
+        "selfSignedHelp": "Aktivieren, wenn der LDAP-Server ein Zertifikat einer privaten oder internen CA verwendet. Für die meisten lokalen ldaps://-Installationen erforderlich.",
+        "advanced": "Erweitert: Suchbasen und Attribute",
+        "advancedHint": "Nur nötig, wenn das Verzeichnis von den Standardwerten des gewählten Typs abweicht.",
+        "derivedHelp": "Leer lassen, um den angezeigten Wert zu verwenden — er ergibt sich aus Verzeichnistyp und Basis-DN.",
+        "userSearchBase": "Benutzer-Suchbasis",
+        "usernameAttribute": "Benutzernamen-Attribut",
+        "userDn": "Benutzer-DN-Vorlage",
+        "userDnHelp": "Wird nur verwendet, wenn kein Bind-DN gesetzt ist. Leer lassen, um den angezeigten Wert zu verwenden.",
+        "groupSearchBase": "Gruppen-Suchbasis",
+        "groupSearchBaseHelp": "Leer lassen, um ab dem Basis-DN zu suchen. Ohne beides werden keine LDAP-Gruppen gelesen.",
+        "groupClass": "Gruppen-Objektklasse",
+        "groupMemberAttribute": "Gruppenmitglied-Attribut",
+        "groupMemberUserAttribute": "Referenziertes Benutzerattribut",
+        "groupMemberUserAttributeHelp": "Das Benutzerattribut, auf das Gruppeneinträge verweisen. Meist dn.",
+        "sessionTimeout": "Sitzungsdauer (Minuten)",
+        "sessionTimeoutHelp": "Gültigkeitsdauer des JWT-Tokens",
+        "attributeMapping": "Attributzuordnung",
+        "attributeMappingHelp": "Welche LDAP-Attribute zu Benutzer-ID, Name und E-Mail werden. Kommagetrennt: Das erste Attribut mit einem Wert gewinnt.",
+        "attribute": {
+          "id": "Benutzer-ID",
+          "name": "Anzeigename",
+          "email": "E-Mail"
+        },
+        "test": {
+          "title": "Anmeldung testen",
+          "help": "Führt diese Konfiguration gegen das Verzeichnis aus und zeigt, was gefunden und zugeordnet würde. Es wird nichts gespeichert und keine Sitzung erzeugt. Mit einem Bind-Konto ist das Passwort optional.",
+          "username": "Benutzername",
+          "password": "Passwort (optional)",
+          "run": "Anmeldung testen",
+          "running": "Test läuft…",
+          "resultTitle": "LDAP-Anmeldetest"
         }
       }
     },
@@ -1218,10 +1508,6 @@
       "saveError": "Konfiguration konnte nicht gespeichert werden",
       "loadError": "Office-Integrationsstatus konnte nicht geladen werden",
       "toggleError": "Office-Integration konnte nicht aktualisiert werden",
-      "offlineTitle": "Offline-Modus (Lokales Office.js)",
-      "offlineDesc": "Aktivieren Sie diese Option, wenn Ihre Umgebung den Zugriff auf appsforoffice.microsoft.com blockiert. Das Add-in lädt die Office JavaScript-Bibliothek dann von diesem Server statt vom Microsoft-CDN.",
-      "offlineLabel": "Office.js von diesem Server bereitstellen (Offline-Modus)",
-      "offlineWarning": "Offline-Modus ist aktiv. Das Add-in lädt Office.js von /office/office-js/office.js auf diesem Server. Hinweis: Microsoft AppSource lehnt Add-ins ab, die nicht die offizielle CDN-URL verwenden – dieser Modus ist ausschließlich für interne Unternehmensbereitstellungen gedacht.",
       "setupTitle": "Bereitstellungsanweisungen",
       "step1": "Kopieren Sie die obige Manifest-URL oder laden Sie die Datei manifest.xml herunter.",
       "step2": "Gehen Sie zum Microsoft 365 Admin Center → Einstellungen → Integrierte Apps.",
@@ -1243,7 +1529,50 @@
       "addFeaturedApp": "Standard-App hinzufügen",
       "removeFeaturedApp": "{{name}} entfernen",
       "unknownApp": "nicht gefunden",
-      "disabledApp": "deaktiviert"
+      "disabledApp": "deaktiviert",
+      "officeJsTitle": "Office.js-Quelle",
+      "officeJsDesc": "Von wo das Add-in die Office-JavaScript-Bibliothek lädt. Ändern Sie dies, wenn Ihr Netzwerk das Microsoft-CDN blockiert. Office.js lädt den Rest der Bibliothek relativ zu dieser URL – eine Einstellung deckt also die gesamte Bibliothek ab.",
+      "officeJsModeCdn": "Microsoft-CDN (empfohlen)",
+      "officeJsModeCdnDesc": "Clients laden Office.js direkt von Microsoft. Immer aktuell und die einzige Option, die Microsoft AppSource akzeptiert.",
+      "officeJsModeProxy": "Über diesen Server proxyen",
+      "officeJsModeProxyDesc": "Dieser Server lädt Office.js vom CDN und speichert es zwischen. Clients kontaktieren Microsoft nie – nur dieser Server benötigt ausgehenden Zugriff, und die zwischengespeicherte Kopie bleibt aktuell.",
+      "officeJsModeCustom": "Eigenes CDN oder Spiegel",
+      "officeJsModeCustomDesc": "Von einer URL laden, die Sie kontrollieren – ein Unternehmens-CDN oder ein Artefakt-Proxy, der das Microsoft-CDN spiegelt. Weder Clients noch dieser Server benötigen Zugriff auf Microsoft.",
+      "officeJsModeBundled": "Mitgelieferte Kopie (offline)",
+      "officeJsModeBundledDesc": "Die mit diesem Release ausgelieferte Kopie bereitstellen. Benötigt kein Netzwerk, erhält aber nie Updates.",
+      "officeJsCdnUrlLabel": "Microsoft-CDN-URL",
+      "officeJsCdnUrlHint": "Muss auf /office.js enden. Wählen Sie unten ein bekanntes CDN oder fügen Sie ein anderes ein.",
+      "officeJsCustomUrlLabel": "Eigene Office.js-URL",
+      "officeJsCustomUrlHint": "Muss auf /office.js enden – Office.js leitet aus dieser URL den Pfad zu allen weiteren benötigten Dateien ab und findet sie ohne diesen Dateinamen nicht. Verweisen Sie hier auf einen Pull-Through-Spiegel des Microsoft-CDN.",
+      "officeJsResolved": "Aktuell an das Add-in ausgeliefert:",
+      "officeJsAppSourceWarning": "Microsoft AppSource verlangt, dass Add-ins Office.js vom offiziellen CDN laden. Jede andere Quelle wird nur für interne Unternehmensbereitstellungen unterstützt – also für Sideloading oder die Verteilung über das Microsoft 365 Admin Center.",
+      "officeJsBundledWarning": "Die mitgelieferte Kopie stammt aus dem npm-Paket @microsoft/office-js, das Microsoft nicht mehr pflegt. Sie wird nie aktualisiert – auch nicht für Sicherheitskorrekturen – und vergrößert den Build um rund 86 MB. Bevorzugen Sie Proxy oder eigenes CDN und nutzen Sie Mitgeliefert nur dort, wo der Server überhaupt keinen ausgehenden Zugriff hat.",
+      "officeJsKnownCdns": "Bekannte Office.js-CDNs",
+      "officeJsKnownCdnsDesc": "Prüft jede URL von diesem Server und aus Ihrem Browser. Das Serverergebnis zählt für den Proxy-Modus; das Browserergebnis kommt einem Outlook-Client näher, der Office.js in den Modi Microsoft-CDN und Eigenes CDN selbst lädt.",
+      "officeJsTest": "Erreichbarkeit testen",
+      "officeJsTesting": "Test läuft…",
+      "officeJsFromServer": "Server",
+      "officeJsFromBrowser": "Browser",
+      "officeJsPresetUse": "Verwenden",
+      "officeJsPresetInUse": "In Verwendung",
+      "officeJsPreset": {
+        "worldwide": "Microsoft-CDN (aktuell)",
+        "worldwideLegacy": "Microsoft-CDN (alter Host)",
+        "china": "China – 21Vianet",
+        "preview": "Vorschau-APIs (nicht für Produktion)"
+      },
+      "officeJsPresetCustom": "Ihre eigene URL",
+      "officeJsFallbackWarning": "Die gespeicherte Office.js-Quelle konnte nicht verwendet werden; das Add-in wechselt auf {{mode}}. Prüfen Sie die URL oben.",
+      "mailActionTitle": "Antwortaktionen",
+      "mailActionDesc": "Was die Schaltfläche unter jeder Assistenzantwort in Outlook auslöst. Alle Aktionen bleiben im Menü der Schaltfläche verfügbar \u2014 hier wird nur festgelegt, welche ohne zusätzlichen Klick ausgeführt wird.",
+      "defaultMailAction": "Standardaktion",
+      "defaultMailActionHelp": "Benutzer können dies pro Gerät in den Einstellungen des Aufgabenbereichs überschreiben. Eine für die geöffnete E-Mail nicht mögliche Auswahl fällt auf eine mögliche zurück \u2014 wer \u201eAllen antworten\u201c wählt, erhält beim Schreiben eines Entwurfs weiterhin \u201eEinfügen\u201c.",
+      "mailActionAuto": "Automatisch \u2014 allen antworten im Lesebereich, einfügen beim Schreiben",
+      "mailActionAnswerAll": "Allen antworten",
+      "mailActionAnswer": "Absender antworten",
+      "mailActionForward": "Weiterleiten",
+      "mailActionNew": "Neue E-Mail",
+      "mailActionInsert": "In den geöffneten Entwurf einfügen"
     },
     "nextcloudEmbed": {
       "title": "Nextcloud-Embed",
@@ -1530,6 +1859,89 @@
         "securityWarning": "Sicherheitswarnung",
         "securityWarningDesc": "Jeder hier hinzugefügte Hostname kann von Tools und MCP-Servern erreicht werden, auch wenn er zu einer internen IP auflöst. Fügen Sie nur Hosts hinzu, die Sie kontrollieren und denen Sie vertrauen. Muster wie *.example.com treffen auf jede Subdomain zu."
       },
+      "proxy": {
+        "title": "Ausgehender Proxy",
+        "description": "Leitet ausgehenden Datenverkehr — LLM-Anbieter, Websuche, Jira, OIDC, MCP-Server — über einen HTTP(S)-Proxy. Das ist weder die Reverse-Proxy-Anmeldung (proxyAuth) noch die Anzahl vertrauenswürdiger Hops (trustProxy).",
+        "enabled": "Proxy für ausgehende Anfragen verwenden",
+        "enabledHint": "Dieser Schalter allein leitet nichts über einen Proxy — dafür muss unten eine URL gesetzt sein. Ausgeschaltet gehen alle Anfragen direkt, auch wenn in der Umgebung ein Proxy gesetzt ist.",
+        "statusActive": "Ausgehende Anfragen laufen über {{url}}.",
+        "statusInactive": "Es wird kein Proxy verwendet — es ist keine Proxy-URL konfiguriert, ausgehende Anfragen gehen direkt. Setzen Sie unten eine URL, um einen Proxy zu verwenden.",
+        "statusOff": "Das Proxying ist ausgeschaltet — ausgehende Anfragen gehen direkt, auch ein in der Umgebung gesetzter Proxy wird ignoriert.",
+        "httpUrl": "Proxy für http://-Ziele",
+        "httpsUrl": "Proxy für https://-Ziele",
+        "urlPlaceholder": "http://proxy.example.com:8080 oder ${HTTPS_PROXY}",
+        "credentialsHint": "Zugangsdaten gehören in die URL (http://benutzer:passwort@proxy.example.com:8080). Passwörter werden verschlüsselt gespeichert und als ***REDACTED*** angezeigt — lassen Sie die Maskierung stehen, um das gespeicherte Passwort zu behalten.",
+        "unresolvedPlaceholder": "{{placeholder}} ist in der Umgebung nicht gesetzt, daher wird für dieses Schema kein Proxy verwendet.",
+        "noProxyTitle": "Proxy für diese Hosts umgehen",
+        "noProxyHelp": "Exakter Hostname (api.example.com), Subdomains (.example.com oder *.example.com). CIDR-Bereiche, host:port-Einträge und ein einzelnes * werden nicht unterstützt.",
+        "noProxyPlaceholder": "localhost, .internal.company",
+        "noProxyEmpty": "Keine Ausnahmen — jede Anfrage nutzt den Proxy.",
+        "urlPatternsTitle": "Nur URLs mit diesen Mustern über den Proxy leiten",
+        "urlPatternsHelp": "Reguläre Ausdrücke, die gegen die vollständige URL geprüft werden. Ist die Liste leer, wird alles über den Proxy geleitet; mit Einträgen nur passende URLs.",
+        "urlPatternPlaceholder": "api\\.openai\\.com",
+        "urlPatternsEmpty": "Keine Muster — jede URL nutzt den Proxy.",
+        "invalidPattern": "Kein gültiger regulärer Ausdruck",
+        "invalidPatternsError": "Korrigieren Sie vor dem Speichern die ungültigen URL-Muster: {{patterns}}",
+        "addEntry": "Hinzufügen",
+        "removeEntry": "Entfernen",
+        "effectiveTitle": "Aktuell wirksam",
+        "effectiveHttp": "HTTP",
+        "effectiveHttps": "HTTPS",
+        "effectiveNoProxy": "Kein Proxy",
+        "effectiveUrlPatterns": "URL-Muster",
+        "effectiveHint": "Was der Server aktuell f\u00fcr ausgehende Anfragen verwendet, einschlie\u00dflich Werten aus der Umgebung. \u00c4nderungen oben werden erst beim Speichern wirksam.",
+        "effectiveUnsaved": "Nicht gespeicherte \u00c4nderungen",
+        "effectivePending": "nach dem Speichern: {{value}}",
+        "unsavedField": "nicht gespeicherte \u00c4nderung",
+        "notSet": "nicht gesetzt",
+        "saveConfig": "Proxy-Einstellungen speichern",
+        "savingConfig": "Wird gespeichert…",
+        "configSaved": "Proxy-Konfiguration erfolgreich gespeichert",
+        "configLoadError": "Fehler beim Laden der Proxy-Konfiguration",
+        "configSaveError": "Fehler beim Speichern der Proxy-Konfiguration",
+        "testTitle": "Verbindung testen",
+        "testHelp": "Testet die Einstellungen oben, gespeichert oder nicht. Weiterleitungen werden nicht verfolgt und kein Antwortinhalt geladen.",
+        "testUrlPlaceholder": "https://api.openai.com/v1/models",
+        "testButton": "Test starten",
+        "testing": "Test läuft…",
+        "testFailed": "Der Verbindungstest konnte nicht ausgeführt werden",
+        "testRouting": "Routing",
+        "testProxy": "Proxy",
+        "testProxyReachable": "TCP-Verbindung hergestellt",
+        "testProxyUnreachable": "Keine TCP-Verbindung: {{error}}",
+        "testResponse": "Antwort",
+        "testSsl": "TLS",
+        "testSslRelaxed": "Die Zertifikatsprüfung ist für diesen Host durch die SSL-Einstellungen deaktiviert.",
+        "testTimings": "Dauer",
+        "testTimingValue": "{{total}} ms gesamt",
+        "testTimingSplit": " ({{proxy}} ms Proxy, {{request}} ms Anfrage)",
+        "testDetail": "Details",
+        "testNextStep": "Nächster Schritt",
+        "source": {
+          "platform": "Aus platform.json",
+          "environment": "Aus der Umgebung",
+          "default": "Nicht konfiguriert"
+        },
+        "decision": {
+          "proxied": "Über den Proxy geleitet",
+          "bypassed": "Umgangen — Host steht in der No-Proxy-Liste",
+          "excluded": "Direkt — URL passt zu keinem der URL-Muster",
+          "disabled": "Direkt — der Proxy ist ausgeschaltet",
+          "direct": "Direkt — für diese URL ist kein Proxy konfiguriert"
+        },
+        "classification": {
+          "ok": "Verbindung erfolgreich",
+          "httpError": "Das Ziel hat einen Fehler zurückgegeben",
+          "proxyUnreachable": "Der Proxy war nicht erreichbar",
+          "proxyAuthRequired": "Der Proxy verlangt eine Authentifizierung",
+          "proxyDnsFailure": "Der Proxy-Host konnte nicht aufgelöst werden",
+          "dnsFailure": "Der Ziel-Host konnte nicht aufgelöst werden",
+          "tlsFailure": "TLS-Prüfung fehlgeschlagen",
+          "timeout": "Zeitüberschreitung bei der Anfrage",
+          "targetUnreachable": "Das Ziel war nicht erreichbar",
+          "requestFailed": "Die Anfrage ist fehlgeschlagen"
+        }
+      },
       "cookieSettings": {
         "title": "Cookie-Sicherheitskonfiguration",
         "description": "Konfigurieren Sie Cookie-Sicherheitseinstellungen für die Authentifizierung",
@@ -1542,6 +1954,17 @@
         "securityWarning": "Sicherheitswarnung",
         "securityWarningDesc": "Das Deaktivieren des Secure-Cookie-Flags ermöglicht die Übertragung von Cookies über unverschlüsselte HTTP-Verbindungen. Dies macht Ihre Authentifizierungs-Tokens anfällig für Abfangen. Verwenden Sie dies nur in sicheren, internen Netzwerkumgebungen ohne SSL.",
         "defaultBehavior": "Standardmäßig werden Cookies in Produktionsumgebungen als sicher markiert, was bedeutet, dass sie nur über HTTPS-Verbindungen gesendet werden. Dies ist die empfohlene Sicherheitseinstellung."
+      }
+    },
+    "security": {
+      "description": "SSL, CORS, Cookie-Einstellungen, ausgehender Proxy und Verschlüsselung",
+      "sections": {
+        "ssl": "SSL / TLS",
+        "cookies": "Cookies",
+        "cors": "CORS",
+        "ssrf": "SSRF-Allowlist",
+        "proxy": "Ausgehender Proxy",
+        "encryption": "Wert-Verschlüsselung"
       }
     },
     "tools": {
@@ -1709,13 +2132,16 @@
       "note5": "Authentifizierungs-Debug-Logging ist separat und erfordert Neustart"
     },
     "nav": {
+      "chatHistory": "Chatverlauf",
       "logging": "Logging",
       "marketplace": "Marktplatz",
       "mcpGateway": "MCP-Gateway",
       "mcpServers": "MCP-Server",
       "telemetry": "Telemetrie",
       "voiceInput": "Spracheingabe",
-      "changelog": "Neuigkeiten"
+      "changelog": "Neuigkeiten",
+      "feedback": "Feedback",
+      "localization": "Lokalisierung"
     },
     "mcp": {
       "common": {
@@ -1826,7 +2252,13 @@
         "cimdHosts": "Vertraute Client-Hosts",
         "cimdHostsDesc": "Kommagetrennte Hostnamen, deren Metadaten-Dokumente akzeptiert werden. *.example.com steht für Subdomains. Eine leere Liste akzeptiert niemanden; \"*\" akzeptiert jeden HTTPS-Client und wird nicht empfohlen.",
         "claudeHintCimd": "Claude: Einstellungen → Connectors → Benutzerdefinierten Connector hinzufügen, dann die obige Endpunkt-URL einfügen. Claude identifiziert sich über sein Metadaten-Dokument auf claude.ai — hier entsteht kein Client-Eintrag — und die Nutzer melden sich bei iHub an und stimmen den angeforderten mcp:*-Scopes zu.",
-        "claudeHintEnterprise": "Claude Team/Enterprise: Alternativ kann eine Organisations-Administration einen vorregistrierten Client für alle festlegen — legen Sie einen öffentlichen OAuth-Client mit der obigen Callback-URL an und lassen Sie dessen Client-ID in den erweiterten Einstellungen des Connectors eintragen."
+        "claudeHintEnterprise": "Claude Team/Enterprise: Alternativ kann eine Organisations-Administration einen vorregistrierten Client für alle festlegen — legen Sie einen öffentlichen OAuth-Client mit der obigen Callback-URL an und lassen Sie dessen Client-ID in den erweiterten Einstellungen des Connectors eintragen.",
+        "cimdBlockedHosts": "Gesperrte Client-Hosts",
+        "cimdBlockedHostsDesc": "Kommagetrennte Hostnamen, die auch dann abgelehnt werden, wenn sie oben als vertrauenswürdig gelten — geprüft, bevor dieser Server irgendeine Anfrage stellt. Damit sperren Sie einen Anbieter, ohne die Liste der vertrauenswürdigen Hosts zu ändern. Einzelne Clients sperren Sie unter OAuth → Clients.",
+        "cimdApprovalMode": "Neue Clients",
+        "cimdApprovalModeDesc": "Ein vertrauenswürdiger Host veröffentlicht mehrere verschiedene Clients — Claude Web, Claude Desktop, Claude Code — unter einem Hostnamen. Mit Freigabepflicht wartet jeder einzelne auf Sie: der Benutzer wird gebeten, sich an die Administration zu wenden, und der Client erscheint hier als wartend. Clients, über die bereits Verbindungen bestehen, sind nicht betroffen.",
+        "cimdApprovalRequired": "Freigabe erforderlich (empfohlen)",
+        "cimdApprovalAuto": "Automatisch verbinden"
       }
     },
     "telemetry": {
@@ -1985,6 +2417,9 @@
         "websearchProvider": "Anbieter",
         "websearchProviderAuto": "Automatisch",
         "websearchProviderBrave": "Brave",
+        "websearchProviderStaan": "Staan",
+        "websearchProviderQwant": "Qwant (ohne API-Schlüssel)",
+        "websearchProviderDesc": "Suchmaschine, die verwendet wird, wenn das Modell keine native Suche hat. Automatisch nutzt Brave, sofern ein Brave-API-Schlüssel konfiguriert ist, dann Staan, sofern dafür ein Schlüssel vorliegt, sonst Qwant. Brave und Staan benötigen einen API-Schlüssel; Qwant benötigt keinen, wird aber auf vielen Cloud-Hosts blockiert.",
         "websearchUseNative": "Native Suche verwenden",
         "websearchUseNativeDesc": "Die integrierte Suche des Modells verwenden, wenn verfügbar (z. B. Google, OpenAI, Anthropic)",
         "websearchMaxResults": "Max. Ergebnisse",
@@ -1995,6 +2430,10 @@
         "websearchEnabledByDefault": "Standardmäßig aktiviert",
         "websearchMaxSearches": "Max. Suchen pro Antwort",
         "websearchMaxSearchesDesc": "Begrenzt, wie viele Suchen das Modell pro Aufruf mit nativer Suche ausführen darf (Anthropic berechnet jede Suche). 1–50, Standard 5.",
+        "websearchResearchGuidance": "In mehreren Schritten recherchieren",
+        "websearchResearchGuidanceDesc": "Weist das Modell an, mehrere Suchen auszuführen, Quellen zu prüfen und die Ergebnisse zusammenzuführen, statt nach einer Suche zu antworten",
+        "websearchResearchGuidanceCustom": "Eigene Recherche-Anweisung",
+        "websearchResearchGuidanceCustomDesc": "Optional. Ersetzt die eingebaute Anweisung, die dem Systemprompt hinzugefügt wird, wenn die Websuche aktiv ist. Leer lassen, um die eingebaute Anweisung zu verwenden.",
         "websearchEnabledByDefaultDesc": "Ob die Websuche für Benutzer standardmäßig aktiviert ist",
         "iassistant": "iAssistant",
         "iassistantDesc": "iAssistant-Integration für diese App konfigurieren",
@@ -2031,7 +2470,11 @@
         "searchApps": "Apps suchen und hinzufügen...",
         "appsAsToolsNoResults": "Keine Apps entsprechen Ihrer Suche",
         "appsAsToolsNoApps": "Keine Apps verfügbar",
-        "removeAppTool": "{{name}} entfernen"
+        "removeAppTool": "{{name}} entfernen",
+        "feedback": "Antwort-Feedback",
+        "feedbackDesc": "Benutzer die Antworten dieser App mit Sternen und einem optionalen Kommentar bewerten lassen",
+        "enableFeedback": "Antwort-Feedback aktivieren",
+        "feedbackNote": "Wenn deaktiviert, ist die Sternebewertung unter den Antworten dieser App ausgeblendet und die Feedback-API lehnt Einsendungen dafür ab. Die plattformweite Feedback-Funktion muss zusätzlich aktiviert sein; alles davon lässt sich auch unter Admin → Feedback verwalten."
       },
       "reorder": "Reihenfolge",
       "reorderHelp": "Ziehen Sie eine Zeile oder nutzen Sie die Pfeile, um die Reihenfolge festzulegen, in der Apps für Benutzer erscheinen – in der App-Übersicht, auf der Startseite und in der Seitenleiste. Es werden immer alle Apps aufgelistet, Suche und Filter gelten hier nicht. Gespeichert wird erst mit „Reihenfolge speichern“.",
@@ -2062,7 +2505,8 @@
       "connectionSection": "iFinder-Verbindung",
       "baseUrl": "iFinder-Basis-URL",
       "baseUrlHelp": "URL Ihrer iFinder-Instanz",
-      "privateKey": "Privater Schlüssel (PEM)",
+      "privateKeyRef": "Privater Schlüssel",
+      "privateKeyRefHelp": "Wählen Sie ein gespeichertes Credential mit dem RSA/EC-Private-Key (PEM-Format) zur Signierung von JWT-Tokens. Alternativ kann die Umgebungsvariable IFINDER_PRIVATE_KEY auf dem Server gesetzt werden.",
       "algorithm": "JWT-Algorithmus",
       "tokenExpiration": "Token-Ablaufzeit (Sekunden)",
       "issuer": "JWT-Aussteller",
@@ -2404,6 +2848,67 @@
       "features": "Neu & verbessert",
       "fixes": "Fehlerbehebungen",
       "backToContents": "Zurück zur Übersicht"
+    },
+    "feedback": {
+      "title": "Feedback",
+      "description": "Festlegen, wie Benutzer KI-Antworten bewerten, und das Eingereichte durchsehen.",
+      "loadError": "Feedback-Einstellungen konnten nicht geladen werden",
+      "saveError": "Feedback-Einstellungen konnten nicht gespeichert werden",
+      "appSaveError": "App konnte nicht aktualisiert werden",
+      "saved": "Feedback-Einstellungen gespeichert",
+      "tabs": {
+        "settings": "Einstellungen",
+        "review": "Feedback"
+      },
+      "sections": {
+        "collection": "Erfassung",
+        "perApp": "App-spezifische Ausnahmen"
+      },
+      "collect": {
+        "title": "Feedback erfassen",
+        "description": "Die Sternebewertung unter KI-Antworten anzeigen und Einsendungen annehmen. Aus blendet sie in jeder Chat-Oberfläche aus und beantwortet POST /api/feedback mit 403. Derselbe Schalter steht unter Admin → Funktionen → Inhalte."
+      },
+      "store": {
+        "title": "Feedback speichern",
+        "description": "Eingereichtes Feedback in contents/data/feedback.jsonl und die Nutzungsstatistik schreiben. Aus lässt die Bewertung sichtbar, es wird aber nichts gespeichert — iAssistant-Feedback erreicht weiterhin iFinder."
+      },
+      "identity": {
+        "title": "Identifizierungsmodus",
+        "description": "Wie die Person erfasst wird, die das Feedback gegeben hat. Gemeinsam mit der Nutzungsverfolgung — eine Änderung hier gilt auch dort und nur für künftige Einträge.",
+        "modes": {
+          "anonymous": "Anonym (gehasht)",
+          "pseudonymous": "Pseudonym (Sitzung)",
+          "identified": "Identifiziert (Benutzer)"
+        }
+      },
+      "perApp": {
+        "description": "Feedback für einzelne Apps abschalten. Eine App kann es nicht einschalten, solange die Erfassung plattformweit aus ist. Wird sofort in der Konfiguration der App gespeichert.",
+        "globalOff": "Die Erfassung ist plattformweit aus, daher ist Feedback in jeder App ausgeblendet — unabhängig von diesen Schaltern.",
+        "appDisabled": "App deaktiviert",
+        "noApps": "Keine Apps konfiguriert."
+      },
+      "review": {
+        "unavailable": "Feedback-Statistiken sind nicht verfügbar."
+      }
+    },
+    "usage": {
+      "reviewFeedback": "Feedback ansehen"
+    },
+    "localization": {
+      "title": "Lokalisierung",
+      "subtitle": "Die Sprache, auf die diese Installation zurückfällt, wenn keine andere Sprache greift.",
+      "defaultLanguage": "Standardsprache",
+      "defaultLanguageDesc": "Wird für Benutzer verwendet, die keine Sprache gewählt haben, und überall dort, wo überhaupt keine Anfragesprache vorliegt.",
+      "whereItApplies": "Wo dies gilt",
+      "appliesUi": "Die Oberflächensprache für Benutzer, die selbst keine gewählt haben.",
+      "appliesSearch": "Die Sprache, in der die Websuche läuft, wenn eine Anfrage keine eigene mitbringt — insbesondere Workflow- und Agentenläufe, hinter denen kein Browser steht.",
+      "appliesFallback": "Der Rückfall für Texte, die in der angeforderten Sprache keine Übersetzung haben.",
+      "save": "Speichern",
+      "saving": "Wird gespeichert...",
+      "saveSuccess": "Standardsprache gespeichert",
+      "saveError": "Standardsprache konnte nicht gespeichert werden",
+      "loadError": "Plattformkonfiguration konnte nicht geladen werden",
+      "noTranslations": "keine Übersetzungen"
     }
   },
   "cloudStorage": {
@@ -2990,7 +3495,8 @@
     "search": {
       "started": "Starte Suche",
       "generating_queries": "Generiere Suchanfragen",
-      "complete": "Suche abgeschlossen"
+      "complete": "Suche abgeschlossen",
+      "finished": "Suche abgeschlossen"
     },
     "doc_lookup": {
       "started": "Starte Dokumentensuche",
@@ -3239,5 +3745,35 @@
     "highlight": "Markieren",
     "allPassages": "Alle",
     "loadFailed": "Dokument konnte nicht geladen werden: {{error}}"
+  },
+  "searchSummary": {
+    "searchedFor": "Gesucht nach",
+    "documentsFound_one": "{{count}} Dokument gefunden",
+    "documentsFound_other": "{{count}} Dokumente gefunden"
+  },
+  "toolActivity": {
+    "searching": "Durchsucht das Web…",
+    "searchingFor": "Sucht nach „{{query}}“",
+    "reading": "Liest {{host}}",
+    "runningTool": "Führt {{name}} aus",
+    "ranTool": "{{name}} ausgeführt",
+    "searchedWeb": "Web durchsucht",
+    "readWeb": "Webseiten gelesen",
+    "searchedFor": "Gesucht nach",
+    "readPage": "Gelesen",
+    "searches_one": "{{count}} Suche",
+    "searches_other": "{{count}} Suchen",
+    "sources_one": "{{count}} Quelle",
+    "sources_other": "{{count}} Quellen",
+    "pagesRead_one": "{{count}} Seite gelesen",
+    "pagesRead_other": "{{count}} Seiten gelesen",
+    "toolCalls_one": "{{count}} Tool-Aufruf",
+    "toolCalls_other": "{{count}} Tool-Aufrufe",
+    "read": "Gelesen",
+    "readTitle": "Die Seite wurde abgerufen und gelesen",
+    "readFailed": "Nicht lesbar",
+    "readFailedTitle": "Die Seite konnte nicht abgerufen werden",
+    "failed": "Fehlgeschlagen",
+    "stopped": "Abgebrochen"
   }
 }

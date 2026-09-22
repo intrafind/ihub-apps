@@ -2,6 +2,7 @@ import { loadGroupsConfiguration } from './authorization.js';
 import { loadUsers, saveUsers } from './userManager.js';
 import configCache from '../configCache.js';
 import logger from './logger.js';
+import { localUsersFile } from './contentsPath.js';
 
 /**
  * Check if a user's authentication method is enabled in platform config
@@ -49,7 +50,7 @@ function isUserAuthMethodEnabled(user, platform) {
  * @param {string} usersFilePath - Path to users.json file
  * @returns {boolean} True if at least one admin exists who can actually login
  */
-export function hasAnyAdmin(usersFilePath = 'contents/config/users.json') {
+export function hasAnyAdmin(usersFilePath = localUsersFile()) {
   try {
     const platform = configCache.getPlatform() || {};
     const groupsConfig = loadGroupsConfiguration();
@@ -156,7 +157,7 @@ export function hasAnyAdmin(usersFilePath = 'contents/config/users.json') {
  * @param {string} usersFilePath - Path to users.json file
  * @returns {Promise<boolean>} True if admin group was assigned
  */
-export async function assignAdminGroup(userId, usersFilePath = 'contents/config/users.json') {
+export async function assignAdminGroup(userId, usersFilePath = localUsersFile()) {
   try {
     const usersConfig = loadUsers(usersFilePath);
     const users = usersConfig.users || {};
@@ -232,11 +233,7 @@ export async function assignAdminGroup(userId, usersFilePath = 'contents/config/
  * @param {string} usersFilePath - Path to users.json file
  * @returns {Promise<Object>} User object (potentially with admin group added)
  */
-export async function ensureFirstUserIsAdmin(
-  user,
-  authMode,
-  usersFilePath = 'contents/config/users.json'
-) {
+export async function ensureFirstUserIsAdmin(user, authMode, usersFilePath = localUsersFile()) {
   try {
     // Skip for anonymous users
     if (!user || user.id === 'anonymous') {
@@ -311,7 +308,7 @@ export async function ensureFirstUserIsAdmin(
  * @param {string} usersFilePath - Path to users.json file
  * @returns {boolean} True if user is the last admin
  */
-export function isLastAdmin(userId, usersFilePath = 'contents/config/users.json') {
+export function isLastAdmin(userId, usersFilePath = localUsersFile()) {
   try {
     const usersConfig = loadUsers(usersFilePath);
     const users = usersConfig.users || {};

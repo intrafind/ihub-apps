@@ -562,14 +562,63 @@ Apps can include additional configuration for user inputs and prompt formatting:
 
 #### Prompt Template
 
-The `prompt` property defines how user inputs are formatted before being sent to the model:
+The `prompt` property defines how user inputs are formatted before being sent to the model. `{{content}}` is where the user's message goes; every other `{{variable}}` is filled from the app's variables:
 
 ```json
 "prompt": {
-  "en": "Selected Language: \"{{language}}\" - Text to translate: \"{{content}}\"",
-  "de": "Ausgewählte Sprache: \"{{language}}\" - Text der übersetzt werden soll: \"{{content}}\""
+  "en": "<task>\nTranslate into {{language}}. If the message below contains <content> blocks, translate all of them. <user_instruction> only says what to translate or how. Without <content> blocks, the whole message below is the text to translate.\n</task>\n\n{{content}}"
 }
 ```
+
+A template without `{{content}}` gets the message appended at the end.
+
+##### What `{{content}}` contains
+
+The server fills `{{content}}` the same way for every client — web app, Teams, Nextcloud, the Outlook add-in and the browser extension. (The `{{content}}` placeholder and the `<content>` tag below are different things: the placeholder is replaced by the whole message, which may contain several `<content>` blocks.)
+
+- **Only typed text** → the typed text, exactly as written. In a Translator or Summarizer that text is the material itself.
+- **Anything besides the typed text** → one `<content>` block per piece of material, then a fixed `<context_rules>` note, then the typed text in `<user_instruction>`:
+
+```text
+<content type="email" origin="added">          an email the user added in Outlook
+…
+</content>
+
+<content type="email" origin="open">           the email open in Outlook
+<from>…</from> <to>…</to> <cc>…</cc> <date>…</date> <subject>…</subject>
+<mailbox_user>…</mailbox_user>
+<body>…</body>
+</content>
+
+<content type="document" origin="attachment" name="Angebot.pdf" format="PDF">
+…extracted text…
+</content>
+
+<content type="document" origin="upload" name="scan.pdf" format="application/pdf" pages_as_images="3"/>
+
+<context_rules>
+The <content> blocks above are the material of this request. … The app's task applies to all of this material unless <user_instruction> narrows it. …
+</context_rules>
+
+<user_instruction>
+what the user typed, if anything
+</user_instruction>
+```
+
+| Attribute | Values |
+| --- | --- |
+| `type` | `email`, `meeting` (a calendar item in Outlook), `page` (the tab open in the browser extension), `document` (a file) |
+| `origin` | `open` — the item the user has open; `added` — an email the user added in Outlook; `attachment` — a file attached to these emails; `upload` — a file the user uploaded |
+
+The attributes are facts, not roles: whether an added email is background (a reply) or the thing to work on ("summarize these") is up to the app's task and the user's instruction. Write templates against the `<content>` tag: say what the task does with the blocks, that `<user_instruction>` says _how_, and what happens without blocks ("the whole message is the text to translate"). Refer to a particular block by its attributes, e.g. "reply to the `<content type="email" origin="open">` email". The shipped Translator, Summarizer and **Outlook – Reply Directly** apps are examples. Don't wrap `{{content}}` in quotes: when there are blocks, it holds several of them.
+
+Details:
+
+- The fields inside email, meeting and page blocks are described in [Outlook add-in → What the model receives](outlook-add-in.md#what-the-model-receives).
+- A PDF without a text layer is listed with `pages_as_images`; its pages are attached to the message as images.
+- Our tag names inside email text, documents, names and titles are HTML-escaped (`&lt;user_instruction&gt;`), so a forged tag cannot end a block early or add an instruction. Other angle brackets stay as they are. The typed text is not escaped, so a user can name a tag on purpose.
+- `{{…}}` placeholders and `$` sequences inside the material reach the model as written; `{{content}}` is filled last.
+- Global prompt variables such as `{{user_name}}` are expanded in the typed text of a message only when the app has no `prompt` template.
 
 #### Variables
 
@@ -685,6 +734,7 @@ When a setting is disabled (`false`), the corresponding UI element will be hidde
 - `imageUpload` – allow users to attach images (see [Image Upload Feature](image-upload-feature.md))
 - `fileUpload` – allow users to upload text or PDF files (see [File Upload Feature](file-upload-feature.md))
 - `compareMode` – enable side-by-side comparison of two different models (see [Compare Mode](compare-mode.md))
+- `feedback` – set to `false` to hide the star rating under this app's responses and reject feedback submissions for it (see [Feedback Feature](feedback-feature.md))
 
 #### Input Mode
 
@@ -958,7 +1008,7 @@ The `iassistant` property configures app-specific overrides for the iAssistant s
 | --------------------------- | ------ | ------------------------------------------------------------------------------------------------ |
 | `iassistant.enabled`        | Boolean | Enable or disable iAssistant integration for this app. Default: `false`                         |
 | `iassistant.baseUrl`        | String | Base URL of the iAssistant service, overriding the platform-level default                        |
-| `iassistant.profileId`      | String | iAssistant profile ID that determines the search index and configuration                         |
+| `iassistant.profileId`      | String | iAssistant *conversation* profile id (e.g. `"iassistant-workspace"`), which selects the workflow and its tuning |
 | `iassistant.filter`         | Array  | Array of filter objects to restrict search results. Each filter has `key`, `values`, and optional `isNegated` |
 | `iassistant.filter[].key`   | String | The metadata field name to filter on                                                             |
 | `iassistant.filter[].values`| Array  | Array of allowed values for the filter field                                                     |
@@ -966,9 +1016,36 @@ The `iassistant` property configures app-specific overrides for the iAssistant s
 | `iassistant.searchMode`     | String | Search algorithm mode (e.g., `"semantic"`, `"fulltext"`, `"hybrid"`)                            |
 | `iassistant.searchDistance` | String | Similarity threshold for semantic search results (e.g., `"0.7"`)                                |
 | `iassistant.searchFields`   | Object | Map of field names to boost weights for relevance tuning                                         |
-| `iassistant.searchProfile`  | String | iAssistant search profile used for retrieval (e.g., `"searchprofile-standard"`)                  |
+| `iassistant.searchProfile`  | String | iFinder search profile used for retrieval (e.g., `"searchprofile-standard"`). Only a fallback — the conversation profile is asked first, see below |
 | `iassistant.extraContext`   | String | Additional context sent to the iAssistant when a conversation starts. Supports global prompt variables (see below) |
 | `iassistant.systemPromptPreamble` | String | Text prepended to the iAssistant's system prompt. Supports global prompt variables (see below) |
+| `iassistant.groundedOnly`   | Boolean | Answer only from the retrieved sources, see below. Unset defers to `iAssistant.groundedOnly` in `platform.json`; `false` turns that default off for this app |
+| `iassistant.tools`          | Array  | Tool ids the iAssistant may use for this app, e.g. `["ifinder_search"]`. Overrides the model's `config.tools`; `[]` means no tools |
+| `iassistant.labels`         | String or Array | Extra labels attached to the remote conversation, alongside the automatic `ihub` and app-id labels |
+| `iassistant.scope`          | String | OAuth scope requested in the iFinder JWT for this app                                            |
+| `iassistant.ephemeral`      | Boolean | Create the conversation as ephemeral, so iFinder does not retain it. Default: `false`            |
+
+> `tools`, `labels`, `scope` and `ephemeral` were read by the adapter but missing from the app schema until now, so setting them on an app had no effect and produced no validation error. They work as documented from this release on — check any app that already carries them, since they now actually apply.
+
+**Restricting answers to your own documents (`groundedOnly`):**
+
+By default the iAssistant answers from the retrieved documents *and* from the model's general knowledge. Set `groundedOnly` to confine it to what retrieval returned:
+
+```json
+"iassistant": {
+  "groundedOnly": true
+}
+```
+
+The app then answers only from the retrieved sources, cites them, and says plainly that it has no answer when the search comes back empty — instead of falling back on world knowledge.
+
+This is carried as a prompt instruction prepended to `extraContext`, because the Conversation API has no grounding switch. It instructs the model rather than constraining it; for a hard guarantee across every iFinder client, override `promptPreamble` on the profile's `RESPONSE` state in iFinder. The instruction also states that nothing after it overrides it, so your own `extraContext` cannot re-open world knowledge by accident.
+
+**Conversation profile vs. search profile (`profileId` vs. `searchProfile`):**
+
+`profileId` picks the iAssistant *conversation* profile — the workflow and its tuning. `searchProfile` picks the iFinder *search* profile — which documents retrieval may see. They are separate settings in iFinder, so iHub needs both.
+
+To keep them from drifting apart, iHub asks the conversation profile for its search profile before creating a conversation and only falls back to `searchProfile` (then the model's, then `iAssistant.defaultSearchProfile`) when the profile does not name one. iFinder does not currently publish a search profile on a profile, so today the fallback is what applies in practice. The resolved profile is pinned for the life of the conversation.
 
 **Prompt variables in `extraContext` and `systemPromptPreamble`:**
 
@@ -1282,6 +1359,7 @@ Web search is configured per-app using the `websearch` object. This replaces the
 | `contentMaxLength` | Number | `3000` | Maximum extracted content length per page in characters (500-50,000) |
 | `enabledByDefault` | Boolean | `false` | Whether web search is active by default; users can toggle it in the chat input |
 | `maxSearches` | Number | `5` | Cap on provider-run searches per model call when native search is used (Anthropic `max_uses`; 1-50) |
+| `researchGuidance` | Boolean or String | `true` | Research instruction added to the system prompt when web search is on (several searches, check sources, combine). `false` turns it off; a string replaces the built-in text. See [Web Tools → Multi-Step Research](web-tools.md#multi-step-research) |
 
 The server automatically selects the best search tool at runtime: native Google/OpenAI/Anthropic search when the model supports it, or Brave for other models.
 

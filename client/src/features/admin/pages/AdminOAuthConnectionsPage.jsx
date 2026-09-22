@@ -85,6 +85,49 @@ function AdminOAuthConnectionsPage() {
     return Number.isNaN(date.getTime()) ? t('common.notAvailable', 'N/A') : date.toLocaleString();
   };
 
+  const encodeClientId = clientId =>
+    // A metadata-document client id is a URL; base64url keeps it out of the
+    // path grammar rather than relying on encodeURIComponent round-tripping.
+    btoa(String.fromCharCode(...new TextEncoder().encode(clientId)))
+      .replace(/\+/g, '-')
+      .replace(/\//g, '_')
+      .replace(/=+$/, '');
+
+  const handleRevokeAll = client => {
+    setConfirmDialog({
+      title: t('admin.auth.oauth.cimd.revokeAllTitle', 'Revoke all connections'),
+      message: t(
+        'admin.auth.oauth.cimd.revokeAllConfirm',
+        'Disconnect all {{count}} user(s) from {{name}}? They can reconnect by signing in and consenting again — block the client first if that is not what you want.',
+        { name: client.name, count: client.connectionCount ?? 0 }
+      ),
+      danger: true,
+      onConfirm: async () => {
+        setConfirmDialog(null);
+        try {
+          const response = await makeAdminApiCall(
+            `/admin/oauth/clients/${encodeClientId(client.clientId)}/connections`,
+            { method: 'DELETE' }
+          );
+          setMessage({
+            type: 'success',
+            text: t(
+              'admin.auth.oauth.cimd.revokeAllSuccess',
+              'Revoked {{count}} connection(s) of {{name}}',
+              { name: client.name, count: response.data?.connectionsRevoked ?? 0 }
+            )
+          });
+          load();
+        } catch (error) {
+          setMessage({
+            type: 'error',
+            text: `${t('admin.auth.oauth.cimd.revokeAllError', 'Failed to revoke the connections')}: ${error.message}`
+          });
+        }
+      }
+    });
+  };
+
   const handleRevoke = connection => {
     setConfirmDialog({
       title: t('admin.auth.oauth.connections.revokeTitle', 'Revoke connection'),
@@ -151,7 +194,7 @@ function AdminOAuthConnectionsPage() {
           <p className="text-xs text-gray-500 dark:text-gray-400 mb-3">
             {t(
               'admin.auth.oauth.connections.cimdDesc',
-              'These clients have no record in the client list — their ID is the URL of a document they publish. They are listed here because people are connected through them.'
+              'Their client ID is the URL of a document they publish. They are listed here because people are connected through them — and because this is where you can disconnect all of them at once.'
             )}
           </p>
           <ul className="divide-y divide-gray-200 dark:divide-gray-700">
@@ -164,12 +207,27 @@ function AdminOAuthConnectionsPage() {
                   <span className="text-xs font-mono text-gray-500 dark:text-gray-400">
                     {client.host}
                   </span>
+                  {client.blocked && (
+                    <span className="ml-2 inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium bg-red-100 dark:bg-red-900/50 text-red-800 dark:text-red-300">
+                      {t('admin.auth.oauth.cimd.blockedBadge', 'Blocked')}
+                    </span>
+                  )}
                 </div>
-                <span className="shrink-0 text-xs text-gray-500 dark:text-gray-400">
-                  {t('admin.auth.oauth.connections.count', '{{count}} connections', {
-                    count: client.connectionCount
-                  })}
-                </span>
+                <div className="shrink-0 flex items-center gap-3">
+                  <span className="text-xs text-gray-500 dark:text-gray-400">
+                    {t('admin.auth.oauth.connections.count', '{{count}} connections', {
+                      count: client.connectionCount
+                    })}
+                  </span>
+                  {client.connectionCount > 0 && (
+                    <button
+                      onClick={() => handleRevokeAll(client)}
+                      className="inline-flex items-center px-3 py-1.5 border border-red-300 dark:border-red-700 text-xs font-medium rounded-md text-red-700 dark:text-red-400 bg-white dark:bg-gray-700 hover:bg-red-50 dark:hover:bg-red-900/30"
+                    >
+                      {t('admin.auth.oauth.cimd.revokeAll', 'Revoke all connections')}
+                    </button>
+                  )}
+                </div>
               </li>
             ))}
           </ul>

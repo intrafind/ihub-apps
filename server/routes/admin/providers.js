@@ -2,13 +2,97 @@ import configStore from '../../services/config/ConfigStore.js';
 import configCache from '../../configCache.js';
 import { adminAuth } from '../../middleware/adminAuth.js';
 import { buildServerPath } from '../../utils/basePath.js';
-import { validateIdForPath } from '../../utils/pathSecurity.js';
+import { validateIdForPath, sanitizeLanguageCode } from '../../utils/pathSecurity.js';
 import tokenStorageService from '../../services/TokenStorageService.js';
 import { getProviderConfigSchema } from '../../adapters/index.js';
 import { sendInternalError, sendNotFound, sendBadRequest } from '../../utils/responseHelpers.js';
+import webSearchService from '../../services/WebSearchService.js';
+import {
+  diagnoseSearchError,
+  diagnoseSearchSuccess,
+  providerLabel
+} from '../../services/search/searchDiagnostics.js';
+import { getProxyConfig, redactUrlSecrets } from '../../utils/httpConfig.js';
+import config from '../../config.js';
+import logger from '../../utils/logger.js';
 
 /** The provider configuration, as a path relative to `contents/`. */
 const PROVIDERS_FILE = 'config/providers.json';
+
+/**
+ * Query used when the admin does not supply one. Deliberately bland and
+ * non-topical: the test is about whether the provider answers this server at
+ * all, so the query should never be the reason a result set is empty.
+ */
+const DEFAULT_TEST_QUERY = 'open source software';
+
+/** Upper bound on an admin-supplied test query. */
+const MAX_TEST_QUERY_LENGTH = 100;
+
+/** Results echoed back to the UI, as proof the response was real. */
+const SAMPLE_RESULT_COUNT = 3;
+
+/** Characters kept per echoed field, so one test cannot return a huge payload. */
+const SAMPLE_FIELD_LENGTH = 300;
+
+/** Ceiling on one test, so a hung provider cannot hold the admin request open. */
+const TEST_TIMEOUT_MS = 20000;
+
+/**
+ * Trim an untrusted string from a search result to a bounded length.
+ * @param {unknown} value
+ * @returns {string}
+ */
+function truncate(value) {
+  return typeof value === 'string' ? value.slice(0, SAMPLE_FIELD_LENGTH) : '';
+}
+
+/**
+ * Reject a search that takes longer than the admin UI is willing to wait.
+ * The underlying request is not cancelled — it is left to finish and be
+ * discarded, which is acceptable for a diagnostic.
+ * @param {Promise} promise
+ * @param {number} ms
+ * @returns {Promise}
+ */
+function withTimeout(promise, ms) {
+  let timer;
+  const timeout = new Promise((_, reject) => {
+    timer = setTimeout(() => {
+      const error = new Error(`Search did not answer within ${ms / 1000}s`);
+      error.code = 'ETIMEDOUT';
+      reject(error);
+    }, ms);
+  });
+  return Promise.race([promise, timeout]).finally(() => clearTimeout(timer));
+}
+
+/**
+ * The outbound-path facts that decide whether a bot-protection block is
+ * explainable — which egress the request takes, and against which endpoint.
+ * Proxy URLs are redacted: they routinely embed credentials.
+ * @param {string} providerId
+ * @returns {{proxy: string|null, proxyEnabled: boolean, endpoint: string|null}}
+ */
+function describeOutboundPath(providerId) {
+  let proxy = null;
+  let proxyEnabled = false;
+  try {
+    const proxyConfig = getProxyConfig();
+    proxyEnabled = Boolean(proxyConfig?.enabled && (proxyConfig.https || proxyConfig.http));
+    proxy = proxyEnabled ? redactUrlSecrets(proxyConfig.https || proxyConfig.http) : null;
+  } catch {
+    // A proxy config that cannot be read is not worth failing the test over.
+  }
+
+  const endpoints = {
+    brave: config.BRAVE_SEARCH_ENDPOINT || 'https://api.search.brave.com/res/v1/web/search',
+    qwant: config.QWANT_SEARCH_ENDPOINT || 'https://api.qwant.com/v3/search/',
+    staan: config.STAAN_SEARCH_ENDPOINT || 'https://api.staan.ai/v2/search/web'
+  };
+
+  return { proxy, proxyEnabled, endpoint: endpoints[providerId] || null };
+}
 
 export default function registerAdminProvidersRoutes(app) {
   /**
@@ -336,4 +420,161 @@ export default function registerAdminProvidersRoutes(app) {
       return sendInternalError(res, error, 'delete provider');
     }
   });
+
+  /**
+   * @swagger
+   * /admin/providers/{providerId}/websearch-test:
+   *   post:
+   *     summary: Run a live connectivity test against a web search provider (Admin)
+   *     description: >
+   *       Issues one real, cache-bypassing search and reports a structured
+   *       diagnosis. Answers the question the provider list cannot: can *this*
+   *       server actually reach the engine? Qwant in particular is fronted by
+   *       DataDome, which blocks data-centre IP ranges, so a correctly
+   *       configured provider can still be unusable on a given host.
+   *     tags:
+   *       - Admin - Providers
+   *     security:
+   *       - bearerAuth: []
+   *       - sessionAuth: []
+   *     parameters:
+   *       - in: path
+   *         name: providerId
+   *         required: true
+   *         schema:
+   *           type: string
+   *         description: A registered web search provider (brave, staan, qwant)
+   *     requestBody:
+   *       required: false
+   *       content:
+   *         application/json:
+   *           schema:
+   *             type: object
+   *             properties:
+   *               query:
+   *                 type: string
+   *                 description: Optional search terms to test with
+   *               language:
+   *                 type: string
+   *                 description: Optional language/locale for the results
+   *     responses:
+   *       200:
+   *         description: >
+   *           The test ran. `success` reports whether the provider returned
+   *           results; a blocked or misconfigured provider is a 200 with
+   *           `success: false` and a diagnosis, not an HTTP error — the
+   *           diagnostic itself succeeded.
+   *       400:
+   *         description: Invalid provider id or test query
+   *       401:
+   *         description: Admin authentication required
+   *       404:
+   *         description: Not a web search provider
+   *       500:
+   *         description: Internal server error
+   */
+  app.post(
+    buildServerPath('/api/admin/providers/:providerId/websearch-test'),
+    adminAuth,
+    async (req, res) => {
+      const { providerId } = req.params;
+
+      // Validate the id before it is used to look anything up.
+      if (!validateIdForPath(providerId, 'provider', res)) {
+        return;
+      }
+
+      // The registry of search providers is the allowlist: only engines this
+      // server actually implements can be driven from here.
+      if (!webSearchService.getProvider(providerId)) {
+        return sendNotFound(res, 'Web search provider');
+      }
+
+      const rawQuery = req.body?.query;
+      if (rawQuery !== undefined && typeof rawQuery !== 'string') {
+        return sendBadRequest(res, 'query must be a string');
+      }
+      const query = (rawQuery || '').trim() || DEFAULT_TEST_QUERY;
+      if (query.length > MAX_TEST_QUERY_LENGTH) {
+        return sendBadRequest(res, `query must be ${MAX_TEST_QUERY_LENGTH} characters or fewer`);
+      }
+
+      const rawLanguage = req.body?.language;
+      if (rawLanguage !== undefined && typeof rawLanguage !== 'string') {
+        return sendBadRequest(res, 'language must be a string');
+      }
+      // Sanitized only when supplied: `sanitizeLanguageCode` substitutes 'en'
+      // for anything it does not recognise, including undefined, and forcing
+      // 'en' here would override the provider's own default for an admin who
+      // asked for no particular language.
+      const language = rawLanguage ? sanitizeLanguageCode(rawLanguage) : undefined;
+
+      const startedAt = Date.now();
+      try {
+        const payload = await withTimeout(
+          // skipCache: a cached hit would report success for an egress IP the
+          // provider has since started blocking, which is the exact failure
+          // this test exists to surface.
+          webSearchService.search(query, { provider: providerId, language, skipCache: true }),
+          TEST_TIMEOUT_MS
+        );
+
+        const results = Array.isArray(payload?.results) ? payload.results : [];
+        const diagnosis = diagnoseSearchSuccess(payload, providerId);
+
+        logger.info('Web search provider test completed', {
+          component: 'AdminProviders',
+          provider: providerId,
+          status: diagnosis.status,
+          resultCount: results.length,
+          durationMs: Date.now() - startedAt
+        });
+
+        return res.json({
+          success: diagnosis.status === 'ok',
+          provider: providerId,
+          providerLabel: providerLabel(providerId),
+          query,
+          durationMs: Date.now() - startedAt,
+          resultCount: results.length,
+          // Echoed as evidence the response was real; bounded so one test
+          // cannot return an unbounded payload.
+          results: results.slice(0, SAMPLE_RESULT_COUNT).map(result => ({
+            title: truncate(result?.title),
+            url: truncate(result?.url),
+            description: truncate(result?.description)
+          })),
+          diagnosis,
+          environment: describeOutboundPath(providerId)
+        });
+      } catch (error) {
+        const diagnosis = diagnoseSearchError(error, providerId);
+
+        logger.warn('Web search provider test failed', {
+          component: 'AdminProviders',
+          provider: providerId,
+          status: diagnosis.status,
+          code: diagnosis.code,
+          blockedBy: diagnosis.blockedBy,
+          durationMs: Date.now() - startedAt,
+          error: error?.message
+        });
+
+        // 200, not an error status: the diagnostic ran and produced its
+        // answer. "Qwant blocks this IP" is a finding, not a failed request,
+        // and the UI renders it as a result rather than an API error.
+        return res.json({
+          success: false,
+          provider: providerId,
+          providerLabel: providerLabel(providerId),
+          query,
+          durationMs: Date.now() - startedAt,
+          resultCount: 0,
+          results: [],
+          diagnosis,
+          environment: describeOutboundPath(providerId)
+        });
+      }
+    }
+  );
 }

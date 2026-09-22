@@ -250,6 +250,136 @@ function cacheKeyForStorageChange(event) {
 }
 
 /**
+ * Decrypt the speech secrets platform.json stores encrypted at rest, in place.
+ *
+ * The realtime WS proxy and the Azure token broker (`/api/voice/azure/token`)
+ * read these from the cache and expect plaintext. Env-var placeholders are
+ * resolved later, when the entry is stored.
+ *
+ * @param {Object} platformData - Parsed platform.json
+ * @returns {Object} The same object
+ */
+function decryptPlatformSecrets(platformData) {
+  if (platformData.speech?.realtime?.apiKey) {
+    platformData.speech.realtime.apiKey = decryptIfEncrypted(platformData.speech.realtime.apiKey);
+  }
+  if (platformData.speech?.azure?.subscriptionKey) {
+    platformData.speech.azure.subscriptionKey = decryptIfEncrypted(
+      platformData.speech.azure.subscriptionKey
+    );
+  }
+  return platformData;
+}
+
+/**
+ * How each cache key is loaded, in one place.
+ *
+ * `initialize()` and `_reloadEntry()` both read this table, so a type's
+ * load/transform logic cannot drift between boot and refresh — which is how
+ * a TTL refresh of platform.json came to cache the speech keys still
+ * encrypted while boot decrypted them.
+ *
+ * - `label` names the entry in log lines ("Cached <label>").
+ * - `load({ verbose })` resolves the entry's data, or `null` when there is
+ *   nothing readable (the `loadJson` contract). Omitted: `loadJson(key)`.
+ * - `count(data)` is the item count logged for non-array data. Omitted:
+ *   `data.length` for arrays, no count otherwise.
+ * - `emptyOnError` marks a best-effort loader: a thrown error is logged as a
+ *   warning and boot caches this value instead of failing the entry.
+ *
+ * Keys not listed here load through the same default as an entry that omits
+ * `load`, under the label "config".
+ */
+const CONFIG_LOADERS = {
+  'config/apps.json': {
+    label: 'apps',
+    load: ({ verbose }) => loadAllApps(true, verbose)
+  },
+  'config/models.json': {
+    label: 'models',
+    load: ({ verbose }) => loadAllModels(true, verbose)
+  },
+  'config/prompts.json': {
+    label: 'prompts',
+    load: ({ verbose }) => loadAllPrompts(true, verbose)
+  },
+  'config/workflows.json': {
+    label: 'workflows',
+    load: ({ verbose }) => loadAllWorkflows(true, verbose)
+  },
+  'config/agents.json': {
+    label: 'agent profiles',
+    load: ({ verbose }) => loadAllAgentProfiles(true, verbose),
+    emptyOnError: []
+  },
+  'config/tools.json': {
+    label: 'tools',
+    load: async ({ verbose }) => expandToolFunctions(await loadAllTools(true, verbose))
+  },
+  'config/groups.json': {
+    label: 'groups with resolved inheritance',
+    load: async () => {
+      const groupsConfig = await loadJson('config/groups.json');
+      return groupsConfig !== null ? resolveGroupInheritance(groupsConfig) : null;
+    },
+    count: data => Object.keys(data.groups || {}).length
+  },
+  'config/platform.json': {
+    label: 'platform config',
+    load: async () => {
+      const platformData = await loadJson('config/platform.json');
+      return platformData !== null ? decryptPlatformSecrets(platformData) : null;
+    }
+  },
+  'config/credentials.json': {
+    label: 'credential store',
+    load: async () => {
+      // A missing store is valid — it means no credentials.
+      const credentialsData = (await loadJson('config/credentials.json')) || { credentials: {} };
+      return decryptCredentials(credentialsData);
+    },
+    count: data => Object.keys(data.credentials || {}).length
+  },
+  'config/sources.json': {
+    label: 'sources'
+  },
+  'config/providers.json': {
+    label: 'providers',
+    count: data => (Array.isArray(data) ? data : data.providers || []).length
+  },
+  'config/registries.json': {
+    label: 'registries',
+    count: data => (data.registries || []).length
+  },
+  'config/installations.json': {
+    label: 'installations',
+    count: data => Object.keys(data.installations || {}).length
+  }
+};
+
+/**
+ * The loader for a cache key, with the defaults filled in.
+ *
+ * @param {string} key - Cache key, e.g. `'config/apps.json'`
+ * @returns {{label: string, load: Function, count?: Function, emptyOnError?: *}}
+ */
+function loaderFor(key) {
+  return { label: 'config', load: () => loadJson(key), ...CONFIG_LOADERS[key] };
+}
+
+/**
+ * The item count to log for freshly loaded data, or undefined for none.
+ *
+ * @param {{count?: Function}} loader - Entry from {@link loaderFor}
+ * @param {*} data - Loaded data
+ * @returns {number|undefined}
+ */
+function loadedItemCount(loader, data) {
+  if (loader.count) return loader.count(data);
+  return Array.isArray(data) ? data.length : undefined;
+}
+
+/**
  * Configuration Cache Service
  *
  * This service provides memory-based caching for frequently accessed configuration files
@@ -259,7 +389,6 @@ function cacheKeyForStorageChange(event) {
  * - Preloads critical configuration files at startup
  * - Provides synchronous access to cached data
  * - Automatic cache refresh with configurable TTL
- * - Fallback to file loading if cache miss occurs
  */
 
 class ConfigCache {
@@ -335,158 +464,31 @@ class ConfigCache {
 
     const loadPromises = this.criticalConfigs.map(async configPath => {
       try {
-        // Special handling for apps.json - load from both sources
-        if (configPath === 'config/apps.json') {
-          // Load all apps (including disabled) for admin access
-          const allApps = await loadAllApps(true);
-          this.setCacheEntry(configPath, allApps);
-          logger.info('Cached apps', {
+        const loader = loaderFor(configPath);
+        let data;
+        try {
+          data = await loader.load({ verbose: true });
+        } catch (err) {
+          if (loader.emptyOnError === undefined) throw err;
+          logger.warn(`Failed to load ${loader.label} (cache will be empty)`, {
             component: 'ConfigCache',
             configPath,
-            count: allApps.length
+            error: err.message
           });
+          this.setCacheEntry(configPath, loader.emptyOnError);
           return;
         }
 
-        // Special handling for models.json - load from both sources
-        if (configPath === 'config/models.json') {
-          // Also load and cache all models (including disabled)
-          const allModels = await loadAllModels(true);
-          this.setCacheEntry('config/models.json', allModels);
-          logger.info('Cached models', {
-            component: 'ConfigCache',
-            configPath: 'config/models.json',
-            count: allModels.length
-          });
-          return;
-        }
-
-        // Special handling for prompts.json - load from both sources
-        if (configPath === 'config/prompts.json') {
-          // Load all prompts (including disabled) for admin access
-          const allPrompts = await loadAllPrompts(true);
-          this.setCacheEntry(configPath, allPrompts);
-          logger.info('Cached prompts', {
-            component: 'ConfigCache',
-            configPath,
-            count: allPrompts.length
-          });
-          return;
-        }
-
-        // Special handling for workflows.json - load from both sources
-        if (configPath === 'config/workflows.json') {
-          // Load all workflows (including disabled) for admin access
-          const allWorkflows = await loadAllWorkflows(true);
-          this.setCacheEntry(configPath, allWorkflows);
-          logger.info('Cached workflows', {
-            component: 'ConfigCache',
-            configPath,
-            count: allWorkflows.length
-          });
-          return;
-        }
-
-        // Special handling for tools.json - load from both sources
-        if (configPath === 'config/tools.json') {
-          const allTools = await loadAllTools(true);
-          const expanded = expandToolFunctions(allTools);
-          this.setCacheEntry(configPath, expanded);
-          logger.info('Cached tools', {
-            component: 'ConfigCache',
-            configPath,
-            count: expanded.length
-          });
-          return;
-        }
-
-        // Special handling for agents.json — load agent profiles
-        if (configPath === 'config/agents.json') {
-          try {
-            const allProfiles = await loadAllAgentProfiles(true);
-            this.setCacheEntry(configPath, allProfiles);
-            logger.info('Cached agent profiles', {
-              component: 'ConfigCache',
-              configPath,
-              count: allProfiles.length
-            });
-          } catch (err) {
-            logger.warn('Failed to load agent profiles (cache will be empty)', {
-              component: 'ConfigCache',
-              error: err.message
-            });
-            this.setCacheEntry(configPath, []);
-          }
-          return;
-        }
-
-        // Special handling for groups.json - load and resolve inheritance
-        if (configPath === 'config/groups.json') {
-          const groupsConfig = await loadJson(configPath);
-          if (groupsConfig !== null) {
-            const resolvedConfig = resolveGroupInheritance(groupsConfig);
-            this.setCacheEntry(configPath, resolvedConfig);
-            logger.info('Cached groups with resolved inheritance', {
-              component: 'ConfigCache',
-              configPath,
-              count: Object.keys(resolvedConfig.groups || {}).length
-            });
-          } else {
-            logger.warn('Failed to load config', { component: 'ConfigCache', configPath });
-          }
-          return;
-        }
-
-        // Special handling for platform.json
-        if (configPath === 'config/platform.json') {
-          const platformData = await loadJson(configPath);
-          if (platformData !== null) {
-            // Decrypt the realtime speech API key so the WS proxy receives
-            // plaintext. Env-var placeholders are resolved later in setCacheEntry.
-            if (platformData.speech?.realtime?.apiKey) {
-              platformData.speech.realtime.apiKey = decryptIfEncrypted(
-                platformData.speech.realtime.apiKey
-              );
-            }
-            // Decrypt the Azure Speech subscription key so the token broker
-            // (/api/voice/azure/token) can exchange it for a short-lived token.
-            if (platformData.speech?.azure?.subscriptionKey) {
-              platformData.speech.azure.subscriptionKey = decryptIfEncrypted(
-                platformData.speech.azure.subscriptionKey
-              );
-            }
-            this.setCacheEntry(configPath, platformData);
-            logger.info('Cached platform config', { component: 'ConfigCache', configPath });
-          } else {
-            logger.warn('Failed to load platform config', { component: 'ConfigCache', configPath });
-          }
-          return;
-        }
-
-        // Special handling for credentials.json - decrypt secrets after loading
-        if (configPath === 'config/credentials.json') {
-          const credentialsData = await loadJson(configPath);
-          if (credentialsData !== null) {
-            decryptCredentials(credentialsData);
-            this.setCacheEntry(configPath, credentialsData);
-            logger.info('Cached credential store', {
-              component: 'ConfigCache',
-              configPath,
-              count: Object.keys(credentialsData.credentials || {}).length
-            });
-          } else {
-            // Missing/empty store is valid — treat as no credentials.
-            this.setCacheEntry(configPath, { credentials: {} });
-          }
-          return;
-        }
-
-        const data = await loadJson(configPath);
         if (data !== null) {
           this.setCacheEntry(configPath, data);
-          logger.info('Cached config', { component: 'ConfigCache', configPath });
+          const count = loadedItemCount(loader, data);
+          logger.info(`Cached ${loader.label}`, {
+            component: 'ConfigCache',
+            configPath,
+            ...(count !== undefined && { count })
+          });
         } else {
-          logger.warn('Failed to load config', { component: 'ConfigCache', configPath });
+          logger.warn(`Failed to load ${loader.label}`, { component: 'ConfigCache', configPath });
         }
       } catch (error) {
         logger.error('Error caching config', { component: 'ConfigCache', configPath, error });
@@ -575,6 +577,23 @@ class ConfigCache {
    * Set a cache entry with automatic refresh timer
    */
   setCacheEntry(key, data) {
+    this._storeEntry(key, this._resolveEntry(key, data));
+  }
+
+  /**
+   * Resolve raw loaded data into what the cache holds for `key`, and its ETag.
+   *
+   * The ETag is computed over the resolved data, so a reload has to compare
+   * against this — not against the raw data — to tell whether anything
+   * changed: any env-var placeholder or `IHUB_*` override otherwise makes
+   * every re-read look like an edit.
+   *
+   * @param {string} key - Cache key
+   * @param {*} data - Data as loaded
+   * @returns {{data: *, etag: string}}
+   * @private
+   */
+  _resolveEntry(key, data) {
     // Resolve environment variables in the data, opting specific fields out
     // when they contain user-data templates instead of env var references.
     const resolvedData = resolveEnvVarsInObject(data, {
@@ -584,12 +603,19 @@ class ConfigCache {
     // Apply IHUB_* environment variable overrides
     applyIhubEnvOverrides(key, resolvedData);
 
-    // Generate ETag for the data
-    const etag = this.generateETag(resolvedData);
+    return { data: resolvedData, etag: this.generateETag(resolvedData) };
+  }
 
-    // Set cache entry
+  /**
+   * Store a resolved entry and schedule its next re-read.
+   *
+   * @param {string} key - Cache key
+   * @param {{data: *, etag: string}} entry - From {@link ConfigCache#_resolveEntry}
+   * @private
+   */
+  _storeEntry(key, { data, etag }) {
     this.cache.set(key, {
-      data: resolvedData,
+      data,
       etag,
       timestamp: Date.now()
     });
@@ -606,9 +632,9 @@ class ConfigCache {
    *
    * Separate from {@link ConfigCache#setCacheEntry} because the chain has to
    * continue when a re-read finds *nothing changed*, which is the common case.
-   * Several `_reloadEntry` branches — groups, platform, credentials, tools —
-   * only call `setCacheEntry` when the etag differs, and while the timer lived
-   * inside it, the first unchanged tick after boot armed nothing and the entry
+   * `_reloadEntry` only stores an entry when its etag differs, and while the
+   * timer lived inside the store, the first unchanged tick after boot armed
+   * nothing and the entry
    * simply stopped refreshing for the life of the process. For `groups.json`
    * that meant an edit made outside the admin UI — dropping `adminAccess` from
    * a group, say — never took effect: `get()` is a plain map read with no
@@ -669,167 +695,6 @@ class ConfigCache {
     const reloadStart = Date.now();
     let reloadError = null;
     try {
-      // Special handling for apps.json - load from both sources
-      if (key === 'config/apps.json') {
-        const apps = await loadAllApps(true, false);
-        const newEtag = this.generateETag(apps);
-        const existing = this.cache.get(key);
-        if (!existing || existing.etag !== newEtag) {
-          this.setCacheEntry(key, apps);
-          logger.info('Cached apps on refresh', {
-            component: 'ConfigCache',
-            configPath: 'config/apps.json',
-            count: apps.length
-          });
-        }
-        return;
-      }
-
-      // Special handling for models.json - load from both sources
-      if (key === 'config/models.json') {
-        const models = await loadAllModels(true, false);
-        const newEtag = this.generateETag(models);
-        const existing = this.cache.get(key);
-        if (!existing || existing.etag !== newEtag) {
-          this.setCacheEntry(key, models);
-          logger.info('Cached models on refresh', {
-            component: 'ConfigCache',
-            configPath: 'config/models.json',
-            count: models.length
-          });
-        }
-        return;
-      }
-
-      // Special handling for prompts.json - load from both sources
-      if (key === 'config/prompts.json') {
-        const prompts = await loadAllPrompts(true, false);
-        const newEtag = this.generateETag(prompts);
-        const existing = this.cache.get(key);
-        if (!existing || existing.etag !== newEtag) {
-          this.setCacheEntry(key, prompts);
-          logger.info('Cached prompts on refresh', {
-            component: 'ConfigCache',
-            configPath: 'config/prompts.json',
-            count: prompts.length
-          });
-        }
-        return;
-      }
-
-      // Special handling for workflows.json - load from both sources
-      if (key === 'config/workflows.json') {
-        const workflows = await loadAllWorkflows(true, false);
-        const newEtag = this.generateETag(workflows);
-        const existing = this.cache.get(key);
-        if (!existing || existing.etag !== newEtag) {
-          this.setCacheEntry(key, workflows);
-          logger.info('Cached workflows on refresh', {
-            component: 'ConfigCache',
-            configPath: 'config/workflows.json',
-            count: workflows.length
-          });
-        }
-        return;
-      }
-
-      // Special handling for agents.json - load agent profiles from per-file dir
-      if (key === 'config/agents.json') {
-        try {
-          const profiles = await loadAllAgentProfiles(true, false);
-          const newEtag = this.generateETag(profiles);
-          const existing = this.cache.get(key);
-          if (!existing || existing.etag !== newEtag) {
-            this.setCacheEntry(key, profiles);
-            logger.info('Cached agent profiles on refresh', {
-              component: 'ConfigCache',
-              configPath: 'config/agents.json',
-              count: profiles.length
-            });
-          }
-        } catch (err) {
-          logger.warn('Agent profiles refresh failed', {
-            component: 'ConfigCache',
-            error: err.message
-          });
-        }
-        return;
-      }
-
-      // Special handling for tools.json - load from both sources
-      if (key === 'config/tools.json') {
-        const allTools = await loadAllTools(true, false);
-        const expanded = expandToolFunctions(allTools);
-        const newEtag = this.generateETag(expanded);
-        const existing = this.cache.get(key);
-        if (!existing || existing.etag !== newEtag) {
-          this.setCacheEntry(key, expanded);
-          logger.info('Cached tools on refresh', {
-            component: 'ConfigCache',
-            configPath: key,
-            count: expanded.length
-          });
-        } else {
-          this._armRefreshTimer(key);
-        }
-        return;
-      }
-
-      // Special handling for groups.json - load and resolve inheritance
-      if (key === 'config/groups.json') {
-        const groupsConfig = await loadJson(key);
-        if (groupsConfig !== null) {
-          const resolvedConfig = resolveGroupInheritance(groupsConfig);
-          const newEtag = this.generateETag(resolvedConfig);
-          const existing = this.cache.get(key);
-          if (!existing || existing.etag !== newEtag) {
-            this.setCacheEntry(key, resolvedConfig);
-            logger.info('Cached groups on refresh', {
-              component: 'ConfigCache',
-              configPath: 'config/groups.json',
-              count: Object.keys(resolvedConfig.groups || {}).length
-            });
-          } else {
-            this._armRefreshTimer(key);
-          }
-        } else {
-          this._armRefreshTimer(key);
-        }
-        return;
-      }
-
-      // Special handling for platform.json
-      if (key === 'config/platform.json') {
-        const platformData = await loadJson(key);
-        if (platformData !== null) {
-          const newEtag = this.generateETag(platformData);
-          const existing = this.cache.get(key);
-          if (!existing || existing.etag !== newEtag) {
-            this.setCacheEntry(key, platformData);
-          } else {
-            this._armRefreshTimer(key);
-          }
-        } else {
-          this._armRefreshTimer(key);
-        }
-        return;
-      }
-
-      // Special handling for credentials.json - decrypt secrets after loading
-      if (key === 'config/credentials.json') {
-        const credentialsData = await loadJson(key);
-        const resolved = credentialsData !== null ? credentialsData : { credentials: {} };
-        decryptCredentials(resolved);
-        const newEtag = this.generateETag(resolved);
-        const existing = this.cache.get(key);
-        if (!existing || existing.etag !== newEtag) {
-          this.setCacheEntry(key, resolved);
-        } else {
-          this._armRefreshTimer(key);
-        }
-        return;
-      }
-
       if (key.startsWith('locales/')) {
         const lang = key.split('/')[1].replace('.json', '');
         await this.loadAndCacheLocale(lang);
@@ -843,14 +708,43 @@ class ConfigCache {
         return;
       }
 
-      const data = await loadJson(key);
-      if (data !== null) {
-        this.setCacheEntry(key, data);
-      } else {
+      const loader = loaderFor(key);
+      let data;
+      try {
+        data = await loader.load({ verbose: false });
+      } catch (err) {
+        if (loader.emptyOnError === undefined) throw err;
+        logger.warn(`Failed to refresh ${loader.label}`, {
+          component: 'ConfigCache',
+          key,
+          error: err.message
+        });
+        this._armRefreshTimer(key);
+        return;
+      }
+
+      if (data === null) {
         // Unreadable right now — a half-written save, a transient EACCES. The
         // cached copy stays, and so must the chain that will try again.
         this._armRefreshTimer(key);
+        return;
       }
+
+      const entry = this._resolveEntry(key, data);
+      if (this.cache.get(key)?.etag === entry.etag) {
+        // Unchanged: nothing to store, and nothing downstream to invalidate —
+        // but the chain continues, see _armRefreshTimer().
+        this._armRefreshTimer(key);
+        return;
+      }
+
+      this._storeEntry(key, entry);
+      const count = loadedItemCount(loader, entry.data);
+      logger.info(`Cached ${loader.label} on refresh`, {
+        component: 'ConfigCache',
+        configPath: key,
+        ...(count !== undefined && { count })
+      });
     } catch (error) {
       reloadError = error;
       logger.error('Error refreshing cache entry', {
@@ -858,7 +752,8 @@ class ConfigCache {
         key,
         error
       });
-      // Keep the old data in cache on refresh failure
+      // Keep the old data in cache on refresh failure, and keep retrying it.
+      if (this.cache.has(key)) this._armRefreshTimer(key);
     } finally {
       // Telemetry: emit reload counter + duration. Lazy-imported because
       // configCache.js is itself imported very early in the boot sequence.
@@ -1037,29 +932,6 @@ class ConfigCache {
   }
 
   /**
-   * Get configuration data with fallback to file loading
-   * This maintains backward compatibility while providing performance benefits
-   */
-  async getWithFallback(configPath) {
-    // Try cache first
-    const cached = this.get(configPath);
-    if (cached !== null) {
-      return cached;
-    }
-
-    // Fallback to file loading
-    logger.warn('Cache miss, loading from file', { component: 'ConfigCache', configPath });
-    const data = await loadJson(configPath);
-
-    // Cache the result for future use
-    if (data !== null) {
-      this.setCacheEntry(configPath, data);
-    }
-
-    return data;
-  }
-
-  /**
    * Get models configuration (most frequently accessed)
    */
   getModels(includeDisabled = false) {
@@ -1108,7 +980,7 @@ class ConfigCache {
       logger.warn('Apps cache not initialized - returning empty array', {
         component: 'ConfigCache'
       });
-      return [];
+      return { data: [], etag: null };
     }
 
     if (includeDisabled) {
@@ -1132,7 +1004,7 @@ class ConfigCache {
       logger.warn('Tools cache not initialized - returning empty array', {
         component: 'ConfigCache'
       });
-      return [];
+      return { data: [], etag: null };
     }
 
     if (includeDisabled) {
@@ -1164,7 +1036,7 @@ class ConfigCache {
       logger.warn('Prompts cache not initialized - returning empty array', {
         component: 'ConfigCache'
       });
-      return [];
+      return { data: [], etag: null };
     }
 
     if (includeDisabled) {
@@ -1458,15 +1330,9 @@ class ConfigCache {
     logger.info('Refreshing models cache', { component: 'ConfigCache' });
 
     try {
-      // Refresh enabled models cache
-      const models = await loadAllModels(true);
-      this.setCacheEntry('config/models.json', models);
-      announceConfigChange('config/models.json');
-
-      logger.info('Models cache refreshed', {
-        component: 'ConfigCache',
-        count: models.length
-      });
+      await this.refreshCacheEntry('config/models.json');
+      const { data: models } = this.getModels(true);
+      logger.info('Models cache refreshed', { component: 'ConfigCache', count: models.length });
     } catch (error) {
       logger.error('Error refreshing models cache', { component: 'ConfigCache', error });
     }
@@ -1479,9 +1345,8 @@ class ConfigCache {
   async refreshAgentProfilesCache() {
     logger.info('Refreshing agent profiles cache', { component: 'ConfigCache' });
     try {
-      const profiles = await loadAllAgentProfiles(true);
-      this.setCacheEntry('config/agents.json', profiles);
-      announceConfigChange('config/agents.json');
+      await this.refreshCacheEntry('config/agents.json');
+      const { data: profiles } = this.getAgentProfiles(true);
       logger.info('Agent profiles cache refreshed', {
         component: 'ConfigCache',
         count: profiles.length
@@ -1502,15 +1367,9 @@ class ConfigCache {
     logger.info('Refreshing apps cache', { component: 'ConfigCache' });
 
     try {
-      // Refresh enabled apps cache
-      const apps = await loadAllApps(true);
-      this.setCacheEntry('config/apps.json', apps);
-      announceConfigChange('config/apps.json');
-
-      logger.info('Apps cache refreshed', {
-        component: 'ConfigCache',
-        count: apps.length
-      });
+      await this.refreshCacheEntry('config/apps.json');
+      const { data: apps } = this.getApps(true);
+      logger.info('Apps cache refreshed', { component: 'ConfigCache', count: apps.length });
     } catch (error) {
       logger.error('Error refreshing apps cache', { component: 'ConfigCache', error });
     }
@@ -1524,11 +1383,8 @@ class ConfigCache {
     logger.info('Refreshing prompts cache', { component: 'ConfigCache' });
 
     try {
-      // Refresh enabled prompts cache
-      const prompts = await loadAllPrompts(true);
-      this.setCacheEntry('config/prompts.json', prompts);
-      announceConfigChange('config/prompts.json');
-
+      await this.refreshCacheEntry('config/prompts.json');
+      const { data: prompts } = this.getPrompts(true);
       logger.info('Prompts cache refreshed', { component: 'ConfigCache', count: prompts.length });
     } catch (error) {
       logger.error('Error refreshing prompts cache', { component: 'ConfigCache', error });
@@ -1543,12 +1399,9 @@ class ConfigCache {
     logger.info('Refreshing tools cache', { component: 'ConfigCache' });
 
     try {
-      const tools = await loadAllTools(true);
-      const expanded = expandToolFunctions(tools);
-      this.setCacheEntry('config/tools.json', expanded);
-      announceConfigChange('config/tools.json');
-
-      logger.info('Tools cache refreshed', { component: 'ConfigCache', count: expanded.length });
+      await this.refreshCacheEntry('config/tools.json');
+      const { data: tools } = this.getTools(true);
+      logger.info('Tools cache refreshed', { component: 'ConfigCache', count: tools.length });
     } catch (error) {
       logger.error('Error refreshing tools cache', { component: 'ConfigCache', error });
     }
@@ -1562,11 +1415,8 @@ class ConfigCache {
     logger.info('Refreshing workflows cache', { component: 'ConfigCache' });
 
     try {
-      // Refresh workflows cache
-      const workflows = await loadAllWorkflows(true);
-      this.setCacheEntry('config/workflows.json', workflows);
-      announceConfigChange('config/workflows.json');
-
+      await this.refreshCacheEntry('config/workflows.json');
+      const { data: workflows } = this.getWorkflows(true);
       logger.info('Workflows cache refreshed', {
         component: 'ConfigCache',
         count: workflows.length

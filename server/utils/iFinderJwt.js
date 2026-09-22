@@ -92,7 +92,7 @@ function getIFinderPrivateKey(iFinderConfig) {
 
   if (!privateKey) {
     throw new Error(
-      'iFinder private key not configured. Set IFINDER_PRIVATE_KEY environment variable or configure the iFinder private key credential in platform.json (iFinder.privateKeyRef)'
+      'iFinder private key not configured. Select or create a credential under Admin > Integrations > iFinder, or set the IFINDER_PRIVATE_KEY environment variable in PEM format.'
     );
   }
 
@@ -112,27 +112,75 @@ function getIFinderPrivateKey(iFinderConfig) {
 }
 
 /**
- * Resolve the JWT subject claim based on the configured jwtSubjectField
+ * Is this user field usable as (part of) a JWT subject?
+ * @param {*} value - Field value from the authenticated user
+ * @returns {boolean} True when it is a non-blank string
+ */
+function hasSubjectValue(value) {
+  return typeof value === 'string' && value.trim() !== '';
+}
+
+/**
+ * Build the error thrown when the configured subject field has no value.
+ * @param {string} field - Configured `jwtSubjectField`
+ * @param {string[]} missing - User fields that are missing or blank
+ * @param {Object} user - Authenticated user object
+ * @returns {Error} Error naming the setting, the gap and the user
+ */
+function subjectFieldMissingError(field, missing, user) {
+  const who = user.id || user.username || user.email || '<unknown>';
+  return new Error(
+    `iFinder JWT subject could not be resolved: "JWT Subject Field" is set to ` +
+      `"${field}" but the authenticated user (${who}) has no ${missing.join(' and ')}. ` +
+      `Set a subject field the user actually carries in Admin > Integrations > iFinder, ` +
+      `or supply the missing value${missing.length > 1 ? 's' : ''} from the auth provider ` +
+      `(for LDAP, the NetBIOS domain is the "Domain" field on the provider).`
+  );
+}
+
+/**
+ * Resolve the JWT subject claim based on the configured jwtSubjectField.
+ *
+ * Resolution is strict: the configured field is the only one consulted. It used
+ * to fall through to whatever else the user had — `email` to username to id,
+ * and `domain\\username` all the way down to a bare account name when no domain
+ * was set. That never failed, it just signed a token identifying a *different*
+ * principal than the setting named, and iFinder built its user mapping against
+ * that. A refused token an admin can read is worth far more than a valid token
+ * for the wrong subject, so a gap now raises instead.
+ *
  * @param {Object} user - Authenticated user object
  * @param {Object} config - iFinder configuration
  * @returns {string} Resolved subject value
+ * @throws {Error} When the configured field has no value on this user
  */
-function resolveJwtSubject(user, config) {
+export function resolveJwtSubject(user, config) {
   const field = config.jwtSubjectField || 'email';
 
   let resolved;
   switch (field) {
     case 'email':
-      resolved = user.email || user.username || user.id;
+      if (!hasSubjectValue(user.email)) {
+        throw subjectFieldMissingError(field, ['email address'], user);
+      }
+      resolved = user.email;
       break;
     case 'username':
-      resolved = user.username || user.email || user.id;
+      if (!hasSubjectValue(user.username)) {
+        throw subjectFieldMissingError(field, ['username'], user);
+      }
+      resolved = user.username;
       break;
-    case 'domain\\username':
-      resolved = user.domain
-        ? `${user.domain}\\${user.username || user.id}`
-        : user.username || user.id;
+    case 'domain\\username': {
+      const missing = [];
+      if (!hasSubjectValue(user.domain)) missing.push('NetBIOS domain');
+      if (!hasSubjectValue(user.username)) missing.push('username');
+      if (missing.length > 0) {
+        throw subjectFieldMissingError(field, missing, user);
+      }
+      resolved = `${user.domain}\\${user.username}`;
       break;
+    }
     default: {
       // Custom template. Placeholders ALWAYS resolve from the authenticated
       // user object (`user[field]`), never from environment variables.
@@ -157,17 +205,20 @@ function resolveJwtSubject(user, config) {
           { component: 'iFinderJwt', jwtSubjectField: field }
         );
       }
+      // A placeholder with no value leaves a hole in the subject (`ROCHUS\\`),
+      // which is just as wrong as the fallbacks above and equally invisible.
+      const unresolved = [];
       resolved = field.replace(/\$\{(?:user\.)?(\w+)\}/g, (_, key) => {
         const value = user[key];
-        if (value === undefined || value === null || value === '') {
-          logger.warn(
-            `iFinder JWT subject template placeholder for user.${key} resolved to empty for user ${user.id || user.username || '<unknown>'}`,
-            { component: 'iFinderJwt', jwtSubjectField: field }
-          );
+        if (!hasSubjectValue(value)) {
+          unresolved.push(`user.${key}`);
           return '';
         }
         return value;
       });
+      if (unresolved.length > 0) {
+        throw subjectFieldMissingError(field, unresolved, user);
+      }
       break;
     }
   }

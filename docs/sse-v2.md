@@ -49,7 +49,7 @@ reducer, `client/src/shared/run/runReducer.js`.
 | `step/completed`       | `{ step, content, toolCalls, finishReason, usage?, citations?, sources?, groundingMetadata? }`                                 | A model step finished                                                         |
 | `tool/started`         | `{ step, callId, toolId, name, args, execution }`                                                                             | A tool call begins (`execution`: server, caller, clarification, passthrough)  |
 | `tool/progress`        | `{ phase, message?, data?, step?, callId?, toolId? }`                                                                         | Free-form progress (see phases below)                                         |
-| `tool/completed`       | `{ step, callId, toolId, name, resultPreview, error?, durationMs?, knowledgeSource? }`                                        | A tool call finished; `resultPreview` is bounded                              |
+| `tool/completed`       | `{ step, callId, toolId, name, resultPreview, error?, durationMs?, knowledgeSource?, webSources? }`                           | A tool call finished; `resultPreview` is bounded, `webSources` lists the pages a search/fetch tool found (see below) |
 | `interaction/raised`   | `{ interaction }`                                                                                                             | A human touchpoint (question, approval, review) — see `contracts/interaction.js` |
 | `interaction/answered` | `{ interactionId, kind, answer }`                                                                                             | The touchpoint was answered                                                   |
 | `progress/node`        | `{ executionId?, nodeId, nodeName?, nodeType?, status, iteration?, progress?, output?, error? }`                              | Workflow node progress (also chat-launched workflows)                         |
@@ -67,6 +67,23 @@ reducer, `client/src/shared/run/runReducer.js`.
 | `fetch.loading` / `fetch.parsing` / `fetch.extracting` | `webContentExtractor`   | `{ url, status, type? }`                                |
 | `ifinder_search` / `ifinder_content` / `ifinder_download` | iFinder tools        | `{ query? \| documentId, searchProfile, … }`             |
 | `agent.*`                      | agent runtime (workflow / agent streams)    | the former internal event payload (task queue, plan, artifacts, inbox, memory, skills, hallucinated tools …) |
+
+### `tool/completed.webSources`
+
+The preview of a web search result is cut at 4 KB, which a search that
+extracted page content exceeds on its first hit — so the sources would be lost
+in the truncated text. For search, fetch and source-lookup tools (ids
+containing `search`, `webContentExtractor`, `source_*`) the server therefore
+reduces the *full* result to at most 25 entries
+`{ url, title?, read?, readFailed? }` (`server/services/loop/webSources.js`):
+`read` marks a page whose content was fetched, `readFailed` one whose fetch
+failed. The field is also recorded on the ledger's `tool/result`, so a
+re-sync keeps it. The chat shows it, with the tool's query and the
+`fetch.*` progress, in the activity panel above the answer
+(`client/src/features/chat/toolActivity.js`, `components/ToolActivity.jsx`).
+Provider-run web search reports its queries as `webSearchQueries` on the
+grounding metadata (Google natively; Anthropic's `web_search` queries are
+mapped onto the same field).
 
 ### `meta.extra`
 

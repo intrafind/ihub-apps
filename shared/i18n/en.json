@@ -133,8 +133,6 @@
     "insertIntoEmail": "Add to email",
     "insertIntoDocument": "Add to document",
     "insertOptions": "More options",
-    "replyToEmail": "Reply to email",
-    "newEmail": "New email",
     "pinned": {
       "addEmails": "Add email(s)",
       "addEmailsTooltip": "Attach the open email — or every email you've selected in Outlook — to the chat",
@@ -155,7 +153,28 @@
       "appearanceHintOffice": "Automatic follows the Outlook theme (or the system setting on older Outlook versions).",
       "appearanceHintSystem": "Automatic follows the system setting.",
       "cancel": "Cancel",
-      "save": "Save"
+      "save": "Save",
+      "answerAction": "Default answer action",
+      "answerActionAuto": "Automatic (reply all, or insert while composing)",
+      "answerActionHint": "What the button under an answer does. The other actions stay one tap away in its menu, and a choice Outlook cannot offer for the open item falls back to one it can."
+    },
+    "mailActions": {
+      "answer": "Reply",
+      "answerAll": "Reply all",
+      "forward": "Forward",
+      "new": "New email",
+      "insert": "Insert into draft",
+      "forwardedMessage": "Forwarded message",
+      "forwardFrom": "From",
+      "forwardSent": "Sent",
+      "forwardTo": "To",
+      "forwardCc": "Cc",
+      "forwardSubject": "Subject",
+      "originalAttached": "Outlook add-ins cannot rebuild a forward with its attachments, so the original message is attached instead \u2014 nothing is lost."
+    },
+    "chatReset": {
+      "message": "New chat started for this email.",
+      "restore": "Restore previous chat"
     },
     "menu": {
       "settings": "Settings",
@@ -432,6 +451,104 @@
     }
   },
   "admin": {
+    "chatHistory": {
+      "chats": {
+        "enabled": "Store chats",
+        "enabledHelp": "Master switch for writing chats to storage. Also requires the Durable Chats feature. Turning it off stops new writes, hides the history from users and pauses the retention sweep; stored chats stay on disk.",
+        "maxChatsPerUser": "Chats per user",
+        "maxChatsPerUserHelp": "Each user keeps this many most recent chats; older ones are deleted by the daily sweep. 0 removes the limit.",
+        "maxMessagesPerChat": "Messages per chat",
+        "maxMessagesPerChatHelp": "Oldest messages are dropped once a chat grows past this. Applied on every write, without a restart. 0 removes the limit.",
+        "retentionDays": "Retention (days)",
+        "retentionDaysHelp": "Chats with no activity for this many days are deleted by the daily sweep. 0 keeps chats forever.",
+        "title": "Durable chats"
+      },
+      "description": "Configure how long stored chats and the run ledger are kept, and review what is stored.",
+      "ledger": {
+        "advanced": "Advanced",
+        "cleanupEnabled": "Delete old runs daily",
+        "cleanupEnabledHelp": "When off, ledger runs are kept regardless of the retention below.",
+        "description": "An append-only event log per run (chats, workflows, agents). Durable chats are rebuilt from it, so it records whenever durable chats are active.",
+        "enabled": "Record the run ledger",
+        "enabledHelp": "Also requires the Run Ledger feature.",
+        "flushIntervalMs": "Flush interval (ms)",
+        "flushIntervalMsHelp": "How long ledger writes are buffered before reaching disk. Requires a restart.",
+        "identityDefault": "Default — user id",
+        "identityFull": "Full — user id, name, email and groups",
+        "identityMode": "Identity in the ledger",
+        "identityModeHelp": "Applies to runs and chats started after saving. Existing ones keep the identity they were recorded with.",
+        "identityModeWarning": "Switching to or from pseudonymized changes the id chats are listed under: chats stored before the switch no longer appear in their owners' history lists.",
+        "identityPseudonymized": "Pseudonymized — a stable hash instead of the user id",
+        "retentionDays": "Retention (days)",
+        "retentionDaysHelp": "Runs older than this are deleted by the daily cleanup. 0 keeps runs forever.",
+        "spillThresholdBytes": "Spill threshold (bytes)",
+        "spillThresholdBytesHelp": "Event payloads larger than this are stored as a separate file instead of inline.",
+        "title": "Run ledger"
+      },
+      "loadError": "Failed to load chat history overview",
+      "refresh": "Refresh",
+      "retention": {
+        "chatsRemoved": "{{count}} chat(s) removed",
+        "chatsSkipped": "Chats not swept: durable chats are not active",
+        "confirm": "Delete now",
+        "confirmMessage": "Everything past the saved retention rules is deleted permanently — chats with their transcripts and ledger runs. Unsaved changes on this page are not used.",
+        "confirmTitle": "Run retention now?",
+        "error": "Failed to run retention",
+        "run": "Run retention now",
+        "running": "Running…",
+        "runsRemoved": "{{count}} ledger run(s) removed",
+        "runsSkipped": "Ledger not swept: ledger cleanup is disabled"
+      },
+      "saveError": "Failed to save settings",
+      "saveSuccess": "Settings saved and applied.",
+      "saveSuccessRestart": "Settings saved. The ledger flush interval takes effect after a server restart.",
+      "stats": {
+        "active": "Active (24h / 7d)",
+        "activity": "Activity",
+        "app": "App",
+        "atCap": "At the message limit",
+        "byKind": "By kind",
+        "byStatus": "By status",
+        "chats": "Chats",
+        "expiring": "Expired by age",
+        "ledgerTitle": "Run ledger",
+        "ledgerUsers": "Users",
+        "messages": "Messages",
+        "nearCap": "Near the message limit",
+        "newest": "Latest activity",
+        "nextSweep": "Next retention sweep",
+        "oldest": "Oldest activity",
+        "overQuota": "Over the per-user limit",
+        "runs": "Recorded runs",
+        "title": "Stored chats",
+        "topApps": "Top apps",
+        "topUsers": "Top users",
+        "truncated": "Only the first {{count}} chats were counted; the numbers below are incomplete.",
+        "unavailable": "The storage provider is not available, so stored chats cannot be counted.",
+        "user": "User",
+        "users": "Users with chats",
+        "usersCount": "{{count}} user(s)"
+      },
+      "status": {
+        "active": "Chats of signed-in users are stored on the server.",
+        "chatsEnabled": "Chat storage enabled",
+        "chatsEnabledHelp": "The \"Store chats\" setting below.",
+        "chatsHeading": "Durable chats",
+        "feature": "Durable Chats feature",
+        "featureHelp": "Turned on in Admin → Features.",
+        "inactive": "Chats are not stored on the server. Every check below must pass.",
+        "ledgerActive": "Ledger recording",
+        "ledgerEnabled": "Ledger enabled",
+        "ledgerEnabledHelp": "The \"Record the run ledger\" setting below.",
+        "ledgerFeature": "Run Ledger feature",
+        "ledgerForced": "On because durable chats need it, even though the Run Ledger feature or setting is off.",
+        "ledgerHeading": "Run ledger",
+        "openFeatures": "Open Features",
+        "storage": "Storage provider ready",
+        "title": "Status"
+      },
+      "title": "Chat History"
+    },
     "voiceInput": {
       "title": "Voice Input (Speech-to-Text)",
       "description": "Configure the speech-to-text backends available to apps. Enable a backend here, then select it per app under the app editor’s Speech Recognition Service.",
@@ -489,10 +606,17 @@
       "search": "Search providers...",
       "noResults": "No providers found matching your search.",
       "noProviders": "No providers configured.",
+      "adjustSearch": "Try adjusting your search term.",
+      "createFirst": "Create your first provider to get started.",
       "configured": "Configured",
       "notConfigured": "Not Configured",
+      "noApiKeyRequired": "No API key required",
       "enabled": "Enabled",
       "disabled": "Disabled",
+      "test": "Test",
+      "testAll": "Test All",
+      "modelResults": "Model Test Results",
+      "testingMore": "Testing remaining models...",
       "configure": "Configure",
       "delete": "Delete",
       "createNew": "Create New Provider",
@@ -508,6 +632,8 @@
         "description": "Description",
         "apiKey": "API Key",
         "status": "Status",
+        "models": "Models",
+        "connectivity": "Connectivity",
         "actions": "Actions"
       },
       "edit": {
@@ -549,6 +675,38 @@
       "info": {
         "title": "API Key Priority",
         "description": "When a model requests an API key, the system checks in this order: 1) Model-specific API key, 2) Provider-level API key (configured here), 3) Environment variable. This allows you to set a default API key for all models of a provider while still allowing individual models to override it."
+      },
+      "websearchTest": {
+        "title": "Connectivity Test",
+        "description": "Runs one real search from this server, bypassing the result cache, and reports whether the provider answered. This is the only way to find out whether bot protection (such as the DataDome layer in front of Qwant) is blocking this server’s IP address — that is decided by where the server sends traffic from, not by the settings on this page.",
+        "savedConfigHint": "The test uses the saved configuration — save your changes first to test them.",
+        "queryLabel": "Test query (optional)",
+        "queryPlaceholder": "open source software",
+        "run": "Run Test",
+        "running": "Testing...",
+        "buttonTitle": "Run one live search and report whether this server can reach the provider",
+        "couldNotRun": "Could not run the test",
+        "blockedBy": "Blocked by {{vendor}} bot protection",
+        "whatToDo": "What to do",
+        "sampleResults": "Sample results",
+        "query": "Query",
+        "results": "Results",
+        "duration": "Took",
+        "endpoint": "Endpoint",
+        "egress": "Egress",
+        "egressDirect": "direct (no proxy)"
+      },
+      "health": {
+        "notTested": "Not tested",
+        "testing": "Testing...",
+        "allOk": "All OK",
+        "partial": "Partial",
+        "failed": "Failed",
+        "blocked": "Blocked",
+        "testSuccessful": "Test successful",
+        "testFailed": "Test failed",
+        "hideResults": "Hide results",
+        "showResults": "Show results"
       }
     },
     "models": {
@@ -568,9 +726,25 @@
       "disabled": "Disabled",
       "default": "Default",
       "actions": "Actions",
-      "test": {
+      "test": "Test",
+      "testResults": {
         "success": "Test Successful",
-        "failed": "Test Failed"
+        "failed": "Test Failed",
+        "messages": {
+          "testSuccessful": "Model test successful",
+          "testFailed": "Model test failed",
+          "connectionTimeout": "Connection timeout",
+          "connectionRefused": "Connection refused",
+          "serviceNotFound": "Service not found",
+          "networkError": "Network error",
+          "requestTimeout": "Request timeout",
+          "apiKeyNotConfigured": "API key not configured",
+          "accessDenied": "Access denied",
+          "authenticationFailed": "Authentication failed",
+          "modelNotFound": "Model not found",
+          "rateLimitExceeded": "Rate limit exceeded",
+          "serverError": "Server error"
+        }
       },
       "enable": "Enable",
       "disable": "Disable",
@@ -886,7 +1060,7 @@
         "connectionsLabel": "Connections",
         "connectionsCount": "{{count}} connections",
         "cimdTitle": "Clients identified by metadata document",
-        "cimdDesc": "Read-only. Their client ID is the URL of a document they publish, so there is no record here to edit — what they may do is set under MCP gateway → Client identification.",
+        "cimdDesc": "Their client ID is the URL of a document they publish, so their name, redirect URIs and grant types are never stored here. What they may do is yours to set — per client, or globally under MCP gateway → Client identification.",
         "connections": {
           "loadError": "Failed to load connections",
           "revoke": "Revoke",
@@ -905,13 +1079,116 @@
           "lastUsed": "Last used",
           "count": "{{count}} connections",
           "cimdTitle": "Clients identified by metadata document",
-          "cimdDesc": "These clients have no record in the client list — their ID is the URL of a document they publish. They are listed here because people are connected through them."
+          "cimdDesc": "Their client ID is the URL of a document they publish. They are listed here because people are connected through them — and because this is where you can disconnect all of them at once."
         },
         "tabs": {
           "connections": "Connections"
         },
         "overview": {
           "connectionsDesc": "See which users have granted which applications access, and revoke any of those grants."
+        },
+        "cimd": {
+          "allowedGroups": "Allowed groups",
+          "allowedGroupsHelp": "Comma-separated group IDs. Only members may connect this client, and a user who leaves every listed group loses access on their next gateway request. Empty means any group.",
+          "approve": "Approve",
+          "approved": "Approved {{name}}",
+          "block": "Block",
+          "blockConfirm": "Block {{name}}? Its {{count}} connection(s) are revoked immediately and nobody can reconnect until you unblock it. An access token it already holds keeps working until it expires — at most {{minutes}} minutes.",
+          "blockTitle": "Block this client",
+          "blocked": "Blocked {{name}}",
+          "blockedBadge": "Blocked",
+          "blockedWithRevoke": "Blocked {{name}} and revoked {{count}} connection(s)",
+          "documentUrl": "Document URL",
+          "editPolicy": "Edit policy",
+          "editSubtitle": "Only policy is editable. This client’s name, redirect URIs and grant types come from the document it publishes.",
+          "firstSeen": "First seen",
+          "host": "Host",
+          "identityDesc": "Read from the metadata document at the URL below on every authorization. Nothing here is stored, so it cannot go stale — and it cannot be edited here.",
+          "identityTitle": "Identity",
+          "inactive": "Not connectable",
+          "inherit": "Inherit the global default",
+          "inheriting": "Inheriting: {{value}}",
+          "loadError": "Failed to load the client",
+          "neverTrusted": "This client is never trusted and always requires consent, whatever its approval state. Approving it lets people connect; it does not skip the consent screen.",
+          "noRestriction": "no restriction",
+          "noneSelected": "Nothing selected — no restriction from this client; the user keeps everything their groups allow. Add entries to narrow it down.",
+          "pending": "Waiting for approval",
+          "policyDesc": "Each field either applies to this client alone or inherits the global default for metadata-document clients. Changes take effect on the next gateway request and the next token refresh.",
+          "policyTitle": "Policy",
+          "revokeAll": "Revoke all connections",
+          "revokeAllConfirm": "Disconnect all {{count}} user(s) from {{name}}? They can reconnect by signing in and consenting again — block the client first if that is not what you want.",
+          "revokeAllError": "Failed to revoke the connections",
+          "revokeAllSuccess": "Revoked {{count}} connection(s) of {{name}}",
+          "revokeAllTitle": "Revoke all connections",
+          "saveError": "Failed to save the policy",
+          "saved": "Policy saved",
+          "scopes": "Grantable scopes",
+          "scopesHelp": "Comma-separated OAuth scopes this client may be granted. Narrowing them also narrows connections that already exist, at their next token refresh. An empty list is no restriction at all — wider than the inherited default.",
+          "tokenExpirationHelp": "Also the window a block takes to bite: an access token already issued stays valid until it expires.",
+          "unblock": "Unblock",
+          "unblocked": "Unblocked {{name}}"
+        }
+      },
+      "ldap": {
+        "title": "LDAP Authentication Settings",
+        "subtitle": "Configure LDAP/Active Directory authentication providers",
+        "add": "Add LDAP Provider",
+        "empty": "No LDAP providers configured",
+        "emptyHint": "Click \"Add LDAP Provider\" to get started",
+        "providerHeading": "LDAP Provider {{number}}",
+        "remove": "Remove this LDAP provider",
+        "name": "Provider Name",
+        "nameHelp": "Internal identifier for this provider",
+        "displayName": "Display Name",
+        "displayNameHelp": "Shown on the login page. Defaults to the provider name.",
+        "url": "LDAP URL",
+        "urlHelp": "ldap://host:389 for plain connections, ldaps://host:636 for TLS",
+        "preset": "Directory Type",
+        "presetHelp": "Sets the attribute defaults: {{attributes}}",
+        "presetLabel": {
+          "openldap": "OpenLDAP / generic LDAP",
+          "activeDirectory": "Active Directory"
+        },
+        "baseDn": "Base DN",
+        "baseDnHelp": "Root of the directory. Users and groups are searched here unless overridden.",
+        "adminDn": "Bind DN",
+        "adminDnHelp": "Service account used to find users and read their groups. Leave empty to bind as the user directly.",
+        "adminPassword": "Bind Password",
+        "adminPasswordHelp": "Select a stored credential profile holding the bind password.",
+        "domain": "Domain",
+        "domainHelp": "NetBIOS/short domain name, used by integrations that identify users as DOMAIN\\username (iFinder). Leave empty for Active Directory to detect it from msDS-PrincipalName; required for other directories.",
+        "selfSigned": "Allow self-signed / internal CA certificates (ldaps://)",
+        "selfSignedHelp": "Enable when the LDAP server uses a certificate from a private or internal CA. Required for most on-premise ldaps:// setups.",
+        "advanced": "Advanced: search bases and attributes",
+        "advancedHint": "Only needed when the directory does not follow the defaults of the selected type.",
+        "derivedHelp": "Leave empty to use the value shown — it follows from the directory type and base DN.",
+        "userSearchBase": "User Search Base",
+        "usernameAttribute": "Username Attribute",
+        "userDn": "User DN Template",
+        "userDnHelp": "Used only when no bind DN is set. Leave empty to use the value shown.",
+        "groupSearchBase": "Group Search Base",
+        "groupSearchBaseHelp": "Leave empty to search from the base DN. Without either, no LDAP groups are read.",
+        "groupClass": "Group Object Class",
+        "groupMemberAttribute": "Group Member Attribute",
+        "groupMemberUserAttribute": "Member Value Attribute",
+        "groupMemberUserAttributeHelp": "The user attribute that group entries reference. Usually dn.",
+        "sessionTimeout": "Session Timeout (minutes)",
+        "sessionTimeoutHelp": "JWT token expiration time",
+        "attributeMapping": "Attribute Mapping",
+        "attributeMappingHelp": "Which LDAP attributes become the user id, name and e-mail. Comma-separated: the first attribute with a value wins.",
+        "attribute": {
+          "id": "User ID",
+          "name": "Display Name",
+          "email": "E-Mail"
+        },
+        "test": {
+          "title": "Test a login",
+          "help": "Runs this configuration against the directory and shows what would be found and mapped. Nothing is saved, no session is created. With a bind account, the password is optional.",
+          "username": "Username",
+          "password": "Password (optional)",
+          "run": "Test login",
+          "running": "Testing…",
+          "resultTitle": "LDAP login test"
         }
       }
     },
@@ -948,10 +1225,6 @@
       "saveError": "Failed to save configuration",
       "loadError": "Failed to load Office Integration status",
       "toggleError": "Failed to update Office Integration",
-      "offlineTitle": "Offline Mode (Local Office.js)",
-      "offlineDesc": "Enable this if your environment blocks access to appsforoffice.microsoft.com. The add-in will then load the Office JavaScript library from this server instead of the Microsoft CDN.",
-      "offlineLabel": "Serve Office.js from this server (offline mode)",
-      "offlineWarning": "Offline mode is active. The add-in will load Office.js from /office/office-js/office.js on this server. Note: Microsoft AppSource will reject add-ins that do not use the official CDN URL — this mode is intended for internal enterprise deployments only.",
       "setupTitle": "Deployment Instructions",
       "step1": "Copy the manifest URL above or download the manifest.xml file.",
       "step2": "Go to Microsoft 365 Admin Center → Settings → Integrated apps.",
@@ -973,7 +1246,50 @@
       "addFeaturedApp": "Add a default app",
       "removeFeaturedApp": "Remove {{name}}",
       "unknownApp": "not found",
-      "disabledApp": "disabled"
+      "disabledApp": "disabled",
+      "officeJsTitle": "Office.js Source",
+      "officeJsDesc": "Where the add-in loads the Office JavaScript library from. Change this if your network blocks Microsoft’s CDN. Office.js loads the rest of the library relative to this URL, so one setting covers the whole library.",
+      "officeJsModeCdn": "Microsoft CDN (recommended)",
+      "officeJsModeCdnDesc": "Clients load Office.js straight from Microsoft. Always current, and the only option Microsoft AppSource accepts.",
+      "officeJsModeProxy": "Proxy through this server",
+      "officeJsModeProxyDesc": "This server fetches Office.js from the CDN and caches it. Clients never contact Microsoft — only this server needs outbound access, and the cached copy stays up to date.",
+      "officeJsModeCustom": "Custom CDN or mirror",
+      "officeJsModeCustomDesc": "Load from a URL you control — a corporate CDN or an artifact proxy mirroring the Microsoft CDN. Neither clients nor this server need access to Microsoft.",
+      "officeJsModeBundled": "Bundled copy (offline)",
+      "officeJsModeBundledDesc": "Serve the copy shipped with this release. Needs no network at all, but never receives updates.",
+      "officeJsCdnUrlLabel": "Microsoft CDN URL",
+      "officeJsCdnUrlHint": "Must end in /office.js. Pick a known CDN below, or paste another.",
+      "officeJsCustomUrlLabel": "Custom Office.js URL",
+      "officeJsCustomUrlHint": "Must end in /office.js — Office.js derives the path to every other file it needs from this URL, and cannot find them without that filename. Point this at a pull-through mirror of the Microsoft CDN.",
+      "officeJsResolved": "Currently served to the add-in:",
+      "officeJsAppSourceWarning": "Microsoft AppSource requires add-ins to load Office.js from the official CDN. Any other source is supported for internal enterprise deployments only — which is what sideloading or Microsoft 365 admin center deployment does.",
+      "officeJsBundledWarning": "The bundled copy comes from the @microsoft/office-js npm package, which Microsoft no longer maintains. It never updates — including for security fixes — and adds roughly 86 MB to the build. Prefer Proxy or Custom CDN, and use Bundled only where the server has no outbound access at all.",
+      "officeJsKnownCdns": "Known Office.js CDNs",
+      "officeJsKnownCdnsDesc": "Checks each URL from this server and from your browser. The server result is what the Proxy mode needs; the browser result is the closer stand-in for an Outlook client, which loads Office.js itself in the Microsoft CDN and Custom modes.",
+      "officeJsTest": "Test reachability",
+      "officeJsTesting": "Testing…",
+      "officeJsFromServer": "server",
+      "officeJsFromBrowser": "browser",
+      "officeJsPresetUse": "Use",
+      "officeJsPresetInUse": "In use",
+      "officeJsPreset": {
+        "worldwide": "Microsoft CDN (current)",
+        "worldwideLegacy": "Microsoft CDN (legacy host)",
+        "china": "China — 21Vianet",
+        "preview": "Preview APIs (not for production)"
+      },
+      "officeJsPresetCustom": "Your custom URL",
+      "officeJsFallbackWarning": "The saved Office.js source could not be used, so the add-in is falling back to {{mode}}. Check the URL above.",
+      "mailActionTitle": "Answer Actions",
+      "mailActionDesc": "What the button under each assistant answer does in Outlook. Every action stays available in the button\u2019s menu \u2014 this only picks the one that needs no extra tap.",
+      "defaultMailAction": "Default action",
+      "defaultMailActionHelp": "Users can override this per device in the task pane\u2019s Settings dialog. A choice Outlook cannot offer for the open item falls back to one it can \u2014 pick Reply all and a user composing a draft still gets Insert.",
+      "mailActionAuto": "Automatic \u2014 reply all in the reading pane, insert while composing",
+      "mailActionAnswerAll": "Reply all",
+      "mailActionAnswer": "Reply to sender",
+      "mailActionForward": "Forward",
+      "mailActionNew": "New email",
+      "mailActionInsert": "Insert into the open draft"
     },
     "nextcloudEmbed": {
       "title": "Nextcloud Embed",
@@ -1260,6 +1576,89 @@
         "securityWarning": "Security Warning",
         "securityWarningDesc": "Every hostname added here can be reached by tools and MCP servers even if it resolves to an internal IP. Only add hosts you control and trust. Patterns like *.example.com match every subdomain."
       },
+      "proxy": {
+        "title": "Outbound Proxy",
+        "description": "Route outbound traffic — LLM providers, web search, Jira, OIDC, MCP servers — through an HTTP(S) proxy. This is not the reverse-proxy login (proxyAuth) and not the trusted hop count (trustProxy).",
+        "enabled": "Use a proxy for outbound requests",
+        "enabledHint": "On its own this switch proxies nothing — a URL below has to be set. Switch it off to go direct even when a proxy is set in the environment.",
+        "statusActive": "Outbound requests are routed through {{url}}.",
+        "statusInactive": "No proxy is in use — no proxy URL is configured, so outbound requests go direct. Set a URL below to start using one.",
+        "statusOff": "Proxying is switched off — outbound requests go direct, including any proxy set in the environment.",
+        "httpUrl": "Proxy for http:// targets",
+        "httpsUrl": "Proxy for https:// targets",
+        "urlPlaceholder": "http://proxy.example.com:8080 or ${HTTPS_PROXY}",
+        "credentialsHint": "Credentials go in the URL (http://user:password@proxy.example.com:8080). Passwords are encrypted at rest and shown as ***REDACTED*** — leave the mask in place to keep the stored password.",
+        "unresolvedPlaceholder": "{{placeholder}} is not set in the environment, so no proxy is used for this scheme.",
+        "noProxyTitle": "Bypass the proxy for these hosts",
+        "noProxyHelp": "Exact hostname (api.example.com), subdomains (.example.com or *.example.com). CIDR ranges, host:port entries and a bare * are not supported.",
+        "noProxyPlaceholder": "localhost, .internal.company",
+        "noProxyEmpty": "No bypasses — every request uses the proxy.",
+        "urlPatternsTitle": "Proxy only URLs matching these patterns",
+        "urlPatternsHelp": "Regular expressions tested against the full URL. Leave the list empty to proxy everything; with entries, only matching URLs are proxied.",
+        "urlPatternPlaceholder": "api\\.openai\\.com",
+        "urlPatternsEmpty": "No patterns — every URL uses the proxy.",
+        "invalidPattern": "Not a valid regular expression",
+        "invalidPatternsError": "Fix the invalid URL patterns before saving: {{patterns}}",
+        "addEntry": "Add",
+        "removeEntry": "Remove",
+        "effectiveTitle": "In effect right now",
+        "effectiveHttp": "HTTP",
+        "effectiveHttps": "HTTPS",
+        "effectiveNoProxy": "No proxy",
+        "effectiveUrlPatterns": "URL patterns",
+        "effectiveHint": "What the server uses for outbound requests right now, including anything coming from the environment. Changes above apply once you save.",
+        "effectiveUnsaved": "Unsaved changes",
+        "effectivePending": "after saving: {{value}}",
+        "unsavedField": "unsaved change",
+        "notSet": "not set",
+        "saveConfig": "Save proxy settings",
+        "savingConfig": "Saving…",
+        "configSaved": "Proxy configuration saved successfully",
+        "configLoadError": "Failed to load proxy configuration",
+        "configSaveError": "Failed to save proxy configuration",
+        "testTitle": "Test connectivity",
+        "testHelp": "Runs against the settings above, saved or not. No redirects are followed and no response body is fetched.",
+        "testUrlPlaceholder": "https://api.openai.com/v1/models",
+        "testButton": "Run test",
+        "testing": "Testing…",
+        "testFailed": "Could not run the connectivity test",
+        "testRouting": "Routing",
+        "testProxy": "Proxy",
+        "testProxyReachable": "TCP connection established",
+        "testProxyUnreachable": "No TCP connection: {{error}}",
+        "testResponse": "Response",
+        "testSsl": "TLS",
+        "testSslRelaxed": "Certificate validation is switched off for this host by the SSL settings.",
+        "testTimings": "Timing",
+        "testTimingValue": "{{total}} ms total",
+        "testTimingSplit": " ({{proxy}} ms proxy, {{request}} ms request)",
+        "testDetail": "Detail",
+        "testNextStep": "Next step",
+        "source": {
+          "platform": "From platform.json",
+          "environment": "From the environment",
+          "default": "Not configured"
+        },
+        "decision": {
+          "proxied": "Routed through the proxy",
+          "bypassed": "Bypassed — host is in the no-proxy list",
+          "excluded": "Direct — URL matches none of the URL patterns",
+          "disabled": "Direct — the proxy is switched off",
+          "direct": "Direct — no proxy configured for this URL"
+        },
+        "classification": {
+          "ok": "Connection succeeded",
+          "httpError": "The target returned an error",
+          "proxyUnreachable": "The proxy could not be reached",
+          "proxyAuthRequired": "The proxy requires authentication",
+          "proxyDnsFailure": "The proxy host could not be resolved",
+          "dnsFailure": "The target host could not be resolved",
+          "tlsFailure": "TLS verification failed",
+          "timeout": "The request timed out",
+          "targetUnreachable": "The target could not be reached",
+          "requestFailed": "The request failed"
+        }
+      },
       "cookieSettings": {
         "title": "Cookie Security Configuration",
         "description": "Configure cookie security settings for authentication",
@@ -1272,6 +1671,17 @@
         "securityWarning": "Security Warning",
         "securityWarningDesc": "Disabling the secure cookie flag allows cookies to be transmitted over unencrypted HTTP connections. This makes your authentication tokens vulnerable to interception. Only use this in secure, internal network environments without SSL.",
         "defaultBehavior": "By default, cookies are marked as secure in production environments, which means they will only be sent over HTTPS connections. This is the recommended security setting."
+      }
+    },
+    "security": {
+      "description": "SSL, CORS, cookie settings, outbound proxy, and encryption configuration",
+      "sections": {
+        "ssl": "SSL / TLS",
+        "cookies": "Cookies",
+        "cors": "CORS",
+        "ssrf": "SSRF Allowlist",
+        "proxy": "Outbound Proxy",
+        "encryption": "Value Encryption"
       }
     },
     "tools": {
@@ -1439,13 +1849,16 @@
       "note5": "Authentication debug logging is separate and requires restart"
     },
     "nav": {
+      "chatHistory": "Chat History",
       "logging": "Logging",
       "marketplace": "Marketplace",
       "mcpGateway": "MCP gateway",
       "mcpServers": "MCP servers",
       "telemetry": "Telemetry",
       "voiceInput": "Voice Input",
-      "changelog": "What's New"
+      "changelog": "What's New",
+      "feedback": "Feedback",
+      "localization": "Localization"
     },
     "mcp": {
       "common": {
@@ -1556,7 +1969,13 @@
         "cimdHosts": "Trusted client hosts",
         "cimdHostsDesc": "Comma-separated hostnames whose metadata documents are accepted. Supports *.example.com for subdomains. An empty list accepts nobody; \"*\" accepts any HTTPS client and is not recommended.",
         "claudeHintCimd": "Claude: Settings → Connectors → Add custom connector, then paste the endpoint URL above. Claude identifies itself with its metadata document at claude.ai — no client record is created here — and users sign in to iHub and consent to the requested mcp:* scopes.",
-        "claudeHintEnterprise": "Claude Team/Enterprise: an organisation admin can instead pin one pre-registered client for everyone — create a public OAuth client with the callback URL above and have them enter its client ID under the connector’s advanced settings."
+        "claudeHintEnterprise": "Claude Team/Enterprise: an organisation admin can instead pin one pre-registered client for everyone — create a public OAuth client with the callback URL above and have them enter its client ID under the connector’s advanced settings.",
+        "cimdBlockedHosts": "Blocked client hosts",
+        "cimdBlockedHostsDesc": "Comma-separated hostnames that are refused even while they are trusted above, checked before any request leaves this server. Use it to cut off a vendor without editing the trusted list you want to keep. Blocking an individual client is done per client under OAuth → Clients.",
+        "cimdApprovalMode": "New clients",
+        "cimdApprovalModeDesc": "A trusted host publishes several different clients — Claude web, Claude Desktop, Claude Code — under one hostname. Requiring approval means each one waits for you: the user is told to ask an administrator, and the client appears here as pending. Clients people are already connected through are unaffected.",
+        "cimdApprovalRequired": "Require approval (recommended)",
+        "cimdApprovalAuto": "Connect automatically"
       }
     },
     "telemetry": {
@@ -1715,6 +2134,9 @@
         "websearchProvider": "Provider",
         "websearchProviderAuto": "Auto",
         "websearchProviderBrave": "Brave",
+        "websearchProviderStaan": "Staan",
+        "websearchProviderQwant": "Qwant (no API key)",
+        "websearchProviderDesc": "Search engine used when the model has no native search. Auto uses Brave when a Brave API key is configured, then Staan when it has one, and Qwant otherwise. Brave and Staan need an API key; Qwant needs none but is blocked on many cloud hosts.",
         "websearchUseNative": "Use Native Search",
         "websearchUseNativeDesc": "Use the model's built-in search when available (e.g. Google, OpenAI, Anthropic)",
         "websearchMaxResults": "Max Results",
@@ -1725,6 +2147,10 @@
         "websearchEnabledByDefault": "Enabled by Default",
         "websearchMaxSearches": "Max Searches per Answer",
         "websearchMaxSearchesDesc": "Caps how many searches the model may run per call with native search (Anthropic bills each search). 1–50, default 5.",
+        "websearchResearchGuidance": "Research in Several Steps",
+        "websearchResearchGuidanceDesc": "Tells the model to run several searches, check sources and combine the findings, instead of answering after one search",
+        "websearchResearchGuidanceCustom": "Custom Research Guidance",
+        "websearchResearchGuidanceCustomDesc": "Optional. Replaces the built-in guidance that is added to the system prompt when web search is on. Leave empty to use the built-in guidance.",
         "websearchEnabledByDefaultDesc": "Whether web search is turned on by default for users",
         "iassistant": "iAssistant",
         "iassistantDesc": "Configure iAssistant integration for this app",
@@ -1761,7 +2187,11 @@
         "searchApps": "Search apps to add...",
         "appsAsToolsNoResults": "No apps match your search",
         "appsAsToolsNoApps": "No apps available",
-        "removeAppTool": "Remove {{name}}"
+        "removeAppTool": "Remove {{name}}",
+        "feedback": "Response Feedback",
+        "feedbackDesc": "Let users rate this app’s responses with stars and an optional comment",
+        "enableFeedback": "Enable response feedback",
+        "feedbackNote": "When disabled, the star rating is hidden under this app’s responses and the feedback API rejects submissions for it. The platform-level feedback feature must also be enabled for the rating to appear; all of it is also manageable under Admin → Feedback."
       },
       "reorder": "Reorder",
       "reorderHelp": "Drag a row or use the arrows to set the order apps appear in for users — in the apps browser, on the start page and in the sidebar. Every app is listed, so search and filters do not apply here. Nothing is saved until you choose \"Save order\".",
@@ -1792,7 +2222,8 @@
       "connectionSection": "iFinder Connection",
       "baseUrl": "iFinder Base URL",
       "baseUrlHelp": "Your iFinder instance URL",
-      "privateKey": "Private Key (PEM)",
+      "privateKeyRef": "Private Key",
+      "privateKeyRefHelp": "Select a stored credential holding the RSA/EC private key (PEM format) used to sign JWT tokens. Alternatively, set the IFINDER_PRIVATE_KEY environment variable on the server.",
       "algorithm": "JWT Algorithm",
       "tokenExpiration": "Token Expiration (seconds)",
       "issuer": "JWT Issuer",
@@ -2134,6 +2565,67 @@
       "features": "New & improved",
       "fixes": "Fixes",
       "backToContents": "Back to contents"
+    },
+    "feedback": {
+      "title": "Feedback",
+      "description": "Configure how users rate AI responses and review what they submitted.",
+      "loadError": "Failed to load feedback settings",
+      "saveError": "Failed to save feedback settings",
+      "appSaveError": "Failed to update the app",
+      "saved": "Feedback settings saved",
+      "tabs": {
+        "settings": "Settings",
+        "review": "Feedback"
+      },
+      "sections": {
+        "collection": "Collection",
+        "perApp": "Per-app overrides"
+      },
+      "collect": {
+        "title": "Collect feedback",
+        "description": "Show the star rating under AI responses and accept submissions. Off hides it in every chat surface and answers POST /api/feedback with 403. The same switch appears in Admin → Features → Content."
+      },
+      "store": {
+        "title": "Store feedback",
+        "description": "Write submitted feedback to contents/data/feedback.jsonl and the usage statistics. Off keeps the rating control visible but nothing is kept — iAssistant feedback still reaches iFinder."
+      },
+      "identity": {
+        "title": "Identification mode",
+        "description": "How the person who gave the feedback is recorded. Shared with usage tracking — changing it here changes it there too, and only for entries written from now on.",
+        "modes": {
+          "anonymous": "Anonymous (hashed)",
+          "pseudonymous": "Pseudonymous (session)",
+          "identified": "Identified (user)"
+        }
+      },
+      "perApp": {
+        "description": "Switch feedback off for single apps. An app can never switch it back on while collection is off platform-wide. Saved immediately in the app’s own configuration.",
+        "globalOff": "Collection is off platform-wide, so feedback is hidden in every app regardless of these switches.",
+        "appDisabled": "App disabled",
+        "noApps": "No apps configured."
+      },
+      "review": {
+        "unavailable": "Feedback statistics are not available."
+      }
+    },
+    "usage": {
+      "reviewFeedback": "Review feedback"
+    },
+    "localization": {
+      "title": "Localization",
+      "subtitle": "The language this installation falls back to when no other language applies.",
+      "defaultLanguage": "Default Language",
+      "defaultLanguageDesc": "Used for users who have not chosen a language, and wherever no request language exists at all.",
+      "whereItApplies": "Where this applies",
+      "appliesUi": "The interface language for users who have not picked one themselves.",
+      "appliesSearch": "The language web search runs in when a request carries none of its own — workflow and agent runs in particular, which have no browser behind them.",
+      "appliesFallback": "The fallback for any text that has no translation in the requested language.",
+      "save": "Save",
+      "saving": "Saving...",
+      "saveSuccess": "Default language saved",
+      "saveError": "Failed to save the default language",
+      "loadError": "Failed to load the platform configuration",
+      "noTranslations": "no translations"
     }
   },
   "cloudStorage": {
@@ -2374,7 +2866,18 @@
     "passages": "{{count}} passage",
     "passages_plural": "{{count}} passages",
     "openExternal": "Open in browser",
-    "showInDocument": "Show this passage in the document"
+    "showInDocument": "Show this passage in the document",
+    "openExternalBlocked": "The document could not be opened — this window blocked it. Try opening it from iHub in your browser.",
+    "openExternalUnavailable": "This document has no link to open.",
+    "downloadFailed": "The document could not be downloaded. Please try again.",
+    "downloadUnavailable": "This document cannot be downloaded from here.",
+    "documentActionFailed": "That action could not be completed.",
+    "attachToMail": "Add to email",
+    "attachedToMail": "Added to your email as {{filename}}.",
+    "attachNeedsDraft": "Open a new email or a reply first, then add the document from there.",
+    "attachTooLarge": "This document is too large to attach. Download it instead.",
+    "attachUnavailable": "This document cannot be attached from here.",
+    "attachFailed": "The document could not be attached to your email."
   },
   "chatMessage": {
     "user": "You",
@@ -2406,7 +2909,8 @@
       "grounding": "Based on search grounding",
       "email": "Based on email content",
       "file": "Based on uploaded file",
-      "mixed": "Based on external knowledge",
+      "emailWithFiles": "Based on email and attachments",
+      "mixed": "Based on multiple sources",
       "workflow": "Generated by workflow",
       "workflowTooltip": "Open workflow execution details",
       "tooltip": "This answer was generated using:"
@@ -2450,6 +2954,7 @@
     "networkError": "Network error connecting to {provider} API for model {model}: {error}. Check your network connection and proxy configuration.",
     "unauthorized": "Invalid API key",
     "modelAccessDenied": "API key is not allowed to use this model",
+    "modelAccessDeniedForUser": "You don't have permission to use this AI model. Please contact your administrator to request access.",
     "noModelsAvailable": "No AI models are available for this app. Please contact your administrator to configure models and permissions.",
     "noCompatibleModels": "No compatible AI models found for this app. The app requires specific model features that are not available. Please contact your administrator.",
     "noModelIdProvided": "No model selected. Please select an AI model to continue.",
@@ -3025,7 +3530,8 @@
     "search": {
       "started": "Starting search",
       "generating_queries": "Generating search queries",
-      "complete": "Search complete"
+      "complete": "Search complete",
+      "finished": "Search complete"
     },
     "doc_lookup": {
       "started": "Starting document lookup",
@@ -3274,5 +3780,35 @@
     "highlight": "Highlight",
     "allPassages": "All",
     "loadFailed": "Could not load the document: {{error}}"
+  },
+  "searchSummary": {
+    "searchedFor": "Searched for",
+    "documentsFound_one": "{{count}} document found",
+    "documentsFound_other": "{{count}} documents found"
+  },
+  "toolActivity": {
+    "searching": "Searching the web…",
+    "searchingFor": "Searching for “{{query}}”",
+    "reading": "Reading {{host}}",
+    "runningTool": "Running {{name}}",
+    "ranTool": "Ran {{name}}",
+    "searchedWeb": "Searched the web",
+    "readWeb": "Read the web",
+    "searchedFor": "Searched for",
+    "readPage": "Read",
+    "searches_one": "{{count}} search",
+    "searches_other": "{{count}} searches",
+    "sources_one": "{{count}} source",
+    "sources_other": "{{count}} sources",
+    "pagesRead_one": "{{count}} page read",
+    "pagesRead_other": "{{count}} pages read",
+    "toolCalls_one": "{{count}} tool call",
+    "toolCalls_other": "{{count}} tool calls",
+    "read": "Read",
+    "readTitle": "The page was fetched and read",
+    "readFailed": "Not readable",
+    "readFailedTitle": "The page could not be fetched",
+    "failed": "Failed",
+    "stopped": "Stopped"
   }
 }

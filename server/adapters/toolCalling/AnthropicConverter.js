@@ -10,11 +10,24 @@ import {
   createGenericToolCall,
   createGenericStreamingResponse,
   normalizeFinishReason,
-  sanitizeSchemaForProvider
+  cloneAndWalkSchema
 } from './GenericToolCalling.js';
 import { validateProviderToolName } from './toolNameValidator.js';
 import logger from '../../utils/logger.js';
 import { parseJsonAsync } from '../../utils/asyncJson.js';
+
+/**
+ * Sanitize a JSON Schema for Anthropic's tool `input_schema`. Anthropic's
+ * schema support is generally more flexible than other providers, so this
+ * currently only deep-clones the schema — kept as an explicit hook other
+ * converters (e.g. Bedrock, which reuses this) can call, and where future
+ * Anthropic-specific restrictions can be added without touching shared code.
+ * @param {Object} schema - JSON Schema
+ * @returns {Object} Sanitized schema
+ */
+export function sanitizeSchema(schema) {
+  return cloneAndWalkSchema(schema, () => {});
+}
 
 /**
  * Convert generic tools to Anthropic format
@@ -55,7 +68,7 @@ export function convertGenericToolsToAnthropic(genericTools = []) {
   return filteredTools.map(tool => ({
     name: tool.id || tool.name,
     description: tool.description,
-    input_schema: sanitizeSchemaForProvider(tool.parameters, 'anthropic')
+    input_schema: sanitizeSchema(tool.parameters)
   }));
 }
 
@@ -196,6 +209,19 @@ function addWebSearchCitations(result, citations) {
 }
 
 /**
+ * Record the query of a native `web_search` server_tool_use block, in the
+ * `webSearchQueries` field Google Search grounding uses, so the chat can say
+ * what the provider searched for.
+ */
+function addWebSearchQuery(result, block) {
+  if (block?.type !== 'server_tool_use' || block.name !== 'web_search') return;
+  const query = block.input?.query;
+  if (typeof query !== 'string' || !query.trim()) return;
+  const metadata = ensureWebSearchMetadata(result);
+  metadata.webSearchQueries = [...(metadata.webSearchQueries || []), query.trim()];
+}
+
+/**
  * Map Anthropic's usage object onto the generic shape.
  * `server_tool_use.web_search_requests` is the billable search count of the
  * response (cumulative on streaming `message_delta` frames).
@@ -295,6 +321,10 @@ export async function convertAnthropicResponseToGeneric(data, streamId = 'defaul
 
     if (typeof parsed.type === 'string' && parsed.type.startsWith('content_block')) {
       trackRawBlock(state, parsed);
+      // The query of a server-side search is only complete once its block is.
+      if (parsed.type === 'content_block_stop') {
+        addWebSearchQuery(result, state.rawBlocks[parsed.index]);
+      }
     }
 
     // Extract usage from message_start (input tokens)
@@ -342,9 +372,11 @@ export async function convertAnthropicResponseToGeneric(data, streamId = 'defaul
           }
         } else if (contentBlock.type === 'web_search_tool_result') {
           addWebSearchResult(result, contentBlock.content);
+        } else if (contentBlock.type === 'server_tool_use') {
+          // The search query Claude issued server-side; there is nothing for
+          // the client to execute, only something to show.
+          addWebSearchQuery(result, contentBlock);
         }
-        // 'server_tool_use' blocks just record the search query Claude issued
-        // server-side; there is nothing for the client to execute.
       }
       result.complete = true;
       if (parsed.stop_reason) {

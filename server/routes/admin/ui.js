@@ -3,7 +3,7 @@ import multer from 'multer';
 import path from 'path';
 import fs from 'fs';
 import { join } from 'path';
-import { getRootDir } from '../../pathUtils.js';
+import { getContentsPath } from '../../utils/contentsPath.js';
 import configCache from '../../configCache.js';
 import configStore from '../../services/config/ConfigStore.js';
 import { adminAuth } from '../../middleware/adminAuth.js';
@@ -38,7 +38,7 @@ export default function registerAdminUIRoutes(app) {
   // Configure multer for file uploads
   const storage = multer.diskStorage({
     destination: (req, file, cb) => {
-      const uploadDir = join(getRootDir(), 'contents/uploads/assets');
+      const uploadDir = getContentsPath('uploads', 'assets');
       // Create directory if it doesn't exist
       if (!fs.existsSync(uploadDir)) {
         fs.mkdirSync(uploadDir, { recursive: true });
@@ -151,7 +151,7 @@ export default function registerAdminUIRoutes(app) {
    */
   app.get(buildServerPath('/api/admin/ui/assets'), authRequired, adminAuth, (req, res) => {
     try {
-      const assetsDir = join(getRootDir(), 'contents/uploads/assets');
+      const assetsDir = getContentsPath('uploads', 'assets');
 
       // Create directory if it doesn't exist
       if (!fs.existsSync(assetsDir)) {
@@ -219,7 +219,7 @@ export default function registerAdminUIRoutes(app) {
     async (req, res) => {
       try {
         const { id } = req.params;
-        const assetsDir = join(getRootDir(), 'contents/uploads/assets');
+        const assetsDir = getContentsPath('uploads', 'assets');
 
         // Validate path stays within assets directory (prevents traversal)
         const filepath = await resolveAndValidatePath(id, assetsDir);

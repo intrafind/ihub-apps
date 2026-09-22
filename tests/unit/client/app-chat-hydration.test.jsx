@@ -50,6 +50,14 @@ jest.mock('../../../client/src/api/endpoints/apps', () => ({
   __esModule: true,
   getConversationMessages: jest.fn().mockResolvedValue({ messages: [] })
 }));
+// Reached through AppChat's citation document actions. Stubbed like the rest
+// of the api layer: `api/client.js` reads `import.meta.env`, which the Jest
+// transform cannot compile.
+jest.mock('../../../client/src/api/endpoints/documents', () => ({
+  __esModule: true,
+  fetchIFinderDocument: jest.fn(),
+  fetchIFinderDocumentMetadata: jest.fn()
+}));
 
 // The stream: record what was opened, deliver nothing.
 const mockStreams = [];

@@ -6,8 +6,10 @@ import react from '@vitejs/plugin-react';
 import authGatePlugin from './vite-plugins/vite-plugin-auth-gate.js';
 
 // Plugin that copies @microsoft/office-js/dist to dist/office/office-js after build.
-// This makes the full Office.js library available locally so that deployments that
-// block appsforoffice.microsoft.com can serve it from their own origin.
+// This backs the `bundled` Office.js mode (see server/utils/officeJsSource.js) for
+// deployments with no outbound access at all. The package is no longer maintained
+// upstream, so the copy never updates — the `proxy` and `custom` modes are the
+// preferred way to serve Office.js from somewhere other than Microsoft's CDN.
 function copyOfficeJsPlugin() {
   return {
     name: 'copy-office-js',

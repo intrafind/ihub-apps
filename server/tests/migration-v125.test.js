@@ -1,13 +1,13 @@
 #!/usr/bin/env node
 
 /**
- * Migration V109 specs — the iFinder search description gains a pointer to the
+ * Migration V125 specs — the iFinder search description gains a pointer to the
  * ifinder-search skill, but only where an admin has not reworded it.
  */
 
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { up, precondition, version } from '../migrations/V109__ifinder_search_skill_pointer.js';
+import { up, precondition, version } from '../migrations/V125__ifinder_search_skill_pointer.js';
 
 const SUPERSEDED = {
   en: 'Search documents in iFinder using the IntraFind query syntax (Lucene plus NEAR/, MODE/, THES/, ENTITY/ and other operators). Field-qualified terms (title:budget, creators:"DOE, John") search the analyzed field; exact-value matching, faceting and sorting need the `.keyword` variant of a text field. Call iFinder_getFields first when unsure which name a field takes.',
@@ -50,7 +50,7 @@ function installedTool(description = { ...SUPERSEDED }) {
 }
 
 test('version is the next unused number', () => {
-  assert.equal(version, '109');
+  assert.equal(version, '125');
 });
 
 test('precondition is false without an iFinder tool config', async () => {

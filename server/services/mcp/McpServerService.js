@@ -168,10 +168,11 @@ export function buildAppInputSchema(app) {
   // Let callers pick a model unless the app pins one. When the app restricts
   // models, advertise the choices as an enum; otherwise accept any model id.
   // RequestBuilder falls back to the app's preferred model when the requested
-  // one is missing or incompatible, so an unknown id can't error. Note this
-  // enforces app-level `allowedModels`, not per-user `permissions.models` —
-  // the same as the chat route, which doesn't gate execution on model
-  // permissions either (see appInvoker.js).
+  // one is missing or incompatible, so an unknown id can't error. This enum
+  // only reflects app-level `allowedModels` — it does not narrow further for
+  // the calling user's `permissions.models`, so a model listed here can still
+  // be refused with `modelAccessDeniedForUser` at call time if the user's
+  // group doesn't permit it (see appInvoker.js).
   if (!app.disallowModelSelection) {
     const modelProp = {
       type: 'string',

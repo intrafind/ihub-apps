@@ -51,7 +51,25 @@ const env = cleanEnv(
     MAGIC_PROMPT_MODEL: str({ optional: true }),
     MAGIC_PROMPT_PROMPT: str({ optional: true }),
     USE_HTTPS: str({ default: 'false', optional: true }),
-    NODE_ENV: str({ default: 'development', optional: true })
+    NODE_ENV: str({ default: 'development', optional: true }),
+    // RSA/EC private key (PEM) used to sign iFinder JWTs when iFinder.useOidcKeyPair
+    // is off and iFinder.privateKeyRef is not set. See server/utils/iFinderJwt.js.
+    IFINDER_PRIVATE_KEY: str({ optional: true }),
+    // Web search (services/WebSearchService.js). These are read off the frozen
+    // config object below, so they have to be declared here — only *_API_KEY
+    // names are passed through dynamically, which is why BRAVE_SEARCH_API_KEY
+    // worked while BRAVE_SEARCH_ENDPOINT silently did not.
+    BRAVE_SEARCH_ENDPOINT: str({ optional: true }),
+    // Base URL of Qwant's JSON search API; the category ("web") is appended.
+    QWANT_SEARCH_ENDPOINT: str({ optional: true }),
+    // Qwant answers a default Node user agent with a bot challenge, so the
+    // provider sends a browser one. Override it if Qwant starts rejecting it.
+    QWANT_SEARCH_USER_AGENT: str({ optional: true }),
+    // Staan's web search endpoint. STAAN_API_KEY needs no declaration: it
+    // reaches `config` through the dynamic `*_API_KEY` pass-through below.
+    STAAN_SEARCH_ENDPOINT: str({ optional: true }),
+    // TTL of the in-memory web-search result cache (services/searchCache.js).
+    SEARCH_CACHE_TTL_MS: num({ default: 600000 })
   },
   {
     reporter: () => {}, // Disable envalid's default reporter that shows missing variables
@@ -96,7 +114,13 @@ const config = Object.freeze({
   MAGIC_PROMPT_MODEL: env.MAGIC_PROMPT_MODEL,
   MAGIC_PROMPT_PROMPT: env.MAGIC_PROMPT_PROMPT,
   USE_HTTPS: env.USE_HTTPS,
-  NODE_ENV: env.NODE_ENV
+  NODE_ENV: env.NODE_ENV,
+  IFINDER_PRIVATE_KEY: env.IFINDER_PRIVATE_KEY,
+  BRAVE_SEARCH_ENDPOINT: env.BRAVE_SEARCH_ENDPOINT,
+  QWANT_SEARCH_ENDPOINT: env.QWANT_SEARCH_ENDPOINT,
+  QWANT_SEARCH_USER_AGENT: env.QWANT_SEARCH_USER_AGENT,
+  STAAN_SEARCH_ENDPOINT: env.STAAN_SEARCH_ENDPOINT,
+  SEARCH_CACHE_TTL_MS: env.SEARCH_CACHE_TTL_MS
 });
 
 export default config;

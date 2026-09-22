@@ -1,0 +1,36 @@
+{
+  "id": "webContentExtractor",
+  "name": {
+    "en": "Web Page Reader",
+    "de": "Webseiten-Leser"
+  },
+  "description": {
+    "en": "Open a web page (or PDF) by its URL and return its main readable text, without navigation, ads, headers or footers. Use it to read a search result in full, or any URL the user gives you. Use the 'url' parameter with the full http(s) address.",
+    "de": "Öffnet eine Webseite (oder ein PDF) über ihre URL und gibt den lesbaren Hauptinhalt ohne Navigation, Werbung, Kopf- und Fußzeilen zurück. Verwenden Sie es, um ein Suchergebnis vollständig zu lesen oder eine vom Benutzer genannte URL zu öffnen. Verwenden Sie den 'url' Parameter mit der vollständigen http(s)-Adresse."
+  },
+  "script": "webContentExtractor.js",
+  "method": "extractForTool",
+  "parameters": {
+    "type": "object",
+    "properties": {
+      "url": {
+        "type": "string",
+        "description": {
+          "en": "The full http(s) URL of the page to open. Example: 'https://example.com/article'",
+          "de": "Die vollständige http(s)-URL der zu öffnenden Seite. Beispiel: 'https://example.com/artikel'"
+        }
+      },
+      "maxLength": {
+        "type": "integer",
+        "description": {
+          "en": "Maximum length of the returned text in characters (default: 10000)",
+          "de": "Maximale Länge des zurückgegebenen Textes in Zeichen (Standard: 10000)"
+        },
+        "default": 10000,
+        "minimum": 500,
+        "maximum": 50000
+      }
+    },
+    "required": ["url"]
+  }
+}

@@ -1043,6 +1043,7 @@ iHub Apps ships with a set of pre-configured built-in tools that cover the most 
 | `extractContent` | Boolean | `true` | Extract full page content from results |
 | `contentMaxLength` | Number | `3000` | Max extracted content per page (500-50,000) |
 | `enabledByDefault` | Boolean | `false` | Whether search is active by default for users |
+| `researchGuidance` | Boolean or String | `true` | Research instruction added to the system prompt when search is on; `false` = off, string = custom text |
 
 **Migration**: Existing apps with websearch tool IDs (`braveSearch`, `enhancedWebSearch`, etc.) in their `tools` array are automatically migrated to the new format on server startup.
 

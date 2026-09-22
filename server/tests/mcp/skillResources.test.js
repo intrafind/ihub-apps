@@ -56,7 +56,7 @@ beforeAll(async () => {
     body: '# Searching iFinder',
     references: ['references/query-cookbook.md', 'references/field-reference.md'],
     scripts: [],
-    assets: []
+    assets: ['assets/logo.png', 'assets/templates']
   });
 });
 
@@ -71,6 +71,25 @@ describe('skill sub-resources', () => {
     expect(uris).toContain('ihub://skill/ifinder-search');
     expect(uris).toContain('ihub://skill/ifinder-search/references/query-cookbook.md');
     expect(uris).toContain('ihub://skill/ifinder-search/references/field-reference.md');
+  });
+
+  it('leaves out binary assets and subdirectories', async () => {
+    // The loader reads a resource as UTF-8: a PNG would arrive corrupted and a
+    // directory is not readable at all, so neither is advertised.
+    const resources = await listMcpResources({ user, platform: {}, expose });
+    const uris = resources.map(r => r.uri);
+
+    expect(uris).not.toContain('ihub://skill/ifinder-search/assets/logo.png');
+    expect(uris).not.toContain('ihub://skill/ifinder-search/assets/templates');
+  });
+
+  it('refuses to read a binary asset', async () => {
+    getSkillResourceMock.mockClear();
+
+    await expect(
+      readMcpResource('ihub://skill/ifinder-search/assets/logo.png', { user, platform: {} })
+    ).rejects.toThrow(/Skill resource not found/);
+    expect(getSkillResourceMock).not.toHaveBeenCalled();
   });
 
   it('reads a bundled reference', async () => {

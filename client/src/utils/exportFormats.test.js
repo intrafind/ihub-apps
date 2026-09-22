@@ -12,7 +12,7 @@
  * Run directly: `node client/src/utils/exportFormats.test.js`.
  */
 
-import { sanitizeForSpreadsheet } from './exportFormats.js';
+import { sanitizeForSpreadsheet, getExportSettingsRows } from './exportFormats.js';
 
 let failures = 0;
 function check(label, cond, details) {
@@ -62,13 +62,56 @@ check(
     // Mirrors exportToCSV's escapeCSV: sanitize first, then quote-wrap if needed.
     const escapeCSV = value => {
       const stringValue = sanitizeForSpreadsheet(value);
-      if (stringValue.includes(',') || stringValue.includes('"') || stringValue.includes('\n')) {
+      if (/[",\r\n]/.test(stringValue)) {
         return `"${stringValue.replace(/"/g, '""')}"`;
       }
       return stringValue;
     };
     return escapeCSV('=1,2') === '"\'=1,2"';
   })()
+);
+
+console.log('\n🧪 getExportSettingsRows\n');
+
+// ExportDialog always passes an object whose fields may all be undefined;
+// exporters must not emit an empty "Settings" section for it (#2452).
+check(
+  'all-undefined settings object yields no rows',
+  getExportSettingsRows({
+    model: undefined,
+    style: undefined,
+    outputFormat: undefined,
+    temperature: undefined,
+    variables: undefined
+  }).length === 0
+);
+check('null settings yields no rows', getExportSettingsRows(null).length === 0);
+check(
+  'variables alone do not produce a settings section',
+  getExportSettingsRows({ variables: { foo: 'bar' } }).length === 0
+);
+check('null temperature is skipped', getExportSettingsRows({ temperature: null }).length === 0);
+check(
+  'temperature 0 is kept',
+  JSON.stringify(getExportSettingsRows({ temperature: 0 })) ===
+    JSON.stringify([['Temperature', '0']])
+);
+check(
+  'populated settings yield rows in stable order',
+  JSON.stringify(
+    getExportSettingsRows({
+      outputFormat: 'markdown',
+      style: 'concise',
+      model: 'gpt',
+      temperature: 0.7
+    })
+  ) ===
+    JSON.stringify([
+      ['Model', 'gpt'],
+      ['Temperature', '0.7'],
+      ['Style', 'concise'],
+      ['Output Format', 'markdown']
+    ])
 );
 
 console.log(`\n${failures === 0 ? '✅ All checks passed' : `❌ ${failures} check(s) failed`}`);

@@ -89,7 +89,7 @@ import {
 } from './serverHelpers.js';
 import { performInitialSetup } from './utils/setupUtils.js';
 import { runConfigMigrations } from './migrations/runner.js';
-import { getProxyConfig } from './utils/httpConfig.js';
+import { getProxyConfig, redactUrlSecrets } from './utils/httpConfig.js';
 import {
   getBasePath,
   buildApiPath,
@@ -186,6 +186,18 @@ async function prepareContents() {
       error: error.message,
       stack: error.stack
     });
+    if (error.migrationHalt) {
+      // The operator's `platform.json` `migrations.onFailure` is 'halt' (the
+      // default) and a migration failed: continuing would serve traffic
+      // against config the migration never finished updating. Exiting lets a
+      // process manager / container orchestrator surface the failure instead
+      // of the server quietly running on stale or half-migrated config.
+      logger.error({
+        component: 'Server',
+        message: 'Halting startup: migrations.onFailure is "halt" and a migration failed'
+      });
+      process.exit(1);
+    }
     logger.warn({
       component: 'Server',
       message: 'Server will continue, but configuration may be outdated'
@@ -508,9 +520,10 @@ if (cluster.isPrimary && workerCount > 1) {
       logger.info({
         component: 'Server',
         message: '🌐 Proxy configuration active',
-        http: proxyConfig.http || '(not set)',
-        https: proxyConfig.https || '(not set)',
-        noProxy: proxyConfig.noProxy || '(not set)',
+        // Redacted: a proxy URL may carry basic-auth credentials.
+        http: proxyConfig.http ? redactUrlSecrets(proxyConfig.http) : '(not set)',
+        https: proxyConfig.https ? redactUrlSecrets(proxyConfig.https) : '(not set)',
+        noProxy: proxyConfig.noProxy.length > 0 ? proxyConfig.noProxy.join(',') : '(not set)',
         urlPatterns:
           proxyConfig.urlPatterns?.length > 0 ? proxyConfig.urlPatterns : '(all URLs proxied)'
       });
@@ -528,42 +541,61 @@ if (cluster.isPrimary && workerCount > 1) {
     });
   }
 
+  // Process-wide singletons run once per cluster: on the worker in slot 0
+  // (`WORKER_INDEX`, stable across respawns — `cluster.worker.id` is never
+  // reused). Computed here (rather than just below, where it originally only
+  // gated the sweeps registered after route setup) because the rollup/audit
+  // schedulers and the MCP eager-connect below need the same guard: each used
+  // to fire its own interval in every worker, so N workers wrote the same
+  // usage-rollup/audit-log files independently and opened N times the MCP
+  // connections at startup.
+  const ownsClusterSingletons = !cluster.isWorker || process.env.WORKER_INDEX === '0';
+
   // Start usage rollup scheduler
-  try {
-    const { startRollupScheduler } = await import('./services/UsageAggregator.js');
-    const platform = configCache.getPlatform ? configCache.getPlatform() : {};
-    const retentionConfig = platform?.usageTracking || {};
-    startRollupScheduler(retentionConfig);
-  } catch (error) {
-    logger.warn('Failed to start usage rollup scheduler', { component: 'Server', error });
+  if (ownsClusterSingletons) {
+    try {
+      const { startRollupScheduler } = await import('./services/UsageAggregator.js');
+      const platform = configCache.getPlatform ? configCache.getPlatform() : {};
+      const retentionConfig = platform?.usageTracking || {};
+      startRollupScheduler(retentionConfig);
+    } catch (error) {
+      logger.warn('Failed to start usage rollup scheduler', { component: 'Server', error });
+    }
   }
 
-  // Initialise MCP client manager from cached mcpServers.json. Failure is
-  // non-fatal — the rest of iHub keeps working even if outbound MCP discovery
-  // is broken.
+  // Initialise MCP client manager from cached mcpServers.json. Every worker
+  // needs its own initialized manager to serve tool calls it handles, so
+  // `initialize()` always runs; only the eager background `connectAll()` is
+  // singleton-gated; workers that skip it still connect lazily on first use
+  // (tools/list retries on miss). Failure is non-fatal — the rest of iHub
+  // keeps working even if outbound MCP discovery is broken.
   try {
     const mcpManagerModule = await import('./services/mcp/McpClientManager.js');
     const mcpManager = mcpManagerModule.default;
     const { data: mcpServersData } = configCache.getMcpServers();
     await mcpManager.initialize(mcpServersData);
-    // Connect eagerly in the background; tools/list will lazy-retry on miss.
-    mcpManager.connectAll().catch(err => {
-      logger.warn('Initial MCP connectAll failed', {
-        component: 'Server',
-        error: err.message
+    if (ownsClusterSingletons) {
+      // Connect eagerly in the background; tools/list will lazy-retry on miss.
+      mcpManager.connectAll().catch(err => {
+        logger.warn('Initial MCP connectAll failed', {
+          component: 'Server',
+          error: err.message
+        });
       });
-    });
+    }
   } catch (error) {
     logger.warn('Failed to initialise MCP client manager', { component: 'Server', error });
   }
 
   // Start audit log cleanup scheduler
-  try {
-    const { startAuditCleanupScheduler } = await import('./services/AuditLogService.js');
-    const platform = configCache.getPlatform ? configCache.getPlatform() : {};
-    startAuditCleanupScheduler(platform?.audit || {});
-  } catch (error) {
-    logger.warn('Failed to start audit log cleanup scheduler', { component: 'Server', error });
+  if (ownsClusterSingletons) {
+    try {
+      const { startAuditCleanupScheduler } = await import('./services/AuditLogService.js');
+      const platform = configCache.getPlatform ? configCache.getPlatform() : {};
+      startAuditCleanupScheduler(platform?.audit || {});
+    } catch (error) {
+      logger.warn('Failed to start audit log cleanup scheduler', { component: 'Server', error });
+    }
   }
 
   // Create Express application
@@ -661,9 +693,7 @@ if (cluster.isPrimary && workerCount > 1) {
   // A chat clarification that is settled (answered, superseded or expired)
   // ends the run its question paused.
   registerChatClarificationLifecycle();
-  // Process-wide singletons run once per cluster: on the worker in slot 0
-  // (`WORKER_INDEX`, stable across respawns — `cluster.worker.id` is never reused).
-  const ownsClusterSingletons = !cluster.isWorker || process.env.WORKER_INDEX === '0';
+  // ownsClusterSingletons computed above, before the rollup/audit schedulers.
   if (ownsClusterSingletons) {
     interactionService.startExpirySweep();
     runLog.startCleanupScheduler();

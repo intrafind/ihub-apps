@@ -26,12 +26,13 @@ export const CLARIFICATION_TTL_MS = 24 * 60 * 60 * 1000;
 const COMPONENT = 'ChatService';
 const PREVIEW_CHARS = 4096;
 
-/** Markers the Office add-in puts around email / meeting context. */
-export const EMAIL_CONTEXT_MARKERS = [
-  '--- Current email ---',
-  '--- Pinned emails',
-  '--- Current meeting ---'
-];
+/**
+ * Blocks `PromptService` renders for host email or meeting context (see
+ * shared/promptContext.js). The seam sees the rendered messages, so their
+ * presence marks the turn as answered from the user's own email. Source text
+ * is escaped there, so an email cannot fake one.
+ */
+export const EMAIL_CONTEXT_MARKERS = ['<content type="email"', '<content type="meeting"'];
 
 /**
  * Knowledge sources implied by the prompt itself: Office email/meeting
@@ -210,7 +211,8 @@ export function chatToolSeam({ chatId, buildLogData, logInteraction }) {
         name: String(info.name || toolId),
         resultPreview: previewToolResult(outcome.rawResult),
         ...(Number.isInteger(outcome.durationMs) ? { durationMs: outcome.durationMs } : {}),
-        ...(outcome.knowledgeSource ? { knowledgeSource: outcome.knowledgeSource } : {})
+        ...(outcome.knowledgeSource ? { knowledgeSource: outcome.knowledgeSource } : {}),
+        ...(outcome.webSources?.length ? { webSources: outcome.webSources } : {})
       });
       await logInteraction(
         'tool_usage',

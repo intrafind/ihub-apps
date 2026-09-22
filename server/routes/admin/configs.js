@@ -7,6 +7,7 @@ import { testRealtimeConnection } from '../../websocket/realtimeTranscription.js
 import { buildServerPath } from '../../utils/basePath.js';
 import logger from '../../utils/logger.js';
 import { sendInternalError, sendBadRequest } from '../../utils/responseHelpers.js';
+import { isValidLanguageCode } from '../../utils/pathSecurity.js';
 import { logAudit } from '../../services/AuditLogService.js';
 import { saveSnapshot } from '../../services/ChangeHistoryService.js';
 
@@ -197,7 +198,6 @@ export default function registerAdminConfigRoutes(app) {
           },
           localAuth: {
             enabled: false,
-            usersFile: 'contents/config/users.json',
             sessionTimeoutMinutes: 480
           },
           oidcAuth: {
@@ -282,6 +282,16 @@ export default function registerAdminConfigRoutes(app) {
         return sendBadRequest(res, 'Invalid configuration data');
       }
 
+      // A bad default language is not cosmetic: every localized lookup that
+      // falls back to it, and every web search that has no request language of
+      // its own, would take the bad value.
+      if (
+        newConfig.defaultLanguage !== undefined &&
+        !isValidLanguageCode(newConfig.defaultLanguage)
+      ) {
+        return sendBadRequest(res, 'defaultLanguage must be a valid language code, e.g. "en"');
+      }
+
       // Load existing config to preserve other fields and track changes.
       // Strict, because this is a read-modify-write: the merge below emits
       // only the named keys, so treating an unparseable platform.json as a
@@ -299,6 +309,13 @@ export default function registerAdminConfigRoutes(app) {
       // Merge the authentication-related config with existing config
       const mergedConfig = {
         ...existingConfig,
+        // Listed explicitly for the same reason as `mcpServer` below: this merge
+        // emits only the named keys, so an unnamed one is silently reverted by
+        // the spread of existingConfig on save.
+        defaultLanguage:
+          newConfig.defaultLanguage !== undefined
+            ? newConfig.defaultLanguage
+            : existingConfig.defaultLanguage,
         auth: newConfig.auth || existingConfig.auth,
         anonymousAuth: newConfig.anonymousAuth || existingConfig.anonymousAuth,
         proxyAuth: newConfig.proxyAuth || existingConfig.proxyAuth,

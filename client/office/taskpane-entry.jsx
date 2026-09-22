@@ -56,20 +56,28 @@ Office.onReady(async () => {
   // can call refreshTokenOrExpireSession() without threading config everywhere.
   installOfficeAuthInterceptor(config);
 
-  // Register the ItemChanged event to reset chat when user switches emails.
+  // Register the ItemChanged event so the chat can start over when the user
+  // switches to a different email.
   // Also listen for SelectedItemsChanged so the taskpane reacts when the user
   // Ctrl-selects multiple messages in the list (ItemChanged does NOT fire for
   // multi-select transitions). Both dispatch the same internal event so the
   // chat panel can refresh its current-item state and the "Add email(s)"
   // control stays in sync with the live Outlook selection. Issue #1553.
   if (Office.context?.mailbox?.addHandlerAsync) {
-    const dispatchItemChanged = () => document.dispatchEvent(new CustomEvent('ihub:itemchanged'));
-    Office.context.mailbox.addHandlerAsync(Office.EventType.ItemChanged, dispatchItemChanged);
+    // `detail.source` tells listeners which Outlook event fired: only
+    // ItemChanged may start a new chat — a selection change never does
+    // (issue #2450, see utilities/officeItemChange.js).
+    const dispatchItemChanged = source => () =>
+      document.dispatchEvent(new CustomEvent('ihub:itemchanged', { detail: { source } }));
+    Office.context.mailbox.addHandlerAsync(
+      Office.EventType.ItemChanged,
+      dispatchItemChanged('ItemChanged')
+    );
     if (Office.EventType?.SelectedItemsChanged) {
       try {
         Office.context.mailbox.addHandlerAsync(
           Office.EventType.SelectedItemsChanged,
-          dispatchItemChanged
+          dispatchItemChanged('SelectedItemsChanged')
         );
       } catch {
         // SelectedItemsChanged requires Mailbox 1.13+; older hosts simply

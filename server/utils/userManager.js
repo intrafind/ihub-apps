@@ -9,6 +9,7 @@ import { mapExternalGroups, loadGroupsConfiguration } from './authorization.js';
 import logger from './logger.js';
 import { ensureFirstUserIsAdmin } from './adminRescue.js';
 import { locateConfigFile } from './configFileLocation.js';
+import { localUsersFile } from './contentsPath.js';
 
 /**
  * Where the users file lives — see {@link locateConfigFile}, which both this
@@ -204,6 +205,35 @@ export function findUserByIdentifier(usersConfig, identifier, authMethod = null)
 }
 
 /**
+ * Look up a **local** user by the subject a JWT carries.
+ *
+ * `sub` is the user's key in `users.json`, so this is a direct lookup rather
+ * than the identifier scan {@link findUserByIdentifier} performs. It returns
+ * null for a user who is not local, which is the point: group membership for
+ * an OIDC or proxy user lives in the identity provider and arrives at sign-in,
+ * so there is nothing authoritative here to re-read for them.
+ *
+ * @param {string} userId - The `sub` claim / user key
+ * @param {string} usersFilePath - Path to users.json
+ * @returns {Object|null} The local user, or null
+ */
+export function findLocalUserById(userId, usersFilePath) {
+  if (!userId || userId === '__proto__' || userId === 'constructor' || userId === 'prototype') {
+    return null;
+  }
+
+  const usersConfig = loadUsers(usersFilePath);
+  const users = usersConfig.users || {};
+  if (!Object.hasOwn(users, userId)) return null;
+
+  const user = users[userId];
+  const methods = Array.isArray(user?.authMethods) ? user.authMethods : [];
+  if (!methods.includes('local')) return null;
+
+  return { ...user, id: userId };
+}
+
+/**
  * Create or update external user (OIDC/Proxy) in users.json
  * @param {Object} externalUser - External user data
  * @param {string} usersFilePath - Path to users.json file
@@ -290,6 +320,12 @@ export async function createOrUpdateExternalUser(externalUser, usersFilePath) {
     // Update basic info from external provider
     user.name = externalUser.name || user.name;
     user.email = externalUser.email || user.email;
+    // Heal the login name. Records created before the directory login name was
+    // persisted carry the email here (see the create branch below), and nothing
+    // used to write it again, so the wrong value survived every later login.
+    // The directory owns this field for an external user, so take its value
+    // whenever the provider supplies one.
+    user.username = externalUser.username || user.username;
 
     // Store internal groups - groups manually assigned to users in the admin interface
     // External groups from auth providers are handled at runtime, not persisted
@@ -309,7 +345,11 @@ export async function createOrUpdateExternalUser(externalUser, usersFilePath) {
 
     const newUser = {
       id: userId,
-      username: externalUser.email || externalUser.id, // Use email or fallback to external id
+      // The directory login name first (sAMAccountName for LDAP/AD, the Windows
+      // account for NTLM). Email is not a login name — it is only the next-best
+      // identifier for providers that supply no username at all (proxy, Teams),
+      // which is why it stays in the chain rather than being dropped.
+      username: externalUser.username || externalUser.email || externalUser.id,
       email: externalUser.email || null,
       name: externalUser.name || externalUser.id,
       internalGroups: [], // Only store internal/manual groups, not external groups
@@ -447,7 +487,7 @@ export async function validateAndPersistExternalUser(externalUser, platformConfi
     authConfig = platformConfig.oidcAuth || {};
   }
 
-  const usersFilePath = platformConfig.localAuth?.usersFile || 'contents/config/users.json';
+  const usersFilePath = localUsersFile(platformConfig.localAuth);
 
   // Check if user exists in users.json
   const usersConfig = loadUsers(usersFilePath);

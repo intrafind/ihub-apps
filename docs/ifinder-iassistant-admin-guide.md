@@ -265,14 +265,19 @@ MIIEvgIBADANBgkqhkiG9w0BAQEFAASCBKgwggSkAgEAAoIBAQDKrCFR...
 
 ### 2. Platform Configuration
 
-Add iFinder configuration to `contents/config/platform.json`:
+Set the non-secret fields from **Admin > Integrations > iFinder**, or add
+them directly to `contents/config/platform.json`. The private key itself is
+never stored inline: create a "Secret"-type credential under **Admin >
+Credentials** holding the PEM key, then reference it via `privateKeyRef`
+(the admin UI does this for you when you pick the credential from the
+**Private Key** field):
 
 ```json
 {
   "iFinder": {
     "baseUrl": "https://your-ifinder-instance.com",
     "defaultSearchProfile": "searchprofile-standard",
-    "privateKey": "-----BEGIN PRIVATE KEY-----\nMIIEvgIBADANBgkqhkiG9w0BAQEFAASCBKgwggSkAgEAAoIBAQDKrCFR...\n-----END PRIVATE KEY-----",
+    "privateKeyRef": "ifinder",
     "endpoints": {
       "search": "/public-api/retrieval/api/v1/search-profiles/{profileId}/_search",
       "document": "/public-api/retrieval/api/v1/search-profiles/{profileId}/docs/{docId}"
@@ -294,7 +299,7 @@ Add iFinder configuration to `contents/config/platform.json`:
 |-----------|-------------|----------|---------|
 | `baseUrl` | iFinder instance URL | Yes | - |
 | `defaultSearchProfile` | Default search profile ID | Yes | - |
-| `privateKey` | RSA private key (PEM format) | Yes | - |
+| `privateKeyRef` | ID of a "Secret" credential (Admin > Credentials) holding the RSA private key (PEM format). `IFINDER_PRIVATE_KEY` env var takes precedence when set | Yes (unless env var is set) | - |
 | `timeout` | Request timeout (ms) | No | 30000 |
 | `algorithm` | JWT signing algorithm | No | RS256 |
 | `issuer` | JWT issuer claim | No | ihub-apps |
@@ -550,13 +555,16 @@ IASSISTANT_BASE_URL=https://iassistant.company.com
 ```
 
 **Platform Configuration (contents/config/platform.json):**
+
+With `IFINDER_PRIVATE_KEY` set as above, no `privateKeyRef` is needed here —
+the environment variable always takes precedence:
+
 ```json
 {
   "serverName": "Company iHub Apps",
   "iFinder": {
     "baseUrl": "https://ifinder.company.com",
     "defaultSearchProfile": "searchprofile-standard",
-    "privateKey": "${IFINDER_PRIVATE_KEY}",
     "timeout": 30000
   },
   "iAssistant": {
@@ -570,13 +578,15 @@ IASSISTANT_BASE_URL=https://iassistant.company.com
 
 ### 2. Advanced Multi-Profile Setup
 
-**Platform Configuration:**
+**Platform Configuration** (`privateKeyRef` points at a "Secret" credential
+created under Admin > Credentials; omit it and set `IFINDER_PRIVATE_KEY`
+instead if you prefer the environment variable):
 ```json
 {
   "iFinder": {
     "baseUrl": "https://ifinder.company.com",
     "defaultSearchProfile": "searchprofile-standard",
-    "privateKey": "${IFINDER_PRIVATE_KEY}",
+    "privateKeyRef": "ifinder",
     "profiles": {
       "hr": "searchprofile-hr-docs",
       "technical": "searchprofile-tech-docs", 
@@ -620,7 +630,7 @@ IASSISTANT_BASE_URL=https://iassistant.company.com
   "iFinder": {
     "baseUrl": "https://ifinder.company.com",
     "defaultSearchProfile": "searchprofile-standard",
-    "privateKey": "${IFINDER_PRIVATE_KEY}",
+    "privateKeyRef": "ifinder",
     "algorithm": "RS256",
     "issuer": "ihub-apps-production",
     "audience": "ifinder-api-production",
@@ -650,13 +660,15 @@ IASSISTANT_BASE_URL=https://iassistant.company.com
 
 ### 4. Development/Testing Configuration
 
-**Development Platform Configuration:**
+**Development Platform Configuration** (a separate credential, e.g.
+`ifinder_dev`, keeps the dev key distinct from production — there is no
+per-environment env var name; `IFINDER_PRIVATE_KEY` is the only one read):
 ```json
 {
   "iFinder": {
     "baseUrl": "https://ifinder-dev.company.com",
     "defaultSearchProfile": "searchprofile-test",
-    "privateKey": "${IFINDER_DEV_PRIVATE_KEY}",
+    "privateKeyRef": "ifinder_dev",
     "timeout": 60000,
     "debug": true,
     "mockResponses": false

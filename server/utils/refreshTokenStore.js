@@ -268,3 +268,25 @@ export async function revokeRefreshTokensFor(clientId, userId) {
   });
   return doomed.length;
 }
+
+/**
+ * Every user who still holds a live refresh token for one client.
+ *
+ * Revoking a whole client cannot be driven from the consent store alone: a
+ * grant whose consent entry has expired (or was deleted) can still have a live
+ * refresh token behind it, and that token is what keeps minting access tokens.
+ * This is how the bulk revoke finds those users too.
+ *
+ * @param {string} clientId - OAuth client identifier.
+ * @returns {Array<string>} Distinct user IDs, in no particular order.
+ */
+export function listRefreshTokenUserIds(clientId) {
+  if (!clientId) return [];
+
+  const store = loadStore();
+  const userIds = new Set();
+  for (const entry of Object.values(store.tokens || {})) {
+    if (entry?.clientId === clientId && entry.userId) userIds.add(entry.userId);
+  }
+  return [...userIds];
+}
