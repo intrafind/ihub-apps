@@ -1,4 +1,24 @@
-import AnthropicAdapter from '../adapters/anthropic.js';
+/**
+ * @jest-environment node
+ */
+import { describe, test, expect, jest } from '@jest/globals';
+
+// pathUtils resolves the app root via import.meta.url, which babel-jest's CJS
+// transform cannot express — stub it with an equivalent that works under jest.
+jest.mock('../../../server/pathUtils.js', () => ({
+  getRootDir: () => require('path').join(__dirname, '../../../')
+}));
+
+// configCache drags in the whole config/auth loading stack. Building request
+// headers never touches configuration.
+jest.mock('../../../server/configCache.js', () => ({
+  default: {
+    getPlatform: () => ({}),
+    getModels: () => ({ data: [] })
+  }
+}));
+
+import AnthropicAdapter from '../../../server/adapters/anthropic.js';
 
 describe('AnthropicAdapter request headers', () => {
   const model = {
