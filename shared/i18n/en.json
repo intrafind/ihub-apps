@@ -133,8 +133,6 @@
     "insertIntoEmail": "Add to email",
     "insertIntoDocument": "Add to document",
     "insertOptions": "More options",
-    "replyToEmail": "Reply to email",
-    "newEmail": "New email",
     "pinned": {
       "addEmails": "Add email(s)",
       "addEmailsTooltip": "Attach the open email — or every email you've selected in Outlook — to the chat",
@@ -155,7 +153,24 @@
       "appearanceHintOffice": "Automatic follows the Outlook theme (or the system setting on older Outlook versions).",
       "appearanceHintSystem": "Automatic follows the system setting.",
       "cancel": "Cancel",
-      "save": "Save"
+      "save": "Save",
+      "answerAction": "Default answer action",
+      "answerActionAuto": "Automatic (reply all, or insert while composing)",
+      "answerActionHint": "What the button under an answer does. The other actions stay one tap away in its menu, and a choice Outlook cannot offer for the open item falls back to one it can."
+    },
+    "mailActions": {
+      "answer": "Reply",
+      "answerAll": "Reply all",
+      "forward": "Forward",
+      "new": "New email",
+      "insert": "Insert into draft",
+      "forwardedMessage": "Forwarded message",
+      "forwardFrom": "From",
+      "forwardSent": "Sent",
+      "forwardTo": "To",
+      "forwardCc": "Cc",
+      "forwardSubject": "Subject",
+      "originalAttached": "Outlook add-ins cannot rebuild a forward with its attachments, so the original message is attached instead \u2014 nothing is lost."
     },
     "menu": {
       "settings": "Settings",
@@ -1162,7 +1177,17 @@
         "preview": "Preview APIs (not for production)"
       },
       "officeJsPresetCustom": "Your custom URL",
-      "officeJsFallbackWarning": "The saved Office.js source could not be used, so the add-in is falling back to {{mode}}. Check the URL above."
+      "officeJsFallbackWarning": "The saved Office.js source could not be used, so the add-in is falling back to {{mode}}. Check the URL above.",
+      "mailActionTitle": "Answer Actions",
+      "mailActionDesc": "What the button under each assistant answer does in Outlook. Every action stays available in the button\u2019s menu \u2014 this only picks the one that needs no extra tap.",
+      "defaultMailAction": "Default action",
+      "defaultMailActionHelp": "Users can override this per device in the task pane\u2019s Settings dialog. A choice Outlook cannot offer for the open item falls back to one it can \u2014 pick Reply all and a user composing a draft still gets Insert.",
+      "mailActionAuto": "Automatic \u2014 reply all in the reading pane, insert while composing",
+      "mailActionAnswerAll": "Reply all",
+      "mailActionAnswer": "Reply to sender",
+      "mailActionForward": "Forward",
+      "mailActionNew": "New email",
+      "mailActionInsert": "Insert into the open draft"
     },
     "nextcloudEmbed": {
       "title": "Nextcloud Embed",
@@ -2815,6 +2840,7 @@
     "networkError": "Network error connecting to {provider} API for model {model}: {error}. Check your network connection and proxy configuration.",
     "unauthorized": "Invalid API key",
     "modelAccessDenied": "API key is not allowed to use this model",
+    "modelAccessDeniedForUser": "You don't have permission to use this AI model. Please contact your administrator to request access.",
     "noModelsAvailable": "No AI models are available for this app. Please contact your administrator to configure models and permissions.",
     "noCompatibleModels": "No compatible AI models found for this app. The app requires specific model features that are not available. Please contact your administrator.",
     "noModelIdProvided": "No model selected. Please select an AI model to continue.",

@@ -238,3 +238,47 @@ tab, and the web app is unchanged.
 - When an action cannot be carried out, the citation list now says so instead of leaving a button
   that appears to do nothing.
 - "Open in App" is hidden in the add-in and the side panel, where there is no app page to open.
+
+## Outlook Add-in: replies keep every recipient, and inserts keep your signature
+
+Answering a thread from the task pane quietly reduced it to a reply to the sender: every other `To:`
+recipient and all `CC:` recipients disappeared from the draft. The pane only ever opened a
+reply-to-sender form — there was no reply-all path at all — so a thread answer reached one person
+instead of the group. **Reply all** is now a real action and is what the button does by default.
+
+Inserting an answer into an email you were already writing also replaced the draft's body outright,
+which took the Outlook signature and the quoted thread with it — a compliance problem wherever a
+footer is mandatory. The answer is now written into the draft at the cursor, leaving the signature
+and the quoted thread untouched.
+
+- Outlook still suppresses the automatic signature on a *new* form an add-in fills in — a platform
+  limitation with no add-in-side workaround. Where every mail must carry a footer, keep the default
+  answer action on **Insert into draft**, or apply the footer with a mail-server transport rule.
+  
+## Chat can no longer reach AI models outside a user's group permissions
+
+A group's **Models** allowlist (Admin → Groups) only ever controlled which models an app's model
+picker displayed. The chat request itself never checked it, so a user could still reach a model
+outside their group's allowed models — either by asking for it directly, or simply by using an app
+whose preferred or default model fell outside their allowance, silently and with no indication a
+restricted model had been used.
+
+Chat requests are now checked against the requesting user's group-level model permissions, the same
+way `/api/models` and the OpenAI-compatible API already are:
+
+- Asking for a model outside your group's allowed models now fails clearly instead of silently
+  using a different one.
+- Automatic model selection — an app's preferred or default model — now only ever considers models
+  both the app and your group allow.
+
+No admin action is required: groups that already restrict **Models** to specific entries are now
+fully enforced for chat, including apps invoked as tools through the MCP gateway.
+
+## Transient server errors no longer get cached and served back as real data
+
+A single failed request to the server — a brief 5xx while loading something like UI styles or
+platform configuration — could get cached in the browser and served back as if it were successful
+data for up to a minute, so the affected screen crashed or rendered blank instead of showing an
+error or simply retrying. Failed requests are no longer written into the client-side response
+cache, so a retry after a transient error always fetches fresh data instead of replaying the
+earlier failure.

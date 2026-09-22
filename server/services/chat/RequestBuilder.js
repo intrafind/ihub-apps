@@ -3,6 +3,7 @@ import { isFeatureEnabled } from '../../featureRegistry.js';
 import { getToolsForApp, resolveAppNativeWebSearch } from '../../toolLoader.js';
 import ErrorHandler from '../../utils/ErrorHandler.js';
 import ApiKeyVerifier from '../../utils/ApiKeyVerifier.js';
+import { filterResourcesByPermissions } from '../../utils/authorization.js';
 import logger from '../../utils/logger.js';
 import { findByIdCaseInsensitive } from '../../utils/resourceLookup.js';
 
@@ -155,16 +156,30 @@ function filterModelsForApp(models, app) {
 }
 
 /**
- * Whether the user is permitted to use a specific model id per their resolved
- * group permissions (`user.permissions.models`, which may contain the `*`
- * wildcard). Returns true when no model-permission info is present so callers
- * without an enhanced user object (e.g. internal/system flows) are not blocked.
+ * Narrow a model list down to what the requesting user's group permissions
+ * allow. Apps only express what they support; user.permissions.models is the
+ * separate, group-driven allowlist enforced everywhere else (/api/models,
+ * the OpenAI-compatible proxy) and must also bound chat model resolution.
+ * @param {Array} models - Models already filtered for app requirements
+ * @param {Object} user - Authenticated/anonymous principal, may be undefined
+ * @returns {Array} Models the user is permitted to use
+ */
+function filterModelsForUser(models, user) {
+  if (!user?.permissions) return models;
+  const allowedModels = user.permissions.models || new Set();
+  return filterResourcesByPermissions(models, allowedModels);
+}
+
+/**
+ * Whether the user is permitted to use a specific model id, per the same
+ * group-permission rules as filterModelsForUser (honors the `*` wildcard,
+ * matches ids case-insensitively). Returns true when no model-permission info
+ * is present so callers without an enhanced user object (e.g. internal/system
+ * flows) are not blocked.
  */
 function isModelPermittedForUser(user, modelId) {
-  const allowed = user?.permissions?.models;
-  if (allowed instanceof Set) return allowed.has('*') || allowed.has(modelId);
-  if (Array.isArray(allowed)) return allowed.includes('*') || allowed.includes(modelId);
-  return true;
+  if (!user?.permissions) return true;
+  return filterModelsForUser([{ id: modelId }], user).length > 0;
 }
 
 class RequestBuilder {
@@ -217,17 +232,49 @@ class RequestBuilder {
         return { success: false, error };
       }
 
+      // A caller may request a specific model, but only one they're permitted
+      // to use. This runs before any app-level filtering so it also covers
+      // models the app would otherwise allow. An explicit request for a model
+      // that exists but sits outside `user.permissions.models` is a hard
+      // error — not a silent substitution — mirroring the enforcement already
+      // applied to /api/models and the OpenAI-compatible proxy
+      // (server/routes/openaiProxy.js). A model id that doesn't exist at all
+      // falls through to normal fallback resolution below, unchanged.
+      let requestedModelId = modelId;
+      if (requestedModelId) {
+        // Normalize to the configured casing up front so the permission
+        // check and every downstream `id === requestedModelId` comparison
+        // line up regardless of how the caller cased the model id.
+        const matchedModel = findByIdCaseInsensitive(models, requestedModelId);
+        if (matchedModel) {
+          requestedModelId = matchedModel.id;
+          if (!isModelPermittedForUser(user, requestedModelId)) {
+            const error = new Error(
+              `You don't have permission to use the model '${requestedModelId}'. Please contact your administrator to request access.`
+            );
+            error.code = 'modelAccessDeniedForUser';
+            return { success: false, error };
+          }
+        }
+      }
+
       // Filter models based on app requirements (allowedModels, tools, settings.model.filter)
       const filteredModels = filterModelsForApp(models, app);
+      // Then narrow to what the requesting user's group permissions allow —
+      // the app only expresses what it supports, user.permissions.models is
+      // the separate, group-driven allowlist that must also bound which
+      // model chat resolution can land on.
+      const permittedModels = filterModelsForUser(filteredModels, user);
       logger.info('Filtered compatible models for app', {
         component: 'RequestBuilder',
         appId: app.id,
         filteredCount: filteredModels.length,
+        permittedCount: permittedModels.length,
         totalCount: models.length
       });
 
       // Check if no models are available at all
-      if (filteredModels.length === 0) {
+      if (permittedModels.length === 0) {
         // Determine the most appropriate error message
         let errorCode;
 
@@ -236,10 +283,13 @@ class RequestBuilder {
           errorCode = 'noModelsAvailable';
         }
         // If models exist but none passed the app-specific filters
-        else if (app.allowedModels || app.tools || app.settings?.model?.filter) {
+        else if (
+          filteredModels.length === 0 &&
+          (app.allowedModels || app.tools || app.settings?.model?.filter)
+        ) {
           errorCode = 'noCompatibleModels';
         }
-        // Otherwise, likely a permissions issue
+        // Otherwise, the app permits models this user's group does not
         else {
           errorCode = 'noModelsForUser';
         }
@@ -255,35 +305,10 @@ class RequestBuilder {
         return { success: false, error };
       }
 
-      // Find the default model from filtered models, or fall back to global default
-      const defaultModelFromFiltered = filteredModels.find(m => m.default)?.id;
+      // Find the default model from the permitted list, or fall back to global default
+      const defaultModelFromFiltered = permittedModels.find(m => m.default)?.id;
       const globalDefaultModel = models.find(m => m.default)?.id;
       const defaultModel = defaultModelFromFiltered || globalDefaultModel;
-
-      // A caller may request a specific model, but only one they're permitted
-      // to use. An explicitly requested modelId the user has no permission for
-      // is ignored (not an error) so resolution falls back to the app's
-      // preferred/default model. This stops `modelId` from being used to
-      // escalate to a model outside `permissions.models` — over both the chat
-      // route and the MCP gateway — without changing the app-default path when
-      // no model is requested.
-      let requestedModelId = modelId;
-      if (requestedModelId) {
-        // Normalize to the configured casing up front so the permission
-        // check and every downstream `id === requestedModelId` comparison
-        // line up regardless of how the caller cased the model id.
-        const matchedModel = findByIdCaseInsensitive(models, requestedModelId);
-        if (matchedModel) requestedModelId = matchedModel.id;
-      }
-      if (requestedModelId && !isModelPermittedForUser(user, requestedModelId)) {
-        logger.warn('Requested model not permitted for user; falling back to app default', {
-          component: 'RequestBuilder',
-          appId: app.id,
-          requestedModelId,
-          user: user?.id
-        });
-        requestedModelId = undefined;
-      }
 
       // Determine which model to use
       let resolvedModelId = requestedModelId || app.preferredModel || defaultModel;
@@ -294,23 +319,23 @@ class RequestBuilder {
           component: 'RequestBuilder',
           appId: app.id
         });
-        // Use the first available model from filtered list as last resort
-        if (filteredModels.length > 0) {
-          resolvedModelId = filteredModels[0].id;
+        // Use the first available model from the permitted list as last resort
+        if (permittedModels.length > 0) {
+          resolvedModelId = permittedModels[0].id;
           logger.info('Using first available model as fallback', {
             component: 'RequestBuilder',
             resolvedModelId
           });
         } else {
-          // This shouldn't happen since we checked filteredModels.length above, but handle it anyway
+          // This shouldn't happen since we checked permittedModels.length above, but handle it anyway
           const error = new Error('No model ID provided and no default model available.');
           error.code = 'noModelIdProvided';
           return { success: false, error };
         }
       }
 
-      // Check if the resolved model is in the filtered list
-      const isModelInFilteredList = filteredModels.some(m => m.id === resolvedModelId);
+      // Check if the resolved model is in the permitted list
+      const isModelInFilteredList = permittedModels.some(m => m.id === resolvedModelId);
 
       if (!isModelInFilteredList) {
         logger.info('Model not compatible with app requirements, searching for fallback', {
@@ -322,15 +347,15 @@ class RequestBuilder {
         // Try to find a compatible fallback model
         let fallbackModel = null;
 
-        // 1. Try app's preferred model if it's in the filtered list
-        if (app.preferredModel && filteredModels.some(m => m.id === app.preferredModel)) {
+        // 1. Try app's preferred model if it's in the permitted list
+        if (app.preferredModel && permittedModels.some(m => m.id === app.preferredModel)) {
           fallbackModel = app.preferredModel;
           logger.info("Using app's preferred model as fallback", {
             component: 'RequestBuilder',
             fallbackModel
           });
         }
-        // 2. Try default model from filtered list
+        // 2. Try default model from the permitted list
         else if (defaultModelFromFiltered) {
           fallbackModel = defaultModelFromFiltered;
           logger.info('Using default model from filtered list as fallback', {
@@ -338,9 +363,9 @@ class RequestBuilder {
             fallbackModel
           });
         }
-        // 3. Try first available model from filtered list
-        else if (filteredModels.length > 0) {
-          fallbackModel = filteredModels[0].id;
+        // 3. Try first available model from the permitted list
+        else if (permittedModels.length > 0) {
+          fallbackModel = permittedModels[0].id;
           logger.info('Using first available compatible model as fallback', {
             component: 'RequestBuilder',
             fallbackModel

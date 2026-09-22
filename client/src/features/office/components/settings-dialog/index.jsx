@@ -7,12 +7,25 @@ import {
   getStoredThemePreference,
   setThemePreference
 } from '../../utilities/officeTheme';
+import {
+  MAIL_ACTION_ANSWER,
+  MAIL_ACTION_ANSWER_ALL,
+  MAIL_ACTION_AUTO,
+  MAIL_ACTION_FORWARD,
+  MAIL_ACTION_INSERT,
+  MAIL_ACTION_NEW,
+  MAIL_ACTION_PREFERENCE_EVENT,
+  OFFICE_MAIL_ACTION_CHOICES,
+  getStoredMailActionPreference,
+  setMailActionPreference
+} from '../../utilities/officeMailAction';
 import { useEmbeddedHost } from '../../contexts/EmbeddedHostContext';
 
 /**
- * Per-user settings for the embedded chat shell: account, UI language and
- * appearance (light / dark / auto). Language and appearance persist in the
- * host's localStorage, so they survive Outlook restarts (issue #2366).
+ * Per-user settings for the embedded chat shell: account, UI language,
+ * appearance (light / dark / auto) and — in Outlook — what the answer button
+ * under each reply does by default. All three preferences persist in the host's
+ * localStorage, so they survive Outlook restarts (issues #2366, #2446).
  *
  * The form is mounted only while the dialog is open so every open starts from
  * the persisted values — a selection abandoned with Cancel must not linger
@@ -28,6 +41,7 @@ function SettingsForm({ user, onClose }) {
   const host = useEmbeddedHost();
   const [selectedLanguage, setSelectedLanguage] = useState(officeLocale);
   const [selectedTheme, setSelectedTheme] = useState(getStoredThemePreference);
+  const [selectedMailAction, setSelectedMailAction] = useState(getStoredMailActionPreference);
 
   const themeLabels = {
     light: t('office.settingsDialog.appearanceLight', 'Light'),
@@ -44,9 +58,26 @@ function SettingsForm({ user, onClose }) {
         )
       : t('office.settingsDialog.appearanceHintSystem', 'Automatic follows the system setting.');
 
+  const mailActionLabels = {
+    [MAIL_ACTION_AUTO]: t(
+      'office.settingsDialog.answerActionAuto',
+      'Automatic (reply all, or insert while composing)'
+    ),
+    [MAIL_ACTION_ANSWER_ALL]: t('office.mailActions.answerAll', 'Reply all'),
+    [MAIL_ACTION_ANSWER]: t('office.mailActions.answer', 'Reply'),
+    [MAIL_ACTION_FORWARD]: t('office.mailActions.forward', 'Forward'),
+    [MAIL_ACTION_NEW]: t('office.mailActions.new', 'New email'),
+    [MAIL_ACTION_INSERT]: t('office.mailActions.insert', 'Insert into draft')
+  };
+
   const handleSave = () => {
     // Appearance applies immediately — no reload needed.
     setThemePreference(selectedTheme);
+    // Likewise the answer action: the chat panel listens for this and
+    // re-resolves its default without a reload.
+    if (setMailActionPreference(selectedMailAction)) {
+      document.dispatchEvent(new CustomEvent(MAIL_ACTION_PREFERENCE_EVENT));
+    }
     if (selectedLanguage !== officeLocale) {
       // Reloads the pane; the saved appearance is re-applied on boot.
       setOfficeLocale(selectedLanguage);
@@ -150,6 +181,37 @@ function SettingsForm({ user, onClose }) {
             </select>
             <p className="mt-1.5 text-xs text-slate-500 dark:text-slate-400">{appearanceHint}</p>
           </div>
+
+          {/* Outlook only: the browser-extension side panel has no mail item
+              to answer, so the control would have nothing to act on. */}
+          {host.kind === 'office' && (
+            <div>
+              <label
+                htmlFor="office-settings-answer-action"
+                className={`block ${sectionLabelClassName}`}
+              >
+                {t('office.settingsDialog.answerAction', 'Default answer action')}
+              </label>
+              <select
+                id="office-settings-answer-action"
+                value={selectedMailAction}
+                onChange={e => setSelectedMailAction(e.target.value)}
+                className={selectClassName}
+              >
+                {OFFICE_MAIL_ACTION_CHOICES.map(choice => (
+                  <option key={choice} value={choice}>
+                    {mailActionLabels[choice]}
+                  </option>
+                ))}
+              </select>
+              <p className="mt-1.5 text-xs text-slate-500 dark:text-slate-400">
+                {t(
+                  'office.settingsDialog.answerActionHint',
+                  'What the button under an answer does. The other actions stay one tap away in its menu, and a choice Outlook cannot offer for the open item falls back to one it can.'
+                )}
+              </p>
+            </div>
+          )}
         </div>
 
         <div className="flex items-center justify-end gap-2 px-3 py-2 sm:px-4 sm:py-3 border-t border-slate-200 dark:border-slate-700">

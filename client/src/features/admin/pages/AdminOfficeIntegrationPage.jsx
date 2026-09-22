@@ -13,6 +13,14 @@ import { getLocalizedContent } from '../../../utils/localizeContent';
 const START_PAGE_CHOICES = ['start', 'apps'];
 
 /**
+ * What the answer button in the task pane does by default; mirrored in
+ * server/utils/officeMailActions.js. `auto` follows the open item — reply all
+ * in the reading pane, insert while the user is composing.
+ */
+const MAIL_ACTION_CHOICES = ['auto', 'answerAll', 'answer', 'forward', 'new', 'insert'];
+const DEFAULT_MAIL_ACTION = 'auto';
+
+/**
  * Office.js delivery modes, in the order they are offered. Kept beside the
  * component so the radio list stays declarative; the ids match
  * `OFFICE_JS_MODES` in server/utils/officeJsSource.js.
@@ -125,6 +133,9 @@ function AdminOfficeIntegrationPage() {
   // The task pane's landing view: which view opens after sign-in, the app
   // whose chat input the start page shows, and the curated app shortcuts.
   const [startPage, setStartPage] = useState(DEFAULT_START_PAGE);
+  // What the answer button under each assistant reply does by default. Users
+  // may override it per device in the pane's Settings dialog (issue #2446).
+  const [defaultMailAction, setDefaultMailAction] = useState(DEFAULT_MAIL_ACTION);
   // Every configured app (admin endpoint), for the two app pickers below.
   const [apps, setApps] = useState([]);
   const [appsLoading, setAppsLoading] = useState(true);
@@ -163,6 +174,11 @@ function AdminOfficeIntegrationPage() {
       setOfficeJsResolvedMode(data.officeJsResolvedMode || '');
       setOfficeJsPresets(Array.isArray(data.officeJsCdnPresets) ? data.officeJsCdnPresets : []);
       setStartPage(readStartPage(data.startPage));
+      setDefaultMailAction(
+        MAIL_ACTION_CHOICES.includes(data.defaultMailAction)
+          ? data.defaultMailAction
+          : DEFAULT_MAIL_ACTION
+      );
       setStarterPrompts(
         Array.isArray(data.starterPrompts)
           ? data.starterPrompts.map(p => ({
@@ -213,6 +229,18 @@ function AdminOfficeIntegrationPage() {
     }`;
 
   const updateStartPage = patch => setStartPage(prev => ({ ...prev, ...patch }));
+
+  const mailActionLabels = {
+    auto: t(
+      'admin.officeIntegration.mailActionAuto',
+      'Automatic \u2014 reply all in the reading pane, insert while composing'
+    ),
+    answerAll: t('admin.officeIntegration.mailActionAnswerAll', 'Reply all'),
+    answer: t('admin.officeIntegration.mailActionAnswer', 'Reply to sender'),
+    forward: t('admin.officeIntegration.mailActionForward', 'Forward'),
+    new: t('admin.officeIntegration.mailActionNew', 'New email'),
+    insert: t('admin.officeIntegration.mailActionInsert', 'Insert into the open draft')
+  };
 
   // Keep ids that no longer resolve to an app in the list so they stay
   // removable instead of silently occupying a slot.
@@ -413,7 +441,8 @@ function AdminOfficeIntegrationPage() {
             // '' means "automatic"; the server stores no id for it.
             defaultAppId: startPage.defaultAppId || '',
             featuredAppIds: startPage.featuredAppIds
-          }
+          },
+          defaultMailAction
         }
       });
       await loadStatus();
@@ -1046,6 +1075,43 @@ function AdminOfficeIntegrationPage() {
                     )}
                   </p>
                 </div>
+              </div>
+            </div>
+
+            {/* Answer actions: what the button under an assistant reply does */}
+            <div className="bg-white dark:bg-gray-800 rounded-xl shadow-xs border border-gray-200 dark:border-gray-700 p-6">
+              <h2 className="text-lg font-semibold text-gray-900 dark:text-gray-100 mb-1">
+                {t('admin.officeIntegration.mailActionTitle', 'Answer Actions')}
+              </h2>
+              <p className="text-sm text-gray-500 dark:text-gray-400 mb-4">
+                {t(
+                  'admin.officeIntegration.mailActionDesc',
+                  'What the button under each assistant answer does in Outlook. Every action stays available in the button\u2019s menu \u2014 this only picks the one that needs no extra tap.'
+                )}
+              </p>
+
+              <div className="max-w-lg">
+                <label htmlFor="office-defaultMailAction" className={labelClass}>
+                  {t('admin.officeIntegration.defaultMailAction', 'Default action')}
+                </label>
+                <select
+                  id="office-defaultMailAction"
+                  value={defaultMailAction}
+                  onChange={e => setDefaultMailAction(e.target.value)}
+                  className={selectClass}
+                >
+                  {MAIL_ACTION_CHOICES.map(choice => (
+                    <option key={choice} value={choice}>
+                      {mailActionLabels[choice]}
+                    </option>
+                  ))}
+                </select>
+                <p className={helpClass}>
+                  {t(
+                    'admin.officeIntegration.defaultMailActionHelp',
+                    'Users can override this per device in the task pane\u2019s Settings dialog. A choice Outlook cannot offer for the open item falls back to one it can \u2014 pick Reply all and a user composing a draft still gets Insert.'
+                  )}
+                </p>
               </div>
             </div>
 
