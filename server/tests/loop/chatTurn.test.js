@@ -658,6 +658,42 @@ test('tools path: step/completed{tool_calls} → tool/started → tool/completed
   assert.deepEqual(endOutcomes(telemetry), ['completed', 'completed']);
 });
 
+test('search tool: tool/completed carries the pages found and read, even when the preview is truncated', async t => {
+  const chatId = newChatId('web-sources');
+  const frames = captureFrames(t, chatId);
+  const page = 'x'.repeat(5000);
+  const { service } = makeService(
+    [toolTurn([{ name: 'webSearch', args: { query: 'berlin' } }]), textTurn('Sunny.')],
+    {
+      runTool: async () => ({
+        query: 'berlin',
+        results: [
+          { title: 'Weather', url: 'https://weather.example/berlin' },
+          { title: 'News', url: 'https://news.example/' }
+        ],
+        extractedContent: [
+          {
+            title: 'Weather',
+            url: 'https://weather.example/berlin',
+            extractedContent: { content: page },
+            contentExtracted: true
+          },
+          { title: 'News', url: 'https://news.example/', contentExtracted: false }
+        ]
+      })
+    }
+  );
+
+  await runTurn(service, { chatId, prep: makePrep({ tools: [webSearchTool] }) });
+
+  const done = frame(frames, TOOL_COMPLETED).data;
+  assert.equal(typeof done.resultPreview, 'string', 'the preview itself is truncated text');
+  assert.deepEqual(done.webSources, [
+    { url: 'https://weather.example/berlin', title: 'Weather', read: true },
+    { url: 'https://news.example/', title: 'News', readFailed: true }
+  ]);
+});
+
 // ── 5. tool failure ─────────────────────────────────────────────────────────
 
 test('tool throws: tool/completed carries the error envelope, the model gets it back, tool_error is logged, the turn still completes', async t => {

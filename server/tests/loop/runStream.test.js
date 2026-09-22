@@ -1113,6 +1113,17 @@ test('projectLedgerEvent: tool/call → tool/started, tool/result → tool/compl
     resultPreview: null,
     error: { message: 'error' }
   });
+  // The pages a search found survive a rebuild from the ledger.
+  const webSources = [{ url: 'https://example.com/', title: 'Example', read: true }];
+  const [searched] = projected(RUN_LOG_EVENTS.TOOL_RESULT, {
+    step: 1,
+    callId: 'c2',
+    toolId: 'braveSearch',
+    resultPreview: '…',
+    durationMs: 3,
+    webSources
+  });
+  assert.deepEqual(searched.data.webSources, webSources);
 });
 
 test('projectLedgerEvent: interaction/raised and interaction/answered project only when complete', () => {

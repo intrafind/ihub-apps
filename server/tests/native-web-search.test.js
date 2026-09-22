@@ -281,6 +281,33 @@ describe('convertAnthropicResponseToGeneric - native web search response handlin
     );
 
     assert.strictEqual(result.tool_calls.length, 0);
+    // ...but the query is kept, so the chat can say what was searched for.
+    assert.deepStrictEqual(result.groundingMetadata?.webSearchQueries, ['nyc weather']);
+  });
+
+  it('records no query for a server tool other than web_search', async () => {
+    const streamId = `test-${Math.random()}`;
+    await convertAnthropicResponseToGeneric(
+      JSON.stringify({
+        type: 'content_block_start',
+        index: 0,
+        content_block: { type: 'server_tool_use', id: 'srvtoolu_2', name: 'code_exec', input: {} }
+      }),
+      streamId
+    );
+    await convertAnthropicResponseToGeneric(
+      JSON.stringify({
+        type: 'content_block_delta',
+        index: 0,
+        delta: { type: 'input_json_delta', partial_json: '{"query":"not a search"}' }
+      }),
+      streamId
+    );
+    const result = await convertAnthropicResponseToGeneric(
+      JSON.stringify({ type: 'content_block_stop', index: 0 }),
+      streamId
+    );
+    assert.strictEqual(result.groundingMetadata, undefined);
   });
 
   it('collects web_search_tool_result content delivered at content_block_start', async () => {
@@ -411,6 +438,9 @@ describe('convertAnthropicResponseToGeneric - native web search response handlin
     assert.ok(result.groundingMetadata);
     assert.strictEqual(result.groundingMetadata.searchResults.length, 1);
     assert.strictEqual(result.groundingMetadata.citations.length, 1);
+    assert.deepStrictEqual(result.groundingMetadata.webSearchQueries, [
+      'claude shannon birth date'
+    ]);
   });
 });
 
