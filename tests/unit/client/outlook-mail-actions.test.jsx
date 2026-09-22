@@ -383,6 +383,71 @@ describe('buildForwardSubject', () => {
   });
 });
 
+describe('failures inside the mailbox lock', () => {
+  test('an item that throws while being read is reported, not left silent', async () => {
+    const m = loadModule();
+    const item = readModeItem();
+    // Office throws on a stale item rather than returning an error result —
+    // which is why every other reader in this feature guards the access.
+    Object.defineProperty(item, 'attachments', {
+      configurable: true,
+      get() {
+        throw Object.assign(new Error('item is no longer valid'), {
+          name: 'ItemNotFound',
+          code: 9020
+        });
+      }
+    });
+    installOffice({
+      item,
+      mailbox: { displayNewMessageFormAsync: jest.fn((_form, cb) => cb(SUCCESS)) }
+    });
+
+    const result = await m.runOutlookMailAction('forward', 'Passing this on.');
+
+    // A result the pane can render — never a rejection the caller drops.
+    expect(result.ok).toBe(false);
+    expect(result.message).toContain('ItemNotFound');
+    expect(result.message).toContain('9020');
+  });
+
+  test('a throw does not wedge the queue for the next action', async () => {
+    const m = loadModule();
+    const broken = readModeItem();
+    Object.defineProperty(broken, 'attachments', {
+      configurable: true,
+      get() {
+        throw new Error('item is no longer valid');
+      }
+    });
+    installOffice({
+      item: broken,
+      mailbox: { displayNewMessageFormAsync: jest.fn((_form, cb) => cb(SUCCESS)) }
+    });
+    await m.runOutlookMailAction('forward', 'Passing this on.');
+
+    const healthy = readModeItem();
+    installOffice({ item: healthy });
+    const result = await m.runOutlookMailAction('answerAll', 'Sounds good.');
+
+    expect(result.ok).toBe(true);
+    expect(healthy.displayReplyAllFormAsync).toHaveBeenCalledTimes(1);
+  });
+});
+
+test('readOutlookMode resolves the mode through the mailbox lock', async () => {
+  const m = loadModule();
+
+  installOffice({ item: readModeItem() });
+  await expect(m.readOutlookMode()).resolves.toBe('read');
+
+  installOffice({ item: composeModeItem() });
+  await expect(m.readOutlookMode()).resolves.toBe('compose');
+
+  delete global.Office;
+  await expect(m.readOutlookMode()).resolves.toBeNull();
+});
+
 test('an unknown host is refused with an explanation, not an exception', async () => {
   const m = loadModule();
   delete global.Office;

@@ -12,7 +12,12 @@ import {
   readAdminMailActionDefault,
   resolveDefaultMailAction
 } from '../utilities/officeMailAction';
-import { detectOutlookMode, runOutlookMailAction } from '../utilities/outlookMailActions';
+import {
+  detectOutlookMode,
+  readOutlookMode,
+  runOutlookMailAction
+} from '../utilities/outlookMailActions';
+import { describeOfficeError, logOfficeError } from '../utilities/officeLog';
 
 /** Outlook's own iconography: the reply arrow, the forward arrow, a new draft. */
 const ACTION_ICONS = {
@@ -51,13 +56,27 @@ export default function useOutlookMailActions({ officeConfig } = {}) {
   const [notice, setNotice] = useState(null);
 
   useEffect(() => {
-    const refreshMode = () => setMode(detectOutlookMode());
+    let cancelled = false;
+    // Through the mailbox lock: a read taken while "Add email(s)" has another
+    // item loaded reports that item's mode, and nothing re-detects once the
+    // load finishes — the action list would stay wrong until the next
+    // selection. The lock-free read seeding `useState` above is only the first
+    // paint; this corrects it.
+    const refreshMode = () => {
+      readOutlookMode().then(
+        next => {
+          if (!cancelled) setMode(next);
+        },
+        () => {}
+      );
+    };
     const refreshPreference = () => setUserPreference(getStoredMailActionPreference());
     document.addEventListener('ihub:itemchanged', refreshMode);
     document.addEventListener(MAIL_ACTION_PREFERENCE_EVENT, refreshPreference);
     // Office.js may still have been initialising when this hook first ran.
     refreshMode();
     return () => {
+      cancelled = true;
       document.removeEventListener('ihub:itemchanged', refreshMode);
       document.removeEventListener(MAIL_ACTION_PREFERENCE_EVENT, refreshPreference);
     };
@@ -97,25 +116,37 @@ export default function useOutlookMailActions({ officeConfig } = {}) {
   const runAction = useCallback(
     async (actionId, content) => {
       setNotice(null);
-      const result = await runOutlookMailAction(actionId, content, {
-        forwardLabels: {
-          forwarded: t('office.mailActions.forwardedMessage', 'Forwarded message'),
-          from: t('office.mailActions.forwardFrom', 'From'),
-          sent: t('office.mailActions.forwardSent', 'Sent'),
-          to: t('office.mailActions.forwardTo', 'To'),
-          cc: t('office.mailActions.forwardCc', 'Cc'),
-          subject: t('office.mailActions.forwardSubject', 'Subject')
-        },
-        originalAttachedNotice: t(
-          'office.mailActions.originalAttached',
-          'Outlook add-ins cannot rebuild a forward with its attachments, so the original message is attached instead — nothing is lost.'
-        )
-      });
-      if (result.ok) {
-        setNotice(result.notice ? { tone: 'info', message: result.notice.message } : null);
-        return;
+      try {
+        const result = await runOutlookMailAction(actionId, content, {
+          forwardLabels: {
+            forwarded: t('office.mailActions.forwardedMessage', 'Forwarded message'),
+            from: t('office.mailActions.forwardFrom', 'From'),
+            sent: t('office.mailActions.forwardSent', 'Sent'),
+            to: t('office.mailActions.forwardTo', 'To'),
+            cc: t('office.mailActions.forwardCc', 'Cc'),
+            subject: t('office.mailActions.forwardSubject', 'Subject')
+          },
+          originalAttachedNotice: t(
+            'office.mailActions.originalAttached',
+            'Outlook add-ins cannot rebuild a forward with its attachments, so the original message is attached instead — nothing is lost.'
+          )
+        });
+        if (result.ok) {
+          setNotice(result.notice ? { tone: 'info', message: result.notice.message } : null);
+          return;
+        }
+        setNotice({ tone: 'error', message: result.message });
+      } catch (error) {
+        // The runner returns failures rather than throwing, but a throw outside
+        // its own guards — a stale Office item, markdown parsing — would
+        // otherwise leave the pane silent: the notice was cleared above and
+        // nobody awaits this callback. See issue #2446.
+        logOfficeError('runAction', error, { action: actionId });
+        setNotice({
+          tone: 'error',
+          message: `Something went wrong running this action. ${describeOfficeError(error)}`.trim()
+        });
       }
-      setNotice({ tone: 'error', message: result.message });
     },
     [t]
   );

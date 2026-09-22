@@ -508,38 +508,73 @@ export async function runOutlookMailAction(action, markdownText, options = {}) {
     return failed(action, 'This action is only available when the add-in is open in Outlook.');
   }
 
-  const mode = detectOutlookMode();
-  if (!isMailActionAvailable(action, mode)) {
-    return failed(
-      action,
-      mode === OUTLOOK_COMPOSE_MODE
-        ? 'Outlook only allows inserting into the draft while you are composing an email.'
-        : 'This action is not available for the selected item.'
-    );
-  }
-
   const plainText = String(markdownText ?? '');
   const html = marked.parse(plainText);
 
   return withMailboxLock(async () => {
-    switch (action) {
-      case MAIL_ACTION_INSERT:
-        return runInsert(html);
-      case MAIL_ACTION_ANSWER:
-      case MAIL_ACTION_ANSWER_ALL:
-        return runReply(action, html, plainText);
-      case MAIL_ACTION_FORWARD:
-        return runForward(
-          html,
-          plainText,
-          options.forwardLabels,
-          options.originalAttachedNotice ||
-            'The original message is attached so none of its attachments are lost.'
-        );
-      case MAIL_ACTION_NEW:
-        return runNew(html, plainText);
-      default:
-        return failed(action, `Unknown action: ${action}`);
+    // Inside the lock, not before it: Office redirects
+    // `Office.context.mailbox.item` to whichever item another reader has loaded
+    // via `loadItemByIdAsync`, so a mode read taken outside the queue can refuse
+    // an action the real item supports ("Add email(s)" is the reader that does
+    // this). The action bodies below re-read the item under the same lock.
+    const mode = detectOutlookMode();
+    if (!isMailActionAvailable(action, mode)) {
+      return failed(
+        action,
+        mode === OUTLOOK_COMPOSE_MODE
+          ? 'Outlook only allows inserting into the draft while you are composing an email.'
+          : 'This action is not available for the selected item.'
+      );
+    }
+
+    try {
+      // `return await`, not a bare `return`: returning a promise out of a try
+      // block hands it to the caller unawaited, so an async rejection — which
+      // is what a stale item read inside `runForward` produces — would sail
+      // straight past the catch below.
+      switch (action) {
+        case MAIL_ACTION_INSERT:
+          return await runInsert(html);
+        case MAIL_ACTION_ANSWER:
+        case MAIL_ACTION_ANSWER_ALL:
+          return await runReply(action, html, plainText);
+        case MAIL_ACTION_FORWARD:
+          return await runForward(
+            html,
+            plainText,
+            options.forwardLabels,
+            options.originalAttachedNotice ||
+              'The original message is attached so none of its attachments are lost.'
+          );
+        case MAIL_ACTION_NEW:
+          return await runNew(html, plainText);
+        default:
+          return failed(action, `Unknown action: ${action}`);
+      }
+    } catch (error) {
+      // Reading a stale `Office.context.mailbox.item` — or any of its
+      // properties — throws rather than returning an error result, which is why
+      // every other reader in this feature wraps that access. Without this the
+      // rejection escapes to a caller that does not catch it and the pane shows
+      // nothing at all, which is worse than the alert this module replaced.
+      logOfficeError('runOutlookMailAction', error, { action, mode });
+      return failed(
+        action,
+        `Outlook could not run this action. ${describeOfficeError(error)}`.trim()
+      );
     }
   });
+}
+
+/**
+ * `detectOutlookMode()` taken through the mailbox lock, for callers that keep
+ * the mode in state. A lock-free read taken while another reader has an item
+ * loaded reports that item's mode — and nothing re-detects when the load
+ * finishes, so the wrong action list would stick until the user selects
+ * another item.
+ *
+ * @returns {Promise<'read'|'compose'|null>}
+ */
+export function readOutlookMode() {
+  return withMailboxLock(async () => detectOutlookMode());
 }
