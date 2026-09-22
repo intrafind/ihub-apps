@@ -121,6 +121,9 @@ const AdminVoiceInputPage = lazyWithRetry(
   () => import('./features/admin/pages/AdminVoiceInputPage')
 );
 const AdminTelemetryPage = lazyWithRetry(() => import('./features/admin/pages/AdminTelemetryPage'));
+const AdminChatHistoryPage = lazyWithRetry(
+  () => import('./features/admin/pages/AdminChatHistoryPage')
+);
 const AdminFeaturesPage = lazyWithRetry(() => import('./features/admin/pages/AdminFeaturesPage'));
 const AdminAuditLogPage = lazyWithRetry(() => import('./features/admin/pages/AdminAuditLogPage'));
 const AdminChangelogPage = lazyWithRetry(() => import('./features/admin/pages/AdminChangelogPage'));
@@ -732,6 +735,12 @@ function App() {
             )}
             {showAdminPage('telemetry') && (
               <Route path="telemetry" element={<LazyAdminRoute component={AdminTelemetryPage} />} />
+            )}
+            {showAdminPage('chatHistory') && (
+              <Route
+                path="chat-history"
+                element={<LazyAdminRoute component={AdminChatHistoryPage} />}
+              />
             )}
             {showAdminPage('system') && (
               <Route
