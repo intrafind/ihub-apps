@@ -392,7 +392,9 @@
       "defaultPage": "start",
       "featuredAppIds": []
     },
-    "useLocalOfficejs": false
+    "officeJsMode": "cdn",
+    "officeJsCdnUrl": "https://officeapis.public.onecdn.static.microsoft/1/office.js",
+    "officeJsCustomUrl": ""
   },
   "runLog": {
     "enabled": true,
