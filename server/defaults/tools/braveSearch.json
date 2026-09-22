@@ -48,6 +48,13 @@
         "default": 3000,
         "minimum": 500,
         "maximum": 50000
+      },
+      "language": {
+        "type": "string",
+        "description": {
+          "en": "Language or locale for the search results, e.g. 'en', 'de' or 'en-GB' (default: the user's language)",
+          "de": "Sprache oder Gebietsschema für die Suchergebnisse, z. B. 'en', 'de' oder 'en-GB' (Standard: die Sprache des Benutzers)"
+        }
       }
     },
     "required": ["query"]

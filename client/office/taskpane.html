@@ -79,11 +79,11 @@
     <!-- Office JavaScript API -->
     <script
       type="text/javascript"
-      src="https://appsforoffice.microsoft.com/lib/1/hosted/office.js"
+      src="https://officeapis.public.onecdn.static.microsoft/1/office.js"
       onerror="
         window.__showOfficeError(
           'Office.js failed to load',
-          'The Office JavaScript library could not be loaded — access to appsforoffice.microsoft.com may be blocked. Ask your administrator to enable the offline Office.js option in iHub Apps.',
+          'The Office JavaScript library could not be loaded — this network may block access to the Microsoft CDN. Ask your administrator to change the Office.js source in the iHub Apps admin settings (proxy, custom CDN or bundled).',
           'Source: ' + this.src
         )
       "

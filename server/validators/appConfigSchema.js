@@ -54,7 +54,7 @@ const starterPromptSchema = z.object({
 const websearchSchema = z
   .object({
     enabled: z.boolean().optional().prefault(false),
-    provider: z.enum(['auto', 'brave', 'qwant']).optional().prefault('auto'),
+    provider: z.enum(['auto', 'brave', 'staan', 'qwant']).optional().prefault('auto'),
     useNativeSearch: z.boolean().optional().prefault(true),
     maxResults: z.number().int().min(1).max(20).optional().prefault(5),
     extractContent: z.boolean().optional().prefault(true),
@@ -358,7 +358,28 @@ const iAssistantConfigSchema = z
       .or(z.literal('')),
     searchProfile: z.string().min(1, 'Search profile cannot be empty').optional().or(z.literal('')),
     extraContext: z.string().optional(),
-    systemPromptPreamble: z.string().optional()
+    systemPromptPreamble: z.string().optional(),
+
+    // Answer only from what retrieval returned, and say so when it returned
+    // nothing, instead of falling back on the model's world knowledge. The
+    // Conversation API has no such switch, so this is carried as a prompt —
+    // see services/integrations/iAssistantGrounding.js. Tri-state on purpose:
+    // undefined defers to the platform's `iAssistant.groundedOnly`, false
+    // turns that default off for this app.
+    groundedOnly: z.boolean().optional(),
+
+    // The four below are read by the iAssistant adapter's resolveConfig but
+    // were never declared here. Zod strips unknown keys and the resource
+    // loader keeps the parsed object, so setting any of them on an app used
+    // to do nothing at all — silently, with no validation error.
+    //
+    // `tools` in particular defaulted to [] at app level, which meant an app
+    // could not enable ifinder_search for itself; only the model's own
+    // `config.tools` ever reached the API.
+    tools: z.array(z.string()).optional(),
+    labels: z.union([z.string(), z.array(z.string())]).optional(),
+    scope: z.string().optional(),
+    ephemeral: z.boolean().optional()
   })
   .optional();
 

@@ -34,6 +34,7 @@
  * @module services/search/qwantProvider
  */
 import { SearchProvider } from './SearchProvider.js';
+import { resolveSearchLanguage } from './searchLanguage.js';
 import { emitToolProgress } from '../loop/RunStream.js';
 import config from '../../config.js';
 import { throttledFetch } from '../../requestThrottler.js';
@@ -149,7 +150,11 @@ const DEFAULT_REGION_BY_LANGUAGE = {
   zh: 'cn'
 };
 
-/** Locale used when the requested one is unknown or missing. */
+/**
+ * Locale used when Qwant does not serve the requested language at all. Reached
+ * only after {@link resolveSearchLanguage} has applied the user's language and
+ * the install's `platform.defaultLanguage`, so it is a last resort.
+ */
 export const QWANT_DEFAULT_LOCALE = 'en_US';
 
 /**
@@ -380,12 +385,15 @@ class QwantSearchProvider extends SearchProvider {
    *   Transport, injected by tests. Defaults to the throttled, proxy/TLS-aware
    *   fetch, queued under the `qwantSearch` tool id so the tool's
    *   `concurrency` / `requestDelayMs` apply.
+   * @param {(language?: string) => string} [deps.languageResolver] - Search-language
+   *   resolution (user's language, else the install default), injected by tests.
    * @param {number} [deps.retryBackoffMs=1200] - Base backoff between retries;
    *   lowered by tests so exercising the retry budget costs milliseconds.
    */
-  constructor({ fetchImpl, retryBackoffMs = 1200 } = {}) {
+  constructor({ fetchImpl, languageResolver, retryBackoffMs = 1200 } = {}) {
     super();
     this.fetchImpl = fetchImpl || ((url, options) => throttledFetch('qwantSearch', url, options));
+    this.languageResolver = languageResolver || resolveSearchLanguage;
     this.retryBackoffMs = retryBackoffMs;
     /** Last `datadome` cookie Qwant handed us; replayed on the next request. */
     this.datadomeCookie = null;
@@ -435,7 +443,9 @@ class QwantSearchProvider extends SearchProvider {
       safesearch = 1,
       skipCache = false
     } = options;
-    const locale = resolveQwantLocale(language);
+    // The user's language decides the locale; `platform.defaultLanguage` stands
+    // in when the caller had none to give (a workflow or agent run).
+    const locale = resolveQwantLocale(this.languageResolver(language));
     const endpoint = config.QWANT_SEARCH_ENDPOINT || QWANT_API_URL;
 
     if (chatId) {

@@ -100,19 +100,32 @@ export async function createLink({
   return link;
 }
 
-export async function getLink(code) {
+/**
+ * Look up a link by code, reloading from disk once on a miss. Under
+ * WORKERS > 1 the code may have been created by a different worker after
+ * this process last loaded (or reloaded) the store — without this, that
+ * worker's in-memory copy never learns about it and every request routed
+ * here 404s forever, even though the link exists on disk. A genuine miss
+ * (never existed, or was deleted) costs exactly one extra disk read.
+ */
+async function findByCode(code) {
   const links = await store.load();
-  return links.links.find(l => l.code === code);
+  const local = links.links.find(l => l.code === code);
+  if (local) return local;
+  const fresh = await store.reload();
+  return fresh.links.find(l => l.code === code);
+}
+
+export async function getLink(code) {
+  return findByCode(code);
 }
 
 export async function isCodeAvailable(code) {
-  const links = await store.load();
-  return !links.links.some(l => l.code === code);
+  return !(await findByCode(code));
 }
 
 export async function recordUsage(code) {
-  const links = await store.load();
-  const link = links.links.find(l => l.code === code);
+  const link = await findByCode(code);
   if (link) {
     link.usage = (link.usage || 0) + 1;
     link.lastUsed = now();
@@ -122,8 +135,10 @@ export async function recordUsage(code) {
 }
 
 export async function deleteLink(code) {
+  const link = await findByCode(code);
+  if (!link) return false;
   const links = await store.load();
-  const idx = links.links.findIndex(l => l.code === code);
+  const idx = links.links.indexOf(link);
   if (idx !== -1) {
     links.links.splice(idx, 1);
     store.markDirty();
@@ -133,8 +148,7 @@ export async function deleteLink(code) {
 }
 
 export async function updateLink(code, data) {
-  const links = await store.load();
-  const link = links.links.find(l => l.code === code);
+  const link = await findByCode(code);
   if (!link) return null;
   Object.assign(link, data, { code });
   store.markDirty();

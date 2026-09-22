@@ -2,6 +2,17 @@
 
 This guide helps you troubleshoot LDAP group mapping issues in iHub Apps.
 
+## Start Here: Test the Login
+
+Admin → Authentication → LDAP has a **Test a login** panel on every provider. It
+runs the whole login path for one username without creating a session, and
+reports the LDAP groups the directory returned, which of them have no mapping,
+and the internal groups the user would end up in. That answers steps 1-3 below
+in one place, against the configuration currently in the form.
+
+The steps below remain useful for reading the server logs of a real login, or
+for a deployment where the admin UI is not reachable.
+
 ## Quick Diagnostic Steps
 
 ### Step 1: Verify LDAP Groups Are Retrieved

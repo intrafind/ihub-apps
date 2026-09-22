@@ -1,4 +1,5 @@
 import registerAdminAuthRoutes from './admin/auth.js';
+import registerAdminLdapTestRoutes from './admin/ldapTest.js';
 import registerAdminOAuthRoutes from './admin/oauthClients.js';
 import registerAdminOAuthCimdRoutes from './admin/oauthCimdClients.js';
 import registerAdminOAuthConnectionRoutes from './admin/oauthConnections.js';
@@ -44,6 +45,7 @@ import registerAdminOverviewRoutes from './admin/overview.js';
 
 export default async function registerAdminRoutes(app) {
   registerAdminAuthRoutes(app);
+  registerAdminLdapTestRoutes(app);
   registerAdminOAuthRoutes(app);
   registerAdminOAuthCimdRoutes(app);
   registerAdminOAuthConnectionRoutes(app);

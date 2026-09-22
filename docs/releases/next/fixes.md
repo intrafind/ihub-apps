@@ -1,5 +1,28 @@
 # Fixes — Unreleased
 
+## Web search now follows the user's language
+
+Web search ran in US English far more often than it should have. Each engine decided the search
+language on its own and each one got it wrong in a different way: Qwant defaulted to `en_US`,
+Staan to `en-us`, and **Brave sent no language at all**, leaving it to Brave's own default. None of
+them consulted the platform's `defaultLanguage`, so there was no setting anywhere that changed it.
+
+It is now resolved once, the same way for all three: the user's language for the request, then
+`defaultLanguage` from `platform.json`, then `en` only if the config cannot be read. Each provider
+maps that onto its own API — Brave's `search_lang` / `country`, Staan's `market`, Qwant's `locale`
+— and falls back to its own default only when the engine does not serve that language at all.
+
+The clearest win is where no user language exists at all: **workflow and agent runs**. Those pass no
+language on the tool call, so on a German install every research run was silently answered from the
+US market. They now land on the configured default instead — the providers resolve it themselves, so
+nothing about how a workflow renders its own prompts changes.
+
+- Brave searches are now language-targeted at all, which they previously never were.
+- A model can still override the language for a single search with the tool's `language` parameter.
+- Brave results are cached per language, so one user's language is no longer served to the next.
+
+Set the default language in **Admin → Customization → Localization** to match your install.
+
 ## `BRAVE_SEARCH_ENDPOINT` and `SEARCH_CACHE_TTL_MS` are read again
 
 Both were documented and both were ignored. The server exposes a fixed allowlist of environment
@@ -23,13 +46,26 @@ marked "Failed", next to the new email — also on the start page. The add-in no
 torn read (every attachment fetch failing with "attachment identifier does not exist") and reads
 the email again after a short pause.
 
-## Dollar signs inside message text are no longer altered
+## Dollar signs inside message text and sources are no longer altered
 
-Text inserted into an app's prompt template — an email body, a pasted document — could change on
-the way to the model: `$&`, `$'`, `` $` `` and `$$` were treated as replacement patterns when
-`{{content}}` was filled in, so an email quoting "$$" arrived with a single dollar sign. The
-inserted text now reaches the model exactly as written; only the template's own placeholders are
-expanded.
+Text inserted into an app's prompt template could change on the way to the model: `$&`, `$'`,
+`` $` `` and `$$` were treated as replacement patterns wherever a value was substituted into a
+`{{placeholder}}`, so a dollar sequence in the source text came out altered instead of verbatim.
+This is now fixed everywhere a template value is inserted; only the template's own placeholders
+are expanded, never anything inside the values themselves.
+
+- **Message text:** an email body or pasted document inserted at `{{content}}` — for example an
+  email quoting "$$" used to arrive with a single dollar sign.
+- **Knowledge sources:** document, web page, or iFinder content inserted at `{{sources}}` /
+  `{{source}}` could be altered the same way; that content now reaches the model unchanged even
+  when it contains a `$1`- or `$&`-shaped sequence.
+
+## A variable name with special characters no longer crashes the chat request
+
+An app's prompt template can carry variables sent from the client or defined by an admin. A
+variable name containing a regex-special character — an unmatched `(`, `[`, or similar — made the
+whole chat request fail with a server error instead of just substituting that one variable. Such
+names now substitute correctly like any other variable name.
 
 ## iFinder: the private key field now actually takes effect
 
@@ -72,6 +108,111 @@ nothing in the log to say so:
 An `${ENV_VAR}` placeholder left in `proxy.http` or `proxy.https` is also no longer used as if it
 were a proxy address when the variable is not set; the connection goes direct instead of failing
 on an unparseable URL.
+
+## LDAP and NTLM users are stored under their directory login name
+
+A user signing in through LDAP or NTLM was created in **Admin → Users** with their email address
+as the account name, not the login name the directory knows them by — `sAMAccountName` for Active
+Directory, the Windows account for NTLM. Only users with no email in the directory got the right
+one, and re-signing in never corrected it, because nothing wrote the field again after the account
+was created.
+
+The login name was available the whole time and everything else used it: the session, the groups
+and the tokens iHub mints were all correct. Only the stored record disagreed, which is why this
+went unnoticed until something read it — the account name shown in the user list, and the admin
+user editor, which refused to open such a record at all because `@` is not valid in a username.
+
+Existing records are repaired on upgrade by migration V115, which recovers the login name the
+directory already recorded alongside each account. It leaves a record alone where the rewrite would
+not be unambiguous: accounts that also sign in locally, where the account name is a credential
+somebody types, and accounts whose login name another user already holds. Those are listed in the
+startup log with the duplicate to resolve. Anything it skips still heals by itself the next time
+that user signs in.
+
+## iAssistant conversations are no longer cancelled after 60 seconds
+
+A long iAssistant interaction — the workspace profile especially — was cut off mid-answer after a
+minute.
+
+The cause was a transport ceiling meant for a different shape of model. `llm.streamIdleTimeoutMs`
+bounds the gap between two chunks of a stream, and 60 s of silence from a model emitting tokens
+steadily really is a hang. An iAssistant turn is not that: it assesses what it knows, plans,
+searches, reassesses and only then starts writing, and iFinder's own per-turn budget defaults to
+90 s *before* generation begins. The quiet stretch before the first word was ordinary work, and the
+ceiling read it as a dead stream.
+
+The `iassistant-conversation` models now carry `streamIdleTimeoutMs: 180000` of their own. Every
+other model keeps the installation-wide default.
+
+Two related traps went with it:
+
+- **`iAssistant.timeout` is removed.** It was documented as the request timeout for iAssistant API
+  calls, defaulted to 60000, and nothing read it — so it is exactly what an admin hitting this
+  would reach for, and raising it changed nothing. Migration V117 removes it and warns if yours had
+  been tuned.
+- **`REQUEST_TIMEOUT` is gone from `config.env`.** That file shipped `REQUEST_TIMEOUT=60000`, which
+  overrode the code's 5-minute whole-call deadline with one minute for every binary deployment that
+  copied it. `config.env` is now marked deprecated: it applies only to the single-executable
+  distribution, and settings belong in `platform.json` or a `.env` file.
+
+## A stopped iAssistant generation no longer hangs the chat
+
+Deleting the message an iAssistant turn was answering left the turn spinning until a timeout fired.
+The Conversation API signals this with a `generation_stopped` event, which the adapter had no case
+for — so the stream never completed. It is now treated as the terminal event it is.
+
+## One loading indicator instead of two
+
+An iAssistant message in progress showed two animations at once: the phase indicator ("Analyzing
+current knowledge") with its own animated dots, and the generic three-dot pulse underneath it. The
+generic one is now the fallback it was meant to be and stands down whenever a phase is showing.
+
+## App-level iAssistant settings that silently did nothing
+
+`iassistant.tools`, `iassistant.labels`, `iassistant.scope` and `iassistant.ephemeral` were read by
+the adapter but missing from the app schema, so validation stripped them at load with no error —
+setting any of them on an app did nothing at all. `tools` was the costly one: it meant an app could
+not enable `ifinder_search` for itself, only the model could.
+
+They are declared now and work as documented. If an app already carries any of them, check it: they
+now actually apply.
+
+## Multi-worker mode no longer duplicates startup jobs, and a halted migration now actually halts
+
+Under the default clustered setup (`WORKERS=4`), every worker independently ran the hourly usage
+rollup, the daily audit-log cleanup, and an eager connection pass to configured MCP servers on
+startup — so those jobs wrote the same rollup and audit-log files on independent timers, and MCP
+servers saw several times the expected number of connections. Only one worker now runs these
+startup jobs; the rest keep serving requests normally and still connect to MCP tools on first use.
+
+Two related startup fixes:
+
+- The configuration-migration lock is now created atomically instead of checked-then-written,
+  closing a narrow window where two server processes starting at the same instant could both
+  believe they had acquired it and migrate concurrently.
+- A migration failure while `migrations.onFailure` is `"halt"` (the default) used to be logged as
+  an error but the server started anyway; it now stops the server from starting instead of serving
+  requests against configuration a migration never finished updating.
+
+A related request-time fix: opening a short link (`/s/:code`) right after it was created could
+answer "Not found" if the redirect landed on a different worker than the one that created it —
+each worker cached usage.json/shortlinks.json in memory from when it started and never looked at
+the file again. A worker now re-reads the file the moment it is asked for a code it does not
+recognise, so a link works on every worker as soon as it exists. The admin usage endpoint
+(`/api/admin/usage`) is similarly refreshed on every request instead of showing whichever worker's
+stale in-memory snapshot happened to answer.
+
+## Chat: the copy-options menu now follows dark mode and stays on top
+
+The small arrow next to a message's copy button opens a menu with "as Text", "as Markdown" and "as
+HTML". That menu stayed a hardcoded white panel with dark gray text regardless of the active
+theme, so on a dark background it showed up as a bright, low-contrast block — most noticeable in
+the Outlook add-in, which offers its own Light/Dark/Automatic appearance setting. It also sat below
+the neighbouring "Insert" menu in stacking order, so in a narrow window it could end up hidden
+behind it, and had no width limit, letting it grow past the edge of a narrow pane.
+
+The panel now follows the theme like the rest of the message actions, always renders above
+neighbouring menus, and is capped to a fixed width.
 
 ## Admin: the model "Test" button and its result messages are translated again
 

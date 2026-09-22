@@ -9,24 +9,19 @@ import { buildServerPath } from '../utils/basePath.js';
 import { getRootDir } from '../pathUtils.js';
 import configCache from '../configCache.js';
 import logger from '../utils/logger.js';
-
-// CDN URL used in the source HTML files — replaced at serve-time when offline mode is on.
-const OFFICE_JS_CDN = 'https://appsforoffice.microsoft.com/lib/1/hosted/office.js';
-// Local path served under /office/office-js/office.js (relative to the add-in origin).
-const OFFICE_JS_LOCAL = './office-js/office.js';
+import { resolveOfficeJsSource, rewriteOfficeJsScriptSrc } from '../utils/officeJsSource.js';
+import { getOfficeJsAsset, isSafeOfficeJsAssetPath } from '../services/OfficeJsProxyService.js';
 
 /**
- * Read an HTML file from disk and, when offline mode is enabled, swap the
- * hard-coded CDN office.js URL for the locally-served copy.
+ * Read an add-in HTML file and point its Office.js `<script>` at the
+ * configured source (Microsoft's CDN, this server's proxy or bundle, or a
+ * custom URL). See `utils/officeJsSource.js` for how Office.js resolves the
+ * rest of the library from that one URL.
  */
 function renderOfficeHtml(filePath) {
   const html = readFileSync(filePath, 'utf-8');
-  const platform = configCache.getPlatform();
-  const useLocal = platform?.officeIntegration?.useLocalOfficejs === true;
-  if (useLocal) {
-    return html.replaceAll(OFFICE_JS_CDN, OFFICE_JS_LOCAL);
-  }
-  return html;
+  const { scriptUrl } = resolveOfficeJsSource(configCache.getPlatform());
+  return rewriteOfficeJsScriptSrc(html, scriptUrl);
 }
 
 export default function registerOfficeRoutes(app) {
@@ -54,12 +49,51 @@ export default function registerOfficeRoutes(app) {
   // browser can cache icon files even when the integration is toggled.
   app.use(buildServerPath('/office/assets'), express.static(path.join(officePath, 'assets')));
 
-  // Serve local @microsoft/office-js files so that environments that cannot
-  // reach appsforoffice.microsoft.com can still load the add-in.
-  // The files are only needed when useLocalOfficejs is enabled, but we expose
-  // the route unconditionally so the admin can test the path without restarting
-  // the server, and so that Vite in dev mode serves from the installed package.
-  app.use(buildServerPath('/office/office-js'), express.static(officeJsDistPath));
+  // Serve the Office.js library from this origin for the `proxy` and `bundled`
+  // modes, so environments that cannot reach Microsoft's CDN can still load the
+  // add-in. Mounted unconditionally: an admin can then verify the path works
+  // before switching a mode on, and Vite serves from the installed package in
+  // dev. Office.js loads every one of its other files relative to this mount.
+  const bundledOfficeJs = express.static(officeJsDistPath);
+
+  app.use(buildServerPath('/office/office-js'), (req, res, next) => {
+    const { mode, upstreamBaseUrl } = resolveOfficeJsSource(configCache.getPlatform());
+    if (mode !== 'proxy') {
+      return bundledOfficeJs(req, res, next);
+    }
+
+    // `req.path` is relative to the mount point; strip the leading slash so the
+    // allowlist sees the same shape it validates.
+    let relPath;
+    try {
+      relPath = decodeURIComponent(req.path).replace(/^\/+/, '');
+    } catch {
+      return res.status(400).send('Invalid path');
+    }
+
+    if (!isSafeOfficeJsAssetPath(relPath)) {
+      logger.debug('Rejected Office.js proxy path', { component: 'OfficeRoutes', relPath });
+      return res.status(404).send('Not found');
+    }
+
+    getOfficeJsAsset(relPath, upstreamBaseUrl)
+      .then(({ body, contentType, source }) => {
+        res.set('Content-Type', contentType);
+        // Office clients re-request these on every pane load; let the webview
+        // cache them for the same window the CDN itself advertises.
+        res.set('Cache-Control', 'public, max-age=14400');
+        res.set('X-Office-Js-Source', source);
+        res.send(body);
+      })
+      .catch(error => {
+        logger.error('Failed to serve Office.js asset via proxy', {
+          component: 'OfficeRoutes',
+          relPath,
+          error: error.message
+        });
+        res.status(error.status === 400 ? 400 : 502).send('Failed to load Office.js');
+      });
+  });
 
   // Guard middleware: return 404 when the integration is not enabled
   function requireOfficeEnabled(req, res, next) {

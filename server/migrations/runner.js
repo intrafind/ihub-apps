@@ -15,7 +15,7 @@ import { pathToFileURL } from 'url';
 import os from 'os';
 import { getRootDir } from '../pathUtils.js';
 import config from '../config.js';
-import { atomicWriteJSON } from '../utils/atomicWrite.js';
+import { atomicWriteJSON, atomicCreateJSON } from '../utils/atomicWrite.js';
 import logger from '../utils/logger.js';
 import {
   setDefault,
@@ -93,6 +93,21 @@ export async function scanMigrationFiles(migrationsDir) {
  */
 const RENAMED_MIGRATIONS = [
   {
+    // The staan provider was renumbered twice while its branch was open: the
+    // CIMD governance migrations took V112/V113 and the proxy-defaults fix took
+    // V114, both on main in parallel. Either old number reconciles to V116.
+    oldVersion: '112',
+    oldFile: 'V112__add_staan_websearch_provider.js',
+    newVersion: '116',
+    newFile: 'V116__add_staan_websearch_provider.js'
+  },
+  {
+    oldVersion: '114',
+    oldFile: 'V114__add_staan_websearch_provider.js',
+    newVersion: '116',
+    newFile: 'V116__add_staan_websearch_provider.js'
+  },
+  {
     oldVersion: '018',
     oldFile: 'V018__add_setup_configured_flag.js',
     newVersion: '075',
@@ -158,6 +173,42 @@ const RENAMED_MIGRATIONS = [
     oldFile: 'V112__grandfather_connected_cimd_clients.js',
     newVersion: '113',
     newFile: 'V113__grandfather_connected_cimd_clients.js'
+  },
+  // The Office.js source-mode migration was written as V115 while the brave
+  // search language parameter (V115) and the staan provider (V116) landed on
+  // main in parallel. It moved to V117 because those had already shipped.
+  // Without this entry, anyone who ran the branch before the merge has 115
+  // recorded against the Office.js file, which would mark the brave V115
+  // applied and silently skip it — the match on `file` as well as `version`
+  // is what keeps this entry off the brave migration's own history row.
+  {
+    oldVersion: '115',
+    oldFile: 'V115__office_js_source_modes.js',
+    newVersion: '117',
+    newFile: 'V117__office_js_source_modes.js'
+  },
+  // …and then collided a second time: the directory login-name backfill took
+  // V117 while the Office.js branch was still open, so it moved again to V118.
+  // Order matters here. Entries are applied in sequence, so a history still
+  // recorded at 115 is rewritten to 117 by the rule above and then to 118 by
+  // this one. Matching on the file keeps both rules off the two migrations
+  // that legitimately hold 115 and 117.
+  {
+    oldVersion: '117',
+    oldFile: 'V117__office_js_source_modes.js',
+    newVersion: '118',
+    newFile: 'V118__office_js_source_modes.js'
+  },
+  // The same V117 slot, contested a third time: the iAssistant stream-ceiling
+  // migration was written as V117 while the login-name backfill was taking it
+  // and Office.js was moving onto V118, so it moved to V119. Matching on the
+  // file is again what keeps this rule off the backfill's own history row,
+  // which legitimately holds 117.
+  {
+    oldVersion: '117',
+    oldFile: 'V117__iassistant_stream_ceiling_and_grounding.js',
+    newVersion: '119',
+    newFile: 'V119__iassistant_stream_ceiling_and_grounding.js'
   }
 ];
 
@@ -337,45 +388,70 @@ function createMigrationContext(contentsDir, defaultsDir, migration) {
 
 /**
  * Acquire a lock file to prevent concurrent migration runs.
+ *
+ * Creates the lock with the 'wx' flag (create-or-fail) rather than the
+ * previous read-then-write: two processes racing to acquire at the same
+ * instant could both pass a plain existence check before either had written,
+ * and both proceed to migrate concurrently. 'wx' makes the create itself the
+ * check, so only one caller can ever win it.
  * @param {string} contentsDir
  */
-async function acquireLock(contentsDir) {
+export async function acquireLock(contentsDir) {
   const lockPath = join(contentsDir, LOCK_FILE);
-  try {
-    const existing = await fs.readFile(lockPath, 'utf8');
-    const lock = JSON.parse(existing);
-    const age = Date.now() - new Date(lock.startedAt).getTime();
 
-    if (age < LOCK_STALE_MS) {
+  // At most one retry: the first pass either creates the lock or, finding it
+  // held and stale, steals it; the second pass' create then either succeeds
+  // or (having lost a steal race to another process) reports who holds it.
+  for (let attempt = 0; attempt < 2; attempt++) {
+    const lockData = {
+      pid: process.pid,
+      startedAt: new Date().toISOString(),
+      hostname: os.hostname()
+    };
+
+    try {
+      await atomicCreateJSON(lockPath, lockData);
+      return;
+    } catch (error) {
+      if (error.code !== 'EEXIST') throw error;
+    }
+
+    let existing = null;
+    try {
+      existing = JSON.parse(await fs.readFile(lockPath, 'utf8'));
+    } catch (error) {
+      if (error.code === 'ENOENT') continue; // released between our create and this read — retry
+      // Corrupt/unreadable lock file: treat as stale rather than blocking forever.
+    }
+
+    const age = existing ? Date.now() - new Date(existing.startedAt).getTime() : Infinity;
+    if (existing && age < LOCK_STALE_MS) {
       throw new Error(
-        `Migration lock held by PID ${lock.pid} since ${lock.startedAt}. ` +
+        `Migration lock held by PID ${existing.pid} since ${existing.startedAt}. ` +
           `If the process is no longer running, delete ${lockPath}`
       );
     }
+
     logger.warn('Stale migration lock detected, overriding', {
       component: 'Migration',
-      ageSeconds: Math.round(age / 1000)
+      ageSeconds: existing ? Math.round(age / 1000) : undefined
     });
-  } catch (error) {
-    if (error.code !== 'ENOENT' && !(error instanceof SyntaxError)) {
-      // Re-throw if it's not a missing file or parse error, and not our own lock error
-      if (error.message?.includes('Migration lock held')) throw error;
+
+    try {
+      await fs.unlink(lockPath);
+    } catch {
+      // Already gone — the next iteration's create settles it either way.
     }
   }
 
-  const lockData = {
-    pid: process.pid,
-    startedAt: new Date().toISOString(),
-    hostname: os.hostname()
-  };
-  await fs.writeFile(lockPath, JSON.stringify(lockData, null, 2));
+  throw new Error(`Failed to acquire migration lock at ${lockPath} after stealing a stale lock`);
 }
 
 /**
  * Release the migration lock file.
  * @param {string} contentsDir
  */
-async function releaseLock(contentsDir) {
+export async function releaseLock(contentsDir) {
   try {
     await fs.unlink(join(contentsDir, LOCK_FILE));
   } catch {
@@ -572,9 +648,14 @@ export async function runConfigMigrations() {
         });
 
         if (migrationConfig.onFailure === 'halt') {
-          throw new Error(
+          const haltError = new Error(
             `Migration V${migration.version} (${migration.description}) failed: ${error.message}`
           );
+          // Distinguishes an operator-requested halt from an ordinary migration
+          // error, so the caller (server.js) can exit the process instead of
+          // logging a warning and serving traffic on unmigrated config.
+          haltError.migrationHalt = true;
+          throw haltError;
         }
       }
     }

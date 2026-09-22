@@ -1,5 +1,56 @@
 # Features — Unreleased
 
+## The default language is configurable in the admin UI
+
+**Admin → Customization → Localization** is a new page for the installation's default language.
+It was previously only reachable by hand-editing `contents/config/platform.json`, which meant the
+setting effectively did not exist for most admins.
+
+The dropdown offers the languages this installation actually has translations for — the same set
+the language switcher shows end users — so it is not possible to select a language with nothing
+behind it. The change applies immediately; no restart is needed.
+
+The default language decides more than the interface:
+
+- the interface language for users who have not chosen one,
+- the language **web search** runs in when a request carries none of its own, which is every
+  workflow and agent run,
+- the fallback for any text with no translation in the requested language.
+
+It does not change the language a workflow renders its own prompts in — that follows the run, not
+this setting.
+
+## Web search with staan.ai
+
+`staanSearch` is a third script-backed search engine alongside `braveSearch` and `qwantSearch`,
+using the [staan.ai web search API](https://docs.staan.ai/docs/web-search). It fills the gap
+between the two that were already there: Brave needs a paid subscription, and Qwant — the keyless
+option — is fronted by DataDome, which answers requests from data-centre IP ranges with a captcha.
+An install on cloud hosting therefore had exactly one working choice, and it cost money. Staan
+needs an API key but answers from anywhere.
+
+- Select it per app in **Admin → Apps → Edit App → Web Search** as the **Staan** provider, or
+  leave the provider on **Auto**.
+- Configure the key in **Admin → Providers → Web Search Providers → Staan Search**, or set
+  `STAAN_API_KEY` in the environment. Keys entered in the admin UI are encrypted at rest.
+- **Auto** now means: Brave when a Brave API key is configured, then Staan when it has one, and
+  Qwant otherwise. An install that already had a Brave key keeps using Brave and is unaffected.
+- The connectivity test under **Admin → Providers** covers Staan too, and distinguishes a rejected
+  key from a rate limit, a malformed request and a proxy that swallowed the response.
+
+Two things Staan does that the other engines do not:
+
+- **Domain scoping.** `includeDomains` restricts a search to a set of sites and `excludeDomains`
+  keeps results away from them (10 domains each, and the two cannot be combined). The `site:` and
+  `-site:` query operators work as well.
+- **More than ten results.** Staan serves ten per request, so asking for more pages through
+  further requests, up to 40. `maxResults` above 10 is honoured rather than silently truncated.
+
+Results come back in the same shape as Brave's and Qwant's, so an app can be switched between
+engines without the model seeing a different tool. Search language follows the app as usual: Staan
+serves the German, French and English markets, and an unsupported region falls back to a supported
+one for the same language.
+
 ## Web search providers can be tested from the admin UI
 
 **Admin → Providers → Web Search Providers** gained a **Connectivity** column and a **Test**
@@ -95,6 +146,15 @@ product to confirm the change had landed.
 - Each field says whether the value in effect comes from `platform.json` or from the environment,
   and an `${ENV_VAR}` placeholder that no variable resolves is called out instead of silently
   doing nothing.
+- **In effect right now** lists every setting the server is using — both proxy URLs, the bypass
+  list and the URL patterns — and marks the fields you have edited but not yet saved, showing what
+  each one becomes once you press Save. An entry you have just added therefore no longer reads as
+  "not set" with nothing to explain it.
+- The page opens on what is actually happening: routed through a named proxy, no proxy in use, or
+  switched off. A fresh installation is in the second state — no `proxy` block is written to
+  `platform.json` and nothing is proxied until a URL is set here or `HTTP_PROXY`/`HTTPS_PROXY` is
+  set in the environment. The switch on its own proxies nothing; turning it off forces every
+  request direct, environment variables included.
 - **Test connectivity** probes any URL against the settings on screen, saved or not. It reports how
   the URL is routed (through the proxy, bypassed, excluded by a pattern, or direct), whether the
   proxy itself answers, the HTTP status and how long each step took, and — when it fails — what
@@ -168,3 +228,154 @@ interactive sign-in; **Admin → OAuth → Connections** is the immediate remedy
 
 Every action is audited: clients discovered, approved, blocked, unblocked, their policy changed,
 and connections revoked in bulk with the client and the count.
+
+## LDAP providers can supply the Windows domain name
+
+**Admin → Authentication → LDAP Providers** gained a **Domain** field for the short (NetBIOS)
+domain name, e.g. `CONTOSO`. It matters for integrations that identify people as `DOMAIN\username`
+rather than by email — iFinder does, through its `domain\username` JWT subject.
+
+NTLM has always had this, because the domain arrives in the protocol handshake. LDAP had no
+equivalent, so that subject form could not work for an LDAP user no matter how it was configured:
+the domain was simply never known, and the identifier went out without it.
+
+Against Active Directory the field can be left empty. iHub then reads the `msDS-PrincipalName`
+attribute of the user signing in, which AD returns in `DOMAIN\sAMAccountName` form, and takes the
+domain from there. A value typed into the field always wins over what the directory reports; a
+disagreement between them is logged. Other directories have no such attribute, so they need the
+field set.
+
+This replaces the workaround of hard-coding the domain into a JWT subject template such as
+`CONTOSO\${user.username}`. Those templates keep working unchanged.
+
+## Outlook Add-in: choose where Office.js is loaded from
+
+Networks that block Microsoft's CDN stopped the Outlook add-in from starting at all. **Admin →
+Office Integration** now has an **Office.js Source** section with four options, so the add-in can
+be served from somewhere the network allows.
+
+- **Microsoft CDN** (default) — unchanged behaviour, and the only option Microsoft AppSource
+  accepts.
+- **Proxy through this server** — iHub fetches the Office JavaScript library from the CDN and
+  caches it. Clients never contact Microsoft; only the iHub server needs outbound access, and it
+  can use the proxy configured under **Admin → Proxy**. The cached copy keeps itself current, and
+  if the CDN becomes unreachable the cached files keep being served.
+- **Custom CDN or mirror** — load from a URL you control, such as a corporate CDN or an artifact
+  proxy (Artifactory, Nexus) mirroring the Microsoft CDN. Neither clients nor the iHub server need
+  access to Microsoft. The URL must end in `/office.js`; the page rejects URLs that do not, because
+  Office.js uses that filename to find the rest of the library.
+- **Bundled copy** — the previous offline mode, renamed. Still available for installations with no
+  outbound access at all.
+
+The page shows which URL is actually being served to the add-in, so a misconfiguration is visible
+without opening the task pane source.
+
+The page also lists the CDN URLs Microsoft documents — the current host, the legacy
+`appsforoffice.microsoft.com`, the China (21Vianet) CDN and the preview endpoint — with a **Test
+reachability** button, so finding a host the network allows does not mean editing config and
+waiting for a user to complain. **Use** puts a listed URL into the field.
+
+Each URL is checked twice, because the modes ask different questions: **server** is whether this
+iHub server can fetch it, which is what **Proxy** needs, and **browser** is whether the browser you
+have the admin page open in can, which is the closer stand-in for an Outlook client under
+**Microsoft CDN** and **Custom**. Networks differ in which hosts they allow — a block written as a
+`microsoft.com` suffix rule catches `appsforoffice.microsoft.com` but not
+`officeapis.public.onecdn.static.microsoft` — so switching hosts is sometimes the whole fix. Both
+worldwide hosts are `required: true` entries in Microsoft's published Microsoft 365 endpoint list,
+so blocking them is an unsupported Microsoft 365 configuration rather than only an iHub problem;
+often the faster route is an allowlist entry.
+
+Prefer **Proxy** or **Custom CDN** over **Bundled** where either is possible: the bundled copy
+comes from the `@microsoft/office-js` npm package, which Microsoft no longer maintains, so it never
+receives updates — including security fixes — and it adds roughly 86 MB to the build. For a fully
+air-gapped installation, **Proxy** with a pre-populated `contents/data/office-js-cache/` directory
+serves the library without any outbound request.
+
+Existing installations are unaffected: the previous offline switch becomes **Bundled** if it was
+on and **Microsoft CDN** if it was off, and both keep the CDN host they were already using.
+
+## The iAssistant shows what it searched for and what it found
+
+An iAssistant answer now carries the same provenance the iFinder/iAssistant webapp shows: the
+queries the assistant actually ran and how many documents came back, with the systems and document
+types they came from.
+
+iHub had been receiving this all along and discarding it — the two iFinder search events were read
+for their names and their payloads dropped — so a chat could say "Starting search" but never what
+was searched or what was found.
+
+- The queries are the real ones iFinder executed, lexical and semantic, de-duplicated.
+- A turn searches several times; the counts are the totals across every round, not the last one.
+- It stays on screen once the answer is finished, because it is part of judging the answer.
+
+## Answer only from your own documents
+
+A new **grounded-only** setting confines an app's iAssistant answers to the documents retrieval
+returned. The assistant cites what it used and says plainly that it has no answer when the search
+comes up empty, instead of falling back on the model's general knowledge — which the iAssistant's
+own default prompt explicitly invites it to do.
+
+Set it per app as `iassistant.groundedOnly`, or installation-wide as `iAssistant.groundedOnly` in
+`platform.json`; an app can turn the installation default back off.
+
+It is carried as a prompt instruction, since the Conversation API has no grounding switch, so it
+instructs the model rather than constraining it. For a guarantee that holds across every iFinder
+client, override `promptPreamble` on the profile's `RESPONSE` state in iFinder.
+
+## The iAssistant profile can supply its own search profile
+
+Configuring an app meant naming both a conversation profile and a search profile, with nothing
+keeping the pair consistent. iHub now asks the conversation profile for its search profile before
+creating a conversation, and falls back to the configured one only when the profile does not name
+one.
+
+iFinder does not publish a search profile on a profile today, so the configured value is still what
+applies in practice — the lookup is in place so the profile takes over by itself once it does.
+Turn it off with `iAssistant.resolveSearchProfileFromProfile: false`. A failed lookup never breaks
+a conversation; it falls back. The resolved profile is pinned for the life of the conversation, so
+editing a profile cannot move a conversation already under way to a different corpus.
+
+## LDAP: one base DN instead of five, and a login you can test before anyone tries it
+
+An LDAP provider used to be six DNs that mostly repeated each other — the same directory root
+inside `userSearchBase`, `userDn` and `groupSearchBase`, the username attribute typed once as a
+setting and again inside the DN template. Now a provider names the directory root once and says
+which kind of directory it is:
+
+```json
+{
+  "name": "corporate-ldap",
+  "url": "ldap://ldap.example.com:389",
+  "preset": "activeDirectory",
+  "baseDn": "dc=example,dc=com",
+  "adminDn": "svc-ihub@example.com",
+  "adminPasswordRef": "ldap_corporate-ldap"
+}
+```
+
+- **Base DN** supplies the user and group search bases, and the user DN template is built from it
+  and the username attribute (`sAMAccountName={{username}},dc=example,dc=com` above).
+- **Directory type** — *OpenLDAP / generic LDAP* or *Active Directory* — supplies the attribute
+  names that differ between products: `uid` vs `sAMAccountName`, `groupOfNames` vs `group`.
+- **Attribute mapping** is now configurable: which LDAP attributes become the user id, display
+  name and e-mail, as a single attribute or an ordered list where the first with a value wins.
+- Every derived field can still be set by hand and then wins. In **Admin → Authentication → LDAP**
+  they have moved under **Advanced**, each showing the value it would resolve to as its
+  placeholder. Providers that spell out every field keep working exactly as before.
+
+### Test a login
+
+Every provider now has a **Test a login** panel that runs the configuration currently in the form
+— saved or not — and reports what happened, step by step: the effective configuration and which
+values were derived, whether the directory could be reached and whether its certificate is
+trusted, the bind, the entry that matched, **which attributes became the id, name and e-mail**,
+the LDAP groups the directory returned, **which of those have no mapping in `groups.json`**, the
+final internal groups, and the iHub user that would be created together with what it grants.
+
+- The password is optional. With a bind account configured, everything except "would this password
+  be accepted" can be checked without knowing anyone's password — the situation NTLM group lookup
+  runs in anyway.
+- Nothing is saved: no session, no user record, no token. Password attributes are never echoed
+  back.
+- Also available as `POST /api/admin/auth/ldap/_test`, with either an inline `provider` or the
+  `providerName` of a saved one.

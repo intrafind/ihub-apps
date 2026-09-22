@@ -311,7 +311,9 @@
   },
   "iAssistant": {
     "defaultProfileId": "",
-    "timeout": 60000
+    "defaultSearchProfile": "searchprofile-standard",
+    "resolveSearchProfileFromProfile": true,
+    "groundedOnly": false
   },
   "officeIntegration": {
     "enabled": false,
@@ -392,7 +394,9 @@
       "defaultPage": "start",
       "featuredAppIds": []
     },
-    "useLocalOfficejs": false
+    "officeJsMode": "cdn",
+    "officeJsCdnUrl": "https://officeapis.public.onecdn.static.microsoft/1/office.js",
+    "officeJsCustomUrl": ""
   },
   "runLog": {
     "enabled": true,
