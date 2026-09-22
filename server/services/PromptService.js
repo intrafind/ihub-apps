@@ -1,4 +1,5 @@
 import { getLocalizedContent } from '../../shared/localize.js';
+import { renderUserMessage } from '../../shared/promptContext.js';
 import configCache from '../configCache.js';
 import { createSourceManager } from '../sources/index.js';
 import SourceResolutionService from './SourceResolutionService.js';
@@ -273,18 +274,52 @@ class PromptService {
       count: Object.keys(globalPromptVariables).length
     });
 
+    const applyGlobalVariables = text => {
+      let out = text;
+      for (const [key, value] of Object.entries(globalPromptVariables || {})) {
+        const strValue = typeof value === 'string' ? value : String(value || '');
+        out = replaceTemplateVar(out, key, strValue);
+      }
+      return out;
+    };
+
     let llmMessages = [...messages].map(msg => {
-      if (msg.role === 'user' && msg.promptTemplate && msg.variables) {
-        let processedContent =
+      if (msg.role !== 'user') {
+        const processedMsg = {
+          role: msg.role,
+          content: typeof msg.content === 'string' ? applyGlobalVariables(msg.content) : msg.content
+        };
+        if (msg.imageData) processedMsg.imageData = msg.imageData;
+        if (msg.fileData) processedMsg.fileData = msg.fileData;
+        if (msg.audioData) processedMsg.audioData = msg.audioData;
+        return processedMsg;
+      }
+
+      // The user's message: host context (email, meeting, page) and uploaded
+      // files become tagged blocks around the typed text — see
+      // shared/promptContext.js. Only the typed text of a message without an
+      // app template has global variables applied; the blocks are source
+      // material and reach the model as written.
+      const templated = Boolean(msg.promptTemplate && msg.variables);
+      const typed = typeof msg.content === 'string' ? msg.content : String(msg.content || '');
+      const body = renderUserMessage({
+        content: templated ? typed : applyGlobalVariables(typed),
+        hostContext: msg.hostContext,
+        files: msg.fileData
+      });
+
+      let processedContent = body;
+      if (templated) {
+        processedContent =
           typeof msg.promptTemplate === 'object'
             ? getLocalizedContent(msg.promptTemplate, lang)
-            : msg.promptTemplate || msg.content;
+            : msg.promptTemplate;
         if (typeof processedContent !== 'string') processedContent = String(processedContent || '');
         // Combine user-defined variables with global prompt variables (user
-        // variables take precedence). The user's content goes in last and
-        // through a function replacer: "{{...}}" placeholders and dollar
-        // patterns inside an email body or a pasted document are literal
-        // text — never re-expanded, never interpreted by String.replace.
+        // variables take precedence). The message goes in last and through a
+        // function replacer: "{{...}}" placeholders and dollar patterns inside
+        // an email body or a document are literal text — never re-expanded,
+        // never interpreted by String.replace.
         const { content: _contentVariable, ...variables } = {
           ...globalPromptVariables,
           ...msg.variables
@@ -293,51 +328,15 @@ class PromptService {
           const strValue = typeof value === 'string' ? value : String(value || '');
           processedContent = replaceTemplateVar(processedContent, key, strValue);
         }
-        const userContent =
-          typeof msg.content === 'string' ? msg.content : String(msg.content || '');
-        processedContent = processedContent.replace(/\{\{content\}\}/g, () => userContent);
-        // Ensure user content is always included: if template is empty or doesn't contain {{content}},
-        // append the user's actual content to make sure it's not lost
-        if (msg.content && msg.content.trim()) {
-          const templateHadContentPlaceholder =
-            (msg.promptTemplate &&
-              ((typeof msg.promptTemplate === 'object' &&
-                Object.values(msg.promptTemplate).some(
-                  v => typeof v === 'string' && v.includes('{{content}}')
-                )) ||
-                (typeof msg.promptTemplate === 'string' &&
-                  msg.promptTemplate.includes('{{content}}')))) ||
-            false;
+        processedContent = processedContent.replace(/\{\{content\}\}/g, () => body);
+        // A template without {{content}} (in this language) still gets the
+        // message, appended, so what the user sent is never lost.
+        if (body.trim() && !processedContent.includes(body)) {
+          processedContent = processedContent.trim() ? `${processedContent}\n\n${body}` : body;
+        }
+      }
 
-          // If template was empty or didn't have {{content}}, append user content
-          if (
-            !processedContent.trim() ||
-            (!templateHadContentPlaceholder && !processedContent.includes(msg.content))
-          ) {
-            processedContent = processedContent.trim()
-              ? `${processedContent}\n\n${msg.content}`
-              : msg.content;
-          }
-        }
-        const processedMsg = { role: 'user', content: processedContent };
-        if (msg.imageData) processedMsg.imageData = msg.imageData;
-        if (msg.fileData) processedMsg.fileData = msg.fileData;
-        if (msg.audioData) processedMsg.audioData = msg.audioData;
-        return processedMsg;
-      }
-      // Apply global prompt variables to normal prompts as well
-      let processedContent = msg.content;
-      if (
-        typeof processedContent === 'string' &&
-        globalPromptVariables &&
-        Object.keys(globalPromptVariables).length > 0
-      ) {
-        for (const [key, value] of Object.entries(globalPromptVariables)) {
-          const strValue = typeof value === 'string' ? value : String(value || '');
-          processedContent = replaceTemplateVar(processedContent, key, strValue);
-        }
-      }
-      const processedMsg = { role: msg.role, content: processedContent };
+      const processedMsg = { role: 'user', content: processedContent };
       if (msg.imageData) processedMsg.imageData = msg.imageData;
       if (msg.fileData) processedMsg.fileData = msg.fileData;
       if (msg.audioData) processedMsg.audioData = msg.audioData;

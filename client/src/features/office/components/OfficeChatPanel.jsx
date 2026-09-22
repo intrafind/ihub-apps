@@ -22,11 +22,11 @@ import useFileUploadHandler from '../../../shared/hooks/useFileUploadHandler';
 import useOutlookMailActions from '../hooks/useOutlookMailActions';
 import {
   buildPromptTemplate,
-  combineUserTextWithEmailContext,
+  buildHostContext,
   buildFileDataFromMailAttachments,
-  collectAttachmentsForSend,
-  formatFileDataAsPromptText
+  collectAttachmentsForSend
 } from '../utilities/buildChatApiMessages';
+import { renderUserMessage } from '../../../../../shared/promptContext.js';
 import { isOutlookAppointmentMode } from '../utilities/officeCapabilities';
 import { getLiveItemId } from '../utilities/outlookMailContext';
 import {
@@ -127,18 +127,14 @@ function OfficeChatPanel({
     multiSelectSupported
   } = usePinnedEmails();
 
-  // Build the email-context text that will be appended to the outgoing message
-  // so ChatInput can include it in the live token-count estimate. This mirrors
-  // what combineUserTextWithEmailContext does at send time — the snapshot
-  // override already carries the user's body opt-out and attachment removals —
-  // but with an empty userText so we only get the email blocks (the typed text
-  // is already counted separately by ChatInput).
+  // The host item as the adapter will send it, for the live token estimate.
+  // Mirrors what useOfficeChatAdapter sends — the snapshot override already
+  // carries the user's body opt-out and attachment removals.
   const { buildSnapshotOverride, ctx: mailCtx } = mailSnapshot;
-  const emailContextText = useMemo(
+  const estimateHostContext = useMemo(
     () =>
-      combineUserTextWithEmailContext({
-        userText: '',
-        currentEmail: buildSnapshotOverride(),
+      buildHostContext({
+        item: buildSnapshotOverride(),
         currentItemId: mailCtx?.itemId,
         pinned: pinnedEmails
       }),
@@ -150,11 +146,11 @@ function OfficeChatPanel({
   // the server stitches their content into the prompt — so they must be counted
   // too, or the indicator wildly undercounts (a single document can dwarf the
   // email body). Mirrors the send path: same attachment merge, same extraction
-  // pipeline, same [File: ...] block format the server prepends. Extraction is
+  // pipeline. Extraction is
   // async (JSZip/pdfjs/mammoth), so this lives in state guarded against stale
   // results; attachments only change on email navigation, pin/unpin, or
   // banner removals, so the cost stays off the keystroke path.
-  const [attachmentContextText, setAttachmentContextText] = useState('');
+  const [attachmentFiles, setAttachmentFiles] = useState(null);
   const attachmentsForEstimate = useMemo(() => {
     const removed = mailSnapshot.removedAttachmentIds;
     const current = (mailSnapshot.ctx?.attachments ?? []).filter(a => !removed?.has(a?.id));
@@ -168,19 +164,22 @@ function OfficeChatPanel({
         : buildFileDataFromMailAttachments(attachmentsForEstimate);
     extraction
       .then(files => {
-        if (!stale) setAttachmentContextText(formatFileDataAsPromptText(files));
+        if (!stale) setAttachmentFiles(files);
       })
       .catch(() => {
-        if (!stale) setAttachmentContextText('');
+        if (!stale) setAttachmentFiles(null);
       });
     return () => {
       stale = true;
     };
   }, [attachmentsForEstimate]);
 
+  // The blocks exactly as the server renders them, without the typed text
+  // (ChatInput counts that separately).
   const estimateContextText = useMemo(
-    () => [emailContextText, attachmentContextText].filter(Boolean).join('\n\n'),
-    [emailContextText, attachmentContextText]
+    () =>
+      renderUserMessage({ content: '', hostContext: estimateHostContext, files: attachmentFiles }),
+    [estimateHostContext, attachmentFiles]
   );
   // itemId of the email currently open in Outlook. Lets us hide the
   // "Add this email" affordance once it's already in the pin list, and

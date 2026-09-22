@@ -1,15 +1,27 @@
 # Breaking Changes — Unreleased
 
-## Outlook Add-in: email context is sent as tagged blocks
+## Email context and uploads reach the model as `<content>` blocks
 
-Messages from the Outlook task pane and the browser extension now wrap the source material in
-tagged blocks — `<current_email>`, `<pinned_emails>`, `<current_meeting>`, `<current_page>` —
-and the user's own note in `<user_instruction>`. The `--- Current email ---`,
-`--- Pinned emails ---` and `--- Current meeting ---` headings are gone.
+Every client — web app, Teams, Nextcloud, the Outlook task pane and the browser extension — now
+sends the same message shape. When a message carries anything besides the typed text, the server
+puts each piece in a `<content>` block that says what it is (`type`: email, meeting, page,
+document) and where it came from (`origin`: open, added, attachment, upload). A fixed
+`<context_rules>` note follows, then the typed text in `<user_instruction>`. All of it goes where
+the app's prompt template has `{{content}}`. A message that is only typed text is sent as typed.
 
-**Before upgrading:** nothing for the shipped apps — migration V108 rewrites the two meeting apps'
-prompts. Custom app prompts that quote one of the old headings should be changed to the tag names
-listed under "What the model receives" in the Outlook add-in guide.
+- Uploaded files are no longer placed above the app's prompt as `[File: name (type)]` sections.
+  They are `<content type="document">` blocks inside `{{content}}`, so a template that says "the
+  document below" now finds the document where it says.
+- Email attachments are document blocks too, with `origin="attachment"`, and count as material:
+  the Translator translates an attached PDF along with the email.
+- The `--- Current email ---`, `--- Pinned emails ---` and `--- Current meeting ---` headings are
+  gone.
+
+**Before upgrading:** nothing for the shipped apps — migrations V108 and V122 update the meeting
+apps, the Translator, the Summarizer and Outlook – Reply Directly unless you edited their prompts.
+Check custom app prompts that quote `{{content}}` (`"{{content}}"`), refer to `[File: …]` or to the
+old headings: refer to the `<content>` blocks instead, as described under "What `{{content}}` contains" in the App
+Configuration guide.
 
 ## Admin → Feedback is a page of its own
 

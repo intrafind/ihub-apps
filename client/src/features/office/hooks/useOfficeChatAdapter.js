@@ -2,8 +2,7 @@ import { useCallback } from 'react';
 import useAppChat from '../../chat/hooks/useAppChat';
 import { useEmbeddedHost, applyHostContextFlags } from '../contexts/EmbeddedHostContext';
 import {
-  combineUserTextWithEmailContext,
-  combineUserTextWithAppointmentContext,
+  buildHostContext,
   buildImageDataFromMailAttachments,
   buildFileDataFromMailAttachments,
   collectAttachmentsForSend
@@ -44,13 +43,13 @@ function combineUploadData(manualData, mailData) {
  *
  * Intercepts sendMessage to:
  * 1. Read the current Outlook mail context (body + attachments)
- * 2. Combine user text with the email body in apiMessage.content
+ * 2. Send the item (email, page, meeting) as apiMessage.hostContext
  * 3. Combine manual uploads with mail attachment images in apiMessage.imageData
  * 4. Combine manual uploads with mail attachment documents in apiMessage.fileData
  *
  * The displayMessage is left unchanged (shows what the user typed in the UI,
- * without the injected email body). Only the apiMessage sent to the server
- * gets the enriched content.
+ * without the email body). Only the apiMessage sent to the server carries
+ * the host context.
  *
  * @param {Object} options
  * @param {string} options.appId - App ID
@@ -99,23 +98,17 @@ function useOfficeChatAdapter({ appId, chatId, onMessageComplete }) {
       // so this list will be empty when itemKind === 'appointment'.
       const pinnedEmails = Array.isArray(params?.pinnedEmails) ? params.pinnedEmails : [];
 
-      // Appointment surfaces inject a structured <current_meeting> block
-      // (subject, time, organizer, attendees, location, description)
-      // instead of the <current_email> block. The downstream prompt for the
-      // meeting-agenda-generator / meeting-briefing apps references this
-      // block by its tag name in its system prompt.
+      // The host item goes to the server as structured `hostContext`; the
+      // server renders it — with the attachments below — as tagged blocks
+      // around the typed text (<content type="email" origin="open">, or
+      // type="page" in the extension, type="meeting" on a calendar item). `content` stays
+      // exactly what the user typed. Calendar items have no pin flow.
       const isAppointment = ctx?.itemKind === 'appointment';
-      const enrichedContent = isAppointment
-        ? combineUserTextWithAppointmentContext({
-            userText: apiMessage.content,
-            appointmentCtx: ctx
-          })
-        : combineUserTextWithEmailContext({
-            userText: apiMessage.content,
-            currentEmail: ctx,
-            currentItemId: ctx.itemId ?? null,
-            pinned: pinnedEmails
-          });
+      const hostContext = buildHostContext({
+        item: ctx,
+        currentItemId: ctx?.itemId ?? null,
+        pinned: isAppointment ? [] : pinnedEmails
+      });
 
       // Combine manual uploads with attachments harvested from the host
       // (email attachments in Outlook, none today in the extension; this
@@ -134,8 +127,8 @@ function useOfficeChatAdapter({ appId, chatId, onMessageComplete }) {
 
       // hostContextFlags + pinnedEmails are client-only signals — strip
       // them before forwarding so they don't show up in the outgoing
-      // chat-completion request body. The enriched content carries the
-      // pinned data into the prompt instead.
+      // chat-completion request body. `hostContext` carries the pinned
+      // emails into the prompt instead.
 
       const {
         hostContextFlags: _hostContextFlags,
@@ -148,7 +141,7 @@ function useOfficeChatAdapter({ appId, chatId, onMessageComplete }) {
         displayMessage,
         apiMessage: {
           ...apiMessage,
-          content: enrichedContent,
+          hostContext,
           imageData: combinedImageData,
           fileData: combinedFileData
         },

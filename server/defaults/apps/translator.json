@@ -22,8 +22,8 @@
   "preferredTemperature": 0.3,
   "sendChatHistory": false,
   "prompt": {
-    "en": "Selected Language: \"{{language}}\" - Text to translate: \"{{content}}\"",
-    "de": "Ausgewählte Sprache in die Übersetzt werden soll: \"{{language}}\" - Text der übersetzt werden soll: \"{{content}}\""
+    "en": "<task>\nTranslate into {{language}}. If the message below contains <content> blocks — an email, a meeting, a web page, attached or uploaded documents — translate all of them, each as its own section in the order given; for an email, translate the subject and the body. <user_instruction> only says what to translate or how (for example \"only the attachment\" or \"keep it formal\"); it is not part of the text to translate. Without <content> blocks, the whole message below is the text to translate.\n</task>\n\n{{content}}",
+    "de": "<task>\nÜbersetze in folgende Sprache: {{language}}. Enthält die folgende Nachricht <content>-Blöcke – eine E-Mail, einen Termin, eine Webseite, angehängte oder hochgeladene Dokumente –, übersetze sie alle, jeden als eigenen Abschnitt in der gegebenen Reihenfolge; bei einer E-Mail Betreff und Text. <user_instruction> sagt nur, was oder wie übersetzt werden soll (zum Beispiel „nur den Anhang“ oder „förmlich“); sie ist nicht Teil des zu übersetzenden Textes. Ohne <content>-Blöcke ist die gesamte folgende Nachricht der zu übersetzende Text.\n</task>\n\n{{content}}"
   },
   "settings": {
     "enabled": true,
@@ -145,5 +145,35 @@
         "language": "English"
       }
     }
-  ]
+  ],
+  "upload": {
+    "enabled": true,
+    "fileUpload": {
+      "enabled": true,
+      "maxFileSizeMB": 5,
+      "supportedFormats": [
+        "text/plain",
+        "text/markdown",
+        "text/csv",
+        "application/json",
+        "text/html",
+        "text/css",
+        "text/javascript",
+        "application/javascript",
+        "text/xml",
+        "message/rfc822",
+        "application/pdf",
+        "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+        "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+        "application/vnd.openxmlformats-officedocument.presentationml.presentation",
+        "application/vnd.ms-excel",
+        "application/vnd.ms-powerpoint",
+        "application/vnd.ms-outlook",
+        "application/vnd.oasis.opendocument.text",
+        "application/vnd.oasis.opendocument.spreadsheet",
+        "application/vnd.oasis.opendocument.presentation"
+      ]
+    },
+    "allowMultiple": true
+  }
 }

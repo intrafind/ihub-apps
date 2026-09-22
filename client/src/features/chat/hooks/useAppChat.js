@@ -569,7 +569,10 @@ function useAppChat({
           messageId: exchangeId,
           imageData: apiMessage.imageData,
           fileData: apiMessage.fileData,
-          audioData: apiMessage.audioData
+          audioData: apiMessage.audioData,
+          // The host item (Outlook email/meeting, the extension's page); the
+          // server renders it as tagged blocks around `content`.
+          ...(apiMessage.hostContext ? { hostContext: apiMessage.hostContext } : {})
         });
 
         pendingMessageDataRef.current = {

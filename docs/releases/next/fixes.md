@@ -327,6 +327,19 @@ to list.
 - CSV, Word and text downloads use a more robust download method for embedded hosts such as the
   Outlook add-in and the browser extension side panel.
 
+## Translator and Summarizer work on the email, page or document, not on your note
+
+Run from Outlook or the browser extension, the Translator translated only what you typed ("hello,
+how are you") instead of the open email or page, and the Summarizer summarized your note. Their
+prompts called the whole message "the text to translate". Both now work on the email, page or
+meeting and its attachments, or on an uploaded document, and read what you typed as the
+instruction ("only the attachment", "formal"); with nothing attached, the typed text is still what
+they translate or summarize.
+
+- Both apps now accept document uploads (PDF, Office, OpenDocument, text), also in the web app.
+- Custom apps get a standard note with every attached email or document saying that it is the
+  material the task works on.
+  
 ## Voice Input: vLLM Realtime and Azure Speech keep working after a platform save
 
 Realtime voice input (vLLM Realtime) and Azure Speech stopped authenticating a few minutes after

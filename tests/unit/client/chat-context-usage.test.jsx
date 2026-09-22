@@ -32,13 +32,16 @@ describe('conversation context estimation', () => {
       expect(messageTokenFragments({ role: 'user', content: 'shown', rawContent: '' })).toEqual([]);
     });
 
-    it('includes attached document text and its file header', () => {
-      const fragments = messageTokenFragments({
+    it('counts attached document text as the server renders it', () => {
+      const [text] = messageTokenFragments({
         role: 'user',
         content: 'summarize this',
         fileData: { fileName: 'report.pdf', displayType: 'PDF', content: 'the report body' }
       });
-      expect(fragments).toEqual(['summarize this', '[File: report.pdf (PDF)]', 'the report body']);
+      expect(text).toContain(
+        '<content type="document" origin="upload" name="report.pdf" format="PDF">\nthe report body\n</content>'
+      );
+      expect(text.endsWith('<user_instruction>\nsummarize this\n</user_instruction>')).toBe(true);
     });
 
     it('handles multiple attached files', () => {
@@ -50,8 +53,8 @@ describe('conversation context estimation', () => {
           { fileName: 'b.txt', fileType: 'text/plain', content: 'beta' }
         ]
       });
-      expect(fragments).toContain('alpha');
-      expect(fragments).toContain('beta');
+      expect(fragments.join('')).toContain('alpha');
+      expect(fragments.join('')).toContain('beta');
     });
 
     it('ignores non-message input', () => {

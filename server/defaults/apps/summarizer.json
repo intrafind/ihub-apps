@@ -31,8 +31,8 @@
   "preferredStyle": "normal",
   "preferredTemperature": 0.5,
   "prompt": {
-    "en": "Please {{action}} the following content: \"{{content}}\"",
-    "de": "Bitte {{action}} den folgenden Inhalt: \"{{content}}\""
+    "en": "<task>\nPlease {{action}} the content below. If the message contains <content> blocks — emails, a meeting, a web page, attached or uploaded documents — they are the content, all of them together. <user_instruction> only says what to focus on or how to present the result. Without <content> blocks, the whole message below is the content.\n</task>\n\n{{content}}",
+    "de": "<task>\nBitte {{action}} den unten stehenden Inhalt. Enthält die Nachricht <content>-Blöcke – E-Mails, einen Termin, eine Webseite, angehängte oder hochgeladene Dokumente –, sind sie zusammen der Inhalt. <user_instruction> sagt nur, worauf der Fokus liegen soll oder wie das Ergebnis aussehen soll. Ohne <content>-Blöcke ist die gesamte folgende Nachricht der Inhalt.\n</task>\n\n{{content}}"
   },
   "settings": {
     "chatHistory": {
@@ -85,5 +85,35 @@
         }
       ]
     }
-  ]
+  ],
+  "upload": {
+    "enabled": true,
+    "fileUpload": {
+      "enabled": true,
+      "maxFileSizeMB": 5,
+      "supportedFormats": [
+        "text/plain",
+        "text/markdown",
+        "text/csv",
+        "application/json",
+        "text/html",
+        "text/css",
+        "text/javascript",
+        "application/javascript",
+        "text/xml",
+        "message/rfc822",
+        "application/pdf",
+        "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+        "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+        "application/vnd.openxmlformats-officedocument.presentationml.presentation",
+        "application/vnd.ms-excel",
+        "application/vnd.ms-powerpoint",
+        "application/vnd.ms-outlook",
+        "application/vnd.oasis.opendocument.text",
+        "application/vnd.oasis.opendocument.spreadsheet",
+        "application/vnd.oasis.opendocument.presentation"
+      ]
+    },
+    "allowMultiple": true
+  }
 }
