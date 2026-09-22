@@ -10,6 +10,7 @@ import configCache from '../configCache.js';
 import logger from '../utils/logger.js';
 import { hasConsent, grantConsent } from '../utils/consentStore.js';
 import { issueConsentTicket, verifyConsentTicket } from '../utils/consentTicket.js';
+import { oauthClientsFile } from '../utils/contentsPath.js';
 
 /**
  * OAuth 2.0 Authorization Code Flow - Authorization Endpoint
@@ -887,7 +888,7 @@ export default function registerOAuthAuthorizeRoutes(app) {
       // registration (or metadata document) changed since. A fetch is allowed
       // here for the same reason as on GET: in cluster mode this POST can land
       // on a worker whose document cache is cold.
-      const clientsFilePath = oauthConfig.clientsFile || 'contents/config/oauth-clients.json';
+      const clientsFilePath = oauthClientsFile(oauthConfig);
       const resolved = await resolveOAuthClient(client_id, platform, { allowFetch: true });
       const client = resolved.ok ? resolved.client : null;
 

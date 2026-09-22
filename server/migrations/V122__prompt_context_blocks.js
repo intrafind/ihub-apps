@@ -1,4 +1,4 @@
-export const version = '121';
+export const version = '122';
 export const description = 'prompt_context_blocks';
 
 // Every client now sends what the user typed, the host item (email, meeting,

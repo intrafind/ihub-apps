@@ -18,6 +18,7 @@ import { touchConsentLastUsed } from '../utils/consentStore.js';
 import configCache from '../configCache.js';
 import logger from '../utils/logger.js';
 import { consumeCode } from '../utils/authorizationCodeStore.js';
+import { localUsersFile, oauthClientsFile } from '../utils/contentsPath.js';
 import { verifyCodeChallenge } from '../utils/pkceUtils.js';
 import { generateJwt, decodeJwt } from '../utils/tokenService.js';
 import {
@@ -287,8 +288,7 @@ export default function registerOAuthRoutes(app) {
         }
 
         // Validate client
-        const authCodeClientsFilePath =
-          oauthConfig.clientsFile || 'contents/config/oauth-clients.json';
+        const authCodeClientsFilePath = oauthClientsFile(oauthConfig);
         const authClient = await resolveGrantClient(
           sanitizedClientId || codeData.clientId,
           platform
@@ -462,7 +462,7 @@ export default function registerOAuthRoutes(app) {
         // For an OIDC or proxy user the groups come from the identity provider
         // at sign-in and iHub holds nothing newer, so the snapshot stands; the
         // remedies there are an admin revoke and `refreshTokenExpirationDays`.
-        const usersFilePath = platform.localAuth?.usersFile || 'contents/config/users.json';
+        const usersFilePath = localUsersFile(platform.localAuth);
         let currentGroups = tokenData.userGroups || [];
         try {
           const localUser = findLocalUserById(tokenData.userId, usersFilePath);
@@ -582,7 +582,7 @@ export default function registerOAuthRoutes(app) {
       }
 
       // Validate client credentials
-      const clientsFilePath = oauthConfig.clientsFile || 'contents/config/oauth-clients.json';
+      const clientsFilePath = oauthClientsFile(oauthConfig);
       const client = await validateClientCredentials(
         sanitizedClientId,
         sanitizedClientSecret,
@@ -749,7 +749,7 @@ export default function registerOAuthRoutes(app) {
             'Client authentication required for token introspection'
           );
         }
-        const clientsFilePath = oauthConfig.clientsFile || 'contents/config/oauth-clients.json';
+        const clientsFilePath = oauthClientsFile(oauthConfig);
         const introspectingClient = await validateClientCredentials(
           introspectClientId,
           introspectClientSecret,

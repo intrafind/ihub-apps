@@ -9,6 +9,7 @@ import { buildServerPath } from '../utils/basePath.js';
 import { logAudit } from '../services/AuditLogService.js';
 import configCache from '../configCache.js';
 import logger from '../utils/logger.js';
+import { oauthClientsFile } from '../utils/contentsPath.js';
 
 /**
  * OAuth 2.0 Dynamic Client Registration (RFC 7591).
@@ -112,7 +113,7 @@ export default function registerOAuthRegisterRoutes(app) {
           .json({ error: validation.error, error_description: validation.errorDescription });
       }
 
-      const clientsFilePath = oauthConfig.clientsFile || 'contents/config/oauth-clients.json';
+      const clientsFilePath = oauthClientsFile(oauthConfig);
 
       const clientsConfig = loadOAuthClients(clientsFilePath);
       if (clientsConfig?.metadata?.error) {

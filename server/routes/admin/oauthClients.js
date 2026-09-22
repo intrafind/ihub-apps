@@ -17,6 +17,7 @@ import configCache from '../../configCache.js';
 import { validateIdForPath } from '../../utils/pathSecurity.js';
 import { logAudit } from '../../services/AuditLogService.js';
 import logger from '../../utils/logger.js';
+import { oauthClientsFile } from '../../utils/contentsPath.js';
 
 /**
  * Admin routes for OAuth client management
@@ -64,7 +65,7 @@ export default function registerAdminOAuthRoutes(app) {
         });
       }
 
-      const clientsFilePath = oauthConfig.clientsFile || 'contents/config/oauth-clients.json';
+      const clientsFilePath = oauthClientsFile(oauthConfig);
       const clients = listOAuthClients(clientsFilePath);
 
       // How many people are actually connected through each client. A row with
@@ -139,7 +140,7 @@ export default function registerAdminOAuthRoutes(app) {
       // Validate clientId
       if (!validateIdForPath(clientId, 'client', res)) return;
 
-      const clientsFilePath = oauthConfig.clientsFile || 'contents/config/oauth-clients.json';
+      const clientsFilePath = oauthClientsFile(oauthConfig);
       const clientsConfig = loadOAuthClients(clientsFilePath);
       const client = findClientById(clientsConfig, clientId);
 
@@ -283,7 +284,7 @@ export default function registerAdminOAuthRoutes(app) {
         trusted: trusted === true
       };
 
-      const clientsFilePath = oauthConfig.clientsFile || 'contents/config/oauth-clients.json';
+      const clientsFilePath = oauthClientsFile(oauthConfig);
       const createdBy = req.user?.id || 'admin';
 
       const newClient = await createOAuthClient(clientData, clientsFilePath, createdBy);
@@ -391,7 +392,7 @@ export default function registerAdminOAuthRoutes(app) {
         }
       }
 
-      const clientsFilePath = oauthConfig.clientsFile || 'contents/config/oauth-clients.json';
+      const clientsFilePath = oauthClientsFile(oauthConfig);
       const updatedBy = req.user?.id || 'admin';
 
       const updatedClient = await updateOAuthClient(clientId, updates, clientsFilePath, updatedBy);
@@ -497,7 +498,7 @@ export default function registerAdminOAuthRoutes(app) {
         });
       }
 
-      const clientsFilePath = oauthConfig.clientsFile || 'contents/config/oauth-clients.json';
+      const clientsFilePath = oauthClientsFile(oauthConfig);
       const deletedBy = req.user?.id || 'admin';
 
       const { deleted, clientIds } = await deleteUnusedDynamicClients(
@@ -541,7 +542,7 @@ export default function registerAdminOAuthRoutes(app) {
       // Validate clientId
       if (!validateIdForPath(clientId, 'client', res)) return;
 
-      const clientsFilePath = oauthConfig.clientsFile || 'contents/config/oauth-clients.json';
+      const clientsFilePath = oauthClientsFile(oauthConfig);
       const deletedBy = req.user?.id || 'admin';
 
       await deleteOAuthClient(clientId, clientsFilePath, deletedBy);
@@ -616,7 +617,7 @@ export default function registerAdminOAuthRoutes(app) {
         // Validate clientId
         if (!validateIdForPath(clientId, 'client', res)) return;
 
-        const clientsFilePath = oauthConfig.clientsFile || 'contents/config/oauth-clients.json';
+        const clientsFilePath = oauthClientsFile(oauthConfig);
         const rotatedBy = req.user?.id || 'admin';
 
         const result = await rotateClientSecret(clientId, clientsFilePath, rotatedBy);
@@ -714,7 +715,7 @@ export default function registerAdminOAuthRoutes(app) {
           });
         }
 
-        const clientsFilePath = oauthConfig.clientsFile || 'contents/config/oauth-clients.json';
+        const clientsFilePath = oauthClientsFile(oauthConfig);
         const clientsConfig = loadOAuthClients(clientsFilePath);
         const client = findClientById(clientsConfig, clientId);
 

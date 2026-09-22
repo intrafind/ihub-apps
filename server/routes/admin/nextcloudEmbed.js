@@ -6,6 +6,7 @@ import { buildPublicBaseUrl } from '../../utils/publicBaseUrl.js';
 import { createOAuthClient } from '../../utils/oauthClientManager.js';
 import logger from '../../utils/logger.js';
 import { sendInternalError, sendBadRequest } from '../../utils/responseHelpers.js';
+import { oauthClientsFile } from '../../utils/contentsPath.js';
 
 /**
  * Merge updates into the platform configuration and publish them.
@@ -112,7 +113,7 @@ export default function registerAdminNextcloudEmbedRoutes(app) {
 
       if (!oauthClientId) {
         const oauthConfig = platform?.oauth || {};
-        const clientsFile = oauthConfig.clientsFile || 'contents/config/oauth-clients.json';
+        const clientsFile = oauthClientsFile(oauthConfig);
 
         const newClient = await createOAuthClient(
           {

@@ -32,10 +32,11 @@ import {
 } from './oauthClientPolicy.js';
 import { DCR_DEFAULT_ALLOWED_SCOPES } from './dcrValidation.js';
 import logger from './logger.js';
+import { oauthClientsFile } from './contentsPath.js';
 
 /** Where the client store lives, with the shipped default applied. */
 function clientsFileFor(platform) {
-  return platform?.oauth?.clientsFile || 'contents/config/oauth-clients.json';
+  return oauthClientsFile(platform?.oauth);
 }
 
 /**
