@@ -2,172 +2,27 @@ import { authenticate } from 'ldap-authentication';
 import configCache from '../configCache.js';
 import credentialService from '../services/CredentialService.js';
 import { enhanceUserGroups, mapExternalGroups } from '../utils/authorization.js';
+import {
+  buildLdapAuthOptions,
+  escapeLdapFilterValue,
+  extractGroupNames,
+  mapLdapUserAttributes,
+  resolveLdapDomain,
+  resolveLdapProvider
+} from '../utils/ldapProviderConfig.js';
+export { parsePrincipalName, resolveLdapDomain } from '../utils/ldapProviderConfig.js';
 import { generateJwt } from '../utils/tokenService.js';
 import { validateAndPersistExternalUser } from '../utils/userManager.js';
 import logger from '../utils/logger.js';
 
 /**
- * LDAP authentication configuration and utilities
- */
-
-/**
- * Escape special characters in a string for use in LDAP search filters (RFC 4515).
- * Prevents LDAP filter injection when user-supplied values are used in queries.
- * @param {string} str - Raw string to escape
- * @returns {string} Escaped string safe for LDAP filter use
- */
-function escapeLdapFilterValue(str) {
-  if (typeof str !== 'string') return str;
-  return str.replace(/[\\*()\x00]/g, c => '\\' + c.charCodeAt(0).toString(16).padStart(2, '0'));
-}
-
-/**
- * Extract a group name from an LDAP group entry.
- * Handles string values, objects with cn/name/displayName, and DN parsing.
- * @param {string|Object} group - LDAP group entry
- * @returns {string|null} Group name or null if not extractable
- */
-function extractGroupName(group) {
-  if (typeof group === 'string') {
-    return group;
-  }
-
-  if (typeof group === 'object' && group !== null) {
-    if (group.cn) {
-      return Array.isArray(group.cn) ? group.cn[0] : group.cn;
-    }
-    if (group.name) {
-      return Array.isArray(group.name) ? group.name[0] : group.name;
-    }
-    if (group.displayName) {
-      return Array.isArray(group.displayName) ? group.displayName[0] : group.displayName;
-    }
-    if (group.dn) {
-      const dnString = Array.isArray(group.dn) ? group.dn[0] : group.dn;
-      const cnMatch = dnString.match(/^CN=([^,]+)/i);
-      if (cnMatch) {
-        return cnMatch[1];
-      }
-    }
-  }
-
-  return null;
-}
-
-/**
- * Extract group names from an LDAP groups response.
- * Handles both array and object formats.
- * @param {Array|Object} groups - Raw groups from LDAP response
- * @returns {string[]} Array of group name strings
- */
-function extractGroupNames(groups) {
-  if (!groups) {
-    return [];
-  }
-
-  const groupsArray = Array.isArray(groups)
-    ? groups
-    : Object.values(groups).filter(g => g && typeof g === 'object');
-
-  return groupsArray
-    .map(group => {
-      const name = extractGroupName(group);
-      if (name === null && group != null) {
-        logger.warn('LDAP: could not extract group name from group object', {
-          component: 'LdapAuth',
-          group
-        });
-      }
-      return name;
-    })
-    .filter(g => g !== null);
-}
-
-/**
- * Attributes requested for the user entry.
+ * LDAP authentication configuration and utilities.
  *
- * `*` is the RFC 4511 shorthand for "every user attribute", i.e. exactly what
- * the server returns when no attribute list is sent at all — so naming it keeps
- * the previous behaviour intact. `msDS-PrincipalName` has to be listed
- * explicitly next to it: it is an Active Directory *constructed* attribute, and
- * constructed attributes are never covered by `*`. It holds the account in
- * `DOMAIN\\sAMAccountName` form, which is the only per-user source for the
- * NetBIOS domain name. Directories that do not have it (OpenLDAP, and AD where
- * the bind account cannot read it) simply omit it from the entry.
+ * Provider configuration is resolved through `utils/ldapProviderConfig.js`, so
+ * a provider that only sets `url`, `baseDn` and `preset` gets the same search
+ * bases, DN template and attribute mapping here as it does in the admin
+ * connection test.
  */
-const USER_SEARCH_ATTRIBUTES = ['*', 'msDS-PrincipalName'];
-
-/**
- * Read the first value of an LDAP attribute, which may come back as a scalar
- * or as a single-element array depending on the server.
- * @param {*} value - Raw attribute value
- * @returns {string|null} First value as a string, or null
- */
-function firstAttributeValue(value) {
-  const raw = Array.isArray(value) ? value[0] : value;
-  return typeof raw === 'string' && raw !== '' ? raw : null;
-}
-
-/**
- * Split an Active Directory `msDS-PrincipalName` (`DOMAIN\\account`) into its
- * parts. Returns nulls for anything that is not in that form, including the
- * bare-account form some directories return.
- * @param {*} value - Raw `msDS-PrincipalName` attribute value
- * @returns {{domain: string|null, account: string|null}}
- */
-export function parsePrincipalName(value) {
-  const principal = firstAttributeValue(value);
-  if (!principal) return { domain: null, account: null };
-
-  const separator = principal.indexOf('\\');
-  if (separator <= 0 || separator === principal.length - 1) {
-    return { domain: null, account: principal };
-  }
-
-  return {
-    domain: principal.slice(0, separator),
-    account: principal.slice(separator + 1)
-  };
-}
-
-/**
- * Resolve the NetBIOS domain name for an authenticated LDAP user.
- *
- * Configuration wins over detection: an admin who typed a domain has stated
- * what iFinder expects to see, and a directory that disagrees does not get to
- * overrule that. Detection only covers the case where nothing was configured.
- *
- * @param {Object} ldapUser - Raw LDAP user entry
- * @param {Object} ldapConfig - LDAP provider configuration
- * @param {string} username - Login name, for logging
- * @returns {string|null} NetBIOS domain name, or null when neither source has one
- */
-export function resolveLdapDomain(ldapUser, ldapConfig, username) {
-  const configured = typeof ldapConfig?.domain === 'string' ? ldapConfig.domain.trim() : '';
-  const { domain: detected, account } = parsePrincipalName(ldapUser?.['msDS-PrincipalName']);
-
-  if (configured) {
-    if (detected && detected.toLowerCase() !== configured.toLowerCase()) {
-      logger.warn(
-        'LDAP Auth: configured domain differs from the directory msDS-PrincipalName; using the configured value',
-        { component: 'LdapAuth', username, configured, detected }
-      );
-    }
-    return configured;
-  }
-
-  if (detected) {
-    logger.debug('LDAP Auth: domain detected from msDS-PrincipalName', {
-      component: 'LdapAuth',
-      username,
-      domain: detected,
-      account
-    });
-    return detected;
-  }
-
-  return null;
-}
 
 /**
  * Authenticate user against LDAP server
@@ -177,52 +32,32 @@ export function resolveLdapDomain(ldapUser, ldapConfig, username) {
  * @returns {Promise<Object>} User object or null
  */
 async function authenticateLdapUser(username, password, ldapConfig) {
+  const resolved = resolveLdapProvider(ldapConfig);
+
   try {
-    // Prepare authentication options
-    const options = {
-      ldapOpts: {
-        url: ldapConfig.url,
-        // Optional: configure additional LDAP options
-        ...(ldapConfig.tlsOptions && { tlsOptions: ldapConfig.tlsOptions }),
-        ...(ldapConfig.timeout && { timeout: ldapConfig.timeout }),
-        ...(ldapConfig.reconnect && { reconnect: ldapConfig.reconnect })
-      },
-      // Admin credentials for user search (if required). The admin password is
-      // resolved from the central credential store via adminPasswordRef.
-      ...(ldapConfig.adminDn && {
-        adminDn: ldapConfig.adminDn,
-        adminPassword: credentialService.resolveSecret(ldapConfig.adminPasswordRef)
-      }),
-      // User search configuration
-      userDn: ldapConfig.userDn || 'uid={{username}},ou=people,dc=example,dc=org',
-      userPassword: password,
-      userSearchBase: ldapConfig.userSearchBase || 'ou=people,dc=example,dc=org',
-      usernameAttribute: ldapConfig.usernameAttribute || 'uid',
-      username: username,
-      attributes: USER_SEARCH_ATTRIBUTES,
-      // Group search configuration (optional)
-      // Note: ldap-authentication library uses 'groupsSearchBase' (with 's')
-      ...(ldapConfig.groupSearchBase && {
-        groupsSearchBase: ldapConfig.groupSearchBase, // Library expects 'groupsSearchBase'
-        groupClass: ldapConfig.groupClass || 'groupOfNames',
-        groupMemberAttribute: ldapConfig.groupMemberAttribute || 'member',
-        groupMemberUserAttribute: ldapConfig.groupMemberUserAttribute || 'dn'
-      })
-    };
+    // The bind-account password is resolved from the central credential store
+    // via adminPasswordRef; without it the user is bound directly as userDn.
+    const options = buildLdapAuthOptions(resolved, {
+      username,
+      password,
+      adminPassword: resolved.adminDn
+        ? credentialService.resolveSecret(resolved.adminPasswordRef)
+        : undefined
+    });
 
     logger.info('LDAP Auth: attempting authentication for user', {
       component: 'LdapAuth',
       username
     });
-    logger.info('LDAP Auth: LDAP server', { component: 'LdapAuth', url: ldapConfig.url });
-    if (ldapConfig.groupSearchBase) {
+    logger.info('LDAP Auth: LDAP server', { component: 'LdapAuth', url: resolved.url });
+    if (resolved.groupSearchBase) {
       logger.info('LDAP Auth: group search enabled', {
         component: 'LdapAuth',
-        groupSearchBase: ldapConfig.groupSearchBase,
-        groupClass: ldapConfig.groupClass || 'groupOfNames'
+        groupSearchBase: resolved.groupSearchBase,
+        groupClass: resolved.groupClass
       });
     } else {
-      logger.warn('LDAP Auth: group search not configured, groupSearchBase is missing', {
+      logger.warn('LDAP Auth: group search not configured, no baseDn or groupSearchBase is set', {
         component: 'LdapAuth'
       });
     }
@@ -284,26 +119,29 @@ async function authenticateLdapUser(username, password, ldapConfig) {
       ldapConfig.defaultGroups.forEach(g => mappedGroups.push(g));
     }
 
+    // Map LDAP attributes onto iHub's user fields using the provider's
+    // (preset-derived or explicit) attribute mapping.
+    const mapped = mapLdapUserAttributes(user, resolved, username);
+    logger.debug('LDAP Auth: mapped LDAP attributes to user fields', {
+      component: 'LdapAuth',
+      username,
+      usedAttributes: mapped.usedAttributes
+    });
+
     // NetBIOS domain, for the iFinder `domain\\username` JWT subject. Null when
     // neither configured nor present in the directory, which the subject
     // resolver reports rather than silently dropping.
-    const domain = resolveLdapDomain(user, ldapConfig, username);
+    const domain = resolveLdapDomain(user, resolved, username);
 
-    // Normalize user data
     const normalizedUser = {
-      id: user.uid || user.sAMAccountName || user.cn || username,
-      name:
-        user.displayName ||
-        user.cn ||
-        user.name ||
-        `${user.givenName || ''} ${user.sn || ''}`.trim() ||
-        username,
-      email: user.mail || user.email || null,
+      id: mapped.id,
+      name: mapped.name,
+      email: mapped.email,
       groups: mappedGroups,
       ...(domain && { domain }),
       authenticated: true,
       authMethod: 'ldap',
-      provider: ldapConfig.name || 'ldap',
+      provider: resolved.name || 'ldap',
       raw: user, // Keep raw LDAP data for debugging
       extractedGroups: groups // Store extracted LDAP group names (strings) for user persistence
     };
@@ -496,42 +334,24 @@ export async function lookupLdapGroupsForUser(username, ldapProviderConfig) {
     );
   }
 
-  if (!ldapProviderConfig.url || !ldapProviderConfig.userSearchBase) {
-    throw new Error('LDAP provider must have url and userSearchBase configured');
+  const resolved = resolveLdapProvider(ldapProviderConfig);
+
+  if (!resolved.url || !resolved.userSearchBase) {
+    throw new Error('LDAP provider must have url and a baseDn or userSearchBase configured');
   }
 
-  // Resolve the admin bind password from the central credential store
-  const adminPassword = credentialService.resolveSecret(ldapProviderConfig.adminPasswordRef);
-
-  // Escape username for safe use in LDAP search filters (RFC 4515)
-  const safeUsername = escapeLdapFilterValue(username);
-
-  const options = {
-    ldapOpts: {
-      url: ldapProviderConfig.url,
-      ...(ldapProviderConfig.tlsOptions && { tlsOptions: ldapProviderConfig.tlsOptions }),
-      ...(ldapProviderConfig.timeout && { timeout: ldapProviderConfig.timeout }),
-      ...(ldapProviderConfig.reconnect && { reconnect: ldapProviderConfig.reconnect })
-    },
-    adminDn: ldapProviderConfig.adminDn,
-    adminPassword,
-    userSearchBase: ldapProviderConfig.userSearchBase,
-    usernameAttribute: ldapProviderConfig.usernameAttribute || 'uid',
-    username: safeUsername,
-    verifyUserExists: true,
-    ...(ldapProviderConfig.groupSearchBase && {
-      groupsSearchBase: ldapProviderConfig.groupSearchBase,
-      groupClass: ldapProviderConfig.groupClass || 'groupOfNames',
-      groupMemberAttribute: ldapProviderConfig.groupMemberAttribute || 'member',
-      groupMemberUserAttribute: ldapProviderConfig.groupMemberUserAttribute || 'dn'
-    })
-  };
+  const options = buildLdapAuthOptions(resolved, {
+    // Escaped for safe use in LDAP search filters (RFC 4515)
+    username: escapeLdapFilterValue(username),
+    adminPassword: credentialService.resolveSecret(resolved.adminPasswordRef),
+    verifyUserExists: true
+  });
 
   logger.info('LDAP Group Lookup: searching groups for user', {
     component: 'LdapGroupLookup',
     username,
-    url: ldapProviderConfig.url,
-    groupSearchBase: ldapProviderConfig.groupSearchBase || 'NOT CONFIGURED'
+    url: resolved.url,
+    groupSearchBase: resolved.groupSearchBase || 'NOT CONFIGURED'
   });
 
   const user = await authenticate(options);

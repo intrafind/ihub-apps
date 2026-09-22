@@ -987,6 +987,68 @@
           "unblock": "Unblock",
           "unblocked": "Unblocked {{name}}"
         }
+      },
+      "ldap": {
+        "title": "LDAP Authentication Settings",
+        "subtitle": "Configure LDAP/Active Directory authentication providers",
+        "add": "Add LDAP Provider",
+        "empty": "No LDAP providers configured",
+        "emptyHint": "Click \"Add LDAP Provider\" to get started",
+        "providerHeading": "LDAP Provider {{number}}",
+        "remove": "Remove this LDAP provider",
+        "name": "Provider Name",
+        "nameHelp": "Internal identifier for this provider",
+        "displayName": "Display Name",
+        "displayNameHelp": "Shown on the login page. Defaults to the provider name.",
+        "url": "LDAP URL",
+        "urlHelp": "ldap://host:389 for plain connections, ldaps://host:636 for TLS",
+        "preset": "Directory Type",
+        "presetHelp": "Sets the attribute defaults: {{attributes}}",
+        "presetLabel": {
+          "openldap": "OpenLDAP / generic LDAP",
+          "activeDirectory": "Active Directory"
+        },
+        "baseDn": "Base DN",
+        "baseDnHelp": "Root of the directory. Users and groups are searched here unless overridden.",
+        "adminDn": "Bind DN",
+        "adminDnHelp": "Service account used to find users and read their groups. Leave empty to bind as the user directly.",
+        "adminPassword": "Bind Password",
+        "adminPasswordHelp": "Select a stored credential profile holding the bind password.",
+        "domain": "Domain",
+        "domainHelp": "NetBIOS/short domain name, used by integrations that identify users as DOMAIN\\username (iFinder). Leave empty for Active Directory to detect it from msDS-PrincipalName; required for other directories.",
+        "selfSigned": "Allow self-signed / internal CA certificates (ldaps://)",
+        "selfSignedHelp": "Enable when the LDAP server uses a certificate from a private or internal CA. Required for most on-premise ldaps:// setups.",
+        "advanced": "Advanced: search bases and attributes",
+        "advancedHint": "Only needed when the directory does not follow the defaults of the selected type.",
+        "derivedHelp": "Leave empty to use the value shown — it follows from the directory type and base DN.",
+        "userSearchBase": "User Search Base",
+        "usernameAttribute": "Username Attribute",
+        "userDn": "User DN Template",
+        "userDnHelp": "Used only when no bind DN is set. Leave empty to use the value shown.",
+        "groupSearchBase": "Group Search Base",
+        "groupSearchBaseHelp": "Leave empty to search from the base DN. Without either, no LDAP groups are read.",
+        "groupClass": "Group Object Class",
+        "groupMemberAttribute": "Group Member Attribute",
+        "groupMemberUserAttribute": "Member Value Attribute",
+        "groupMemberUserAttributeHelp": "The user attribute that group entries reference. Usually dn.",
+        "sessionTimeout": "Session Timeout (minutes)",
+        "sessionTimeoutHelp": "JWT token expiration time",
+        "attributeMapping": "Attribute Mapping",
+        "attributeMappingHelp": "Which LDAP attributes become the user id, name and e-mail. Comma-separated: the first attribute with a value wins.",
+        "attribute": {
+          "id": "User ID",
+          "name": "Display Name",
+          "email": "E-Mail"
+        },
+        "test": {
+          "title": "Test a login",
+          "help": "Runs this configuration against the directory and shows what would be found and mapped. Nothing is saved, no session is created. With a bind account, the password is optional.",
+          "username": "Username",
+          "password": "Password (optional)",
+          "run": "Test login",
+          "running": "Testing…",
+          "resultTitle": "LDAP login test"
+        }
       }
     },
     "officeIntegration": {

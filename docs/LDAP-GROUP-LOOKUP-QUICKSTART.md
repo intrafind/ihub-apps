@@ -28,14 +28,13 @@ Edit `contents/config/platform.json`:
       {
         "name": "corporate-ldap",
         "url": "ldap://your-ldap-server:389",
+        "preset": "openldap",  // or "activeDirectory"
         "adminDn": "cn=admin,dc=example,dc=org",
-        "adminPassword": "${LDAP_ADMIN_PASSWORD}",
-        "userSearchBase": "ou=people,dc=example,dc=org",
-        "usernameAttribute": "uid",
-        
-        // IMPORTANT: These two lines must be configured for group retrieval
-        "groupSearchBase": "ou=groups,dc=example,dc=org",
-        "groupClass": "groupOfNames"  // or "group" for Active Directory
+        "adminPasswordRef": "ldap_corporate-ldap",
+
+        // IMPORTANT: without a baseDn (or an explicit groupSearchBase),
+        // no group search runs at all.
+        "baseDn": "dc=example,dc=org"
       }
     ]
   }
@@ -43,10 +42,17 @@ Edit `contents/config/platform.json`:
 ```
 
 **Key Points**:
-- `groupSearchBase`: Where LDAP groups are stored
-- `groupClass`: Type of LDAP group objects
-  - OpenLDAP: `groupOfNames` or `groupOfUniqueNames`
-  - Active Directory: `group`
+- `baseDn`: The directory root. Users *and* groups are searched from here unless
+  `userSearchBase` / `groupSearchBase` name something narrower.
+- `preset`: Sets the attribute names that differ per product — `openldap` gives
+  `uid` / `groupOfNames`, `activeDirectory` gives `sAMAccountName` / `group`.
+  Set `groupClass` explicitly for anything else (e.g. `groupOfUniqueNames`).
+- `adminPasswordRef`: Id of a credential profile (Admin → Credentials) holding
+  the bind password.
+
+Then use **Test a login** on the provider in Admin → Authentication → LDAP: it
+shows the groups the directory returns and the internal groups they map to,
+without needing anyone to log in.
 
 ### Step 2: Configure Group Mappings
 

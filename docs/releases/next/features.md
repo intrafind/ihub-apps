@@ -334,3 +334,48 @@ applies in practice — the lookup is in place so the profile takes over by itse
 Turn it off with `iAssistant.resolveSearchProfileFromProfile: false`. A failed lookup never breaks
 a conversation; it falls back. The resolved profile is pinned for the life of the conversation, so
 editing a profile cannot move a conversation already under way to a different corpus.
+
+## LDAP: one base DN instead of five, and a login you can test before anyone tries it
+
+An LDAP provider used to be six DNs that mostly repeated each other — the same directory root
+inside `userSearchBase`, `userDn` and `groupSearchBase`, the username attribute typed once as a
+setting and again inside the DN template. Now a provider names the directory root once and says
+which kind of directory it is:
+
+```json
+{
+  "name": "corporate-ldap",
+  "url": "ldap://ldap.example.com:389",
+  "preset": "activeDirectory",
+  "baseDn": "dc=example,dc=com",
+  "adminDn": "svc-ihub@example.com",
+  "adminPasswordRef": "ldap_corporate-ldap"
+}
+```
+
+- **Base DN** supplies the user and group search bases, and the user DN template is built from it
+  and the username attribute (`sAMAccountName={{username}},dc=example,dc=com` above).
+- **Directory type** — *OpenLDAP / generic LDAP* or *Active Directory* — supplies the attribute
+  names that differ between products: `uid` vs `sAMAccountName`, `groupOfNames` vs `group`.
+- **Attribute mapping** is now configurable: which LDAP attributes become the user id, display
+  name and e-mail, as a single attribute or an ordered list where the first with a value wins.
+- Every derived field can still be set by hand and then wins. In **Admin → Authentication → LDAP**
+  they have moved under **Advanced**, each showing the value it would resolve to as its
+  placeholder. Providers that spell out every field keep working exactly as before.
+
+### Test a login
+
+Every provider now has a **Test a login** panel that runs the configuration currently in the form
+— saved or not — and reports what happened, step by step: the effective configuration and which
+values were derived, whether the directory could be reached and whether its certificate is
+trusted, the bind, the entry that matched, **which attributes became the id, name and e-mail**,
+the LDAP groups the directory returned, **which of those have no mapping in `groups.json`**, the
+final internal groups, and the iHub user that would be created together with what it grants.
+
+- The password is optional. With a bind account configured, everything except "would this password
+  be accepted" can be checked without knowing anyone's password — the situation NTLM group lookup
+  runs in anyway.
+- Nothing is saved: no session, no user record, no token. Password attributes are never echoed
+  back.
+- Also available as `POST /api/admin/auth/ldap/_test`, with either an inline `provider` or the
+  `providerName` of a saved one.
