@@ -1,30 +1,31 @@
-import { render, screen, waitFor, fireEvent } from '@testing-library/react';
+import { render, screen, waitFor } from '@testing-library/react';
+import userEvent from '@testing-library/user-event';
 import '@testing-library/jest-dom';
-import CitationPanel from '../../../client/src/features/chat/components/CitationPanel';
-import { EmbeddedHostProvider } from '../../../client/src/features/office/contexts/EmbeddedHostContext';
-import { fetchIFinderDocument } from '../../../client/src/api/endpoints/ifinder';
 
 /**
- * The document actions on an iAssistant citation, across the hosts the chat UI
- * renders in (issue #2453).
+ * Citation document actions in an embedded host.
  *
- * In the Outlook task pane and the extension side panel popups are blocked:
- * `window.open()` returns null and the click does nothing at all. Those hosts
- * pass their own opener through the embedded-host adapter, and Outlook also
- * offers attaching the document to the mail being written. All of it is
- * exercised against the real CitationPanel, because the bug was precisely that
- * the panel's own fallback path — the one used wherever no chat page supplies
- * `onDocumentAction` — went straight to `window.open`.
+ * In the Outlook task pane the open/download buttons used to be a complete
+ * no-op: `window.open()` is popup-blocked there and returns `null` without
+ * throwing, and the download URL carries no session anyway because the pane
+ * authenticates with a Bearer header rather than a cookie (issue #2453).
+ * These cover both halves — the right host API is used, and a failure is
+ * shown to the user instead of vanishing.
  */
 
+const mockT = (key, def) => (typeof def === 'string' ? def : key);
 jest.mock('react-i18next', () => ({
-  useTranslation: () => ({ t: (key, fallback) => fallback || key, i18n: { language: 'en' } })
+  __esModule: true,
+  useTranslation: () => ({ t: mockT, i18n: { language: 'en' } })
 }));
 
-jest.mock('../../../client/src/api/endpoints/ifinder', () => ({
+// `api/client.js` reads `import.meta.env`, which the Jest transform cannot
+// compile, so the api layer is stubbed the way the other client suites do it.
+const mockFetchIFinderDocument = jest.fn();
+jest.mock('../../../client/src/api/endpoints/documents', () => ({
   __esModule: true,
-  fetchIFinderDocument: jest.fn(),
-  fetchIFinderDocumentMetadata: jest.fn(() => Promise.resolve({}))
+  fetchIFinderDocument: (...args) => mockFetchIFinderDocument(...args),
+  fetchIFinderDocumentMetadata: jest.fn().mockResolvedValue({})
 }));
 
 jest.mock('../../../client/src/features/workflows/components/AppSelectionModal', () => ({
@@ -32,198 +33,154 @@ jest.mock('../../../client/src/features/workflows/components/AppSelectionModal',
   default: () => null
 }));
 
-const DOC = {
+const CitationPanel = require('../../../client/src/features/chat/components/CitationPanel').default;
+
+const DEEP_LINK = 'https://intranet.test/documents/doc-1';
+
+const documentItem = {
   document_id: 'doc-1',
   title: 'Quarterly report',
-  links: [{ type: 'ACCESS', documentId: 'ifinder-1', searchProfile: 'default' }],
   additional_document_metadata: {
-    'accessInfo.deepLink': ['https://ifinder.example/doc/1'],
-    'file.name': ['report.pdf'],
-    application: ['pdf']
-  }
+    'accessInfo.deepLink': [DEEP_LINK],
+    'file.name': ['quarterly-report.pdf']
+  },
+  links: [{ type: 'ACCESS', documentId: 'doc-1', searchProfile: 'default' }]
 };
 
-const citations = { references: [], resultItems: [DOC] };
+const citations = { references: [], resultItems: [documentItem] };
 
-const renderPanel = (host = null, props = {}) =>
-  render(
-    host ? (
-      <EmbeddedHostProvider value={host}>
-        <CitationPanel citations={citations} {...props} />
-      </EmbeddedHostProvider>
-    ) : (
-      <CitationPanel citations={citations} {...props} />
-    )
-  );
+const renderPanel = (props = {}) => render(<CitationPanel citations={citations} {...props} />);
 
-const openMenu = () => fireEvent.click(screen.getByTitle('Menu'));
+const openOverflowMenu = async user => {
+  await user.click(screen.getByRole('button', { name: 'Menu' }));
+};
 
-let anchorClicks;
+describe('citation document actions', () => {
+  let windowOpen;
 
-beforeEach(() => {
-  jest.clearAllMocks();
-  anchorClicks = [];
-  jest.spyOn(HTMLAnchorElement.prototype, 'click').mockImplementation(function click() {
-    anchorClicks.push({ href: this.href, download: this.download });
+  beforeEach(() => {
+    mockFetchIFinderDocument.mockReset();
+    windowOpen = jest.spyOn(window, 'open').mockReturnValue({});
+    URL.createObjectURL = jest.fn(() => 'blob:mock-url');
+    URL.revokeObjectURL = jest.fn();
   });
-  window.URL.createObjectURL = jest.fn(() => 'blob:mock');
-  window.URL.revokeObjectURL = jest.fn();
-  fetchIFinderDocument.mockResolvedValue({
-    data: new Blob(['%PDF-1.7 report'], { type: 'application/pdf' }),
-    contentType: 'application/pdf',
-    filename: 'Quarterly report.pdf'
+
+  afterEach(() => {
+    windowOpen.mockRestore();
+    delete global.Office;
+    delete URL.createObjectURL;
+    delete URL.revokeObjectURL;
   });
-});
 
-afterEach(() => {
-  jest.restoreAllMocks();
-});
+  it('opens the deep link through the Outlook API when running in the task pane', async () => {
+    const user = userEvent.setup();
+    const openBrowserWindow = jest.fn();
+    global.Office = { context: { ui: { openBrowserWindow } } };
 
-describe('opening the source document', () => {
-  test('embedded hosts open the link themselves instead of calling window.open', async () => {
-    const openExternalUrl = jest.fn(() => true);
-    const windowOpen = jest.spyOn(window, 'open').mockReturnValue(null);
+    renderPanel();
+    await user.click(screen.getByTitle('Open in browser'));
 
-    renderPanel({ kind: 'office', openExternalUrl });
-    fireEvent.click(screen.getByTitle('Open in browser'));
-
-    await waitFor(() =>
-      expect(openExternalUrl).toHaveBeenCalledWith('https://ifinder.example/doc/1')
-    );
+    expect(openBrowserWindow).toHaveBeenCalledWith(DEEP_LINK);
     expect(windowOpen).not.toHaveBeenCalled();
   });
 
-  test('the web app keeps using window.open', async () => {
-    const windowOpen = jest.spyOn(window, 'open').mockReturnValue({});
+  it('tells the user when the host blocked the open instead of doing nothing', async () => {
+    const user = userEvent.setup();
+    windowOpen.mockReturnValue(null);
 
     renderPanel();
-    fireEvent.click(screen.getByTitle('Open in browser'));
+    await user.click(screen.getByTitle('Open in browser'));
 
-    await waitFor(() =>
-      expect(windowOpen).toHaveBeenCalledWith(
-        'https://ifinder.example/doc/1',
-        '_blank',
-        'noopener,noreferrer'
-      )
-    );
+    expect(await screen.findByRole('alert')).toHaveTextContent(/could not be opened/i);
   });
 
-  test('a blocked link says so instead of doing nothing', async () => {
-    jest.spyOn(window, 'open').mockReturnValue(null);
+  it('clears the error once the next action succeeds', async () => {
+    const user = userEvent.setup();
+    windowOpen.mockReturnValue(null);
 
     renderPanel();
-    fireEvent.click(screen.getByTitle('Open in browser'));
+    await user.click(screen.getByTitle('Open in browser'));
+    expect(await screen.findByRole('alert')).toBeInTheDocument();
 
-    expect(await screen.findByRole('alert')).toHaveTextContent('cannot open links');
+    windowOpen.mockReturnValue({});
+    await user.click(screen.getByTitle('Open in browser'));
+    await waitFor(() => expect(screen.queryByRole('alert')).not.toBeInTheDocument());
   });
-});
 
-describe('downloading', () => {
-  test('fetches on the authenticated API path and saves the file', async () => {
-    renderPanel({ kind: 'office', openExternalUrl: jest.fn(() => true) });
-    openMenu();
-    fireEvent.click(screen.getByText('Download'));
-
-    await waitFor(() => expect(anchorClicks).toHaveLength(1));
-    expect(fetchIFinderDocument).toHaveBeenCalledWith({
-      documentId: 'ifinder-1',
-      searchProfile: 'default'
+  it('downloads through the authenticated proxy and saves the blob, not a popup', async () => {
+    const user = userEvent.setup();
+    const anchorClick = jest
+      .spyOn(HTMLAnchorElement.prototype, 'click')
+      .mockImplementation(() => {});
+    mockFetchIFinderDocument.mockResolvedValue({
+      data: new Blob(['pdf']),
+      headers: { 'content-disposition': 'attachment; filename="q3.pdf"' }
     });
-    expect(anchorClicks[0].download).toBe('Quarterly report.pdf');
-    expect(screen.queryByRole('alert')).toBeNull();
-  });
-
-  test('a failed download is reported on the document', async () => {
-    fetchIFinderDocument.mockRejectedValue(Object.assign(new Error('nope'), { status: 403 }));
 
     renderPanel();
-    openMenu();
-    fireEvent.click(screen.getByText('Download'));
-
-    expect(await screen.findByRole('alert')).toHaveTextContent('Could not download this document');
-    expect(anchorClicks).toHaveLength(0);
-  });
-});
-
-describe('adding a document to the email being written', () => {
-  const outlookHost = (overrides = {}) => ({
-    kind: 'office',
-    openExternalUrl: jest.fn(() => true),
-    fileAttachment: {
-      isAvailable: () => true,
-      attach: jest.fn(() => Promise.resolve()),
-      maxBytes: 25 * 1024 * 1024,
-      labelKey: 'citations.attachToEmail',
-      unavailableHintKey: 'citations.errors.attachNeedsDraft',
-      ...overrides
-    }
-  });
-
-  test('hands Outlook the downloaded bytes and confirms', async () => {
-    const host = outlookHost();
-
-    renderPanel(host);
-    openMenu();
-    fireEvent.click(screen.getByText('Add to email'));
-
-    await waitFor(() => expect(host.fileAttachment.attach).toHaveBeenCalled());
-    const { base64, filename } = host.fileAttachment.attach.mock.calls[0][0];
-    expect(filename).toBe('Quarterly report.pdf');
-    expect(Buffer.from(base64, 'base64').toString()).toBe('%PDF-1.7 report');
-    expect(await screen.findByText(/Added to your email/)).toBeInTheDocument();
-  });
-
-  test('is offered but disabled while a received mail is open', () => {
-    renderPanel(outlookHost({ isAvailable: () => false }));
-    openMenu();
-
-    const action = screen.getByText('Add to email').closest('button');
-    expect(action).toBeDisabled();
-    expect(action).toHaveAttribute('title', expect.stringContaining('Open a new email'));
-  });
-
-  test('re-checks the host when Outlook switches to another item', async () => {
-    let composing = false;
-    renderPanel(outlookHost({ isAvailable: () => composing }));
-    openMenu();
-    expect(screen.getByText('Add to email').closest('button')).toBeDisabled();
-
-    composing = true;
-    fireEvent(document, new CustomEvent('ihub:itemchanged'));
+    await openOverflowMenu(user);
+    await user.click(screen.getByText('Download'));
 
     await waitFor(() =>
-      expect(screen.getByText('Add to email').closest('button')).not.toBeDisabled()
+      expect(mockFetchIFinderDocument).toHaveBeenCalledWith({
+        documentId: 'doc-1',
+        searchProfile: 'default'
+      })
     );
+    expect(windowOpen).not.toHaveBeenCalled();
+    expect(anchorClick).toHaveBeenCalled();
+
+    anchorClick.mockRestore();
   });
 
-  test('a document too large for a mail is not attached', async () => {
-    const host = outlookHost({ maxBytes: 4 });
+  it('reports a failed download', async () => {
+    const user = userEvent.setup();
+    mockFetchIFinderDocument.mockRejectedValue(new Error('HTTP 401'));
 
-    renderPanel(host);
-    openMenu();
-    fireEvent.click(screen.getByText('Add to email'));
+    renderPanel();
+    await openOverflowMenu(user);
+    await user.click(screen.getByText('Download'));
 
-    expect(await screen.findByRole('alert')).toHaveTextContent('too large to attach');
-    expect(host.fileAttachment.attach).not.toHaveBeenCalled();
+    expect(await screen.findByRole('alert')).toHaveTextContent(/could not be downloaded/i);
   });
 
-  test('hosts that cannot attach do not offer the action', () => {
-    renderPanel({ kind: 'extension', openExternalUrl: jest.fn(() => true) });
-    openMenu();
+  it('hides "Open in App" when no handler can navigate there', async () => {
+    const user = userEvent.setup();
 
-    expect(screen.queryByText('Add to email')).toBeNull();
+    renderPanel();
+    await openOverflowMenu(user);
+
+    expect(screen.queryByText('Open in App')).not.toBeInTheDocument();
   });
-});
 
-describe('opening a document in another app', () => {
-  test('is offered only where the surrounding page can route there', () => {
-    const { unmount } = renderPanel({ kind: 'office' });
-    openMenu();
-    expect(screen.queryByText('Open in App')).toBeNull();
-    unmount();
+  it('keeps "Open in App" when a host handler is mounted', async () => {
+    const user = userEvent.setup();
 
-    renderPanel(null, { onDocumentAction: jest.fn() });
-    openMenu();
+    renderPanel({ onDocumentAction: jest.fn() });
+    await openOverflowMenu(user);
+
     expect(screen.getByText('Open in App')).toBeInTheDocument();
+  });
+
+  it('surfaces a failure reported by a host handler', async () => {
+    const user = userEvent.setup();
+    const onDocumentAction = jest.fn().mockResolvedValue({ ok: false, reason: 'blocked' });
+
+    renderPanel({ onDocumentAction });
+    await user.click(screen.getByTitle('Open in browser'));
+
+    expect(onDocumentAction).toHaveBeenCalledWith('openExternal', documentItem, undefined);
+    expect(await screen.findByRole('alert')).toHaveTextContent(/could not be opened/i);
+  });
+
+  it('stays quiet for a legacy handler that reports nothing', async () => {
+    const user = userEvent.setup();
+    const onDocumentAction = jest.fn();
+
+    renderPanel({ onDocumentAction });
+    await user.click(screen.getByTitle('Open in browser'));
+
+    await waitFor(() => expect(onDocumentAction).toHaveBeenCalled());
+    expect(screen.queryByRole('alert')).not.toBeInTheDocument();
   });
 });

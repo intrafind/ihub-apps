@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
-import { fetchIFinderDocument } from '../../../api/endpoints/ifinder';
-import { downloadBlob, resolveDownloadFilename } from '../../../utils/fileDownload';
+import { fetchIFinderDocument } from '../../../api/endpoints/documents';
+import { filenameFromContentDisposition, saveBlobAs } from '../../../utils/externalNavigation';
 import PdfPassageViewer from './PdfPassageViewer';
 
 const MIN_SCALE = 0.5;
@@ -15,9 +15,9 @@ const SCALE_STEP = 0.2;
  * The PDF comes from the existing `integrations/ifinder/document` proxy with
  * `convertToPdf=true`, i.e. the same generated PDF the "Preview" action used to
  * open in a browser tab. Fetching it as an ArrayBuffer (instead of handing the
- * URL to pdf.js) keeps the request on the authenticated API path — which is
- * also what makes the preview work in the Outlook task pane and the extension
- * side panel, where the session cookie a bare fetch relies on does not exist.
+ * URL to pdf.js) keeps the request on the app's authenticated `apiClient` path,
+ * which also carries the Bearer token the Outlook task pane and the extension
+ * side panel sign requests with.
  *
  * @param {Object} props
  * @param {string} props.documentId iFinder document id from the ACCESS link.
@@ -66,8 +66,8 @@ function DocumentPreviewModal({
       responseType: 'arraybuffer',
       signal: controller.signal
     })
-      .then(({ data: buffer }) => {
-        if (!cancelled) setData(buffer);
+      .then(response => {
+        if (!cancelled) setData(response.data);
       })
       .catch(err => {
         if (!cancelled && err.name !== 'AbortError' && err.code !== 'ERR_CANCELED') {
@@ -115,36 +115,34 @@ function DocumentPreviewModal({
 
   const handleStateChange = useCallback(state => setViewerState(state), []);
 
-  // Downloading goes through the same authenticated fetch as the preview: a
-  // link to the proxy URL carries no token in the embedded hosts, and the
-  // popup it would open is blocked there anyway (issue #2453).
+  // Downloading through an authenticated blob fetch rather than a link to the
+  // API URL: a plain anchor carries no Bearer token in the embedded hosts, and
+  // its `target="_blank"` is popup-blocked there anyway (issue #2453).
   const [downloading, setDownloading] = useState(false);
   const [downloadError, setDownloadError] = useState(null);
 
   const handleDownload = useCallback(async () => {
-    if (downloading) return;
     setDownloading(true);
     setDownloadError(null);
     try {
-      const {
-        data: blob,
-        contentType,
-        filename
-      } = await fetchIFinderDocument({
-        documentId,
-        searchProfile
-      });
-      downloadBlob(blob, resolveDownloadFilename({ headerFilename: filename, title, contentType }));
-    } catch (error) {
-      console.error('[iHub] document download failed:', error);
+      const response = await fetchIFinderDocument({ documentId, searchProfile });
+      const filename =
+        filenameFromContentDisposition(response.headers?.['content-disposition']) ||
+        title ||
+        documentId;
+      if (!saveBlobAs(response.data, filename)) {
+        setDownloadError(
+          t('citations.downloadFailed', 'The document could not be downloaded. Please try again.')
+        );
+      }
+    } catch {
       setDownloadError(
-        error?.message ||
-          t('citations.errors.unknown', 'Something went wrong while fetching the document.')
+        t('citations.downloadFailed', 'The document could not be downloaded. Please try again.')
       );
     } finally {
       setDownloading(false);
     }
-  }, [documentId, downloading, searchProfile, t, title]);
+  }, [documentId, searchProfile, title, t]);
 
   const { loading, numPages, totalMatches, currentMatch } = viewerState;
   const passageCount = passages.length;
@@ -161,11 +159,17 @@ function DocumentPreviewModal({
             <p className="text-sm font-semibold text-gray-900 dark:text-white truncate">
               {title || t('documentPreview.title', 'Document preview')}
             </p>
-            <p className="text-xs text-gray-500 dark:text-gray-400">
-              {loading
-                ? t('documentPreview.loading', 'Loading document…')
-                : t('documentPreview.pageCount', '{{count}} pages', { count: numPages })}
-            </p>
+            {downloadError ? (
+              <p role="alert" className="text-xs text-red-600 dark:text-red-400">
+                {downloadError}
+              </p>
+            ) : (
+              <p className="text-xs text-gray-500 dark:text-gray-400">
+                {loading
+                  ? t('documentPreview.loading', 'Loading document…')
+                  : t('documentPreview.pageCount', '{{count}} pages', { count: numPages })}
+              </p>
+            )}
           </div>
 
           {/* Match navigation */}
@@ -253,43 +257,21 @@ function DocumentPreviewModal({
           </div>
 
           <button
+            type="button"
             onClick={handleDownload}
             disabled={downloading}
             className="p-1.5 rounded-sm hover:bg-gray-100 dark:hover:bg-gray-700 text-gray-600 dark:text-gray-300 disabled:opacity-50"
-            title={downloadError || t('citations.download', 'Download')}
+            title={t('citations.download', 'Download')}
             aria-label={t('citations.download', 'Download')}
           >
-            {downloading ? (
-              <svg className="w-4 h-4 animate-spin" fill="none" viewBox="0 0 24 24">
-                <circle
-                  className="opacity-25"
-                  cx="12"
-                  cy="12"
-                  r="10"
-                  stroke="currentColor"
-                  strokeWidth="4"
-                />
-                <path
-                  className="opacity-75"
-                  fill="currentColor"
-                  d="M4 12a8 8 0 018-8v4a4 4 0 00-4 4H4z"
-                />
-              </svg>
-            ) : (
-              <svg
-                className={`w-4 h-4 ${downloadError ? 'text-red-600 dark:text-red-400' : ''}`}
-                fill="none"
-                viewBox="0 0 24 24"
-                stroke="currentColor"
-              >
-                <path
-                  strokeLinecap="round"
-                  strokeLinejoin="round"
-                  strokeWidth={2}
-                  d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4"
-                />
-              </svg>
-            )}
+            <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+              <path
+                strokeLinecap="round"
+                strokeLinejoin="round"
+                strokeWidth={2}
+                d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4"
+              />
+            </svg>
           </button>
 
           <button

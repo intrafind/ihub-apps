@@ -50,12 +50,12 @@ jest.mock('../../../client/src/api/endpoints/apps', () => ({
   __esModule: true,
   getConversationMessages: jest.fn().mockResolvedValue({ messages: [] })
 }));
-// Reached only by the "Open in App" document prefill, which no test here
-// triggers — mocked so the real module does not drag the Axios client in.
-jest.mock('../../../client/src/api/endpoints/ifinder', () => ({
+// Reached through AppChat's citation document actions. Stubbed like the rest
+// of the api layer: `api/client.js` reads `import.meta.env`, which the Jest
+// transform cannot compile.
+jest.mock('../../../client/src/api/endpoints/documents', () => ({
   __esModule: true,
   fetchIFinderDocument: jest.fn(),
-  fetchIFinderDocumentText: jest.fn(),
   fetchIFinderDocumentMetadata: jest.fn()
 }));
 

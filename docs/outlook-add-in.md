@@ -77,6 +77,7 @@ Still on the **Office Integration** admin page:
 - **Description** — short blurb shown alongside the name. Max 250 chars per locale.
 - **Starter Prompts** — up to 20 quick-action prompts displayed when the user opens the add-in on an email. Each has a **Title** (button label) and **Message** (the prompt sent on click, max 4000 chars). Prompts can be reordered with the up/down arrows. They are used as the default suggestions when the user-selected app does not declare its own starter prompts.
 - **Start Page** — what the pane shows after sign-in and which app answers there. See [The start page](#the-start-page) below.
+- **Answer Actions** — what the button under each assistant answer does by default. See [Answer actions](#answer-actions) below.
 
 Click **Save**. Display Name and Description changes are picked up on the next manifest fetch — you do **not** need to redeploy the manifest unless the `<DisplayName>` text needs to change in M365 Admin Center listings (it is read at upload time).
 
@@ -103,6 +104,90 @@ Three settings in the **Start Page** section control it. They are stored as `off
 ```
 
 The start page is built for small panes: it scrolls as one column, drops the subtitle and the app descriptions below roughly 340 px of width and the starter prompts below roughly 480 px of height, and deliberately leaves the model selector, tools menu, uploads and voice input to the opened app. Existing installations receive `defaultPage: "start"` through configuration migration `V107`; pick **All apps** to restore the previous landing view.
+
+### Answer actions
+
+Under every assistant answer the pane shows one button plus a menu. Each entry is a distinct Outlook operation:
+
+| Action | What it does | Office.js call |
+|---|---|---|
+| **Reply all** | Opens a reply to the sender **and** every other `To:` and `Cc:` recipient of the thread. | `item.displayReplyAllFormAsync` |
+| **Reply** | Opens a reply to the sender only. | `item.displayReplyFormAsync` |
+| **Forward** | Opens a new message, `FW: …`, with the answer above the original quoted below. | `mailbox.displayNewMessageFormAsync` (rebuilt — see below) |
+| **New email** | Opens a blank new message carrying the answer. | `mailbox.displayNewMessageFormAsync` |
+| **Insert into draft** | Writes the answer into the draft the user is already composing, at the cursor. | `item.body.setSelectedDataAsync`, else `prependAsync` |
+
+**Which actions appear depends on what Outlook is doing**, because the API does:
+
+- **An email selected in the reading pane** → Reply all, Reply, Forward, New email. There is no draft to insert into, so *Insert* is not offered.
+- **A draft open for writing** (a reply, a forward, a new mail) → *Insert into draft* only. Outlook's `displayNewMessageFormAsync` is documented as read-mode only and the reply openers do not exist on a compose surface, so offering them here would fail rather than do something.
+
+**Default action.** The button runs whichever action is resolved first:
+
+1. the user's own choice in the task-pane **Settings** dialog,
+2. the **Answer Actions → Default action** setting on the admin page (`officeIntegration.defaultMailAction` in `platform.json`),
+3. otherwise the context default — *Reply all* in the reading pane, *Insert into draft* in a draft.
+
+A configured action the open item cannot offer is skipped rather than honoured, so an admin who picks **Reply all** still gets *Insert* for a user writing a draft. `auto` (the shipped value, seeded into existing installations by configuration migration `V120`) means "use the context default".
+
+```json
+"officeIntegration": {
+  "defaultMailAction": "auto"
+}
+```
+
+#### Forward is rebuilt, not opened
+
+The Outlook JavaScript API has **no forward-form call** — there is no `displayForwardForm` to match `displayReplyFormAsync`. Forward is therefore reconstructed on top of the new-message form: `FW: ` subject, the assistant's answer, a standard `From / Sent / To / Cc / Subject` header block, and the original body quoted below. Two limits are handled explicitly rather than silently:
+
+- **Attachments.** `displayNewMessageFormAsync` accepts attachments by URL or by *item* id, never by the original's individual attachment ids, so the original's files cannot be re-attached one by one. When the original carries attachments, the **whole original message is attached instead** (as a message attachment) and the pane says so — nothing is lost, it is one click further away.
+- **Size.** Outlook caps a form body at 32 K characters. If the quoted original would exceed it, the quote is dropped and the original is attached instead. If the *answer alone* exceeds it, no form is opened; the answer is copied to the clipboard and the pane says why.
+
+#### Signatures
+
+**Insert into draft** writes into a draft Outlook has already built, so the user's signature and the quoted thread stay exactly as they are — this is the action to prefer where a signature is a compliance requirement.
+
+The other four actions open a **new** form, and Outlook suppresses the automatic signature whenever an add-in supplies the body (`htmlBody`). This is a platform limitation with no add-in-side workaround: there is no API to read the configured signature or to ask Outlook to apply it to a supplied body. Where every outgoing mail must carry a footer, either keep the default on *Insert into draft* (the user starts the reply in Outlook, then inserts), or apply the footer with a transport rule on the mail server, which is unaffected by how the draft was created.
+
+### Documents found by iAssistant
+
+When an app answers from iFinder, its sources are listed under the answer. Each document carries
+the same actions in the task pane as in the browser — **Open in browser**, **Preview (PDF)**,
+**Download**, **Details** — plus one that only exists here:
+
+**Add to email** attaches the document to the mail the user is writing. The pane downloads it with
+the signed-in user's own iFinder permissions and hands Outlook the bytes, so the attachment is a
+real file on the draft: the recipient needs no iFinder access, and the sender no
+download-then-attach detour.
+
+It follows the same read/compose split as the answer actions above, and for the same reason — the
+API's:
+
+- **A draft open for writing** → the entry is active; the document is attached where the cursor is
+  not, i.e. to the message itself.
+- **An email selected in the reading pane** → the entry is shown but disabled, since a received
+  message has nothing to attach to. Opening a reply activates it on clients where the task pane
+  follows the item (Outlook on the web, the new Outlook for Windows); on classic desktop Outlook
+  the reply opens in its own window, where the add-in has to be started again.
+
+Attaching by URL — the one path that would work from the reading pane — is not usable: Outlook has
+*Exchange* fetch that URL, and the iFinder proxy is behind the user's iHub session.
+
+Two limits:
+
+- Documents above **25 MB** are refused with a message pointing at **Download**. Your Exchange
+  message-size limit may be lower, in which case Outlook refuses the attachment itself and the pane
+  reports what it said.
+- The attachment is named after what iFinder reports — its file name, or the name from the download
+  headers — and gets the extension for its content type when that name carries none, so it opens on
+  the recipient's machine.
+
+Everything here needs the user's iHub session in the pane: a document the user may not open in
+iFinder is refused by iFinder, not by the add-in.
+
+#### When an Outlook call fails
+
+A rejected Office call never raises a browser alert. The pane shows a notice naming the Office error (its `name` and `code`), the same record is written to the browser console, and the last 25 failures can be dumped from the task pane's devtools with `window.ihubOfficeErrors()` — quote that output in a support request. Where the answer could otherwise be lost (a body past the 32 K cap), it is copied to the clipboard first and the notice says so.
 
 ---
 
@@ -189,42 +274,6 @@ context for that app). It is a good choice for the start page's default chat app
 
 ---
 
-## Documents found by iAssistant
-
-When an app answers from iFinder, the sources appear under the answer as a list of documents. Each
-one carries the same actions in the task pane as in the browser:
-
-| Action | What it does |
-|---|---|
-| **Open in browser** | Opens the document at its source. In the task pane this goes through Office, which hands the link to the user's default browser. |
-| **Preview (PDF)** | Renders the document inside the pane with the cited passages highlighted. |
-| **Download** | Saves the file. |
-| **Add to email** | Attaches the document to the mail being written. Outlook only. |
-| **Details** | File type, size, author, source and the document's link. |
-
-**Add to email** is what turns a search hit into an attachment: the pane downloads the document
-with the user's own iFinder permissions and puts it on the draft — no link, no separate download
-step, and nothing the recipient needs access to iFinder for.
-
-It appears while the user is **composing**: a new mail, a reply, or a meeting invitation with the
-add-in open. Reading a mail, the action is shown but disabled, since a received message has nothing
-to attach to. Opening a reply switches the action on by itself on clients where the task pane
-follows the item (Outlook on the web, new Outlook for Windows); on classic desktop Outlook the
-reply opens in its own window, where the add-in has to be started again.
-
-Two limits are worth knowing:
-
-- Documents above **25 MB** are refused with a message pointing at **Download** instead. Your
-  Exchange message-size limit may be lower, in which case Outlook refuses the attachment itself and
-  says so on the document.
-- The attachment is named after what iFinder reports — its file name, or the document title with
-  the extension for its type.
-
-Everything above needs the user's iHub session in the pane; a document the user may not open in
-iFinder is refused there, not here.
-
----
-
 ## Step 4 — Deploy the manifest via Microsoft 365 Admin Center (centralized deployment)
 
 The recommended way to roll the add-in out to all users is **Centralized Deployment** through the Microsoft 365 Admin Center. This installs the add-in tenant-wide; users do not need to add it themselves.
@@ -289,12 +338,13 @@ Watch the iHub server logs (`npm run logs`) during the first sign-in. The OAuth 
 
 ## End-user settings
 
-Users open the task-pane menu (**☰**) → **Settings** to adjust two personal preferences. Both are stored in the Outlook client's local storage: they survive Outlook restarts and are kept per user and per device. Nothing is stored on the iHub server and there is no admin-side configuration for them.
+Users open the task-pane menu (**☰**) → **Settings** to adjust three personal preferences. All are stored in the Outlook client's local storage: they survive Outlook restarts and are kept per user and per device. Nothing is stored on the iHub server.
 
 | Setting | Options | Notes |
 |---|---|---|
 | **Language** | English, German | Defaults to the Outlook display language. Changing it reloads the task pane. |
 | **Appearance** | **Light** (default), **Dark**, **Automatic** | Applies immediately, no reload. *Automatic* follows the Outlook theme on clients that expose it (Mailbox requirement set 1.14+ — Outlook on the web, the new Outlook for Windows, current Microsoft 365 desktop builds) and switches live when the user changes Outlook's theme; older clients fall back to the operating system's dark-mode setting. |
+| **Default answer action** | **Automatic** (default), Reply all, Reply, Forward, New email, Insert into draft | Overrides the admin's [default action](#answer-actions) for this user on this device. Applies immediately, no reload. Only shown in Outlook. |
 
 > Because these preferences live in the Outlook client's storage, clearing the add-in's site data or moving to another machine resets them to the defaults.
 
@@ -305,7 +355,7 @@ Users open the task-pane menu (**☰**) → **Settings** to adjust two personal 
 | Change | Action required |
 |---|---|
 | Edit Display Name / Description in admin UI | None for users; Microsoft will refresh the manifest within ~24h. To force-refresh, re-link the manifest in M365 Admin Center. |
-| Edit starter prompts or start-page settings | None — both are fetched live by the task pane on every open. |
+| Edit starter prompts, start-page or answer-action settings | None — all are fetched live by the task pane on every open. |
 | Change iHub deployment URL (e.g., move to a new domain) | The manifest auto-regenerates with the new host. In M365 Admin Center, **remove the old deployed add-in and re-upload from the new manifest URL** — Microsoft caches the URLs from the manifest at deploy time. |
 | Rotate the OAuth client | Click **Disable** then **Enable** on the Office Integration page. Existing user sessions need to sign in again. The manifest URL is unchanged. |
 | Upgrade iHub | No add-in action needed unless the manifest schema changes — release notes will call this out. |
@@ -465,17 +515,16 @@ attempting an outbound request. An Outlook add-in needs about 600 KB —
 - Inline images and item attachments are filtered out — only file attachments are forwarded as chat context.
 - Total attachment size is capped by iHub's normal upload limits — see [File Upload Feature](file-upload-feature.md).
 
-### "Add to email" is greyed out, or a document will not open
+### "Add to email" is greyed out, or a document will not attach
 
 - **Greyed out:** the pane is open on a message the user is *reading*. Attachments only go on a
   draft — start a new mail or a reply and attach from there.
-- **A document refuses to open or download:** the pane fetches it with the signed-in user's own
-  iFinder permissions, so "You do not have access to this document" is an iFinder permission, not
-  an add-in problem. Check the user's iFinder access and the **JWT Subject Field** under
+- **"You do not have access to this document":** the pane fetches documents with the signed-in
+  user's own iFinder permissions, so this is an iFinder permission rather than an add-in problem.
+  Check the user's iFinder access and the **JWT Subject Field** under
   **Admin → Integrations → iFinder**.
-- **Nothing happens at all on a client older than the fix for issue #2453:** the buttons used to
-  open a popup, which Outlook blocks in the task pane. Upgrade iHub; the pane now opens links
-  through Office and saves files directly.
+- **Outlook refuses the attachment:** the notice names the Office error; a size complaint means the
+  mailbox's message limit is below the document's size. Download it and share it another way.
 
 ### CI / staging environments
 

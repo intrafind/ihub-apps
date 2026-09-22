@@ -141,25 +141,3 @@ export async function readActiveTabContext() {
     return empty;
   }
 }
-
-/**
- * Open a URL in a new browser tab from the side panel.
- *
- * `window.open()` does nothing in the side panel — the popup is blocked and
- * the call returns `null` without raising (issue #2453). `chrome.tabs.create`
- * is the extension's way of doing this, and it puts the tab next to the page
- * the user was looking at.
- *
- * @param {string} url
- * @returns {Promise<boolean>} false when the tab could not be opened.
- */
-export async function openExtensionTab(url) {
-  if (!url) return false;
-  try {
-    await chrome.tabs.create({ url });
-    return true;
-  } catch (error) {
-    console.error('[iHub] chrome.tabs.create failed:', error);
-    return false;
-  }
-}

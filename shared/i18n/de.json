@@ -154,8 +154,6 @@
     "insertIntoEmail": "In E-Mail einfügen",
     "insertIntoDocument": "In Dokument einfügen",
     "insertOptions": "Weitere Optionen",
-    "replyToEmail": "Auf E-Mail antworten",
-    "newEmail": "Neue E-Mail",
     "pinned": {
       "addEmails": "E-Mail(s) hinzufügen",
       "addEmailsTooltip": "Die geöffnete E-Mail – oder alle in Outlook ausgewählten E-Mails – an den Chat anhängen",
@@ -176,7 +174,24 @@
       "appearanceHintOffice": "Automatisch folgt dem Outlook-Design (bzw. der Systemeinstellung bei älteren Outlook-Versionen).",
       "appearanceHintSystem": "Automatisch folgt der Systemeinstellung.",
       "cancel": "Abbrechen",
-      "save": "Speichern"
+      "save": "Speichern",
+      "answerAction": "Standardaktion für Antworten",
+      "answerActionAuto": "Automatisch (allen antworten bzw. in den Entwurf einfügen)",
+      "answerActionHint": "Was die Schaltfläche unter einer Antwort auslöst. Die übrigen Aktionen bleiben einen Klick entfernt im Menü, und eine für die geöffnete E-Mail nicht mögliche Auswahl fällt auf eine mögliche zurück."
+    },
+    "mailActions": {
+      "answer": "Antworten",
+      "answerAll": "Allen antworten",
+      "forward": "Weiterleiten",
+      "new": "Neue E-Mail",
+      "insert": "In Entwurf einfügen",
+      "forwardedMessage": "Weitergeleitete Nachricht",
+      "forwardFrom": "Von",
+      "forwardSent": "Gesendet",
+      "forwardTo": "An",
+      "forwardCc": "Cc",
+      "forwardSubject": "Betreff",
+      "originalAttached": "Outlook-Add-ins können eine Weiterleitung nicht mit ihren Anhängen nachbauen. Die ursprüngliche Nachricht ist deshalb angehängt \u2014 es geht nichts verloren."
     },
     "menu": {
       "settings": "Einstellungen",
@@ -484,20 +499,17 @@
     "passages_plural": "{{count}} Passagen",
     "openExternal": "Im Browser öffnen",
     "showInDocument": "Diese Textstelle im Dokument anzeigen",
-    "attachToEmail": "An E-Mail anhängen",
-    "attachedToEmail": "Als {{filename}} an Ihre E-Mail angehängt.",
-    "attaching": "Wird an Ihre E-Mail angehängt…",
-    "downloading": "Wird heruntergeladen…",
-    "errors": {
-      "accessDenied": "Sie haben keinen Zugriff auf dieses Dokument.",
-      "notFound": "Dieses Dokument ist nicht mehr verfügbar.",
-      "unknown": "Beim Laden des Dokuments ist ein Fehler aufgetreten.",
-      "openBlocked": "In diesem Fenster können keine Links geöffnet werden. Nutzen Sie den Link unter „Details“ oder öffnen Sie das Dokument im Browser.",
-      "downloadFailed": "Das Dokument konnte nicht heruntergeladen werden. {{reason}}",
-      "attachFailed": "Das Dokument konnte nicht angehängt werden. {{reason}}",
-      "attachNeedsDraft": "Öffnen Sie zuerst eine neue E-Mail oder eine Antwort und hängen Sie das Dokument dort an.",
-      "attachTooLarge": "Dieses Dokument ist zu groß zum Anhängen ({{size}} MB). Laden Sie es stattdessen herunter."
-    }
+    "openExternalBlocked": "Das Dokument konnte nicht ge\u00f6ffnet werden \u2013 dieses Fenster hat es blockiert. \u00d6ffnen Sie es stattdessen \u00fcber iHub im Browser.",
+    "openExternalUnavailable": "F\u00fcr dieses Dokument gibt es keinen Link zum \u00d6ffnen.",
+    "downloadFailed": "Das Dokument konnte nicht heruntergeladen werden. Bitte erneut versuchen.",
+    "downloadUnavailable": "Dieses Dokument kann hier nicht heruntergeladen werden.",
+    "documentActionFailed": "Diese Aktion konnte nicht ausgef\u00fchrt werden.",
+    "attachToMail": "An E-Mail anh\u00e4ngen",
+    "attachedToMail": "Als {{filename}} an Ihre E-Mail angeh\u00e4ngt.",
+    "attachNeedsDraft": "\u00d6ffnen Sie zuerst eine neue E-Mail oder eine Antwort und h\u00e4ngen Sie das Dokument dort an.",
+    "attachTooLarge": "Dieses Dokument ist zu gro\u00df zum Anh\u00e4ngen. Laden Sie es stattdessen herunter.",
+    "attachUnavailable": "Dieses Dokument kann von hier aus nicht angeh\u00e4ngt werden.",
+    "attachFailed": "Das Dokument konnte nicht an Ihre E-Mail angeh\u00e4ngt werden."
   },
   "chatMessage": {
     "user": "Du",
@@ -593,6 +605,7 @@
     "networkError": "Netzwerkfehler bei der Verbindung zur {provider} API für Modell {model}: {error}. Überprüfen Sie Ihre Netzwerkverbindung und Proxy-Konfiguration.",
     "unauthorized": "Ungültiger API-Schlüssel",
     "modelAccessDenied": "API-Schlüssel darf dieses Modell nicht verwenden",
+    "modelAccessDeniedForUser": "Sie haben keine Berechtigung, dieses KI-Modell zu verwenden. Bitte wenden Sie sich an Ihren Administrator, um Zugriff anzufordern.",
     "noModelsAvailable": "Für diese Anwendung sind keine KI-Modelle verfügbar. Bitte wenden Sie sich an Ihren Administrator, um Modelle und Berechtigungen zu konfigurieren.",
     "noCompatibleModels": "Keine kompatiblen KI-Modelle für diese Anwendung gefunden. Die Anwendung erfordert spezifische Modellfunktionen, die nicht verfügbar sind. Bitte wenden Sie sich an Ihren Administrator.",
     "noModelIdProvided": "Kein Modell ausgewählt. Bitte wählen Sie ein KI-Modell, um fortzufahren.",
@@ -747,11 +760,17 @@
       "search": "Anbieter suchen...",
       "noResults": "Keine Anbieter gefunden, die Ihrer Suche entsprechen.",
       "noProviders": "Keine Anbieter konfiguriert.",
+      "adjustSearch": "Versuchen Sie, Ihren Suchbegriff anzupassen.",
+      "createFirst": "Erstellen Sie Ihren ersten Anbieter, um loszulegen.",
       "configured": "Konfiguriert",
       "notConfigured": "Nicht konfiguriert",
       "noApiKeyRequired": "Kein API-Schlüssel erforderlich",
       "enabled": "Aktiviert",
       "disabled": "Deaktiviert",
+      "test": "Testen",
+      "testAll": "Alle testen",
+      "modelResults": "Modelltest-Ergebnisse",
+      "testingMore": "Weitere Modelle werden getestet...",
       "configure": "Konfigurieren",
       "delete": "Löschen",
       "createNew": "Neuen Anbieter erstellen",
@@ -767,6 +786,8 @@
         "description": "Beschreibung",
         "apiKey": "API-Schlüssel",
         "status": "Status",
+        "models": "Modelle",
+        "connectivity": "Konnektivität",
         "actions": "Aktionen"
       },
       "edit": {
@@ -859,9 +880,25 @@
       "disabled": "Deaktiviert",
       "default": "Standard",
       "actions": "Aktionen",
-      "test": {
+      "test": "Testen",
+      "testResults": {
         "success": "Test erfolgreich",
-        "failed": "Test fehlgeschlagen"
+        "failed": "Test fehlgeschlagen",
+        "messages": {
+          "testSuccessful": "Modelltest erfolgreich",
+          "testFailed": "Modelltest fehlgeschlagen",
+          "connectionTimeout": "Verbindungs-Timeout",
+          "connectionRefused": "Verbindung abgelehnt",
+          "serviceNotFound": "Dienst nicht gefunden",
+          "networkError": "Netzwerkfehler",
+          "requestTimeout": "Anfrage-Timeout",
+          "apiKeyNotConfigured": "API-Schlüssel nicht konfiguriert",
+          "accessDenied": "Zugriff verweigert",
+          "authenticationFailed": "Authentifizierung fehlgeschlagen",
+          "modelNotFound": "Modell nicht gefunden",
+          "rateLimitExceeded": "Ratenlimit überschritten",
+          "serverError": "Serverfehler"
+        }
       },
       "enable": "Aktivieren",
       "disable": "Deaktivieren",
@@ -1422,7 +1459,17 @@
         "preview": "Vorschau-APIs (nicht für Produktion)"
       },
       "officeJsPresetCustom": "Ihre eigene URL",
-      "officeJsFallbackWarning": "Die gespeicherte Office.js-Quelle konnte nicht verwendet werden; das Add-in wechselt auf {{mode}}. Prüfen Sie die URL oben."
+      "officeJsFallbackWarning": "Die gespeicherte Office.js-Quelle konnte nicht verwendet werden; das Add-in wechselt auf {{mode}}. Prüfen Sie die URL oben.",
+      "mailActionTitle": "Antwortaktionen",
+      "mailActionDesc": "Was die Schaltfläche unter jeder Assistenzantwort in Outlook auslöst. Alle Aktionen bleiben im Menü der Schaltfläche verfügbar \u2014 hier wird nur festgelegt, welche ohne zusätzlichen Klick ausgeführt wird.",
+      "defaultMailAction": "Standardaktion",
+      "defaultMailActionHelp": "Benutzer können dies pro Gerät in den Einstellungen des Aufgabenbereichs überschreiben. Eine für die geöffnete E-Mail nicht mögliche Auswahl fällt auf eine mögliche zurück \u2014 wer \u201eAllen antworten\u201c wählt, erhält beim Schreiben eines Entwurfs weiterhin \u201eEinfügen\u201c.",
+      "mailActionAuto": "Automatisch \u2014 allen antworten im Lesebereich, einfügen beim Schreiben",
+      "mailActionAnswerAll": "Allen antworten",
+      "mailActionAnswer": "Absender antworten",
+      "mailActionForward": "Weiterleiten",
+      "mailActionNew": "Neue E-Mail",
+      "mailActionInsert": "In den geöffneten Entwurf einfügen"
     },
     "nextcloudEmbed": {
       "title": "Nextcloud-Embed",

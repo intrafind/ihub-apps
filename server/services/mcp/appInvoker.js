@@ -61,9 +61,9 @@ export async function invokeAppNonStreaming({ appId, args, user, language, timeo
   // Optional model override. RequestBuilder checks it against the app's
   // allowed/compatible models and falls back to the preferred model if the
   // requested one is missing or incompatible, so an unknown id can't error.
-  // This is not a per-user model-permission gate (RequestBuilder doesn't
-  // enforce `permissions.models` here, same as the chat route); it only
-  // respects the app's `allowedModels`.
+  // RequestBuilder also enforces the caller's `permissions.models` here,
+  // same as the chat route: a model outside the user's group allowlist
+  // throws `modelAccessDeniedForUser` instead of silently substituting.
   const modelId =
     typeof args?.modelId === 'string' && args.modelId.trim() ? args.modelId.trim() : undefined;
 

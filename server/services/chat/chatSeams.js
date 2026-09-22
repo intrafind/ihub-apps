@@ -26,12 +26,16 @@ export const CLARIFICATION_TTL_MS = 24 * 60 * 60 * 1000;
 const COMPONENT = 'ChatService';
 const PREVIEW_CHARS = 4096;
 
-/** Markers the Office add-in puts around email / meeting context. */
-export const EMAIL_CONTEXT_MARKERS = [
-  '--- Current email ---',
-  '--- Pinned emails',
-  '--- Current meeting ---'
-];
+/**
+ * Tags the Office add-in (task pane + browser extension) wraps around email /
+ * meeting context — see `CONTEXT_TAGS` in
+ * client/src/features/office/utilities/buildChatApiMessages.js, the single
+ * source of truth for these names. Pre-V108 builds sent plain-text headings
+ * ('--- Current email ---', '--- Pinned emails', '--- Current meeting ---')
+ * instead; those no longer appear on the wire, so matching them here would
+ * never fire.
+ */
+export const EMAIL_CONTEXT_MARKERS = ['<current_email>', '<pinned_emails>', '<current_meeting>'];
 
 /**
  * Knowledge sources implied by the prompt itself: Office email/meeting

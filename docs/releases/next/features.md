@@ -4,16 +4,20 @@
 
 Sources under an iAssistant answer carry a new action in the Outlook task pane: **Add to email**.
 It downloads the document with the signed-in user's own iFinder permissions and puts it on the
-draft as an attachment — the recipient needs no iFinder access, and the sender no separate
+draft as a real attachment — the recipient needs no iFinder access, and the sender no
 download-then-attach detour.
 
-The action is there while composing: a new mail, a reply, or a meeting invitation with the add-in
-open. While a received message is being read it is shown but disabled, since there is nothing to
-attach to; opening a reply switches it on by itself where the task pane follows the item (Outlook
-on the web, new Outlook for Windows). Documents above 25 MB are refused with a pointer to
-**Download**, and a mailbox with a stricter limit says so on the document.
+The action follows the same split as the answer actions: active while a draft is open (a new mail,
+a reply, a forward), shown but disabled while a received message is being read, since there is
+nothing to attach to. Opening a reply activates it by itself where the task pane follows the item
+(Outlook on the web, the new Outlook for Windows). Documents above 25 MB are refused with a pointer
+to **Download**, and a mailbox with a stricter limit reports what Outlook said.
 
-Nothing to configure — it appears wherever the add-in is deployed and an app returns iFinder
+The attachment is named after what iFinder reports, with the extension for its content type added
+when the name carries none — Outlook picks the icon, and the recipient's machine the application,
+from that extension.
+
+Nothing to configure: it appears wherever the add-in is deployed and an app returns iFinder
 sources.
 
 ## The default language is configurable in the admin UI
@@ -395,3 +399,38 @@ final internal groups, and the iHub user that would be created together with wha
   back.
 - Also available as `POST /api/admin/auth/ldap/_test`, with either an inline `provider` or the
   `providerName` of a saved one.
+
+## Outlook Add-in: Reply, Reply all, Forward, New email and Insert
+
+The buttons under an assistant answer are now five distinct actions, each doing what its name says.
+Previously the pane offered three buttons over two behaviours — **Add to email** and **Reply to
+email** both opened a reply to the sender only — and Forward did not exist at all.
+
+| Action | What it does |
+|---|---|
+| **Reply all** | Replies to the sender and every other `To:` and `Cc:` recipient of the thread. |
+| **Reply** | Replies to the sender only. |
+| **Forward** | Opens a `FW:` message with the answer above the original quoted below. |
+| **New email** | Opens a blank new message carrying the answer. |
+| **Insert into draft** | Writes the answer into the draft you are already composing, at the cursor. |
+
+Which actions appear follows what Outlook is doing, because the API does. With an email selected in
+the reading pane you get the four openers; while you are writing a draft you get **Insert into
+draft**, which is the only one Outlook supports there — this is also why *New email* used to fail
+when invoked from a Forward draft.
+
+- **Admins** set the default under **Admin → Office Integration → Answer Actions**. It reaches the
+  task pane live; no manifest redeploy.
+- **Users** override it for themselves under the task-pane menu (**☰**) → **Settings → Default
+  answer action**, stored per device and surviving Outlook restarts.
+- The shipped default is **Automatic**: *Reply all* in the reading pane, *Insert into draft* in a
+  draft. A configured action Outlook cannot offer for the open item falls back to one it can.
+- **Forward is rebuilt**, because Outlook's add-in API has no forward-form call. When the original
+  carries attachments — or its body is too long for Outlook's 32 K form limit — the original message
+  is attached to the forward instead and the pane says so, rather than dropping files silently.
+- A rejected Outlook call now shows a notice naming the Office error instead of a bare alert, and the
+  answer is copied to the clipboard where it could otherwise be lost. The last failures can be dumped
+  from the task pane's devtools with `window.ihubOfficeErrors()` for a support request.
+
+See [Answer actions](../../outlook-add-in.md#answer-actions) for the full behaviour, including how
+Outlook handles signatures.

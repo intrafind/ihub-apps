@@ -1,44 +1,61 @@
 /* global Office */
+
 import { isMailboxAvailable, isRequirementSetSupported } from './officeCapabilities';
+import { detectOutlookMode } from './outlookMailActions';
+import { OUTLOOK_COMPOSE_MODE } from './officeMailAction';
+import { describeOfficeError, logOfficeError } from './officeLog';
 
 /**
- * Attaching an iAssistant document to the mail the user is writing.
+ * Putting a document the assistant found on the mail the user is writing.
  *
- * Outlook only accepts attachments on an item in *compose* mode, through
- * `addFileAttachmentFromBase64Async` (Mailbox 1.8). The URL-based
- * `addFileAttachmentAsync` is not usable here: Exchange fetches that URL
- * itself, and the iFinder proxy is behind the user's iHub session. So the
- * task pane downloads the document on the authenticated API path and hands
- * Outlook the bytes.
+ * Outlook accepts attachments only on an item in *compose* mode, and only
+ * through `addFileAttachmentFromBase64Async` (Mailbox 1.8). The URL-based
+ * `addFileAttachmentAsync` is not usable for iFinder documents: Exchange
+ * fetches that URL itself, and the iFinder proxy is behind the user's iHub
+ * session. So the pane downloads the document on the authenticated API path
+ * and hands Outlook the bytes — which is also what keeps the recipient from
+ * needing iFinder access at all.
+ *
+ * Read mode has nothing to attach to: `displayReplyFormAsync` and friends open
+ * a *new* form the pane cannot reach afterwards, and the new-message form
+ * takes attachments by URL or item id only. The action is therefore offered
+ * but disabled there, the same split `outlookMailActions.js` draws for the
+ * answer actions.
  */
 
 /**
  * Outlook rejects oversized attachments with a generic error, and base64
- * encoding a very large download would freeze the pane first. 25 MB is below
- * the default Exchange message limit and above anything iFinder normally
- * serves.
+ * encoding a very large download would freeze the pane before it got that
+ * far. 25 MB is below the default Exchange message limit and well above
+ * anything iFinder normally serves.
  */
 export const MAX_ATTACHMENT_BYTES = 25 * 1024 * 1024;
 
 /**
- * True when the item currently open in Outlook can take an attachment, i.e.
- * the user is composing a mail (or a meeting invitation) rather than reading
- * one, and the client is new enough for base64 attachments.
+ * True when this surface is an Outlook mail item at all, i.e. when the action
+ * is worth showing even if it is not usable right now.
  *
- * Re-evaluate this whenever `ihub:itemchanged` fires — switching from a read
- * item to a draft flips it.
+ * @returns {boolean}
+ */
+export function isOutlookAttachmentHost() {
+  return isMailboxAvailable() && isRequirementSetSupported('Mailbox', '1.8');
+}
+
+/**
+ * True when the item currently open can take an attachment: the user is
+ * composing a mail (or a meeting invitation) on a client new enough for
+ * base64 attachments.
+ *
+ * Re-evaluate on `ihub:itemchanged` — switching from a received mail to a
+ * draft flips it.
  *
  * @returns {boolean}
  */
 export function canAttachFileToOutlookItem() {
-  if (!isMailboxAvailable()) return false;
+  if (!isOutlookAttachmentHost()) return false;
+  if (detectOutlookMode() !== OUTLOOK_COMPOSE_MODE) return false;
   try {
-    const item = Office.context.mailbox.item;
-    if (typeof item?.addFileAttachmentFromBase64Async !== 'function') return false;
-    // `addFileAttachmentFromBase64Async` exists on read items in some builds
-    // but only does anything in compose mode, where `item.body.setAsync` is
-    // available. Requiring the requirement set as well keeps older clients out.
-    return isRequirementSetSupported('Mailbox', '1.8') && typeof item.body?.setAsync === 'function';
+    return typeof Office.context.mailbox.item?.addFileAttachmentFromBase64Async === 'function';
   } catch {
     return false;
   }
@@ -48,16 +65,20 @@ export function canAttachFileToOutlookItem() {
  * Attach a file to the mail currently being composed.
  *
  * @param {Object} file
- * @param {string} file.base64 file contents, base64 encoded, without a data: prefix.
+ * @param {string} file.base64 file contents, base64 encoded, without a `data:` prefix.
  * @param {string} file.filename name (with extension) the attachment gets in the mail.
- * @returns {Promise<void>} rejects with the Office error message when Outlook refuses.
+ * @returns {Promise<{ok: true}|{ok: false, reason: 'notComposing'|'failed', message?: string}>}
  */
 export function attachFileToOutlookItem({ base64, filename }) {
-  return new Promise((resolve, reject) => {
-    if (!canAttachFileToOutlookItem()) {
-      reject(new Error('NOT_COMPOSING'));
-      return;
-    }
+  if (!canAttachFileToOutlookItem()) {
+    return Promise.resolve({ ok: false, reason: 'notComposing' });
+  }
+
+  return new Promise(resolve => {
+    const fail = error => {
+      logOfficeError('addFileAttachmentFromBase64Async', error, { filename });
+      resolve({ ok: false, reason: 'failed', message: describeOfficeError(error) });
+    };
 
     try {
       Office.context.mailbox.item.addFileAttachmentFromBase64Async(
@@ -65,17 +86,15 @@ export function attachFileToOutlookItem({ base64, filename }) {
         filename,
         { isInline: false },
         result => {
-          if (result.status === Office.AsyncResultStatus.Failed) {
-            const error = new Error(result.error?.message || 'Outlook refused the attachment');
-            error.code = result.error?.code;
-            reject(error);
+          if (result?.status === Office.AsyncResultStatus.Failed) {
+            fail(result.error);
             return;
           }
-          resolve();
+          resolve({ ok: true });
         }
       );
     } catch (error) {
-      reject(error);
+      fail(error);
     }
   });
 }
