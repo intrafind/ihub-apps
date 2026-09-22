@@ -406,38 +406,44 @@ Here are the 3 most recent contracts:
 
 ## User Interface
 
-### iFinder Document Explorer App
+### iFinder Search App
 
-The system includes a pre-configured app called "iFinder Document Explorer" that provides:
+The app `ifinder-search` ("iFinder Search") is the iFinder counterpart of the Web Chat app: instead of the web, it researches the iFinder index, as the signed-in user. It ships disabled — enable it under **Admin > Apps** once iFinder is configured.
 
-- **Natural Language Interface**: Users can ask questions about documents
-- **Conversational AI**: Maintains context throughout the conversation
-- **Multi-language Support**: Available in English and German
-- **Smart Tool Selection**: AI automatically chooses the right tools for each request
+It handles two kinds of requests:
 
-**App Configuration:**
+- **Questions** ("What is the notice period in our supplier contracts?"): the model searches several times with different wording and operators, judges the hits by title, metadata and teasers, reads only the few documents it needs with `iFinder_getContent`, and answers with each statement linked to its document.
+- **Document searches** ("show my latest tickets", "presentations about project X from last month"): the model builds filters (person, date range, type, source, status) and a sort, and lists the matching documents with a link, date and the fields that matter. It does not read their content unless asked.
 
-- **App ID**: `ifinder-document-explorer`
-- **Tools**: `iFinder.search`, `iFinder.getContent`, `iFinder.getMetadata`, `iFinder.download`
-- **Features**: Chat history, model selection, output formatting
+Requests about the user ("my tickets", "documents I wrote") use the signed-in user's name and email, which the system prompt receives through `{{user_name}}` and `{{user_email}}`. Because iFinder stores names as `"LASTNAME, Firstname"`, and the stored spelling can differ from the profile name, the model first searches loosely on the last name with a facet on the matching `.keyword` field (`task.assignee.keyword`, `creators.keyword`, …) and then filters on the exact value it found.
+
+The documents each search found are listed in the chat's tool activity, like web search results, linked to their iFinder deep link.
+
+**App configuration:**
+
+- **App ID**: `ifinder-search`
+- **Tools**: `iFinder_search`, `iFinder_getContent`, `iFinder_getMetadata`, `iFinder_getFields`, `iFinder_getFacetValues`, `iFinder_listProfiles`, `iFinder_discover`
+- **Skills**: `ifinder-search` — the full query syntax and troubleshooting table, loaded on demand when the `skills` feature is on. Without it the system prompt carries the essentials (search in several steps, query vs. filter, the `.keyword` rule, sorting).
+
+The research behaviour lives in the system prompt, so an admin can adapt it — for example to name the ticket system or the custom `cust.*` fields of their deployment.
 
 ### Example User Interactions
 
-1. **"Find all documents by John Smith from last month"**
-   - AI uses `iFinder.search` with appropriate query
+1. **"Show my latest tickets"**
+   - AI finds how the user's name is stored in `task.assignee`, filters on it and sorts by `modificationDate:desc`
+   - Returns a table of tickets with status and link
+
+2. **"Find all documents by John Smith from last month"**
+   - AI uses `iFinder_search` with a `creators.keyword` filter and a `modificationDate` range
    - Returns filtered results with metadata
 
-2. **"What's in document XYZ123?"**
-   - AI uses `iFinder.getContent` to fetch full text
-   - Provides summary and key information
+3. **"What does our travel policy say about rental cars?"**
+   - AI searches with several wordings, reads the most relevant policy with `iFinder_getContent`
+   - Answers with the policy linked as the source
 
-3. **"Compare the content of documents A and B"**
+4. **"Compare the content of documents A and B"**
    - AI fetches content from both documents
    - Performs comparative analysis
-
-4. **"Download the latest contract for review"**
-   - AI searches for recent contracts
-   - Provides download information or saves locally
 
 ### Passage Highlighting in the Document Preview
 
