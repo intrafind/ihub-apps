@@ -503,7 +503,13 @@
     "openExternalUnavailable": "F\u00fcr dieses Dokument gibt es keinen Link zum \u00d6ffnen.",
     "downloadFailed": "Das Dokument konnte nicht heruntergeladen werden. Bitte erneut versuchen.",
     "downloadUnavailable": "Dieses Dokument kann hier nicht heruntergeladen werden.",
-    "documentActionFailed": "Diese Aktion konnte nicht ausgef\u00fchrt werden."
+    "documentActionFailed": "Diese Aktion konnte nicht ausgef\u00fchrt werden.",
+    "attachToMail": "An E-Mail anh\u00e4ngen",
+    "attachedToMail": "Als {{filename}} an Ihre E-Mail angeh\u00e4ngt.",
+    "attachNeedsDraft": "\u00d6ffnen Sie zuerst eine neue E-Mail oder eine Antwort und h\u00e4ngen Sie das Dokument dort an.",
+    "attachTooLarge": "Dieses Dokument ist zu gro\u00df zum Anh\u00e4ngen. Laden Sie es stattdessen herunter.",
+    "attachUnavailable": "Dieses Dokument kann von hier aus nicht angeh\u00e4ngt werden.",
+    "attachFailed": "Das Dokument konnte nicht an Ihre E-Mail angeh\u00e4ngt werden."
   },
   "chatMessage": {
     "user": "Du",

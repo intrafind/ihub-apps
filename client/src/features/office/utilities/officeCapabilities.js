@@ -1,6 +1,17 @@
 /* global Office */
 
-function safeIsSetSupported(set, version) {
+/**
+ * Requirement-set check that never throws.
+ *
+ * `Office.context.requirements.isSetSupported` is missing on old hosts and
+ * throws in a few embed scenarios, so every capability check in the add-in
+ * goes through here.
+ *
+ * @param {string} set requirement set name, e.g. 'Mailbox'.
+ * @param {string} version minimum version, e.g. '1.8'.
+ * @returns {boolean}
+ */
+export function isRequirementSetSupported(set, version) {
   try {
     if (
       typeof Office === 'undefined' ||
@@ -28,7 +39,7 @@ export function isMailboxAvailable() {
 export function isMultiSelectListSupported() {
   if (!isMailboxAvailable()) return false;
   if (typeof Office.context.mailbox.getSelectedItemsAsync !== 'function') return false;
-  return safeIsSetSupported('Mailbox', '1.13');
+  return isRequirementSetSupported('Mailbox', '1.13');
 }
 
 // Mailbox 1.15 added loadItemByIdAsync (load full item, including body) for
@@ -38,7 +49,7 @@ export function isMultiSelectListSupported() {
 export function isMultiSelectBodySupported() {
   if (!isMultiSelectListSupported()) return false;
   if (typeof Office.context.mailbox.loadItemByIdAsync !== 'function') return false;
-  return safeIsSetSupported('Mailbox', '1.15');
+  return isRequirementSetSupported('Mailbox', '1.15');
 }
 
 /**

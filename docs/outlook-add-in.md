@@ -149,6 +149,42 @@ The Outlook JavaScript API has **no forward-form call** — there is no `display
 
 The other four actions open a **new** form, and Outlook suppresses the automatic signature whenever an add-in supplies the body (`htmlBody`). This is a platform limitation with no add-in-side workaround: there is no API to read the configured signature or to ask Outlook to apply it to a supplied body. Where every outgoing mail must carry a footer, either keep the default on *Insert into draft* (the user starts the reply in Outlook, then inserts), or apply the footer with a transport rule on the mail server, which is unaffected by how the draft was created.
 
+### Documents found by iAssistant
+
+When an app answers from iFinder, its sources are listed under the answer. Each document carries
+the same actions in the task pane as in the browser — **Open in browser**, **Preview (PDF)**,
+**Download**, **Details** — plus one that only exists here:
+
+**Add to email** attaches the document to the mail the user is writing. The pane downloads it with
+the signed-in user's own iFinder permissions and hands Outlook the bytes, so the attachment is a
+real file on the draft: the recipient needs no iFinder access, and the sender no
+download-then-attach detour.
+
+It follows the same read/compose split as the answer actions above, and for the same reason — the
+API's:
+
+- **A draft open for writing** → the entry is active; the document is attached where the cursor is
+  not, i.e. to the message itself.
+- **An email selected in the reading pane** → the entry is shown but disabled, since a received
+  message has nothing to attach to. Opening a reply activates it on clients where the task pane
+  follows the item (Outlook on the web, the new Outlook for Windows); on classic desktop Outlook
+  the reply opens in its own window, where the add-in has to be started again.
+
+Attaching by URL — the one path that would work from the reading pane — is not usable: Outlook has
+*Exchange* fetch that URL, and the iFinder proxy is behind the user's iHub session.
+
+Two limits:
+
+- Documents above **25 MB** are refused with a message pointing at **Download**. Your Exchange
+  message-size limit may be lower, in which case Outlook refuses the attachment itself and the pane
+  reports what it said.
+- The attachment is named after what iFinder reports — its file name, or the name from the download
+  headers — and gets the extension for its content type when that name carries none, so it opens on
+  the recipient's machine.
+
+Everything here needs the user's iHub session in the pane: a document the user may not open in
+iFinder is refused by iFinder, not by the add-in.
+
 #### When an Outlook call fails
 
 A rejected Office call never raises a browser alert. The pane shows a notice naming the Office error (its `name` and `code`), the same record is written to the browser console, and the last 25 failures can be dumped from the task pane's devtools with `window.ihubOfficeErrors()` — quote that output in a support request. Where the answer could otherwise be lost (a body past the 32 K cap), it is copied to the clipboard first and the notice says so.
@@ -478,6 +514,17 @@ attempting an outbound request. An Outlook add-in needs about 600 KB —
 - Reading attachments needs Mailbox API **1.8+**. Outlook on the web and current desktop Outlook satisfy this; very old Outlook 2016 builds may not.
 - Inline images and item attachments are filtered out — only file attachments are forwarded as chat context.
 - Total attachment size is capped by iHub's normal upload limits — see [File Upload Feature](file-upload-feature.md).
+
+### "Add to email" is greyed out, or a document will not attach
+
+- **Greyed out:** the pane is open on a message the user is *reading*. Attachments only go on a
+  draft — start a new mail or a reply and attach from there.
+- **"You do not have access to this document":** the pane fetches documents with the signed-in
+  user's own iFinder permissions, so this is an iFinder permission rather than an add-in problem.
+  Check the user's iFinder access and the **JWT Subject Field** under
+  **Admin → Integrations → iFinder**.
+- **Outlook refuses the attachment:** the notice names the Office error; a size complaint means the
+  mailbox's message limit is below the document's size. Download it and share it another way.
 
 ### CI / staging environments
 

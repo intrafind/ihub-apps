@@ -4,12 +4,15 @@ import { scrollToElement } from '../../../utils/citationTransformer';
 import { fetchIFinderDocumentMetadata } from '../../../api/endpoints/documents';
 import AppSelectionModal from '../../workflows/components/AppSelectionModal';
 import {
+  attachCitationDocumentToMail,
+  canAttachCitationDocument,
   downloadCitationDocument,
   getCitationDeepLink as getDeepLink,
   getCitationDocumentAccess as getDocumentAccess,
   getCitationFileName as getFileName,
   getCitationMeta as getMeta,
   hasCitationProxyAccess as hasProxyAccess,
+  isCitationAttachSupported,
   openCitationDocument
 } from '../utils/citationDocuments';
 import {
@@ -115,8 +118,13 @@ function PassageText({ content, index, onJumpToPassage, t }) {
  * the panel — the Outlook task pane and the extension side panel have no
  * router to navigate to `/apps/:id`, so the entry would be a dead button
  * there (issue #2453).
+ *
+ * `attach` describes the "Add to email" entry: rendered only in the Outlook
+ * task pane (`supported`), and enabled there only while the user is writing a
+ * mail (`enabled`) — a received message has nothing to attach to, which the
+ * disabled entry says rather than leaving it to be discovered by clicking.
  */
-function OverflowMenu({ item, onAction, onOpenInApp, canOpenInApp, t }) {
+function OverflowMenu({ item, onAction, onOpenInApp, canOpenInApp, attach, t }) {
   const [open, setOpen] = useState(false);
   const menuRef = useRef(null);
 
@@ -188,6 +196,29 @@ function OverflowMenu({ item, onAction, onOpenInApp, canOpenInApp, t }) {
                 />
               </svg>
               {t('citations.download', 'Download')}
+            </button>
+          )}
+          {canProxy && attach?.supported && (
+            <button
+              onClick={e => {
+                e.stopPropagation();
+                if (!attach.enabled) return;
+                onAction('attachToMail', item);
+                setOpen(false);
+              }}
+              disabled={!attach.enabled}
+              title={attach.enabled ? undefined : attach.hint}
+              className="w-full text-left px-3 py-2 text-sm text-gray-700 dark:text-gray-200 hover:bg-gray-100 dark:hover:bg-gray-700 flex items-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed disabled:hover:bg-transparent dark:disabled:hover:bg-transparent"
+            >
+              <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <path
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                  strokeWidth={2}
+                  d="M15.172 7l-6.586 6.586a2 2 0 102.828 2.828l6.414-6.586a4 4 0 00-5.656-5.656l-6.415 6.585a6 6 0 108.486 8.486L20.5 13"
+                />
+              </svg>
+              {attach.label}
             </button>
           )}
           {canProxy && canOpenInApp && (
@@ -460,6 +491,35 @@ function CitationPanel({ citations, onDocumentAction }) {
   // issue #2453 these failures were invisible: in the Outlook task pane the
   // popup-based open/download simply did nothing at all.
   const [actionError, setActionError] = useState(null);
+  // Confirmation for an action whose result is not visible in the panel —
+  // today only "Add to email", where the document lands in a draft the user
+  // may not be looking at.
+  const [actionNotice, setActionNotice] = useState(null);
+  // Whether the host can take an attachment right now. In Outlook this
+  // depends on the open item, so it is re-read on every `ihub:itemchanged`:
+  // opening a reply turns the entry on without a reload.
+  const [attachEnabled, setAttachEnabled] = useState(canAttachCitationDocument);
+  const attachSupported = isCitationAttachSupported();
+
+  useEffect(() => {
+    if (!attachSupported) return undefined;
+    const handler = () => setAttachEnabled(canAttachCitationDocument());
+    document.addEventListener('ihub:itemchanged', handler);
+    return () => document.removeEventListener('ihub:itemchanged', handler);
+  }, [attachSupported]);
+
+  const attachMenu = useMemo(
+    () => ({
+      supported: attachSupported,
+      enabled: attachEnabled,
+      label: t('citations.attachToMail', 'Add to email'),
+      hint: t(
+        'citations.attachNeedsDraft',
+        'Open a new email or a reply first, then add the document from there.'
+      )
+    }),
+    [attachSupported, attachEnabled, t]
+  );
 
   const describeFailure = useCallback(
     (action, reason) => {
@@ -479,6 +539,23 @@ function CitationPanel({ citations, onDocumentAction }) {
               'The document could not be opened — this window blocked it. Try opening it from iHub in your browser.'
             );
       }
+      if (action === 'attachToMail') {
+        if (reason === 'notComposing') {
+          return t(
+            'citations.attachNeedsDraft',
+            'Open a new email or a reply first, then add the document from there.'
+          );
+        }
+        if (reason === 'tooLarge') {
+          return t(
+            'citations.attachTooLarge',
+            'This document is too large to attach. Download it instead.'
+          );
+        }
+        return reason === 'unavailable'
+          ? t('citations.attachUnavailable', 'This document cannot be attached from here.')
+          : t('citations.attachFailed', 'The document could not be attached to your email.');
+      }
       return t('citations.documentActionFailed', 'That action could not be completed.');
     },
     [t]
@@ -487,10 +564,27 @@ function CitationPanel({ citations, onDocumentAction }) {
   const handleDocAction = useCallback(
     async (action, item, appId) => {
       setActionError(null);
+      setActionNotice(null);
 
       // Handle details locally — no need to bubble up
       if (action === 'details') {
         setDetailsDoc(item);
+        return;
+      }
+
+      // Attaching is the panel's own: it is offered only in the Outlook task
+      // pane, which mounts no `onDocumentAction` handler to delegate to.
+      if (action === 'attachToMail') {
+        const attached = await attachCitationDocumentToMail(item);
+        if (attached.ok) {
+          setActionNotice(
+            t('citations.attachedToMail', 'Added to your email as {{filename}}.', {
+              filename: attached.filename
+            })
+          );
+        } else {
+          setActionError(describeFailure(action, attached.reason));
+        }
         return;
       }
 
@@ -509,7 +603,7 @@ function CitationPanel({ citations, onDocumentAction }) {
         setActionError(describeFailure(action, result.reason));
       }
     },
-    [onDocumentAction, describeFailure]
+    [onDocumentAction, describeFailure, t]
   );
 
   /**
@@ -615,6 +709,30 @@ function CitationPanel({ citations, onDocumentAction }) {
             type="button"
             onClick={() => setActionError(null)}
             className="shrink-0 rounded-sm p-0.5 hover:bg-red-100 dark:hover:bg-red-900/40"
+            title={t('common.close', 'Close')}
+            aria-label={t('common.close', 'Close')}
+          >
+            <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+              <path
+                strokeLinecap="round"
+                strokeLinejoin="round"
+                strokeWidth={2}
+                d="M6 18L18 6M6 6l12 12"
+              />
+            </svg>
+          </button>
+        </div>
+      )}
+      {actionNotice && (
+        <div
+          role="status"
+          className="mb-2 flex items-start gap-2 rounded-md border border-green-200 bg-green-50 px-2.5 py-2 text-xs text-green-800 dark:border-green-900/50 dark:bg-green-900/20 dark:text-green-300"
+        >
+          <span className="flex-1">{actionNotice}</span>
+          <button
+            type="button"
+            onClick={() => setActionNotice(null)}
+            className="shrink-0 rounded-sm p-0.5 hover:bg-green-100 dark:hover:bg-green-900/40"
             title={t('common.close', 'Close')}
             aria-label={t('common.close', 'Close')}
           >
@@ -735,6 +853,7 @@ function CitationPanel({ citations, onDocumentAction }) {
                     }
                     onOpenInApp={setAppPickerDoc}
                     canOpenInApp={!!onDocumentAction}
+                    attach={attachMenu}
                     t={t}
                   />
                 </div>
