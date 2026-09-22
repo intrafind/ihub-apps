@@ -311,7 +311,9 @@
   },
   "iAssistant": {
     "defaultProfileId": "",
-    "timeout": 60000
+    "defaultSearchProfile": "searchprofile-standard",
+    "resolveSearchProfileFromProfile": true,
+    "groundedOnly": false
   },
   "officeIntegration": {
     "enabled": false,

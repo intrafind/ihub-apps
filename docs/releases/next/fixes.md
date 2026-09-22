@@ -95,3 +95,51 @@ nothing in the log to say so:
 An `${ENV_VAR}` placeholder left in `proxy.http` or `proxy.https` is also no longer used as if it
 were a proxy address when the variable is not set; the connection goes direct instead of failing
 on an unparseable URL.
+
+## iAssistant conversations are no longer cancelled after 60 seconds
+
+A long iAssistant interaction — the workspace profile especially — was cut off mid-answer after a
+minute.
+
+The cause was a transport ceiling meant for a different shape of model. `llm.streamIdleTimeoutMs`
+bounds the gap between two chunks of a stream, and 60 s of silence from a model emitting tokens
+steadily really is a hang. An iAssistant turn is not that: it assesses what it knows, plans,
+searches, reassesses and only then starts writing, and iFinder's own per-turn budget defaults to
+90 s *before* generation begins. The quiet stretch before the first word was ordinary work, and the
+ceiling read it as a dead stream.
+
+The `iassistant-conversation` models now carry `streamIdleTimeoutMs: 180000` of their own. Every
+other model keeps the installation-wide default.
+
+Two related traps went with it:
+
+- **`iAssistant.timeout` is removed.** It was documented as the request timeout for iAssistant API
+  calls, defaulted to 60000, and nothing read it — so it is exactly what an admin hitting this
+  would reach for, and raising it changed nothing. Migration V117 removes it and warns if yours had
+  been tuned.
+- **`REQUEST_TIMEOUT` is gone from `config.env`.** That file shipped `REQUEST_TIMEOUT=60000`, which
+  overrode the code's 5-minute whole-call deadline with one minute for every binary deployment that
+  copied it. `config.env` is now marked deprecated: it applies only to the single-executable
+  distribution, and settings belong in `platform.json` or a `.env` file.
+
+## A stopped iAssistant generation no longer hangs the chat
+
+Deleting the message an iAssistant turn was answering left the turn spinning until a timeout fired.
+The Conversation API signals this with a `generation_stopped` event, which the adapter had no case
+for — so the stream never completed. It is now treated as the terminal event it is.
+
+## One loading indicator instead of two
+
+An iAssistant message in progress showed two animations at once: the phase indicator ("Analyzing
+current knowledge") with its own animated dots, and the generic three-dot pulse underneath it. The
+generic one is now the fallback it was meant to be and stands down whenever a phase is showing.
+
+## App-level iAssistant settings that silently did nothing
+
+`iassistant.tools`, `iassistant.labels`, `iassistant.scope` and `iassistant.ephemeral` were read by
+the adapter but missing from the app schema, so validation stripped them at load with no error —
+setting any of them on an app did nothing at all. `tools` was the costly one: it meant an app could
+not enable `ifinder_search` for itself, only the model could.
+
+They are declared now and work as documented. If an app already carries any of them, check it: they
+now actually apply.

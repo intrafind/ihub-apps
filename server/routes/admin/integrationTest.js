@@ -46,6 +46,15 @@ const MAX_OVERRIDE_LENGTH = 320;
 const TEST_SEARCH_QUERY = 'test';
 
 /**
+ * Ceiling for the iAssistant diagnostic probes. An admin waits on these in the
+ * browser, so they stay short; a real conversation turn is bounded by the
+ * model's `streamIdleTimeoutMs` and the whole-call `REQUEST_TIMEOUT` instead.
+ * This used to read `iAssistant.timeout`, a platform setting that looked like
+ * it governed chat turns and never did.
+ */
+const IASSISTANT_DIAGNOSTIC_TIMEOUT_MS = 60000;
+
+/**
  * Build the URL for an integration request.
  *
  * Every component comes from the trusted platform configuration — nothing from
@@ -1196,7 +1205,11 @@ export default function registerIntegrationTestRoutes(app) {
         const iFinderConfig = platformConfig.iFinder || {};
         const config = iAssistantService.getConfig();
         const signingKey = describeSigningKey(iFinderConfig);
-        const timeout = config.timeout || 60000;
+        // Bounds the diagnostic probes below, not a chat turn: these are
+        // reachability and round-trip checks an admin waits on in the browser.
+        // A real iAssistant turn is bounded by the model's streamIdleTimeoutMs
+        // and the whole-call REQUEST_TIMEOUT instead.
+        const timeout = IASSISTANT_DIAGNOSTIC_TIMEOUT_MS;
 
         logger.info('Running iAssistant integration diagnostics', {
           component: 'IntegrationTest',

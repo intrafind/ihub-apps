@@ -1,8 +1,16 @@
 import { useTranslation } from 'react-i18next';
 
 /**
- * SearchStatusIndicator shows animated status messages during iAssistant search phases.
- * Displayed in the assistant message bubble while the conversation API processes a request.
+ * The phase an iAssistant turn is currently in — "Analyzing current
+ * knowledge", "Starting search", "Generating answer".
+ *
+ * This is the turn's *only* loading indicator while it is showing: it carries
+ * the animated dots itself, so the generic three-dot row in ChatMessage stands
+ * down whenever a phase is known. Two sets of bouncing dots on one message is
+ * what the duplicate indicator looked like.
+ *
+ * What the turn searched for and found lives in SearchSummary instead, because
+ * that outlives the answer and this does not.
  *
  * @param {Object} props
  * @param {Object} props.status - Search status event { event: string, ... }
@@ -27,8 +35,6 @@ function SearchStatusIndicator({ status }) {
 
   if (!message) return null;
 
-  const queries = status.queries;
-
   return (
     <div className="text-sm text-gray-500 dark:text-gray-400 py-1">
       <div className="flex items-center gap-2">
@@ -39,18 +45,6 @@ function SearchStatusIndicator({ status }) {
         </div>
         <span>{message}</span>
       </div>
-      {queries && queries.length > 0 && (
-        <div className="ml-5 mt-1 flex flex-wrap gap-1.5">
-          {queries.map((q, i) => (
-            <span
-              key={i}
-              className="inline-flex items-center px-2 py-0.5 rounded-md text-xs bg-indigo-50 dark:bg-indigo-900/30 text-indigo-600 dark:text-indigo-300 border border-indigo-200 dark:border-indigo-700/50"
-            >
-              {q}
-            </span>
-          ))}
-        </div>
-      )}
     </div>
   );
 }
