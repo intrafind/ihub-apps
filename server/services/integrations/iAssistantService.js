@@ -1,4 +1,3 @@
-import config from '../../config.js';
 import configCache from '../../configCache.js';
 
 /**
@@ -34,8 +33,24 @@ class IAssistantService {
         defaultProfileId:
           iAssistantConfig.defaultProfileId || process.env.IASSISTANT_PROFILE_ID || '',
         defaultFilter: iAssistantConfig.defaultFilter || [],
+        // The fallback used when neither the app, the model, nor the
+        // iAssistant profile names a search profile. It is the single place
+        // that decides what "unconfigured" means, so an installation can move
+        // it without editing every app.
         defaultSearchProfile: iAssistantConfig.defaultSearchProfile || 'searchprofile-standard',
-        timeout: iAssistantConfig.timeout || config.IASSISTANT_TIMEOUT || 60000
+        // Whether iHub asks the iAssistant profile for its search profile
+        // before falling back to the configured one. Off only turns off the
+        // extra lookup; it never changes which profile is used when the
+        // profile does not name one.
+        resolveSearchProfileFromProfile: iAssistantConfig.resolveSearchProfileFromProfile !== false,
+        // How long a resolved profile stays cached. Profiles are edited by
+        // administrators, not per request, so minutes are the right scale.
+        profileCacheTtlMs: Number.isFinite(iAssistantConfig.profileCacheTtlMs)
+          ? iAssistantConfig.profileCacheTtlMs
+          : 300000,
+        // Installation-wide default for grounded-only answering. An app's own
+        // `iassistant.groundedOnly` wins over it in either direction.
+        groundedOnly: iAssistantConfig.groundedOnly === true
       };
     }
     return this.config;

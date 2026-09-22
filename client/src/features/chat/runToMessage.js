@@ -7,7 +7,7 @@
  * `extras` carries exactly the message fields the chat UI reads today:
  * thoughts, images, clarification/awaitingInput/clarificationAnswered,
  * workflowCheckpoint, workflowSteps/workflowStep, workflowResult/outputFormat,
- * activeSkills, searchStatus, citations, groundingSources, answerSource,
+ * activeSkills, searchStatus, searchSummary, citations, groundingSources, answerSource,
  * finishReason, ifinderMessageId. The hook (`useAppChat`) only decides WHEN to write the
  * projection and which message it belongs to — it never interprets events.
  *
@@ -195,6 +195,10 @@ export function projectRunToMessage(run, options = {}) {
   if (run.searchStatus !== null && run.searchStatus !== undefined) {
     extras.searchStatus = run.searchStatus;
   }
+  // Outlives the streaming phase on purpose: what the turn searched for and
+  // how much it found is part of the answer's provenance, not a progress
+  // spinner, so the finished message keeps showing it.
+  if (run.searchSummary) extras.searchSummary = run.searchSummary;
   const citations = mergeCitationEntries(run.citations);
   if (citations) extras.citations = citations;
   // Sources behind a grounded answer (provider-run web search). A completed

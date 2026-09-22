@@ -32,7 +32,7 @@ needs an API key but answers from anywhere.
 - Select it per app in **Admin → Apps → Edit App → Web Search** as the **Staan** provider, or
   leave the provider on **Auto**.
 - Configure the key in **Admin → Providers → Web Search Providers → Staan Search**, or set
-  `STAAN_API_KEY` in `config.env`. Keys entered in the admin UI are encrypted at rest.
+  `STAAN_API_KEY` in the environment. Keys entered in the admin UI are encrypted at rest.
 - **Auto** now means: Brave when a Brave API key is configured, then Staan when it has one, and
   Qwant otherwise. An install that already had a Brave key keeps using Brave and is unaffected.
 - The connectivity test under **Admin → Providers** covers Staan too, and distinguishes a rejected
@@ -293,3 +293,44 @@ serves the library without any outbound request.
 
 Existing installations are unaffected: the previous offline switch becomes **Bundled** if it was
 on and **Microsoft CDN** if it was off, and both keep the CDN host they were already using.
+
+## The iAssistant shows what it searched for and what it found
+
+An iAssistant answer now carries the same provenance the iFinder/iAssistant webapp shows: the
+queries the assistant actually ran and how many documents came back, with the systems and document
+types they came from.
+
+iHub had been receiving this all along and discarding it — the two iFinder search events were read
+for their names and their payloads dropped — so a chat could say "Starting search" but never what
+was searched or what was found.
+
+- The queries are the real ones iFinder executed, lexical and semantic, de-duplicated.
+- A turn searches several times; the counts are the totals across every round, not the last one.
+- It stays on screen once the answer is finished, because it is part of judging the answer.
+
+## Answer only from your own documents
+
+A new **grounded-only** setting confines an app's iAssistant answers to the documents retrieval
+returned. The assistant cites what it used and says plainly that it has no answer when the search
+comes up empty, instead of falling back on the model's general knowledge — which the iAssistant's
+own default prompt explicitly invites it to do.
+
+Set it per app as `iassistant.groundedOnly`, or installation-wide as `iAssistant.groundedOnly` in
+`platform.json`; an app can turn the installation default back off.
+
+It is carried as a prompt instruction, since the Conversation API has no grounding switch, so it
+instructs the model rather than constraining it. For a guarantee that holds across every iFinder
+client, override `promptPreamble` on the profile's `RESPONSE` state in iFinder.
+
+## The iAssistant profile can supply its own search profile
+
+Configuring an app meant naming both a conversation profile and a search profile, with nothing
+keeping the pair consistent. iHub now asks the conversation profile for its search profile before
+creating a conversation, and falls back to the configured one only when the profile does not name
+one.
+
+iFinder does not publish a search profile on a profile today, so the configured value is still what
+applies in practice — the lookup is in place so the profile takes over by itself once it does.
+Turn it off with `iAssistant.resolveSearchProfileFromProfile: false`. A failed lookup never breaks
+a conversation; it falls back. The resolved profile is pinned for the life of the conversation, so
+editing a profile cannot move a conversation already under way to a different corpus.
