@@ -222,3 +222,12 @@ sub-messages rather than as the button's own text. The result headline shown aft
 "Connection timeout", "Authentication failed") was also always displayed in English, regardless of
 the admin's language. Both the button label and the result messages now follow the selected
 language.
+
+## Transient server errors no longer get cached and served back as real data
+
+A single failed request to the server — a brief 5xx while loading something like UI styles or
+platform configuration — could get cached in the browser and served back as if it were successful
+data for up to a minute, so the affected screen crashed or rendered blank instead of showing an
+error or simply retrying. Failed requests are no longer written into the client-side response
+cache, so a retry after a transient error always fetches fresh data instead of replaying the
+earlier failure.
