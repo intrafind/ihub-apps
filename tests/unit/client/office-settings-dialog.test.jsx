@@ -5,6 +5,9 @@
  * Issue #2366: dark mode can be activated in Settings and is remembered
  * across restarts. The dialog must persist the chosen appearance on Save,
  * apply it without a reload, and discard an abandoned selection on Cancel.
+ *
+ * Issue #2446: the default answer action is a per-user override on the same
+ * terms — persisted, applied without a reload, and only offered in Outlook.
  */
 
 import '@testing-library/jest-dom';
@@ -37,6 +40,7 @@ const {
 } = require('../../../client/src/features/office/contexts/EmbeddedHostContext');
 
 const STORAGE_KEY = 'office_ihub_theme';
+const MAIL_ACTION_STORAGE_KEY = 'office_ihub_mail_action';
 const html = () => document.documentElement;
 const user = { name: 'Ada Lovelace', email: 'ada@example.com' };
 
@@ -115,4 +119,48 @@ test('the automatic-mode hint names Outlook in the task pane and the system else
     </EmbeddedHostProvider>
   );
   expect(screen.getByText('Automatic follows the system setting.')).toBeInTheDocument();
+});
+
+test('Save persists the default answer action and announces it without a reload', () => {
+  const onClose = jest.fn();
+  const heard = jest.fn();
+  document.addEventListener('ihub:mailactionchanged', heard);
+  render(<SettingsDialog user={user} isOpen onClose={onClose} />);
+
+  const answerAction = screen.getByLabelText('Default answer action');
+  expect(answerAction).toHaveValue('auto');
+
+  fireEvent.change(answerAction, { target: { value: 'forward' } });
+  fireEvent.click(screen.getByRole('button', { name: 'Save' }));
+
+  expect(localStorage.getItem(MAIL_ACTION_STORAGE_KEY)).toBe('forward');
+  // The open chat re-resolves its default off this event rather than a reload.
+  expect(heard).toHaveBeenCalledTimes(1);
+  document.removeEventListener('ihub:mailactionchanged', heard);
+});
+
+test('the dialog opens on the persisted answer action', () => {
+  localStorage.setItem(MAIL_ACTION_STORAGE_KEY, 'answer');
+  render(<SettingsDialog user={user} isOpen onClose={jest.fn()} />);
+  expect(screen.getByLabelText('Default answer action')).toHaveValue('answer');
+});
+
+test('Cancel leaves the stored answer action alone', () => {
+  render(<SettingsDialog user={user} isOpen onClose={jest.fn()} />);
+
+  fireEvent.change(screen.getByLabelText('Default answer action'), {
+    target: { value: 'forward' }
+  });
+  fireEvent.click(screen.getByRole('button', { name: 'Cancel' }));
+
+  expect(localStorage.getItem(MAIL_ACTION_STORAGE_KEY)).toBeNull();
+});
+
+test('the answer action is not offered outside Outlook — the side panel has no mail item', () => {
+  render(
+    <EmbeddedHostProvider value={{ kind: 'extension' }}>
+      <SettingsDialog user={user} isOpen onClose={jest.fn()} />
+    </EmbeddedHostProvider>
+  );
+  expect(screen.queryByLabelText('Default answer action')).not.toBeInTheDocument();
 });

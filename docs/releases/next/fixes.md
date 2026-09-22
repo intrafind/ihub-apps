@@ -188,3 +188,19 @@ the file again. A worker now re-reads the file the moment it is asked for a code
 recognise, so a link works on every worker as soon as it exists. The admin usage endpoint
 (`/api/admin/usage`) is similarly refreshed on every request instead of showing whichever worker's
 stale in-memory snapshot happened to answer.
+
+## Outlook Add-in: replies keep every recipient, and inserts keep your signature
+
+Answering a thread from the task pane quietly reduced it to a reply to the sender: every other `To:`
+recipient and all `CC:` recipients disappeared from the draft. The pane only ever opened a
+reply-to-sender form — there was no reply-all path at all — so a thread answer reached one person
+instead of the group. **Reply all** is now a real action and is what the button does by default.
+
+Inserting an answer into an email you were already writing also replaced the draft's body outright,
+which took the Outlook signature and the quoted thread with it — a compliance problem wherever a
+footer is mandatory. The answer is now written into the draft at the cursor, leaving the signature
+and the quoted thread untouched.
+
+- Outlook still suppresses the automatic signature on a *new* form an add-in fills in — a platform
+  limitation with no add-in-side workaround. Where every mail must carry a footer, keep the default
+  answer action on **Insert into draft**, or apply the footer with a mail-server transport rule.

@@ -8,6 +8,10 @@ import logger from '../../utils/logger.js';
 import { sendInternalError, sendBadRequest } from '../../utils/responseHelpers.js';
 import { sanitizeOfficeStartPage, validateOfficeStartPage } from '../../utils/officeStartPage.js';
 import {
+  sanitizeOfficeMailAction,
+  validateOfficeMailAction
+} from '../../utils/officeMailActions.js';
+import {
   DEFAULT_OFFICE_JS_CDN_URL,
   OFFICE_JS_CDN_PRESETS,
   OFFICE_JS_MODES,
@@ -66,6 +70,7 @@ export default function registerAdminOfficeIntegrationRoutes(app) {
       starterPrompts: Array.isArray(officeConfig.starterPrompts) ? officeConfig.starterPrompts : [],
       // Always complete, so the admin form has a value for every control.
       startPage: sanitizeOfficeStartPage(officeConfig.startPage),
+      defaultMailAction: sanitizeOfficeMailAction(officeConfig.defaultMailAction),
       officeJsMode: OFFICE_JS_MODES.includes(officeConfig.officeJsMode)
         ? officeConfig.officeJsMode
         : 'cdn',
@@ -249,6 +254,10 @@ export default function registerAdminOfficeIntegrationRoutes(app) {
    *               startPage:
    *                 type: object
    *                 description: Which view the pane opens after sign-in (`defaultPage` — `start` or `apps`), the default chat app (`defaultAppId`) and the curated app shortcuts (`featuredAppIds`).
+   *               defaultMailAction:
+   *                 type: string
+   *                 enum: [auto, answer, answerAll, forward, new, insert]
+   *                 description: What the answer button in the task pane does by default. `auto` follows the open item — reply all in the reading pane, insert while composing. Users may override it in the pane's Settings dialog.
    *     responses:
    *       200:
    *         description: Config updated
@@ -264,7 +273,8 @@ export default function registerAdminOfficeIntegrationRoutes(app) {
         officeJsMode,
         officeJsCdnUrl,
         officeJsCustomUrl,
-        startPage
+        startPage,
+        defaultMailAction
       } = req.body || {};
       const platform = configCache.getPlatform();
 
@@ -379,6 +389,11 @@ export default function registerAdminOfficeIntegrationRoutes(app) {
         const result = validateOfficeStartPage(startPage);
         if (result.error) return sendBadRequest(res, result.error);
         allowed.startPage = result.value;
+      }
+      if (defaultMailAction !== undefined) {
+        const result = validateOfficeMailAction(defaultMailAction);
+        if (result.error) return sendBadRequest(res, result.error);
+        allowed.defaultMailAction = result.value;
       }
 
       await savePlatformConfig({

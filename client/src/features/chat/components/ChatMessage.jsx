@@ -72,8 +72,15 @@ function ChatMessage({
   compact = false, // New prop to indicate compact mode (for widget or mobile)
   onOpenInCanvas,
   onInsert,
-  onInsertNew = null,
   insertAction = null, // { variant: 'icon'|'primary', labelKey: string } — Office host promotes the per-message insert action to a labelled primary button; web app default keeps the legacy icon button on the action row.
+  // The host's answer actions, rendered as a split button under the primary
+  // variant: `[{ id, label, icon }]` in menu order. Outlook passes the actions
+  // its current mode supports — answer / answer all / forward / new in read
+  // mode, insert while composing (issue #2446). Omitted or empty keeps the
+  // single-action button driven by `onInsert`.
+  insertActions = null,
+  defaultInsertActionId = null, // Which of `insertActions` the main button runs.
+  onInsertAction = null, // (actionId, content) => void
   isLatestAssistantMessage = false, // Keeps the primary insert button always-visible on the most recent assistant response inside small Outlook panes.
   canvasEnabled = false,
   // Whether this chat stores the images its turns generate (durable chats do;
@@ -724,11 +731,17 @@ function ChatMessage({
   // Don't apply bubble styling when showing ClarificationCard (it has its own styling)
   const hasPendingClarification = message.clarification && !message.clarificationAnswered;
   const showBubble = !hasPendingClarification;
-  // Dropdown is email-specific: only show it when both onInsertNew is provided AND the
-  // insert action is for email (not Word/PowerPoint). This keeps the rounding and the
-  // dropdown chevron in sync regardless of how future hosts wire onInsertNew.
-  const showInsertDropdown =
-    Boolean(onInsertNew) && insertAction?.labelKey === 'office.insertIntoEmail';
+  // The host's answer actions, when it supplies more than the single insert.
+  // Every entry is a distinct action with its own handler; the main button runs
+  // the resolved default and the chevron opens the rest (issue #2446).
+  const messageActions = Array.isArray(insertActions) && onInsertAction ? insertActions : [];
+  const defaultMessageAction =
+    messageActions.find(action => action.id === defaultInsertActionId) || messageActions[0] || null;
+  const showInsertDropdown = messageActions.length > 1;
+  const runMessageAction = action => {
+    if (action) onInsertAction(action.id, message.content);
+    else onInsert(message.content);
+  };
 
   return (
     <div
@@ -922,7 +935,7 @@ function ChatMessage({
       {!isUser &&
         !isError &&
         !message.loading &&
-        onInsert &&
+        (onInsert || defaultMessageAction) &&
         insertAction?.variant === 'primary' && (
           <div
             className={`mt-2 w-full transition-opacity duration-200 ${
@@ -933,17 +946,22 @@ function ChatMessage({
               {/* Main action button — square-right when the chevron is shown, fully rounded otherwise */}
               <button
                 type="button"
-                onClick={() => onInsert(message.content)}
+                onClick={() => runMessageAction(defaultMessageAction)}
                 className={`inline-flex flex-1 items-center justify-center gap-2 px-3 py-2 text-sm font-semibold bg-indigo-600 text-white shadow-xs hover:bg-indigo-700 focus:outline-hidden focus:ring-2 focus:ring-indigo-500 focus:ring-offset-1 transition-colors ${showInsertDropdown ? 'rounded-l-md' : 'rounded-md'}`}
               >
-                <Icon name="arrow-right" size="sm" className="text-white" />
+                <Icon
+                  name={defaultMessageAction?.icon || 'arrow-right'}
+                  size="sm"
+                  className="text-white"
+                />
                 <span>
-                  {t(
-                    insertAction.labelKey || 'office.insertIntoDocument',
-                    insertAction.labelKey === 'office.insertIntoEmail'
-                      ? 'Add to email'
-                      : 'Add to document'
-                  )}
+                  {defaultMessageAction?.label ||
+                    t(
+                      insertAction.labelKey || 'office.insertIntoDocument',
+                      insertAction.labelKey === 'office.insertIntoEmail'
+                        ? 'Add to email'
+                        : 'Add to document'
+                    )}
                 </span>
               </button>
 
@@ -971,30 +989,24 @@ function ChatMessage({
                       className="absolute bottom-full mb-1 right-0 z-50 w-48 rounded-md bg-white dark:bg-gray-800 shadow-lg ring-1 ring-black/5 focus:outline-hidden"
                     >
                       <div className="py-1">
-                        <button
-                          type="button"
-                          role="menuitem"
-                          onClick={() => {
-                            onInsert(message.content);
-                            setInsertDropdownOpen(false);
-                          }}
-                          className="flex w-full items-center gap-2 px-4 py-2 text-sm text-gray-700 dark:text-gray-200 hover:bg-gray-100 dark:hover:bg-gray-700"
-                        >
-                          <Icon name="arrow-right" size="sm" />
-                          {t('office.replyToEmail', 'Reply to email')}
-                        </button>
-                        <button
-                          type="button"
-                          role="menuitem"
-                          onClick={() => {
-                            onInsertNew(message.content);
-                            setInsertDropdownOpen(false);
-                          }}
-                          className="flex w-full items-center gap-2 px-4 py-2 text-sm text-gray-700 dark:text-gray-200 hover:bg-gray-100 dark:hover:bg-gray-700"
-                        >
-                          <Icon name="pencil" size="sm" />
-                          {t('office.newEmail', 'New email')}
-                        </button>
+                        {messageActions.map(action => (
+                          <button
+                            key={action.id}
+                            type="button"
+                            role="menuitem"
+                            onClick={() => {
+                              runMessageAction(action);
+                              setInsertDropdownOpen(false);
+                            }}
+                            className="flex w-full items-center gap-2 px-4 py-2 text-sm text-gray-700 dark:text-gray-200 hover:bg-gray-100 dark:hover:bg-gray-700"
+                          >
+                            <Icon name={action.icon || 'arrow-right'} size="sm" />
+                            <span className="flex-1 text-left">{action.label}</span>
+                            {action.id === defaultMessageAction?.id && (
+                              <Icon name="check" size="sm" className="text-indigo-600" />
+                            )}
+                          </button>
+                        ))}
                       </div>
                     </div>
                   )}

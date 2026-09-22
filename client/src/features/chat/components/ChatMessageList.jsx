@@ -23,8 +23,11 @@ function ChatMessageList({
   compact = false,
   onOpenInCanvas,
   onInsert,
-  onInsertNew = null,
   insertAction = null,
+  // Host answer actions for the Office task pane's split button — see ChatMessage.
+  insertActions = null,
+  defaultInsertActionId = null,
+  onInsertAction = null,
   canvasEnabled = false,
   // Whether this surface's chat stores the images its turns generate. Only the
   // durable chat page does; the compare panels, the canvas and the Office pane
@@ -178,8 +181,10 @@ function ChatMessageList({
                 compact={compact}
                 onOpenInCanvas={onOpenInCanvas}
                 onInsert={onInsert}
-                onInsertNew={onInsertNew}
                 insertAction={insertAction}
+                insertActions={insertActions}
+                defaultInsertActionId={defaultInsertActionId}
+                onInsertAction={onInsertAction}
                 isLatestAssistantMessage={index === lastAssistantIndex}
                 canvasEnabled={canvasEnabled}
                 imagesPersisted={imagesPersisted}
