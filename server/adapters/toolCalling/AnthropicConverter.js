@@ -10,11 +10,24 @@ import {
   createGenericToolCall,
   createGenericStreamingResponse,
   normalizeFinishReason,
-  sanitizeSchemaForProvider
+  cloneAndWalkSchema
 } from './GenericToolCalling.js';
 import { validateProviderToolName } from './toolNameValidator.js';
 import logger from '../../utils/logger.js';
 import { parseJsonAsync } from '../../utils/asyncJson.js';
+
+/**
+ * Sanitize a JSON Schema for Anthropic's tool `input_schema`. Anthropic's
+ * schema support is generally more flexible than other providers, so this
+ * currently only deep-clones the schema — kept as an explicit hook other
+ * converters (e.g. Bedrock, which reuses this) can call, and where future
+ * Anthropic-specific restrictions can be added without touching shared code.
+ * @param {Object} schema - JSON Schema
+ * @returns {Object} Sanitized schema
+ */
+export function sanitizeSchema(schema) {
+  return cloneAndWalkSchema(schema, () => {});
+}
 
 /**
  * Convert generic tools to Anthropic format
@@ -55,7 +68,7 @@ export function convertGenericToolsToAnthropic(genericTools = []) {
   return filteredTools.map(tool => ({
     name: tool.id || tool.name,
     description: tool.description,
-    input_schema: sanitizeSchemaForProvider(tool.parameters, 'anthropic')
+    input_schema: sanitizeSchema(tool.parameters)
   }));
 }
 
