@@ -134,13 +134,13 @@ following the note — for example committing you to a task you had just assigne
 - Sender, To, Cc, date and subject are read from Outlook and included even when the body is
   excluded; the greeting no longer has to be guessed from the quoted thread.
 - Your note always comes last, right where the app's prompt continues.
-- Collected emails and calendar items use the same tagged shape; the browser extension sends the
-  page as `<current_page>` with its title and URL.
+- Added emails, calendar items and attachments use the same `<content>` blocks; the browser
+  extension sends the page as `<content type="page">` with its title and URL.
 - A fixed `<context_rules>` note marks the blocks as quoted material, and the add-in's own tag
   names inside email text are escaped, so an email cannot close a block early or smuggle in a fake
   `<user_instruction>`.
-- Attachments arrive in a `<documents>` block next to the email, and their text is escaped the
-  same way — a PDF attachment can no longer add an instruction of its own.
+- Attachment text is escaped the same way — a PDF attachment can no longer add an instruction of
+  its own.
 
 ## New app: Outlook – Reply Directly
 

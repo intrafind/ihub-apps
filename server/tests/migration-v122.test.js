@@ -1,24 +1,22 @@
 #!/usr/bin/env node
 
 /**
- * Migration V122 specs — shipped Translator / Summarizer templates move to the
- * prompt context blocks and get a document upload; the Outlook reply app
- * learns about <documents>. Admin-edited prompts stay as they are.
+ * Migration V122 specs — the shipped apps move from the old context tags and
+ * the quoted "{{content}}" templates to the <content> blocks. A prompt is
+ * replaced only while it is still exactly the one we shipped; the fixtures are
+ * those shipped texts (the fields the migration touches) from before V122.
  */
 
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import fs from 'node:fs';
-import {
-  up,
-  precondition,
-  version,
-  TEMPLATES,
-  OUTLOOK_REPLY_REPLACEMENTS
-} from '../migrations/V122__prompt_context_blocks.js';
+import { up, precondition, version, SHIPPED } from '../migrations/V122__prompt_context_blocks.js';
 
-const readDefault = file =>
-  JSON.parse(fs.readFileSync(new URL(`../defaults/${file}`, import.meta.url), 'utf8'));
+const readJsonFile = url => JSON.parse(fs.readFileSync(url, 'utf8'));
+const readDefault = file => readJsonFile(new URL(`../defaults/${file}`, import.meta.url));
+const readShipped = file =>
+  readJsonFile(new URL(`./fixtures/migration-v122/${file.slice('apps/'.length)}`, import.meta.url));
+const getPath = (obj, dotPath) => dotPath.split('.').reduce((node, key) => node?.[key], obj);
 
 function fakeCtx(files) {
   const logs = [];
@@ -39,7 +37,8 @@ function fakeCtx(files) {
   };
 }
 
-const oldApp = file => ({ id: file, prompt: { ...TEMPLATES[file].old } });
+const shippedInstall = () =>
+  Object.fromEntries(Object.keys(SHIPPED).map(file => [file, readShipped(file)]));
 
 test('version is the next unused number', () => {
   assert.equal(version, '122');
@@ -49,17 +48,12 @@ test('version is the next unused number', () => {
   assert.deepEqual(taken, ['V122__prompt_context_blocks.js']);
 });
 
-test('the new templates are what the shipped defaults carry', () => {
-  for (const [file, { new: next }] of Object.entries(TEMPLATES)) {
-    assert.deepEqual(readDefault(file).prompt, next, file);
-  }
-  const reply = readDefault('apps/outlook-reply.json').system;
-  for (const [from, to] of OUTLOOK_REPLY_REPLACEMENTS) {
-    assert.ok(!Object.values(reply).some(s => s.includes(from)) || to.includes(from));
-    assert.ok(
-      Object.values(reply).some(s => s.includes(to)),
-      to.slice(0, 40)
-    );
+test('the new defaults no longer name the old tags', () => {
+  for (const file of Object.keys(SHIPPED)) {
+    const text = JSON.stringify(readDefault(file));
+    for (const tag of ['<current_email>', '<pinned_emails>', '<current_meeting>', '<documents>']) {
+      assert.ok(!text.includes(tag), `${file} still names ${tag}`);
+    }
   }
 });
 
@@ -67,56 +61,47 @@ test('precondition is false on an installation without the apps', async () => {
   assert.equal(await precondition(fakeCtx({})), false);
 });
 
-test('rewrites the shipped templates and adds the upload block', async () => {
-  const ctx = fakeCtx({
-    'apps/translator.json': oldApp('apps/translator.json'),
-    'apps/summarizer.json': oldApp('apps/summarizer.json')
-  });
+test('moves every shipped prompt to the new default and adds the upload section', async () => {
+  const ctx = fakeCtx(shippedInstall());
   assert.equal(await precondition(ctx), true);
   await up(ctx);
-  for (const file of Object.keys(TEMPLATES)) {
-    assert.deepEqual(ctx.files[file].prompt, TEMPLATES[file].new);
-    assert.equal(ctx.files[file].upload.enabled, true);
-    assert.ok(ctx.files[file].prompt.en.includes('{{content}}'));
+  for (const [file, fields] of Object.entries(SHIPPED)) {
+    const defaults = readDefault(file);
+    for (const field of Object.keys(fields)) {
+      assert.deepEqual(
+        getPath(ctx.files[file], field),
+        getPath(defaults, field),
+        `${file} ${field}`
+      );
+    }
   }
+  assert.equal(ctx.files['apps/translator.json'].upload.enabled, true);
+  assert.equal(ctx.files['apps/summarizer.json'].upload.enabled, true);
 });
 
-test('leaves admin-edited prompts and an existing upload section alone', async () => {
-  const custom = {
-    id: 'translator',
-    prompt: { en: 'My own: {{content}}', de: TEMPLATES['apps/translator.json'].old.de },
-    upload: { enabled: false }
-  };
-  const ctx = fakeCtx({ 'apps/translator.json': custom });
+test('a fresh installation, already on the new defaults, is not touched', async () => {
+  const files = Object.fromEntries(Object.keys(SHIPPED).map(file => [file, readDefault(file)]));
+  const ctx = fakeCtx(files);
+  await up(ctx);
+  assert.deepEqual(ctx.writes, []);
+});
+
+test('leaves an admin-edited language and an existing upload section alone', async () => {
+  const translator = readShipped('apps/translator.json');
+  translator.prompt.en = 'My own: {{content}}';
+  translator.upload = { enabled: false };
+  const ctx = fakeCtx({ 'apps/translator.json': translator });
   await up(ctx);
   const app = ctx.files['apps/translator.json'];
   assert.equal(app.prompt.en, 'My own: {{content}}');
-  assert.equal(app.prompt.de, TEMPLATES['apps/translator.json'].new.de);
+  assert.equal(app.prompt.de, readDefault('apps/translator.json').prompt.de);
   assert.deepEqual(app.upload, { enabled: false });
 });
 
-test('tells the reply app about <documents>, once', async () => {
-  const [[fromEn], [fromDe]] = OUTLOOK_REPLY_REPLACEMENTS;
-  const ctx = fakeCtx({
-    'apps/outlook-reply.json': {
-      id: 'outlook-reply',
-      system: { en: `Blocks:\n${fromEn}\nEnd.`, de: `Blöcke:\n${fromDe}\nEnde.` }
-    }
-  });
-  await up(ctx);
-  const { system } = ctx.files['apps/outlook-reply.json'];
-  assert.ok(system.en.includes('<documents>'));
-  assert.ok(system.de.includes('<documents>'));
-
-  const again = fakeCtx({ 'apps/outlook-reply.json': ctx.files['apps/outlook-reply.json'] });
-  await up(again);
-  assert.deepEqual(again.writes, []);
-});
-
 test('a second run writes nothing', async () => {
-  const ctx = fakeCtx({ 'apps/summarizer.json': oldApp('apps/summarizer.json') });
+  const ctx = fakeCtx(shippedInstall());
   await up(ctx);
-  const again = fakeCtx({ 'apps/summarizer.json': ctx.files['apps/summarizer.json'] });
+  const again = fakeCtx(ctx.files);
   await up(again);
   assert.deepEqual(again.writes, []);
 });

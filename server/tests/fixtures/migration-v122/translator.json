@@ -1,0 +1,7 @@
+{
+  "id": "translator",
+  "prompt": {
+    "en": "Selected Language: \"{{language}}\" - Text to translate: \"{{content}}\"",
+    "de": "Ausgewählte Sprache in die Übersetzt werden soll: \"{{language}}\" - Text der übersetzt werden soll: \"{{content}}\""
+  }
+}

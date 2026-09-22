@@ -37,7 +37,7 @@ export function computeContextUsage({ contextWindow, inputTokens, maxOutputToken
  *
  * Mirrors what the client puts on the wire (`getMessagesForApi`: `rawContent`
  * wins over `content`) and what the server makes of a user message: attached
- * document text rendered as a <documents> block, with <context_rules> and the
+ * document text rendered as <content type="document"> blocks, with <context_rules> and the
  * typed text in <user_instruction> (`renderUserMessage`). Page images of
  * image-based PDFs contribute their listing only — image tokens are
  * provider-specific and not estimated here.

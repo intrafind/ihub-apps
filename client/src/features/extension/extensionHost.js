@@ -55,8 +55,8 @@ export function getExtensionRedirectUri() {
  *   { available, itemKind: 'page', title, url, subject, bodyText, attachments }
  *
  * `itemKind: 'page'` makes the adapter send the context as `currentPage`,
- * which the server renders as a <current_page> block with <title> and <url>
- * tags instead of the Outlook <current_email> block. `attachments` is always an empty array in the
+ * which the server renders as <content type="page" origin="open"> with
+ * <title> and <url> tags instead of the Outlook email block. `attachments` is always an empty array in the
  * extension because we don't surface page resources as separate attachments
  * today.
  */

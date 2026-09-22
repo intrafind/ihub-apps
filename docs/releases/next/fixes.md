@@ -331,9 +331,10 @@ to list.
 
 Run from Outlook or the browser extension, the Translator translated only what you typed ("hello,
 how are you") instead of the open email or page, and the Summarizer summarized your note. Their
-prompts called the whole message "the text to translate". Both now work on the email, page,
-meeting or uploaded document and read what you typed as the instruction; with nothing attached,
-the typed text is still what they translate or summarize.
+prompts called the whole message "the text to translate". Both now work on the email, page or
+meeting and its attachments, or on an uploaded document, and read what you typed as the
+instruction ("only the attachment", "formal"); with nothing attached, the typed text is still what
+they translate or summarize.
 
 - Both apps now accept document uploads (PDF, Office, OpenDocument, text), also in the web app.
 - Custom apps get a standard note with every attached email or document saying that it is the

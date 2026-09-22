@@ -1,0 +1,7 @@
+{
+  "id": "summarizer",
+  "prompt": {
+    "en": "Please {{action}} the following content: \"{{content}}\"",
+    "de": "Bitte {{action}} den folgenden Inhalt: \"{{content}}\""
+  }
+}

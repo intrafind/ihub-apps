@@ -152,7 +152,7 @@ async function buildFileEntryForAttachment(a) {
     }
     return {
       source: 'local',
-      origin: 'email_attachment',
+      origin: 'attachment',
       fileName: a.name,
       fileType: 'message/rfc822',
       displayType: 'Email',
@@ -168,7 +168,7 @@ async function buildFileEntryForAttachment(a) {
     }
     return {
       source: 'local',
-      origin: 'email_attachment',
+      origin: 'attachment',
       fileName: a.name,
       fileType: 'text/calendar',
       displayType: 'Calendar invite',
@@ -184,7 +184,7 @@ async function buildFileEntryForAttachment(a) {
     // base64 — see issue #1467).
     return {
       source: 'local',
-      origin: 'email_attachment',
+      origin: 'attachment',
       fileName: a.name,
       fileType: cleanType,
       displayType: cleanType,
@@ -202,7 +202,7 @@ async function buildFileEntryForAttachment(a) {
     const { content, pageImages } = await processDocumentFile(file);
     return {
       source: 'local',
-      origin: 'email_attachment',
+      origin: 'attachment',
       fileName: a.name,
       fileType: cleanType,
       displayType: cleanType,
@@ -353,7 +353,7 @@ function currentItemContext(item) {
  * Emails the user pinned or bulk-selected, de-duplicated against each other
  * and against the current item.
  */
-function pinnedEmailsContext(pinned, currentItemId) {
+function addedEmailsContext(pinned, currentItemId) {
   const list = Array.isArray(pinned) ? pinned : [];
   const seen = new Set();
   const out = [];
@@ -365,7 +365,7 @@ function pinnedEmailsContext(pinned, currentItemId) {
     if (!text(p?.subject) && !text(p?.bodyText)) continue;
     out.push(compact({ ...emailFields(p), body: text(p?.bodyText) }));
   }
-  return out.length ? { pinnedEmails: out } : {};
+  return out.length ? { addedEmails: out } : {};
 }
 
 /**
@@ -389,7 +389,7 @@ function pinnedEmailsContext(pinned, currentItemId) {
  */
 export function buildHostContext({ item, currentItemId, pinned }) {
   const context = {
-    ...pinnedEmailsContext(pinned, currentItemId ?? item?.itemId ?? null),
+    ...addedEmailsContext(pinned, currentItemId ?? item?.itemId ?? null),
     ...currentItemContext(item)
   };
   return Object.keys(context).length ? context : null;

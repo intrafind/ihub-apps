@@ -100,8 +100,8 @@ function useOfficeChatAdapter({ appId, chatId, onMessageComplete }) {
 
       // The host item goes to the server as structured `hostContext`; the
       // server renders it — with the attachments below — as tagged blocks
-      // around the typed text (<current_email>, <current_page> in the
-      // extension, <current_meeting> on a calendar item). `content` stays
+      // around the typed text (<content type="email" origin="open">, or
+      // type="page" in the extension, type="meeting" on a calendar item). `content` stays
       // exactly what the user typed. Calendar items have no pin flow.
       const isAppointment = ctx?.itemKind === 'appointment';
       const hostContext = buildHostContext({

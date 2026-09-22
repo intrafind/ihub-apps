@@ -232,9 +232,9 @@ export default function registerSessionRoutes(app, { getLocalizedError, DEFAULT_
    *           type: object
    *           description: >-
    *             Optional item the host shows next to the chat — `currentEmail`,
-   *             `currentPage`, `currentMeeting` and `pinnedEmails`, each field a
+   *             `currentPage`, `currentMeeting` and `addedEmails`, each field a
    *             display-ready string. The server renders it, together with
-   *             `fileData`, as tagged blocks around `content` (see
+   *             `fileData`, as `<content>` blocks around `content` (see
    *             docs/apps.md, "What {{content}} contains"); `content` stays what the user
    *             typed.
    *

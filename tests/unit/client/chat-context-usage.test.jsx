@@ -39,7 +39,7 @@ describe('conversation context estimation', () => {
         fileData: { fileName: 'report.pdf', displayType: 'PDF', content: 'the report body' }
       });
       expect(text).toContain(
-        '<document index="1" name="report.pdf" type="PDF">\nthe report body\n</document>'
+        '<content type="document" origin="upload" name="report.pdf" format="PDF">\nthe report body\n</content>'
       );
       expect(text.endsWith('<user_instruction>\nsummarize this\n</user_instruction>')).toBe(true);
     });

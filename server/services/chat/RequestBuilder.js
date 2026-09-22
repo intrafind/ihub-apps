@@ -12,7 +12,7 @@ import { normalizeFiles } from '../../../shared/promptContext.js';
  * Attach the page images of image-based PDFs to their message.
  *
  * The text of every upload is already in the message: `processMessageTemplates`
- * renders files as a <documents> block (shared/promptContext.js). A document
+ * renders each file as a <content type="document"> block (shared/promptContext.js). A document
  * without extractable text contributes its rendered pages, which travel as
  * `imageData` so each adapter can format them for its provider — next to any
  * image the user uploaded directly.

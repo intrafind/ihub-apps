@@ -27,12 +27,12 @@ const COMPONENT = 'ChatService';
 const PREVIEW_CHARS = 4096;
 
 /**
- * Blocks `PromptService` renders around a message that carries host email or
- * meeting context (`CONTEXT_TAGS` in shared/promptContext.js). The seam sees
- * the rendered messages, so their presence marks the turn as answered from
- * the user's own email.
+ * Blocks `PromptService` renders for host email or meeting context (see
+ * shared/promptContext.js). The seam sees the rendered messages, so their
+ * presence marks the turn as answered from the user's own email. Source text
+ * is escaped there, so an email cannot fake one.
  */
-export const EMAIL_CONTEXT_MARKERS = ['<current_email>', '<pinned_emails>', '<current_meeting>'];
+export const EMAIL_CONTEXT_MARKERS = ['<content type="email"', '<content type="meeting"'];
 
 /**
  * Knowledge sources implied by the prompt itself: Office email/meeting

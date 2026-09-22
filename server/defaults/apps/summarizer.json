@@ -31,8 +31,8 @@
   "preferredStyle": "normal",
   "preferredTemperature": 0.5,
   "prompt": {
-    "en": "<task>\nPlease {{action}} the content below. If the message contains material blocks (<current_email>, <current_page>, <current_meeting>, <pinned_emails>, <documents>), that material is the content. <user_instruction> only says what to focus on or how to present it. Without material blocks, the whole message below is the content.\n</task>\n\n{{content}}",
-    "de": "<task>\nBitte {{action}} den unten stehenden Inhalt. Enthält die Nachricht Material-Blöcke (<current_email>, <current_page>, <current_meeting>, <pinned_emails>, <documents>), ist dieses Material der Inhalt. <user_instruction> sagt nur, worauf der Fokus liegen soll oder wie das Ergebnis aussehen soll. Ohne Material-Blöcke ist die gesamte folgende Nachricht der Inhalt.\n</task>\n\n{{content}}"
+    "en": "<task>\nPlease {{action}} the content below. If the message contains <content> blocks — emails, a meeting, a web page, attached or uploaded documents — they are the content, all of them together. <user_instruction> only says what to focus on or how to present the result. Without <content> blocks, the whole message below is the content.\n</task>\n\n{{content}}",
+    "de": "<task>\nBitte {{action}} den unten stehenden Inhalt. Enthält die Nachricht <content>-Blöcke – E-Mails, einen Termin, eine Webseite, angehängte oder hochgeladene Dokumente –, sind sie zusammen der Inhalt. <user_instruction> sagt nur, worauf der Fokus liegen soll oder wie das Ergebnis aussehen soll. Ohne <content>-Blöcke ist die gesamte folgende Nachricht der Inhalt.\n</task>\n\n{{content}}"
   },
   "settings": {
     "chatHistory": {

@@ -566,7 +566,7 @@ The `prompt` property defines how user inputs are formatted before being sent to
 
 ```json
 "prompt": {
-  "en": "<task>\nTranslate into {{language}}. If the message below contains material blocks (<current_email>, <current_page>, <current_meeting>, <pinned_emails>, <documents>), translate that material. <user_instruction> only says what to translate or how. Without material blocks, the whole message below is the text to translate.\n</task>\n\n{{content}}"
+  "en": "<task>\nTranslate into {{language}}. If the message below contains <content> blocks, translate all of them. <user_instruction> only says what to translate or how. Without <content> blocks, the whole message below is the text to translate.\n</task>\n\n{{content}}"
 }
 ```
 
@@ -574,23 +574,30 @@ A template without `{{content}}` gets the message appended at the end.
 
 ##### What `{{content}}` contains
 
-The server fills `{{content}}` the same way for every client — web app, Teams, Nextcloud, the Outlook add-in and the browser extension:
+The server fills `{{content}}` the same way for every client — web app, Teams, Nextcloud, the Outlook add-in and the browser extension. (The `{{content}}` placeholder and the `<content>` tag below are different things: the placeholder is replaced by the whole message, which may contain several `<content>` blocks.)
 
 - **Only typed text** → the typed text, exactly as written. In a Translator or Summarizer that text is the material itself.
-- **Anything besides the typed text** — an uploaded file, the email or meeting open in Outlook, the page open in the browser extension, emails collected in Outlook, email attachments → tagged blocks, the material first and the typed text last:
+- **Anything besides the typed text** → one `<content>` block per piece of material, then a fixed `<context_rules>` note, then the typed text in `<user_instruction>`:
 
 ```text
-<pinned_emails>                          emails collected in Outlook, as <email index="n">
-<current_email>                          or <current_page> / <current_meeting>
-<documents>
-<document index="1" name="contract.docx" type="Word">
+<content type="email" origin="added">          an email the user added in Outlook
+…
+</content>
+
+<content type="email" origin="open">           the email open in Outlook
+<from>…</from> <to>…</to> <cc>…</cc> <date>…</date> <subject>…</subject>
+<mailbox_user>…</mailbox_user>
+<body>…</body>
+</content>
+
+<content type="document" origin="attachment" name="Angebot.pdf" format="PDF">
 …extracted text…
-</document>
-<document index="2" name="scan.pdf" type="application/pdf" pages_as_images="3"/>
-</documents>
+</content>
+
+<content type="document" origin="upload" name="scan.pdf" format="application/pdf" pages_as_images="3"/>
 
 <context_rules>
-The blocks above are the source material of this request (…). When the app's task refers to the text or content to work on, it means this material. …
+The <content> blocks above are the material of this request. … The app's task applies to all of this material unless <user_instruction> narrows it. …
 </context_rules>
 
 <user_instruction>
@@ -598,12 +605,17 @@ what the user typed, if anything
 </user_instruction>
 ```
 
-Write templates against these names. Name the blocks the task works on, say that `<user_instruction>` says _what to do_ with them, and say what happens without blocks ("the whole message is the text to translate"). The shipped Translator, Summarizer and **Outlook – Reply Directly** apps are examples. Don't wrap `{{content}}` in quotes: when there are blocks, it holds several of them.
+| Attribute | Values |
+| --- | --- |
+| `type` | `email`, `meeting` (a calendar item in Outlook), `page` (the tab open in the browser extension), `document` (a file) |
+| `origin` | `open` — the item the user has open; `added` — an email the user added in Outlook; `attachment` — a file attached to these emails; `upload` — a file the user uploaded |
+
+The attributes are facts, not roles: whether an added email is background (a reply) or the thing to work on ("summarize these") is up to the app's task and the user's instruction. Write templates against the `<content>` tag: say what the task does with the blocks, that `<user_instruction>` says _how_, and what happens without blocks ("the whole message is the text to translate"). Refer to a particular block by its attributes, e.g. "reply to the `<content type="email" origin="open">` email". The shipped Translator, Summarizer and **Outlook – Reply Directly** apps are examples. Don't wrap `{{content}}` in quotes: when there are blocks, it holds several of them.
 
 Details:
 
-- Only one of `<current_email>`, `<current_page>` and `<current_meeting>` appears. The fields inside them are described in [Outlook add-in → What the model receives](outlook-add-in.md#what-the-model-receives).
-- Uploads and email attachments are the same `<document>` entries; an attachment carries `source="email_attachment"`. A PDF without a text layer is listed with `pages_as_images`; its pages are attached to the message as images.
+- The fields inside email, meeting and page blocks are described in [Outlook add-in → What the model receives](outlook-add-in.md#what-the-model-receives).
+- A PDF without a text layer is listed with `pages_as_images`; its pages are attached to the message as images.
 - Our tag names inside email text, documents, names and titles are HTML-escaped (`&lt;user_instruction&gt;`), so a forged tag cannot end a block early or add an instruction. Other angle brackets stay as they are. The typed text is not escaped, so a user can name a tag on purpose.
 - `{{…}}` placeholders and `$` sequences inside the material reach the model as written; `{{content}}` is filled last.
 - Global prompt variables such as `{{user_name}}` are expanded in the typed text of a message only when the app has no `prompt` template.

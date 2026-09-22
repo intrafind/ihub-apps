@@ -517,12 +517,12 @@ test('no tools: a message carrying fileData/imageData ends with run/ended.knowle
   assert.deepEqual(many.ended.knowledgeSources, ['file']);
 });
 
-test('no tools: the Office email marker yields knowledgeSources ["email"]; email + upload yields both', async t => {
+test('no tools: an open email yields knowledgeSources ["email"]; email + upload yields both', async t => {
   const email = await sourcesEmittedFor(t, 'email', [
     {
       role: 'user',
       content:
-        '<current_email>\nFrom: a@b.c\n</current_email>\n\n<user_instruction>\nSummarize this email\n</user_instruction>'
+        '<content type="email" origin="open">\n<from>a@b.c</from>\n</content>\n\n<user_instruction>\nSummarize this email\n</user_instruction>'
     }
   ]);
   assert.deepEqual(email.ended.knowledgeSources, ['email']);
@@ -531,7 +531,7 @@ test('no tools: the Office email marker yields knowledgeSources ["email"]; email
     {
       role: 'user',
       content:
-        '<current_email>\nFrom: a@b.c\n</current_email>\n\n<user_instruction>\nCheck the attachment\n</user_instruction>',
+        '<content type="email" origin="open">\n<from>a@b.c</from>\n</content>\n\n<user_instruction>\nCheck the attachment\n</user_instruction>',
       fileData: { fileName: 'deck.pdf', fileType: 'application/pdf', content: 'slides' }
     }
   ]);
@@ -540,12 +540,12 @@ test('no tools: the Office email marker yields knowledgeSources ["email"]; email
   assert.deepEqual([...both.summary.knowledgeSources].sort(), ['email', 'file']);
 });
 
-test('no tools: the Office pinned-emails and current-meeting tags each yield knowledgeSources ["email"]', async t => {
+test('no tools: added emails and an open meeting each yield knowledgeSources ["email"]', async t => {
   const pinned = await sourcesEmittedFor(t, 'pinned-emails', [
     {
       role: 'user',
       content:
-        '<pinned_emails>\n<email index="1">\nFrom: a@b.c\n</email>\n</pinned_emails>\n\n<user_instruction>\nSummarize these\n</user_instruction>'
+        '<content type="email" origin="added">\n<from>a@b.c</from>\n</content>\n\n<user_instruction>\nSummarize these\n</user_instruction>'
     }
   ]);
   assert.deepEqual(pinned.ended.knowledgeSources, ['email']);
@@ -554,7 +554,7 @@ test('no tools: the Office pinned-emails and current-meeting tags each yield kno
     {
       role: 'user',
       content:
-        '<current_meeting>\nSubject: Sync\n</current_meeting>\n\n<user_instruction>\nDraft an agenda\n</user_instruction>'
+        '<content type="meeting" origin="open">\n<subject>Sync</subject>\n</content>\n\n<user_instruction>\nDraft an agenda\n</user_instruction>'
     }
   ]);
   assert.deepEqual(meeting.ended.knowledgeSources, ['email']);
