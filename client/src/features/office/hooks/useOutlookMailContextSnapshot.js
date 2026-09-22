@@ -1,5 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useEmbeddedHost } from '../contexts/EmbeddedHostContext';
+import { getLiveItemId } from '../utilities/outlookMailContext';
+import { isDifferentItem } from '../utilities/officeItemChange';
 
 /**
  * Maintains a live, user-editable snapshot of the current host mail context
@@ -12,7 +14,7 @@ import { useEmbeddedHost } from '../contexts/EmbeddedHostContext';
  *  - Fetches `host.readMessageContext()` on mount and again whenever Outlook
  *    fires `ihub:itemchanged` (user navigates to a different email).
  *  - Tracks per-message edits: a set of attachment ids the user removed via
- *    the banner. The set resets on item change.
+ *    the banner. The set resets when the event concerns a different item.
  *  - `buildSnapshotOverride()` returns a copy of the live ctx with removed
  *    attachments stripped — chat adapter accepts this as `hostContextOverride`
  *    in params, skipping its own `readMessageContext()` call.
@@ -39,6 +41,8 @@ export function useOutlookMailContextSnapshot() {
   // attachments ("not part of this item" errors).
   const loadSeqRef = useRef(0);
   const reloadTimerRef = useRef(null);
+  // itemId the per-email edits above belong to.
+  const editsItemIdRef = useRef(getLiveItemId());
 
   const hostKind = host?.kind;
 
@@ -61,9 +65,16 @@ export function useOutlookMailContextSnapshot() {
     load();
 
     function onItemChange() {
-      setRemovedAttachmentIds(new Set());
-      setIncludeBody(true);
-      setGeneration(g => g + 1);
+      // A selection event for the email already open (re-selecting it, a
+      // list refresh) must not undo the user's attachment removals or body
+      // opt-out — only a different item does. Issue #2450.
+      const liveItemId = getLiveItemId();
+      if (isDifferentItem({ liveItemId, lastItemId: editsItemIdRef.current })) {
+        setRemovedAttachmentIds(new Set());
+        setIncludeBody(true);
+        setGeneration(g => g + 1);
+      }
+      editsItemIdRef.current = liveItemId;
       // Supersede any in-flight load right away and show the loading state,
       // but debounce the actual read: the second event of the double
       // dispatch lands within milliseconds, and the short pause also gives
