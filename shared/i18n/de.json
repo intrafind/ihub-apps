@@ -154,8 +154,6 @@
     "insertIntoEmail": "In E-Mail einfügen",
     "insertIntoDocument": "In Dokument einfügen",
     "insertOptions": "Weitere Optionen",
-    "replyToEmail": "Auf E-Mail antworten",
-    "newEmail": "Neue E-Mail",
     "pinned": {
       "addEmails": "E-Mail(s) hinzufügen",
       "addEmailsTooltip": "Die geöffnete E-Mail – oder alle in Outlook ausgewählten E-Mails – an den Chat anhängen",
@@ -176,7 +174,24 @@
       "appearanceHintOffice": "Automatisch folgt dem Outlook-Design (bzw. der Systemeinstellung bei älteren Outlook-Versionen).",
       "appearanceHintSystem": "Automatisch folgt der Systemeinstellung.",
       "cancel": "Abbrechen",
-      "save": "Speichern"
+      "save": "Speichern",
+      "answerAction": "Standardaktion für Antworten",
+      "answerActionAuto": "Automatisch (allen antworten bzw. in den Entwurf einfügen)",
+      "answerActionHint": "Was die Schaltfläche unter einer Antwort auslöst. Die übrigen Aktionen bleiben einen Klick entfernt im Menü, und eine für die geöffnete E-Mail nicht mögliche Auswahl fällt auf eine mögliche zurück."
+    },
+    "mailActions": {
+      "answer": "Antworten",
+      "answerAll": "Allen antworten",
+      "forward": "Weiterleiten",
+      "new": "Neue E-Mail",
+      "insert": "In Entwurf einfügen",
+      "forwardedMessage": "Weitergeleitete Nachricht",
+      "forwardFrom": "Von",
+      "forwardSent": "Gesendet",
+      "forwardTo": "An",
+      "forwardCc": "Cc",
+      "forwardSubject": "Betreff",
+      "originalAttached": "Outlook-Add-ins können eine Weiterleitung nicht mit ihren Anhängen nachbauen. Die ursprüngliche Nachricht ist deshalb angehängt \u2014 es geht nichts verloren."
     },
     "menu": {
       "settings": "Einstellungen",
@@ -1433,7 +1448,17 @@
         "preview": "Vorschau-APIs (nicht für Produktion)"
       },
       "officeJsPresetCustom": "Ihre eigene URL",
-      "officeJsFallbackWarning": "Die gespeicherte Office.js-Quelle konnte nicht verwendet werden; das Add-in wechselt auf {{mode}}. Prüfen Sie die URL oben."
+      "officeJsFallbackWarning": "Die gespeicherte Office.js-Quelle konnte nicht verwendet werden; das Add-in wechselt auf {{mode}}. Prüfen Sie die URL oben.",
+      "mailActionTitle": "Antwortaktionen",
+      "mailActionDesc": "Was die Schaltfläche unter jeder Assistenzantwort in Outlook auslöst. Alle Aktionen bleiben im Menü der Schaltfläche verfügbar \u2014 hier wird nur festgelegt, welche ohne zusätzlichen Klick ausgeführt wird.",
+      "defaultMailAction": "Standardaktion",
+      "defaultMailActionHelp": "Benutzer können dies pro Gerät in den Einstellungen des Aufgabenbereichs überschreiben. Eine für die geöffnete E-Mail nicht mögliche Auswahl fällt auf eine mögliche zurück \u2014 wer \u201eAllen antworten\u201c wählt, erhält beim Schreiben eines Entwurfs weiterhin \u201eEinfügen\u201c.",
+      "mailActionAuto": "Automatisch \u2014 allen antworten im Lesebereich, einfügen beim Schreiben",
+      "mailActionAnswerAll": "Allen antworten",
+      "mailActionAnswer": "Absender antworten",
+      "mailActionForward": "Weiterleiten",
+      "mailActionNew": "Neue E-Mail",
+      "mailActionInsert": "In den geöffneten Entwurf einfügen"
     },
     "nextcloudEmbed": {
       "title": "Nextcloud-Embed",

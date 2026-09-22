@@ -2,6 +2,7 @@ import { useState, useRef, useCallback, useEffect, useMemo } from 'react';
 import { useNavigate, Navigate } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
 import { v4 as uuidv4 } from 'uuid';
+import Icon from '../../../shared/components/Icon';
 import ChatMessageList from '../../chat/components/ChatMessageList';
 import ChatInput from '../../chat/components/ChatInput';
 import ChatHeader from './chat/ChatHeader';
@@ -18,10 +19,7 @@ import useOfficeChatAdapter from '../hooks/useOfficeChatAdapter';
 import useOutlookMailContextSnapshot from '../hooks/useOutlookMailContextSnapshot';
 import useAppSettings from '../../../shared/hooks/useAppSettings';
 import useFileUploadHandler from '../../../shared/hooks/useFileUploadHandler';
-import {
-  displayReplyFormWithAssistantResponse,
-  displayNewEmailFormWithAssistantResponse
-} from '../utilities/replyForm';
+import useOutlookMailActions from '../hooks/useOutlookMailActions';
 import {
   buildPromptTemplate,
   combineUserTextWithEmailContext,
@@ -255,13 +253,19 @@ function OfficeChatPanel({
     };
   }, []);
 
-  const handleInsert = useCallback(content => {
-    displayReplyFormWithAssistantResponse(content);
-  }, []);
+  // Answer actions for the item the pane is attached to: reply / reply all /
+  // forward / new in read mode, insert while the user is composing (#2446).
+  const mailActions = useOutlookMailActions({ officeConfig });
 
-  const handleInsertNew = useCallback(content => {
-    displayNewEmailFormWithAssistantResponse(content);
-  }, []);
+  // The compact icon button (hosts that do not promote the action to a primary
+  // button — the browser-extension side panel) and any surface that renders no
+  // action list. Running the resolved default keeps the notice strip as the one
+  // place the outcome is reported, including "there is no mail item here".
+  const { runAction: runMailAction, defaultActionId: defaultMailActionId } = mailActions;
+  const handleInsert = useCallback(
+    content => runMailAction(defaultMailActionId, content),
+    [runMailAction, defaultMailActionId]
+  );
 
   const submitMessage = useCallback(
     (messageText, overrides = {}) => {
@@ -607,8 +611,10 @@ function OfficeChatPanel({
                 editable={true}
                 compact={true}
                 onInsert={handleInsert}
-                onInsertNew={handleInsertNew}
                 insertAction={embeddedHost?.insertAction}
+                insertActions={mailActions.actions}
+                defaultInsertActionId={defaultMailActionId}
+                onInsertAction={runMailAction}
                 appId={selectedApp?.id}
                 chatId={chatIdRef.current}
                 app={selectedApp}
@@ -648,6 +654,32 @@ function OfficeChatPanel({
               }
               collapseOnMessageSent={collapseStripCounter}
             />
+
+            {/* Outcome of the last answer action. Replaces the bare
+                window.alert the reply/insert helpers used to raise: a failed
+                Office call names the error here (and the answer is on the
+                clipboard where one could be lost), an attached-original
+                forward explains itself. See issue #2446. */}
+            {mailActions.notice && (
+              <div
+                role={mailActions.notice.tone === 'error' ? 'alert' : 'status'}
+                className={`shrink-0 flex items-start gap-2 border-t px-3 py-2 text-xs ${
+                  mailActions.notice.tone === 'error'
+                    ? 'border-red-200 bg-red-50 text-red-800 dark:border-red-900 dark:bg-red-950/50 dark:text-red-200'
+                    : 'border-slate-200 bg-slate-50 text-slate-700 dark:border-slate-700 dark:bg-slate-800/60 dark:text-slate-200'
+                }`}
+              >
+                <span className="flex-1">{mailActions.notice.message}</span>
+                <button
+                  type="button"
+                  onClick={mailActions.dismissNotice}
+                  aria-label={t('common.close', 'Close')}
+                  className="shrink-0 rounded p-0.5 hover:bg-black/5 dark:hover:bg-white/10"
+                >
+                  <Icon name="close" size="sm" />
+                </button>
+              </div>
+            )}
 
             {/* Input */}
             <div className="office-chat-input border-t border-gray-200 bg-white shrink-0 dark:border-slate-700 dark:bg-slate-900">

@@ -31,7 +31,7 @@ export function isOutlookMailItemAvailable() {
  */
 let mailboxQueue = Promise.resolve();
 
-function withMailboxLock(fn) {
+export function withMailboxLock(fn) {
   const result = mailboxQueue.then(() => fn());
   // Keep the chain alive whether the operation succeeds or fails.
   mailboxQueue = result.then(

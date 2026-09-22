@@ -223,6 +223,22 @@ sub-messages rather than as the button's own text. The result headline shown aft
 the admin's language. Both the button label and the result messages now follow the selected
 language.
 
+## Outlook Add-in: replies keep every recipient, and inserts keep your signature
+
+Answering a thread from the task pane quietly reduced it to a reply to the sender: every other `To:`
+recipient and all `CC:` recipients disappeared from the draft. The pane only ever opened a
+reply-to-sender form — there was no reply-all path at all — so a thread answer reached one person
+instead of the group. **Reply all** is now a real action and is what the button does by default.
+
+Inserting an answer into an email you were already writing also replaced the draft's body outright,
+which took the Outlook signature and the quoted thread with it — a compliance problem wherever a
+footer is mandatory. The answer is now written into the draft at the cursor, leaving the signature
+and the quoted thread untouched.
+
+- Outlook still suppresses the automatic signature on a *new* form an add-in fills in — a platform
+  limitation with no add-in-side workaround. Where every mail must carry a footer, keep the default
+  answer action on **Insert into draft**, or apply the footer with a mail-server transport rule.
+  
 ## Chat can no longer reach AI models outside a user's group permissions
 
 A group's **Models** allowlist (Admin → Groups) only ever controlled which models an app's model
