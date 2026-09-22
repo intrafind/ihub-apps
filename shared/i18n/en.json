@@ -601,9 +601,25 @@
       "disabled": "Disabled",
       "default": "Default",
       "actions": "Actions",
-      "test": {
+      "test": "Test",
+      "testResults": {
         "success": "Test Successful",
-        "failed": "Test Failed"
+        "failed": "Test Failed",
+        "messages": {
+          "testSuccessful": "Model test successful",
+          "testFailed": "Model test failed",
+          "connectionTimeout": "Connection timeout",
+          "connectionRefused": "Connection refused",
+          "serviceNotFound": "Service not found",
+          "networkError": "Network error",
+          "requestTimeout": "Request timeout",
+          "apiKeyNotConfigured": "API key not configured",
+          "accessDenied": "Access denied",
+          "authenticationFailed": "Authentication failed",
+          "modelNotFound": "Model not found",
+          "rateLimitExceeded": "Rate limit exceeded",
+          "serverError": "Server error"
+        }
       },
       "enable": "Enable",
       "disable": "Disable",

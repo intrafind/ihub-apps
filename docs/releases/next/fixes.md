@@ -72,3 +72,12 @@ nothing in the log to say so:
 An `${ENV_VAR}` placeholder left in `proxy.http` or `proxy.https` is also no longer used as if it
 were a proxy address when the variable is not set; the connection goes direct instead of failing
 on an unparseable URL.
+
+## Admin: the model "Test" button and its result messages are translated again
+
+The "Test" action on Admin > Models and Admin > Providers showed a broken label instead of
+"Test"/"Testen", because the translation file defined `admin.models.test` as a group of
+sub-messages rather than as the button's own text. The result headline shown after a test (e.g.
+"Connection timeout", "Authentication failed") was also always displayed in English, regardless of
+the admin's language. Both the button label and the result messages now follow the selected
+language.
