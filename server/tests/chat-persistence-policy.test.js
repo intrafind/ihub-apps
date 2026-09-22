@@ -29,6 +29,7 @@ import {
   shutdownStorageBootstrap
 } from '../storage/bootstrap.js';
 import {
+  chatMessageCap,
   chatRetentionSettings,
   isChatPersistenceActive,
   isChatPersistenceConfigured
@@ -38,6 +39,7 @@ import { ChatRepository } from '../services/chat/ChatRepository.js';
 import { resolvePrincipal } from '../services/loop/runIdentity.js';
 import { RunLog } from '../services/loop/RunLog.js';
 import { featureCategories, featureRegistry } from '../featureRegistry.js';
+import configCache from '../configCache.js';
 import {
   abortChatRequest,
   abortChatRequestOnDisconnect,
@@ -350,6 +352,20 @@ describe('chat retention settings', () => {
   it('falls back to the defaults for a value that is not a number', () => {
     assert.deepEqual(chatRetentionSettings({ chats: { retentionDays: 'soon' } }), DEFAULTS);
     assert.deepEqual(chatRetentionSettings({ chats: { maxMessagesPerChat: 'lots' } }), DEFAULTS);
+  });
+
+  it('reads the live message cap from the platform config an admin saved', () => {
+    // `getPlatform()` hands back the config itself. Reading `.data` off it made
+    // every configured cap fall back to the default without a word.
+    const key = 'config/platform.json';
+    const previous = configCache.cache.get(key);
+    configCache.cache.set(key, { data: { chats: { maxMessagesPerChat: 5 } }, etag: 'test' });
+    try {
+      assert.equal(chatMessageCap(), 5);
+    } finally {
+      if (previous) configCache.cache.set(key, previous);
+      else configCache.cache.delete(key);
+    }
   });
 });
 

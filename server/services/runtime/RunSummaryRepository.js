@@ -648,14 +648,18 @@ export class RunSummaryRepository {
    * Anonymous runs are left out, so these numbers describe the same population
    * the listings do.
    *
-   * @returns {Promise<{totalExecutions: number, totalUsers: number, byStatus: Object}>}
+   * `byKind` splits the same count by run kind (chat, workflow, agent, …) —
+   * what the admin Chat History page shows for the ledger.
+   *
+   * @returns {Promise<{totalExecutions: number, totalUsers: number, byStatus: Object, byKind: Object}>}
    */
   async stats() {
-    const empty = { totalExecutions: 0, totalUsers: 0, byStatus: {} };
+    const empty = { totalExecutions: 0, totalUsers: 0, byStatus: {}, byKind: {} };
     if (!this.isAvailable()) return empty;
     const { records, truncated } = await this._load();
     if (truncated) this._logTruncation('stats', { loaded: records.length });
     const byStatus = {};
+    const byKind = {};
     const owners = new Set();
     let totalExecutions = 0;
     for (const record of records) {
@@ -663,9 +667,11 @@ export class RunSummaryRepository {
       totalExecutions += 1;
       const status = record.status || 'unknown';
       byStatus[status] = (byStatus[status] || 0) + 1;
+      const kind = record.kind || 'unknown';
+      byKind[kind] = (byKind[kind] || 0) + 1;
       if (record.ownerId) owners.add(record.ownerId);
     }
-    return { totalExecutions, totalUsers: owners.size, byStatus };
+    return { totalExecutions, totalUsers: owners.size, byStatus, byKind };
   }
 
   /**

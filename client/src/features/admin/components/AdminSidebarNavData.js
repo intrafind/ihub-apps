@@ -26,7 +26,8 @@ import {
   ClipboardDocumentCheckIcon,
   NewspaperIcon,
   MicrophoneIcon,
-  StarIcon
+  StarIcon,
+  ChatBubbleLeftRightIcon
 } from '@heroicons/react/24/outline';
 
 /**
@@ -283,6 +284,13 @@ export function getAdminNavSections({ t, showAdminPage, featureFlags }) {
           href: '/admin/telemetry',
           icon: SignalIcon,
           visible: showAdminPage('telemetry')
+        },
+        {
+          key: 'chat-history',
+          label: t('admin.nav.chatHistory', 'Chat History'),
+          href: '/admin/chat-history',
+          icon: ChatBubbleLeftRightIcon,
+          visible: showAdminPage('chatHistory')
         },
         {
           key: 'audit-log',
