@@ -16,6 +16,7 @@
  *     (`tools/lib/searchWithExtraction.js`)
  *   - `{ items: [...] }` / `{ sources: [...] }`
  *   - a single fetched page `{ url, title?, content }` (`webContentExtractor`)
+ *   - iFinder hits `{ results: [{ title, url?, deepLink }] }` (`iFinder_search`)
  *
  * @module services/loop/webSources
  */
@@ -33,6 +34,19 @@ function httpUrl(value) {
   } catch {
     return null;
   }
+}
+
+/**
+ * First http(s) link on a result item. `deepLink` covers iFinder hits, whose
+ * `url` is often the document's own location (`file://`, `smb://`) while the
+ * deep link opens it in the browser.
+ */
+function linkOf(item) {
+  for (const value of [item.url, item.link, item.href, item.uri, item.deepLink]) {
+    const url = httpUrl(value);
+    if (url) return url;
+  }
+  return null;
 }
 
 function titleOf(item) {
@@ -65,7 +79,7 @@ export function extractWebSources(toolId, result) {
   const byUrl = new Map();
   const add = (item, read) => {
     if (!item || typeof item !== 'object') return;
-    const url = httpUrl(item.url || item.link || item.href || item.uri);
+    const url = linkOf(item);
     if (!url) return;
     let entry = byUrl.get(url);
     if (!entry) {

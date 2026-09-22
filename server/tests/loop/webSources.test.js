@@ -100,3 +100,27 @@ test('contracts: webSources survives tool/completed and the ledger tool result',
   });
   assert.deepEqual(ledger.webSources, webSources);
 });
+
+test('extractWebSources: iFinder hits fall back to their deep link', () => {
+  const sources = extractWebSources('iFinder_search', {
+    totalFound: 2,
+    results: [
+      {
+        id: 'fs-1',
+        title: 'Contract.pdf',
+        url: 'file://share/contracts/Contract.pdf',
+        deepLink: 'https://ifinder.example.com/open?id=fs-1'
+      },
+      {
+        id: 'conf-2',
+        title: 'Onboarding',
+        url: 'https://wiki.example.com/onboarding',
+        deepLink: 'https://ifinder.example.com/open?id=conf-2'
+      }
+    ]
+  });
+  assert.deepEqual(sources, [
+    { url: 'https://ifinder.example.com/open?id=fs-1', title: 'Contract.pdf' },
+    { url: 'https://wiki.example.com/onboarding', title: 'Onboarding' }
+  ]);
+});
