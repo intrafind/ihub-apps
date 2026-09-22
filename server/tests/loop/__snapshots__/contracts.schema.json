@@ -998,6 +998,28 @@
               },
               "knowledgeSource": {
                 "type": "string"
+              },
+              "webSources": {
+                "type": "array",
+                "items": {
+                  "type": "object",
+                  "properties": {
+                    "url": {
+                      "type": "string"
+                    },
+                    "title": {
+                      "type": "string"
+                    },
+                    "read": {
+                      "type": "boolean"
+                    },
+                    "readFailed": {
+                      "type": "boolean"
+                    }
+                  },
+                  "required": ["url"],
+                  "additionalProperties": false
+                }
               }
             },
             "required": ["step", "callId", "toolId", "name", "resultPreview", "durationMs"],
@@ -4182,6 +4204,28 @@
               },
               "knowledgeSource": {
                 "type": "string"
+              },
+              "webSources": {
+                "type": "array",
+                "items": {
+                  "type": "object",
+                  "properties": {
+                    "url": {
+                      "type": "string"
+                    },
+                    "title": {
+                      "type": "string"
+                    },
+                    "read": {
+                      "type": "boolean"
+                    },
+                    "readFailed": {
+                      "type": "boolean"
+                    }
+                  },
+                  "required": ["url"],
+                  "additionalProperties": false
+                }
               }
             },
             "required": ["step", "callId", "toolId", "name", "resultPreview"],

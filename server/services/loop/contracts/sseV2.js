@@ -13,7 +13,7 @@ import {
   RUN_STATUSES,
   RUN_KINDS
 } from '../../../../shared/runEvents.js';
-import { usageSchema, toolCallRecordSchema } from './runLogEvents.js';
+import { usageSchema, toolCallRecordSchema, webSourceSchema } from './runLogEvents.js';
 import { interactionSchema, interactionAnswerSchema } from './interaction.js';
 
 const ts = z.string().datetime({ offset: true });
@@ -118,7 +118,9 @@ export const toolCompletedData = z.object({
   resultPreview: z.any(),
   error: z.object({ code: z.string().optional(), message: z.string() }).optional(),
   durationMs: z.number().int().nonnegative().optional(),
-  knowledgeSource: z.string().optional()
+  knowledgeSource: z.string().optional(),
+  /** Pages the call found or read (search / fetch tools), from the full result. */
+  webSources: z.array(webSourceSchema).optional()
 });
 
 export const interactionRaisedData = z.object({

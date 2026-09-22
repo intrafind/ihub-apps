@@ -373,7 +373,8 @@ export function reduceRunEvent(state, envelope) {
         result: undefined,
         error: null,
         durationMs: null,
-        knowledgeSource: null
+        knowledgeSource: null,
+        webSources: []
       };
       run = { ...run, tools: [...run.tools.filter(t => t.callId !== data.callId), tool] };
       return withRun(next, run);
@@ -400,6 +401,9 @@ export function reduceRunEvent(state, envelope) {
         error: data.error || null,
         durationMs: data.durationMs ?? null,
         knowledgeSource: data.knowledgeSource || null,
+        // Pages a search / fetch tool found or read (server-extracted from the
+        // full result — the preview is too short to hold them).
+        webSources: Array.isArray(data.webSources) ? data.webSources : [],
         completedAt: ts
       };
       const tools =

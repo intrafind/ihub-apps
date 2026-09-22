@@ -156,5 +156,6 @@ export function artifactSettings(platformConfig) {
  * @returns {{enabled: boolean, maxBytes: number, maxPerBatch: number}}
  */
 export function artifactPolicy() {
-  return artifactSettings(configCache.getPlatform?.()?.data || {});
+  // `getPlatform()` returns the config itself, not a `{ data }` cache entry.
+  return artifactSettings(configCache.getPlatform?.() || {});
 }

@@ -442,7 +442,8 @@ describe('RunSummaryRepository: the runs namespace', () => {
     assert.deepEqual(await repository.stats(), {
       totalExecutions: 0,
       totalUsers: 0,
-      byStatus: {}
+      byStatus: {},
+      byKind: {}
     });
     assert.deepEqual(await repository.getPendingCheckpoints(), []);
     assert.deepEqual(

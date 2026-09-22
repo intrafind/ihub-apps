@@ -549,7 +549,8 @@ export function projectLedgerEvent(ev) {
           resultPreview: d.resultPreview ?? null,
           ...(d.error ? { error: { message: String(d.error.message || 'error') } } : {}),
           ...(Number.isInteger(d.durationMs) ? { durationMs: d.durationMs } : {}),
-          ...(d.knowledgeSource ? { knowledgeSource: d.knowledgeSource } : {})
+          ...(d.knowledgeSource ? { knowledgeSource: d.knowledgeSource } : {}),
+          ...(d.webSources?.length ? { webSources: d.webSources } : {})
         })
       ];
     case RUN_LOG_EVENTS.INTERACTION_RAISED:

@@ -7,14 +7,15 @@
  * `extras` carries exactly the message fields the chat UI reads today:
  * thoughts, images, clarification/awaitingInput/clarificationAnswered,
  * workflowCheckpoint, workflowSteps/workflowStep, workflowResult/outputFormat,
- * activeSkills, searchStatus, searchSummary, citations, groundingSources, answerSource,
- * finishReason, ifinderMessageId. The hook (`useAppChat`) only decides WHEN to write the
+ * activeSkills, searchStatus, searchSummary, toolActivity, citations, groundingSources,
+ * answerSource, finishReason, ifinderMessageId. The hook (`useAppChat`) only decides WHEN to write the
  * projection and which message it belongs to — it never interprets events.
  *
  * @module features/chat/runToMessage
  */
 import { isRunFinished, getInteractions } from '../../shared/run/runReducer';
 import { extractGroundingSources } from './groundingSources';
+import { buildToolActivity } from './toolActivity';
 import {
   interactionToCheckpoint,
   isCheckpointInteraction,
@@ -211,6 +212,11 @@ export function projectRunToMessage(run, options = {}) {
     stepGrounding.length ? stepGrounding : run.grounding
   );
   if (groundingSources.length) extras.groundingSources = groundingSources;
+  // The searches the turn ran, the pages they found and read, and the other
+  // tools it called. Like the search summary, it stays with the finished
+  // answer as provenance.
+  const toolActivity = buildToolActivity(run);
+  if (toolActivity) extras.toolActivity = toolActivity;
 
   // ── completion metadata ──────────────────────────────────────────────
   if (finished) {

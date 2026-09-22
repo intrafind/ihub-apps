@@ -140,7 +140,9 @@ export function isChatPersistenceActive({
  * @returns {number} Messages one chat may keep; `<= 0` means no cap.
  */
 export function chatMessageCap() {
-  return chatRetentionSettings(configCache.getPlatform?.()?.data || {}).maxMessagesPerChat;
+  // `getPlatform()` already returns the config itself, not a `{ data }`
+  // cache entry — reading `.data` off it silently fell back to the default.
+  return chatRetentionSettings(configCache.getPlatform?.() || {}).maxMessagesPerChat;
 }
 
 /**
