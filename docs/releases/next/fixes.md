@@ -339,3 +339,18 @@ they translate or summarize.
 - Both apps now accept document uploads (PDF, Office, OpenDocument, text), also in the web app.
 - Custom apps get a standard note with every attached email or document saying that it is the
   material the task works on.
+  
+## Voice Input: vLLM Realtime and Azure Speech keep working after a platform save
+
+Realtime voice input (vLLM Realtime) and Azure Speech stopped authenticating a few minutes after
+startup, or right after any save in **Admin → Voice Input** or another platform setting, and only
+came back after a server restart. The encrypted API key and subscription key were re-read from
+`platform.json` without being decrypted, so the server sent the encrypted value upstream. Both keys
+are now decrypted on every reload, not only at startup.
+
+## Apps, models, prompts, workflows and agent profiles edited on disk are picked up again
+
+Changes made directly to the files under `contents/` (rather than through the admin UI) for apps,
+models, prompts, workflows and agent profiles were only noticed until the first periodic reload
+that found nothing new; after that, further edits were ignored until a restart or an admin save.
+Every configuration type now keeps reloading on its regular interval.

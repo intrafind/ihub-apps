@@ -4,7 +4,9 @@
  *
  * Uses `fetch` + `ReadableStream` instead of the native `EventSource` so that
  * custom `Authorization` headers can be injected (Office add-in / PKCE Bearer
- * tokens) and a 401 can be recovered with a silent token refresh. Both
+ * tokens) and a 401 can be recovered with a silent token refresh. Host-specific
+ * token handling is plugged in via `setSseAuthProvider()` so this shared module
+ * never depends on a feature (the Office bridge registers itself at startup). Both
  * `useEventSource` (chat) and `useRunStream` (workflow / agent) sit on top of
  * this module so there is exactly one place that knows how a stream is opened.
  *
@@ -15,7 +17,6 @@
  * @module shared/utils/openSseStream
  */
 import { parseSseStream } from './parseSseStream';
-import { getRefreshToken, refreshTokenOrExpireSession } from '../../features/office/api/officeAuth';
 
 /** SSE v2 protocol version accepted by the client reducer. */
 export const SSE_PROTOCOL_VERSION = 2;
@@ -46,17 +47,41 @@ export class SseHttpError extends Error {
 }
 
 /**
+ * Host-specific auth provider, registered by embedded hosts (Office add-in,
+ * browser extension, Nextcloud) that carry their own token lifecycle.
+ * `null` in the plain SPA, which relies on cookies plus the `authToken`
+ * localStorage fallback.
+ *
+ * @type {{ getToken?: () => (string|null), onUnauthorized?: () => Promise<boolean> } | null}
+ */
+let sseAuthProvider = null;
+
+/**
+ * Register (or clear, with `null`) the auth provider used by every SSE stream.
+ *
+ * @param {Object|null} provider
+ * @param {Function} [provider.getToken] - Returns the host's access token, or null.
+ *   Takes precedence over the main app's `authToken`.
+ * @param {Function} [provider.onUnauthorized] - Called on a 401. Should attempt a
+ *   silent refresh and resolve `true` to retry the request once, or `false` to
+ *   report the 401 as-is. May throw when the refresh itself fails.
+ */
+export function setSseAuthProvider(provider) {
+  sseAuthProvider = provider || null;
+}
+
+/**
  * Build auth headers for stream / re-sync requests.
- * Mirrors the behaviour of apiClient's request interceptor:
- * - Reads `authToken` from localStorage (main app session)
- * - Falls back to `office_ihubtoken` (Office add-in PKCE token)
+ * Mirrors the behaviour of the apiClient request interceptors:
+ * - Prefers the registered host provider's token (e.g. Office PKCE token)
+ * - Falls back to `authToken` from localStorage (main app session)
  *
  * @returns {Object} `{ Authorization }` or an empty object when no token is stored
  */
 export function getSseAuthHeaders() {
   let token = null;
   try {
-    token = localStorage.getItem('office_ihubtoken') || localStorage.getItem('authToken') || null;
+    token = sseAuthProvider?.getToken?.() || localStorage.getItem('authToken') || null;
   } catch {
     // localStorage unavailable (privacy mode / sandbox) — fall back to cookies only
   }
@@ -64,11 +89,8 @@ export function getSseAuthHeaders() {
 }
 
 /**
- * `fetch` with credentials, Bearer header and a single silent-refresh retry on
- * 401 for the Office add-in (keyed off `getRefreshToken()` so the refresh is
- * attempted even when the access token is already gone but a refresh token
- * exists). `refreshTokenOrExpireSession()` invokes the session-expired callback
- * and throws when the refresh itself fails.
+ * `fetch` with credentials, Bearer header and — when a host auth provider is
+ * registered — a single silent-refresh retry on 401.
  *
  * @param {string} url - Absolute or relative URL
  * @param {RequestInit} [init] - Fetch options (headers are merged with the auth header)
@@ -84,8 +106,8 @@ export async function fetchWithAuthRetry(url, init = {}) {
     });
 
   let res = await doFetch();
-  if (res.status === 401 && getRefreshToken()) {
-    await refreshTokenOrExpireSession();
+  const onUnauthorized = sseAuthProvider?.onUnauthorized;
+  if (res.status === 401 && onUnauthorized && (await onUnauthorized())) {
     res = await doFetch();
   }
   return res;

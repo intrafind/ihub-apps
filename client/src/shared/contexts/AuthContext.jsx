@@ -1,5 +1,6 @@
 import { createContext, useContext, useReducer, useEffect, useCallback, useRef } from 'react';
 import { apiClient } from '../../api/client.js';
+import { fetchAuthStatus, invalidateAuthStatusCache } from '../../api';
 import { buildPath, buildApiUrl, getApiBaseUrlOverride } from '../../utils/runtimeBasePath';
 
 // Auth action types
@@ -115,11 +116,10 @@ export function AuthProvider({ children }) {
     try {
       dispatch({ type: AUTH_ACTIONS.SET_LOADING, payload: true });
 
-      const response = await apiClient.get('/auth/status', {
-        headers: getAuthHeaders()
-      });
-
-      const data = response.data;
+      // Shared, cached and deduplicated with PlatformConfigContext so a page
+      // load fires /auth/status once. Login paths clear the API cache before
+      // calling this, so a post-login refresh always reaches the server.
+      const data = await fetchAuthStatus();
 
       if (data.success !== false) {
         dispatch({
@@ -341,8 +341,10 @@ export function AuthProvider({ children }) {
 
         // Try to get fresh auth config to check for auto-redirect
         try {
-          const response = await apiClient.get('/auth/status');
-          const data = response.data;
+          // Drop the now-stale authenticated entry rather than bypassing the
+          // cache, so every other consumer sees the refreshed status too.
+          invalidateAuthStatusCache();
+          const data = await fetchAuthStatus();
 
           // If auto-redirect is configured, redirect to the auth provider
           if (data.autoRedirect && !isLogoutPage) {
@@ -399,8 +401,17 @@ export function AuthProvider({ children }) {
     window.addEventListener('authTokenExpired', handleTokenExpired);
 
     // Listen for successful re-authentication from the auth gate overlay
-    const handleAuthGateSuccess = () => {
+    const handleAuthGateSuccess = async () => {
       console.log('🔓 Auth gate re-authentication successful - refreshing auth state');
+      // The auth gate is a standalone script that logs in via its own fetch calls,
+      // bypassing our cache module, so the pre-login auth-status entry (and any
+      // data cached for the previous identity) must be cleared before refetching.
+      try {
+        const { clearApiCache } = await import('../../api/utils/cache');
+        clearApiCache();
+      } catch (error) {
+        console.warn('Could not clear API cache on auth gate success:', error);
+      }
       loadAuthStatus();
     };
     window.addEventListener('authGateSuccess', handleAuthGateSuccess);
