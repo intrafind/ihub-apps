@@ -201,3 +201,15 @@ the file again. A worker now re-reads the file the moment it is asked for a code
 recognise, so a link works on every worker as soon as it exists. The admin usage endpoint
 (`/api/admin/usage`) is similarly refreshed on every request instead of showing whichever worker's
 stale in-memory snapshot happened to answer.
+
+## Chat: the copy-options menu now follows dark mode and stays on top
+
+The small arrow next to a message's copy button opens a menu with "as Text", "as Markdown" and "as
+HTML". That menu stayed a hardcoded white panel with dark gray text regardless of the active
+theme, so on a dark background it showed up as a bright, low-contrast block — most noticeable in
+the Outlook add-in, which offers its own Light/Dark/Automatic appearance setting. It also sat below
+the neighbouring "Insert" menu in stacking order, so in a narrow window it could end up hidden
+behind it, and had no width limit, letting it grow past the edge of a narrow pane.
+
+The panel now follows the theme like the rest of the message actions, always renders above
+neighbouring menus, and is capped to a fixed width.
