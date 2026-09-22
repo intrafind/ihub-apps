@@ -188,3 +188,22 @@ the file again. A worker now re-reads the file the moment it is asked for a code
 recognise, so a link works on every worker as soon as it exists. The admin usage endpoint
 (`/api/admin/usage`) is similarly refreshed on every request instead of showing whichever worker's
 stale in-memory snapshot happened to answer.
+
+## Chat can no longer reach AI models outside a user's group permissions
+
+A group's **Models** allowlist (Admin → Groups) only ever controlled which models an app's model
+picker displayed. The chat request itself never checked it, so a user could still reach a model
+outside their group's allowed models — either by asking for it directly, or simply by using an app
+whose preferred or default model fell outside their allowance, silently and with no indication a
+restricted model had been used.
+
+Chat requests are now checked against the requesting user's group-level model permissions, the same
+way `/api/models` and the OpenAI-compatible API already are:
+
+- Asking for a model outside your group's allowed models now fails clearly instead of silently
+  using a different one.
+- Automatic model selection — an app's preferred or default model — now only ever considers models
+  both the app and your group allow.
+
+No admin action is required: groups that already restrict **Models** to specific entries are now
+fully enforced for chat, including apps invoked as tools through the MCP gateway.
