@@ -52,19 +52,69 @@ const rateLimitConfigSchema = z.object({
   skipFailedRequests: z.boolean().prefault(false)
 });
 
+/**
+ * Which LDAP attribute an iHub user field is read from. A single attribute name
+ * or an ordered list — the first attribute the directory returns a value for
+ * wins. Unset means the directory preset decides.
+ */
+const ldapAttributeMappingSchema = z.object({
+  id: z.union([z.string(), z.array(z.string())]).optional(),
+  name: z.union([z.string(), z.array(z.string())]).optional(),
+  email: z.union([z.string(), z.array(z.string())]).optional()
+});
+
+/**
+ * An LDAP provider. Only `name`, `url` and `baseDn` are really needed: the
+ * search bases, the user DN template, the group object class and the attribute
+ * mapping are derived from `baseDn` and `preset` (see
+ * `server/utils/ldapProviderConfig.js`). Every derived field below can still be
+ * set explicitly, and an explicit value always wins.
+ */
 const ldapProviderSchema = z.object({
   name: z.string(),
-  displayName: z.string(),
-  url: z.string(),
-  adminDn: z.string().optional(),
-  adminPassword: z.string().optional(),
-  userSearchBase: z.string(),
-  usernameAttribute: z.string().prefault('uid'),
-  userDn: z.string().optional(),
-  groupSearchBase: z.string().optional(),
-  groupClass: z.string().optional(),
-  groupMemberAttribute: z.string().optional(),
-  groupMemberUserAttribute: z.string().optional(),
+  displayName: z.string().optional().describe('Name shown on the login page. Defaults to `name`.'),
+  url: z.string().describe('ldap://host:389 or ldaps://host:636'),
+  preset: z
+    .enum(['openldap', 'activeDirectory'])
+    .optional()
+    .describe(
+      'Directory flavour. Supplies the attribute defaults that differ between products (uid vs sAMAccountName, groupOfNames vs group). Defaults to "openldap".'
+    ),
+  baseDn: z
+    .string()
+    .optional()
+    .describe(
+      'Root DN of the directory, e.g. dc=example,dc=org. Used as the default user and group search base.'
+    ),
+  adminDn: z.string().optional().describe('DN of the bind (service) account, if one is needed.'),
+  adminPasswordRef: z
+    .string()
+    .optional()
+    .describe('Id of the credential profile holding the bind password.'),
+  userSearchBase: z.string().optional().describe('Defaults to `baseDn`.'),
+  usernameAttribute: z
+    .string()
+    .optional()
+    .describe('Defaults to the preset (uid / sAMAccountName).'),
+  userDn: z
+    .string()
+    .optional()
+    .describe(
+      'DN template used when no bind account is configured. Defaults to `<usernameAttribute>={{username}},<userSearchBase>`.'
+    ),
+  // NetBIOS/short domain name (e.g. "ROCHUS"), used by the iFinder
+  // `domain\\username` JWT subject. Mirrors `ntlmAuth.domain`, which NTLM
+  // gets from the protocol handshake; LDAP has no equivalent, so it is either
+  // configured here or detected from the AD `msDS-PrincipalName` attribute.
+  domain: z.string().optional(),
+  groupSearchBase: z
+    .string()
+    .optional()
+    .describe('Defaults to `baseDn`. Without either, no LDAP groups are read.'),
+  groupClass: z.string().optional().describe('Defaults to the preset (groupOfNames / group).'),
+  groupMemberAttribute: z.string().optional().describe('Defaults to `member`.'),
+  groupMemberUserAttribute: z.string().optional().describe('Defaults to `dn`.'),
+  attributeMapping: ldapAttributeMappingSchema.optional(),
   defaultGroups: z.array(z.string()).prefault([]),
   sessionTimeoutMinutes: z.number().min(1).prefault(480),
   tlsOptions: z.record(z.any()).optional()
@@ -196,6 +246,10 @@ export const proxyConfigSchema = z
 
 export const platformConfigSchema = z
   .object({
+    // The install-wide language: what the UI falls back to, and what web search
+    // runs in when a request carries no language of its own (a workflow or
+    // agent run). Edited in Admin → Customization → Localization.
+    defaultLanguage: z.string().min(2).max(11).prefault('en'),
     auth: z
       .object({
         mode: z.enum(['proxy', 'local', 'oidc', 'ldap', 'ntlm', 'anonymous']).prefault('local'),

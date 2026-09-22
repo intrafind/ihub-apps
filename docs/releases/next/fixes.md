@@ -1,5 +1,28 @@
 # Fixes — Unreleased
 
+## Web search now follows the user's language
+
+Web search ran in US English far more often than it should have. Each engine decided the search
+language on its own and each one got it wrong in a different way: Qwant defaulted to `en_US`,
+Staan to `en-us`, and **Brave sent no language at all**, leaving it to Brave's own default. None of
+them consulted the platform's `defaultLanguage`, so there was no setting anywhere that changed it.
+
+It is now resolved once, the same way for all three: the user's language for the request, then
+`defaultLanguage` from `platform.json`, then `en` only if the config cannot be read. Each provider
+maps that onto its own API — Brave's `search_lang` / `country`, Staan's `market`, Qwant's `locale`
+— and falls back to its own default only when the engine does not serve that language at all.
+
+The clearest win is where no user language exists at all: **workflow and agent runs**. Those pass no
+language on the tool call, so on a German install every research run was silently answered from the
+US market. They now land on the configured default instead — the providers resolve it themselves, so
+nothing about how a workflow renders its own prompts changes.
+
+- Brave searches are now language-targeted at all, which they previously never were.
+- A model can still override the language for a single search with the tool's `language` parameter.
+- Brave results are cached per language, so one user's language is no longer served to the next.
+
+Set the default language in **Admin → Customization → Localization** to match your install.
+
 ## `BRAVE_SEARCH_ENDPOINT` and `SEARCH_CACHE_TTL_MS` are read again
 
 Both were documented and both were ignored. The server exposes a fixed allowlist of environment
@@ -72,6 +95,74 @@ nothing in the log to say so:
 An `${ENV_VAR}` placeholder left in `proxy.http` or `proxy.https` is also no longer used as if it
 were a proxy address when the variable is not set; the connection goes direct instead of failing
 on an unparseable URL.
+
+## LDAP and NTLM users are stored under their directory login name
+
+A user signing in through LDAP or NTLM was created in **Admin → Users** with their email address
+as the account name, not the login name the directory knows them by — `sAMAccountName` for Active
+Directory, the Windows account for NTLM. Only users with no email in the directory got the right
+one, and re-signing in never corrected it, because nothing wrote the field again after the account
+was created.
+
+The login name was available the whole time and everything else used it: the session, the groups
+and the tokens iHub mints were all correct. Only the stored record disagreed, which is why this
+went unnoticed until something read it — the account name shown in the user list, and the admin
+user editor, which refused to open such a record at all because `@` is not valid in a username.
+
+Existing records are repaired on upgrade by migration V115, which recovers the login name the
+directory already recorded alongside each account. It leaves a record alone where the rewrite would
+not be unambiguous: accounts that also sign in locally, where the account name is a credential
+somebody types, and accounts whose login name another user already holds. Those are listed in the
+startup log with the duplicate to resolve. Anything it skips still heals by itself the next time
+that user signs in.
+
+## iAssistant conversations are no longer cancelled after 60 seconds
+
+A long iAssistant interaction — the workspace profile especially — was cut off mid-answer after a
+minute.
+
+The cause was a transport ceiling meant for a different shape of model. `llm.streamIdleTimeoutMs`
+bounds the gap between two chunks of a stream, and 60 s of silence from a model emitting tokens
+steadily really is a hang. An iAssistant turn is not that: it assesses what it knows, plans,
+searches, reassesses and only then starts writing, and iFinder's own per-turn budget defaults to
+90 s *before* generation begins. The quiet stretch before the first word was ordinary work, and the
+ceiling read it as a dead stream.
+
+The `iassistant-conversation` models now carry `streamIdleTimeoutMs: 180000` of their own. Every
+other model keeps the installation-wide default.
+
+Two related traps went with it:
+
+- **`iAssistant.timeout` is removed.** It was documented as the request timeout for iAssistant API
+  calls, defaulted to 60000, and nothing read it — so it is exactly what an admin hitting this
+  would reach for, and raising it changed nothing. Migration V117 removes it and warns if yours had
+  been tuned.
+- **`REQUEST_TIMEOUT` is gone from `config.env`.** That file shipped `REQUEST_TIMEOUT=60000`, which
+  overrode the code's 5-minute whole-call deadline with one minute for every binary deployment that
+  copied it. `config.env` is now marked deprecated: it applies only to the single-executable
+  distribution, and settings belong in `platform.json` or a `.env` file.
+
+## A stopped iAssistant generation no longer hangs the chat
+
+Deleting the message an iAssistant turn was answering left the turn spinning until a timeout fired.
+The Conversation API signals this with a `generation_stopped` event, which the adapter had no case
+for — so the stream never completed. It is now treated as the terminal event it is.
+
+## One loading indicator instead of two
+
+An iAssistant message in progress showed two animations at once: the phase indicator ("Analyzing
+current knowledge") with its own animated dots, and the generic three-dot pulse underneath it. The
+generic one is now the fallback it was meant to be and stands down whenever a phase is showing.
+
+## App-level iAssistant settings that silently did nothing
+
+`iassistant.tools`, `iassistant.labels`, `iassistant.scope` and `iassistant.ephemeral` were read by
+the adapter but missing from the app schema, so validation stripped them at load with no error —
+setting any of them on an app did nothing at all. `tools` was the costly one: it meant an app could
+not enable `ifinder_search` for itself, only the model could.
+
+They are declared now and work as documented. If an app already carries any of them, check it: they
+now actually apply.
 
 ## Multi-worker mode no longer duplicates startup jobs, and a halted migration now actually halts
 

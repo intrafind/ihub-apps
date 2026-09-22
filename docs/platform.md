@@ -384,7 +384,11 @@ the call to the whole-call deadline (`REQUEST_TIMEOUT`, 5 minutes).
 - **streamIdleTimeoutMs** (number) – Longest gap between two chunks of a
   stream that has already produced one. Armed only after the first chunk, so a
   model that thinks for minutes before answering is not cut off.
-  Default: `60000`
+  Default: `60000`. An agentic provider goes quiet *between* chunks for much
+  longer than a token-steady one: the `iassistant-conversation` models
+  therefore carry `streamIdleTimeoutMs: 180000` of their own, since a
+  workspace-profile turn assesses, plans and searches before writing anything.
+  Raise it per model rather than installation-wide.
 
 See [Stream deadlines](llm-client.md#stream-deadlines).
 
@@ -1013,12 +1017,14 @@ plaintext in `platform.json`. See
 
 The JWT `sub` claim identifies the authenticated user to iFinder. It is **always** derived from the authenticated user object — never from environment variables (configCache skips env var resolution for this field, see `ENV_VAR_RESOLUTION_SKIP_PATHS` in `server/configCache.js`).
 
+Resolution is **strict**: the configured field is the only one consulted. If the authenticated user has no value for it, token generation fails with an error naming the setting and the missing field. It does not fall back to another identifier — a valid token for the wrong subject is worse than no token, because iFinder keys its user mapping on `sub` and the mismatch is invisible on both sides.
+
 Accepted forms:
 
-- `"email"` (default) — `user.email`, falling back to `user.username`, then `user.id`.
-- `"username"` — `user.username`, falling back to `user.email`, then `user.id`.
-- `"domain\\username"` — `user.domain + "\\" + user.username`, useful for NTLM/AD setups.
-- **Custom template** — embed `${user.field}` placeholders to build the subject from user attributes. Example: `"DOMAIN\\${user.username}"` produces `DOMAIN\john.doe` for a user with `username = "john.doe"`. Available fields include `id`, `username`, `name`, `email`, `domain`.
+- `"email"` (default) — `user.email`.
+- `"username"` — `user.username`. For LDAP this is the directory login name (`sAMAccountName` when `usernameAttribute` is set to it), for NTLM the Windows account name.
+- `"domain\\username"` — `user.domain + "\\" + user.username`, for NTLM/AD setups. Requires a domain on the user: NTLM takes it from the handshake, LDAP from the provider's `domain` field or by detecting it from the Active Directory `msDS-PrincipalName` attribute. See [LDAP and NTLM Authentication](ldap-ntlm-authentication.md).
+- **Custom template** — embed `${user.field}` placeholders to build the subject from user attributes. Example: `"DOMAIN\\${user.username}"` produces `DOMAIN\john.doe` for a user with `username = "john.doe"`. Available fields include `id`, `username`, `name`, `email`, `domain`. A placeholder with no value is an error too, rather than leaving a hole in the subject.
 
 > **Security note:** Earlier versions accepted the legacy `${field}` form (no `user.` prefix). That syntax collided with the env var resolver — on Windows `process.env.username` is set to the OS user running the server, so `${username}` silently expanded to the service account name in every JWT subject, breaking per-user identity in iFinder. The configCache skip-list and migration V043 fix this; legacy `${field}` is still accepted with a deprecation warning, but **use `${user.field}` for clarity and forward-compatibility**.
 
@@ -1031,18 +1037,46 @@ Configures the global connection to an IntraFind iAssistant service. Individual 
 ```json
 {
   "iAssistant": {
-    "baseUrl": "https://iassistant.company.com",
-    "defaultProfileId": "main-search-profile",
-    "timeout": 60000
+    "defaultProfileId": "iassistant-workspace",
+    "defaultSearchProfile": "searchprofile-standard",
+    "resolveSearchProfileFromProfile": true,
+    "groundedOnly": false
   }
 }
 ```
 
-| Field              | Type   | Default | Description                                                                              |
-| ------------------ | ------ | ------- | ---------------------------------------------------------------------------------------- |
-| `baseUrl`          | String | `""`    | Base URL of the iAssistant service                                                       |
-| `defaultProfileId` | String | `""`    | Profile ID used when an app does not specify its own `iassistant.profileId`              |
-| `timeout`          | Number | `60000` | Request timeout in milliseconds for iAssistant API calls                                 |
+| Field                             | Type    | Default                   | Description                                                                                                                        |
+| --------------------------------- | ------- | ------------------------- | ---------------------------------------------------------------------------------------------------------------------------------- |
+| `defaultProfileId`                | String  | `""`                      | Conversation profile used when an app does not set its own `iassistant.profileId`                                                  |
+| `defaultSearchProfile`            | String  | `"searchprofile-standard"` | iFinder search profile used when neither the app, the model, nor the conversation profile names one                                |
+| `resolveSearchProfileFromProfile` | Boolean | `true`                    | Ask the conversation profile for its search profile before falling back to `defaultSearchProfile`                                  |
+| `profileCacheTtlMs`               | Number  | `300000`                  | How long a resolved conversation profile is cached                                                                                 |
+| `groundedOnly`                    | Boolean | `false`                   | Installation-wide default for grounded-only answering; an app's `iassistant.groundedOnly` overrides it in either direction         |
+
+The base URL is not configured here — iAssistant reuses `iFinder.baseUrl`.
+
+### Conversation profile vs. search profile
+
+These are two different things, and both matter:
+
+- the **conversation profile** (`defaultProfileId`, e.g. `iassistant-workspace`) selects the iAssistant workflow and its tuning — how many reasoning steps, how long a turn may take, which model writes the answer;
+- the **search profile** (`defaultSearchProfile`, e.g. `searchprofile-standard`) selects which documents retrieval is allowed to see.
+
+With `resolveSearchProfileFromProfile` on, iHub reads the conversation profile before creating a conversation and uses a search profile published there, so a profile built for one corpus does not have to be paired by hand in every app. iFinder does not currently publish one, so in practice the configured fallback applies — the lookup is there so the profile takes over by itself once it does. A failed lookup is never fatal: it falls back and logs at debug level.
+
+The search profile is fixed for the life of a conversation. Changing this configuration affects new conversations, not ones already under way.
+
+### Grounded-only answering
+
+`groundedOnly` confines answers to what retrieval returned: no world knowledge, and an explicit "not in the sources" instead of an answer when nothing relevant was found.
+
+It is carried as a prompt instruction, prepended to the conversation's extra context, because the Conversation API has no grounding switch — `response_generation` accepts only `extra_context`, `system_prompt_preamble` and `reasoning_effort`, and the iAssistant's own preamble states that it answers from the documents *and* its general knowledge. So this instructs the model rather than constraining it. For a guarantee that applies to every client and not just iHub, override `promptPreamble` on the profile's `RESPONSE` state in iFinder instead.
+
+### Request timeouts
+
+There is no iAssistant-specific timeout. An iAssistant turn is bounded by the same two transport ceilings as any other model — see [`llm.connectTimeoutMs` and `llm.streamIdleTimeoutMs`](#llm). The shipped `iassistant-conversation` model sets `streamIdleTimeoutMs` to 180 s of its own, because a workspace-profile turn reasons and searches for a long stretch before it writes anything, and the 60 s installation default read that silence as a dead stream.
+
+> **Removed in V117:** `iAssistant.timeout`. It was documented as the request timeout for iAssistant API calls and nothing ever read it — raising it had no effect on cancelled turns. Set `streamIdleTimeoutMs` on the model instead.
 
 ## OAuth Server Configuration
 

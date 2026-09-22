@@ -1257,6 +1257,68 @@
           "unblock": "Entsperren",
           "unblocked": "{{name}} entsperrt"
         }
+      },
+      "ldap": {
+        "title": "LDAP-Authentifizierungseinstellungen",
+        "subtitle": "LDAP-/Active-Directory-Authentifizierungsanbieter konfigurieren",
+        "add": "LDAP-Anbieter hinzufügen",
+        "empty": "Keine LDAP-Anbieter konfiguriert",
+        "emptyHint": "Klicken Sie auf „LDAP-Anbieter hinzufügen“, um zu beginnen",
+        "providerHeading": "LDAP-Anbieter {{number}}",
+        "remove": "Diesen LDAP-Anbieter entfernen",
+        "name": "Anbietername",
+        "nameHelp": "Interne Kennung dieses Anbieters",
+        "displayName": "Anzeigename",
+        "displayNameHelp": "Wird auf der Anmeldeseite angezeigt. Standard ist der Anbietername.",
+        "url": "LDAP-URL",
+        "urlHelp": "ldap://host:389 für unverschlüsselte Verbindungen, ldaps://host:636 für TLS",
+        "preset": "Verzeichnistyp",
+        "presetHelp": "Legt die Attribut-Standardwerte fest: {{attributes}}",
+        "presetLabel": {
+          "openldap": "OpenLDAP / generisches LDAP",
+          "activeDirectory": "Active Directory"
+        },
+        "baseDn": "Basis-DN",
+        "baseDnHelp": "Wurzel des Verzeichnisses. Benutzer und Gruppen werden hier gesucht, sofern nicht überschrieben.",
+        "adminDn": "Bind-DN",
+        "adminDnHelp": "Dienstkonto, mit dem Benutzer gesucht und deren Gruppen gelesen werden. Leer lassen, um den Benutzer direkt zu binden.",
+        "adminPassword": "Bind-Passwort",
+        "adminPasswordHelp": "Wählen Sie ein gespeichertes Zugangsdaten-Profil mit dem Bind-Passwort.",
+        "domain": "Domäne",
+        "domainHelp": "Kurzer NetBIOS-Domänenname, genutzt von Integrationen, die Benutzer als DOMAIN\\username identifizieren (iFinder). Für Active Directory leer lassen, um ihn aus msDS-PrincipalName zu ermitteln; für andere Verzeichnisse erforderlich.",
+        "selfSigned": "Selbstsignierte Zertifikate / interne CA zulassen (ldaps://)",
+        "selfSignedHelp": "Aktivieren, wenn der LDAP-Server ein Zertifikat einer privaten oder internen CA verwendet. Für die meisten lokalen ldaps://-Installationen erforderlich.",
+        "advanced": "Erweitert: Suchbasen und Attribute",
+        "advancedHint": "Nur nötig, wenn das Verzeichnis von den Standardwerten des gewählten Typs abweicht.",
+        "derivedHelp": "Leer lassen, um den angezeigten Wert zu verwenden — er ergibt sich aus Verzeichnistyp und Basis-DN.",
+        "userSearchBase": "Benutzer-Suchbasis",
+        "usernameAttribute": "Benutzernamen-Attribut",
+        "userDn": "Benutzer-DN-Vorlage",
+        "userDnHelp": "Wird nur verwendet, wenn kein Bind-DN gesetzt ist. Leer lassen, um den angezeigten Wert zu verwenden.",
+        "groupSearchBase": "Gruppen-Suchbasis",
+        "groupSearchBaseHelp": "Leer lassen, um ab dem Basis-DN zu suchen. Ohne beides werden keine LDAP-Gruppen gelesen.",
+        "groupClass": "Gruppen-Objektklasse",
+        "groupMemberAttribute": "Gruppenmitglied-Attribut",
+        "groupMemberUserAttribute": "Referenziertes Benutzerattribut",
+        "groupMemberUserAttributeHelp": "Das Benutzerattribut, auf das Gruppeneinträge verweisen. Meist dn.",
+        "sessionTimeout": "Sitzungsdauer (Minuten)",
+        "sessionTimeoutHelp": "Gültigkeitsdauer des JWT-Tokens",
+        "attributeMapping": "Attributzuordnung",
+        "attributeMappingHelp": "Welche LDAP-Attribute zu Benutzer-ID, Name und E-Mail werden. Kommagetrennt: Das erste Attribut mit einem Wert gewinnt.",
+        "attribute": {
+          "id": "Benutzer-ID",
+          "name": "Anzeigename",
+          "email": "E-Mail"
+        },
+        "test": {
+          "title": "Anmeldung testen",
+          "help": "Führt diese Konfiguration gegen das Verzeichnis aus und zeigt, was gefunden und zugeordnet würde. Es wird nichts gespeichert und keine Sitzung erzeugt. Mit einem Bind-Konto ist das Passwort optional.",
+          "username": "Benutzername",
+          "password": "Passwort (optional)",
+          "run": "Anmeldung testen",
+          "running": "Test läuft…",
+          "resultTitle": "LDAP-Anmeldetest"
+        }
       }
     },
     "officeIntegration": {
@@ -1292,10 +1354,6 @@
       "saveError": "Konfiguration konnte nicht gespeichert werden",
       "loadError": "Office-Integrationsstatus konnte nicht geladen werden",
       "toggleError": "Office-Integration konnte nicht aktualisiert werden",
-      "offlineTitle": "Offline-Modus (Lokales Office.js)",
-      "offlineDesc": "Aktivieren Sie diese Option, wenn Ihre Umgebung den Zugriff auf appsforoffice.microsoft.com blockiert. Das Add-in lädt die Office JavaScript-Bibliothek dann von diesem Server statt vom Microsoft-CDN.",
-      "offlineLabel": "Office.js von diesem Server bereitstellen (Offline-Modus)",
-      "offlineWarning": "Offline-Modus ist aktiv. Das Add-in lädt Office.js von /office/office-js/office.js auf diesem Server. Hinweis: Microsoft AppSource lehnt Add-ins ab, die nicht die offizielle CDN-URL verwenden – dieser Modus ist ausschließlich für interne Unternehmensbereitstellungen gedacht.",
       "setupTitle": "Bereitstellungsanweisungen",
       "step1": "Kopieren Sie die obige Manifest-URL oder laden Sie die Datei manifest.xml herunter.",
       "step2": "Gehen Sie zum Microsoft 365 Admin Center → Einstellungen → Integrierte Apps.",
@@ -1317,7 +1375,40 @@
       "addFeaturedApp": "Standard-App hinzufügen",
       "removeFeaturedApp": "{{name}} entfernen",
       "unknownApp": "nicht gefunden",
-      "disabledApp": "deaktiviert"
+      "disabledApp": "deaktiviert",
+      "officeJsTitle": "Office.js-Quelle",
+      "officeJsDesc": "Von wo das Add-in die Office-JavaScript-Bibliothek lädt. Ändern Sie dies, wenn Ihr Netzwerk das Microsoft-CDN blockiert. Office.js lädt den Rest der Bibliothek relativ zu dieser URL – eine Einstellung deckt also die gesamte Bibliothek ab.",
+      "officeJsModeCdn": "Microsoft-CDN (empfohlen)",
+      "officeJsModeCdnDesc": "Clients laden Office.js direkt von Microsoft. Immer aktuell und die einzige Option, die Microsoft AppSource akzeptiert.",
+      "officeJsModeProxy": "Über diesen Server proxyen",
+      "officeJsModeProxyDesc": "Dieser Server lädt Office.js vom CDN und speichert es zwischen. Clients kontaktieren Microsoft nie – nur dieser Server benötigt ausgehenden Zugriff, und die zwischengespeicherte Kopie bleibt aktuell.",
+      "officeJsModeCustom": "Eigenes CDN oder Spiegel",
+      "officeJsModeCustomDesc": "Von einer URL laden, die Sie kontrollieren – ein Unternehmens-CDN oder ein Artefakt-Proxy, der das Microsoft-CDN spiegelt. Weder Clients noch dieser Server benötigen Zugriff auf Microsoft.",
+      "officeJsModeBundled": "Mitgelieferte Kopie (offline)",
+      "officeJsModeBundledDesc": "Die mit diesem Release ausgelieferte Kopie bereitstellen. Benötigt kein Netzwerk, erhält aber nie Updates.",
+      "officeJsCdnUrlLabel": "Microsoft-CDN-URL",
+      "officeJsCdnUrlHint": "Muss auf /office.js enden. Wählen Sie unten ein bekanntes CDN oder fügen Sie ein anderes ein.",
+      "officeJsCustomUrlLabel": "Eigene Office.js-URL",
+      "officeJsCustomUrlHint": "Muss auf /office.js enden – Office.js leitet aus dieser URL den Pfad zu allen weiteren benötigten Dateien ab und findet sie ohne diesen Dateinamen nicht. Verweisen Sie hier auf einen Pull-Through-Spiegel des Microsoft-CDN.",
+      "officeJsResolved": "Aktuell an das Add-in ausgeliefert:",
+      "officeJsAppSourceWarning": "Microsoft AppSource verlangt, dass Add-ins Office.js vom offiziellen CDN laden. Jede andere Quelle wird nur für interne Unternehmensbereitstellungen unterstützt – also für Sideloading oder die Verteilung über das Microsoft 365 Admin Center.",
+      "officeJsBundledWarning": "Die mitgelieferte Kopie stammt aus dem npm-Paket @microsoft/office-js, das Microsoft nicht mehr pflegt. Sie wird nie aktualisiert – auch nicht für Sicherheitskorrekturen – und vergrößert den Build um rund 86 MB. Bevorzugen Sie Proxy oder eigenes CDN und nutzen Sie Mitgeliefert nur dort, wo der Server überhaupt keinen ausgehenden Zugriff hat.",
+      "officeJsKnownCdns": "Bekannte Office.js-CDNs",
+      "officeJsKnownCdnsDesc": "Prüft jede URL von diesem Server und aus Ihrem Browser. Das Serverergebnis zählt für den Proxy-Modus; das Browserergebnis kommt einem Outlook-Client näher, der Office.js in den Modi Microsoft-CDN und Eigenes CDN selbst lädt.",
+      "officeJsTest": "Erreichbarkeit testen",
+      "officeJsTesting": "Test läuft…",
+      "officeJsFromServer": "Server",
+      "officeJsFromBrowser": "Browser",
+      "officeJsPresetUse": "Verwenden",
+      "officeJsPresetInUse": "In Verwendung",
+      "officeJsPreset": {
+        "worldwide": "Microsoft-CDN (aktuell)",
+        "worldwideLegacy": "Microsoft-CDN (alter Host)",
+        "china": "China – 21Vianet",
+        "preview": "Vorschau-APIs (nicht für Produktion)"
+      },
+      "officeJsPresetCustom": "Ihre eigene URL",
+      "officeJsFallbackWarning": "Die gespeicherte Office.js-Quelle konnte nicht verwendet werden; das Add-in wechselt auf {{mode}}. Prüfen Sie die URL oben."
     },
     "nextcloudEmbed": {
       "title": "Nextcloud-Embed",
@@ -1608,7 +1699,10 @@
         "title": "Ausgehender Proxy",
         "description": "Leitet ausgehenden Datenverkehr — LLM-Anbieter, Websuche, Jira, OIDC, MCP-Server — über einen HTTP(S)-Proxy. Das ist weder die Reverse-Proxy-Anmeldung (proxyAuth) noch die Anzahl vertrauenswürdiger Hops (trustProxy).",
         "enabled": "Proxy für ausgehende Anfragen verwenden",
-        "enabledHint": "Ausgeschaltet wird nichts über den Proxy geleitet, unabhängig von den URLs unten.",
+        "enabledHint": "Dieser Schalter allein leitet nichts über einen Proxy — dafür muss unten eine URL gesetzt sein. Ausgeschaltet gehen alle Anfragen direkt, auch wenn in der Umgebung ein Proxy gesetzt ist.",
+        "statusActive": "Ausgehende Anfragen laufen über {{url}}.",
+        "statusInactive": "Es wird kein Proxy verwendet — es ist keine Proxy-URL konfiguriert, ausgehende Anfragen gehen direkt. Setzen Sie unten eine URL, um einen Proxy zu verwenden.",
+        "statusOff": "Das Proxying ist ausgeschaltet — ausgehende Anfragen gehen direkt, auch ein in der Umgebung gesetzter Proxy wird ignoriert.",
         "httpUrl": "Proxy für http://-Ziele",
         "httpsUrl": "Proxy für https://-Ziele",
         "urlPlaceholder": "http://proxy.example.com:8080 oder ${HTTPS_PROXY}",
@@ -1630,6 +1724,11 @@
         "effectiveHttp": "HTTP",
         "effectiveHttps": "HTTPS",
         "effectiveNoProxy": "Kein Proxy",
+        "effectiveUrlPatterns": "URL-Muster",
+        "effectiveHint": "Was der Server aktuell f\u00fcr ausgehende Anfragen verwendet, einschlie\u00dflich Werten aus der Umgebung. \u00c4nderungen oben werden erst beim Speichern wirksam.",
+        "effectiveUnsaved": "Nicht gespeicherte \u00c4nderungen",
+        "effectivePending": "nach dem Speichern: {{value}}",
+        "unsavedField": "nicht gespeicherte \u00c4nderung",
         "notSet": "nicht gesetzt",
         "saveConfig": "Proxy-Einstellungen speichern",
         "savingConfig": "Wird gespeichert…",
@@ -1876,7 +1975,8 @@
       "telemetry": "Telemetrie",
       "voiceInput": "Spracheingabe",
       "changelog": "Neuigkeiten",
-      "feedback": "Feedback"
+      "feedback": "Feedback",
+      "localization": "Lokalisierung"
     },
     "mcp": {
       "common": {
@@ -2152,8 +2252,9 @@
         "websearchProvider": "Anbieter",
         "websearchProviderAuto": "Automatisch",
         "websearchProviderBrave": "Brave",
+        "websearchProviderStaan": "Staan",
         "websearchProviderQwant": "Qwant (ohne API-Schlüssel)",
-        "websearchProviderDesc": "Suchmaschine, die verwendet wird, wenn das Modell keine native Suche hat. Automatisch nutzt Brave, sofern ein Brave-API-Schlüssel konfiguriert ist, sonst Qwant; Qwant benötigt keinen API-Schlüssel.",
+        "websearchProviderDesc": "Suchmaschine, die verwendet wird, wenn das Modell keine native Suche hat. Automatisch nutzt Brave, sofern ein Brave-API-Schlüssel konfiguriert ist, dann Staan, sofern dafür ein Schlüssel vorliegt, sonst Qwant. Brave und Staan benötigen einen API-Schlüssel; Qwant benötigt keinen, wird aber auf vielen Cloud-Hosts blockiert.",
         "websearchUseNative": "Native Suche verwenden",
         "websearchUseNativeDesc": "Die integrierte Suche des Modells verwenden, wenn verfügbar (z. B. Google, OpenAI, Anthropic)",
         "websearchMaxResults": "Max. Ergebnisse",
@@ -2623,6 +2724,22 @@
     },
     "usage": {
       "reviewFeedback": "Feedback ansehen"
+    },
+    "localization": {
+      "title": "Lokalisierung",
+      "subtitle": "Die Sprache, auf die diese Installation zurückfällt, wenn keine andere Sprache greift.",
+      "defaultLanguage": "Standardsprache",
+      "defaultLanguageDesc": "Wird für Benutzer verwendet, die keine Sprache gewählt haben, und überall dort, wo überhaupt keine Anfragesprache vorliegt.",
+      "whereItApplies": "Wo dies gilt",
+      "appliesUi": "Die Oberflächensprache für Benutzer, die selbst keine gewählt haben.",
+      "appliesSearch": "Die Sprache, in der die Websuche läuft, wenn eine Anfrage keine eigene mitbringt — insbesondere Workflow- und Agentenläufe, hinter denen kein Browser steht.",
+      "appliesFallback": "Der Rückfall für Texte, die in der angeforderten Sprache keine Übersetzung haben.",
+      "save": "Speichern",
+      "saving": "Wird gespeichert...",
+      "saveSuccess": "Standardsprache gespeichert",
+      "saveError": "Standardsprache konnte nicht gespeichert werden",
+      "loadError": "Plattformkonfiguration konnte nicht geladen werden",
+      "noTranslations": "keine Übersetzungen"
     }
   },
   "cloudStorage": {
@@ -3209,7 +3326,8 @@
     "search": {
       "started": "Starte Suche",
       "generating_queries": "Generiere Suchanfragen",
-      "complete": "Suche abgeschlossen"
+      "complete": "Suche abgeschlossen",
+      "finished": "Suche abgeschlossen"
     },
     "doc_lookup": {
       "started": "Starte Dokumentensuche",
@@ -3458,5 +3576,10 @@
     "highlight": "Markieren",
     "allPassages": "Alle",
     "loadFailed": "Dokument konnte nicht geladen werden: {{error}}"
+  },
+  "searchSummary": {
+    "searchedFor": "Gesucht nach",
+    "documentsFound_one": "{{count}} Dokument gefunden",
+    "documentsFound_other": "{{count}} Dokumente gefunden"
   }
 }

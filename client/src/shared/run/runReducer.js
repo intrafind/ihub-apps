@@ -76,6 +76,11 @@ export function createRunState(runId, init = {}) {
     citations: [],
     skills: [],
     searchStatus: null,
+    // Accumulated across every retrieval round of the turn, because
+    // `searchStatus` only ever holds the newest event and a workspace-profile
+    // turn searches several times: without this, "found 3 documents" replaces
+    // "found 12 documents" and the turn reads as one small search.
+    searchSummary: null,
     grounding: null,
     output: undefined,
     toolName: null,
@@ -87,6 +92,56 @@ function union(list, items) {
   const out = [...list];
   for (const item of items || []) if (item && !out.includes(item)) out.push(item);
   return out;
+}
+
+/** An empty search summary. */
+function emptySearchSummary() {
+  return {
+    queries: [],
+    applications: [],
+    sources: [],
+    totalHits: 0,
+    rounds: 0,
+    searching: false
+  };
+}
+
+/**
+ * Fold one search status event into the turn's running summary.
+ *
+ * The iAssistant searches repeatedly within a single turn — it assesses what
+ * it knows, searches, reassesses, searches again — and reports each round
+ * with its own started/finished pair. The summary keeps the union of the
+ * queries and the sum of the hits so the finished message can say what the
+ * whole turn looked for and how much it found, the way the iAssistant webapp
+ * does. Status events that are not search events (assess, plan, …) pass
+ * through untouched.
+ *
+ * @param {Object|null} summary - the summary so far
+ * @param {Object|null} status - the search status event
+ * @returns {Object|null} the new summary
+ */
+function accumulateSearch(summary, status) {
+  const event = status?.event;
+  if (event !== 'search.started' && event !== 'search.finished') return summary;
+
+  const next = { ...(summary || emptySearchSummary()) };
+
+  if (event === 'search.started') {
+    next.queries = union(next.queries, status.queries);
+    next.rounds += 1;
+    next.searching = true;
+    return next;
+  }
+
+  next.totalHits += Number.isFinite(status.numberOfHits) ? status.numberOfHits : 0;
+  next.applications = union(next.applications, status.applications);
+  next.sources = union(next.sources, status.sources);
+  next.searching = false;
+  // A finished event without a preceding started one still counts as a round,
+  // so a summary never reports zero rounds while reporting hits.
+  if (next.rounds === 0) next.rounds = 1;
+  return next;
 }
 
 /**
@@ -365,7 +420,11 @@ export function reduceRunEvent(state, envelope) {
       run = { ...run, progress: [...run.progress, entry] };
       switch (data.phase) {
         case 'search.status':
-          run = { ...run, searchStatus: data.data ?? null };
+          run = {
+            ...run,
+            searchStatus: data.data ?? null,
+            searchSummary: accumulateSearch(run.searchSummary, data.data)
+          };
           break;
         case 'citation':
           if (data.data) run = { ...run, citations: [...run.citations, data.data] };

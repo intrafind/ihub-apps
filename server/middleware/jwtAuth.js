@@ -657,6 +657,11 @@ export default function jwtAuthMiddleware(req, res, next) {
           name: decoded.name || decoded.displayName || decoded.username,
           email: decoded.email || decoded.mail || '',
           groups: decoded.groups || [],
+          // Minted by loginLdapUser when the provider has a NetBIOS domain
+          // configured or detected. Needed here for the iFinder
+          // `domain\\username` subject, which is otherwise only resolvable on
+          // the login request itself.
+          domain: decoded.domain,
           authMode: 'ldap',
           timestamp: Date.now()
         };

@@ -987,6 +987,68 @@
           "unblock": "Unblock",
           "unblocked": "Unblocked {{name}}"
         }
+      },
+      "ldap": {
+        "title": "LDAP Authentication Settings",
+        "subtitle": "Configure LDAP/Active Directory authentication providers",
+        "add": "Add LDAP Provider",
+        "empty": "No LDAP providers configured",
+        "emptyHint": "Click \"Add LDAP Provider\" to get started",
+        "providerHeading": "LDAP Provider {{number}}",
+        "remove": "Remove this LDAP provider",
+        "name": "Provider Name",
+        "nameHelp": "Internal identifier for this provider",
+        "displayName": "Display Name",
+        "displayNameHelp": "Shown on the login page. Defaults to the provider name.",
+        "url": "LDAP URL",
+        "urlHelp": "ldap://host:389 for plain connections, ldaps://host:636 for TLS",
+        "preset": "Directory Type",
+        "presetHelp": "Sets the attribute defaults: {{attributes}}",
+        "presetLabel": {
+          "openldap": "OpenLDAP / generic LDAP",
+          "activeDirectory": "Active Directory"
+        },
+        "baseDn": "Base DN",
+        "baseDnHelp": "Root of the directory. Users and groups are searched here unless overridden.",
+        "adminDn": "Bind DN",
+        "adminDnHelp": "Service account used to find users and read their groups. Leave empty to bind as the user directly.",
+        "adminPassword": "Bind Password",
+        "adminPasswordHelp": "Select a stored credential profile holding the bind password.",
+        "domain": "Domain",
+        "domainHelp": "NetBIOS/short domain name, used by integrations that identify users as DOMAIN\\username (iFinder). Leave empty for Active Directory to detect it from msDS-PrincipalName; required for other directories.",
+        "selfSigned": "Allow self-signed / internal CA certificates (ldaps://)",
+        "selfSignedHelp": "Enable when the LDAP server uses a certificate from a private or internal CA. Required for most on-premise ldaps:// setups.",
+        "advanced": "Advanced: search bases and attributes",
+        "advancedHint": "Only needed when the directory does not follow the defaults of the selected type.",
+        "derivedHelp": "Leave empty to use the value shown — it follows from the directory type and base DN.",
+        "userSearchBase": "User Search Base",
+        "usernameAttribute": "Username Attribute",
+        "userDn": "User DN Template",
+        "userDnHelp": "Used only when no bind DN is set. Leave empty to use the value shown.",
+        "groupSearchBase": "Group Search Base",
+        "groupSearchBaseHelp": "Leave empty to search from the base DN. Without either, no LDAP groups are read.",
+        "groupClass": "Group Object Class",
+        "groupMemberAttribute": "Group Member Attribute",
+        "groupMemberUserAttribute": "Member Value Attribute",
+        "groupMemberUserAttributeHelp": "The user attribute that group entries reference. Usually dn.",
+        "sessionTimeout": "Session Timeout (minutes)",
+        "sessionTimeoutHelp": "JWT token expiration time",
+        "attributeMapping": "Attribute Mapping",
+        "attributeMappingHelp": "Which LDAP attributes become the user id, name and e-mail. Comma-separated: the first attribute with a value wins.",
+        "attribute": {
+          "id": "User ID",
+          "name": "Display Name",
+          "email": "E-Mail"
+        },
+        "test": {
+          "title": "Test a login",
+          "help": "Runs this configuration against the directory and shows what would be found and mapped. Nothing is saved, no session is created. With a bind account, the password is optional.",
+          "username": "Username",
+          "password": "Password (optional)",
+          "run": "Test login",
+          "running": "Testing…",
+          "resultTitle": "LDAP login test"
+        }
       }
     },
     "officeIntegration": {
@@ -1022,10 +1084,6 @@
       "saveError": "Failed to save configuration",
       "loadError": "Failed to load Office Integration status",
       "toggleError": "Failed to update Office Integration",
-      "offlineTitle": "Offline Mode (Local Office.js)",
-      "offlineDesc": "Enable this if your environment blocks access to appsforoffice.microsoft.com. The add-in will then load the Office JavaScript library from this server instead of the Microsoft CDN.",
-      "offlineLabel": "Serve Office.js from this server (offline mode)",
-      "offlineWarning": "Offline mode is active. The add-in will load Office.js from /office/office-js/office.js on this server. Note: Microsoft AppSource will reject add-ins that do not use the official CDN URL — this mode is intended for internal enterprise deployments only.",
       "setupTitle": "Deployment Instructions",
       "step1": "Copy the manifest URL above or download the manifest.xml file.",
       "step2": "Go to Microsoft 365 Admin Center → Settings → Integrated apps.",
@@ -1047,7 +1105,40 @@
       "addFeaturedApp": "Add a default app",
       "removeFeaturedApp": "Remove {{name}}",
       "unknownApp": "not found",
-      "disabledApp": "disabled"
+      "disabledApp": "disabled",
+      "officeJsTitle": "Office.js Source",
+      "officeJsDesc": "Where the add-in loads the Office JavaScript library from. Change this if your network blocks Microsoft’s CDN. Office.js loads the rest of the library relative to this URL, so one setting covers the whole library.",
+      "officeJsModeCdn": "Microsoft CDN (recommended)",
+      "officeJsModeCdnDesc": "Clients load Office.js straight from Microsoft. Always current, and the only option Microsoft AppSource accepts.",
+      "officeJsModeProxy": "Proxy through this server",
+      "officeJsModeProxyDesc": "This server fetches Office.js from the CDN and caches it. Clients never contact Microsoft — only this server needs outbound access, and the cached copy stays up to date.",
+      "officeJsModeCustom": "Custom CDN or mirror",
+      "officeJsModeCustomDesc": "Load from a URL you control — a corporate CDN or an artifact proxy mirroring the Microsoft CDN. Neither clients nor this server need access to Microsoft.",
+      "officeJsModeBundled": "Bundled copy (offline)",
+      "officeJsModeBundledDesc": "Serve the copy shipped with this release. Needs no network at all, but never receives updates.",
+      "officeJsCdnUrlLabel": "Microsoft CDN URL",
+      "officeJsCdnUrlHint": "Must end in /office.js. Pick a known CDN below, or paste another.",
+      "officeJsCustomUrlLabel": "Custom Office.js URL",
+      "officeJsCustomUrlHint": "Must end in /office.js — Office.js derives the path to every other file it needs from this URL, and cannot find them without that filename. Point this at a pull-through mirror of the Microsoft CDN.",
+      "officeJsResolved": "Currently served to the add-in:",
+      "officeJsAppSourceWarning": "Microsoft AppSource requires add-ins to load Office.js from the official CDN. Any other source is supported for internal enterprise deployments only — which is what sideloading or Microsoft 365 admin center deployment does.",
+      "officeJsBundledWarning": "The bundled copy comes from the @microsoft/office-js npm package, which Microsoft no longer maintains. It never updates — including for security fixes — and adds roughly 86 MB to the build. Prefer Proxy or Custom CDN, and use Bundled only where the server has no outbound access at all.",
+      "officeJsKnownCdns": "Known Office.js CDNs",
+      "officeJsKnownCdnsDesc": "Checks each URL from this server and from your browser. The server result is what the Proxy mode needs; the browser result is the closer stand-in for an Outlook client, which loads Office.js itself in the Microsoft CDN and Custom modes.",
+      "officeJsTest": "Test reachability",
+      "officeJsTesting": "Testing…",
+      "officeJsFromServer": "server",
+      "officeJsFromBrowser": "browser",
+      "officeJsPresetUse": "Use",
+      "officeJsPresetInUse": "In use",
+      "officeJsPreset": {
+        "worldwide": "Microsoft CDN (current)",
+        "worldwideLegacy": "Microsoft CDN (legacy host)",
+        "china": "China — 21Vianet",
+        "preview": "Preview APIs (not for production)"
+      },
+      "officeJsPresetCustom": "Your custom URL",
+      "officeJsFallbackWarning": "The saved Office.js source could not be used, so the add-in is falling back to {{mode}}. Check the URL above."
     },
     "nextcloudEmbed": {
       "title": "Nextcloud Embed",
@@ -1338,7 +1429,10 @@
         "title": "Outbound Proxy",
         "description": "Route outbound traffic — LLM providers, web search, Jira, OIDC, MCP servers — through an HTTP(S) proxy. This is not the reverse-proxy login (proxyAuth) and not the trusted hop count (trustProxy).",
         "enabled": "Use a proxy for outbound requests",
-        "enabledHint": "When switched off nothing is proxied, whatever the URLs below say.",
+        "enabledHint": "On its own this switch proxies nothing — a URL below has to be set. Switch it off to go direct even when a proxy is set in the environment.",
+        "statusActive": "Outbound requests are routed through {{url}}.",
+        "statusInactive": "No proxy is in use — no proxy URL is configured, so outbound requests go direct. Set a URL below to start using one.",
+        "statusOff": "Proxying is switched off — outbound requests go direct, including any proxy set in the environment.",
         "httpUrl": "Proxy for http:// targets",
         "httpsUrl": "Proxy for https:// targets",
         "urlPlaceholder": "http://proxy.example.com:8080 or ${HTTPS_PROXY}",
@@ -1360,6 +1454,11 @@
         "effectiveHttp": "HTTP",
         "effectiveHttps": "HTTPS",
         "effectiveNoProxy": "No proxy",
+        "effectiveUrlPatterns": "URL patterns",
+        "effectiveHint": "What the server uses for outbound requests right now, including anything coming from the environment. Changes above apply once you save.",
+        "effectiveUnsaved": "Unsaved changes",
+        "effectivePending": "after saving: {{value}}",
+        "unsavedField": "unsaved change",
         "notSet": "not set",
         "saveConfig": "Save proxy settings",
         "savingConfig": "Saving…",
@@ -1606,7 +1705,8 @@
       "telemetry": "Telemetry",
       "voiceInput": "Voice Input",
       "changelog": "What's New",
-      "feedback": "Feedback"
+      "feedback": "Feedback",
+      "localization": "Localization"
     },
     "mcp": {
       "common": {
@@ -1882,8 +1982,9 @@
         "websearchProvider": "Provider",
         "websearchProviderAuto": "Auto",
         "websearchProviderBrave": "Brave",
+        "websearchProviderStaan": "Staan",
         "websearchProviderQwant": "Qwant (no API key)",
-        "websearchProviderDesc": "Search engine used when the model has no native search. Auto uses Brave when a Brave API key is configured and Qwant otherwise; Qwant needs no API key.",
+        "websearchProviderDesc": "Search engine used when the model has no native search. Auto uses Brave when a Brave API key is configured, then Staan when it has one, and Qwant otherwise. Brave and Staan need an API key; Qwant needs none but is blocked on many cloud hosts.",
         "websearchUseNative": "Use Native Search",
         "websearchUseNativeDesc": "Use the model's built-in search when available (e.g. Google, OpenAI, Anthropic)",
         "websearchMaxResults": "Max Results",
@@ -2353,6 +2454,22 @@
     },
     "usage": {
       "reviewFeedback": "Review feedback"
+    },
+    "localization": {
+      "title": "Localization",
+      "subtitle": "The language this installation falls back to when no other language applies.",
+      "defaultLanguage": "Default Language",
+      "defaultLanguageDesc": "Used for users who have not chosen a language, and wherever no request language exists at all.",
+      "whereItApplies": "Where this applies",
+      "appliesUi": "The interface language for users who have not picked one themselves.",
+      "appliesSearch": "The language web search runs in when a request carries none of its own — workflow and agent runs in particular, which have no browser behind them.",
+      "appliesFallback": "The fallback for any text that has no translation in the requested language.",
+      "save": "Save",
+      "saving": "Saving...",
+      "saveSuccess": "Default language saved",
+      "saveError": "Failed to save the default language",
+      "loadError": "Failed to load the platform configuration",
+      "noTranslations": "no translations"
     }
   },
   "cloudStorage": {
@@ -3244,7 +3361,8 @@
     "search": {
       "started": "Starting search",
       "generating_queries": "Generating search queries",
-      "complete": "Search complete"
+      "complete": "Search complete",
+      "finished": "Search complete"
     },
     "doc_lookup": {
       "started": "Starting document lookup",
@@ -3493,5 +3611,10 @@
     "highlight": "Highlight",
     "allPassages": "All",
     "loadFailed": "Could not load the document: {{error}}"
+  },
+  "searchSummary": {
+    "searchedFor": "Searched for",
+    "documentsFound_one": "{{count}} document found",
+    "documentsFound_other": "{{count}} documents found"
   }
 }
