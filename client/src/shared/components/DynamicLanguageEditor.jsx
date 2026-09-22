@@ -2,7 +2,7 @@ import { useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import Icon from './Icon';
 import { translateText } from '../../api/adminApi';
-import { useFormValidationErrors } from '../../features/admin/components/formValidationContext';
+import { useFormValidationErrors } from '../contexts/formValidationContext';
 
 function LanguageInput({ lang, name, type, value, placeholder, required, onChange, hasError }) {
   const inputClass = `block w-full rounded-lg border px-3 py-2 bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100 focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 ${

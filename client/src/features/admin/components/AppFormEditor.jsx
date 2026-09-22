@@ -24,7 +24,7 @@ import SettingsConfigSection from './app-form/SettingsConfigSection';
 import { validateWithSchema, errorsToFieldErrors } from '../../../utils/schemaValidation';
 import useFeatureFlags from '../../../shared/hooks/useFeatureFlags';
 import AdminFormErrorSummary from './AdminFormErrorSummary';
-import { FormValidationProvider } from './formValidationContext';
+import { FormValidationProvider } from '../../../shared/contexts/formValidationContext';
 import { fetchTranscriptionModels } from '../../../api/endpoints/models';
 import BasicInfoSection from './app-form/BasicInfoSection';
 import InputModeSection from './app-form/InputModeSection';
