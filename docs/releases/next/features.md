@@ -146,6 +146,10 @@ product to confirm the change had landed.
 - Each field says whether the value in effect comes from `platform.json` or from the environment,
   and an `${ENV_VAR}` placeholder that no variable resolves is called out instead of silently
   doing nothing.
+- **In effect right now** lists every setting the server is using — both proxy URLs, the bypass
+  list and the URL patterns — and marks the fields you have edited but not yet saved, showing what
+  each one becomes once you press Save. An entry you have just added therefore no longer reads as
+  "not set" with nothing to explain it.
 - The page opens on what is actually happening: routed through a named proxy, no proxy in use, or
   switched off. A fresh installation is in the second state — no `proxy` block is written to
   `platform.json` and nothing is proxied until a URL is set here or `HTTP_PROXY`/`HTTPS_PROXY` is
@@ -243,6 +247,52 @@ field set.
 
 This replaces the workaround of hard-coding the domain into a JWT subject template such as
 `CONTOSO\${user.username}`. Those templates keep working unchanged.
+
+## Outlook Add-in: choose where Office.js is loaded from
+
+Networks that block Microsoft's CDN stopped the Outlook add-in from starting at all. **Admin →
+Office Integration** now has an **Office.js Source** section with four options, so the add-in can
+be served from somewhere the network allows.
+
+- **Microsoft CDN** (default) — unchanged behaviour, and the only option Microsoft AppSource
+  accepts.
+- **Proxy through this server** — iHub fetches the Office JavaScript library from the CDN and
+  caches it. Clients never contact Microsoft; only the iHub server needs outbound access, and it
+  can use the proxy configured under **Admin → Proxy**. The cached copy keeps itself current, and
+  if the CDN becomes unreachable the cached files keep being served.
+- **Custom CDN or mirror** — load from a URL you control, such as a corporate CDN or an artifact
+  proxy (Artifactory, Nexus) mirroring the Microsoft CDN. Neither clients nor the iHub server need
+  access to Microsoft. The URL must end in `/office.js`; the page rejects URLs that do not, because
+  Office.js uses that filename to find the rest of the library.
+- **Bundled copy** — the previous offline mode, renamed. Still available for installations with no
+  outbound access at all.
+
+The page shows which URL is actually being served to the add-in, so a misconfiguration is visible
+without opening the task pane source.
+
+The page also lists the CDN URLs Microsoft documents — the current host, the legacy
+`appsforoffice.microsoft.com`, the China (21Vianet) CDN and the preview endpoint — with a **Test
+reachability** button, so finding a host the network allows does not mean editing config and
+waiting for a user to complain. **Use** puts a listed URL into the field.
+
+Each URL is checked twice, because the modes ask different questions: **server** is whether this
+iHub server can fetch it, which is what **Proxy** needs, and **browser** is whether the browser you
+have the admin page open in can, which is the closer stand-in for an Outlook client under
+**Microsoft CDN** and **Custom**. Networks differ in which hosts they allow — a block written as a
+`microsoft.com` suffix rule catches `appsforoffice.microsoft.com` but not
+`officeapis.public.onecdn.static.microsoft` — so switching hosts is sometimes the whole fix. Both
+worldwide hosts are `required: true` entries in Microsoft's published Microsoft 365 endpoint list,
+so blocking them is an unsupported Microsoft 365 configuration rather than only an iHub problem;
+often the faster route is an allowlist entry.
+
+Prefer **Proxy** or **Custom CDN** over **Bundled** where either is possible: the bundled copy
+comes from the `@microsoft/office-js` npm package, which Microsoft no longer maintains, so it never
+receives updates — including security fixes — and it adds roughly 86 MB to the build. For a fully
+air-gapped installation, **Proxy** with a pre-populated `contents/data/office-js-cache/` directory
+serves the library without any outbound request.
+
+Existing installations are unaffected: the previous offline switch becomes **Bundled** if it was
+on and **Microsoft CDN** if it was off, and both keep the CDN host they were already using.
 
 ## LDAP: one base DN instead of five, and a login you can test before anyone tries it
 

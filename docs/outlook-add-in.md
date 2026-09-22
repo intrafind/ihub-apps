@@ -286,6 +286,110 @@ The OAuth client and other OAuth flags are left in place by **Disable** so re-en
 
 ---
 
+## Networks that block Microsoft's CDN
+
+By default the add-in loads the Office JavaScript library from Microsoft's CDN
+(`https://officeapis.public.onecdn.static.microsoft/1/office.js`). Some
+enterprise networks block that, and the add-in then fails to start.
+
+Office.js is a bootstrapper: it derives the path to every other file it needs
+from the URL of its own `<script>` tag, and no Microsoft hostname is baked into
+any of those files. One setting therefore redirects the whole library. Choose
+the source under *Admin → Office Integration → Office.js Source*:
+
+| Mode | Clients reach Microsoft | Server reaches Microsoft | Receives updates |
+| --- | --- | --- | --- |
+| **Microsoft CDN** (default) | yes | no | yes |
+| **Proxy through this server** | no | yes | yes |
+| **Custom CDN or mirror** | no | no | depends on the mirror |
+| **Bundled copy** | no | no | **no** |
+
+Before changing the mode, two things are worth trying:
+
+1. **Find out which host is actually blocked.** The section lists the CDN URLs
+   Microsoft documents and has a **Test reachability** button that checks each
+   one. Networks differ in which they allow — a block written as a
+   `microsoft.com` suffix rule catches `appsforoffice.microsoft.com` but not
+   `officeapis.public.onecdn.static.microsoft`, so switching hosts can be the
+   whole fix. **Use** puts a listed URL into the field.
+2. **Ask for an allowlist entry.** Both worldwide hosts are `required: true`
+   entries in
+   [Microsoft's published Microsoft 365 endpoint list](https://learn.microsoft.com/microsoft-365/enterprise/urls-and-ip-address-ranges)
+   (IDs 70 and 193, *Microsoft 365 Common and Office Online*). Blocking them is
+   an unsupported Microsoft 365 configuration, not only an iHub problem.
+
+### Reading the reachability results
+
+Each URL is checked twice, because the two modes ask different questions:
+
+| Badge | What it means | Matters for |
+| --- | --- | --- |
+| **server** | This iHub server can fetch the URL | **Proxy** mode, where the server does the fetching |
+| **browser** | The browser you have the admin page open in can reach it | **Microsoft CDN** and **Custom** modes, where the Office client fetches it |
+
+Your browser is a stand-in for an Outlook client, not a guarantee: both usually
+sit on the same corporate network, but a desktop Outlook webview can be subject
+to different policy. Treat a **browser** failure as conclusive and a
+**browser** success as strong evidence.
+
+A badge can also read **?**. From the browser that means the URL responded but
+the response was opaque — the host sends no CORS headers, which is normal for a
+private mirror — so the request was not blocked, but an HTTP error is
+indistinguishable from success. From the server it means the check itself
+failed (an expired session, or a URL that did not pass validation), which says
+nothing about the CDN; hover the badge for the reason.
+
+A private-range host is refused by the SSRF guard rather than probed; the result
+says so and names the allowlist to add it to. The server-side check never
+follows redirects and never reads the response body.
+
+The listed CDNs are:
+
+| Entry | Use |
+| --- | --- |
+| Microsoft CDN (current) | The default, and Microsoft's currently documented URL |
+| Microsoft CDN (legacy host) | The pre-unified-domain host; still served, and still valid |
+| China — 21Vianet | Required for tenants on the 21Vianet-operated Office 365 in China |
+| Preview APIs | Preview build. Microsoft states it is not for production use |
+
+**Proxy through this server** is the best fit when the iHub server has outbound
+access — directly or through the corporate proxy configured under *Admin →
+Proxy*. Clients only ever talk to iHub. Files are cached under
+`contents/data/office-js-cache/` for 4 hours; if the CDN becomes unreachable,
+the cached copies keep being served regardless of age.
+
+**Custom CDN or mirror** points the add-in at a URL you control — a corporate
+CDN, or an artifact proxy (Artifactory, Nexus) with
+`https://officeapis.public.onecdn.static.microsoft/1/` as its remote. Nothing in
+the deployment needs access to Microsoft. The URL **must end in `/office.js`**:
+Office.js uses that filename to recognize its own script tag, and cannot locate
+the rest of the library without it. The admin UI rejects URLs that do not.
+
+**Bundled copy** serves the snapshot shipped with the release and needs no
+network at all. Use it only where the server has no outbound access either: it
+comes from the `@microsoft/office-js` npm package, which Microsoft no longer
+maintains, so it never updates — including for security fixes — and it adds
+roughly 86 MB to the build.
+
+For a fully air-gapped install, prefer **Proxy** with a pre-populated cache.
+The cache is partitioned per upstream, so the files go in a subdirectory of
+`contents/data/office-js-cache/` named for the configured CDN URL — start the
+server once with the URL set and it creates the directory, then drop the files
+in there. (The partitioning is what stops a CDN change from being masked by the
+previous CDN's cached bytes.) The server then serves them without ever
+attempting an outbound request. An Outlook add-in needs about 600 KB —
+`office.js`,
+`o15apptofilemappingtable.js`, `MicrosoftAjax.js`, the host payload
+(`outlook-win32-16.01.js` or `outlook-web-16.01.js`) and
+`<locale>/outlook_strings.js` for each language you support.
+
+> **AppSource:** Microsoft requires add-ins published to AppSource to load
+> Office.js from the official CDN. The other three modes are for internal
+> enterprise deployments — centralized deployment or sideloading — which is how
+> the iHub add-in is distributed.
+
+---
+
 ## Troubleshooting
 
 ### Manifest URL returns 404 or "Office integration is not enabled"
@@ -343,9 +447,11 @@ Sideloading is per-user and ideal for QA, but does not survive mailbox moves and
   - [`server/routes/integrations/officeAddin.js`](../server/routes/integrations/officeAddin.js) — manifest + runtime config
   - [`server/routes/admin/officeIntegration.js`](../server/routes/admin/officeIntegration.js) — admin enable/disable/config
   - [`server/routes/office.js`](../server/routes/office.js) — task pane + asset serving
+  - [`server/utils/officeJsSource.js`](../server/utils/officeJsSource.js) — Office.js modes, URL validation and base-path derivation
+  - [`server/services/OfficeJsProxyService.js`](../server/services/OfficeJsProxyService.js) — the Office.js pull-through cache
   - [`server/utils/officeStartPage.js`](../server/utils/officeStartPage.js) — start-page settings: sanitized for the pane, validated for the admin API
 - **Task pane:** [`client/src/features/office/components/OfficeApp.jsx`](../client/src/features/office/components/OfficeApp.jsx) (routing — where "home" is), [`OfficeStartPage.jsx`](../client/src/features/office/components/OfficeStartPage.jsx) (the start page), [`OfficeChatPanel.jsx`](../client/src/features/office/components/OfficeChatPanel.jsx) (the chat, which sends a message handed over from the start page)
 - **Message assembly:** [`buildChatApiMessages.js`](../client/src/features/office/utilities/buildChatApiMessages.js) (the tagged blocks above), [`outlookMailContext.js`](../client/src/features/office/utilities/outlookMailContext.js) and [`outlookItemFields.js`](../client/src/features/office/utilities/outlookItemFields.js) (reading body, headers and the mailbox user from Office.js)
 - **Default config:** `officeIntegration` block in [`server/defaults/config/platform.json`](../server/defaults/config/platform.json)
-- **Migrations:** `V028__add_office_integration_config.js`, `V029__fix_empty_office_description.js`, `V030__add_office_integration_starter_prompts.js`, `V107__add_office_start_page_config.js`, `V108__office_context_xml_tags.js`
+- **Migrations:** `V028__add_office_integration_config.js`, `V029__fix_empty_office_description.js`, `V030__add_office_integration_starter_prompts.js`, `V107__add_office_start_page_config.js`, `V108__office_context_xml_tags.js`, `V118__office_js_source_modes.js`
 - **Related docs:** [OAuth Authorization Code Flow](oauth-authorization-code.md), [Office 365 Integration](office365-integration.md), [Production Reverse Proxy Guide](production-reverse-proxy-guide.md), [SSL Certificates](ssl-certificates.md)
