@@ -29,6 +29,7 @@ import { RUN_LOG_EVENTS } from '../../../shared/runEvents.js';
 import { addUsage, normalizeUsage, usageToBudget } from './llmUsage.js';
 import { repairToolArguments, applyParameterDefaults, matchTool } from './toolArgs.js';
 import { classifyToolResult, isCitationProducingTool } from './toolClassify.js';
+import { extractWebSources } from './webSources.js';
 import { planToolBatches } from './segmentPlanner.js';
 import { takeSteers, steerMessage } from './steering.js';
 import {
@@ -867,7 +868,10 @@ export class AgentLoop {
       rawResult,
       message: bound.message,
       durationMs: Date.now() - started,
-      error: failure
+      error: failure,
+      // The pages a search/fetch tool found or read, taken from the full
+      // result: the previews that reach clients are too short to hold them.
+      webSources: failure ? [] : extractWebSources(toolId, rawResult ?? message.content)
     };
     await runHooks(seams, 'postTool', ctx, info, outcome);
     messages.push(outcome.message);
@@ -886,7 +890,8 @@ export class AgentLoop {
         : undefined,
       durationMs: outcome.durationMs,
       hasImage: !!outcome.message.imageData,
-      knowledgeSource: outcome.knowledgeSource
+      knowledgeSource: outcome.knowledgeSource,
+      ...(outcome.webSources?.length ? { webSources: outcome.webSources } : {})
     });
     if (ctx.channel?.onToolEnd) await ctx.channel.onToolEnd({ ...info, outcome, verdict }, ctx);
 
