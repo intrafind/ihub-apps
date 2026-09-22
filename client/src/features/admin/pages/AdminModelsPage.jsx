@@ -7,6 +7,7 @@ import Icon from '../../../shared/components/Icon';
 import ModelDetailsPopup from '../../../shared/components/ModelDetailsPopup';
 import { getAdminApiErrorMessage, makeAdminApiCall, toggleModels } from '../../../api/adminApi';
 import { DataTable, SearchInput, FilterSelect } from '../components/data-table';
+import { translateModelTestMessage } from '../utils/modelTestMessages';
 
 function ModelNameCell({ model, currentLanguage }) {
   return (
@@ -124,13 +125,14 @@ function AdminModelsPage() {
       });
       setTestResults(prev => ({ ...prev, [modelId]: response?.data || {} }));
     } catch (err) {
-      // Server body: { error: headline, details: remediation text, code }
+      // Server body: { error: headline, details: remediation text, code, messageKey }
       const body = err?.response?.data || {};
+      const fallbackMessage = body.error || t('admin.models.testResults.failed', 'Test Failed');
       setTestResults(prev => ({
         ...prev,
         [modelId]: {
           success: false,
-          message: body.error || t('admin.models.test.failed', 'Test Failed'),
+          message: translateModelTestMessage(t, body.messageKey, fallbackMessage),
           error:
             body.details || (err?.response?.status ? `HTTP ${err.response.status}` : err.message)
         }
@@ -309,7 +311,7 @@ function AdminModelsPage() {
               <Icon name="check-circle" className="h-5 w-5 text-green-500 shrink-0 mt-0.5" />
               <div className="flex-1">
                 <div className="text-sm font-medium text-green-800 dark:text-green-300">
-                  {t('admin.models.test.success', 'Test Successful')}
+                  {t('admin.models.testResults.success', 'Test Successful')}
                 </div>
                 <div className="text-sm text-gray-700 dark:text-gray-300 mt-1">
                   {result.response}
@@ -321,7 +323,7 @@ function AdminModelsPage() {
               <Icon name="exclamation-circle" className="h-5 w-5 text-red-500 shrink-0 mt-0.5" />
               <div className="flex-1">
                 <div className="text-sm font-medium text-red-800 dark:text-red-300">
-                  {result.message || t('admin.models.test.failed', 'Test Failed')}
+                  {result.message || t('admin.models.testResults.failed', 'Test Failed')}
                 </div>
                 {result.error && (
                   <div className="text-sm text-gray-700 dark:text-gray-300 mt-1">
