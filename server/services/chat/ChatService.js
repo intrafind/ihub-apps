@@ -51,8 +51,12 @@ import * as defaultTelemetry from './chatTelemetry.js';
 
 const COMPONENT = 'ChatService';
 
-/** Tool rounds per chat turn (the loop forces a final answer on the last one). */
-export const CHAT_MAX_TOOL_ROUNDS = 10;
+/**
+ * Tool rounds per chat turn (the loop forces a final answer on the last one).
+ * Sized for multi-step web research: several searches plus reading the most
+ * relevant pages with the page reader easily takes more than ten rounds.
+ */
+export const CHAT_MAX_TOOL_ROUNDS = 25;
 
 /**
  * Wall-clock ceiling on a durable chat turn.

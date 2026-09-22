@@ -41,3 +41,21 @@ Chat History**, without editing `platform.json`.
   sweep, after a confirmation.
 - The page warns before switching the identity mode to or from pseudonymized, because chats stored
   before the switch drop out of their owners' history lists.
+
+## Web Search: Research in Several Steps
+
+With web search turned on, the assistant now researches a question in several steps instead of
+answering after a single search: it breaks the question into parts, searches several times with
+different wording, checks key claims against more than one source and combines the findings into
+one answer with source links.
+
+- Applies to every app with web search, whenever web search is on for the conversation. With web
+  search off nothing changes.
+- A chat answer can now use up to 25 rounds of tool calls instead of 10, so there is room to search
+  several times and still open the most relevant pages.
+- Admins can turn it off or replace the instruction with their own text per app under
+  **Admin → Apps → Edit App → Web Search → Research in Several Steps**
+  (`websearch.researchGuidance`).
+- The default **Web Chat** prompt was reworded to match. It is updated on upgrade only where it is
+  still the shipped default; a prompt you changed is kept.
+- With Gemini's built-in Google Search, the instruction only steers how Gemini uses its own search.

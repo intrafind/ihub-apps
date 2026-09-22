@@ -18,6 +18,11 @@ function WebSearchSection({ app, onChange }) {
     });
   };
 
+  // researchGuidance: true/unset = built-in text, false = off, string = custom text
+  const researchGuidance = app.websearch?.researchGuidance;
+  const researchGuidanceOn = researchGuidance !== false;
+  const customResearchGuidance = typeof researchGuidance === 'string' ? researchGuidance : '';
+
   return (
     <div className="bg-white dark:bg-gray-800 shadow-sm px-4 py-5 sm:rounded-lg sm:p-6">
       <div className="md:grid md:grid-cols-3 md:gap-6">
@@ -219,6 +224,56 @@ function WebSearchSection({ app, onChange }) {
                   <div className="w-11 h-6 bg-gray-200 peer-focus:outline-hidden peer-focus:ring-4 peer-focus:ring-indigo-300 dark:peer-focus:ring-indigo-800 rounded-full peer dark:bg-gray-700 peer-checked:after:translate-x-full peer-checked:rtl:after:-translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:inset-s-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all dark:border-gray-600 peer-checked:bg-indigo-600"></div>
                 </label>
               </div>
+
+              {/* Multi-step research guidance */}
+              <div className="flex items-center justify-between">
+                <div>
+                  <label className="text-sm font-medium text-gray-700 dark:text-gray-300">
+                    {t('admin.apps.edit.websearchResearchGuidance', 'Research in Several Steps')}
+                  </label>
+                  <p className="text-xs text-gray-500 dark:text-gray-400">
+                    {t(
+                      'admin.apps.edit.websearchResearchGuidanceDesc',
+                      'Tells the model to run several searches, check sources and combine the findings, instead of answering after one search'
+                    )}
+                  </p>
+                </div>
+                <label className="relative inline-flex items-center cursor-pointer ml-4">
+                  <input
+                    type="checkbox"
+                    checked={researchGuidanceOn}
+                    onChange={e => handleWebSearchChange({ researchGuidance: e.target.checked })}
+                    className="sr-only peer"
+                  />
+                  <div className="w-11 h-6 bg-gray-200 peer-focus:outline-hidden peer-focus:ring-4 peer-focus:ring-indigo-300 dark:peer-focus:ring-indigo-800 rounded-full peer dark:bg-gray-700 peer-checked:after:translate-x-full peer-checked:rtl:after:-translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:inset-s-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all dark:border-gray-600 peer-checked:bg-indigo-600"></div>
+                </label>
+              </div>
+
+              {researchGuidanceOn && (
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 dark:text-gray-300">
+                    {t(
+                      'admin.apps.edit.websearchResearchGuidanceCustom',
+                      'Custom Research Guidance'
+                    )}
+                  </label>
+                  <p className="text-xs text-gray-500 dark:text-gray-400 mt-0.5">
+                    {t(
+                      'admin.apps.edit.websearchResearchGuidanceCustomDesc',
+                      'Optional. Replaces the built-in guidance that is added to the system prompt when web search is on. Leave empty to use the built-in guidance.'
+                    )}
+                  </p>
+                  <textarea
+                    rows={4}
+                    maxLength={4000}
+                    value={customResearchGuidance}
+                    onChange={e =>
+                      handleWebSearchChange({ researchGuidance: e.target.value || true })
+                    }
+                    className="mt-1 block w-full rounded-md border-gray-300 shadow-xs focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm"
+                  />
+                </div>
+              )}
             </div>
           )}
         </div>

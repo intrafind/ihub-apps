@@ -172,7 +172,7 @@ Chat policies:
 
 | Policy                   | Value                                                                                 |
 | ------------------------ | ------------------------------------------------------------------------------------- |
-| `budgets.maxToolRounds`  | 10 (`CHAT_MAX_TOOL_ROUNDS`); the last round is a forced tool-less final answer (a cap of 1 gets one extra tool-less call)         |
+| `budgets.maxToolRounds`  | 25 (`CHAT_MAX_TOOL_ROUNDS`); the last round is a forced tool-less final answer (a cap of 1 gets one extra tool-less call)         |
 | `tools.parallel`         | **false** — chat tools have side effects and the client renders tool events in order |
 | `budgets.maxWallClockMs` | headless invocations only (`invokeAppInternal`, default 180 s)                        |
 | `timeoutMs`              | hard timeout per model call (the chat route's `DEFAULT_TIMEOUT`)                      |
