@@ -56,6 +56,7 @@ import {
 } from '../../utils/responseHelpers.js';
 import { drainPendingFinish } from '../../services/workflow/chatBridge.js';
 import { cancelChatWorkflow, replayChatWorkflowProgress } from '../../tools/workflowRunner.js';
+import { renderUserMessage } from '../../../shared/promptContext.js';
 
 /**
  * Report a failure that happened before (or instead of) a model turn on the
@@ -227,6 +228,15 @@ export default function registerSessionRoutes(app, { getLocalizedError, DEFAULT_
    *         imageData:
    *           type: object
    *           description: Optional attached image data
+   *         hostContext:
+   *           type: object
+   *           description: >-
+   *             Optional item the host shows next to the chat — `currentEmail`,
+   *             `currentPage`, `currentMeeting` and `pinnedEmails`, each field a
+   *             display-ready string. The server renders it, together with
+   *             `fileData`, as tagged blocks around `content` (see
+   *             docs/apps.md, "What {{content}} contains"); `content` stays what the user
+   *             typed.
    *
    *     ChatRequest:
    *       type: object
@@ -1093,8 +1103,12 @@ export default function registerSessionRoutes(app, { getLocalizedError, DEFAULT_
               chatId
             });
 
-            // Strip the @mention from the input
-            const strippedInput = lastUserContent.replace(/@[\w.-]+/, '').trim();
+            // Strip the @mention from the input; the host item (email, page,
+            // meeting) goes along as tagged blocks, the files as inputFiles.
+            const strippedInput = renderUserMessage({
+              content: lastUserContent.replace(/@[\w.-]+/, '').trim(),
+              hostContext: lastUserMsg.hostContext
+            });
 
             // Collect file data from the last message
             const fileData = lastUserMsg.fileData || null;

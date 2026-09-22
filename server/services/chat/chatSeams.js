@@ -27,13 +27,10 @@ const COMPONENT = 'ChatService';
 const PREVIEW_CHARS = 4096;
 
 /**
- * Tags the Office add-in (task pane + browser extension) wraps around email /
- * meeting context — see `CONTEXT_TAGS` in
- * client/src/features/office/utilities/buildChatApiMessages.js, the single
- * source of truth for these names. Pre-V108 builds sent plain-text headings
- * ('--- Current email ---', '--- Pinned emails', '--- Current meeting ---')
- * instead; those no longer appear on the wire, so matching them here would
- * never fire.
+ * Blocks `PromptService` renders around a message that carries host email or
+ * meeting context (`CONTEXT_TAGS` in shared/promptContext.js). The seam sees
+ * the rendered messages, so their presence marks the turn as answered from
+ * the user's own email.
  */
 export const EMAIL_CONTEXT_MARKERS = ['<current_email>', '<pinned_emails>', '<current_meeting>'];
 

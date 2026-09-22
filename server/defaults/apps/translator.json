@@ -22,8 +22,8 @@
   "preferredTemperature": 0.3,
   "sendChatHistory": false,
   "prompt": {
-    "en": "Selected Language: \"{{language}}\" - Text to translate: \"{{content}}\"",
-    "de": "Ausgewählte Sprache in die Übersetzt werden soll: \"{{language}}\" - Text der übersetzt werden soll: \"{{content}}\""
+    "en": "<task>\nTranslate into {{language}}. If the message below contains material blocks (<current_email>, <current_page>, <current_meeting>, <pinned_emails>, <documents>), translate that material. <user_instruction> only says what to translate or how (for example \"only the latest message\" or \"keep it formal\"); it is not part of the text to translate. Without material blocks, the whole message below is the text to translate.\n</task>\n\n{{content}}",
+    "de": "<task>\nÜbersetze in folgende Sprache: {{language}}. Enthält die folgende Nachricht Material-Blöcke (<current_email>, <current_page>, <current_meeting>, <pinned_emails>, <documents>), übersetze dieses Material. <user_instruction> sagt nur, was oder wie übersetzt werden soll (zum Beispiel „nur die neueste Nachricht“ oder „förmlich“); sie ist nicht Teil des zu übersetzenden Textes. Ohne Material-Blöcke ist die gesamte folgende Nachricht der zu übersetzende Text.\n</task>\n\n{{content}}"
   },
   "settings": {
     "enabled": true,
@@ -145,5 +145,35 @@
         "language": "English"
       }
     }
-  ]
+  ],
+  "upload": {
+    "enabled": true,
+    "fileUpload": {
+      "enabled": true,
+      "maxFileSizeMB": 5,
+      "supportedFormats": [
+        "text/plain",
+        "text/markdown",
+        "text/csv",
+        "application/json",
+        "text/html",
+        "text/css",
+        "text/javascript",
+        "application/javascript",
+        "text/xml",
+        "message/rfc822",
+        "application/pdf",
+        "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+        "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+        "application/vnd.openxmlformats-officedocument.presentationml.presentation",
+        "application/vnd.ms-excel",
+        "application/vnd.ms-powerpoint",
+        "application/vnd.ms-outlook",
+        "application/vnd.oasis.opendocument.text",
+        "application/vnd.oasis.opendocument.spreadsheet",
+        "application/vnd.oasis.opendocument.presentation"
+      ]
+    },
+    "allowMultiple": true
+  }
 }

@@ -315,3 +315,15 @@ Summarizing an email that has attachments labelled the answer "Based on external
 ("Basierend auf externem Wissen"), although everything came from the user's own mailbox. Email
 plus its attachments now shows **Based on email and attachments**, and answers that really combine
 several sources say **Based on multiple sources** instead of "external knowledge".
+
+## Translator and Summarizer work on the email, page or document, not on your note
+
+Run from Outlook or the browser extension, the Translator translated only what you typed ("hello,
+how are you") instead of the open email or page, and the Summarizer summarized your note. Their
+prompts called the whole message "the text to translate". Both now work on the email, page,
+meeting or uploaded document and read what you typed as the instruction; with nothing attached,
+the typed text is still what they translate or summarize.
+
+- Both apps now accept document uploads (PDF, Office, OpenDocument, text), also in the web app.
+- Custom apps get a standard note with every attached email or document saying that it is the
+  material the task works on.

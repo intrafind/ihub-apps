@@ -6,69 +6,29 @@ import ApiKeyVerifier from '../../utils/ApiKeyVerifier.js';
 import { filterResourcesByPermissions } from '../../utils/authorization.js';
 import logger from '../../utils/logger.js';
 import { findByIdCaseInsensitive } from '../../utils/resourceLookup.js';
+import { normalizeFiles } from '../../../shared/promptContext.js';
 
-function preprocessMessagesWithFileData(messages) {
+/**
+ * Attach the page images of image-based PDFs to their message.
+ *
+ * The text of every upload is already in the message: `processMessageTemplates`
+ * renders files as a <documents> block (shared/promptContext.js). A document
+ * without extractable text contributes its rendered pages, which travel as
+ * `imageData` so each adapter can format them for its provider — next to any
+ * image the user uploaded directly.
+ */
+function attachDocumentPageImages(messages) {
   return messages.map(msg => {
-    // Handle array of files (multiple file upload)
-    if (Array.isArray(msg.fileData)) {
-      const textParts = [];
-      const imageParts = [];
-
-      for (const file of msg.fileData) {
-        if (file.content) {
-          textParts.push(
-            `[File: ${file.fileName} (${file.displayType || file.fileType})]\n\n${file.content}\n\n`
-          );
-        } else if (Array.isArray(file.pageImages) && file.pageImages.length > 0) {
-          textParts.push(
-            `[File: ${file.fileName} (${file.displayType || file.fileType})] - ${file.pageImages.length} page(s) rendered as images:\n\n`
-          );
-          for (const img of file.pageImages) {
-            imageParts.push({ base64: img, fileType: 'image/jpeg' });
-          }
-        }
-      }
-
-      if (imageParts.length > 0) {
-        // Use imageData property so adapters handle provider-specific formatting
-        return {
-          ...msg,
-          content: textParts.join('') + (msg.content || ''),
-          imageData: imageParts
-        };
-      }
-
-      const filesInfo = textParts.join('');
-      if (filesInfo) {
-        return { ...msg, content: filesInfo + (msg.content || '') };
-      }
-      return msg;
-    }
-
-    // Handle single file with text content
-    if (msg.fileData && msg.fileData.content) {
-      const fileInfo = `[File: ${msg.fileData.fileName || msg.fileData.name} (${msg.fileData.displayType || msg.fileData.fileType || msg.fileData.type})]\n\n${msg.fileData.content}\n\n`;
-      return { ...msg, content: fileInfo + (msg.content || '') };
-    }
-
-    // Handle single file with page images (image-based PDF)
-    if (
-      msg.fileData &&
-      !msg.fileData.content &&
-      Array.isArray(msg.fileData.pageImages) &&
-      msg.fileData.pageImages.length > 0
-    ) {
-      const textContent =
-        `[File: ${msg.fileData.fileName} (${msg.fileData.displayType || msg.fileData.fileType})]\n\n` +
-        (msg.content || '');
-      const imageData = msg.fileData.pageImages.map(img => ({
-        base64: img,
-        fileType: 'image/jpeg'
-      }));
-      return { ...msg, content: textContent, imageData };
-    }
-
-    return msg;
+    const pageImages = normalizeFiles(msg.fileData)
+      .filter(file => !file.content && Array.isArray(file.pageImages))
+      .flatMap(file => file.pageImages.map(img => ({ base64: img, fileType: 'image/jpeg' })));
+    if (pageImages.length === 0) return msg;
+    const existing = Array.isArray(msg.imageData)
+      ? msg.imageData
+      : msg.imageData
+        ? [msg.imageData]
+        : [];
+    return { ...msg, imageData: [...existing, ...pageImages] };
   });
 }
 
@@ -410,9 +370,9 @@ class RequestBuilder {
         modelName,
         requestedSkill
       );
-      // Extract raw file/image data from the last user message before preprocessing
-      // flattens it into the content string. This is needed so workflow tools
-      // can receive the structured file object for their inputFiles mechanism.
+      // The raw file/image data of the last user message, next to its rendered
+      // content: workflow tools receive the structured file object for their
+      // inputFiles mechanism.
       const lastUserMsg = [...llmMessages].reverse().find(m => m.role === 'user');
       const userFileData = lastUserMsg?.fileData || lastUserMsg?.imageData || null;
 
@@ -425,7 +385,7 @@ class RequestBuilder {
         messageKeys: lastUserMsg ? Object.keys(lastUserMsg).join(', ') : 'none'
       });
 
-      llmMessages = preprocessMessagesWithFileData(llmMessages);
+      llmMessages = attachDocumentPageImages(llmMessages);
 
       logger.info('Preparing chat request', {
         component: 'RequestBuilder',

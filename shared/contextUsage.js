@@ -6,6 +6,8 @@
  * loading the tokenizer itself lazily / on demand.
  */
 
+import { renderUserMessage } from './promptContext.js';
+
 /**
  * Compute remaining context-window capacity for a request.
  * @param {object} params
@@ -34,10 +36,11 @@ export function computeContextUsage({ contextWindow, inputTokens, maxOutputToken
  * the LLM.
  *
  * Mirrors what the client puts on the wire (`getMessagesForApi`: `rawContent`
- * wins over `content`) and what `RequestBuilder.preprocessMessagesWithFileData`
- * then folds into the message content (attached document text prefixed with a
- * `[File: name (type)]` header). Page images of image-based PDFs contribute a
- * header only — image tokens are provider-specific and not estimated here.
+ * wins over `content`) and what the server makes of a user message: attached
+ * document text rendered as a <documents> block, with <context_rules> and the
+ * typed text in <user_instruction> (`renderUserMessage`). Page images of
+ * image-based PDFs contribute their listing only — image tokens are
+ * provider-specific and not estimated here.
  *
  * @param {object} message - a chat message from the client's message list
  * @returns {Array<string>} text fragments contributed by this message
@@ -45,25 +48,18 @@ export function computeContextUsage({ contextWindow, inputTokens, maxOutputToken
 export function messageTokenFragments(message) {
   if (!message || typeof message !== 'object') return [];
 
-  const fragments = [];
   const content = message.rawContent !== undefined ? message.rawContent : message.content;
-  if (typeof content === 'string' && content) fragments.push(content);
-
-  const files = Array.isArray(message.fileData)
-    ? message.fileData
-    : message.fileData
-      ? [message.fileData]
-      : [];
-
-  for (const file of files) {
-    if (!file || typeof file !== 'object') continue;
-    const name = file.fileName || file.name || '';
-    const type = file.displayType || file.fileType || file.type || '';
-    fragments.push(`[File: ${name} (${type})]`);
-    if (typeof file.content === 'string' && file.content) fragments.push(file.content);
-  }
-
-  return fragments;
+  const text =
+    message.role === 'user' || message.fileData
+      ? renderUserMessage({
+          content: typeof content === 'string' ? content : '',
+          hostContext: message.hostContext,
+          files: message.fileData
+        })
+      : typeof content === 'string'
+        ? content
+        : '';
+  return text ? [text] : [];
 }
 
 /**
