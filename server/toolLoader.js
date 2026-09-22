@@ -241,6 +241,13 @@ export const DEFAULT_NATIVE_WEB_SEARCH_MAX_USES = 5;
 /** Script-backed search tool offered when native search cannot be used. */
 export const NATIVE_WEB_SEARCH_FALLBACK_TOOL_ID = 'braveSearch';
 
+/**
+ * Page reader offered next to the script-backed search tool, so the model can
+ * open a result (or a URL the user gave it) in full instead of relying on the
+ * search tool's short automatic excerpts.
+ */
+export const WEB_CONTENT_EXTRACTOR_TOOL_ID = 'webContentExtractor';
+
 /** Script-backed search tool for each `websearch.provider` value. */
 export const WEBSEARCH_TOOL_IDS = Object.freeze({
   brave: 'braveSearch',
@@ -401,11 +408,25 @@ export async function resolveNativeWebSearchFallbackTools(directive, { app, lang
     logger.warn('Native web search fallback tool not found', { component: 'ToolLoader', toolId });
     return [];
   }
-  return [
+  return withPageReader(
     Object.values(WEBSEARCH_TOOL_IDS).includes(toolId)
       ? buildWebsearchTool(toolDef, app?.websearch)
-      : toolDef
-  ];
+      : toolDef,
+    allTools
+  );
+}
+
+/**
+ * Pair a script-backed search tool with the page reader, so the model can open
+ * what it found. The reader is left out when it is not installed or an admin
+ * disabled it (`loadTools` only returns enabled tools).
+ * @param {Object} searchTool - Search tool definition to offer
+ * @param {Object[]} allTools - All available tool definitions
+ * @returns {Object[]} The search tool, followed by the page reader when available
+ */
+function withPageReader(searchTool, allTools) {
+  const reader = allTools.find(t => t.id === WEB_CONTENT_EXTRACTOR_TOOL_ID);
+  return reader ? [searchTool, reader] : [searchTool];
 }
 
 /**
@@ -419,7 +440,7 @@ export async function resolveNativeWebSearchFallbackTools(directive, { app, lang
  * @param {Array} allTools - All available tool definitions
  * @param {boolean|undefined} websearchEnabled - User toggle: undefined = use enabledByDefault, false = disabled
  * @param {Object} [model] - Full model config (per-model native search opt-out)
- * @returns {Array} Zero or one tool definition to inject
+ * @returns {Array} No tools, or the search tool followed by the page reader
  */
 function resolveWebsearchTool(app, modelProvider, allTools, websearchEnabled, model) {
   if (!app.websearch?.enabled) return [];
@@ -442,7 +463,7 @@ function resolveWebsearchTool(app, modelProvider, allTools, websearchEnabled, mo
     return [];
   }
 
-  return [buildWebsearchTool(toolDef, app.websearch)];
+  return withPageReader(buildWebsearchTool(toolDef, app.websearch), allTools);
 }
 
 /**
@@ -493,7 +514,8 @@ export async function getToolsForApp(app, language = null, context = {}) {
     context.websearchEnabled,
     context.model
   );
-  appTools = appTools.concat(websearchTools);
+  // An app may also list the page reader in `tools` — offer it only once.
+  appTools = appTools.concat(websearchTools.filter(t => !appTools.some(a => a.id === t.id)));
 
   // Add source-generated tools
   if (Array.isArray(app.sources) && app.sources.length > 0) {
