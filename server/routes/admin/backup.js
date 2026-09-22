@@ -3,8 +3,6 @@ import fs from 'fs/promises';
 import { createWriteStream } from 'fs';
 import { ZipArchive } from 'archiver';
 import yauzl from 'yauzl';
-import { fileURLToPath } from 'url';
-import { dirname } from 'path';
 import configCache from '../../configCache.js';
 import { announceFullConfigReload } from '../../configSync.js';
 import { adminAuth } from '../../middleware/adminAuth.js';
@@ -14,12 +12,15 @@ import logger from '../../utils/logger.js';
 import { sendInternalError, sendBadRequest } from '../../utils/responseHelpers.js';
 import { runConfigMigrations } from '../../migrations/runner.js';
 import { logAudit } from '../../services/AuditLogService.js';
+import { getContentsPath } from '../../utils/contentsPath.js';
 
-const __filename = fileURLToPath(import.meta.url);
-const __dirname = dirname(__filename);
-
-// Define the contents directory path
-const contentsPath = path.join(__dirname, '../../../contents');
+/**
+ * The directory name the backup archive files the contents under.
+ *
+ * Fixed rather than taken from `CONTENTS_DIR`, so a backup made on one
+ * installation imports into another whatever each names its contents directory.
+ */
+const ARCHIVE_CONTENTS_DIR = 'contents';
 
 /**
  * Get all files recursively from a directory
@@ -74,7 +75,7 @@ function extractZip(zipPath, extractPath) {
       // base directory, so the contents/ base must exist before we start
       // validating entries — otherwise every entry is rejected as a path
       // traversal and the import silently extracts nothing.
-      const contentsBase = path.join(extractPath, 'contents');
+      const contentsBase = path.join(extractPath, ARCHIVE_CONTENTS_DIR);
       try {
         await ensureDir(contentsBase);
       } catch (mkdirErr) {
@@ -201,14 +202,19 @@ export async function exportConfig(req, res) {
     archive.pipe(res);
 
     // Get all files from contents directory
+    const contentsPath = getContentsPath();
     const allFiles = await getAllFiles(contentsPath);
 
     let fileCount = 0;
 
     for (const filePath of allFiles) {
       try {
-        // Get relative path from project root
-        const relativePath = path.relative(path.join(contentsPath, '../'), filePath);
+        // Path inside the archive, under ARCHIVE_CONTENTS_DIR whatever the
+        // live directory is called. ZIP entry names are `/`-separated.
+        const relativePath = path.posix.join(
+          ARCHIVE_CONTENTS_DIR,
+          ...path.relative(contentsPath, filePath).split(path.sep)
+        );
 
         // Debug logging
         logger.info('Adding to archive', { component: 'AdminBackup', relativePath, filePath });
@@ -322,6 +328,7 @@ export async function stageAndSwapContents({
  * Import configuration from uploaded ZIP file
  */
 export async function importConfig(req, res) {
+  const contentsPath = getContentsPath();
   let tempZipPath = null;
   let tempExtractPath = null;
 
@@ -351,7 +358,7 @@ export async function importConfig(req, res) {
     });
 
     // Verify the ZIP actually contained contents/ files
-    const extractedContentsPath = path.join(tempExtractPath, 'contents');
+    const extractedContentsPath = path.join(tempExtractPath, ARCHIVE_CONTENTS_DIR);
     if (extractedCount === 0) {
       return sendBadRequest(res, 'Invalid backup file: No contents directory found');
     }
@@ -375,11 +382,11 @@ export async function importConfig(req, res) {
     const backupTimestamp = new Date().toISOString().replace(/[:.]/g, '-').slice(0, 19);
     const currentBackupPath = path.join(
       path.dirname(contentsPath),
-      `contents-backup-${backupTimestamp}`
+      `${path.basename(contentsPath)}-backup-${backupTimestamp}`
     );
     const stagingPath = path.join(
       path.dirname(contentsPath),
-      `contents-staging-${backupTimestamp}`
+      `${path.basename(contentsPath)}-staging-${backupTimestamp}`
     );
 
     logger.info('Staging and swapping in imported configuration', {

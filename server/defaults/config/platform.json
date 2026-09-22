@@ -14,7 +14,6 @@
     }
   },
   "skills": {
-    "skillsDirectory": "contents/skills",
     "maxSkillBodyTokens": 5000
   },
   "globalPromptVariables": {
@@ -134,7 +133,6 @@
       "authz": false,
       "clients": false
     },
-    "clientsFile": "contents/config/oauth-clients.json",
     "defaultTokenExpirationMinutes": 60,
     "maxTokenExpirationMinutes": 1440,
     "authorizationCodeEnabled": false,
@@ -204,7 +202,6 @@
   },
   "localAuth": {
     "enabled": true,
-    "usersFile": "contents/config/users.json",
     "showDemoAccounts": true
   },
   "swagger": {

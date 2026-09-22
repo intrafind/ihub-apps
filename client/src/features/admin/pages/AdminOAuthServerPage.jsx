@@ -120,7 +120,6 @@ function AdminOAuthServerPage() {
             authz: newStatus,
             clients: platformConfig.oauth?.enabled?.clients ?? false
           },
-          clientsFile: platformConfig.oauth?.clientsFile || 'contents/config/oauth-clients.json',
           defaultTokenExpirationMinutes: platformConfig.oauth?.defaultTokenExpirationMinutes || 60,
           maxTokenExpirationMinutes: platformConfig.oauth?.maxTokenExpirationMinutes || 1440
         }

@@ -1,4 +1,5 @@
 import express from 'express';
+import { getContentsPath } from '../utils/contentsPath.js';
 import path from 'path';
 import config from '../config.js';
 import { authRequired } from '../middleware/authRequired.js';
@@ -38,7 +39,7 @@ export default function registerStaticRoutes(app, { isPackaged, rootDir, basePat
   }
 
   // Serve uploaded assets
-  const uploadsPath = path.join(rootDir, 'contents/uploads');
+  const uploadsPath = getContentsPath('uploads');
   logger.info('Serving uploaded assets', {
     component: 'StaticRoutes',
     uploadsPath,

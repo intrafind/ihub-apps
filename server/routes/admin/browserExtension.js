@@ -3,6 +3,7 @@ import { promises as fs } from 'fs';
 import { ZipArchive } from 'archiver';
 import config from '../../config.js';
 import { getRootDir } from '../../pathUtils.js';
+import { getContentsPath } from '../../utils/contentsPath.js';
 import configStore from '../../services/config/ConfigStore.js';
 import configCache from '../../configCache.js';
 import { adminAuth } from '../../middleware/adminAuth.js';
@@ -17,6 +18,7 @@ import {
 import { isValidExtensionId } from '../../utils/pathSecurity.js';
 import logger from '../../utils/logger.js';
 import { sendInternalError, sendBadRequest, sendNotFound } from '../../utils/responseHelpers.js';
+import { oauthClientsFile } from '../../utils/contentsPath.js';
 
 // The browser extension uses a fixed redirect URI scheme:
 //   https://<extension-id>.chromiumapp.org/cb     (Chrome / Edge)
@@ -31,7 +33,7 @@ import { sendInternalError, sendBadRequest, sendNotFound } from '../../utils/res
 const SIGNING_KEY_FILE = '.browser-extension-key.pem';
 
 function signingKeyPath() {
-  return join(getRootDir(), 'contents', SIGNING_KEY_FILE);
+  return getContentsPath(SIGNING_KEY_FILE);
 }
 
 /**
@@ -252,7 +254,7 @@ export default function registerAdminBrowserExtensionRoutes(app) {
 
       if (!oauthClientId) {
         const oauthConfig = platform?.oauth || {};
-        const clientsFile = oauthConfig.clientsFile || 'contents/config/oauth-clients.json';
+        const clientsFile = oauthClientsFile(oauthConfig);
 
         const newClient = await createOAuthClient(
           {
@@ -281,7 +283,7 @@ export default function registerAdminBrowserExtensionRoutes(app) {
         // Re-sync redirectUris and allowedGroups onto the existing client so
         // the admin can manage extension IDs without rotating the secret.
         const oauthConfig = platform?.oauth || {};
-        const clientsFile = oauthConfig.clientsFile || 'contents/config/oauth-clients.json';
+        const clientsFile = oauthClientsFile(oauthConfig);
         await updateOAuthClient(
           oauthClientId,
           { redirectUris, allowedGroups, active: true },
@@ -465,7 +467,7 @@ export default function registerAdminBrowserExtensionRoutes(app) {
         (allowed.extensionIds !== undefined || allowed.allowedGroups !== undefined)
       ) {
         const oauthConfig = platform?.oauth || {};
-        const clientsFile = oauthConfig.clientsFile || 'contents/config/oauth-clients.json';
+        const clientsFile = oauthClientsFile(oauthConfig);
         const newRedirectUris = buildAllRedirectUris(merged.extensionIds || [], merged.signingKey);
         const newAllowedGroups = merged.allowedGroups || ['browser-extension'];
         try {
@@ -533,7 +535,7 @@ export default function registerAdminBrowserExtensionRoutes(app) {
         // previous ID (one-cycle grace period) + manual side-load IDs.
         if (cfg.oauthClientId) {
           const oauthConfig = platform?.oauth || {};
-          const clientsFile = oauthConfig.clientsFile || 'contents/config/oauth-clients.json';
+          const clientsFile = oauthClientsFile(oauthConfig);
           try {
             await updateOAuthClient(
               cfg.oauthClientId,

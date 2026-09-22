@@ -536,14 +536,13 @@ Built-in username/password authentication.
 {
   "localAuth": {
     "enabled": true,
-    "usersFile": "contents/config/users.json",
     "showDemoAccounts": true
   }
 }
 ```
 
 - **enabled** (boolean) – Enable local authentication. Default: `false`
-- **usersFile** (string) – Path to users configuration file. Default: `"contents/config/users.json"`
+- **usersFile** (string) – Path to the users file, relative to the installation root or absolute. Default: `config/users.json` inside the contents directory (`contents/config/users.json`, or under `CONTENTS_DIR` when that is set). Leave it unset unless the file lives elsewhere.
 - **showDemoAccounts** (boolean) – Show demo accounts on login page. Default: `true`
 
 ### **proxyAuth**
@@ -1089,7 +1088,6 @@ iHub Apps can act as an OAuth 2.0 authorization server, issuing access tokens to
       "authz": false,
       "clients": false
     },
-    "clientsFile": "contents/config/oauth-clients.json",
     "defaultTokenExpirationMinutes": 60,
     "maxTokenExpirationMinutes": 1440,
     "authorizationCodeEnabled": false,
@@ -1107,7 +1105,7 @@ iHub Apps can act as an OAuth 2.0 authorization server, issuing access tokens to
 | ------------------------------------ | ------- | -------------------------------------- | --------------------------------------------------------------------------------------- |
 | `enabled.authz`                      | Boolean | `false`                                | Enable the built-in OAuth 2.0 authorization server (authorization code flow, JWKS, etc.) |
 | `enabled.clients`                    | Boolean | `false`                                | Enable OAuth Clients (client credentials / static API key authentication). Can be toggled independently from the authorization server. |
-| `clientsFile`                        | String  | `"contents/config/oauth-clients.json"` | Path to the registered OAuth clients configuration file                                 |
+| `clientsFile`                        | String  | `config/oauth-clients.json` in the contents directory | Path to the registered OAuth clients file, relative to the installation root or absolute. The default follows `CONTENTS_DIR`; leave it unset unless the file lives elsewhere. |
 | `defaultTokenExpirationMinutes`      | Number  | `60`                                   | Default access token lifetime in minutes                                                |
 | `maxTokenExpirationMinutes`          | Number  | `1440`                                 | Maximum allowed access token lifetime in minutes                                        |
 | `authorizationCodeEnabled`           | Boolean | `false`                                | Enable the Authorization Code grant flow                                                |
@@ -1215,7 +1213,6 @@ Configures the skills system, which provides reusable AI behaviors that can be a
 ```json
 {
   "skills": {
-    "skillsDirectory": "contents/skills",
     "maxSkillBodyTokens": 5000
   }
 }
@@ -1223,5 +1220,5 @@ Configures the skills system, which provides reusable AI behaviors that can be a
 
 | Field                | Type   | Default              | Description                                                                           |
 | -------------------- | ------ | -------------------- | ------------------------------------------------------------------------------------- |
-| `skillsDirectory`    | String | `"contents/skills"` | Directory where skill definition files are stored                                     |
+| `skillsDirectory`    | String | `skills` in the contents directory | Directory where skill definition files are stored, relative to the installation root. The default follows `CONTENTS_DIR`; leave it unset unless skills live elsewhere. |
 | `maxSkillBodyTokens` | Number | `5000`               | Maximum token count for the combined skill instructions injected into a conversation  |

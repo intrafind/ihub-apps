@@ -20,6 +20,7 @@ import {
 } from '../../utils/officeJsSource.js';
 import { probeOfficeJsUrl } from '../../services/OfficeJsProxyService.js';
 import { assertPublicTarget, createPinnedLookup } from '../../utils/ssrfGuard.js';
+import { oauthClientsFile } from '../../utils/contentsPath.js';
 
 /**
  * Merge updates into the platform configuration and publish them.
@@ -116,7 +117,7 @@ export default function registerAdminOfficeIntegrationRoutes(app) {
       // Auto-create OAuth client if one doesn't exist yet
       if (!oauthClientId) {
         const oauthConfig = platform?.oauth || {};
-        const clientsFile = oauthConfig.clientsFile || 'contents/config/oauth-clients.json';
+        const clientsFile = oauthClientsFile(oauthConfig);
 
         const newClient = await createOAuthClient(
           {

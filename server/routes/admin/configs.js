@@ -198,7 +198,6 @@ export default function registerAdminConfigRoutes(app) {
           },
           localAuth: {
             enabled: false,
-            usersFile: 'contents/config/users.json',
             sessionTimeoutMinutes: 480
           },
           oidcAuth: {
