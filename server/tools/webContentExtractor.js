@@ -401,6 +401,31 @@ export default async function webContentExtractor({
   }
 }
 
+/** Bounds of the model-facing `maxLength` (mirrors tools/webContentExtractor.json). */
+const TOOL_MIN_LENGTH = 500;
+const TOOL_MAX_LENGTH = 50000;
+const TOOL_DEFAULT_LENGTH = 10000;
+
+/**
+ * Entry point for the `webContentExtractor` tool the model calls.
+ *
+ * Tool arguments come straight from the model, and nothing validates them
+ * against the schema, so this wrapper does it for the two arguments that
+ * matter: `maxLength` is clamped to the schema's bounds (an oversized value
+ * would otherwise land a whole PDF in the context), and `ignoreSSL` is never
+ * taken from the model — certificate checking stays with the platform's
+ * `ssl.ignoreInvalidCertificates` setting and the SSL domain whitelist.
+ *
+ * @param {Object} params - Tool arguments plus the runtime context runTool adds
+ * @returns {Promise<Object>} Same result as {@link webContentExtractor}
+ */
+export async function extractForTool({ url, uri, link, maxLength, chatId } = {}) {
+  let length = Number(maxLength);
+  if (!Number.isFinite(length)) length = TOOL_DEFAULT_LENGTH;
+  length = Math.min(TOOL_MAX_LENGTH, Math.max(TOOL_MIN_LENGTH, Math.floor(length)));
+  return webContentExtractor({ url, uri, link, maxLength: length, chatId });
+}
+
 // CLI interface for direct execution
 if (import.meta.url === `file://${process.argv[1]}`) {
   const args = process.argv.slice(2);
