@@ -41,4 +41,10 @@ describe('AnswerSourceBadge', () => {
     renderBadge(['file']);
     expect(screen.getByText('chatMessage.answerSource.file')).toBeInTheDocument();
   });
+
+  it('labels iFinder answers as iFinder documents, not web search', () => {
+    renderBadge(['ifinder']);
+    expect(screen.getByText('chatMessage.answerSource.ifinder')).toBeInTheDocument();
+    expect(screen.queryByText('chatMessage.answerSource.websearch')).not.toBeInTheDocument();
+  });
 });

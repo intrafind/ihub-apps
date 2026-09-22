@@ -82,6 +82,12 @@ function AnswerSourceBadge({ answerSource, workflowResult }) {
         colorClasses =
           'bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-300 border-green-200 dark:border-green-800';
         break;
+      case 'ifinder':
+        displayText = t('chatMessage.answerSource.ifinder');
+        iconName = 'document-text';
+        colorClasses =
+          'bg-emerald-100 text-emerald-700 dark:bg-emerald-900/30 dark:text-emerald-300 border-emerald-200 dark:border-emerald-800';
+        break;
       case 'sources':
         displayText = t('chatMessage.answerSource.sources');
         iconName = 'document-text';

@@ -8,7 +8,8 @@
  * Sources of the list:
  *  - `run.tools` (`tool/started` / `tool/completed`): every server-executed
  *    tool call, with the pages a search or fetch tool reported on
- *    `webSources`. Clarifications (`ask_user`), chat-launched workflows and
+ *    `webSources`. A search is scoped to the web or to the organisation's
+ *    documents (iFinder, configured sources), see `searchScope`. Clarifications (`ask_user`), chat-launched workflows and
  *    skill activation are left out: each has its own UI.
  *  - provider-run web search (Google Search grounding, Anthropic web search):
  *    the queries the provider reports on the grounding metadata
@@ -23,21 +24,74 @@ const HIDDEN_TOOL_IDS = new Set(['activate_skill', 'ask_user']);
 
 /**
  * Same heuristic as the server's `isCitationProducingTool`: search tools,
- * the page extractor and configured source lookups.
+ * the page extractor and configured source lookups; reading an iFinder
+ * document is a fetch too.
  * @param {string} toolId
  * @returns {'search'|'fetch'|'tool'}
  */
 export function toolKind(toolId) {
   const id = String(toolId || '').toLowerCase();
-  if (id === 'webcontentextractor') return 'fetch';
+  if (id === 'webcontentextractor' || id === 'ifinder_getcontent') return 'fetch';
   if (id.includes('search') || id.startsWith('source_')) return 'search';
   return 'tool';
+}
+
+/**
+ * Where a search or fetch tool looks: the organisation's own documents
+ * (iFinder, a configured source) or the public web. Only the latter is a web
+ * search.
+ * @param {string} toolId
+ * @returns {'documents'|'web'}
+ */
+export function searchScope(toolId) {
+  const id = String(toolId || '').toLowerCase();
+  return id.startsWith('ifinder') || id.startsWith('source_') ? 'documents' : 'web';
 }
 
 function queryOf(args) {
   if (!args || typeof args !== 'object') return null;
   const query = args.query ?? args.q ?? args.searchQuery ?? args.searchTerm;
   return typeof query === 'string' && query.trim() ? query.trim() : null;
+}
+
+function documentIdOf(args) {
+  const id = args && typeof args === 'object' ? args.documentId : null;
+  return typeof id === 'string' && id ? id : null;
+}
+
+/** Key of a source: its URL, or its iFinder document id when it has no link. */
+export function sourceKey(source) {
+  return source.documentId ? `doc:${source.documentId}` : source.url;
+}
+
+/**
+ * iFinder documents across the turn: which document each `iFinder_getContent`
+ * read (title and link, from its own result or from the search hit that found
+ * it), and the search hits marked read once their document was read.
+ */
+function resolveDocuments(items) {
+  const known = new Map();
+  for (const item of items) {
+    for (const source of item.sources) {
+      if (!source.documentId) continue;
+      known.set(source.documentId, { ...known.get(source.documentId), ...source });
+    }
+  }
+  const read = new Set();
+  for (const item of items) {
+    if (item.kind !== 'fetch' || !item.documentId) continue;
+    const doc = known.get(item.documentId);
+    item.url = item.url || doc?.url || null;
+    item.title = doc?.title || null;
+    if (item.status === 'completed') read.add(item.documentId);
+  }
+  if (!read.size) return;
+  for (const item of items) {
+    if (item.kind !== 'search') continue;
+    item.sources = item.sources.map(source =>
+      source.documentId && read.has(source.documentId) ? { ...source, read: true } : source
+    );
+  }
 }
 
 function urlOf(args) {
@@ -95,8 +149,10 @@ export function buildToolActivity(run) {
       toolId: tool.toolId,
       name: tool.name || tool.toolId,
       status,
+      scope: kind === 'tool' ? null : searchScope(tool.toolId),
       query: kind === 'search' ? queryOf(tool.args) : null,
       url: kind === 'fetch' ? urlOf(tool.args) : null,
+      documentId: kind === 'fetch' ? documentIdOf(tool.args) : null,
       sources: Array.isArray(tool.webSources) ? tool.webSources : [],
       error: tool.error?.message || null,
       durationMs: tool.durationMs ?? null
@@ -109,6 +165,7 @@ export function buildToolActivity(run) {
       id: 'native-web-search',
       kind: 'search',
       native: true,
+      scope: 'web',
       toolId: 'webSearch',
       name: 'webSearch',
       // The provider reports no end of its search; once the answer streams,
@@ -122,6 +179,7 @@ export function buildToolActivity(run) {
   }
 
   if (!items.length) return null;
+  resolveDocuments(items);
 
   // The page being fetched right now: the newest fetch frame, while a search
   // or fetch is still in flight.

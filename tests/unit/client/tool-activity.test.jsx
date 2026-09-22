@@ -11,7 +11,11 @@ import {
   getRun
 } from '../../../client/src/shared/run/runReducer';
 import { projectRunToMessage } from '../../../client/src/features/chat/runToMessage';
-import { buildToolActivity, toolKind } from '../../../client/src/features/chat/toolActivity';
+import {
+  buildToolActivity,
+  searchScope,
+  toolKind
+} from '../../../client/src/features/chat/toolActivity';
 import ToolActivity from '../../../client/src/features/chat/components/ToolActivity';
 
 jest.mock('react-i18next', () => ({
@@ -86,6 +90,14 @@ describe('toolKind', () => {
     expect(toolKind('source_handbook')).toBe('search');
     expect(toolKind('webContentExtractor')).toBe('fetch');
     expect(toolKind('jira')).toBe('tool');
+  });
+});
+
+describe('searchScope', () => {
+  test('iFinder and configured sources search documents, not the web', () => {
+    expect(searchScope('iFinder_search')).toBe('documents');
+    expect(searchScope('source_handbook')).toBe('documents');
+    expect(searchScope('braveSearch')).toBe('web');
   });
 });
 
@@ -236,6 +248,90 @@ describe('ToolActivity', () => {
     // Which pages were read, and which could not be.
     expect(screen.getByText('Read')).toBeInTheDocument();
     expect(screen.getByText('Not readable')).toBeInTheDocument();
+  });
+
+  test('an iFinder search is a document search, not a web search', () => {
+    const toolId = 'iFinder_search';
+    const activity = buildToolActivity(
+      runFrom([
+        started,
+        env(2, 'tool/started', {
+          step: 1,
+          callId: 'c1',
+          toolId,
+          name: toolId,
+          args: { query: 'supplier contracts' },
+          execution: 'server'
+        }),
+        env(3, 'tool/completed', {
+          step: 1,
+          callId: 'c1',
+          toolId,
+          name: toolId,
+          durationMs: 300,
+          webSources: [{ url: 'https://ifinder.example/doc/1', title: 'Contract A' }]
+        }),
+        ended(4)
+      ])
+    );
+    expect(activity.items[0]).toMatchObject({ kind: 'search', scope: 'documents' });
+    render(<ToolActivity activity={activity} loading={false} />);
+    const toggle = screen.getByRole('button');
+    expect(toggle).toHaveTextContent(
+      'Searched documents · toolActivity.searches:1 · toolActivity.sources:1'
+    );
+    expect(toggle).not.toHaveTextContent('Searched the web');
+    expect(screen.getAllByTestId('icon')[0]).toHaveAttribute('data-name', 'document-text');
+  });
+
+  test('an iFinder_getContent call says which document it read', () => {
+    const tool = (seq, type, callId, toolId, data) =>
+      env(seq, type, { step: 1, callId, toolId, name: toolId, ...data });
+    const doc = {
+      url: 'https://ifinder.example/doc/1',
+      documentId: 'doc-1',
+      title: 'Contract A'
+    };
+    const activity = buildToolActivity(
+      runFrom([
+        started,
+        tool(2, 'tool/started', 'c1', 'iFinder_search', {
+          args: { query: 'supplier contracts' },
+          execution: 'server'
+        }),
+        tool(3, 'tool/completed', 'c1', 'iFinder_search', {
+          durationMs: 300,
+          webSources: [doc, { documentId: 'doc-2', title: 'Contract B' }]
+        }),
+        tool(4, 'tool/started', 'c2', 'iFinder_getContent', {
+          args: { documentId: 'doc-1' },
+          execution: 'server'
+        }),
+        // The content result has no browser link of its own.
+        tool(5, 'tool/completed', 'c2', 'iFinder_getContent', {
+          durationMs: 200,
+          webSources: [{ documentId: 'doc-1', title: 'Contract A', read: true }]
+        }),
+        ended(6)
+      ])
+    );
+    const [search, read] = activity.items;
+    expect(read).toMatchObject({ kind: 'fetch', scope: 'documents', documentId: 'doc-1' });
+    // The hit that found the document is marked read.
+    expect(search.sources[0]).toMatchObject({ documentId: 'doc-1', read: true });
+    expect(search.sources[1].read).toBeUndefined();
+
+    render(<ToolActivity activity={activity} loading={false} />);
+    const toggle = screen.getByRole('button');
+    expect(toggle).toHaveTextContent(
+      'Searched documents · toolActivity.searches:1 · toolActivity.sources:2 · toolActivity.documentsRead:1'
+    );
+    fireEvent.click(toggle);
+    // The read links to the document via the search hit's deep link.
+    const links = screen.getAllByRole('link', { name: 'Contract A' });
+    expect(links.map(link => link.getAttribute('href'))).toEqual([doc.url, doc.url]);
+    // A hit without a browser link is still listed by title.
+    expect(screen.getByText('Contract B')).toBeInTheDocument();
   });
 
   test('renders nothing without activity', () => {

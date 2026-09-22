@@ -120,7 +120,39 @@ test('extractWebSources: iFinder hits fall back to their deep link', () => {
     ]
   });
   assert.deepEqual(sources, [
-    { url: 'https://ifinder.example.com/open?id=fs-1', title: 'Contract.pdf' },
-    { url: 'https://wiki.example.com/onboarding', title: 'Onboarding' }
+    {
+      url: 'https://ifinder.example.com/open?id=fs-1',
+      documentId: 'fs-1',
+      title: 'Contract.pdf'
+    },
+    { url: 'https://wiki.example.com/onboarding', documentId: 'conf-2', title: 'Onboarding' }
+  ]);
+});
+
+test('extractWebSources: an iFinder hit without a browser link is listed by document id', () => {
+  const sources = extractWebSources('iFinder_search', {
+    results: [{ id: 'fs-9', title: ['Memo.docx'], url: 'smb://share/Memo.docx' }]
+  });
+  assert.deepEqual(sources, [{ documentId: 'fs-9', title: 'Memo.docx' }]);
+});
+
+test('extractWebSources: iFinder_getContent is a read document', () => {
+  const sources = extractWebSources('iFinder_getContent', {
+    documentId: 'fs-1',
+    content: 'The notice period is three months.',
+    metadata: { title: 'Contract.pdf', url: 'file://share/contracts/Contract.pdf' }
+  });
+  assert.deepEqual(sources, [{ documentId: 'fs-1', title: 'Contract.pdf', read: true }]);
+});
+
+test('extractWebSources: iFinder_getMetadata names the document without reading it', () => {
+  const sources = extractWebSources('iFinder_getMetadata', {
+    id: 'conf-2',
+    title: 'Onboarding',
+    deepLink: 'https://ifinder.example.com/open?id=conf-2',
+    content: null
+  });
+  assert.deepEqual(sources, [
+    { url: 'https://ifinder.example.com/open?id=conf-2', documentId: 'conf-2', title: 'Onboarding' }
   ]);
 });
