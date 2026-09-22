@@ -7,7 +7,8 @@
  *   - publish only the NEWEST load's result (a slow stale load resolving
  *     last must not clobber the fresh snapshot),
  *   - coalesce the double dispatch into a single re-fetch,
- *   - reset per-email edits (removed attachments, include-body) on change.
+ *   - reset per-email edits (removed attachments, include-body) when the
+ *     item changes, and keep them for events about the same item.
  */
 
 import '@testing-library/jest-dom';
@@ -169,4 +170,49 @@ test('per-email edits (removed attachments, include-body) reset on item change',
   expect(result.current.removedAttachmentIds.size).toBe(0);
   expect(result.current.includeBody).toBe(true);
   expect(result.current.generation).toBe(generationBefore + 1);
+});
+
+test('an event for the email already open keeps the per-email edits (issue #2450)', async () => {
+  global.Office = { context: { mailbox: { item: { itemId: 'A' } } } };
+  try {
+    const loads = [];
+    mockHostImpl = {
+      kind: 'office',
+      readMessageContext: jest.fn(() => {
+        const d = deferred();
+        loads.push(d);
+        return d.promise;
+      })
+    };
+
+    const { result } = renderHook(() => useOutlookMailContextSnapshot());
+    await act(async () => {
+      loads[0].resolve({
+        available: true,
+        itemId: 'A',
+        attachments: [{ id: 'a1', name: 'doc.pdf' }]
+      });
+    });
+    act(() => {
+      result.current.removeAttachment('a1');
+      result.current.setIncludeBody(false);
+    });
+
+    // Re-selecting the same message / a list refresh.
+    await act(async () => {
+      dispatchItemChanged();
+    });
+    expect(result.current.removedAttachmentIds.has('a1')).toBe(true);
+    expect(result.current.includeBody).toBe(false);
+
+    // A genuinely different email still starts clean.
+    global.Office.context.mailbox.item = { itemId: 'B' };
+    await act(async () => {
+      dispatchItemChanged();
+    });
+    expect(result.current.removedAttachmentIds.size).toBe(0);
+    expect(result.current.includeBody).toBe(true);
+  } finally {
+    delete global.Office;
+  }
 });

@@ -294,3 +294,17 @@ from JSON Schema.
 
 vLLM still drops those keywords where they are genuine schema annotations; it no longer confuses a
 property's *name* with one.
+
+## Outlook Add-in: the chat no longer resets on its own and loses answers
+
+The task pane sometimes cleared the whole conversation — including finished answers and a
+half-typed message — while users were still reading the same email. Any selection change in the
+message list (re-selecting the message, a list refresh when new mail arrived) counted as "opened a
+different email".
+
+- The chat now starts over only when a genuinely different email is opened, and never while an
+  answer is still being generated.
+- When it does start over, a **Restore previous chat** notice brings the earlier conversation and
+  the typed text back.
+- Removed attachments and the email-body opt-out in the context strip stay as set while the same
+  email remains open.

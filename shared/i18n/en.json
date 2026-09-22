@@ -172,6 +172,10 @@
       "forwardSubject": "Subject",
       "originalAttached": "Outlook add-ins cannot rebuild a forward with its attachments, so the original message is attached instead \u2014 nothing is lost."
     },
+    "chatReset": {
+      "message": "New chat started for this email.",
+      "restore": "Restore previous chat"
+    },
     "menu": {
       "settings": "Settings",
       "logout": "Logout",

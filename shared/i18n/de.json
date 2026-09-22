@@ -193,6 +193,10 @@
       "forwardSubject": "Betreff",
       "originalAttached": "Outlook-Add-ins können eine Weiterleitung nicht mit ihren Anhängen nachbauen. Die ursprüngliche Nachricht ist deshalb angehängt \u2014 es geht nichts verloren."
     },
+    "chatReset": {
+      "message": "Neuer Chat für diese E-Mail gestartet.",
+      "restore": "Vorherigen Chat wiederherstellen"
+    },
     "menu": {
       "settings": "Einstellungen",
       "logout": "Abmelden",
