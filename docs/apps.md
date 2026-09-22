@@ -959,7 +959,7 @@ The `iassistant` property configures app-specific overrides for the iAssistant s
 | --------------------------- | ------ | ------------------------------------------------------------------------------------------------ |
 | `iassistant.enabled`        | Boolean | Enable or disable iAssistant integration for this app. Default: `false`                         |
 | `iassistant.baseUrl`        | String | Base URL of the iAssistant service, overriding the platform-level default                        |
-| `iassistant.profileId`      | String | iAssistant profile ID that determines the search index and configuration                         |
+| `iassistant.profileId`      | String | iAssistant *conversation* profile id (e.g. `"iassistant-workspace"`), which selects the workflow and its tuning |
 | `iassistant.filter`         | Array  | Array of filter objects to restrict search results. Each filter has `key`, `values`, and optional `isNegated` |
 | `iassistant.filter[].key`   | String | The metadata field name to filter on                                                             |
 | `iassistant.filter[].values`| Array  | Array of allowed values for the filter field                                                     |
@@ -967,9 +967,36 @@ The `iassistant` property configures app-specific overrides for the iAssistant s
 | `iassistant.searchMode`     | String | Search algorithm mode (e.g., `"semantic"`, `"fulltext"`, `"hybrid"`)                            |
 | `iassistant.searchDistance` | String | Similarity threshold for semantic search results (e.g., `"0.7"`)                                |
 | `iassistant.searchFields`   | Object | Map of field names to boost weights for relevance tuning                                         |
-| `iassistant.searchProfile`  | String | iAssistant search profile used for retrieval (e.g., `"searchprofile-standard"`)                  |
+| `iassistant.searchProfile`  | String | iFinder search profile used for retrieval (e.g., `"searchprofile-standard"`). Only a fallback — the conversation profile is asked first, see below |
 | `iassistant.extraContext`   | String | Additional context sent to the iAssistant when a conversation starts. Supports global prompt variables (see below) |
 | `iassistant.systemPromptPreamble` | String | Text prepended to the iAssistant's system prompt. Supports global prompt variables (see below) |
+| `iassistant.groundedOnly`   | Boolean | Answer only from the retrieved sources, see below. Unset defers to `iAssistant.groundedOnly` in `platform.json`; `false` turns that default off for this app |
+| `iassistant.tools`          | Array  | Tool ids the iAssistant may use for this app, e.g. `["ifinder_search"]`. Overrides the model's `config.tools`; `[]` means no tools |
+| `iassistant.labels`         | String or Array | Extra labels attached to the remote conversation, alongside the automatic `ihub` and app-id labels |
+| `iassistant.scope`          | String | OAuth scope requested in the iFinder JWT for this app                                            |
+| `iassistant.ephemeral`      | Boolean | Create the conversation as ephemeral, so iFinder does not retain it. Default: `false`            |
+
+> `tools`, `labels`, `scope` and `ephemeral` were read by the adapter but missing from the app schema until now, so setting them on an app had no effect and produced no validation error. They work as documented from this release on — check any app that already carries them, since they now actually apply.
+
+**Restricting answers to your own documents (`groundedOnly`):**
+
+By default the iAssistant answers from the retrieved documents *and* from the model's general knowledge. Set `groundedOnly` to confine it to what retrieval returned:
+
+```json
+"iassistant": {
+  "groundedOnly": true
+}
+```
+
+The app then answers only from the retrieved sources, cites them, and says plainly that it has no answer when the search comes back empty — instead of falling back on world knowledge.
+
+This is carried as a prompt instruction prepended to `extraContext`, because the Conversation API has no grounding switch. It instructs the model rather than constraining it; for a hard guarantee across every iFinder client, override `promptPreamble` on the profile's `RESPONSE` state in iFinder. The instruction also states that nothing after it overrides it, so your own `extraContext` cannot re-open world knowledge by accident.
+
+**Conversation profile vs. search profile (`profileId` vs. `searchProfile`):**
+
+`profileId` picks the iAssistant *conversation* profile — the workflow and its tuning. `searchProfile` picks the iFinder *search* profile — which documents retrieval may see. They are separate settings in iFinder, so iHub needs both.
+
+To keep them from drifting apart, iHub asks the conversation profile for its search profile before creating a conversation and only falls back to `searchProfile` (then the model's, then `iAssistant.defaultSearchProfile`) when the profile does not name one. iFinder does not currently publish a search profile on a profile, so today the fallback is what applies in practice. The resolved profile is pinned for the life of the conversation.
 
 **Prompt variables in `extraContext` and `systemPromptPreamble`:**
 

@@ -198,6 +198,17 @@ const RENAMED_MIGRATIONS = [
     oldFile: 'V117__office_js_source_modes.js',
     newVersion: '118',
     newFile: 'V118__office_js_source_modes.js'
+  },
+  // The same V117 slot, contested a third time: the iAssistant stream-ceiling
+  // migration was written as V117 while the login-name backfill was taking it
+  // and Office.js was moving onto V118, so it moved to V119. Matching on the
+  // file is again what keeps this rule off the backfill's own history row,
+  // which legitimately holds 117.
+  {
+    oldVersion: '117',
+    oldFile: 'V117__iassistant_stream_ceiling_and_grounding.js',
+    newVersion: '119',
+    newFile: 'V119__iassistant_stream_ceiling_and_grounding.js'
   }
 ];
 

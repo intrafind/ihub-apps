@@ -3361,7 +3361,8 @@
     "search": {
       "started": "Starting search",
       "generating_queries": "Generating search queries",
-      "complete": "Search complete"
+      "complete": "Search complete",
+      "finished": "Search complete"
     },
     "doc_lookup": {
       "started": "Starting document lookup",
@@ -3610,5 +3611,10 @@
     "highlight": "Highlight",
     "allPassages": "All",
     "loadFailed": "Could not load the document: {{error}}"
+  },
+  "searchSummary": {
+    "searchedFor": "Searched for",
+    "documentsFound_one": "{{count}} document found",
+    "documentsFound_other": "{{count}} documents found"
   }
 }
