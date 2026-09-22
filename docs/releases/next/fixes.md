@@ -223,6 +223,25 @@ sub-messages rather than as the button's own text. The result headline shown aft
 the admin's language. Both the button label and the result messages now follow the selected
 language.
 
+## Chat can no longer reach AI models outside a user's group permissions
+
+A group's **Models** allowlist (Admin → Groups) only ever controlled which models an app's model
+picker displayed. The chat request itself never checked it, so a user could still reach a model
+outside their group's allowed models — either by asking for it directly, or simply by using an app
+whose preferred or default model fell outside their allowance, silently and with no indication a
+restricted model had been used.
+
+Chat requests are now checked against the requesting user's group-level model permissions, the same
+way `/api/models` and the OpenAI-compatible API already are:
+
+- Asking for a model outside your group's allowed models now fails clearly instead of silently
+  using a different one.
+- Automatic model selection — an app's preferred or default model — now only ever considers models
+  both the app and your group allow.
+
+No admin action is required: groups that already restrict **Models** to specific entries are now
+fully enforced for chat, including apps invoked as tools through the MCP gateway.
+
 ## Transient server errors no longer get cached and served back as real data
 
 A single failed request to the server — a brief 5xx while loading something like UI styles or
