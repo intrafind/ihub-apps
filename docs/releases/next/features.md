@@ -59,3 +59,18 @@ one answer with source links.
 - The default **Web Chat** prompt was reworded to match. It is updated on upgrade only where it is
   still the shipped default; a prompt you changed is kept.
 - With Gemini's built-in Google Search, the instruction only steers how Gemini uses its own search.
+
+## iFinder search results are about half the size
+
+Every iFinder search hit used to carry the raw API document and the raw hit metadata alongside the
+fields already mapped out of them, so each result shipped the same values two to three times. On a
+49-hit search those two fields alone were 48% of the response. They are gone, and fields the source
+has no value for are now left out instead of being sent as `null`.
+
+- Agents, workflows and MCP clients fit roughly twice as many results in the same context budget
+- A document whose source reports no file size no longer shows a made-up "0 B" in the citation
+  panel and the admin source test
+- `iFinder_getContent` likewise no longer echoes the raw document and raw API metadata
+- Custom integrations that read `rawDocument`, `rawHitMetadata` or `rawApiMetadata` off an iFinder
+  response should switch to the mapped fields of the same name — `title`, `file`, `score`,
+  `teasers` and the rest are unchanged
