@@ -507,9 +507,16 @@ callers with the matching scope.
   pointing the agent at the corresponding `source_*` tool — calling
   those over `tools/call` is how dynamic queries (search etc.) work.
 - **iHub skills** → MCP resources at `ihub://skill/<skillName>`.
-  Returns the skill's `SKILL.md` body. Skill resources (scripts,
-  references, assets) are not yet enumerated individually; agents that
-  need them can call the `read_skill_resource` tool.
+  Returns the skill's `SKILL.md` body. The files a skill bundles are
+  enumerated as resources of their own at
+  `ihub://skill/<skillName>/<relative/path>` — for example
+  `ihub://skill/ifinder-search/references/query-cookbook.md` — so a
+  "see references/…" link in a SKILL.md is followable. A read resolves
+  only paths the skill loader itself enumerated, which is what keeps a
+  `../` out of the filesystem. The internal `activate_skill` and
+  `read_skill_resource` tools stay out of the gateway: they wrap
+  filesystem access, and these resources replace them for external
+  callers.
 
 ### Who sees which tool
 

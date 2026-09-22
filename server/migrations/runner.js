@@ -209,6 +209,16 @@ const RENAMED_MIGRATIONS = [
     oldFile: 'V117__iassistant_stream_ceiling_and_grounding.js',
     newVersion: '119',
     newFile: 'V119__iassistant_stream_ceiling_and_grounding.js'
+  },
+  // The iFinder skill-pointer migration was written as V109 while the legacy
+  // private-key migration took that number on main; by the time its branch
+  // merged, main had reached V124. Matching on the file keeps this rule off
+  // the private-key migration's own history row, which legitimately holds 109.
+  {
+    oldVersion: '109',
+    oldFile: 'V109__ifinder_search_skill_pointer.js',
+    newVersion: '125',
+    newFile: 'V125__ifinder_search_skill_pointer.js'
   }
 ];
 
