@@ -173,6 +173,42 @@ const RENAMED_MIGRATIONS = [
     oldFile: 'V112__grandfather_connected_cimd_clients.js',
     newVersion: '113',
     newFile: 'V113__grandfather_connected_cimd_clients.js'
+  },
+  // The Office.js source-mode migration was written as V115 while the brave
+  // search language parameter (V115) and the staan provider (V116) landed on
+  // main in parallel. It moved to V117 because those had already shipped.
+  // Without this entry, anyone who ran the branch before the merge has 115
+  // recorded against the Office.js file, which would mark the brave V115
+  // applied and silently skip it — the match on `file` as well as `version`
+  // is what keeps this entry off the brave migration's own history row.
+  {
+    oldVersion: '115',
+    oldFile: 'V115__office_js_source_modes.js',
+    newVersion: '117',
+    newFile: 'V117__office_js_source_modes.js'
+  },
+  // …and then collided a second time: the directory login-name backfill took
+  // V117 while the Office.js branch was still open, so it moved again to V118.
+  // Order matters here. Entries are applied in sequence, so a history still
+  // recorded at 115 is rewritten to 117 by the rule above and then to 118 by
+  // this one. Matching on the file keeps both rules off the two migrations
+  // that legitimately hold 115 and 117.
+  {
+    oldVersion: '117',
+    oldFile: 'V117__office_js_source_modes.js',
+    newVersion: '118',
+    newFile: 'V118__office_js_source_modes.js'
+  },
+  // The same V117 slot, contested a third time: the iAssistant stream-ceiling
+  // migration was written as V117 while the login-name backfill was taking it
+  // and Office.js was moving onto V118, so it moved to V119. Matching on the
+  // file is again what keeps this rule off the backfill's own history row,
+  // which legitimately holds 117.
+  {
+    oldVersion: '117',
+    oldFile: 'V117__iassistant_stream_ceiling_and_grounding.js',
+    newVersion: '119',
+    newFile: 'V119__iassistant_stream_ceiling_and_grounding.js'
   }
 ];
 

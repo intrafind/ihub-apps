@@ -75,6 +75,7 @@ For Active Directory, use this configuration pattern:
   "userSearchBase": "dc=example,dc=com",
   "usernameAttribute": "sAMAccountName",
   "userDn": "{{username}}@example.com",
+  "domain": "EXAMPLE",
   "groupSearchBase": "dc=example,dc=com",
   "groupClass": "group",
   "defaultGroups": ["ad-users"],
@@ -114,11 +115,38 @@ AD_BIND_PASSWORD=your_ad_service_password
 | `userSearchBase`        | Base DN for user searches                      | Yes      | -                                              |
 | `usernameAttribute`     | Attribute to match username                    | No       | `uid`                                          |
 | `userDn`                | Pattern for user DN ({{username}} placeholder) | No       | `uid={{username}},ou=people,dc=example,dc=org` |
+| `domain`                | NetBIOS/short domain name (e.g. `CONTOSO`)     | No       | Detected from AD `msDS-PrincipalName`          |
 | `groupSearchBase`       | Base DN for group searches                     | No       | -                                              |
 | `groupClass`            | LDAP class for groups                          | No       | `groupOfNames`                                 |
 | `defaultGroups`         | Default groups for authenticated users         | No       | `[]`                                           |
 | `sessionTimeoutMinutes` | JWT token timeout                              | No       | `480`                                          |
 | `tlsOptions`            | TLS connection options                         | No       | `{}`                                           |
+
+#### The `domain` field
+
+Some integrations identify users as `DOMAIN\username` rather than by email —
+iFinder does, via its `domain\username` JWT subject. NTLM gets that short
+(NetBIOS) domain name from the protocol handshake. LDAP has no equivalent, so
+it comes from one of two places:
+
+1. **This field.** Set it to the NetBIOS name, e.g. `EXAMPLE` for
+   `dc=example,dc=com`. Required for OpenLDAP and any non-AD directory.
+2. **Detection.** Left empty against Active Directory, iHub reads the
+   `msDS-PrincipalName` attribute of the authenticated user, which AD returns
+   in `DOMAIN\sAMAccountName` form, and takes the domain from it.
+
+A configured value always wins. When the directory reports a different one, the
+mismatch is logged and the configured value is used — an admin who typed a
+domain has stated what the downstream system expects to see.
+
+Note that the NetBIOS name is set when the domain is created and is **not**
+reliably the first `dc=` component: it is capped at 15 characters and can be
+chosen freely. Detection reads what AD actually stores; guessing from the DN
+does not.
+
+If neither source yields a domain, integrations configured for
+`domain\username` fail with an error naming this field, rather than sending a
+bare account name under a setting that promises a qualified one.
 
 ## NTLM Authentication
 

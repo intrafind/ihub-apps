@@ -61,6 +61,11 @@ const ldapProviderSchema = z.object({
   userSearchBase: z.string(),
   usernameAttribute: z.string().prefault('uid'),
   userDn: z.string().optional(),
+  // NetBIOS/short domain name (e.g. "ROCHUS"), used by the iFinder
+  // `domain\\username` JWT subject. Mirrors `ntlmAuth.domain`, which NTLM
+  // gets from the protocol handshake; LDAP has no equivalent, so it is either
+  // configured here or detected from the AD `msDS-PrincipalName` attribute.
+  domain: z.string().optional(),
   groupSearchBase: z.string().optional(),
   groupClass: z.string().optional(),
   groupMemberAttribute: z.string().optional(),

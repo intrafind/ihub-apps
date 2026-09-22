@@ -84,6 +84,92 @@ function extractGroupNames(groups) {
 }
 
 /**
+ * Attributes requested for the user entry.
+ *
+ * `*` is the RFC 4511 shorthand for "every user attribute", i.e. exactly what
+ * the server returns when no attribute list is sent at all — so naming it keeps
+ * the previous behaviour intact. `msDS-PrincipalName` has to be listed
+ * explicitly next to it: it is an Active Directory *constructed* attribute, and
+ * constructed attributes are never covered by `*`. It holds the account in
+ * `DOMAIN\\sAMAccountName` form, which is the only per-user source for the
+ * NetBIOS domain name. Directories that do not have it (OpenLDAP, and AD where
+ * the bind account cannot read it) simply omit it from the entry.
+ */
+const USER_SEARCH_ATTRIBUTES = ['*', 'msDS-PrincipalName'];
+
+/**
+ * Read the first value of an LDAP attribute, which may come back as a scalar
+ * or as a single-element array depending on the server.
+ * @param {*} value - Raw attribute value
+ * @returns {string|null} First value as a string, or null
+ */
+function firstAttributeValue(value) {
+  const raw = Array.isArray(value) ? value[0] : value;
+  return typeof raw === 'string' && raw !== '' ? raw : null;
+}
+
+/**
+ * Split an Active Directory `msDS-PrincipalName` (`DOMAIN\\account`) into its
+ * parts. Returns nulls for anything that is not in that form, including the
+ * bare-account form some directories return.
+ * @param {*} value - Raw `msDS-PrincipalName` attribute value
+ * @returns {{domain: string|null, account: string|null}}
+ */
+export function parsePrincipalName(value) {
+  const principal = firstAttributeValue(value);
+  if (!principal) return { domain: null, account: null };
+
+  const separator = principal.indexOf('\\');
+  if (separator <= 0 || separator === principal.length - 1) {
+    return { domain: null, account: principal };
+  }
+
+  return {
+    domain: principal.slice(0, separator),
+    account: principal.slice(separator + 1)
+  };
+}
+
+/**
+ * Resolve the NetBIOS domain name for an authenticated LDAP user.
+ *
+ * Configuration wins over detection: an admin who typed a domain has stated
+ * what iFinder expects to see, and a directory that disagrees does not get to
+ * overrule that. Detection only covers the case where nothing was configured.
+ *
+ * @param {Object} ldapUser - Raw LDAP user entry
+ * @param {Object} ldapConfig - LDAP provider configuration
+ * @param {string} username - Login name, for logging
+ * @returns {string|null} NetBIOS domain name, or null when neither source has one
+ */
+export function resolveLdapDomain(ldapUser, ldapConfig, username) {
+  const configured = typeof ldapConfig?.domain === 'string' ? ldapConfig.domain.trim() : '';
+  const { domain: detected, account } = parsePrincipalName(ldapUser?.['msDS-PrincipalName']);
+
+  if (configured) {
+    if (detected && detected.toLowerCase() !== configured.toLowerCase()) {
+      logger.warn(
+        'LDAP Auth: configured domain differs from the directory msDS-PrincipalName; using the configured value',
+        { component: 'LdapAuth', username, configured, detected }
+      );
+    }
+    return configured;
+  }
+
+  if (detected) {
+    logger.debug('LDAP Auth: domain detected from msDS-PrincipalName', {
+      component: 'LdapAuth',
+      username,
+      domain: detected,
+      account
+    });
+    return detected;
+  }
+
+  return null;
+}
+
+/**
  * Authenticate user against LDAP server
  * @param {string} username - Username
  * @param {string} password - Password
@@ -113,6 +199,7 @@ async function authenticateLdapUser(username, password, ldapConfig) {
       userSearchBase: ldapConfig.userSearchBase || 'ou=people,dc=example,dc=org',
       usernameAttribute: ldapConfig.usernameAttribute || 'uid',
       username: username,
+      attributes: USER_SEARCH_ATTRIBUTES,
       // Group search configuration (optional)
       // Note: ldap-authentication library uses 'groupsSearchBase' (with 's')
       ...(ldapConfig.groupSearchBase && {
@@ -197,6 +284,11 @@ async function authenticateLdapUser(username, password, ldapConfig) {
       ldapConfig.defaultGroups.forEach(g => mappedGroups.push(g));
     }
 
+    // NetBIOS domain, for the iFinder `domain\\username` JWT subject. Null when
+    // neither configured nor present in the directory, which the subject
+    // resolver reports rather than silently dropping.
+    const domain = resolveLdapDomain(user, ldapConfig, username);
+
     // Normalize user data
     const normalizedUser = {
       id: user.uid || user.sAMAccountName || user.cn || username,
@@ -208,6 +300,7 @@ async function authenticateLdapUser(username, password, ldapConfig) {
         username,
       email: user.mail || user.email || null,
       groups: mappedGroups,
+      ...(domain && { domain }),
       authenticated: true,
       authMethod: 'ldap',
       provider: ldapConfig.name || 'ldap',
@@ -266,12 +359,14 @@ export async function loginLdapUser(username, password, ldapConfig) {
     authMethod: 'ldap',
     provider: ldapConfig.name || 'ldap',
     groups: user.groups, // Already mapped groups (with authenticated, defaults)
+    ...(user.domain && { domain: user.domain }),
     // Don't pass externalGroups - would cause duplicate mapExternalGroups() call
     ldapData: {
       subject: user.id,
       provider: ldapConfig.name || 'ldap',
       lastProvider: ldapConfig.name || 'ldap',
       username: username,
+      ...(user.domain && { domain: user.domain }),
       // Store extracted LDAP groups for reference/debugging
       ldapGroups: user.extractedGroups || []
     }
@@ -291,15 +386,22 @@ export async function loginLdapUser(username, password, ldapConfig) {
   const { token, expiresIn } = generateJwt(persistedUser, {
     authMode: 'ldap',
     authProvider: persistedUser.provider,
-    expiresInMinutes: sessionTimeout
+    expiresInMinutes: sessionTimeout,
+    // Carried as a claim so it survives into `req.user` on every later request,
+    // the way NTLM already carries it. Without this the domain would exist only
+    // on the login request and the `domain\\username` subject would degrade
+    // back to a bare account name for the rest of the session.
+    ...(persistedUser.domain && { additionalClaims: { domain: persistedUser.domain } })
   });
 
   return {
     user: {
       id: persistedUser.id,
+      username: persistedUser.username,
       name: persistedUser.name,
       email: persistedUser.email,
       groups: persistedUser.groups,
+      ...(persistedUser.domain && { domain: persistedUser.domain }),
       authenticated: true,
       authMethod: 'ldap',
       provider: persistedUser.provider

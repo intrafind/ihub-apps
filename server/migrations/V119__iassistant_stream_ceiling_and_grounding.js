@@ -1,5 +1,5 @@
 /**
- * Migration V117 — iAssistant turns that outlive 60 seconds, and a config key
+ * Migration V119 — iAssistant turns that outlive 60 seconds, and a config key
  * that never did anything
  *
  * Symptom: an iAssistant conversation on the workspace profile was cancelled
@@ -45,7 +45,7 @@
  * profile, keeps what it has.
  */
 
-export const version = '117';
+export const version = '119';
 export const description = 'iassistant_stream_ceiling_and_grounding';
 
 /** Providers whose turns are agentic rather than token-steady. */

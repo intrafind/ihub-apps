@@ -1017,12 +1017,14 @@ plaintext in `platform.json`. See
 
 The JWT `sub` claim identifies the authenticated user to iFinder. It is **always** derived from the authenticated user object — never from environment variables (configCache skips env var resolution for this field, see `ENV_VAR_RESOLUTION_SKIP_PATHS` in `server/configCache.js`).
 
+Resolution is **strict**: the configured field is the only one consulted. If the authenticated user has no value for it, token generation fails with an error naming the setting and the missing field. It does not fall back to another identifier — a valid token for the wrong subject is worse than no token, because iFinder keys its user mapping on `sub` and the mismatch is invisible on both sides.
+
 Accepted forms:
 
-- `"email"` (default) — `user.email`, falling back to `user.username`, then `user.id`.
-- `"username"` — `user.username`, falling back to `user.email`, then `user.id`.
-- `"domain\\username"` — `user.domain + "\\" + user.username`, useful for NTLM/AD setups.
-- **Custom template** — embed `${user.field}` placeholders to build the subject from user attributes. Example: `"DOMAIN\\${user.username}"` produces `DOMAIN\john.doe` for a user with `username = "john.doe"`. Available fields include `id`, `username`, `name`, `email`, `domain`.
+- `"email"` (default) — `user.email`.
+- `"username"` — `user.username`. For LDAP this is the directory login name (`sAMAccountName` when `usernameAttribute` is set to it), for NTLM the Windows account name.
+- `"domain\\username"` — `user.domain + "\\" + user.username`, for NTLM/AD setups. Requires a domain on the user: NTLM takes it from the handshake, LDAP from the provider's `domain` field or by detecting it from the Active Directory `msDS-PrincipalName` attribute. See [LDAP and NTLM Authentication](ldap-ntlm-authentication.md).
+- **Custom template** — embed `${user.field}` placeholders to build the subject from user attributes. Example: `"DOMAIN\\${user.username}"` produces `DOMAIN\john.doe` for a user with `username = "john.doe"`. Available fields include `id`, `username`, `name`, `email`, `domain`. A placeholder with no value is an error too, rather than leaving a hole in the subject.
 
 > **Security note:** Earlier versions accepted the legacy `${field}` form (no `user.` prefix). That syntax collided with the env var resolver — on Windows `process.env.username` is set to the OS user running the server, so `${username}` silently expanded to the service account name in every JWT subject, breaking per-user identity in iFinder. The configCache skip-list and migration V043 fix this; legacy `${field}` is still accepted with a deprecation warning, but **use `${user.field}` for clarity and forward-compatibility**.
 
