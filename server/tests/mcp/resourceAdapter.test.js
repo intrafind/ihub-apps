@@ -53,3 +53,26 @@ describe('MCP resource adapter — URI parsing', () => {
     );
   });
 });
+
+describe('MCP resource adapter — skill sub-resources', () => {
+  it('rejects a path under an unknown skill', async () => {
+    await expect(
+      readMcpResource('ihub://skill/no-such-skill/references/guide.md', { user: {} })
+    ).rejects.toThrow(/Skill not found/);
+  });
+
+  it('rejects a traversal path under a skill name', async () => {
+    // The segments are decoded only after the split, so this stays a relative
+    // path and is measured against the files the loader enumerated — it never
+    // reaches the filesystem.
+    await expect(
+      readMcpResource('ihub://skill/ifinder-search/..%2F..%2Fetc%2Fpasswd', { user: {} })
+    ).rejects.toThrow(/Skill (resource )?not found/);
+  });
+
+  it('rejects a path under a source', async () => {
+    await expect(
+      readMcpResource('ihub://source/some-source/secret.md', { user: {} })
+    ).rejects.toThrow(/Source not found/);
+  });
+});
