@@ -66,3 +66,27 @@ of at runtime. Two cases to look for:
   token has been going out as a bare account name. Set **Domain** on the LDAP provider (or leave it
   empty against Active Directory, which now detects it) — and check which form iFinder's user
   mapping actually holds, since until now it can only have been the unqualified one.
+
+## A custom `CONTENTS_DIR` is honoured everywhere
+
+On installations that set `CONTENTS_DIR`, the default `admin` account could not sign in after a
+fresh setup, users and OAuth clients created in the admin UI were invisible to sign-in and token
+checks, and uploaded skills never loaded. Several other things were written to a `contents/`
+folder next to the configured one. All of it now uses the configured contents directory.
+Installations that keep the default name `contents` see no change.
+
+- Sign-in, OAuth client checks and skill loading follow `CONTENTS_DIR`. Migration V121 removes
+  `localAuth.usersFile`, `oauth.clientsFile` and `skills.skillsDirectory` from `platform.json`
+  where they still hold the shipped `contents/…` value. A path you set yourself is kept.
+- UI asset uploads, the browser-extension signing key, the audit log, change history, agent
+  artifacts, inboxes and memory, page sources, custom renderers and OpenAPI tool files now live
+  in the configured directory.
+- Configuration backups always store files under `contents/` in the archive, so a backup made on
+  one installation imports into another whatever each calls its contents directory.
+
+**Before upgrading:** nothing if you do not set `CONTENTS_DIR`. If you do, look for a `contents/`
+folder in the installation root next to your configured directory. Move anything under its
+`uploads/`, `data/`, `agents/memory/`, `skills/`, `pages/` and `renderers/`, its
+`config/users.json` and `config/oauth-clients.json`, and a `.browser-extension-key.pem` file, into
+the matching place in your configured directory. Without that, audit history, uploaded logos and
+agent memory from before the upgrade no longer appear.

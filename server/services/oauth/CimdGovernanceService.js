@@ -24,10 +24,11 @@ import { getCimdConfig } from '../../utils/oauthClientResolver.js';
 import { effectiveField, evaluateCimdActivation } from '../../utils/oauthClientPolicy.js';
 import { countByClient, listSeenCimdClients } from './ConnectionService.js';
 import logger from '../../utils/logger.js';
+import { oauthClientsFile } from '../../utils/contentsPath.js';
 
 /** Where the client store lives, with the shipped default applied. */
 export function clientsFileFor(platform) {
-  return platform?.oauth?.clientsFile || 'contents/config/oauth-clients.json';
+  return oauthClientsFile(platform?.oauth);
 }
 
 /**

@@ -34,7 +34,6 @@ function AdminAuthPage() {
     },
     localAuth: {
       enabled: false,
-      usersFile: 'contents/config/users.json',
       sessionTimeoutMinutes: 480,
       jwtSecret: '$' + '{JWT_SECRET}',
       showDemoAccounts: false

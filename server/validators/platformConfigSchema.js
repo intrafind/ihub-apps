@@ -291,7 +291,9 @@ export const platformConfigSchema = z
     localAuth: z
       .object({
         enabled: z.boolean().prefault(false),
-        usersFile: z.string().prefault('contents/config/users.json'),
+        // Unset means `config/users.json` in the contents directory, which
+        // follows CONTENTS_DIR — see localUsersFile() in utils/contentsPath.js.
+        usersFile: z.string().optional(),
         sessionTimeoutMinutes: z.number().min(1).prefault(480),
         showDemoAccounts: z.boolean().prefault(true)
       })

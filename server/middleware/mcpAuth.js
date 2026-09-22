@@ -13,6 +13,7 @@ import { hasAnyScope, MCP_METHOD_SCOPES, MCP_SCOPES } from '../services/mcp/scop
 import { buildServerPath } from '../utils/basePath.js';
 import configCache from '../configCache.js';
 import logger from '../utils/logger.js';
+import { oauthClientsFile } from '../utils/contentsPath.js';
 
 /**
  * Resolve the URL of the RFC 9728 protected-resource metadata document.
@@ -80,7 +81,7 @@ export default async function mcpAuth(req, res, next) {
 
   // Look up the OAuth client. Required for both auth_code (per-client
   // allowlist application) and client_credentials (service-account identity).
-  const clientsFilePath = oauthConfig.clientsFile || 'contents/config/oauth-clients.json';
+  const clientsFilePath = oauthClientsFile(oauthConfig);
   let client = null;
 
   if (isClientIdUrl(decoded.client_id)) {

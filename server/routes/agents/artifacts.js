@@ -16,7 +16,7 @@ import {
 } from '../../utils/responseHelpers.js';
 import { buildServerPath } from '../../utils/basePath.js';
 import { validateIdForPath, resolveAndValidatePath } from '../../utils/pathSecurity.js';
-import { getRootDir } from '../../pathUtils.js';
+import { getContentsPath } from '../../utils/contentsPath.js';
 import { getWorkflowEngine } from '../../services/workflow/index.js';
 import { buildContentDisposition } from '../../utils/safeContentDisposition.js';
 
@@ -25,7 +25,7 @@ function getEngine() {
 }
 
 function artifactsRootDir() {
-  return path.join(getRootDir(), 'contents', 'data', 'agent-artifacts');
+  return getContentsPath('data', 'agent-artifacts');
 }
 
 // Returns a validated absolute directory path for the run, or null on any

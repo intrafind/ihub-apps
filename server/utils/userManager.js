@@ -9,6 +9,7 @@ import { mapExternalGroups, loadGroupsConfiguration } from './authorization.js';
 import logger from './logger.js';
 import { ensureFirstUserIsAdmin } from './adminRescue.js';
 import { locateConfigFile } from './configFileLocation.js';
+import { localUsersFile } from './contentsPath.js';
 
 /**
  * Where the users file lives — see {@link locateConfigFile}, which both this
@@ -486,7 +487,7 @@ export async function validateAndPersistExternalUser(externalUser, platformConfi
     authConfig = platformConfig.oidcAuth || {};
   }
 
-  const usersFilePath = platformConfig.localAuth?.usersFile || 'contents/config/users.json';
+  const usersFilePath = localUsersFile(platformConfig.localAuth);
 
   // Check if user exists in users.json
   const usersConfig = loadUsers(usersFilePath);

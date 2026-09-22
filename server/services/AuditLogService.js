@@ -2,7 +2,7 @@ import { promises as fs, createReadStream } from 'fs';
 import { createInterface } from 'readline';
 import { join } from 'path';
 import { randomUUID } from 'crypto';
-import { getRootDir } from '../pathUtils.js';
+import { getContentsPath } from '../utils/contentsPath.js';
 import logger from '../utils/logger.js';
 import configCache from '../configCache.js';
 import { getContext } from '../utils/requestContext.js';
@@ -44,8 +44,7 @@ function isEmailShaped(value) {
 // are grouped by date so a flush spanning midnight lands in the correct
 // per-day JSONL file.
 const appender = createJsonlAppender({
-  getFilePath: entry =>
-    join(getRootDir(), 'contents', AUDIT_LOG_DIR, `${entry.ts.slice(0, 10)}.jsonl`),
+  getFilePath: entry => getContentsPath(AUDIT_LOG_DIR, `${entry.ts.slice(0, 10)}.jsonl`),
   flushIntervalMs: FLUSH_INTERVAL_MS,
   maxQueueSize: MAX_QUEUE,
   component: 'AuditLogService'
@@ -362,7 +361,7 @@ export async function queryAuditLog({
   const fromDate =
     from || new Date(now.getTime() - DEFAULT_QUERY_RANGE_DAYS * DAY_MS).toISOString().slice(0, 10);
 
-  const auditDir = join(getRootDir(), 'contents', AUDIT_LOG_DIR);
+  const auditDir = getContentsPath(AUDIT_LOG_DIR);
 
   const emptyFacets = () => Object.fromEntries(FACET_FIELDS.map(f => [f, []]));
 
@@ -504,7 +503,7 @@ export async function cleanupAuditLog(retentionDays) {
     return { deleted: [], retainedFrom: null };
   }
 
-  const auditDir = join(getRootDir(), 'contents', AUDIT_LOG_DIR);
+  const auditDir = getContentsPath(AUDIT_LOG_DIR);
   let files;
   try {
     files = await fs.readdir(auditDir);
