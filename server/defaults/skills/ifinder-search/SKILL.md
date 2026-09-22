@@ -214,10 +214,10 @@ nothing to the reader.
 
 ### Size the result set before you pull it
 
-Every hit carries its teasers, so a 50-hit response is large whatever you put in
-`returnFields` — `returnFields` selects document fields, it does not shrink the
-teasers. When you do not yet know whether a query is any good, spend one hit
-first:
+Every hit that matched text carries its teasers, so a 50-hit response is large
+whatever you put in `returnFields` — `returnFields` selects document fields, it
+does not shrink the teasers. When you do not yet know whether a query is any
+good, spend one hit first:
 
 ```
 iFinder_search({

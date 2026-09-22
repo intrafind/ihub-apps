@@ -73,4 +73,5 @@ has no value for are now left out instead of being sent as `null`.
 - `iFinder_getContent` likewise no longer echoes the raw document and raw API metadata
 - Custom integrations that read `rawDocument`, `rawHitMetadata` or `rawApiMetadata` off an iFinder
   response should switch to the mapped fields of the same name — `title`, `file`, `score`,
-  `teasers` and the rest are unchanged
+  `teasers` and the rest are unchanged, except that a field is now absent rather than `null` or
+  empty when the source has no value for it
