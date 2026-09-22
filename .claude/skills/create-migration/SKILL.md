@@ -14,8 +14,9 @@ description: Create a new versioned config migration in server/migrations/ follo
 
 1. Find the next version number:
    ```bash
-   ls server/migrations/V*.js | sort | tail -3
+   git fetch origin main && git ls-tree --name-only origin/main:server/migrations | grep '^V' | tail -3
    ```
+   Pick the number from the *current* `origin/main`, not your branch — another PR may have taken it since you branched. The `Migration Version Check` PR workflow fails if the number is already used on main (or is below main's highest); if it does, merge main and renumber to the version it reports (`node scripts/check-migration-versions.js --base origin/main` runs the same check locally).
 
 2. Create `server/migrations/V{NNN}__{short_description}.js` (NNN = zero-padded 3 digits, underscores in description):
 
