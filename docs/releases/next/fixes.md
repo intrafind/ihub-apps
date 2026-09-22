@@ -214,6 +214,15 @@ behind it, and had no width limit, letting it grow past the edge of a narrow pan
 The panel now follows the theme like the rest of the message actions, always renders above
 neighbouring menus, and is capped to a fixed width.
 
+## Admin: the model "Test" button and its result messages are translated again
+
+The "Test" action on Admin > Models and Admin > Providers showed a broken label instead of
+"Test"/"Testen", because the translation file defined `admin.models.test` as a group of
+sub-messages rather than as the button's own text. The result headline shown after a test (e.g.
+"Connection timeout", "Authentication failed") was also always displayed in English, regardless of
+the admin's language. Both the button label and the result messages now follow the selected
+language.
+
 ## Outlook Add-in: replies keep every recipient, and inserts keep your signature
 
 Answering a thread from the task pane quietly reduced it to a reply to the sender: every other `To:`

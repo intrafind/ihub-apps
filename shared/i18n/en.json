@@ -504,11 +504,17 @@
       "search": "Search providers...",
       "noResults": "No providers found matching your search.",
       "noProviders": "No providers configured.",
+      "adjustSearch": "Try adjusting your search term.",
+      "createFirst": "Create your first provider to get started.",
       "configured": "Configured",
       "notConfigured": "Not Configured",
       "noApiKeyRequired": "No API key required",
       "enabled": "Enabled",
       "disabled": "Disabled",
+      "test": "Test",
+      "testAll": "Test All",
+      "modelResults": "Model Test Results",
+      "testingMore": "Testing remaining models...",
       "configure": "Configure",
       "delete": "Delete",
       "createNew": "Create New Provider",
@@ -524,6 +530,8 @@
         "description": "Description",
         "apiKey": "API Key",
         "status": "Status",
+        "models": "Models",
+        "connectivity": "Connectivity",
         "actions": "Actions"
       },
       "edit": {
@@ -616,9 +624,25 @@
       "disabled": "Disabled",
       "default": "Default",
       "actions": "Actions",
-      "test": {
+      "test": "Test",
+      "testResults": {
         "success": "Test Successful",
-        "failed": "Test Failed"
+        "failed": "Test Failed",
+        "messages": {
+          "testSuccessful": "Model test successful",
+          "testFailed": "Model test failed",
+          "connectionTimeout": "Connection timeout",
+          "connectionRefused": "Connection refused",
+          "serviceNotFound": "Service not found",
+          "networkError": "Network error",
+          "requestTimeout": "Request timeout",
+          "apiKeyNotConfigured": "API key not configured",
+          "accessDenied": "Access denied",
+          "authenticationFailed": "Authentication failed",
+          "modelNotFound": "Model not found",
+          "rateLimitExceeded": "Rate limit exceeded",
+          "serverError": "Server error"
+        }
       },
       "enable": "Enable",
       "disable": "Disable",

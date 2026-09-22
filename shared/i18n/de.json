@@ -748,11 +748,17 @@
       "search": "Anbieter suchen...",
       "noResults": "Keine Anbieter gefunden, die Ihrer Suche entsprechen.",
       "noProviders": "Keine Anbieter konfiguriert.",
+      "adjustSearch": "Versuchen Sie, Ihren Suchbegriff anzupassen.",
+      "createFirst": "Erstellen Sie Ihren ersten Anbieter, um loszulegen.",
       "configured": "Konfiguriert",
       "notConfigured": "Nicht konfiguriert",
       "noApiKeyRequired": "Kein API-Schlüssel erforderlich",
       "enabled": "Aktiviert",
       "disabled": "Deaktiviert",
+      "test": "Testen",
+      "testAll": "Alle testen",
+      "modelResults": "Modelltest-Ergebnisse",
+      "testingMore": "Weitere Modelle werden getestet...",
       "configure": "Konfigurieren",
       "delete": "Löschen",
       "createNew": "Neuen Anbieter erstellen",
@@ -768,6 +774,8 @@
         "description": "Beschreibung",
         "apiKey": "API-Schlüssel",
         "status": "Status",
+        "models": "Modelle",
+        "connectivity": "Konnektivität",
         "actions": "Aktionen"
       },
       "edit": {
@@ -860,9 +868,25 @@
       "disabled": "Deaktiviert",
       "default": "Standard",
       "actions": "Aktionen",
-      "test": {
+      "test": "Testen",
+      "testResults": {
         "success": "Test erfolgreich",
-        "failed": "Test fehlgeschlagen"
+        "failed": "Test fehlgeschlagen",
+        "messages": {
+          "testSuccessful": "Modelltest erfolgreich",
+          "testFailed": "Modelltest fehlgeschlagen",
+          "connectionTimeout": "Verbindungs-Timeout",
+          "connectionRefused": "Verbindung abgelehnt",
+          "serviceNotFound": "Dienst nicht gefunden",
+          "networkError": "Netzwerkfehler",
+          "requestTimeout": "Anfrage-Timeout",
+          "apiKeyNotConfigured": "API-Schlüssel nicht konfiguriert",
+          "accessDenied": "Zugriff verweigert",
+          "authenticationFailed": "Authentifizierung fehlgeschlagen",
+          "modelNotFound": "Modell nicht gefunden",
+          "rateLimitExceeded": "Ratenlimit überschritten",
+          "serverError": "Serverfehler"
+        }
       },
       "enable": "Aktivieren",
       "disable": "Deaktivieren",
