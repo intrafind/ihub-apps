@@ -15,10 +15,11 @@ import { resolveAndValidatePath, sanitizeRelativePath } from '../utils/pathSecur
 class FileSystemHandler extends SourceHandler {
   constructor(handlerConfig = {}) {
     super(handlerConfig);
-    // Use absolute path to contents directory
+    // Absolute path to the contents directory. `resolve`, not `join`: an
+    // absolute CONTENTS_DIR must be taken as-is, not appended to the root.
     const rootDir = getRootDir();
     const contentsDir = config.CONTENTS_DIR || 'contents';
-    this.basePath = handlerConfig.basePath || path.join(rootDir, contentsDir);
+    this.basePath = handlerConfig.basePath || path.resolve(rootDir, contentsDir);
     logger.info(`FileSystemHandler initialized with basePath: ${this.basePath}`);
 
     // Ensure sources subdirectory exists
