@@ -335,7 +335,7 @@ function AdminVoiceInputPage() {
             <p className="mt-1 text-xs text-gray-500 dark:text-gray-400">
               {t(
                 'admin.voiceInput.azure.subscriptionKeyHint',
-                'Stored encrypted at rest and never sent to the browser. A shown value of ***REDACTED*** means a key is already set — leave it to keep it.'
+                'Stored encrypted at rest and never sent to the browser. A shown value of ***REDACTED*** means a key is already set — leave it to keep it. Leave it empty for an on-prem Azure Speech container, which needs no key — set its host above.'
               )}
             </p>
           </div>
