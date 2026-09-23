@@ -126,7 +126,8 @@ function OfficeStartPage({ user, onLogout, onSelectApp, onStartChat, onBrowseApp
         app: defaultApp,
         officeConfig,
         isAppointment,
-        language: officeLocale
+        language: officeLocale,
+        includeOfficeDefaults: true
       }),
     [defaultApp, officeConfig, isAppointment]
   );

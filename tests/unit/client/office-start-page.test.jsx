@@ -234,7 +234,12 @@ describe('buildOfficeStarterPrompts', () => {
   });
 
   test('the Outlook defaults fill in and always auto-send; meetings get the calendar set', () => {
-    const mail = buildOfficeStarterPrompts({ app: { id: 'chat' }, officeConfig, language: 'en' });
+    const mail = buildOfficeStarterPrompts({
+      app: { id: 'chat' },
+      officeConfig,
+      language: 'en',
+      includeOfficeDefaults: true
+    });
     expect(mail).toEqual([
       { key: 'office-0', label: 'Summarize', message: 'Summarize this email', autoSend: true }
     ]);
@@ -242,10 +247,32 @@ describe('buildOfficeStarterPrompts', () => {
       app: null,
       officeConfig,
       isAppointment: true,
-      language: 'en'
+      language: 'en',
+      includeOfficeDefaults: true
     });
     expect(meeting.map(p => p.label)).toEqual(['Agenda']);
-    expect(buildOfficeStarterPrompts({ app: null, officeConfig: {}, language: 'en' })).toEqual([]);
+    expect(
+      buildOfficeStarterPrompts({
+        app: null,
+        officeConfig: {},
+        language: 'en',
+        includeOfficeDefaults: true
+      })
+    ).toEqual([]);
+  });
+
+  test('an opened app without prompts of its own does not get the Outlook defaults', () => {
+    expect(
+      buildOfficeStarterPrompts({ app: { id: 'chat' }, officeConfig, language: 'en' })
+    ).toEqual([]);
+    expect(
+      buildOfficeStarterPrompts({
+        app: { id: 'chat' },
+        officeConfig,
+        isAppointment: true,
+        language: 'en'
+      })
+    ).toEqual([]);
   });
 });
 

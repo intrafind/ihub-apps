@@ -75,7 +75,7 @@ Still on the **Office Integration** admin page:
 
 - **Display Name** — appears as the add-in name in Outlook's ribbon and the M365 Admin Center listing. Localize for each language your users see (`en`, `de`, …). Required, max 250 chars per locale.
 - **Description** — short blurb shown alongside the name. Max 250 chars per locale.
-- **Starter Prompts** — up to 20 quick-action prompts displayed when the user opens the add-in on an email. Each has a **Title** (button label) and **Message** (the prompt sent on click, max 4000 chars). Prompts can be reordered with the up/down arrows. They are used as the default suggestions when the user-selected app does not declare its own starter prompts.
+- **Starter Prompts** — up to 20 quick-action prompts displayed when the user opens the add-in on an email. Each has a **Title** (button label) and **Message** (the prompt sent on click, max 4000 chars). Prompts can be reordered with the up/down arrows. They are the start page's **quick starters**: shown under the default chat app's input when that app does not declare its own starter prompts. Inside an opened app only the app's own starter prompts appear — an app without any shows none, and the Outlook defaults are not offered there. With the landing view set to **All apps** there is no start page, so the defaults are not shown at all.
 - **Start Page** — what the pane shows after sign-in and which app answers there. See [The start page](#the-start-page) below.
 - **Answer Actions** — what the button under each assistant answer does by default. See [Answer actions](#answer-actions) below.
 
