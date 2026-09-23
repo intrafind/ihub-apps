@@ -3783,6 +3783,8 @@
     "readFailed": "Nicht lesbar",
     "readFailedTitle": "Die Seite konnte nicht abgerufen werden",
     "failed": "Fehlgeschlagen",
-    "stopped": "Abgebrochen"
+    "stopped": "Abgebrochen",
+    "moreValues_one": "+{{count}} weiterer",
+    "moreValues_other": "+{{count}} weitere"
   }
 }
