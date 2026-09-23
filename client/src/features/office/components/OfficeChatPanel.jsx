@@ -568,8 +568,8 @@ function OfficeChatPanel({
   if (!authData) return null;
   if (!selectedApp) return <Navigate to={homePath} replace />;
 
-  // The app's own starter prompts, or the admin's Outlook defaults (the
-  // calendar set inside a meeting) — the same list the start page offers.
+  // Only the app's own starter prompts — the admin's Outlook defaults are the
+  // start page's quick starters and do not follow the user into an app.
   const starterPrompts = buildOfficeStarterPrompts({
     app: selectedApp,
     officeConfig,
@@ -642,18 +642,20 @@ function OfficeChatPanel({
                     </div>
                   )}
                 </div>
-                <div className="flex flex-col gap-1.5">
-                  {starterPrompts.map(prompt => (
-                    <button
-                      key={prompt.key}
-                      type="button"
-                      onClick={() => handlePromptSelect(prompt)}
-                      className="office-starter-prompt w-full text-left rounded-lg border border-slate-200 bg-white hover:bg-slate-50 hover:border-slate-300 transition-colors text-slate-700 dark:border-slate-700 dark:bg-slate-800 dark:hover:bg-slate-700 dark:hover:border-slate-600 dark:text-slate-200"
-                    >
-                      {prompt.label}
-                    </button>
-                  ))}
-                </div>
+                {starterPrompts.length > 0 && (
+                  <div className="flex flex-col gap-1.5">
+                    {starterPrompts.map(prompt => (
+                      <button
+                        key={prompt.key}
+                        type="button"
+                        onClick={() => handlePromptSelect(prompt)}
+                        className="office-starter-prompt w-full text-left rounded-lg border border-slate-200 bg-white hover:bg-slate-50 hover:border-slate-300 transition-colors text-slate-700 dark:border-slate-700 dark:bg-slate-800 dark:hover:bg-slate-700 dark:hover:border-slate-600 dark:text-slate-200"
+                      >
+                        {prompt.label}
+                      </button>
+                    ))}
+                  </div>
+                )}
               </div>
             )}
 

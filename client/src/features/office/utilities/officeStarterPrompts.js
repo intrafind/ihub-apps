@@ -8,17 +8,27 @@ import { getLocalizedContent } from '../../../utils/localizeContent';
  * An app's own `starterPrompts` win. Without them the admin's Outlook
  * defaults apply (`officeIntegration.starterPrompts`, or the calendar set
  * when the open item is an appointment so nobody sees "Summarize this email"
- * inside a meeting). Default prompts fire on click; an app prompt only when
- * it says `autoSend`.
+ * inside a meeting) — but only where `includeOfficeDefaults` is set: the
+ * defaults are the start page's quick starters, so an opened app without
+ * prompts of its own shows none. Default prompts fire on click; an app prompt
+ * only when it says `autoSend`.
  *
  * @param {object} options
  * @param {object|null} options.app - The app the prompt will be sent to.
  * @param {object} options.officeConfig - The add-in config (`useOfficeConfig()`).
  * @param {boolean} [options.isAppointment] - Whether the open Outlook item is a meeting.
  * @param {string} options.language - The pane's language.
+ * @param {boolean} [options.includeOfficeDefaults] - Fall back to the admin's
+ *   Outlook defaults when the app has no prompts (the start page only).
  * @returns {Array<{ key: string, label: string, subtitle?: string, message: string, autoSend: boolean, raw?: object }>}
  */
-export function buildOfficeStarterPrompts({ app, officeConfig, isAppointment = false, language }) {
+export function buildOfficeStarterPrompts({
+  app,
+  officeConfig,
+  isAppointment = false,
+  language,
+  includeOfficeDefaults = false
+}) {
   if (Array.isArray(app?.starterPrompts) && app.starterPrompts.length > 0) {
     return app.starterPrompts.map((p, idx) => ({
       key: p?.id ?? `${idx}`,
@@ -29,6 +39,8 @@ export function buildOfficeStarterPrompts({ app, officeConfig, isAppointment = f
       raw: p
     }));
   }
+
+  if (!includeOfficeDefaults) return [];
 
   const configured = isAppointment
     ? officeConfig?.calendarStarterPrompts
