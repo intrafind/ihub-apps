@@ -216,3 +216,129 @@ test('an event for the email already open keeps the per-email edits (issue #2450
     delete global.Office;
   }
 });
+
+function dispatchSelectionChanged() {
+  document.dispatchEvent(
+    new CustomEvent('ihub:itemchanged', { detail: { source: 'SelectedItemsChanged' } })
+  );
+}
+
+function dispatchOutlookItemChanged() {
+  document.dispatchEvent(
+    new CustomEvent('ihub:itemchanged', { detail: { source: 'ItemChanged' } })
+  );
+}
+
+describe('SelectedItemsChanged', () => {
+  let loads;
+
+  beforeEach(() => {
+    global.Office = { context: { mailbox: { item: { itemId: 'A' } } } };
+    loads = [];
+    mockHostImpl = {
+      kind: 'office',
+      readMessageContext: jest.fn(() => {
+        const d = deferred();
+        loads.push(d);
+        return d.promise;
+      })
+    };
+  });
+
+  afterEach(() => {
+    delete global.Office;
+  });
+
+  async function mountWithEmailA() {
+    const hook = renderHook(() => useOutlookMailContextSnapshot());
+    await act(async () => {
+      loads[0].resolve({ available: true, itemId: 'A', subject: 'Mail A', attachments: [] });
+    });
+    return hook;
+  }
+
+  test('firing before Outlook swapped the item does not re-read the previous email', async () => {
+    const { result } = await mountWithEmailA();
+
+    // The user clicks email B: the selection event arrives while
+    // mailbox.item still points at A…
+    await act(async () => {
+      dispatchSelectionChanged();
+      jest.advanceTimersByTime(150);
+    });
+    // …so the strip keeps showing A instead of re-reading it.
+    expect(loads).toHaveLength(1);
+    expect(result.current.loading).toBe(false);
+    expect(result.current.ctx?.itemId).toBe('A');
+
+    // Outlook swaps the item and fires ItemChanged: one read, of B.
+    global.Office.context.mailbox.item = { itemId: 'B' };
+    await act(async () => {
+      dispatchOutlookItemChanged();
+      jest.advanceTimersByTime(150);
+    });
+    expect(loads).toHaveLength(2);
+
+    // The settled selection check finds B already covered.
+    await act(async () => {
+      jest.advanceTimersByTime(1000);
+    });
+    expect(loads).toHaveLength(2);
+
+    await act(async () => {
+      loads[1].resolve({ available: true, itemId: 'B', subject: 'Mail B', attachments: [] });
+    });
+    expect(result.current.ctx?.itemId).toBe('B');
+  });
+
+  test('re-selecting the open email or a list refresh never re-reads it', async () => {
+    const { result } = await mountWithEmailA();
+
+    await act(async () => {
+      dispatchSelectionChanged();
+      dispatchSelectionChanged();
+      jest.advanceTimersByTime(1000);
+    });
+    expect(loads).toHaveLength(1);
+    expect(result.current.loading).toBe(false);
+    expect(result.current.ctx?.itemId).toBe('A');
+  });
+
+  test('a brief gap with no item open does not blank the strip', async () => {
+    const { result } = await mountWithEmailA();
+
+    // mailbox.item is momentarily empty while the host swaps…
+    global.Office.context.mailbox.item = null;
+    await act(async () => {
+      dispatchSelectionChanged();
+      jest.advanceTimersByTime(100);
+    });
+    // …and back to the same email before the selection settles.
+    global.Office.context.mailbox.item = { itemId: 'A' };
+    await act(async () => {
+      jest.advanceTimersByTime(1000);
+    });
+    expect(loads).toHaveLength(1);
+    expect(result.current.ctx?.itemId).toBe('A');
+  });
+
+  test('re-reads once settled when the item changed without an ItemChanged', async () => {
+    const { result } = await mountWithEmailA();
+
+    global.Office.context.mailbox.item = { itemId: 'B' };
+    await act(async () => {
+      dispatchSelectionChanged();
+      jest.advanceTimersByTime(400);
+    });
+    expect(result.current.loading).toBe(true);
+    await act(async () => {
+      jest.advanceTimersByTime(150);
+    });
+    expect(loads).toHaveLength(2);
+
+    await act(async () => {
+      loads[1].resolve({ available: true, itemId: 'B', subject: 'Mail B', attachments: [] });
+    });
+    expect(result.current.ctx?.itemId).toBe('B');
+  });
+});
