@@ -47,14 +47,21 @@ export default function registerOfficeRoutes(app) {
 
   // Serve office static assets (icons, bundled JS) — always available so the
   // browser can cache icon files even when the integration is toggled.
-  app.use(buildServerPath('/office/assets'), express.static(path.join(officePath, 'assets')));
+  // Bundle filenames are content-hashed by Vite, so a long immutable cache is
+  // safe: a changed file gets a new name, a deploy never serves stale JS.
+  // Without this, express.static's default max-age=0 forces a revalidation
+  // round trip for every asset on every task-pane open — painful on slow links.
+  app.use(
+    buildServerPath('/office/assets'),
+    express.static(path.join(officePath, 'assets'), { maxAge: '1y', immutable: true })
+  );
 
   // Serve the Office.js library from this origin for the `proxy` and `bundled`
   // modes, so environments that cannot reach Microsoft's CDN can still load the
   // add-in. Mounted unconditionally: an admin can then verify the path works
   // before switching a mode on, and Vite serves from the installed package in
   // dev. Office.js loads every one of its other files relative to this mount.
-  const bundledOfficeJs = express.static(officeJsDistPath);
+  const bundledOfficeJs = express.static(officeJsDistPath, { maxAge: '1y', immutable: true });
 
   app.use(buildServerPath('/office/office-js'), (req, res, next) => {
     const { mode, upstreamBaseUrl } = resolveOfficeJsSource(configCache.getPlatform());
@@ -114,6 +121,7 @@ export default function registerOfficeRoutes(app) {
     try {
       const html = renderOfficeHtml(path.join(htmlDir, 'taskpane.html'));
       res.set('Content-Type', 'text/html; charset=utf-8');
+      res.set('Cache-Control', 'no-cache');
       res.send(html);
     } catch (err) {
       logger.error('Failed to serve taskpane.html', { component: 'OfficeRoutes', error: err });
@@ -126,6 +134,7 @@ export default function registerOfficeRoutes(app) {
     try {
       const html = renderOfficeHtml(path.join(officePath, 'callback.html'));
       res.set('Content-Type', 'text/html; charset=utf-8');
+      res.set('Cache-Control', 'no-cache');
       res.send(html);
     } catch (err) {
       logger.error('Failed to serve callback.html', { component: 'OfficeRoutes', error: err });
@@ -139,6 +148,7 @@ export default function registerOfficeRoutes(app) {
     try {
       const html = renderOfficeHtml(path.join(htmlDir, 'commands.html'));
       res.set('Content-Type', 'text/html; charset=utf-8');
+      res.set('Cache-Control', 'no-cache');
       res.send(html);
     } catch (err) {
       logger.error('Failed to serve commands.html', { component: 'OfficeRoutes', error: err });

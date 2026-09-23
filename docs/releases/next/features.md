@@ -20,3 +20,11 @@ so you can see how the assistant searched, not just that it did.
 - Every other tool shows the arguments it was called with.
 - A failed call shows its error message under it instead of only in a tooltip on "Failed", so
   the reason is visible on touch screens too.
+
+## Outlook Add-in: faster repeat opens on slow connections
+
+The task pane's JavaScript and CSS bundles now carry a long-lived cache header, so the browser
+reuses them from disk instead of re-fetching on every open. Previously every asset was revalidated
+with the server on each open, which added a round trip per file — noticeable on slow or
+high-latency connections. The `taskpane.html`, `commands.html` and `callback.html` pages
+themselves still revalidate on every load, so a new deployment is always picked up.
