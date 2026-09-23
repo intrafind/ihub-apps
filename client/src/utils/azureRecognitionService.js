@@ -9,6 +9,8 @@ class AzureSpeechRecognition {
   lang = 'de-DE';
   host = '';
   continuous = false;
+  // Fetch a token from the iHub server; false means keyless (on-prem container).
+  useServerToken = true;
   interimResults = false;
 
   constructor() {}
@@ -148,31 +150,34 @@ class AzureSpeechRecognition {
     return res.json(); // { token, region }
   }
 
+  // Throws when the recognizer cannot be built; callers must not call start()
+  // afterwards (this.recognition stays undefined).
   async initRecognizer() {
-    try {
-      const { token, region } = await this.#fetchAuthToken();
+    // No token without a server-side subscription key: an on-prem Azure Speech
+    // container needs no authentication (the endpoint also answers token: null).
+    const { token, region } = this.useServerToken
+      ? await this.#fetchAuthToken()
+      : { token: null, region: '' };
 
-      // Prefer a custom host when configured (private/regional endpoint),
-      // otherwise use the region from the token response. Either way the
-      // recognizer authenticates with the short-lived token, never a key.
-      let speechConfig;
-      if (this.host) {
-        const hostURL = new URL(
-          `${this.host}/speech/recognition/interactive/cognitiveservices/v1${postfix}`
-        );
-        speechConfig = speechSdk.SpeechConfig.fromHost(hostURL);
-        speechConfig.authorizationToken = token;
-      } else {
-        speechConfig = speechSdk.SpeechConfig.fromAuthorizationToken(token, region);
-      }
-
-      const audioConfig = speechSdk.AudioConfig.fromDefaultMicrophoneInput();
-      speechConfig.speechRecognitionLanguage = this.lang ?? 'de-DE';
-      this.recognition = new speechSdk.SpeechRecognizer(speechConfig, audioConfig);
-    } catch (e) {
-      console.error('Failed to initialize Azure recognizer:', e);
-      this.#triggerOnError({ error: 'service', message: e.message });
+    // Prefer a custom host when configured (private/regional endpoint or
+    // on-prem container), otherwise use the region from the token response.
+    // The recognizer authenticates with the short-lived token, never a key.
+    let speechConfig;
+    if (this.host) {
+      const hostURL = new URL(
+        `${this.host}/speech/recognition/interactive/cognitiveservices/v1${postfix}`
+      );
+      speechConfig = speechSdk.SpeechConfig.fromHost(hostURL);
+      if (token) speechConfig.authorizationToken = token;
+    } else if (token) {
+      speechConfig = speechSdk.SpeechConfig.fromAuthorizationToken(token, region);
+    } else {
+      throw new Error('Azure subscription key is not configured');
     }
+
+    const audioConfig = speechSdk.AudioConfig.fromDefaultMicrophoneInput();
+    speechConfig.speechRecognitionLanguage = this.lang ?? 'de-DE';
+    this.recognition = new speechSdk.SpeechRecognizer(speechConfig, audioConfig);
   }
 
   // PRIVATE METHODS
