@@ -998,6 +998,8 @@ export default function registerDataRoutes(app) {
         // The vLLM realtime URL/apiKey stay server-side (the browser connects to
         // iHub, not vLLM); only whether it's enabled is surfaced. Azure host is
         // not a secret and lets the client fall back to a platform default.
+        // keyConfigured tells the client whether to fetch a token at all: without
+        // a key (on-prem container, air-gapped) it connects to the host directly.
         speech: platform.speech
           ? {
               realtime: platform.speech.realtime
@@ -1007,7 +1009,8 @@ export default function registerDataRoutes(app) {
                 ? {
                     enabled: platform.speech.azure.enabled,
                     host: platform.speech.azure.host,
-                    region: platform.speech.azure.region
+                    region: platform.speech.azure.region,
+                    keyConfigured: !!platform.speech.azure.subscriptionKey
                   }
                 : undefined
             }

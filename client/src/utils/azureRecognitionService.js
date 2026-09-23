@@ -9,6 +9,8 @@ class AzureSpeechRecognition {
   lang = 'de-DE';
   host = '';
   continuous = false;
+  // Fetch a token from the iHub server; false means keyless (on-prem container).
+  useServerToken = true;
   interimResults = false;
 
   constructor() {}
@@ -151,9 +153,11 @@ class AzureSpeechRecognition {
   // Throws when the recognizer cannot be built; callers must not call start()
   // afterwards (this.recognition stays undefined).
   async initRecognizer() {
-    // token is null when no subscription key is configured server-side
-    // (on-prem Azure Speech container, which needs no authentication).
-    const { token, region } = await this.#fetchAuthToken();
+    // No token without a server-side subscription key: an on-prem Azure Speech
+    // container needs no authentication (the endpoint also answers token: null).
+    const { token, region } = this.useServerToken
+      ? await this.#fetchAuthToken()
+      : { token: null, region: '' };
 
     // Prefer a custom host when configured (private/regional endpoint or
     // on-prem container), otherwise use the region from the token response.
