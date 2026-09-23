@@ -16,6 +16,9 @@
  *    (`webSearchQueries`). Its sources are listed by `GroundingSources`.
  *  - `fetch.*` progress frames: the page a search is reading right now.
  *
+ * Each item also lists what the call asked for (`details`, see
+ * `toolDetails`) and, when it failed, why (`error`).
+ *
  * @module features/chat/toolActivity
  */
 
@@ -94,6 +97,82 @@ function resolveDocuments(items) {
   }
 }
 
+/** Longest argument value shown in full; longer ones are cut, the full text kept for a tooltip. */
+const DETAIL_VALUE_CHARS = 160;
+/** Most values listed for one argument; the rest are counted as `more`. */
+const DETAIL_MAX_VALUES = 12;
+
+function detailValue(value) {
+  let text;
+  if (typeof value === 'string') text = value.trim();
+  else if (typeof value === 'number' || typeof value === 'boolean') text = String(value);
+  else {
+    try {
+      text = JSON.stringify(value);
+    } catch {
+      return null;
+    }
+  }
+  if (!text) return null;
+  return text.length > DETAIL_VALUE_CHARS
+    ? { text: `${text.slice(0, DETAIL_VALUE_CHARS)}…`, full: text }
+    : { text };
+}
+
+/**
+ * What a call asked for, beyond what its row already shows: every argument
+ * the model passed, in its order, e.g. an iFinder search's `filter`, `sort`,
+ * `maxResults` and `returnFacets`, or the `facet` a facet lookup enumerated.
+ * An array argument keeps one value per distinct element, so each filter
+ * reads on its own.
+ *
+ * @param {Object} args - the call's arguments
+ * @param {string[]} shown - argument names the row already shows
+ * @returns {Array<{name: string, values: Array<{text: string, full?: string}>, more: number}>}
+ */
+export function toolDetails(args, shown = []) {
+  if (!args || typeof args !== 'object' || Array.isArray(args)) return [];
+  const details = [];
+  for (const [name, value] of Object.entries(args)) {
+    if (shown.includes(name) || value === null || value === undefined) continue;
+    const values = [];
+    for (const item of Array.isArray(value) ? value : [value]) {
+      const detail = detailValue(item);
+      if (
+        detail &&
+        !values.some(seen => (seen.full ?? seen.text) === (detail.full ?? detail.text))
+      ) {
+        values.push(detail);
+      }
+    }
+    if (values.length) {
+      details.push({
+        name,
+        values: values.slice(0, DETAIL_MAX_VALUES),
+        more: Math.max(0, values.length - DETAIL_MAX_VALUES)
+      });
+    }
+  }
+  return details;
+}
+
+/** Argument names each value the row shows can come from — see `queryOf`, `urlOf`, `documentIdOf`. */
+const ROW_ARGS = {
+  query: ['query', 'q', 'searchQuery', 'searchTerm'],
+  url: ['url', 'uri', 'link'],
+  documentId: ['documentId']
+};
+
+/** Names of the arguments whose value the row already shows. */
+function shownArgs(args, row) {
+  if (!args || typeof args !== 'object') return [];
+  return Object.entries(ROW_ARGS).flatMap(([field, names]) =>
+    row[field]
+      ? names.filter(name => typeof args[name] === 'string' && args[name].trim() === row[field])
+      : []
+  );
+}
+
 function urlOf(args) {
   if (!args || typeof args !== 'object') return null;
   const url = args.url ?? args.uri ?? args.link;
@@ -143,6 +222,9 @@ export function buildToolActivity(run) {
     // A call the turn never saw finish (stopped, failed elsewhere) is not
     // still running once the turn is over.
     const status = tool.status === 'running' && finished ? 'stopped' : tool.status;
+    const query = kind === 'search' ? queryOf(tool.args) : null;
+    const url = kind === 'fetch' ? urlOf(tool.args) : null;
+    const documentId = kind === 'fetch' ? documentIdOf(tool.args) : null;
     items.push({
       id: tool.callId,
       kind,
@@ -150,9 +232,10 @@ export function buildToolActivity(run) {
       name: tool.name || tool.toolId,
       status,
       scope: kind === 'tool' ? null : searchScope(tool.toolId),
-      query: kind === 'search' ? queryOf(tool.args) : null,
-      url: kind === 'fetch' ? urlOf(tool.args) : null,
-      documentId: kind === 'fetch' ? documentIdOf(tool.args) : null,
+      query,
+      url,
+      documentId,
+      details: toolDetails(tool.args, shownArgs(tool.args, { query, url, documentId })),
       sources: Array.isArray(tool.webSources) ? tool.webSources : [],
       error: tool.error?.message || null,
       durationMs: tool.durationMs ?? null
@@ -172,6 +255,7 @@ export function buildToolActivity(run) {
       // the search is behind it.
       status: finished || run.text ? 'completed' : 'running',
       queries: nativeQueries,
+      details: [],
       sources: [],
       error: null,
       durationMs: null
