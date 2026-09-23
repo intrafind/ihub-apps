@@ -50,11 +50,11 @@ All upload types share a single `upload` object in the app configuration:
 Default `supportedFormats` for `fileUpload`:
 
 ```
-text/plain, text/markdown, text/csv, application/json, text/html, text/css,
-text/javascript, application/javascript, text/xml, message/rfc822,
+text/plain, text/markdown, text/csv, text/vtt, application/json, text/html,
+text/css, text/javascript, application/javascript, text/xml, message/rfc822,
 application/pdf,
 application/vnd.openxmlformats-officedocument.wordprocessingml.document,
-application/vnd.ms-outlook, application/x-msg,
+application/vnd.ms-outlook,
 application/vnd.oasis.opendocument.text,
 application/vnd.oasis.opendocument.spreadsheet,
 application/vnd.oasis.opendocument.presentation
@@ -102,6 +102,8 @@ Supported providers (configured at the platform level):
 | Extension | MIME Type | Processing library |
 |-----------|-----------|-------------------|
 | `.txt`, `.md`, `.csv`, `.json`, `.html`, `.css`, `.js`, `.xml` | `text/*` / `application/json` | Read directly as text |
+| `.vtt` | `text/vtt` | WebVTT (e.g. Microsoft Teams transcripts), read directly as text |
+| any extension | `text/*` ("Any text file") | Read as text; rejected if the content is binary — see below |
 | `.pdf` | `application/pdf` | Text extracted via `pdfjs-dist`; falls back to rendering each page as an image |
 | `.docx` | `application/vnd.openxmlformats-officedocument.wordprocessingml.document` | Converted to text via `mammoth` |
 | `.xlsx` | `application/vnd.openxmlformats-officedocument.spreadsheetml.sheet` | Cell content extracted via `xlsx` |
@@ -113,6 +115,21 @@ Supported providers (configured at the platform level):
 | `.odp` | `application/vnd.oasis.opendocument.presentation` | XML text extracted via `jszip` |
 | `.msg` | `application/vnd.ms-outlook`, `application/x-msg` | Subject, sender/recipients (SMTP addresses preferred), date, attachment names, and body extracted via `@kenjiuno/msgreader`. Body falls back across plain text → HTML → compressed RTF, so HTML-only emails (e.g. newsletters) are read correctly |
 | `.eml` | `message/rfc822` | Read as-is (RFC 822 format) |
+
+#### Any text file (`text/*`)
+
+Adding the wildcard `text/*` to `fileUpload.supportedFormats` accepts any file whose content is
+plain text, whatever its extension or the MIME type the browser reports (browsers report none for
+many formats, e.g. `.log`, `.yaml`, `.srt`). With it enabled:
+
+- the file picker is not filtered by type;
+- a file matching another listed format is processed as before (e.g. PDF text extraction);
+- any other file is read as plain text and rejected with "Unsupported file format" if it looks
+  binary (NUL bytes or undecodable characters). Format-specific extractors are never used for it,
+  so a `.docx` is only extracted when the DOCX type itself is listed.
+
+`text/*` is off by default and has to be selected explicitly in the admin format selector
+("Any text file").
 
 > `.xlsx`, `.xls`, `.pptx`, and `.ppt` are fully supported by the processing engine but are not included in the default `supportedFormats` list. Add their MIME types explicitly to enable them.
 

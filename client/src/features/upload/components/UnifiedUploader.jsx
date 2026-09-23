@@ -4,9 +4,12 @@ import Uploader from './Uploader';
 import '../components/ImageUpload.css';
 import {
   SUPPORTED_TEXT_FORMATS,
+  GENERIC_TEXT_MIME_TYPE,
   getFileTypeDisplay as getFileTypeDisplayUtil,
+  getExtensionDisplay,
   formatMimeTypesToDisplay,
   processDocumentFile,
+  processGenericTextFile,
   formatAcceptAttribute,
   processImageFile,
   extractAudioFromVideo,
@@ -125,6 +128,19 @@ const UnifiedUploader = ({
     ...VIDEO_FORMATS,
     ...TEXT_FORMATS
   ]);
+
+  // "Any text file" (text/*) opts into content-based acceptance: the picker is
+  // left unfiltered and a file not matching an explicit format is read as
+  // plain text and rejected if it turns out to be binary.
+  const ALLOW_GENERIC_TEXT = TEXT_FORMATS.includes(GENERIC_TEXT_MIME_TYPE);
+  const EXPLICIT_TEXT_FORMATS = formatAcceptAttribute(
+    TEXT_FORMATS.filter(format => format !== GENERIC_TEXT_MIME_TYPE)
+  );
+  const isExplicitTextFile = file => {
+    if (file.type && EXPLICIT_TEXT_FORMATS.includes(file.type)) return true;
+    const fileExtension = '.' + file.name.split('.').pop().toLowerCase();
+    return EXPLICIT_TEXT_FORMATS.includes(fileExtension);
+  };
 
   const isImageFile = type => IMAGE_FORMATS.includes(type);
   const isAudioFile = type => AUDIO_FORMATS.includes(type);
@@ -291,17 +307,25 @@ const UnifiedUploader = ({
       return await processVideo(file);
     }
 
-    // Handle text/document files using shared utility
-    const { content: processedContent, pageImages } = await processDocumentFile(file);
+    // Handle text/document files using shared utility. Files that only pass
+    // because "any text file" is allowed are read as plain text — never run
+    // through a format-specific extractor the admin did not enable.
+    const isGenericText = ALLOW_GENERIC_TEXT && !isExplicitTextFile(file);
+    const { content: processedContent, pageImages } = isGenericText
+      ? await processGenericTextFile(file)
+      : await processDocumentFile(file);
     const displayContent = processedContent || '';
     const previewContent =
       displayContent.length > 200 ? displayContent.substring(0, 200) + '...' : displayContent;
+    const displayType = isGenericText
+      ? getExtensionDisplay(file.name)
+      : getFileTypeDisplay(file.type);
 
     return {
       preview: {
         type: 'document',
         fileName: file.name,
-        fileType: getFileTypeDisplay(file.type),
+        fileType: displayType,
         content: previewContent
       },
       data: {
@@ -311,8 +335,8 @@ const UnifiedUploader = ({
         pageImages,
         fileName: file.name,
         fileSize: file.size,
-        fileType: file.type,
-        displayType: getFileTypeDisplay(file.type)
+        fileType: file.type || (isGenericText ? 'text/plain' : ''),
+        displayType
       }
     };
   };
@@ -395,6 +419,7 @@ const UnifiedUploader = ({
       onProcessFile={processFile}
       data={fileData}
       allowMultiple={allowMultiple}
+      acceptAnyFile={ALLOW_GENERIC_TEXT}
     >
       {({
         error,

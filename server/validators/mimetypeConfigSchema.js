@@ -16,9 +16,11 @@ const categorySchema = z.object({
   mimeTypes: z.array(z.string()).min(1, 'Category must have at least one MIME type')
 });
 
-// MIME type detail schema - defines properties for each MIME type
+// MIME type detail schema - defines properties for each MIME type.
+// Wildcard entries such as `text/*` ("Any text file") match by content, not
+// by extension, so their extension list may be empty.
 const mimeTypeDetailSchema = z.object({
-  extensions: z.array(z.string()).min(1, 'MIME type must have at least one extension'),
+  extensions: z.array(z.string()),
   displayName: z.string().min(1, 'Display name is required'),
   category: z.string().min(1, 'Category is required')
 });
