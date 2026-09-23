@@ -8,9 +8,3 @@ empty under **Admin → Voice Input** and set the host to the container, or keep
 already sets: the browser now connects to it directly, with no call to Microsoft from the browser
 or the iHub server, so this works fully air-gapped. Azure cloud still needs a key. A failed Azure setup now shows its error instead
 of a generic "Error starting voice input".
-
-## Chat Export: PDF and Excel Downloads Work Again
-
-Exporting a chat or message as PDF opened the print dialog with a blank page, and exporting as
-Excel produced no file at all. PDF export now prints the full conversation, and Excel export
-downloads the workbook again.
