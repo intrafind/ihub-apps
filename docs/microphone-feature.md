@@ -89,6 +89,12 @@ Admins can configure the platform-level speech backends under **Admin → Voice 
   reaches the browser. When an app selects the Azure service without its own
   `settings.speechRecognition.host`, it falls back to the platform host configured here.
 
+  **On-prem Azure Speech containers** need no key: leave the subscription key empty and
+  set the host to the container (e.g. `ws://speech.internal:5000`). The token endpoint then
+  returns no token and the browser connects to the host directly. Without a key _and_
+  without a host (Azure cloud), voice input fails with "Azure subscription key is not
+  configured".
+
   > **Migrating from `VITE_AZURE_SUBSCRIPTION_ID`:** earlier builds baked the Azure key
   > into the client bundle via this env var. It is no longer used — set the key under
   > **Admin → Voice Input** (`speech.azure.subscriptionKey`) instead.

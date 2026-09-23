@@ -576,7 +576,7 @@
         "region": "Region",
         "subscriptionKey": "Subscription Key",
         "subscriptionKeyPlaceholder": "Azure Speech key",
-        "subscriptionKeyHint": "Stored encrypted at rest and never sent to the browser. A shown value of ***REDACTED*** means a key is already set — leave it to keep it."
+        "subscriptionKeyHint": "Stored encrypted at rest and never sent to the browser. A shown value of ***REDACTED*** means a key is already set — leave it to keep it. Leave it empty for an on-prem Azure Speech container, which needs no key — set its host above."
       }
     },
     "agents": {

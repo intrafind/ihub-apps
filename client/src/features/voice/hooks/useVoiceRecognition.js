@@ -219,7 +219,18 @@ const useVoiceRecognition = ({ app, inputRef, onSpeechResult, onCommand, disable
       if (recognition instanceof AzureSpeechRecognition) {
         // Async: fetches a short-lived Azure token from the server before
         // building the recognizer (the subscription key stays server-side).
-        await recognition.initRecognizer();
+        // Its handlers aren't wired yet, so surface a failure here and bail
+        // out instead of starting a recognizer that was never built.
+        try {
+          await recognition.initRecognizer();
+        } catch (error) {
+          console.error('Failed to initialize Azure recognizer:', error);
+          showError(
+            error.message ||
+              t('voiceInput.error.service', 'Transcription service unavailable. Please try again.')
+          );
+          return;
+        }
       }
 
       // Some services (vLLM realtime) end asynchronously: after stop() the old

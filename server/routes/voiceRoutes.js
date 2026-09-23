@@ -10,6 +10,11 @@ import logger from '../utils/logger.js';
  * `/api/voice/azure/token` brokers a short-lived Azure Speech authorization
  * token so the browser SDK never receives the subscription key. Requires
  * authentication; the key is read (decrypted) from platform.speech.azure.
+ *
+ * Without a configured key it answers `{ token: null }`: on-prem Azure Speech
+ * containers accept unauthenticated connections to their host, so the client
+ * connects keyless. Azure cloud still needs a key (the client refuses a
+ * keyless session without a custom host).
  */
 export default function registerVoiceRoutes(app) {
   app.get(buildServerPath('/api/voice/azure/token'), authRequired, async (req, res) => {
@@ -17,6 +22,9 @@ export default function registerVoiceRoutes(app) {
       const azure = (configCache.getPlatform() || {}).speech?.azure || {};
       if (!azure.enabled) {
         return res.status(503).json({ error: 'Azure Speech is not enabled' });
+      }
+      if (!azure.subscriptionKey) {
+        return res.json({ token: null, region: azure.region || '' });
       }
       const result = await getAzureSpeechToken({
         subscriptionKey: azure.subscriptionKey, // decrypted by configCache on load
