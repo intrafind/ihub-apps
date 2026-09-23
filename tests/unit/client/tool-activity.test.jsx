@@ -14,6 +14,7 @@ import { projectRunToMessage } from '../../../client/src/features/chat/runToMess
 import {
   buildToolActivity,
   searchScope,
+  toolDetails,
   toolKind
 } from '../../../client/src/features/chat/toolActivity';
 import ToolActivity from '../../../client/src/features/chat/components/ToolActivity';
@@ -98,6 +99,68 @@ describe('searchScope', () => {
     expect(searchScope('iFinder_search')).toBe('documents');
     expect(searchScope('source_handbook')).toBe('documents');
     expect(searchScope('braveSearch')).toBe('web');
+  });
+});
+
+describe('toolDetails', () => {
+  test('lists every argument but the ones the row shows, one value per array element', () => {
+    expect(
+      toolDetails(
+        {
+          query: '*',
+          filter: ['creators.keyword:"Daniel Manzke"', 'modificationDate:[2026-09-09 TO *]'],
+          sort: ['modificationDate:desc'],
+          maxResults: 20,
+          from: 0,
+          exact: false,
+          searchProfile: null,
+          returnFacets: []
+        },
+        ['query']
+      )
+    ).toEqual([
+      {
+        name: 'filter',
+        values: [
+          { text: 'creators.keyword:"Daniel Manzke"' },
+          { text: 'modificationDate:[2026-09-09 TO *]' }
+        ],
+        more: 0
+      },
+      { name: 'sort', values: [{ text: 'modificationDate:desc' }], more: 0 },
+      { name: 'maxResults', values: [{ text: '20' }], more: 0 },
+      { name: 'from', values: [{ text: '0' }], more: 0 },
+      { name: 'exact', values: [{ text: 'false' }], more: 0 }
+    ]);
+  });
+
+  test('cuts a long value and keeps the full text', () => {
+    const long = 'x'.repeat(200);
+    const [detail] = toolDetails({ note: long, options: { deep: true } });
+    expect(detail.values[0].text).toBe(`${'x'.repeat(160)}…`);
+    expect(detail.values[0].full).toBe(long);
+    expect(toolDetails({ options: { deep: true } })[0].values).toEqual([{ text: '{"deep":true}' }]);
+  });
+
+  test('lists a long array by its first values and counts the rest, without repeats', () => {
+    const fields = Array.from({ length: 30 }, (_, i) => `field${i}`);
+    const [detail] = toolDetails({ returnFields: [...fields, 'field0'] });
+    expect(detail.values).toHaveLength(12);
+    expect(detail.values[0]).toEqual({ text: 'field0' });
+    expect(detail.more).toBe(18);
+    const item = { id: 'c1', kind: 'tool', name: 'iFinder_search', status: 'completed' };
+    render(
+      <ToolActivity
+        activity={{ items: [{ ...item, details: [detail], sources: [] }], reading: null }}
+      />
+    );
+    fireEvent.click(screen.getByRole('button'));
+    expect(screen.getByText('toolActivity.moreValues:18')).toBeInTheDocument();
+  });
+
+  test('has nothing to list without arguments', () => {
+    expect(toolDetails(undefined)).toEqual([]);
+    expect(toolDetails({})).toEqual([]);
   });
 });
 
@@ -332,6 +395,73 @@ describe('ToolActivity', () => {
     expect(links.map(link => link.getAttribute('href'))).toEqual([doc.url, doc.url]);
     // A hit without a browser link is still listed by title.
     expect(screen.getByText('Contract B')).toBeInTheDocument();
+  });
+
+  const call = (seq, type, callId, toolId, data) =>
+    env(seq, type, { step: 1, callId, toolId, name: toolId, ...data });
+
+  test('shows what each call asked for: filters, sort, facets', () => {
+    const activity = buildToolActivity(
+      runFrom([
+        started,
+        call(2, 'tool/started', 'c1', 'iFinder_search', {
+          args: {
+            query: '*',
+            filter: ['creators.keyword:"Daniel Manzke"'],
+            sort: ['modificationDate:desc'],
+            maxResults: 20
+          },
+          execution: 'server'
+        }),
+        call(3, 'tool/completed', 'c1', 'iFinder_search', { durationMs: 300 }),
+        call(4, 'tool/started', 'c2', 'iFinder_getFacetValues', {
+          args: { facet: 'creators.keyword', query: 'Manzke' },
+          execution: 'server'
+        }),
+        call(5, 'tool/completed', 'c2', 'iFinder_getFacetValues', { durationMs: 100 }),
+        ended(6)
+      ])
+    );
+    // The query is the search row's own chip, not repeated as a detail.
+    expect(activity.items[0].details.map(detail => detail.name)).toEqual([
+      'filter',
+      'sort',
+      'maxResults'
+    ]);
+    render(<ToolActivity activity={activity} loading={false} />);
+    fireEvent.click(screen.getByRole('button'));
+    expect(screen.getByText('creators.keyword:"Daniel Manzke"')).toBeInTheDocument();
+    expect(screen.getByText('modificationDate:desc')).toBeInTheDocument();
+    expect(screen.getByText('20')).toBeInTheDocument();
+    // A tool without a query of its own lists all of its arguments.
+    expect(screen.getByText('Ran iFinder_getFacetValues')).toBeInTheDocument();
+    expect(screen.getByText('facet')).toBeInTheDocument();
+    expect(screen.getByText('creators.keyword')).toBeInTheDocument();
+    expect(screen.getByText('Manzke')).toBeInTheDocument();
+  });
+
+  test('a failed call shows why, not only on hover', () => {
+    const activity = buildToolActivity(
+      runFrom([
+        started,
+        call(2, 'tool/started', 'c1', 'iFinder_getContent', {
+          args: { documentId: 'IPD-531' },
+          execution: 'server'
+        }),
+        call(3, 'tool/completed', 'c1', 'iFinder_getContent', {
+          durationMs: 100,
+          error: { message: 'Document not found: IPD-531' }
+        }),
+        ended(4)
+      ])
+    );
+    // The document id is the row's label, not a detail.
+    expect(activity.items[0].details).toEqual([]);
+    render(<ToolActivity activity={activity} loading={false} />);
+    fireEvent.click(screen.getByRole('button'));
+    expect(screen.getByText('IPD-531')).toBeInTheDocument();
+    expect(screen.getByText('Failed')).toBeInTheDocument();
+    expect(screen.getByText('Document not found: IPD-531')).toBeInTheDocument();
   });
 
   test('renders nothing without activity', () => {

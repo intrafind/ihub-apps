@@ -3818,6 +3818,8 @@
     "readFailed": "Not readable",
     "readFailedTitle": "The page could not be fetched",
     "failed": "Failed",
-    "stopped": "Stopped"
+    "stopped": "Stopped",
+    "moreValues_one": "+{{count}} more",
+    "moreValues_other": "+{{count}} more"
   }
 }

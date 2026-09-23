@@ -9,3 +9,14 @@ shows none, instead of falling back to the Outlook defaults.
 
 To keep a prompt available inside a particular app, add it to that app's starter prompts. With the
 landing view set to **All apps** there is no start page, so the Outlook defaults are not shown.
+
+## Chat: tool activity shows what each call asked for and why it failed
+
+The tool activity above an answer now lists the arguments of every tool call, not only its name,
+so you can see how the assistant searched, not just that it did.
+
+- An iFinder search shows its filters, sort order, result limit, offset and requested facets
+  next to the query; a facet lookup shows which facet it enumerated.
+- Every other tool shows the arguments it was called with.
+- A failed call shows its error message under it instead of only in a tooltip on "Failed", so
+  the reason is visible on touch screens too.

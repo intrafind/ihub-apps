@@ -189,6 +189,8 @@ function ActivityItem({ item }) {
           )}
           <ItemStatus item={item} />
         </div>
+        <ItemDetails item={item} />
+        <ItemError item={item} />
         {item.sources.length > 0 && (
           <ul className="mt-1 ms-5 space-y-0.5">
             {item.sources.map(source => (
@@ -204,36 +206,89 @@ function ActivityItem({ item }) {
     const url = item.url || item.sources[0]?.url;
     const label = item.sources[0]?.title || item.title || (url ? hostnameOf(url) : item.documentId);
     return (
-      <li className="flex flex-wrap items-center gap-1.5">
-        <StatusIcon item={item} fallback="document-text" />
-        <span>{t('toolActivity.readPage', 'Read')}</span>
-        {url ? (
-          <a
-            href={url}
-            target="_blank"
-            rel="noopener noreferrer"
-            className="text-indigo-600 dark:text-indigo-400 hover:underline break-all"
-          >
-            {label}
-          </a>
-        ) : (
-          label && <span className="text-gray-700 dark:text-gray-300 break-all">{label}</span>
-        )}
-        <ItemStatus item={item} />
+      <li>
+        <div className="flex flex-wrap items-center gap-1.5">
+          <StatusIcon item={item} fallback="document-text" />
+          <span>{t('toolActivity.readPage', 'Read')}</span>
+          {url ? (
+            <a
+              href={url}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="text-indigo-600 dark:text-indigo-400 hover:underline break-all"
+            >
+              {label}
+            </a>
+          ) : (
+            label && <span className="text-gray-700 dark:text-gray-300 break-all">{label}</span>
+          )}
+          <ItemStatus item={item} />
+        </div>
+        <ItemDetails item={item} />
+        <ItemError item={item} />
       </li>
     );
   }
 
   return (
-    <li className="flex flex-wrap items-center gap-1.5">
-      <StatusIcon item={item} fallback="wrench" />
-      <span>
-        {item.status === 'running'
-          ? t('toolActivity.runningTool', 'Running {{name}}', { name: item.name })
-          : t('toolActivity.ranTool', 'Ran {{name}}', { name: item.name })}
-      </span>
-      <ItemStatus item={item} />
+    <li>
+      <div className="flex flex-wrap items-center gap-1.5">
+        <StatusIcon item={item} fallback="wrench" />
+        <span>
+          {item.status === 'running'
+            ? t('toolActivity.runningTool', 'Running {{name}}', { name: item.name })
+            : t('toolActivity.ranTool', 'Ran {{name}}', { name: item.name })}
+        </span>
+        <ItemStatus item={item} />
+      </div>
+      <ItemDetails item={item} />
+      <ItemError item={item} />
     </li>
+  );
+}
+
+/**
+ * What the call asked for: each argument the model passed, by its name, with
+ * one chip per value (so every filter of a search reads on its own).
+ */
+function ItemDetails({ item }) {
+  const { t } = useTranslation();
+  if (!item.details?.length) return null;
+  return (
+    <dl className="mt-1 ms-5 flex flex-wrap items-baseline gap-x-3 gap-y-1">
+      {item.details.map(detail => (
+        <div key={detail.name} className="inline-flex flex-wrap items-baseline gap-1 min-w-0">
+          <dt className="text-gray-400 dark:text-gray-500">{detail.name}</dt>
+          {detail.values.map(value => (
+            <dd
+              key={value.full ?? value.text}
+              className="m-0 px-1.5 rounded bg-gray-100 dark:bg-gray-800 text-gray-700 dark:text-gray-300 font-mono break-all"
+              title={value.full}
+            >
+              {value.text}
+            </dd>
+          ))}
+          {detail.more > 0 && (
+            <dd className="m-0 text-gray-400 dark:text-gray-500">
+              {t('toolActivity.moreValues', { count: detail.more })}
+            </dd>
+          )}
+        </div>
+      ))}
+    </dl>
+  );
+}
+
+/** Why the call failed, shown under it — the "Failed" label's tooltip is out of reach on touch screens. */
+function ItemError({ item }) {
+  if (item.status !== 'error' || !item.error) return null;
+  return (
+    <p
+      className="mt-1 ms-5 text-red-600 dark:text-red-400 break-words line-clamp-3"
+      title={item.error}
+    >
+      {item.error}
+    </p>
   );
 }
 
