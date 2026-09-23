@@ -33,6 +33,7 @@ const UPLOAD_TYPE_CONFIGS = {
       'text/plain',
       'text/markdown',
       'text/csv',
+      'text/vtt',
       'application/json',
       'application/pdf',
       'application/vnd.openxmlformats-officedocument.wordprocessingml.document'

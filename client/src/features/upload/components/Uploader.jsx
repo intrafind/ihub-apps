@@ -3,6 +3,10 @@ import { useState, useRef, useEffect } from 'react';
 /**
  * Generic uploader component that handles file selection, validation and preview logic.
  * UI rendering is delegated to a render prop for flexibility.
+ *
+ * `acceptAnyFile` skips the MIME/extension check (size is still enforced) and
+ * leaves the file picker unfiltered — for callers that decide acceptance by
+ * content in `onProcessFile`, e.g. "any text file" uploads.
  */
 const Uploader = ({
   accept = [],
@@ -12,6 +16,7 @@ const Uploader = ({
   onSelect,
   onProcessFile,
   allowMultiple = false,
+  acceptAnyFile = false,
   children
 }) => {
   const [preview, setPreview] = useState(null);
@@ -96,7 +101,7 @@ const Uploader = ({
       // Note: Some browsers may return empty string or incorrect MIME type for certain files
       // In such cases, we can fall back to extension-based validation
       const hasValidMimeType =
-        acceptedMimeTypes.length === 0 || acceptedMimeTypes.includes(file.type);
+        acceptAnyFile || acceptedMimeTypes.length === 0 || acceptedMimeTypes.includes(file.type);
 
       if (!hasValidMimeType) {
         // If MIME type doesn't match, try checking file extension as fallback
@@ -293,7 +298,7 @@ const Uploader = ({
       type: 'file',
       ref: fileInputRef,
       onChange: handleFileChange,
-      accept: accept.join(','),
+      accept: acceptAnyFile ? undefined : accept.join(','),
       disabled: disabled || isProcessing,
       className: 'hidden',
       multiple: allowMultiple

@@ -10,6 +10,11 @@ import pdfjsWorkerUrl from 'pdfjs-dist/build/pdf.worker.min.mjs?url';
 let mimetypesConfigCache = null;
 let mimetypesConfigPromise = null;
 
+// Wildcard entry an admin can add to `fileUpload.supportedFormats` to accept
+// any file whose content is plain text, regardless of its extension or the
+// (often missing) MIME type the browser reports — e.g. `.log`, `.yaml`, `.srt`.
+export const GENERIC_TEXT_MIME_TYPE = 'text/*';
+
 // Build default config from new structure for backward compatibility
 const buildDefaultConfig = () => {
   return {
@@ -31,6 +36,7 @@ const buildDefaultConfig = () => {
         mimeTypes: [
           'text/plain',
           'text/markdown',
+          'text/vtt',
           'application/json',
           'application/pdf',
           'application/vnd.openxmlformats-officedocument.wordprocessingml.document'
@@ -55,6 +61,7 @@ const buildDefaultConfig = () => {
       },
       'text/plain': { extensions: ['.txt'], displayName: 'TXT', category: 'documents' },
       'text/markdown': { extensions: ['.md'], displayName: 'MD', category: 'documents' },
+      'text/vtt': { extensions: ['.vtt'], displayName: 'VTT', category: 'documents' },
       'application/json': { extensions: ['.json'], displayName: 'JSON', category: 'documents' }
     }
   };
@@ -681,6 +688,14 @@ export const readTextFile = file => {
   });
 };
 
+// Upper-cased extension of a file name ("meeting.log" → "LOG"), used as the
+// display type for files accepted via GENERIC_TEXT_MIME_TYPE, which have no
+// entry in the mimetypes config.
+export const getExtensionDisplay = fileName => {
+  const dot = (fileName || '').lastIndexOf('.');
+  return dot > 0 && dot < fileName.length - 1 ? fileName.slice(dot + 1).toUpperCase() : 'TXT';
+};
+
 // Process PDF file
 export const processPdfFile = async file => {
   const arrayBuffer = await file.arrayBuffer();
@@ -987,6 +1002,18 @@ export const looksLikeBinaryText = text => {
     if (code === 0xfffd) replacements++;
   }
   return replacements > sample.length * 0.05;
+};
+
+// Read a file accepted only via GENERIC_TEXT_MIME_TYPE. Unlike
+// processDocumentFile it never dispatches to a format-specific extractor —
+// the admin allowed "any text file", not e.g. DOCX — so binary content is
+// rejected instead of being parsed.
+export const processGenericTextFile = async file => {
+  const content = await readTextFile(file);
+  if (looksLikeBinaryText(content)) {
+    throw new Error('unsupported-format');
+  }
+  return { content };
 };
 
 // Process OpenOffice/LibreOffice file

@@ -194,6 +194,7 @@ const uploadSchema = z
             'text/plain',
             'text/markdown',
             'text/csv',
+            'text/vtt',
             'application/json',
             'text/html',
             'text/css',

@@ -54,6 +54,7 @@
         "text/plain",
         "text/markdown",
         "text/csv",
+        "text/vtt",
         "application/json",
         "text/html",
         "text/css",
@@ -70,7 +71,8 @@
         "application/vnd.ms-outlook",
         "application/vnd.oasis.opendocument.text",
         "application/vnd.oasis.opendocument.spreadsheet",
-        "application/vnd.oasis.opendocument.presentation"
+        "application/vnd.oasis.opendocument.presentation",
+        "text/*"
       ]
     }
   },
@@ -180,6 +182,11 @@
       "displayName": "CSV",
       "category": "documents"
     },
+    "text/vtt": {
+      "extensions": [".vtt"],
+      "displayName": "VTT",
+      "category": "documents"
+    },
     "application/json": {
       "extensions": [".json"],
       "displayName": "JSON",
@@ -263,6 +270,11 @@
     "application/vnd.oasis.opendocument.presentation": {
       "extensions": [".odp"],
       "displayName": "ODP",
+      "category": "documents"
+    },
+    "text/*": {
+      "extensions": [],
+      "displayName": "Any text file",
       "category": "documents"
     }
   }
