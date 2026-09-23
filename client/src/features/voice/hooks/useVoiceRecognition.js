@@ -176,6 +176,12 @@ const useVoiceRecognition = ({ app, inputRef, onSpeechResult, onCommand, disable
           // configured in Admin → Voice Input (platform.speech.azure.host).
           recognition.host =
             app?.settings?.speechRecognition?.host || platformConfig?.speech?.azure?.host || '';
+          // Only ask the server for a token when it holds a subscription key.
+          // Without one (on-prem container, air-gapped) the recognizer connects
+          // straight to the host and nothing contacts Microsoft.
+          recognition.useServerToken = !!(
+            platformConfig?.speech?.azure?.enabled && platformConfig?.speech?.azure?.keyConfigured
+          );
           break;
         case 'vllm-realtime':
           // Streams mic audio to iHub, which proxies to a vLLM realtime endpoint.
@@ -217,9 +223,20 @@ const useVoiceRecognition = ({ app, inputRef, onSpeechResult, onCommand, disable
       const usesTextEventShape = recognition.usesTextEventShape === true;
 
       if (recognition instanceof AzureSpeechRecognition) {
-        // Async: fetches a short-lived Azure token from the server before
-        // building the recognizer (the subscription key stays server-side).
-        await recognition.initRecognizer();
+        // Async: fetches a short-lived Azure token from the server (when a key
+        // is configured) before building the recognizer; the key stays server-side.
+        // Its handlers aren't wired yet, so surface a failure here and bail
+        // out instead of starting a recognizer that was never built.
+        try {
+          await recognition.initRecognizer();
+        } catch (error) {
+          console.error('Failed to initialize Azure recognizer:', error);
+          showError(
+            error.message ||
+              t('voiceInput.error.service', 'Transcription service unavailable. Please try again.')
+          );
+          return;
+        }
       }
 
       // Some services (vLLM realtime) end asynchronously: after stop() the old

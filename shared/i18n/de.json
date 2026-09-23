@@ -834,7 +834,7 @@
         "region": "Region",
         "subscriptionKey": "Abonnementschlüssel",
         "subscriptionKeyPlaceholder": "Azure-Speech-Schlüssel",
-        "subscriptionKeyHint": "Verschlüsselt gespeichert und nie an den Browser gesendet. Ein angezeigter Wert ***REDACTED*** bedeutet, dass bereits ein Schlüssel gesetzt ist — belassen Sie ihn, um ihn beizubehalten."
+        "subscriptionKeyHint": "Verschlüsselt gespeichert und nie an den Browser gesendet. Ein angezeigter Wert ***REDACTED*** bedeutet, dass bereits ein Schlüssel gesetzt ist — belassen Sie ihn, um ihn beizubehalten. Für einen On-Premises-Azure-Speech-Container, der keinen Schlüssel benötigt, leer lassen und oben dessen Host eintragen."
       }
     },
     "agents": {
