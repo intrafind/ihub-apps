@@ -699,13 +699,14 @@ export const exportToXLSX = async (
     backgroundColor: '#E0E0E0'
   };
 
-  // Prepare data rows for write-excel-file
+  // Prepare data rows for write-excel-file. Cells covered by a `columnSpan`
+  // must still be present in the row (as `null`) so later columns line up.
   const data = [
     // Header information
-    [{ value: docTitle, span: 3, fontWeight: 'bold' }],
-    [{ value: 'App' }, { value: appName, span: 2 }],
-    [{ value: 'Date' }, { value: new Date().toLocaleString(), span: 2 }],
-    [{ value: '', span: 3 }],
+    [{ value: docTitle, columnSpan: 3, fontWeight: 'bold' }, null, null],
+    [{ value: 'App' }, { value: appName, columnSpan: 2 }, null],
+    [{ value: 'Date' }, { value: new Date().toLocaleString(), columnSpan: 2 }, null],
+    [{ value: '', columnSpan: 3 }, null, null],
     // Column headers
     [
       { value: 'Role', ...headerStyle },
@@ -725,21 +726,20 @@ export const exportToXLSX = async (
   // Add settings section if available
   const settingsRows = getExportSettingsRows(settings);
   if (settingsRows.length > 0) {
-    data.push([{ value: '', span: 3 }]);
-    data.push([{ value: 'Settings', ...headerStyle, span: 3 }]);
+    data.push([{ value: '', columnSpan: 3 }, null, null]);
+    data.push([{ value: 'Settings', ...headerStyle, columnSpan: 3 }, null, null]);
     settingsRows.forEach(([label, value]) => {
-      data.push([{ value: label }, { value: sanitizeForSpreadsheet(value), span: 2 }]);
+      data.push([{ value: label }, { value: sanitizeForSpreadsheet(value), columnSpan: 2 }, null]);
     });
   }
 
   // Define column widths
   const columns = [{ width: 15 }, { width: 20 }, { width: 80 }];
 
-  // Write XLSX file
-  await writeXlsxFile(data, {
-    columns,
-    fileName: filename
-  });
+  // write-excel-file v4 no longer accepts a `fileName` option (it is silently
+  // ignored, so nothing downloads); it returns an object with `toBlob()`.
+  const blob = await writeXlsxFile(data, { columns }).toBlob();
+  downloadBlob(blob, filename);
 
   return { success: true, filename };
 };

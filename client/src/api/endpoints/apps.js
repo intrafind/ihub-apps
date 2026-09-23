@@ -129,61 +129,67 @@ export const checkAppChatStatus = async (appId, chatId) => {
 //
 // We deliberately avoid `window.open()` here: inside sandboxed/embedded hosts
 // such as the Outlook taskpane and the browser-extension side panel, popups
-// are blocked and `window.open()` returns `null`. The previous implementation
-// then accessed `printWindow.document`, which crashed the whole export with
-// "null is not an object (evaluating '...document')". An offscreen iframe
-// prints the document in-place and works across those hosts.
+// are blocked and `window.open()` returns `null`. An offscreen iframe prints
+// the document in-place and works across those hosts.
+//
+// The document is written synchronously with document.write() rather than via
+// `srcdoc`: an iframe attached before `srcdoc` is set first fires `load` for
+// its initial empty `about:blank` document, which made us print a blank page.
 const printHtmlDocument = htmlContent =>
   new Promise((resolve, reject) => {
     const iframe = document.createElement('iframe');
     iframe.setAttribute('aria-hidden', 'true');
+    iframe.setAttribute('tabindex', '-1');
+    // Keep a real layout box: some engines print a zero-sized frame as blank.
     iframe.style.position = 'fixed';
-    iframe.style.left = '-9999px';
-    iframe.style.width = '0';
-    iframe.style.height = '0';
+    iframe.style.left = '-10000px';
+    iframe.style.top = '0';
+    iframe.style.width = '800px';
+    iframe.style.height = '600px';
     iframe.style.border = '0';
-
-    let settled = false;
-    const removeFrame = () => setTimeout(() => iframe.remove(), 1000);
-
-    const triggerPrint = () => {
-      if (settled) return;
-      try {
-        const frameWindow = iframe.contentWindow;
-        if (!frameWindow) throw new Error('Print frame is unavailable');
-        settled = true;
-        frameWindow.focus();
-        frameWindow.print();
-        removeFrame();
-        resolve();
-      } catch (err) {
-        settled = true;
-        removeFrame();
-        reject(err);
-      }
-    };
-
-    iframe.onload = triggerPrint;
-    // Safety net in case `onload` never fires for the generated document.
-    setTimeout(triggerPrint, 1500);
 
     document.body.appendChild(iframe);
 
-    // Prefer `srcdoc`; fall back to document.write for engines that ignore it.
+    const frameWindow = iframe.contentWindow;
+    const doc = frameWindow?.document;
+    if (!frameWindow || !doc) {
+      iframe.remove();
+      reject(new Error('Unable to initialise print frame'));
+      return;
+    }
+
     try {
-      iframe.srcdoc = htmlContent;
-    } catch {
-      const doc = iframe.contentWindow?.document;
-      if (!doc) {
-        settled = true;
-        iframe.remove();
-        reject(new Error('Unable to initialise print frame'));
-        return;
-      }
       doc.open();
       doc.write(htmlContent);
       doc.close();
+    } catch (err) {
+      iframe.remove();
+      reject(err);
+      return;
     }
+
+    // print() is non-blocking in some browsers, so keep the frame alive until
+    // the dialog closes; the timeout is a safety net if `afterprint` never fires.
+    let removed = false;
+    const removeFrame = () => {
+      if (removed) return;
+      removed = true;
+      iframe.remove();
+    };
+
+    // Give the freshly written document a tick to lay out before printing.
+    setTimeout(() => {
+      try {
+        frameWindow.addEventListener('afterprint', () => setTimeout(removeFrame, 0));
+        frameWindow.focus();
+        frameWindow.print();
+        setTimeout(removeFrame, 60000);
+        resolve();
+      } catch (err) {
+        removeFrame();
+        reject(err);
+      }
+    }, 250);
   });
 
 // Client-side PDF generation using browser print functionality
