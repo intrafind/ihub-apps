@@ -89,6 +89,14 @@ describe('splitSections', () => {
     assert.ok(ids.includes('overview-2'));
   });
 
+  it('keeps angle brackets in titles and escapes them in the result', () => {
+    const [section] = splitSections('#### Uploads reach the model as `<content>` blocks\n\ntext');
+    assert.equal(section.title, 'Uploads reach the model as <content> blocks');
+    const doc = `${bigDocument()}\n\n# Uploads as \`<content>\` blocks\n\nUploads arrive wrapped.`;
+    const { content } = selectContent(doc, { section: 'uploads-as-content-blocks' });
+    assert.match(content, /path="Uploads as &lt;content> blocks"/);
+  });
+
   it('keeps level 5+ headings inside their section', () => {
     const sections = splitSections('# A\n\n##### Deep\n\ntext');
     assert.equal(sections.length, 1);

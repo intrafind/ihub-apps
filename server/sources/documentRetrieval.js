@@ -149,10 +149,11 @@ export function slugify(text) {
   return slug || 'section';
 }
 
+// Titles keep any `<…>` they contain (`<content>` blocks, `<appId>`): they
+// are escaped wherever they are written out, never rendered as HTML.
 function cleanHeading(raw) {
   return raw
     .replace(/\[([^\]]*)\]\([^)]*\)/g, '$1')
-    .replace(/<[^>]+>/g, '')
     .replace(/[*`]/g, '')
     .trim();
 }
