@@ -97,7 +97,7 @@ const escapeAttribute = value =>
  * and for fragments and other non-navigating hrefs.
  *
  * @param {string} href - The link's destination.
- * @param {string} text - The link's rendered text.
+ * @param {string} text - The link's source text.
  * @returns {string} The tooltip, or '' when none is useful.
  */
 export const linkDestinationTooltip = (href, text) => {
@@ -108,10 +108,10 @@ export const linkDestinationTooltip = (href, text) => {
   } catch {
     // Malformed escapes: show the URL as written.
   }
-  // `text` is rendered inline HTML: strip tags and undo the entity escaping
-  // marked applies to a bare URL's text before comparing it with the href.
+  // `text` is the link's source text. marked entity-escapes the text of a bare
+  // URL (`<https://…?a=1&b=2>` reads `&amp;`), so undo that before comparing it
+  // with the href; the result is only compared, never rendered.
   const plainText = String(text ?? '')
-    .replace(/<[^>]*>/g, '')
     .replace(/&(amp|lt|gt|quot|#39);/g, (_, entity) => ENTITY_CHARS[entity])
     .trim();
   if (plainText === href || plainText === shown) return '';
