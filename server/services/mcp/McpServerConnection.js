@@ -379,6 +379,7 @@ export class McpServerConnection {
         _mcp: {
           serverId: this.config.id,
           originalName: t.name,
+          ...(this.config.name ? { serverName: this.config.name } : {}),
           ...(ui?.resourceUri ? { ui: { resourceUri: ui.resourceUri } } : {})
         }
       });

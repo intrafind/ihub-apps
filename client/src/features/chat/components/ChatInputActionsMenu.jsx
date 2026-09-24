@@ -6,6 +6,8 @@ import { VoiceInputComponent } from '../../voice/components';
 import MagicPromptLoader from '../../../shared/components/MagicPromptLoader';
 import ImageGenerationControls from './ImageGenerationControls';
 import { trackToolUsage } from '../../../utils/toolUsageTracker';
+import { getLocalizedContent } from '../../../utils/localizeContent';
+import { groupToolsByMcpServer } from '../utils/groupToolsByMcpServer';
 import { usePlatformConfig } from '../../../shared/contexts/PlatformConfigContext';
 import { useEmbeddedHost } from '../../office/contexts/EmbeddedHostContext';
 import { useKeyboardNavigation } from '../../../shared/hooks/useKeyboardNavigation';
@@ -57,7 +59,7 @@ function ChatInputActionsMenu({
   hostContextFlags = null,
   onHostContextFlagChange = null
 }) {
-  const { t } = useTranslation();
+  const { t, i18n } = useTranslation();
   const { platformConfig } = usePlatformConfig();
   // Embedded-host adapter (Outlook taskpane / browser-extension side panel)
   // declares which "Include …" toggles to render under the `+` menu via
@@ -94,9 +96,6 @@ function ChatInputActionsMenu({
       ? cloudStorage.providers.filter(p => p.enabled)
       : [];
 
-  // Tool grouping configuration (websearch is now handled via app.websearch config, not app.tools)
-  const TOOL_GROUPS = {};
-
   // Load tool metadata when component mounts. Workflows live in app.workflows now
   // and are triggered via @mentions, so they are intentionally not surfaced here.
   useEffect(() => {
@@ -130,37 +129,9 @@ function ChatInputActionsMenu({
     return () => document.removeEventListener('mousedown', handleClickOutside);
   }, []);
 
-  // Get grouped and individual tools
-  const getToolsStructure = () => {
-    if (!app?.tools || app.tools.length === 0) return { grouped: [], individual: [] };
-
-    const grouped = [];
-    const individual = [];
-    const processedTools = new Set();
-
-    // Check for tool groups
-    Object.values(TOOL_GROUPS).forEach(group => {
-      const groupTools = app.tools.filter(toolId => group.tools.includes(toolId));
-      if (groupTools.length > 0) {
-        grouped.push({
-          ...group,
-          matchedTools: groupTools
-        });
-        groupTools.forEach(t => processedTools.add(t));
-      }
-    });
-
-    // Add remaining individual tools
-    app.tools.forEach(toolId => {
-      if (!processedTools.has(toolId)) {
-        individual.push(toolId);
-      }
-    });
-
-    return { grouped, individual };
-  };
-
-  const { grouped, individual } = getToolsStructure();
+  const { grouped, individual } = groupToolsByMcpServer(app?.tools, availableTools, name =>
+    getLocalizedContent(name, i18n.language)
+  );
 
   const toggleTool = (toolId, isGroup = false, groupTools = []) => {
     if (isGroup) {
