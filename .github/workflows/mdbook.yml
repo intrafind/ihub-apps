@@ -7,6 +7,7 @@ on:
       - 'docs/**'
       - 'scripts/update-docs-version.js'
       - 'scripts/export-docs-markdown.js'
+      - 'server/utils/releaseNotes.js'
   workflow_dispatch:
 
 jobs:
