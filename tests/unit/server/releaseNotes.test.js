@@ -19,6 +19,7 @@ import {
   parseReleaseNotes,
   parseReleaseSections,
   renderReleaseNotes,
+  renderReleaseNotesChapter,
   slugify,
   sortVersionsNewestFirst,
   subtractEntries
@@ -182,5 +183,87 @@ describe('rendering and publishing helpers', () => {
   test('slugify never returns an empty id', () => {
     expect(slugify('!!!')).toBe('entry');
     expect(slugify('  `code` Title ')).toBe('code-title');
+  });
+});
+
+describe('renderReleaseNotesChapter', () => {
+  const release = (version, files) => ({ version, sections: parseReleaseSections(files) });
+
+  test('lists releases newest first with unreleased changes ahead, and skips empty ones', () => {
+    const chapter = renderReleaseNotesChapter(
+      [
+        release('5.4.0', { 'features.md': '# Features — 5.4.0\n\n## Old Feature\n\nold\n' }),
+        release('next', { 'fixes.md': '# Fixes — Unreleased\n\n## Pending Fix\n' }),
+        release('5.5.0', { 'features.md': '# Features — 5.5.0\n' }),
+        release('5.4.10', {
+          'breaking-changes.md': '# Breaking Changes — 5.4.10\n\n## Renamed Setting\n\nact\n',
+          'features.md': '# Features — 5.4.10\n\n## New A\n\na\n\n## New B\n\nb\n'
+        })
+      ],
+      { currentVersion: '5.4.10' }
+    );
+
+    expect(chapter.startsWith('# Release Notes\n\n')).toBe(true);
+    expect(chapter).toContain('This documentation ships with version 5.4.10.');
+    expect(chapter).toContain(
+      [
+        '- Unreleased: 1 fix',
+        '- Version 5.4.10: 1 breaking change, 2 features',
+        '- Version 5.4.0: 1 feature'
+      ].join('\n')
+    );
+    // 5.5.0 has no entries, so it appears nowhere.
+    expect(chapter).not.toContain('5.5.0');
+
+    const headings = chapter.split('\n').filter(line => line.startsWith('#'));
+    expect(headings).toEqual([
+      '# Release Notes',
+      '## Unreleased',
+      '### Fixes',
+      '#### Pending Fix',
+      '## Version 5.4.10',
+      '### Breaking Changes',
+      '#### Renamed Setting',
+      '### Features',
+      '#### New A',
+      '#### New B',
+      '## Version 5.4.0',
+      '### Features',
+      '#### Old Feature'
+    ]);
+    expect(chapter).toContain('#### Renamed Setting\n\nact\n\n### Features');
+    expect(chapter.endsWith('#### Old Feature\n\nold\n')).toBe(true);
+  });
+
+  test('keeps headings inside an entry beneath the entry, but not inside code fences', () => {
+    const chapter = renderReleaseNotesChapter([
+      release('5.5.1', {
+        'features.md': [
+          '# Features — 5.5.1',
+          '',
+          '## Big Feature',
+          '',
+          '### Part One',
+          '',
+          '#### Detail',
+          '',
+          '```bash',
+          '# a shell comment',
+          '```'
+        ].join('\n')
+      })
+    ]);
+
+    expect(chapter).toContain('#### Big Feature\n\n##### Part One\n\n###### Detail');
+    expect(chapter).toContain('```bash\n# a shell comment\n```');
+    expect(chapter).not.toContain('ships with version');
+  });
+
+  test('is empty when no release has an entry', () => {
+    expect(renderReleaseNotesChapter([])).toBe('');
+    expect(renderReleaseNotesChapter(undefined)).toBe('');
+    expect(
+      renderReleaseNotesChapter([release('next', { 'features.md': '# Features — Unreleased\n' })])
+    ).toBe('');
   });
 });
