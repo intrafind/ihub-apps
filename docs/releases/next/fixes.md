@@ -21,3 +21,11 @@ the connection.
 Tool calls to external MCP servers included iHub's internal context — the signed-in user's
 profile, the app configuration and the chat id — alongside the model's arguments. Only the tool's
 own arguments are sent now.
+
+## Chat: Thinking Is Readable Again Instead of One Bullet Per Word
+
+Opening **Show thinking** on a reasoning model produced a bulleted list with a single word on each
+line — "The", "user", "is", "asking" — which was unreadable. Providers stream reasoning one token
+at a time, and every token was kept as its own entry rather than being joined into the text it came
+from. The thinking now reads as continuous text and keeps its own line breaks, while named steps
+such as workflow phases stay separate entries.

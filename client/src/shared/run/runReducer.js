@@ -185,6 +185,26 @@ function ensureStep(run, step) {
 }
 
 /**
+ * Append a thought, merging it into the previous one when both are raw text.
+ *
+ * Providers stream reasoning one token at a time (vLLM/OpenAI `delta.reasoning`,
+ * one SSE frame per token), so appending every delta as its own entry rendered
+ * the thinking as one bullet per word. Text deltas are concatenated the same way
+ * a few lines above; this gives reasoning the same treatment.
+ *
+ * Named thoughts (`{ name, content }`) are discrete semantic events — workflow
+ * phases and the like — so they stay separate entries and also break the run of
+ * text, which is what keeps a named thought from swallowing the stream after it.
+ */
+function appendThought(list, thought) {
+  const last = list[list.length - 1];
+  if (typeof thought === 'string' && typeof last === 'string') {
+    return [...list.slice(0, -1), last + thought];
+  }
+  return [...list, thought];
+}
+
+/**
  * Fold one envelope into the stream state. Unknown or malformed envelopes are
  * ignored (the state object is returned unchanged).
  *
@@ -310,8 +330,8 @@ export function reduceRunEvent(state, envelope) {
         const thought = data.meta?.name
           ? { name: data.meta.name, content: data.content || '' }
           : data.content || '';
-        step.thinking = [...step.thinking, thought];
-        run = { ...run, thinking: [...run.thinking, thought] };
+        step.thinking = appendThought(step.thinking, thought);
+        run = { ...run, thinking: appendThought(run.thinking, thought) };
       } else if (data.kind === 'image' && data.image) {
         step.images = [...step.images, data.image];
         run = { ...run, images: [...run.images, data.image] };
