@@ -23,6 +23,9 @@ function ChatHeader({
   showShareButton = false,
   showCanvasButton = false,
   showBackToChatButton = false,
+  // Off where the header is not the page, e.g. the admin app editor's test panel.
+  showBackButton = true,
+  showEditAppButton = true,
   parametersVisible = false,
   onClearChat,
   onToggleConfig,
@@ -73,14 +76,16 @@ function ChatHeader({
     <div className="flex flex-col mb-2 pb-2 border-b sm:mb-4 sm:pb-4">
       <div className="flex items-center justify-between">
         <div className="flex items-center">
-          <button
-            onClick={handleBack}
-            className="mr-2 bg-gray-200 hover:bg-gray-300 text-gray-800 p-1.5 rounded-full flex items-center justify-center h-8 w-8 sm:mr-3 sm:p-2 sm:h-10 sm:w-10"
-            title={t('pages.appChat.backToApps')}
-            aria-label={t('common.backToAppsList', 'Back to apps list')}
-          >
-            <Icon name="arrowLeft" size="sm" />
-          </button>
+          {showBackButton && (
+            <button
+              onClick={handleBack}
+              className="mr-2 bg-gray-200 hover:bg-gray-300 text-gray-800 p-1.5 rounded-full flex items-center justify-center h-8 w-8 sm:mr-3 sm:p-2 sm:h-10 sm:w-10"
+              title={t('pages.appChat.backToApps')}
+              aria-label={t('common.backToAppsList', 'Back to apps list')}
+            >
+              <Icon name="arrowLeft" size="sm" />
+            </button>
+          )}
           <div
             className="w-8 h-8 rounded-full flex items-center justify-center mr-2 sm:w-10 sm:h-10 sm:mr-3"
             style={{ backgroundColor: color }}
@@ -198,7 +203,7 @@ function ChatHeader({
                 <Icon name="document-duplicate" size="sm" />
               </button>
             )}
-            {user?.isAdmin && appId && (
+            {showEditAppButton && user?.isAdmin && appId && (
               <button
                 onClick={() => navigate(`/admin/apps/${appId}`)}
                 className="bg-gray-200 dark:bg-gray-700 hover:bg-gray-300 dark:hover:bg-gray-600 text-gray-800 dark:text-gray-200 p-2 rounded-full flex items-center justify-center h-10 w-10"
@@ -239,6 +244,7 @@ function ChatHeader({
               parametersVisible={parametersVisible}
               appId={appId}
               chatId={chatId}
+              showEditAppButton={showEditAppButton}
               showCompareModeToggle={showCompareModeToggle}
               compareModeActive={compareModeActive}
               onCompareModeChange={onCompareModeChange}

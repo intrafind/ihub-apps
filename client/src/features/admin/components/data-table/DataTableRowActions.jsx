@@ -52,11 +52,18 @@ function ActionButton({ action, row }) {
     <Icon name={action.icon || 'pencil'} size="sm" />
   );
 
-  if (action.href) {
+  // `title` may depend on the row, e.g. to explain why an action is disabled.
+  const title =
+    (typeof action.title === 'function' ? action.title(row) : action.title) || action.label;
+
+  // A link can't be disabled, so a disabled link action renders as a button.
+  if (action.href && !disabled) {
     return (
       <a
         href={action.href(row)}
-        title={action.title || action.label}
+        target={action.target}
+        rel={action.target === '_blank' ? 'noopener noreferrer' : undefined}
+        title={title}
         aria-label={action.label}
         className={className}
         onClick={e => {
@@ -76,7 +83,7 @@ function ActionButton({ action, row }) {
       type="button"
       disabled={disabled || busy}
       onClick={() => action.onClick && action.onClick(row)}
-      title={action.title || action.label}
+      title={title}
       aria-label={action.label}
       className={className}
     >

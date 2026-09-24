@@ -12,6 +12,20 @@ each one.
   Formats**. The file picker then shows all files; binary files are rejected on upload, and formats
   such as PDF or Word are only extracted when they are selected explicitly.
 
+## App Editor: Open the App, Save Without Leaving, and Test Next to the Editor
+
+Admins can now tweak an app and try it without leaving the app editor.
+
+- **Save** stores the app and keeps the editor open (also with Ctrl+S / Cmd+S). **Save & Exit**
+  returns to the app list, as saving did before. A new app saved with **Save** stays open for
+  further editing.
+- **Open app** in the editor and a new open icon in **Admin → Apps** open the app's chat page in a
+  new tab.
+- **Test** shows the app's chat next to the editor (full screen on small screens), so you can
+  check the start screen and chat with the app. It runs the saved version and starts over with a
+  new chat after every save; test chats are ordinary chats of your account.
+- Testing works for chat apps. Disabled apps can't be opened or tested until they are enabled.
+
 ## Prompt Caching: Per-Model Switch and Cache Metrics
 
 Providers serve the start of a prompt they have seen recently from a cache, billed at a steep

@@ -1,6 +1,7 @@
 import { useState, useEffect, useRef, useCallback, useMemo } from 'react';
 import {
   getOrCreateChatId,
+  mintChatId,
   readChatId,
   resetChatId,
   getConversationId,
@@ -12,7 +13,7 @@ import { fetchAppDetails, fetchChat } from '../../../api';
 import LoadingSpinner from '../../../shared/components/LoadingSpinner';
 import { useTranslation } from 'react-i18next';
 import { getLocalizedContent } from '../../../utils/localizeContent';
-import { buildApiUrl } from '../../../utils/runtimeBasePath';
+import { buildApiUrl, buildPath } from '../../../utils/runtimeBasePath';
 import { debugLog } from '../../../utils/debugLog';
 import Icon from '../../../shared/components/Icon';
 import AppShareModal from '../components/AppShareModal';
@@ -203,12 +204,40 @@ const getTranscriptionErrorMessage = (err, t) => {
   }
 };
 
-function AppChat({ preloadedApp = null }) {
+// The query string an embedded chat reads: none. Module-level, so its identity
+// is stable across renders like the router's own.
+const NO_SEARCH_PARAMS = new URLSearchParams();
+
+/**
+ * The chat page of an app.
+ *
+ * @param {Object} props
+ * @param {Object|null} [props.preloadedApp] - App config already fetched by the caller
+ * @param {boolean} [props.embedded=false] - Rendered inside another page instead of on
+ *   the app's own route — the admin app editor's test panel (issue #2510). The app id
+ *   comes from `appId`, the host page's URL is neither read nor changed, nothing
+ *   navigates away from the host (canvas and "open in app" open a new tab), and
+ *   nothing this browser remembers about the app is read or written: chat id,
+ *   settings, variables, recent apps, the iAssistant conversation. Every mount is a
+ *   new chat that starts from the app's own defaults, as a new user would see it.
+ * @param {string|null} [props.appId] - The app to show when `embedded`
+ */
+function AppChat({ preloadedApp = null, embedded = false, appId: embeddedAppId = null }) {
   const { t, i18n } = useTranslation();
   const currentLanguage = i18n.language;
-  const { appId, chatId: routeChatId } = useParams();
+  const routeParams = useParams();
+  // Embedded, the route and the query string belong to the host page.
+  const appId = embedded ? embeddedAppId : routeParams.appId;
+  const routeChatId = embedded ? undefined : routeParams.chatId;
   const navigate = useNavigate();
-  const [searchParams] = useSearchParams();
+  const [urlSearchParams] = useSearchParams();
+  const searchParams = embedded ? NO_SEARCH_PARAMS : urlSearchParams;
+  // Embedded: where this app's own page lives, for links that must not point
+  // at the host page.
+  const appPagePath = embedded ? buildPath(`/apps/${encodeURIComponent(appId)}`) : null;
+  const openInNewTab = useCallback(path => {
+    window.open(buildPath(path), '_blank', 'noopener,noreferrer');
+  }, []);
   const featureFlags = useFeatureFlags();
   const prefillMessage = searchParams.get('prefill') || '';
   const documentId = searchParams.get('documentId');
@@ -287,7 +316,7 @@ function AppChat({ preloadedApp = null }) {
     setImageAspectRatio,
     setImageQuality,
     modelsLoading
-  } = useAppSettings(appId, app, { chatSettings });
+  } = useAppSettings(appId, app, { chatSettings, isolated: embedded });
 
   // When tools feature is disabled platform-wide, hide tool UI entirely
   const toolsFeatureEnabled = featureFlags.isEnabled('tools', true);
@@ -369,10 +398,10 @@ function AppChat({ preloadedApp = null }) {
   // State for document token size warning
   const [fileTokenWarning, setFileTokenWarning] = useState(null);
 
-  // Record recent usage of this app
+  // Record recent usage of this app. An admin testing it is not using it.
   useEffect(() => {
-    recordAppUsage(appId);
-  }, [appId]);
+    if (!embedded) recordAppUsage(appId);
+  }, [appId, embedded]);
 
   // Custom hooks for complex functionality
   const fileUploadHandler = useFileUploadHandler();
@@ -416,7 +445,8 @@ function AppChat({ preloadedApp = null }) {
     handoffAppliedRef.current = false;
   }, [appId]);
   useEffect(() => {
-    if (handoffAppliedRef.current || !app || modelsLoading) return;
+    // Embedded: a handoff waiting in this tab is meant for the app's own page.
+    if (embedded || handoffAppliedRef.current || !app || modelsLoading) return;
     const handoff = consumePendingChatStart(appId);
     handoffAppliedRef.current = true;
     if (!handoff) return;
@@ -432,7 +462,7 @@ function AppChat({ preloadedApp = null }) {
       setTranscriptionEnabled(settings.transcriptionEnabled);
     if (settings.imageAspectRatio) setImageAspectRatio(settings.imageAspectRatio);
     if (settings.imageQuality) setImageQuality(settings.imageQuality);
-  }, [app, appId, modelsLoading]); // eslint-disable-line @eslint-react/exhaustive-deps
+  }, [app, appId, modelsLoading, embedded]); // eslint-disable-line @eslint-react/exhaustive-deps
 
   // Check document token size against model context window and warn user if needed
   useEffect(() => {
@@ -512,23 +542,27 @@ function AppChat({ preloadedApp = null }) {
   // trip is paid for with a "Loading chat…" spinner where the greeting and the
   // starter prompts belong, plus a red `API Error` in the console every time.
   const mintedChatIdsRef = useRef(new Set());
+  // Embedded, the chat is never the one this tab holds for the app page, and
+  // it is not stored for it either.
   const resolveChatId = useCallback(() => {
     if (routeChatId) return routeChatId;
-    const stored = readChatId(appId);
+    const stored = embedded ? null : readChatId(appId);
     if (stored) return stored;
-    const minted = getOrCreateChatId(appId);
+    const minted = embedded ? mintChatId() : getOrCreateChatId(appId);
     mintedChatIdsRef.current.add(minted);
     return minted;
-  }, [appId, routeChatId]);
+  }, [appId, routeChatId, embedded]);
   const [chatId, setChatId] = useState(resolveChatId);
   // Ref to store variables for resend operations to avoid race condition with state updates
   const pendingVariablesRef = useRef(null);
 
-  // Follow the URL: another app, or another chat under the same app.
+  // Follow the URL: another app, or another chat under the same app. An
+  // embedded chat has no URL to follow; it keeps the chat it was mounted with.
   useEffect(() => {
+    if (embedded) return;
     const next = resolveChatId();
     setChatId(current => (current === next ? current : next));
-  }, [resolveChatId]);
+  }, [resolveChatId, embedded]);
 
   /**
    * Leave the current chat and start a fresh one for this app. A URL that names
@@ -539,14 +573,14 @@ function AppChat({ preloadedApp = null }) {
    * @returns {string} The new chat id.
    */
   const startNewChat = useCallback(() => {
-    const nextChatId = resetChatId(appId);
+    const nextChatId = embedded ? mintChatId() : resetChatId(appId);
     // Minted here, so the store has never heard of it: skip the hydration
     // round trip that could only 404.
     mintedChatIdsRef.current.add(nextChatId);
     setChatId(nextChatId);
     if (routeChatId) navigate(`/apps/${appId}`, { replace: true });
     return nextChatId;
-  }, [appId, navigate, routeChatId]);
+  }, [appId, navigate, routeChatId, embedded]);
 
   /**
    * Determine if the response should trigger auto-redirect to canvas mode
@@ -584,9 +618,11 @@ function AppChat({ preloadedApp = null }) {
       if (!content || !app) return;
 
       const encodedContent = encodeURIComponent(content);
-      navigate(`/apps/${appId}/canvas?content=${encodedContent}`);
+      const canvasPath = `/apps/${appId}/canvas?content=${encodedContent}`;
+      if (embedded) openInNewTab(canvasPath);
+      else navigate(canvasPath);
     },
-    [navigate, appId, app]
+    [navigate, appId, app, embedded, openInNewTab]
   );
 
   // Handle auto-redirect to canvas when message is completed
@@ -599,8 +635,9 @@ function AppChat({ preloadedApp = null }) {
         shouldRedirect: shouldAutoRedirectToCanvas(aiResponse, userInput)
       });
 
-      // Check if we should auto-redirect to canvas mode
-      if (shouldAutoRedirectToCanvas(aiResponse, userInput)) {
+      // Check if we should auto-redirect to canvas mode. Embedded, that would
+      // be an unasked-for new tab; the canvas button still opens one.
+      if (!embedded && shouldAutoRedirectToCanvas(aiResponse, userInput)) {
         debugLog('🎨 Auto-redirecting to canvas mode with response:', {
           responseLength: aiResponse?.length,
           userInput
@@ -608,7 +645,7 @@ function AppChat({ preloadedApp = null }) {
         handleOpenInCanvas(aiResponse);
       }
     },
-    [shouldAutoRedirectToCanvas, handleOpenInCanvas, app]
+    [shouldAutoRedirectToCanvas, handleOpenInCanvas, app, embedded]
   );
 
   // Durable chats: the server owns the transcript, so the browser copy is
@@ -649,6 +686,8 @@ function AppChat({ preloadedApp = null }) {
     appId,
     chatId,
     onMessageComplete: handleMessageComplete,
+    // Embedded, the app page's iAssistant conversation stays untouched.
+    persistConversationId: !embedded,
     // Runtime-selectable: seeded from app.ephemeral but the user can toggle it in
     // the chat settings. When on, nothing is persisted to browser storage.
     ephemeral,
@@ -819,8 +858,9 @@ function AppChat({ preloadedApp = null }) {
     if (conversationResumed.current || !app || messages.length > 0) return;
     // A server-backed chat hydrates from the durable store instead, and that
     // store is the source of truth for it. Two loaders replacing the same array
-    // would race, and the loser would silently win on a slow network.
-    if (ephemeral || serverBackedChat) return;
+    // would race, and the loser would silently win on a slow network. An
+    // embedded chat is always new.
+    if (embedded || ephemeral || serverBackedChat) return;
 
     const existingConversationId = getConversationId(appId);
     if (!existingConversationId) return;
@@ -840,7 +880,7 @@ function AppChat({ preloadedApp = null }) {
         clearConversationId(appId);
       }
     })();
-  }, [app, appId, messages.length, loadServerMessages, ephemeral, serverBackedChat]);
+  }, [app, appId, messages.length, loadServerMessages, ephemeral, serverBackedChat, embedded]);
 
   // Auto-send message if send=true query parameter is present
   const autoSendTriggered = useRef(false);
@@ -1162,7 +1202,7 @@ function AppChat({ preloadedApp = null }) {
       clearMessages();
       resetConversationState();
       startNewChat();
-      clearConversationId(appId);
+      if (!embedded) clearConversationId(appId);
       conversationResumed.current = false;
 
       // Reset the chat input to empty
@@ -1186,7 +1226,7 @@ function AppChat({ preloadedApp = null }) {
           temperature,
           variables: initialVars
         };
-        saveAppSettings(appId, settings);
+        if (!embedded) saveAppSettings(appId, settings);
       }
     },
     sendMessage: text => {
@@ -1275,27 +1315,28 @@ function AppChat({ preloadedApp = null }) {
     };
   }, [appId, currentLanguage, t, preloadedApp]);
 
-  // Load saved variables from sessionStorage when initializing
+  // Load saved variables from sessionStorage when initializing. Embedded, the
+  // test shows the app's own defaults.
   useEffect(() => {
-    if (app && !loading) {
+    if (app && !loading && !embedded) {
       const savedSettings = loadAppSettings(appId);
       if (savedSettings && savedSettings.variables) {
         setVariables(savedSettings.variables);
         debugLog('Restored app variables from sessionStorage:', savedSettings.variables);
       }
     }
-  }, [app, loading, appId]);
+  }, [app, loading, appId, embedded]);
 
   // Save variables to sessionStorage whenever they change
   useEffect(() => {
-    if (app && !loading) {
+    if (app && !loading && !embedded) {
       const settings = {
         variables
       };
 
       saveAppSettings(appId, settings);
     }
-  }, [app, loading, appId, variables]);
+  }, [app, loading, appId, variables, embedded]);
 
   // Calculate the welcome message to display (if any) - show greeting when configured
   const welcomeMessage = useMemo(() => {
@@ -1622,12 +1663,14 @@ function AppChat({ preloadedApp = null }) {
           ...(access?.searchProfile ? { searchProfile: access.searchProfile } : {}),
           source: 'ifinder'
         });
-        navigate(`/apps/${targetAppId}?${params.toString()}`);
+        const targetPath = `/apps/${targetAppId}?${params.toString()}`;
+        if (embedded) openInNewTab(targetPath);
+        else navigate(targetPath);
       }
 
       return undefined;
     },
-    [navigate]
+    [navigate, embedded, openInNewTab]
   );
 
   const clearChat = () => {
@@ -1646,7 +1689,7 @@ function AppChat({ preloadedApp = null }) {
         clearMessages();
         resetConversationState();
         startNewChat();
-        clearConversationId(appId);
+        if (!embedded) clearConversationId(appId);
         conversationResumed.current = false;
       }
 
@@ -1671,7 +1714,7 @@ function AppChat({ preloadedApp = null }) {
           temperature,
           variables: initialVars
         };
-        saveAppSettings(appId, settings);
+        if (!embedded) saveAppSettings(appId, settings);
       }
     }
   };
@@ -2404,6 +2447,9 @@ function AppChat({ preloadedApp = null }) {
         compareModeActive={compareModeActive}
         onCompareModeChange={setCompareModeActive}
         compareModeDisabled={processing || compareIsProcessing}
+        showBackButton={!embedded}
+        showEditAppButton={!embedded}
+        onOpenCanvas={embedded ? () => openInNewTab(`/apps/${appId}/canvas`) : undefined}
       />
 
       {app?.variables && app.variables.length > 0 && showParameters && (
@@ -2453,8 +2499,15 @@ function AppChat({ preloadedApp = null }) {
         </div>
       )}
 
-      <div className="flex flex-col md:flex-row flex-1 gap-4 overflow-hidden mx-auto w-full">
-        <div className="flex flex-col max-w-6xl mx-auto w-full h-full">
+      {/* Embedded, the chat sits in a panel far narrower than the viewport its
+          breakpoints measure, so the input variables stack above it instead of
+          taking a side column. */}
+      <div
+        className={`flex flex-col flex-1 gap-4 overflow-hidden mx-auto w-full ${embedded ? '' : 'md:flex-row'}`}
+      >
+        <div
+          className={`flex flex-col max-w-6xl mx-auto w-full ${embedded ? 'flex-1 min-h-0' : 'h-full'}`}
+        >
           {compareModeActive ? (
             /* Compare Mode View */
             <>
@@ -2476,6 +2529,7 @@ function AppChat({ preloadedApp = null }) {
                   onClarificationSubmit={handleClarificationSubmit}
                   onClarificationSkip={handleClarificationSkip}
                   onDocumentAction={handleDocumentAction}
+                  linkPath={appPagePath}
                   ephemeral={ephemeral}
                 />
               </div>
@@ -2511,6 +2565,7 @@ function AppChat({ preloadedApp = null }) {
                         onClarificationSubmit={handleClarificationSubmit}
                         onClarificationSkip={handleClarificationSkip}
                         onDocumentAction={handleDocumentAction}
+                        linkPath={appPagePath}
                       />
                     </div>
                   ) : (
@@ -2560,6 +2615,7 @@ function AppChat({ preloadedApp = null }) {
                         onClarificationSubmit={handleClarificationSubmit}
                         onClarificationSkip={handleClarificationSkip}
                         onDocumentAction={handleDocumentAction}
+                        linkPath={appPagePath}
                       />
                     </div>
                   ) : (
@@ -2608,6 +2664,7 @@ function AppChat({ preloadedApp = null }) {
                     onClarificationSubmit={handleClarificationSubmit}
                     onClarificationSkip={handleClarificationSkip}
                     onDocumentAction={handleDocumentAction}
+                    linkPath={appPagePath}
                   />
                 </div>
                 <div className="shrink-0 px-4 pt-2">{renderChatInput()}</div>
@@ -2639,6 +2696,7 @@ function AppChat({ preloadedApp = null }) {
                   onClarificationSubmit={handleClarificationSubmit}
                   onClarificationSkip={handleClarificationSkip}
                   onDocumentAction={handleDocumentAction}
+                  linkPath={appPagePath}
                 />
 
                 {renderChatInput()}
@@ -2648,7 +2706,9 @@ function AppChat({ preloadedApp = null }) {
         </div>
 
         {app?.variables && app.variables.length > 0 && (
-          <div className="hidden md:block w-80 lg:w-96 overflow-y-auto p-4 bg-gray-50 dark:bg-gray-800 rounded-lg shrink-0">
+          <div
+            className={`hidden md:block overflow-y-auto p-4 bg-gray-50 dark:bg-gray-800 rounded-lg shrink-0 ${embedded ? 'order-first max-h-60' : 'w-80 lg:w-96'}`}
+          >
             <h3 className="font-medium mb-3 text-gray-900 dark:text-gray-100">
               {t('pages.appChat.inputParameters')}
             </h3>
@@ -2666,9 +2726,11 @@ function AppChat({ preloadedApp = null }) {
           // A share link points at the app, never at one stored chat: the
           // recipient does not own it and could only ever get a 404 from it.
           path={
-            routeChatId
-              ? window.location.pathname.replace(/\/c\/[^/]+$/, '')
-              : window.location.pathname
+            embedded
+              ? appPagePath
+              : routeChatId
+                ? window.location.pathname.replace(/\/c\/[^/]+$/, '')
+                : window.location.pathname
           }
           params={{
             model: selectedModel,
