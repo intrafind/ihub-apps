@@ -43,3 +43,11 @@ validation, so items with keys the current release rejects were installed withou
 The `description` and `placeholder` of an app variable were dropped when the app was loaded, so
 the chat showed neither the help text nor the custom placeholder — including on shipped apps such
 as the Translator. Both now appear as configured.
+
+## Chat: Thinking Is Readable Again Instead of One Bullet Per Word
+
+Opening **Show thinking** on a reasoning model produced a bulleted list with a single word on each
+line — "The", "user", "is", "asking" — which was unreadable. Providers stream reasoning one token
+at a time, and every token was kept as its own entry rather than being joined into the text it came
+from. The thinking now reads as continuous text and keeps its own line breaks, while named steps
+such as workflow phases stay separate entries.
