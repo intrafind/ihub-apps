@@ -8,6 +8,49 @@ const localizedStringSchema = z.record(
 
 const idSchema = zSafeId.min(1).max(64);
 
+// RFC 9110 field-name token.
+const HTTP_HEADER_NAME = /^[A-Za-z0-9!#$%&'*+.^_`|~-]+$/;
+
+// Headers the MCP transport sets itself. Letting an auth block override them
+// would break framing or session resumption, so they are refused up front.
+const RESERVED_HEADER_NAMES = new Set([
+  'accept',
+  'connection',
+  'content-length',
+  'content-type',
+  'host',
+  'last-event-id',
+  'mcp-protocol-version',
+  'mcp-session-id',
+  'transfer-encoding'
+]);
+
+const headerNameSchema = z
+  .string()
+  .min(1)
+  .max(128)
+  .regex(HTTP_HEADER_NAME, 'header name must be a valid HTTP header name')
+  .refine(name => !RESERVED_HEADER_NAMES.has(name.toLowerCase()), {
+    message: 'header name is reserved for the MCP transport'
+  });
+
+const headerValueSchema = z
+  .string()
+  .max(1024)
+  .regex(/^[^\r\n]*$/, 'must not contain line breaks');
+
+// Non-secret headers sent on every request, e.g. a scope or account id a
+// vendor expects next to the key. Stored in plaintext, so Authorization is
+// refused here: secrets belong in the credential store via `auth`.
+const staticHeadersSchema = z
+  .record(
+    headerNameSchema.refine(name => name.toLowerCase() !== 'authorization', {
+      message: 'put credentials in the auth block, not in static headers'
+    }),
+    headerValueSchema
+  )
+  .optional();
+
 const authSchema = z
   .discriminatedUnion('type', [
     z.object({ type: z.literal('none') }),
@@ -25,6 +68,16 @@ const authSchema = z
       passwordRef: z.string().min(1)
     }),
     z.object({
+      // API key sent in a vendor-specific header instead of Authorization
+      // (e.g. Google's `X-Goog-Api-Key`).
+      type: z.literal('header'),
+      headerName: headerNameSchema,
+      // Literal text placed before the secret, e.g. `Token token=`.
+      valuePrefix: headerValueSchema.max(64).optional(),
+      // credentialRef to the key in the central credential store.
+      valueRef: z.string().min(1)
+    }),
+    z.object({
       type: z.literal('oauth'),
       tokenUrl: z.string().url(),
       clientId: z.string().min(1),
@@ -38,13 +91,15 @@ const authSchema = z
 const transportSchema = z.discriminatedUnion('type', [
   z.object({
     type: z.literal('streamableHttp'),
-    url: z.string().url()
+    url: z.string().url(),
+    headers: staticHeadersSchema
   }),
   // Legacy SSE retained for back-compat per the 2025-03-26 spec change.
   // streamableHttp is preferred.
   z.object({
     type: z.literal('sse'),
     url: z.string().url(),
+    headers: staticHeadersSchema,
     deprecated: z.literal(true).optional()
   }),
   z.object({

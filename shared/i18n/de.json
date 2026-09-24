@@ -2268,7 +2268,14 @@
           "transportStreamableHttp": "Streamable HTTP (empfohlen)",
           "transportSse": "SSE (veraltet)",
           "transportStdio": "stdio",
-          "transportWebsocket": "WebSocket"
+          "transportWebsocket": "WebSocket",
+          "authHeader": "API-Schlüssel in eigenem Header",
+          "headerName": "Header-Name",
+          "valuePrefix": "Wert-Präfix (optional)",
+          "apiKey": "API-Schlüssel",
+          "valueRefHint": "Gespeichertes Credential-Profil mit dem API-Schlüssel auswählen.",
+          "headers": "Zusätzliche Header (optional)",
+          "headersHint": "Ein „Name: Wert“ pro Zeile, wird bei jeder Anfrage gesendet. Im Klartext gespeichert — Schlüssel und Tokens gehören unter Authentifizierung."
         }
       },
       "gateway": {
@@ -2323,6 +2330,38 @@
         "cimdApprovalModeDesc": "Ein vertrauenswürdiger Host veröffentlicht mehrere verschiedene Clients — Claude Web, Claude Desktop, Claude Code — unter einem Hostnamen. Mit Freigabepflicht wartet jeder einzelne auf Sie: der Benutzer wird gebeten, sich an die Administration zu wenden, und der Client erscheint hier als wartend. Clients, über die bereits Verbindungen bestehen, sind nicht betroffen.",
         "cimdApprovalRequired": "Freigabe erforderlich (empfohlen)",
         "cimdApprovalAuto": "Automatisch verbinden"
+      },
+      "catalog": {
+        "open": "Katalog durchsuchen",
+        "title": "MCP-Server-Katalog",
+        "subtitle": "Gehostete MCP-Server, mit denen sich iHub verbinden kann. Server auswählen, um das Formular vorzubefüllen, dann API-Schlüssel hinterlegen, testen und speichern.",
+        "searchPlaceholder": "Server suchen…",
+        "category": "Kategorie",
+        "allCategories": "Alle Kategorien",
+        "loadError": "Katalog konnte nicht geladen werden: {{error}}",
+        "noResults": "Keine Server passen zur Suche.",
+        "installed": "Hinzugefügt",
+        "docs": "Dokumentation",
+        "use": "Hinzufügen",
+        "emptyHint": "Mit einem vorkonfigurierten Server aus dem Katalog beginnen oder einen eigenen hinzufügen.",
+        "prefilledNoKey": "Aus dem Katalog vorbefüllt. {{name}} benötigt keinen API-Schlüssel — Verbindung testen und speichern.",
+        "prefilledKey": "Aus dem Katalog vorbefüllt. Den API-Schlüssel für {{name}} als Credential speichern, unten auswählen, dann testen und speichern.",
+        "auth": {
+          "none": "Kein Schlüssel nötig",
+          "apiKey": "API-Schlüssel",
+          "basic": "Benutzername & API-Token"
+        },
+        "categories": {
+          "documentation": "Dokumentation",
+          "development": "Entwicklung & Betrieb",
+          "productivity": "Produktivität",
+          "content": "Inhalte & Medien",
+          "automation": "Automatisierung & Web",
+          "customer": "Vertrieb & Support",
+          "analytics": "Analytics",
+          "data": "Daten & Recherche",
+          "finance": "Finanzen & Zahlungen"
+        }
       }
     },
     "telemetry": {

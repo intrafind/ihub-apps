@@ -1984,7 +1984,14 @@
           "transportStreamableHttp": "Streamable HTTP (recommended)",
           "transportSse": "SSE (legacy)",
           "transportStdio": "stdio",
-          "transportWebsocket": "WebSocket"
+          "transportWebsocket": "WebSocket",
+          "authHeader": "API key in custom header",
+          "headerName": "Header name",
+          "valuePrefix": "Value prefix (optional)",
+          "apiKey": "API key",
+          "valueRefHint": "Select a stored credential profile holding the API key.",
+          "headers": "Additional headers (optional)",
+          "headersHint": "One \"Name: value\" per line, sent with every request. Stored in plain text — put keys and tokens under Authentication instead."
         }
       },
       "gateway": {
@@ -2039,6 +2046,38 @@
         "cimdApprovalModeDesc": "A trusted host publishes several different clients — Claude web, Claude Desktop, Claude Code — under one hostname. Requiring approval means each one waits for you: the user is told to ask an administrator, and the client appears here as pending. Clients people are already connected through are unaffected.",
         "cimdApprovalRequired": "Require approval (recommended)",
         "cimdApprovalAuto": "Connect automatically"
+      },
+      "catalog": {
+        "open": "Browse catalog",
+        "title": "MCP server catalog",
+        "subtitle": "Hosted MCP servers iHub can connect to. Pick one to pre-fill the form, then add its API key, test and save.",
+        "searchPlaceholder": "Search servers…",
+        "category": "Category",
+        "allCategories": "All categories",
+        "loadError": "Failed to load the catalog: {{error}}",
+        "noResults": "No servers match your search.",
+        "installed": "Added",
+        "docs": "Documentation",
+        "use": "Add",
+        "emptyHint": "Start from the catalog of preconfigured servers, or add your own.",
+        "prefilledNoKey": "Pre-filled from the catalog. {{name}} needs no API key — test the connection and save.",
+        "prefilledKey": "Pre-filled from the catalog. Store the {{name}} API key as a credential, select it below, then test and save.",
+        "auth": {
+          "none": "No key needed",
+          "apiKey": "API key",
+          "basic": "Username & API token"
+        },
+        "categories": {
+          "documentation": "Documentation",
+          "development": "Development & operations",
+          "productivity": "Productivity",
+          "content": "Content & media",
+          "automation": "Automation & web",
+          "customer": "Sales & support",
+          "analytics": "Analytics",
+          "data": "Data & research",
+          "finance": "Finance & payments"
+        }
       }
     },
     "telemetry": {

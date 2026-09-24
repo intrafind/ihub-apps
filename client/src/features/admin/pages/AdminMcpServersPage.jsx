@@ -4,6 +4,8 @@ import Icon from '../../../shared/components/Icon';
 import LoadingSpinner from '../../../shared/components/LoadingSpinner';
 import { makeAdminApiCall } from '../../../api/adminApi';
 import { CredentialRefSelect } from '../components/OpenApiToolEditor';
+import McpServerCatalogDialog from '../components/McpServerCatalogDialog';
+import { getLocalizedContent } from '../../../utils/localizeContent';
 
 const BLANK_FORM = {
   id: '',
@@ -26,6 +28,40 @@ const INPUT_CLASS =
   'w-full rounded-md border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100 shadow-xs px-3 py-2 text-sm focus:border-blue-500 focus:ring-blue-500';
 const MONO_INPUT_CLASS = `${INPUT_CLASS} font-mono`;
 
+// Static headers are edited as "Name: value" lines on the transport.
+function headersToText(headers) {
+  return Object.entries(headers || {})
+    .map(([name, value]) => `${name}: ${value}`)
+    .join('\n');
+}
+
+function textToHeaders(text) {
+  const headers = {};
+  for (const line of (text || '').split('\n')) {
+    const trimmed = line.trim();
+    if (!trimmed) continue;
+    const colon = trimmed.indexOf(':');
+    const name = (colon === -1 ? trimmed : trimmed.slice(0, colon)).trim();
+    headers[name] = colon === -1 ? '' : trimmed.slice(colon + 1).trim();
+  }
+  return Object.keys(headers).length ? headers : undefined;
+}
+
+function isHttpTransport(transport) {
+  return transport?.type === 'streamableHttp' || transport?.type === 'sse';
+}
+
+function transportToForm(transport) {
+  const { headers, ...rest } = transport || {};
+  return isHttpTransport(rest) ? { ...rest, headersText: headersToText(headers) } : rest;
+}
+
+function transportFromForm(transport) {
+  const { headersText, ...rest } = transport;
+  const headers = isHttpTransport(rest) ? textToHeaders(headersText) : undefined;
+  return headers ? { ...rest, headers } : rest;
+}
+
 function transportFields(transport, onChange, t) {
   if (
     transport.type === 'streamableHttp' ||
@@ -43,8 +79,28 @@ function transportFields(transport, onChange, t) {
           value={transport.url || ''}
           onChange={e => onChange({ ...transport, url: e.target.value })}
           className={INPUT_CLASS}
-          placeholder="https://mcp.example.com/sse"
+          placeholder="https://mcp.example.com/mcp"
         />
+        {isHttpTransport(transport) && (
+          <div className="mt-3">
+            <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+              {t('admin.mcp.servers.form.headers', 'Additional headers (optional)')}
+            </label>
+            <textarea
+              rows={2}
+              value={transport.headersText || ''}
+              onChange={e => onChange({ ...transport, headersText: e.target.value })}
+              className={MONO_INPUT_CLASS}
+              placeholder="X-Scope: read"
+            />
+            <p className="mt-1 text-xs text-gray-500 dark:text-gray-400">
+              {t(
+                'admin.mcp.servers.form.headersHint',
+                'One "Name: value" per line, sent with every request. Stored in plain text — put keys and tokens under Authentication instead.'
+              )}
+            </p>
+          </div>
+        )}
       </div>
     );
   }
@@ -103,6 +159,7 @@ function authFields(auth, onChange, t) {
             if (v === 'none') return onChange({ type: 'none' });
             if (v === 'bearer') return onChange({ type: 'bearer', tokenRef: '' });
             if (v === 'basic') return onChange({ type: 'basic', username: '', passwordRef: '' });
+            if (v === 'header') return onChange({ type: 'header', headerName: '', valueRef: '' });
             if (v === 'oauth')
               return onChange({ type: 'oauth', tokenUrl: '', clientId: '', clientSecretRef: '' });
           }}
@@ -110,6 +167,9 @@ function authFields(auth, onChange, t) {
         >
           <option value="none">{t('admin.mcp.servers.form.authNone', 'None')}</option>
           <option value="bearer">{t('admin.mcp.servers.form.authBearer', 'Bearer token')}</option>
+          <option value="header">
+            {t('admin.mcp.servers.form.authHeader', 'API key in custom header')}
+          </option>
           <option value="basic">{t('admin.mcp.servers.form.authBasic', 'Basic')}</option>
           <option value="oauth">
             {t('admin.mcp.servers.form.authOauth', 'OAuth (client credentials)')}
@@ -127,6 +187,46 @@ function authFields(auth, onChange, t) {
             'Select a stored credential profile holding the bearer token.'
           )}
         />
+      )}
+      {auth?.type === 'header' && (
+        <>
+          <div className="grid grid-cols-2 gap-3">
+            <div>
+              <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+                {t('admin.mcp.servers.form.headerName', 'Header name')}
+              </label>
+              <input
+                type="text"
+                required
+                value={auth.headerName || ''}
+                onChange={e => onChange({ ...auth, headerName: e.target.value })}
+                className={MONO_INPUT_CLASS}
+                placeholder="X-Api-Key"
+              />
+            </div>
+            <div>
+              <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+                {t('admin.mcp.servers.form.valuePrefix', 'Value prefix (optional)')}
+              </label>
+              <input
+                type="text"
+                value={auth.valuePrefix || ''}
+                onChange={e => onChange({ ...auth, valuePrefix: e.target.value || undefined })}
+                className={MONO_INPUT_CLASS}
+              />
+            </div>
+          </div>
+          <CredentialRefSelect
+            value={auth.valueRef || ''}
+            onChange={id => onChange({ ...auth, valueRef: id })}
+            types={['secret', 'apiKeyHeader', 'bearer']}
+            label={t('admin.mcp.servers.form.apiKey', 'API key')}
+            help={t(
+              'admin.mcp.servers.form.valueRefHint',
+              'Select a stored credential profile holding the API key.'
+            )}
+          />
+        </>
       )}
       {auth?.type === 'basic' && (
         <>
@@ -236,8 +336,24 @@ function StatusBadge({ status, t }) {
   );
 }
 
+// Auth block for a catalog entry, with the credential reference left for the
+// admin to pick.
+function catalogAuthTemplate(auth) {
+  if (auth?.type === 'bearer') return { type: 'bearer', tokenRef: '' };
+  if (auth?.type === 'basic') return { type: 'basic', username: '', passwordRef: '' };
+  if (auth?.type === 'header') {
+    return {
+      type: 'header',
+      headerName: auth.headerName,
+      ...(auth.valuePrefix ? { valuePrefix: auth.valuePrefix } : {}),
+      valueRef: ''
+    };
+  }
+  return { type: 'none' };
+}
+
 function AdminMcpServersPage() {
-  const { t } = useTranslation();
+  const { t, i18n } = useTranslation();
   const [loading, setLoading] = useState(true);
   const [servers, setServers] = useState([]);
   const [message, setMessage] = useState(null);
@@ -245,6 +361,8 @@ function AdminMcpServersPage() {
   const [form, setForm] = useState(BLANK_FORM);
   const [draftTesting, setDraftTesting] = useState(false);
   const [draftTest, setDraftTest] = useState(null); // null | { ok, status, tools } | { ok:false, error }
+  const [catalogOpen, setCatalogOpen] = useState(false);
+  const [catalogEntry, setCatalogEntry] = useState(null); // catalog entry the create form came from
 
   const load = async () => {
     setLoading(true);
@@ -271,6 +389,28 @@ function AdminMcpServersPage() {
   const startCreate = () => {
     setForm(BLANK_FORM);
     setDraftTest(null);
+    setCatalogEntry(null);
+    setEditing('new');
+  };
+
+  const startFromCatalog = entry => {
+    const taken = new Set(servers.map(s => s.id));
+    let id = entry.id;
+    for (let n = 2; taken.has(id); n++) id = `${entry.id}-${n}`;
+    setForm({
+      ...BLANK_FORM,
+      id,
+      name: entry.name,
+      // The form stores English text only, so start from the English copy.
+      description: getLocalizedContent(entry.description, 'en'),
+      transport: transportToForm(entry.transport),
+      auth: catalogAuthTemplate(entry.auth),
+      toolPrefix: entry.toolPrefix || '',
+      timeoutMs: entry.timeoutMs || BLANK_FORM.timeoutMs
+    });
+    setDraftTest(null);
+    setCatalogEntry(entry);
+    setCatalogOpen(false);
     setEditing('new');
   };
 
@@ -278,6 +418,7 @@ function AdminMcpServersPage() {
     setForm({
       ...BLANK_FORM,
       ...server,
+      transport: transportToForm(server.transport),
       name: typeof server.name === 'string' ? server.name : server.name?.en || server.id,
       description:
         typeof server.description === 'string' ? server.description : server.description?.en || ''
@@ -289,11 +430,13 @@ function AdminMcpServersPage() {
   const closeDialog = () => {
     setEditing(null);
     setDraftTest(null);
+    setCatalogEntry(null);
   };
 
   // Build the request body shared by save() and the in-dialog test probe.
   const buildBody = () => ({
     ...form,
+    transport: transportFromForm(form.transport),
     name: form.name ? { en: form.name } : undefined,
     description: form.description ? { en: form.description } : undefined,
     allowedTools:
@@ -418,13 +561,22 @@ function AdminMcpServersPage() {
             )}
           </p>
         </div>
-        <button
-          onClick={startCreate}
-          className="inline-flex items-center px-4 py-2 border border-transparent text-sm font-medium rounded-md shadow-xs text-white bg-blue-600 hover:bg-blue-700"
-        >
-          <Icon name="plus" size="md" className="mr-2" />
-          {t('admin.mcp.servers.create', 'Add MCP server')}
-        </button>
+        <div className="flex shrink-0 space-x-2 ml-4">
+          <button
+            onClick={() => setCatalogOpen(true)}
+            className="inline-flex items-center px-4 py-2 border border-gray-300 dark:border-gray-600 text-sm font-medium rounded-md shadow-xs text-gray-700 dark:text-gray-200 bg-white dark:bg-gray-700 hover:bg-gray-50 dark:hover:bg-gray-600"
+          >
+            <Icon name="cube" size="md" className="mr-2" />
+            {t('admin.mcp.catalog.open', 'Browse catalog')}
+          </button>
+          <button
+            onClick={startCreate}
+            className="inline-flex items-center px-4 py-2 border border-transparent text-sm font-medium rounded-md shadow-xs text-white bg-blue-600 hover:bg-blue-700"
+          >
+            <Icon name="plus" size="md" className="mr-2" />
+            {t('admin.mcp.servers.create', 'Add MCP server')}
+          </button>
+        </div>
       </div>
 
       <div>
@@ -448,6 +600,19 @@ function AdminMcpServersPage() {
             <h3 className="mt-2 text-sm font-medium text-gray-900 dark:text-gray-100">
               {t('admin.mcp.servers.empty', 'No MCP servers configured')}
             </h3>
+            <p className="mt-1 text-sm text-gray-500 dark:text-gray-400">
+              {t(
+                'admin.mcp.catalog.emptyHint',
+                'Start from the catalog of preconfigured servers, or add your own.'
+              )}
+            </p>
+            <button
+              onClick={() => setCatalogOpen(true)}
+              className="mt-4 inline-flex items-center px-4 py-2 border border-gray-300 dark:border-gray-600 text-sm font-medium rounded-md shadow-xs text-gray-700 dark:text-gray-200 bg-white dark:bg-gray-700 hover:bg-gray-50 dark:hover:bg-gray-600"
+            >
+              <Icon name="cube" size="md" className="mr-2" />
+              {t('admin.mcp.catalog.open', 'Browse catalog')}
+            </button>
           </div>
         ) : (
           <div className="bg-white dark:bg-gray-800 shadow-sm overflow-hidden sm:rounded-md">
@@ -508,6 +673,10 @@ function AdminMcpServersPage() {
         )}
       </div>
 
+      {catalogOpen && (
+        <McpServerCatalogDialog onClose={() => setCatalogOpen(false)} onSelect={startFromCatalog} />
+      )}
+
       {editing !== null && (
         <div className="fixed z-10 inset-0 overflow-y-auto">
           <div className="flex items-center justify-center min-h-screen px-4">
@@ -518,6 +687,45 @@ function AdminMcpServersPage() {
                   ? t('admin.mcp.servers.createTitle', 'Create MCP server')
                   : t('admin.mcp.servers.editTitle', 'Edit {{id}}', { id: editing })}
               </h2>
+              {editing === 'new' && catalogEntry && (
+                <div className="rounded-md border border-blue-200 dark:border-blue-800 bg-blue-50 dark:bg-blue-900/30 p-3 text-sm text-blue-800 dark:text-blue-200 space-y-1.5">
+                  <div className="flex items-start">
+                    <Icon name="information-circle" size="sm" className="mr-1.5 mt-0.5 shrink-0" />
+                    <div className="space-y-1.5">
+                      <p>
+                        {catalogEntry.auth?.type === 'none'
+                          ? t(
+                              'admin.mcp.catalog.prefilledNoKey',
+                              'Pre-filled from the catalog. {{name}} needs no API key — test the connection and save.',
+                              { name: catalogEntry.name }
+                            )
+                          : t(
+                              'admin.mcp.catalog.prefilledKey',
+                              'Pre-filled from the catalog. Store the {{name}} API key as a credential, select it below, then test and save.',
+                              { name: catalogEntry.name }
+                            )}
+                      </p>
+                      {catalogEntry.credentialHint && (
+                        <p>{getLocalizedContent(catalogEntry.credentialHint, i18n.language)}</p>
+                      )}
+                      {catalogEntry.notes && (
+                        <p>{getLocalizedContent(catalogEntry.notes, i18n.language)}</p>
+                      )}
+                      {catalogEntry.docsUrl && (
+                        <a
+                          href={catalogEntry.docsUrl}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          className="inline-flex items-center font-medium underline"
+                        >
+                          {t('admin.mcp.catalog.docs', 'Documentation')}
+                          <Icon name="external-link" size="xs" className="ml-1" />
+                        </a>
+                      )}
+                    </div>
+                  </div>
+                </div>
+              )}
               {editing === 'new' && (
                 <div>
                   <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">

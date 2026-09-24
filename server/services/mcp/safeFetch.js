@@ -163,16 +163,22 @@ export async function safeFetch(input, init = {}, opts = {}) {
   const agent = makePinnedAgent(address, family, url.protocol === 'https:');
 
   // Node 18+ `fetch` (undici) does not accept the legacy `agent` option, so
-  // when running under undici we set a dispatcher. When undici is unavailable
-  // (older Node) we fall back to http.request via a thin shim.
+  // when running under undici we set a dispatcher. The dispatcher must come
+  // from the same undici as the fetch: Node's built-in fetch bundles its own
+  // undici, whose handler API differs from the npm package and rejects its
+  // Agent. When undici is unavailable we fall back to http.request via a thin
+  // shim.
+  let undici;
   try {
-    const undici = await import('undici');
+    undici = await import('undici');
+  } catch {
+    undici = null;
+  }
+  if (undici) {
     const dispatcher = new undici.Agent({
       connect: { lookup: makePinnedLookup(address, family) }
     });
-    return await globalThis.fetch(url, { ...init, dispatcher });
-  } catch {
-    // Fall through to node-http-based fetch
+    return await undici.fetch(url, { ...init, dispatcher });
   }
 
   return await nodeHttpFetch(url, init, agent);
