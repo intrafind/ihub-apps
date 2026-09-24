@@ -22,7 +22,8 @@
  * @module services/chat/chatShareAccess
  */
 import { isAdminUser, isAnonymousUser, resolvePrincipal } from '../loop/runIdentity.js';
-import { isShareActive } from './chatSharing.js';
+import { isAdminEligiblePrincipal } from '../../utils/authorization.js';
+import { isShareActive, isWithinArtifactGrace } from './chatSharing.js';
 
 /**
  * Decide whether `user` may open `share`.
@@ -32,14 +33,25 @@ import { isShareActive } from './chatSharing.js';
  *   an anonymous caller.
  * @param {Object} [options]
  * @param {number} [options.now] - Clock, for tests.
+ * @param {'transcript'|'artifact'} [options.purpose='transcript'] - What the
+ *   caller is about to read. An artifact fetch is let through for a short
+ *   while after the open that used a share's last view, because it is that
+ *   viewer's page fetching the pictures the transcript it was just served
+ *   names; see `SHARE_ARTIFACT_GRACE_MS`.
  * @returns {Promise<{ok: true, viewerId: string|null, counts: boolean, viaOwner: boolean,
  *   viaAdmin: boolean}|{ok: false, status: 401|404}>}
  *   `viewerId` is the signed-in caller's id (null for an anonymous viewer of a
  *   public share); `counts` says whether this open is a view the owner asked
  *   to have tracked — the owner's and an admin's own opens are not.
  */
-export async function authorizeShareView(share, user, { now = Date.now() } = {}) {
-  if (!isShareActive(share, now)) return { ok: false, status: 404 };
+export async function authorizeShareView(
+  share,
+  user,
+  { now = Date.now(), purpose = 'transcript' } = {}
+) {
+  const open =
+    isShareActive(share, now) || (purpose === 'artifact' && isWithinArtifactGrace(share, now));
+  if (!open) return { ok: false, status: 404 };
 
   const anonymous = isAnonymousUser(user);
   const viewerId = anonymous ? null : String(user.id);
@@ -49,7 +61,11 @@ export async function authorizeShareView(share, user, { now = Date.now() } = {})
     if (me.id === share.ownerId) {
       return { ok: true, viewerId, counts: false, viaOwner: true, viaAdmin: false };
     }
-    if (isAdminUser(user)) {
+    // Group membership alone is not admin here: a personal API key or an
+    // add-in token minted by an administrator carries their groups but is a
+    // delegated principal, and `enhanceUserWithPermissions` denies it admin
+    // rights everywhere else.
+    if (isAdminUser(user) && isAdminEligiblePrincipal(user)) {
       return { ok: true, viewerId, counts: false, viaOwner: false, viaAdmin: true };
     }
   }

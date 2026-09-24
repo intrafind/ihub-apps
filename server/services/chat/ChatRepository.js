@@ -40,6 +40,7 @@ import { getStorage, readFacet } from '../../storage/bootstrap.js';
 import { RUNTIME_NAMESPACES } from '../../storage/namespaces.js';
 import { chatMessageCap } from './chatPersistence.js';
 import { getArtifactRepository } from '../artifacts/ArtifactRepository.js';
+import { ChatShareRepository } from './ChatShareRepository.js';
 
 const COMPONENT = 'ChatRepository';
 
@@ -564,18 +565,25 @@ export class ChatRepository {
    *   Where what a turn produced is stored. Injected rather than imported at
    *   use so a test can drive the transcript without a payload store, and
    *   resolved lazily so this module does not fix the provider at construction.
+   * @param {import('./ChatShareRepository.js').ChatShareRepository} [options.shares]
+   *   Where a chat's share links are stored; asked which artifacts a link
+   *   still hands out before a truncating write deletes them. Built over the
+   *   same two facets as this repository when not given, so the two always
+   *   read the same provider.
    */
   constructor({
     documents = null,
     locks = null,
     logger: log,
     maxMessages = null,
-    artifacts = null
+    artifacts = null,
+    shares = null
   } = {}) {
     this.documents = documents || null;
     this.locks = locks || null;
     this.logger = log || logger;
     this._artifacts = artifacts;
+    this._shares = shares;
     /**
      * Messages one chat may keep, or null for "ask the platform config".
      * Resolved per write rather than captured here, so an admin who lowers it
@@ -601,6 +609,22 @@ export class ChatRepository {
    */
   artifactStore() {
     return this._artifacts || getArtifactRepository();
+  }
+
+  /**
+   * The share store of this repository's chats.
+   *
+   * @returns {import('./ChatShareRepository.js').ChatShareRepository}
+   */
+  shareStore() {
+    if (!this._shares) {
+      this._shares = new ChatShareRepository({
+        documents: this.documents,
+        locks: this.locks,
+        logger: this.logger
+      });
+    }
+    return this._shares;
   }
 
   /**
@@ -1278,9 +1302,19 @@ export class ChatRepository {
       // gone while the descriptor is still stored renders as a broken picture
       // in a chat nobody edited, while the reverse — a payload nothing points
       // at — is swept when the chat is deleted.
+      //
+      // Except for what a share still hands out. A share is a frozen copy of
+      // the transcript, and the pictures in it are served out of this chat's
+      // scope rather than copied — so an edit that drops a message from the
+      // live chat must not take a picture away from a link the owner already
+      // sent. Those payloads go when the chat goes, with the share.
       const orphaned = artifactIdsOfMessages(discarded);
       if (orphaned.length > 0) {
-        await this.artifactStore().deleteMany(this.artifactScope(chatId), orphaned);
+        const retained = await this.shareStore().artifactIdsRetainedByShares(chatId);
+        const deletable = orphaned.filter(id => !retained.has(id));
+        if (deletable.length > 0) {
+          await this.artifactStore().deleteMany(this.artifactScope(chatId), deletable);
+        }
       }
 
       return { message: entry, messages };

@@ -349,8 +349,13 @@ export default function ChatHistoryPage() {
 
   const activeView = sharingEnabled ? view : 'mine';
 
+  // Fetched once per visit to the tab. `loading` is deliberately not a
+  // dependency: it is set by this very effect, and re-running on it would
+  // cancel the fetch that was just started and leave the tab on its
+  // skeleton for good. Leaving the tab mid-load drops the answer; coming
+  // back fetches again.
   useEffect(() => {
-    if (activeView !== 'shared' || shared.loaded || shared.loading) return;
+    if (activeView !== 'shared' || shared.loaded) return undefined;
     let active = true;
     setShared(prev => ({ ...prev, loading: true, error: null }));
     fetchSharesWithMe()
@@ -365,7 +370,7 @@ export default function ChatHistoryPage() {
     return () => {
       active = false;
     };
-  }, [activeView, shared.loaded, shared.loading]);
+  }, [activeView, shared.loaded]);
 
   // A share travels with what its page shows about the app, because the
   // recipient may not be able to see that app themselves; the viewer's own

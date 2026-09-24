@@ -234,6 +234,17 @@ export default function registerAdminChatHistoryRoutes(app) {
         }
       }
       // The sharing form section is `platform.chats.sharing` on disk.
+      const nextSharing = { ...current.sharing, ...(sharing || {}) };
+      if (
+        nextSharing.defaultExpiryDays > 0 &&
+        nextSharing.maxExpiryDays > 0 &&
+        nextSharing.defaultExpiryDays > nextSharing.maxExpiryDays
+      ) {
+        return sendBadRequest(
+          res,
+          'Invalid chat history settings: sharing.defaultExpiryDays must not exceed sharing.maxExpiryDays'
+        );
+      }
       for (const [key, value] of Object.entries(sharing || {})) {
         if (current.sharing[key] === value) continue;
         platformConfig.chats = {

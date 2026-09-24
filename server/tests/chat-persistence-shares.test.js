@@ -28,8 +28,16 @@ import configCache from '../configCache.js';
 import { bootstrapStorage, shutdownStorageBootstrap } from '../storage/bootstrap.js';
 import { getChatRepository } from '../services/chat/ChatRepository.js';
 import { getChatShareRepository, isShareId } from '../services/chat/ChatShareRepository.js';
-import { resolveShareLimits, shareState } from '../services/chat/chatSharing.js';
-import registerChatShareRoutes from '../routes/chatShares.js';
+import {
+  SHARE_ARTIFACT_GRACE_MS,
+  isWithinArtifactGrace,
+  resolveShareLimits,
+  shareState
+} from '../services/chat/chatSharing.js';
+import { authorizeShareView } from '../services/chat/chatShareAccess.js';
+import { getArtifactRepository } from '../services/artifacts/ArtifactRepository.js';
+import { fingerprint } from '../services/UserFingerprint.js';
+import registerChatShareRoutes, { downloadName } from '../routes/chatShares.js';
 import registerChatRoutes from '../routes/chats.js';
 
 const ADA = { id: 'user-ada', name: 'Ada Lovelace', email: 'ada@example.com' };
@@ -284,6 +292,52 @@ describe('the policy helpers', () => {
     assert.equal(resolveShareLimits({ maxViews: 0 }, open, now).ok, false);
     assert.equal(resolveShareLimits({ maxViews: 2.5 }, open, now).ok, false);
   });
+
+  it('never lets a default expiry exceed the longest expiry an owner may pick', () => {
+    // An admin who sets the default above the cap gets the cap applied, not a
+    // form that refuses every owner who left the expiry alone.
+    const now = Date.parse('2026-09-24T12:00:00Z');
+    const settings = { defaultExpiryDays: 30, maxExpiryDays: 7, maxViewsCap: 0 };
+    const limits = resolveShareLimits({}, settings, now);
+    assert.equal(limits.ok, true);
+    assert.equal(limits.expiresAt, new Date(now + 7 * DAY_MS).toISOString());
+  });
+
+  it('grants a used-up share a short window for its artifacts, and nothing else', () => {
+    const now = Date.parse('2026-09-24T12:00:00Z');
+    const justUsedUp = {
+      maxViews: 1,
+      viewCount: 1,
+      lastViewedAt: new Date(now - 1000).toISOString()
+    };
+    assert.equal(isWithinArtifactGrace(justUsedUp, now), true);
+    const longAgo = {
+      ...justUsedUp,
+      lastViewedAt: new Date(now - SHARE_ARTIFACT_GRACE_MS - 1).toISOString()
+    };
+    assert.equal(isWithinArtifactGrace(longAgo, now), false);
+    assert.equal(
+      isWithinArtifactGrace({ ...justUsedUp, revokedAt: '2026-09-24T11:00:00Z' }, now),
+      false
+    );
+    assert.equal(isWithinArtifactGrace({ viewCount: 0 }, now), false, 'an active share needs none');
+  });
+
+  it('builds a download name that survives a cut through a surrogate pair', () => {
+    // The stored name is capped at 200 UTF-16 units elsewhere, which can split
+    // an emoji; the header must still be encodable.
+    const name = `${'a'.repeat(199)}😀`.slice(0, 200);
+    const result = downloadName({ id: 'x', kind: 'image', mimeType: 'image/png', name });
+    assert.doesNotThrow(() => encodeURIComponent(result));
+    assert.equal(
+      downloadName({ id: 'abcdef0123', kind: 'image', mimeType: 'image/png' }),
+      'image-abcdef01.png'
+    );
+    assert.equal(
+      downloadName({ id: 'x', kind: 'image', mimeType: 'image/png', name: 'a/b"c\nd.png' }),
+      'a_b_c_d.png'
+    );
+  });
 });
 
 describe('creating a share', () => {
@@ -337,6 +391,8 @@ describe('creating a share', () => {
     assert.deepEqual(unknown.body.details.unknown, ['nobody']);
     const inactive = await createShare(ADA, chatId, { mode: 'users', recipients: [LINUS.id] });
     assert.equal(inactive.statusCode, 400, 'a deactivated account cannot be a recipient');
+    const proto = await createShare(ADA, chatId, { mode: 'users', recipients: ['__proto__'] });
+    assert.equal(proto.statusCode, 400, 'a prototype key is not a user');
     const ok = await createShare(ADA, chatId, { mode: 'users', recipients: [GRACE.id, GRACE.id] });
     assert.equal(ok.statusCode, 201);
     assert.deepEqual(ok.body.share.recipients, [GRACE.id]);
@@ -441,6 +497,54 @@ describe('who may open a link', () => {
     } finally {
       setSharing({ enabled: true });
     }
+  });
+});
+
+describe('identity modes and delegated principals', () => {
+  it('writes no owner name on a pseudonymized installation, and hides the toggle server-side', async () => {
+    chatCounter += 1;
+    const chatId = `chat-pseudo-${chatCounter}`;
+    const repository = getChatRepository();
+    // A pseudonymized chat is owned by the hashed principal, which is what the
+    // access check resolves the caller to in that mode.
+    await repository.ensureChat({
+      chatId,
+      ownerId: await fingerprint(ADA.id),
+      identityMode: 'pseudonymized',
+      appId: 'chat',
+      title: 'Hashed owner'
+    });
+    await repository.appendMessage(chatId, { role: 'user', content: 'hello' });
+    await repository.appendMessage(chatId, { role: 'assistant', content: 'hi' });
+
+    const res = await createShare(ADA, chatId, { mode: 'public', showOwnerName: true });
+    assert.equal(res.statusCode, 201);
+    assert.equal(res.body.share.ownerName, null);
+    assert.equal(res.body.share.showOwnerName, false);
+
+    const view = await drive(openHandlers, {
+      params: { shareId: res.body.share.id },
+      user: GRACE
+    });
+    assert.equal(view.statusCode, 200);
+    assert.equal(view.body.share.sharedBy, null);
+    // The per-view log stores the viewer the way the mode records people.
+    const stored = await getChatShareRepository().getShare(res.body.share.id);
+    assert.equal(stored.views[0].userId, await fingerprint(GRACE.id));
+    assert.notEqual(stored.views[0].userId, GRACE.id);
+  });
+
+  it("a delegated token with the admin's groups is not an admin here", async () => {
+    const chatId = await seedChat(ADA);
+    const { share } = (await createShare(ADA, chatId, { mode: 'users', recipients: [GRACE.id] }))
+      .body;
+    const apiKey = { ...ROOT, authMode: 'oauth_personal_key' };
+    const read = await drive(openHandlers, { params: { shareId: share.id }, user: apiKey });
+    assert.equal(read.statusCode, 404);
+    const revoke = await drive(revokeHandlers, { params: { shareId: share.id }, user: apiKey });
+    assert.equal(revoke.statusCode, 404);
+    const still = await getChatShareRepository().getShare(share.id);
+    assert.equal(still.revokedAt, null);
   });
 });
 
@@ -557,6 +661,69 @@ describe('artifacts through a share', () => {
 
     // Artifact opens are not views.
     assert.equal((await getChatShareRepository().getShare(share.id)).viewCount, 0);
+  });
+
+  it('keeps a shared picture when the owner regenerates or edits it away', async () => {
+    const chatId = await seedChat(ADA, { turns: 0 });
+    const repository = getChatRepository();
+    const shared = await seedArtifact(chatId, 'shared');
+    const { share } = (await createShare(ADA, chatId, { mode: 'public' })).body;
+    // Not in any share: the ordinary rule still applies to this one.
+    const unshared = await seedArtifact(chatId, 'unshared');
+    const { messages } = await repository.getMessages(chatId);
+    const first = messages.find(m => m.artifacts?.[0]?.id === shared.id);
+
+    // Regenerate from the shared picture's message: both pictures leave the
+    // live transcript.
+    await repository.appendMessage(
+      chatId,
+      { role: 'assistant', content: 'a different answer' },
+      { replaceFromMessageId: first.id }
+    );
+
+    const scope = repository.artifactScope(chatId);
+    assert.ok(await getArtifactRepository().get(scope, shared.id), 'the shared picture survives');
+    assert.equal(await getArtifactRepository().get(scope, unshared.id), null, 'the other is gone');
+
+    const res = await drive(artifactHandlers, {
+      params: { shareId: share.id, artifactId: shared.id },
+      user: ANONYMOUS
+    });
+    assert.equal(res.statusCode, 200);
+    assert.equal(Buffer.from(res.body).toString(), 'png-bytes-shared');
+  });
+
+  it('is still served to the viewer whose open used the last allowed view', async () => {
+    const chatId = await seedChat(ADA, { turns: 0 });
+    const artifact = await seedArtifact(chatId, 'last');
+    const { share } = (await createShare(ADA, chatId, { mode: 'public', maxViews: 1 })).body;
+
+    const open = await drive(openHandlers, { params: { shareId: share.id }, user: ANONYMOUS });
+    assert.equal(open.statusCode, 200);
+    // The link is used up for the next reader …
+    const again = await drive(openHandlers, { params: { shareId: share.id }, user: ANONYMOUS });
+    assert.equal(again.statusCode, 404);
+    // … but the page that was just served still gets its pictures.
+    const list = await drive(artifactsHandlers, { params: { shareId: share.id }, user: ANONYMOUS });
+    assert.equal(list.statusCode, 200);
+    assert.deepEqual(
+      list.body.items.map(item => item.id),
+      [artifact.id]
+    );
+    const bytes = await drive(artifactHandlers, {
+      params: { shareId: share.id, artifactId: artifact.id },
+      user: ANONYMOUS
+    });
+    assert.equal(bytes.statusCode, 200);
+
+    // Once the window has passed, nothing opens any more.
+    const stored = await getChatShareRepository().getShare(share.id);
+    const later = Date.parse(stored.lastViewedAt) + SHARE_ARTIFACT_GRACE_MS + 1;
+    const expired = await authorizeShareView(stored, undefined, {
+      now: later,
+      purpose: 'artifact'
+    });
+    assert.deepEqual(expired, { ok: false, status: 404 });
   });
 
   it('applies the same audience rules as the transcript', async () => {
@@ -709,6 +876,26 @@ describe('deleting the chat', () => {
 });
 
 describe('the recipient picker', () => {
+  it('answers nothing while user links are not on offer, and nothing to machine tokens', async () => {
+    setSharing({ allowUsers: false });
+    try {
+      const off = await drive(lookupHandlers, { query: { q: 'grace' }, user: ADA });
+      assert.deepEqual(off.body.items, []);
+    } finally {
+      setSharing({ allowUsers: true });
+    }
+    const machine = await drive(lookupHandlers, {
+      query: { q: 'grace' },
+      user: { id: 'client-1', isOAuthClient: true }
+    });
+    assert.deepEqual(machine.body.items, []);
+    const agent = await drive(lookupHandlers, {
+      query: { q: 'grace' },
+      user: { id: 'agent-1', isAgent: true }
+    });
+    assert.deepEqual(agent.body.items, []);
+  });
+
   it('needs two characters, matches name or e-mail, skips the caller and inactive accounts', async () => {
     const short = await drive(lookupHandlers, { query: { q: 'g' }, user: ADA });
     assert.deepEqual(short.body.items, []);

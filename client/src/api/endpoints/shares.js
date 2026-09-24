@@ -2,6 +2,13 @@ import { apiClient } from '../client';
 import { handleApiResponse } from '../utils/requestHandler';
 
 /**
+ * Request config for the viewer calls. A 401 is an expected answer here — it
+ * means "this link needs a sign-in" — and the page renders that itself, so
+ * the response interceptor must not read it as an expired session.
+ */
+const VIEWER_REQUEST = { _suppressAuthExpired: true };
+
+/**
  * Chat sharing (`/api/chats/:chatId/shares`, `/api/shares/*`,
  * `/api/users/lookup`) — read-only links onto durable chats.
  *
@@ -102,7 +109,7 @@ export const fetchSharedChat = async shareId => {
     throw new Error('Missing required parameters');
   }
   return handleApiResponse(
-    () => apiClient.get(`/shares/${encodeURIComponent(shareId)}`),
+    () => apiClient.get(`/shares/${encodeURIComponent(shareId)}`, VIEWER_REQUEST),
     null,
     null
   );
@@ -119,7 +126,7 @@ export const fetchSharedChatArtifacts = async shareId => {
     throw new Error('Missing required parameters');
   }
   return handleApiResponse(
-    () => apiClient.get(`/shares/${encodeURIComponent(shareId)}/artifacts`),
+    () => apiClient.get(`/shares/${encodeURIComponent(shareId)}/artifacts`, VIEWER_REQUEST),
     null,
     null
   );
@@ -139,7 +146,7 @@ export const fetchSharedArtifact = async (shareId, artifactId) => {
   }
   const response = await apiClient.get(
     `/shares/${encodeURIComponent(shareId)}/artifacts/${encodeURIComponent(artifactId)}`,
-    { responseType: 'blob' }
+    { ...VIEWER_REQUEST, responseType: 'blob' }
   );
   return response.data;
 };

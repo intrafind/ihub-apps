@@ -25,7 +25,11 @@
  * time and the link never shows anything newer. Artifacts are *not* copied:
  * the artifact store is write-once and keyed per chat, so the snapshot only
  * records which artifact ids its messages carry, and the route serves those
- * ids out of the chat's own scope and nothing else.
+ * ids out of the chat's own scope and nothing else. The chat repository, in
+ * turn, asks {@link ChatShareRepository#artifactIdsRetainedByShares} before
+ * it deletes the artifacts of messages an edit or the message cap removed, so
+ * a picture an active share still shows survives the edit that dropped it
+ * from the live chat.
  *
  * The share id is the URL. It is minted here from `crypto.randomBytes` and is
  * never the chat id, which is client-minted and enumerable.
@@ -429,6 +433,29 @@ export class ChatShareRepository {
   }
 
   /**
+   * Artifact ids that an active share of this chat still hands out.
+   *
+   * Asked by `ChatRepository.appendMessage` on the rare write that drops
+   * messages from the transcript — an edit, a regenerate, the message cap —
+   * so the payloads a link already handed out are not deleted from under it.
+   * An index read over the chat's own shares, nothing more.
+   *
+   * @param {string} chatId - Chat id.
+   * @param {Object} [options]
+   * @param {number} [options.now] - Clock, for tests.
+   * @returns {Promise<Set<string>>}
+   */
+  async artifactIdsRetainedByShares(chatId, { now = Date.now() } = {}) {
+    const retained = new Set();
+    if (!this.isAvailable() || !isValidId(chatId)) return retained;
+    for (const share of await this.listSharesForChat(chatId)) {
+      if (shareState(share, now) !== 'active') continue;
+      for (const id of Array.isArray(share.artifactIds) ? share.artifactIds : []) retained.add(id);
+    }
+    return retained;
+  }
+
+  /**
    * Walk the whole namespace — for the admin page only. Bounded, and the
    * bound is reported so the page can say the list is cut.
    *
@@ -514,19 +541,27 @@ export class ChatShareRepository {
    * limit is the last one served.
    *
    * @param {string} shareId - Share id.
-   * @param {string|null} viewerId - Signed-in viewer, or null.
+   * @param {string|null} viewerId - Signed-in viewer, or null. Matched against
+   *   the recipients of a `users` share, which are raw user ids by design.
    * @param {Object} [options]
    * @param {number} [options.now] - Clock, for tests.
+   * @param {string|null} [options.recordAs] - What the per-view log stores
+   *   for this viewer: the principal id in the share's identity mode, so a
+   *   pseudonymized installation never keeps raw viewer ids on a share.
+   *   Defaults to `viewerId`.
    * @returns {Promise<{share: Object|null, counted: boolean}>}
    */
-  async recordView(shareId, viewerId, { now = Date.now() } = {}) {
+  async recordView(shareId, viewerId, { now = Date.now(), recordAs = viewerId } = {}) {
     if (!this.isAvailable() || !isShareId(shareId)) return { share: null, counted: false };
     return this._withShareLock(shareId, async () => {
       const { share, etag } = await this._loadShare(shareId);
       if (!share) return { share: null, counted: false };
       if (shareState(share, now) !== 'active') return { share, counted: false };
       const at = new Date(now).toISOString();
-      const views = [...(Array.isArray(share.views) ? share.views : []), { at, userId: viewerId }];
+      const views = [
+        ...(Array.isArray(share.views) ? share.views : []),
+        { at, userId: recordAs ?? null }
+      ];
       const recipientViews = { ...(share.recipientViews || {}) };
       if (viewerId && share.mode === 'users' && share.recipients?.includes(viewerId)) {
         const previous = recipientViews[viewerId] || { count: 0, lastViewedAt: null };

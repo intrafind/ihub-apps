@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { Link, useParams } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
 import Icon from '../../../shared/components/Icon';
@@ -184,20 +184,42 @@ function ArtifactRow({ artifact, fetchBlob }) {
 export default function SharedChatPage() {
   const { shareId } = useParams();
   const { t, i18n } = useTranslation();
-  const { isAuthenticated } = useAuth();
+  const { isAuthenticated, isLoading: authLoading } = useAuth();
   const [status, setStatus] = useState('loading');
   const [data, setData] = useState(null);
   const [artifacts, setArtifacts] = useState([]);
+  // The one request in flight for this link, keyed by what it asked with.
+  // Every successful open counts as a view server-side, so the page must
+  // open a link exactly once: not once per StrictMode double-run, and not
+  // again when the sign-in status settles after the first answer arrived.
+  const requestRef = useRef(null);
+  // What the last answer for this link was. Once the transcript is on
+  // screen, a later sign-in state change must not open it again; only a
+  // "sign in first" answer is worth retrying once the viewer has signed in.
+  const settledRef = useRef(null);
 
   useEffect(() => {
+    // Wait for the sign-in status: the request carries the viewer's
+    // credentials either way, but an open made before the status is known
+    // is followed by a second one when it flips — two views for one visit.
+    if (authLoading) return undefined;
+    if (settledRef.current?.shareId === shareId && settledRef.current.status !== 'signin') {
+      return undefined;
+    }
+    const key = `${shareId}|${isAuthenticated ? 'in' : 'out'}`;
+    if (requestRef.current?.key !== key) {
+      requestRef.current = { key, promise: fetchSharedChat(shareId) };
+      setStatus('loading');
+      setData(null);
+      setArtifacts([]);
+    }
+    const { promise } = requestRef.current;
     let active = true;
-    setStatus('loading');
-    setData(null);
-    setArtifacts([]);
     (async () => {
       try {
-        const result = await fetchSharedChat(shareId);
+        const result = await promise;
         if (!active) return;
+        settledRef.current = { shareId, status: 'ready' };
         setData(result);
         setStatus('ready');
         const hasArtifacts = (result.messages || []).some(m => m.artifacts?.length > 0);
@@ -211,15 +233,16 @@ export default function SharedChatPage() {
         }
       } catch (error) {
         if (!active) return;
-        if (error?.status === 401) setStatus('signin');
-        else if (error?.status === 404) setStatus('unavailable');
-        else setStatus('error');
+        const next =
+          error?.status === 401 ? 'signin' : error?.status === 404 ? 'unavailable' : 'error';
+        settledRef.current = { shareId, status: next };
+        setStatus(next);
       }
     })();
     return () => {
       active = false;
     };
-  }, [shareId, isAuthenticated]);
+  }, [shareId, authLoading, isAuthenticated]);
 
   const share = data?.share || null;
   const messages = useMemo(() => toViewerMessages(data?.messages), [data]);

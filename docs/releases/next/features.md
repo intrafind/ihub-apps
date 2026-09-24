@@ -67,8 +67,8 @@ rows of the tool activity panel show their address the same way.
 
 Users can now share a stored chat as a read-only link — with specific users, with anyone who is
 signed in, or publicly without a sign-in. The recipient sees the conversation as it was when it
-was shared, including tool activity and sources, and can view and download the files it
-generated. They cannot continue, edit or rate it. Off by default: turn on **Chat Sharing** under
+was shared and can view and download the images it generated. They cannot continue, edit or rate
+it. Off by default: turn on **Chat Sharing** under
 **Admin → Features** (it requires **Durable Chats**).
 
 - **Share chat** in the header of a stored chat opens the dialog. **Specific users** are picked by

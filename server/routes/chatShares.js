@@ -62,6 +62,7 @@ import {
 import { StorageError, storageHttpStatus } from '../storage/errors.js';
 import { loadUsers } from '../utils/userManager.js';
 import { localUsersFile } from '../utils/contentsPath.js';
+import { isAdminEligiblePrincipal } from '../utils/authorization.js';
 
 const COMPONENT = 'ChatShareRoutes';
 
@@ -173,7 +174,8 @@ function resolveRecipients(ids) {
   const details = [];
   const unknown = [];
   for (const id of ids) {
-    const user = users[id];
+    // Own keys only: `users['__proto__']` is an object too.
+    const user = Object.hasOwn(users, id) ? users[id] : null;
     if (!user || user.active === false) unknown.push(id);
     else details.push(userSummary(user));
   }
@@ -241,8 +243,11 @@ function viewerView(share) {
  */
 function viewerMessages(messages) {
   return (messages || []).map(message => {
+    // A viewer renders none of these: `usage` is billing, `clientMessageId`
+    // the owner's browser bookkeeping, `runId` a handle onto endpoints the
+    // viewer is not authorized for anyway.
     // eslint-disable-next-line no-unused-vars
-    const { usage, clientMessageId, ...rest } = message;
+    const { usage, clientMessageId, runId, ...rest } = message;
     return rest;
   });
 }
@@ -268,14 +273,14 @@ function setViewerHeaders(res, share) {
  * @param {import('express').Response} res - Express response.
  * @returns {Promise<{share: Object, access: Object}|null>}
  */
-async function loadViewableShare(req, res) {
+async function loadViewableShare(req, res, { purpose = 'transcript' } = {}) {
   const { shareId } = req.params;
   if (!isShareId(shareId) || !sharingActive()) {
     sendNotFound(res, 'Share');
     return null;
   }
   const share = await getChatShareRepository().getShare(shareId);
-  const access = await authorizeShareView(share, req.user);
+  const access = await authorizeShareView(share, req.user, { purpose });
   if (!access.ok) {
     if (access.status === 401) {
       sendErrorResponse(res, 401, 'Sign in to open this shared chat', {
@@ -297,7 +302,9 @@ async function loadViewableShare(req, res) {
  * @returns {Promise<boolean>}
  */
 async function isShareOwnerOrAdmin(share, user) {
-  if (isAdminUser(user)) return true;
+  // Delegated principals (personal API keys, add-in tokens) carry their
+  // owner's groups but never their admin rights — same rule as the admin API.
+  if (isAdminUser(user) && isAdminEligiblePrincipal(user)) return true;
   const me = await resolvePrincipal(user, { mode: share.identityMode || 'default' });
   return me.id === share.ownerId;
 }
@@ -308,9 +315,20 @@ async function isShareOwnerOrAdmin(share, user) {
  * @param {Object} artifact - Artifact with `name`, `kind`, `mimeType`, `id`.
  * @returns {string}
  */
-function downloadName(artifact) {
+export function downloadName(artifact) {
   const stored = typeof artifact.name === 'string' ? artifact.name.trim() : '';
-  if (stored) return stored.replace(/[\r\n"\\/]+/g, '_').slice(0, 200);
+  // Well-formed and cut by code point: the stored name was capped in UTF-16
+  // units, which can leave half a surrogate pair behind, and a name with a
+  // lone surrogate is not encodable — the download would answer 500.
+  if (stored) {
+    const wellFormed = stored.replace(
+      /[\uD800-\uDBFF](?![\uDC00-\uDFFF])|(?<![\uD800-\uDBFF])[\uDC00-\uDFFF]/g,
+      '_'
+    );
+    return Array.from(wellFormed.replace(/[\r\n"\\/]+/g, '_'))
+      .slice(0, 200)
+      .join('');
+  }
   const ext =
     {
       'image/png': 'png',
@@ -389,6 +407,10 @@ export default function registerChatShareRoutes(app) {
         const limits = resolveShareLimits({ expiresAt, maxViews }, deps.settings);
         if (!limits.ok) return sendBadRequest(res, limits.error);
 
+        // A pseudonymized installation records no names against a chat, and
+        // a share must not become the place where one is written next to
+        // the pseudonym — not for viewers, and not for the admin list.
+        const pseudonymized = auth.chat.identityMode === 'pseudonymized';
         const share = await deps.shares.createShare({
           chatId,
           ownerId: auth.chat.ownerId,
@@ -398,8 +420,8 @@ export default function registerChatShareRoutes(app) {
           recipients: recipientDetails.map(entry => entry.id),
           recipientDetails,
           title: auth.chat.title || '',
-          ownerName: req.user?.name || req.user?.username || null,
-          showOwnerName,
+          ownerName: pseudonymized ? null : req.user?.name || req.user?.username || null,
+          showOwnerName: pseudonymized ? false : showOwnerName,
           expiresAt: limits.expiresAt,
           maxViews: limits.maxViews,
           messages
@@ -475,8 +497,13 @@ export default function registerChatShareRoutes(app) {
       const repository = getChatShareRepository();
       if (access.counts) {
         // Counted under the share's lock, where the view limit is checked
-        // again: the open that reaches it is served, the next is not.
-        const { counted } = await repository.recordView(share.id, access.viewerId);
+        // again: the open that reaches it is served, the next is not. The
+        // per-view log stores the viewer as the share's identity mode
+        // records people — a hash on a pseudonymized installation.
+        const recordAs = access.viewerId
+          ? (await resolvePrincipal(req.user, { mode: share.identityMode || 'default' })).id
+          : null;
+        const { counted } = await repository.recordView(share.id, access.viewerId, { recordAs });
         if (!counted) return sendNotFound(res, 'Share');
       }
       const snapshot = await repository.getSnapshot(share.id);
@@ -497,7 +524,7 @@ export default function registerChatShareRoutes(app) {
 
   app.get(buildServerPath('/api/shares/:shareId/artifacts'), async (req, res) => {
     try {
-      const loaded = await loadViewableShare(req, res);
+      const loaded = await loadViewableShare(req, res, { purpose: 'artifact' });
       if (!loaded) return;
       const { share } = loaded;
       const allowed = new Set(share.artifactIds || []);
@@ -516,7 +543,7 @@ export default function registerChatShareRoutes(app) {
     try {
       const { artifactId } = req.params;
       if (!validateIdForPath(artifactId, 'artifact', res)) return;
-      const loaded = await loadViewableShare(req, res);
+      const loaded = await loadViewableShare(req, res, { purpose: 'artifact' });
       if (!loaded) return;
       const { share } = loaded;
       // The allow-list is what the snapshot named. Everything else in the
@@ -540,9 +567,16 @@ export default function registerChatShareRoutes(app) {
       if (share.mode === 'public') res.setHeader('X-Robots-Tag', 'noindex, nofollow');
       if (download) {
         const name = downloadName(artifact);
+        const ascii = name.replace(/[^\x20-\x7e]/g, '_');
+        let encoded;
+        try {
+          encoded = encodeURIComponent(name);
+        } catch {
+          encoded = encodeURIComponent(ascii);
+        }
         res.setHeader(
           'Content-Disposition',
-          `attachment; filename="${name.replace(/[^\x20-\x7e]/g, '_')}"; filename*=UTF-8''${encodeURIComponent(name)}`
+          `attachment; filename="${ascii}"; filename*=UTF-8''${encoded}`
         );
       } else {
         res.setHeader('Content-Disposition', 'inline');
@@ -584,6 +618,17 @@ export default function registerChatShareRoutes(app) {
     authenticatedOnly,
     async (req, res) => {
       try {
+        // The picker exists for one thing: addressing a share to users. It
+        // answers nothing while that is not on offer — sharing off, user
+        // links switched off, storage down — and nothing to a principal that
+        // could never be handed a share: a machine token or an agent.
+        const settings = chatSharingSettings(configCache.getPlatform() || {});
+        if (!sharingActive() || !allowedShareModes(settings).users) {
+          return res.json({ items: [] });
+        }
+        if (req.user?.isOAuthClient || req.user?.isAgent === true) {
+          return res.json({ items: [] });
+        }
         const raw = typeof req.query.q === 'string' ? req.query.q : '';
         const q = raw.trim().slice(0, LOOKUP_MAX_CHARS).toLowerCase();
         if (q.length < LOOKUP_MIN_CHARS) return res.json({ items: [] });

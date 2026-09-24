@@ -43,6 +43,17 @@ export const DEFAULT_SHARING_SETTINGS = Object.freeze({
 /** One day in milliseconds, for turning the day-based caps into instants. */
 export const DAY_MS = 24 * 60 * 60 * 1000;
 
+/**
+ * How long after a counted open the artifacts of a share that has just
+ * reached its view limit may still be fetched.
+ *
+ * The open that uses the last view is served, and the page then fetches the
+ * images and files that transcript names — each its own request, none of
+ * them a view. Without this window those follow-up requests would find the
+ * share exhausted and the last allowed viewer would see broken pictures.
+ */
+export const SHARE_ARTIFACT_GRACE_MS = 10 * 60 * 1000;
+
 function readNumber(value, fallback) {
   const parsed = Number(value);
   return Number.isFinite(parsed) ? parsed : fallback;
@@ -127,9 +138,12 @@ export function chatSharingClientConfig(featureConfig = {}, platformConfig = {})
   return {
     enabled: isChatSharingConfigured(featureConfig, platformConfig),
     modes: allowedShareModes(settings),
-    defaultExpiryDays: settings.defaultExpiryDays,
+    defaultExpiryDays: effectiveDefaultExpiryDays(settings),
     maxExpiryDays: settings.maxExpiryDays,
-    maxViewsCap: settings.maxViewsCap
+    maxViewsCap: settings.maxViewsCap,
+    // In pseudonymized identity mode a share never carries its owner's name,
+    // so the form has no "show my name" to offer.
+    ownerNameHidden: platformConfig?.runLog?.identityMode === 'pseudonymized'
   };
 }
 
@@ -168,6 +182,36 @@ export function isShareActive(share, now = Date.now()) {
 }
 
 /**
+ * Whether a share that has just reached its view limit is still within the
+ * window in which its artifacts may be fetched — see
+ * {@link SHARE_ARTIFACT_GRACE_MS}. Revoked and expired shares never are.
+ *
+ * @param {Object|null} share - Share document.
+ * @param {number} [now] - Clock, for tests.
+ * @returns {boolean}
+ */
+export function isWithinArtifactGrace(share, now = Date.now()) {
+  if (shareState(share, now) !== 'exhausted') return false;
+  const lastViewedAt = Date.parse(share.lastViewedAt || '');
+  return Number.isFinite(lastViewedAt) && now - lastViewedAt <= SHARE_ARTIFACT_GRACE_MS;
+}
+
+/**
+ * The default expiry an owner gets when they pick none, never longer than the
+ * longest expiry they may pick: an admin who sets the default above the cap
+ * gets the cap, not a form every owner is refused on.
+ *
+ * @param {ReturnType<typeof chatSharingSettings>} settings - Effective settings.
+ * @returns {number} Days; `0` for none.
+ */
+export function effectiveDefaultExpiryDays(settings) {
+  const fallback = settings.defaultExpiryDays > 0 ? settings.defaultExpiryDays : 0;
+  if (settings.maxExpiryDays > 0)
+    return Math.min(fallback || settings.maxExpiryDays, settings.maxExpiryDays);
+  return fallback;
+}
+
+/**
  * Check an owner's requested expiry and view limit against the admin caps,
  * filling in the default expiry when the owner named none.
  *
@@ -185,8 +229,8 @@ export function resolveShareLimits({ expiresAt, maxViews }, settings, now = Date
     if (!Number.isFinite(parsed)) return { ok: false, error: 'expiresAt must be an ISO-8601 date' };
     if (parsed <= now) return { ok: false, error: 'expiresAt must be in the future' };
     resolvedExpiry = new Date(parsed).toISOString();
-  } else if (settings.defaultExpiryDays > 0) {
-    resolvedExpiry = new Date(now + settings.defaultExpiryDays * DAY_MS).toISOString();
+  } else if (effectiveDefaultExpiryDays(settings) > 0) {
+    resolvedExpiry = new Date(now + effectiveDefaultExpiryDays(settings) * DAY_MS).toISOString();
   }
   if (settings.maxExpiryDays > 0) {
     const latest = now + settings.maxExpiryDays * DAY_MS;

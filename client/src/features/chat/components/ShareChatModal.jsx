@@ -651,15 +651,17 @@ export default function ShareChatModal({ chatId, isOpen, onClose }) {
                     )}
                   </span>
                 </label>
-                <label className="flex items-start gap-2 text-sm text-gray-700 dark:text-gray-300">
-                  <input
-                    type="checkbox"
-                    checked={showOwnerName}
-                    onChange={e => setShowOwnerName(e.target.checked)}
-                    className="mt-0.5"
-                  />
-                  <span>{t('chatSharing.showNameLabel', 'Show my name to viewers')}</span>
-                </label>
+                {!sharing.ownerNameHidden && (
+                  <label className="flex items-start gap-2 text-sm text-gray-700 dark:text-gray-300">
+                    <input
+                      type="checkbox"
+                      checked={showOwnerName}
+                      onChange={e => setShowOwnerName(e.target.checked)}
+                      className="mt-0.5"
+                    />
+                    <span>{t('chatSharing.showNameLabel', 'Show my name to viewers')}</span>
+                  </label>
+                )}
               </div>
             )}
 

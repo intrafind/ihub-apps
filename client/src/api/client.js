@@ -86,6 +86,13 @@ const addResponseInterceptor = client => {
         if (originalRequest?._isOfficeRequest) {
           return Promise.reject(error);
         }
+        // A request that expects a 401 as an answer — a shared chat asking
+        // whether this link needs a sign-in — handles it itself. Treating it
+        // as an expired session would clear a token that was never there and
+        // raise the sign-in overlay over a page that already says "sign in".
+        if (originalRequest?._suppressAuthExpired) {
+          return Promise.reject(error);
+        }
 
         // Token expired or invalid - clear localStorage token for backward compatibility
         const currentToken = localStorage.getItem('authToken');
