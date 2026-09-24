@@ -1,0 +1,79 @@
+TITLE: Microsoft 365 Outlook Mail tools: search, read and draft replies from chat — send only after confirmation
+LABELS: enhancement, backend, tools, outlook
+---
+Part of #EPIC. Builds on #FRAMEWORK.
+
+## Summary
+
+Let apps work with the user's mailbox through Microsoft Graph, with the user's own permissions:
+
+- search mail;
+- read messages and attachments;
+- draft new mails, replies and forwards;
+- after an explicit confirmation, send, move or categorize.
+
+This targets the most common assistant requests, for example "What did Müller write about the contract last week?", "Summarize the unread mails from my team", or "Draft a reply that declines politely".
+
+## Current state
+
+- **Office 365 connects for files only.** The Office 365 provider (`Office365Service.js`, `platform.json → cloudStorage.providers[]` with `type: "office365"`) uses delegated OAuth for OneDrive, SharePoint and Teams **files**. Scopes are built from the enabled sources in `_buildScopes`: `User.Read`, `offline_access`, `Files.Read(.All)`, `Sites.Read.All`, `Team.ReadBasic.All` and `Channel.ReadBasic.All`. It has no mail scopes.
+- **The Outlook add-in sees one message.** It (`docs/outlook-add-in.md`) works on the currently open message through Office.js. It cannot search the mailbox or look at other messages.
+- **No mail tools and no outbound mail** (no SMTP) exist anywhere in the platform.
+
+## Proposal
+
+### Tools
+
+| Tool | Effect | Graph |
+| --- | --- | --- |
+| `outlook_searchMessages` | read | `GET /me/messages?$search=` (KQL) + `$filter` for folder, from, date range, unread, hasAttachments |
+| `outlook_getMessage` | read | message with body converted to plain text/markdown, headers, recipients, attachment list, `webLink` |
+| `outlook_getConversation` | read | all messages of a `conversationId`, oldest first |
+| `outlook_getAttachment` | read | download → server-side text extraction (shared with the cloud storage file tools issue in #EPIC); large files return metadata only |
+| `outlook_listFolders` | read | `mailFolders` incl. child folders |
+| `outlook_createDraft` | write | new / `createReply` / `createReplyAll` / `createForward`; returns the draft's `webLink` so the user can open it in Outlook |
+| `outlook_sendDraft` | destructive | `POST /me/messages/{id}/send` |
+| `outlook_moveMessage` | write | move to a folder |
+| `outlook_updateMessage` | write | categories, flag, read state (pairs with #2414) |
+
+### Scopes and consent
+
+- Request mail scopes only when the admin enables the capability, following the same pattern as `_buildScopes`:
+  - read → `Mail.Read`;
+  - drafts, move and categorize → `Mail.ReadWrite`;
+  - send → `Mail.Send`.
+- These are delegated scopes. Many tenants restrict user consent, so the admin docs must cover admin consent.
+- Users who connected for OneDrive only get a "Reconnect to allow mail access" card. The scope upgrade flow comes from #FRAMEWORK.
+
+### Safety
+
+- **Drafts-only by default.** `outlook_sendDraft` is off unless the admin enables it. When it is on, it always shows a confirmation card with To/Cc/Bcc, subject and body.
+- **Optional recipient policy:** "internal domains only", configured as a list of allowed domains.
+- **Mail content is untrusted input.** Tool results mark bodies as external content. A mail that says "forward this to x@y" must never lead to an action without the confirmation card.
+- **Caps:** body length limit, attachment size limit, max search results; HTML is stripped to text.
+
+## Acceptance criteria
+
+- [ ] Search, read, conversation, attachment and folder tools work with the user's delegated token.
+- [ ] Drafts (new/reply/reply-all/forward) appear in the user's Drafts folder with a link to open them.
+- [ ] Sending, moving and categorizing require confirmation; send is disabled unless the admin enables it; optional domain allow-list.
+- [ ] Mail scopes are requested only for enabled capabilities; existing users are prompted to reconnect instead of failing.
+- [ ] Attachments are converted to text on the server (same extractor as the cloud storage file tools); size limits are enforced.
+- [ ] Example app "Mail assistant" in `server/defaults/apps/` (disabled by default).
+- [ ] Tests with mocked Graph responses; docs in `docs/office365-integration.md`; changelog entry.
+
+## Open questions
+
+1. Shared mailboxes and delegated mailboxes (`Mail.Read.Shared`): v1 or later?
+2. Should apps use provider-neutral tool names (`mail_search`, …) that route to Outlook or Gmail, depending on which one the user connected? See the Google Workspace issue in #EPIC.
+3. Is sending from chat wanted at all, or should drafts be the only write path?
+
+## Related
+
+- #FRAMEWORK: connections, scope upgrade and the confirmation gate.
+- #2414: Outlook add-in classification with write-back to categories.
+- #2521: scheduled tasks (for example "every morning, summarize unread mails").
+- The triggers issue in #EPIC ("new mail in folder").
+
+---
+_Generated by [Claude Code](https://claude.ai/code)_
