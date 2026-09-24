@@ -28,12 +28,6 @@ import {
 } from '../utilities/buildChatApiMessages';
 import { renderUserMessage } from '../../../../../shared/promptContext.js';
 import { isOutlookAppointmentMode } from '../utilities/officeCapabilities';
-import { getLiveItemId } from '../utilities/outlookMailContext';
-import {
-  ITEM_CHANGED_EVENT,
-  getItemChangeSource,
-  shouldStartNewChatForItemChange
-} from '../utilities/officeItemChange';
 import {
   buildOfficeStarterPrompts,
   combineStarterPromptWithTypedText
@@ -245,9 +239,13 @@ function OfficeChatPanel({
     inputValueRef.current = inputValue;
   }, [inputValue]);
 
-  // itemId the current conversation belongs to. The chat only starts over
-  // when Outlook reports a genuinely different item — see issue #2450.
-  const chatItemIdRef = useRef(getLiveItemId());
+  // itemId the current conversation belongs to. The chat starts over when the
+  // mail snapshot publishes a *different* email. Driving this off the
+  // snapshot rather than off the `ihub:itemchanged` event is the whole point:
+  // at event time `Office.context.mailbox.item.itemId` still names the
+  // previous email, so the event-driven version reset the chat one email
+  // behind the one on screen and answered about the wrong mail (#2509).
+  const chatItemIdRef = useRef(null);
 
   // The conversation set aside by the last automatic new chat, so the user
   // can bring it back. Its transcript stays in session storage under its own
@@ -255,46 +253,42 @@ function OfficeChatPanel({
   const [previousChat, setPreviousChat] = useState(null);
 
   useEffect(() => {
-    const handler = event => {
-      const liveItemId = getLiveItemId();
-      const startNewChat = shouldStartNewChatForItemChange({
-        source: getItemChangeSource(event),
-        liveItemId,
-        lastItemId: chatItemIdRef.current
+    // No item means the snapshot is reloading, or the user deselected /
+    // multi-selected. Neither is a different email: ignore it entirely so the
+    // ref keeps naming the last email actually shown.
+    if (currentItemId == null) return;
+    const previousItemId = chatItemIdRef.current;
+    chatItemIdRef.current = currentItemId;
+    // Nothing to start over from on the first published snapshot.
+    if (previousItemId == null || currentItemId === previousItemId) return;
+
+    // Pinned emails are the whole point of the feature, so they must
+    // survive an item change. We only reset the chat history (and the
+    // staged input) when the user has nothing pinned — otherwise we'd
+    // silently throw away the context they were assembling. A response
+    // still streaming belongs to the conversation on screen; clearing now
+    // would drop it mid-answer.
+    if (pinnedEmailsRef.current.length > 0) return;
+    if (adapterRef.current.processing) return;
+
+    const hadMessages = adapterRef.current.messages.length > 0;
+    const typed = inputValueRef.current;
+    // Keep an earlier restorable chat when the one on screen is empty —
+    // clicking through several emails must not lose the offer.
+    if (hadMessages || typed) {
+      setPreviousChat({
+        chatId: chatIdRef.current,
+        inputValue: typed,
+        starterPrompt: selectedStarterPromptRef.current
       });
-      if (!startNewChat) return;
-      chatItemIdRef.current = liveItemId;
-
-      // Pinned emails are the whole point of the feature, so they must
-      // survive ItemChanged. We only reset the chat history (and the
-      // staged input) when the user has nothing pinned — otherwise we'd
-      // silently throw away the context they were assembling. A response
-      // still streaming belongs to the conversation on screen; clearing now
-      // would drop it mid-answer.
-      if (pinnedEmailsRef.current.length > 0) return;
-      if (adapterRef.current.processing) return;
-
-      const hadMessages = adapterRef.current.messages.length > 0;
-      const typed = inputValueRef.current;
-      // Keep an earlier restorable chat when the one on screen is empty —
-      // clicking through several emails must not lose the offer.
-      if (hadMessages || typed) {
-        setPreviousChat({
-          chatId: chatIdRef.current,
-          inputValue: typed,
-          starterPrompt: selectedStarterPromptRef.current
-        });
-      }
-      chatIdRef.current = `office-${uuidv4()}`;
-      selectedStarterPromptRef.current = null;
-      adapterRef.current.clearMessages();
-      setInputValue('');
-    };
-    document.addEventListener(ITEM_CHANGED_EVENT, handler);
-    return () => {
-      document.removeEventListener(ITEM_CHANGED_EVENT, handler);
-    };
-  }, []);
+    }
+    chatIdRef.current = `office-${uuidv4()}`;
+    selectedStarterPromptRef.current = null;
+    adapterRef.current.clearMessages();
+    setInputValue('');
+    // The refs above are read, not tracked — the effect must run on a
+    // published item change and nothing else.
+  }, [currentItemId]);
 
   const handleRestorePreviousChat = useCallback(() => {
     if (!previousChat) return;
@@ -776,6 +770,11 @@ function OfficeChatPanel({
                 value={inputValue}
                 onChange={e => setInputValue(e?.target?.value ?? e)}
                 onSubmit={handleSubmit}
+                // While the snapshot reloads we don't know which email is
+                // open, and `buildSnapshotOverride()` returns null — the
+                // adapter would then do its own `readMessageContext()` and
+                // could answer about a different email than the strip shows.
+                disabled={mailSnapshot.loading}
                 isProcessing={adapter.processing}
                 onCancel={adapter.cancelGeneration}
                 allowEmptySubmit={!!selectedApp?.allowEmptyContent}
