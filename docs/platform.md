@@ -10,7 +10,7 @@ The optional `platform.json` file controls global platform behavior and is locat
     "usageTracking": true
   },
   "globalPromptVariables": {
-    "context": "Very important: The user's timezone is {{timezone}}. The current date is {{date}}..."
+    "context": "Very important: The current date is {{date}}..."
   },
   "pdfExport": {
     "defaultTemplate": "default",
@@ -75,12 +75,19 @@ Controls platform feature flags and capabilities.
 
 Global prompt variables enable platform administrators to inject dynamic context and information into all AI conversations automatically. These variables are resolved at runtime and can be used in app system prompts, user prompts, and the global context string.
 
+The context is placed in front of app system prompts, so what it renders to is the start of almost
+every prompt. The shipped default names only the date (`{{date}}`), which is the same for every
+user for a whole day and so keeps the prompt cacheable by the provider (see
+[Models → Prompt Caching](models.md#prompt-caching)). Per-user or per-request variables such as
+`{{timezone}}` or `{{time}}` still work, but in the context they make every prompt start
+differently.
+
 #### Configuration
 
 ```json
 {
   "globalPromptVariables": {
-    "context": "Very important: The user's timezone is {{timezone}}. The current date is {{date}}. Any dates before this are in the past, and any dates after this are in the future. When dealing with modern entities/companies/people, and the user asks for the 'latest', 'most recent', 'today's', etc. don't assume your knowledge is up to date; You can and should speak any language the user asks you to speak or use the language of the user.",
+    "context": "Very important: The current date is {{date}}. Any dates before this are in the past, and any dates after this are in the future. When dealing with modern entities/companies/people, and the user asks for the 'latest', 'most recent', 'today's', etc. don't assume your knowledge is up to date; You can and should speak any language the user asks you to speak or use the language of the user.",
     "variables": {
       "company": "IntraFind Software AG",
       "department": "AI Solutions",

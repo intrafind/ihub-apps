@@ -18,6 +18,17 @@ let trackingMode = 'pseudonymous';
 let configLoaded = false;
 let migrationChecked = false;
 
+/**
+ * Prompt-cache and reasoning counters, kept under `tokens`. Subsets of the
+ * prompt (cache) and completion (reasoning) totals, recorded only when the
+ * provider reports them. `perProvider` lets admins compare adapters.
+ */
+const DETAIL_BUCKETS = ['cacheRead', 'cacheWrite', 'reasoning'];
+
+function createCounterBucket() {
+  return { total: 0, perUser: {}, perApp: {}, perModel: {}, perProvider: {} };
+}
+
 function createDefaultUsage() {
   return {
     messages: { total: 0, perUser: {}, perApp: {}, perModel: {} },
@@ -26,8 +37,11 @@ function createDefaultUsage() {
       perUser: {},
       perApp: {},
       perModel: {},
-      prompt: { total: 0, perUser: {}, perApp: {}, perModel: {} },
-      completion: { total: 0, perUser: {}, perApp: {}, perModel: {} }
+      prompt: { total: 0, perUser: {}, perApp: {}, perModel: {}, perProvider: {} },
+      completion: { total: 0, perUser: {}, perApp: {}, perModel: {}, perProvider: {} },
+      cacheRead: createCounterBucket(),
+      cacheWrite: createCounterBucket(),
+      reasoning: createCounterBucket()
     },
     // Provider-run web searches billed on top of tokens (Anthropic web search).
     webSearch: { total: 0, perUser: {}, perApp: {}, perModel: {} },
@@ -212,13 +226,33 @@ export function estimateTokens(text) {
   return estimateTokensShared(text);
 }
 
+/** A provider-reported count, or undefined when it was not reported. */
+function reportedCount(value) {
+  return Number.isFinite(value) && value >= 0 ? Math.round(value) : undefined;
+}
+
+function addToBucket(bucket, { resolvedUser, appId, modelId, provider }, amount) {
+  inc(bucket, 'total', amount);
+  inc(bucket.perUser, resolvedUser, amount);
+  inc(bucket.perApp, appId, amount);
+  inc(bucket.perModel, modelId, amount);
+  if (provider) {
+    if (!bucket.perProvider) bucket.perProvider = {};
+    inc(bucket.perProvider, provider, amount);
+  }
+}
+
 async function recordChatMessage({
   direction,
   userId,
   appId,
   modelId,
+  provider,
   tokens = 0,
   tokenSource = 'estimate',
+  cacheReadTokens,
+  cacheWriteTokens,
+  reasoningTokens,
   webSearchRequests = 0,
   user
 }) {
@@ -236,11 +270,18 @@ async function recordChatMessage({
   inc(data.tokens.perUser, resolvedUser, tokens);
   inc(data.tokens.perApp, appId, tokens);
   inc(data.tokens.perModel, modelId, tokens);
-  const directionBucket = data.tokens[direction];
-  inc(directionBucket.perUser, resolvedUser, tokens);
-  inc(directionBucket.perApp, appId, tokens);
-  inc(directionBucket.perModel, modelId, tokens);
-  inc(directionBucket, 'total', tokens);
+  const dims = { resolvedUser, appId, modelId, provider };
+  addToBucket(data.tokens[direction], dims, tokens);
+  const details = {
+    cacheRead: reportedCount(cacheReadTokens),
+    cacheWrite: reportedCount(cacheWriteTokens),
+    reasoning: reportedCount(reasoningTokens)
+  };
+  for (const key of DETAIL_BUCKETS) {
+    if (details[key] === undefined) continue;
+    if (!data.tokens[key]) data.tokens[key] = createCounterBucket();
+    addToBucket(data.tokens[key], dims, details[key]);
+  }
   if (!data.tokenSources) data.tokenSources = { provider: 0, estimate: 0 };
   data.tokenSources[tokenSource] = (data.tokenSources[tokenSource] || 0) + 1;
   if (webSearchRequests > 0) {
@@ -256,7 +297,11 @@ async function recordChatMessage({
     userId: resolvedUser,
     appId,
     modelId,
+    provider,
     ...(direction === 'prompt' ? { promptTokens: tokens } : { completionTokens: tokens }),
+    cacheReadTokens: details.cacheRead,
+    cacheWriteTokens: details.cacheWrite,
+    reasoningTokens: details.reasoning,
     ...(webSearchRequests > 0 ? { webSearchRequests } : {}),
     tokenSource
   });

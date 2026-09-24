@@ -87,6 +87,15 @@ const nativeWebSearchSchema = z
   })
   .strict();
 
+// Prompt caching (issue #2508): whether iHub sends cache hints for this model
+// — OpenAI's `prompt_cache_key`, Anthropic's `cache_control`, Bedrock's
+// `cachePoint`. Unset means the provider default in shared/promptCaching.js.
+const promptCachingSchema = z
+  .object({
+    enabled: z.boolean()
+  })
+  .strict();
+
 const baseModelConfigSchema = z
   .object({
     // Required fields
@@ -207,6 +216,7 @@ const baseModelConfigSchema = z
     enabled: z.boolean().optional().prefault(true),
     thinking: thinkingSchema.optional(),
     nativeWebSearch: nativeWebSearchSchema.optional(),
+    promptCaching: promptCachingSchema.optional(),
 
     // Additional fields for specific providers
     supportsImages: z.boolean().optional(),

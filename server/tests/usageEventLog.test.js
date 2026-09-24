@@ -116,6 +116,35 @@ describe('flushQueue / cleanupEvents race', () => {
   });
 });
 
+describe('logUsageEvent optional counters', () => {
+  it('writes cache/reasoning/web-search counters and the provider only when reported', async () => {
+    logUsageEvent(
+      entry({
+        provider: 'openai',
+        promptTokens: 2000,
+        cacheReadTokens: 1920,
+        cacheWriteTokens: 0,
+        reasoningTokens: 64,
+        webSearchRequests: 2
+      })
+    );
+    logUsageEvent(entry({ userId: 'u3' }));
+    await flushQueue();
+
+    const [withCounters, plain] = await readEvents();
+    expect(withCounters).toMatchObject({
+      prov: 'openai',
+      pt: 2000,
+      cr: 1920,
+      cw: 0,
+      rt: 64,
+      ws: 2
+    });
+    expect(plain.uid).toBe('u3');
+    for (const key of ['prov', 'cr', 'cw', 'rt', 'ws']) expect(plain).not.toHaveProperty(key);
+  });
+});
+
 describe('flushQueue append failure', () => {
   it('re-buffers the queue instead of dropping events when appendFile fails', async () => {
     logUsageEvent(entry({ userId: 'u2' }));

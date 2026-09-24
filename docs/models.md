@@ -51,6 +51,7 @@ Each model is defined with the following properties:
 | `streamIdleTimeoutMs`          | Number  | -        | Override the maximum gap between two chunks of a live stream for this model (0-300000, `0` disables)                     |
 | `thinking`                     | Object  | -        | Extended thinking configuration for models that support it. See [Thinking Configuration](#model-thinking-configuration) below |
 | `nativeWebSearch`              | Object  | -        | Native (provider-run) web search settings for this model. See [Native Web Search](#native-web-search) below |
+| `promptCaching`                | Object  | provider default | `{ "enabled": true \| false }` — whether iHub marks prompts for the provider's prompt cache. See [Prompt Caching](#prompt-caching) below |
 | `hint`                         | Object  | -        | Message displayed when this model is selected. See [Model Hints](#model-hints) for full documentation |
 
 ### Sampling Parameters
@@ -441,6 +442,45 @@ Apps with `websearch.useNativeSearch` (the default) use the provider's built-in 
 ```
 
 The number of searches per call is capped by the app (`websearch.maxSearches`) or the workflow node (`maxWebSearches`), not by the model.
+
+### Prompt Caching
+
+Providers cache the start of prompts they have seen recently — tool definitions, the system
+prompt, the conversation so far — and bill those input tokens at a discount. `promptCaching.enabled`
+switches iHub's cache hints on or off for a model. In the admin model editor this is **Prompt
+Caching → Use prompt caching**; the switch is shown only for providers where iHub sends hints.
+
+| Provider                            | What iHub sends when on                                                                                                         | Default when unset                    |
+| ----------------------------------- | ------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------- |
+| `openai`, `openai-responses`        | `prompt_cache_key` = `ihub:{appId}:{modelId}` (hashed when longer than OpenAI's 64-character limit)                              | On for `api.openai.com`, off for any other host |
+| `anthropic`                         | `cache_control` (5-minute cache) on the last tool, the system prompt and the latest user message                                | Off                                   |
+| `bedrock`                           | Converse `cachePoint` after the tools (Claude models), the system prompt and the latest user message                            | Off                                   |
+| `google`, `mistral`, `local`, …     | Nothing — these cache on their own, if at all                                                                                   | —                                     |
+
+- **OpenAI** caches prompts of 1,024 tokens and more by itself; the key only routes requests that
+  share a prefix to the same cache and raises the hit rate. It is off for other hosts because
+  OpenAI-compatible servers (Azure, LM Studio, gateways) may reject the unknown parameter.
+- **Anthropic and Bedrock** charge 25 % more for writing to the cache and about 10 % of the input
+  price for reading from it, so caching pays off when prompts are reused within five minutes —
+  follow-up turns of a conversation, or an app with a long system prompt used by many people.
+  Prompts below the model's minimum cacheable length are simply not cached.
+- **Bedrock** rejects cache points on models without explicit prompt caching. Enable it only for
+  models that support it (Claude models; see the AWS model cards for Nova).
+- Cache reads and writes show up under **Admin → Usage Reports → Prompt caching**.
+
+```json
+{
+  "id": "claude-sonnet",
+  "modelId": "claude-sonnet-4-6",
+  "provider": "anthropic",
+  "url": "https://api.anthropic.com/v1/messages",
+  "promptCaching": { "enabled": true }
+}
+```
+
+A prompt only hits the cache when it starts exactly like an earlier one. Keep per-user or
+per-request variables (`{{user_name}}`, `{{time}}`, `{{timezone}}`) out of the start of system
+prompts; the shipped defaults use `{{date}}` only, which changes once a day.
 
 ### Model Selection in Apps
 

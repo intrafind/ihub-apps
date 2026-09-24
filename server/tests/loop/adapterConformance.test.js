@@ -206,11 +206,11 @@ for (const provider of ['oa', 'vl', 'ms']) {
     );
     expectSingleCall(result, { name: 'get_weather', args: { city: 'Berlin' }, id: 'call_1' });
     assert.equal(result.finishReason, 'tool_calls');
-    if (provider !== 'vl') assert.equal(result.usage?.totalTokens, 10);
+    assert.equal(result.usage?.totalTokens, 10);
   });
 }
 
-test('[oa] 7. usage on the finish chunk is captured; trailing usage frame after finish is unreachable (documented)', async () => {
+test('[oa] 7. usage on the finish chunk is captured; without include_usage the stream ends on the finish frame', async () => {
   const result = await run(
     'oa',
     sseResponse([
@@ -251,12 +251,13 @@ test('[oa] 8e. in-band error frame → PROVIDER_ERROR with provider message', as
   );
 });
 
-test('[vl] 7. GAP: vLLM converter reports no usage', async () => {
+test('[vl] 7. vLLM usage on the finish chunk is captured', async () => {
   const result = await run(
     'vl',
     sseResponse(openaiText(['x'], { usage: { prompt_tokens: 1, completion_tokens: 1 } }))
   );
-  assert.equal(result.usage, null);
+  assert.equal(result.usage.promptTokens, 1);
+  assert.equal(result.usage.completionTokens, 1);
 });
 
 test('[ms] 8e. GAP: mistral ignores {"error"} frames — stream ends without completion', async () => {

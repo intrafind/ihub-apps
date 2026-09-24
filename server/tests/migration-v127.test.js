@@ -1,74 +1,58 @@
 #!/usr/bin/env node
 
 /**
- * Migration V127 specs — the iFinder `getContent` / `getMetadata` descriptions
- * and the ifinder-search app prompt gain the document-id guidance, but only
- * where an admin has not reworded them.
+ * Migration V127 specs — shipped prompt texts use {{date}}, not {{timezone}}
+ * (issue #2508). Only a text that is still exactly the old shipped default is
+ * rewritten; an admin's own wording is preserved.
  */
 
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import fs from 'node:fs/promises';
-import path from 'node:path';
-import { fileURLToPath } from 'node:url';
+import { readFile } from 'node:fs/promises';
 import {
   up,
   precondition,
   version,
-  applyToolDefaults,
-  applyAppPrompt,
-  SUPERSEDED_TOOL_VALUES,
-  SUPERSEDED_APP_PROMPT
-} from '../migrations/V127__ifinder_document_id_guidance.js';
+  FRAGMENTS,
+  refreshedText
+} from '../migrations/V127__date_only_default_prompts.js';
 
-const DEFAULTS_DIR = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '../defaults');
+const readShipped = async file =>
+  JSON.parse(await readFile(new URL(`../defaults/${file}`, import.meta.url), 'utf8'));
 
-async function shipped(file) {
-  return JSON.parse(await fs.readFile(path.join(DEFAULTS_DIR, file), 'utf8'));
+/** The shipped default as it read before this release. */
+function superseded(text) {
+  let out = text;
+  for (const { from, to } of FRAGMENTS) out = out.split(to).join(from);
+  return out;
 }
 
-function clone(value) {
-  return JSON.parse(JSON.stringify(value));
-}
-
-function getAt(obj, p) {
-  return p.reduce((node, key) => node?.[key], obj);
-}
-
-function setAt(obj, p, value) {
-  getAt(obj, p.slice(0, -1))[p[p.length - 1]] = value;
-}
-
-/** The iFinder tool as an installation that predates this migration has it. */
-async function installedTool() {
-  const tool = await shipped('tools/iFinder.json');
-  for (const { path: p, value } of SUPERSEDED_TOOL_VALUES) setAt(tool, p, clone(value));
-  return tool;
-}
-
-/** The app as an installation that predates this migration has it. */
-async function installedApp() {
-  const app = await shipped('apps/ifinder-search.json');
-  app.system = { ...SUPERSEDED_APP_PROMPT };
-  return app;
-}
-
-function fakeCtx(files) {
+function fakeCtx(files, defaults) {
   const logs = [];
+  const warnings = [];
   const writes = [];
   return {
     files,
     logs,
+    warnings,
     writes,
     fileExists: async p => p in files,
-    readJson: async p => clone(files[p]),
-    readDefaultJson: shipped,
-    writeJson: async (p, data) => {
-      files[p] = data;
+    readJson: async p => JSON.parse(JSON.stringify(files[p])),
+    readDefaultJson: async p => JSON.parse(JSON.stringify(defaults[p])),
+    writeJson: async (p, d) => {
       writes.push(p);
+      files[p] = d;
     },
     log: m => logs.push(m),
-    warn: m => logs.push(m)
+    warn: m => warnings.push(m)
+  };
+}
+
+async function shippedDefaults() {
+  return {
+    'config/platform.json': await readShipped('config/platform.json'),
+    'apps/iassistant.json': await readShipped('apps/iassistant.json'),
+    'apps/ifinder-search.json': await readShipped('apps/ifinder-search.json')
   };
 }
 
@@ -76,127 +60,105 @@ test('version is the next unused number', () => {
   assert.equal(version, '127');
 });
 
-test('the shipped defaults differ from every superseded value', async () => {
-  const tool = await shipped('tools/iFinder.json');
-  for (const { path: p, value } of SUPERSEDED_TOOL_VALUES) {
-    assert.notDeepEqual(getAt(tool, p), value, p.join('.'));
-  }
-  const app = await shipped('apps/ifinder-search.json');
-  for (const [locale, text] of Object.entries(SUPERSEDED_APP_PROMPT)) {
-    assert.notEqual(app.system[locale], text, locale);
-    assert.match(app.system[locale], /iFinder_getMetadata/);
+test('no shipped default uses {{timezone}} or {{time}} any more', async () => {
+  const defaults = await shippedDefaults();
+  for (const [file, config] of Object.entries(defaults)) {
+    const text = JSON.stringify(config);
+    assert.equal(text.includes('{{timezone}}'), false, `${file} uses {{timezone}}`);
+    assert.equal(text.includes('{{time}}'), false, `${file} uses {{time}}`);
   }
 });
 
-test('precondition needs an iFinder tool config or the search app', async () => {
-  assert.equal(await precondition(fakeCtx({})), false);
-  assert.equal(await precondition(fakeCtx({ 'tools/iFinder.json': {} })), true);
-  assert.equal(await precondition(fakeCtx({ 'config/tools.json': [] })), true);
-  assert.equal(await precondition(fakeCtx({ 'apps/ifinder-search.json': {} })), true);
-});
-
-test('an untouched tool config takes every refreshed value', async () => {
-  const files = { 'tools/iFinder.json': await installedTool() };
-  const ctx = fakeCtx(files);
-  await up(ctx);
-
-  assert.deepEqual(ctx.writes, ['tools/iFinder.json']);
-  const current = await shipped('tools/iFinder.json');
-  for (const { path: p } of SUPERSEDED_TOOL_VALUES) {
-    assert.deepEqual(getAt(files['tools/iFinder.json'], p), getAt(current, p), p.join('.'));
-  }
-  const documentId =
-    files['tools/iFinder.json'].functions.getMetadata.parameters.properties.documentId.description
-      .en;
-  assert.match(documentId, /Never a title, file name or link/);
-  assert.ok(
-    files[
-      'tools/iFinder.json'
-    ].functions.getMetadata.parameters.properties.returnFields.default.includes('creators')
+test('precondition requires at least one of the files', async () => {
+  const defaults = await shippedDefaults();
+  assert.equal(await precondition(fakeCtx({}, defaults)), false);
+  assert.equal(
+    await precondition(fakeCtx({ 'apps/iassistant.json': { id: 'iassistant' } }, defaults)),
+    true
   );
 });
 
-test('an admin-edited value is kept while the untouched ones are refreshed', async () => {
-  const tool = await installedTool();
-  tool.functions.getContent.description = { en: 'Our own wording', de: 'Eigene Formulierung' };
-  // Translated into a further language: also an edit.
-  tool.functions.getMetadata.description = {
-    ...tool.functions.getMetadata.description,
-    fr: 'Métadonnées'
-  };
-  const files = { 'tools/iFinder.json': tool };
-  const ctx = fakeCtx(files);
-  await up(ctx);
-
-  const stored = files['tools/iFinder.json'];
-  assert.equal(stored.functions.getContent.description.en, 'Our own wording');
-  assert.equal(stored.functions.getMetadata.description.fr, 'Métadonnées');
-  assert.match(
-    stored.functions.getContent.parameters.properties.documentId.description.en,
-    /Never a title/
-  );
-  assert.match(
-    stored.functions.getMetadata.parameters.properties.documentId.description.de,
-    /Nie ein Titel/
-  );
-});
-
-test('a config that is already current is not rewritten', async () => {
+test('untouched old defaults are rewritten in every file and locale', async () => {
+  const defaults = await shippedDefaults();
+  const platform = defaults['config/platform.json'];
+  const iassistant = defaults['apps/iassistant.json'];
+  const ifinder = defaults['apps/ifinder-search.json'];
   const files = {
-    'tools/iFinder.json': await shipped('tools/iFinder.json'),
-    'apps/ifinder-search.json': await shipped('apps/ifinder-search.json')
+    'config/platform.json': {
+      ...platform,
+      globalPromptVariables: {
+        ...platform.globalPromptVariables,
+        context: superseded(platform.globalPromptVariables.context)
+      }
+    },
+    'apps/iassistant.json': {
+      ...iassistant,
+      iassistant: {
+        ...iassistant.iassistant,
+        extraContext: superseded(iassistant.iassistant.extraContext)
+      }
+    },
+    'apps/ifinder-search.json': {
+      ...ifinder,
+      system: { en: superseded(ifinder.system.en), de: superseded(ifinder.system.de) }
+    }
   };
-  const ctx = fakeCtx(files);
+  // The fixtures really are the old texts.
+  assert.match(files['config/platform.json'].globalPromptVariables.context, /\{\{timezone\}\}/);
+  assert.match(files['apps/ifinder-search.json'].system.de, /Zeitzone des Benutzers/);
+
+  const ctx = fakeCtx(files, defaults);
+  await up(ctx);
+
+  assert.equal(
+    files['config/platform.json'].globalPromptVariables.context,
+    platform.globalPromptVariables.context
+  );
+  assert.equal(
+    files['apps/iassistant.json'].iassistant.extraContext,
+    iassistant.iassistant.extraContext
+  );
+  assert.equal(files['apps/ifinder-search.json'].system.en, ifinder.system.en);
+  assert.equal(files['apps/ifinder-search.json'].system.de, ifinder.system.de);
+  assert.deepEqual(ctx.writes.sort(), Object.keys(files).sort());
+  assert.deepEqual(ctx.warnings, []);
+});
+
+test('a customized text is left alone and logged when it still uses {{timezone}}', async () => {
+  const defaults = await shippedDefaults();
+  const custom = "Acme policy applies. The user's timezone is {{timezone}}. Today is {{date}}.";
+  const files = {
+    'config/platform.json': { globalPromptVariables: { context: custom } }
+  };
+  const ctx = fakeCtx(files, defaults);
+  await up(ctx);
+  assert.equal(files['config/platform.json'].globalPromptVariables.context, custom);
+  assert.deepEqual(ctx.writes, []);
+  assert.equal(ctx.warnings.length, 1);
+  assert.match(ctx.warnings[0], /customized/);
+});
+
+test('a default edited elsewhere is not rewritten even though the old sentence is still in it', async () => {
+  const defaults = await shippedDefaults();
+  const edited = `${superseded(defaults['config/platform.json'].globalPromptVariables.context)} Be brief.`;
+  assert.equal(
+    refreshedText(edited, defaults['config/platform.json'].globalPromptVariables.context),
+    null
+  );
+});
+
+test('already migrated or non-string values are no-ops', async () => {
+  const defaults = await shippedDefaults();
+  const current = defaults['config/platform.json'].globalPromptVariables.context;
+  assert.equal(refreshedText(current, current), null);
+  assert.equal(refreshedText(undefined, current), null);
+  assert.equal(refreshedText({ en: current }, current), null);
+
+  const files = {
+    'apps/ifinder-search.json': JSON.parse(JSON.stringify(defaults['apps/ifinder-search.json']))
+  };
+  const ctx = fakeCtx(files, defaults);
   await up(ctx);
   assert.deepEqual(ctx.writes, []);
-});
-
-test('applyToolDefaults skips paths the installed tool does not have', async () => {
-  const tool = { id: 'iFinder', functions: { search: {} } };
-  assert.deepEqual(applyToolDefaults(tool, await shipped('tools/iFinder.json')), []);
-});
-
-test('the legacy config/tools.json iFinder entry is refreshed in place', async () => {
-  const files = {
-    'config/tools.json': [{ id: 'braveSearch', functions: {} }, await installedTool()]
-  };
-  const ctx = fakeCtx(files);
-  await up(ctx);
-
-  assert.deepEqual(ctx.writes, ['config/tools.json']);
-  const [other, iFinder] = files['config/tools.json'];
-  assert.deepEqual(other, { id: 'braveSearch', functions: {} });
-  assert.match(iFinder.functions.getContent.description.en, /`id` field of a hit/);
-});
-
-test('the app prompt is refreshed per locale, only where untouched', async () => {
-  const app = await installedApp();
-  app.system.de = 'Eigener Prompt';
-  const files = { 'apps/ifinder-search.json': app };
-  const ctx = fakeCtx(files);
-  await up(ctx);
-
-  assert.deepEqual(ctx.writes, ['apps/ifinder-search.json']);
-  const current = await shipped('apps/ifinder-search.json');
-  assert.equal(files['apps/ifinder-search.json'].system.en, current.system.en);
-  assert.equal(files['apps/ifinder-search.json'].system.de, 'Eigener Prompt');
-  // Everything but the prompt is left as it was.
-  assert.equal(files['apps/ifinder-search.json'].enabled, app.enabled);
-});
-
-test('applyAppPrompt ignores an app without a localized prompt', async () => {
-  const current = await shipped('apps/ifinder-search.json');
-  assert.deepEqual(applyAppPrompt({ system: 'plain string' }, current), []);
-  assert.deepEqual(applyAppPrompt({}, current), []);
-});
-
-test('tool and app are refreshed in one run', async () => {
-  const files = {
-    'tools/iFinder.json': await installedTool(),
-    'apps/ifinder-search.json': await installedApp()
-  };
-  const ctx = fakeCtx(files);
-  await up(ctx);
-  assert.deepEqual(ctx.writes.sort(), ['apps/ifinder-search.json', 'tools/iFinder.json']);
-  assert.match(files['apps/ifinder-search.json'].system.de, /Linkformat/);
+  assert.deepEqual(ctx.warnings, []);
 });

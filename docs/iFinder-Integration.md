@@ -800,6 +800,13 @@ facets, paging, and the discovery loop — with a full field reference and a que
 cookbook alongside it. Grant it to a group and it is offered over the gateway as
 an MCP resource (`ihub://skill/ifinder-search`).
 
+The skill is a _managed default_ (`MANAGED_DEFAULT_FILES` in
+`server/utils/setupUtils.js`): its guidance moves together with the iFinder
+tool descriptions and the search app prompt, so on every start the server
+refreshes `contents/skills/ifinder-search/` from the shipped files, also on
+installations that already have it. Local edits to those files are overwritten;
+to customize the skill, copy it under another skill id.
+
 ## Admin-driven corpus discovery
 
 Some workflows benefit from a precomputed "corpus map" — which sources

@@ -11,7 +11,10 @@
 
 import { BaseAdapter } from './BaseAdapter.js';
 import { convertToolsFromGeneric } from './toolCalling/index.js';
-import { convertBedrockToolChoice } from './toolCalling/BedrockConverter.js';
+import {
+  convertBedrockToolChoice,
+  convertBedrockUsageToGeneric
+} from './toolCalling/BedrockConverter.js';
 import { BedrockEventStreamDecoder } from './bedrockEventStream.js';
 import { getReadableStream } from '../utils/streamUtils.js';
 import configCache from '../configCache.js';
@@ -348,6 +351,8 @@ class BedrockAdapterClass extends BaseAdapter {
       body.additionalModelRequestFields = model.config.additionalModelRequestFields;
     }
 
+    if (options.promptCache) applyCachePoints(body, model);
+
     const headers = {
       Authorization: `Bearer ${apiKey}`,
       'Content-Type': 'application/json'
@@ -465,17 +470,9 @@ class BedrockAdapterClass extends BaseAdapter {
             }
 
             case 'metadata': {
-              const usage = payload.usage || {};
+              const usage = convertBedrockUsageToGeneric(payload.usage);
               yield {
-                usage: {
-                  promptTokens: usage.inputTokens,
-                  completionTokens: usage.outputTokens,
-                  totalTokens:
-                    usage.totalTokens ??
-                    (typeof usage.inputTokens === 'number' && typeof usage.outputTokens === 'number'
-                      ? usage.inputTokens + usage.outputTokens
-                      : undefined)
-                },
+                ...(usage ? { usage } : {}),
                 complete: true,
                 finishReason: lastFinishReason || 'stop'
               };
@@ -532,6 +529,36 @@ function mapStopReason(stopReason) {
       return 'error';
     default:
       return stopReason || 'stop';
+  }
+}
+
+/** A Converse cache checkpoint, 5-minute default TTL. */
+const CACHE_POINT = Object.freeze({ cachePoint: Object.freeze({ type: 'default' }) });
+
+/**
+ * Add Converse cache checkpoints in prompt order (tools → system → messages):
+ * after the tool definitions (Claude models only — the field that accepts
+ * checkpoints varies by model family), after the system prompt, and after the
+ * latest user message (a moving checkpoint the next turn reads up to).
+ *
+ * A prefix below the model's minimum is simply not cached; the request still
+ * succeeds. A model without explicit prompt caching rejects checkpoints, which
+ * is why caching is opt-in for Bedrock models.
+ *
+ * @param {Object} body - Converse request body (mutated)
+ * @param {Object} model - model config
+ */
+export function applyCachePoints(body, model) {
+  const isClaude = /(^|[./])anthropic\./.test(String(model?.modelId || ''));
+  if (isClaude && Array.isArray(body.toolConfig?.tools) && body.toolConfig.tools.length > 0) {
+    body.toolConfig = { ...body.toolConfig, tools: [...body.toolConfig.tools, CACHE_POINT] };
+  }
+  if (Array.isArray(body.system) && body.system.length > 0) {
+    body.system = [...body.system, CACHE_POINT];
+  }
+  const last = body.messages?.[body.messages.length - 1];
+  if (last?.role === 'user' && Array.isArray(last.content) && last.content.length > 0) {
+    body.messages[body.messages.length - 1] = { ...last, content: [...last.content, CACHE_POINT] };
   }
 }
 

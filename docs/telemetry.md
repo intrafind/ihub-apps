@@ -125,8 +125,11 @@ Required and conditionally required attributes follow the gen-ai conventions:
 | `gen_ai.response.id`         | Provider response id |
 | `gen_ai.response.model`      | Provider-reported model |
 | `gen_ai.response.finish_reasons` | Array of finish reasons |
-| `gen_ai.usage.input_tokens`  | Prompt tokens |
-| `gen_ai.usage.output_tokens` | Completion tokens |
+| `gen_ai.usage.input_tokens`  | Prompt tokens — the whole input, cached tokens included, for every provider |
+| `gen_ai.usage.output_tokens` | Completion tokens — the whole output, reasoning included |
+| `gen_ai.usage.cache_read.input_tokens` | Input tokens served from the provider's prompt cache (when reported) |
+| `gen_ai.usage.cache_creation.input_tokens` | Input tokens written to the prompt cache (Anthropic, Bedrock; when reported) |
+| `gen_ai.usage.reasoning.output_tokens` | Output tokens spent on reasoning (OpenAI, Gemini; when reported) |
 | `error.type`                 | `rate_limit_exceeded`, `authentication_error`, `timeout`, `http_<code>` |
 
 iHub-specific span attributes:

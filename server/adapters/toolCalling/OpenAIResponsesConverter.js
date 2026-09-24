@@ -10,6 +10,7 @@ import {
   createGenericTool,
   createGenericToolCall,
   createGenericStreamingResponse,
+  createGenericUsage,
   normalizeFinishReason,
   cloneAndWalkSchema
 } from './GenericToolCalling.js';
@@ -275,6 +276,23 @@ export function convertOpenaiResponsesToolCallsToGeneric(responsesToolCalls = []
 }
 
 /**
+ * Map a Responses API `usage` object onto the generic shape. `input_tokens`
+ * already includes cached tokens and `output_tokens` already includes
+ * reasoning tokens.
+ * @param {Object} usage - provider `usage`
+ * @returns {Object} generic usage (see `createGenericUsage`)
+ */
+function responsesUsageToGeneric(usage) {
+  return createGenericUsage({
+    promptTokens: usage.input_tokens,
+    completionTokens: usage.output_tokens,
+    totalTokens: usage.total_tokens,
+    cacheReadTokens: usage.input_tokens_details?.cached_tokens,
+    reasoningTokens: usage.output_tokens_details?.reasoning_tokens
+  });
+}
+
+/**
  * Convert OpenAI Responses API streaming response to generic format
  * @param {string} data - Raw response data
  * @param {string} streamId - Stream identifier
@@ -295,6 +313,7 @@ export async function convertOpenaiResponsesResponseToGeneric(data, _streamId = 
     const annotations = [];
     let complete = false;
     let finishReason = null;
+    let nonStreamingUsage = null;
 
     // Handle server-sent event format with type field
     if (parsed.type) {
@@ -320,11 +339,7 @@ export async function convertOpenaiResponsesResponseToGeneric(data, _streamId = 
         const completionMetadata = {};
         const usageData = parsed.response?.usage || parsed.usage;
         if (usageData) {
-          completionMetadata.usage = {
-            promptTokens: usageData.input_tokens || 0,
-            completionTokens: usageData.output_tokens || 0,
-            totalTokens: usageData.total_tokens || 0
-          };
+          completionMetadata.usage = responsesUsageToGeneric(usageData);
         }
 
         // Don't extract content from completion event - content comes from delta events
@@ -502,6 +517,7 @@ export async function convertOpenaiResponsesResponseToGeneric(data, _streamId = 
       complete = true;
       // Set finish reason based on whether tool calls are present
       finishReason = toolCalls.length > 0 ? 'tool_calls' : 'stop';
+      if (parsed.usage) nonStreamingUsage = responsesUsageToGeneric(parsed.usage);
     }
     // Handle legacy streaming chunks format
     else if (parsed.output_chunk) {
@@ -543,6 +559,9 @@ export async function convertOpenaiResponsesResponseToGeneric(data, _streamId = 
     }
     if (annotations.length > 0) {
       metadata.annotations = annotations;
+    }
+    if (nonStreamingUsage) {
+      metadata.usage = nonStreamingUsage;
     }
 
     return createGenericStreamingResponse(

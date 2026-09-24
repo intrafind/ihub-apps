@@ -11,6 +11,21 @@ background and only replaces the shown email when the read really returned a dif
 read that still returned the previous email, or no email, is checked once more shortly after.
 Re-selecting the open email or a refresh of the message list changes nothing on screen.
 
+## Usage Reports: Token counts come from the provider
+
+Usage reports showed estimated prompt tokens for every chat message, and for streamed answers from
+OpenAI and OpenAI-compatible servers (vLLM, local models) estimated completion tokens as well.
+vLLM models never contributed provider numbers at all. The provider's counts arrive in a last
+message after the answer, which was never read, and prompt tokens were counted locally before the
+call. Reports now use the provider's numbers wherever it sends them.
+
+- Prompt-token totals shift after the upgrade, usually upwards: the local estimate was approximate
+  and left out tool definitions and attachments.
+- Prompt tokens mean the same for every provider: the whole input, cached tokens included.
+  Completion tokens are the whole output — Gemini thinking tokens, which Gemini bills as output,
+  now count too.
+- **Data Quality** on the usage overview moves towards "Provider" as new usage comes in.
+
 ## iFinder Search: Follow-up questions find the document that was listed
 
 Asking about a document the assistant had listed in an earlier answer ("show me the top 10", "who
@@ -29,4 +44,7 @@ tools do not accept and which are not even unique when the same file is indexed 
   so document lists show consistent dates without a lookup per document.
 
 Installations that kept the shipped iFinder tool descriptions and the shipped iFinder Search prompt
-receive the updated wording on upgrade; edited ones are left as they are.
+receive the updated wording on upgrade; edited ones are left as they are. The shipped
+`ifinder-search` skill is now kept in step with the release: the server refreshes it from the
+shipped files on every start, also on installations that already have it. Local edits to that skill
+are overwritten — copy it under another skill id to customize it.

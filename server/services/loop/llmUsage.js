@@ -8,8 +8,22 @@
  * `{ promptTokens, completionTokens, totalTokens, cacheReadTokens?,
  *    cacheWriteTokens?, reasoningTokens?, webSearchRequests?, source }`.
  *
+ * `promptTokens` is the whole input with cached tokens included and
+ * `completionTokens` the whole output with reasoning included, whatever the
+ * provider (the converters add Anthropic's and Bedrock's separately reported
+ * cache counts back in). `cacheReadTokens` and `cacheWriteTokens` are subsets
+ * of `promptTokens`; `reasoningTokens` is a subset of `completionTokens`.
+ *
  * @module services/loop/llmUsage
  */
+
+/** Counters only present when the provider reported them. */
+export const OPTIONAL_COUNTERS = Object.freeze([
+  'cacheReadTokens',
+  'cacheWriteTokens',
+  'reasoningTokens',
+  'webSearchRequests'
+]);
 
 function num(...candidates) {
   for (const c of candidates) {
@@ -50,11 +64,16 @@ export function normalizeUsage(raw, source = 'provider') {
   const cacheReadTokens = num(
     raw.cacheReadTokens,
     raw.cache_read_input_tokens,
+    raw.cacheReadInputTokens,
     raw.cachedContentTokenCount,
     raw.prompt_tokens_details?.cached_tokens,
     raw.input_tokens_details?.cached_tokens
   );
-  const cacheWriteTokens = num(raw.cacheWriteTokens, raw.cache_creation_input_tokens);
+  const cacheWriteTokens = num(
+    raw.cacheWriteTokens,
+    raw.cache_creation_input_tokens,
+    raw.cacheWriteInputTokens
+  );
   const reasoningTokens = num(
     raw.reasoningTokens,
     raw.thoughtsTokenCount,
@@ -73,6 +92,7 @@ export function normalizeUsage(raw, source = 'provider') {
     completionTokens === undefined &&
     totalTokens === undefined &&
     cacheReadTokens === undefined &&
+    cacheWriteTokens === undefined &&
     reasoningTokens === undefined &&
     webSearchRequests === undefined
   ) {
@@ -93,7 +113,10 @@ export function normalizeUsage(raw, source = 'provider') {
 /**
  * Merge usage reported across streaming chunks. Non-zero incoming values win
  * (handles Anthropic's `message_start` prompt count + `message_delta` output
- * count, and Google's cumulative per-chunk counters).
+ * count, and Google's cumulative per-chunk counters). The optional counters
+ * (cache read/write, reasoning, web searches) are cumulative within one
+ * response, so the highest value reported wins and a frame that omits one
+ * never erases it.
  *
  * @param {Object|null} existing - already normalized
  * @param {Object|null} incoming - already normalized
@@ -114,12 +137,11 @@ export function mergeUsage(existing, incoming) {
     merged.promptTokens + merged.completionTokens
   );
   merged.totalTokens = total;
-  if (existing.webSearchRequests !== undefined || incoming.webSearchRequests !== undefined) {
-    // Cumulative within one response: the later frame is authoritative, never lower.
-    merged.webSearchRequests = Math.max(
-      existing.webSearchRequests || 0,
-      incoming.webSearchRequests || 0
-    );
+  for (const key of OPTIONAL_COUNTERS) {
+    if (existing[key] !== undefined || incoming[key] !== undefined) {
+      // Cumulative within one response: the later frame is authoritative, never lower.
+      merged[key] = Math.max(existing[key] || 0, incoming[key] || 0);
+    }
   }
   if (existing.source && incoming.source && existing.source !== incoming.source) {
     merged.source = 'mixed';
@@ -142,12 +164,7 @@ export function addUsage(a, b) {
     totalTokens: (a.totalTokens || 0) + (b.totalTokens || 0),
     source: a.source === b.source ? a.source || 'provider' : 'mixed'
   };
-  for (const key of [
-    'cacheReadTokens',
-    'cacheWriteTokens',
-    'reasoningTokens',
-    'webSearchRequests'
-  ]) {
+  for (const key of OPTIONAL_COUNTERS) {
     if (a[key] !== undefined || b[key] !== undefined) out[key] = (a[key] || 0) + (b[key] || 0);
   }
   return out;
@@ -167,14 +184,25 @@ export function usageToBudget(usage) {
 }
 
 /**
- * OpenAI-compatible wire view: `{ prompt_tokens, completion_tokens, total_tokens }`.
+ * OpenAI-compatible wire view: `{ prompt_tokens, completion_tokens, total_tokens }`,
+ * plus OpenAI's `prompt_tokens_details.cached_tokens` and
+ * `completion_tokens_details.reasoning_tokens` when those were reported.
  * @param {Object|null} usage
- * @returns {{prompt_tokens:number, completion_tokens:number, total_tokens:number}}
+ * @returns {{prompt_tokens:number, completion_tokens:number, total_tokens:number,
+ *   prompt_tokens_details?:{cached_tokens:number},
+ *   completion_tokens_details?:{reasoning_tokens:number}}}
  */
 export function usageToOpenAI(usage) {
-  return {
+  const out = {
     prompt_tokens: usage?.promptTokens || 0,
     completion_tokens: usage?.completionTokens || 0,
     total_tokens: usage?.totalTokens || 0
   };
+  if (usage?.cacheReadTokens !== undefined) {
+    out.prompt_tokens_details = { cached_tokens: usage.cacheReadTokens };
+  }
+  if (usage?.reasoningTokens !== undefined) {
+    out.completion_tokens_details = { reasoning_tokens: usage.reasoningTokens };
+  }
+  return out;
 }

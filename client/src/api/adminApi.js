@@ -960,6 +960,11 @@ export const fetchAdminUsageModels = async (range = '30d') => {
   return response.data;
 };
 
+export const fetchAdminUsageProviders = async (range = '30d') => {
+  const response = await makeAdminApiCall(`/admin/usage/providers?range=${range}`);
+  return response.data;
+};
+
 export const setAppFeedbackEnabled = async (appId, enabled) => {
   const response = await makeAdminApiCall(`/admin/apps/${appId}/features/feedback`, {
     method: 'POST',
@@ -985,6 +990,7 @@ export const adminApi = {
   fetchAdminUsageUsers,
   fetchAdminUsageApps,
   fetchAdminUsageModels,
+  fetchAdminUsageProviders,
   fetchAdminFeedbackEntries,
   setAppFeedbackEnabled,
   fetchAdminCacheStats,
