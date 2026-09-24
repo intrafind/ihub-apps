@@ -9,6 +9,7 @@ import {
   createGenericTool,
   createGenericToolCall,
   createGenericStreamingResponse,
+  createGenericUsage,
   normalizeFinishReason,
   cloneAndWalkSchema,
   normalizeToolName
@@ -247,12 +248,19 @@ export async function convertGoogleResponseToGeneric(data, streamId = 'default')
     const parsed = await parseJsonAsync(data);
 
     // Extract usage metadata from Google Gemini responses
+    // `promptTokenCount` already includes `cachedContentTokenCount` (implicit
+    // and explicit caching alike). `candidatesTokenCount` excludes thinking,
+    // which Gemini bills as output — added back so `completionTokens` means
+    // the whole output, as it does for every other provider.
     if (parsed.usageMetadata) {
-      result.metadata.usage = {
-        promptTokens: parsed.usageMetadata.promptTokenCount || 0,
-        completionTokens: parsed.usageMetadata.candidatesTokenCount || 0,
-        totalTokens: parsed.usageMetadata.totalTokenCount || 0
-      };
+      const u = parsed.usageMetadata;
+      result.metadata.usage = createGenericUsage({
+        promptTokens: u.promptTokenCount,
+        completionTokens: (u.candidatesTokenCount || 0) + (u.thoughtsTokenCount || 0),
+        totalTokens: u.totalTokenCount,
+        cacheReadTokens: u.cachedContentTokenCount,
+        reasoningTokens: u.thoughtsTokenCount
+      });
     }
 
     // Handle full response object (non-streaming) - detect by presence of finishReason at the top level

@@ -9,6 +9,7 @@ import {
   createGenericTool,
   createGenericToolCall,
   createGenericStreamingResponse,
+  createGenericUsage,
   normalizeFinishReason,
   cloneAndWalkSchema
 } from './GenericToolCalling.js';
@@ -223,16 +224,32 @@ function addWebSearchQuery(result, block) {
 
 /**
  * Map Anthropic's usage object onto the generic shape.
+ *
+ * Anthropic's `input_tokens` counts only the input *after* the last cache
+ * breakpoint; tokens served from the cache (`cache_read_input_tokens`) and
+ * tokens written to it (`cache_creation_input_tokens`) are reported apart.
+ * The generic `promptTokens` is the whole input, so all three are added up.
  * `server_tool_use.web_search_requests` is the billable search count of the
  * response (cumulative on streaming `message_delta` frames).
+ *
+ * The input side is taken from `message_start` only (`includeInput: false`
+ * on `message_delta`), where the cache counters are final.
  */
 function toGenericUsage(usage, { includeInput = true } = {}) {
-  const promptTokens = includeInput ? usage.input_tokens || 0 : 0;
-  const completionTokens = usage.output_tokens || 0;
-  const generic = { promptTokens, completionTokens, totalTokens: promptTokens + completionTokens };
-  const searches = usage.server_tool_use?.web_search_requests;
-  if (Number.isInteger(searches) && searches >= 0) generic.webSearchRequests = searches;
-  return generic;
+  const cacheReadTokens = includeInput ? usage.cache_read_input_tokens : undefined;
+  const cacheWriteTokens = includeInput ? usage.cache_creation_input_tokens : undefined;
+  const promptTokens = includeInput
+    ? (usage.input_tokens || 0) + (cacheReadTokens || 0) + (cacheWriteTokens || 0)
+    : 0;
+  return createGenericUsage({
+    promptTokens,
+    completionTokens: usage.output_tokens || 0,
+    cacheReadTokens,
+    cacheWriteTokens,
+    webSearchRequests: Number.isInteger(usage.server_tool_use?.web_search_requests)
+      ? usage.server_tool_use.web_search_requests
+      : undefined
+  });
 }
 
 /**

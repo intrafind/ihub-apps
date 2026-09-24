@@ -152,6 +152,58 @@ export function createGenericToolResult(
 }
 
 /**
+ * Build the generic `metadata.usage` object a converter hands downstream.
+ *
+ * Conventions every converter follows, so the numbers compare across providers:
+ * - `promptTokens` is the **whole** input, cached tokens included (Anthropic
+ *   and Bedrock report the uncached part only; their converters add the cache
+ *   counts back before calling this).
+ * - `completionTokens` is the whole output, reasoning tokens included.
+ * - `cacheReadTokens` / `cacheWriteTokens` / `reasoningTokens` /
+ *   `webSearchRequests` are optional and only set when the provider reported
+ *   them, so "not reported" stays distinguishable from "zero".
+ *
+ * @param {Object} counts
+ * @param {number} [counts.promptTokens]
+ * @param {number} [counts.completionTokens]
+ * @param {number} [counts.totalTokens] - defaults to prompt + completion
+ * @param {number} [counts.cacheReadTokens]
+ * @param {number} [counts.cacheWriteTokens]
+ * @param {number} [counts.reasoningTokens]
+ * @param {number} [counts.webSearchRequests]
+ * @returns {{promptTokens:number, completionTokens:number, totalTokens:number,
+ *   cacheReadTokens?:number, cacheWriteTokens?:number, reasoningTokens?:number,
+ *   webSearchRequests?:number}}
+ */
+export function createGenericUsage({
+  promptTokens,
+  completionTokens,
+  totalTokens,
+  ...optional
+} = {}) {
+  const count = value =>
+    typeof value === 'number' && Number.isFinite(value) && value >= 0 ? value : undefined;
+  const prompt = count(promptTokens) ?? 0;
+  const completion = count(completionTokens) ?? 0;
+  const total = count(totalTokens);
+  const usage = {
+    promptTokens: prompt,
+    completionTokens: completion,
+    totalTokens: total !== undefined && total >= prompt + completion ? total : prompt + completion
+  };
+  for (const key of [
+    'cacheReadTokens',
+    'cacheWriteTokens',
+    'reasoningTokens',
+    'webSearchRequests'
+  ]) {
+    const value = count(optional[key]);
+    if (value !== undefined) usage[key] = value;
+  }
+  return usage;
+}
+
+/**
  * Create a generic streaming response
  * @param {string[]} content - Content chunks
  * @param {string[]} thinking - Thinking chunks

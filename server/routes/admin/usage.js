@@ -7,7 +7,12 @@ import configStore from '../../services/config/ConfigStore.js';
 import configCache from '../../configCache.js';
 import config from '../../config.js';
 import { getTrackingMode, reloadConfig } from '../../usageTracker.js';
-import { getDailyRollups, getMonthlyRollups, runRollups } from '../../services/UsageAggregator.js';
+import {
+  getDailyRollups,
+  getMonthlyRollups,
+  runRollups,
+  sumRollupDimension
+} from '../../services/UsageAggregator.js';
 import { readEvents } from '../../services/UsageEventLog.js';
 import { sendInternalError, sendBadRequest } from '../../utils/responseHelpers.js';
 import { escapeCsvField } from '../../utils/csv.js';
@@ -67,19 +72,7 @@ export default function registerAdminUsageRoutes(app) {
       const { range = '30d' } = req.query;
       const parsed = parseRange(range);
       const rollups = await getDailyRollups(parsed.startDate, parsed.endDate);
-
-      const users = {};
-      for (const rollup of rollups) {
-        for (const [uid, data] of Object.entries(rollup.byUser || {})) {
-          if (!users[uid])
-            users[uid] = { messages: 0, promptTokens: 0, completionTokens: 0, days: 0 };
-          users[uid].messages += data.messages;
-          users[uid].promptTokens += data.promptTokens;
-          users[uid].completionTokens += data.completionTokens;
-          users[uid].days += 1;
-        }
-      }
-
+      const users = sumRollupDimension(rollups, 'byUser', { countDays: true });
       res.json({ range, users });
     } catch (error) {
       return sendInternalError(res, error, 'load usage user data');
@@ -92,17 +85,7 @@ export default function registerAdminUsageRoutes(app) {
       const { range = '30d' } = req.query;
       const parsed = parseRange(range);
       const rollups = await getDailyRollups(parsed.startDate, parsed.endDate);
-
-      const apps = {};
-      for (const rollup of rollups) {
-        for (const [appId, data] of Object.entries(rollup.byApp || {})) {
-          if (!apps[appId]) apps[appId] = { messages: 0, promptTokens: 0, completionTokens: 0 };
-          apps[appId].messages += data.messages;
-          apps[appId].promptTokens += data.promptTokens;
-          apps[appId].completionTokens += data.completionTokens;
-        }
-      }
-
+      const apps = sumRollupDimension(rollups, 'byApp');
       res.json({ range, apps });
     } catch (error) {
       return sendInternalError(res, error, 'load usage app data');
@@ -115,21 +98,24 @@ export default function registerAdminUsageRoutes(app) {
       const { range = '30d' } = req.query;
       const parsed = parseRange(range);
       const rollups = await getDailyRollups(parsed.startDate, parsed.endDate);
-
-      const models = {};
-      for (const rollup of rollups) {
-        for (const [modelId, data] of Object.entries(rollup.byModel || {})) {
-          if (!models[modelId])
-            models[modelId] = { messages: 0, promptTokens: 0, completionTokens: 0 };
-          models[modelId].messages += data.messages;
-          models[modelId].promptTokens += data.promptTokens;
-          models[modelId].completionTokens += data.completionTokens;
-        }
-      }
-
+      const models = sumRollupDimension(rollups, 'byModel');
       res.json({ range, models });
     } catch (error) {
       return sendInternalError(res, error, 'load usage model data');
+    }
+  });
+
+  // Per-provider (adapter) breakdown over time. Only events recorded since the
+  // provider was tracked carry one.
+  app.get(buildServerPath('/api/admin/usage/providers'), adminAuth, async (req, res) => {
+    try {
+      const { range = '30d' } = req.query;
+      const parsed = parseRange(range);
+      const rollups = await getDailyRollups(parsed.startDate, parsed.endDate);
+      const providers = sumRollupDimension(rollups, 'byProvider');
+      res.json({ range, providers });
+    } catch (error) {
+      return sendInternalError(res, error, 'load usage provider data');
     }
   });
 
@@ -201,8 +187,13 @@ export default function registerAdminUsageRoutes(app) {
       });
 
       if (format === 'csv') {
+        // New columns are appended so scripts reading the export by position
+        // keep working. The optional counters stay empty when the provider did
+        // not report them, so "not reported" and "zero" stay apart.
+        const optional = value => (Number.isFinite(value) ? value : '');
         const headers =
-          'timestamp,type,userId,app,model,promptTokens,completionTokens,tokenSource\n';
+          'timestamp,type,userId,app,model,promptTokens,completionTokens,tokenSource,' +
+          'provider,cacheReadTokens,cacheWriteTokens,reasoningTokens,webSearchRequests\n';
         const rows = events
           .map(e =>
             [
@@ -213,7 +204,12 @@ export default function registerAdminUsageRoutes(app) {
               escapeCsvField(e.model),
               e.pt || 0,
               e.ct || 0,
-              escapeCsvField(e.src || 'estimate')
+              escapeCsvField(e.src || 'estimate'),
+              escapeCsvField(e.prov || ''),
+              optional(e.cr),
+              optional(e.cw),
+              optional(e.rt),
+              optional(e.ws)
             ].join(',')
           )
           .join('\n');

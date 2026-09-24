@@ -165,6 +165,9 @@ class OpenAIAdapterClass extends BaseAdapter {
 
     if (tools && tools.length > 0) body.tools = convertToolsFromGeneric(tools, 'openai');
     if (toolChoice) body.tool_choice = toolChoice;
+    // Prompt caching is automatic; the key routes requests sharing a prefix
+    // to the same cache (see adapters/promptCaching.js).
+    if (options.promptCache?.key) body.prompt_cache_key = options.promptCache.key;
     if (responseSchema) {
       // Deep clone incoming schema and enforce additionalProperties:false on all objects
       const schemaClone = JSON.parse(JSON.stringify(responseSchema));

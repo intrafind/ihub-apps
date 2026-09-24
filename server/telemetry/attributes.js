@@ -156,6 +156,19 @@ export function buildUsageAttributes(usage = {}) {
     attributes['gen_ai.usage.output_tokens'] = parseInt(usage.completion_tokens, 10);
   }
 
+  // Prompt caching (OTel GenAI semantic conventions). Both are subsets of
+  // `gen_ai.usage.input_tokens`, which counts the whole input for every
+  // provider. Set only when the provider reported them.
+  if (usage.cacheReadTokens !== undefined) {
+    attributes['gen_ai.usage.cache_read.input_tokens'] = parseInt(usage.cacheReadTokens, 10);
+  }
+  if (usage.cacheWriteTokens !== undefined) {
+    attributes['gen_ai.usage.cache_creation.input_tokens'] = parseInt(usage.cacheWriteTokens, 10);
+  }
+  if (usage.reasoningTokens !== undefined) {
+    attributes['gen_ai.usage.reasoning.output_tokens'] = parseInt(usage.reasoningTokens, 10);
+  }
+
   return attributes;
 }
 

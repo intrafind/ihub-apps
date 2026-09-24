@@ -9,12 +9,36 @@
 import {
   createGenericTool,
   createGenericToolCall,
-  createGenericStreamingResponse
+  createGenericStreamingResponse,
+  createGenericUsage
 } from './GenericToolCalling.js';
 import { sanitizeSchema as sanitizeAnthropicSchema } from './AnthropicConverter.js';
 import { validateProviderToolName } from './toolNameValidator.js';
 import { parseJsonAsync } from '../../utils/asyncJson.js';
 import logger from '../../utils/logger.js';
+
+/**
+ * Map a Converse API `usage` object onto the generic shape. Like Anthropic,
+ * Bedrock's `inputTokens` excludes the tokens read from or written to the
+ * prompt cache, so they are added back to get the whole input.
+ * @param {Object} usage - Converse `usage` (streaming `metadata` event or response body)
+ * @returns {Object|null} generic usage (see `createGenericUsage`), `null` without token counts
+ */
+export function convertBedrockUsageToGeneric(usage = {}) {
+  const counted = ['inputTokens', 'outputTokens', 'totalTokens'].some(
+    key => typeof usage?.[key] === 'number'
+  );
+  if (!counted) return null;
+  const cacheReadTokens = usage.cacheReadInputTokens;
+  const cacheWriteTokens = usage.cacheWriteInputTokens;
+  return createGenericUsage({
+    promptTokens: (usage.inputTokens || 0) + (cacheReadTokens || 0) + (cacheWriteTokens || 0),
+    completionTokens: usage.outputTokens,
+    totalTokens: usage.totalTokens,
+    cacheReadTokens,
+    cacheWriteTokens
+  });
+}
 
 /**
  * Convert generic tools to Bedrock Converse format.
@@ -218,16 +242,11 @@ export async function convertBedrockResponseToGeneric(data) {
     }
 
     if (parsed?.usage) {
-      const u = parsed.usage;
-      result.metadata = result.metadata || {};
-      result.metadata.usage = {
-        promptTokens: u.inputTokens || 0,
-        completionTokens: u.outputTokens || 0,
-        totalTokens:
-          typeof u.totalTokens === 'number'
-            ? u.totalTokens
-            : (u.inputTokens || 0) + (u.outputTokens || 0)
-      };
+      const usage = convertBedrockUsageToGeneric(parsed.usage);
+      if (usage) {
+        result.metadata = result.metadata || {};
+        result.metadata.usage = usage;
+      }
     }
 
     result.complete = true;

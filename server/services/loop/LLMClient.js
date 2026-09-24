@@ -35,6 +35,7 @@
  */
 import crypto from 'node:crypto';
 import { getAdapter, createCompletionRequest } from '../../adapters/index.js';
+import { resolvePromptCache } from '../../adapters/promptCaching.js';
 import { convertResponseToGeneric, clearStreamingState } from '../../adapters/toolCalling/index.js';
 import { throttledRun } from '../../requestThrottler.js';
 import { httpFetch, redactUrlSecrets } from '../../utils/httpConfig.js';
@@ -718,6 +719,9 @@ export class LLMClient {
 
     const effectiveStream = STREAM_ONLY_PROVIDERS.has(model.provider) ? true : stream !== false;
     const adapterOptions = buildAdapterOptions(options, model, effectiveStream);
+    // Prompt-cache hints (cache key, breakpoints) when the model has caching on.
+    const promptCache = resolvePromptCache(model, { appId: telemetry.appId });
+    if (promptCache) adapterOptions.promptCache = promptCache;
 
     let request;
     try {
@@ -1543,7 +1547,10 @@ export class LLMClient {
       const usage = accumulator.usage
         ? {
             inputTokens: accumulator.usage.promptTokens,
-            outputTokens: accumulator.usage.completionTokens
+            outputTokens: accumulator.usage.completionTokens,
+            cacheReadTokens: accumulator.usage.cacheReadTokens,
+            cacheWriteTokens: accumulator.usage.cacheWriteTokens,
+            reasoningTokens: accumulator.usage.reasoningTokens
           }
         : undefined;
       instrumentation.recordResponse(

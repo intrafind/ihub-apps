@@ -5,9 +5,11 @@ import {
   triggerUsageRollup,
   fetchAdminUsageUsers,
   fetchAdminUsageApps,
-  fetchAdminUsageModels
+  fetchAdminUsageModels,
+  fetchAdminUsageProviders
 } from '../../../api/adminApi';
 import LoadingSpinner from '../../../shared/components/LoadingSpinner';
+import { cacheHitRatio, formatRatio } from '../utils/promptCacheStats';
 
 const RANGES = [
   { label: '7d', value: '7d' },
@@ -19,7 +21,9 @@ const RANGES = [
 const COLORS = {
   promptTokens: '#3b82f6',
   completionTokens: '#10b981',
-  messages: '#8b5cf6'
+  messages: '#8b5cf6',
+  cacheReadTokens: '#06b6d4',
+  uncachedInputTokens: '#f59e0b'
 };
 
 function SimpleLineChart({ data, dataKeys, height = 200 }) {
@@ -200,8 +204,18 @@ export default function UsageTimeline() {
   const [loading, setLoading] = useState(true);
   const [generating, setGenerating] = useState(false);
   const [rollupMessage, setRollupMessage] = useState(null);
-  const [breakdowns, setBreakdowns] = useState({ users: [], apps: [], models: [] });
-  const [expanded, setExpanded] = useState({ users: false, apps: false, models: false });
+  const [breakdowns, setBreakdowns] = useState({
+    users: [],
+    apps: [],
+    models: [],
+    providers: []
+  });
+  const [expanded, setExpanded] = useState({
+    users: false,
+    apps: false,
+    models: false,
+    providers: false
+  });
 
   const loadTimeline = useCallback(
     selectedRange => {
@@ -210,14 +224,17 @@ export default function UsageTimeline() {
         fetchAdminUsageTimeline(selectedRange),
         fetchAdminUsageUsers(selectedRange),
         fetchAdminUsageApps(selectedRange),
-        fetchAdminUsageModels(selectedRange)
+        fetchAdminUsageModels(selectedRange),
+        // Older servers have no provider breakdown; the rest still renders.
+        fetchAdminUsageProviders(selectedRange).catch(() => null)
       ])
-        .then(([timelineData, usersData, appsData, modelsData]) => {
+        .then(([timelineData, usersData, appsData, modelsData, providersData]) => {
           setTimeline(timelineData);
           setBreakdowns({
             users: toSortedArray(usersData?.users, 'userId'),
             apps: toSortedArray(appsData?.apps, 'appId'),
-            models: toSortedArray(modelsData?.models, 'modelId')
+            models: toSortedArray(modelsData?.models, 'modelId'),
+            providers: toSortedArray(providersData?.providers, 'provider')
           });
         })
         .catch(e => console.error('Failed to load timeline', e))
@@ -269,28 +286,61 @@ export default function UsageTimeline() {
 
   const chartData = useMemo(() => {
     if (!timeline?.data) return [];
-    return timeline.data.map(d => ({
-      label: d.date || d.month || '',
-      promptTokens: d.totals?.promptTokens || 0,
-      completionTokens: d.totals?.completionTokens || 0,
-      messages: d.totals?.messages || 0,
-      uniqueUsers: d.totals?.uniqueUsers || 0
-    }));
+    return timeline.data.map(d => {
+      const promptTokens = d.totals?.promptTokens || 0;
+      const cacheReadTokens = d.totals?.cacheReadTokens || 0;
+      return {
+        label: d.date || d.month || '',
+        promptTokens,
+        completionTokens: d.totals?.completionTokens || 0,
+        cacheReadTokens,
+        cacheWriteTokens: d.totals?.cacheWriteTokens || 0,
+        // Prompt tokens include the cached ones; the rest was billed in full.
+        uncachedInputTokens: Math.max(0, promptTokens - cacheReadTokens),
+        messages: d.totals?.messages || 0,
+        uniqueUsers: d.totals?.uniqueUsers || 0
+      };
+    });
   }, [timeline]);
 
   const totals = useMemo(() => {
-    if (!chartData.length) return { promptTokens: 0, completionTokens: 0, messages: 0 };
+    const zero = {
+      promptTokens: 0,
+      completionTokens: 0,
+      cacheReadTokens: 0,
+      cacheWriteTokens: 0,
+      messages: 0
+    };
     return chartData.reduce(
       (acc, d) => ({
         promptTokens: acc.promptTokens + d.promptTokens,
         completionTokens: acc.completionTokens + d.completionTokens,
+        cacheReadTokens: acc.cacheReadTokens + d.cacheReadTokens,
+        cacheWriteTokens: acc.cacheWriteTokens + d.cacheWriteTokens,
         messages: acc.messages + d.messages
       }),
-      { promptTokens: 0, completionTokens: 0, messages: 0 }
+      zero
     );
   }, [chartData]);
 
+  const hasCacheData = totals.cacheReadTokens > 0 || totals.cacheWriteTokens > 0;
+
   const formatNumber = n => new Intl.NumberFormat().format(n);
+
+  const cacheColumns = [
+    {
+      key: 'cacheReadTokens',
+      label: t('admin.usage.promptCache.cachedTokens', 'Cached input tokens'),
+      align: 'right',
+      format: v => formatNumber(v || 0)
+    },
+    {
+      key: 'hitRatio',
+      label: t('admin.usage.promptCache.hitRatio', 'Cache hit ratio'),
+      align: 'right',
+      format: v => formatRatio(v)
+    }
+  ];
 
   const toggleSection = key => setExpanded(prev => ({ ...prev, [key]: !prev[key] }));
 
@@ -327,7 +377,8 @@ export default function UsageTimeline() {
       key: 'completionTokens',
       label: t('admin.usage.breakdown.completionTokens', 'Completion Tokens'),
       align: 'right'
-    }
+    },
+    ...cacheColumns
   ];
 
   const modelColumns = [
@@ -347,6 +398,23 @@ export default function UsageTimeline() {
       key: 'completionTokens',
       label: t('admin.usage.breakdown.completionTokens', 'Completion Tokens'),
       align: 'right'
+    },
+    ...cacheColumns
+  ];
+
+  const providerColumns = [
+    {
+      key: 'provider',
+      label: t('admin.usage.promptCache.byProvider', 'Provider'),
+      align: 'left',
+      format: v => v
+    },
+    ...modelColumns.slice(1),
+    {
+      key: 'cacheWriteTokens',
+      label: t('admin.usage.promptCache.writeTokens', 'Cache write tokens'),
+      align: 'right',
+      format: v => formatNumber(v || 0)
     }
   ];
 
@@ -443,7 +511,7 @@ export default function UsageTimeline() {
       ) : (
         <>
           {/* Summary cards */}
-          <div className="grid grid-cols-3 gap-4">
+          <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
             <div className="bg-blue-50 dark:bg-blue-900/20 rounded-lg p-4">
               <p className="text-sm text-blue-600 dark:text-blue-400">
                 {t('admin.usage.timeline.promptTokens', 'Prompt Tokens')}
@@ -466,6 +534,19 @@ export default function UsageTimeline() {
               </p>
               <p className="text-2xl font-bold text-purple-700 dark:text-purple-300">
                 {formatNumber(totals.messages)}
+              </p>
+            </div>
+            <div className="bg-cyan-50 dark:bg-cyan-900/20 rounded-lg p-4">
+              <p className="text-sm text-cyan-700 dark:text-cyan-400">
+                {t('admin.usage.promptCache.cachedTokens', 'Cached input tokens')}
+              </p>
+              <p className="text-2xl font-bold text-cyan-800 dark:text-cyan-300">
+                {formatNumber(totals.cacheReadTokens)}
+              </p>
+              <p className="text-xs text-cyan-700 dark:text-cyan-400">
+                {t('admin.usage.promptCache.hitRatioValue', '{{ratio}} cache hit ratio', {
+                  ratio: formatRatio(cacheHitRatio(totals.cacheReadTokens, totals.promptTokens))
+                })}
               </p>
             </div>
           </div>
@@ -499,6 +580,48 @@ export default function UsageTimeline() {
                 {t('admin.usage.timeline.completion', 'Completion')}
               </div>
             </div>
+          </div>
+
+          {/* Cached vs uncached input */}
+          <div className="bg-white dark:bg-gray-800 rounded-lg shadow-xs border border-gray-200 dark:border-gray-700 p-6">
+            <h4 className="text-sm font-medium text-gray-600 dark:text-gray-400 mb-4">
+              {t('admin.usage.promptCache.inputOverTime', 'Cached vs. uncached input tokens')}
+            </h4>
+            {hasCacheData ? (
+              <>
+                <SimpleLineChart
+                  data={chartData}
+                  dataKeys={[
+                    { key: 'uncachedInputTokens', color: COLORS.uncachedInputTokens },
+                    { key: 'cacheReadTokens', color: COLORS.cacheReadTokens }
+                  ]}
+                  height={200}
+                />
+                <div className="flex justify-center gap-6 mt-3">
+                  <div className="flex items-center gap-2 text-sm text-gray-500">
+                    <span
+                      className="w-3 h-3 rounded-full"
+                      style={{ backgroundColor: COLORS.uncachedInputTokens }}
+                    />
+                    {t('admin.usage.promptCache.uncached', 'Uncached')}
+                  </div>
+                  <div className="flex items-center gap-2 text-sm text-gray-500">
+                    <span
+                      className="w-3 h-3 rounded-full"
+                      style={{ backgroundColor: COLORS.cacheReadTokens }}
+                    />
+                    {t('admin.usage.promptCache.cached', 'Cached')}
+                  </div>
+                </div>
+              </>
+            ) : (
+              <p className="text-sm text-gray-500 dark:text-gray-400">
+                {t(
+                  'admin.usage.promptCache.notReportedRange',
+                  'No provider reported prompt-cache usage in this range.'
+                )}
+              </p>
+            )}
           </div>
 
           {/* Messages chart */}
@@ -535,6 +658,13 @@ export default function UsageTimeline() {
             expanded={expanded.models}
             onToggle={() => toggleSection('models')}
           />
+          <BreakdownTable
+            title={t('admin.usage.promptCache.topProviders', 'Providers')}
+            data={breakdowns.providers}
+            columns={providerColumns}
+            expanded={expanded.providers}
+            onToggle={() => toggleSection('providers')}
+          />
         </>
       )}
     </div>
@@ -545,6 +675,10 @@ export default function UsageTimeline() {
 function toSortedArray(obj, idField) {
   if (!obj || typeof obj !== 'object') return [];
   return Object.entries(obj)
-    .map(([key, val]) => ({ [idField]: key, ...val }))
+    .map(([key, val]) => ({
+      [idField]: key,
+      ...val,
+      hitRatio: cacheHitRatio(val?.cacheReadTokens || 0, val?.promptTokens || 0)
+    }))
     .sort((a, b) => b.messages - a.messages);
 }

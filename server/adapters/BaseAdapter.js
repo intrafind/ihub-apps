@@ -4,6 +4,26 @@ import { getReadableStream } from '../utils/streamUtils.js';
 import { convertResponseToGeneric, clearStreamingState } from './toolCalling/index.js';
 
 /**
+ * How long a stream that asked for `stream_options.include_usage` waits for
+ * the usage frame after its finish frame. Servers send it right away; this
+ * only bounds one that keeps the body open without sending it.
+ */
+export const TRAILING_USAGE_WAIT_MS = 2000;
+
+const TIMED_OUT = Symbol('timed-out');
+
+/** `reader.read()`, or `TIMED_OUT` when nothing arrives within `ms`. */
+function readWithin(reader, ms) {
+  let timer;
+  return Promise.race([
+    reader.read(),
+    new Promise(resolve => {
+      timer = setTimeout(() => resolve(TIMED_OUT), ms);
+    })
+  ]).finally(() => clearTimeout(timer));
+}
+
+/**
  * Base adapter class for LLM providers to reduce duplication
  */
 export class BaseAdapter {
@@ -166,7 +186,9 @@ export class BaseAdapter {
    * @yields {object} Normalized result chunks consumed by LLMClient
    */
   async *parseResponseStream(response, ctx) {
-    yield* this.parseSseStream(response, ctx.model.provider, ctx.chatId);
+    yield* this.parseSseStream(response, ctx.model.provider, ctx.chatId, {
+      trailingUsage: ctx.request?.body?.stream_options?.include_usage === true
+    });
   }
 
   /**
@@ -179,14 +201,26 @@ export class BaseAdapter {
    * @param {string} [streamId] - Per-chat identifier isolating tool-call accumulation
    *   state between concurrent streams; falls back to a shared 'default' bucket
    *   (previous behavior) when the caller doesn't provide one.
+   * @param {Object} [options]
+   * @param {boolean} [options.trailingUsage=false] - The request asked for
+   *   `stream_options.include_usage`. Chat Completions then sends the usage in
+   *   one more frame *after* the `finish_reason` frame (`choices: []`), right
+   *   before `[DONE]`. The finishing chunk is held back until that frame (or
+   *   `[DONE]`, or the end of the body) arrives, and the usage is folded into
+   *   it — otherwise the stream would end on the finish frame and every
+   *   streamed call would lose its provider usage, cache counts included. A
+   *   server that sends nothing more within `TRAILING_USAGE_WAIT_MS` finishes
+   *   without usage.
    * @yields {object} Normalized result chunks
    */
-  async *parseSseStream(response, provider, streamId = 'default') {
+  async *parseSseStream(response, provider, streamId = 'default', { trailingUsage = false } = {}) {
     const readable = getReadableStream(response);
     const reader = readable.getReader();
     const decoder = new TextDecoder();
     const queue = [];
     let parsingError = null;
+    // A finishing chunk waiting for the trailing usage frame (see `trailingUsage`).
+    let held = null;
 
     const parser = createParser({
       onEvent: event => {
@@ -198,7 +232,15 @@ export class BaseAdapter {
 
     try {
       while (true) {
-        const { done, value } = await reader.read();
+        const next = held ? await readWithin(reader, TRAILING_USAGE_WAIT_MS) : await reader.read();
+        if (next === TIMED_OUT) {
+          // The server sent the finish frame and then nothing, without closing
+          // the body: finish with what arrived rather than stall the answer.
+          reader.cancel().catch(() => {});
+          yield held;
+          return;
+        }
+        const { done, value } = next;
         if (done) break;
 
         try {
@@ -233,6 +275,18 @@ export class BaseAdapter {
           try {
             const result = await convertResponseToGeneric(evt.data, provider, streamId);
             if (!result) continue;
+            if (held) {
+              // The frame after the finish frame: the usage frame or `[DONE]`.
+              if (result.metadata?.usage) {
+                held.metadata = { ...(held.metadata || {}), usage: result.metadata.usage };
+              }
+              yield held;
+              return;
+            }
+            if (trailingUsage && result.complete && !result.error && !result.metadata?.usage) {
+              held = result;
+              continue;
+            }
             yield result;
             if (result.error || result.complete) return;
           } catch (conversionErr) {
@@ -251,6 +305,12 @@ export class BaseAdapter {
             };
           }
         }
+      }
+
+      // The body ended right after the finish frame, without usage or `[DONE]`.
+      if (held) {
+        yield held;
+        return;
       }
 
       // If we had parsing errors but no events were processed, yield a final error

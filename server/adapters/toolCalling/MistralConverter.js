@@ -11,7 +11,8 @@
 import {
   convertOpenAIToolsToGeneric,
   convertGenericToolCallsToOpenAI,
-  convertOpenAIToolCallsToGeneric
+  convertOpenAIToolCallsToGeneric,
+  convertOpenAIUsageToGeneric
 } from './OpenAIConverter.js';
 
 import {
@@ -102,11 +103,7 @@ export async function convertMistralResponseToGeneric(data, _streamId = 'default
 
     // Extract usage data from streaming chunks (requires stream_options.include_usage)
     if (parsed.usage) {
-      result.metadata.usage = {
-        promptTokens: parsed.usage.prompt_tokens || 0,
-        completionTokens: parsed.usage.completion_tokens || 0,
-        totalTokens: parsed.usage.total_tokens || 0
-      };
+      result.metadata.usage = convertOpenAIUsageToGeneric(parsed.usage);
     }
 
     // Handle full response object (non-streaming)

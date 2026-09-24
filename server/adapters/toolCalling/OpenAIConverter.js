@@ -9,6 +9,7 @@ import {
   createGenericTool,
   createGenericToolCall,
   createGenericStreamingResponse,
+  createGenericUsage,
   normalizeFinishReason,
   cloneAndWalkSchema
 } from './GenericToolCalling.js';
@@ -16,6 +17,24 @@ import { isPlausibleToolName, validateProviderToolName } from './toolNameValidat
 import { buildThoughtSignatureExtraContent, extractThoughtSignature } from './thoughtSignatures.js';
 import logger from '../../utils/logger.js';
 import { parseJsonAsync } from '../../utils/asyncJson.js';
+
+/**
+ * Map a Chat Completions `usage` object onto the generic shape. Shared by the
+ * OpenAI-compatible converters (OpenAI, Mistral, vLLM). `prompt_tokens`
+ * already includes cached tokens and `completion_tokens` already includes
+ * reasoning tokens, so the detail counters are carried as-is.
+ * @param {Object} usage - provider `usage`
+ * @returns {Object} generic usage (see `createGenericUsage`)
+ */
+export function convertOpenAIUsageToGeneric(usage) {
+  return createGenericUsage({
+    promptTokens: usage.prompt_tokens,
+    completionTokens: usage.completion_tokens,
+    totalTokens: usage.total_tokens,
+    cacheReadTokens: usage.prompt_tokens_details?.cached_tokens,
+    reasoningTokens: usage.completion_tokens_details?.reasoning_tokens
+  });
+}
 
 /**
  * Sanitize a JSON Schema for OpenAI's tool `parameters`. OpenAI has no known
@@ -300,11 +319,7 @@ export async function convertOpenAIResponseToGeneric(data, streamId = 'default')
 
     // Extract usage data from streaming chunks (requires stream_options.include_usage)
     if (parsed.usage) {
-      result.metadata.usage = {
-        promptTokens: parsed.usage.prompt_tokens || 0,
-        completionTokens: parsed.usage.completion_tokens || 0,
-        totalTokens: parsed.usage.total_tokens || 0
-      };
+      result.metadata.usage = convertOpenAIUsageToGeneric(parsed.usage);
     }
 
     // Handle error responses
