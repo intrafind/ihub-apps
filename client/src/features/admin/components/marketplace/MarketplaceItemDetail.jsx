@@ -75,6 +75,8 @@ function MarketplaceItemDetail({ item: initialItem, onClose, onAction }) {
   const displayName = item?.displayName?.[lang] || item?.displayName?.en || item?.name;
   const description = item?.description?.[lang] || item?.description?.en || '';
   const isInstalled = item?.installationStatus === 'installed';
+  // Present on this instance, but not installed from the marketplace
+  const isLocal = item?.installationStatus === 'local';
 
   /**
    * Fetches full item detail from server when the panel opens.
@@ -100,13 +102,17 @@ function MarketplaceItemDetail({ item: initialItem, onClose, onAction }) {
    * Executes an item action (install, update, uninstall, or detach),
    * then refreshes the item detail and notifies the parent.
    *
-   * @param {string} action - One of: install, update, uninstall, detach
+   * @param {string} action - One of: install, replace, update, uninstall, detach
    */
   const handleAction = async action => {
     setActionLoading(action);
     try {
       if (action === 'install') {
         await installMarketplaceItem(item.registryId, item.type, item.name);
+      } else if (action === 'replace') {
+        await installMarketplaceItem(item.registryId, item.type, item.name, {
+          replaceLocal: true
+        });
       } else if (action === 'update') {
         await updateMarketplaceItem(item.registryId, item.type, item.name);
       } else if (action === 'uninstall') {
@@ -153,6 +159,11 @@ function MarketplaceItemDetail({ item: initialItem, onClose, onAction }) {
                   &#x2713; {t('admin.marketplace.installed', 'Installed')}
                 </span>
               )}
+              {isLocal && (
+                <span className="inline-flex items-center px-2 py-0.5 rounded-sm text-xs font-medium bg-amber-100 text-amber-800 dark:bg-amber-900/40 dark:text-amber-300">
+                  {t('admin.marketplace.localCopy', 'Local copy')}
+                </span>
+              )}
             </div>
             <h2 className="text-xl font-bold text-gray-900 dark:text-white">{displayName}</h2>
             {item?.author && (
@@ -170,7 +181,29 @@ function MarketplaceItemDetail({ item: initialItem, onClose, onAction }) {
 
         {/* Action buttons bar */}
         <div className="flex gap-2 px-6 py-3 bg-gray-50 dark:bg-gray-900 border-b border-gray-200 dark:border-gray-700">
-          {!isInstalled && (
+          {isLocal && (
+            <>
+              {item?.type === 'skill' && (
+                <button
+                  onClick={() => {
+                    onClose();
+                    navigate(`/admin/skills/${item.name}`);
+                  }}
+                  className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 text-sm font-medium"
+                >
+                  {t('admin.marketplace.viewSkill', 'View Skill')}
+                </button>
+              )}
+              <button
+                onClick={() => setConfirmAction('replace')}
+                disabled={!!actionLoading}
+                className="px-4 py-2 border border-amber-300 text-amber-700 dark:border-amber-700 dark:text-amber-300 rounded-lg hover:bg-amber-50 dark:hover:bg-amber-900/20 disabled:opacity-50 text-sm font-medium"
+              >
+                {t('admin.marketplace.replaceLocal', 'Replace local copy')}
+              </button>
+            </>
+          )}
+          {!isInstalled && !isLocal && (
             <button
               onClick={() => handleAction('install')}
               disabled={actionLoading === 'install'}
@@ -210,19 +243,34 @@ function MarketplaceItemDetail({ item: initialItem, onClose, onAction }) {
           )}
         </div>
 
+        {/* Why a local item cannot simply be installed */}
+        {isLocal && !confirmAction && (
+          <p className="mx-6 my-3 text-sm text-gray-600 dark:text-gray-300">
+            {t(
+              'admin.marketplace.localCopyHint',
+              'This instance already has an item with this ID that was not installed from the marketplace. Installing replaces it.'
+            )}
+          </p>
+        )}
+
         {/* Destructive action confirmation inline panel */}
         {confirmAction && (
           <div className="mx-6 my-3 p-4 bg-yellow-50 dark:bg-yellow-900/20 border border-yellow-200 dark:border-yellow-700 rounded-lg">
             <p className="text-sm text-yellow-800 dark:text-yellow-200 mb-3">
-              {confirmAction === 'uninstall'
+              {confirmAction === 'replace'
                 ? t(
-                    'admin.marketplace.confirmUninstall',
-                    `Are you sure you want to uninstall "${displayName}"? This will delete the files.`
+                    'admin.marketplace.confirmReplaceLocal',
+                    'Replace the local copy with the marketplace version? Changes made to the local copy are lost. A model keeps its API key and default setting.'
                   )
-                : t(
-                    'admin.marketplace.confirmDetach',
-                    `Detach "${displayName}" from marketplace tracking? Files will be kept.`
-                  )}
+                : confirmAction === 'uninstall'
+                  ? t(
+                      'admin.marketplace.confirmUninstall',
+                      `Are you sure you want to uninstall "${displayName}"? This will delete the files.`
+                    )
+                  : t(
+                      'admin.marketplace.confirmDetach',
+                      `Detach "${displayName}" from marketplace tracking? Files will be kept.`
+                    )}
             </p>
             <div className="flex gap-2">
               <button

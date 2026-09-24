@@ -34,7 +34,8 @@ const TYPE_COLORS = {
  * @param {string[]} [props.item.tags] - Array of tag strings for filtering
  * @param {string} [props.item.author] - Author name or organization
  * @param {string} [props.item.registryName] - Display name of the source registry
- * @param {string} [props.item.installationStatus] - One of: installed, update-available, or undefined
+ * @param {string} [props.item.installationStatus] - One of: installed, local (present on this
+ *   instance but not installed from the marketplace), available, update-available, or undefined
  * @param {Function} props.onClick - Called when the card body is clicked (open detail panel)
  * @param {Function} [props.onAction] - Called after a successful install to refresh the parent list
  */
@@ -48,6 +49,7 @@ function MarketplaceItemCard({ item, onClick, onAction }) {
   const displayName = item.displayName?.[lang] || item.displayName?.en || item.name;
   const description = item.description?.[lang] || item.description?.en || '';
   const isInstalled = item.installationStatus === 'installed';
+  const isLocal = item.installationStatus === 'local';
   const hasUpdate = item.installationStatus === 'update-available';
 
   /**
@@ -59,6 +61,11 @@ function MarketplaceItemCard({ item, onClick, onAction }) {
   const handleInstall = async e => {
     e.stopPropagation();
     if (isInstalled) return;
+    // Installing would replace the local copy — that is confirmed in the detail panel
+    if (isLocal) {
+      onClick?.();
+      return;
+    }
     setInstalling(true);
     setError(null);
     try {
@@ -92,6 +99,11 @@ function MarketplaceItemCard({ item, onClick, onAction }) {
           {isInstalled && (
             <span className="inline-flex items-center px-2 py-0.5 rounded-sm text-xs font-medium bg-green-100 text-green-800 dark:bg-green-900/40 dark:text-green-300">
               &#x2713; {t('admin.marketplace.installed', 'Installed')}
+            </span>
+          )}
+          {isLocal && (
+            <span className="inline-flex items-center px-2 py-0.5 rounded-sm text-xs font-medium bg-amber-100 text-amber-800 dark:bg-amber-900/40 dark:text-amber-300">
+              {t('admin.marketplace.localCopy', 'Local copy')}
             </span>
           )}
         </div>
@@ -134,18 +146,22 @@ function MarketplaceItemCard({ item, onClick, onAction }) {
           className={`text-xs px-3 py-1.5 rounded-lg font-medium transition-colors ${
             isInstalled
               ? 'bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-400 cursor-default'
-              : hasUpdate
-                ? 'bg-orange-600 text-white hover:bg-orange-700'
-                : 'bg-blue-600 text-white hover:bg-blue-700 disabled:opacity-50'
+              : isLocal
+                ? 'border border-amber-300 text-amber-700 hover:bg-amber-50 dark:border-amber-700 dark:text-amber-300 dark:hover:bg-amber-900/20'
+                : hasUpdate
+                  ? 'bg-orange-600 text-white hover:bg-orange-700'
+                  : 'bg-blue-600 text-white hover:bg-blue-700 disabled:opacity-50'
           }`}
         >
           {installing
             ? '...'
             : isInstalled
               ? '\u2713 ' + t('admin.marketplace.installed', 'Installed')
-              : hasUpdate
-                ? t('admin.marketplace.update', 'Update')
-                : t('admin.marketplace.install', 'Install')}
+              : isLocal
+                ? t('admin.marketplace.replaceLocal', 'Replace local copy')
+                : hasUpdate
+                  ? t('admin.marketplace.update', 'Update')
+                  : t('admin.marketplace.install', 'Install')}
         </button>
       </div>
 
