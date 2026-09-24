@@ -23,6 +23,7 @@ function ChatActionsMenu({
   showCanvasButton = false,
   appId,
   chatId,
+  showEditAppButton = true,
   // Compare mode toggle (parity with desktop header)
   showCompareModeToggle = false,
   compareModeActive = false,
@@ -62,7 +63,7 @@ function ChatActionsMenu({
       </button>
       {open && (
         <div className="absolute right-0 mt-2 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-sm shadow-lg z-20 min-w-40">
-          {user?.isAdmin && appId && (
+          {showEditAppButton && user?.isAdmin && appId && (
             <button
               onClick={() => {
                 navigate(`/admin/apps/${appId}`);

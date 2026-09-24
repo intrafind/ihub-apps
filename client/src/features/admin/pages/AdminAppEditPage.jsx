@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, useRef } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
 import DualModeEditor from '../../../shared/components/DualModeEditor';
@@ -12,6 +12,8 @@ import AdminBreadcrumb from '../components/AdminBreadcrumb';
 import { useUnsavedChanges } from '../hooks/useUnsavedChanges';
 import ConfirmDialog from '../../../shared/components/ConfirmDialog';
 import ContentAccessSection from '../components/ContentAccessSection';
+import AppTestPanel from '../components/AppTestPanel';
+import { buildPath } from '../../../utils/runtimeBasePath';
 
 function AdminAppEditPage() {
   const { t } = useTranslation();
@@ -20,7 +22,8 @@ function AdminAppEditPage() {
   const [app, setApp] = useState(null);
   const [initialData, setInitialData] = useState(null);
   const [loading, setLoading] = useState(true);
-  const [saving, setSaving] = useState(false);
+  // Which save is running: 'stay' (Save) or 'exit' (Save & Exit); null when idle.
+  const [saving, setSaving] = useState(null);
   const [error, setError] = useState(null);
   const [saveError, setSaveError] = useState(null);
   const [availableModels, setAvailableModels] = useState([]);
@@ -29,8 +32,21 @@ function AdminAppEditPage() {
   const [editingMode, setEditingMode] = useState('form');
   const [validationState, setValidationState] = useState({ isValid: true, errors: [] });
   const [historyOpen, setHistoryOpen] = useState(false);
+  const [testOpen, setTestOpen] = useState(false);
+  // Bumped after every save so the test panel reloads the saved app.
+  const [previewReloadKey, setPreviewReloadKey] = useState(0);
+  const [toast, setToast] = useState(null);
+  const toastTimerRef = useRef(null);
 
-  const { blocker, markSaved } = useUnsavedChanges(initialData, app);
+  const { isDirty, blocker, markSaved } = useUnsavedChanges(initialData, app);
+
+  const showToast = useCallback(message => {
+    clearTimeout(toastTimerRef.current);
+    setToast(message);
+    toastTimerRef.current = setTimeout(() => setToast(null), 4000);
+  }, []);
+
+  useEffect(() => () => clearTimeout(toastTimerRef.current), []);
 
   useEffect(() => {
     // Load available models, UI config, and JSON schema
@@ -303,8 +319,10 @@ function AdminAppEditPage() {
     return cleanedApp;
   };
 
-  const handleSave = async e => {
-    e.preventDefault();
+  // Save keeps the admin in the editor; Save & Exit (`exit: true`) goes back
+  // to the list, which is what saving always did before.
+  const saveApp = async ({ exit = false } = {}) => {
+    if (!app || saving) return;
 
     // Check validation state
     if (!validationState.isValid) {
@@ -315,32 +333,73 @@ function AdminAppEditPage() {
     }
 
     if (!app.id) {
-      setSaveError('App ID is required');
+      setSaveError(t('admin.apps.edit.idRequired', 'App ID is required'));
       return;
     }
 
+    // The state being saved; the admin may keep editing while the request runs.
+    const savedApp = app;
+    const isNew = appId === 'new';
+
     try {
-      setSaving(true);
+      setSaving(exit ? 'exit' : 'stay');
       setSaveError(null);
-      const method = appId === 'new' ? 'POST' : 'PUT';
-      const url = appId === 'new' ? '/admin/apps' : `/admin/apps/${appId}`;
+      const method = isNew ? 'POST' : 'PUT';
+      const url = isNew ? '/admin/apps' : `/admin/apps/${appId}`;
 
       // Clean the app data before saving
-      const cleanedApp = cleanAppData(app);
+      const cleanedApp = cleanAppData(savedApp);
 
       await makeAdminApiCall(url, {
         method,
         body: cleanedApp
       });
 
-      markSaved();
-      navigate('/admin/apps');
+      if (exit) {
+        markSaved();
+        navigate('/admin/apps');
+        return;
+      }
+
+      if (isNew) {
+        // From now on this is an existing app: later saves use PUT, and
+        // History, Download, Open app and Test become available.
+        markSaved();
+        navigate(`/admin/apps/${encodeURIComponent(savedApp.id)}`, { replace: true });
+        showToast(t('admin.apps.edit.created', 'App created'));
+        return;
+      }
+
+      // The saved state is the new baseline for the unsaved-changes check.
+      setInitialData(savedApp);
+      setPreviewReloadKey(key => key + 1);
+      showToast(t('admin.apps.edit.saved', 'App saved'));
     } catch (err) {
       setSaveError(getAdminApiErrorMessage(err));
     } finally {
-      setSaving(false);
+      setSaving(null);
     }
   };
+
+  const handleSave = e => {
+    e.preventDefault();
+    saveApp();
+  };
+
+  // Ctrl/Cmd+S saves without leaving the editor. The ref always holds the
+  // latest saveApp, so the listener is registered once.
+  const saveAppRef = useRef(saveApp);
+  saveAppRef.current = saveApp;
+  useEffect(() => {
+    const handleKeyDown = e => {
+      if (!(e.ctrlKey || e.metaKey) || e.altKey || e.shiftKey) return;
+      if (e.key !== 's' && e.key !== 'S') return;
+      e.preventDefault();
+      saveAppRef.current();
+    };
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, []);
 
   const handleAppChange = updatedApp => {
     setApp(updatedApp);
@@ -400,157 +459,252 @@ function AdminAppEditPage() {
     );
   }
 
+  const isNewApp = appId === 'new';
+  // Open app and Test run the saved app, so they follow the saved enabled
+  // state; disabled apps aren't served to the chat UI.
+  const savedEnabled = initialData?.enabled !== false;
+  const appName = app?.name?.en ?? appId;
+  const secondaryButton =
+    'inline-flex items-center justify-center rounded-md border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 px-4 py-2 text-sm font-medium text-gray-700 dark:text-gray-200 shadow-xs hover:bg-gray-50 dark:hover:bg-gray-600 focus:outline-hidden focus:ring-2 focus:ring-indigo-500 focus:ring-offset-2';
+
   return (
-    <div className="max-w-6xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
-      <AdminBreadcrumb
-        crumbs={[
-          { label: 'Admin', href: '/admin' },
-          { label: 'Apps', href: '/admin/apps' },
-          { label: appId === 'new' ? 'New App' : (app?.name?.en ?? appId) }
-        ]}
-      />
-      <div className="sm:flex sm:items-center">
-        <div className="sm:flex-auto">
-          <h1 className="text-2xl font-semibold text-gray-900 dark:text-gray-100">
-            {appId === 'new'
-              ? t('admin.apps.edit.titleNew', 'Add New App')
-              : t('admin.apps.edit.titleEdit', 'Edit App')}
-          </h1>
-          <p className="mt-2 text-sm text-gray-700 dark:text-gray-300">
-            {appId === 'new'
-              ? t('admin.apps.edit.subtitleNew', 'Configure a new iHub application')
-              : t('admin.apps.edit.subtitleEdit', 'Modify app settings and configuration')}
-          </p>
-        </div>
-        <div className="mt-4 sm:mt-0 sm:ml-16 sm:flex-none">
-          <div className="flex space-x-3">
-            {appId !== 'new' && (
-              <button
-                type="button"
-                onClick={() => setHistoryOpen(true)}
-                className="inline-flex items-center justify-center rounded-md border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 px-4 py-2 text-sm font-medium text-gray-700 dark:text-gray-200 shadow-xs hover:bg-gray-50 dark:hover:bg-gray-600 focus:outline-hidden focus:ring-2 focus:ring-indigo-500 focus:ring-offset-2 sm:w-auto"
-              >
-                <Icon name="clock" className="w-4 h-4 mr-2" />
-                {t('admin.apps.edit.history', 'History')}
-              </button>
-            )}
-            {appId !== 'new' && (
-              <button
-                type="button"
-                onClick={() => {
-                  const dataStr = JSON.stringify(app, null, 2);
-                  const dataUri =
-                    'data:application/json;charset=utf-8,' + encodeURIComponent(dataStr);
-                  const exportFileDefaultName = `app-${app.id}.json`;
-                  const linkElement = document.createElement('a');
-                  linkElement.setAttribute('href', dataUri);
-                  linkElement.setAttribute('download', exportFileDefaultName);
-                  linkElement.click();
-                }}
-                className="inline-flex items-center justify-center rounded-md border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 px-4 py-2 text-sm font-medium text-gray-700 dark:text-gray-200 shadow-xs hover:bg-gray-50 dark:hover:bg-gray-600 focus:outline-hidden focus:ring-2 focus:ring-indigo-500 focus:ring-offset-2 sm:w-auto"
-              >
-                <Icon name="download" className="w-4 h-4 mr-2" />
-                {t('common.download')}
-              </button>
-            )}
-            <button
-              type="button"
-              className="inline-flex items-center justify-center rounded-md border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 px-4 py-2 text-sm font-medium text-gray-700 dark:text-gray-200 shadow-xs hover:bg-gray-50 dark:hover:bg-gray-600 focus:outline-hidden focus:ring-2 focus:ring-indigo-500 focus:ring-offset-2 sm:w-auto"
-              onClick={() => navigate('/admin/apps')}
-            >
-              {t('admin.apps.edit.back', 'Back to Apps')}
-            </button>
+    // With the test panel open the page splits: the editor scrolls on the
+    // left, the app runs on the right (full screen below the lg breakpoint).
+    <div className={testOpen ? 'lg:flex lg:h-full' : undefined}>
+      <div className={testOpen ? 'lg:flex-1 lg:min-w-0 lg:overflow-y-auto' : undefined}>
+        <div className="max-w-6xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
+          <AdminBreadcrumb
+            crumbs={[
+              { label: 'Admin', href: '/admin' },
+              { label: 'Apps', href: '/admin/apps' },
+              { label: isNewApp ? 'New App' : appName }
+            ]}
+          />
+          {/* Wraps the actions below the title when they don't fit beside it,
+              e.g. next to the test panel. */}
+          <div className="flex flex-wrap items-center justify-between gap-4">
+            <div className="flex-auto min-w-[14rem]">
+              <h1 className="text-2xl font-semibold text-gray-900 dark:text-gray-100">
+                {isNewApp
+                  ? t('admin.apps.edit.titleNew', 'Add New App')
+                  : t('admin.apps.edit.titleEdit', 'Edit App')}
+              </h1>
+              <p className="mt-2 text-sm text-gray-700 dark:text-gray-300">
+                {isNewApp
+                  ? t('admin.apps.edit.subtitleNew', 'Configure a new iHub application')
+                  : t('admin.apps.edit.subtitleEdit', 'Modify app settings and configuration')}
+              </p>
+            </div>
+            <div className="min-w-0">
+              <div className="flex flex-wrap gap-3">
+                {!isNewApp && (
+                  <button
+                    type="button"
+                    onClick={() => setTestOpen(open => !open)}
+                    aria-expanded={testOpen}
+                    title={t(
+                      'admin.apps.edit.testHint',
+                      'Chat with the saved app next to the editor'
+                    )}
+                    className={`${secondaryButton} ${testOpen ? 'ring-2 ring-indigo-500' : ''}`}
+                  >
+                    <Icon name="beaker" className="w-4 h-4 mr-2" />
+                    {testOpen
+                      ? t('admin.apps.edit.hideTest', 'Hide test')
+                      : t('admin.apps.edit.test', 'Test')}
+                  </button>
+                )}
+                {!isNewApp &&
+                  (savedEnabled ? (
+                    <a
+                      href={buildPath(`/apps/${encodeURIComponent(appId)}`)}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      title={t('admin.apps.openAppHint', 'Open the app in a new tab')}
+                      className={secondaryButton}
+                    >
+                      <Icon name="external-link" className="w-4 h-4 mr-2" />
+                      {t('admin.apps.openApp', 'Open app')}
+                    </a>
+                  ) : (
+                    <button
+                      type="button"
+                      disabled
+                      title={t(
+                        'admin.apps.edit.openDisabledHint',
+                        'Enable the app and save to open it'
+                      )}
+                      className={`${secondaryButton} opacity-50 cursor-not-allowed`}
+                    >
+                      <Icon name="external-link" className="w-4 h-4 mr-2" />
+                      {t('admin.apps.openApp', 'Open app')}
+                    </button>
+                  ))}
+                {!isNewApp && (
+                  <button
+                    type="button"
+                    onClick={() => setHistoryOpen(true)}
+                    className={secondaryButton}
+                  >
+                    <Icon name="clock" className="w-4 h-4 mr-2" />
+                    {t('admin.apps.edit.history', 'History')}
+                  </button>
+                )}
+                {!isNewApp && (
+                  <button
+                    type="button"
+                    onClick={() => {
+                      const dataStr = JSON.stringify(app, null, 2);
+                      const dataUri =
+                        'data:application/json;charset=utf-8,' + encodeURIComponent(dataStr);
+                      const exportFileDefaultName = `app-${app.id}.json`;
+                      const linkElement = document.createElement('a');
+                      linkElement.setAttribute('href', dataUri);
+                      linkElement.setAttribute('download', exportFileDefaultName);
+                      linkElement.click();
+                    }}
+                    className={secondaryButton}
+                  >
+                    <Icon name="download" className="w-4 h-4 mr-2" />
+                    {t('common.download')}
+                  </button>
+                )}
+                <button
+                  type="button"
+                  className={secondaryButton}
+                  onClick={() => navigate('/admin/apps')}
+                >
+                  {t('admin.apps.edit.back', 'Back to Apps')}
+                </button>
+              </div>
+            </div>
           </div>
+
+          {saveError && (
+            <div className="mt-6 rounded-md bg-red-50 dark:bg-red-900/30 p-4">
+              <div className="flex">
+                <div className="shrink-0">
+                  <Icon name="x-circle" className="h-5 w-5 text-red-400" />
+                </div>
+                <div className="ml-3">
+                  <h3 className="text-sm font-medium text-red-800 dark:text-red-200">
+                    {t('admin.apps.errorTitle', 'Error')}
+                  </h3>
+                  <div className="mt-2 text-sm text-red-700 dark:text-red-300">{saveError}</div>
+                </div>
+              </div>
+            </div>
+          )}
+
+          <form onSubmit={handleSave} className="mt-8">
+            {/* Dual Mode Editor */}
+            <DualModeEditor
+              value={app}
+              onChange={handleAppChange}
+              formComponent={AppFormEditor}
+              formProps={{
+                availableModels,
+                uiConfig,
+                jsonSchema
+              }}
+              jsonSchema={jsonSchema}
+              defaultMode={editingMode}
+              onModeChange={handleModeChange}
+              onValidationChange={handleValidationChange}
+              title={
+                isNewApp
+                  ? t('admin.apps.edit.configureNewApp', 'Configure New App')
+                  : t('admin.apps.edit.editAppConfig', 'Edit App Configuration')
+              }
+              description={
+                isNewApp
+                  ? t(
+                      'admin.apps.edit.configureNewAppDesc',
+                      'Set up the configuration for your new iHub app using the form interface or JSON editor.'
+                    )
+                  : t(
+                      'admin.apps.edit.editAppConfigDesc',
+                      'Modify the app configuration using the form interface or raw JSON editor.'
+                    )
+              }
+              showValidationSummary={true}
+              className="mb-6"
+            />
+
+            {/* Group access — which groups may use this app (groups.json) */}
+            <ContentAccessSection
+              resourceType="apps"
+              resourceId={appId}
+              isNew={isNewApp}
+              className="mb-6"
+            />
+
+            {/* Save buttons: Save stays in the editor, Save & Exit returns to the list */}
+            <div className="flex flex-wrap justify-end gap-3">
+              <button
+                type="button"
+                onClick={() => navigate('/admin/apps')}
+                className="bg-white dark:bg-gray-700 py-2 px-4 border border-gray-300 dark:border-gray-600 rounded-md shadow-xs text-sm font-medium text-gray-700 dark:text-gray-200 hover:bg-gray-50 dark:hover:bg-gray-600 focus:outline-hidden focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500"
+              >
+                {t('admin.apps.edit.cancel', 'Cancel')}
+              </button>
+              <button
+                type="button"
+                onClick={() => saveApp({ exit: true })}
+                disabled={Boolean(saving) || !validationState.isValid}
+                className="inline-flex justify-center items-center py-2 px-4 border border-gray-300 dark:border-gray-600 shadow-xs text-sm font-medium rounded-md text-gray-700 dark:text-gray-200 bg-white dark:bg-gray-700 hover:bg-gray-50 dark:hover:bg-gray-600 focus:outline-hidden focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500 disabled:opacity-50 disabled:cursor-not-allowed"
+              >
+                {saving === 'exit' ? (
+                  <>
+                    <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-gray-500 mr-2"></div>
+                    {t('admin.apps.edit.saving', 'Saving...')}
+                  </>
+                ) : (
+                  t('admin.apps.edit.saveAndExit', 'Save & Exit')
+                )}
+              </button>
+              <button
+                type="submit"
+                disabled={Boolean(saving) || !validationState.isValid}
+                title={t('admin.apps.edit.saveHint', 'Save and keep editing (Ctrl+S / ⌘S)')}
+                className="inline-flex justify-center items-center py-2 px-4 border border-transparent shadow-xs text-sm font-medium rounded-md text-white bg-indigo-600 hover:bg-indigo-700 focus:outline-hidden focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500 disabled:opacity-50 disabled:cursor-not-allowed"
+              >
+                {saving === 'stay' ? (
+                  <>
+                    <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white mr-2"></div>
+                    {t('admin.apps.edit.saving', 'Saving...')}
+                  </>
+                ) : (
+                  <>
+                    <Icon name="check" className="h-4 w-4 mr-2" />
+                    {t('admin.apps.edit.save', 'Save')}
+                  </>
+                )}
+              </button>
+            </div>
+          </form>
         </div>
       </div>
 
-      {saveError && (
-        <div className="mt-6 rounded-md bg-red-50 dark:bg-red-900/30 p-4">
-          <div className="flex">
-            <div className="shrink-0">
-              <Icon name="x-circle" className="h-5 w-5 text-red-400" />
-            </div>
-            <div className="ml-3">
-              <h3 className="text-sm font-medium text-red-800 dark:text-red-200">
-                {t('admin.apps.errorTitle', 'Error')}
-              </h3>
-              <div className="mt-2 text-sm text-red-700 dark:text-red-300">{saveError}</div>
-            </div>
-          </div>
-        </div>
+      {testOpen && !isNewApp && (
+        <AppTestPanel
+          appId={appId}
+          enabled={savedEnabled}
+          isDirty={isDirty}
+          reloadKey={previewReloadKey}
+          onClose={() => setTestOpen(false)}
+        />
       )}
 
-      <form onSubmit={handleSave} className="mt-8">
-        {/* Dual Mode Editor */}
-        <DualModeEditor
-          value={app}
-          onChange={handleAppChange}
-          formComponent={AppFormEditor}
-          formProps={{
-            availableModels,
-            uiConfig,
-            jsonSchema
-          }}
-          jsonSchema={jsonSchema}
-          defaultMode={editingMode}
-          onModeChange={handleModeChange}
-          onValidationChange={handleValidationChange}
-          title={
-            appId === 'new'
-              ? t('admin.apps.edit.configureNewApp', 'Configure New App')
-              : t('admin.apps.edit.editAppConfig', 'Edit App Configuration')
-          }
-          description={
-            appId === 'new'
-              ? t(
-                  'admin.apps.edit.configureNewAppDesc',
-                  'Set up the configuration for your new iHub app using the form interface or JSON editor.'
-                )
-              : t(
-                  'admin.apps.edit.editAppConfigDesc',
-                  'Modify the app configuration using the form interface or raw JSON editor.'
-                )
-          }
-          showValidationSummary={true}
-          className="mb-6"
-        />
-
-        {/* Group access — which groups may use this app (groups.json) */}
-        <ContentAccessSection
-          resourceType="apps"
-          resourceId={appId}
-          isNew={appId === 'new'}
-          className="mb-6"
-        />
-
-        {/* Save Button */}
-        <div className="flex justify-end space-x-3">
-          <button
-            type="button"
-            onClick={() => navigate('/admin/apps')}
-            className="bg-white dark:bg-gray-700 py-2 px-4 border border-gray-300 dark:border-gray-600 rounded-md shadow-xs text-sm font-medium text-gray-700 dark:text-gray-200 hover:bg-gray-50 dark:hover:bg-gray-600 focus:outline-hidden focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500"
-          >
-            {t('admin.apps.edit.cancel', 'Cancel')}
-          </button>
-          <button
-            type="submit"
-            disabled={saving || !validationState.isValid}
-            className="inline-flex justify-center py-2 px-4 border border-transparent shadow-xs text-sm font-medium rounded-md text-white bg-indigo-600 hover:bg-indigo-700 focus:outline-hidden focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500 disabled:opacity-50 disabled:cursor-not-allowed"
-          >
-            {saving ? (
-              <div className="flex items-center">
-                <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white mr-2"></div>
-                {t('admin.apps.edit.saving', 'Saving...')}
-              </div>
-            ) : (
-              <div className="flex items-center">
-                <Icon name="check" className="h-4 w-4 mr-2" />
-                {t('admin.apps.edit.save', 'Save App')}
-              </div>
-            )}
-          </button>
+      {toast && (
+        <div
+          role="status"
+          className="fixed top-4 left-1/2 -translate-x-1/2 z-50 flex items-center gap-2 rounded-md bg-green-600 px-4 py-2 text-sm text-white shadow-lg"
+        >
+          <Icon name="check-circle" className="h-4 w-4" />
+          {toast}
         </div>
-      </form>
+      )}
 
       <ChangeHistoryDrawer
         isOpen={historyOpen}

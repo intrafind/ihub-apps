@@ -15,6 +15,7 @@ import {
   toggleApps
 } from '../../../api/adminApi';
 import { fetchUIConfig } from '../../../api';
+import { buildPath } from '../../../utils/runtimeBasePath';
 import ConfirmDialog from '../../../shared/components/ConfirmDialog';
 import ReorderableList from '../components/ReorderableList';
 import { DataTable, SearchInput, FilterSelect } from '../components/data-table';
@@ -326,6 +327,21 @@ function AdminAppsPage() {
   ];
 
   const actions = [
+    {
+      // A new tab keeps the admin list (filters, scroll) where it was. Disabled
+      // apps aren't served to the chat UI, so there is nothing to open.
+      id: 'open',
+      label: t('admin.apps.openApp', 'Open app'),
+      title: app =>
+        app.enabled === false
+          ? t('admin.apps.openDisabledHint', 'Enable the app to open it')
+          : t('admin.apps.openAppHint', 'Open the app in a new tab'),
+      icon: 'external-link',
+      priority: 'primary',
+      href: app => buildPath(`/apps/${encodeURIComponent(app.id)}`),
+      target: '_blank',
+      disabled: app => app.enabled === false
+    },
     {
       id: 'edit',
       label: t('admin.apps.actions.edit', 'Edit'),

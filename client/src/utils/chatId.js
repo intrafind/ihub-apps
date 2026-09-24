@@ -1,6 +1,15 @@
 import { v4 as uuidv4 } from 'uuid';
 
 /**
+ * A new chat id that is not stored anywhere. For surfaces that must not share
+ * this tab's chat with the app page, such as the admin app editor's test panel.
+ *
+ * @param {string} [prefix='chat'] - Prefix for the generated id
+ * @returns {string} The chat id
+ */
+export const mintChatId = (prefix = 'chat') => `${prefix}-${uuidv4()}`;
+
+/**
  * Retrieve a chat ID for the given app from sessionStorage or generate a new one.
  * A new ID will only be created if none is stored.
  *

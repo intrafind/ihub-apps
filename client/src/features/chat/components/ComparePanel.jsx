@@ -39,6 +39,7 @@ const ComparePanel = forwardRef(function ComparePanel(
     onClarificationSubmit,
     onClarificationSkip,
     onDocumentAction,
+    linkPath,
     ephemeral
   },
   ref
@@ -174,6 +175,7 @@ const ComparePanel = forwardRef(function ComparePanel(
           onClarificationSubmit={onClarificationSubmit}
           onClarificationSkip={onClarificationSkip}
           onDocumentAction={onDocumentAction}
+          linkPath={linkPath}
           compact={true}
         />
       </div>

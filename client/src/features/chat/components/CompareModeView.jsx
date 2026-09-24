@@ -31,6 +31,7 @@ const CompareModeView = forwardRef(function CompareModeView(
     onClarificationSubmit,
     onClarificationSkip,
     onDocumentAction,
+    linkPath,
     ephemeral
   },
   ref
@@ -103,6 +104,7 @@ const CompareModeView = forwardRef(function CompareModeView(
           onClarificationSubmit={onClarificationSubmit}
           onClarificationSkip={onClarificationSkip}
           onDocumentAction={onDocumentAction}
+          linkPath={linkPath}
           ephemeral={ephemeral}
         />
       ))}
