@@ -325,3 +325,42 @@ describe('runReducer — sequence gaps and re-sync', () => {
     expect(getRun(cleared, 'run-c').text).toBe(getRun(state, 'run-c').text);
   });
 });
+
+describe('runReducer — streamed reasoning', () => {
+  const start = [
+    env(1, 'chat-1', 'stream/connected', { runId: 'chat-1', lastSeq: 0, protocol: 2 }),
+    env(2, 'run-r', 'run/started', { kind: 'chat', refs: { chatId: 'chat-1' } })
+  ];
+  const thought = (seq, content, meta) =>
+    env(seq, 'run-r', 'step/delta', { step: 0, kind: 'thinking', content, ...(meta && { meta }) });
+
+  test('merges per-token reasoning deltas into one entry', () => {
+    // vLLM streams `delta.reasoning` one token at a time; without merging this
+    // rendered as one bullet per word.
+    const run = getRun(
+      fold([...start, thought(3, 'The '), thought(4, 'user '), thought(5, 'is asking')]),
+      'run-r'
+    );
+    expect(run.thinking).toEqual(['The user is asking']);
+    expect(run.steps[0].thinking).toEqual(['The user is asking']);
+  });
+
+  test('keeps named thoughts discrete and does not merge across them', () => {
+    const run = getRun(
+      fold([
+        ...start,
+        thought(3, 'wei'),
+        thought(4, 'ghing'),
+        thought(5, 'let me think', { name: 'planning' }),
+        thought(6, 'now '),
+        thought(7, 'answering')
+      ]),
+      'run-r'
+    );
+    expect(run.thinking).toEqual([
+      'weighing',
+      { name: 'planning', content: 'let me think' },
+      'now answering'
+    ]);
+  });
+});

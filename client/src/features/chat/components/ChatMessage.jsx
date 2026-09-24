@@ -826,7 +826,10 @@ function ChatMessage({
             {showThoughts && (
               <ul className="list-disc pl-4 mt-1 space-y-1">
                 {message.thoughts.map((th, idx) => (
-                  <li key={idx}>
+                  /* Streamed reasoning is one merged block of text and carries its
+                     own line breaks (numbered steps, blank lines); without this it
+                     collapses into a single run-on paragraph. */
+                  <li key={idx} className="whitespace-pre-wrap">
                     {typeof th === 'string'
                       ? th
                       : t(`thoughts.${th.name}`, {
