@@ -106,18 +106,20 @@ jest.mock('../../../client/src/shared/hooks/useFileUploadHandler', () => ({
   })
 }));
 
-// The panel's own snapshot is still loading when a handed-over message goes
-// out — the handoff must not depend on it.
+// The mail snapshot is the panel's only source of truth for which email is
+// open. Tests drive it directly: `openItem(id)` sets what the next render
+// sees, exactly as a published read would.
+const mockSnapshot = { loading: false, ctx: null };
 jest.mock('../../../client/src/features/office/hooks/useOutlookMailContextSnapshot', () => ({
   __esModule: true,
   default: () => ({
-    loading: true,
-    ctx: null,
+    loading: mockSnapshot.loading,
+    ctx: mockSnapshot.ctx,
     visibleAttachments: [],
     removedAttachmentIds: new Set(),
     removeAttachment: jest.fn(),
     restoreAttachments: jest.fn(),
-    buildSnapshotOverride: () => null,
+    buildSnapshotOverride: () => mockSnapshot.ctx,
     includeBody: true,
     setIncludeBody: jest.fn(),
     generation: 0
@@ -200,34 +202,41 @@ const app = {
 };
 
 function openItem(itemId) {
-  global.Office = {
-    context: { mailbox: { item: itemId ? { itemId, itemType: 'message' } : null } }
-  };
+  mockSnapshot.loading = false;
+  mockSnapshot.ctx = itemId
+    ? { available: true, itemId, itemKind: 'message', subject: `Mail ${itemId}`, attachments: [] }
+    : { available: false, reason: 'no item', attachments: [] };
 }
 
-function fire(source) {
-  act(() => {
-    document.dispatchEvent(new CustomEvent('ihub:itemchanged', { detail: { source } }));
-  });
+/** What the pane looks like between reads: no item known yet. */
+function reloading() {
+  mockSnapshot.loading = true;
+  mockSnapshot.ctx = null;
 }
 
 const messages = () => screen.getByRole('list', { name: 'messages' });
 
+// A fresh element every time: re-rendering the identical element object lets
+// React bail out of the subtree, and the panel would never see the new item.
+const panel = () => (
+  <MemoryRouter initialEntries={['/chat']}>
+    <OfficeChatPanel
+      authData={{ user: { name: 'Ada' } }}
+      selectedApp={app}
+      setSelectedApp={jest.fn()}
+      onLogout={jest.fn()}
+      homePath="/start"
+    />
+  </MemoryRouter>
+);
+
 function renderPanelWithAnswer() {
-  render(
-    <MemoryRouter initialEntries={['/chat']}>
-      <OfficeChatPanel
-        authData={{ user: { name: 'Ada' } }}
-        selectedApp={app}
-        setSelectedApp={jest.fn()}
-        onLogout={jest.fn()}
-        homePath="/start"
-      />
-    </MemoryRouter>
-  );
+  const { rerender } = render(panel());
   fireEvent.change(screen.getByLabelText('message'), { target: { value: 'Summarize' } });
   fireEvent.click(screen.getByRole('button', { name: 'Send' }));
   expect(messages()).toHaveTextContent('Answer');
+  // Re-render so the panel observes whatever `openItem` / `reloading` set.
+  return () => act(() => rerender(panel()));
 }
 
 beforeEach(() => {
@@ -237,43 +246,52 @@ beforeEach(() => {
   openItem('ITEM-A');
 });
 
-afterEach(() => {
-  delete global.Office;
-});
-
-test('repeated events for the same item leave the conversation untouched', () => {
-  renderPanelWithAnswer();
+test('repeated reads of the same item leave the conversation untouched', () => {
+  const settle = renderPanelWithAnswer();
   fireEvent.change(screen.getByLabelText('message'), { target: { value: 'half-typed' } });
 
-  fire('ItemChanged');
-  fire('ItemChanged');
-  fire('SelectedItemsChanged');
+  // Re-selecting the open email / a list refresh: every read returns ITEM-A.
+  openItem('ITEM-A');
+  settle();
+  openItem('ITEM-A');
+  settle();
 
   expect(mockClearMessages).not.toHaveBeenCalled();
   expect(messages()).toHaveTextContent('Answer');
   expect(screen.getByLabelText('message')).toHaveValue('half-typed');
 });
 
-test('a selection change never clears the chat, even when the live item differs', () => {
-  renderPanelWithAnswer();
+test('the reload gap between two reads of the same item does not clear the chat', () => {
+  const settle = renderPanelWithAnswer();
 
-  openItem('ITEM-B');
-  fire('SelectedItemsChanged');
-  // Deselecting / multi-selecting leaves no single item open.
+  reloading();
+  settle();
+  openItem('ITEM-A');
+  settle();
+
+  expect(mockClearMessages).not.toHaveBeenCalled();
+  expect(messages()).toHaveTextContent('Answer');
+});
+
+test('deselecting / multi-selecting does not clear the chat', () => {
+  const settle = renderPanelWithAnswer();
+
   openItem(null);
-  fire('ItemChanged');
+  settle();
 
   expect(mockClearMessages).not.toHaveBeenCalled();
   expect(messages()).toHaveTextContent('Answer');
 });
 
 test('a different email starts a new chat that can be undone', () => {
-  renderPanelWithAnswer();
+  const settle = renderPanelWithAnswer();
   fireEvent.change(screen.getByLabelText('message'), { target: { value: 'follow-up' } });
 
+  // A real switch: the strip blanks while the read runs, then publishes B.
+  reloading();
+  settle();
   openItem('ITEM-B');
-  fire('SelectedItemsChanged');
-  fire('ItemChanged');
+  settle();
 
   expect(mockClearMessages).toHaveBeenCalledTimes(1);
   expect(messages()).not.toHaveTextContent('Answer');
@@ -287,14 +305,31 @@ test('a different email starts a new chat that can be undone', () => {
   expect(screen.queryByRole('button', { name: 'Restore previous chat' })).not.toBeInTheDocument();
 });
 
+// #2470/#2509: the chat used to key off `Office.context.mailbox.item.itemId`
+// read at event time. That id lags the selection, so the reset landed one
+// email behind — the pane answered about a mail it was no longer showing.
+// Nothing may consult it: the panel follows the published snapshot only.
+test('the chat follows the published snapshot, not the lagging live item id', () => {
+  global.Office = { context: { mailbox: { item: { itemId: 'ITEM-A' } } } };
+  try {
+    const settle = renderPanelWithAnswer();
+
+    openItem('ITEM-B');
+    settle();
+
+    expect(mockClearMessages).toHaveBeenCalledTimes(1);
+    expect(messages()).not.toHaveTextContent('Answer');
+  } finally {
+    delete global.Office;
+  }
+});
+
 test('an answer still streaming is not cleared by an item change', () => {
-  renderPanelWithAnswer();
+  const settle = renderPanelWithAnswer();
   mockProcessing = true;
-  // Re-render so the panel sees the adapter's processing state.
-  fireEvent.change(screen.getByLabelText('message'), { target: { value: 'more' } });
 
   openItem('ITEM-B');
-  fire('ItemChanged');
+  settle();
 
   expect(mockClearMessages).not.toHaveBeenCalled();
   expect(messages()).toHaveTextContent('Answer');

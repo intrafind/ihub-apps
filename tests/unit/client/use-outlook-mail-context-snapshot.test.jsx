@@ -135,111 +135,16 @@ test('rapid successive item changes: only the newest load publishes', async () =
   expect(result.current.ctx?.itemId).toBe('C');
 });
 
-test('per-email edits (removed attachments, include-body) reset on item change', async () => {
-  const loads = [];
-  mockHostImpl = {
-    kind: 'office',
-    readMessageContext: jest.fn(() => {
-      const d = deferred();
-      loads.push(d);
-      return d.promise;
-    })
-  };
-
-  const { result } = renderHook(() => useOutlookMailContextSnapshot());
-  await act(async () => {
-    loads[0].resolve({
-      available: true,
-      itemId: 'A',
-      subject: 'Mail A',
-      attachments: [{ id: 'a1', name: 'doc.pdf' }]
-    });
-  });
-
-  act(() => {
-    result.current.removeAttachment('a1');
-    result.current.setIncludeBody(false);
-  });
-  expect(result.current.removedAttachmentIds.has('a1')).toBe(true);
-  expect(result.current.includeBody).toBe(false);
-  const generationBefore = result.current.generation;
-
-  await act(async () => {
-    dispatchItemChanged();
-  });
-  expect(result.current.removedAttachmentIds.size).toBe(0);
-  expect(result.current.includeBody).toBe(true);
-  expect(result.current.generation).toBe(generationBefore + 1);
-});
-
-test('an event for the email already open keeps the per-email edits (issue #2450)', async () => {
-  global.Office = { context: { mailbox: { item: { itemId: 'A' } } } };
-  try {
-    const loads = [];
-    mockHostImpl = {
-      kind: 'office',
-      readMessageContext: jest.fn(() => {
-        const d = deferred();
-        loads.push(d);
-        return d.promise;
-      })
-    };
-
-    const { result } = renderHook(() => useOutlookMailContextSnapshot());
-    await act(async () => {
-      loads[0].resolve({
-        available: true,
-        itemId: 'A',
-        attachments: [{ id: 'a1', name: 'doc.pdf' }]
-      });
-    });
-    act(() => {
-      result.current.removeAttachment('a1');
-      result.current.setIncludeBody(false);
-    });
-
-    // Re-selecting the same message / a list refresh.
-    await act(async () => {
-      dispatchItemChanged();
-    });
-    expect(result.current.removedAttachmentIds.has('a1')).toBe(true);
-    expect(result.current.includeBody).toBe(false);
-
-    // A genuinely different email still starts clean.
-    global.Office.context.mailbox.item = { itemId: 'B' };
-    await act(async () => {
-      dispatchItemChanged();
-    });
-    expect(result.current.removedAttachmentIds.size).toBe(0);
-    expect(result.current.includeBody).toBe(true);
-  } finally {
-    delete global.Office;
-  }
-});
-
-function dispatchSelectionChanged() {
-  document.dispatchEvent(
-    new CustomEvent('ihub:itemchanged', { detail: { source: 'SelectedItemsChanged' } })
-  );
-}
-
-function dispatchOutlookItemChanged() {
-  document.dispatchEvent(
-    new CustomEvent('ihub:itemchanged', { detail: { source: 'ItemChanged' } })
-  );
-}
-
-function mailCtx(itemId) {
-  return { available: true, itemId, subject: `Mail ${itemId}`, attachments: [] };
+function mailCtx(itemId, attachments = []) {
+  return { available: true, itemId, subject: `Mail ${itemId}`, attachments };
 }
 
 const NO_ITEM = { available: false, reason: 'no item', attachments: [] };
 
-describe('switching emails', () => {
+describe('per-email edits', () => {
   let loads;
 
   beforeEach(() => {
-    global.Office = { context: { mailbox: { item: { itemId: 'A' } } } };
     loads = [];
     mockHostImpl = {
       kind: 'office',
@@ -251,8 +156,80 @@ describe('switching emails', () => {
     };
   });
 
-  afterEach(() => {
-    delete global.Office;
+  async function mountWithEmailA() {
+    const hook = renderHook(() => useOutlookMailContextSnapshot());
+    await act(async () => {
+      loads[0].resolve(mailCtx('A', [{ id: 'a1', name: 'doc.pdf' }]));
+    });
+    expect(hook.result.current.ctx?.itemId).toBe('A');
+    act(() => {
+      hook.result.current.removeAttachment('a1');
+      hook.result.current.setIncludeBody(false);
+    });
+    expect(hook.result.current.removedAttachmentIds.has('a1')).toBe(true);
+    expect(hook.result.current.includeBody).toBe(false);
+    return hook;
+  }
+
+  async function reloadReturning(ctx) {
+    await act(async () => {
+      dispatchItemChanged();
+      jest.advanceTimersByTime(150);
+    });
+    await act(async () => {
+      loads[loads.length - 1].resolve(ctx);
+    });
+  }
+
+  test('reset when the read returns a different email', async () => {
+    const { result } = await mountWithEmailA();
+    const generationBefore = result.current.generation;
+
+    await reloadReturning(mailCtx('B'));
+
+    expect(result.current.ctx?.itemId).toBe('B');
+    expect(result.current.removedAttachmentIds.size).toBe(0);
+    expect(result.current.includeBody).toBe(true);
+    expect(result.current.generation).toBeGreaterThan(generationBefore);
+  });
+
+  test('survive an event for the email already open (issue #2450)', async () => {
+    const { result } = await mountWithEmailA();
+    const generationBefore = result.current.generation;
+
+    // Re-selecting the open email / a list refresh: the read returns A again.
+    await reloadReturning(mailCtx('A', [{ id: 'a1', name: 'doc.pdf' }]));
+
+    expect(result.current.ctx?.itemId).toBe('A');
+    expect(result.current.removedAttachmentIds.has('a1')).toBe(true);
+    expect(result.current.includeBody).toBe(false);
+    expect(result.current.generation).toBe(generationBefore);
+  });
+
+  test('reset when the read finds no item at all (deselect, multi-select)', async () => {
+    const { result } = await mountWithEmailA();
+
+    await reloadReturning(NO_ITEM);
+
+    expect(result.current.ctx?.itemId).toBeUndefined();
+    expect(result.current.removedAttachmentIds.size).toBe(0);
+    expect(result.current.includeBody).toBe(true);
+  });
+});
+
+describe('switching emails', () => {
+  let loads;
+
+  beforeEach(() => {
+    loads = [];
+    mockHostImpl = {
+      kind: 'office',
+      readMessageContext: jest.fn(() => {
+        const d = deferred();
+        loads.push(d);
+        return d.promise;
+      })
+    };
   });
 
   async function mountWithEmailA() {
@@ -264,17 +241,45 @@ describe('switching emails', () => {
     return hook;
   }
 
-  test('SelectedItemsChanged reads in the background and shows the new email once the read returns it', async () => {
+  // The regression behind #2470/#2505/#2509: every one of those gated the
+  // re-read (or its publication) on `Office.context.mailbox.item.itemId`,
+  // which Outlook keeps pointing at the previous email for a while after the
+  // switch. With a lagging id the gate said "same item" and the pane stayed
+  // on the old email — permanently, because nothing retried. The hook must
+  // not consult that id at all.
+  test('switches even when mailbox.item.itemId still names the old email', async () => {
+    global.Office = { context: { mailbox: { item: { itemId: 'A' } } } };
+    try {
+      const { result } = await mountWithEmailA();
+
+      await act(async () => {
+        dispatchItemChanged();
+        jest.advanceTimersByTime(150);
+      });
+      expect(loads).toHaveLength(2);
+
+      await act(async () => {
+        loads[1].resolve(mailCtx('B'));
+      });
+      expect(result.current.ctx?.itemId).toBe('B');
+    } finally {
+      delete global.Office;
+    }
+  });
+
+  // ItemChanged then SelectedItemsChanged is what Outlook desktop fires for
+  // one click. #2509 cancelled the first load and let the second one decline
+  // to publish, leaving the hook stuck at { loading: true, ctx: null }.
+  test.each([
+    ['ItemChanged then SelectedItemsChanged', ['ItemChanged', 'SelectedItemsChanged']],
+    ['SelectedItemsChanged then ItemChanged', ['SelectedItemsChanged', 'ItemChanged']]
+  ])('%s coalesces into one read that publishes', async (_name, sources) => {
     const { result } = await mountWithEmailA();
 
     await act(async () => {
-      dispatchSelectionChanged();
-    });
-    // The strip keeps A while the read runs — no blank "Email context".
-    expect(result.current.loading).toBe(false);
-    expect(result.current.ctx?.itemId).toBe('A');
-
-    await act(async () => {
+      for (const source of sources) {
+        document.dispatchEvent(new CustomEvent('ihub:itemchanged', { detail: { source } }));
+      }
       jest.advanceTimersByTime(150);
     });
     expect(loads).toHaveLength(2);
@@ -284,150 +289,28 @@ describe('switching emails', () => {
     });
     expect(result.current.loading).toBe(false);
     expect(result.current.ctx?.itemId).toBe('B');
-
-    // A settled read of a different email needs no verification read.
-    await act(async () => {
-      jest.advanceTimersByTime(2000);
-    });
-    expect(loads).toHaveLength(2);
   });
 
-  test('regression: the pane switches even when mailbox.item.itemId still names the old email', async () => {
-    const { result } = await mountWithEmailA();
-    act(() => {
-      result.current.removeAttachment('a1');
-      result.current.setIncludeBody(false);
-    });
-
-    // The user clicks B. Outlook fires both events while the synchronous
-    // item id still says A (the host hands out the cached previous item).
-    await act(async () => {
-      dispatchSelectionChanged();
-      dispatchOutlookItemChanged();
-      jest.advanceTimersByTime(150);
-    });
-    expect(result.current.loading).toBe(true);
-    expect(loads).toHaveLength(2);
-
-    // The read itself already runs against the new email.
-    await act(async () => {
-      loads[1].resolve(mailCtx('B'));
-    });
-    expect(result.current.loading).toBe(false);
-    expect(result.current.ctx?.itemId).toBe('B');
-    // The edits belonged to A and are gone with it.
-    expect(result.current.removedAttachmentIds.size).toBe(0);
-    expect(result.current.includeBody).toBe(true);
-
-    await act(async () => {
-      jest.advanceTimersByTime(2000);
-    });
-    expect(loads).toHaveLength(2);
-  });
-
-  test('a read that still returned the previous email is verified once more', async () => {
+  // No id gate means no way to get wedged: even a read that comes back with
+  // the old email publishes, so the next event starts from a settled state
+  // instead of an indefinite loading one.
+  test('a read that returned the old email still publishes', async () => {
     const { result } = await mountWithEmailA();
 
-    // ItemChanged fires, but the read lands before the host swapped the item
-    // and returns A again.
     await act(async () => {
-      dispatchOutlookItemChanged();
+      dispatchItemChanged();
       jest.advanceTimersByTime(150);
     });
-    expect(loads).toHaveLength(2);
     await act(async () => {
       loads[1].resolve(mailCtx('A'));
-    });
-    // Not shown yet: the pane waits for the verification read…
-    expect(result.current.loading).toBe(true);
-    expect(loads).toHaveLength(2);
-
-    await act(async () => {
-      jest.advanceTimersByTime(400);
-    });
-    expect(loads).toHaveLength(3);
-    await act(async () => {
-      loads[2].resolve(mailCtx('B'));
-    });
-    // …which brings the email the user actually selected.
-    expect(result.current.loading).toBe(false);
-    expect(result.current.ctx?.itemId).toBe('B');
-  });
-
-  test('ItemChanged for the same email publishes it after the verification read', async () => {
-    const { result } = await mountWithEmailA();
-
-    await act(async () => {
-      dispatchOutlookItemChanged();
-      jest.advanceTimersByTime(150);
-      loads[1].resolve(mailCtx('A'));
-    });
-    await act(async () => {
-      jest.advanceTimersByTime(400);
-    });
-    expect(loads).toHaveLength(3);
-    await act(async () => {
-      loads[2].resolve(mailCtx('A'));
-    });
-    expect(result.current.loading).toBe(false);
-    expect(result.current.ctx?.itemId).toBe('A');
-    // The budget is spent: no further reads.
-    await act(async () => {
-      jest.advanceTimersByTime(2000);
-    });
-    expect(loads).toHaveLength(3);
-  });
-
-  test('re-selecting the open email or a list refresh changes nothing on screen', async () => {
-    const { result } = await mountWithEmailA();
-    const shown = result.current.ctx;
-    act(() => {
-      result.current.removeAttachment('a1');
-    });
-
-    await act(async () => {
-      dispatchSelectionChanged();
-      dispatchSelectionChanged();
-      jest.advanceTimersByTime(150);
-    });
-    // The burst costs one background read…
-    expect(loads).toHaveLength(2);
-    expect(result.current.loading).toBe(false);
-    await act(async () => {
-      loads[1].resolve(mailCtx('A'));
-    });
-    // …plus one verification read, since the result looks like a stale one.
-    await act(async () => {
-      jest.advanceTimersByTime(400);
-    });
-    expect(loads).toHaveLength(3);
-    await act(async () => {
-      loads[2].resolve(mailCtx('A'));
-      jest.advanceTimersByTime(2000);
-    });
-    expect(loads).toHaveLength(3);
-    // Same email: the snapshot object and the edits are untouched.
-    expect(result.current.ctx).toBe(shown);
-    expect(result.current.loading).toBe(false);
-    expect(result.current.removedAttachmentIds.has('a1')).toBe(true);
-  });
-
-  test('a brief gap with no item during the switch does not blank the strip', async () => {
-    const { result } = await mountWithEmailA();
-
-    await act(async () => {
-      dispatchSelectionChanged();
-      jest.advanceTimersByTime(150);
-    });
-    // The read lands mid-swap and finds no item.
-    await act(async () => {
-      loads[1].resolve(NO_ITEM);
     });
     expect(result.current.loading).toBe(false);
     expect(result.current.ctx?.itemId).toBe('A');
 
+    // And the next event reads again, rather than being gated away.
     await act(async () => {
-      jest.advanceTimersByTime(400);
+      dispatchItemChanged();
+      jest.advanceTimersByTime(150);
     });
     expect(loads).toHaveLength(3);
     await act(async () => {
@@ -436,48 +319,20 @@ describe('switching emails', () => {
     expect(result.current.ctx?.itemId).toBe('B');
   });
 
-  test('when the item is really gone (deselect, multi-select) the verified empty state is shown', async () => {
-    const { result } = await mountWithEmailA();
+  test('no extra verification reads are scheduled', async () => {
+    await mountWithEmailA();
 
     await act(async () => {
-      dispatchSelectionChanged();
+      dispatchItemChanged();
       jest.advanceTimersByTime(150);
-      loads[1].resolve(NO_ITEM);
     });
     await act(async () => {
-      jest.advanceTimersByTime(400);
-    });
-    expect(loads).toHaveLength(3);
-    await act(async () => {
-      loads[2].resolve(NO_ITEM);
-    });
-    expect(result.current.loading).toBe(false);
-    expect(result.current.ctx).toEqual(NO_ITEM);
-  });
-
-  test('a newer event supersedes a pending verification read', async () => {
-    const { result } = await mountWithEmailA();
-
-    await act(async () => {
-      dispatchSelectionChanged();
-      jest.advanceTimersByTime(150);
       loads[1].resolve(mailCtx('A'));
     });
-    // Verification pending (400 ms). ItemChanged arrives first.
+
     await act(async () => {
-      jest.advanceTimersByTime(100);
-      dispatchOutlookItemChanged();
-      jest.advanceTimersByTime(150);
+      jest.advanceTimersByTime(5000);
     });
-    expect(loads).toHaveLength(3);
-    await act(async () => {
-      loads[2].resolve(mailCtx('B'));
-    });
-    expect(result.current.ctx?.itemId).toBe('B');
-    // The superseded verification never ran.
-    await act(async () => {
-      jest.advanceTimersByTime(2000);
-    });
-    expect(loads).toHaveLength(3);
+    expect(loads).toHaveLength(2);
   });
 });

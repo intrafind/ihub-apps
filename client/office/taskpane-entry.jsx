@@ -64,9 +64,10 @@ Office.onReady(async () => {
   // chat panel can refresh its current-item state and the "Add email(s)"
   // control stays in sync with the live Outlook selection. Issue #1553.
   if (Office.context?.mailbox?.addHandlerAsync) {
-    // `detail.source` tells listeners which Outlook event fired: only
-    // ItemChanged may start a new chat — a selection change never does
-    // (issue #2450, see utilities/officeItemChange.js).
+    // `detail.source` is carried for diagnostics only. Listeners treat both
+    // events the same and re-read the item; which email is open is decided
+    // by what that read returns, never by the event or by the synchronous
+    // `Office.context.mailbox.item.itemId`, which lags the selection (#2509).
     const dispatchItemChanged = source => () =>
       document.dispatchEvent(new CustomEvent('ihub:itemchanged', { detail: { source } }));
     Office.context.mailbox.addHandlerAsync(
