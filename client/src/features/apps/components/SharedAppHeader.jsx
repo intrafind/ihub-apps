@@ -56,8 +56,6 @@ function SharedAppHeader({
   showParameters,
   onShare,
   showShareButton = false,
-  onShareChat,
-  showShareChatButton = false,
   conversationTitle = null,
 
   // Compare mode props
@@ -148,8 +146,6 @@ function SharedAppHeader({
           parametersVisible={showParameters}
           onShare={onShare}
           showShareButton={showShareButton}
-          onShareChat={onShareChat}
-          showShareChatButton={showShareChatButton}
           messages={messages}
           exportSettings={exportSettings}
           appId={appId}
