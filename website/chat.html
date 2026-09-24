@@ -1,0 +1,201 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>AI Chat for Teams | iHub Apps</title>
+<meta name="description" content="Model-agnostic, intuitive AI chat for everyday use by the whole organization: files, voice, web search with citations, diagrams, compare mode, canvas and chat history. Self-hosted.">
+<meta property="og:title" content="AI Chat for Teams | iHub Apps">
+<meta property="og:description" content="Model-agnostic, intuitive AI chat for everyday use by the whole organization: files, voice, web search with citations, diagrams, compare mode, canvas and chat history. Self-hosted.">
+<meta property="og:type" content="website">
+<meta property="og:image" content="assets/screenshots/chat-answer.webp">
+<link rel="icon" href="assets/img/favicon.ico">
+<link rel="stylesheet" href="assets/css/site.css">
+</head>
+<body>
+<a class="skip" href="#main">Skip to content</a>
+<header class="nav" id="top">
+  <div class="wrap">
+    <a class="brand" href="index.html" aria-label="iHub Apps home"><img src="assets/img/ihub-mark.svg" alt=""><span>iHub <b>Apps</b></span></a>
+    <ul class="nav-links">
+      <li><button type="button" aria-expanded="false" aria-haspopup="true">Platform <svg class="" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m6 9 6 6 6-6"/></svg></button><div class="menu"><a href="chat.html"><span class="ico"><svg class="" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M21 12a8 8 0 0 1-8 8H7l-4 3v-6.5A8 8 0 1 1 21 12z"/></svg></span><span><strong>Chat</strong><small>Model-agnostic chat for everyone in the company.</small></span></a><a href="apps.html"><span class="ico"><svg class="" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="3" y="3" width="7" height="7" rx="1.5"/><rect x="14" y="3" width="7" height="7" rx="1.5"/><rect x="3" y="14" width="7" height="7" rx="1.5"/><rect x="14" y="14" width="7" height="7" rx="1.5"/></svg></span><span><strong>Apps</strong><small>Ready-made AI assistants for recurring tasks.</small></span></a><a href="workflows.html"><span class="ico"><svg class="" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="3" y="3" width="6" height="6" rx="1.5"/><rect x="15" y="15" width="6" height="6" rx="1.5"/><path d="M9 6h4a3 3 0 0 1 3 3v6"/><path d="M12 15l3 3 3-3"/></svg></span><span><strong>Workflows & Agents</strong><small>Multi-step automation with human approval.</small></span></a><a href="integrations.html"><span class="ico"><svg class="" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M9 2v6M15 2v6M7 8h10v3a5 5 0 0 1-10 0V8z"/><path d="M12 16v6"/></svg></span><span><strong>Integrations</strong><small>Tools, MCP, Outlook, browser, Nextcloud, Teams.</small></span></a><a href="api.html"><span class="ico"><svg class="" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m8 7-5 5 5 5M16 7l5 5-5 5M14 4l-4 16"/></svg></span><span><strong>API</strong><small>OpenAI-compatible API, MCP gateway, OAuth.</small></span></a><a href="models.html"><span class="ico"><svg class="" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="5" y="5" width="14" height="14" rx="2"/><rect x="9" y="9" width="6" height="6"/><path d="M9 2v3M15 2v3M9 19v3M15 19v3M2 9h3M2 15h3M19 9h3M19 15h3"/></svg></span><span><strong>Models</strong><small>Every major provider plus local models.</small></span></a></div></li>
+      <li><button type="button" aria-expanded="false" aria-haspopup="true">Learn <svg class="" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m6 9 6 6 6-6"/></svg></button><div class="menu narrow"><a href="docs.html"><span class="ico"><svg class="" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 4h6a2 2 0 0 1 2 2v14a2 2 0 0 0-2-2H4V4zM20 4h-6a2 2 0 0 0-2 2v14a2 2 0 0 1 2-2h6V4z"/></svg></span><span><strong>Documentation</strong><small>Guides for users, admins and developers.</small></span></a><a href="changelog.html"><span class="ico"><svg class="" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2"/></svg></span><span><strong>Changelog</strong><small>What shipped in every release.</small></span></a><a href="security.html"><span class="ico"><svg class="" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 2 4 5v6c0 5 3.5 9.5 8 11 4.5-1.5 8-6 8-11V5l-8-3z"/><path d="m9 12 2 2 4-4"/></svg></span><span><strong>Security & privacy</strong><small>Data control, identity, encryption, audit.</small></span></a><a href="https://github.com/intrafind/ihub-apps" target="_blank" rel="noopener"><span class="ico"><svg class="" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 2a10 10 0 0 0-3.2 19.5c.5.1.7-.2.7-.5v-1.7c-2.8.6-3.4-1.2-3.4-1.2-.5-1.2-1.1-1.5-1.1-1.5-.9-.6.1-.6.1-.6 1 .1 1.5 1 1.5 1 .9 1.5 2.3 1.1 2.9.8.1-.6.3-1.1.6-1.3-2.2-.3-4.6-1.1-4.6-5a3.9 3.9 0 0 1 1-2.7 3.6 3.6 0 0 1 .1-2.7s.8-.3 2.8 1a9.5 9.5 0 0 1 5 0c1.9-1.3 2.7-1 2.7-1a3.6 3.6 0 0 1 .1 2.7 3.9 3.9 0 0 1 1 2.7c0 3.9-2.4 4.7-4.6 5 .4.3.7.9.7 1.9v2.8c0 .3.2.6.7.5A10 10 0 0 0 12 2z"/></svg></span><span><strong>GitHub</strong><small>Source code, issues and releases.</small></span></a></div></li>
+      <li><a href="security.html">Security</a></li>
+      <li><a href="enterprise.html">Enterprise</a></li>
+      <li><a href="pricing.html">Pricing</a></li>
+    </ul>
+    <div class="nav-spacer"></div>
+    <div class="nav-cta">
+      <a class="btn secondary sm hide-m" href="https://github.com/intrafind/ihub-apps" target="_blank" rel="noopener"><svg class="" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 2a10 10 0 0 0-3.2 19.5c.5.1.7-.2.7-.5v-1.7c-2.8.6-3.4-1.2-3.4-1.2-.5-1.2-1.1-1.5-1.1-1.5-.9-.6.1-.6.1-.6 1 .1 1.5 1 1.5 1 .9 1.5 2.3 1.1 2.9.8.1-.6.3-1.1.6-1.3-2.2-.3-4.6-1.1-4.6-5a3.9 3.9 0 0 1 1-2.7 3.6 3.6 0 0 1 .1-2.7s.8-.3 2.8 1a9.5 9.5 0 0 1 5 0c1.9-1.3 2.7-1 2.7-1a3.6 3.6 0 0 1 .1 2.7 3.9 3.9 0 0 1 1 2.7c0 3.9-2.4 4.7-4.6 5 .4.3.7.9.7 1.9v2.8c0 .3.2.6.7.5A10 10 0 0 0 12 2z"/></svg> GitHub</a>
+      <a class="btn primary sm" href="https://github.com/intrafind/ihub-apps/releases" target="_blank" rel="noopener">Get started</a>
+      <button class="nav-toggle" type="button" aria-label="Open menu" aria-expanded="false"><svg class="" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 7h16M4 12h16M4 17h16"/></svg></button>
+    </div>
+  </div>
+</header>
+<main id="main">
+<section class="hero">
+  <div class="wrap">
+    <span class="eyebrow">For daily work</span>
+    <h1>iHub Chat</h1>
+    <p class="lead">Model-agnostic, intuitive AI chat for everyday use by the whole organization. Every conversation stays inside your infrastructure.</p>
+    <div class="btn-row"><a class="btn primary" href="https://github.com/intrafind/ihub-apps/releases" target="_blank" rel="noopener"><svg class="" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 3v12M7 10l5 5 5-5M4 21h16"/></svg>Get started</a><a class="btn secondary" href="mailto:sales@intrafind.com">Talk to IntraFind</a></div>
+    
+    <div class="hero-art"><figure class="shot browser zoomable"><img src="assets/screenshots/chat-answer.webp" alt="The iHub chat with a streamed Markdown answer, app sidebar, model selector and context-window indicator." loading="eager" decoding="async"></figure></div>
+  </div>
+</section>
+<section class="section soft" ><div class="wrap" data-tabs>
+    <div class="section-head center"><h2>Everyday AI. Use cases for every department.</h2><p class="lead">The general chat is one app among many. Each department gets apps with the right prompt, inputs and knowledge built in.</p></div>
+    <div class="tabs" role="tablist"><button type="button" role="tab" aria-selected="true">Communication</button><button type="button" role="tab" aria-selected="false">Research</button><button type="button" role="tab" aria-selected="false">Legal</button><button type="button" role="tab" aria-selected="false">Operations</button><button type="button" role="tab" aria-selected="false">Files</button><button type="button" role="tab" aria-selected="false">Meetings</button></div>
+    <div class="tab-panel active" role="tabpanel"><figure class="shot browser zoomable"><img src="assets/screenshots/chat-email-composer.webp" alt="The Email Composer app with type, recipient, subject and tone parameters." loading="lazy" decoding="async"></figure><p class="caption">Email Composer: pick type, recipient and tone; the app writes the draft.</p></div><div class="tab-panel" role="tabpanel"><figure class="shot browser zoomable"><img src="assets/screenshots/chat-research.webp" alt="Web Chat app answering a research question with headings and cited sources." loading="lazy" decoding="async"></figure><p class="caption">Web Chat: live web search with cited sources in the answer.</p></div><div class="tab-panel" role="tabpanel"><figure class="shot browser zoomable"><img src="assets/screenshots/app-nda-empty.webp" alt="The NDA Risk Analyzer app waiting for a contract upload." loading="lazy" decoding="async"></figure><p class="caption">NDA Risk Analyzer: structured risk output rendered by a custom component.</p></div><div class="tab-panel" role="tabpanel"><figure class="shot browser zoomable"><img src="assets/screenshots/chat-mermaid.webp" alt="The Diagram Generator app rendering a process flowchart." loading="lazy" decoding="async"></figure><p class="caption">Diagram Generator: process descriptions become Mermaid diagrams.</p></div><div class="tab-panel" role="tabpanel"><figure class="shot browser zoomable"><img src="assets/screenshots/app-file-analysis-empty.webp" alt="The File Analyzer app with upload controls." loading="lazy" decoding="async"></figure><p class="caption">File Analyzer: PDF, Office, e-mail, audio and video files, parsed in the browser.</p></div><div class="tab-panel" role="tabpanel"><figure class="shot browser zoomable"><img src="assets/screenshots/mobile-home.webp" alt="The iHub start page on a phone with a greeting, quick chat input and recent apps." loading="lazy" decoding="async"></figure><p class="caption">Meeting Briefing and Agenda Generator work on the phone as well.</p></div>
+  </div></section>
+<section class="section" ><div class="wrap">
+    <div class="section-head center"><h2>One interface. Every capability.</h2></div>
+    <div class="bento"><div class="tile"><div class="txt"><h3>Model agnostic</h3><p>Work with GPT, Claude, Gemini, Mistral, Bedrock or a local model in one interface. Switch mid-conversation; admins decide which groups may use which models.</p></div><figure class="shot zoomable"><img src="assets/screenshots/chat-model-selector.webp" alt="The model selector dropdown listing Claude, Gemini, GPT-5 and Mistral models." loading="lazy" decoding="async"></figure></div><div class="tile"><div class="txt"><h3>Company knowledge</h3><p>Ground answers in your own content: local files, web pages, internal pages and iFinder enterprise search with the user’s own permissions.</p></div><figure class="shot zoomable"><img src="assets/screenshots/admin-sources.webp" alt="Admin list of knowledge sources with type, exposure and status columns." loading="lazy" decoding="async"></figure></div><div class="tile"><div class="txt"><h3>Work with files</h3><p>Upload documents, presentations, spreadsheets, e-mails, images, audio and video, or pick them from Google Drive, OneDrive, SharePoint and Nextcloud.</p></div><figure class="shot zoomable"><img src="assets/screenshots/app-file-analysis-empty.webp" alt="File upload controls in the File Analyzer app." loading="lazy" decoding="async"></figure></div><div class="tile"><div class="txt"><h3>Image generation</h3><p>Generate and edit images with Gemini image models, including aspect ratio and quality controls and multi-turn editing.</p></div><figure class="shot zoomable"><img src="assets/screenshots/app-image-generator-empty.webp" alt="The Image Generator app with starter prompts and generation controls." loading="lazy" decoding="async"></figure></div></div>
+  </div></section>
+<section class="section soft" ><div class="wrap">
+    <div class="section-head"><h2>Always grounded in facts.</h2><p class="lead">Rely on citations for fact-based answers.</p></div>
+    <div class="feature" >
+      <div class="feature-text">
+        
+        <h3>Web search with sources</h3>
+        <p>Native search grounding from Google, OpenAI and Anthropic, or server-side search via Brave, Staan (EU index) and Qwant. The answer shows which queries ran and where each fact came from.</p>
+        <ul><li>Answer source badge: model, web, sources, grounding or mixed</li><li>Citation panel with document preview and highlighted passages</li><li>Search follows the user’s language</li></ul>
+        
+      </div>
+      <div class="feature-media"><figure class="shot browser zoomable"><img src="assets/screenshots/chat-research.webp" alt="Research answer with headings, numbered findings and a Sources section." loading="lazy" decoding="async"></figure></div>
+    </div><div class="feature flip" >
+      <div class="feature-text">
+        
+        <h3>Compare two models on the same prompt<span class="badge preview">Preview</span></h3>
+        <p>Send one message to two models and read both answers side by side. Perfect for evaluating a new model or a local alternative before you standardize.</p>
+        
+        
+      </div>
+      <div class="feature-media"><figure class="shot browser zoomable"><img src="assets/screenshots/chat-compare.webp" alt="Compare mode with two model panels answering the same prompt." loading="lazy" decoding="async"></figure></div>
+    </div><div class="feature" >
+      <div class="feature-text">
+        
+        <h3>Ask for clarification instead of guessing</h3>
+        <p>Apps can pause and ask the user a question with chips, dropdowns or free text before they continue. Tool activity shows what each call asked for and why it failed.</p>
+        
+        
+      </div>
+      <div class="feature-media"><figure class="shot browser zoomable"><img src="assets/screenshots/chat-empty.webp" alt="Empty chat with greeting, input box, magic prompt and microphone buttons." loading="lazy" decoding="async"></figure></div>
+    </div>
+  </div></section>
+<section class="section" ><div class="wrap">
+    <div class="section-head"><h2>Real-time voice for work.</h2><p class="lead">Dictate instead of typing, on the desktop and on the phone.</p></div>
+    <div class="feature" >
+      <div class="feature-text">
+        
+        <h3>Voice input with review</h3>
+        <p>Speak into any app. Transcription runs in the browser, through Azure Speech (including on-prem containers) or through a self-hosted realtime model such as Voxtral on vLLM, relayed by the iHub server.</p>
+        <ul><li>Automatic or manual mode with a transcript overlay</li><li>Record-then-transcribe for files and video</li><li>Dictation app with AI clean-up</li></ul>
+        
+      </div>
+      <div class="feature-media"><figure class="shot zoomable"><img src="assets/screenshots/mobile-chat.webp" alt="The iHub chat on a phone with a streamed answer." loading="lazy" decoding="async"></figure></div>
+    </div>
+  </div></section>
+<section class="section soft" ><div class="wrap">
+    <div class="section-head"><h2>Redefining your output.</h2><p class="lead">Go from chat interactions to structured documents.</p></div>
+    <div class="feature" >
+      <div class="feature-text">
+        
+        <h3>Canvas</h3>
+        <p>Open a document editor next to the chat. Continue, summarize, expand, translate or change the tone of any passage, and insert answers straight into the document.</p>
+        
+        
+      </div>
+      <div class="feature-media"><figure class="shot browser zoomable"><img src="assets/screenshots/canvas.webp" alt="Canvas mode with the chat on the left and a rich-text document editor on the right." loading="lazy" decoding="async"></figure></div>
+    </div><div class="feature flip" >
+      <div class="feature-text">
+        
+        <h3>Structured output and custom renderers</h3>
+        <p>Apps can require a JSON schema and render the result with a custom React component: risk tables, extracted questions, checklists. No rebuild needed, renderers live in the content folder.</p>
+        
+        
+      </div>
+      <div class="feature-media"><figure class="shot browser zoomable"><img src="assets/screenshots/app-nda-empty.webp" alt="The NDA Risk Analyzer app, which renders structured results with a custom component." loading="lazy" decoding="async"></figure></div>
+    </div><div class="feature" >
+      <div class="feature-text">
+        
+        <h3>Diagrams, exports and sharing</h3>
+        <p>Mermaid diagrams render inline with SVG, PNG and PDF export. Whole conversations export to PDF (three templates), DOCX, PPTX, XLSX, Markdown, HTML or JSON. Short links open an app with prefilled parameters.</p>
+        
+        
+      </div>
+      <div class="feature-media"><figure class="shot browser zoomable"><img src="assets/screenshots/chat-share-modal.webp" alt="Share dialog for an app with a generated short link." loading="lazy" decoding="async"></figure></div>
+    </div><div class="feature flip" >
+      <div class="feature-text">
+        
+        <h3>Chat history that survives a closed tab<span class="badge preview">Preview</span></h3>
+        <p>Durable Chats store conversations server-side with retention limits. A long-running answer completes while you are away; rename, reopen and continue from the history page. Incognito mode never stores anything.</p>
+        
+        
+      </div>
+      <div class="feature-media"><figure class="shot browser zoomable"><img src="assets/screenshots/chats-history.webp" alt="The chat history page grouped by Today and Yesterday." loading="lazy" decoding="async"></figure></div>
+    </div>
+  </div></section>
+<section class="section" ><div class="wrap">
+    <div class="section-head"><h2>Prompt library and magic prompt.</h2></div>
+    <div class="feature" >
+      <div class="feature-text">
+        
+        <h3>Reusable prompts for the whole team</h3>
+        <p>A searchable, categorized library of prompt templates with variables, scoped to an app or shared globally. Magic Prompt rewrites a rough input into a precise prompt with one click, with undo.</p>
+        
+        
+      </div>
+      <div class="feature-media"><figure class="shot browser zoomable"><img src="assets/screenshots/prompts.webp" alt="The prompt library with categories and template cards." loading="lazy" decoding="async"></figure></div>
+    </div>
+  </div></section>
+<section class="section soft" id="faq"><div class="wrap">
+    <div class="section-head center"><h2>Questions & answers</h2></div>
+    <div class="faq"><details><summary>Where is my data processed?</summary><div class="answer"><p>Inside your iHub deployment and at the model provider you configured. With a local model (vLLM, LM Studio, Ollama) or IntraFind-hosted GPUs in German data centres, nothing leaves your infrastructure.</p></div></details><details><summary>Are prompts stored?</summary><div class="answer"><p>By default a conversation lives only in the browser session. Admins can enable Durable Chats with retention limits, and any app can be marked ephemeral so nothing is stored at all.</p></div></details><details><summary>Which models can I use?</summary><div class="answer"><p>OpenAI, Anthropic, Google, Mistral, AWS Bedrock, Azure OpenAI and any OpenAI-compatible endpoint. See the <a href="models.html">models page</a>.</p></div></details><details><summary>Which file types are supported?</summary><div class="answer"><p>PDF, DOCX, XLSX, PPTX, legacy Office, ODT/ODS/ODP, EML and MSG e-mails, CSV, JSON, HTML, Markdown, VTT transcripts, images (JPG, PNG, GIF, WebP, TIFF), audio (MP3, WAV, FLAC, OGG, M4A) and video with audio extraction.</p></div></details><details><summary>Does chat work on mobile?</summary><div class="answer"><p>Yes. The interface is responsive and installable as a progressive web app, with voice input and dark mode.</p></div></details></div>
+  </div></section>
+<section class="section"><div class="wrap">
+    <div class="section-head center"><h2>The essential AI stack for your company.</h2><p class="lead">Simple for business users. Ready for advanced use cases. Governed by IT.</p></div>
+    <div class="grid cols-5"><a class="card" href="apps.html"><span class="ico"><svg class="" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="3" y="3" width="7" height="7" rx="1.5"/><rect x="14" y="3" width="7" height="7" rx="1.5"/><rect x="3" y="14" width="7" height="7" rx="1.5"/><rect x="14" y="14" width="7" height="7" rx="1.5"/></svg></span><h3>Apps</h3><p>Ready-made AI assistants for recurring tasks.</p><span class="more">Learn more →</span></a><a class="card" href="workflows.html"><span class="ico"><svg class="" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="3" y="3" width="6" height="6" rx="1.5"/><rect x="15" y="15" width="6" height="6" rx="1.5"/><path d="M9 6h4a3 3 0 0 1 3 3v6"/><path d="M12 15l3 3 3-3"/></svg></span><h3>Workflows & Agents</h3><p>Multi-step automation with human approval.</p><span class="more">Learn more →</span></a><a class="card" href="integrations.html"><span class="ico"><svg class="" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M9 2v6M15 2v6M7 8h10v3a5 5 0 0 1-10 0V8z"/><path d="M12 16v6"/></svg></span><h3>Integrations</h3><p>Tools, MCP, Outlook, browser, Nextcloud, Teams.</p><span class="more">Learn more →</span></a><a class="card" href="api.html"><span class="ico"><svg class="" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m8 7-5 5 5 5M16 7l5 5-5 5M14 4l-4 16"/></svg></span><h3>API</h3><p>OpenAI-compatible API, MCP gateway, OAuth.</p><span class="more">Learn more →</span></a><a class="card" href="models.html"><span class="ico"><svg class="" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="5" y="5" width="14" height="14" rx="2"/><rect x="9" y="9" width="6" height="6"/><path d="M9 2v3M15 2v3M9 19v3M15 19v3M2 9h3M2 15h3M19 9h3M19 15h3"/></svg></span><h3>Models</h3><p>Every major provider plus local models.</p><span class="more">Learn more →</span></a></div>
+  </div></section>
+<section class="cta">
+  <div class="wrap">
+    <div class="box">
+      <h2>Run iHub Apps in 60 seconds.</h2>
+      <p class="lead">One command installs the standalone binary. No Node.js, no Docker, no database. Open http://localhost:3000, add a model key, and your team has 24 AI apps.</p>
+      <pre><code>curl -fsSL https://raw.githubusercontent.com/intrafind/ihub-apps/main/install.sh | sh</code></pre>
+      <div class="btn-row">
+        <a class="btn primary" href="https://github.com/intrafind/ihub-apps/releases" target="_blank" rel="noopener"><svg class="" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 3v12M7 10l5 5 5-5M4 21h16"/></svg> Download for Linux, macOS, Windows</a>
+        <a class="btn secondary" href="mailto:sales@intrafind.com">Talk to IntraFind</a>
+      </div>
+    </div>
+  </div>
+</section>
+<section class="trust" aria-label="Trust">
+  <div class="wrap">
+    <div class="item"><span class="ico"><svg class="" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 2a10 10 0 0 0-3.2 19.5c.5.1.7-.2.7-.5v-1.7c-2.8.6-3.4-1.2-3.4-1.2-.5-1.2-1.1-1.5-1.1-1.5-.9-.6.1-.6.1-.6 1 .1 1.5 1 1.5 1 .9 1.5 2.3 1.1 2.9.8.1-.6.3-1.1.6-1.3-2.2-.3-4.6-1.1-4.6-5a3.9 3.9 0 0 1 1-2.7 3.6 3.6 0 0 1 .1-2.7s.8-.3 2.8 1a9.5 9.5 0 0 1 5 0c1.9-1.3 2.7-1 2.7-1a3.6 3.6 0 0 1 .1 2.7 3.9 3.9 0 0 1 1 2.7c0 3.9-2.4 4.7-4.6 5 .4.3.7.9.7 1.9v2.8c0 .3.2.6.7.5A10 10 0 0 0 12 2z"/></svg></span><div><strong>Open source</strong><span>BSD-3-Clause with attribution. Full source on GitHub.</span></div></div>
+    <div class="item"><span class="ico"><svg class="" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="3" y="3" width="18" height="7" rx="2"/><rect x="3" y="14" width="18" height="7" rx="2"/><path d="M7 6.5h.01M7 17.5h.01"/></svg></span><div><strong>Deployable anywhere</strong><span>Binary, Docker, Windows service, on-prem or air-gapped.</span></div></div>
+    <div class="item"><span class="ico"><svg class="" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 2 4 5v6c0 5 3.5 9.5 8 11 4.5-1.5 8-6 8-11V5l-8-3z"/><path d="m9 12 2 2 4-4"/></svg></span><div><strong>GDPR by design</strong><span>Your infrastructure, your models, your data. Made in Germany.</span></div></div>
+  </div>
+</section>
+</main>
+<footer>
+  <div class="wrap">
+    <div class="foot-grid">
+      <div class="foot-brand">
+        <a class="brand" href="index.html"><img src="assets/img/ihub-mark.svg" alt=""><span>iHub <b>Apps</b></span></a>
+        <p>The open-source AI platform for your whole organization. Built by <a href="https://intrafind.com/" target="_blank" rel="noopener">IntraFind Software AG</a> in Berlin, Bonn and Munich.</p>
+      </div>
+      <div><h4>Platform</h4><ul><li><a href="chat.html">Chat</a></li><li><a href="apps.html">Apps</a></li><li><a href="workflows.html">Workflows & Agents</a></li><li><a href="integrations.html">Integrations</a></li><li><a href="api.html">API</a></li><li><a href="models.html">Models</a></li><li><a href="integrations.html#outlook">Outlook add-in</a></li><li><a href="integrations.html#browser">Browser extension</a></li><li><a href="integrations.html#nextcloud">Nextcloud app</a></li></ul></div>
+      <div><h4>Learn</h4><ul><li><a href="docs.html">Documentation</a></li><li><a href="changelog.html">Changelog</a></li><li><a href="security.html">Security & privacy</a></li><li><a href="enterprise.html">Enterprise</a></li><li><a href="pricing.html">Pricing</a></li><li><a href="https://github.com/intrafind/ihub-apps/releases" target="_blank" rel="noopener">Releases</a></li><li><a href="https://github.com/intrafind/ihub-apps/pkgs/container/ihub-apps" target="_blank" rel="noopener">Docker image</a></li></ul></div>
+      <div><h4>Company</h4><ul><li><a href="https://intrafind.com/" target="_blank" rel="noopener">IntraFind</a></li><li><a href="mailto:sales@intrafind.com" target="_blank" rel="noopener">Contact sales</a></li><li><a href="https://github.com/intrafind/ihub-apps" target="_blank" rel="noopener">GitHub</a></li><li><a href="https://github.com/intrafind/ihub-apps/issues" target="_blank" rel="noopener">Issues</a></li><li><a href="https://github.com/intrafind/ihub-apps/blob/main/LICENSE" target="_blank" rel="noopener">License</a></li></ul></div>
+      <div><h4>Also by IntraFind</h4><ul><li><a href="https://intrafind.com/" target="_blank" rel="noopener">iFinder enterprise search</a></li><li><a href="https://intrafind.com/" target="_blank" rel="noopener">iAssistant</a></li></ul></div>
+    </div>
+    <div class="foot-bottom">
+      <span>© 2026 IntraFind Software AG. iHub Apps 5.5.16.</span>
+      <span><a href="https://intrafind.com/" target="_blank" rel="noopener">Imprint</a> · <a href="https://intrafind.com/" target="_blank" rel="noopener">Privacy policy</a> · <a href="https://github.com/intrafind/ihub-apps/blob/main/LICENSE" target="_blank" rel="noopener">License</a></span>
+    </div>
+  </div>
+</footer>
+<script src="assets/js/site.js" defer></script>
+</body>
+</html>

@@ -1,0 +1,148 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>AI Workflow Automation and Agents | iHub Apps</title>
+<meta name="description" content="Build multi-step AI automation with a visual editor: 26 node types, decisions, loops, parallel branches, HTTP and code steps, human approval, schedules and webhooks. Plus autonomous agents with memory and budgets.">
+<meta property="og:title" content="AI Workflow Automation and Agents | iHub Apps">
+<meta property="og:description" content="Build multi-step AI automation with a visual editor: 26 node types, decisions, loops, parallel branches, HTTP and code steps, human approval, schedules and webhooks. Plus autonomous agents with memory and budgets.">
+<meta property="og:type" content="website">
+<meta property="og:image" content="assets/screenshots/workflow-editor.webp">
+<link rel="icon" href="assets/img/favicon.ico">
+<link rel="stylesheet" href="assets/css/site.css">
+</head>
+<body>
+<a class="skip" href="#main">Skip to content</a>
+<header class="nav" id="top">
+  <div class="wrap">
+    <a class="brand" href="index.html" aria-label="iHub Apps home"><img src="assets/img/ihub-mark.svg" alt=""><span>iHub <b>Apps</b></span></a>
+    <ul class="nav-links">
+      <li><button type="button" aria-expanded="false" aria-haspopup="true">Platform <svg class="" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m6 9 6 6 6-6"/></svg></button><div class="menu"><a href="chat.html"><span class="ico"><svg class="" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M21 12a8 8 0 0 1-8 8H7l-4 3v-6.5A8 8 0 1 1 21 12z"/></svg></span><span><strong>Chat</strong><small>Model-agnostic chat for everyone in the company.</small></span></a><a href="apps.html"><span class="ico"><svg class="" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="3" y="3" width="7" height="7" rx="1.5"/><rect x="14" y="3" width="7" height="7" rx="1.5"/><rect x="3" y="14" width="7" height="7" rx="1.5"/><rect x="14" y="14" width="7" height="7" rx="1.5"/></svg></span><span><strong>Apps</strong><small>Ready-made AI assistants for recurring tasks.</small></span></a><a href="workflows.html"><span class="ico"><svg class="" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="3" y="3" width="6" height="6" rx="1.5"/><rect x="15" y="15" width="6" height="6" rx="1.5"/><path d="M9 6h4a3 3 0 0 1 3 3v6"/><path d="M12 15l3 3 3-3"/></svg></span><span><strong>Workflows & Agents</strong><small>Multi-step automation with human approval.</small></span></a><a href="integrations.html"><span class="ico"><svg class="" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M9 2v6M15 2v6M7 8h10v3a5 5 0 0 1-10 0V8z"/><path d="M12 16v6"/></svg></span><span><strong>Integrations</strong><small>Tools, MCP, Outlook, browser, Nextcloud, Teams.</small></span></a><a href="api.html"><span class="ico"><svg class="" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m8 7-5 5 5 5M16 7l5 5-5 5M14 4l-4 16"/></svg></span><span><strong>API</strong><small>OpenAI-compatible API, MCP gateway, OAuth.</small></span></a><a href="models.html"><span class="ico"><svg class="" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="5" y="5" width="14" height="14" rx="2"/><rect x="9" y="9" width="6" height="6"/><path d="M9 2v3M15 2v3M9 19v3M15 19v3M2 9h3M2 15h3M19 9h3M19 15h3"/></svg></span><span><strong>Models</strong><small>Every major provider plus local models.</small></span></a></div></li>
+      <li><button type="button" aria-expanded="false" aria-haspopup="true">Learn <svg class="" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m6 9 6 6 6-6"/></svg></button><div class="menu narrow"><a href="docs.html"><span class="ico"><svg class="" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 4h6a2 2 0 0 1 2 2v14a2 2 0 0 0-2-2H4V4zM20 4h-6a2 2 0 0 0-2 2v14a2 2 0 0 1 2-2h6V4z"/></svg></span><span><strong>Documentation</strong><small>Guides for users, admins and developers.</small></span></a><a href="changelog.html"><span class="ico"><svg class="" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2"/></svg></span><span><strong>Changelog</strong><small>What shipped in every release.</small></span></a><a href="security.html"><span class="ico"><svg class="" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 2 4 5v6c0 5 3.5 9.5 8 11 4.5-1.5 8-6 8-11V5l-8-3z"/><path d="m9 12 2 2 4-4"/></svg></span><span><strong>Security & privacy</strong><small>Data control, identity, encryption, audit.</small></span></a><a href="https://github.com/intrafind/ihub-apps" target="_blank" rel="noopener"><span class="ico"><svg class="" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 2a10 10 0 0 0-3.2 19.5c.5.1.7-.2.7-.5v-1.7c-2.8.6-3.4-1.2-3.4-1.2-.5-1.2-1.1-1.5-1.1-1.5-.9-.6.1-.6.1-.6 1 .1 1.5 1 1.5 1 .9 1.5 2.3 1.1 2.9.8.1-.6.3-1.1.6-1.3-2.2-.3-4.6-1.1-4.6-5a3.9 3.9 0 0 1 1-2.7 3.6 3.6 0 0 1 .1-2.7s.8-.3 2.8 1a9.5 9.5 0 0 1 5 0c1.9-1.3 2.7-1 2.7-1a3.6 3.6 0 0 1 .1 2.7 3.9 3.9 0 0 1 1 2.7c0 3.9-2.4 4.7-4.6 5 .4.3.7.9.7 1.9v2.8c0 .3.2.6.7.5A10 10 0 0 0 12 2z"/></svg></span><span><strong>GitHub</strong><small>Source code, issues and releases.</small></span></a></div></li>
+      <li><a href="security.html">Security</a></li>
+      <li><a href="enterprise.html">Enterprise</a></li>
+      <li><a href="pricing.html">Pricing</a></li>
+    </ul>
+    <div class="nav-spacer"></div>
+    <div class="nav-cta">
+      <a class="btn secondary sm hide-m" href="https://github.com/intrafind/ihub-apps" target="_blank" rel="noopener"><svg class="" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 2a10 10 0 0 0-3.2 19.5c.5.1.7-.2.7-.5v-1.7c-2.8.6-3.4-1.2-3.4-1.2-.5-1.2-1.1-1.5-1.1-1.5-.9-.6.1-.6.1-.6 1 .1 1.5 1 1.5 1 .9 1.5 2.3 1.1 2.9.8.1-.6.3-1.1.6-1.3-2.2-.3-4.6-1.1-4.6-5a3.9 3.9 0 0 1 1-2.7 3.6 3.6 0 0 1 .1-2.7s.8-.3 2.8 1a9.5 9.5 0 0 1 5 0c1.9-1.3 2.7-1 2.7-1a3.6 3.6 0 0 1 .1 2.7 3.9 3.9 0 0 1 1 2.7c0 3.9-2.4 4.7-4.6 5 .4.3.7.9.7 1.9v2.8c0 .3.2.6.7.5A10 10 0 0 0 12 2z"/></svg> GitHub</a>
+      <a class="btn primary sm" href="https://github.com/intrafind/ihub-apps/releases" target="_blank" rel="noopener">Get started</a>
+      <button class="nav-toggle" type="button" aria-label="Open menu" aria-expanded="false"><svg class="" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 7h16M4 12h16M4 17h16"/></svg></button>
+    </div>
+  </div>
+</header>
+<main id="main">
+<section class="hero">
+  <div class="wrap">
+    <span class="eyebrow">For complex automation · Preview</span>
+    <h1>iHub Workflows & Agents</h1>
+    <p class="lead">Build powerful process automation with AI steps, tools and human-in-the-loop approval. Let autonomous agents handle the recurring work, with budgets and an audit trail.</p>
+    <div class="btn-row"><a class="btn primary" href="https://github.com/intrafind/ihub-apps/releases" target="_blank" rel="noopener"><svg class="" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 3v12M7 10l5 5 5-5M4 21h16"/></svg>Get started</a><a class="btn secondary" href="https://github.com/intrafind/ihub-apps/blob/main/docs/workflows.md" target="_blank" rel="noopener">Workflow documentation</a></div>
+    <p class="sub">Workflows and the Agent Factory are preview features. Enable them under Admin → Features.</p>
+    <div class="hero-art"><figure class="shot browser zoomable"><img src="assets/screenshots/workflow-editor.webp" alt="The visual workflow editor with a node palette on the left and a research workflow on the canvas." loading="eager" decoding="async"></figure></div>
+  </div>
+</section>
+<section class="section soft" ><div class="wrap" data-tabs>
+    <div class="section-head center"><h2>Automate anything. Deploy workflows for all departments.</h2><p class="lead">18 workflow templates ship with the platform, from research to audit-grade document review.</p></div>
+    <div class="tabs" role="tablist"><button type="button" role="tab" aria-selected="true">Research</button><button type="button" role="tab" aria-selected="false">Knowledge & documents</button><button type="button" role="tab" aria-selected="false">Approvals</button><button type="button" role="tab" aria-selected="false">Run history</button><button type="button" role="tab" aria-selected="false">For users</button></div>
+    <div class="tab-panel active" role="tabpanel"><figure class="shot browser zoomable"><img src="assets/screenshots/workflow-editor.webp" alt="Research Assistant workflow in the editor." loading="lazy" decoding="async"></figure><p class="caption">Research Assistant, Topic Deep Dive, Iterative Research with autonomous or human review.</p></div><div class="tab-panel" role="tabpanel"><figure class="shot browser zoomable"><img src="assets/screenshots/admin-workflows.webp" alt="The workflows list in the admin panel." loading="lazy" decoding="async"></figure><p class="caption">Knowledge Base Q&A, Document Analysis, Corpus Completeness Analysis over iFinder.</p></div><div class="tab-panel" role="tabpanel"><figure class="shot browser zoomable"><img src="assets/screenshots/admin-agent-approvals.webp" alt="The pending approvals queue for agents." loading="lazy" decoding="async"></figure><p class="caption">Research with Approval: a human checkpoint before results are published.</p></div><div class="tab-panel" role="tabpanel"><figure class="shot browser zoomable"><img src="assets/screenshots/admin-workflow-executions.webp" alt="The workflow executions page." loading="lazy" decoding="async"></figure><p class="caption">Every execution with status, steps, export, restart and cancel.</p></div><div class="tab-panel" role="tabpanel"><figure class="shot browser zoomable"><img src="assets/screenshots/workflows.webp" alt="The user-facing workflows page." loading="lazy" decoding="async"></figure><p class="caption">Users start workflows from their own page, from chat with @, or as a chat tool.</p></div>
+  </div></section>
+<section class="section" ><div class="wrap">
+    <div class="section-head center"><h2>Build with full flexibility. Choose between agentic or fully deterministic automation.</h2></div>
+    <div class="grid cols-4"><div class="card"><span class="ico"><svg class="" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m12 3 1.8 4.7L18.5 9.5l-4.7 1.8L12 16l-1.8-4.7L5.5 9.5l4.7-1.8L12 3zM19 15l.9 2.1L22 18l-2.1.9L19 21l-.9-2.1L16 18l2.1-.9L19 15zM5 15l.6 1.4L7 17l-1.4.6L5 19l-.6-1.4L3 17l1.4-.6L5 15z"/></svg></span><h3>AI steps</h3><p>Prompt, planner and verifier nodes with per-node model and thinking overrides.</p></div><div class="card"><span class="ico"><svg class="" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="3" y="3" width="6" height="6" rx="1.5"/><rect x="15" y="15" width="6" height="6" rx="1.5"/><path d="M9 6h4a3 3 0 0 1 3 3v6"/><path d="M12 15l3 3 3-3"/></svg></span><h3>Flow control</h3><p>Decision branches (expression, equals, contains, LLM), loops with nesting, parallel and join.</p></div><div class="card"><span class="ico"><svg class="" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M13 2 4 14h7l-1 8 9-12h-7l1-8z"/></svg></span><h3>Actions</h3><p>Tool, HTTP request with SSRF guard, sandboxed JavaScript, transform and memory nodes.</p></div><div class="card"><span class="ico"><svg class="" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="9" cy="8" r="3.5"/><path d="M2.5 20a6.5 6.5 0 0 1 13 0"/><circle cx="17" cy="9" r="2.5"/><path d="M15.5 14.5A5 5 0 0 1 21.5 20"/></svg></span><h3>Human in the loop</h3><p>Approval checkpoints and ask-user questions, restricted to approver groups.</p></div><div class="card"><span class="ico"><svg class="" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2"/></svg></span><h3>Triggers</h3><p>Manual, cron schedule with time zone, and HMAC-signed webhooks. Safe on multiple instances.</p></div><div class="card"><span class="ico"><svg class="" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m12 3 9 5-9 5-9-5 9-5z"/><path d="m3 12 9 5 9-5M3 17l9 5 9-5"/></svg></span><h3>Versioning</h3><p>Draft and published versions, version list, activate any version, export and import.</p></div><div class="card"><span class="ico"><svg class="" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M2 12s3.5-7 10-7 10 7 10 7-3.5 7-10 7S2 12 2 12z"/><circle cx="12" cy="12" r="3"/></svg></span><h3>Run history</h3><p>Checkpoints, crash-resume, SSE progress, per-execution export, restart and cancel.</p></div><div class="card"><span class="ico"><svg class="" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="11" cy="11" r="7"/><path d="m20 20-3.5-3.5"/></svg></span><h3>Audit-grade nodes</h3><p>Query plan, corpus search, structured records, quote validation and templated reports for legal and public-sector reviews.</p></div></div>
+  </div></section>
+<section class="section soft" ><div class="wrap">
+    <div class="section-head"><h2>Autonomous agents with guard rails.</h2><p class="lead">The Agent Factory runs profiles that wake up on a schedule, a webhook or on demand, act with a service-account identity and stay inside a budget.</p></div>
+    <div class="feature" >
+      <div class="feature-text">
+        
+        <h3>Agent profiles<span class="badge preview">Preview</span></h3>
+        <p>Plan, run tools, verify results adversarially and write artifacts. Each profile has its own tools, skills, model, token budget and tool-round limits.</p>
+        <ul><li>Long-term memory in Markdown</li><li>Inboxes with TODO checklists</li><li>Dynamic task queues with planner and drain</li></ul>
+        
+      </div>
+      <div class="feature-media"><figure class="shot browser zoomable"><img src="assets/screenshots/admin-agent-edit.webp" alt="The agent profile editor." loading="lazy" decoding="async"></figure></div>
+    </div><div class="feature flip" >
+      <div class="feature-text">
+        
+        <h3>Approvals and operator steering</h3>
+        <p>Actions that need a human wait in a pending-approvals queue visible only to approver groups. Operators can steer a run mid-flight and cancel or resume after a crash.</p>
+        
+        
+      </div>
+      <div class="feature-media"><figure class="shot browser zoomable"><img src="assets/screenshots/admin-agent-approvals.webp" alt="The pending approvals page." loading="lazy" decoding="async"></figure></div>
+    </div><div class="feature" >
+      <div class="feature-text">
+        
+        <h3>Runs, inboxes and memory</h3>
+        <p>Every run is logged step by step. Inboxes hold the work an agent should pick up; memory holds what it learned. Both are editable by admins.</p>
+        
+        
+      </div>
+      <div class="feature-media"><figure class="shot browser zoomable"><img src="assets/screenshots/admin-agents.webp" alt="The agents overview page." loading="lazy" decoding="async"></figure></div>
+    </div>
+  </div></section>
+<section class="section" ><div class="wrap">
+    <div class="section-head"><h2>Workflows inside the chat.</h2></div>
+    <div class="feature" >
+      <div class="feature-text">
+        
+        <h3>Mention a workflow with @ or run it as a tool</h3>
+        <p>Users can start a workflow from any chat by typing @, or an app can call a workflow as a tool and pass the result straight through. Progress streams into the conversation.</p>
+        
+        
+      </div>
+      <div class="feature-media"><figure class="shot browser zoomable"><img src="assets/screenshots/workflows.webp" alt="The workflows page for users." loading="lazy" decoding="async"></figure></div>
+    </div>
+  </div></section>
+<section class="section soft" id="faq"><div class="wrap">
+    <div class="section-head center"><h2>Questions & answers</h2></div>
+    <div class="faq"><details><summary>What is the difference between an app, a workflow and an agent?</summary><div class="answer"><p>An app answers interactively in a chat. A workflow orchestrates a fixed sequence of steps with branches, loops and approvals. An agent is an autonomous profile that wakes up on a trigger, plans its own steps within a budget and asks for approval when needed.</p></div></details><details><summary>Do I need to code?</summary><div class="answer"><p>No. Workflows are built on a visual canvas with a node palette, a variables panel and an edge-condition editor. Code nodes are optional.</p></div></details><details><summary>How are workflows triggered?</summary><div class="answer"><p>Manually, from chat, on a cron schedule with time zone, or via an HMAC-signed webhook. A cross-process scheduler lock keeps schedules safe when you run several workers or servers.</p></div></details><details><summary>Who can build and run workflows?</summary><div class="answer"><p>Permissions are per group, like everything else in iHub. Admins enable the preview feature under Admin → Features.</p></div></details><details><summary>What happens if the server restarts mid-run?</summary><div class="answer"><p>Executions checkpoint after each node and resume automatically on start-up.</p></div></details></div>
+  </div></section>
+<section class="section"><div class="wrap">
+    <div class="section-head center"><h2>The essential AI stack for your company.</h2><p class="lead">Simple for business users. Ready for advanced use cases. Governed by IT.</p></div>
+    <div class="grid cols-5"><a class="card" href="chat.html"><span class="ico"><svg class="" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M21 12a8 8 0 0 1-8 8H7l-4 3v-6.5A8 8 0 1 1 21 12z"/></svg></span><h3>Chat</h3><p>Model-agnostic chat for everyone in the company.</p><span class="more">Learn more →</span></a><a class="card" href="apps.html"><span class="ico"><svg class="" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="3" y="3" width="7" height="7" rx="1.5"/><rect x="14" y="3" width="7" height="7" rx="1.5"/><rect x="3" y="14" width="7" height="7" rx="1.5"/><rect x="14" y="14" width="7" height="7" rx="1.5"/></svg></span><h3>Apps</h3><p>Ready-made AI assistants for recurring tasks.</p><span class="more">Learn more →</span></a><a class="card" href="integrations.html"><span class="ico"><svg class="" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M9 2v6M15 2v6M7 8h10v3a5 5 0 0 1-10 0V8z"/><path d="M12 16v6"/></svg></span><h3>Integrations</h3><p>Tools, MCP, Outlook, browser, Nextcloud, Teams.</p><span class="more">Learn more →</span></a><a class="card" href="api.html"><span class="ico"><svg class="" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m8 7-5 5 5 5M16 7l5 5-5 5M14 4l-4 16"/></svg></span><h3>API</h3><p>OpenAI-compatible API, MCP gateway, OAuth.</p><span class="more">Learn more →</span></a><a class="card" href="models.html"><span class="ico"><svg class="" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="5" y="5" width="14" height="14" rx="2"/><rect x="9" y="9" width="6" height="6"/><path d="M9 2v3M15 2v3M9 19v3M15 19v3M2 9h3M2 15h3M19 9h3M19 15h3"/></svg></span><h3>Models</h3><p>Every major provider plus local models.</p><span class="more">Learn more →</span></a></div>
+  </div></section>
+<section class="cta">
+  <div class="wrap">
+    <div class="box">
+      <h2>Run iHub Apps in 60 seconds.</h2>
+      <p class="lead">One command installs the standalone binary. No Node.js, no Docker, no database. Open http://localhost:3000, add a model key, and your team has 24 AI apps.</p>
+      <pre><code>curl -fsSL https://raw.githubusercontent.com/intrafind/ihub-apps/main/install.sh | sh</code></pre>
+      <div class="btn-row">
+        <a class="btn primary" href="https://github.com/intrafind/ihub-apps/releases" target="_blank" rel="noopener"><svg class="" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 3v12M7 10l5 5 5-5M4 21h16"/></svg> Download for Linux, macOS, Windows</a>
+        <a class="btn secondary" href="mailto:sales@intrafind.com">Talk to IntraFind</a>
+      </div>
+    </div>
+  </div>
+</section>
+<section class="trust" aria-label="Trust">
+  <div class="wrap">
+    <div class="item"><span class="ico"><svg class="" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 2a10 10 0 0 0-3.2 19.5c.5.1.7-.2.7-.5v-1.7c-2.8.6-3.4-1.2-3.4-1.2-.5-1.2-1.1-1.5-1.1-1.5-.9-.6.1-.6.1-.6 1 .1 1.5 1 1.5 1 .9 1.5 2.3 1.1 2.9.8.1-.6.3-1.1.6-1.3-2.2-.3-4.6-1.1-4.6-5a3.9 3.9 0 0 1 1-2.7 3.6 3.6 0 0 1 .1-2.7s.8-.3 2.8 1a9.5 9.5 0 0 1 5 0c1.9-1.3 2.7-1 2.7-1a3.6 3.6 0 0 1 .1 2.7 3.9 3.9 0 0 1 1 2.7c0 3.9-2.4 4.7-4.6 5 .4.3.7.9.7 1.9v2.8c0 .3.2.6.7.5A10 10 0 0 0 12 2z"/></svg></span><div><strong>Open source</strong><span>BSD-3-Clause with attribution. Full source on GitHub.</span></div></div>
+    <div class="item"><span class="ico"><svg class="" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="3" y="3" width="18" height="7" rx="2"/><rect x="3" y="14" width="18" height="7" rx="2"/><path d="M7 6.5h.01M7 17.5h.01"/></svg></span><div><strong>Deployable anywhere</strong><span>Binary, Docker, Windows service, on-prem or air-gapped.</span></div></div>
+    <div class="item"><span class="ico"><svg class="" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 2 4 5v6c0 5 3.5 9.5 8 11 4.5-1.5 8-6 8-11V5l-8-3z"/><path d="m9 12 2 2 4-4"/></svg></span><div><strong>GDPR by design</strong><span>Your infrastructure, your models, your data. Made in Germany.</span></div></div>
+  </div>
+</section>
+</main>
+<footer>
+  <div class="wrap">
+    <div class="foot-grid">
+      <div class="foot-brand">
+        <a class="brand" href="index.html"><img src="assets/img/ihub-mark.svg" alt=""><span>iHub <b>Apps</b></span></a>
+        <p>The open-source AI platform for your whole organization. Built by <a href="https://intrafind.com/" target="_blank" rel="noopener">IntraFind Software AG</a> in Berlin, Bonn and Munich.</p>
+      </div>
+      <div><h4>Platform</h4><ul><li><a href="chat.html">Chat</a></li><li><a href="apps.html">Apps</a></li><li><a href="workflows.html">Workflows & Agents</a></li><li><a href="integrations.html">Integrations</a></li><li><a href="api.html">API</a></li><li><a href="models.html">Models</a></li><li><a href="integrations.html#outlook">Outlook add-in</a></li><li><a href="integrations.html#browser">Browser extension</a></li><li><a href="integrations.html#nextcloud">Nextcloud app</a></li></ul></div>
+      <div><h4>Learn</h4><ul><li><a href="docs.html">Documentation</a></li><li><a href="changelog.html">Changelog</a></li><li><a href="security.html">Security & privacy</a></li><li><a href="enterprise.html">Enterprise</a></li><li><a href="pricing.html">Pricing</a></li><li><a href="https://github.com/intrafind/ihub-apps/releases" target="_blank" rel="noopener">Releases</a></li><li><a href="https://github.com/intrafind/ihub-apps/pkgs/container/ihub-apps" target="_blank" rel="noopener">Docker image</a></li></ul></div>
+      <div><h4>Company</h4><ul><li><a href="https://intrafind.com/" target="_blank" rel="noopener">IntraFind</a></li><li><a href="mailto:sales@intrafind.com" target="_blank" rel="noopener">Contact sales</a></li><li><a href="https://github.com/intrafind/ihub-apps" target="_blank" rel="noopener">GitHub</a></li><li><a href="https://github.com/intrafind/ihub-apps/issues" target="_blank" rel="noopener">Issues</a></li><li><a href="https://github.com/intrafind/ihub-apps/blob/main/LICENSE" target="_blank" rel="noopener">License</a></li></ul></div>
+      <div><h4>Also by IntraFind</h4><ul><li><a href="https://intrafind.com/" target="_blank" rel="noopener">iFinder enterprise search</a></li><li><a href="https://intrafind.com/" target="_blank" rel="noopener">iAssistant</a></li></ul></div>
+    </div>
+    <div class="foot-bottom">
+      <span>© 2026 IntraFind Software AG. iHub Apps 5.5.16.</span>
+      <span><a href="https://intrafind.com/" target="_blank" rel="noopener">Imprint</a> · <a href="https://intrafind.com/" target="_blank" rel="noopener">Privacy policy</a> · <a href="https://github.com/intrafind/ihub-apps/blob/main/LICENSE" target="_blank" rel="noopener">License</a></span>
+    </div>
+  </div>
+</footer>
+<script src="assets/js/site.js" defer></script>
+</body>
+</html>

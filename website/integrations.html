@@ -1,0 +1,201 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Integrations | iHub Apps</title>
+<meta name="description" content="Power your apps and workflows with built-in tools, OpenAPI imports, MCP in both directions, and surfaces where people already work: Outlook, browser, Nextcloud, Microsoft Teams, Jira, Google Drive, Office 365 and iFinder.">
+<meta property="og:title" content="Integrations | iHub Apps">
+<meta property="og:description" content="Power your apps and workflows with built-in tools, OpenAPI imports, MCP in both directions, and surfaces where people already work: Outlook, browser, Nextcloud, Microsoft Teams, Jira, Google Drive, Office 365 and iFinder.">
+<meta property="og:type" content="website">
+<meta property="og:image" content="assets/screenshots/admin-integrations.webp">
+<link rel="icon" href="assets/img/favicon.ico">
+<link rel="stylesheet" href="assets/css/site.css">
+</head>
+<body>
+<a class="skip" href="#main">Skip to content</a>
+<header class="nav" id="top">
+  <div class="wrap">
+    <a class="brand" href="index.html" aria-label="iHub Apps home"><img src="assets/img/ihub-mark.svg" alt=""><span>iHub <b>Apps</b></span></a>
+    <ul class="nav-links">
+      <li><button type="button" aria-expanded="false" aria-haspopup="true">Platform <svg class="" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m6 9 6 6 6-6"/></svg></button><div class="menu"><a href="chat.html"><span class="ico"><svg class="" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M21 12a8 8 0 0 1-8 8H7l-4 3v-6.5A8 8 0 1 1 21 12z"/></svg></span><span><strong>Chat</strong><small>Model-agnostic chat for everyone in the company.</small></span></a><a href="apps.html"><span class="ico"><svg class="" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="3" y="3" width="7" height="7" rx="1.5"/><rect x="14" y="3" width="7" height="7" rx="1.5"/><rect x="3" y="14" width="7" height="7" rx="1.5"/><rect x="14" y="14" width="7" height="7" rx="1.5"/></svg></span><span><strong>Apps</strong><small>Ready-made AI assistants for recurring tasks.</small></span></a><a href="workflows.html"><span class="ico"><svg class="" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="3" y="3" width="6" height="6" rx="1.5"/><rect x="15" y="15" width="6" height="6" rx="1.5"/><path d="M9 6h4a3 3 0 0 1 3 3v6"/><path d="M12 15l3 3 3-3"/></svg></span><span><strong>Workflows & Agents</strong><small>Multi-step automation with human approval.</small></span></a><a href="integrations.html"><span class="ico"><svg class="" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M9 2v6M15 2v6M7 8h10v3a5 5 0 0 1-10 0V8z"/><path d="M12 16v6"/></svg></span><span><strong>Integrations</strong><small>Tools, MCP, Outlook, browser, Nextcloud, Teams.</small></span></a><a href="api.html"><span class="ico"><svg class="" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m8 7-5 5 5 5M16 7l5 5-5 5M14 4l-4 16"/></svg></span><span><strong>API</strong><small>OpenAI-compatible API, MCP gateway, OAuth.</small></span></a><a href="models.html"><span class="ico"><svg class="" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="5" y="5" width="14" height="14" rx="2"/><rect x="9" y="9" width="6" height="6"/><path d="M9 2v3M15 2v3M9 19v3M15 19v3M2 9h3M2 15h3M19 9h3M19 15h3"/></svg></span><span><strong>Models</strong><small>Every major provider plus local models.</small></span></a></div></li>
+      <li><button type="button" aria-expanded="false" aria-haspopup="true">Learn <svg class="" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m6 9 6 6 6-6"/></svg></button><div class="menu narrow"><a href="docs.html"><span class="ico"><svg class="" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 4h6a2 2 0 0 1 2 2v14a2 2 0 0 0-2-2H4V4zM20 4h-6a2 2 0 0 0-2 2v14a2 2 0 0 1 2-2h6V4z"/></svg></span><span><strong>Documentation</strong><small>Guides for users, admins and developers.</small></span></a><a href="changelog.html"><span class="ico"><svg class="" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2"/></svg></span><span><strong>Changelog</strong><small>What shipped in every release.</small></span></a><a href="security.html"><span class="ico"><svg class="" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 2 4 5v6c0 5 3.5 9.5 8 11 4.5-1.5 8-6 8-11V5l-8-3z"/><path d="m9 12 2 2 4-4"/></svg></span><span><strong>Security & privacy</strong><small>Data control, identity, encryption, audit.</small></span></a><a href="https://github.com/intrafind/ihub-apps" target="_blank" rel="noopener"><span class="ico"><svg class="" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 2a10 10 0 0 0-3.2 19.5c.5.1.7-.2.7-.5v-1.7c-2.8.6-3.4-1.2-3.4-1.2-.5-1.2-1.1-1.5-1.1-1.5-.9-.6.1-.6.1-.6 1 .1 1.5 1 1.5 1 .9 1.5 2.3 1.1 2.9.8.1-.6.3-1.1.6-1.3-2.2-.3-4.6-1.1-4.6-5a3.9 3.9 0 0 1 1-2.7 3.6 3.6 0 0 1 .1-2.7s.8-.3 2.8 1a9.5 9.5 0 0 1 5 0c1.9-1.3 2.7-1 2.7-1a3.6 3.6 0 0 1 .1 2.7 3.9 3.9 0 0 1 1 2.7c0 3.9-2.4 4.7-4.6 5 .4.3.7.9.7 1.9v2.8c0 .3.2.6.7.5A10 10 0 0 0 12 2z"/></svg></span><span><strong>GitHub</strong><small>Source code, issues and releases.</small></span></a></div></li>
+      <li><a href="security.html">Security</a></li>
+      <li><a href="enterprise.html">Enterprise</a></li>
+      <li><a href="pricing.html">Pricing</a></li>
+    </ul>
+    <div class="nav-spacer"></div>
+    <div class="nav-cta">
+      <a class="btn secondary sm hide-m" href="https://github.com/intrafind/ihub-apps" target="_blank" rel="noopener"><svg class="" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 2a10 10 0 0 0-3.2 19.5c.5.1.7-.2.7-.5v-1.7c-2.8.6-3.4-1.2-3.4-1.2-.5-1.2-1.1-1.5-1.1-1.5-.9-.6.1-.6.1-.6 1 .1 1.5 1 1.5 1 .9 1.5 2.3 1.1 2.9.8.1-.6.3-1.1.6-1.3-2.2-.3-4.6-1.1-4.6-5a3.9 3.9 0 0 1 1-2.7 3.6 3.6 0 0 1 .1-2.7s.8-.3 2.8 1a9.5 9.5 0 0 1 5 0c1.9-1.3 2.7-1 2.7-1a3.6 3.6 0 0 1 .1 2.7 3.9 3.9 0 0 1 1 2.7c0 3.9-2.4 4.7-4.6 5 .4.3.7.9.7 1.9v2.8c0 .3.2.6.7.5A10 10 0 0 0 12 2z"/></svg> GitHub</a>
+      <a class="btn primary sm" href="https://github.com/intrafind/ihub-apps/releases" target="_blank" rel="noopener">Get started</a>
+      <button class="nav-toggle" type="button" aria-label="Open menu" aria-expanded="false"><svg class="" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 7h16M4 12h16M4 17h16"/></svg></button>
+    </div>
+  </div>
+</header>
+<main id="main">
+<section class="hero">
+  <div class="wrap">
+    <span class="eyebrow">Integrations</span>
+    <h1>Plug iHub into the tools you already use.</h1>
+    <p class="lead">Built-in tools, any OpenAPI service, MCP servers in and out, and add-ins for Outlook, the browser and Nextcloud. All governed centrally.</p>
+    <div class="btn-row"><a class="btn primary" href="https://github.com/intrafind/ihub-apps/releases" target="_blank" rel="noopener"><svg class="" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 3v12M7 10l5 5 5-5M4 21h16"/></svg>Get started</a><a class="btn secondary" href="https://github.com/intrafind/ihub-apps/blob/main/docs/tool-calling.md" target="_blank" rel="noopener">Tool calling docs</a></div>
+    
+    <div class="hero-art"><figure class="shot browser zoomable"><img src="assets/screenshots/admin-integrations.webp" alt="The integrations hub in the admin panel." loading="eager" decoding="async"></figure></div>
+  </div>
+</section>
+<section class="section soft" ><div class="wrap">
+    <div class="section-head center"><h2>Three ways to connect.</h2></div>
+    <div class="grid cols-3"><div class="card"><span class="ico"><svg class="" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M13 2 4 14h7l-1 8 9-12h-7l1-8z"/></svg></span><h3>Integrate natively</h3><p>Web search (Brave, Staan, Qwant, native grounding), web content extraction, screenshots, Jira, Microsoft Entra people search, iFinder, iAssistant, Google Drive, Office 365 and Nextcloud file pickers.</p></div><a class="card" href="https://github.com/intrafind/ihub-apps/blob/main/docs/tool-calling.md" target="_blank" rel="noopener"><span class="ico"><svg class="" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m8 7-5 5 5 5M16 7l5 5-5 5M14 4l-4 16"/></svg></span><h3>Import any OpenAPI service</h3><p>Paste a spec URL or JSON/YAML, pick the operations the model may call, and use centrally stored credentials. Requests are SSRF-guarded and logged.</p><span class="more">Read the guide →</span></a><a class="card" href="https://github.com/intrafind/ihub-apps/blob/main/docs/mcp-integration.md" target="_blank" rel="noopener"><span class="ico"><svg class="" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M10 3h4v3a2 2 0 1 0 4 0h3v4h-3a2 2 0 1 0 0 4h3v4h-3a2 2 0 1 0-4 0v3h-4v-3a2 2 0 1 0-4 0H3v-4h3a2 2 0 1 0 0-4H3V6h3a2 2 0 1 0 4 0V3z"/></svg></span><h3>Add capabilities via MCP</h3><p>Connect any MCP server over Streamable HTTP or SSE with bearer or OAuth authentication, allowlists and tool prefixes. And expose iHub itself as an MCP server.</p><span class="more">MCP documentation →</span></a></div>
+  </div></section>
+<section class="section" ><div class="wrap">
+    <div class="section-head"><h2>Built-in tools and connectors.</h2></div>
+    <div class="feature" >
+      <div class="feature-text">
+        
+        <h3>Tools with central credentials</h3>
+        <p>18 tools ship with the platform, from ask_user and web search to iFinder and Entra people search. Credentials for external services live in one encrypted store and are referenced by tools and models.</p>
+        
+        
+      </div>
+      <div class="feature-media"><figure class="shot browser zoomable"><img src="assets/screenshots/admin-tools.webp" alt="The tools list in the admin panel." loading="lazy" decoding="async"></figure></div>
+    </div><div class="feature flip" >
+      <div class="feature-text">
+        
+        <h3>MCP servers as tool providers</h3>
+        <p>Register remote MCP servers, choose which tools to expose, prefix names to avoid collisions and reconnect automatically. Private IP ranges are blocked by default.</p>
+        
+        
+      </div>
+      <div class="feature-media"><figure class="shot browser zoomable"><img src="assets/screenshots/admin-mcp-servers.webp" alt="The MCP servers page in the admin panel." loading="lazy" decoding="async"></figure></div>
+    </div><div class="feature" >
+      <div class="feature-text">
+        
+        <h3>iHub as an MCP server for Claude, Cursor and VS Code</h3>
+        <p>The MCP gateway exposes your apps, tools, workflows and resources to external agents behind OAuth 2.0 with dynamic client registration. Approve clients individually, revoke connections and run stateless behind a load balancer.</p>
+        
+        
+      </div>
+      <div class="feature-media"><figure class="shot browser zoomable"><img src="assets/screenshots/admin-mcp-gateway.webp" alt="The MCP gateway configuration page." loading="lazy" decoding="async"></figure></div>
+    </div><div class="feature flip" >
+      <div class="feature-text">
+        
+        <h3>Jira, Office 365, Google Drive, Nextcloud</h3>
+        <p>Users connect Jira with OAuth and search, read, comment on and transition tickets from chat. File pickers bring documents from OneDrive, SharePoint, Teams libraries, Google Drive and Nextcloud into any app.</p>
+        
+        
+      </div>
+      <div class="feature-media"><figure class="shot browser zoomable"><img src="assets/screenshots/admin-integrations-jira.webp" alt="The Jira integration settings page." loading="lazy" decoding="async"></figure></div>
+    </div>
+  </div></section>
+<section class="section soft" ><div class="wrap">
+    <div class="section-head"><h2>Bring iHub to where people work.</h2></div>
+    <div class="feature" id="outlook">
+      <div class="feature-text">
+        
+        <h3>Outlook add-in</h3>
+        <p>Summarize the open thread, reply, reply all, forward or draft a new mail, insert into the draft, and prepare for the meeting in the open calendar item. Deployed centrally from the Microsoft 365 admin center.</p>
+        <ul><li>Desktop, web and mobile Outlook</li><li>Attachments as context</li><li>Attach documents found in iAssistant</li></ul>
+        <p class="mt-1"><a class="btn ghost" href="https://github.com/intrafind/ihub-apps/blob/main/docs/outlook-add-in.md" target="_blank" rel="noopener">Outlook add-in rollout <svg class="" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M5 12h14M13 6l6 6-6 6"/></svg></a></p>
+      </div>
+      <div class="feature-media"><figure class="shot browser zoomable"><img src="assets/screenshots/admin-office.webp" alt="Outlook add-in configuration page." loading="lazy" decoding="async"></figure></div>
+    </div><div class="feature flip" id="browser">
+      <div class="feature-text">
+        
+        <h3>Browser extension</h3>
+        <p>A side panel for Chrome, Edge and Firefox that sends the current page to any app. Signed CRX or ZIP builds, OAuth with PKCE, no data stored in the extension.</p>
+        
+        <p class="mt-1"><a class="btn ghost" href="https://github.com/intrafind/ihub-apps/blob/main/docs/browser-extension.md" target="_blank" rel="noopener">Browser extension docs <svg class="" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M5 12h14M13 6l6 6-6 6"/></svg></a></p>
+      </div>
+      <div class="feature-media"><figure class="shot browser zoomable"><img src="assets/screenshots/admin-browser-extension.webp" alt="Browser extension download and configuration page." loading="lazy" decoding="async"></figure></div>
+    </div><div class="feature" id="nextcloud">
+      <div class="feature-text">
+        
+        <h3>Nextcloud app and embed</h3>
+        <p>“Chat with iHub” inside Nextcloud Files, plus an embeddable full-page view protected by OAuth and a frame-ancestors policy.</p>
+        
+        <p class="mt-1"><a class="btn ghost" href="https://github.com/intrafind/ihub-apps/blob/main/docs/nextcloud-integration.md" target="_blank" rel="noopener">Nextcloud integration <svg class="" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M5 12h14M13 6l6 6-6 6"/></svg></a></p>
+      </div>
+      <div class="feature-media"><figure class="shot browser zoomable"><img src="assets/screenshots/admin-nextcloud-embed.webp" alt="Nextcloud embed configuration page." loading="lazy" decoding="async"></figure></div>
+    </div><div class="feature flip" id="teams">
+      <div class="feature-text">
+        
+        <h3>Microsoft Teams tab</h3>
+        <p>A personal tab with Teams single sign-on, so the whole workspace is one click away inside Teams.</p>
+        
+        
+      </div>
+      <div class="feature-media"><figure class="shot browser zoomable"><img src="assets/screenshots/admin-integrations-office365.webp" alt="Office 365 integration settings." loading="lazy" decoding="async"></figure></div>
+    </div>
+  </div></section>
+<section class="section" ><div class="wrap">
+    <div class="section-head"><h2>Enterprise knowledge from IntraFind.</h2></div>
+    <div class="feature" >
+      <div class="feature-text">
+        
+        <h3>iFinder and iAssistant</h3>
+        <p>Use IntraFind iFinder as a knowledge source with the user’s own permissions: pin a document or drive a search query. iAssistant adds grounded retrieval-augmented answers as a model in its own right.</p>
+        <ul><li>Seven iFinder tools: search, content, metadata, facets, profiles</li><li>JWT or OIDC identity pass-through</li><li>Audit-grade quote validation for reviews</li></ul>
+        <p class="mt-1"><a class="btn ghost" href="https://github.com/intrafind/ihub-apps/blob/main/docs/iFinder-Integration.md" target="_blank" rel="noopener">iFinder integration <svg class="" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M5 12h14M13 6l6 6-6 6"/></svg></a></p>
+      </div>
+      <div class="feature-media"><figure class="shot browser zoomable"><img src="assets/screenshots/admin-sources.webp" alt="The sources list with iFinder, file and URL sources." loading="lazy" decoding="async"></figure></div>
+    </div>
+  </div></section>
+<section class="section soft" ><div class="wrap"><div class="section-head center"><h2>Catalogue</h2><p class="lead">Everything that ships or connects today.</p></div>
+      <div class="grid cols-3">
+        <div class="card"><h3>Search & web</h3><ul class="inline-list"><li>Brave Search</li><li>Staan (EU)</li><li>Qwant</li><li>Google grounding</li><li>OpenAI web search</li><li>Anthropic web search</li><li>Web content extractor</li><li>Playwright screenshot</li><li>Selenium screenshot</li></ul></div>
+        <div class="card"><h3>Enterprise systems</h3><ul class="inline-list"><li>Jira</li><li>Microsoft Entra</li><li>iFinder</li><li>iAssistant</li><li>Office 365 / SharePoint / OneDrive</li><li>Google Drive</li><li>Nextcloud</li><li>Any OpenAPI service</li></ul></div>
+        <div class="card"><h3>Surfaces</h3><ul class="inline-list"><li>Outlook add-in</li><li>Browser extension</li><li>Nextcloud app</li><li>Microsoft Teams tab</li><li>PWA</li><li>OpenAI-compatible API</li><li>MCP gateway</li><li>A2A (experimental)</li></ul></div>
+        <div class="card"><h3>Protocols</h3><ul class="inline-list"><li>MCP client</li><li>MCP server</li><li>OAuth 2.0 / OIDC</li><li>Dynamic client registration</li><li>CIMD</li><li>HMAC webhooks</li><li>SSE v2</li></ul></div>
+        <div class="card"><h3>Identity</h3><ul class="inline-list"><li>OIDC (Entra, Google, Keycloak, Okta, Auth0)</li><li>ADFS</li><li>LDAP</li><li>NTLM</li><li>Proxy / JWT</li><li>Teams SSO</li><li>Local accounts</li></ul></div>
+        <div class="card"><h3>Agent tools</h3><ul class="inline-list"><li>ask_user</li><li>evidence</li><li>create_task</li><li>list_tasks</li><li>mark_task_done</li><li>read/write inbox</li><li>read/write memory</li><li>write_artifact</li></ul></div>
+      </div></div></section>
+<section class="section soft" id="faq"><div class="wrap">
+    <div class="section-head center"><h2>Questions & answers</h2></div>
+    <div class="faq"><details><summary>Can I connect a service that is not listed?</summary><div class="answer"><p>Yes. Import its OpenAPI specification as a tool, connect it through an MCP server, or write a small script tool. Credentials are stored centrally and encrypted.</p></div></details><details><summary>Is the integration secure?</summary><div class="answer"><p>Outbound calls pass an SSRF guard, private ranges are blocked unless allowlisted, secrets are AES-256-GCM encrypted, and every tool call appears in the audit log and the run ledger.</p></div></details><details><summary>Can other AI clients use my iHub apps?</summary><div class="answer"><p>Yes. The MCP gateway exposes apps, tools and workflows to Claude Desktop, claude.ai, Cursor and VS Code behind OAuth 2.0, and the OpenAI-compatible API works with the OpenAI SDKs, LangChain and LlamaIndex.</p></div></details><details><summary>Do users need to authenticate with each service?</summary><div class="answer"><p>Depends on the service. Jira and the cloud file pickers use the user’s own OAuth login. Central credentials are used for service accounts such as web search or OpenAPI tools.</p></div></details></div>
+  </div></section>
+<section class="section"><div class="wrap">
+    <div class="section-head center"><h2>The essential AI stack for your company.</h2><p class="lead">Simple for business users. Ready for advanced use cases. Governed by IT.</p></div>
+    <div class="grid cols-5"><a class="card" href="chat.html"><span class="ico"><svg class="" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M21 12a8 8 0 0 1-8 8H7l-4 3v-6.5A8 8 0 1 1 21 12z"/></svg></span><h3>Chat</h3><p>Model-agnostic chat for everyone in the company.</p><span class="more">Learn more →</span></a><a class="card" href="apps.html"><span class="ico"><svg class="" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="3" y="3" width="7" height="7" rx="1.5"/><rect x="14" y="3" width="7" height="7" rx="1.5"/><rect x="3" y="14" width="7" height="7" rx="1.5"/><rect x="14" y="14" width="7" height="7" rx="1.5"/></svg></span><h3>Apps</h3><p>Ready-made AI assistants for recurring tasks.</p><span class="more">Learn more →</span></a><a class="card" href="workflows.html"><span class="ico"><svg class="" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="3" y="3" width="6" height="6" rx="1.5"/><rect x="15" y="15" width="6" height="6" rx="1.5"/><path d="M9 6h4a3 3 0 0 1 3 3v6"/><path d="M12 15l3 3 3-3"/></svg></span><h3>Workflows & Agents</h3><p>Multi-step automation with human approval.</p><span class="more">Learn more →</span></a><a class="card" href="api.html"><span class="ico"><svg class="" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m8 7-5 5 5 5M16 7l5 5-5 5M14 4l-4 16"/></svg></span><h3>API</h3><p>OpenAI-compatible API, MCP gateway, OAuth.</p><span class="more">Learn more →</span></a><a class="card" href="models.html"><span class="ico"><svg class="" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="5" y="5" width="14" height="14" rx="2"/><rect x="9" y="9" width="6" height="6"/><path d="M9 2v3M15 2v3M9 19v3M15 19v3M2 9h3M2 15h3M19 9h3M19 15h3"/></svg></span><h3>Models</h3><p>Every major provider plus local models.</p><span class="more">Learn more →</span></a></div>
+  </div></section>
+<section class="cta">
+  <div class="wrap">
+    <div class="box">
+      <h2>Run iHub Apps in 60 seconds.</h2>
+      <p class="lead">One command installs the standalone binary. No Node.js, no Docker, no database. Open http://localhost:3000, add a model key, and your team has 24 AI apps.</p>
+      <pre><code>curl -fsSL https://raw.githubusercontent.com/intrafind/ihub-apps/main/install.sh | sh</code></pre>
+      <div class="btn-row">
+        <a class="btn primary" href="https://github.com/intrafind/ihub-apps/releases" target="_blank" rel="noopener"><svg class="" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 3v12M7 10l5 5 5-5M4 21h16"/></svg> Download for Linux, macOS, Windows</a>
+        <a class="btn secondary" href="mailto:sales@intrafind.com">Talk to IntraFind</a>
+      </div>
+    </div>
+  </div>
+</section>
+<section class="trust" aria-label="Trust">
+  <div class="wrap">
+    <div class="item"><span class="ico"><svg class="" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 2a10 10 0 0 0-3.2 19.5c.5.1.7-.2.7-.5v-1.7c-2.8.6-3.4-1.2-3.4-1.2-.5-1.2-1.1-1.5-1.1-1.5-.9-.6.1-.6.1-.6 1 .1 1.5 1 1.5 1 .9 1.5 2.3 1.1 2.9.8.1-.6.3-1.1.6-1.3-2.2-.3-4.6-1.1-4.6-5a3.9 3.9 0 0 1 1-2.7 3.6 3.6 0 0 1 .1-2.7s.8-.3 2.8 1a9.5 9.5 0 0 1 5 0c1.9-1.3 2.7-1 2.7-1a3.6 3.6 0 0 1 .1 2.7 3.9 3.9 0 0 1 1 2.7c0 3.9-2.4 4.7-4.6 5 .4.3.7.9.7 1.9v2.8c0 .3.2.6.7.5A10 10 0 0 0 12 2z"/></svg></span><div><strong>Open source</strong><span>BSD-3-Clause with attribution. Full source on GitHub.</span></div></div>
+    <div class="item"><span class="ico"><svg class="" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="3" y="3" width="18" height="7" rx="2"/><rect x="3" y="14" width="18" height="7" rx="2"/><path d="M7 6.5h.01M7 17.5h.01"/></svg></span><div><strong>Deployable anywhere</strong><span>Binary, Docker, Windows service, on-prem or air-gapped.</span></div></div>
+    <div class="item"><span class="ico"><svg class="" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 2 4 5v6c0 5 3.5 9.5 8 11 4.5-1.5 8-6 8-11V5l-8-3z"/><path d="m9 12 2 2 4-4"/></svg></span><div><strong>GDPR by design</strong><span>Your infrastructure, your models, your data. Made in Germany.</span></div></div>
+  </div>
+</section>
+</main>
+<footer>
+  <div class="wrap">
+    <div class="foot-grid">
+      <div class="foot-brand">
+        <a class="brand" href="index.html"><img src="assets/img/ihub-mark.svg" alt=""><span>iHub <b>Apps</b></span></a>
+        <p>The open-source AI platform for your whole organization. Built by <a href="https://intrafind.com/" target="_blank" rel="noopener">IntraFind Software AG</a> in Berlin, Bonn and Munich.</p>
+      </div>
+      <div><h4>Platform</h4><ul><li><a href="chat.html">Chat</a></li><li><a href="apps.html">Apps</a></li><li><a href="workflows.html">Workflows & Agents</a></li><li><a href="integrations.html">Integrations</a></li><li><a href="api.html">API</a></li><li><a href="models.html">Models</a></li><li><a href="integrations.html#outlook">Outlook add-in</a></li><li><a href="integrations.html#browser">Browser extension</a></li><li><a href="integrations.html#nextcloud">Nextcloud app</a></li></ul></div>
+      <div><h4>Learn</h4><ul><li><a href="docs.html">Documentation</a></li><li><a href="changelog.html">Changelog</a></li><li><a href="security.html">Security & privacy</a></li><li><a href="enterprise.html">Enterprise</a></li><li><a href="pricing.html">Pricing</a></li><li><a href="https://github.com/intrafind/ihub-apps/releases" target="_blank" rel="noopener">Releases</a></li><li><a href="https://github.com/intrafind/ihub-apps/pkgs/container/ihub-apps" target="_blank" rel="noopener">Docker image</a></li></ul></div>
+      <div><h4>Company</h4><ul><li><a href="https://intrafind.com/" target="_blank" rel="noopener">IntraFind</a></li><li><a href="mailto:sales@intrafind.com" target="_blank" rel="noopener">Contact sales</a></li><li><a href="https://github.com/intrafind/ihub-apps" target="_blank" rel="noopener">GitHub</a></li><li><a href="https://github.com/intrafind/ihub-apps/issues" target="_blank" rel="noopener">Issues</a></li><li><a href="https://github.com/intrafind/ihub-apps/blob/main/LICENSE" target="_blank" rel="noopener">License</a></li></ul></div>
+      <div><h4>Also by IntraFind</h4><ul><li><a href="https://intrafind.com/" target="_blank" rel="noopener">iFinder enterprise search</a></li><li><a href="https://intrafind.com/" target="_blank" rel="noopener">iAssistant</a></li></ul></div>
+    </div>
+    <div class="foot-bottom">
+      <span>© 2026 IntraFind Software AG. iHub Apps 5.5.16.</span>
+      <span><a href="https://intrafind.com/" target="_blank" rel="noopener">Imprint</a> · <a href="https://intrafind.com/" target="_blank" rel="noopener">Privacy policy</a> · <a href="https://github.com/intrafind/ihub-apps/blob/main/LICENSE" target="_blank" rel="noopener">License</a></span>
+    </div>
+  </div>
+</footer>
+<script src="assets/js/site.js" defer></script>
+</body>
+</html>
