@@ -6,7 +6,22 @@ import { WebSocketClientTransport } from '@modelcontextprotocol/sdk/client/webso
 import { URL } from 'url';
 import credentialService from '../CredentialService.js';
 import { safeFetch, assertSafeHost } from './safeFetch.js';
+import {
+  appsEnabledFor,
+  buildClientCapabilities,
+  extractUiResource,
+  isAppCallable,
+  isAppOnly,
+  isModelVisible,
+  readToolUiMeta
+} from './mcpApps.js';
 import logger from '../../utils/logger.js';
+
+/** How long a fetched MCP App UI resource is reused before re-reading it. */
+const UI_RESOURCE_TTL_MS = 5 * 60 * 1000;
+
+/** Guard against a server that paginates `tools/list` forever. */
+const MAX_TOOL_LIST_PAGES = 20;
 
 /**
  * One MCPServerConnection wraps the SDK `Client` for a single configured
@@ -16,6 +31,8 @@ import logger from '../../utils/logger.js';
  *   - exponential-backoff auto-reconnect
  *   - tool catalog cache (refreshed on `tools/list_changed`)
  *   - hard timeout + cancellation around `tools/call`
+ *   - MCP Apps: advertising the `io.modelcontextprotocol/ui` extension,
+ *     reading `_meta.ui` off tools, and fetching `ui://` resources
  *
  * Multiple servers are coordinated by McpClientManager.
  */
@@ -28,7 +45,11 @@ export class McpServerConnection {
     this.connected = false;
     this.connecting = null; // shared promise while a connect is in flight
     this.lastError = null;
-    this.toolsCache = null; // last result of tools/list
+    this.toolsCache = null; // model-facing tools from the last tools/list
+    // MCP Apps: every tool an app (view) of this server may call, keyed by the
+    // server's own tool name. Includes app-only tools the model never sees.
+    this.appToolsCache = null;
+    this.uiResourceCache = new Map(); // uri -> { resource, expiresAt }
     this.consecutiveFailures = 0;
     // Marked unhealthy after `maxRetries` consecutive failures. The manager
     // skips unhealthy connections in `listAllTools` so a broken server doesn't
@@ -153,7 +174,7 @@ export class McpServerConnection {
         const authHeaders = await this._getAuthHeaders(auth);
         return safeFetch(
           input,
-          { ...init, headers: { ...(init.headers || {}), ...authHeaders } },
+          { ...init, headers: { ...toPlainHeaders(init.headers), ...authHeaders } },
           {
             allowHosts,
             blockPrivateIps
@@ -210,7 +231,10 @@ export class McpServerConnection {
 
     this.connecting = (async () => {
       try {
-        this.client = new Client({ name: 'ihub-apps', version: '1.0.0' }, { capabilities: {} });
+        this.client = new Client(
+          { name: 'ihub-apps', version: '1.0.0' },
+          { capabilities: buildClientCapabilities(appsEnabledFor(this.config)) }
+        );
         this.transport = await this._buildTransport();
         await this.client.connect(this.transport);
         this.connected = true;
@@ -229,6 +253,7 @@ export class McpServerConnection {
         try {
           this.client.onNotification?.({ method: 'notifications/tools/list_changed' }, async () => {
             this.toolsCache = null;
+            this.appToolsCache = null;
           });
         } catch {
           /* SDK version without this hook — fine, manual refresh still works */
@@ -271,12 +296,19 @@ export class McpServerConnection {
     this.transport = null;
     this.connected = false;
     this.toolsCache = null;
+    this.appToolsCache = null;
+    this.uiResourceCache.clear();
   }
 
   /**
    * List tools advertised by this server, applying the allowlist filter.
    * Returns the raw `Tool` objects from the MCP spec, augmented with iHub's
    * prefix metadata so the caller can map back to this server in `runTool`.
+   *
+   * MCP Apps: a tool whose `_meta.ui.visibility` leaves out `"model"` is an
+   * app-only helper (a view's refresh or save action) and is never offered to
+   * the model; a tool with `_meta.ui.resourceUri` carries it on `_mcp.ui` so
+   * the chat can render its view. Both kinds land in `appToolsCache`.
    */
   async listTools() {
     if (this.unhealthy) return [];
@@ -284,14 +316,46 @@ export class McpServerConnection {
     if (!this.connected) await this.connect();
     if (this.toolsCache) return this.toolsCache;
 
-    const result = await this.client.listTools({});
+    const rawTools = [];
+    let cursor;
+    for (let page = 0; page < MAX_TOOL_LIST_PAGES; page++) {
+      const result = await this.client.listTools(cursor ? { cursor } : {});
+      rawTools.push(...(result.tools || []));
+      cursor = result.nextCursor;
+      if (!cursor) break;
+    }
+
     const prefix = this.config.toolPrefix ?? `${this.config.id}__`;
     const allow = this.config.allowedTools || ['*'];
     const allowAll = allow.includes('*');
+    const appsEnabled = appsEnabledFor(this.config);
 
-    const tools = (result.tools || [])
-      .filter(t => allowAll || allow.includes(t.name))
-      .map(t => ({
+    const tools = [];
+    const appTools = new Map();
+    for (const t of rawTools) {
+      if (!t || typeof t.name !== 'string') continue;
+      // Visibility is honoured even with apps disabled: an app-only helper
+      // must never reach the model. Only the view link is dropped.
+      const meta = readToolUiMeta(t);
+      const ui = meta && !appsEnabled ? { ...meta, resourceUri: null } : meta;
+      const allowed = allowAll || allow.includes(t.name);
+
+      // The allowlist governs what the model is offered. App-only tools are
+      // never offered to the model and exist only to serve this server's own
+      // views, so they stay callable by those views regardless.
+      if (appsEnabled && isAppCallable(ui) && (allowed || isAppOnly(ui))) {
+        appTools.set(t.name, {
+          name: t.name,
+          description: t.description || '',
+          inputSchema: t.inputSchema || { type: 'object', properties: {} },
+          ...(t.title ? { title: t.title } : {}),
+          ...(t.annotations ? { annotations: t.annotations } : {}),
+          ui
+        });
+      }
+
+      if (!allowed || !isModelVisible(ui)) continue;
+      tools.push({
         // iHub-facing id; runMcpTool splits on the prefix delimiter.
         id: `${prefix}${t.name}`,
         name: `${prefix}${t.name}`,
@@ -300,20 +364,40 @@ export class McpServerConnection {
         // Internal markers so toolLoader.runTool knows how to dispatch.
         _mcp: {
           serverId: this.config.id,
-          originalName: t.name
+          originalName: t.name,
+          ...(ui?.resourceUri ? { ui: { resourceUri: ui.resourceUri } } : {})
         }
-      }));
+      });
+    }
     this.toolsCache = tools;
+    this.appToolsCache = appTools;
     return tools;
   }
 
   /**
-   * Invoke a tool. Wraps the SDK call in a hard timeout and translates the
-   * MCP-spec `isError: true` success response into a thrown Error — without
-   * this, every tool-level failure surfaces as a successful response with
-   * garbage content in the model context (issue #1460 comment, gap #3).
+   * The tool an app (view) of this server wants to call, or null when the app
+   * may not call it: unknown, hidden from apps by its visibility, or blocked
+   * by the allowlist.
+   *
+   * @param {string} name - The server's own tool name
+   * @returns {Promise<Object|null>}
    */
-  async callTool(originalName, args) {
+  async getAppTool(name) {
+    if (typeof name !== 'string' || !name) return null;
+    await this.listTools();
+    return this.appToolsCache?.get(name) || null;
+  }
+
+  /**
+   * Invoke a tool and return the raw CallToolResult, `isError` included.
+   * Wraps the SDK call in the server's hard timeout. This is what an MCP App
+   * view receives; the model-facing `callTool` builds on it.
+   *
+   * @param {string} originalName - The server's own tool name
+   * @param {Object} [args]
+   * @returns {Promise<Object>} CallToolResult
+   */
+  async callToolRaw(originalName, args) {
     if (this.unhealthy) {
       throw new Error(`MCP server ${this.config.id} is unhealthy: ${this.lastError}`);
     }
@@ -325,29 +409,86 @@ export class McpServerConnection {
     const timeoutMs = this.config.timeoutMs ?? 30000;
     const controller = new AbortController();
     const timer = setTimeout(() => controller.abort(), timeoutMs);
-
     try {
-      const result = await this.client.callTool(
-        { name: originalName, arguments: args || {} },
-        undefined,
-        { signal: controller.signal, timeout: timeoutMs }
-      );
-
-      // Critical: MCP returns tool-level failures as a successful JSON-RPC
-      // response with `isError: true`. If we don't catch this here, the
-      // model receives the error payload as if it were a normal tool result.
-      if (result?.isError) {
-        const message = extractErrorText(result) || `MCP tool ${originalName} returned isError`;
-        const err = new Error(message);
-        err.code = 'MCP_TOOL_ERROR';
-        err.mcpResult = result;
-        throw err;
-      }
-
-      return normalizeToolResult(result);
+      return await this.client.callTool({ name: originalName, arguments: args || {} }, undefined, {
+        signal: controller.signal,
+        timeout: timeoutMs
+      });
     } finally {
       clearTimeout(timer);
     }
+  }
+
+  /**
+   * Invoke a tool. Wraps the SDK call in a hard timeout and translates the
+   * MCP-spec `isError: true` success response into a thrown Error — without
+   * this, every tool-level failure surfaces as a successful response with
+   * garbage content in the model context (issue #1460 comment, gap #3).
+   *
+   * @param {string} originalName - The server's own tool name
+   * @param {Object} [args]
+   * @param {Object} [options]
+   * @param {Function} [options.onRawResult] - Receives the raw CallToolResult
+   *   before it is normalised or turned into an error (MCP Apps views need it)
+   */
+  async callTool(originalName, args, { onRawResult } = {}) {
+    const result = await this.callToolRaw(originalName, args);
+    if (typeof onRawResult === 'function') onRawResult(result);
+
+    // Critical: MCP returns tool-level failures as a successful JSON-RPC
+    // response with `isError: true`. If we don't catch this here, the
+    // model receives the error payload as if it were a normal tool result.
+    if (result?.isError) {
+      const message = extractErrorText(result) || `MCP tool ${originalName} returned isError`;
+      const err = new Error(message);
+      err.code = 'MCP_TOOL_ERROR';
+      err.mcpResult = result;
+      throw err;
+    }
+
+    return normalizeToolResult(result);
+  }
+
+  /**
+   * `resources/read` against this server, bounded by the server's timeout.
+   * @param {string} uri
+   * @returns {Promise<Object>} ReadResourceResult
+   */
+  async readResource(uri) {
+    if (this.unhealthy) {
+      throw new Error(`MCP server ${this.config.id} is unhealthy: ${this.lastError}`);
+    }
+    if (this.config.enabled === false) {
+      throw new Error(`MCP server ${this.config.id} is disabled`);
+    }
+    if (!this.connected) await this.connect();
+    const timeoutMs = this.config.timeoutMs ?? 30000;
+    return this.client.readResource({ uri }, { timeout: timeoutMs });
+  }
+
+  /**
+   * Fetch and validate an MCP App UI resource (`ui://…`), cached briefly so a
+   * chat with several views of the same app reads it once.
+   *
+   * @param {string} uri
+   * @returns {Promise<{uri:string, html:string, csp:Object, permissions:Object, prefersBorder:(boolean|null)}>}
+   */
+  async getUiResource(uri) {
+    const cached = this.uiResourceCache.get(uri);
+    if (cached && cached.expiresAt > Date.now()) return cached.resource;
+    const resource = extractUiResource(await this.readResource(uri), uri);
+    this.uiResourceCache.set(uri, { resource, expiresAt: Date.now() + UI_RESOURCE_TTL_MS });
+    logger.info('MCP App UI resource loaded', {
+      component: 'McpServerConnection',
+      serverId: this.config.id,
+      uri,
+      bytes: Buffer.byteLength(resource.html, 'utf8'),
+      // The specification asks hosts to keep an audit trail of the CSP a view
+      // was granted.
+      csp: resource.csp,
+      permissions: Object.keys(resource.permissions)
+    });
+    return resource;
   }
 
   status() {
@@ -362,6 +503,20 @@ export class McpServerConnection {
       toolCount: this.toolsCache ? this.toolsCache.length : null
     };
   }
+}
+
+/**
+ * Request headers as a plain object. The SDK transports pass a `Headers`
+ * instance (carrying `Accept: application/json, text/event-stream` and the
+ * content type); spreading one yields `{}`, which dropped those headers and
+ * made spec-compliant Streamable HTTP servers answer 406.
+ *
+ * @param {Headers|Object|Array|undefined} headers
+ * @returns {Object<string, string>}
+ */
+export function toPlainHeaders(headers) {
+  if (!headers) return {};
+  return Object.fromEntries(new Headers(headers).entries());
 }
 
 function extractErrorText(result) {

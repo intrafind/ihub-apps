@@ -117,6 +117,155 @@ tool definition and forwards to `McpClientManager.callTool`, which:
   surface as iHub tool errors (not silent success-with-garbage-content).
 - Lazy-connects on first use; reconnects with exponential backoff up to
   `reconnect.maxRetries` before marking the server unhealthy.
+- Sends only the tool's own arguments. The context iHub adds for its native
+  tools (`user`, `chatId`, `appConfig`, workflow plumbing) never leaves iHub;
+  `language` is forwarded only when the tool's schema declares it.
+
+### MCP Apps — interactive views
+
+iHub is an [MCP Apps](https://modelcontextprotocol.io/docs/extensions/apps)
+host (extension `io.modelcontextprotocol/ui`, specification 2026-01-26). A
+server that supports it declares an HTML view as a `ui://` resource and points
+a tool at it with `_meta.ui.resourceUri`; when the model calls that tool, the
+view renders inline in the chat answer, next to the text reply.
+
+Two public servers to start with:
+
+```jsonc
+{
+  "servers": [
+    {
+      "id": "drawio",
+      "name": { "en": "draw.io" },
+      "transport": { "type": "streamableHttp", "url": "https://mcp.draw.io/mcp" }
+    },
+    {
+      "id": "excalidraw",
+      "name": { "en": "Excalidraw" },
+      "transport": { "type": "streamableHttp", "url": "https://mcp.excalidraw.com/mcp" }
+    }
+  ]
+}
+```
+
+Then give an app the server's tools, either all of them by server id or one
+by one:
+
+```jsonc
+{ "id": "whiteboard", "tools": ["drawio", "excalidraw__create_view", "excalidraw__read_me"] }
+```
+
+Both servers can also be self-hosted (`jgraph/drawio-mcp` on Docker Hub, or
+`excalidraw/excalidraw-mcp` from source); list an internal hostname in
+`security.allowedHosts`.
+
+#### Enabling and disabling
+
+Per server, `apps.enabled` (admin UI: **Render interactive views (MCP
+Apps)**, on by default; migration `V130` seeds it). When on, iHub advertises
+the extension in `initialize`:
+
+```json
+{ "capabilities": { "extensions": { "io.modelcontextprotocol/ui": { "mimeTypes": ["text/html;profile=mcp-app"] } } } }
+```
+
+When off the extension is not advertised, no view renders, and a
+well-behaved server returns text only (draw.io, for example, returns an
+"open in draw.io" link instead). Changing the toggle reconnects the server,
+because capabilities are negotiated once per connection. The connection test
+in the admin dialog marks each tool that renders a view.
+
+#### Tool visibility
+
+`_meta.ui.visibility` decides who may call a tool:
+
+| Visibility | Offered to the model | Callable by the server's views |
+|------------|----------------------|--------------------------------|
+| omitted / `["model", "app"]` | yes | yes |
+| `["model"]` | yes | no |
+| `["app"]` | **never** | yes |
+
+App-only tools (Excalidraw's `save_checkpoint`, for example) are hidden from
+the model even when MCP Apps are disabled. `allowedTools` restricts what the
+model is offered and which model-visible tools a view may call; app-only
+tools exist only to serve the server's own views and stay callable by them.
+A view can never call a tool of a different server.
+
+#### Sandbox
+
+A view is untrusted HTML. It renders in a double iframe:
+
+1. The chat embeds `GET /api/mcp-apps/sandbox` with
+   `sandbox="allow-scripts allow-forms"` — deliberately **without**
+   `allow-same-origin`, so the page runs in an opaque origin: it cannot read
+   iHub's DOM, cookies or storage, and iHub's session is never exposed. The
+   page refuses to run anywhere else, and `frame-ancestors 'self'` stops other
+   sites from embedding it.
+2. The sandbox page writes the view into an inner frame, which inherits the
+   page's `Content-Security-Policy` header. The header is built server-side
+   from the domains the resource declares in `_meta.ui.csp` (sanitized: no
+   keywords, wildcards-only or directive breaks). Nothing else is reachable:
+   no `'self'`, `connect-src 'none'` and `frame-src 'none'` unless declared,
+   `object-src 'none'` always.
+3. Permissions a resource requests (`camera`, `microphone`, `geolocation`,
+   `clipboardWrite`) become the iframes' `allow` attribute.
+
+The specification's reference layout puts the sandbox on a second origin with
+`allow-same-origin`. A self-hosted iHub has one origin, so iHub gets the
+separation from the opaque origin instead. The one visible difference: views
+cannot use `localStorage`/`sessionStorage` (the reference apps handle that).
+Views are not rendered where the API is served from a different origin than
+the page (an API base override, such as the browser extension).
+
+#### What a view can do
+
+| Method | iHub behaviour |
+|--------|----------------|
+| `ui/initialize` | Host info, capabilities and context: theme, style variables, locale, time zone, `inline`/`fullscreen` display modes, container size, the tool definition |
+| `ui/notifications/tool-input` / `tool-result` / `tool-cancelled` | The call's arguments, then its full `CallToolResult` (`structuredContent` and `_meta` included — the model only ever sees `content`), or a cancellation when the call failed without a result |
+| `tools/call` | Proxied to the view's own server, subject to visibility |
+| `resources/read` | Proxied to the view's own server |
+| `ui/open-link` | Opens `http(s)` links in a new tab (`noopener`) |
+| `ui/message` | Posts the text as the user's next chat message; refused while a turn is running |
+| `ui/update-model-context` | The latest update per view is added to the next turn's prompt as an `<mcp_app_context>` block (text and structured content; never stored or shown) |
+| `ui/request-display-mode` | `inline` or `fullscreen` (a full-window overlay with a close button); `pip` is not offered |
+| `ui/notifications/size-changed` | Inline views grow with their content, up to 720 px |
+| `ui/notifications/host-context-changed` | Sent on theme, language, width and display-mode changes |
+| `ui/resource-teardown` | Sent when the view is removed |
+
+Requests are rate-limited per view, and the server logs every call a view
+makes (`component: McpApps`).
+
+#### Host endpoints
+
+All but the sandbox page require the chat's authentication and name the app
+and the tool whose call rendered the view. The caller must be able to open
+the app, and the app must offer the tool.
+
+- `GET /api/mcp-apps/sandbox?csp=…` — the sandbox page (static, no auth).
+- `GET /api/mcp-apps/resource?appId=&toolId=` — the view's HTML and metadata.
+  The server derives the `ui://` URI from the tool; the client never names it.
+- `POST /api/mcp-apps/tools/call` — `{ appId, toolId, name, arguments }`.
+- `POST /api/mcp-apps/resources/read` — `{ appId, toolId, uri }`.
+
+#### Persistence
+
+The SSE stream carries the view on `tool/started` (`mcpApp: { serverId,
+toolName, resourceUri }`) and its data on `tool/completed` (`mcpApp: { …,
+callId, toolId, args, toolResult }`). The same descriptor is stored with the
+assistant message (`mcpApps`), so a reopened chat redraws the view. Payloads
+above 1 MB per view, or 2 MB per answer, are dropped with `payloadOmitted`;
+the chat then says the view is too large to show again. Shared chats show
+where a view was without running it.
+
+#### Limitations
+
+- Tool arguments are not streamed to the view while the model is still
+  writing them (`ui/notifications/tool-input-partial` is not sent).
+- Model-context updates reach the model with the next message only; image
+  content in them is not forwarded.
+- iHub does not call tools a view exposes to its host
+  (`appCapabilities.tools`), and `resources/list` is not proxied.
 
 ### Admin operations
 

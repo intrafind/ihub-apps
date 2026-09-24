@@ -679,8 +679,13 @@ export { localizeTools };
  *
  * @param {string} toolId - Tool identifier
  * @param {object} params - Parameters passed to the tool
+ * @param {object} [options]
+ * @param {Function} [options.onMcpAppResult] - For an MCP tool that renders an
+ *   MCP App view: receives the raw CallToolResult (structured content, `_meta`,
+ *   `isError`) the view is drawn from. The return value stays the model-facing
+ *   result either way.
  */
-export async function runTool(toolId, params = {}) {
+export async function runTool(toolId, params = {}, options = {}) {
   logger.info('Running tool', { component: 'ToolLoader', toolId });
   if (!isValidId(toolId)) {
     throw new Error('Invalid tool id');
@@ -807,7 +812,9 @@ export async function runTool(toolId, params = {}) {
       toolId,
       serverId: tool._mcp.serverId
     });
-    return await mcpClientManager.callTool(toolId, params);
+    return await mcpClientManager.callTool(toolId, params, {
+      onRawResult: options.onMcpAppResult
+    });
   }
 
   // OpenAPI tools are dispatched through the OpenApiToolRunner.

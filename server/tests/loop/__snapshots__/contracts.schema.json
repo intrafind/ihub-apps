@@ -4081,6 +4081,22 @@
               "execution": {
                 "type": "string",
                 "enum": ["server", "caller", "clarification", "passthrough"]
+              },
+              "mcpApp": {
+                "type": "object",
+                "properties": {
+                  "serverId": {
+                    "type": "string"
+                  },
+                  "toolName": {
+                    "type": "string"
+                  },
+                  "resourceUri": {
+                    "type": "string"
+                  }
+                },
+                "required": ["serverId", "toolName", "resourceUri"],
+                "additionalProperties": false
               }
             },
             "required": ["step", "callId", "toolId", "name", "args", "execution"],
@@ -4230,6 +4246,48 @@
                   },
                   "additionalProperties": false
                 }
+              },
+              "mcpApp": {
+                "type": "object",
+                "properties": {
+                  "serverId": {
+                    "type": "string"
+                  },
+                  "toolName": {
+                    "type": "string"
+                  },
+                  "resourceUri": {
+                    "type": "string"
+                  },
+                  "callId": {
+                    "type": "string"
+                  },
+                  "toolId": {
+                    "type": "string"
+                  },
+                  "args": {
+                    "type": "object",
+                    "propertyNames": {
+                      "type": "string"
+                    },
+                    "additionalProperties": {}
+                  },
+                  "toolResult": {
+                    "type": "object",
+                    "propertyNames": {
+                      "type": "string"
+                    },
+                    "additionalProperties": {}
+                  },
+                  "cancelled": {
+                    "type": "boolean"
+                  },
+                  "payloadOmitted": {
+                    "type": "boolean"
+                  }
+                },
+                "required": ["serverId", "toolName", "resourceUri", "callId", "toolId"],
+                "additionalProperties": false
               }
             },
             "required": ["step", "callId", "toolId", "name", "resultPreview"],

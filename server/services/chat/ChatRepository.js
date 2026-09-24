@@ -159,7 +159,9 @@ const OPTIONAL_MESSAGE_FIELDS = [
   'error',
   'finishReason',
   'attachments',
-  'artifacts'
+  'artifacts',
+  // MCP App views of an assistant answer (see services/mcp/mcpApps.js).
+  'mcpApps'
 ];
 
 /**

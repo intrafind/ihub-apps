@@ -162,17 +162,27 @@ export async function safeFetch(input, init = {}, opts = {}) {
   );
   const agent = makePinnedAgent(address, family, url.protocol === 'https:');
 
-  // Node 18+ `fetch` (undici) does not accept the legacy `agent` option, so
-  // when running under undici we set a dispatcher. When undici is unavailable
-  // (older Node) we fall back to http.request via a thin shim.
+  // Pin the connection through an undici dispatcher. The fetch must come from
+  // the same undici package as the Agent: Node's bundled `fetch` is a
+  // different undici major and rejects a newer Agent ("invalid onRequestStart
+  // method"). That failure used to be swallowed into the shim below, whose
+  // response has no body stream — so Streamable HTTP servers answering with
+  // `text/event-stream` never got their reply read.
+  //
+  // Only a missing undici falls back to the http.request shim; a network
+  // error from the real fetch propagates instead of silently re-sending the
+  // request.
+  let undici = null;
   try {
-    const undici = await import('undici');
+    undici = await import('undici');
+  } catch {
+    undici = null;
+  }
+  if (typeof undici?.fetch === 'function' && typeof undici?.Agent === 'function') {
     const dispatcher = new undici.Agent({
       connect: { lookup: makePinnedLookup(address, family) }
     });
-    return await globalThis.fetch(url, { ...init, dispatcher });
-  } catch {
-    // Fall through to node-http-based fetch
+    return await undici.fetch(url, { ...init, dispatcher });
   }
 
   return await nodeHttpFetch(url, init, agent);

@@ -14,7 +14,8 @@ const BLANK_FORM = {
   auth: { type: 'none' },
   toolPrefix: '',
   allowedTools: ['*'],
-  timeoutMs: 30000
+  timeoutMs: 30000,
+  apps: { enabled: true }
 };
 
 // Shared input styling. The project does not use @tailwindcss/forms, so a bare
@@ -660,6 +661,29 @@ function AdminMcpServersPage() {
                 />
               </div>
 
+              <div className="flex items-start space-x-2">
+                <input
+                  id="appsEnabled"
+                  type="checkbox"
+                  className="mt-0.5"
+                  checked={form.apps?.enabled !== false}
+                  onChange={e =>
+                    setForm({ ...form, apps: { ...(form.apps || {}), enabled: e.target.checked } })
+                  }
+                />
+                <div>
+                  <label htmlFor="appsEnabled" className="text-sm text-gray-700 dark:text-gray-300">
+                    {t('admin.mcp.servers.form.appsEnabled', 'Render interactive views (MCP Apps)')}
+                  </label>
+                  <p className="text-xs text-gray-500 dark:text-gray-400">
+                    {t(
+                      'admin.mcp.servers.form.appsEnabledHint',
+                      "Advertise the MCP Apps extension and show the interactive views this server's tools declare inline in the chat. Turn off to get text-only results."
+                    )}
+                  </p>
+                </div>
+              </div>
+
               {(draftTesting || draftTest) && (
                 <div className="rounded-md border border-gray-200 dark:border-gray-700 bg-gray-50 dark:bg-gray-900/40 p-3">
                   {draftTesting ? (
@@ -683,8 +707,17 @@ function AdminMcpServersPage() {
                         <ul className="mt-3 max-h-56 overflow-y-auto divide-y divide-gray-200 dark:divide-gray-700 rounded-sm border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800">
                           {draftTest.tools.map(tool => (
                             <li key={tool.name} className="px-3 py-2">
-                              <div className="font-mono text-xs text-gray-900 dark:text-gray-100">
-                                {tool.name}
+                              <div className="flex items-center gap-2 font-mono text-xs text-gray-900 dark:text-gray-100">
+                                <span>{tool.name}</span>
+                                {tool.uiResourceUri && (
+                                  <span
+                                    className="inline-flex items-center gap-1 rounded-sm bg-blue-50 dark:bg-blue-900/40 px-1.5 py-0.5 font-sans text-[11px] text-blue-700 dark:text-blue-300"
+                                    title={tool.uiResourceUri}
+                                  >
+                                    <Icon name="cube" size="xs" />
+                                    {t('admin.mcp.servers.test.rendersView', 'interactive view')}
+                                  </span>
+                                )}
                               </div>
                               {tool.description && (
                                 <div className="mt-0.5 text-xs text-gray-500 dark:text-gray-400">

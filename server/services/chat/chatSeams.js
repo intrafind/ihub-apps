@@ -16,6 +16,7 @@ import * as defaultTelemetry from './chatTelemetry.js';
 import defaultInteractionService from '../loop/InteractionService.js';
 import defaultRunLog from '../loop/RunLog.js';
 import { buildQuestionPrompt } from '../loop/questionPrompt.js';
+import { buildViewDescriptor, toViewToolResult } from '../mcp/mcpApps.js';
 
 /**
  * A clarification nobody answers expires after a day, so abandoned chats do
@@ -175,11 +176,47 @@ export function chatTurnSeam({ chatId, buildLogData, streaming, telemetry = defa
 }
 
 /**
+ * The `_mcp` marker of a tool that renders an MCP App view, or null.
+ * @param {Object} info - Loop tool info
+ * @returns {Object|null}
+ */
+function mcpAppOf(info) {
+  const mcp = info?.toolDef?._mcp;
+  return mcp?.ui?.resourceUri ? mcp : null;
+}
+
+/**
+ * MCP App view for a finished call: what to render plus the data to render it
+ * with — the tool input and the full CallToolResult (the model only ever sees
+ * its text; the view gets structured content and `_meta` too). A call that
+ * failed without a result (timeout, transport error) is marked cancelled so
+ * the view can say so.
+ */
+function mcpAppViewFor(info, mcp) {
+  const raw = info.mcpAppResult;
+  return buildViewDescriptor({
+    callId: callIdOf(info),
+    toolId: String(info.toolId),
+    mcp,
+    args: info.args,
+    ...(raw ? { toolResult: toViewToolResult(raw) } : { cancelled: true })
+  });
+}
+
+/**
  * Tool call projection: `tool/started` / `tool/completed` frames, the
  * interaction log, and the rich error envelope the chat model has always been
  * handed back on a failed tool.
+ *
+ * MCP App tools also announce their view on `tool/started` (so the client can
+ * mount it while the tool runs) and ship the view's data on `tool/completed`;
+ * the views are collected on `mcpAppViews` for the stored answer.
  */
-export function chatToolSeam({ chatId, buildLogData, logInteraction }) {
+export function chatToolSeam({ chatId, buildLogData, logInteraction, mcpAppViews = null }) {
+  const recordView = view => {
+    if (Array.isArray(mcpAppViews)) mcpAppViews.push(view);
+    return view;
+  };
   return {
     name: 'chat-tools',
     preTool(ctx, info) {
@@ -190,6 +227,7 @@ export function chatToolSeam({ chatId, buildLogData, logInteraction }) {
         isWorkflow: String(info.toolId).startsWith('workflow_'),
         argKeys: Object.keys(info.args || {}).join(', ')
       });
+      const mcp = mcpAppOf(info);
       emit(ctx, SSE_V2_EVENTS.TOOL_STARTED, {
         step: ctx.iteration,
         callId: callIdOf(info),
@@ -200,12 +238,23 @@ export function chatToolSeam({ chatId, buildLogData, logInteraction }) {
           ? 'passthrough'
           : info.toolDef?.interactive
             ? 'clarification'
-            : 'server'
+            : 'server',
+        ...(mcp
+          ? {
+              mcpApp: {
+                serverId: mcp.serverId,
+                toolName: mcp.originalName,
+                resourceUri: mcp.ui.resourceUri
+              }
+            }
+          : {})
       });
       return null;
     },
     async postTool(ctx, info, outcome) {
       const { toolId, args } = info;
+      const mcp = mcpAppOf(info);
+      const mcpApp = mcp ? recordView(mcpAppViewFor(info, mcp)) : null;
       if (outcome.error) {
         const err = outcome.error;
         const causeMessage =
@@ -231,7 +280,8 @@ export function chatToolSeam({ chatId, buildLogData, logInteraction }) {
             ...(errorResult.code ? { code: String(errorResult.code) } : {}),
             message: errorResult.message
           },
-          ...(Number.isInteger(outcome.durationMs) ? { durationMs: outcome.durationMs } : {})
+          ...(Number.isInteger(outcome.durationMs) ? { durationMs: outcome.durationMs } : {}),
+          ...(mcpApp ? { mcpApp } : {})
         });
         await logInteraction(
           'tool_error',
@@ -247,7 +297,8 @@ export function chatToolSeam({ chatId, buildLogData, logInteraction }) {
         resultPreview: previewToolResult(outcome.rawResult),
         ...(Number.isInteger(outcome.durationMs) ? { durationMs: outcome.durationMs } : {}),
         ...(outcome.knowledgeSource ? { knowledgeSource: outcome.knowledgeSource } : {}),
-        ...(outcome.webSources?.length ? { webSources: outcome.webSources } : {})
+        ...(outcome.webSources?.length ? { webSources: outcome.webSources } : {}),
+        ...(mcpApp ? { mcpApp } : {})
       });
       await logInteraction(
         'tool_usage',

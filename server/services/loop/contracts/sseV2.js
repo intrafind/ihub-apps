@@ -91,13 +91,38 @@ export const stepCompletedData = z.object({
   groundingMetadata: z.any().optional()
 });
 
+/**
+ * The MCP App view a tool renders (extension `io.modelcontextprotocol/ui`):
+ * which MCP server and `ui://` resource to draw it from.
+ */
+const mcpAppRefSchema = z.object({
+  serverId: z.string(),
+  toolName: z.string(),
+  resourceUri: z.string()
+});
+
+/**
+ * A finished MCP App view: the reference plus the data it is drawn from —
+ * tool input and the full CallToolResult — unless the payload was too large
+ * to ship (`payloadOmitted`).
+ */
+export const mcpAppViewSchema = mcpAppRefSchema.extend({
+  callId: z.string(),
+  toolId: z.string(),
+  args: z.record(z.string(), z.any()).optional(),
+  toolResult: z.record(z.string(), z.any()).optional(),
+  cancelled: z.boolean().optional(),
+  payloadOmitted: z.boolean().optional()
+});
+
 export const toolStartedData = z.object({
   step: z.number().int().nonnegative(),
   callId: z.string(),
   toolId: z.string(),
   name: z.string(),
   args: z.any(),
-  execution: z.enum(['server', 'caller', 'clarification', 'passthrough']).prefault('server')
+  execution: z.enum(['server', 'caller', 'clarification', 'passthrough']).prefault('server'),
+  mcpApp: mcpAppRefSchema.optional()
 });
 
 export const toolProgressData = z.object({
@@ -120,7 +145,9 @@ export const toolCompletedData = z.object({
   durationMs: z.number().int().nonnegative().optional(),
   knowledgeSource: z.string().optional(),
   /** Pages the call found or read (search / fetch tools), from the full result. */
-  webSources: z.array(webSourceSchema).optional()
+  webSources: z.array(webSourceSchema).optional(),
+  /** MCP App view drawn from this call's full result. */
+  mcpApp: mcpAppViewSchema.optional()
 });
 
 export const interactionRaisedData = z.object({

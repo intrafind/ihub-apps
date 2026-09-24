@@ -702,6 +702,19 @@ function AppChat({ preloadedApp = null, embedded = false, appId: embeddedAppId =
     serverBacked: serverBackedChat
   });
 
+  // What an MCP App view in this chat may do in the composer: post a follow-up
+  // message (`ui/message`) the way a starter prompt with autoSend does.
+  const mcpAppHost = useMemo(
+    () => ({
+      sendMessage: text => {
+        setInput(text);
+        setTimeout(() => formRef.current?.requestSubmit(), 0);
+      },
+      isProcessing: processing
+    }),
+    [processing]
+  );
+
   // Hydrate a server-backed chat from the durable store. That mode keeps no
   // browser copy, so this fetch is the only thing that puts a stored transcript
   // back on screen — both when the history opens a chat by URL and on a plain
@@ -2559,6 +2572,7 @@ function AppChat({ preloadedApp = null, embedded = false, appId: embeddedAppId =
                     <div className="w-full h-full overflow-y-auto bg-gray-50 dark:bg-gray-800/50 rounded-lg flex flex-col">
                       <ChatMessageList
                         messages={messages}
+                        mcpAppHost={mcpAppHost}
                         outputFormat={selectedOutputFormat}
                         onDelete={handleDeleteMessage}
                         onEdit={handleEditMessage}
@@ -2609,6 +2623,7 @@ function AppChat({ preloadedApp = null, embedded = false, appId: embeddedAppId =
                     <div className="mb-8">
                       <ChatMessageList
                         messages={messages}
+                        mcpAppHost={mcpAppHost}
                         outputFormat={selectedOutputFormat}
                         onDelete={handleDeleteMessage}
                         onEdit={handleEditMessage}
@@ -2654,6 +2669,7 @@ function AppChat({ preloadedApp = null, embedded = false, appId: embeddedAppId =
                 <div className="flex-1 overflow-hidden flex flex-col">
                   <ChatMessageList
                     messages={messages}
+                    mcpAppHost={mcpAppHost}
                     outputFormat={selectedOutputFormat}
                     onDelete={handleDeleteMessage}
                     onEdit={handleEditMessage}
@@ -2686,6 +2702,7 @@ function AppChat({ preloadedApp = null, embedded = false, appId: embeddedAppId =
               <div className="hidden md:flex md:flex-col md:h-full">
                 <ChatMessageList
                   messages={messages}
+                  mcpAppHost={mcpAppHost}
                   outputFormat={selectedOutputFormat}
                   onDelete={handleDeleteMessage}
                   onEdit={handleEditMessage}

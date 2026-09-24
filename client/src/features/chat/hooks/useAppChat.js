@@ -17,6 +17,7 @@ import {
 import { projectMessageRuns } from '../runToMessage';
 import { fetchAllLedgerEvents } from '../../../shared/run/ledgerPages';
 import { fetchWithAuthRetry } from '../../../shared/utils/openSseStream';
+import { takeMcpAppModelContext } from '../mcpApps/modelContextStore';
 
 /**
  * High level hook combining chat message management with streaming
@@ -575,6 +576,10 @@ function useAppChat({
           ...(apiMessage.hostContext ? { hostContext: apiMessage.hostContext } : {})
         });
 
+        // What open MCP App views reported since the last message; the server
+        // hands it to the model with this turn only.
+        const mcpAppContext = takeMcpAppModelContext(chatId);
+
         pendingMessageDataRef.current = {
           appId,
           chatId: chatId,
@@ -582,6 +587,7 @@ function useAppChat({
           params: {
             ...params,
             ...(requestedSkill ? { requestedSkill } : {}),
+            ...(mcpAppContext.length > 0 ? { mcpAppContext } : {}),
             ...takeProtocolParams(sendChatHistory)
           }
         };

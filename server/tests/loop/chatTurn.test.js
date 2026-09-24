@@ -1381,3 +1381,101 @@ test('prompt sources tracked before a turn end up in run/ended.knowledgeSources 
     'no stale badge on the follow-up turn'
   );
 });
+
+// ── MCP App views ───────────────────────────────────────────────────────────
+
+const drawTool = {
+  id: 'drawio__create_diagram',
+  name: 'drawio__create_diagram',
+  description: 'Draw a diagram',
+  parameters: { type: 'object', properties: { mermaid: { type: 'string' } } },
+  _mcp: {
+    serverId: 'drawio',
+    originalName: 'create_diagram',
+    ui: { resourceUri: 'ui://drawio/mcp-app.html' }
+  }
+};
+
+test('MCP App tool: tool/started names the view, tool/completed carries the input and the full result, the model sees only the text, the summary keeps the view', async t => {
+  const chatId = newChatId('mcp-app');
+  const frames = captureFrames(t, chatId);
+  const raw = {
+    content: [{ type: 'text', text: 'Diagram drawn.' }],
+    structuredContent: { xml: '<mxGraphModel/>' },
+    _meta: { build: 'abc' }
+  };
+  const args = { mermaid: 'flowchart LR; A-->B' };
+  const { service, runTool, requests } = makeService(
+    [toolTurn([{ name: drawTool.id, args }]), textTurn('Here it is.')],
+    {
+      runTool: async (_toolId, _params, options) => {
+        options?.onMcpAppResult?.(raw);
+        return 'Diagram drawn.';
+      }
+    }
+  );
+
+  const summary = await runTurn(service, { chatId, prep: makePrep({ tools: [drawTool] }) });
+
+  assertWellFormed(frames, { runId: summary.runId });
+  assert.equal(typeof runTool.calls[0][2]?.onMcpAppResult, 'function');
+
+  const view = {
+    serverId: 'drawio',
+    toolName: 'create_diagram',
+    resourceUri: 'ui://drawio/mcp-app.html'
+  };
+  assert.deepEqual(frame(frames, TOOL_STARTED).data.mcpApp, view);
+
+  const done = frame(frames, TOOL_COMPLETED).data;
+  assert.deepEqual(done.mcpApp, {
+    callId: 'call_1',
+    toolId: drawTool.id,
+    ...view,
+    args,
+    toolResult: raw
+  });
+
+  // Structured content and _meta are for the view, never for the model.
+  const followUp = requests[1].request.body.messages;
+  assert.equal(followUp.at(-1).role, 'tool');
+  assert.equal(followUp.at(-1).content, 'Diagram drawn.');
+
+  assert.deepEqual(summary.mcpApps, [done.mcpApp]);
+});
+
+test('MCP App tool that fails without a result: the view is marked cancelled and the error still reaches the model', async t => {
+  const chatId = newChatId('mcp-app-fail');
+  const frames = captureFrames(t, chatId);
+  const { service } = makeService(
+    [toolTurn([{ name: drawTool.id, args: { mermaid: 'x' } }]), textTurn('Sorry.')],
+    {
+      runTool: async () => {
+        throw new Error('MCP server timed out');
+      }
+    }
+  );
+
+  const summary = await runTurn(service, { chatId, prep: makePrep({ tools: [drawTool] }) });
+
+  assertWellFormed(frames, { runId: summary.runId });
+  const done = frame(frames, TOOL_COMPLETED).data;
+  assert.ok(done.error);
+  assert.equal(done.mcpApp.cancelled, true);
+  assert.equal(done.mcpApp.toolResult, undefined);
+  assert.deepEqual(done.mcpApp.args, { mermaid: 'x' });
+  assert.equal(summary.mcpApps.length, 1);
+});
+
+test('ordinary tools carry no MCP App view', async t => {
+  const chatId = newChatId('no-mcp-app');
+  const frames = captureFrames(t, chatId);
+  const { service } = makeService(
+    [toolTurn([{ name: 'webSearch', args: { query: 'x' } }]), textTurn('Done.')],
+    { runTool: async () => 'text' }
+  );
+  const summary = await runTurn(service, { chatId, prep: makePrep({ tools: [webSearchTool] }) });
+  assert.equal(frame(frames, TOOL_STARTED).data.mcpApp, undefined);
+  assert.equal(frame(frames, TOOL_COMPLETED).data.mcpApp, undefined);
+  assert.deepEqual(summary.mcpApps, []);
+});

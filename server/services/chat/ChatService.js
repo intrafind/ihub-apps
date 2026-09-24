@@ -459,6 +459,9 @@ class ChatService {
     }
 
     const channel = streaming ? createChatChannel({ chatId, stream }) : null;
+    // MCP App views this turn rendered, stored with the answer so reopening
+    // the chat draws them again.
+    const mcpAppViews = [];
     const turnSeam = chatTurnSeam({
       chatId,
       buildLogData: log,
@@ -469,7 +472,12 @@ class ChatService {
     // outcome when chatToolSeam projects the tool result to `tool/completed`.
     const seams = [
       knowledgeSourceSeam,
-      chatToolSeam({ chatId, buildLogData: log, logInteraction: this.logInteraction }),
+      chatToolSeam({
+        chatId,
+        buildLogData: log,
+        logInteraction: this.logInteraction,
+        mcpAppViews
+      }),
       questionSeam(
         chatQuestionOptions({
           chatId,
@@ -529,8 +537,19 @@ class ChatService {
         // `language` is a default the tool may use; explicit model-provided
         // args of the same name win, while chatId/user/appConfig can never be
         // overridden by the model.
-        executeTool: (call, { toolId, args }) =>
-          this.runTool(toolId, { language, ...args, chatId, user, appConfig: app })
+        //
+        // An MCP tool with an MCP App view hands back its raw result on the
+        // shared `info` object, where `chatToolSeam` builds the view from it.
+        executeTool: (call, { toolId, args, info }) =>
+          this.runTool(
+            toolId,
+            { language, ...args, chatId, user, appConfig: app },
+            {
+              onMcpAppResult: result => {
+                if (info) info.mcpAppResult = result;
+              }
+            }
+          )
       });
       outcome = await this._finishTurn({
         result,
@@ -544,6 +563,7 @@ class ChatService {
         getLocalizedError,
         language,
         channel,
+        mcpAppViews,
         takePendingCall: () => turnSeam.takePendingCall()
       });
       // The ledger's terminal frame first, then the chat document.
@@ -640,6 +660,7 @@ class ChatService {
     getLocalizedError,
     language,
     channel,
+    mcpAppViews = [],
     takePendingCall = () => null
   }) {
     const loopSources = result.knowledgeSources || [];
@@ -658,6 +679,8 @@ class ChatService {
       // branch below spreads this object, so an aborted turn keeps the
       // pictures it had already emitted.
       images: result.images || [],
+      // Same reasoning for MCP App views: part of the answer, restored on reopen.
+      mcpApps: mcpAppViews,
       knowledgeSources: this.getKnowledgeSources(chatId, loopSources)
     };
     const translate = async (key, params) => {

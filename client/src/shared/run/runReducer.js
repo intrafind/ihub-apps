@@ -374,7 +374,9 @@ export function reduceRunEvent(state, envelope) {
         error: null,
         durationMs: null,
         knowledgeSource: null,
-        webSources: []
+        webSources: [],
+        // MCP App view the tool renders (server + `ui://` resource).
+        mcpApp: data.mcpApp || null
       };
       run = { ...run, tools: [...run.tools.filter(t => t.callId !== data.callId), tool] };
       return withRun(next, run);
@@ -404,6 +406,8 @@ export function reduceRunEvent(state, envelope) {
         // Pages a search / fetch tool found or read (server-extracted from the
         // full result — the preview is too short to hold them).
         webSources: Array.isArray(data.webSources) ? data.webSources : [],
+        // The finished MCP App view: tool input + the full result it draws.
+        mcpApp: data.mcpApp || base.mcpApp || null,
         completedAt: ts
       };
       const tools =
