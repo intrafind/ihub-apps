@@ -16,8 +16,7 @@ import { getLocalizedContent } from '../../../utils/localizeContent';
 import { buildApiUrl, buildPath } from '../../../utils/runtimeBasePath';
 import { debugLog } from '../../../utils/debugLog';
 import Icon from '../../../shared/components/Icon';
-import AppShareModal from '../components/AppShareModal';
-import ShareChatModal from '../../chat/components/ShareChatModal';
+import ShareDialog from '../../chat/components/ShareDialog';
 import { usePlatformConfig } from '../../../shared/contexts/PlatformConfigContext';
 import {
   downloadCitationDocument,
@@ -257,12 +256,12 @@ function AppChat({ preloadedApp = null, embedded = false, appId: embeddedAppId =
   const [showConfig, setShowConfig] = useState(false);
   const [variables, setVariables] = useState({});
   const [showParameters, setShowParameters] = useState(false);
+  // One share dialog for both: a short link to the app, and the stored
+  // conversation itself as a read-only link. The latter is gated by the
+  // server's answer (feature on, admin switch on, storage up) and needs a
+  // durable chat.
   const [showShare, setShowShare] = useState(false);
   const shareEnabled = featureFlags.isBothEnabled(app, 'shortLinks', true);
-  // Sharing the conversation itself (a read-only link onto the stored chat)
-  // is a different thing from the app share link above, and is gated by the
-  // server's answer: feature on, admin switch on, storage up.
-  const [showShareChat, setShowShareChat] = useState(false);
   const { platformConfig } = usePlatformConfig();
   const chatSharingEnabled = platformConfig?.chats?.sharing?.enabled === true;
 
@@ -701,6 +700,10 @@ function AppChat({ preloadedApp = null, embedded = false, appId: embeddedAppId =
     ephemeral,
     serverBacked: serverBackedChat
   });
+
+  // A durable chat can be shared as a read-only link once it has a message.
+  const chatShareOffered = chatSharingEnabled && serverBackedChat;
+  const chatShareReady = chatShareOffered && Boolean(chatId) && messages.length > 0;
 
   // Hydrate a server-backed chat from the durable store. That mode keeps no
   // browser copy, so this fetch is the only thing that puts a stored transcript
@@ -2449,11 +2452,7 @@ function AppChat({ preloadedApp = null, embedded = false, appId: embeddedAppId =
         onToggleParameters={toggleParameters}
         showParameters={showParameters}
         onShare={() => setShowShare(true)}
-        showShareButton={shareEnabled}
-        onShareChat={() => setShowShareChat(true)}
-        showShareChatButton={
-          chatSharingEnabled && serverBackedChat && Boolean(chatId) && messages.length > 0
-        }
+        showShareButton={shareEnabled || chatShareReady}
         conversationTitle={conversationTitle}
         showCompareModeToggle={compareModeFeatureEnabled && models.length >= 2}
         compareModeActive={compareModeActive}
@@ -2732,36 +2731,38 @@ function AppChat({ preloadedApp = null, embedded = false, appId: embeddedAppId =
           </div>
         )}
       </div>
-      {showShareChat && chatId && (
-        <ShareChatModal
-          chatId={chatId}
-          appId={appId}
-          isOpen={showShareChat}
-          onClose={() => setShowShareChat(false)}
-        />
-      )}
-      {shareEnabled && showShare && (
-        <AppShareModal
-          appId={appId}
-          // A share link points at the app, never at one stored chat: the
-          // recipient does not own it and could only ever get a 404 from it.
-          path={
-            embedded
-              ? appPagePath
-              : routeChatId
-                ? window.location.pathname.replace(/\/c\/[^/]+$/, '')
-                : window.location.pathname
-          }
-          params={{
-            model: selectedModel,
-            style: selectedStyle,
-            outfmt: selectedOutputFormat,
-            temp: temperature,
-            history: sendChatHistory,
-            prefill: prefillMessage,
-            ...Object.fromEntries(Object.entries(variables).map(([k, v]) => [`var_${k}`, v]))
-          }}
+      {showShare && (
+        <ShareDialog
+          isOpen={showShare}
           onClose={() => setShowShare(false)}
+          appName={app?.name}
+          chatShare={chatShareOffered ? { chatId, ready: chatShareReady } : null}
+          appLink={
+            shareEnabled
+              ? {
+                  appId,
+                  // A link to the app points at the app, never at one stored
+                  // chat: the recipient does not own it and could only ever
+                  // get a 404 from it.
+                  path: embedded
+                    ? appPagePath
+                    : routeChatId
+                      ? window.location.pathname.replace(/\/c\/[^/]+$/, '')
+                      : window.location.pathname,
+                  params: {
+                    model: selectedModel,
+                    style: selectedStyle,
+                    outfmt: selectedOutputFormat,
+                    temp: temperature,
+                    history: sendChatHistory,
+                    prefill: prefillMessage,
+                    ...Object.fromEntries(
+                      Object.entries(variables).map(([k, v]) => [`var_${k}`, v])
+                    )
+                  }
+                }
+              : null
+          }
         />
       )}
     </div>

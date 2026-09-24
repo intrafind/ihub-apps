@@ -12,7 +12,7 @@ import CanvasChatPanel from '../components/CanvasChatPanel';
 import CanvasEditor from '../components/CanvasEditor';
 import FloatingToolbox from '../components/FloatingToolbox';
 import CanvasContentConfirmationModal from '../components/CanvasContentConfirmationModal';
-import AppShareModal from '../../apps/components/AppShareModal';
+import ShareDialog from '../../chat/components/ShareDialog';
 
 // Import hooks and utilities
 import useAppChat from '../../chat/hooks/useAppChat';
@@ -672,17 +672,21 @@ export default function AppCanvas() {
         onCancel={handleContentModalCancel}
       />
       {shareEnabled && showShare && (
-        <AppShareModal
-          appId={appId}
-          path={window.location.pathname}
-          params={{
-            model: selectedModel,
-            style: selectedStyle,
-            outfmt: selectedOutputFormat,
-            temp: temperature,
-            history: sendChatHistory
-          }}
+        <ShareDialog
+          isOpen={showShare}
           onClose={() => setShowShare(false)}
+          appName={app?.name}
+          appLink={{
+            appId,
+            path: window.location.pathname,
+            params: {
+              model: selectedModel,
+              style: selectedStyle,
+              outfmt: selectedOutputFormat,
+              temp: temperature,
+              history: sendChatHistory
+            }
+          }}
         />
       )}
     </div>
