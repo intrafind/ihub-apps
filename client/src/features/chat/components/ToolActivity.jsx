@@ -216,6 +216,7 @@ function ActivityItem({ item }) {
               target="_blank"
               rel="noopener noreferrer"
               className="text-indigo-600 dark:text-indigo-400 hover:underline break-all"
+              title={url}
             >
               {label}
             </a>

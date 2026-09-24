@@ -145,31 +145,91 @@ export async function copyDefaultConfiguration() {
 }
 
 /**
- * Files that are generated at build time (not user-editable) and must be kept
- * in sync with server/defaults on every startup. Unlike copyMissingFiles,
- * these are overwritten in contents whenever the shipped default differs, so
- * regenerated content (e.g. the consolidated documentation) is never left
- * stale after an upgrade. Paths are relative to both server/defaults and the
- * contents directory.
+ * Default files whose shipped copy is authoritative: unlike ordinary defaults,
+ * which are copied once and then belong to the installation, these are
+ * overwritten in contents whenever the shipped default differs, so generated
+ * or vendor-maintained content is never left stale after an upgrade. Paths
+ * are relative to both server/defaults and the contents directory; an entry
+ * ending in `/` is a directory whose files are all managed (recursively).
+ *
+ * - `sources/ihub-documentation.md` — the consolidated documentation the
+ *   build regenerates.
+ * - `skills/ifinder-search/` — the shipped iFinder search skill. Its guidance
+ *   moves with the iFinder tools and the search app prompt in the same
+ *   release, so an installation must not keep an older copy. Customize it by
+ *   copying it under another skill id, not by editing it in place.
  */
-const MANAGED_DEFAULT_FILES = ['sources/ihub-documentation.md'];
+export const MANAGED_DEFAULT_FILES = ['sources/ihub-documentation.md', 'skills/ifinder-search/'];
 
 /**
- * Refreshes build-managed default files into the contents directory.
+ * Files under `dir`, recursively, as paths relative to `dir` (posix separators).
+ * @param {string} dir
+ * @returns {Promise<string[]>}
+ */
+async function listFilesRecursive(dir) {
+  const entries = await fs.readdir(dir, { withFileTypes: true });
+  const files = [];
+  for (const entry of entries) {
+    if (entry.isDirectory()) {
+      const nested = await listFilesRecursive(path.join(dir, entry.name));
+      files.push(...nested.map(f => `${entry.name}/${f}`));
+    } else if (entry.isFile()) {
+      files.push(entry.name);
+    }
+  }
+  return files;
+}
+
+/**
+ * The managed entries expanded to individual files: a directory entry becomes
+ * every file the shipped default holds under it.
+ * @param {string} defaultsPath - Absolute path of server/defaults
+ * @param {string[]} entries - Managed paths (files, or directories ending in `/`)
+ * @returns {Promise<string[]>} Relative file paths, in order
+ */
+export async function expandManagedDefaultFiles(defaultsPath, entries = MANAGED_DEFAULT_FILES) {
+  const files = [];
+  for (const entry of entries) {
+    if (!entry.endsWith('/')) {
+      files.push(entry);
+      continue;
+    }
+    const dir = path.join(defaultsPath, entry);
+    try {
+      const nested = await listFilesRecursive(dir);
+      files.push(...nested.map(f => path.posix.join(entry, f)));
+    } catch (error) {
+      if (error.code !== 'ENOENT') throw error;
+      logger.warn('Managed default directory not found in defaults, skipping refresh', {
+        component: 'Setup',
+        directory: entry
+      });
+    }
+  }
+  return files;
+}
+
+/**
+ * Refreshes managed default files into the contents directory.
  * Overwrites only when the content differs to avoid needless writes (and to
  * keep the filesystem source cache, which is keyed on mtime, from churning).
  * Missing source files (e.g. a dev checkout where docs were never exported)
  * are skipped with a warning.
+ * @param {Object} [options]
+ * @param {string} [options.defaultsPath] - Absolute path of the defaults directory
+ * @param {string} [options.contentsPath] - Absolute path of the contents directory
+ * @param {string[]} [options.entries] - Managed paths to refresh
  * @returns {Promise<number>} Number of files refreshed
  */
-export async function syncManagedDefaultFiles() {
-  const rootDir = getRootDir();
-  const defaultConfigPath = path.join(rootDir, 'server', 'defaults');
-  const contentsPath = path.join(rootDir, config.CONTENTS_DIR);
+export async function syncManagedDefaultFiles({
+  defaultsPath = path.join(getRootDir(), 'server', 'defaults'),
+  contentsPath = path.join(getRootDir(), config.CONTENTS_DIR),
+  entries = MANAGED_DEFAULT_FILES
+} = {}) {
   let updated = 0;
 
-  for (const relPath of MANAGED_DEFAULT_FILES) {
-    const srcPath = path.join(defaultConfigPath, relPath);
+  for (const relPath of await expandManagedDefaultFiles(defaultsPath, entries)) {
+    const srcPath = path.join(defaultsPath, relPath);
     const destPath = path.join(contentsPath, relPath);
 
     try {

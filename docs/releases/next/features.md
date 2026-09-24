@@ -55,3 +55,10 @@ provider.
   cache counts as `gen_ai.usage.cache_read.input_tokens` and
   `gen_ai.usage.cache_creation.input_tokens`.
 - Only usage recorded after the upgrade has cache counts.
+
+## Chat Links Show Where They Lead
+
+Hovering a link in a chat answer now shows its destination as a tooltip, so a user can see which
+site or file a linked title opens before clicking. Links that already carry a title — such as the
+source and folder the iFinder Search app now puts on every document link — keep it. The "Read …"
+rows of the tool activity panel show their address the same way.
