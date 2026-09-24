@@ -135,18 +135,21 @@ Download, Open app and Test are available.
 app's chat page in a new tab. Disabled apps are not served to the chat, so for them the button is
 greyed out until the app is enabled (in the editor: enabled and saved).
 
-**Testing an app:** **Test** in the editor header opens the app's real chat page next to the
-editor (full screen on small screens), so you can check the start screen, send messages and see
-how the prompt, model, tools and sources behave without leaving the editor.
+**Testing an app:** **Test** in the editor header opens the app's chat next to the editor (full
+screen on small screens), so you can check the start screen, send messages and see how the prompt,
+model, tools and sources behave without leaving the editor. It is the same chat users get, not a
+separate preview.
 
-- The test runs the **saved** version of the app — exactly what users get. While you have unsaved
-  changes the panel says so; save and it reloads with them.
+- The test runs the **saved** version of the app. While you have unsaved changes the panel says so;
+  every save restarts the test with the new version.
+- Each start is a new chat that begins from the app's own defaults (model, settings, variables), as
+  a new user would see it. What you last chose on the app's own page is neither used nor changed.
+  **Restart** (the circular arrow) starts over without saving.
 - Test chats are ordinary chats of your own account, stored and counted like any other chat you
   have with the app.
 - Changes are live for users as soon as you save, so test risky changes on a cloned app.
-- The panel embeds iHub in a frame on the same origin. A reverse proxy that sends
-  `X-Frame-Options: DENY` or `Content-Security-Policy: frame-ancestors 'none'` blocks it;
-  `SAMEORIGIN` / `'self'` works. **Open app** is not affected.
+- The test is available for chat apps. For iframe and redirect apps, use **Open app**.
+- Canvas and "open in app" links from the test open in a new tab, so the editor stays where it is.
 
 **Change history:** Every edit page has a **History** button. Click it to see a before/after diff of every saved change, including who made the change and when.
 

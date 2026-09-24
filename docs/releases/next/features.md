@@ -21,9 +21,7 @@ Admins can now tweak an app and try it without leaving the app editor.
   further editing.
 - **Open app** in the editor and a new open icon in **Admin → Apps** open the app's chat page in a
   new tab.
-- **Test** shows the app's real chat page next to the editor (full screen on small screens), so
-  you can check the start screen and chat with the app. It runs the saved version and reloads after
-  every save; test chats are ordinary chats of your account.
-- Disabled apps can't be opened or tested until they are enabled.
-- The test panel embeds iHub in a same-origin frame. A reverse proxy that sends
-  `X-Frame-Options: DENY` blocks it; `SAMEORIGIN` works.
+- **Test** shows the app's chat next to the editor (full screen on small screens), so you can
+  check the start screen and chat with the app. It runs the saved version and starts over with a
+  new chat after every save; test chats are ordinary chats of your account.
+- Testing works for chat apps. Disabled apps can't be opened or tested until they are enabled.

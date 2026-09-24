@@ -16,7 +16,6 @@ import {
 } from '../../../api/adminApi';
 import { fetchUIConfig } from '../../../api';
 import { buildPath } from '../../../utils/runtimeBasePath';
-import { appChatPath } from '../../../utils/appPreviewMode';
 import ConfirmDialog from '../../../shared/components/ConfirmDialog';
 import ReorderableList from '../components/ReorderableList';
 import { DataTable, SearchInput, FilterSelect } from '../components/data-table';
@@ -339,7 +338,7 @@ function AdminAppsPage() {
           : t('admin.apps.openAppHint', 'Open the app in a new tab'),
       icon: 'external-link',
       priority: 'primary',
-      href: app => buildPath(appChatPath(app.id)),
+      href: app => buildPath(`/apps/${encodeURIComponent(app.id)}`),
       target: '_blank',
       disabled: app => app.enabled === false
     },

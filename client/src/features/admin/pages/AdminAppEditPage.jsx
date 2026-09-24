@@ -14,7 +14,6 @@ import ConfirmDialog from '../../../shared/components/ConfirmDialog';
 import ContentAccessSection from '../components/ContentAccessSection';
 import AppTestPanel from '../components/AppTestPanel';
 import { buildPath } from '../../../utils/runtimeBasePath';
-import { appChatPath } from '../../../utils/appPreviewMode';
 
 function AdminAppEditPage() {
   const { t } = useTranslation();
@@ -518,7 +517,7 @@ function AdminAppEditPage() {
                 {!isNewApp &&
                   (savedEnabled ? (
                     <a
-                      href={buildPath(appChatPath(appId))}
+                      href={buildPath(`/apps/${encodeURIComponent(appId)}`)}
                       target="_blank"
                       rel="noopener noreferrer"
                       title={t('admin.apps.openAppHint', 'Open the app in a new tab')}
@@ -690,7 +689,6 @@ function AdminAppEditPage() {
       {testOpen && !isNewApp && (
         <AppTestPanel
           appId={appId}
-          appName={appName}
           enabled={savedEnabled}
           isDirty={isDirty}
           reloadKey={previewReloadKey}

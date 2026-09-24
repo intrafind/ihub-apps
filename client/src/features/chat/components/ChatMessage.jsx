@@ -93,7 +93,10 @@ function ChatMessage({
   models = [], // Available models for determining if model param should be included in link
   onClarificationSubmit = null, // Callback when a clarification response is submitted
   onClarificationSkip = null, // Callback when a clarification is skipped
-  onDocumentAction = null // Callback for citation document actions (preview, download, openInApp)
+  onDocumentAction = null, // Callback for citation document actions (preview, download, openInApp)
+  // Page the copy-link action points at. Defaults to the current page; a host
+  // page that isn't the app's own route (the admin app editor) passes the app's.
+  linkPath = null
 }) {
   const { t } = useTranslation();
   const featureFlags = useFeatureFlags();
@@ -273,7 +276,7 @@ function ChatMessage({
   const handleCopyLink = () => {
     // Get the current page URL (without query params)
     const currentUrl = new URL(window.location.href);
-    const baseUrl = `${currentUrl.origin}${currentUrl.pathname}`;
+    const baseUrl = `${currentUrl.origin}${linkPath || currentUrl.pathname}`;
 
     // Get the message content (raw content if available, otherwise regular content)
     const messageContent =

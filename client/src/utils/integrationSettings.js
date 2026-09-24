@@ -3,8 +3,6 @@
  * throughout the iHub application.
  */
 
-import { isAppPreviewMode } from './appPreviewMode';
-
 // Per-tab/iframe flag set by embed entry points (e.g.
 // `client/nextcloud/full-app-entry.jsx`). When present, integration settings
 // are forced to "no chrome" and localStorage is never touched — direct-visit
@@ -14,10 +12,6 @@ import { isAppPreviewMode } from './appPreviewMode';
 const EMBED_MODE_KEY = 'ihubEmbedMode';
 
 function isEmbedMode() {
-  // The app editor's test panel behaves like an embed. It can't use the
-  // sessionStorage flag: a same-origin iframe shares sessionStorage with the
-  // admin tab around it, which would then lose its own header.
-  if (isAppPreviewMode()) return true;
   try {
     return sessionStorage.getItem(EMBED_MODE_KEY) === '1';
   } catch {

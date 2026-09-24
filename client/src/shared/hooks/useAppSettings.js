@@ -36,8 +36,12 @@ import { useUIConfig } from '../contexts/UIConfigContext';
  * @param {Object} [options]
  * @param {Object|null} [options.chatSettings] - Settings stored on the chat being
  *   opened, or null for a new or non-persisted chat.
+ * @param {boolean} [options.isolated=false] - Skip layer 2 and leave the page
+ *   alone: nothing this browser saved for the app is read or written, and the
+ *   header color is not changed. The admin app editor's test panel uses it so a
+ *   test starts from the app's own defaults, as a new user would see it.
  */
-function useAppSettings(appId, app, { chatSettings = null } = {}) {
+function useAppSettings(appId, app, { chatSettings = null, isolated = false } = {}) {
   const { setHeaderColor } = useUIConfig();
 
   // Configuration states
@@ -109,7 +113,7 @@ function useAppSettings(appId, app, { chatSettings = null } = {}) {
     // Set header color. Above the signature check on purpose: it is an
     // idempotent side effect on a context another page may have changed, not
     // part of resolving the user's settings.
-    if (app.color) {
+    if (app.color && !isolated) {
       setHeaderColor(app.color);
     }
 
@@ -179,7 +183,7 @@ function useAppSettings(appId, app, { chatSettings = null } = {}) {
     setImageQuality(initialState.imageQuality);
 
     // Load saved settings and override defaults if available
-    const savedSettings = loadAppSettings(settingsAppId);
+    const savedSettings = isolated ? null : loadAppSettings(settingsAppId);
     if (savedSettings) {
       // Only restore the saved model if it's still compatible with the
       // current app config — otherwise we'd resurrect a stale selection
@@ -240,11 +244,11 @@ function useAppSettings(appId, app, { chatSettings = null } = {}) {
           setSelectedModel(chatSettings.modelId);
       }
     }
-  }, [app, settingsAppId, chatSettings, setHeaderColor, models, modelsLoading]);
+  }, [app, settingsAppId, chatSettings, setHeaderColor, models, modelsLoading, isolated]);
 
   // Save settings when they change
   useEffect(() => {
-    if (app) {
+    if (app && !isolated) {
       saveAppSettings(settingsAppId, {
         selectedModel,
         selectedStyle,
@@ -265,6 +269,7 @@ function useAppSettings(appId, app, { chatSettings = null } = {}) {
   }, [
     settingsAppId,
     app,
+    isolated,
     selectedModel,
     selectedStyle,
     selectedOutputFormat,

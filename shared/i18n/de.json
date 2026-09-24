@@ -2499,10 +2499,11 @@
         "title": "App testen",
         "subtitle": "Läuft mit der gespeicherten Version, so wie Benutzer sie sehen",
         "loading": "App wird geladen...",
-        "reload": "Neu laden",
+        "loadError": "Die App konnte für den Test nicht geladen werden.",
+        "restart": "Mit neuem Chat neu starten",
         "close": "Testbereich schließen",
-        "unsavedHint": "Sie haben ungespeicherte Änderungen. Speichern Sie, um sie zu testen – der Test lädt nach jedem Speichern neu.",
-        "frameTitle": "Test von {{name}}",
+        "unsavedHint": "Sie haben ungespeicherte Änderungen. Speichern Sie, um sie zu testen – der Test startet nach jedem Speichern neu.",
+        "chatOnly": "Der Test hier funktioniert für Chat-Apps. Öffnen Sie diese App mit „App öffnen“.",
         "disabled": "Diese App ist deaktiviert und kann daher nicht im Chat geöffnet werden. Aktivieren und speichern Sie sie, um sie zu testen."
       },
       "status": {

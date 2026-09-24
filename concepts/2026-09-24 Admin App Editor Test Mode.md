@@ -20,28 +20,28 @@ link from the admin to the running app, and no way to try a change without leavi
    Exit** is the old behaviour. `Ctrl/Cmd+S` triggers Save. Saving a new app with Save replaces
    `/admin/apps/new` with `/admin/apps/:id`, so later saves use `PUT` and History, Download, Open
    app and Test appear.
-3. **Test** opens a panel with the app's real chat page: beside the editor from the `lg`
-   breakpoint, full screen below it. It reloads after every save.
+3. **Test** opens a panel with the app's real chat (`AppChat`, embedded): beside the editor from
+   the `lg` breakpoint, full screen below it. It restarts with a new chat after every save.
 
 ## Decision: the test panel runs the saved config (option A)
 
 The issue offered two options:
 
-- **A — saved config only.** Embed the chat UI for `/apps/:appId` and reload it after each save.
+- **A — saved config only.** Embed the chat UI for the app and restart it after each save.
 - **B — draft config.** Run the chat against the editor's in-memory config through an admin-only
   server path that accepts an app override.
 
 **We chose A.** Reasons:
 
-- **Parity for free.** The panel is the production page, not a second renderer. Start screen,
-  variables, uploads, tools, sources and model selection behave exactly as users see them.
+- **Parity.** The panel renders the production chat component, not a second renderer. Start
+  screen, variables, uploads, tools, sources and model selection behave as users see them.
 - **No new server surface.** The chat resolves the app by id from `configCache.getApps()` in
   several places — `RequestBuilder`, `sessionRoutes`, `appToolsGateway`, `ChatService`, the
   conversation and feedback routes. A draft override would have to reach all of them, be
   validated with `appConfigSchema`, stay admin-only, and keep test chats out of history and usage
   stats. That is a larger, security-relevant change for a convenience feature.
 - **Save no longer costs a round trip.** With Save staying in the editor, "change → save → the
-  panel reloads → test" is one click plus typing.
+  panel restarts → test" is one click plus typing.
 
 Accepted trade-offs, stated in the UI and in `docs/admin-ui.md`:
 
@@ -50,7 +50,8 @@ Accepted trade-offs, stated in the UI and in `docs/admin-ui.md`:
 - Test chats are regular chats of the admin (history, usage).
 - Unsaved changes are not in the test; the panel shows a hint while the editor is dirty.
 
-Option B stays possible later. It would replace the iframe's app lookup, not the panel.
+Option B stays possible later. It would change how the embedded chat's requests resolve the app
+(a draft override on the server), not the panel.
 
 ## Disabled apps
 
@@ -59,28 +60,55 @@ app button is therefore disabled with a tooltip for disabled apps (in the editor
 saved state), and the test panel explains that the app must be enabled and saved. Letting admins
 open disabled apps would need the same server changes as option B.
 
-## How the embed works
+## Decision: render `AppChat` in the page, not an iframe
 
-- The iframe loads `buildPath('/apps/:appId?ihubPreview=1')`.
-- `client/src/utils/appPreviewMode.js` reads the flag once, when the module loads, and only when
-  the page is framed. In-app navigation drops the query string (a new chat, `/c/:chatId`), so a
-  per-render check would lose it. Outside a frame the flag is ignored, so a pasted link opens the
-  normal page.
-- `integrationSettings.js` treats preview mode like the Nextcloud embed: no header, footer or
-  sidebar, and nothing written to `localStorage`. The existing embed flag in `sessionStorage`
-  could not be reused, because a same-origin iframe shares `sessionStorage` with the admin tab
-  around it, which would then lose its own header.
-- The iframe is same-origin, so the admin's session cookie authenticates it. A reverse proxy that
-  sends `X-Frame-Options: DENY` (or `frame-ancestors 'none'`) blocks the panel; `SAMEORIGIN` works.
-- The unsaved-changes guard (`useUnsavedChanges`) intercepts the admin router only. Opening,
-  closing or navigating inside the panel never trips it, and leaving the editor still does.
+A first version loaded `/apps/:appId` in a same-origin iframe. It was rejected in review: a second
+copy of the whole SPA inside the admin page (boot, auth check, config fetches), a hidden
+query-string flag to strip the chrome, and a dependency on the proxy's framing headers
+(`X-Frame-Options`). The panel now renders `AppChat` directly, and `AppChat` has an `embedded` mode
+for it.
+
+`AppChat` is written as the page for `/apps/:appId`, so embedding it meant cutting its ties to the
+route and to the tab's memory of the app. With `embedded`:
+
+- **Route.** The app id comes from a prop. The host's query string is not read (it would apply
+  `?prefill=`, `?model=`, `?var_*=` meant for the app page) and never rewritten; `chatId` from the
+  route does not apply.
+- **Navigation.** Nothing navigates the host away. The back button and "Edit app" are hidden (the
+  admin is already editing it); the canvas and a citation's "open in app" open a new tab; the
+  automatic jump to the canvas after a long answer is off, because it would be an unasked-for tab.
+- **What the tab remembers.** Nothing is read or written: the chat id (`ai_hub_chat_id_<app>`),
+  the settings and variables (`ai_hub_app_settings_<app>`), the recent apps, a start-page handoff,
+  the iAssistant conversation id. Each mount mints an in-memory chat id, and `useAppSettings`
+  takes `isolated`, which also leaves the header color alone. So a test starts from the app's own
+  defaults, as a new user would see it, and the app's own page is untouched afterwards.
+- **Links.** A message's copy-link and the share dialog point at the app's page
+  (`linkPath` / `appPagePath`), not at `/admin/apps/…`.
+- **Layout.** The chat's breakpoints measure the viewport, but beside the editor it gets about
+  half of it. The input variables therefore stack above the chat instead of taking a side column.
+
+The panel fetches the app with `fetchAppDetails` like `AppRouterWrapper` does, passes it as
+`preloadedApp`, and is keyed by a counter that the editor bumps after every save, so each save
+refetches the saved app and starts a new chat. Only chat apps are rendered; iframe and redirect
+apps point to Open app.
+
+The unsaved-changes guard (`useUnsavedChanges`) intercepts the admin router only. The embedded chat
+never navigates, so opening, using or closing the panel never trips it, and leaving the editor
+still does.
 
 ## Files
 
 - `client/src/features/admin/pages/AdminAppEditPage.jsx` — Save / Save & Exit / `Ctrl+S`, new-app
   URL replace, Open app, Test toggle, split layout
 - `client/src/features/admin/components/AppTestPanel.jsx` — the panel
+- `client/src/features/apps/pages/AppChat.jsx` — `embedded` mode
+- `client/src/shared/hooks/useAppSettings.js` — `isolated` option
+- `client/src/utils/chatId.js` — `mintChatId`
+- `client/src/features/apps/components/SharedAppHeader.jsx`,
+  `client/src/features/chat/components/ChatHeader.jsx`, `ChatActionsMenu.jsx` — optional back and
+  Edit app buttons, canvas override
+- `client/src/features/chat/components/ChatMessage.jsx`, `ChatMessageList.jsx`, `ComparePanel.jsx`,
+  `CompareModeView.jsx` — `linkPath` for the copy-link action
 - `client/src/features/admin/pages/AdminAppsPage.jsx` — Open row action
 - `client/src/features/admin/components/data-table/DataTableRowActions.jsx` — `target` on link
   actions, row-dependent `title`, disabled links render as disabled buttons
-- `client/src/utils/appPreviewMode.js`, `client/src/utils/integrationSettings.js` — preview mode

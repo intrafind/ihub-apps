@@ -9,7 +9,8 @@ import '@testing-library/jest-dom';
  * - Saving a new app with Save moves the editor to /admin/apps/:id.
  * - Ctrl/Cmd+S saves.
  * - Open app links to the chat page in a new tab (not for disabled apps).
- * - The test panel runs the saved app in an iframe and reloads after a save.
+ * - The test panel renders the real chat, embedded, for the saved app and
+ *   restarts it after a save.
  */
 
 jest.mock('react-i18next', () => {
@@ -38,10 +39,29 @@ jest.mock('../../../client/src/api/adminApi', () => ({
   getAdminApiErrorMessage: err => err?.message || 'failed'
 }));
 
+const mockFetchAppDetails = jest.fn();
 jest.mock('../../../client/src/api', () => ({
   fetchModels: jest.fn(() => Promise.resolve([])),
-  fetchUIConfig: jest.fn(() => Promise.resolve({}))
+  fetchUIConfig: jest.fn(() => Promise.resolve({})),
+  fetchAppDetails: (...args) => mockFetchAppDetails(...args)
 }));
+
+// The chat page itself has its own suites (app-chat-embedded); here it only
+// has to show which app it was handed, how, and each time it mounts.
+const mockChatMounts = [];
+jest.mock('../../../client/src/features/apps/pages/AppChat', () => {
+  const React = require('react');
+  return function AppChat(props) {
+    React.useEffect(() => {
+      mockChatMounts.push(props);
+    }, []);
+    return (
+      <div data-testid="app-chat" data-embedded={String(props.embedded)}>
+        {props.appId}: {props.preloadedApp?.name?.en}
+      </div>
+    );
+  };
+});
 
 // runtimeBasePath uses `import.meta`, which the Jest transform cannot parse.
 // Stand in for a subpath deployment, so the links must carry the base path.
@@ -115,6 +135,11 @@ const writes = () => mockMakeAdminApiCall.mock.calls.filter(([, options]) => opt
 
 beforeEach(() => {
   mockMakeAdminApiCall.mockReset();
+  mockFetchAppDetails.mockReset();
+  mockFetchAppDetails.mockImplementation(appId =>
+    Promise.resolve({ ...SAVED_APP, id: appId, type: 'chat' })
+  );
+  mockChatMounts.length = 0;
 });
 
 describe('AdminAppEditPage save actions', () => {
@@ -208,33 +233,54 @@ describe('AdminAppEditPage open and test', () => {
 
     fireEvent.click(screen.getByRole('button', { name: /Test/ }));
     expect(screen.getByText(/This app is disabled/)).toBeInTheDocument();
-    expect(document.querySelector('iframe')).toBeNull();
+    expect(screen.queryByTestId('app-chat')).not.toBeInTheDocument();
+    expect(mockFetchAppDetails).not.toHaveBeenCalled();
   });
 
-  test('the test panel runs the saved app and reloads after a save', async () => {
+  test('the test panel explains that only chat apps can be tested in it', async () => {
+    mockApi();
+    mockFetchAppDetails.mockResolvedValue({ ...SAVED_APP, type: 'iframe' });
+    renderEditor();
+
+    fireEvent.click(await screen.findByRole('button', { name: /Test/ }));
+    expect(await screen.findByText(/Testing here works for chat apps/)).toBeInTheDocument();
+    expect(screen.queryByTestId('app-chat')).not.toBeInTheDocument();
+  });
+
+  test('the test panel embeds the saved app and restarts it after a save', async () => {
     mockApi();
     renderEditor();
 
     fireEvent.click(await screen.findByRole('button', { name: /Test/ }));
-    const frame = document.querySelector('iframe');
-    expect(frame).toHaveAttribute('src', '/ihub/apps/chat?ihubPreview=1');
+    const chat = await screen.findByTestId('app-chat');
+    expect(chat).toHaveAttribute('data-embedded', 'true');
+    expect(chat).toHaveTextContent('chat: Chat');
+    expect(document.querySelector('iframe')).toBeNull();
+    expect(mockFetchAppDetails).toHaveBeenCalledWith('chat');
+    expect(mockChatMounts).toHaveLength(1);
 
-    // Unsaved edits are not in the preview yet, and the panel says so.
+    // Unsaved edits are not in the test yet, and the panel says so.
     fireEvent.change(screen.getByLabelText('Name'), { target: { value: 'Chat 2' } });
     expect(screen.getByText(/You have unsaved changes/)).toBeInTheDocument();
 
+    mockFetchAppDetails.mockResolvedValue({ ...SAVED_APP, name: { en: 'Chat 2' }, type: 'chat' });
     fireEvent.click(screen.getByRole('button', { name: /^Save$/ }));
     await screen.findByText('App saved');
 
-    // A fresh iframe element means a fresh load of the saved app.
-    const reloaded = document.querySelector('iframe');
-    expect(reloaded).not.toBe(frame);
+    // The saved app is fetched again and the chat starts over with it.
+    expect(await screen.findByText('chat: Chat 2')).toBeInTheDocument();
+    expect(mockFetchAppDetails).toHaveBeenCalledTimes(2);
+    expect(mockChatMounts).toHaveLength(2);
     expect(screen.queryByText(/You have unsaved changes/)).not.toBeInTheDocument();
+
+    // Restart does the same without a save.
+    fireEvent.click(screen.getByRole('button', { name: 'Restart with a new chat' }));
+    await waitFor(() => expect(mockChatMounts).toHaveLength(3));
 
     // Opening and closing the panel never trips the unsaved-changes guard.
     fireEvent.change(screen.getByLabelText('Name'), { target: { value: 'Chat 3' } });
     fireEvent.click(screen.getByRole('button', { name: 'Close test panel' }));
-    expect(document.querySelector('iframe')).toBeNull();
+    expect(screen.queryByTestId('app-chat')).not.toBeInTheDocument();
     expect(screen.queryByText('You have unsaved changes. Leave anyway?')).not.toBeInTheDocument();
 
     // Leaving the page still does.

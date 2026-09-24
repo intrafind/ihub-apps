@@ -62,13 +62,22 @@ function SharedAppHeader({
   showCompareModeToggle = false,
   compareModeActive = false,
   onCompareModeChange,
-  compareModeDisabled = false
+  compareModeDisabled = false,
+
+  // Embedding: a host page that isn't the app's own route (the admin app
+  // editor's test panel) hides the navigation buttons and opens the canvas
+  // itself instead of navigating away.
+  showBackButton = true,
+  showEditAppButton = true,
+  onOpenCanvas
 }) {
   const navigate = useNavigate();
   const { t } = useTranslation();
 
   const handleToggleCanvas = () => {
-    if (mode === 'chat') {
+    if (mode === 'chat' && onOpenCanvas) {
+      onOpenCanvas();
+    } else if (mode === 'chat') {
       navigate(`/apps/${appId}/canvas`);
     } else {
       navigate(`/apps/${appId}`);
@@ -126,6 +135,8 @@ function SharedAppHeader({
           showParametersButton={mode === 'chat' && app?.variables && app.variables.length > 0}
           showCanvasButton={mode === 'chat' && app?.features?.canvas === true}
           showBackToChatButton={mode === 'canvas'}
+          showBackButton={showBackButton}
+          showEditAppButton={showEditAppButton}
           onClearChat={handleClear}
           onToggleConfig={onToggleConfig}
           onToggleCanvas={handleToggleCanvas}

@@ -43,6 +43,8 @@ function ChatMessageList({
   onClarificationSkip = null, // Callback when a clarification is skipped
   // Citation document action handlers
   onDocumentAction = null,
+  // Page a message's copy-link action points at — see ChatMessage.
+  linkPath = null,
   showAvatars = true
 }) {
   const { t } = useTranslation();
@@ -193,6 +195,7 @@ function ChatMessageList({
                 onClarificationSubmit={onClarificationSubmit}
                 onClarificationSkip={onClarificationSkip}
                 onDocumentAction={onDocumentAction}
+                linkPath={linkPath}
               />
             </div>
           </div>
