@@ -2568,7 +2568,16 @@
       "maxLengthHelp": "Maximum characters loaded per document; longer content is truncated.",
       "validation": {
         "ifinderContentRequired": "Provide a document ID or a search query so the source knows which documents to load"
-      }
+      },
+      "tokens": "Size",
+      "tokenCount": "~{{tokens}} tokens",
+      "tokensAtMost": "≤ ~{{tokens}} tokens",
+      "tokensRemote": "Loaded from the web when used; testing the source measures it",
+      "tokensDynamic": "Depends on what the search finds; at most the configured results × maximum length",
+      "tokensSearched": "searched, up to ~{{tokens}} per call",
+      "tokensEveryRequest": "sent with every request",
+      "tokensLargePromptHint": "This source is added to the prompt of every request. Expose it as a tool so only the sections a question needs are loaded.",
+      "promptTokensTotal": "Prompt sources add ~{{tokens}} tokens to every request of this app."
     },
     "auditLog": {
       "title": "Audit Log",

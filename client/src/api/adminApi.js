@@ -326,6 +326,15 @@ export const fetchAdminSources = async () => {
   }
 };
 
+/**
+ * Estimated token count of every source's content.
+ * @returns {Promise<{toolResultBudgetTokens: number, sources: Object}>}
+ */
+export const fetchSourceTokens = async () => {
+  const response = await makeAdminApiCall('/admin/sources/_tokens');
+  return response.data || { sources: {} };
+};
+
 export const fetchAdminSource = async sourceId => {
   const response = await makeAdminApiCall(`/admin/sources/${sourceId}`);
   return response.data;
@@ -1021,6 +1030,7 @@ export const adminApi = {
   // Sources functions - both name variants for compatibility
   fetchAdminSources,
   getSources: fetchAdminSources, // Alias for SourcePicker compatibility
+  fetchSourceTokens,
   fetchAdminSource,
   getSource: fetchAdminSource, // Alias
   createSource,

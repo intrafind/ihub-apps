@@ -2,10 +2,15 @@ import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
 import Icon from '../../../shared/components/Icon';
-import { getAdminApiErrorMessage, makeAdminApiCall } from '../../../api/adminApi';
+import {
+  fetchSourceTokens,
+  getAdminApiErrorMessage,
+  makeAdminApiCall
+} from '../../../api/adminApi';
 import ConfirmDialog from '../../../shared/components/ConfirmDialog';
 import { useFilterState } from '../hooks/useFilterState';
 import { DataTable, SearchInput, FilterSelect } from '../components/data-table';
+import SourceTokenCount from '../components/SourceTokenCount';
 
 function NameCell({ source }) {
   return (
@@ -53,12 +58,24 @@ function AdminSourcesPage() {
   const [bulkOperating, setBulkOperating] = useState(false);
   const [testingSource, setTestingSource] = useState(null);
   const [confirmDialog, setConfirmDialog] = useState(null);
+  const [tokenEstimates, setTokenEstimates] = useState({ sources: {} });
 
   useEffect(() => {
     loadSources();
   }, []);
 
+  // Token estimates read every file source, so they load separately and
+  // never hold up (or fail) the list itself.
+  const loadTokenEstimates = async () => {
+    try {
+      setTokenEstimates(await fetchSourceTokens());
+    } catch (err) {
+      console.error('Failed to load source token estimates:', err);
+    }
+  };
+
   const loadSources = async () => {
+    loadTokenEstimates();
     try {
       setLoading(true);
       setError(null);
@@ -71,6 +88,8 @@ function AdminSourcesPage() {
       setLoading(false);
     }
   };
+
+  const tokensOf = source => tokenEstimates.sources?.[source.id];
 
   const filteredSources = Array.isArray(sources)
     ? sources.filter(source => {
@@ -129,6 +148,13 @@ function AdminSourcesPage() {
         method: 'POST'
       });
       if (response.data.success) {
+        const measured = response.data.result?.estimatedTokens;
+        if (Number.isFinite(measured)) {
+          setTokenEstimates(prev => ({
+            ...prev,
+            sources: { ...prev.sources, [sourceId]: { tokens: measured } }
+          }));
+        }
         alert(`Source test successful:\n${JSON.stringify(response.data.result, null, 2)}`);
       } else {
         alert(`Source test failed: ${response.data.error}`);
@@ -226,6 +252,20 @@ function AdminSourcesPage() {
       sortable: true,
       hideBelow: 'md',
       render: s => <TypeBadge type={s.type} />
+    },
+    {
+      key: 'tokens',
+      header: t('admin.sources.tokens', 'Size'),
+      sortable: true,
+      hideBelow: 'md',
+      sortAccessor: s => tokensOf(s)?.tokens ?? tokensOf(s)?.maxTokens ?? -1,
+      render: s => (
+        <SourceTokenCount
+          estimate={tokensOf(s)}
+          exposeAs={s.exposeAs}
+          budgetTokens={tokenEstimates.toolResultBudgetTokens}
+        />
+      )
     },
     {
       key: 'status',
