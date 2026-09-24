@@ -5,11 +5,29 @@
  *
  * @module adapters/promptCaching
  */
-import { createHash } from 'node:crypto';
 import { isPromptCachingEnabled } from '../../shared/promptCaching.js';
 
 /** OpenAI rejects the whole request when `prompt_cache_key` is longer. */
 export const PROMPT_CACHE_KEY_MAX_LENGTH = 64;
+
+const FNV_OFFSET = 0xcbf29ce484222325n;
+const FNV_PRIME = 0x100000001b3n;
+const U64 = 0xffffffffffffffffn;
+
+/**
+ * 64-bit FNV-1a: a stable, non-cryptographic digest. The cache key is a
+ * routing hint, not a secret — a collision only makes two apps share OpenAI
+ * routing — so a cryptographic hash would add nothing.
+ * @param {string} text
+ * @returns {string} 16 hex characters
+ */
+function fnv1a64(text) {
+  let hash = FNV_OFFSET;
+  for (const byte of Buffer.from(text, 'utf8')) {
+    hash = ((hash ^ BigInt(byte)) * FNV_PRIME) & U64;
+  }
+  return hash.toString(16).padStart(16, '0');
+}
 
 /**
  * The OpenAI `prompt_cache_key` for a request: one key per app and model.
@@ -27,7 +45,7 @@ export const PROMPT_CACHE_KEY_MAX_LENGTH = 64;
 export function buildPromptCacheKey({ appId, modelId }) {
   const key = `ihub:${appId || '-'}:${modelId}`;
   if (key.length <= PROMPT_CACHE_KEY_MAX_LENGTH) return key;
-  return `ihub:${createHash('sha256').update(key).digest('hex').slice(0, 32)}`;
+  return `ihub:${fnv1a64(key)}`;
 }
 
 /**

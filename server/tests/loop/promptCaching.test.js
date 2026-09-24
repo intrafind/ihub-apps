@@ -82,7 +82,8 @@ test('the cache key is per app and model, and never exceeds OpenAI’s 64 charac
   assert.equal(buildPromptCacheKey({ modelId: 'gpt-4o' }), 'ihub:-:gpt-4o');
   const long = buildPromptCacheKey({ appId: 'a'.repeat(60), modelId: 'gpt-4o' });
   assert.ok(long.length <= PROMPT_CACHE_KEY_MAX_LENGTH);
-  assert.match(long, /^ihub:[0-9a-f]{32}$/);
+  assert.match(long, /^ihub:[0-9a-f]{16}$/);
+  assert.notEqual(long, buildPromptCacheKey({ appId: 'b'.repeat(60), modelId: 'gpt-4o' }));
   assert.equal(long, buildPromptCacheKey({ appId: 'a'.repeat(60), modelId: 'gpt-4o' }), 'stable');
 });
 
