@@ -17,3 +17,6 @@ extension (`io.modelcontextprotocol/ui`), so any server built for it works.
 - Admins control it per server with **Render interactive views (MCP Apps)** under
   **Admin → MCP servers** (on by default). The connection test marks tools that render a view.
   Add the server's tools to an app as usual, e.g. `"tools": ["drawio"]`.
+- To try it, two example apps ship disabled — **draw.io Diagrams** and **Excalidraw Sketches** —
+  along with their MCP servers, also disabled. Enable the server under **Admin → MCP servers**,
+  then the app under **Admin → Apps**.

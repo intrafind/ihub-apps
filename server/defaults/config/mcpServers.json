@@ -1,5 +1,54 @@
 {
-  "servers": [],
+  "servers": [
+    {
+      "id": "drawio",
+      "name": {
+        "en": "draw.io",
+        "de": "draw.io"
+      },
+      "description": {
+        "en": "Official draw.io MCP App server. Renders diagrams inline in the chat. Used by the \"draw.io Diagrams\" app.",
+        "de": "Offizieller draw.io-MCP-App-Server. Zeigt Diagramme direkt im Chat an. Wird von der App „draw.io-Diagramme“ verwendet."
+      },
+      "enabled": false,
+      "transport": {
+        "type": "streamableHttp",
+        "url": "https://mcp.draw.io/mcp"
+      },
+      "auth": {
+        "type": "none"
+      },
+      "allowedTools": ["*"],
+      "timeoutMs": 60000,
+      "apps": {
+        "enabled": true
+      }
+    },
+    {
+      "id": "excalidraw",
+      "name": {
+        "en": "Excalidraw",
+        "de": "Excalidraw"
+      },
+      "description": {
+        "en": "Official Excalidraw MCP App server. Draws hand-drawn diagrams inline in the chat. Used by the \"Excalidraw Sketches\" app.",
+        "de": "Offizieller Excalidraw-MCP-App-Server. Zeichnet handgezeichnete Diagramme direkt im Chat. Wird von der App „Excalidraw-Skizzen“ verwendet."
+      },
+      "enabled": false,
+      "transport": {
+        "type": "streamableHttp",
+        "url": "https://mcp.excalidraw.com/mcp"
+      },
+      "auth": {
+        "type": "none"
+      },
+      "allowedTools": ["*"],
+      "timeoutMs": 60000,
+      "apps": {
+        "enabled": true
+      }
+    }
+  ],
   "security": {
     "blockPrivateIps": true,
     "allowedHosts": []

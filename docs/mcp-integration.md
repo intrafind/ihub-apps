@@ -129,7 +129,15 @@ server that supports it declares an HTML view as a `ui://` resource and points
 a tool at it with `_meta.ui.resourceUri`; when the model calls that tool, the
 view renders inline in the chat answer, next to the text reply.
 
-Two public servers to start with:
+iHub ships two example apps to try it with, both **disabled**:
+**draw.io Diagrams** (`drawio-diagrams`) and **Excalidraw Sketches**
+(`excalidraw-sketches`). Their MCP servers, `drawio` and `excalidraw`, are
+pre-configured and also disabled (migration `V131` adds them to existing
+installations unless the ids are taken), so nothing contacts these public
+endpoints until an admin opts in. To try one, enable the server under
+**Admin → MCP servers**, then the app under **Admin → Apps**.
+
+The server entries look like this:
 
 ```jsonc
 {
