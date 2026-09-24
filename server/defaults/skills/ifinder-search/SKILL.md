@@ -15,7 +15,7 @@ description: >
 license: Apache-2.0
 metadata:
   author: IntraFind
-  version: '1.2'
+  version: '1.3'
 ---
 
 # Searching iFinder
@@ -209,8 +209,35 @@ Then:
 - **`iFinder_getContent({ documentId })`** — the extracted text. This is what
   you read to answer a question. Use `maxLength` to cap it.
 
+`documentId` is the hit's `id`, and nothing else: not its title, not its file
+name, not its link. Both tools reject anything that is not an id. A title is
+not even unique — the same file is usually indexed several times (see below).
+
 Cite documents by `title` plus `deepLink`, never by bare `id` — the id means
-nothing to the reader.
+nothing to the reader. Keep the id where it does not show and still survives
+into the next turn: as the link's title, which renders as a tooltip:
+
+```text
+[Schulungsangebot.pptx](https://…/Schulungsangebot.pptx "SharePoint › Vertrieb › Dokumente · onedrive-d4HF8X5AZOWTbeGW")
+```
+
+The tooltip tells the reader where the link leads (source system, site or
+folder from `navigationTree`), and a follow-up question ("who wrote the second
+one?") finds the id in the earlier answer instead of guessing it. Keep `"` and
+`|` out of the title — one breaks the link, the other a table cell.
+
+### You know the title but not the id
+
+Tool results do not carry over between turns; only the answer text does. When a
+document is known only by its title, find it again before calling
+`iFinder_getMetadata` or `iFinder_getContent`:
+
+```
+iFinder_search({ query: 'title:"Schulungsangebot.pptx"', maxResults: 5 })
+```
+
+Then pick the hit whose `deepLink` (or `sourceName`) matches the one cited
+earlier, and use its `id`. Never pass the title itself as `documentId`.
 
 ### Size the result set before you pull it
 

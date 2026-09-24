@@ -193,16 +193,24 @@ iFinder.search({
     {
       "id": "doc123456",
       "title": "Q4 Contract Proposals",
-      "content": "...",
-      "author": "John Smith",
-      "createdDate": "2024-01-15",
-      "documentType": "pdf",
+      "creators": "SMITH, John",
+      "creationDate": "2024-01-15T09:00:00Z",
+      "modificationDate": "2024-01-16T14:25:00Z",
+      "application": "PDF",
+      "sourceName": "SharePoint",
+      "deepLink": "https://…/Q4%20Contract%20Proposals.pdf",
       "score": 0.95
     }
   ],
   "facets": {...}
 }
 ```
+
+Each hit carries its `id` — the value `getContent` and `getMetadata` take as
+`documentId` — along with `creators`, `owners`, `creationDate` and
+`modificationDate` (the field "newest first" sorts on), so a result list can be
+judged and followed up on without a metadata call per hit. Keys a source has no
+value for are omitted rather than sent as `null`.
 
 ### The IntraFind query syntax
 
@@ -249,7 +257,10 @@ Retrieve the full content of a specific document for analysis.
 
 **Parameters:**
 
-- `documentId` (required): Document ID to fetch
+- `documentId` (required): The `id` of a search hit. A value that cannot be an
+  id — one containing whitespace, or a URL — is rejected before any request is
+  made, and a 404 carries the same hint: search for the document and pass the
+  `id` of the matching hit.
 - `maxLength` (optional): Maximum content length (default: 50000)
 - `searchProfile` (optional): Specific search profile ID
 
@@ -286,8 +297,18 @@ Get detailed metadata for a specific document without fetching content.
 
 **Parameters:**
 
-- `documentId` (required): Document ID to fetch metadata for
+- `documentId` (required): The `id` of a search hit. A title, file name or link
+  is rejected with a hint that says how to obtain the id (search for the
+  document, e.g. `title:"…"`, and take the `id` of the matching hit); the same
+  hint comes back when no document has that id. The hit's `id` is always
+  requested, and a hit whose `id` differs from the one asked for is reported as
+  not found rather than returned as the wrong document.
 - `searchProfile` (optional): Specific search profile ID
+- `returnFields` (optional): Fields to return. Defaults to `id`, `title`,
+  `creators`, `owners`, `language`, `accessInfo.*`, `mediaType`, `sourceType`,
+  `file.*`, `sourceLocations.*`, `navigationTree`, `creationDate`,
+  `modificationDate`, `indexingDate`, `application`, `contentLength`,
+  `sourceName` and `url`.
 
 **Example Usage:**
 
@@ -418,6 +439,8 @@ It handles two kinds of requests:
 Requests about the user ("my tickets", "documents I wrote") use the signed-in user's name and email, which the system prompt receives through `{{user_name}}` and `{{user_email}}`. Because iFinder stores names as `"LASTNAME, Firstname"`, and the stored spelling can differ from the profile name, the model first searches loosely on the last name with a facet on the matching `.keyword` field (`task.assignee.keyword`, `creators.keyword`, …) and then filters on the exact value it found.
 
 The documents each search found are listed in the chat's tool activity, like web search results, linked to their iFinder deep link.
+
+**Links and follow-up questions.** Only the message text of earlier turns is replayed to the model — not the tool results — so a document listed in one turn would be known by its title alone in the next, and a title is neither an id nor unique (the same file is usually indexed several times). The prompt therefore has the model write every document link as `[title](deepLink "source › location · id")`. The link title renders as a tooltip, so a user hovering a link sees which system and folder it opens (SharePoint › Vertrieb › Dokumente …) before clicking; the document id at its end is what a follow-up turn ("who wrote the second one?") passes to `iFinder_getMetadata` or `iFinder_getContent`, and it never appears in the visible text. A document the model knows only by title is searched for again (`title:"…"`) and matched by its deep link before either tool is called. Links without a title of their own get their decoded destination as the tooltip from the chat renderer.
 
 **App configuration:**
 

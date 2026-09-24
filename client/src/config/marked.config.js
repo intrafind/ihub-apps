@@ -64,6 +64,62 @@ const highlightCode = (code, lang) => {
   return escapeHtml(code);
 };
 
+/** Longest destination shown in a link tooltip; longer URLs are cut with an ellipsis. */
+const LINK_TOOLTIP_MAX_CHARS = 200;
+const ENTITY_CHARS = { amp: '&', lt: '<', gt: '>', quot: '"', '#39': "'" };
+
+/**
+ * Escape a value for an HTML attribute the way marked's own renderer does:
+ * `<`, `>`, quotes and bare `&` are encoded, an entity that is already there
+ * (`&quot;`, `&#39;`) is kept, so a title written with entities still reads
+ * as its characters in the tooltip.
+ */
+const escapeAttribute = value =>
+  String(value).replace(/[<>"']|&(?!(?:#\d{1,7}|#[Xx][a-fA-F0-9]{1,6}|\w+);)/g, char => {
+    switch (char) {
+      case '&':
+        return '&amp;';
+      case '<':
+        return '&lt;';
+      case '>':
+        return '&gt;';
+      case '"':
+        return '&quot;';
+      default:
+        return '&#39;';
+    }
+  });
+
+/**
+ * The tooltip for a link that carries no title: its destination, percent-decoded
+ * so a SharePoint or file-share URL reads as the file it opens rather than as
+ * `%7B…%7D&file=…`. Empty for a link whose visible text already is the URL,
+ * and for fragments and other non-navigating hrefs.
+ *
+ * @param {string} href - The link's destination.
+ * @param {string} text - The link's rendered text.
+ * @returns {string} The tooltip, or '' when none is useful.
+ */
+export const linkDestinationTooltip = (href, text) => {
+  if (typeof href !== 'string' || !href || href.startsWith('#')) return '';
+  let shown = href;
+  try {
+    shown = decodeURIComponent(href);
+  } catch {
+    // Malformed escapes: show the URL as written.
+  }
+  // `text` is rendered inline HTML: strip tags and undo the entity escaping
+  // marked applies to a bare URL's text before comparing it with the href.
+  const plainText = String(text ?? '')
+    .replace(/<[^>]*>/g, '')
+    .replace(/&(amp|lt|gt|quot|#39);/g, (_, entity) => ENTITY_CHARS[entity])
+    .trim();
+  if (plainText === href || plainText === shown) return '';
+  return shown.length > LINK_TOOLTIP_MAX_CHARS
+    ? `${shown.slice(0, LINK_TOOLTIP_MAX_CHARS - 1)}…`
+    : shown;
+};
+
 const createRenderer = t => {
   const renderer = new Renderer();
 
@@ -170,8 +226,12 @@ const createRenderer = t => {
       // If URL parsing fails, assume it's a relative path or invalid
     }
     const targetAttr = isExternal ? ' target="_blank" rel="noopener noreferrer"' : '';
-    const titleAttr = actualTitle ? ` title="${actualTitle}"` : '';
-    return `<a href="${actualHref}"${titleAttr}${targetAttr}>${text}</a>`;
+    // A link without a title of its own gets its destination as the tooltip,
+    // so a reader hovering "Quarterly report" sees where it would take them
+    // before clicking. A link whose text already is the URL needs none.
+    const tooltip = actualTitle || linkDestinationTooltip(actualHref, text);
+    const titleAttr = tooltip ? ` title="${escapeAttribute(tooltip)}"` : '';
+    return `<a href="${escapeAttribute(actualHref)}"${titleAttr}${targetAttr}>${text}</a>`;
   };
 
   return renderer;

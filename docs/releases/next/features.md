@@ -25,3 +25,10 @@ Admins can now tweak an app and try it without leaving the app editor.
   check the start screen and chat with the app. It runs the saved version and starts over with a
   new chat after every save; test chats are ordinary chats of your account.
 - Testing works for chat apps. Disabled apps can't be opened or tested until they are enabled.
+
+## Chat Links Show Where They Lead
+
+Hovering a link in a chat answer now shows its destination as a tooltip, so a user can see which
+site or file a linked title opens before clicking. Links that already carry a title — such as the
+source and folder the iFinder Search app now puts on every document link — keep it. The "Read …"
+rows of the tool activity panel show their address the same way.
