@@ -92,7 +92,7 @@ audit log (Admin → Audit Log, `resource: chatShare`).
    `contents/config/features.json`). No restart needed.
 2. Check **Admin → Observability → Chat History → Chat sharing**. The section
    edits `platform.json → chats.sharing` with validation and shows whether
-   links can currently be created. Migration V128 writes the defaults into an
+   links can currently be created. Migration V129 writes the defaults into an
    existing installation:
 
 ```json

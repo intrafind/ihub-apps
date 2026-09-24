@@ -97,8 +97,8 @@
     },
     "getContent": {
       "description": {
-        "en": "Fetch document content from iFinder for LLM processing",
-        "de": "Dokumentinhalt aus iFinder für LLM-Verarbeitung abrufen"
+        "en": "Fetch the extracted text of one document from iFinder for LLM processing. Takes the document's `id` as returned by iFinder_search (the `id` field of a hit) — titles, file names and links are not accepted.",
+        "de": "Den extrahierten Text eines Dokuments aus iFinder für die LLM-Verarbeitung abrufen. Erwartet die `id` des Dokuments, wie iFinder_search sie liefert (Feld `id` eines Treffers) — Titel, Dateinamen und Links werden nicht akzeptiert."
       },
       "parameters": {
         "type": "object",
@@ -106,8 +106,8 @@
           "documentId": {
             "type": "string",
             "description": {
-              "en": "Document ID to fetch content for. Example: 'doc123456'",
-              "de": "Dokument-ID für die Inhalte abgerufen werden sollen. Beispiel: 'doc123456'"
+              "en": "The `id` of an iFinder_search hit, e.g. 'onedrive-d4HF8X5AZOWTbeGW'. Never a title, file name or link: when only those are known, search for the document first (e.g. query `title:\"…\"`) and pass the `id` of the hit whose deepLink matches.",
+              "de": "Die `id` eines iFinder_search-Treffers, z. B. 'onedrive-d4HF8X5AZOWTbeGW'. Nie ein Titel, Dateiname oder Link: Sind nur diese bekannt, das Dokument zuerst suchen (z. B. query `title:\"…\"`) und die `id` des Treffers übergeben, dessen deepLink passt."
             }
           },
           "searchProfile": {
@@ -195,8 +195,8 @@
     },
     "getMetadata": {
       "description": {
-        "en": "Fetch detailed metadata for a specific document from iFinder using search endpoint",
-        "de": "Detaillierte Metadaten für ein spezifisches Dokument aus iFinder über Suchendpunkt abrufen"
+        "en": "Fetch the metadata of one document from iFinder without its text — title, authors, dates, source, file details and links. Takes the document's `id` as returned by iFinder_search (the `id` field of a hit) — titles, file names and links are not accepted.",
+        "de": "Die Metadaten eines Dokuments ohne seinen Text aus iFinder abrufen — Titel, Autoren, Daten, Quelle, Dateidetails und Links. Erwartet die `id` des Dokuments, wie iFinder_search sie liefert (Feld `id` eines Treffers) — Titel, Dateinamen und Links werden nicht akzeptiert."
       },
       "parameters": {
         "type": "object",
@@ -204,8 +204,8 @@
           "documentId": {
             "type": "string",
             "description": {
-              "en": "Document ID to fetch metadata for. Example: 'onedrive-d4HF8X5AZOWTbeGW'",
-              "de": "Dokument-ID für die Metadaten abgerufen werden sollen. Beispiel: 'onedrive-d4HF8X5AZOWTbeGW'"
+              "en": "The `id` of an iFinder_search hit, e.g. 'onedrive-d4HF8X5AZOWTbeGW'. Never a title, file name or link: when only those are known, search for the document first (e.g. query `title:\"…\"`) and pass the `id` of the hit whose deepLink matches.",
+              "de": "Die `id` eines iFinder_search-Treffers, z. B. 'onedrive-d4HF8X5AZOWTbeGW'. Nie ein Titel, Dateiname oder Link: Sind nur diese bekannt, das Dokument zuerst suchen (z. B. query `title:\"…\"`) und die `id` des Treffers übergeben, dessen deepLink passt."
             }
           },
           "searchProfile": {
@@ -221,11 +221,14 @@
               "type": "string"
             },
             "description": {
-              "en": "Fields to return in metadata response. Default: ['title', 'language', 'accessInfo.*', 'mediaType', 'sourceType', 'file.*', 'sourceLocations.*', 'navigationTree', 'modificationDate', 'indexingDate', 'application', 'contentLength', 'sourceName']",
-              "de": "In Metadatenantwort zurückzugebende Felder. Standard: ['title', 'language', 'accessInfo.*', 'mediaType', 'sourceType', 'file.*', 'sourceLocations.*', 'navigationTree', 'modificationDate', 'indexingDate', 'application', 'contentLength', 'sourceName']"
+              "en": "Fields to return in metadata response. `id` is always included. Default: ['id', 'title', 'creators', 'owners', 'language', 'accessInfo.*', 'mediaType', 'sourceType', 'file.*', 'sourceLocations.*', 'navigationTree', 'creationDate', 'modificationDate', 'indexingDate', 'application', 'contentLength', 'sourceName', 'url']",
+              "de": "In Metadatenantwort zurückzugebende Felder. `id` ist immer enthalten. Standard: ['id', 'title', 'creators', 'owners', 'language', 'accessInfo.*', 'mediaType', 'sourceType', 'file.*', 'sourceLocations.*', 'navigationTree', 'creationDate', 'modificationDate', 'indexingDate', 'application', 'contentLength', 'sourceName', 'url']"
             },
             "default": [
+              "id",
               "title",
+              "creators",
+              "owners",
               "language",
               "accessInfo.*",
               "mediaType",
@@ -233,11 +236,13 @@
               "file.*",
               "sourceLocations.*",
               "navigationTree",
+              "creationDate",
               "modificationDate",
               "indexingDate",
               "application",
               "contentLength",
-              "sourceName"
+              "sourceName",
+              "url"
             ]
           }
         },

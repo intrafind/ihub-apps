@@ -113,6 +113,24 @@ const doc = await iFinder_getContent({ documentId: hits.results[0].id, maxLength
 `iFinder_getMetadata` gives the same document's metadata without the text — use
 it when you only need the date, author or link.
 
+Both take the hit's `id` and nothing else. A title or a link as `documentId` is
+rejected with a hint, not resolved.
+
+## Find the id of a document you only know by title
+
+Tool results are not replayed in later turns, so a document cited earlier may
+be known by its title alone. Search for it, then match the hit:
+
+```js
+const hits = await iFinder_search({ query: 'title:"Schulungsangebot.pptx"', maxResults: 5 });
+const hit = hits.results.find(h => h.deepLink === citedLink) ?? hits.results[0];
+await iFinder_getMetadata({ documentId: hit.id });
+```
+
+Better still, keep the id in the answer where it does not show: as the markdown
+link title, `[Title](deepLink "SharePoint › Vertrieb · onedrive-d4HF8X5AZOWTbeGW")`,
+which renders as a tooltip naming the source and can be read back next turn.
+
 ## Two people, one document
 
 ```js

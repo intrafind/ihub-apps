@@ -10,6 +10,69 @@ import path from 'path';
 import logger from '../../utils/logger.js';
 
 /**
+ * What a caller that passed something other than a document id needs to hear.
+ *
+ * `documentId` reaches `getContent` / `getMetadata` from model tool calls, and
+ * a model that no longer has the id of a document it listed earlier tends to
+ * pass the title, the file name or the deep link instead. A bare "not found"
+ * reads as a missing document; this says what to pass and how to get it.
+ */
+export const DOCUMENT_ID_HINT =
+  '`documentId` must be the `id` field of an iFinder_search hit — never a title, file name or link. ' +
+  'When only the title is known, search for the document first (e.g. query `title:"…"`) and pass the `id` of the hit whose deepLink matches.';
+
+/** Shorten a caller-supplied value for an error message. */
+function quoteForError(value) {
+  const text = String(value);
+  return text.length > 80 ? `${text.slice(0, 77)}…` : text;
+}
+
+/**
+ * Whether a value can be a document id at all. Ids are single opaque tokens
+ * (`onedrive-d4HF8X5AZOWTbeGW`); whitespace or a URL scheme means the caller
+ * passed a title or a link, and the request would only produce a 404 after a
+ * round trip.
+ *
+ * @param {unknown} value
+ * @returns {boolean}
+ */
+export function looksLikeDocumentId(value) {
+  return (
+    typeof value === 'string' &&
+    value.length > 0 &&
+    value.length <= 1024 &&
+    !/\s/.test(value) &&
+    !/^[a-z][a-z0-9+.-]*:\/\//i.test(value)
+  );
+}
+
+/**
+ * Fields `getMetadata` asks for when the caller does not project its own.
+ * Enough to answer "who wrote it, when, where is it, how do I open it"
+ * without a content fetch; `id` is what follow-up calls pass.
+ */
+export const DEFAULT_METADATA_FIELDS = Object.freeze([
+  'id',
+  'title',
+  'creators',
+  'owners',
+  'language',
+  'accessInfo.*',
+  'mediaType',
+  'sourceType',
+  'file.*',
+  'sourceLocations.*',
+  'navigationTree',
+  'creationDate',
+  'modificationDate',
+  'indexingDate',
+  'application',
+  'contentLength',
+  'sourceName',
+  'url'
+]);
+
+/**
  * Unified iFinder Service Class
  * Provides search, content retrieval, metadata fetching, and download functionality
  * for the iFinder document management system.
@@ -119,6 +182,7 @@ class IFinderService {
       'context',
       'creationDate',
       'creators',
+      'file.extension',
       'file.name',
       'file.size',
       'idHash',
@@ -127,6 +191,7 @@ class IFinderService {
       'languages',
       'links',
       'mediaType',
+      'modificationDate',
       'navigationTree',
       'navigationTreeDepth',
       'owners',
@@ -349,7 +414,13 @@ class IFinderService {
             application: getFieldValue(doc, 'application'),
             contentLength: getFieldValue(doc, 'contentLength'),
 
+            // People, in the field names the index uses ("DOE, John"). These
+            // are requested by default and are what a caller filters on next.
+            creators: getFieldValue(doc, 'creators'),
+            owners: getFieldValue(doc, 'owners'),
+
             // Timestamps (iFinder format)
+            creationDate: getFieldValue(doc, 'creationDate'),
             modificationDate: getFieldValue(doc, 'modificationDate'),
             indexingDate: getFieldValue(doc, 'indexingDate'),
 
@@ -420,6 +491,9 @@ class IFinderService {
     if (!documentId) {
       throw new Error('Document ID parameter is required');
     }
+    if (!looksLikeDocumentId(documentId)) {
+      throw new Error(`Invalid document ID "${quoteForError(documentId)}". ${DOCUMENT_ID_HINT}`);
+    }
     this.validateCommon(user, chatId);
 
     const config = this.getConfig();
@@ -461,7 +535,9 @@ class IFinderService {
 
       if (!response.ok) {
         const errorText = await response.text();
-        if (response.status === 404) throw new Error(`Document not found: ${documentId}`);
+        if (response.status === 404) {
+          throw new Error(`Document not found: ${documentId}. ${DOCUMENT_ID_HINT}`);
+        }
         if (response.status === 403)
           throw new Error(`Access denied to document content: ${documentId}`);
         if (response.status === 413)
@@ -546,21 +622,7 @@ class IFinderService {
     chatId,
     user,
     searchProfile,
-    returnFields = [
-      'title',
-      'language',
-      'accessInfo.*',
-      'mediaType',
-      'sourceType',
-      'file.*',
-      'sourceLocations.*',
-      'navigationTree',
-      'modificationDate',
-      'indexingDate',
-      'application',
-      'contentLength',
-      'sourceName'
-    ]
+    returnFields = DEFAULT_METADATA_FIELDS
   }) {
     if (!documentId) {
       throw new Error('Document ID parameter is required');
@@ -568,10 +630,20 @@ class IFinderService {
 
     // The ID is embedded in a quoted _id:"…" query below. Document IDs can
     // arrive from model/tool parameters, so validate against the central safe
-    // ID allowlist to prevent query injection.
+    // ID allowlist to prevent query injection. A title or a link fails here
+    // too; the hint says what to pass instead.
     if (!isValidId(documentId)) {
-      throw new Error('Invalid document ID format');
+      throw new Error(
+        `Invalid document ID format "${quoteForError(documentId)}". ${DOCUMENT_ID_HINT}`
+      );
     }
+
+    // The hit's own `id` is always fetched, whatever the caller projected: it
+    // is what proves the hit is the requested document rather than a text
+    // match on the id string, and it is the value later calls have to pass.
+    const fields = Array.isArray(returnFields) ? returnFields : DEFAULT_METADATA_FIELDS;
+    const projectedFields =
+      fields.includes('id') || fields.includes('*') ? fields : ['id', ...fields];
 
     // Use the search method with _id:documentId query
     const searchResult = await this.search({
@@ -580,16 +652,19 @@ class IFinderService {
       user,
       maxResults: 1,
       searchProfile,
-      returnFields
+      returnFields: projectedFields
     });
 
-    // Check if document was found
-    if (!searchResult.results || searchResult.results.length === 0) {
-      throw new Error(`Document not found: ${documentId}`);
+    // The single hit, if it is the requested document. A hit whose id differs
+    // is a different document — the id string matched somewhere else — and is
+    // reported as not found rather than returned as if it were the right one.
+    const result = searchResult.results?.[0];
+    const hitId = result?.id;
+    const isOtherDocument =
+      (typeof hitId === 'string' || typeof hitId === 'number') && String(hitId) !== documentId;
+    if (!result || isOtherDocument) {
+      throw new Error(`Document not found: ${documentId}. ${DOCUMENT_ID_HINT}`);
     }
-
-    // Get the single result and enhance it for metadata use case
-    const result = searchResult.results[0];
 
     // Diagnostic logging: which metadata fields survived normalization
     const metaFields = [

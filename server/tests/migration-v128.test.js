@@ -1,131 +1,226 @@
 #!/usr/bin/env node
 
 /**
- * Migration V128 specs — seeding `platform.chats.sharing`.
- *
- * The migration adds the built-in defaults where they are missing and leaves
- * every value an admin already set exactly as it is; it never writes
- * `features.json`, because turning sharing on is the admin's call.
+ * Migration V128 specs — the iFinder `getContent` / `getMetadata` descriptions
+ * and the ifinder-search app prompt gain the document-id guidance, but only
+ * where an admin has not reworded them.
  */
-import fs from 'node:fs/promises';
-import os from 'node:os';
-import path from 'node:path';
-import { after, before, describe, it } from 'node:test';
-import assert from 'node:assert/strict';
 
+import test from 'node:test';
+import assert from 'node:assert/strict';
+import fs from 'node:fs/promises';
+import path from 'node:path';
+import { fileURLToPath } from 'node:url';
 import {
   up,
   precondition,
   version,
-  description,
-  SHARING_DEFAULTS
-} from '../migrations/V128__chat_sharing_defaults.js';
-import { setDefault } from '../migrations/utils.js';
+  applyToolDefaults,
+  applyAppPrompt,
+  SUPERSEDED_TOOL_VALUES,
+  SUPERSEDED_APP_PROMPT
+} from '../migrations/V128__ifinder_document_id_guidance.js';
 
-let baseDir;
+const DEFAULTS_DIR = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '../defaults');
 
-/** A migration context over a scratch contents directory. */
-function makeCtx(dir) {
+async function shipped(file) {
+  return JSON.parse(await fs.readFile(path.join(DEFAULTS_DIR, file), 'utf8'));
+}
+
+function clone(value) {
+  return JSON.parse(JSON.stringify(value));
+}
+
+function getAt(obj, p) {
+  return p.reduce((node, key) => node?.[key], obj);
+}
+
+function setAt(obj, p, value) {
+  getAt(obj, p.slice(0, -1))[p[p.length - 1]] = value;
+}
+
+/** The iFinder tool as an installation that predates this migration has it. */
+async function installedTool() {
+  const tool = await shipped('tools/iFinder.json');
+  for (const { path: p, value } of SUPERSEDED_TOOL_VALUES) setAt(tool, p, clone(value));
+  return tool;
+}
+
+/**
+ * The app as an installation that predates this migration has it: `0` before
+ * V127 ran (the prompt still names the timezone), `1` after it.
+ */
+async function installedApp(variant = 0) {
+  const app = await shipped('apps/ifinder-search.json');
+  app.system = Object.fromEntries(
+    Object.entries(SUPERSEDED_APP_PROMPT).map(([locale, texts]) => [locale, texts[variant]])
+  );
+  return app;
+}
+
+function fakeCtx(files) {
   const logs = [];
+  const writes = [];
   return {
+    files,
     logs,
-    fileExists: async rel =>
-      fs
-        .stat(path.join(dir, rel))
-        .then(() => true)
-        .catch(() => false),
-    readJson: async rel => JSON.parse(await fs.readFile(path.join(dir, rel), 'utf8')),
-    writeJson: async (rel, data) => {
-      await fs.mkdir(path.dirname(path.join(dir, rel)), { recursive: true });
-      await fs.writeFile(path.join(dir, rel), JSON.stringify(data, null, 2), 'utf8');
+    writes,
+    fileExists: async p => p in files,
+    readJson: async p => clone(files[p]),
+    readDefaultJson: shipped,
+    writeJson: async (p, data) => {
+      files[p] = data;
+      writes.push(p);
     },
-    setDefault,
-    log: m => logs.push(['info', m]),
-    warn: m => logs.push(['warn', m])
+    log: m => logs.push(m),
+    warn: m => logs.push(m)
   };
 }
 
-/** Write a scratch contents dir holding this platform config. */
-async function seed(platform) {
-  const dir = await fs.mkdtemp(path.join(baseDir, 'v128-'));
-  await fs.mkdir(path.join(dir, 'config'), { recursive: true });
-  if (platform !== null) {
-    await fs.writeFile(
-      path.join(dir, 'config/platform.json'),
-      JSON.stringify(platform, null, 2),
-      'utf8'
+test('version is the next unused number', () => {
+  assert.equal(version, '128');
+});
+
+test('the shipped defaults differ from every superseded value', async () => {
+  const tool = await shipped('tools/iFinder.json');
+  for (const { path: p, value } of SUPERSEDED_TOOL_VALUES) {
+    assert.notDeepEqual(getAt(tool, p), value, p.join('.'));
+  }
+  const app = await shipped('apps/ifinder-search.json');
+  for (const [locale, texts] of Object.entries(SUPERSEDED_APP_PROMPT)) {
+    assert.equal(texts.length, 2, locale);
+    for (const text of texts) assert.notEqual(app.system[locale], text, locale);
+    assert.match(texts[0], /\{\{timezone\}\}/);
+    assert.doesNotMatch(texts[1], /\{\{timezone\}\}/);
+    assert.doesNotMatch(app.system[locale], /\{\{timezone\}\}/);
+    assert.match(app.system[locale], /iFinder_getMetadata/);
+  }
+});
+
+test('precondition needs an iFinder tool config or the search app', async () => {
+  assert.equal(await precondition(fakeCtx({})), false);
+  assert.equal(await precondition(fakeCtx({ 'tools/iFinder.json': {} })), true);
+  assert.equal(await precondition(fakeCtx({ 'config/tools.json': [] })), true);
+  assert.equal(await precondition(fakeCtx({ 'apps/ifinder-search.json': {} })), true);
+});
+
+test('an untouched tool config takes every refreshed value', async () => {
+  const files = { 'tools/iFinder.json': await installedTool() };
+  const ctx = fakeCtx(files);
+  await up(ctx);
+
+  assert.deepEqual(ctx.writes, ['tools/iFinder.json']);
+  const current = await shipped('tools/iFinder.json');
+  for (const { path: p } of SUPERSEDED_TOOL_VALUES) {
+    assert.deepEqual(getAt(files['tools/iFinder.json'], p), getAt(current, p), p.join('.'));
+  }
+  const documentId =
+    files['tools/iFinder.json'].functions.getMetadata.parameters.properties.documentId.description
+      .en;
+  assert.match(documentId, /Never a title, file name or link/);
+  assert.ok(
+    files[
+      'tools/iFinder.json'
+    ].functions.getMetadata.parameters.properties.returnFields.default.includes('creators')
+  );
+});
+
+test('an admin-edited value is kept while the untouched ones are refreshed', async () => {
+  const tool = await installedTool();
+  tool.functions.getContent.description = { en: 'Our own wording', de: 'Eigene Formulierung' };
+  // Translated into a further language: also an edit.
+  tool.functions.getMetadata.description = {
+    ...tool.functions.getMetadata.description,
+    fr: 'Métadonnées'
+  };
+  const files = { 'tools/iFinder.json': tool };
+  const ctx = fakeCtx(files);
+  await up(ctx);
+
+  const stored = files['tools/iFinder.json'];
+  assert.equal(stored.functions.getContent.description.en, 'Our own wording');
+  assert.equal(stored.functions.getMetadata.description.fr, 'Métadonnées');
+  assert.match(
+    stored.functions.getContent.parameters.properties.documentId.description.en,
+    /Never a title/
+  );
+  assert.match(
+    stored.functions.getMetadata.parameters.properties.documentId.description.de,
+    /Nie ein Titel/
+  );
+});
+
+test('a config that is already current is not rewritten', async () => {
+  const files = {
+    'tools/iFinder.json': await shipped('tools/iFinder.json'),
+    'apps/ifinder-search.json': await shipped('apps/ifinder-search.json')
+  };
+  const ctx = fakeCtx(files);
+  await up(ctx);
+  assert.deepEqual(ctx.writes, []);
+});
+
+test('applyToolDefaults skips paths the installed tool does not have', async () => {
+  const tool = { id: 'iFinder', functions: { search: {} } };
+  assert.deepEqual(applyToolDefaults(tool, await shipped('tools/iFinder.json')), []);
+});
+
+test('the legacy config/tools.json iFinder entry is refreshed in place', async () => {
+  const files = {
+    'config/tools.json': [{ id: 'braveSearch', functions: {} }, await installedTool()]
+  };
+  const ctx = fakeCtx(files);
+  await up(ctx);
+
+  assert.deepEqual(ctx.writes, ['config/tools.json']);
+  const [other, iFinder] = files['config/tools.json'];
+  assert.deepEqual(other, { id: 'braveSearch', functions: {} });
+  assert.match(iFinder.functions.getContent.description.en, /`id` field of a hit/);
+});
+
+test('the app prompt is refreshed per locale, only where untouched', async () => {
+  const app = await installedApp();
+  app.system.de = 'Eigener Prompt';
+  const files = { 'apps/ifinder-search.json': app };
+  const ctx = fakeCtx(files);
+  await up(ctx);
+
+  assert.deepEqual(ctx.writes, ['apps/ifinder-search.json']);
+  const current = await shipped('apps/ifinder-search.json');
+  assert.equal(files['apps/ifinder-search.json'].system.en, current.system.en);
+  assert.equal(files['apps/ifinder-search.json'].system.de, 'Eigener Prompt');
+  // Everything but the prompt is left as it was.
+  assert.equal(files['apps/ifinder-search.json'].enabled, app.enabled);
+});
+
+test('the app prompt is refreshed whether or not V127 already ran', async () => {
+  const current = await shipped('apps/ifinder-search.json');
+  for (const variant of [0, 1]) {
+    const files = { 'apps/ifinder-search.json': await installedApp(variant) };
+    const ctx = fakeCtx(files);
+    await up(ctx);
+    assert.deepEqual(ctx.writes, ['apps/ifinder-search.json'], `variant ${variant}`);
+    assert.deepEqual(
+      files['apps/ifinder-search.json'].system,
+      current.system,
+      `variant ${variant}`
     );
   }
-  return { dir, ctx: makeCtx(dir) };
-}
-
-before(async () => {
-  baseDir = await fs.mkdtemp(path.join(os.tmpdir(), 'ihub-migration-v128-'));
 });
 
-after(async () => {
-  await fs.rm(baseDir, { recursive: true, force: true });
+test('applyAppPrompt ignores an app without a localized prompt', async () => {
+  const current = await shipped('apps/ifinder-search.json');
+  assert.deepEqual(applyAppPrompt({ system: 'plain string' }, current), []);
+  assert.deepEqual(applyAppPrompt({}, current), []);
 });
 
-describe('V128 identity', () => {
-  it('is numbered and described as its file name says', () => {
-    assert.equal(version, '128');
-    assert.equal(description, 'chat_sharing_defaults');
-  });
-
-  it('only runs when platform.json exists', async () => {
-    const { ctx } = await seed(null);
-    assert.equal(await precondition(ctx), false);
-    const { ctx: withPlatform } = await seed({});
-    assert.equal(await precondition(withPlatform), true);
-  });
-});
-
-describe('V128 seeds the sharing block', () => {
-  it('adds every default to an installation that has none', async () => {
-    const { ctx } = await seed({ chats: { enabled: true, retentionDays: 90 } });
-    await up(ctx);
-    const platform = await ctx.readJson('config/platform.json');
-    assert.deepEqual(platform.chats.sharing, SHARING_DEFAULTS);
-    // The siblings are untouched.
-    assert.equal(platform.chats.retentionDays, 90);
-  });
-
-  it('creates the chats block when even that is missing', async () => {
-    const { ctx } = await seed({ auth: { mode: 'local' } });
-    await up(ctx);
-    const platform = await ctx.readJson('config/platform.json');
-    assert.deepEqual(platform.chats.sharing, SHARING_DEFAULTS);
-    assert.deepEqual(platform.auth, { mode: 'local' });
-  });
-
-  it('keeps every value an admin already set, and fills only the gaps', async () => {
-    const { ctx } = await seed({
-      chats: { sharing: { allowPublic: false, maxExpiryDays: 30 } }
-    });
-    await up(ctx);
-    const platform = await ctx.readJson('config/platform.json');
-    assert.equal(platform.chats.sharing.allowPublic, false);
-    assert.equal(platform.chats.sharing.maxExpiryDays, 30);
-    assert.equal(platform.chats.sharing.enabled, true);
-    assert.equal(platform.chats.sharing.allowUsers, true);
-    assert.equal(platform.chats.sharing.defaultExpiryDays, 0);
-    assert.equal(platform.chats.sharing.maxViewsCap, 0);
-  });
-
-  it('is idempotent', async () => {
-    const { ctx } = await seed({});
-    await up(ctx);
-    const first = await ctx.readJson('config/platform.json');
-    await up(ctx);
-    const second = await ctx.readJson('config/platform.json');
-    assert.deepEqual(second, first);
-  });
-
-  it('never creates or edits features.json', async () => {
-    const { ctx, dir } = await seed({});
-    await up(ctx);
-    assert.equal(await ctx.fileExists('config/features.json'), false);
-    assert.ok(dir);
-  });
+test('tool and app are refreshed in one run', async () => {
+  const files = {
+    'tools/iFinder.json': await installedTool(),
+    'apps/ifinder-search.json': await installedApp()
+  };
+  const ctx = fakeCtx(files);
+  await up(ctx);
+  assert.deepEqual(ctx.writes.sort(), ['apps/ifinder-search.json', 'tools/iFinder.json']);
+  assert.match(files['apps/ifinder-search.json'].system.de, /Linkformat/);
 });

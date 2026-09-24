@@ -1,5 +1,5 @@
 /**
- * Migration V128 — Seed the platform `chats.sharing` section
+ * Migration V129 — Seed the platform `chats.sharing` section
  *
  * Chat sharing hands out read-only links onto stored chats. The feature
  * itself ships dark behind `features.chatSharing`; the settings seeded here
@@ -23,7 +23,7 @@
  * `features.json`: whether chats may be shared at all is the admin's call.
  */
 
-export const version = '128';
+export const version = '129';
 export const description = 'chat_sharing_defaults';
 
 export const SHARING_DEFAULTS = Object.freeze({
