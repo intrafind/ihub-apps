@@ -132,7 +132,7 @@ view renders inline in the chat answer, next to the text reply.
 iHub ships two example apps to try it with, both **disabled**:
 **draw.io Diagrams** (`drawio-diagrams`) and **Excalidraw Sketches**
 (`excalidraw-sketches`). Their MCP servers, `drawio` and `excalidraw`, are
-pre-configured and also disabled (migration `V131` adds them to existing
+pre-configured and also disabled (migration `V132` adds them to existing
 installations unless the ids are taken), so nothing contacts these public
 endpoints until an admin opts in. To try one, enable the server under
 **Admin → MCP servers**, then the app under **Admin → Apps**.
@@ -170,7 +170,7 @@ Both servers can also be self-hosted (`jgraph/drawio-mcp` on Docker Hub, or
 #### Enabling and disabling
 
 Per server, `apps.enabled` (admin UI: **Render interactive views (MCP
-Apps)**, on by default; migration `V130` seeds it). When on, iHub advertises
+Apps)**, on by default; migration `V131` seeds it). When on, iHub advertises
 the extension in `initialize`:
 
 ```json

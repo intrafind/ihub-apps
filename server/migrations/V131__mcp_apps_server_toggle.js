@@ -1,4 +1,4 @@
-export const version = '130';
+export const version = '131';
 export const description = 'mcp_apps_server_toggle';
 
 export async function precondition(ctx) {

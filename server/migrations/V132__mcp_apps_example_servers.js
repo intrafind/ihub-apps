@@ -1,4 +1,4 @@
-export const version = '131';
+export const version = '132';
 export const description = 'mcp_apps_example_servers';
 
 /** The MCP App servers the "draw.io Diagrams" and "Excalidraw Sketches" apps use. */

@@ -51,6 +51,13 @@ During a release, `scripts/finalize-release-notes.js` moves `next/` under the ve
 3. If `next/` had no entries, nothing is created and the changelog does not list the release.
    If `docs/releases/3.4.0/` already exists (a re-run), nothing is changed.
 
+Because the build then regenerates the **iHub Documentation** knowledge source
+(`scripts/export-docs-markdown.js`, run by `build:server` and `build-sea.sh`), the binaries and the
+Docker image also ship the current documentation with the release notes of every release up to
+and including `3.4.0`. Installations re-sync that file into `contents/` on startup, so the iHub
+Support Bot answers from the documentation of the version it runs. See
+[Sources System](sources.md#built-in-sources).
+
 ### 4. Build Process
 
 **Binary Builds:**

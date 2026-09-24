@@ -45,8 +45,8 @@
       "de": "iHub-Dokumentation"
     },
     "description": {
-      "en": "Full iHub Apps documentation (consolidated from the docs/ folder): configuration, authentication, features, and operations. Use as a knowledge source for apps that answer questions about the iHub platform.",
-      "de": "Vollständige iHub-Apps-Dokumentation (zusammengeführt aus dem Ordner docs/): Konfiguration, Authentifizierung, Funktionen und Betrieb. Als Wissensquelle für Apps, die Fragen zur iHub-Plattform beantworten."
+      "en": "Full iHub Apps documentation (consolidated from the docs/ folder): configuration, authentication, features, and operations, plus the release notes of every version (breaking changes, new features, and fixes). Use as a knowledge source for apps that answer questions about the iHub platform, including what changed in a release and what to check before upgrading.",
+      "de": "Vollständige iHub-Apps-Dokumentation (zusammengeführt aus dem Ordner docs/): Konfiguration, Authentifizierung, Funktionen und Betrieb, dazu die Versionshinweise jeder Version (Breaking Changes, neue Funktionen und Fehlerbehebungen). Als Wissensquelle für Apps, die Fragen zur iHub-Plattform beantworten – auch dazu, was sich in einem Release geändert hat und was vor einem Upgrade zu prüfen ist."
     },
     "type": "filesystem",
     "enabled": true,
