@@ -158,12 +158,19 @@ audience, lists the newest ones, and lets an administrator revoke any of them.
 
 ## Using it
 
-- **Share chat** in the header of a durable chat (`/apps/:appId/c/:chatId`)
-  opens the dialog: pick the audience, the recipients for a `users` share, an
-  expiry and an open limit, acknowledge the warning for a public link, and
-  copy the URL. Below the form every link of this chat is listed with its
-  state, its opens and — per recipient — whether it was opened, each with a
-  **Revoke** button.
+- **Share** in the chat header opens one dialog for everything a chat page
+  can share. **This conversation** is the read-only link described here;
+  **Link to the app** is a short link (`/s/<code>`, feature `shortLinks`)
+  that opens the app for a new chat, optionally with the current settings, and
+  never carries the conversation. With both on offer they are two tabs, and
+  the conversation is preselected once the chat has a message; with one, the
+  dialog shows only that one. The conversation needs a durable chat
+  (`/apps/:appId/c/:chatId`) with at least one message.
+- In **This conversation**: pick the audience, the recipients for a `users`
+  share, an expiry and an open limit, acknowledge the warning for a public
+  link, and copy the URL. Below the form every link of this chat is listed
+  with its state, its opens and — per recipient — whether it was opened, each
+  with a **Revoke** button.
 - The link is `/share/<id>`. The page renders outside the application shell,
   so it works for a visitor who has no account, and carries the app's name and
   icon, the chat title, a _Read-only_ badge and, for a public link, a banner
@@ -220,7 +227,8 @@ client-minted and enumerable.
 | `server/services/chat/chatShareAccess.js`           | Who may open a link                                         |
 | `server/routes/chatShares.js`                       | The routes above                                            |
 | `server/routes/admin/chatHistory.js`                | Settings, stats, admin list and revoke                      |
-| `client/src/features/chat/components/ShareChatModal.jsx` | The share dialog                                       |
+| `client/src/features/chat/components/ShareDialog.jsx` | The share dialog: conversation and app link |
+| `client/src/features/chat/components/ChatSharePanel.jsx` | Its "This conversation" form and link list |
 | `client/src/features/chat/pages/SharedChatPage.jsx` | The read-only page at `/share/:shareId`                     |
 | `client/src/auth-gate/auth-gate.js`                 | Lets `/share/*` load without a sign-in; the server decides  |
 | `server/tests/chat-persistence-shares.test.js`      | Access matrix, snapshot, allow-list, limits, cascade        |

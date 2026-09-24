@@ -23,6 +23,7 @@ import registerStaticRoutes from './routes/staticRoutes.js';
 import registerGeneralRoutes from './routes/generalRoutes.js';
 import registerModelRoutes from './routes/modelRoutes.js';
 import registerToolRoutes from './routes/toolRoutes.js';
+import registerMcpAppRoutes from './routes/mcpAppRoutes.js';
 import registerSkillRoutes from './routes/skillRoutes.js';
 import registerPageRoutes from './routes/pageRoutes.js';
 import registerRendererRoutes from './routes/rendererRoutes.js';
@@ -669,6 +670,7 @@ if (cluster.isPrimary && workerCount > 1) {
   registerGeneralRoutes(app, { getLocalizedError });
   registerModelRoutes(app, { getLocalizedError });
   registerToolRoutes(app);
+  registerMcpAppRoutes(app);
   registerSkillRoutes(app);
   registerPageRoutes(app);
   registerRendererRoutes(app);

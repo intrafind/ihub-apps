@@ -373,8 +373,7 @@
           "acknowledge": "Verstanden"
         }
       },
-      "newChat": "Neuer Chat",
-      "shareChat": "Chat teilen"
+      "newChat": "Neuer Chat"
     }
   },
   "models": {
@@ -2235,7 +2234,8 @@
           "running": "Verbindung wird getestet …",
           "success": "Verbunden — {{count}} Tools gefunden",
           "failed": "Verbindung fehlgeschlagen: {{error}}",
-          "noTools": "Der Server ist verbunden, stellt aber keine Tools bereit (oder alle wurden durch die Allowlist gefiltert)."
+          "noTools": "Der Server ist verbunden, stellt aber keine Tools bereit (oder alle wurden durch die Allowlist gefiltert).",
+          "rendersView": "interaktive Ansicht"
         },
         "status": {
           "unknown": "unbekannt",
@@ -2265,6 +2265,8 @@
           "toolPrefix": "Tool-Präfix",
           "timeout": "Timeout (ms)",
           "allowedTools": "Erlaubte Tools (kommagetrennt oder *)",
+          "appsEnabled": "Interaktive Ansichten anzeigen (MCP Apps)",
+          "appsEnabledHint": "Kündigt die MCP-Apps-Erweiterung an und zeigt die interaktiven Ansichten, die die Tools dieses Servers deklarieren, direkt im Chat an. Deaktivieren für reine Textergebnisse.",
           "transportStreamableHttp": "Streamable HTTP (empfohlen)",
           "transportSse": "SSE (veraltet)",
           "transportStdio": "stdio",
@@ -2355,6 +2357,7 @@
           "documentation": "Dokumentation",
           "development": "Entwicklung & Betrieb",
           "productivity": "Produktivität",
+          "design": "Design & Diagramme",
           "content": "Inhalte & Medien",
           "automation": "Automatisierung & Web",
           "customer": "Vertrieb & Support",
@@ -3950,6 +3953,43 @@
     "stopped": "Abgebrochen",
     "moreValues_one": "+{{count}} weiterer",
     "moreValues_other": "+{{count}} weitere"
+  },
+  "mcpApps": {
+    "caption": "Interaktive Ansicht · {{name}}",
+    "loading": "Interaktive Ansicht wird geladen…",
+    "loadFailed": "Die interaktive Ansicht konnte nicht geladen werden: {{error}}",
+    "payloadOmitted": "Diese interaktive Ansicht war zu groß zum Speichern und kann nicht erneut angezeigt werden.",
+    "unsupportedSurface": "Interaktive Ansichten sind in diesem Fenster nicht verfügbar.",
+    "exitFullscreen": "Vollbild beenden",
+    "frameTitle": "Interaktive Ansicht: {{name}}",
+    "readOnly": "Interaktive Ansicht „{{name}}“ – öffnen Sie den Chat, um sie zu verwenden."
+  },
+  "shareDialog": {
+    "title": "Teilen",
+    "titleApp": "App teilen",
+    "targetLabel": "Was geteilt wird",
+    "target": {
+      "chat": {
+        "label": "Diese Unterhaltung",
+        "hint": "Eine schreibgeschützte Kopie der bisherigen Nachrichten"
+      },
+      "app": {
+        "label": "Link zur App",
+        "hint": "Öffnet die App für einen neuen Chat, ohne Ihre Nachrichten"
+      }
+    },
+    "chatNotReady": "Senden Sie zuerst eine Nachricht — eine Unterhaltung kann geteilt werden, sobald sie begonnen hat.",
+    "thisApp": "diese App",
+    "appLink": {
+      "description": "Ein Kurzlink, der {{app}} für einen neuen Chat öffnet. Ihre Unterhaltung ist nicht enthalten.",
+      "includeSettingsHint": "Empfänger starten mit dem Modell, dem Stil und den Eingabewerten, die Sie gerade gewählt haben.",
+      "moreOptions": "Weitere Optionen",
+      "codeLabel": "Eigener Kurzcode",
+      "codePlaceholder": "Wird automatisch erzeugt",
+      "codeHint": "Optional, mindestens {{count}} Zeichen.",
+      "expiryHint": "Leer lassen, damit der Link nicht abläuft.",
+      "createFailed": "Der Link konnte nicht erstellt werden."
+    }
   },
   "chatSharing": {
     "title": "Chat teilen",

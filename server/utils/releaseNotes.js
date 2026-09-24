@@ -9,7 +9,8 @@
  * Every directory holds up to three files — `breaking-changes.md`, `features.md`, `fixes.md` —
  * and every file is one H1 title followed by `##` entries. This module is the single place that
  * knows that shape: the admin changelog endpoint, the release pipeline
- * (`scripts/finalize-release-notes.js`) and their tests all read and write release notes through
+ * (`scripts/finalize-release-notes.js`), the documentation export that feeds the iHub Support Bot
+ * (`scripts/export-docs-markdown.js`) and their tests all read and write release notes through
  * it.
  *
  * Pure functions only. Nothing here touches the filesystem, so the release script can import it
@@ -263,6 +264,118 @@ export function renderReleaseNotes({ sectionTitle, version, entries = [], preamb
     const body = (entry.body ?? '').trim();
     blocks.push(body ? `## ${entry.title}\n\n${body}` : `## ${entry.title}`);
   }
+  return `${blocks.join('\n\n')}\n`;
+}
+
+const ATX_HEADING_RE = /^( {0,3})(#{1,6})(?=\s|$)/;
+
+/**
+ * Push every heading of a Markdown fragment down by `levels`, capped at `######`. Lines inside
+ * fenced code blocks are content and stay as they are.
+ *
+ * @param {string} markdown
+ * @param {number} levels
+ * @returns {string}
+ */
+function demoteHeadings(markdown, levels) {
+  let openFence = null;
+  return String(markdown ?? '')
+    .split('\n')
+    .map(line => {
+      const fence = FENCE_RE.exec(line);
+      if (fence) {
+        if (!openFence) {
+          openFence = fence[1];
+        } else if (fence[1][0] === openFence[0] && fence[1].length >= openFence.length) {
+          openFence = null;
+        }
+        return line;
+      }
+      if (openFence) return line;
+      return line.replace(ATX_HEADING_RE, (_, indent, hashes) => {
+        return `${indent}${'#'.repeat(Math.min(hashes.length + levels, 6))}`;
+      });
+    })
+    .join('\n');
+}
+
+const SECTION_NOUNS = Object.freeze({
+  breakingChanges: ['breaking change', 'breaking changes'],
+  features: ['feature', 'features'],
+  fixes: ['fix', 'fixes']
+});
+
+/** `1 breaking change, 3 features, 2 fixes` — only the sections that have entries. */
+function describeCounts(counts) {
+  return RELEASE_SECTIONS.filter(section => counts[section.key] > 0)
+    .map(section => {
+      const [singular, plural] = SECTION_NOUNS[section.key];
+      const n = counts[section.key];
+      return `${n} ${n === 1 ? singular : plural}`;
+    })
+    .join(', ');
+}
+
+/**
+ * Every release as one Markdown chapter, for the bundled "iHub Documentation" knowledge source
+ * that `scripts/export-docs-markdown.js` builds. It is what lets the iHub Support Bot answer what a
+ * release changed, fixed or broke, and what an upgrade across several releases brings in.
+ *
+ * Releases are listed the way the admin changelog lists them: `next` (not shipped in a tagged
+ * release yet) first, then newest release first, and a release without a single entry is left
+ * out. Each release is a `## ` heading, each section a `### `, each entry a `#### `; headings
+ * inside an entry body are pushed down to stay beneath their entry.
+ *
+ * @param {Array<{ version: string, sections: Record<string, { entries: Array<{ title: string, body?: string }> }> }>} releases
+ *   one item per release directory, `sections` as returned by {@link parseReleaseSections}; any
+ *   order
+ * @param {{ currentVersion?: string }} [options] the version this documentation ships with
+ * @returns {string} the chapter, ending in a newline; '' when no release has an entry
+ */
+export function renderReleaseNotesChapter(releases, { currentVersion } = {}) {
+  const byVersion = new Map((releases ?? []).map(release => [release.version, release]));
+  const withEntries = sortVersionsNewestFirst([...byVersion.keys()])
+    .map(version => ({
+      ...byVersion.get(version),
+      counts: countEntries(byVersion.get(version).sections)
+    }))
+    .filter(release => release.counts.total > 0);
+  if (withEntries.length === 0) return '';
+
+  const heading = release =>
+    release.version === UNRELEASED_VERSION ? UNRELEASED_LABEL : `Version ${release.version}`;
+
+  const intro = [
+    'What every iHub Apps release changed — its breaking changes, new features and fixes — newest release first.',
+    currentVersion ? `This documentation ships with version ${currentVersion}.` : null,
+    'Upgrading brings in every release after the installed version, up to and including the target version: check the breaking changes of each of them before upgrading.'
+  ]
+    .filter(Boolean)
+    .join(' ');
+
+  const blocks = ['# Release Notes', intro];
+  blocks.push(
+    withEntries
+      .map(release => `- ${heading(release)}: ${describeCounts(release.counts)}`)
+      .join('\n')
+  );
+
+  for (const release of withEntries) {
+    blocks.push(`## ${heading(release)}`);
+    if (release.version === UNRELEASED_VERSION) {
+      blocks.push('Changes that have not shipped in a tagged release yet.');
+    }
+    for (const section of RELEASE_SECTIONS) {
+      const entries = release.sections[section.key]?.entries ?? [];
+      if (entries.length === 0) continue;
+      blocks.push(`### ${section.title}`);
+      for (const entry of entries) {
+        const body = demoteHeadings((entry.body ?? '').trim(), 2);
+        blocks.push(body ? `#### ${entry.title}\n\n${body}` : `#### ${entry.title}`);
+      }
+    }
+  }
+
   return `${blocks.join('\n\n')}\n`;
 }
 

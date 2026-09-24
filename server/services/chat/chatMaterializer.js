@@ -14,6 +14,7 @@
  *
  * @module services/chat/chatMaterializer
  */
+import { boundStoredViews } from '../mcp/mcpApps.js';
 import logger from '../../utils/logger.js';
 import { deriveChatTitle } from './ChatRepository.js';
 import { getArtifactRepository } from '../artifacts/ArtifactRepository.js';
@@ -379,6 +380,10 @@ export async function materializeAssistantTurn({
     // times out. A chat stuck `running` then makes every later open replay a
     // dead run and spin on an empty placeholder. Losing the answer is bad;
     // losing the answer *and* wedging the chat is worse.
+    // MCP App views the turn rendered (tool input + result per view), bounded
+    // so a chat document cannot grow without limit.
+    const mcpApps = pausedWithoutAnswer ? [] : boundStoredViews(summary?.mcpApps);
+
     let appended = null;
     if (!pausedWithoutAnswer) {
       try {
@@ -392,7 +397,8 @@ export async function materializeAssistantTurn({
             finishReason: summary?.finishReason ?? null,
             ...(usage ? { usage } : {}),
             ...(error ? { error } : {}),
-            ...(artifacts.length > 0 ? { artifacts } : {})
+            ...(artifacts.length > 0 ? { artifacts } : {}),
+            ...(mcpApps.length > 0 ? { mcpApps } : {})
           },
           // The end of the transcript for an ordinary turn, and the position
           // right after this run's own question for a superseded one.

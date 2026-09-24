@@ -360,8 +360,7 @@
           "acknowledge": "I Understand"
         }
       },
-      "newChat": "New Chat",
-      "shareChat": "Share chat"
+      "newChat": "New Chat"
     },
     "authRequired": {
       "title": "Authentication Required",
@@ -1951,7 +1950,8 @@
           "running": "Testing connection…",
           "success": "Connected — {{count}} tools discovered",
           "failed": "Connection failed: {{error}}",
-          "noTools": "The server connected but exposed no tools (or all were filtered by the allowlist)."
+          "noTools": "The server connected but exposed no tools (or all were filtered by the allowlist).",
+          "rendersView": "interactive view"
         },
         "status": {
           "unknown": "unknown",
@@ -1981,6 +1981,8 @@
           "toolPrefix": "Tool prefix",
           "timeout": "Timeout (ms)",
           "allowedTools": "Allowed tools (comma-separated, or *)",
+          "appsEnabled": "Render interactive views (MCP Apps)",
+          "appsEnabledHint": "Advertise the MCP Apps extension and show the interactive views this server's tools declare inline in the chat. Turn off to get text-only results.",
           "transportStreamableHttp": "Streamable HTTP (recommended)",
           "transportSse": "SSE (legacy)",
           "transportStdio": "stdio",
@@ -2071,6 +2073,7 @@
           "documentation": "Documentation",
           "development": "Development & operations",
           "productivity": "Productivity",
+          "design": "Design & diagrams",
           "content": "Content & media",
           "automation": "Automation & web",
           "customer": "Sales & support",
@@ -3985,6 +3988,43 @@
     "stopped": "Stopped",
     "moreValues_one": "+{{count}} more",
     "moreValues_other": "+{{count}} more"
+  },
+  "mcpApps": {
+    "caption": "Interactive view · {{name}}",
+    "loading": "Loading interactive view…",
+    "loadFailed": "The interactive view could not be loaded: {{error}}",
+    "payloadOmitted": "This interactive view was too large to keep and cannot be shown again.",
+    "unsupportedSurface": "Interactive views are not available in this window.",
+    "exitFullscreen": "Exit full screen",
+    "frameTitle": "Interactive view: {{name}}",
+    "readOnly": "Interactive view “{{name}}” — open the chat to use it."
+  },
+  "shareDialog": {
+    "title": "Share",
+    "titleApp": "Share app",
+    "targetLabel": "What to share",
+    "target": {
+      "chat": {
+        "label": "This conversation",
+        "hint": "A read-only copy of the messages so far"
+      },
+      "app": {
+        "label": "Link to the app",
+        "hint": "Opens the app for a new chat, without your messages"
+      }
+    },
+    "chatNotReady": "Send a first message — a conversation can be shared once it has started.",
+    "thisApp": "this app",
+    "appLink": {
+      "description": "A short link that opens {{app}} for a new chat. Your conversation is not part of it.",
+      "includeSettingsHint": "Recipients start with the model, style and input values you have selected now.",
+      "moreOptions": "More options",
+      "codeLabel": "Custom short code",
+      "codePlaceholder": "Generated automatically",
+      "codeHint": "Optional, at least {{count}} characters.",
+      "expiryHint": "Leave empty and the link does not expire.",
+      "createFailed": "The link could not be created."
+    }
   },
   "chatSharing": {
     "title": "Share chat",

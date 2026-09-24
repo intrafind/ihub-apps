@@ -1,14 +1,23 @@
 # Fixes — Unreleased
 
-## MCP Servers: External Servers Connect Over HTTP
+## iHub Support Bot: Documentation Available in Docker and Production Builds
 
-Connecting iHub to an external MCP server over Streamable HTTP or SSE failed: **Test connection**
-reported errors such as
+In Docker images, the iHub Support Bot had no iHub documentation to answer from, and installations
+built with `npm run prod:build` could ship the documentation of an earlier build or none at all —
+the documentation source was generated after the server files were packaged, or not at all. Every
+build now generates it before packaging, so the bot answers from the documentation of the version
+it runs.
 
-> Unable to read the request as JSON because the request content type '' is not a known JSON
-> content type.
+## MCP Servers Using Streamable HTTP Connect Reliably
 
-or never finished. Requests went out without the headers the MCP protocol requires, and responses
-could not be streamed. Both are fixed, so tools from external MCP servers now show up in the tool
-catalog. SSE message requests now also go through the same private-address protection as
-the rest of the connection.
+Connecting to an MCP server over Streamable HTTP often failed with `406 Not Acceptable`, or the
+connection test and tool calls timed out. iHub dropped the request headers the protocol requires
+and could not read streamed (`text/event-stream`) replies. Both now work. Message requests over
+the legacy SSE transport now also go through the same private-address protection as the rest of
+the connection.
+
+## External MCP Servers No Longer Receive iHub User Details
+
+Tool calls to external MCP servers included iHub's internal context — the signed-in user's
+profile, the app configuration and the chat id — alongside the model's arguments. Only the tool's
+own arguments are sent now.

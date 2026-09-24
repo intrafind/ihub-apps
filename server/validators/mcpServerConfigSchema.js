@@ -134,6 +134,16 @@ export const mcpServerConfigSchema = z.object({
   allowedTools: z.array(z.string()).prefault(['*']),
   // Hard timeout (ms) for `tools/call`; the client aborts past this.
   timeoutMs: z.number().int().min(1000).max(600000).prefault(30000),
+  // MCP Apps (extension `io.modelcontextprotocol/ui`): when enabled, iHub
+  // advertises the extension on connect and renders the interactive views the
+  // server's tools declare (`_meta.ui.resourceUri`) inline in the chat. When
+  // disabled the extension is not advertised, so a well-behaved server falls
+  // back to text-only results.
+  apps: z
+    .object({
+      enabled: z.boolean().prefault(true)
+    })
+    .prefault({}),
   // Auto-reconnect window. After `maxRetries` failures the connection is
   // marked unhealthy and excluded from `tools/list` aggregation.
   reconnect: z

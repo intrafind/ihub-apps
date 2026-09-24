@@ -22,7 +22,7 @@ interactive login per user? That is all iHub's outbound client supports today:
 | `basic`        | `Authorization: Basic base64(user:secret)`                        |
 | `oauth`        | client-credentials token, form-encoded request to the token URL   |
 
-Result: **37 servers in the catalog**, 37 left out.
+Result: **39 servers in the catalog**, 35 left out.
 
 ### In the catalog
 
@@ -31,6 +31,7 @@ Result: **37 servers in the catalog**, 37 left out.
 | Documentation            | Microsoft Learn, Context7, DeepWiki, Astro Docs (all without key)                                        |
 | Development & operations | GitHub, Sentry, Postman, Cloudflare, Supabase, Neon, Render, Buildkite, Honeycomb, PagerDuty, Braintrust |
 | Productivity             | Atlassian (Jira & Confluence), Linear, monday.com, Coda                                                  |
+| Design & diagrams        | draw.io, Excalidraw (MCP App servers, no key)                                                            |
 | Content & media          | Sanity, Cloudinary, Wix                                                                                  |
 | Automation & web         | Zapier, Apify, Browser Use, superglue                                                                    |
 | Sales & support          | Close, Intercom, Fireflies.ai, Modjo                                                                     |
@@ -57,6 +58,9 @@ Notes that shaped entries:
   asks for an agent key.
 - Hugging Face and Context7 work without a key, so they are listed keyless with a note on adding
   one.
+- draw.io and Excalidraw return an interactive view (MCP Apps), which iHub renders in the chat.
+  iHub also ships both as disabled servers with the same ids (`drawio`, `excalidraw`), so the
+  catalog marks them **Added** on installations that have them and the admin enables them there.
 
 ### Left out
 
@@ -65,7 +69,6 @@ Notes that shaped entries:
 | Interactive OAuth login per user only                                    | Amplitude, Ashby, Asana, Attio, Canva, ClickUp, Demodesk, HubSpot, Jamie, Klardaten, Leadfeeder, Miro, Mobbin, Notion, Pennylane, Pipedrive, Prisma, Ramp, SISTRIX (API keys refused since 31 Aug 2026), Spendesk, Square, Stack Overflow, Stytch, Supercut, TaxGraph, Typeform, Vercel |
 | Static token documented only for the local package, or not at all        | InstantDB, Netlify, Replicate, Semgrep (hosted server now answers with an OAuth challenge), Lazyweb (token only obtainable through its installer)                                                                                          |
 | Client-credentials variants iHub's `oauth` type does not speak           | Plaid (JSON token request), PayPal (token request with Basic client auth, undocumented for MCP), Pipedream (plus four `x-pd-*` headers, one of them per end user)                                                                          |
-| Renders its result as an MCP App (iframe UI), which iHub does not display | draw.io, Excalidraw                                                                                                                                                                                                                      |
 
 ## Bugs Found on the Way
 
@@ -82,7 +85,12 @@ work at all:
    body, so SSE responses never completed. `safeFetch` now uses `undici.fetch` with the matching
    Agent.
 
-The SSE transport's message POSTs also bypassed the pinned fetch; they now use it too.
+The MCP Apps work (#2523) fixed both on `main` in parallel. Its header fix merged the SDK
+headers into a plain object and spread the auth headers next to them, so a static
+`Authorization` went out twice — the SDK's lowercase copy and iHub's — and fetch joined them
+into `Bearer t, Bearer t`. This branch sets the auth headers on the SDK's `Headers` instead
+(`server/tests/mcp/connectionRequestHeaders.test.js` checks what reaches the wire). The SSE
+transport's message POSTs also bypassed the pinned fetch; they now use it too.
 
 ## Design
 
@@ -106,7 +114,7 @@ The SSE transport's message POSTs also bypassed the pinned fetch; they now use i
 
 ## Next Step: Per-User Outbound OAuth
 
-27 of the 37 servers left out — including Notion, Asana, HubSpot, Miro, Canva, ClickUp and
+27 of the 35 servers left out — including Notion, Asana, HubSpot, Miro, Canva, ClickUp and
 Vercel — need each user to sign in with their own account. Supporting them means an outbound
 OAuth 2.1 client in iHub: authorization code with PKCE, client registration via Client ID Metadata
 Documents (preferred by the 2025-11-25 MCP spec) or dynamic client registration, per-user token

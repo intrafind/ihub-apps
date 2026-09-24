@@ -16,6 +16,7 @@
  *   description    { en, de }
  *   transport      transport block, copied into the form; `headers` are
  *                  non-secret headers the vendor expects next to the key
+ *   timeoutMs      optional tool-call timeout, when the default is too short
  *   auth           { type: 'none' } | { type: 'bearer' } | { type: 'basic' } |
  *                  { type: 'header', headerName, valuePrefix? } — the
  *                  credential reference is left for the admin to pick
@@ -29,6 +30,7 @@ export const MCP_CATALOG_CATEGORIES = [
   'documentation',
   'development',
   'productivity',
+  'design',
   'content',
   'automation',
   'customer',
@@ -419,6 +421,48 @@ export const MCP_SERVER_CATALOG = [
     },
     docsUrl: 'https://help.coda.io/hc/en-us/articles/44722661982989-Connect-to-the-Coda-MCP',
     tags: ['docs', 'wiki', 'tables']
+  },
+
+  // --- Design & diagrams -----------------------------------------------------
+  // MCP App servers: their tools return an interactive view that renders in
+  // the chat. iHub also ships both as disabled defaults under the same ids.
+  {
+    id: 'drawio',
+    name: 'draw.io',
+    vendor: 'JGraph',
+    category: 'design',
+    description: {
+      en: 'Create flowcharts, architecture and other diagrams that render as interactive draw.io views in the chat.',
+      de: 'Flussdiagramme, Architektur- und andere Diagramme erstellen, die als interaktive draw.io-Ansicht im Chat erscheinen.'
+    },
+    transport: { type: 'streamableHttp', url: 'https://mcp.draw.io/mcp' },
+    auth: { type: 'none' },
+    timeoutMs: 60000,
+    notes: {
+      en: 'An MCP App server: keep “Render interactive views (MCP Apps)” on. iHub ships this server disabled with the “draw.io Diagrams” app — if it is already listed, enable it there instead of adding it again.',
+      de: 'Ein MCP-App-Server: „Interaktive Ansichten anzeigen (MCP Apps)“ eingeschaltet lassen. iHub liefert diesen Server deaktiviert mit der App „draw.io-Diagramme“ aus — ist er schon aufgeführt, dort aktivieren statt ihn erneut hinzuzufügen.'
+    },
+    docsUrl: 'https://github.com/jgraph/drawio-mcp',
+    tags: ['diagrams', 'flowchart', 'architecture', 'mcp apps']
+  },
+  {
+    id: 'excalidraw',
+    name: 'Excalidraw',
+    vendor: 'Excalidraw',
+    category: 'design',
+    description: {
+      en: 'Draw hand-drawn style sketches and diagrams that render as interactive Excalidraw views in the chat.',
+      de: 'Skizzen und Diagramme im Handzeichen-Stil zeichnen, die als interaktive Excalidraw-Ansicht im Chat erscheinen.'
+    },
+    transport: { type: 'streamableHttp', url: 'https://mcp.excalidraw.com/mcp' },
+    auth: { type: 'none' },
+    timeoutMs: 60000,
+    notes: {
+      en: 'An MCP App server: keep “Render interactive views (MCP Apps)” on. iHub ships this server disabled with the “Excalidraw Sketches” app — if it is already listed, enable it there instead of adding it again.',
+      de: 'Ein MCP-App-Server: „Interaktive Ansichten anzeigen (MCP Apps)“ eingeschaltet lassen. iHub liefert diesen Server deaktiviert mit der App „Excalidraw-Skizzen“ aus — ist er schon aufgeführt, dort aktivieren statt ihn erneut hinzuzufügen.'
+    },
+    docsUrl: 'https://github.com/excalidraw/excalidraw-mcp',
+    tags: ['diagrams', 'sketch', 'whiteboard', 'mcp apps']
   },
 
   // --- Content & media -------------------------------------------------------

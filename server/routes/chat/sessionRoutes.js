@@ -1,4 +1,5 @@
 import configCache from '../../configCache.js';
+import { appendMcpAppContext } from '../../services/mcp/mcpAppContext.js';
 import { sendLLMError } from '../../services/loop/llmHttpErrors.js';
 import { logInteraction, trackSession } from '../../utils.js';
 import llmClient, {
@@ -886,7 +887,8 @@ export default function registerSessionRoutes(app, { getLocalizedError, DEFAULT_
           documentIds,
           replaceFromMessageId,
           ephemeral,
-          sendChatHistory
+          sendChatHistory,
+          mcpAppContext
         } = req.body;
 
         // `chatAuthRequired` authorizes the app, never the chat id. Once chats
@@ -1277,6 +1279,7 @@ export default function registerSessionRoutes(app, { getLocalizedError, DEFAULT_
               )
               .json({ error: errMsg, code: prep.error.code });
           }
+          appendMcpAppContext(prep.data.llmMessages, mcpAppContext);
           ({ model, llmMessages } = prep.data);
 
           // Awaited, not returned bare: `return promise` inside a try/finally
@@ -1334,6 +1337,8 @@ export default function registerSessionRoutes(app, { getLocalizedError, DEFAULT_
             return res.json({ status: 'error', message: errMsg, code: prep.error.code });
           }
           model = prep.data.model;
+          // What open MCP App views reported since the last turn; model-only.
+          appendMcpAppContext(prep.data.llmMessages, mcpAppContext);
           llmMessages = prep.data.llmMessages;
 
           // A skill pre-activated via slash command is announced on the turn's run.

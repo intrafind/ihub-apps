@@ -1,4 +1,5 @@
 import { z } from 'zod';
+import { mcpAppContextSchema } from '../services/mcp/mcpAppContext.js';
 export { zSafeId } from './common.js';
 
 export {
@@ -89,6 +90,11 @@ export const chatPostSchema = {
     imageQuality: z.string().optional(),
     requestedSkill: z.string().optional(),
     documentIds: z.array(z.string()).optional(),
+    /**
+     * MCP Apps: the latest `ui/update-model-context` of each open view, handed
+     * to the model with this turn only (see services/mcp/mcpAppContext.js).
+     */
+    mcpAppContext: mcpAppContextSchema.optional(),
     /**
      * Stored message id to fork the persisted history from (inclusive) — an
      * edit or a regenerate. Ignored unless the chat is persisted.
