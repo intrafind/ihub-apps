@@ -229,7 +229,13 @@ function dispatchOutlookItemChanged() {
   );
 }
 
-describe('SelectedItemsChanged', () => {
+function mailCtx(itemId) {
+  return { available: true, itemId, subject: `Mail ${itemId}`, attachments: [] };
+}
+
+const NO_ITEM = { available: false, reason: 'no item', attachments: [] };
+
+describe('switching emails', () => {
   let loads;
 
   beforeEach(() => {
@@ -252,93 +258,226 @@ describe('SelectedItemsChanged', () => {
   async function mountWithEmailA() {
     const hook = renderHook(() => useOutlookMailContextSnapshot());
     await act(async () => {
-      loads[0].resolve({ available: true, itemId: 'A', subject: 'Mail A', attachments: [] });
+      loads[0].resolve(mailCtx('A'));
     });
+    expect(hook.result.current.ctx?.itemId).toBe('A');
     return hook;
   }
 
-  test('firing before Outlook swapped the item does not re-read the previous email', async () => {
+  test('SelectedItemsChanged reads in the background and shows the new email once the read returns it', async () => {
     const { result } = await mountWithEmailA();
 
-    // The user clicks email B: the selection event arrives while
-    // mailbox.item still points at A…
     await act(async () => {
       dispatchSelectionChanged();
-      jest.advanceTimersByTime(150);
     });
-    // …so the strip keeps showing A instead of re-reading it.
-    expect(loads).toHaveLength(1);
+    // The strip keeps A while the read runs — no blank "Email context".
     expect(result.current.loading).toBe(false);
     expect(result.current.ctx?.itemId).toBe('A');
 
-    // Outlook swaps the item and fires ItemChanged: one read, of B.
-    global.Office.context.mailbox.item = { itemId: 'B' };
+    await act(async () => {
+      jest.advanceTimersByTime(150);
+    });
+    expect(loads).toHaveLength(2);
+
+    await act(async () => {
+      loads[1].resolve(mailCtx('B'));
+    });
+    expect(result.current.loading).toBe(false);
+    expect(result.current.ctx?.itemId).toBe('B');
+
+    // A settled read of a different email needs no verification read.
+    await act(async () => {
+      jest.advanceTimersByTime(2000);
+    });
+    expect(loads).toHaveLength(2);
+  });
+
+  test('regression: the pane switches even when mailbox.item.itemId still names the old email', async () => {
+    const { result } = await mountWithEmailA();
+    act(() => {
+      result.current.removeAttachment('a1');
+      result.current.setIncludeBody(false);
+    });
+
+    // The user clicks B. Outlook fires both events while the synchronous
+    // item id still says A (the host hands out the cached previous item).
+    await act(async () => {
+      dispatchSelectionChanged();
+      dispatchOutlookItemChanged();
+      jest.advanceTimersByTime(150);
+    });
+    expect(result.current.loading).toBe(true);
+    expect(loads).toHaveLength(2);
+
+    // The read itself already runs against the new email.
+    await act(async () => {
+      loads[1].resolve(mailCtx('B'));
+    });
+    expect(result.current.loading).toBe(false);
+    expect(result.current.ctx?.itemId).toBe('B');
+    // The edits belonged to A and are gone with it.
+    expect(result.current.removedAttachmentIds.size).toBe(0);
+    expect(result.current.includeBody).toBe(true);
+
+    await act(async () => {
+      jest.advanceTimersByTime(2000);
+    });
+    expect(loads).toHaveLength(2);
+  });
+
+  test('a read that still returned the previous email is verified once more', async () => {
+    const { result } = await mountWithEmailA();
+
+    // ItemChanged fires, but the read lands before the host swapped the item
+    // and returns A again.
     await act(async () => {
       dispatchOutlookItemChanged();
       jest.advanceTimersByTime(150);
     });
     expect(loads).toHaveLength(2);
-
-    // The settled selection check finds B already covered.
     await act(async () => {
-      jest.advanceTimersByTime(1000);
+      loads[1].resolve(mailCtx('A'));
     });
+    // Not shown yet: the pane waits for the verification read…
+    expect(result.current.loading).toBe(true);
     expect(loads).toHaveLength(2);
 
     await act(async () => {
-      loads[1].resolve({ available: true, itemId: 'B', subject: 'Mail B', attachments: [] });
-    });
-    expect(result.current.ctx?.itemId).toBe('B');
-  });
-
-  test('re-selecting the open email or a list refresh never re-reads it', async () => {
-    const { result } = await mountWithEmailA();
-
-    await act(async () => {
-      dispatchSelectionChanged();
-      dispatchSelectionChanged();
-      jest.advanceTimersByTime(1000);
-    });
-    expect(loads).toHaveLength(1);
-    expect(result.current.loading).toBe(false);
-    expect(result.current.ctx?.itemId).toBe('A');
-  });
-
-  test('a brief gap with no item open does not blank the strip', async () => {
-    const { result } = await mountWithEmailA();
-
-    // mailbox.item is momentarily empty while the host swaps…
-    global.Office.context.mailbox.item = null;
-    await act(async () => {
-      dispatchSelectionChanged();
-      jest.advanceTimersByTime(100);
-    });
-    // …and back to the same email before the selection settles.
-    global.Office.context.mailbox.item = { itemId: 'A' };
-    await act(async () => {
-      jest.advanceTimersByTime(1000);
-    });
-    expect(loads).toHaveLength(1);
-    expect(result.current.ctx?.itemId).toBe('A');
-  });
-
-  test('re-reads once settled when the item changed without an ItemChanged', async () => {
-    const { result } = await mountWithEmailA();
-
-    global.Office.context.mailbox.item = { itemId: 'B' };
-    await act(async () => {
-      dispatchSelectionChanged();
       jest.advanceTimersByTime(400);
     });
-    expect(result.current.loading).toBe(true);
+    expect(loads).toHaveLength(3);
     await act(async () => {
-      jest.advanceTimersByTime(150);
+      loads[2].resolve(mailCtx('B'));
     });
-    expect(loads).toHaveLength(2);
+    // …which brings the email the user actually selected.
+    expect(result.current.loading).toBe(false);
+    expect(result.current.ctx?.itemId).toBe('B');
+  });
+
+  test('ItemChanged for the same email publishes it after the verification read', async () => {
+    const { result } = await mountWithEmailA();
 
     await act(async () => {
-      loads[1].resolve({ available: true, itemId: 'B', subject: 'Mail B', attachments: [] });
+      dispatchOutlookItemChanged();
+      jest.advanceTimersByTime(150);
+      loads[1].resolve(mailCtx('A'));
+    });
+    await act(async () => {
+      jest.advanceTimersByTime(400);
+    });
+    expect(loads).toHaveLength(3);
+    await act(async () => {
+      loads[2].resolve(mailCtx('A'));
+    });
+    expect(result.current.loading).toBe(false);
+    expect(result.current.ctx?.itemId).toBe('A');
+    // The budget is spent: no further reads.
+    await act(async () => {
+      jest.advanceTimersByTime(2000);
+    });
+    expect(loads).toHaveLength(3);
+  });
+
+  test('re-selecting the open email or a list refresh changes nothing on screen', async () => {
+    const { result } = await mountWithEmailA();
+    const shown = result.current.ctx;
+    act(() => {
+      result.current.removeAttachment('a1');
+    });
+
+    await act(async () => {
+      dispatchSelectionChanged();
+      dispatchSelectionChanged();
+      jest.advanceTimersByTime(150);
+    });
+    // The burst costs one background read…
+    expect(loads).toHaveLength(2);
+    expect(result.current.loading).toBe(false);
+    await act(async () => {
+      loads[1].resolve(mailCtx('A'));
+    });
+    // …plus one verification read, since the result looks like a stale one.
+    await act(async () => {
+      jest.advanceTimersByTime(400);
+    });
+    expect(loads).toHaveLength(3);
+    await act(async () => {
+      loads[2].resolve(mailCtx('A'));
+      jest.advanceTimersByTime(2000);
+    });
+    expect(loads).toHaveLength(3);
+    // Same email: the snapshot object and the edits are untouched.
+    expect(result.current.ctx).toBe(shown);
+    expect(result.current.loading).toBe(false);
+    expect(result.current.removedAttachmentIds.has('a1')).toBe(true);
+  });
+
+  test('a brief gap with no item during the switch does not blank the strip', async () => {
+    const { result } = await mountWithEmailA();
+
+    await act(async () => {
+      dispatchSelectionChanged();
+      jest.advanceTimersByTime(150);
+    });
+    // The read lands mid-swap and finds no item.
+    await act(async () => {
+      loads[1].resolve(NO_ITEM);
+    });
+    expect(result.current.loading).toBe(false);
+    expect(result.current.ctx?.itemId).toBe('A');
+
+    await act(async () => {
+      jest.advanceTimersByTime(400);
+    });
+    expect(loads).toHaveLength(3);
+    await act(async () => {
+      loads[2].resolve(mailCtx('B'));
     });
     expect(result.current.ctx?.itemId).toBe('B');
+  });
+
+  test('when the item is really gone (deselect, multi-select) the verified empty state is shown', async () => {
+    const { result } = await mountWithEmailA();
+
+    await act(async () => {
+      dispatchSelectionChanged();
+      jest.advanceTimersByTime(150);
+      loads[1].resolve(NO_ITEM);
+    });
+    await act(async () => {
+      jest.advanceTimersByTime(400);
+    });
+    expect(loads).toHaveLength(3);
+    await act(async () => {
+      loads[2].resolve(NO_ITEM);
+    });
+    expect(result.current.loading).toBe(false);
+    expect(result.current.ctx).toEqual(NO_ITEM);
+  });
+
+  test('a newer event supersedes a pending verification read', async () => {
+    const { result } = await mountWithEmailA();
+
+    await act(async () => {
+      dispatchSelectionChanged();
+      jest.advanceTimersByTime(150);
+      loads[1].resolve(mailCtx('A'));
+    });
+    // Verification pending (400 ms). ItemChanged arrives first.
+    await act(async () => {
+      jest.advanceTimersByTime(100);
+      dispatchOutlookItemChanged();
+      jest.advanceTimersByTime(150);
+    });
+    expect(loads).toHaveLength(3);
+    await act(async () => {
+      loads[2].resolve(mailCtx('B'));
+    });
+    expect(result.current.ctx?.itemId).toBe('B');
+    // The superseded verification never ran.
+    await act(async () => {
+      jest.advanceTimersByTime(2000);
+    });
+    expect(loads).toHaveLength(3);
   });
 });

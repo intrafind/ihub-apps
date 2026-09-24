@@ -8,10 +8,21 @@ import {
   isDifferentItem
 } from '../utilities/officeItemChange';
 
-// How long a SelectedItemsChanged event waits before the hook checks whether
-// the open item actually changed. Outlook fires it as soon as the list
-// selection moves, usually before mailbox.item points at the new email.
-const SELECTION_SETTLE_MS = 400;
+// Debounce for the read that follows an `ihub:itemchanged` event: a burst of
+// events costs one read, and the pause gives the host a moment to finish
+// swapping Office.context.mailbox.item.
+const RELOAD_DEBOUNCE_MS = 150;
+// Pause before the one verification read that follows a read whose result
+// looks stale (see `isUnconfirmed`). Outlook reports a selection change
+// before it opens the new email, and right after ItemChanged the item it
+// serves can still carry the previous email's cached fields, so a read
+// landing in that window returns the old email or nothing at all.
+const VERIFY_DELAY_MS = 400;
+// How many verification reads may follow one event. A read downloads the
+// attachments, so this stays small: the settled read of a genuinely
+// different email needs none, and a re-selection of the open email or a
+// list refresh costs one background read.
+const MAX_VERIFY_READS = 1;
 
 /**
  * Maintains a live, user-editable snapshot of the current host mail context
@@ -22,16 +33,20 @@ const SELECTION_SETTLE_MS = 400;
  *
  * Behavior:
  *  - Fetches `host.readMessageContext()` on mount and again whenever Outlook
- *    fires `ihub:itemchanged` for ItemChanged (user navigates to a different
- *    email). A SelectedItemsChanged event only re-reads once the selection
- *    has settled and the open item really is a different one.
+ *    fires `ihub:itemchanged`. ItemChanged shows the loading state first;
+ *    SelectedItemsChanged reads in the background and only publishes when
+ *    the read really returned a different item, so re-selecting the open
+ *    email or a list refresh changes nothing on screen.
+ *  - Which item is shown is decided by what the read returned, never by the
+ *    synchronous `Office.context.mailbox.item.itemId` at event time: that id
+ *    can lag behind the selection (it is what made the pane stick to the
+ *    previous email). A read that still returned the previous item, or no
+ *    item, is followed by one verification read after a short pause.
  *  - Tracks per-message edits: a set of attachment ids the user removed via
- *    the banner. The set resets when the event concerns a different item.
+ *    the banner. The set resets when the snapshot moves to a different item.
  *  - `buildSnapshotOverride()` returns a copy of the live ctx with removed
  *    attachments stripped — chat adapter accepts this as `hostContextOverride`
  *    in params, skipping its own `readMessageContext()` call.
- *  - `confirmSent()` resets removals after a successful send so the next
- *    message starts from a clean snapshot of the same email.
  */
 export function useOutlookMailContextSnapshot() {
   const host = useEmbeddedHost();
@@ -43,7 +58,8 @@ export function useOutlookMailContextSnapshot() {
   // plumbing (issue #1467) — the OfficeMailContextBanner owns this state now
   // and the contextToggles mechanism is no longer used in the Outlook host.
   const [includeBody, setIncludeBody] = useState(true);
-  // Bumped by ItemChanged so the chat panel can reset its edit state too.
+  // Bumped when the snapshot moves to a different item so the chat panel can
+  // reset its edit state too.
   const [generation, setGeneration] = useState(0);
   // Monotonic sequence for context loads. A single click in Outlook fires
   // both ItemChanged and SelectedItemsChanged (each dispatching
@@ -52,19 +68,71 @@ export function useOutlookMailContextSnapshot() {
   // email resolves last and clobbers the fresh snapshot with stale
   // attachments ("not part of this item" errors).
   const loadSeqRef = useRef(0);
-  const reloadTimerRef = useRef(null);
-  const selectionTimerRef = useRef(null);
-  // itemId the snapshot and the per-email edits above belong to.
+  // The one pending timer: the debounced read after an event, or the
+  // verification read after a read that looked stale.
+  const timerRef = useRef(null);
+  // itemId the per-email edits above belong to.
   const itemIdRef = useRef(getLiveItemId());
+  // itemId of the snapshot last published (null when it had no item).
+  const publishedItemIdRef = useRef(null);
 
   const hostKind = host?.kind;
 
   useEffect(() => {
     let disposed = false;
 
-    async function load() {
+    function clearTimer() {
+      if (timerRef.current) {
+        clearTimeout(timerRef.current);
+        timerRef.current = null;
+      }
+    }
+
+    function schedule(fn, delay) {
+      clearTimer();
+      timerRef.current = setTimeout(() => {
+        timerRef.current = null;
+        fn();
+      }, delay);
+    }
+
+    function publish(ctx) {
+      const itemId = ctx?.itemId ?? null;
+      // Edits belong to one email. `isDifferentItem` also resets for hosts
+      // without item ids (browser extension), as before.
+      if (isDifferentItem({ liveItemId: itemId, lastItemId: itemIdRef.current })) {
+        setRemovedAttachmentIds(new Set());
+        setIncludeBody(true);
+        setGeneration(g => g + 1);
+      }
+      itemIdRef.current = itemId;
+      publishedItemIdRef.current = itemId;
+      setState({ loading: false, ctx });
+    }
+
+    /**
+     * A read after an item-change event is unconfirmed when it cannot have
+     * been the new email: it returned the item that was already on screen
+     * before the event, or no item at all (the host mid-swap). Both are what
+     * a read landing before Outlook finished switching looks like.
+     */
+    function isUnconfirmed(ctx, previousItemId) {
+      if (!ctx || ctx.available === false) return true;
+      const itemId = ctx.itemId ?? null;
+      return itemId != null && itemId === previousItemId;
+    }
+
+    /**
+     * @param {object} [opts]
+     * @param {string|null} [opts.source] - Outlook event that caused the read;
+     *   null for the mount read.
+     * @param {number} [opts.verifyBudget] - Verification reads still allowed.
+     */
+    async function load({ source = null, verifyBudget = 0 } = {}) {
       const seq = ++loadSeqRef.current;
-      setState({ loading: true, ctx: null });
+      const previousItemId = publishedItemIdRef.current;
+      const isSelection = source === ITEM_CHANGE_SOURCE.selectedItemsChanged;
+      if (!isSelection) setState({ loading: true, ctx: null });
       let ctx = null;
       try {
         ctx = await host.readMessageContext();
@@ -72,54 +140,52 @@ export function useOutlookMailContextSnapshot() {
         ctx = null;
       }
       if (disposed || seq !== loadSeqRef.current) return;
-      setState({ loading: false, ctx });
+
+      const unconfirmed = source != null && isUnconfirmed(ctx, previousItemId);
+      if (unconfirmed && verifyBudget > 0) {
+        // Keep what is on screen (or the loading state) and look again once
+        // the host has had time to settle; a newer event supersedes this.
+        schedule(() => load({ source, verifyBudget: verifyBudget - 1 }), VERIFY_DELAY_MS);
+        return;
+      }
+      // A selection event that ends on the email already shown changes
+      // nothing: don't churn the snapshot (and the token estimate) for it.
+      // The strip was not blanked, so there is nothing to restore either.
+      if (
+        isSelection &&
+        ctx &&
+        ctx.available !== false &&
+        (ctx.itemId ?? null) === previousItemId
+      ) {
+        return;
+      }
+      publish(ctx);
     }
 
     load();
 
-    function reload() {
-      // A selection event for the email already open (re-selecting it, a
-      // list refresh) must not undo the user's attachment removals or body
-      // opt-out — only a different item does. Issue #2450.
-      const liveItemId = getLiveItemId();
-      if (isDifferentItem({ liveItemId, lastItemId: itemIdRef.current })) {
-        setRemovedAttachmentIds(new Set());
-        setIncludeBody(true);
-        setGeneration(g => g + 1);
-      }
-      itemIdRef.current = liveItemId;
-      // Supersede any in-flight load right away and show the loading state,
-      // but debounce the actual read: a burst of events should cost one
-      // read, and the short pause also gives the host time to finish
-      // swapping Office.context.mailbox.item.
-      loadSeqRef.current++;
-      setState({ loading: true, ctx: null });
-      if (reloadTimerRef.current) clearTimeout(reloadTimerRef.current);
-      reloadTimerRef.current = setTimeout(() => {
-        reloadTimerRef.current = null;
-        load();
-      }, 150);
-    }
-
     function onItemChange(event) {
-      if (getItemChangeSource(event) !== ITEM_CHANGE_SOURCE.selectedItemsChanged) {
-        reload();
-        return;
+      const source = getItemChangeSource(event);
+      // Supersede any in-flight read right away. ItemChanged is Outlook's
+      // word that the pane shows a different item, so show the loading
+      // state; SelectedItemsChanged also fires for re-selecting the open
+      // email, multi-select and list refreshes, so it reads in the
+      // background and the strip keeps the current email until the read
+      // proves the item changed.
+      loadSeqRef.current++;
+      if (source !== ITEM_CHANGE_SOURCE.selectedItemsChanged) {
+        // Reset the edits as early as the live id lets us; `publish` covers
+        // the case where that id still lags behind the selection.
+        const liveItemId = getLiveItemId();
+        if (isDifferentItem({ liveItemId, lastItemId: itemIdRef.current })) {
+          setRemovedAttachmentIds(new Set());
+          setIncludeBody(true);
+          setGeneration(g => g + 1);
+        }
+        itemIdRef.current = liveItemId;
+        setState({ loading: true, ctx: null });
       }
-      // SelectedItemsChanged fires the moment the list selection moves,
-      // usually before Outlook has pointed mailbox.item at the new email
-      // (and ItemChanged follows once it has). Reading right away showed
-      // the previous email first and the new one only after ItemChanged's
-      // re-read, or an empty "Email context" when the read landed mid-swap.
-      // Let the selection settle and re-read only if the open item really
-      // changed and no ItemChanged has covered it by then. Re-selecting the
-      // open email or a list refresh then costs nothing at all.
-      if (selectionTimerRef.current) clearTimeout(selectionTimerRef.current);
-      selectionTimerRef.current = setTimeout(() => {
-        selectionTimerRef.current = null;
-        if (getLiveItemId() === itemIdRef.current) return;
-        reload();
-      }, SELECTION_SETTLE_MS);
+      schedule(() => load({ source, verifyBudget: MAX_VERIFY_READS }), RELOAD_DEBOUNCE_MS);
     }
 
     document.addEventListener(ITEM_CHANGED_EVENT, onItemChange);
@@ -128,14 +194,7 @@ export function useOutlookMailContextSnapshot() {
       // publishing; a re-run's own loads supersede them via the shared
       // sequence ref.
       disposed = true;
-      if (reloadTimerRef.current) {
-        clearTimeout(reloadTimerRef.current);
-        reloadTimerRef.current = null;
-      }
-      if (selectionTimerRef.current) {
-        clearTimeout(selectionTimerRef.current);
-        selectionTimerRef.current = null;
-      }
+      clearTimer();
       document.removeEventListener(ITEM_CHANGED_EVENT, onItemChange);
     };
     // host is a stable object from EmbeddedHostProvider; depend on kind so we
