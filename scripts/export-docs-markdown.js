@@ -1,20 +1,30 @@
 #!/usr/bin/env node
 
-import { readFile, writeFile, mkdir } from 'fs/promises';
+import { readFile, readdir, writeFile, mkdir } from 'fs/promises';
 import { join, dirname, resolve } from 'path';
 import { fileURLToPath } from 'url';
 import { existsSync } from 'fs';
+import {
+  RELEASE_SECTIONS,
+  isReleaseVersionName,
+  parseReleaseSections,
+  renderReleaseNotesChapter
+} from '../server/utils/releaseNotes.js';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = dirname(__filename);
 const rootDir = join(__dirname, '..');
 const docsDir = join(rootDir, 'docs');
+const releasesDir = join(docsDir, 'releases');
 const outputDir = join(docsDir, 'book');
 const outputFile = join(outputDir, 'iHub-Apps-Documentation.md');
 
 // Also emit the consolidated docs as the bundled "iHub Documentation" source so
 // fresh installs ship with it (server/defaults → contents on first run). This
-// file is generated at build time and is intentionally not committed.
+// file is generated at build time and is intentionally not committed:
+// `build:server` regenerates it before every copy of server/ into dist/, and
+// the server re-syncs it into contents/ on startup, so every release carries
+// its own documentation and release notes.
 const sourceOutputFile = join(rootDir, 'server', 'defaults', 'sources', 'ihub-documentation.md');
 
 /**
@@ -60,6 +70,37 @@ async function processMarkdownFile(file, index) {
 }
 
 /**
+ * Build the "Release Notes" chapter from docs/releases/: breaking changes,
+ * features and fixes of every release, so the documentation source can answer
+ * what a release changed. In a release build, finalize-release-notes.js has
+ * already moved docs/releases/next/ under the release version.
+ */
+async function buildReleaseNotesChapter(version) {
+  let names = [];
+  try {
+    const dirents = await readdir(releasesDir, { withFileTypes: true });
+    names = dirents.filter(d => d.isDirectory() && isReleaseVersionName(d.name)).map(d => d.name);
+  } catch {
+    console.warn(`Warning: No release notes found at ${releasesDir}`);
+    return '';
+  }
+
+  const releases = await Promise.all(
+    names.map(async name => {
+      const files = {};
+      for (const section of RELEASE_SECTIONS) {
+        files[section.file] = await readFile(join(releasesDir, name, section.file), 'utf-8').catch(
+          () => ''
+        );
+      }
+      return { version: name, sections: parseReleaseSections(files) };
+    })
+  );
+
+  return renderReleaseNotesChapter(releases, { currentVersion: version });
+}
+
+/**
  * Generate metadata header
  */
 function generateMetadata(version) {
@@ -78,7 +119,9 @@ author: IntraFind
 - **Generated:** ${new Date().toLocaleString()}
 - **Format:** Standalone Markdown
 
-This document contains the complete iHub Apps documentation exported from mdBook.
+This document contains the complete iHub Apps documentation exported from mdBook,
+followed by a **Release Notes** chapter with the breaking changes, new features
+and fixes of every release.
 
 ---
 
@@ -112,6 +155,12 @@ async function exportMarkdown() {
       console.log(`  [${i + 1}/${files.length}] ${file.path}`);
       const processedContent = await processMarkdownFile(file, i);
       output += processedContent;
+    }
+
+    console.log('Adding release notes...');
+    const releaseNotes = await buildReleaseNotesChapter(version);
+    if (releaseNotes) {
+      output += `\n\n---\n\n<!-- Source: releases/ -->\n\n${releaseNotes}`;
     }
 
     // Ensure output directory exists
