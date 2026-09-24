@@ -6,6 +6,29 @@ import logger from '../utils/logger.js';
 import { httpFetch } from '../utils/httpConfig.js';
 import { recordSourceLoad } from '../telemetry/metrics.js';
 import { getLocalizedString } from '../utils/localize.js';
+import { RESULT_BUDGET_TOKENS, getContentStats, selectContent } from './documentRetrieval.js';
+
+/**
+ * Handlers that load one whole text (a file, a web page, an iHub page). A
+ * tool over one of them returns the text when it is small, and otherwise the
+ * sections the model asks for — see documentRetrieval.js. iFinder runs its
+ * own search and is not one of them.
+ */
+const DOCUMENT_TYPES = new Set(['filesystem', 'url', 'page']);
+
+const RETRIEVAL_HINT =
+  ' Small content is returned in full. Large content is too big to return at once: ' +
+  'pass `query` with keywords from the question to get the sections that match it, ' +
+  'or `section` with a section id from an earlier result to read that section.';
+
+/**
+ * Handler metadata as the model sees it: without the server's absolute path
+ * (`fullPath`, and the `file://` link built from it).
+ */
+function toolMetadata(metadata) {
+  const { fullPath: _fullPath, link, ...rest } = metadata || {};
+  return typeof link === 'string' && !link.startsWith('file:') ? { ...rest, link } : rest;
+}
 
 // Global registry for source tool functions (persists across SourceManager instances)
 const globalSourceToolRegistry = new Map();
@@ -319,14 +342,22 @@ class SourceManager {
     const toolId = `source_${source.id}`;
 
     // Store tool execution function in global registry
-    const toolFunction = async params => {
-      const sourceConfig = {
-        ...source.config,
-        ...context,
-        ...params
-      };
+    const toolFunction = async (params = {}) => {
+      if (!DOCUMENT_TYPES.has(source.type)) {
+        return await handler.getCachedContent({ ...source.config, ...context, ...params });
+      }
 
-      return await handler.getCachedContent(sourceConfig);
+      const { query, section, ...rest } = params;
+      const sourceConfig = { ...source.config, ...context, ...rest };
+      // The file is the one the admin configured, never one the model names.
+      if (source.type === 'filesystem') sourceConfig.path = source.config.path;
+
+      const loaded = await handler.getCachedContent(sourceConfig);
+      const name = source.name
+        ? getLocalizedString(source.name, context.language || 'en', undefined, source.id)
+        : source.id;
+      const { content, retrieval } = selectContent(loaded?.content, { query, section, name });
+      return { content, metadata: { ...toolMetadata(loaded?.metadata), retrieval } };
     };
 
     this.toolRegistry.set(toolId, toolFunction);
@@ -334,7 +365,7 @@ class SourceManager {
 
     // Localize description
     const language = context.language || 'en';
-    const description = source.description
+    const baseDescription = source.description
       ? getLocalizedString(
           source.description,
           language,
@@ -342,6 +373,9 @@ class SourceManager {
           `Load content from ${source.type} source: ${source.id}`
         )
       : `Load content from ${source.type} source: ${source.id}`;
+    const description = DOCUMENT_TYPES.has(source.type)
+      ? `${baseDescription}${RETRIEVAL_HINT}`
+      : baseDescription;
 
     // Get human-friendly name
     const displayName = source.name
@@ -374,14 +408,20 @@ class SourceManager {
       required: []
     };
 
-    switch (source.type) {
-      case 'filesystem':
-        baseSchema.properties.path = {
-          type: 'string',
-          description: 'File path to load (optional if configured in source)'
-        };
-        break;
+    if (DOCUMENT_TYPES.has(source.type)) {
+      baseSchema.properties.query = {
+        type: 'string',
+        description:
+          'Keywords or a short question to search the source for. Needed when the source is ' +
+          'too large to return in full; then only the best-matching sections are returned.'
+      };
+      baseSchema.properties.section = {
+        type: 'string',
+        description: 'Id of a section to read in full, as listed in an earlier result.'
+      };
+    }
 
+    switch (source.type) {
       case 'url':
         baseSchema.properties.url = {
           type: 'string',
@@ -527,6 +567,48 @@ class SourceManager {
   }
 
   /**
+   * Estimated size of a source's content, for the admin UI. Filesystem and
+   * page sources are read (the count is cached by content). A URL source is
+   * fetched only with `fetchRemote` (when an admin tests it), and what an
+   * iFinder source loads depends on its search, so it has no fixed count.
+   *
+   * @param {Object} source - Source configuration
+   * @param {Object} [options]
+   * @param {boolean} [options.fetchRemote=false] - Fetch URL sources to measure them
+   * @returns {Promise<Object>} `{ tokens, characters, bytes? }`, or
+   *   `{ tokens: null, reason: 'remote' | 'dynamic', maxTokens? }`
+   */
+  async estimateSourceTokens(source, { fetchRemote = false } = {}) {
+    const measurable =
+      source.type === 'filesystem' ||
+      source.type === 'page' ||
+      (fetchRemote && source.type === 'url');
+    if (measurable) {
+      const { content, metadata } = await this.getHandler(source.type).getCachedContent({
+        ...source.config
+      });
+      const stats = getContentStats(content);
+      return Number.isFinite(metadata?.size) ? { ...stats, bytes: metadata.size } : stats;
+    }
+    if (source.type === 'ifinder') {
+      // Upper bound: the handler loads at most maxResults documents of at
+      // most maxLength characters each (a single one for a pinned document).
+      const { documentId, maxResults = 10, maxLength = 10000 } = source.config || {};
+      const characters = (documentId ? 1 : maxResults) * maxLength;
+      return { tokens: null, reason: 'dynamic', maxTokens: Math.ceil(characters / 4) };
+    }
+    return { tokens: null, reason: 'remote' };
+  }
+
+  /**
+   * Most tokens one call of a source tool returns (larger content is searched).
+   * @returns {number}
+   */
+  getToolResultBudgetTokens() {
+    return RESULT_BUDGET_TOKENS;
+  }
+
+  /**
    * Test source connection without loading content
    * @param {string} type - Handler type
    * @param {Object} config - Source configuration
@@ -592,6 +674,7 @@ class SourceManager {
         relativePath: filePath,
         fileSize,
         contentLength: Buffer.byteLength(content, encoding),
+        estimatedTokens: getContentStats(content).tokens,
         encoding,
         lastModified: stats.mtime.toISOString()
       };

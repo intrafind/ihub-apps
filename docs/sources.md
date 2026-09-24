@@ -259,10 +259,32 @@ Sources can be exposed in two ways:
 - Content appears in XML tags: `<source id="..." type="..." link="...">content</source>`
 
 #### Tool Mode (`exposeAs: "tool"`)
-- Source becomes a callable tool for the AI
+- Source becomes a callable tool for the AI (`source_<id>`)
 - Content loaded only when the AI calls the tool
 - Suitable for dynamic, searchable content
 - Reduces token usage for large sources
+
+For filesystem, URL and page sources, one tool call returns at most about
+10,000 tokens (40,000 characters). Content that fits is returned whole, as
+before. Larger content, such as the ~2 MB bundled iHub Documentation, is split
+into sections at its Markdown headings, and the tool takes two parameters:
+
+| Parameter | Returns |
+|-----------|---------|
+| `query` | The sections that best match the keywords (keyword ranking; a section that is only a heading brings its subsections along) |
+| `section` | One section by id (or heading title) with its subsections; ids ending in `#2`, `#3`, … continue a section too long for one result |
+| neither | An outline of the document's section ids to choose from |
+
+Each section comes back as `<section id="…" path="Chapter › Section" file="…">`,
+so the model can cite it and ask for it again. The limit keeps a result below
+the agent loop's 64 KB tool-result limit: a larger result used to be cut to a
+16 KB preview, which for the iHub Documentation was only its front matter.
+
+The file of a filesystem tool source is always the one configured on the
+source; the model cannot ask the tool for another file.
+
+iFinder tool sources are unchanged: they run their own search (`query`,
+`documentId`, `maxResults`).
 
 ## Integration with Apps
 
@@ -309,13 +331,35 @@ Content from documentation source...
 Access the sources administration interface at `/admin/sources`.
 
 #### Features:
-- **List Sources**: View all configured sources with filtering
+- **List Sources**: View all configured sources with filtering, and their estimated size in tokens
 - **Create/Edit Sources**: Form-based source configuration
 - **Test Sources**: Verify source connectivity and content
 - **Preview Sources**: View source content before saving
 - **Bulk Operations**: Enable/disable multiple sources
 - **Dependency Tracking**: View which apps use each source
 - **Statistics**: Source usage and performance metrics
+
+#### Source Size in Tokens
+
+The **Size** column of the sources list shows each source's estimated token
+count, so you can see what a source costs before you add it to an app:
+
+- **Prompt sources** are sent with every request. Above 50,000 tokens the
+  count turns amber with a warning: expose the source as a tool instead, so
+  only the sections a question needs are loaded.
+- **Tool sources** larger than one tool result are marked *searched, up to
+  ~10.0K per call*: the model gets the matching sections, not the whole source.
+- **URL sources** are fetched only when used; **Test** measures them.
+- **iFinder sources** load what their search finds; the list shows the upper
+  bound (maximum results × maximum length).
+
+The app editor's source picker shows the same sizes, plus the total the
+selected prompt sources add to every request of the app. The filesystem
+source editor shows the token count next to the file size, and the **Test**
+result includes `estimatedTokens`.
+
+Counts are estimates (GPT-4o tokenizer, or characters ÷ 4 where it is not
+available); the provider-reported usage of a request is authoritative.
 
 #### Source Testing
 
@@ -345,7 +389,8 @@ POST   /api/admin/sources           # Create source
 GET    /api/admin/sources/:id       # Get source
 PUT    /api/admin/sources/:id       # Update source
 DELETE /api/admin/sources/:id       # Delete source
-POST   /api/admin/sources/:id/test  # Test source
+POST   /api/admin/sources/:id/test  # Test source (includes estimatedTokens)
+GET    /api/admin/sources/_tokens   # Estimated size in tokens of every source
 POST   /api/admin/sources/:id/preview # Preview content
 POST   /api/admin/sources/_ifinder/metadata # Load iFinder document metadata (verify a document ID)
 POST   /api/admin/sources/_ifinder/search   # Preview which documents an iFinder query would load
@@ -552,7 +597,10 @@ A query-based source loading the top 5 matching documents:
 - Increase `maxContentLength` in source configuration
 - Use content cleaning options for URL sources
 - Consider splitting large sources into smaller files
-- Use tool mode instead of prompt mode for large sources
+- Use tool mode instead of prompt mode for large sources: the tool returns only
+  the sections that match the model's `query` (see [Tool Mode](#tool-mode-exposeas-tool))
+- Check the **Size** column in the sources list: a prompt source adds its full
+  token count to every request
 
 ### Performance Optimization
 

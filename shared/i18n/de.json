@@ -2869,7 +2869,16 @@
       "maxLengthHelp": "Maximale Zeichenzahl pro Dokument; längerer Inhalt wird gekürzt.",
       "validation": {
         "ifinderContentRequired": "Geben Sie eine Dokument-ID oder eine Suchanfrage an, damit die Quelle weiß, welche Dokumente geladen werden sollen"
-      }
+      },
+      "tokens": "Größe",
+      "tokenCount": "~{{tokens}} Tokens",
+      "tokensAtMost": "≤ ~{{tokens}} Tokens",
+      "tokensRemote": "Wird bei Verwendung aus dem Web geladen; ein Test der Quelle misst die Größe",
+      "tokensDynamic": "Hängt von den Suchergebnissen ab; höchstens konfigurierte Ergebnisanzahl × maximale Länge",
+      "tokensSearched": "durchsucht, bis zu ~{{tokens}} pro Aufruf",
+      "tokensEveryRequest": "wird mit jeder Anfrage gesendet",
+      "tokensLargePromptHint": "Diese Quelle wird bei jeder Anfrage in den Prompt eingefügt. Stellen Sie sie als Tool bereit, damit nur die Abschnitte geladen werden, die eine Frage benötigt.",
+      "promptTokensTotal": "Prompt-Quellen fügen jeder Anfrage dieser App ~{{tokens}} Tokens hinzu."
     },
     "auditLog": {
       "title": "Audit-Log",

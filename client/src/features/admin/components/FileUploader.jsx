@@ -2,6 +2,8 @@ import { useState, useEffect, useCallback, lazy, Suspense } from 'react';
 import { useTranslation } from 'react-i18next';
 import { makeAdminApiCall } from '../../../api/adminApi';
 import Icon from '../../../shared/components/Icon';
+import { useEstimatedTokenCount } from '../../../shared/hooks/useEstimatedTokenCount';
+import { formatTokenCount } from '../utils/tokenStats';
 
 const MonacoEditor = lazy(() => import('@monaco-editor/react'));
 
@@ -14,6 +16,8 @@ function FileUploader({ source, onChange, isEditing }) {
   const [isEditingContent, setIsEditingContent] = useState(false);
   const [hasUnsavedChanges, setHasUnsavedChanges] = useState(false);
   const [isDragging, setIsDragging] = useState(false);
+  // Debounced: tokenizing a multi-megabyte file on every keystroke would stall the editor.
+  const estimatedTokens = useEstimatedTokenCount(fileContent, { debounceMs: 800 });
 
   const loadCurrentFile = useCallback(async () => {
     if (!source?.id || !source?.config?.path) return;
@@ -394,6 +398,10 @@ function FileUploader({ source, onChange, isEditing }) {
                   </p>
                   <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">
                     {formatFileSize(currentFile.size)} •
+                    {estimatedTokens > 0 &&
+                      ` ${t('admin.sources.tokenCount', '~{{tokens}} tokens', {
+                        tokens: formatTokenCount(estimatedTokens)
+                      })} •`}
                     {currentFile.modified &&
                       ` ${new Date(currentFile.modified).toLocaleDateString()}`}
                   </p>

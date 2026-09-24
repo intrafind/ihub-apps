@@ -79,3 +79,19 @@ line — "The", "user", "is", "asking" — which was unreadable. Providers strea
 at a time, and every token was kept as its own entry rather than being joined into the text it came
 from. The thinking now reads as continuous text and keeps its own line breaks, while named steps
 such as workflow phases stay separate entries.
+
+## iHub Support Bot Answers From the Whole Documentation
+
+The iHub Support Bot could not answer most questions about iHub: of the ~2 MB iHub Documentation
+it only ever saw the first few pages — the title page and table of contents. A source exposed as a
+tool returned its whole content, and anything above the 64 KB a tool result may hold was cut to a
+short preview. The whole documentation (~500,000 tokens) would not fit most models anyway.
+
+- Filesystem, URL and page sources exposed as tools still return small content whole. Larger
+  content is searched: the tool returns the sections that match the model's keywords (up to about
+  10,000 tokens), one section it asks for by id, or an outline to pick from.
+- The Support Bot's system prompt now tells the model to search the documentation, with English
+  keywords whatever the question's language. An upgrade updates the prompt only in the languages
+  you have not changed.
+- A filesystem tool source always reads the file configured on the source; the model can no
+  longer ask it for another file.

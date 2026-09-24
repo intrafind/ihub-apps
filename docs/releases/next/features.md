@@ -95,3 +95,18 @@ A model that declares no **Context Window** now uses the length its endpoint rep
 `max_model_len` on `/v1/models`) instead of a conservative default, so long chats keep more history
 before older tool output is collapsed. A configured value always wins — lowering it deliberately
 still works, and endpoints that do not report a length are unaffected.
+
+## Sources Show Their Size in Tokens
+
+Admins can now see what a knowledge source costs before adding it to an app. The sources list
+under **Admin → Sources** has a **Size** column with each source's estimated token count.
+
+- A source exposed in the prompt is sent with every request; above 50,000 tokens its size is
+  marked with a warning and the hint to expose it as a tool instead.
+- A source exposed as a tool that is larger than one tool result is marked as searched, with the
+  most it returns per call.
+- URL sources are measured when you test them; iFinder sources show their upper bound (maximum
+  results × maximum length).
+- The source picker in the app editor shows the same sizes and the total the selected prompt
+  sources add to every request of the app. The file editor of a filesystem source shows the count
+  next to the file size, and **Test** reports `estimatedTokens`.

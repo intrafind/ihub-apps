@@ -1,6 +1,9 @@
 import { useState, useEffect } from 'react';
+import { useTranslation } from 'react-i18next';
 import { MagnifyingGlassIcon, XMarkIcon, CheckIcon } from '@heroicons/react/24/outline';
 import { adminApi } from '../../../api/adminApi';
+import SourceTokenCount from './SourceTokenCount';
+import { formatTokenCount } from '../utils/tokenStats';
 
 /**
  * Source Picker Component
@@ -29,7 +32,9 @@ function SourcePicker({
   className = '',
   disabled = false
 }) {
+  const { t } = useTranslation();
   const [sources, setSources] = useState([]);
+  const [tokenEstimates, setTokenEstimates] = useState({ sources: {} });
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
   const [featureDisabled, setFeatureDisabled] = useState(false);
@@ -40,6 +45,11 @@ function SourcePicker({
   // Load available admin sources on mount
   useEffect(() => {
     loadAdminSources();
+    // Sizes are a hint only: a failure leaves them blank, never the picker.
+    adminApi
+      .fetchSourceTokens()
+      .then(setTokenEstimates)
+      .catch(err => console.error('Failed to load source token estimates:', err));
   }, []);
 
   // Update selected IDs when value prop changes
@@ -197,6 +207,12 @@ function SourcePicker({
   };
 
   const filteredSources = getFilteredSources();
+
+  // Prompt sources are sent with every request of the app; tool sources only
+  // when the model calls them.
+  const promptTokens = sources
+    .filter(source => selectedIds.has(source.id) && source.exposeAs !== 'tool')
+    .reduce((sum, source) => sum + (tokenEstimates.sources?.[source.id]?.tokens || 0), 0);
 
   // If feature is disabled, show nothing (section should be hidden by parent)
   if (featureDisabled) {
@@ -361,6 +377,13 @@ function SourcePicker({
                         {source.config?.url && (
                           <span>• URL: {new URL(source.config.url).hostname}</span>
                         )}
+                        <span>•</span>
+                        <SourceTokenCount
+                          inline
+                          estimate={tokenEstimates.sources?.[source.id]}
+                          exposeAs={source.exposeAs}
+                          budgetTokens={tokenEstimates.toolResultBudgetTokens}
+                        />
                       </div>
                     </div>
                   </div>
@@ -402,6 +425,15 @@ function SourcePicker({
               );
             })}
           </div>
+          {promptTokens > 0 && (
+            <p className="mt-2 text-xs text-gray-500 dark:text-gray-400">
+              {t(
+                'admin.sources.promptTokensTotal',
+                'Prompt sources add ~{{tokens}} tokens to every request of this app.',
+                { tokens: formatTokenCount(promptTokens) }
+              )}
+            </p>
+          )}
         </div>
       )}
     </div>

@@ -558,6 +558,91 @@ export default function registerAdminSourcesRoutes(app) {
 
   /**
    * @swagger
+   * /api/admin/sources/_tokens:
+   *   get:
+   *     summary: Get estimated source sizes in tokens
+   *     description: |
+   *       Estimated token count of each source's content (admin access required).
+   *       Filesystem and page sources are measured; URL sources are measured
+   *       when tested (`reason: remote`), and iFinder sources load what their
+   *       search finds (`reason: dynamic`, with `maxTokens` as the upper bound).
+   *       `toolResultBudgetTokens` is the most one call of a source exposed as
+   *       a tool returns; larger content is searched section by section.
+   *     tags: [Admin - Sources]
+   *     security:
+   *       - bearerAuth: []
+   *       - sessionAuth: []
+   *     responses:
+   *       200:
+   *         description: Token estimates by source id
+   *         content:
+   *           application/json:
+   *             schema:
+   *               type: object
+   *               properties:
+   *                 toolResultBudgetTokens:
+   *                   type: integer
+   *                 sources:
+   *                   type: object
+   *                   additionalProperties:
+   *                     type: object
+   *                     properties:
+   *                       tokens:
+   *                         type: integer
+   *                         nullable: true
+   *                       characters:
+   *                         type: integer
+   *                       bytes:
+   *                         type: integer
+   *                       maxTokens:
+   *                         type: integer
+   *                       reason:
+   *                         type: string
+   *                         enum: [remote, dynamic]
+   *                       error:
+   *                         type: string
+   *       401:
+   *         description: Unauthorized - Invalid or missing authentication
+   *         content:
+   *           application/json:
+   *             schema:
+   *               $ref: '#/components/schemas/ErrorResponse'
+   *       403:
+   *         description: Forbidden - Insufficient admin permissions
+   *         content:
+   *           application/json:
+   *             schema:
+   *               $ref: '#/components/schemas/ErrorResponse'
+   */
+  app.get(
+    buildServerPath('/api/admin/sources/_tokens'),
+    requireFeature('sources'),
+    contentAdminAuth,
+    async (req, res) => {
+      try {
+        const { data: sources } = configCache.getSources(true);
+        const manager = getSourceManager();
+        const entries = await Promise.all(
+          sources.map(async source => {
+            try {
+              return [source.id, await manager.estimateSourceTokens(source)];
+            } catch (error) {
+              return [source.id, { tokens: null, error: error.message }];
+            }
+          })
+        );
+        res.json({
+          toolResultBudgetTokens: manager.getToolResultBudgetTokens(),
+          sources: Object.fromEntries(entries)
+        });
+      } catch (error) {
+        sendFailedOperationError(res, 'estimate source tokens', error);
+      }
+    }
+  );
+
+  /**
+   * @swagger
    * /api/admin/sources/_types:
    *   get:
    *     summary: Get available source types
@@ -1468,6 +1553,20 @@ export default function registerAdminSourcesRoutes(app) {
 
           // Test source connection
           const result = await manager.testSource(source.type, testConfig);
+          if (result.estimatedTokens === undefined && source.type !== 'ifinder') {
+            // Measure what the source actually loads (for a URL: the cleaned
+            // page, not the raw HTML the connection test read).
+            try {
+              const estimate = await manager.estimateSourceTokens(source, { fetchRemote: true });
+              if (estimate.tokens !== null) result.estimatedTokens = estimate.tokens;
+            } catch (estimateError) {
+              logger.debug('Could not estimate source tokens', {
+                component: 'AdminSources',
+                sourceId: id,
+                error: estimateError.message
+              });
+            }
+          }
           const duration = Date.now() - startTime;
 
           res.json({
