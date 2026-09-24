@@ -44,6 +44,7 @@ import registerRunRoutes from './routes/runs.js';
 // That one is the live chat turn (`/api/apps/:appId/chat/:chatId`); this one is
 // the durable-chat surface at `/api/chats`.
 import registerStoredChatRoutes from './routes/chats.js';
+import registerChatShareRoutes from './routes/chatShares.js';
 import runLog from './services/loop/RunLog.js';
 import { startChatRetentionSweep, stopChatRetentionSweep } from './services/chat/chatRetention.js';
 import {
@@ -687,6 +688,7 @@ if (cluster.isPrimary && workerCount > 1) {
   registerAgentRoutes(app);
   registerRunRoutes(app);
   registerStoredChatRoutes(app);
+  registerChatShareRoutes(app);
   // An answered workflow checkpoint resumes its execution (one answer endpoint);
   // overdue interactions expire on a sweep (an expired checkpoint fails its run).
   registerCheckpointResume();

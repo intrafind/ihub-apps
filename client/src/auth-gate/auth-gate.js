@@ -104,6 +104,15 @@
           return;
         }
 
+        // A shared chat link decides its own audience server-side: a public
+        // share opens with nobody signed in, and the page itself sends a
+        // viewer to the login when the link needs one. Gating it here would
+        // demand a sign-in before the server ever got to say "public".
+        if (isSharedChatPath()) {
+          loadApp();
+          return;
+        }
+
         // Anonymous auth enabled — load app directly
         if (data.anonymousAuth && data.anonymousAuth.enabled) {
           loadApp();
@@ -140,6 +149,17 @@
   // =========================================================================
   // API
   // =========================================================================
+
+  /**
+   * Whether the page being opened is a shared chat (`/share/<id>`), relative
+   * to the deployment base path.
+   */
+  function isSharedChatPath() {
+    var base = window.__BASE_PATH__ || '';
+    var pathname = window.location.pathname || '';
+    var relative = base && pathname.indexOf(base) === 0 ? pathname.slice(base.length) : pathname;
+    return relative.indexOf('/share/') === 0;
+  }
 
   function fetchAuthStatus() {
     var headers = { Accept: 'application/json' };

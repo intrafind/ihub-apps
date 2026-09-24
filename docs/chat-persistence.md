@@ -157,9 +157,11 @@ Reloading a plain `/apps/:appId` restores the conversation as well: the tab
 remembers which chat it is in and the transcript is fetched back from the store,
 where before it came from browser storage. Clearing the chat, or starting a new
 one, drops the chat id from the URL and begins a fresh conversation; nothing is
-lost, the previous chat simply stays in the list. A share link built on a chat
-page points at the **app**, never at the one stored chat — a recipient does not
-own it and could only get a 404 from it.
+lost, the previous chat simply stays in the list. The app share link built on a
+chat page points at the **app**, never at the one stored chat — a recipient does
+not own it and could only get a 404 from it. Handing the conversation itself to
+someone is a different thing, with its own audiences, limits and a frozen copy:
+see [Chat Sharing](chat-sharing.md).
 
 Editing an earlier message and sending it again rewrites the stored transcript
 from that message, the same way it rewrites what is on screen — that is the

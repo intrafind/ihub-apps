@@ -121,6 +121,16 @@ export const featureRegistry = [
     preview: true
   },
   {
+    id: 'chatSharing',
+    name: { en: 'Chat Sharing', de: 'Chats teilen' },
+    description: {
+      en: 'Let users share a stored chat as a read-only link — with users they pick, with anyone signed in, or publicly without sign-in. Requires Durable Chats. Which of the three is offered, and the limits on a link, are set under Admin → Chat History',
+      de: 'Nutzer können einen gespeicherten Chat als schreibgeschützten Link teilen — mit ausgewählten Nutzern, mit allen Angemeldeten oder öffentlich ohne Anmeldung. Erfordert Dauerhafte Chats. Welche der drei Varianten angeboten werden und die Grenzen eines Links werden unter Admin → Chat-Verlauf festgelegt'
+    },
+    category: 'content',
+    default: false
+  },
+  {
     id: 'shortLinks',
     name: { en: 'Short Links', de: 'Kurzlinks' },
     description: {

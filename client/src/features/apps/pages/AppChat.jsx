@@ -17,6 +17,8 @@ import { buildApiUrl, buildPath } from '../../../utils/runtimeBasePath';
 import { debugLog } from '../../../utils/debugLog';
 import Icon from '../../../shared/components/Icon';
 import AppShareModal from '../components/AppShareModal';
+import ShareChatModal from '../../chat/components/ShareChatModal';
+import { usePlatformConfig } from '../../../shared/contexts/PlatformConfigContext';
 import {
   downloadCitationDocument,
   getCitationDocumentAccess,
@@ -257,6 +259,12 @@ function AppChat({ preloadedApp = null, embedded = false, appId: embeddedAppId =
   const [showParameters, setShowParameters] = useState(false);
   const [showShare, setShowShare] = useState(false);
   const shareEnabled = featureFlags.isBothEnabled(app, 'shortLinks', true);
+  // Sharing the conversation itself (a read-only link onto the stored chat)
+  // is a different thing from the app share link above, and is gated by the
+  // server's answer: feature on, admin switch on, storage up.
+  const [showShareChat, setShowShareChat] = useState(false);
+  const { platformConfig } = usePlatformConfig();
+  const chatSharingEnabled = platformConfig?.chats?.sharing?.enabled === true;
 
   // Compare mode state
   // Check both platform-wide feature flag AND app-level setting
@@ -2442,6 +2450,10 @@ function AppChat({ preloadedApp = null, embedded = false, appId: embeddedAppId =
         showParameters={showParameters}
         onShare={() => setShowShare(true)}
         showShareButton={shareEnabled}
+        onShareChat={() => setShowShareChat(true)}
+        showShareChatButton={
+          chatSharingEnabled && serverBackedChat && Boolean(chatId) && messages.length > 0
+        }
         conversationTitle={conversationTitle}
         showCompareModeToggle={compareModeFeatureEnabled && models.length >= 2}
         compareModeActive={compareModeActive}
@@ -2720,6 +2732,14 @@ function AppChat({ preloadedApp = null, embedded = false, appId: embeddedAppId =
           </div>
         )}
       </div>
+      {showShareChat && chatId && (
+        <ShareChatModal
+          chatId={chatId}
+          appId={appId}
+          isOpen={showShareChat}
+          onClose={() => setShowShareChat(false)}
+        />
+      )}
       {shareEnabled && showShare && (
         <AppShareModal
           appId={appId}

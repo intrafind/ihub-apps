@@ -407,7 +407,16 @@
     "enabled": true,
     "retentionDays": 90,
     "maxChatsPerUser": 200,
-    "maxMessagesPerChat": 2000
+    "maxMessagesPerChat": 2000,
+    "sharing": {
+      "enabled": true,
+      "allowUsers": true,
+      "allowAuthenticated": true,
+      "allowPublic": true,
+      "defaultExpiryDays": 0,
+      "maxExpiryDays": 0,
+      "maxViewsCap": 0
+    }
   },
   "artifacts": {
     "enabled": true,

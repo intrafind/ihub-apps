@@ -45,7 +45,9 @@ function ChatMessageList({
   onDocumentAction = null,
   // Page a message's copy-link action points at — see ChatMessage.
   linkPath = null,
-  showAvatars = true
+  showAvatars = true,
+  // A shared, read-only transcript — see ChatMessage.
+  readOnly = false
 }) {
   const { t } = useTranslation();
   const chatContainerRef = useRef(null);
@@ -177,6 +179,7 @@ function ChatMessageList({
                 onEdit={onEdit}
                 onResend={onResend}
                 editable={editable}
+                readOnly={readOnly}
                 appId={appId}
                 chatId={chatId}
                 modelId={modelId}

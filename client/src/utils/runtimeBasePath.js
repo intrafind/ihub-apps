@@ -24,6 +24,7 @@ export const KNOWN_ROUTES = [
   'pages', // Dynamic content pages
   'prompts', // Prompts listing
   'chats', // Chat history overview
+  'share', // Read-only shared chat (public or sign-in gated per link)
   'settings', // Settings pages (integrations, etc.)
   'teams', // Microsoft Teams embed routes
   'workflows', // Workflow management and execution
@@ -182,6 +183,27 @@ export const getApiBaseUrlOverride = () => apiBaseUrlOverride;
  * @param {string} path - The path to append (e.g., "/api/health", "logo.svg")
  * @returns {string} The complete path
  */
+/**
+ * Whether `pathname` is a shared chat page (`/share/<id>`), under whatever
+ * base path this deployment runs at.
+ *
+ * A shared chat decides its own audience server-side — a public link opens
+ * with nobody signed in — so the sign-in redirects that guard every other
+ * page must leave it alone. Both places that redirect ask here: the React
+ * auth context, and (as a copy, because it runs before any module loads) the
+ * pre-React gate in `client/src/auth-gate/auth-gate.js`.
+ *
+ * @param {string} [pathname] - Path to test; the current location by default.
+ * @returns {boolean}
+ */
+export const isSharedChatPath = (
+  pathname = typeof window !== 'undefined' ? window.location.pathname : ''
+) => {
+  const base = getBasePath();
+  const relative = base && pathname.startsWith(base) ? pathname.slice(base.length) : pathname;
+  return relative.startsWith('/share/');
+};
+
 export const buildPath = path => {
   const basePath = getBasePath();
 

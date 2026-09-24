@@ -101,6 +101,11 @@ export default function registerStaticRoutes(app, { isPackaged, rootDir, basePat
       const pwaConfig = rawPwaConfig?.enabled ? resolvePwaConfig(rawPwaConfig) : null;
 
       const html = buildIndexHtml(indexPath, { basePath: serverBasePath, pwaConfig });
+      // A shared chat page may be public, and a public page that reaches a
+      // crawler stays in its index long after the link was revoked.
+      if (relativePath.startsWith('/share/')) {
+        res.set('X-Robots-Tag', 'noindex, nofollow');
+      }
       if (html !== null) {
         res.set('Content-Type', 'text/html; charset=utf-8');
         res.set('Cache-Control', 'no-cache');

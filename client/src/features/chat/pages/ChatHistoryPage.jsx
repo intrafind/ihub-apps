@@ -9,7 +9,8 @@ import useChats, {
   patchChatInCache,
   removeChatFromCache
 } from '../../../shared/hooks/useChats';
-import { deleteChat, renameChat } from '../../../api';
+import { deleteChat, fetchSharesWithMe, renameChat } from '../../../api';
+import { usePlatformConfig } from '../../../shared/contexts/PlatformConfigContext';
 import { CHAT_GROUPS, chatRecencyGroup } from '../../../utils/chatGroups';
 import { getLocalizedContent } from '../../../utils/localizeContent';
 import { START_PAGE_PATH } from '../../../utils/homePage';
@@ -209,6 +210,72 @@ function ChatRow({ chat, editing, timeLabel, onStartRename, onRename, onCancelRe
   );
 }
 
+/**
+ * One chat somebody shared with the viewer, linking to its read-only page.
+ *
+ * @param {Object} props - Component properties.
+ * @param {Object} props.share - A share resolved for display.
+ * @param {string} props.timeLabel - Right-aligned date label.
+ * @returns {JSX.Element} The row.
+ */
+function SharedRow({ share, timeLabel }) {
+  const { t } = useTranslation();
+  return (
+    <Link
+      to={share.to}
+      className="group flex items-center gap-4 px-4 py-3.5 rounded-2xl border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800 hover:border-gray-300 dark:hover:border-gray-600 hover:shadow-md transition-all"
+    >
+      <span
+        className="w-10 h-10 rounded-xl flex items-center justify-center flex-none text-white"
+        style={{ backgroundColor: share.appColor }}
+      >
+        <Icon name={share.appIcon} size="md" />
+      </span>
+      <span className="flex-1 min-w-0">
+        <span className="flex items-center gap-2 mb-0.5">
+          <span className="text-[15px] font-bold text-gray-900 dark:text-gray-100 truncate">
+            {share.displayTitle}
+          </span>
+          <span
+            className="flex-none text-[11px] font-semibold rounded-full px-2 py-0.5"
+            style={{
+              color: share.appColor,
+              backgroundColor: hexToRgba(share.appColor, 0.12)
+            }}
+          >
+            {share.appName}
+          </span>
+          {!share.viewed && (
+            <span
+              className="flex-none text-[11px] font-semibold rounded-full px-2 py-0.5 bg-amber-100 text-amber-800 dark:bg-amber-900/40 dark:text-amber-200"
+              title={t('chatHistory.sharedNewHint', 'You have not opened this yet')}
+            >
+              {t('chatHistory.sharedNew', 'New')}
+            </span>
+          )}
+        </span>
+        <span className="block text-sm text-gray-500 dark:text-gray-400 truncate leading-snug">
+          {share.sharedBy
+            ? t('chatHistory.sharedBy', {
+                name: share.sharedBy,
+                defaultValue: 'Shared by {{name}}'
+              })
+            : t('chatHistory.sharedWithYou', 'Shared with you')}
+          {' · '}
+          {t('chatHistory.messageCount', {
+            count: share.messageCount || 0,
+            defaultValue_one: '{{count}} message',
+            defaultValue_other: '{{count}} messages'
+          })}
+        </span>
+      </span>
+      <span className="flex-none text-xs text-gray-500 dark:text-gray-400 font-medium whitespace-nowrap">
+        {timeLabel}
+      </span>
+    </Link>
+  );
+}
+
 export default function ChatHistoryPage() {
   const { t, i18n } = useTranslation();
   const currentLanguage = i18n.language;
@@ -216,6 +283,13 @@ export default function ChatHistoryPage() {
 
   const { chats, loading, error, hasMore, loadMore } = useChats();
   const { apps } = useApps();
+  const { platformConfig } = usePlatformConfig();
+  const sharingEnabled = platformConfig?.chats?.sharing?.enabled === true;
+
+  // 'mine' is the stored chats; 'shared' the `users`-mode shares addressed to
+  // the viewer. The second tab only exists while sharing is on.
+  const [view, setView] = useState('mine');
+  const [shared, setShared] = useState({ items: [], loading: false, error: null, loaded: false });
 
   const [query, setQuery] = useState('');
   const [grouping, setGrouping] = useState('date');
@@ -272,6 +346,75 @@ export default function ChatHistoryPage() {
       c => c.displayTitle.toLowerCase().includes(q) || c.appName.toLowerCase().includes(q)
     );
   }, [query, resolvedChats]);
+
+  const activeView = sharingEnabled ? view : 'mine';
+
+  // Fetched once per visit to the tab. `loading` is deliberately not a
+  // dependency: it is set by this very effect, and re-running on it would
+  // cancel the fetch that was just started and leave the tab on its
+  // skeleton for good. Leaving the tab mid-load drops the answer; coming
+  // back fetches again.
+  useEffect(() => {
+    if (activeView !== 'shared' || shared.loaded) return undefined;
+    let active = true;
+    setShared(prev => ({ ...prev, loading: true, error: null }));
+    fetchSharesWithMe()
+      .then(result => {
+        if (!active) return;
+        setShared({ items: result?.items || [], loading: false, error: null, loaded: true });
+      })
+      .catch(err => {
+        if (!active) return;
+        setShared({ items: [], loading: false, error: err, loaded: true });
+      });
+    return () => {
+      active = false;
+    };
+  }, [activeView, shared.loaded]);
+
+  // A share travels with what its page shows about the app, because the
+  // recipient may not be able to see that app themselves; the viewer's own
+  // apps list is only the fallback.
+  const resolvedShares = useMemo(
+    () =>
+      shared.items.map(share => {
+        const app = share.appId ? appsById.get(share.appId) : null;
+        const name = share.app?.name || app?.name;
+        return {
+          ...share,
+          displayTitle: share.title || t('chatHistory.untitled', 'Untitled chat'),
+          appName:
+            (name && getLocalizedContent(name, currentLanguage)) ||
+            share.appId ||
+            t('chatHistory.unknownApp', 'Unknown app'),
+          appColor: share.app?.color || app?.color || DEFAULT_APP_COLOR,
+          appIcon: share.app?.icon || app?.icon || DEFAULT_APP_ICON,
+          to: `/share/${encodeURIComponent(share.id)}`
+        };
+      }),
+    [shared.items, appsById, currentLanguage, t]
+  );
+
+  const filteredShares = useMemo(() => {
+    const q = query.trim().toLowerCase();
+    if (!q) return resolvedShares;
+    return resolvedShares.filter(
+      s => s.displayTitle.toLowerCase().includes(q) || s.appName.toLowerCase().includes(q)
+    );
+  }, [query, resolvedShares]);
+
+  const sharedDateLabel = useCallback(
+    value => {
+      try {
+        return new Date(value).toLocaleDateString(currentLanguage || undefined, {
+          dateStyle: 'medium'
+        });
+      } catch {
+        return '';
+      }
+    },
+    [currentLanguage]
+  );
 
   const groupLabel = useCallback(
     g =>
@@ -408,24 +551,32 @@ export default function ChatHistoryPage() {
         <div className="flex items-end justify-between gap-4 mb-6 flex-wrap">
           <div>
             <h1 className="text-[26px] font-extrabold text-gray-900 dark:text-gray-100 tracking-tight">
-              {t('chatHistory.title', 'Your chats')}
+              {activeView === 'shared'
+                ? t('chatHistory.sharedWithMe', 'Shared with me')
+                : t('chatHistory.title', 'Your chats')}
             </h1>
             <p className="text-sm text-gray-500 dark:text-gray-400 mt-1">
               {/* How many are on screen, not how many exist: the list is
                   cursor-paged and there is no cheap total, so with more still
                   to fetch the count says "30+" rather than claiming 30 is all
                   of them right above a "Show older chats" button. */}
-              {hasMore
-                ? t('chatHistory.subtitleMore', {
-                    count: filteredChats.length,
-                    defaultValue_one: '{{count}}+ conversation across your apps',
-                    defaultValue_other: '{{count}}+ conversations across your apps'
+              {activeView === 'shared'
+                ? t('chatHistory.sharedSubtitle', {
+                    count: filteredShares.length,
+                    defaultValue_one: '{{count}} chat shared with you',
+                    defaultValue_other: '{{count}} chats shared with you'
                   })
-                : t('chatHistory.subtitle', {
-                    count: filteredChats.length,
-                    defaultValue_one: '{{count}} conversation across your apps',
-                    defaultValue_other: '{{count}} conversations across your apps'
-                  })}
+                : hasMore
+                  ? t('chatHistory.subtitleMore', {
+                      count: filteredChats.length,
+                      defaultValue_one: '{{count}}+ conversation across your apps',
+                      defaultValue_other: '{{count}}+ conversations across your apps'
+                    })
+                  : t('chatHistory.subtitle', {
+                      count: filteredChats.length,
+                      defaultValue_one: '{{count}} conversation across your apps',
+                      defaultValue_other: '{{count}} conversations across your apps'
+                    })}
             </p>
           </div>
           <button
@@ -436,6 +587,34 @@ export default function ChatHistoryPage() {
             {t('sidebar.newChat', 'New chat')}
           </button>
         </div>
+
+        {/* Mine / shared with me */}
+        {sharingEnabled && (
+          <div
+            role="tablist"
+            aria-label={t('chatHistory.viewLabel', 'Which chats')}
+            className="flex gap-6 border-b border-gray-200 dark:border-gray-700 mb-6"
+          >
+            {[
+              ['mine', t('chatHistory.title', 'Your chats')],
+              ['shared', t('chatHistory.sharedWithMe', 'Shared with me')]
+            ].map(([key, label]) => (
+              <button
+                key={key}
+                role="tab"
+                aria-selected={activeView === key}
+                onClick={() => setView(key)}
+                className={`-mb-px pb-2.5 text-sm font-semibold border-b-2 transition-colors ${
+                  activeView === key
+                    ? 'border-indigo-600 text-indigo-600 dark:text-indigo-400 dark:border-indigo-400'
+                    : 'border-transparent text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-300'
+                }`}
+              >
+                {label}
+              </button>
+            ))}
+          </div>
+        )}
 
         {/* Search + grouping */}
         <div className="flex gap-3 mb-6 flex-wrap">
@@ -462,26 +641,28 @@ export default function ChatHistoryPage() {
           </div>
 
           {/* Segmented grouping control */}
-          <div
-            role="group"
-            aria-label={t('chatHistory.groupBy', 'Group by')}
-            className="flex bg-gray-200 dark:bg-gray-700 rounded-xl p-1 gap-0.5"
-          >
-            {GROUPINGS.map(g => (
-              <button
-                key={g}
-                onClick={() => setGrouping(g)}
-                aria-pressed={grouping === g}
-                className={`px-4 py-2 rounded-lg text-sm font-semibold transition-colors ${
-                  grouping === g
-                    ? 'bg-white dark:bg-gray-800 text-indigo-600 dark:text-indigo-400 shadow-xs'
-                    : 'text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-300'
-                }`}
-              >
-                {groupingLabels[g]}
-              </button>
-            ))}
-          </div>
+          {activeView === 'mine' && (
+            <div
+              role="group"
+              aria-label={t('chatHistory.groupBy', 'Group by')}
+              className="flex bg-gray-200 dark:bg-gray-700 rounded-xl p-1 gap-0.5"
+            >
+              {GROUPINGS.map(g => (
+                <button
+                  key={g}
+                  onClick={() => setGrouping(g)}
+                  aria-pressed={grouping === g}
+                  className={`px-4 py-2 rounded-lg text-sm font-semibold transition-colors ${
+                    grouping === g
+                      ? 'bg-white dark:bg-gray-800 text-indigo-600 dark:text-indigo-400 shadow-xs'
+                      : 'text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-300'
+                  }`}
+                >
+                  {groupingLabels[g]}
+                </button>
+              ))}
+            </div>
+          )}
         </div>
 
         {/* Success has to be said out loud too: the row simply vanishing is
@@ -501,7 +682,61 @@ export default function ChatHistoryPage() {
         )}
 
         {/* Chat list */}
-        {showSkeleton ? (
+        {activeView === 'shared' ? (
+          shared.loading && !shared.loaded ? (
+            <>
+              <span role="status" aria-live="polite" className="sr-only">
+                {t('common.loading', 'Loading…')}
+              </span>
+              <ChatListSkeleton />
+            </>
+          ) : shared.error ? (
+            <EmptyState
+              icon="warning"
+              title={t('chatHistory.sharedLoadFailed', 'Shared chats could not be loaded')}
+            >
+              <button
+                onClick={() => setShared({ items: [], loading: false, error: null, loaded: false })}
+                className="mt-3 text-indigo-600 dark:text-indigo-400 text-sm font-medium hover:underline"
+              >
+                {t('app.retry', 'Retry')}
+              </button>
+            </EmptyState>
+          ) : filteredShares.length === 0 ? (
+            query ? (
+              <EmptyState
+                icon="chat-bubble"
+                title={t('chatHistory.noResults', 'No chats match your search')}
+              >
+                <button
+                  onClick={handleClearSearch}
+                  className="mt-3 text-indigo-600 dark:text-indigo-400 text-sm font-medium hover:underline"
+                >
+                  {t('pages.appsList.clearFilters', 'Clear filters')}
+                </button>
+              </EmptyState>
+            ) : (
+              <EmptyState
+                icon="user-group"
+                title={t('chatHistory.sharedEmpty', 'Nothing has been shared with you yet')}
+                description={t(
+                  'chatHistory.sharedEmptyHint',
+                  'Chats that colleagues share with you specifically show up here.'
+                )}
+              />
+            )
+          ) : (
+            <div className="flex flex-col gap-2.5">
+              {filteredShares.map(share => (
+                <SharedRow
+                  key={share.id}
+                  share={share}
+                  timeLabel={sharedDateLabel(share.createdAt)}
+                />
+              ))}
+            </div>
+          )
+        ) : showSkeleton ? (
           <>
             <span role="status" aria-live="polite" className="sr-only">
               {t('common.loading', 'Loading…')}
@@ -592,7 +827,7 @@ export default function ChatHistoryPage() {
             sees "No chats match your search" with no way to widen it, because
             the only control that fetches more used to live in the branch that
             renders when there *are* results. */}
-        {hasMore && (
+        {activeView === 'mine' && hasMore && (
           <div className="flex justify-center mt-6">
             <button
               onClick={loadMore}

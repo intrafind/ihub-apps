@@ -2,6 +2,7 @@ import { useEffect, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import Icon from '../../../shared/components/Icon';
 import { fetchChatArtifact } from '../../../api';
+import { useArtifactFetcher } from '../contexts/ArtifactFetchContext';
 
 /**
  * One image an assistant turn produced.
@@ -36,6 +37,9 @@ import { fetchChatArtifact } from '../../../api';
  * @returns {JSX.Element|null}
  */
 function GeneratedImage({ image, chatId, index, persisted = false }) {
+  // A shared chat serves its images through the share rather than the
+  // owner's chat route; the page providing that route says so via context.
+  const customFetch = useArtifactFetcher();
   const { t } = useTranslation();
   const storedId = !image?.data && !image?.unavailable ? image?.id : null;
   const containerRef = useRef(null);
@@ -79,7 +83,7 @@ function GeneratedImage({ image, chatId, index, persisted = false }) {
     let active = true;
     (async () => {
       try {
-        const blob = await fetchChatArtifact(chatId, storedId);
+        const blob = await (customFetch || fetchChatArtifact)(chatId, storedId);
         // Revoked in the cleanup below — but only once it has been handed to
         // the element. Revoking a URL the browser has not loaded yet is what
         // turns a slow render into a broken image.
@@ -100,7 +104,7 @@ function GeneratedImage({ image, chatId, index, persisted = false }) {
       if (url) URL.revokeObjectURL(url);
       setObjectUrl(null);
     };
-  }, [chatId, storedId, isVisible]);
+  }, [chatId, storedId, isVisible, customFetch]);
 
   const src = image?.data
     ? `data:${image.mimeType || 'image/png'};base64,${image.data}`

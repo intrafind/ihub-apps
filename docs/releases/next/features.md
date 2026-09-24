@@ -62,3 +62,29 @@ Hovering a link in a chat answer now shows its destination as a tooltip, so a us
 site or file a linked title opens before clicking. Links that already carry a title — such as the
 source and folder the iFinder Search app now puts on every document link — keep it. The "Read …"
 rows of the tool activity panel show their address the same way.
+
+## Chat Sharing: Read-Only Links to Stored Chats
+
+Users can now share a stored chat as a read-only link — with specific users, with anyone who is
+signed in, or publicly without a sign-in. The recipient sees the conversation as it was when it
+was shared and can view and download the images it generated. They cannot continue, edit or rate
+it. Off by default: turn on **Chat Sharing** under
+**Admin → Features** (it requires **Durable Chats**).
+
+- **Share chat** in the header of a stored chat opens the dialog. **Specific users** are picked by
+  name or e-mail from the user database and find the chat under **Shared with me** on the chats
+  page (no notification is sent). **Anyone signed in** needs the link and an account. **Public**
+  links open for anyone with the link, also when anonymous access is off; the owner has to
+  acknowledge a warning first, and can choose whether viewers see their name.
+- A link is a **copy of the chat at the time of sharing**. Later messages and edits are not part
+  of it; uploaded files are never part of it — the viewer sees the file name only.
+- Every link can carry an **expiry** and a **maximum number of opens**. Opens are counted, and
+  for links to specific users the owner sees per recipient whether and when they opened it.
+- **Revoke** closes a link immediately; the chat itself is unchanged. Deleting the chat removes
+  its links. A closed, expired, used-up or unknown link shows the same "no longer available" page.
+- Admins configure sharing under **Admin → Observability → Chat History → Chat sharing**: which
+  audiences are offered (public links can be switched off), a default and a longest expiry, and a
+  cap on opens per link. The same page counts shares, lists the newest ones and lets an admin
+  revoke any of them. Creating and revoking shares is written to the audit log.
+- New settings block `platform.json → chats.sharing`; the upgrade writes the defaults (all
+  audiences allowed, no expiry, no cap).

@@ -96,7 +96,10 @@ function ChatMessage({
   onDocumentAction = null, // Callback for citation document actions (preview, download, openInApp)
   // Page the copy-link action points at. Defaults to the current page; a host
   // page that isn't the app's own route (the admin app editor) passes the app's.
-  linkPath = null
+  linkPath = null,
+  // A shared, read-only transcript: no delete, no feedback, no edits. The
+  // viewer is not the owner and none of those actions could reach the chat.
+  readOnly = false
 }) {
   const { t } = useTranslation();
   const featureFlags = useFeatureFlags();
@@ -839,6 +842,34 @@ function ChatMessage({
         {renderContent()}
         {isUser && hasVariables && <MessageVariables variables={message.variables} />}
 
+        {/* A shared chat carries an upload only as its name: the file itself
+            is never stored, so a viewer is told what is missing rather than
+            shown nothing. Only the share page sets this field. */}
+        {Array.isArray(message.sharedAttachments) && message.sharedAttachments.length > 0 && (
+          <ul
+            className="mt-2 space-y-1"
+            aria-label={t('chatSharing.viewer.attachmentsLabel', 'Attachments')}
+          >
+            {message.sharedAttachments.map((attachment, idx) => (
+              <li
+                key={`${attachment?.name || attachment?.type || 'attachment'}-${idx}`}
+                className="flex items-center gap-2 text-xs italic text-gray-500 dark:text-gray-400"
+              >
+                <Icon name="paper-clip" size="sm" />
+                <span>
+                  {t('chatSharing.viewer.attachmentNotIncluded', {
+                    name:
+                      attachment?.name ||
+                      attachment?.type ||
+                      t('chatSharing.viewer.attachmentUnnamed', 'file'),
+                    defaultValue: 'Attachment not included: {{name}}'
+                  })}
+                </span>
+              </li>
+            ))}
+          </ul>
+        )}
+
         {/* Display generated images */}
         {message.images && message.images.length > 0 && (
           <div className="mt-3 space-y-2">
@@ -1144,16 +1175,18 @@ function ChatMessage({
             </>
           )}
 
-          <button
-            onClick={handleDelete}
-            className="flex items-center gap-1 hover:text-red-500 transition-colors duration-150"
-            title={t('chatMessage.deleteMessage', 'Delete message')}
-          >
-            <Icon name="trash" size="sm" />
-          </button>
+          {!readOnly && (
+            <button
+              onClick={handleDelete}
+              className="flex items-center gap-1 hover:text-red-500 transition-colors duration-150"
+              title={t('chatMessage.deleteMessage', 'Delete message')}
+            >
+              <Icon name="trash" size="sm" />
+            </button>
+          )}
 
           {/* Add star rating for AI responses only */}
-          {feedbackEnabled && !isUser && !isError && !message.loading && (
+          {feedbackEnabled && !readOnly && !isUser && !isError && !message.loading && (
             <>
               {!compact && <div className="mx-2 h-4 border-l border-gray-300"></div>}
               <div className="flex items-center gap-2">

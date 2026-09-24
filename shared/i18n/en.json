@@ -170,7 +170,7 @@
       "forwardTo": "To",
       "forwardCc": "Cc",
       "forwardSubject": "Subject",
-      "originalAttached": "Outlook add-ins cannot rebuild a forward with its attachments, so the original message is attached instead \u2014 nothing is lost."
+      "originalAttached": "Outlook add-ins cannot rebuild a forward with its attachments, so the original message is attached instead — nothing is lost."
     },
     "chatReset": {
       "message": "New chat started for this email.",
@@ -360,7 +360,8 @@
           "acknowledge": "I Understand"
         }
       },
-      "newChat": "New Chat"
+      "newChat": "New Chat",
+      "shareChat": "Share chat"
     },
     "authRequired": {
       "title": "Authentication Required",
@@ -545,9 +546,67 @@
         "ledgerHeading": "Run ledger",
         "openFeatures": "Open Features",
         "storage": "Storage provider ready",
-        "title": "Status"
+        "title": "Status",
+        "sharingHeading": "Chat sharing",
+        "sharingActive": "Links can be created",
+        "sharingActiveHelp": "Needs durable chats, the feature and the switch below.",
+        "sharingFeature": "Chat Sharing feature",
+        "sharingEnabled": "Sharing enabled",
+        "sharingEnabledHelp": "The \"Allow sharing chats\" setting below."
       },
-      "title": "Chat History"
+      "title": "Chat History",
+      "sharing": {
+        "title": "Chat sharing",
+        "description": "Read-only links onto stored chats. Also requires the Chat Sharing feature. A link is a copy of the chat as it was when it was shared; uploaded files are never part of it.",
+        "enabled": "Allow sharing chats",
+        "enabledHelp": "Turning it off stops new links and closes existing ones until it is turned on again.",
+        "allowUsers": "Links for specific users",
+        "allowUsersHelp": "The owner picks recipients from the user database; they sign in to open the link.",
+        "allowAuthenticated": "Links for anyone signed in",
+        "allowAuthenticatedHelp": "Anyone with an account here who has the link.",
+        "allowPublic": "Public links (no sign-in)",
+        "allowPublicHelp": "Anyone on the internet who has the link, without signing in. Owners see a warning before they create one.",
+        "defaultExpiryDays": "Default expiry (days)",
+        "defaultExpiryDaysHelp": "Expiry a new link gets when its owner picks none. 0 means links do not expire by default.",
+        "maxExpiryDays": "Longest expiry (days)",
+        "maxExpiryDaysHelp": "Owners cannot pick a later expiry, and \"never\" is no longer offered. 0 removes the limit.",
+        "maxViewsCap": "Most views per link",
+        "maxViewsCapHelp": "Owners cannot allow more opens than this, and \"unlimited\" is no longer offered. 0 removes the limit."
+      },
+      "shares": {
+        "title": "Shared chats",
+        "total": "Shares",
+        "truncated": "Counted up to the scan limit",
+        "active": "Active links",
+        "views": "Link opens",
+        "byMode": "Active by audience",
+        "listTitle": "Recent shares",
+        "listTruncated": "Only the newest shares are listed.",
+        "empty": "No chat has been shared yet.",
+        "chat": "Chat",
+        "owner": "Owner",
+        "audience": "Audience",
+        "stateLabel": "State",
+        "viewsLabel": "Views",
+        "created": "Created",
+        "expires": "Expires",
+        "revoke": "Revoke",
+        "revokeTitle": "Revoke this share?",
+        "revokeMessage": "The link to \"{{title}}\" stops working immediately for everyone who has it. The chat itself is not changed.",
+        "revoked": "Share revoked. The link no longer opens.",
+        "revokeFailed": "Failed to revoke share",
+        "mode": {
+          "users": "Specific users",
+          "authenticated": "Signed-in users",
+          "public": "Public"
+        },
+        "state": {
+          "active": "Active",
+          "revoked": "Revoked",
+          "expired": "Expired",
+          "exhausted": "View limit reached"
+        }
+      }
     },
     "voiceInput": {
       "title": "Voice Input (Speech-to-Text)",
@@ -1285,10 +1344,10 @@
       "officeJsPresetCustom": "Your custom URL",
       "officeJsFallbackWarning": "The saved Office.js source could not be used, so the add-in is falling back to {{mode}}. Check the URL above.",
       "mailActionTitle": "Answer Actions",
-      "mailActionDesc": "What the button under each assistant answer does in Outlook. Every action stays available in the button\u2019s menu \u2014 this only picks the one that needs no extra tap.",
+      "mailActionDesc": "What the button under each assistant answer does in Outlook. Every action stays available in the button’s menu — this only picks the one that needs no extra tap.",
       "defaultMailAction": "Default action",
-      "defaultMailActionHelp": "Users can override this per device in the task pane\u2019s Settings dialog. A choice Outlook cannot offer for the open item falls back to one it can \u2014 pick Reply all and a user composing a draft still gets Insert.",
-      "mailActionAuto": "Automatic \u2014 reply all in the reading pane, insert while composing",
+      "defaultMailActionHelp": "Users can override this per device in the task pane’s Settings dialog. A choice Outlook cannot offer for the open item falls back to one it can — pick Reply all and a user composing a draft still gets Insert.",
+      "mailActionAuto": "Automatic — reply all in the reading pane, insert while composing",
       "mailActionAnswerAll": "Reply all",
       "mailActionAnswer": "Reply to sender",
       "mailActionForward": "Forward",
@@ -3793,7 +3852,18 @@
       "yesterday": "Yesterday",
       "last7days": "Last 7 days",
       "older": "Older"
-    }
+    },
+    "sharedWithMe": "Shared with me",
+    "viewLabel": "Which chats",
+    "sharedSubtitle_one": "{{count}} chat shared with you",
+    "sharedSubtitle_other": "{{count}} chats shared with you",
+    "sharedEmpty": "Nothing has been shared with you yet",
+    "sharedEmptyHint": "Chats that colleagues share with you specifically show up here.",
+    "sharedLoadFailed": "Shared chats could not be loaded",
+    "sharedBy": "Shared by {{name}}",
+    "sharedWithYou": "Shared with you",
+    "sharedNew": "New",
+    "sharedNewHint": "You have not opened this yet"
   },
   "transcription": {
     "record": "Record audio to transcribe",
@@ -3876,5 +3946,104 @@
     "stopped": "Stopped",
     "moreValues_one": "+{{count}} more",
     "moreValues_other": "+{{count}} more"
+  },
+  "chatSharing": {
+    "title": "Share chat",
+    "description": "Recipients get a read-only copy of this conversation as it is right now. Later messages, edits and uploaded files are not part of it.",
+    "noModes": "Sharing chats is not available here.",
+    "modeLabel": "Who can open the link",
+    "modes": {
+      "users": {
+        "label": "Specific users",
+        "hint": "Only the people you pick, after they sign in."
+      },
+      "authenticated": {
+        "label": "Anyone signed in with the link",
+        "hint": "Anyone with an account here who has the link."
+      },
+      "public": {
+        "label": "Anyone with the link, no sign-in",
+        "hint": "Opens for anyone on the internet who has the link."
+      }
+    },
+    "mode": {
+      "users": "Specific users",
+      "authenticated": "Signed-in users",
+      "public": "Public"
+    },
+    "recipientsLabel": "Share with",
+    "recipientsPlaceholder": "Search by name or e-mail…",
+    "recipientsNone": "No matching users",
+    "recipientsHint": "Only users who have signed in here before can be picked.",
+    "removeRecipient": "Remove {{name}}",
+    "publicWarningTitle": "This makes the conversation public",
+    "publicWarning": "Anyone who has the link can read this conversation and download the files it generated — without signing in, until you revoke the link or it expires. The link can be forwarded to anyone. Do not share conversations that contain internal or personal data.",
+    "publicAcknowledge": "I understand that anyone with the link can read this conversation without signing in.",
+    "showNameLabel": "Show my name to viewers",
+    "expiryLabel": "Link expires",
+    "expiryDateLabel": "Expiry date",
+    "expiry": {
+      "never": "Never",
+      "day": "In 1 day",
+      "week": "In 7 days",
+      "month": "In 30 days",
+      "quarter": "In 90 days",
+      "custom": "On a date…"
+    },
+    "expiryCapHint": "Links here expire after at most {{count}} days.",
+    "maxViewsLabel": "Maximum opens",
+    "maxViewsPlaceholder": "Unlimited",
+    "maxViewsHint": "The link stops working once it has been opened this often.",
+    "maxViewsCapHint": "At most {{count}} opens per link here.",
+    "create": "Create link",
+    "creating": "Creating…",
+    "created": "Link created",
+    "linkLabel": "Share link",
+    "copy": "Copy link",
+    "copied": "Copied",
+    "createAnother": "Create another link",
+    "createFailed": "The link could not be created.",
+    "existingTitle": "Links for this chat",
+    "existingEmpty": "This chat has not been shared yet.",
+    "loadFailed": "The links could not be loaded.",
+    "revoke": "Revoke",
+    "revokeTitle": "Revoke this link?",
+    "revokeMessage": "The link stops working immediately for everyone who has it. The chat itself is not changed.",
+    "revokeFailed": "The link could not be revoked.",
+    "state": {
+      "active": "Active",
+      "revoked": "Revoked",
+      "expired": "Expired",
+      "exhausted": "View limit reached"
+    },
+    "views_one": "{{count}} view",
+    "views_other": "{{count}} views",
+    "lastViewed": "Last opened {{date}}",
+    "neverViewed": "Not opened yet",
+    "expiresOn": "Expires {{date}}",
+    "viewedBy": "Opened {{date}}",
+    "notViewedBy": "Not opened yet",
+    "viewer": {
+      "untitled": "Shared chat",
+      "readOnly": "Read-only",
+      "sharedBy": "Shared by {{name}}",
+      "sharedAnonymously": "Shared with you",
+      "openApp": "Open iHub Apps",
+      "publicBanner": "This conversation is publicly accessible. Anyone with the link can read it.",
+      "signInTitle": "Sign in to open this shared chat",
+      "signInHint": "This link was shared with signed-in users only. Sign in and you will be brought back here.",
+      "signIn": "Sign in",
+      "unavailableTitle": "This link is no longer available",
+      "unavailableHint": "The share may have been revoked, expired, reached its view limit, or never existed.",
+      "loadFailed": "The shared chat could not be loaded",
+      "artifacts": "Files in this chat",
+      "artifactFailed": "The file could not be loaded.",
+      "view": "View",
+      "download": "Download",
+      "expires": "This link expires on {{date}}.",
+      "attachmentsLabel": "Attachments",
+      "attachmentNotIncluded": "Attachment not included: {{name}}",
+      "attachmentUnnamed": "file"
+    }
   }
 }

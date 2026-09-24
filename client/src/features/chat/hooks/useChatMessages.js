@@ -26,7 +26,7 @@ import { debugLog } from '../../../utils/debugLog';
  * @param {Object} msg - Stored message.
  * @returns {Object} Chat message.
  */
-function transformStoredMessage(msg) {
+export function transformStoredMessage(msg) {
   const message = {
     id: msg.id,
     serverId: msg.id,

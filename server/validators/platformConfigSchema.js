@@ -415,7 +415,23 @@ export const platformConfigSchema = z
         enabled: z.boolean().prefault(true),
         retentionDays: z.number().prefault(90),
         maxChatsPerUser: z.number().prefault(200),
-        maxMessagesPerChat: z.number().prefault(2000)
+        maxMessagesPerChat: z.number().prefault(2000),
+        // Chat sharing: read-only links onto stored chats, gated by
+        // features.chatSharing. The three `allow*` switches decide which
+        // audiences an owner may pick; the caps bound what a link may be
+        // configured with, zero or less meaning "no cap" as everywhere here.
+        sharing: z
+          .object({
+            enabled: z.boolean().prefault(true),
+            allowUsers: z.boolean().prefault(true),
+            allowAuthenticated: z.boolean().prefault(true),
+            allowPublic: z.boolean().prefault(true),
+            defaultExpiryDays: z.number().prefault(0),
+            maxExpiryDays: z.number().prefault(0),
+            maxViewsCap: z.number().prefault(0)
+          })
+          .passthrough()
+          .prefault({})
       })
       .passthrough()
       .prefault({}),

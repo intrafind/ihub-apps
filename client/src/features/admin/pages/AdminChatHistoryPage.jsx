@@ -26,6 +26,34 @@ function formatDate(value) {
 }
 
 /** One gate in the "is this being stored?" chain. */
+function ShareStateBadge({ state, t }) {
+  const labels = {
+    active: t('admin.chatHistory.shares.state.active', 'Active'),
+    revoked: t('admin.chatHistory.shares.state.revoked', 'Revoked'),
+    expired: t('admin.chatHistory.shares.state.expired', 'Expired'),
+    exhausted: t('admin.chatHistory.shares.state.exhausted', 'View limit reached')
+  };
+  const tone =
+    state === 'active'
+      ? 'bg-green-100 text-green-800 dark:bg-green-900/40 dark:text-green-200'
+      : 'bg-gray-100 text-gray-700 dark:bg-gray-700 dark:text-gray-300';
+  return (
+    <span className={`inline-block text-xs font-medium rounded-full px-2 py-0.5 ${tone}`}>
+      {labels[state] || state}
+    </span>
+  );
+}
+
+function shareModeLabel(mode, t) {
+  return (
+    {
+      users: t('admin.chatHistory.shares.mode.users', 'Specific users'),
+      authenticated: t('admin.chatHistory.shares.mode.authenticated', 'Signed-in users'),
+      public: t('admin.chatHistory.shares.mode.public', 'Public')
+    }[mode] || mode
+  );
+}
+
 function GateRow({ ok, label, detail, action }) {
   return (
     <li className="flex items-start justify-between gap-4 py-2">
@@ -167,6 +195,20 @@ function AdminChatHistoryPage() {
   const [settings, setSettings] = useState(null);
   const [dirty, setDirty] = useState(false);
   const [confirmDialog, setConfirmDialog] = useState(null);
+  const [shares, setShares] = useState({ items: [], truncated: false });
+
+  const loadShares = useCallback(async () => {
+    try {
+      const response = await makeAdminApiCall('/admin/chat-history/shares');
+      setShares({
+        items: response.data?.items || [],
+        truncated: response.data?.truncated === true
+      });
+    } catch {
+      // The overview still renders; the list just stays empty.
+      setShares({ items: [], truncated: false });
+    }
+  }, []);
 
   const loadOverview = useCallback(
     async ({ keepSettings = false } = {}) => {
@@ -196,7 +238,8 @@ function AdminChatHistoryPage() {
 
   useEffect(() => {
     loadOverview();
-  }, [loadOverview]);
+    loadShares();
+  }, [loadOverview, loadShares]);
 
   const updateSetting = (block, key, value) => {
     setSettings(prev => ({ ...prev, [block]: { ...prev[block], [key]: value } }));
@@ -209,7 +252,7 @@ function AdminChatHistoryPage() {
       setMessage(null);
       const response = await makeAdminApiCall('/admin/chat-history/settings', {
         method: 'PUT',
-        body: { chats: settings.chats, runLog: settings.runLog }
+        body: { chats: settings.chats, runLog: settings.runLog, sharing: settings.sharing }
       });
       setMessage({
         type: 'success',
@@ -280,6 +323,39 @@ function AdminChatHistoryPage() {
     }
   };
 
+  const revokeShare = async shareId => {
+    setConfirmDialog(null);
+    try {
+      setMessage(null);
+      await makeAdminApiCall(`/admin/chat-history/shares/${encodeURIComponent(shareId)}`, {
+        method: 'DELETE'
+      });
+      setMessage({
+        type: 'success',
+        text: t('admin.chatHistory.shares.revoked', 'Share revoked. The link no longer opens.')
+      });
+      await Promise.all([loadShares(), loadOverview({ keepSettings: dirty })]);
+    } catch (error) {
+      setMessage({
+        type: 'error',
+        text: errorText(error, t('admin.chatHistory.shares.revokeFailed', 'Failed to revoke share'))
+      });
+    }
+  };
+
+  const confirmRevoke = share => {
+    setConfirmDialog({
+      title: t('admin.chatHistory.shares.revokeTitle', 'Revoke this share?'),
+      message: t('admin.chatHistory.shares.revokeMessage', {
+        title: share.title || share.chatId,
+        defaultValue:
+          'The link to "{{title}}" stops working immediately for everyone who has it. The chat itself is not changed.'
+      }),
+      confirmLabel: t('admin.chatHistory.shares.revoke', 'Revoke'),
+      onConfirm: () => revokeShare(share.id)
+    });
+  };
+
   const confirmRetention = target => {
     setConfirmDialog({
       target,
@@ -312,6 +388,7 @@ function AdminChatHistoryPage() {
   const { status, stats } = overview;
   const chatStats = stats?.chats || {};
   const ledgerStats = stats?.ledger || {};
+  const shareStats = stats?.shares || {};
   const retention = chatStats.retention || {};
   // `default` and `full` both record the plain user id; only `pseudonymized`
   // records a different one, which is what chat history is listed by.
@@ -405,7 +482,7 @@ function AdminChatHistoryPage() {
                   'Chats are not stored on the server. Every check below must pass.'
                 )}
           </div>
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
             <div>
               <h3 className="text-sm font-semibold text-gray-700 dark:text-gray-300">
                 {t('admin.chatHistory.status.chatsHeading', 'Durable chats')}
@@ -463,6 +540,34 @@ function AdminChatHistoryPage() {
                   detail={t(
                     'admin.chatHistory.status.ledgerEnabledHelp',
                     'The "Record the run ledger" setting below.'
+                  )}
+                />
+              </ul>
+            </div>
+            <div>
+              <h3 className="text-sm font-semibold text-gray-700 dark:text-gray-300">
+                {t('admin.chatHistory.status.sharingHeading', 'Chat sharing')}
+              </h3>
+              <ul className="divide-y divide-gray-100 dark:divide-gray-700">
+                <GateRow
+                  ok={status.chatSharingActive}
+                  label={t('admin.chatHistory.status.sharingActive', 'Links can be created')}
+                  detail={t(
+                    'admin.chatHistory.status.sharingActiveHelp',
+                    'Needs durable chats, the feature and the switch below.'
+                  )}
+                />
+                <GateRow
+                  ok={status.featureChatSharing}
+                  label={t('admin.chatHistory.status.sharingFeature', 'Chat Sharing feature')}
+                  action={featuresLink}
+                />
+                <GateRow
+                  ok={status.sharingEnabled}
+                  label={t('admin.chatHistory.status.sharingEnabled', 'Sharing enabled')}
+                  detail={t(
+                    'admin.chatHistory.status.sharingEnabledHelp',
+                    'The "Allow sharing chats" setting below.'
                   )}
                 />
               </ul>
@@ -604,6 +709,125 @@ function AdminChatHistoryPage() {
               counts={ledgerStats.byStatus}
             />
           </div>
+
+          <h2 className={`${headingClass} mt-8`}>
+            <Icon name="link" className="w-5 h-5 mr-2 text-blue-500" />
+            {t('admin.chatHistory.shares.title', 'Shared chats')}
+          </h2>
+          <div className="grid grid-cols-1 md:grid-cols-4 gap-6">
+            <StatTile
+              label={t('admin.chatHistory.shares.total', 'Shares')}
+              value={formatNumber(shareStats.total)}
+              hint={
+                shareStats.truncated
+                  ? t('admin.chatHistory.shares.truncated', 'Counted up to the scan limit')
+                  : undefined
+              }
+            />
+            <StatTile
+              label={t('admin.chatHistory.shares.active', 'Active links')}
+              value={formatNumber(shareStats.byState?.active)}
+            />
+            <StatTile
+              label={t('admin.chatHistory.shares.views', 'Link opens')}
+              value={formatNumber(shareStats.views)}
+            />
+            <CountList
+              title={t('admin.chatHistory.shares.byMode', 'Active by audience')}
+              counts={shareStats.activeByMode}
+            />
+          </div>
+          <div className="mt-6">
+            <h3 className="text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
+              {t('admin.chatHistory.shares.listTitle', 'Recent shares')}
+            </h3>
+            {shares.items.length === 0 ? (
+              <p className="text-sm text-gray-500 dark:text-gray-400">
+                {t('admin.chatHistory.shares.empty', 'No chat has been shared yet.')}
+              </p>
+            ) : (
+              <div className="overflow-x-auto">
+                <table className="min-w-full text-sm">
+                  <thead>
+                    <tr className="text-left text-xs uppercase tracking-wide text-gray-500 dark:text-gray-400">
+                      <th className="py-2 pr-4">{t('admin.chatHistory.shares.chat', 'Chat')}</th>
+                      <th className="py-2 pr-4">{t('admin.chatHistory.shares.owner', 'Owner')}</th>
+                      <th className="py-2 pr-4">
+                        {t('admin.chatHistory.shares.audience', 'Audience')}
+                      </th>
+                      <th className="py-2 pr-4">
+                        {t('admin.chatHistory.shares.stateLabel', 'State')}
+                      </th>
+                      <th className="py-2 pr-4">
+                        {t('admin.chatHistory.shares.viewsLabel', 'Views')}
+                      </th>
+                      <th className="py-2 pr-4">
+                        {t('admin.chatHistory.shares.created', 'Created')}
+                      </th>
+                      <th className="py-2 pr-4">
+                        {t('admin.chatHistory.shares.expires', 'Expires')}
+                      </th>
+                      <th className="py-2" />
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-gray-100 dark:divide-gray-700 text-gray-700 dark:text-gray-200">
+                    {shares.items.map(share => (
+                      <tr key={share.id}>
+                        <td className="py-2 pr-4 max-w-xs">
+                          <span className="block truncate" title={share.chatId}>
+                            {share.title || share.chatId}
+                          </span>
+                        </td>
+                        <td className="py-2 pr-4">
+                          <span className="block truncate max-w-40" title={share.ownerId}>
+                            {share.ownerName || share.ownerId}
+                          </span>
+                        </td>
+                        <td className="py-2 pr-4 whitespace-nowrap">
+                          {shareModeLabel(share.mode, t)}
+                          {share.mode === 'users' &&
+                            share.recipientCount > 0 &&
+                            ` (${share.recipientCount})`}
+                        </td>
+                        <td className="py-2 pr-4">
+                          <ShareStateBadge state={share.state} t={t} />
+                        </td>
+                        <td className="py-2 pr-4 whitespace-nowrap">
+                          {formatNumber(share.viewCount)}
+                          {share.maxViews ? ` / ${formatNumber(share.maxViews)}` : ''}
+                        </td>
+                        <td className="py-2 pr-4 whitespace-nowrap">
+                          {formatDate(share.createdAt)}
+                        </td>
+                        <td className="py-2 pr-4 whitespace-nowrap">
+                          {share.expiresAt ? formatDate(share.expiresAt) : '—'}
+                        </td>
+                        <td className="py-2 text-right">
+                          {share.state === 'active' && (
+                            <button
+                              type="button"
+                              onClick={() => confirmRevoke(share)}
+                              className="text-xs text-red-600 dark:text-red-400 hover:underline"
+                            >
+                              {t('admin.chatHistory.shares.revoke', 'Revoke')}
+                            </button>
+                          )}
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+                {shares.truncated && (
+                  <p className="text-xs text-gray-500 dark:text-gray-400 mt-2">
+                    {t(
+                      'admin.chatHistory.shares.listTruncated',
+                      'Only the newest shares are listed.'
+                    )}
+                  </p>
+                )}
+              </div>
+            )}
+          </div>
         </div>
 
         {/* Durable chat settings */}
@@ -653,6 +877,99 @@ function AdminChatHistoryPage() {
                 )}
                 value={settings.chats.maxMessagesPerChat}
                 onChange={value => updateSetting('chats', 'maxMessagesPerChat', value)}
+              />
+            </div>
+          </div>
+        </div>
+
+        {/* Chat sharing settings */}
+        <div className={cardClass}>
+          <h2 className={headingClass}>
+            <Icon name="link" className="w-5 h-5 mr-2 text-blue-500" />
+            {t('admin.chatHistory.sharing.title', 'Chat sharing')}
+          </h2>
+          <p className="text-sm text-gray-600 dark:text-gray-400 mb-4">
+            {t(
+              'admin.chatHistory.sharing.description',
+              'Read-only links onto stored chats. Also requires the Chat Sharing feature. A link is a copy of the chat as it was when it was shared; uploaded files are never part of it.'
+            )}
+          </p>
+          <div className="space-y-4">
+            <CheckboxField
+              id="sharing-enabled"
+              label={t('admin.chatHistory.sharing.enabled', 'Allow sharing chats')}
+              help={t(
+                'admin.chatHistory.sharing.enabledHelp',
+                'Turning it off stops new links and closes existing ones until it is turned on again.'
+              )}
+              checked={settings.sharing.enabled}
+              onChange={value => updateSetting('sharing', 'enabled', value)}
+            />
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+              <CheckboxField
+                id="sharing-allow-users"
+                label={t('admin.chatHistory.sharing.allowUsers', 'Links for specific users')}
+                help={t(
+                  'admin.chatHistory.sharing.allowUsersHelp',
+                  'The owner picks recipients from the user database; they sign in to open the link.'
+                )}
+                checked={settings.sharing.allowUsers}
+                onChange={value => updateSetting('sharing', 'allowUsers', value)}
+              />
+              <CheckboxField
+                id="sharing-allow-authenticated"
+                label={t(
+                  'admin.chatHistory.sharing.allowAuthenticated',
+                  'Links for anyone signed in'
+                )}
+                help={t(
+                  'admin.chatHistory.sharing.allowAuthenticatedHelp',
+                  'Anyone with an account here who has the link.'
+                )}
+                checked={settings.sharing.allowAuthenticated}
+                onChange={value => updateSetting('sharing', 'allowAuthenticated', value)}
+              />
+              <CheckboxField
+                id="sharing-allow-public"
+                label={t('admin.chatHistory.sharing.allowPublic', 'Public links (no sign-in)')}
+                help={t(
+                  'admin.chatHistory.sharing.allowPublicHelp',
+                  'Anyone on the internet who has the link, without signing in. Owners see a warning before they create one.'
+                )}
+                checked={settings.sharing.allowPublic}
+                onChange={value => updateSetting('sharing', 'allowPublic', value)}
+              />
+            </div>
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+              <NumberField
+                id="sharing-default-expiry"
+                label={t('admin.chatHistory.sharing.defaultExpiryDays', 'Default expiry (days)')}
+                help={t(
+                  'admin.chatHistory.sharing.defaultExpiryDaysHelp',
+                  'Expiry a new link gets when its owner picks none. 0 means links do not expire by default.'
+                )}
+                value={settings.sharing.defaultExpiryDays}
+                onChange={value => updateSetting('sharing', 'defaultExpiryDays', value)}
+              />
+              <NumberField
+                id="sharing-max-expiry"
+                label={t('admin.chatHistory.sharing.maxExpiryDays', 'Longest expiry (days)')}
+                help={t(
+                  'admin.chatHistory.sharing.maxExpiryDaysHelp',
+                  'Owners cannot pick a later expiry, and "never" is no longer offered. 0 removes the limit.'
+                )}
+                value={settings.sharing.maxExpiryDays}
+                onChange={value => updateSetting('sharing', 'maxExpiryDays', value)}
+              />
+              <NumberField
+                id="sharing-max-views"
+                label={t('admin.chatHistory.sharing.maxViewsCap', 'Most views per link')}
+                help={t(
+                  'admin.chatHistory.sharing.maxViewsCapHelp',
+                  'Owners cannot allow more opens than this, and "unlimited" is no longer offered. 0 removes the limit.'
+                )}
+                value={settings.sharing.maxViewsCap}
+                onChange={value => updateSetting('sharing', 'maxViewsCap', value)}
               />
             </div>
           </div>
@@ -817,9 +1134,15 @@ function AdminChatHistoryPage() {
         isOpen={!!confirmDialog}
         title={confirmDialog?.title ?? ''}
         message={confirmDialog?.message ?? ''}
-        confirmLabel={t('admin.chatHistory.retention.confirm', 'Delete now')}
+        confirmLabel={
+          confirmDialog?.confirmLabel ?? t('admin.chatHistory.retention.confirm', 'Delete now')
+        }
         danger
-        onConfirm={() => runRetention(confirmDialog?.target || 'all')}
+        onConfirm={() =>
+          confirmDialog?.onConfirm
+            ? confirmDialog.onConfirm()
+            : runRetention(confirmDialog?.target || 'all')
+        }
         onDeny={() => setConfirmDialog(null)}
       />
     </div>

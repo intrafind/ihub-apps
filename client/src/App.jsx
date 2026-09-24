@@ -10,6 +10,7 @@ import StartPage from './features/apps/pages/StartPage';
 import PromptsList from './features/prompts/pages/PromptsList';
 import AppRouterWrapper from './features/apps/components/AppRouterWrapper';
 const ChatHistoryPage = lazyWithRetry(() => import('./features/chat/pages/ChatHistoryPage'));
+const SharedChatPage = lazyWithRetry(() => import('./features/chat/pages/SharedChatPage'));
 // Lazy load workflow components
 const WorkflowsPage = lazyWithRetry(() => import('./features/workflows/pages/WorkflowsPage'));
 const SetupWizard = lazyWithRetry(() => import('./features/setup/SetupWizard'));
@@ -379,6 +380,18 @@ function App() {
 
         {/* Standalone login page — rendered outside Layout (no sidebar/header) */}
         <Route path="login" element={<LoginPage />} />
+
+        {/* A shared chat — rendered outside Layout: a public share opens with
+            nobody signed in, and the shell has nothing to show such a visitor.
+            The server decides per link who may open it. */}
+        <Route
+          path="share/:shareId"
+          element={
+            <Suspense fallback={<AdminLoading />}>
+              <SharedChatPage />
+            </Suspense>
+          }
+        />
 
         {/* First-run setup wizard — rendered outside Layout */}
         <Route

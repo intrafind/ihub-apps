@@ -29,6 +29,14 @@ import {
   chatRetentionSettings,
   isChatPersistenceConfigured
 } from '../../services/chat/chatPersistence.js';
+import {
+  CHAT_SHARING_FEATURE,
+  chatSharingSettings,
+  isChatSharingConfigured,
+  shareState
+} from '../../services/chat/chatSharing.js';
+import { getChatShareRepository, isShareId } from '../../services/chat/ChatShareRepository.js';
+import { sendNotFound } from '../../utils/responseHelpers.js';
 import { sweepChats } from '../../services/chat/chatRetention.js';
 import { collectChatStats } from '../../services/chat/chatAdminStats.js';
 import { getRunSummaryRepository } from '../../services/runtime/RunSummaryRepository.js';
@@ -62,12 +70,32 @@ const runLogSettingsSchema = z
   .partial()
   .strict();
 
+// The sharing block lives under `platform.chats.sharing` but is edited as its
+// own form section, so it travels as its own block here. Day and view caps
+// are integers; zero or less is the documented "no cap".
+const sharingSettingsSchema = z
+  .object({
+    enabled: z.boolean(),
+    allowUsers: z.boolean(),
+    allowAuthenticated: z.boolean(),
+    allowPublic: z.boolean(),
+    defaultExpiryDays: z.number().int(),
+    maxExpiryDays: z.number().int(),
+    maxViewsCap: z.number().int()
+  })
+  .partial()
+  .strict();
+
 const settingsBodySchema = z
   .object({
     chats: chatsSettingsSchema.optional(),
-    runLog: runLogSettingsSchema.optional()
+    runLog: runLogSettingsSchema.optional(),
+    sharing: sharingSettingsSchema.optional()
   })
   .strict();
+
+/** Most shares the admin listing returns. */
+const ADMIN_SHARES_LIMIT = 200;
 
 const retentionRunSchema = z
   .object({ target: z.enum(['chats', 'ledger', 'all']).optional() })
@@ -90,6 +118,7 @@ function resolveSettings(platform) {
       enabled: chats.enabled !== false,
       ...chatRetentionSettings(platform)
     },
+    sharing: chatSharingSettings(platform),
     runLog: {
       enabled: ledger.enabled !== false,
       identityMode: ledger.identityMode || 'default',
@@ -122,10 +151,14 @@ function resolveStatus(platform, features) {
   }
   const featureChatPersistence = isFeatureEnabled(CHAT_PERSISTENCE_FEATURE, features);
   const featureRunLog = isFeatureEnabled('runLog', features);
+  const featureChatSharing = isFeatureEnabled(CHAT_SHARING_FEATURE, features);
   const chatPersistenceActive = isChatPersistenceConfigured(features, platform);
   return {
     featureChatPersistence,
     featureRunLog,
+    featureChatSharing,
+    sharingEnabled: chatSharingSettings(platform).enabled !== false,
+    chatSharingActive: isChatSharingConfigured(features, platform),
     chatsEnabled: platform?.chats?.enabled !== false,
     runLogEnabled: platform?.runLog?.enabled !== false,
     storageReady: isStorageReady() === true,
@@ -149,14 +182,15 @@ export default function registerAdminChatHistoryRoutes(app) {
       const platform = configCache.getPlatform?.() || {};
       const features = configCache.getFeatures?.() || {};
       const settings = resolveSettings(platform);
-      const [chats, ledger] = await Promise.all([
+      const [chats, ledger, shares] = await Promise.all([
         collectChatStats({ repository: getChatRepository(), settings: settings.chats }),
-        getRunSummaryRepository().stats()
+        getRunSummaryRepository().stats(),
+        getChatShareRepository().collectStats()
       ]);
       res.json({
         settings,
         status: resolveStatus(platform, features),
-        stats: { chats, ledger },
+        stats: { chats, ledger, shares },
         generatedAt: new Date().toISOString()
       });
     } catch (error) {
@@ -180,7 +214,7 @@ export default function registerAdminChatHistoryRoutes(app) {
       );
     }
     try {
-      const { chats, runLog: ledger } = parsed.data;
+      const { chats, runLog: ledger, sharing } = parsed.data;
       const platformConfig = await configStore.readJson('config/platform.json');
       if (!platformConfig) throw new Error('Unable to read config/platform.json');
 
@@ -198,6 +232,26 @@ export default function registerAdminChatHistoryRoutes(app) {
           platformConfig[block] = { ...(platformConfig[block] || {}), [key]: value };
           changed.push(`${block}.${key}`);
         }
+      }
+      // The sharing form section is `platform.chats.sharing` on disk.
+      const nextSharing = { ...current.sharing, ...(sharing || {}) };
+      if (
+        nextSharing.defaultExpiryDays > 0 &&
+        nextSharing.maxExpiryDays > 0 &&
+        nextSharing.defaultExpiryDays > nextSharing.maxExpiryDays
+      ) {
+        return sendBadRequest(
+          res,
+          'Invalid chat history settings: sharing.defaultExpiryDays must not exceed sharing.maxExpiryDays'
+        );
+      }
+      for (const [key, value] of Object.entries(sharing || {})) {
+        if (current.sharing[key] === value) continue;
+        platformConfig.chats = {
+          ...(platformConfig.chats || {}),
+          sharing: { ...(platformConfig.chats?.sharing || {}), [key]: value }
+        };
+        changed.push(`chats.sharing.${key}`);
       }
 
       if (changed.length > 0) {
@@ -226,6 +280,67 @@ export default function registerAdminChatHistoryRoutes(app) {
       return sendInternalError(res, error, 'update chat history settings');
     }
   });
+
+  /**
+   * GET /api/admin/chat-history/shares
+   * The newest shares across the installation, with their state — for
+   * support and compliance. Bounded; `truncated` says when the walk was cut.
+   */
+  app.get(buildServerPath('/api/admin/chat-history/shares'), adminAuth, async (_req, res) => {
+    try {
+      const now = Date.now();
+      const { shares, truncated } = await getChatShareRepository().scanShares();
+      const items = shares.slice(0, ADMIN_SHARES_LIMIT).map(share => ({
+        id: share.id,
+        chatId: share.chatId,
+        ownerId: share.ownerId,
+        ownerName: share.ownerName || null,
+        appId: share.appId || null,
+        title: share.title || '',
+        mode: share.mode,
+        state: shareState(share, now),
+        recipientCount: Array.isArray(share.recipients) ? share.recipients.length : 0,
+        createdAt: share.createdAt,
+        expiresAt: share.expiresAt || null,
+        revokedAt: share.revokedAt || null,
+        maxViews: share.maxViews || null,
+        viewCount: share.viewCount || 0,
+        lastViewedAt: share.lastViewedAt || null
+      }));
+      res.json({ items, truncated: truncated || shares.length > ADMIN_SHARES_LIMIT });
+    } catch (error) {
+      return sendInternalError(res, error, 'list chat shares');
+    }
+  });
+
+  /**
+   * DELETE /api/admin/chat-history/shares/:shareId
+   * Revoke any share. The owner's own revoke goes through
+   * `DELETE /api/shares/:shareId`; this is the admin's, and it is audited as
+   * such.
+   */
+  app.delete(
+    buildServerPath('/api/admin/chat-history/shares/:shareId'),
+    adminAuth,
+    async (req, res) => {
+      try {
+        const { shareId } = req.params;
+        if (!isShareId(shareId)) return sendNotFound(res, 'Share');
+        const revoked = await getChatShareRepository().revokeShare(shareId);
+        if (!revoked) return sendNotFound(res, 'Share');
+        logAudit({
+          req,
+          action: 'delete',
+          resource: 'chatShare',
+          resourceId: shareId,
+          summary: `Admin revoked share of chat ${revoked.chatId} (${revoked.mode})`
+        });
+        res.json({ ok: true, share: { ...revoked, views: undefined, state: 'revoked' } });
+      } catch (error) {
+        return sendInternalError(res, error, 'revoke chat share');
+      }
+    }
+  );
 
   /**
    * POST /api/admin/chat-history/retention/run
