@@ -102,6 +102,12 @@ function resolveUser(req) {
  * @throws {McpAppAccessError}
  */
 export async function resolveMcpApp(req, appId, toolId) {
+  // The routes validate both with zod already; checked again here because a
+  // query parameter can also arrive as an array (`?toolId=a&toolId=b`), and
+  // everything below treats them as strings.
+  if (typeof appId !== 'string' || typeof toolId !== 'string') {
+    throw new McpAppAccessError(400, 'Invalid app or tool id');
+  }
   const user = resolveUser(req);
   if (!user) throw new McpAppAccessError(401, 'Authentication required');
 

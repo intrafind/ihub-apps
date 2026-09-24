@@ -33,7 +33,8 @@ jest.unstable_mockModule('../../utils/logger.js', () => ({
   default: { info: jest.fn(), warn: jest.fn(), error: jest.fn(), debug: jest.fn() }
 }));
 
-const { default: registerMcpAppRoutes } = await import('../../routes/mcpAppRoutes.js');
+const { default: registerMcpAppRoutes, resolveMcpApp } =
+  await import('../../routes/mcpAppRoutes.js');
 
 const app = express();
 app.use(express.json());
@@ -165,6 +166,28 @@ describe('GET /api/mcp-apps/resource', () => {
     apps = [{ id: 'whiteboard', tools: ['excalidraw'] }];
     const res = await asUser(request(app).get('/api/mcp-apps/resource').query(ref));
     expect(res.status).toBe(200);
+  });
+});
+
+describe('resolveMcpApp', () => {
+  it('rejects ids that are not strings (a repeated query parameter arrives as an array)', async () => {
+    const req = { user: { id: 'u1', permissions: {} } };
+    await expect(resolveMcpApp(req, 'whiteboard', ['a', 'b'])).rejects.toMatchObject({
+      status: 400
+    });
+    await expect(
+      resolveMcpApp(req, ['whiteboard'], 'excalidraw__create_view')
+    ).rejects.toMatchObject({ status: 400 });
+    expect(findTool).not.toHaveBeenCalled();
+  });
+
+  it('rejects a repeated toolId query parameter at the route', async () => {
+    const res = await asUser(
+      request(app).get(
+        '/api/mcp-apps/resource?appId=whiteboard&toolId=excalidraw__create_view&toolId=x'
+      )
+    );
+    expect(res.status).toBe(400);
   });
 });
 
