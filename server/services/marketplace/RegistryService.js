@@ -21,6 +21,7 @@ import { validateCatalog } from '../../validators/catalogSchema.js';
 import { validateRegistryConfig } from '../../validators/registryConfigSchema.js';
 import tokenStorageService from '../TokenStorageService.js';
 import logger from '../../utils/logger.js';
+import { getLocalContentIds, installationStatusFor } from './localContent.js';
 
 const COMPONENT = 'RegistryService';
 
@@ -790,7 +791,7 @@ class RegistryService {
    * @param {string} [filters.search] - Case-insensitive substring search against name and description
    * @param {string} [filters.category] - Filter by category string
    * @param {string} [filters.registry] - Filter by registry ID
-   * @param {string} [filters.status] - Filter by installation status ('installed'|'available'|'all')
+   * @param {string} [filters.status] - Filter by installation status ('installed'|'local'|'available'|'all')
    * @param {number|string} [filters.page=1] - Page number (1-based)
    * @param {number|string} [filters.limit=24] - Items per page
    * @returns {Promise<{ items: Array, total: number, page: number, limit: number, totalPages: number }>}
@@ -802,9 +803,9 @@ class RegistryService {
     const registries = registriesData?.registries || [];
     const installations = installationsData?.installations || {};
 
-    // Build a set of skill names already present on disk (from defaults or manual copy)
-    const { data: diskSkills } = cc.getSkills();
-    const diskSkillNames = new Set((diskSkills || []).map(s => s.name));
+    // Items already on this instance (shipped defaults, hand-made or copied
+    // files) that the marketplace did not install
+    const localIds = getLocalContentIds(cc);
 
     const allItems = [];
 
@@ -818,13 +819,13 @@ class RegistryService {
       for (const item of items) {
         const key = `${item.type}:${item.name}`;
         const installation = installations[key];
-        const onDisk = item.type === 'skill' && diskSkillNames.has(item.name);
+        const existsLocally = !!localIds[item.type]?.has(item.name);
 
         allItems.push({
           ...item,
           registryId: registry.id,
           registryName: registry.name,
-          installationStatus: installation || onDisk ? 'installed' : 'available',
+          installationStatus: installationStatusFor(installation, existsLocally),
           installation: installation || null
         });
       }
@@ -884,9 +885,8 @@ class RegistryService {
     const { data: installationsData } = cc.getInstallations();
     const installations = installationsData?.installations || {};
 
-    // Check if skill is present on disk even if not tracked in installations.json
-    const { data: diskSkills } = cc.getSkills();
-    const diskSkillNames = new Set((diskSkills || []).map(s => s.name));
+    // An item can be present without the marketplace having installed it
+    const localIds = getLocalContentIds(cc);
 
     const cached = await this.getCachedCatalogAsync(registryId);
     if (!cached) throw new Error(`No cached catalog for registry '${registryId}'`);
@@ -896,7 +896,7 @@ class RegistryService {
 
     const key = `${type}:${name}`;
     const installation = installations[key];
-    const onDisk = type === 'skill' && diskSkillNames.has(name);
+    const existsLocally = !!localIds[type]?.has(name);
 
     // Look up the registry config so we can fetch a content preview
     const { data: registriesData } = cc.getRegistries();
@@ -945,7 +945,7 @@ class RegistryService {
       ...item,
       registryId,
       registryName: registry?.name,
-      installationStatus: installation || onDisk ? 'installed' : 'available',
+      installationStatus: installationStatusFor(installation, existsLocally),
       installation: installation || null,
       contentPreview
     };

@@ -232,6 +232,7 @@ function AdminMarketplacePage() {
                   <option value="installed">
                     {t('admin.marketplace.statusInstalled', 'Installed')}
                   </option>
+                  <option value="local">{t('admin.marketplace.statusLocal', 'Local copy')}</option>
                 </select>
               </div>
 

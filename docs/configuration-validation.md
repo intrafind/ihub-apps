@@ -224,6 +224,11 @@ Validates marketplace catalog documents fetched from a registry's `catalog.json`
   - `url`: Absolute URL with optional companion files
 - **Metadata**: Version, author, category, tags, license, minimum iHub version
 
+**On install:** each item's content is validated against the schema of its type (app, model,
+prompt or workflow) before anything is written, and its `id` must equal the item's `name`. An item
+whose `name` matches one already on the instance that the marketplace did not install is shown as
+**Local copy**, and replacing it needs confirmation (`replaceLocal: true` on the install request).
+
 **Example Valid Configuration:**
 ```json
 {
