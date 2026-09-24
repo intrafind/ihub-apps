@@ -15,10 +15,15 @@
  * - dir: subdirectory under contents/ where files live
  * - ext: file extension for JSON-based types (null for skills)
  * - cacheRefresh: ConfigCache method name to call after write
- * - validate: async validation function returning { success, errors }
+ * - validate: validation function returning { success, errors }
  *
  * Skills are directory-based (contents/skills/{name}/), not single-file.
- * Model configs have their apiKey stripped on install for security.
+ * Model configs have their apiKey stripped on install for security; a model
+ * written over an existing one keeps that one's apiKey and `default` flag.
+ *
+ * An item that already exists on this instance without having been installed
+ * from the marketplace (a shipped default, or something an admin made) is
+ * only replaced when the caller passes `replaceLocal`.
  *
  * @module services/marketplace/ContentInstaller
  */
@@ -30,7 +35,12 @@ import { isValidId, resolveAndValidatePath } from '../../utils/pathSecurity.js';
 import { getRootDir } from '../../pathUtils.js';
 import config from '../../config.js';
 import registryService from './RegistryService.js';
+import { getLocalContentIds } from './localContent.js';
 import logger from '../../utils/logger.js';
+import { appConfigSchema } from '../../validators/appConfigSchema.js';
+import { modelConfigSchema } from '../../validators/modelConfigSchema.js';
+import { promptConfigSchema } from '../../validators/promptConfigSchema.js';
+import { workflowConfigSchema } from '../../validators/workflowConfigSchema.js';
 
 const COMPONENT = 'ContentInstaller';
 
@@ -60,6 +70,27 @@ function contentRelPath(name, typeConfig) {
 }
 
 /**
+ * A `validate` function for CONTENT_CONFIG backed by one of the config
+ * schemas the loaders use, so the installer accepts exactly what the running
+ * server would load without a validation warning.
+ *
+ * @param {import('zod').ZodTypeAny} schema
+ * @returns {(data: unknown) => { success: boolean, errors?: string[] }}
+ */
+function schemaValidator(schema) {
+  return data => {
+    const result = schema.safeParse(data);
+    if (result.success) return { success: true };
+    return {
+      success: false,
+      errors: result.error.issues.map(
+        issue => `${issue.path.join('.') || '(root)'}: ${issue.message}`
+      )
+    };
+  };
+}
+
+/**
  * Content type dispatch table.
  * Each entry describes how to store, validate, and cache-refresh a given type.
  *
@@ -70,47 +101,57 @@ const CONTENT_CONFIG = {
     dir: 'apps',
     ext: '.json',
     cacheRefresh: 'refreshAppsCache',
-    validate: async data => {
-      try {
-        const { validateAppConfig } = await import('../../validators/appConfigSchema.js');
-        return validateAppConfig ? validateAppConfig(data) : { success: true };
-      } catch {
-        return { success: true };
-      }
-    }
+    validate: schemaValidator(appConfigSchema)
   },
   model: {
     dir: 'models',
     ext: '.json',
     cacheRefresh: 'refreshModelsCache',
-    validate: async data => {
-      try {
-        const { validateModelConfig } = await import('../../validators/modelConfigSchema.js');
-        return validateModelConfig ? validateModelConfig(data) : { success: true };
-      } catch {
-        return { success: true };
-      }
-    }
+    validate: schemaValidator(modelConfigSchema)
   },
   prompt: {
     dir: 'prompts',
     ext: '.json',
     cacheRefresh: 'refreshPromptsCache',
-    validate: async () => ({ success: true })
+    validate: schemaValidator(promptConfigSchema)
   },
   skill: {
     dir: 'skills',
     ext: null, // Directory-based, not a single file
     cacheRefresh: 'refreshSkillsCache',
-    validate: async () => ({ success: true })
+    validate: () => ({ success: true })
   },
   workflow: {
     dir: 'workflows',
     ext: '.json',
     cacheRefresh: 'refreshWorkflowsCache',
-    validate: async () => ({ success: true })
+    validate: schemaValidator(workflowConfigSchema)
   }
 };
+
+/**
+ * Validate fetched content before it is written.
+ *
+ * Beyond the schema, a JSON item's `id` must equal its catalog name: the file
+ * is written as `<name>.json`, and a different `id` inside it would leave the
+ * item unreachable by the name the marketplace tracks it under.
+ *
+ * @param {string} type - Content type
+ * @param {string} name - Catalog item name
+ * @param {object|string} content - Fetched content
+ * @param {{ ext: string|null, validate: function }} typeConfig - Entry from CONTENT_CONFIG
+ * @throws {Error} Listing every problem found
+ */
+function assertValidContent(type, name, content, typeConfig) {
+  const validation = typeConfig.validate(content);
+  const errors = validation.success ? [] : [...(validation.errors || [])];
+  if (typeConfig.ext && content?.id !== undefined && content.id !== name) {
+    errors.push(`id: '${content.id}' does not match the catalog name '${name}'`);
+  }
+  if (errors.length > 0) {
+    throw new Error(`Content validation failed: ${errors.join(', ')}`);
+  }
+}
 
 // ---------------------------------------------------------------------------
 // Installations manifest helpers
@@ -310,20 +351,24 @@ class ContentInstaller {
    * Steps:
    * 1. Validate the item name is path-safe
    * 2. Check the item is not already installed
-   * 3. Fetch the item content from the registry
-   * 4. Validate the fetched content
-   * 5. Write the content to disk
-   * 6. Record the installation in installations.json
-   * 7. Refresh the relevant ConfigCache entry
+   * 3. Refuse to replace a local item of the same type and name, unless asked to
+   * 4. Fetch the item content from the registry
+   * 5. Validate the fetched content
+   * 6. Write the content to disk
+   * 7. Record the installation in installations.json
+   * 8. Refresh the relevant ConfigCache entry
    *
    * @param {string} registryId - Registry ID to install from
    * @param {string} type - Content type ('app'|'model'|'prompt'|'skill'|'workflow')
    * @param {string} name - Item name / identifier
    * @param {string} [installedBy='admin'] - Username of the installing admin for audit trail
+   * @param {{ replaceLocal?: boolean }} [options] - `replaceLocal: true` confirms
+   *   replacing an item that already exists on this instance
    * @returns {Promise<object>} The installation manifest entry
-   * @throws {Error} On validation failure, duplicate installation, or fetch error
+   * @throws {Error} On validation failure, duplicate installation, fetch error,
+   *   or — with `code: 'LOCAL_CONTENT_EXISTS'` — an unconfirmed local item
    */
-  async install(registryId, type, name, installedBy = 'admin') {
+  async install(registryId, type, name, installedBy = 'admin', { replaceLocal = false } = {}) {
     logger.info('Installing content item from registry', {
       component: COMPONENT,
       type,
@@ -348,13 +393,23 @@ class ContentInstaller {
       throw new Error(`${type} '${name}' is already installed. Use update to upgrade.`);
     }
 
+    // The same id may already exist here without the marketplace knowing it,
+    // e.g. a shipped default. Installing writes over it, so that takes an
+    // explicit confirmation.
+    const localIds = getLocalContentIds(await getConfigCache());
+    if (localIds[type]?.has(name) && !replaceLocal) {
+      const error = new Error(
+        `${type} '${name}' already exists on this instance and was not installed from the ` +
+          'marketplace. Installing replaces it; confirm the replacement to continue.'
+      );
+      error.code = 'LOCAL_CONTENT_EXISTS';
+      throw error;
+    }
+
     const { item, content } = await fetchItemContent(registryId, type, name);
 
     // Validate the fetched content against the schema for this type
-    const validation = await config.validate(content);
-    if (!validation.success) {
-      throw new Error(`Content validation failed: ${(validation.errors || []).join(', ')}`);
-    }
+    assertValidContent(type, name, content, config);
 
     await this._writeContent(type, name, content, config);
 
@@ -461,10 +516,7 @@ class ContentInstaller {
 
     const { item, content } = await fetchItemContent(existing.registryId, type, name);
 
-    const validation = await config.validate(content);
-    if (!validation.success) {
-      throw new Error(`Content validation failed: ${(validation.errors || []).join(', ')}`);
-    }
+    assertValidContent(type, name, content, config);
 
     await this._writeContent(type, name, content, config);
 
@@ -522,8 +574,17 @@ class ContentInstaller {
    * - If content has a `files` map, each key/value is written as a separate file
    * - If content is a plain string, it is written as SKILL.md
    *
-   * All other types are written as a single JSON file.
-   * Model configs have their `apiKey` field stripped before writing for security.
+   * All other types are written as a single JSON file, `<dir>/<name>.json`.
+   * When a document with the same id already exists — the marketplace's own
+   * copy on update, or a local one being replaced — it is written over; one
+   * stored under a different file name is removed afterwards so the id is not
+   * left in two files.
+   *
+   * Model configs have their `apiKey` field stripped before writing for
+   * security. The instance-level settings of the model being replaced carry
+   * over: its encrypted `apiKey` and its `default` flag, so installing or
+   * updating never drops a configured key and never changes which model is
+   * the system default. A model with no predecessor is written as non-default.
    *
    * @param {string} type - Content type
    * @param {string} name - Item name (safe path component, already validated)
@@ -555,19 +616,24 @@ class ContentInstaller {
         await fs.writeFile(path.join(skillDir, 'SKILL.md'), content, 'utf8');
       }
     } else {
+      const targetPath = contentRelPath(name, typeConfig);
+      const previousPath = await configStore.resolveIdToPath(typeConfig.dir, name, {
+        createIfMissing: false
+      });
+
       // Strip API keys from model configs before writing to disk for security
       let safeContent = content;
-      if (
-        type === 'model' &&
-        safeContent &&
-        typeof safeContent === 'object' &&
-        safeContent.apiKey
-      ) {
-        const { apiKey, ...rest } = safeContent;
-        safeContent = rest;
+      if (type === 'model' && safeContent && typeof safeContent === 'object') {
+        const { apiKey: _ignored, ...rest } = safeContent;
+        const previous = previousPath ? await configStore.readJson(previousPath) : null;
+        safeContent = { ...rest, default: previous?.default === true };
+        if (previous?.apiKey) safeContent.apiKey = previous.apiKey;
       }
 
-      await configStore.writeJson(contentRelPath(name, typeConfig), safeContent);
+      await configStore.writeJson(targetPath, safeContent);
+      if (previousPath && previousPath !== targetPath) {
+        await configStore.remove(previousPath);
+      }
     }
   }
 

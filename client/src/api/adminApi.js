@@ -848,12 +848,15 @@ export const fetchMarketplaceItemDetail = async (registryId, type, name) => {
  * @param {string} registryId - The registry ID the item belongs to
  * @param {string} type - The item type (app, model, prompt, skill, workflow)
  * @param {string} name - The item name identifier
+ * @param {Object} [options]
+ * @param {boolean} [options.replaceLocal=false] - Confirms replacing an item with the same
+ *   id that already exists on this instance (installationStatus 'local')
  * @returns {Promise<Object>} Result of the install operation
  */
-export const installMarketplaceItem = async (registryId, type, name) => {
+export const installMarketplaceItem = async (registryId, type, name, { replaceLocal } = {}) => {
   const response = await makeAdminApiCall(
     `/admin/marketplace/registries/${registryId}/items/${type}/${name}/_install`,
-    { method: 'POST' }
+    { method: 'POST', ...(replaceLocal ? { body: { replaceLocal: true } } : {}) }
   );
   return response.data;
 };

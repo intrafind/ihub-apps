@@ -176,17 +176,23 @@ class ModelDiscoveryService {
       // Get the first available model (vLLM typically serves one model at a time)
       const discoveredModel = data.data[0];
       const discoveredModelId = discoveredModel.id;
+      // vLLM reports the served context length here; OpenAI and most other
+      // OpenAI-compatible servers omit it. Only used as a fallback for models
+      // that declare no contextWindow — see getDiscoveredContextWindow().
+      const maxModelLen = Number(discoveredModel.max_model_len);
 
       logger.info('Successfully discovered model', {
         component: 'ModelDiscoveryService',
         modelConfigId: model.id,
         discoveredModelId,
+        maxModelLen: Number.isFinite(maxModelLen) ? maxModelLen : undefined,
         totalModelsAvailable: data.data.length
       });
 
       // Cache the result
       this.cache.set(model.id, {
         modelId: discoveredModelId,
+        maxModelLen: Number.isFinite(maxModelLen) && maxModelLen > 0 ? maxModelLen : null,
         timestamp: Date.now()
       });
 
@@ -270,6 +276,24 @@ class ModelDiscoveryService {
     }
 
     return discoveredModelId;
+  }
+
+  /**
+   * Context length reported by the endpoint on the last successful discovery.
+   *
+   * Read-only: never triggers a fetch, so callers outside the adapter path get
+   * a value only once discovery has run at least once for this model config.
+   * Returns null until then, and for endpoints that don't report the field.
+   *
+   * @param {string} modelConfigId
+   * @param {number} [cacheTtlMs]
+   * @returns {number|null} context length in tokens, or null if unknown
+   */
+  getDiscoveredContextWindow(modelConfigId, cacheTtlMs = this.DEFAULT_CACHE_TTL_MS) {
+    const cached = this.cache.get(modelConfigId);
+    if (!cached) return null;
+    if (Date.now() - cached.timestamp >= (cached.ttlMs ?? cacheTtlMs)) return null;
+    return cached.maxModelLen ?? null;
   }
 
   /**

@@ -345,7 +345,11 @@ export default function registerAdminMarketplaceRoutes(app) {
         if (!validateIdForPath(registryId, 'registryId', res)) return;
         if (!isValidId(name)) return sendError(res, 400, 'Invalid item name');
         const installedBy = req.user?.email || req.user?.username || 'admin';
-        const manifest = await contentInstaller.install(registryId, type, name, installedBy);
+        // Replacing an item that already exists here must be asked for explicitly
+        const replaceLocal = req.body?.replaceLocal === true;
+        const manifest = await contentInstaller.install(registryId, type, name, installedBy, {
+          replaceLocal
+        });
         logAudit({
           req,
           action: 'create',
@@ -356,7 +360,14 @@ export default function registerAdminMarketplaceRoutes(app) {
         res.status(201).json(manifest);
       } catch (error) {
         logger.error('Error installing item', { component: COMPONENT, error: error.message });
-        const status = error.message.includes('already installed') ? 409 : 500;
+        if (error.code === 'LOCAL_CONTENT_EXISTS') {
+          return sendError(res, 409, error.message, error.code);
+        }
+        const status = error.message.includes('already installed')
+          ? 409
+          : error.message.startsWith('Content validation failed')
+            ? 422
+            : 500;
         sendError(res, status, error.message);
       }
     }
@@ -386,7 +397,11 @@ export default function registerAdminMarketplaceRoutes(app) {
         res.json(manifest);
       } catch (error) {
         logger.error('Error updating item', { component: COMPONENT, error: error.message });
-        const status = error.message.includes('not installed') ? 404 : 500;
+        const status = error.message.includes('not installed')
+          ? 404
+          : error.message.startsWith('Content validation failed')
+            ? 422
+            : 500;
         sendError(res, status, error.message);
       }
     }
