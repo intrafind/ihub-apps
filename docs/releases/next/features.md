@@ -73,6 +73,22 @@ development, productivity, design, sales and support, data, and finance.
 - Servers that only allow each user to sign in with their own account (OAuth) are not in the
   catalog yet, because iHub connects with one shared credential per server.
 
+## Models: Reasoning Settings in the Model Form
+
+The model editor has a new **Reasoning** section, so reasoning models no longer have to be
+configured by hand-editing their JSON file. Without it, a reasoning model left its thinking in the
+middle of the answer instead of behind the **Show thinking** toggle.
+
+- **Enable reasoning** asks the model to think before answering and to return that thinking
+  separately from the answer.
+- **Reasoning effort** — minimal, low, medium or high, or the provider's default. It is sent as
+  `reasoning_effort` (OpenAI, vLLM) or `thinkingLevel` (Gemini); servers that do not support it
+  ignore the value, so leave it on the default unless the model documents these levels.
+- **Show reasoning** controls whether users can open the thinking at all.
+- The bundled **Local vLLM** model now has reasoning enabled. Self-hosted vLLM servers must be
+  started with a matching `--reasoning-parser` (for example `qwen3`), otherwise there is no
+  separate thinking for iHub to show.
+
 ## Models: Context Window Read From the Endpoint When Not Configured
 
 A model that declares no **Context Window** now uses the length its endpoint reports (vLLM's

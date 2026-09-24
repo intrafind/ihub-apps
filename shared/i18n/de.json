@@ -1133,7 +1133,15 @@
         "nativeWebSearchVersionBasic": "einfach (alle Claude-Modelle, Vertex AI, Foundry)",
         "nativeWebSearchVersionFiltering": "dynamische Filterung (ab Claude 4.6)",
         "nativeWebSearchVersionInclusion": "dynamische Filterung + Antwort-Einschluss (ab Claude 4.6)",
-        "nativeWebSearchDynamicFiltering": "Dynamische Filterung aktivieren"
+        "nativeWebSearchDynamicFiltering": "Dynamische Filterung aktivieren",
+        "thinkingEnabled": "Reasoning aktivieren",
+        "thinkingLevel": "Reasoning-Aufwand",
+        "thinkingLevelDefault": "Provider-Standard",
+        "thinkingLevelMinimal": "Minimal",
+        "thinkingLevelLow": "Niedrig",
+        "thinkingLevelMedium": "Mittel",
+        "thinkingLevelHigh": "Hoch",
+        "thinkingThoughts": "Reasoning anzeigen"
       },
       "hints": {
         "modelId": "Eindeutige Kennung für das Modell (kann nach der Erstellung nicht geändert werden)",
@@ -1151,7 +1159,10 @@
         "promptCachingOpenAI": "Sendet einen Cache-Schlüssel, damit Anfragen mit gleichem Prompt-Anfang den Cache von OpenAI wiederverwenden. Für api.openai.com standardmäßig an; für OpenAI-kompatible Server ausschalten, die unbekannte Parameter ablehnen.",
         "promptCachingExplicit": "Markiert Tools, System-Prompt und Unterhaltung zum Cachen. Gecachte Eingaben kosten etwa ein Zehntel normaler Eingaben, das Schreiben in den Cache aber ein Viertel mehr – das lohnt sich, wenn dieselbe App innerhalb von fünf Minuten erneut genutzt wird. Nur für Modelle, die Prompt-Caching unterstützen.",
         "nativeWebSearchToolVersion": "Neuere Versionen lassen Claude Suchergebnisse per Code filtern, bevor sie ins Kontextfenster gelangen, und sparen so Tokens bei suchintensiven Prompts. Google Cloud und in Azure gehostetes Foundry bieten nur die einfache Version.",
-        "nativeWebSearchDynamicFiltering": "Führt die Websuche aus der Code-Ausführung heraus aus (ab Claude 4.6 über die Claude API). Wenn aus, wird die neuere Tool-Version direkt aufgerufen."
+        "nativeWebSearchDynamicFiltering": "Führt die Websuche aus der Code-Ausführung heraus aus (ab Claude 4.6 über die Claude API). Wenn aus, wird die neuere Tool-Version direkt aufgerufen.",
+        "thinkingEnabled": "Das Modell vor der Antwort nachdenken lassen. Das Reasoning wird getrennt von der Antwort zurückgegeben; ohne diese Option schreibt ein Reasoning-Modell seine Gedanken stattdessen in den Antworttext.",
+        "thinkingLevel": "Wird als reasoning_effort (OpenAI, vLLM) bzw. thinkingLevel (Gemini) gesendet. Server ohne Unterstützung ignorieren den Wert — beim Provider-Standard belassen, sofern das Modell diese Stufen nicht dokumentiert.",
+        "thinkingThoughts": "Das Reasoning Nutzern hinter dem Umschalter „Denkprozess anzeigen“ zugänglich machen. Zum Verbergen deaktivieren."
       },
       "placeholders": {
         "selectProvider": "Anbieter auswählen",
@@ -1165,7 +1176,8 @@
         "imageGeneration": "Bilderzeugungseinstellungen",
         "nativeWebSearch": "Native Websuche",
         "promptCaching": "Prompt-Caching",
-        "providerConfig": "Anbieter-Einstellungen"
+        "providerConfig": "Anbieter-Einstellungen",
+        "thinking": "Reasoning"
       },
       "errors": {
         "invalidJson": "Ungültiges JSON"
