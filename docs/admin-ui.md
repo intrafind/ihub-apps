@@ -55,8 +55,10 @@ Press `g` followed by a letter within 300ms:
 | `n` | Create new item (on any list page) |
 | `?` | Show the full shortcut cheatsheet |
 | `Cmd+K` / `Ctrl+K` | Open the command palette |
+| `Cmd+S` / `Ctrl+S` | Save the app you are editing and stay in the editor |
 
-> Shortcuts do not fire when focus is in a text input or textarea.
+> Shortcuts do not fire when focus is in a text input or textarea. `Cmd+S` / `Ctrl+S` is the
+> exception: it saves from anywhere in the app editor.
 
 ---
 
@@ -123,6 +125,28 @@ Apps are the AI-powered tools your users interact with. Each app has its own sys
 - **Permissions** — which groups can access this app. The **Group access** card on the edit page shows the groups that already have access as chips, with a search box to grant more; every change saves immediately; see [Managing Groups](#managing-groups).
 
 **Enabling/disabling:** Use the toggle in the app list or the Enabled field on the edit page.
+
+**Saving:** **Save** (or `Cmd+S` / `Ctrl+S`) stores the app and keeps you in the editor, so you can
+keep tweaking it. **Save & Exit** stores it and returns to the app list. Saving a new app with
+**Save** moves the editor to the app's own address (`/admin/apps/<id>`); from then on History,
+Download, Open app and Test are available.
+
+**Opening an app:** **Open app** in the editor header, or the open icon in the app list, opens the
+app's chat page in a new tab. Disabled apps are not served to the chat, so for them the button is
+greyed out until the app is enabled (in the editor: enabled and saved).
+
+**Testing an app:** **Test** in the editor header opens the app's real chat page next to the
+editor (full screen on small screens), so you can check the start screen, send messages and see
+how the prompt, model, tools and sources behave without leaving the editor.
+
+- The test runs the **saved** version of the app — exactly what users get. While you have unsaved
+  changes the panel says so; save and it reloads with them.
+- Test chats are ordinary chats of your own account, stored and counted like any other chat you
+  have with the app.
+- Changes are live for users as soon as you save, so test risky changes on a cloned app.
+- The panel embeds iHub in a frame on the same origin. A reverse proxy that sends
+  `X-Frame-Options: DENY` or `Content-Security-Policy: frame-ancestors 'none'` blocks it;
+  `SAMEORIGIN` / `'self'` works. **Open app** is not affected.
 
 **Change history:** Every edit page has a **History** button. Click it to see a before/after diff of every saved change, including who made the change and when.
 
@@ -286,3 +310,4 @@ Go to **Platform → Updates** to:
 | `n` | New item on current list page |
 | `?` | Show shortcut cheatsheet |
 | `Cmd+K` / `Ctrl+K` | Open command palette |
+| `Cmd+S` / `Ctrl+S` | Save (in the app editor) |

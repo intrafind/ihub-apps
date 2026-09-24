@@ -2398,6 +2398,17 @@
         "autoStartHelp": "Wenn aktiviert, startet die App automatisch die Konversation, wenn der Chat geöffnet oder zurückgesetzt wird",
         "ephemeral": "Flüchtiger Chat",
         "ephemeralHelp": "Wenn aktiviert, wird der Chat nie gespeichert. Nachrichten existieren nur, solange der Chat geöffnet ist, und werden verworfen, wenn Sie die App wechseln oder neu laden.",
+        "test": "Testen",
+        "hideTest": "Test ausblenden",
+        "testHint": "Die gespeicherte App neben dem Editor ausprobieren",
+        "openDisabledHint": "Aktivieren und speichern Sie die App, um sie zu öffnen",
+        "save": "Speichern",
+        "saveAndExit": "Speichern & schließen",
+        "saveHint": "Speichern und weiter bearbeiten (Strg+S / ⌘S)",
+        "saving": "Wird gespeichert...",
+        "saved": "App gespeichert",
+        "created": "App erstellt",
+        "idRequired": "Die App-ID ist erforderlich",
         "mcpTools": {
           "title": "MCP-Server-Tools",
           "desc": "Aktivieren Sie Tools, die von verbundenen MCP-Servern bereitgestellt werden, für diese App.",
@@ -2481,6 +2492,19 @@
       "reorderHelp": "Ziehen Sie eine Zeile oder nutzen Sie die Pfeile, um die Reihenfolge festzulegen, in der Apps für Benutzer erscheinen – in der App-Übersicht, auf der Startseite und in der Seitenleiste. Es werden immer alle Apps aufgelistet, Suche und Filter gelten hier nicht. Gespeichert wird erst mit „Reihenfolge speichern“.",
       "saveOrder": "Reihenfolge speichern",
       "savingOrder": "Reihenfolge wird gespeichert...",
+      "openApp": "App öffnen",
+      "openAppHint": "App in einem neuen Tab öffnen",
+      "openDisabledHint": "Aktivieren Sie die App, um sie zu öffnen",
+      "test": {
+        "title": "App testen",
+        "subtitle": "Läuft mit der gespeicherten Version, so wie Benutzer sie sehen",
+        "loading": "App wird geladen...",
+        "reload": "Neu laden",
+        "close": "Testbereich schließen",
+        "unsavedHint": "Sie haben ungespeicherte Änderungen. Speichern Sie, um sie zu testen – der Test lädt nach jedem Speichern neu.",
+        "frameTitle": "Test von {{name}}",
+        "disabled": "Diese App ist deaktiviert und kann daher nicht im Chat geöffnet werden. Aktivieren und speichern Sie sie, um sie zu testen."
+      },
       "status": {
         "disabled": "Deaktiviert"
       }

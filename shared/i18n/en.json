@@ -2114,6 +2114,17 @@
         "autoStartHelp": "When enabled, the app will automatically start the conversation when the chat is opened or reset",
         "ephemeral": "Ephemeral chat",
         "ephemeralHelp": "When enabled, the chat is never stored. Messages exist only while the chat is open and are discarded when you switch apps or reload.",
+        "test": "Test",
+        "hideTest": "Hide test",
+        "testHint": "Chat with the saved app next to the editor",
+        "openDisabledHint": "Enable the app and save to open it",
+        "save": "Save",
+        "saveAndExit": "Save & Exit",
+        "saveHint": "Save and keep editing (Ctrl+S / ⌘S)",
+        "saving": "Saving...",
+        "saved": "App saved",
+        "created": "App created",
+        "idRequired": "App ID is required",
         "mcpTools": {
           "title": "MCP server tools",
           "desc": "Enable tools provided by connected MCP servers for this app.",
@@ -2197,6 +2208,19 @@
       "reorderHelp": "Drag a row or use the arrows to set the order apps appear in for users — in the apps browser, on the start page and in the sidebar. Every app is listed, so search and filters do not apply here. Nothing is saved until you choose \"Save order\".",
       "saveOrder": "Save order",
       "savingOrder": "Saving order...",
+      "openApp": "Open app",
+      "openAppHint": "Open the app in a new tab",
+      "openDisabledHint": "Enable the app to open it",
+      "test": {
+        "title": "Test app",
+        "subtitle": "Runs the saved version, as users see it",
+        "loading": "Loading app...",
+        "reload": "Reload",
+        "close": "Close test panel",
+        "unsavedHint": "You have unsaved changes. Save to test them — the test reloads after every save.",
+        "frameTitle": "Test of {{name}}",
+        "disabled": "This app is disabled, so it cannot be opened in the chat. Enable it and save to test it."
+      },
       "status": {
         "disabled": "Disabled"
       }
