@@ -72,3 +72,10 @@ development, productivity, design, sales and support, data, and finance.
   Authentication.
 - Servers that only allow each user to sign in with their own account (OAuth) are not in the
   catalog yet, because iHub connects with one shared credential per server.
+
+## Models: Context Window Read From the Endpoint When Not Configured
+
+A model that declares no **Context Window** now uses the length its endpoint reports (vLLM's
+`max_model_len` on `/v1/models`) instead of a conservative default, so long chats keep more history
+before older tool output is collapsed. A configured value always wins — lowering it deliberately
+still works, and endpoints that do not report a length are unaffected.
