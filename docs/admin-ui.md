@@ -200,7 +200,9 @@ answered is counted with a local estimate. **Data Quality** shows the share of p
 
 Providers keep a cache of recently seen prompt prefixes (system prompt, tool definitions, the start
 of the conversation). Input served from that cache is billed at a discount and answers faster.
-The **Prompt caching** panel on **Overview** shows:
+Whether iHub marks prompts for the cache is a per-model switch in the model editor (**Prompt
+Caching → Use prompt caching**; see [Models → Prompt Caching](models.md#prompt-caching)). The
+**Prompt caching** panel on **Overview** shows:
 
 - **Cache hit ratio** — cached input tokens divided by input tokens, counted over the models that
   report caching, so models without cache reporting don't dilute it.

@@ -1053,7 +1053,7 @@ Both fields support the same global prompt variables as system prompts — built
 
 ```json
 "iassistant": {
-  "extraContext": "You are talking to {{user_name}} ({{user_email}}). Today is {{date}} ({{date_iso}}), the user's timezone is {{timezone}}."
+  "extraContext": "You are talking to {{user_name}} ({{user_email}}). Today is {{date}} ({{date_iso}})."
 }
 ```
 

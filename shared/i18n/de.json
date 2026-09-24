@@ -1070,6 +1070,7 @@
         "maxReferenceImages": "Max. Referenzbilder",
         "modelType": "Modelltyp",
         "nativeWebSearchEnabled": "Native Websuche verwenden",
+        "promptCachingEnabled": "Prompt-Caching verwenden",
         "nativeWebSearchToolVersion": "Version des Websuche-Tools",
         "nativeWebSearchVersionBasic": "einfach (alle Claude-Modelle, Vertex AI, Foundry)",
         "nativeWebSearchVersionFiltering": "dynamische Filterung (ab Claude 4.6)",
@@ -1089,6 +1090,8 @@
         "modelType": "Chat-Modelle beantworten Prompts. Transkriptionsmodelle wandeln Audio über einen Echtzeit-Endpunkt (z. B. Voxtral) in Text um.",
         "realtimeUrl": "WebSocket-URL des vLLM-Echtzeit-Endpunkts. Sie bleibt serverseitig und erreicht niemals den Browser.",
         "nativeWebSearch": "Apps mit Websuche verwenden auf diesem Modell die integrierte Suche des Anbieters. Für Modelle oder Gateways ohne Unterstützung ausschalten; sie greifen dann auf Brave Search zurück.",
+        "promptCachingOpenAI": "Sendet einen Cache-Schlüssel, damit Anfragen mit gleichem Prompt-Anfang den Cache von OpenAI wiederverwenden. Für api.openai.com standardmäßig an; für OpenAI-kompatible Server ausschalten, die unbekannte Parameter ablehnen.",
+        "promptCachingExplicit": "Markiert Tools, System-Prompt und Unterhaltung zum Cachen. Gecachte Eingaben kosten etwa ein Zehntel normaler Eingaben, das Schreiben in den Cache aber ein Viertel mehr – das lohnt sich, wenn dieselbe App innerhalb von fünf Minuten erneut genutzt wird. Nur für Modelle, die Prompt-Caching unterstützen.",
         "nativeWebSearchToolVersion": "Neuere Versionen lassen Claude Suchergebnisse per Code filtern, bevor sie ins Kontextfenster gelangen, und sparen so Tokens bei suchintensiven Prompts. Google Cloud und in Azure gehostetes Foundry bieten nur die einfache Version.",
         "nativeWebSearchDynamicFiltering": "Führt die Websuche aus der Code-Ausführung heraus aus (ab Claude 4.6 über die Claude API). Wenn aus, wird die neuere Tool-Version direkt aufgerufen."
       },
@@ -1103,6 +1106,7 @@
       "sections": {
         "imageGeneration": "Bilderzeugungseinstellungen",
         "nativeWebSearch": "Native Websuche",
+        "promptCaching": "Prompt-Caching",
         "providerConfig": "Anbieter-Einstellungen"
       },
       "errors": {

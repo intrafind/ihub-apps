@@ -11,6 +11,10 @@ import Icon from '../../../shared/components/Icon';
 import { getAdminApiErrorMessage, makeAdminApiCall } from '../../../api/adminApi';
 import AdminFormErrorSummary from './AdminFormErrorSummary';
 import { FormValidationProvider } from '../../../shared/contexts/formValidationContext';
+import {
+  isPromptCachingEnabled,
+  supportsPromptCaching
+} from '../../../../../shared/promptCaching.js';
 
 /**
  * Editor for a JSON-typed provider config field. Keeps the raw textarea contents in
@@ -894,6 +898,48 @@ function ModelFormEditor({
                     </div>
                   </fieldset>
                 </div>
+
+                {supportsPromptCaching(data.provider) && (
+                  <div className="col-span-6">
+                    <fieldset>
+                      <legend className="text-base font-medium text-gray-900 dark:text-gray-100">
+                        {t('admin.models.sections.promptCaching', 'Prompt Caching')}
+                      </legend>
+                      <div className="mt-4 flex items-start">
+                        <div className="flex items-center h-5">
+                          <input
+                            id="promptCaching.enabled"
+                            type="checkbox"
+                            checked={isPromptCachingEnabled(data)}
+                            onChange={e =>
+                              handleChange('promptCaching', { enabled: e.target.checked })
+                            }
+                            className="focus:ring-indigo-500 h-4 w-4 text-indigo-600 border-gray-300 dark:border-gray-600 rounded-sm"
+                          />
+                        </div>
+                        <div className="ml-3 text-sm">
+                          <label
+                            htmlFor="promptCaching.enabled"
+                            className="font-medium text-gray-700 dark:text-gray-300"
+                          >
+                            {t('admin.models.fields.promptCachingEnabled', 'Use prompt caching')}
+                          </label>
+                          <p className="text-gray-500 dark:text-gray-400">
+                            {data.provider === 'openai' || data.provider === 'openai-responses'
+                              ? t(
+                                  'admin.models.hints.promptCachingOpenAI',
+                                  'Sends a cache key so requests that start with the same prompt reuse OpenAI’s cache. On by default for api.openai.com; turn it off for OpenAI-compatible servers that reject unknown parameters.'
+                                )
+                              : t(
+                                  'admin.models.hints.promptCachingExplicit',
+                                  'Marks the tools, system prompt and conversation for caching. Cached input costs about a tenth of normal input, but writing it costs a quarter more, so this pays off when the same app is used again within five minutes. Only for models that support prompt caching.'
+                                )}
+                          </p>
+                        </div>
+                      </div>
+                    </fieldset>
+                  </div>
+                )}
 
                 {/* Image Generation Configuration */}
                 {['anthropic', 'google', 'openai-responses'].includes(data.provider) && (

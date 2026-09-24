@@ -194,6 +194,9 @@ class OpenAIResponsesAdapterClass extends BaseAdapter {
       body.tools = responsesTools;
     }
     if (toolChoice) body.tool_choice = toolChoice;
+    // Prompt caching is automatic; the key routes requests sharing a prefix
+    // to the same cache (see adapters/promptCaching.js).
+    if (options.promptCache?.key) body.prompt_cache_key = options.promptCache.key;
 
     // Structured outputs use text.format instead of response_format
     if (responseSchema) {

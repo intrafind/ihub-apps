@@ -272,6 +272,8 @@ class AnthropicAdapterClass extends BaseAdapter {
       requestBody.system = systemPrompt;
     }
 
+    if (options.promptCache) applyCacheBreakpoints(requestBody);
+
     // Note: Request body logging disabled to prevent exposing sensitive data in logs
     // logger.info('Anthropic request body:', JSON.stringify(requestBody, null, 2));
 
@@ -285,6 +287,59 @@ class AnthropicAdapterClass extends BaseAdapter {
       },
       body: requestBody
     };
+  }
+}
+
+/** 5-minute cache (Anthropic's default TTL); writes cost 1.25x input, reads 0.1x. */
+const EPHEMERAL = Object.freeze({ type: 'ephemeral' });
+
+/** Content blocks that accept `cache_control` in a user message. */
+const CACHEABLE_BLOCKS = new Set(['text', 'image', 'document', 'tool_result', 'tool_use']);
+
+/**
+ * Mark what Anthropic may cache, in prompt order (tools → system → messages),
+ * with three of the four breakpoints a request may carry:
+ *
+ * 1. the last tool definition — caches every tool;
+ * 2. the end of the system prompt — survives changes further down;
+ * 3. the last block of the latest user message — a moving breakpoint: the next
+ *    turn of the conversation finds this one within Anthropic's look-back and
+ *    reads everything before it from the cache.
+ *
+ * A prefix below the model's minimum cacheable length is simply not cached;
+ * Anthropic neither fails the request nor charges a write for it.
+ *
+ * @param {Object} body - Messages API request body (mutated)
+ */
+export function applyCacheBreakpoints(body) {
+  if (Array.isArray(body.tools) && body.tools.length > 0) {
+    const last = body.tools.length - 1;
+    body.tools[last] = { ...body.tools[last], cache_control: EPHEMERAL };
+  }
+
+  if (typeof body.system === 'string' && body.system.trim()) {
+    body.system = [{ type: 'text', text: body.system, cache_control: EPHEMERAL }];
+  }
+
+  const lastMessage = body.messages?.[body.messages.length - 1];
+  if (lastMessage?.role !== 'user') return;
+  if (typeof lastMessage.content === 'string') {
+    if (lastMessage.content.trim()) {
+      body.messages[body.messages.length - 1] = {
+        ...lastMessage,
+        content: [{ type: 'text', text: lastMessage.content, cache_control: EPHEMERAL }]
+      };
+    }
+    return;
+  }
+  if (Array.isArray(lastMessage.content) && lastMessage.content.length > 0) {
+    const blocks = [...lastMessage.content];
+    const i = blocks.length - 1;
+    const block = blocks[i];
+    if (!CACHEABLE_BLOCKS.has(block?.type)) return;
+    if (block.type === 'text' && !block.text?.trim()) return;
+    blocks[i] = { ...block, cache_control: EPHEMERAL };
+    body.messages[body.messages.length - 1] = { ...lastMessage, content: blocks };
   }
 }
 

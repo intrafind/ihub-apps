@@ -812,6 +812,7 @@
         "maxReferenceImages": "Max Reference Images",
         "modelType": "Model Type",
         "nativeWebSearchEnabled": "Use native web search",
+        "promptCachingEnabled": "Use prompt caching",
         "nativeWebSearchToolVersion": "Web search tool version",
         "nativeWebSearchVersionBasic": "basic (all Claude models, Vertex AI, Foundry)",
         "nativeWebSearchVersionFiltering": "dynamic filtering (Claude 4.6 and later)",
@@ -831,6 +832,8 @@
         "modelType": "Chat models answer prompts. Transcription models convert audio to text via a realtime endpoint (e.g. Voxtral).",
         "realtimeUrl": "WebSocket URL of the vLLM realtime endpoint. It stays server-side and never reaches the browser.",
         "nativeWebSearch": "Apps with web search use the provider's built-in search on this model. Turn it off for models or gateways that do not support it; they fall back to Brave Search.",
+        "promptCachingOpenAI": "Sends a cache key so requests that start with the same prompt reuse OpenAI’s cache. On by default for api.openai.com; turn it off for OpenAI-compatible servers that reject unknown parameters.",
+        "promptCachingExplicit": "Marks the tools, system prompt and conversation for caching. Cached input costs about a tenth of normal input, but writing it costs a quarter more, so this pays off when the same app is used again within five minutes. Only for models that support prompt caching.",
         "nativeWebSearchToolVersion": "Newer versions let Claude filter search results in code before they reach the context window, which saves tokens on search-heavy prompts. Google Cloud and Azure-hosted Foundry only offer the basic version.",
         "nativeWebSearchDynamicFiltering": "Runs web search from code execution (Claude 4.6 or later on the Claude API). When off, the newer tool version is called directly."
       },
@@ -845,6 +848,7 @@
       "sections": {
         "imageGeneration": "Image Generation Settings",
         "nativeWebSearch": "Native Web Search",
+        "promptCaching": "Prompt Caching",
         "providerConfig": "Provider Settings"
       },
       "errors": {
