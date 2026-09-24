@@ -47,7 +47,9 @@ function ChatMessageList({
   linkPath = null,
   showAvatars = true,
   // A shared, read-only transcript — see ChatMessage.
-  readOnly = false
+  readOnly = false,
+  // What MCP App views may do in the composer — see ChatMessage.
+  mcpAppHost = null
 }) {
   const { t } = useTranslation();
   const chatContainerRef = useRef(null);
@@ -199,6 +201,7 @@ function ChatMessageList({
                 onClarificationSkip={onClarificationSkip}
                 onDocumentAction={onDocumentAction}
                 linkPath={linkPath}
+                mcpAppHost={mcpAppHost}
               />
             </div>
           </div>

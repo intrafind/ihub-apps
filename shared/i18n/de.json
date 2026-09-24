@@ -2234,7 +2234,8 @@
           "running": "Verbindung wird getestet …",
           "success": "Verbunden — {{count}} Tools gefunden",
           "failed": "Verbindung fehlgeschlagen: {{error}}",
-          "noTools": "Der Server ist verbunden, stellt aber keine Tools bereit (oder alle wurden durch die Allowlist gefiltert)."
+          "noTools": "Der Server ist verbunden, stellt aber keine Tools bereit (oder alle wurden durch die Allowlist gefiltert).",
+          "rendersView": "interaktive Ansicht"
         },
         "status": {
           "unknown": "unbekannt",
@@ -2264,6 +2265,8 @@
           "toolPrefix": "Tool-Präfix",
           "timeout": "Timeout (ms)",
           "allowedTools": "Erlaubte Tools (kommagetrennt oder *)",
+          "appsEnabled": "Interaktive Ansichten anzeigen (MCP Apps)",
+          "appsEnabledHint": "Kündigt die MCP-Apps-Erweiterung an und zeigt die interaktiven Ansichten, die die Tools dieses Servers deklarieren, direkt im Chat an. Deaktivieren für reine Textergebnisse.",
           "transportStreamableHttp": "Streamable HTTP (empfohlen)",
           "transportSse": "SSE (veraltet)",
           "transportStdio": "stdio",
@@ -3910,6 +3913,16 @@
     "stopped": "Abgebrochen",
     "moreValues_one": "+{{count}} weiterer",
     "moreValues_other": "+{{count}} weitere"
+  },
+  "mcpApps": {
+    "caption": "Interaktive Ansicht · {{name}}",
+    "loading": "Interaktive Ansicht wird geladen…",
+    "loadFailed": "Die interaktive Ansicht konnte nicht geladen werden: {{error}}",
+    "payloadOmitted": "Diese interaktive Ansicht war zu groß zum Speichern und kann nicht erneut angezeigt werden.",
+    "unsupportedSurface": "Interaktive Ansichten sind in diesem Fenster nicht verfügbar.",
+    "exitFullscreen": "Vollbild beenden",
+    "frameTitle": "Interaktive Ansicht: {{name}}",
+    "readOnly": "Interaktive Ansicht „{{name}}“ – öffnen Sie den Chat, um sie zu verwenden."
   },
   "shareDialog": {
     "title": "Teilen",

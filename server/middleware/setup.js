@@ -618,6 +618,7 @@ export function setupMiddleware(app, platformConfig = {}) {
   app.use(buildApiPath('/shares'), rateLimiters.publicApiLimiter);
   app.use(buildApiPath('/users'), rateLimiters.publicApiLimiter);
   app.use(buildApiPath('/tools'), rateLimiters.publicApiLimiter);
+  app.use(buildApiPath('/mcp-apps'), rateLimiters.publicApiLimiter);
   app.use(buildApiPath('/models'), rateLimiters.publicApiLimiter);
   app.use(buildApiPath('/prompts'), rateLimiters.publicApiLimiter);
   app.use(buildApiPath('/styles'), rateLimiters.publicApiLimiter);

@@ -58,6 +58,7 @@ function ChatCheckpoint({ executionId, checkpoint }) {
 }
 import AnswerSourceBadge from './AnswerSourceBadge';
 import ExportDialog from './ExportDialog';
+import McpAppViews from '../mcpApps/McpAppViews';
 import './ChatMessage.css';
 
 function ChatMessage({
@@ -99,7 +100,10 @@ function ChatMessage({
   linkPath = null,
   // A shared, read-only transcript: no delete, no feedback, no edits. The
   // viewer is not the owner and none of those actions could reach the chat.
-  readOnly = false
+  readOnly = false,
+  // What an MCP App view in this answer may do in the composer:
+  // `{ sendMessage(text), isProcessing }`. Surfaces without a composer omit it.
+  mcpAppHost = null
 }) {
   const { t } = useTranslation();
   const featureFlags = useFeatureFlags();
@@ -838,6 +842,16 @@ function ChatMessage({
             like the thoughts, so it stays put while the answer streams. */}
         {!isUser && message.toolActivity && (
           <ToolActivity activity={message.toolActivity} loading={!!message.loading} />
+        )}
+        {/* Interactive MCP App views the answer's tool calls rendered. */}
+        {!isUser && message.mcpApps?.length > 0 && (
+          <McpAppViews
+            views={message.mcpApps}
+            appId={appId}
+            chatId={chatId}
+            readOnly={readOnly}
+            host={mcpAppHost}
+          />
         )}
         {renderContent()}
         {isUser && hasVariables && <MessageVariables variables={message.variables} />}

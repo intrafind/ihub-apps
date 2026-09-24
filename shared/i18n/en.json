@@ -1950,7 +1950,8 @@
           "running": "Testing connection…",
           "success": "Connected — {{count}} tools discovered",
           "failed": "Connection failed: {{error}}",
-          "noTools": "The server connected but exposed no tools (or all were filtered by the allowlist)."
+          "noTools": "The server connected but exposed no tools (or all were filtered by the allowlist).",
+          "rendersView": "interactive view"
         },
         "status": {
           "unknown": "unknown",
@@ -1980,6 +1981,8 @@
           "toolPrefix": "Tool prefix",
           "timeout": "Timeout (ms)",
           "allowedTools": "Allowed tools (comma-separated, or *)",
+          "appsEnabled": "Render interactive views (MCP Apps)",
+          "appsEnabledHint": "Advertise the MCP Apps extension and show the interactive views this server's tools declare inline in the chat. Turn off to get text-only results.",
           "transportStreamableHttp": "Streamable HTTP (recommended)",
           "transportSse": "SSE (legacy)",
           "transportStdio": "stdio",
@@ -3945,6 +3948,16 @@
     "stopped": "Stopped",
     "moreValues_one": "+{{count}} more",
     "moreValues_other": "+{{count}} more"
+  },
+  "mcpApps": {
+    "caption": "Interactive view · {{name}}",
+    "loading": "Loading interactive view…",
+    "loadFailed": "The interactive view could not be loaded: {{error}}",
+    "payloadOmitted": "This interactive view was too large to keep and cannot be shown again.",
+    "unsupportedSurface": "Interactive views are not available in this window.",
+    "exitFullscreen": "Exit full screen",
+    "frameTitle": "Interactive view: {{name}}",
+    "readOnly": "Interactive view “{{name}}” — open the chat to use it."
   },
   "shareDialog": {
     "title": "Share",

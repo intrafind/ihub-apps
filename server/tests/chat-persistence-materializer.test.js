@@ -641,3 +641,47 @@ describe('chatMaterializer: the order the two writes become visible', () => {
     });
   });
 });
+
+describe('chatMaterializer: MCP App views', () => {
+  const view = {
+    callId: 'call_1',
+    toolId: 'drawio__create_diagram',
+    serverId: 'drawio',
+    toolName: 'create_diagram',
+    resourceUri: 'ui://drawio/mcp-app.html',
+    args: { mermaid: 'flowchart LR; A-->B' },
+    toolResult: { content: [{ type: 'text', text: 'drawn' }], structuredContent: { xml: '<x/>' } }
+  };
+
+  it('stores the views a turn rendered with the answer, so reopening the chat redraws them', async () => {
+    await withRepository(async ({ repository }) => {
+      await userTurn(repository);
+      await assistantTurn(repository, { mcpApps: [view] });
+      const { messages } = await repository.getMessages(CHAT_ID);
+      assert.deepEqual(messages.at(-1).mcpApps, [view]);
+    });
+  });
+
+  it('a turn without views stores no field at all', async () => {
+    await withRepository(async ({ repository }) => {
+      await userTurn(repository);
+      await assistantTurn(repository, { mcpApps: [] });
+      const { messages } = await repository.getMessages(CHAT_ID);
+      assert.equal('mcpApps' in messages.at(-1), false);
+    });
+  });
+
+  it('views beyond the storage budget keep their reference but drop their payload', async () => {
+    await withRepository(async ({ repository }) => {
+      await userTurn(repository);
+      const big = { ...view, callId: 'call_2', args: { mermaid: 'x'.repeat(2.5 * 1024 * 1024) } };
+      await assistantTurn(repository, { mcpApps: [view, big] });
+      const { messages } = await repository.getMessages(CHAT_ID);
+      const [first, second] = messages.at(-1).mcpApps;
+      assert.deepEqual(first, view);
+      assert.equal(second.callId, 'call_2');
+      assert.equal(second.payloadOmitted, true);
+      assert.equal(second.args, undefined);
+    });
+  });
+});
