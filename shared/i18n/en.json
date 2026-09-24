@@ -2609,7 +2609,33 @@
       }
     },
     "usage": {
-      "reviewFeedback": "Review feedback"
+      "reviewFeedback": "Review feedback",
+      "promptCache": {
+        "title": "Prompt caching",
+        "subtitle": "Input tokens the provider served from its prompt cache. Cached tokens are billed at a discount and return faster.",
+        "hitRatio": "Cache hit ratio",
+        "hitRatioHint": "Of {{tokens}} input tokens on models that report caching",
+        "hitRatioValue": "{{ratio}} cache hit ratio",
+        "notReported": "No provider has reported cache usage yet",
+        "notReportedShort": "not reported",
+        "notReportedRange": "No provider reported prompt-cache usage in this range.",
+        "cachedTokens": "Cached input tokens",
+        "writeTokens": "Cache write tokens",
+        "writeToRead": "{{ratio}} of cache reads",
+        "writesOnly": "Written but never read yet",
+        "writesExceedReads": "More writes than reads: where writes cost extra, caching costs more than it saves",
+        "breakdown": "Cache usage by",
+        "byModel": "Model",
+        "byApp": "App",
+        "byProvider": "Provider",
+        "inputTokens": "Input tokens",
+        "noRows": "No usage recorded yet.",
+        "providerSince": "The provider breakdown covers usage recorded since this version.",
+        "inputOverTime": "Cached vs. uncached input tokens",
+        "cached": "Cached",
+        "uncached": "Uncached",
+        "topProviders": "Providers"
+      }
     },
     "localization": {
       "title": "Localization",

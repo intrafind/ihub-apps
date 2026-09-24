@@ -97,9 +97,18 @@ one-line JSON event to `contents/data/usage-events.jsonl`:
   "model": "claude-haiku-4-5-20251001",
   "pt": 421,
   "ct": 0,
-  "src": "provider"
+  "src": "provider",
+  "prov": "anthropic",
+  "cr": 384,
+  "cw": 0
 }
 ```
+
+`pt`/`ct` are prompt and completion tokens, `src` whether they came from the
+provider or a local estimate, `prov` the provider adapter. The optional
+counters `cr`/`cw` (prompt-cache read/write tokens), `rt` (reasoning tokens)
+and `ws` (provider web searches) are only present when the provider reported
+them. All of them are counts, never content.
 
 `uid` form depends on `features.usageTrackingMode`:
 

@@ -183,6 +183,60 @@ Groups control what users can access. Go to **Access & Identity → Groups**.
 
 ---
 
+## Usage Reports
+
+**Observability → Usage Reports** (`/admin/usage`) shows messages, tokens, feedback and magic-prompt
+use, all-time on **Overview**, **Users**, **Applications** and **Details**, and per day or month on
+**Timeline** (range 7 days to 12 months, from the hourly rollups — **Generate Report** refreshes
+them on demand).
+
+**How tokens are counted.** Prompt tokens are the whole input of a model call, including tokens the
+provider served from its prompt cache; completion tokens are the whole output, including reasoning
+("thinking") tokens. This holds for every provider, so numbers compare across models. The provider's
+own counts are used whenever it reports them; a call that failed or was stopped before the provider
+answered is counted with a local estimate. **Data Quality** shows the share of provider numbers.
+
+### Prompt caching
+
+Providers keep a cache of recently seen prompt prefixes (system prompt, tool definitions, the start
+of the conversation). Input served from that cache is billed at a discount and answers faster.
+The **Prompt caching** panel on **Overview** shows:
+
+- **Cache hit ratio** — cached input tokens divided by input tokens, counted over the models that
+  report caching, so models without cache reporting don't dilute it.
+- **Cached input tokens** — input served from the cache.
+- **Cache write tokens** — input written to the cache. Anthropic and Bedrock charge extra for
+  writes; when writes exceed reads, the tile turns amber, because caching then costs more than it
+  saves.
+- A breakdown **by model, app or provider**. "not reported" means the provider never reported
+  cache usage for that row — it is not the same as 0 %.
+
+**Timeline** adds a **Cached input tokens** card with the hit ratio for the range, a **Cached vs.
+uncached input tokens** chart, cache columns in the app and model breakdowns, and a **Providers**
+breakdown.
+
+What each provider reports:
+
+| Provider (adapter) | Cached input | Cache writes | Reasoning |
+| --- | --- | --- | --- |
+| Anthropic | yes | yes | — (included in output) |
+| Bedrock (Converse) | yes | yes | — |
+| OpenAI Chat Completions, OpenAI Responses | yes | — (automatic, no write charge) | yes |
+| Google Gemini | yes | — | yes |
+| vLLM / local OpenAI-compatible | when the server reports `prompt_tokens_details` | — | when reported |
+| Mistral | when reported | — | — |
+| iAssistant | no usage reported | — | — |
+
+The provider breakdown and the cache counters cover usage recorded since the release that added
+them; older data counts as uncached.
+
+**Exports.** **Download CSV/JSON** export the all-time summary including the cache totals. The event
+export (`GET /api/admin/usage/export?range=90d&format=csv`) has the columns `provider`,
+`cacheReadTokens`, `cacheWriteTokens`, `reasoningTokens` and `webSearchRequests` after the existing
+ones; a counter the provider did not report is left empty.
+
+---
+
 ## Audit Log
 
 Go to **Observability → Audit Log** to see a complete record of all admin actions.

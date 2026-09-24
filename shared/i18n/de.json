@@ -2893,7 +2893,33 @@
       }
     },
     "usage": {
-      "reviewFeedback": "Feedback ansehen"
+      "reviewFeedback": "Feedback ansehen",
+      "promptCache": {
+        "title": "Prompt-Caching",
+        "subtitle": "Eingabe-Tokens, die der Anbieter aus seinem Prompt-Cache geliefert hat. Gecachte Tokens werden günstiger abgerechnet und kommen schneller zurück.",
+        "hitRatio": "Cache-Trefferquote",
+        "hitRatioHint": "Von {{tokens}} Eingabe-Tokens auf Modellen, die Caching melden",
+        "hitRatioValue": "{{ratio}} Cache-Trefferquote",
+        "notReported": "Noch kein Anbieter hat Cache-Nutzung gemeldet",
+        "notReportedShort": "nicht gemeldet",
+        "notReportedRange": "In diesem Zeitraum hat kein Anbieter Prompt-Cache-Nutzung gemeldet.",
+        "cachedTokens": "Gecachte Eingabe-Tokens",
+        "writeTokens": "Cache-Schreib-Tokens",
+        "writeToRead": "{{ratio}} der Cache-Lesezugriffe",
+        "writesOnly": "Geschrieben, aber noch nie gelesen",
+        "writesExceedReads": "Mehr Schreib- als Lesezugriffe: Wo Schreiben extra kostet, kostet Caching mehr, als es spart",
+        "breakdown": "Cache-Nutzung nach",
+        "byModel": "Modell",
+        "byApp": "App",
+        "byProvider": "Anbieter",
+        "inputTokens": "Eingabe-Tokens",
+        "noRows": "Noch keine Nutzung erfasst.",
+        "providerSince": "Die Aufschlüsselung nach Anbieter umfasst die Nutzung seit dieser Version.",
+        "inputOverTime": "Gecachte vs. ungecachte Eingabe-Tokens",
+        "cached": "Gecacht",
+        "uncached": "Ungecacht",
+        "topProviders": "Anbieter"
+      }
     },
     "localization": {
       "title": "Lokalisierung",

@@ -18,21 +18,37 @@ export async function flushQueue() {
   return appender.flush();
 }
 
+/** Optional provider counters: event key → field name. Written only when reported. */
+const OPTIONAL_EVENT_COUNTERS = {
+  cr: 'cacheReadTokens',
+  cw: 'cacheWriteTokens',
+  rt: 'reasoningTokens',
+  ws: 'webSearchRequests'
+};
+
 /**
  * Log a usage event to the JSONL append-only file.
  * Events are buffered and flushed every 10 seconds.
+ *
+ * Keys: `pt`/`ct` prompt/completion tokens (the prompt count includes cached
+ * tokens), `cr`/`cw` prompt-cache read/write tokens, `rt` reasoning tokens,
+ * `ws` provider web searches, `prov` provider (adapter) id, `src` token source.
+ * The optional counters are omitted when the provider did not report them, so
+ * "not reported" and "zero" stay apart.
  */
 export function logUsageEvent({
   type,
   userId,
   appId,
   modelId,
+  provider = null,
   promptTokens = 0,
   completionTokens = 0,
   tokenSource = 'estimate',
   conversationId = null,
   rating = null,
-  metadata = null
+  metadata = null,
+  ...counters
 }) {
   const entry = {
     ts: new Date().toISOString(),
@@ -44,6 +60,11 @@ export function logUsageEvent({
     ct: completionTokens,
     src: tokenSource
   };
+  if (provider) entry.prov = provider;
+  for (const [key, field] of Object.entries(OPTIONAL_EVENT_COUNTERS)) {
+    const value = counters[field];
+    if (Number.isFinite(value) && value >= 0) entry[key] = value;
+  }
   if (conversationId) entry.cid = conversationId;
   if (rating != null) entry.rating = rating;
   if (metadata) entry.meta = metadata;

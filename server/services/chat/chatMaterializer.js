@@ -144,14 +144,23 @@ export async function storeGeneratedArtifacts({ chatId, runId, artifacts, store,
   return descriptors;
 }
 
-/** Usage as stored on a message: the three counters, nothing provider-specific. */
+/**
+ * Usage as stored on a message: the three counters, plus the provider's
+ * cache read/write and reasoning counts when it reported them. Nothing else
+ * provider-specific.
+ */
 function normalizeUsage(usage) {
   if (!usage || typeof usage !== 'object') return null;
   const promptTokens = Number(usage.promptTokens) || 0;
   const completionTokens = Number(usage.completionTokens) || 0;
   const totalTokens = Number(usage.totalTokens) || promptTokens + completionTokens;
   if (!promptTokens && !completionTokens && !totalTokens) return null;
-  return { promptTokens, completionTokens, totalTokens };
+  const stored = { promptTokens, completionTokens, totalTokens };
+  for (const key of ['cacheReadTokens', 'cacheWriteTokens', 'reasoningTokens']) {
+    const value = Number(usage[key]);
+    if (usage[key] !== undefined && Number.isFinite(value) && value >= 0) stored[key] = value;
+  }
+  return stored;
 }
 
 /**

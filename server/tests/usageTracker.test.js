@@ -90,6 +90,71 @@ describe('recordChatRequest / recordChatResponse', () => {
     expect(usage.tokens.completion.perUser.u1).toBe(25);
     expect(usage.tokens.perUser.u1).toBe(35);
   });
+
+  it('records prompt-cache and reasoning counts per model, app, user and provider', async () => {
+    await recordChatRequest({
+      userId: 'u1',
+      appId: 'a1',
+      modelId: 'm1',
+      provider: 'anthropic',
+      tokens: 2000,
+      tokenSource: 'provider',
+      cacheReadTokens: 1800,
+      cacheWriteTokens: 150
+    });
+    await recordChatResponse({
+      userId: 'u1',
+      appId: 'a1',
+      modelId: 'm1',
+      provider: 'anthropic',
+      tokens: 40,
+      tokenSource: 'provider',
+      reasoningTokens: 12
+    });
+
+    const usage = await getUsage();
+    expect(usage.tokens.prompt.total).toBe(2000);
+    expect(usage.tokens.prompt.perProvider.anthropic).toBe(2000);
+    expect(usage.tokens.cacheRead.total).toBe(1800);
+    expect(usage.tokens.cacheRead.perModel.m1).toBe(1800);
+    expect(usage.tokens.cacheRead.perApp.a1).toBe(1800);
+    expect(usage.tokens.cacheRead.perUser.u1).toBe(1800);
+    expect(usage.tokens.cacheRead.perProvider.anthropic).toBe(1800);
+    expect(usage.tokens.cacheWrite.total).toBe(150);
+    expect(usage.tokens.reasoning.total).toBe(12);
+    // Cache counts are subsets of the prompt: they never add to the token total.
+    expect(usage.tokens.total).toBe(2040);
+    expect(usage.tokenSources.provider).toBe(2);
+  });
+
+  it('adds cache buckets to a usage.json written before they existed', async () => {
+    const legacy = await getUsage();
+    delete legacy.tokens.cacheRead;
+    delete legacy.tokens.cacheWrite;
+    delete legacy.tokens.reasoning;
+    delete legacy.tokens.prompt.perProvider;
+    fileContents = JSON.stringify(legacy, null, 2);
+
+    await recordChatRequest({
+      userId: 'u1',
+      appId: 'a1',
+      modelId: 'm1',
+      provider: 'openai',
+      tokens: 100,
+      cacheReadTokens: 64
+    });
+
+    const usage = await getUsage();
+    expect(usage.tokens.cacheRead.total).toBe(64);
+    expect(usage.tokens.prompt.perProvider.openai).toBe(100);
+  });
+
+  it('leaves the cache buckets untouched when the provider reported no cache counts', async () => {
+    await recordChatRequest({ userId: 'u1', appId: 'a1', modelId: 'm1', tokens: 10 });
+    const usage = await getUsage();
+    expect(usage.tokens.cacheRead.total).toBe(0);
+    expect(usage.tokens.cacheRead.perModel.m1).toBeUndefined();
+  });
 });
 
 describe('recordFeedback', () => {

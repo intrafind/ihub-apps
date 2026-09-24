@@ -13,6 +13,57 @@ import logger from '../utils/logger.js';
 const ROLLUP_INTERVAL_MS = 60 * 60 * 1000; // 1 hour
 
 /**
+ * Optional counters rolled up next to prompt/completion tokens: rollup field
+ * → usage-event key. Prompt-cache read/write tokens are subsets of
+ * `promptTokens`, reasoning tokens a subset of `completionTokens`. Events
+ * written before these were tracked simply contribute zero.
+ */
+export const ROLLUP_COUNTERS = Object.freeze({
+  cacheReadTokens: 'cr',
+  cacheWriteTokens: 'cw',
+  reasoningTokens: 'rt',
+  webSearchRequests: 'ws'
+});
+
+/** Per-dimension entry: messages, prompt/completion tokens and the optional counters. */
+function emptyDimension() {
+  const entry = { messages: 0, promptTokens: 0, completionTokens: 0 };
+  for (const field of Object.keys(ROLLUP_COUNTERS)) entry[field] = 0;
+  return entry;
+}
+
+/** Add one dimension entry (daily rollup or event-derived) into another. */
+function addDimension(target, source) {
+  target.messages += source.messages || 0;
+  target.promptTokens += source.promptTokens || 0;
+  target.completionTokens += source.completionTokens || 0;
+  for (const field of Object.keys(ROLLUP_COUNTERS)) {
+    target[field] = (target[field] || 0) + (source[field] || 0);
+  }
+}
+
+/**
+ * Sum one dimension (`byUser`, `byApp`, `byModel`, `byProvider`) across a set
+ * of rollups. With `countDays`, each entry also gets the number of rollups it
+ * appeared in.
+ * @param {Object[]} rollups - daily or monthly rollups
+ * @param {string} dim
+ * @param {{countDays?: boolean}} [options]
+ * @returns {Object<string, Object>}
+ */
+export function sumRollupDimension(rollups, dim, { countDays = false } = {}) {
+  const out = {};
+  for (const rollup of rollups) {
+    for (const [key, val] of Object.entries(rollup?.[dim] || {})) {
+      if (!out[key]) out[key] = countDays ? { ...emptyDimension(), days: 0 } : emptyDimension();
+      addDimension(out[key], val);
+      if (countDays) out[key].days += 1;
+    }
+  }
+  return out;
+}
+
+/**
  * Build a daily rollup from events for a given date string (YYYY-MM-DD).
  */
 function buildDailyRollup(events, date) {
@@ -22,6 +73,7 @@ function buildDailyRollup(events, date) {
       messages: 0,
       promptTokens: 0,
       completionTokens: 0,
+      ...Object.fromEntries(Object.keys(ROLLUP_COUNTERS).map(field => [field, 0])),
       uniqueUsers: new Set(),
       chatRequests: 0,
       chatResponses: 0,
@@ -31,6 +83,7 @@ function buildDailyRollup(events, date) {
     byUser: {},
     byApp: {},
     byModel: {},
+    byProvider: {},
     tokenQuality: { provider: 0, estimate: 0 }
   };
 
@@ -40,10 +93,13 @@ function buildDailyRollup(events, date) {
     const model = event.model || 'unknown';
     const pt = event.pt || 0;
     const ct = event.ct || 0;
+    const counts = { messages: 1, promptTokens: pt, completionTokens: ct };
+    for (const [field, key] of Object.entries(ROLLUP_COUNTERS)) counts[field] = event[key] || 0;
 
     rollup.totals.uniqueUsers.add(uid);
     rollup.totals.promptTokens += pt;
     rollup.totals.completionTokens += ct;
+    for (const field of Object.keys(ROLLUP_COUNTERS)) rollup.totals[field] += counts[field];
 
     if (event.type === 'chat_request') {
       rollup.totals.chatRequests += 1;
@@ -63,26 +119,18 @@ function buildDailyRollup(events, date) {
       rollup.tokenQuality.estimate += 1;
     }
 
-    // Per-user aggregation
-    if (!rollup.byUser[uid])
-      rollup.byUser[uid] = { messages: 0, promptTokens: 0, completionTokens: 0 };
-    rollup.byUser[uid].messages += 1;
-    rollup.byUser[uid].promptTokens += pt;
-    rollup.byUser[uid].completionTokens += ct;
-
-    // Per-app aggregation
-    if (!rollup.byApp[app])
-      rollup.byApp[app] = { messages: 0, promptTokens: 0, completionTokens: 0 };
-    rollup.byApp[app].messages += 1;
-    rollup.byApp[app].promptTokens += pt;
-    rollup.byApp[app].completionTokens += ct;
-
-    // Per-model aggregation
-    if (!rollup.byModel[model])
-      rollup.byModel[model] = { messages: 0, promptTokens: 0, completionTokens: 0 };
-    rollup.byModel[model].messages += 1;
-    rollup.byModel[model].promptTokens += pt;
-    rollup.byModel[model].completionTokens += ct;
+    // Per-user / per-app / per-model aggregation; per provider (adapter) only
+    // for events that recorded one.
+    for (const [dim, key] of [
+      ['byUser', uid],
+      ['byApp', app],
+      ['byModel', model],
+      ['byProvider', event.prov]
+    ]) {
+      if (!key) continue;
+      if (!rollup[dim][key]) rollup[dim][key] = emptyDimension();
+      addDimension(rollup[dim][key], counts);
+    }
   }
 
   // Convert Set to count
@@ -100,12 +148,14 @@ function buildMonthlyRollup(dailyRollups, month) {
       messages: 0,
       promptTokens: 0,
       completionTokens: 0,
+      ...Object.fromEntries(Object.keys(ROLLUP_COUNTERS).map(field => [field, 0])),
       uniqueUsers: new Set(),
       days: dailyRollups.length
     },
     byUser: {},
     byApp: {},
     byModel: {},
+    byProvider: {},
     tokenQuality: { provider: 0, estimate: 0 }
   };
 
@@ -113,21 +163,18 @@ function buildMonthlyRollup(dailyRollups, month) {
     rollup.totals.messages += daily.totals.messages;
     rollup.totals.promptTokens += daily.totals.promptTokens;
     rollup.totals.completionTokens += daily.totals.completionTokens;
+    // Daily files written before these counters existed have none of them.
+    for (const field of Object.keys(ROLLUP_COUNTERS)) {
+      rollup.totals[field] += daily.totals[field] || 0;
+    }
     rollup.tokenQuality.provider += daily.tokenQuality.provider;
     rollup.tokenQuality.estimate += daily.tokenQuality.estimate;
 
     // Merge per-dimension data
-    for (const [dim, dimKey] of [
-      ['byUser', 'byUser'],
-      ['byApp', 'byApp'],
-      ['byModel', 'byModel']
-    ]) {
-      for (const [key, val] of Object.entries(daily[dim])) {
-        if (!rollup[dimKey][key])
-          rollup[dimKey][key] = { messages: 0, promptTokens: 0, completionTokens: 0 };
-        rollup[dimKey][key].messages += val.messages;
-        rollup[dimKey][key].promptTokens += val.promptTokens;
-        rollup[dimKey][key].completionTokens += val.completionTokens;
+    for (const dim of ['byUser', 'byApp', 'byModel', 'byProvider']) {
+      for (const [key, val] of Object.entries(daily[dim] || {})) {
+        if (!rollup[dim][key]) rollup[dim][key] = emptyDimension();
+        addDimension(rollup[dim][key], val);
         if (dim === 'byUser') rollup.totals.uniqueUsers.add(key);
       }
     }

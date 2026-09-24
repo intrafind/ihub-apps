@@ -1543,7 +1543,10 @@ export class LLMClient {
       const usage = accumulator.usage
         ? {
             inputTokens: accumulator.usage.promptTokens,
-            outputTokens: accumulator.usage.completionTokens
+            outputTokens: accumulator.usage.completionTokens,
+            cacheReadTokens: accumulator.usage.cacheReadTokens,
+            cacheWriteTokens: accumulator.usage.cacheWriteTokens,
+            reasoningTokens: accumulator.usage.reasoningTokens
           }
         : undefined;
       instrumentation.recordResponse(

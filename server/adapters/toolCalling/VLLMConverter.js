@@ -13,6 +13,7 @@ import {
   normalizeFinishReason,
   cloneAndWalkSchema
 } from './GenericToolCalling.js';
+import { convertOpenAIUsageToGeneric } from './OpenAIConverter.js';
 import logger from '../../utils/logger.js';
 import { parseJsonAsync } from '../../utils/asyncJson.js';
 
@@ -282,6 +283,14 @@ export async function convertVLLMResponseToGeneric(data, streamId = 'default') {
       result.errorMessage = parsed.error.message || 'Unknown error';
       result.complete = true;
       return result;
+    }
+
+    // Usage: on the non-streaming body, and on the trailing streaming frame
+    // (`stream_options.include_usage`). `prompt_tokens_details.cached_tokens`
+    // is the prefix-cache hit count when the server runs with
+    // `--enable-prompt-tokens-details`.
+    if (parsed.usage) {
+      result.metadata.usage = convertOpenAIUsageToGeneric(parsed.usage);
     }
 
     // Handle full response object (non-streaming)

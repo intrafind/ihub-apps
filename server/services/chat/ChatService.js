@@ -23,6 +23,7 @@ import { isFailureFinishReason } from '../../adapters/toolCalling/index.js';
 import PromptService from '../PromptService.js';
 import logger from '../../utils/logger.js';
 import defaultAgentLoop from '../loop/AgentLoop.js';
+import { OPTIONAL_COUNTERS } from '../loop/llmUsage.js';
 import runLogSingleton, { newRunId, isValidRunId } from '../loop/RunLog.js';
 import interactionServiceSingleton from '../loop/InteractionService.js';
 import { RunStreamEmitter, bindStreamRun, unbindStreamRun } from '../loop/RunStream.js';
@@ -155,7 +156,11 @@ export function withAppPrompt(messages, variables, promptTemplate) {
   );
 }
 
-/** Usage as carried on the wire (contract fields only). */
+/**
+ * Usage as carried on the wire (contract fields only): the three counters,
+ * the optional provider counters (cache read/write, reasoning, web searches)
+ * when reported, and the source.
+ */
 function wireUsage(usage) {
   if (!usage) return undefined;
   const out = {
@@ -163,6 +168,9 @@ function wireUsage(usage) {
     completionTokens: usage.completionTokens || 0,
     totalTokens: usage.totalTokens || (usage.promptTokens || 0) + (usage.completionTokens || 0)
   };
+  for (const key of OPTIONAL_COUNTERS) {
+    if (Number.isInteger(usage[key]) && usage[key] >= 0) out[key] = usage[key];
+  }
   if (usage.source === 'provider' || usage.source === 'estimate' || usage.source === 'mixed') {
     out.source = usage.source;
   }
@@ -451,6 +459,12 @@ class ChatService {
     }
 
     const channel = streaming ? createChatChannel({ chatId, stream }) : null;
+    const turnSeam = chatTurnSeam({
+      chatId,
+      buildLogData: log,
+      streaming,
+      telemetry: this.telemetry
+    });
     // knowledgeSourceSeam runs first so its `outcome.knowledgeSource` is on the
     // outcome when chatToolSeam projects the tool result to `tool/completed`.
     const seams = [
@@ -481,7 +495,7 @@ class ChatService {
         })
       ),
       imageLiftSeam,
-      chatTurnSeam({ chatId, buildLogData: log, streaming, telemetry: this.telemetry })
+      turnSeam
     ];
 
     let outcome;
@@ -529,7 +543,8 @@ class ChatService {
         timeoutMs,
         getLocalizedError,
         language,
-        channel
+        channel,
+        takePendingCall: () => turnSeam.takePendingCall()
       });
       // The ledger's terminal frame first, then the chat document.
       //
@@ -624,7 +639,8 @@ class ChatService {
     timeoutMs,
     getLocalizedError,
     language,
-    channel
+    channel,
+    takePendingCall = () => null
   }) {
     const loopSources = result.knowledgeSources || [];
     const content = result.content || '';
@@ -660,6 +676,8 @@ class ChatService {
       await this.telemetry.recordChatCallEnd({
         baseLog: buildLogData(streaming),
         model,
+        // The call stopped mid-way is still billed: its request side, estimated.
+        request: takePendingCall(),
         outcome: 'aborted'
       });
       endRun({ status: 'aborted', finishReason: 'connection_closed' });
@@ -677,6 +695,7 @@ class ChatService {
       await this.telemetry.recordChatCallEnd({
         baseLog: buildLogData(streaming),
         model,
+        request: takePendingCall(),
         outcome: 'error',
         error: err
       });

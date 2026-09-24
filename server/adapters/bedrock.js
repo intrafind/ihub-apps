@@ -11,7 +11,10 @@
 
 import { BaseAdapter } from './BaseAdapter.js';
 import { convertToolsFromGeneric } from './toolCalling/index.js';
-import { convertBedrockToolChoice } from './toolCalling/BedrockConverter.js';
+import {
+  convertBedrockToolChoice,
+  convertBedrockUsageToGeneric
+} from './toolCalling/BedrockConverter.js';
 import { BedrockEventStreamDecoder } from './bedrockEventStream.js';
 import { getReadableStream } from '../utils/streamUtils.js';
 import configCache from '../configCache.js';
@@ -465,17 +468,9 @@ class BedrockAdapterClass extends BaseAdapter {
             }
 
             case 'metadata': {
-              const usage = payload.usage || {};
+              const usage = convertBedrockUsageToGeneric(payload.usage);
               yield {
-                usage: {
-                  promptTokens: usage.inputTokens,
-                  completionTokens: usage.outputTokens,
-                  totalTokens:
-                    usage.totalTokens ??
-                    (typeof usage.inputTokens === 'number' && typeof usage.outputTokens === 'number'
-                      ? usage.inputTokens + usage.outputTokens
-                      : undefined)
-                },
+                ...(usage ? { usage } : {}),
                 complete: true,
                 finishReason: lastFinishReason || 'stop'
               };

@@ -9,6 +9,8 @@ import { useTranslation } from 'react-i18next';
 import LoadingSpinner from '../../../shared/components/LoadingSpinner';
 import Icon from '../../../shared/components/Icon';
 import UsageTimeline from '../components/UsageTimeline';
+import PromptCachePanel from '../components/PromptCachePanel';
+import { summarizePromptCache } from '../utils/promptCacheStats';
 
 function StatCard({ title, value, icon, color, change, changeType, linkTo, linkLabel }) {
   return (
@@ -198,12 +200,21 @@ function AdminUsageReports() {
   const downloadCsv = () => {
     if (!usage) return;
     const { messages, tokens, feedback, magicPrompt } = usage;
+    const cache = summarizePromptCache(tokens);
     const csvData = [
       ['Metric', 'Total', 'Description'],
       ['Messages', messages.total, 'Total messages sent'],
       ['Tokens', tokens.total, 'Total tokens processed'],
-      ['Prompt Tokens', tokens.prompt.total, 'Input tokens'],
-      ['Completion Tokens', tokens.completion.total, 'Output tokens'],
+      ['Prompt Tokens', tokens.prompt.total, 'Input tokens (cached tokens included)'],
+      ['Completion Tokens', tokens.completion.total, 'Output tokens (reasoning included)'],
+      ['Cached Input Tokens', cache.cacheReadTokens, 'Input tokens served from the prompt cache'],
+      ['Cache Write Tokens', cache.cacheWriteTokens, 'Input tokens written to the prompt cache'],
+      [
+        'Cache Hit Ratio',
+        cache.hitRatio === null ? '' : cache.hitRatio.toFixed(4),
+        'Cached / input tokens on models that report caching'
+      ],
+      ['Reasoning Tokens', tokens.reasoning?.total || 0, 'Output tokens spent on reasoning'],
       ['Feedback Good', feedback.good, 'Positive feedback count'],
       ['Feedback Bad', feedback.bad, 'Negative feedback count'],
       ['Magic Prompt Uses', magicPrompt.total, 'Magic prompt invocations'],
@@ -394,6 +405,8 @@ function AdminUsageReports() {
           </div>
         )}
       </div>
+
+      <PromptCachePanel tokens={tokens} />
 
       {/* Token Breakdown */}
       <div className="grid grid-cols-1 md:grid-cols-2 gap-6">

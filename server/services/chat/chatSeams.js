@@ -101,25 +101,60 @@ function toolCallRecords(toolCalls) {
 /**
  * Per-turn bookkeeping: prompt-implied knowledge sources on the first step,
  * usage/metrics for every model call, and the `step/completed` frame.
+ *
+ * The request side of a call's usage is recorded when the call ends, with the
+ * provider's prompt and cache counts. A call that never reaches `stepEnd` —
+ * retried by the loop (native web-search fallback, reactive compaction),
+ * aborted or failed — is still recorded, with the estimate taken when it
+ * started: on the next `preStep`, or by the owner via `takePendingCall()`.
  */
 export function chatTurnSeam({ chatId, buildLogData, streaming, telemetry = defaultTelemetry }) {
+  /** The model call in flight: `{ model, request }` until its request side is recorded. */
+  let pending = null;
+  const take = () => {
+    const call = pending;
+    pending = null;
+    return call;
+  };
+  const flushUnfinished = async () => {
+    const call = take();
+    if (!call || typeof telemetry.recordChatCallRequest !== 'function') return;
+    await telemetry.recordChatCallRequest({
+      baseLog: buildLogData(streaming),
+      model: call.model,
+      request: call.request,
+      usage: null
+    });
+  };
   return {
     name: 'chat-turn',
+    /**
+     * Hand over the call still in flight (if any) so the turn's terminal
+     * bookkeeping records its request side; `null` when every call ended.
+     * @returns {{promptTokens:number}|null}
+     */
+    takePendingCall() {
+      return take()?.request || null;
+    },
     async preStep(ctx) {
       if (ctx.iteration === 1) {
         for (const source of detectContextSources(ctx.messages)) ctx.addKnowledgeSource(source);
       }
-      await telemetry.recordChatCallStart({
+      await flushUnfinished();
+      const request = await telemetry.recordChatCallStart({
         baseLog: buildLogData(streaming),
         chatId,
         model: ctx.model,
         messages: ctx.messages
       });
+      pending = { model: ctx.model, request: request || null };
     },
     async stepEnd(ctx, step) {
+      const call = take();
       await telemetry.recordChatCallEnd({
         baseLog: buildLogData(streaming),
         model: ctx.model,
+        ...(call ? { request: call.request || { promptTokens: 0 } } : {}),
         usage: step.result?.usage || null,
         content: step.result?.content || '',
         outcome: 'completed'
