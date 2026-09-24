@@ -49,3 +49,33 @@ of the live one.
   changes nothing, and removed attachments and the body opt-out survive both.
 - The chat input is unavailable for the moment the pane spends reading a newly opened email,
   rather than accepting a question it would answer from a different message.
+  
+## Marketplace: Installs No Longer Overwrite Local Content or Accept Broken Items
+
+Installing an item from the marketplace silently replaced an app, model, prompt, workflow or skill
+of the same ID that was already on the instance — including the shipped defaults — and a replaced
+model lost its API key and could change which model was the system default. Installs also skipped
+validation, so items with keys the current release rejects were installed without an error.
+
+- Items that exist on the instance but were not installed from the marketplace are marked
+  **Local copy**. Replacing one takes an explicit confirmation, and the status filter can show
+  them.
+- Installing or updating a model keeps the API key and default setting of the model it replaces.
+  A newly installed model never becomes the system default.
+- Apps, models, prompts and workflows are checked against the same rules the server applies when
+  loading them, and an item whose ID differs from its marketplace name is refused. The error lists
+  every problem found.
+
+## Apps: Variable Descriptions and Placeholders Show in Chat
+
+The `description` and `placeholder` of an app variable were dropped when the app was loaded, so
+the chat showed neither the help text nor the custom placeholder — including on shipped apps such
+as the Translator. Both now appear as configured.
+
+## Chat: Thinking Is Readable Again Instead of One Bullet Per Word
+
+Opening **Show thinking** on a reasoning model produced a bulleted list with a single word on each
+line — "The", "user", "is", "asking" — which was unreadable. Providers stream reasoning one token
+at a time, and every token was kept as its own entry rather than being joined into the text it came
+from. The thinking now reads as continuous text and keeps its own line breaks, while named steps
+such as workflow phases stay separate entries.

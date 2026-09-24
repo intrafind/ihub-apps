@@ -236,6 +236,20 @@ function ModelFormEditor({
     });
   };
 
+  // `thinking` is an optional nested object and the schema is strict, so an
+  // empty `{}` would fail validation: turning reasoning off drops the key
+  // entirely rather than leaving `{ enabled: false }` behind.
+  const handleThinkingChange = (key, value) => {
+    const next = { ...(data.thinking || {}), [key]: value };
+    if (key === 'enabled' && !value) {
+      const { thinking: _dropped, ...rest } = data;
+      onChange(rest);
+      return;
+    }
+    if (value === '' || value === null || value === undefined) delete next[key];
+    onChange({ ...data, thinking: next });
+  };
+
   const handleInputChange = e => {
     const { name, value, type, checked } = e.target;
     handleChange(name, type === 'checkbox' ? checked : value);
@@ -898,6 +912,106 @@ function ModelFormEditor({
                     </div>
                   </fieldset>
                 </div>
+
+                {!isTranscription && (
+                  <div className="col-span-6">
+                    <fieldset>
+                      <legend className="text-base font-medium text-gray-900 dark:text-gray-100">
+                        {t('admin.models.sections.thinking', 'Reasoning')}
+                      </legend>
+                      <div className="mt-4 flex items-start">
+                        <div className="flex items-center h-5">
+                          <input
+                            id="thinking.enabled"
+                            type="checkbox"
+                            checked={data.thinking?.enabled || false}
+                            onChange={e => handleThinkingChange('enabled', e.target.checked)}
+                            className="focus:ring-indigo-500 h-4 w-4 text-indigo-600 border-gray-300 dark:border-gray-600 rounded-sm"
+                          />
+                        </div>
+                        <div className="ml-3 text-sm">
+                          <label
+                            htmlFor="thinking.enabled"
+                            className="font-medium text-gray-700 dark:text-gray-300"
+                          >
+                            {t('admin.models.fields.thinkingEnabled', 'Enable reasoning')}
+                          </label>
+                          <p className="text-gray-500 dark:text-gray-400">
+                            {t(
+                              'admin.models.hints.thinkingEnabled',
+                              'Ask the model to think before answering. The reasoning is returned separately from the answer; leave off and a reasoning model writes its thinking into the answer text instead.'
+                            )}
+                          </p>
+                        </div>
+                      </div>
+                      {data.thinking?.enabled && (
+                        <div className="mt-4 ml-7 space-y-4">
+                          <div className="max-w-xs">
+                            <label
+                              htmlFor="thinking.level"
+                              className="block text-sm font-medium text-gray-700 dark:text-gray-300"
+                            >
+                              {t('admin.models.fields.thinkingLevel', 'Reasoning effort')}
+                            </label>
+                            <select
+                              id="thinking.level"
+                              value={data.thinking?.level || ''}
+                              onChange={e => handleThinkingChange('level', e.target.value)}
+                              className="mt-1 focus:ring-indigo-500 focus:border-indigo-500 block w-full shadow-xs sm:text-sm border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100 rounded-md"
+                            >
+                              <option value="">
+                                {t('admin.models.fields.thinkingLevelDefault', 'Provider default')}
+                              </option>
+                              <option value="minimal">
+                                {t('admin.models.fields.thinkingLevelMinimal', 'Minimal')}
+                              </option>
+                              <option value="low">
+                                {t('admin.models.fields.thinkingLevelLow', 'Low')}
+                              </option>
+                              <option value="medium">
+                                {t('admin.models.fields.thinkingLevelMedium', 'Medium')}
+                              </option>
+                              <option value="high">
+                                {t('admin.models.fields.thinkingLevelHigh', 'High')}
+                              </option>
+                            </select>
+                            <p className="mt-1 text-sm text-gray-500 dark:text-gray-400">
+                              {t(
+                                'admin.models.hints.thinkingLevel',
+                                'Sent as reasoning_effort (OpenAI, vLLM) or thinkingLevel (Gemini). Servers that do not support it ignore the value — leave on provider default unless the model documents these levels.'
+                              )}
+                            </p>
+                          </div>
+                          <div className="flex items-start">
+                            <div className="flex items-center h-5">
+                              <input
+                                id="thinking.thoughts"
+                                type="checkbox"
+                                checked={data.thinking?.thoughts !== false}
+                                onChange={e => handleThinkingChange('thoughts', e.target.checked)}
+                                className="focus:ring-indigo-500 h-4 w-4 text-indigo-600 border-gray-300 dark:border-gray-600 rounded-sm"
+                              />
+                            </div>
+                            <div className="ml-3 text-sm">
+                              <label
+                                htmlFor="thinking.thoughts"
+                                className="font-medium text-gray-700 dark:text-gray-300"
+                              >
+                                {t('admin.models.fields.thinkingThoughts', 'Show reasoning')}
+                              </label>
+                              <p className="text-gray-500 dark:text-gray-400">
+                                {t(
+                                  'admin.models.hints.thinkingThoughts',
+                                  'Surface the reasoning to users behind the "Show thinking" toggle. Turn off to keep it hidden.'
+                                )}
+                              </p>
+                            </div>
+                          </div>
+                        </div>
+                      )}
+                    </fieldset>
+                  </div>
+                )}
 
                 {supportsPromptCaching(data.provider) && (
                   <div className="col-span-6">

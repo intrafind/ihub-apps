@@ -875,7 +875,15 @@
         "nativeWebSearchVersionBasic": "basic (all Claude models, Vertex AI, Foundry)",
         "nativeWebSearchVersionFiltering": "dynamic filtering (Claude 4.6 and later)",
         "nativeWebSearchVersionInclusion": "dynamic filtering + response inclusion (Claude 4.6 and later)",
-        "nativeWebSearchDynamicFiltering": "Enable dynamic filtering"
+        "nativeWebSearchDynamicFiltering": "Enable dynamic filtering",
+        "thinkingEnabled": "Enable reasoning",
+        "thinkingLevel": "Reasoning effort",
+        "thinkingLevelDefault": "Provider default",
+        "thinkingLevelMinimal": "Minimal",
+        "thinkingLevelLow": "Low",
+        "thinkingLevelMedium": "Medium",
+        "thinkingLevelHigh": "High",
+        "thinkingThoughts": "Show reasoning"
       },
       "hints": {
         "modelId": "Unique identifier for the model (cannot be changed after creation)",
@@ -893,7 +901,10 @@
         "promptCachingOpenAI": "Sends a cache key so requests that start with the same prompt reuse OpenAI’s cache. On by default for api.openai.com; turn it off for OpenAI-compatible servers that reject unknown parameters.",
         "promptCachingExplicit": "Marks the tools, system prompt and conversation for caching. Cached input costs about a tenth of normal input, but writing it costs a quarter more, so this pays off when the same app is used again within five minutes. Only for models that support prompt caching.",
         "nativeWebSearchToolVersion": "Newer versions let Claude filter search results in code before they reach the context window, which saves tokens on search-heavy prompts. Google Cloud and Azure-hosted Foundry only offer the basic version.",
-        "nativeWebSearchDynamicFiltering": "Runs web search from code execution (Claude 4.6 or later on the Claude API). When off, the newer tool version is called directly."
+        "nativeWebSearchDynamicFiltering": "Runs web search from code execution (Claude 4.6 or later on the Claude API). When off, the newer tool version is called directly.",
+        "thinkingEnabled": "Ask the model to think before answering. The reasoning is returned separately from the answer; leave off and a reasoning model writes its thinking into the answer text instead.",
+        "thinkingLevel": "Sent as reasoning_effort (OpenAI, vLLM) or thinkingLevel (Gemini). Servers that do not support it ignore the value — leave on provider default unless the model documents these levels.",
+        "thinkingThoughts": "Surface the reasoning to users behind the \"Show thinking\" toggle. Turn off to keep it hidden."
       },
       "placeholders": {
         "selectProvider": "Select a provider",
@@ -907,7 +918,8 @@
         "imageGeneration": "Image Generation Settings",
         "nativeWebSearch": "Native Web Search",
         "promptCaching": "Prompt Caching",
-        "providerConfig": "Provider Settings"
+        "providerConfig": "Provider Settings",
+        "thinking": "Reasoning"
       },
       "errors": {
         "invalidJson": "Invalid JSON"
@@ -2143,10 +2155,15 @@
       "statusAll": "All Status",
       "statusAvailable": "Available",
       "statusInstalled": "Installed",
+      "statusLocal": "Local copy",
       "searchPlaceholder": "Search items...",
       "noResults": "No items found. Try adjusting your filters or refreshing your registries.",
       "confirmUninstall": "Are you sure you want to uninstall this item? This will delete the files.",
       "confirmDetach": "Detach this item from marketplace tracking? Files will be kept.",
+      "localCopy": "Local copy",
+      "localCopyHint": "This instance already has an item with this ID that was not installed from the marketplace. Installing replaces it.",
+      "replaceLocal": "Replace local copy",
+      "confirmReplaceLocal": "Replace the local copy with the marketplace version? Changes made to the local copy are lost. A model keeps its API key and default setting.",
       "noRegistries": {
         "title": "No registries configured",
         "description": "Add a marketplace registry to discover and install content.",

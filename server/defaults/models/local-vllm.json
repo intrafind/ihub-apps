@@ -16,5 +16,8 @@
   "supportsTools": false,
   "enabled": false,
   "default": false,
-  "autoDiscovery": true
+  "autoDiscovery": true,
+  "thinking": {
+    "enabled": true
+  }
 }

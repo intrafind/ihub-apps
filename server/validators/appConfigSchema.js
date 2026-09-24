@@ -30,6 +30,10 @@ const variableSchema = z.object({
       'Variable name must start with letter/underscore and contain only alphanumeric characters, underscores, and hyphens'
     ),
   label: localizedStringSchema,
+  // Help text and input placeholder shown with the variable in the chat UI.
+  // Undeclared, both were stripped on load and never reached the client.
+  description: localizedStringSchema.optional(),
+  placeholder: localizedStringSchema.optional(),
   type: z.enum(['string', 'text', 'number', 'boolean', 'date', 'select']),
   required: z.boolean().optional().prefault(false),
   defaultValue: z
