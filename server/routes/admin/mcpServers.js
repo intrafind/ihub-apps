@@ -7,6 +7,7 @@ import {
   mcpServerConfigSchema
 } from '../../validators/mcpServerConfigSchema.js';
 import mcpClientManager from '../../services/mcp/McpClientManager.js';
+import { MCP_SERVER_CATALOG, MCP_CATALOG_CATEGORIES } from '../../services/mcp/serverCatalog.js';
 import configCache from '../../configCache.js';
 import logger from '../../utils/logger.js';
 
@@ -32,6 +33,14 @@ async function writeConfig(updated) {
   const { data: fresh } = configCache.getMcpServers();
   await mcpClientManager.initialize(fresh);
   return parsed.data;
+}
+
+// Endpoint identity for matching catalog entries against configured servers:
+// case-insensitive, ignoring a trailing slash.
+function endpointKey(transport) {
+  return typeof transport?.url === 'string'
+    ? transport.url.trim().replace(/\/+$/, '').toLowerCase()
+    : null;
 }
 
 export default function registerAdminMcpServersRoutes(app) {
@@ -162,6 +171,28 @@ export default function registerAdminMcpServersRoutes(app) {
         error: error.message
       });
       res.status(400).json({ success: false, error: error.message, details: error.details });
+    }
+  });
+
+  // Built-in catalog of hosted MCP servers the admin can start from. An entry
+  // is `installed` when a configured server already uses its id or endpoint.
+  app.get(buildServerPath('/api/admin/mcp/catalog'), adminAuth, async (req, res) => {
+    try {
+      const cfg = await readConfig();
+      const servers = cfg.servers || [];
+      const ids = new Set(servers.map(s => s.id));
+      const endpoints = new Set(servers.map(s => endpointKey(s.transport)).filter(Boolean));
+      res.json({
+        success: true,
+        categories: MCP_CATALOG_CATEGORIES,
+        entries: MCP_SERVER_CATALOG.map(entry => ({
+          ...entry,
+          installed: ids.has(entry.id) || endpoints.has(endpointKey(entry.transport))
+        }))
+      });
+    } catch (error) {
+      logger.error('[MCP Admin] Catalog error', { component: 'AdminMcp', error });
+      res.status(500).json({ success: false, error: 'Failed to load MCP server catalog' });
     }
   });
 

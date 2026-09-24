@@ -12,7 +12,9 @@ it runs.
 
 Connecting to an MCP server over Streamable HTTP often failed with `406 Not Acceptable`, or the
 connection test and tool calls timed out. iHub dropped the request headers the protocol requires
-and could not read streamed (`text/event-stream`) replies. Both now work.
+and could not read streamed (`text/event-stream`) replies. Both now work. Message requests over
+the legacy SSE transport now also go through the same private-address protection as the rest of
+the connection.
 
 ## External MCP Servers No Longer Receive iHub User Details
 

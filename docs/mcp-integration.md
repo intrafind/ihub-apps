@@ -19,22 +19,23 @@ already uses.
 ### Configuration
 
 External MCP servers are configured in `contents/config/mcpServers.json`
-or via the admin UI at **Admin → MCP servers**:
+or via the admin UI at **Admin → MCP servers**. To start from a known
+hosted server, use **Browse catalog** there (see [Server catalog](#server-catalog)).
 
 ```jsonc
 {
   "servers": [
     {
-      "id": "github-mcp",
-      "name": { "en": "GitHub MCP" },
+      "id": "github",
+      "name": { "en": "GitHub" },
       "enabled": true,
       "transport": {
         "type": "streamableHttp",
-        "url": "https://mcp.github.com/sse"
+        "url": "https://api.githubcopilot.com/mcp/"
       },
       "auth": {
         "type": "bearer",
-        "token": "ENC[AES256_GCM,...]"
+        "tokenRef": "github-pat"
       },
       "toolPrefix": "github__",
       "allowedTools": ["*"],
@@ -64,27 +65,47 @@ or via the admin UI at **Admin → MCP servers**:
 | `stdio` | Local MCP server invoked as a child process. iHub does not invoke a shell — args go straight to `execve`. |
 | `websocket` | Less common. Supported for parity. |
 
+`streamableHttp` and `sse` accept an optional `headers` map of non-secret
+headers sent with every request — a scope or account id some vendors
+expect next to the key:
+
+```json
+"transport": {
+  "type": "streamableHttp",
+  "url": "https://mcp.close.com/mcp",
+  "headers": { "Close-Scope": "mcp.read" }
+}
+```
+
+Values are stored in plaintext, so `Authorization` is refused here —
+credentials go in the `auth` block. Header names the transport sets
+itself are refused as well.
+
 ### Authentication
 
 The `auth` block on a server entry supports:
 
 - `{ "type": "none" }` — no auth header.
-- `{ "type": "bearer", "token": "..." }` — `Authorization: Bearer <token>`.
-- `{ "type": "basic", "username": "...", "password": "..." }`.
-- `{ "type": "oauth", "tokenUrl": "...", "clientId": "...", "clientSecret": "..." }`
-  — fetches an access token on connect (basic support; not all transports
-  yet hook this into the SDK's OAuth provider).
+- `{ "type": "bearer", "tokenRef": "..." }` — `Authorization: Bearer <token>`.
+- `{ "type": "header", "headerName": "X-Goog-Api-Key", "valueRef": "..." }` —
+  the key in a vendor-specific header. An optional `valuePrefix` is put in
+  front of the key (`"valuePrefix": "Token token="` sends
+  `Token token=<key>`). Header names the transport sets itself (`Host`,
+  `Content-Type`, `Accept`, `Mcp-Session-Id`, `Mcp-Protocol-Version`, …)
+  are refused.
+- `{ "type": "basic", "username": "...", "passwordRef": "..." }`.
+- `{ "type": "oauth", "tokenUrl": "...", "clientId": "...", "clientSecretRef": "..." }`
+  — OAuth client credentials: iHub fetches a token and refreshes it before
+  it expires.
 
-Secrets are **encrypted at rest** with `TokenStorageService` (AES-256-GCM):
+Every `*Ref` field names a profile in the central credential store
+(**Admin → Credentials**, `contents/config/credentials.json`). The secret
+is encrypted at rest there and resolved only when the connection is
+opened, so `mcpServers.json` never holds secret material.
 
-- Admin saves go through `encryptSecrets()` before disk write.
-- Admin reads return `***REDACTED***` so secrets never leave the server.
-- Unlike `platform.json` secrets (which `configCache` decrypts on load),
-  `mcpServers.json` secrets stay encrypted in the cache. `McpServerConnection._decryptAuth()`
-  decrypts them at connect time, so only the connection code sees plaintext.
-
-Environment-variable placeholders (`${MY_TOKEN}`) work too and are left
-unencrypted.
+There is no per-user sign-in yet: every user of a server shares the one
+credential configured for it. Servers that only accept an interactive
+OAuth login for each user cannot be connected today.
 
 ### Security
 
@@ -285,6 +306,74 @@ where a view was without running it.
 - `DELETE /api/admin/mcp/servers/:id`.
 - `POST /api/admin/mcp/servers/:id/test` — drop the cached connection,
   reconnect, run `tools/list`, return the resulting status.
+- `GET /api/admin/mcp/catalog` — the built-in server catalog (see below),
+  each entry flagged `installed` when a configured server already uses its
+  id or URL.
+
+### Server catalog
+
+**Admin → MCP servers → Browse catalog** offers hosted MCP servers that
+iHub can connect to with one shared credential. Picking one pre-fills the
+create form — endpoint, auth type, header name, extra headers — and shows
+where to create the key plus region-specific URLs and URL options. The
+admin stores the key under **Admin → Credentials**, selects it, tests and
+saves; nothing is added until then.
+
+The catalog ships with iHub (`server/services/mcp/serverCatalog.js`), so it
+updates with each release and needs no configuration. Servers that only
+support an interactive OAuth login for each user are not listed: iHub has
+no per-user outbound OAuth yet.
+
+draw.io and Excalidraw are MCP App servers (see [MCP Apps](#mcp-apps--interactive-views)):
+their tools return a view that renders in the chat. iHub already ships both
+as disabled servers with the same ids, so on most installations the catalog
+shows them as **Added** — enable them in the server list instead.
+
+| Server | Category | Endpoint | Authentication |
+|--------|----------|----------|----------------|
+| Microsoft Learn | Documentation | `https://learn.microsoft.com/api/mcp` | none |
+| Context7 | Documentation | `https://mcp.context7.com/mcp` | none |
+| DeepWiki | Documentation | `https://mcp.deepwiki.com/mcp` | none |
+| Astro Docs | Documentation | `https://mcp.docs.astro.build/mcp` | none |
+| GitHub | Development & operations | `https://api.githubcopilot.com/mcp/` | Bearer token |
+| Sentry | Development & operations | `https://mcp.sentry.dev/mcp` | `Authorization: Sentry-Bearer <key>` |
+| Postman | Development & operations | `https://mcp.postman.com/minimal` | Bearer token |
+| Cloudflare | Development & operations | `https://mcp.cloudflare.com/mcp` | Bearer token |
+| Supabase | Development & operations | `https://mcp.supabase.com/mcp` | Bearer token |
+| Neon | Development & operations | `https://mcp.neon.tech/mcp` | Bearer token |
+| Render | Development & operations | `https://mcp.render.com/mcp` | Bearer token |
+| Buildkite | Development & operations | `https://mcp.buildkite.com/direct` | Bearer token |
+| Honeycomb | Development & operations | `https://mcp.honeycomb.io/mcp` | Bearer token |
+| PagerDuty | Development & operations | `https://mcp.pagerduty.com/mcp` | `Authorization: Token token=<key>` |
+| Braintrust | Development & operations | `https://api.braintrust.dev/mcp` | Bearer token |
+| Atlassian (Jira & Confluence) | Productivity | `https://mcp.atlassian.com/v2/mcp` | Basic (email + API token) |
+| Linear | Productivity | `https://mcp.linear.app/mcp` | Bearer token |
+| monday.com | Productivity | `https://mcp.monday.com/mcp` | Bearer token |
+| Coda | Productivity | `https://coda.io/apis/mcp` | Bearer token |
+| draw.io | Design & diagrams | `https://mcp.draw.io/mcp` | none |
+| Excalidraw | Design & diagrams | `https://mcp.excalidraw.com/mcp` | none |
+| Sanity | Content & media | `https://mcp.sanity.io` | Bearer token |
+| Cloudinary | Content & media | `https://asset-management.mcp.cloudinary.com/mcp` | `cloudinary-url: <key>` |
+| Wix | Content & media | `https://mcp.wix.com/mcp` | `Authorization: <key>` + `wix-account-id` |
+| Zapier | Automation & web | `https://mcp.zapier.com/api/v1/connect` | Bearer token |
+| Apify | Automation & web | `https://mcp.apify.com` | Bearer token |
+| Browser Use | Automation & web | `https://api.browser-use.com/v3/mcp` | `X-Browser-Use-API-Key: <key>` |
+| superglue | Automation & web | `https://api.superglue.cloud/mcp` | Bearer token |
+| Close | Sales & support | `https://mcp.close.com/mcp` | `Close-API-Key: <key>` + `Close-Scope` |
+| Intercom | Sales & support | `https://mcp.intercom.com/mcp` | Bearer token |
+| Fireflies.ai | Sales & support | `https://api.fireflies.ai/mcp` | Bearer token |
+| Modjo | Sales & support | `https://api.mcp.modjo.ai/v1/mcp` | Bearer token |
+| PostHog | Analytics | `https://mcp.posthog.com/mcp` | Bearer token |
+| Hugging Face | Data & research | `https://huggingface.co/mcp` | none |
+| Google Maps | Data & research | `https://mapstools.googleapis.com/mcp` | `X-Goog-Api-Key: <key>` |
+| Statista | Data & research | `https://api.statista.ai/v1/mcp` | `x-api-key: <key>` |
+| PRIMAMCP | Data & research | `https://mcp.planitprima.com/mcp` | Bearer token |
+| Stripe | Finance & payments | `https://mcp.stripe.com` | Bearer token |
+| Debitura | Finance & payments | `https://mcp.debitura.com/mcp` | Bearer token |
+
+Endpoints and credential requirements are the vendors' and change over
+time. **Test connection** in the create dialog shows at once whether a
+key is accepted.
 
 ## Inbound — exposing iHub as an MCP server
 

@@ -60,9 +60,10 @@ export class McpServerConnection {
   /**
    * Resolve auth secrets from the central credential store. The auth block in
    * mcpServers.json carries only credentialRef pointers (`tokenRef`,
-   * `passwordRef`, `clientSecretRef`); the plaintext secret is fetched here at
-   * connect time and inlined onto the returned auth object as the field name
-   * the header builders expect (`token` / `password` / `clientSecret`).
+   * `passwordRef`, `clientSecretRef`, `valueRef`); the plaintext secret is
+   * fetched here at connect time and inlined onto the returned auth object as
+   * the field name the header builders expect (`token` / `password` /
+   * `clientSecret` / `value`).
    */
   _resolveAuth(auth) {
     if (!auth) return { type: 'none' };
@@ -70,7 +71,8 @@ export class McpServerConnection {
     const refFields = {
       tokenRef: 'token',
       passwordRef: 'password',
-      clientSecretRef: 'clientSecret'
+      clientSecretRef: 'clientSecret',
+      valueRef: 'value'
     };
     for (const [refField, plainField] of Object.entries(refFields)) {
       if (typeof out[refField] === 'string' && out[refField]) {
@@ -91,7 +93,7 @@ export class McpServerConnection {
   }
 
   /**
-   * Build static auth headers for bearer/basic. OAuth is handled separately
+   * Build static auth headers for bearer/basic/header. OAuth is handled separately
    * (async, per-request, with caching) in _getAuthHeaders so token refresh
    * works without rebuilding the transport.
    */
@@ -101,6 +103,9 @@ export class McpServerConnection {
     if (auth.type === 'basic') {
       const creds = Buffer.from(`${auth.username}:${auth.password}`).toString('base64');
       return { Authorization: `Basic ${creds}` };
+    }
+    if (auth.type === 'header') {
+      return { [auth.headerName]: `${auth.valuePrefix || ''}${auth.value}` };
     }
     return {};
   }
@@ -163,18 +168,26 @@ export class McpServerConnection {
       // address has shifted to a private range.
       await assertSafeHost(url.hostname, this.security.allowedHosts, blockPrivateIps);
 
-      const requestInit = { headers: this._buildAuthHeaders(auth) };
+      const requestInit = { headers: { ...(t.headers || {}), ...this._buildAuthHeaders(auth) } };
       const allowHosts = this.security.allowedHosts;
 
       // Use our DNS-pinned fetch as the SDK's underlying transport so the
       // socket can't be steered to a private IP between validation and connect.
       // Auth headers are resolved per request so OAuth client-credentials
       // tokens refresh transparently without rebuilding the transport.
+      // The SDK passes a `Headers` instance that already carries the static
+      // auth headers (lowercased, from requestInit). Auth headers are *set* on
+      // it rather than spread next to it: a plain-object merge would send both
+      // `authorization` and `Authorization`, which fetch joins into
+      // "Bearer t, Bearer t".
       const pinnedFetch = async (input, init = {}) => {
-        const authHeaders = await this._getAuthHeaders(auth);
+        const headers = new Headers(init.headers);
+        for (const [name, value] of Object.entries(await this._getAuthHeaders(auth))) {
+          headers.set(name, value);
+        }
         return safeFetch(
           input,
-          { ...init, headers: { ...toPlainHeaders(init.headers), ...authHeaders } },
+          { ...init, headers: toPlainHeaders(headers) },
           {
             allowHosts,
             blockPrivateIps
@@ -200,6 +213,7 @@ export class McpServerConnection {
       // by Streamable HTTP; we keep this for back-compat with older servers.
       return new SSEClientTransport(url, {
         requestInit,
+        fetch: pinnedFetch,
         eventSourceInit: { fetch: pinnedFetch }
       });
     }
