@@ -89,3 +89,9 @@ middle of the answer instead of behind the **Show thinking** toggle.
   started with a matching `--reasoning-parser` (for example `qwen3`), otherwise there is no
   separate thinking for iHub to show.
 
+## Models: Context Window Read From the Endpoint When Not Configured
+
+A model that declares no **Context Window** now uses the length its endpoint reports (vLLM's
+`max_model_len` on `/v1/models`) instead of a conservative default, so long chats keep more history
+before older tool output is collapsed. A configured value always wins — lowering it deliberately
+still works, and endpoints that do not report a length are unaffected.

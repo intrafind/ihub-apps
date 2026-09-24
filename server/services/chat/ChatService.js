@@ -49,6 +49,7 @@ import {
 } from './chatSeams.js';
 import { describeChatError } from './chatErrors.js';
 import * as defaultTelemetry from './chatTelemetry.js';
+import modelDiscoveryService from '../ModelDiscoveryService.js';
 
 const COMPONENT = 'ChatService';
 
@@ -103,13 +104,20 @@ const CHAT_COMPACT_WINDOW_SHARE = 0.5;
 
 /**
  * Compaction threshold for a chat turn on `model`.
- * Falls back to the floor when the model declares no usable contextWindow.
  *
- * @param {{contextWindow?: number}} model - resolved model config
+ * A configured contextWindow always wins — operators lower it deliberately.
+ * Only when the model declares none do we fall back to the context length
+ * discovery saw on the endpoint (vLLM's `max_model_len`), and to the floor
+ * when that is unknown too.
+ *
+ * @param {{contextWindow?: number, id?: string}} model - resolved model config
  * @returns {number} threshold in estimated tokens
  */
 export function chatCompactThresholdTokens(model) {
-  const window = Number(model?.contextWindow);
+  let window = Number(model?.contextWindow);
+  if ((!Number.isFinite(window) || window <= 0) && model?.id) {
+    window = Number(modelDiscoveryService.getDiscoveredContextWindow(model.id));
+  }
   if (!Number.isFinite(window) || window <= 0) return CHAT_COMPACT_MIN_TOKENS;
   return Math.max(CHAT_COMPACT_MIN_TOKENS, Math.floor(window * CHAT_COMPACT_WINDOW_SHARE));
 }
