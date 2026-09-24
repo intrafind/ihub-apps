@@ -360,8 +360,7 @@
           "acknowledge": "I Understand"
         }
       },
-      "newChat": "New Chat",
-      "shareChat": "Share chat"
+      "newChat": "New Chat"
     },
     "authRequired": {
       "title": "Authentication Required",
@@ -3946,6 +3945,33 @@
     "stopped": "Stopped",
     "moreValues_one": "+{{count}} more",
     "moreValues_other": "+{{count}} more"
+  },
+  "shareDialog": {
+    "title": "Share",
+    "titleApp": "Share app",
+    "targetLabel": "What to share",
+    "target": {
+      "chat": {
+        "label": "This conversation",
+        "hint": "A read-only copy of the messages so far"
+      },
+      "app": {
+        "label": "Link to the app",
+        "hint": "Opens the app for a new chat, without your messages"
+      }
+    },
+    "chatNotReady": "Send a first message — a conversation can be shared once it has started.",
+    "thisApp": "this app",
+    "appLink": {
+      "description": "A short link that opens {{app}} for a new chat. Your conversation is not part of it.",
+      "includeSettingsHint": "Recipients start with the model, style and input values you have selected now.",
+      "moreOptions": "More options",
+      "codeLabel": "Custom short code",
+      "codePlaceholder": "Generated automatically",
+      "codeHint": "Optional, at least {{count}} characters.",
+      "expiryHint": "Leave empty and the link does not expire.",
+      "createFailed": "The link could not be created."
+    }
   },
   "chatSharing": {
     "title": "Share chat",

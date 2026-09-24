@@ -1,11 +1,11 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
-import Modal from '../../../shared/components/Modal';
 import Icon from '../../../shared/components/Icon';
 import ConfirmDialog from '../../../shared/components/ConfirmDialog';
 import { usePlatformConfig } from '../../../shared/contexts/PlatformConfigContext';
 import { createChatShare, fetchChatShares, lookupUsers, revokeChatShare } from '../../../api';
 import { buildPath } from '../../../utils/runtimeBasePath';
+import ShareLinkResult, { CopyLinkButton, shareInputClass as inputClass } from './ShareLinkResult';
 
 const DAY_MS = 24 * 60 * 60 * 1000;
 
@@ -19,9 +19,6 @@ const EXPIRY_PRESETS = [
 
 /** The three audiences, in the order the form offers them. */
 const MODE_ORDER = ['users', 'authenticated', 'public'];
-
-const inputClass =
-  'w-full rounded-lg border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 px-3 py-2 text-sm text-gray-900 dark:text-gray-100 focus:outline-hidden focus:ring-2 focus:ring-indigo-500';
 
 /**
  * The absolute URL of a share, including the deployment base path.
@@ -57,34 +54,6 @@ function endOfDayIso(value) {
   const [y, m, d] = value.split('-').map(Number);
   if (!y || !m || !d) return null;
   return new Date(y, m - 1, d, 23, 59, 59, 999).toISOString();
-}
-
-/**
- * A small copy-to-clipboard button that says when it worked.
- *
- * @param {Object} props - Component properties.
- * @param {string} props.text - What to copy.
- * @param {string} [props.className] - Extra classes.
- * @returns {JSX.Element}
- */
-function CopyButton({ text, className = '' }) {
-  const { t } = useTranslation();
-  const [copied, setCopied] = useState(false);
-  useEffect(() => {
-    if (!copied) return undefined;
-    const timer = setTimeout(() => setCopied(false), 2000);
-    return () => clearTimeout(timer);
-  }, [copied]);
-  return (
-    <button
-      type="button"
-      onClick={() => navigator.clipboard?.writeText(text).then(() => setCopied(true))}
-      className={`inline-flex items-center gap-1 px-3 py-1.5 text-sm rounded-lg border border-gray-200 dark:border-gray-600 text-gray-700 dark:text-gray-200 hover:bg-gray-100 dark:hover:bg-gray-700 ${className}`}
-    >
-      <Icon name={copied ? 'check' : 'copy'} size="sm" />
-      {copied ? t('chatSharing.copied', 'Copied') : t('chatSharing.copy', 'Copy link')}
-    </button>
-  );
 }
 
 /**
@@ -142,7 +111,7 @@ function ShareRow({ share, onRevoke }) {
           {formatDate(share.createdAt, i18n.language)}
         </span>
         <span className="ml-auto flex items-center gap-2">
-          {active && <CopyButton text={shareUrl(share.id)} />}
+          {active && <CopyLinkButton text={shareUrl(share.id)} />}
           {active && (
             <button
               type="button"
@@ -217,7 +186,8 @@ function ShareRow({ share, onRevoke }) {
 }
 
 /**
- * Share a stored chat as a read-only link.
+ * Share a stored chat as a read-only link — the "This conversation" part of
+ * the share dialog.
  *
  * Offers the audiences the installation allows (`platformConfig.chats.sharing`),
  * a recipient picker for `users` mode, an expiry and a view limit within the
@@ -227,11 +197,9 @@ function ShareRow({ share, onRevoke }) {
  *
  * @param {Object} props - Component properties.
  * @param {string} props.chatId - The stored chat.
- * @param {boolean} props.isOpen - Whether the dialog is shown.
- * @param {() => void} props.onClose - Close the dialog.
- * @returns {JSX.Element|null}
+ * @returns {JSX.Element}
  */
-export default function ShareChatModal({ chatId, isOpen, onClose }) {
+export default function ChatSharePanel({ chatId }) {
   const { t } = useTranslation();
   const { platformConfig } = usePlatformConfig();
   const sharing = platformConfig?.chats?.sharing || {};
@@ -289,7 +257,6 @@ export default function ShareChatModal({ chatId, isOpen, onClose }) {
     max: maxExpiryDays ? toDateInputValue(new Date(Date.now() + maxExpiryDays * DAY_MS)) : undefined
   }));
   const searchTimerRef = useRef(null);
-  const titleRef = useRef(null);
 
   const loadShares = useCallback(async () => {
     setShares(prev => ({ ...prev, loading: true, error: null }));
@@ -302,8 +269,8 @@ export default function ShareChatModal({ chatId, isOpen, onClose }) {
   }, [chatId]);
 
   useEffect(() => {
-    if (isOpen) loadShares();
-  }, [isOpen, loadShares]);
+    loadShares();
+  }, [loadShares]);
 
   // Recipient lookup, debounced; results never include who is already picked.
   useEffect(() => {
@@ -420,68 +387,24 @@ export default function ShareChatModal({ chatId, isOpen, onClose }) {
     })[key];
 
   return (
-    <Modal
-      isOpen={isOpen}
-      onClose={onClose}
-      maxWidthClassName="max-w-2xl"
-      initialFocusRef={titleRef}
-    >
-      <div className="flex items-start justify-between gap-4 px-6 py-4 border-b border-gray-200 dark:border-gray-700">
+    <div className="space-y-6">
+      <p className="text-sm text-gray-500 dark:text-gray-400">
+        {t(
+          'chatSharing.description',
+          'Recipients get a read-only copy of this conversation as it is right now. Later messages, edits and uploaded files are not part of it.'
+        )}
+      </p>
+      {allowedModes.length === 0 ? (
+        <p className="text-sm text-gray-600 dark:text-gray-300">
+          {t('chatSharing.noModes', 'Sharing chats is not available here.')}
+        </p>
+      ) : created ? (
+        <ShareLinkResult url={shareUrl(created.id)} onCreateAnother={() => setCreated(null)} />
+      ) : (
+        // App.css makes every form sticky on phones (meant for the chat
+        // input). Alone in its wrapper this one has no room to move, so it
+        // cannot slide up over the description above it.
         <div>
-          <h2
-            ref={titleRef}
-            tabIndex={-1}
-            className="text-lg font-semibold text-gray-900 dark:text-gray-100 outline-hidden"
-          >
-            {t('chatSharing.title', 'Share chat')}
-          </h2>
-          <p className="text-sm text-gray-500 dark:text-gray-400 mt-0.5">
-            {t(
-              'chatSharing.description',
-              'Recipients get a read-only copy of this conversation as it is right now. Later messages, edits and uploaded files are not part of it.'
-            )}
-          </p>
-        </div>
-        <button
-          type="button"
-          onClick={onClose}
-          aria-label={t('common.close', 'Close')}
-          className="p-1.5 rounded-lg text-gray-500 hover:text-gray-700 hover:bg-gray-100 dark:hover:bg-gray-700 dark:hover:text-gray-200"
-        >
-          <Icon name="x" size="sm" />
-        </button>
-      </div>
-
-      <div className="flex-1 overflow-y-auto px-6 py-5 space-y-6">
-        {allowedModes.length === 0 ? (
-          <p className="text-sm text-gray-600 dark:text-gray-300">
-            {t('chatSharing.noModes', 'Sharing chats is not available here.')}
-          </p>
-        ) : created ? (
-          <div className="rounded-xl border border-green-200 dark:border-green-800 bg-green-50 dark:bg-green-900/20 p-4 space-y-3">
-            <div className="flex items-center gap-2 text-green-800 dark:text-green-200 font-semibold">
-              <Icon name="check-circle" size="sm" />
-              {t('chatSharing.created', 'Link created')}
-            </div>
-            <div className="flex items-center gap-2">
-              <input
-                readOnly
-                value={shareUrl(created.id)}
-                onFocus={e => e.target.select()}
-                aria-label={t('chatSharing.linkLabel', 'Share link')}
-                className={`${inputClass} font-mono text-xs`}
-              />
-              <CopyButton text={shareUrl(created.id)} />
-            </div>
-            <button
-              type="button"
-              onClick={() => setCreated(null)}
-              className="text-sm font-medium text-indigo-600 dark:text-indigo-400 hover:underline"
-            >
-              {t('chatSharing.createAnother', 'Create another link')}
-            </button>
-          </div>
-        ) : (
           <form onSubmit={handleCreate} className="space-y-5">
             <fieldset>
               <legend className="text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
@@ -760,41 +683,41 @@ export default function ShareChatModal({ chatId, isOpen, onClose }) {
               </button>
             </div>
           </form>
-        )}
+        </div>
+      )}
 
-        <section aria-labelledby="share-existing-heading">
-          <h3
-            id="share-existing-heading"
-            className="text-[11px] font-bold tracking-widest uppercase text-gray-500 dark:text-gray-400 mb-2"
-          >
-            {t('chatSharing.existingTitle', 'Links for this chat')}
-          </h3>
-          {revokeError && (
-            <p role="alert" className="text-sm text-red-600 dark:text-red-400 mb-2">
-              {revokeError}
-            </p>
-          )}
-          {shares.loading ? (
-            <p className="text-sm text-gray-500 dark:text-gray-400">
-              {t('common.loading', 'Loading…')}
-            </p>
-          ) : shares.error ? (
-            <p className="text-sm text-red-600 dark:text-red-400">
-              {t('chatSharing.loadFailed', 'The links could not be loaded.')}
-            </p>
-          ) : shares.items.length === 0 ? (
-            <p className="text-sm text-gray-500 dark:text-gray-400">
-              {t('chatSharing.existingEmpty', 'This chat has not been shared yet.')}
-            </p>
-          ) : (
-            <ul className="space-y-2">
-              {shares.items.map(share => (
-                <ShareRow key={share.id} share={share} onRevoke={() => setConfirmRevoke(share)} />
-              ))}
-            </ul>
-          )}
-        </section>
-      </div>
+      <section aria-labelledby="share-existing-heading">
+        <h3
+          id="share-existing-heading"
+          className="text-[11px] font-bold tracking-widest uppercase text-gray-500 dark:text-gray-400 mb-2"
+        >
+          {t('chatSharing.existingTitle', 'Links for this chat')}
+        </h3>
+        {revokeError && (
+          <p role="alert" className="text-sm text-red-600 dark:text-red-400 mb-2">
+            {revokeError}
+          </p>
+        )}
+        {shares.loading ? (
+          <p className="text-sm text-gray-500 dark:text-gray-400">
+            {t('common.loading', 'Loading…')}
+          </p>
+        ) : shares.error ? (
+          <p className="text-sm text-red-600 dark:text-red-400">
+            {t('chatSharing.loadFailed', 'The links could not be loaded.')}
+          </p>
+        ) : shares.items.length === 0 ? (
+          <p className="text-sm text-gray-500 dark:text-gray-400">
+            {t('chatSharing.existingEmpty', 'This chat has not been shared yet.')}
+          </p>
+        ) : (
+          <ul className="space-y-2">
+            {shares.items.map(share => (
+              <ShareRow key={share.id} share={share} onRevoke={() => setConfirmRevoke(share)} />
+            ))}
+          </ul>
+        )}
+      </section>
 
       <ConfirmDialog
         isOpen={!!confirmRevoke}
@@ -808,6 +731,6 @@ export default function ShareChatModal({ chatId, isOpen, onClose }) {
         onConfirm={() => confirmRevoke && handleRevoke(confirmRevoke)}
         onDeny={() => setConfirmRevoke(null)}
       />
-    </Modal>
+    </div>
   );
 }

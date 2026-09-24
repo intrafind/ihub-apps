@@ -225,7 +225,7 @@ jest.mock('../../../client/src/shared/components/Icon', () => ({
   __esModule: true,
   default: () => null
 }));
-jest.mock('../../../client/src/features/apps/components/AppShareModal', () => ({
+jest.mock('../../../client/src/features/chat/components/ShareDialog', () => ({
   __esModule: true,
   default: () => null
 }));
