@@ -15,6 +15,7 @@
  * @module services/chat/chatDeletion
  */
 import logger from '../../utils/logger.js';
+import { getChatShareRepository } from './ChatShareRepository.js';
 
 /**
  * Run one cascade step without letting it strand the rest.
@@ -56,13 +57,22 @@ async function attempt(step, what, where) {
  *   state of a paused execution that workflow retention deliberately keeps
  *   longer than the ledger. Deleting the chat is the one event that really
  *   does mean the execution's content goes with it.
+ * @param {(chatId: string) => Promise<unknown>} [deps.deleteShares] - Share
+ *   cascade: the links that hand out a frozen copy of this chat, with their
+ *   snapshots. A share outliving its chat would keep serving a transcript the
+ *   owner was told is gone. Injectable for tests.
  * @param {string} deps.component - Log component of the caller.
  * @returns {Promise<{deleted: boolean, runIds: string[]}>}
  */
 export async function deleteChatWithCascade(
   repository,
   chatId,
-  { deleteRun, removeWorkflowState, component }
+  {
+    deleteRun,
+    removeWorkflowState,
+    deleteShares = id => getChatShareRepository().deleteSharesForChat(id),
+    component
+  }
 ) {
   // The chat document is the only place a chat's runs are recorded, so it has
   // to be read before it is removed — `deleteChat` returns them for exactly
@@ -73,6 +83,10 @@ export async function deleteChatWithCascade(
     await attempt(() => deleteRun(runId), 'one of its runs', where);
     await attempt(() => removeWorkflowState(runId), 'the workflow state of one of its runs', where);
   }
+  // Shares are keyed by chat id in their own index, so they do not need the
+  // chat document and can go after it — and must, so a delete that fails
+  // before this point leaves a re-deletable chat rather than orphaned links.
+  await attempt(() => deleteShares(chatId), 'its shares', { component, chatId, runId: null });
   return { deleted, runIds };
 }
 

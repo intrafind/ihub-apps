@@ -10,6 +10,7 @@ import { buildServerPath } from '../../utils/basePath.js';
 import { isValidLanguageCode } from '../../utils/pathSecurity.js';
 import { resolveFeatures, requireFeature } from '../../featureRegistry.js';
 import { isChatPersistenceConfigured } from '../../services/chat/chatPersistence.js';
+import { chatSharingClientConfig } from '../../services/chat/chatSharing.js';
 import crypto from 'crypto';
 import logger from '../../utils/logger.js';
 import { sendInternalError, sendFailedOperationError } from '../../utils/responseHelpers.js';
@@ -973,7 +974,11 @@ export default function registerDataRoutes(app) {
         // obvious-looking name would enable the UI in exactly the cases where
         // nothing gets stored. Nothing read it.
         chats: {
-          persistence: isChatPersistenceConfigured(configCache.getFeatures(), platform)
+          persistence: isChatPersistenceConfigured(configCache.getFeatures(), platform),
+          // Sharing rides on persistence: whether links can be made at all,
+          // which audiences an owner may pick and the caps the form has to
+          // respect. The server enforces the same caps on create.
+          sharing: chatSharingClientConfig(configCache.getFeatures(), platform)
         },
         rateLimit: platform.rateLimit,
         swagger: platform.swagger

@@ -24,6 +24,7 @@ export const KNOWN_ROUTES = [
   'pages', // Dynamic content pages
   'prompts', // Prompts listing
   'chats', // Chat history overview
+  'share', // Read-only shared chat (public or sign-in gated per link)
   'settings', // Settings pages (integrations, etc.)
   'teams', // Microsoft Teams embed routes
   'workflows', // Workflow management and execution

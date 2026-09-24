@@ -191,7 +191,7 @@
       "forwardTo": "An",
       "forwardCc": "Cc",
       "forwardSubject": "Betreff",
-      "originalAttached": "Outlook-Add-ins können eine Weiterleitung nicht mit ihren Anhängen nachbauen. Die ursprüngliche Nachricht ist deshalb angehängt \u2014 es geht nichts verloren."
+      "originalAttached": "Outlook-Add-ins können eine Weiterleitung nicht mit ihren Anhängen nachbauen. Die ursprüngliche Nachricht ist deshalb angehängt — es geht nichts verloren."
     },
     "chatReset": {
       "message": "Neuer Chat für diese E-Mail gestartet.",
@@ -373,7 +373,8 @@
           "acknowledge": "Verstanden"
         }
       },
-      "newChat": "Neuer Chat"
+      "newChat": "Neuer Chat",
+      "shareChat": "Chat teilen"
     }
   },
   "models": {
@@ -503,17 +504,17 @@
     "passages_plural": "{{count}} Passagen",
     "openExternal": "Im Browser öffnen",
     "showInDocument": "Diese Textstelle im Dokument anzeigen",
-    "openExternalBlocked": "Das Dokument konnte nicht ge\u00f6ffnet werden \u2013 dieses Fenster hat es blockiert. \u00d6ffnen Sie es stattdessen \u00fcber iHub im Browser.",
-    "openExternalUnavailable": "F\u00fcr dieses Dokument gibt es keinen Link zum \u00d6ffnen.",
+    "openExternalBlocked": "Das Dokument konnte nicht geöffnet werden – dieses Fenster hat es blockiert. Öffnen Sie es stattdessen über iHub im Browser.",
+    "openExternalUnavailable": "Für dieses Dokument gibt es keinen Link zum Öffnen.",
     "downloadFailed": "Das Dokument konnte nicht heruntergeladen werden. Bitte erneut versuchen.",
     "downloadUnavailable": "Dieses Dokument kann hier nicht heruntergeladen werden.",
-    "documentActionFailed": "Diese Aktion konnte nicht ausgef\u00fchrt werden.",
-    "attachToMail": "An E-Mail anh\u00e4ngen",
-    "attachedToMail": "Als {{filename}} an Ihre E-Mail angeh\u00e4ngt.",
-    "attachNeedsDraft": "\u00d6ffnen Sie zuerst eine neue E-Mail oder eine Antwort und h\u00e4ngen Sie das Dokument dort an.",
-    "attachTooLarge": "Dieses Dokument ist zu gro\u00df zum Anh\u00e4ngen. Laden Sie es stattdessen herunter.",
-    "attachUnavailable": "Dieses Dokument kann von hier aus nicht angeh\u00e4ngt werden.",
-    "attachFailed": "Das Dokument konnte nicht an Ihre E-Mail angeh\u00e4ngt werden."
+    "documentActionFailed": "Diese Aktion konnte nicht ausgeführt werden.",
+    "attachToMail": "An E-Mail anhängen",
+    "attachedToMail": "Als {{filename}} an Ihre E-Mail angehängt.",
+    "attachNeedsDraft": "Öffnen Sie zuerst eine neue E-Mail oder eine Antwort und hängen Sie das Dokument dort an.",
+    "attachTooLarge": "Dieses Dokument ist zu groß zum Anhängen. Laden Sie es stattdessen herunter.",
+    "attachUnavailable": "Dieses Dokument kann von hier aus nicht angehängt werden.",
+    "attachFailed": "Das Dokument konnte nicht an Ihre E-Mail angehängt werden."
   },
   "chatMessage": {
     "user": "Du",
@@ -803,9 +804,67 @@
         "ledgerHeading": "Run-Ledger",
         "openFeatures": "Funktionen öffnen",
         "storage": "Speicheranbieter bereit",
-        "title": "Status"
+        "title": "Status",
+        "sharingHeading": "Chats teilen",
+        "sharingActive": "Links können erstellt werden",
+        "sharingActiveHelp": "Benötigt dauerhafte Chats, das Feature und den Schalter unten.",
+        "sharingFeature": "Feature „Chats teilen“",
+        "sharingEnabled": "Teilen aktiviert",
+        "sharingEnabledHelp": "Die Einstellung „Teilen von Chats erlauben“ unten."
       },
-      "title": "Chatverlauf"
+      "title": "Chatverlauf",
+      "sharing": {
+        "title": "Chats teilen",
+        "description": "Schreibgeschützte Links auf gespeicherte Chats. Erfordert zusätzlich das Feature „Chats teilen“. Ein Link ist eine Kopie des Chats im Stand zum Zeitpunkt des Teilens; hochgeladene Dateien sind nie enthalten.",
+        "enabled": "Teilen von Chats erlauben",
+        "enabledHelp": "Beim Ausschalten werden keine neuen Links mehr erstellt und bestehende sind geschlossen, bis es wieder eingeschaltet wird.",
+        "allowUsers": "Links für bestimmte Nutzer",
+        "allowUsersHelp": "Der Besitzer wählt Empfänger aus der Nutzerdatenbank; sie melden sich an, um den Link zu öffnen.",
+        "allowAuthenticated": "Links für alle Angemeldeten",
+        "allowAuthenticatedHelp": "Jeder mit einem Konto hier, der den Link hat.",
+        "allowPublic": "Öffentliche Links (ohne Anmeldung)",
+        "allowPublicHelp": "Jeder im Internet, der den Link hat, ohne Anmeldung. Besitzer sehen vor dem Erstellen eine Warnung.",
+        "defaultExpiryDays": "Standard-Ablauf (Tage)",
+        "defaultExpiryDaysHelp": "Ablauf, den ein neuer Link erhält, wenn der Besitzer keinen wählt. 0 bedeutet, Links laufen standardmäßig nicht ab.",
+        "maxExpiryDays": "Längster Ablauf (Tage)",
+        "maxExpiryDaysHelp": "Besitzer können keinen späteren Ablauf wählen, und „Nie“ wird nicht mehr angeboten. 0 hebt die Grenze auf.",
+        "maxViewsCap": "Maximale Aufrufe pro Link",
+        "maxViewsCapHelp": "Besitzer können nicht mehr Aufrufe erlauben, und „Unbegrenzt“ wird nicht mehr angeboten. 0 hebt die Grenze auf."
+      },
+      "shares": {
+        "title": "Geteilte Chats",
+        "total": "Freigaben",
+        "truncated": "Bis zur Scan-Grenze gezählt",
+        "active": "Aktive Links",
+        "views": "Link-Aufrufe",
+        "byMode": "Aktiv nach Zielgruppe",
+        "listTitle": "Neueste Freigaben",
+        "listTruncated": "Nur die neuesten Freigaben werden aufgeführt.",
+        "empty": "Es wurde noch kein Chat geteilt.",
+        "chat": "Chat",
+        "owner": "Besitzer",
+        "audience": "Zielgruppe",
+        "stateLabel": "Status",
+        "viewsLabel": "Aufrufe",
+        "created": "Erstellt",
+        "expires": "Läuft ab",
+        "revoke": "Widerrufen",
+        "revokeTitle": "Diese Freigabe widerrufen?",
+        "revokeMessage": "Der Link zu „{{title}}“ funktioniert sofort für niemanden mehr. Der Chat selbst bleibt unverändert.",
+        "revoked": "Freigabe widerrufen. Der Link öffnet sich nicht mehr.",
+        "revokeFailed": "Freigabe konnte nicht widerrufen werden",
+        "mode": {
+          "users": "Bestimmte Nutzer",
+          "authenticated": "Angemeldete Nutzer",
+          "public": "Öffentlich"
+        },
+        "state": {
+          "active": "Aktiv",
+          "revoked": "Widerrufen",
+          "expired": "Abgelaufen",
+          "exhausted": "Aufruflimit erreicht"
+        }
+      }
     },
     "voiceInput": {
       "title": "Spracheingabe (Speech-to-Text)",
@@ -1569,10 +1628,10 @@
       "officeJsPresetCustom": "Ihre eigene URL",
       "officeJsFallbackWarning": "Die gespeicherte Office.js-Quelle konnte nicht verwendet werden; das Add-in wechselt auf {{mode}}. Prüfen Sie die URL oben.",
       "mailActionTitle": "Antwortaktionen",
-      "mailActionDesc": "Was die Schaltfläche unter jeder Assistenzantwort in Outlook auslöst. Alle Aktionen bleiben im Menü der Schaltfläche verfügbar \u2014 hier wird nur festgelegt, welche ohne zusätzlichen Klick ausgeführt wird.",
+      "mailActionDesc": "Was die Schaltfläche unter jeder Assistenzantwort in Outlook auslöst. Alle Aktionen bleiben im Menü der Schaltfläche verfügbar — hier wird nur festgelegt, welche ohne zusätzlichen Klick ausgeführt wird.",
       "defaultMailAction": "Standardaktion",
-      "defaultMailActionHelp": "Benutzer können dies pro Gerät in den Einstellungen des Aufgabenbereichs überschreiben. Eine für die geöffnete E-Mail nicht mögliche Auswahl fällt auf eine mögliche zurück \u2014 wer \u201eAllen antworten\u201c wählt, erhält beim Schreiben eines Entwurfs weiterhin \u201eEinfügen\u201c.",
-      "mailActionAuto": "Automatisch \u2014 allen antworten im Lesebereich, einfügen beim Schreiben",
+      "defaultMailActionHelp": "Benutzer können dies pro Gerät in den Einstellungen des Aufgabenbereichs überschreiben. Eine für die geöffnete E-Mail nicht mögliche Auswahl fällt auf eine mögliche zurück — wer „Allen antworten“ wählt, erhält beim Schreiben eines Entwurfs weiterhin „Einfügen“.",
+      "mailActionAuto": "Automatisch — allen antworten im Lesebereich, einfügen beim Schreiben",
       "mailActionAnswerAll": "Allen antworten",
       "mailActionAnswer": "Absender antworten",
       "mailActionForward": "Weiterleiten",
@@ -1894,10 +1953,10 @@
         "effectiveHttps": "HTTPS",
         "effectiveNoProxy": "Kein Proxy",
         "effectiveUrlPatterns": "URL-Muster",
-        "effectiveHint": "Was der Server aktuell f\u00fcr ausgehende Anfragen verwendet, einschlie\u00dflich Werten aus der Umgebung. \u00c4nderungen oben werden erst beim Speichern wirksam.",
-        "effectiveUnsaved": "Nicht gespeicherte \u00c4nderungen",
+        "effectiveHint": "Was der Server aktuell für ausgehende Anfragen verwendet, einschließlich Werten aus der Umgebung. Änderungen oben werden erst beim Speichern wirksam.",
+        "effectiveUnsaved": "Nicht gespeicherte Änderungen",
         "effectivePending": "nach dem Speichern: {{value}}",
-        "unsavedField": "nicht gespeicherte \u00c4nderung",
+        "unsavedField": "nicht gespeicherte Änderung",
         "notSet": "nicht gesetzt",
         "saveConfig": "Proxy-Einstellungen speichern",
         "savingConfig": "Wird gespeichert…",
@@ -3758,7 +3817,18 @@
       "yesterday": "Gestern",
       "last7days": "Letzte 7 Tage",
       "older": "Älter"
-    }
+    },
+    "sharedWithMe": "Mit mir geteilt",
+    "viewLabel": "Welche Chats",
+    "sharedSubtitle_one": "{{count}} mit Ihnen geteilter Chat",
+    "sharedSubtitle_other": "{{count}} mit Ihnen geteilte Chats",
+    "sharedEmpty": "Mit Ihnen wurde noch nichts geteilt",
+    "sharedEmptyHint": "Chats, die Kollegen gezielt mit Ihnen teilen, erscheinen hier.",
+    "sharedLoadFailed": "Geteilte Chats konnten nicht geladen werden",
+    "sharedBy": "Geteilt von {{name}}",
+    "sharedWithYou": "Mit Ihnen geteilt",
+    "sharedNew": "Neu",
+    "sharedNewHint": "Sie haben dies noch nicht geöffnet"
   },
   "transcription": {
     "record": "Audio zum Transkribieren aufnehmen",
@@ -3841,5 +3911,104 @@
     "stopped": "Abgebrochen",
     "moreValues_one": "+{{count}} weiterer",
     "moreValues_other": "+{{count}} weitere"
+  },
+  "chatSharing": {
+    "title": "Chat teilen",
+    "description": "Empfänger erhalten eine schreibgeschützte Kopie dieser Unterhaltung im jetzigen Stand. Spätere Nachrichten, Bearbeitungen und hochgeladene Dateien sind nicht enthalten.",
+    "noModes": "Chats können hier nicht geteilt werden.",
+    "modeLabel": "Wer den Link öffnen kann",
+    "modes": {
+      "users": {
+        "label": "Bestimmte Nutzer",
+        "hint": "Nur die von Ihnen ausgewählten Personen, nach der Anmeldung."
+      },
+      "authenticated": {
+        "label": "Alle Angemeldeten mit dem Link",
+        "hint": "Jeder mit einem Konto hier, der den Link hat."
+      },
+      "public": {
+        "label": "Jeder mit dem Link, ohne Anmeldung",
+        "hint": "Öffnet sich für jeden im Internet, der den Link hat."
+      }
+    },
+    "mode": {
+      "users": "Bestimmte Nutzer",
+      "authenticated": "Angemeldete Nutzer",
+      "public": "Öffentlich"
+    },
+    "recipientsLabel": "Teilen mit",
+    "recipientsPlaceholder": "Nach Name oder E-Mail suchen…",
+    "recipientsNone": "Keine passenden Nutzer",
+    "recipientsHint": "Es können nur Nutzer ausgewählt werden, die sich hier schon einmal angemeldet haben.",
+    "removeRecipient": "{{name}} entfernen",
+    "publicWarningTitle": "Damit wird die Unterhaltung öffentlich",
+    "publicWarning": "Jeder, der den Link hat, kann diese Unterhaltung lesen und die darin erzeugten Dateien herunterladen — ohne Anmeldung, bis Sie den Link widerrufen oder er abläuft. Der Link kann an beliebige Personen weitergegeben werden. Teilen Sie keine Unterhaltungen mit internen oder personenbezogenen Daten.",
+    "publicAcknowledge": "Ich verstehe, dass jeder mit dem Link diese Unterhaltung ohne Anmeldung lesen kann.",
+    "showNameLabel": "Meinen Namen für Betrachter anzeigen",
+    "expiryLabel": "Link läuft ab",
+    "expiryDateLabel": "Ablaufdatum",
+    "expiry": {
+      "never": "Nie",
+      "day": "In 1 Tag",
+      "week": "In 7 Tagen",
+      "month": "In 30 Tagen",
+      "quarter": "In 90 Tagen",
+      "custom": "An einem Datum…"
+    },
+    "expiryCapHint": "Links laufen hier nach spätestens {{count}} Tagen ab.",
+    "maxViewsLabel": "Maximale Aufrufe",
+    "maxViewsPlaceholder": "Unbegrenzt",
+    "maxViewsHint": "Der Link funktioniert nicht mehr, sobald er so oft geöffnet wurde.",
+    "maxViewsCapHint": "Höchstens {{count}} Aufrufe pro Link hier.",
+    "create": "Link erstellen",
+    "creating": "Wird erstellt…",
+    "created": "Link erstellt",
+    "linkLabel": "Freigabelink",
+    "copy": "Link kopieren",
+    "copied": "Kopiert",
+    "createAnother": "Weiteren Link erstellen",
+    "createFailed": "Der Link konnte nicht erstellt werden.",
+    "existingTitle": "Links für diesen Chat",
+    "existingEmpty": "Dieser Chat wurde noch nicht geteilt.",
+    "loadFailed": "Die Links konnten nicht geladen werden.",
+    "revoke": "Widerrufen",
+    "revokeTitle": "Diesen Link widerrufen?",
+    "revokeMessage": "Der Link funktioniert sofort für niemanden mehr. Der Chat selbst bleibt unverändert.",
+    "revokeFailed": "Der Link konnte nicht widerrufen werden.",
+    "state": {
+      "active": "Aktiv",
+      "revoked": "Widerrufen",
+      "expired": "Abgelaufen",
+      "exhausted": "Aufruflimit erreicht"
+    },
+    "views_one": "{{count}} Aufruf",
+    "views_other": "{{count}} Aufrufe",
+    "lastViewed": "Zuletzt geöffnet {{date}}",
+    "neverViewed": "Noch nicht geöffnet",
+    "expiresOn": "Läuft ab {{date}}",
+    "viewedBy": "Geöffnet {{date}}",
+    "notViewedBy": "Noch nicht geöffnet",
+    "viewer": {
+      "untitled": "Geteilter Chat",
+      "readOnly": "Nur lesen",
+      "sharedBy": "Geteilt von {{name}}",
+      "sharedAnonymously": "Mit Ihnen geteilt",
+      "openApp": "iHub Apps öffnen",
+      "publicBanner": "Diese Unterhaltung ist öffentlich zugänglich. Jeder mit dem Link kann sie lesen.",
+      "signInTitle": "Melden Sie sich an, um diesen geteilten Chat zu öffnen",
+      "signInHint": "Dieser Link wurde nur mit angemeldeten Nutzern geteilt. Nach der Anmeldung kommen Sie hierher zurück.",
+      "signIn": "Anmelden",
+      "unavailableTitle": "Dieser Link ist nicht mehr verfügbar",
+      "unavailableHint": "Die Freigabe wurde möglicherweise widerrufen, ist abgelaufen, hat ihr Aufruflimit erreicht oder hat nie existiert.",
+      "loadFailed": "Der geteilte Chat konnte nicht geladen werden",
+      "artifacts": "Dateien in diesem Chat",
+      "artifactFailed": "Die Datei konnte nicht geladen werden.",
+      "view": "Ansehen",
+      "download": "Herunterladen",
+      "expires": "Dieser Link läuft am {{date}} ab.",
+      "attachmentsLabel": "Anhänge",
+      "attachmentNotIncluded": "Anhang nicht enthalten: {{name}}",
+      "attachmentUnnamed": "Datei"
+    }
   }
 }

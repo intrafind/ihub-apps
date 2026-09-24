@@ -32,6 +32,9 @@ function ChatHeader({
   onToggleParameters,
   onToggleCanvas,
   onShare,
+  // Share the stored conversation itself as a read-only link (not the app).
+  onShareChat,
+  showShareChatButton = false,
   currentLanguage,
   isMobile = false,
   messages = [],
@@ -188,6 +191,16 @@ function ChatHeader({
                 <Icon name="share" size="sm" />
               </button>
             )}
+            {showShareChatButton && (
+              <button
+                onClick={onShareChat}
+                className="bg-gray-200 dark:bg-gray-700 hover:bg-gray-300 dark:hover:bg-gray-600 text-gray-800 dark:text-gray-200 p-2 rounded-full flex items-center justify-center h-10 w-10"
+                title={t('pages.appChat.shareChat', 'Share chat')}
+                aria-label={t('pages.appChat.shareChat', 'Share chat')}
+              >
+                <Icon name="link" size="sm" />
+              </button>
+            )}
             {showCompareModeToggle && (
               <button
                 onClick={() => !compareModeDisabled && onCompareModeChange?.(!compareModeActive)}
@@ -233,6 +246,8 @@ function ChatHeader({
               onToggleConfig={onToggleConfig}
               onShare={onShare}
               showShareButton={showShareButton}
+              onShareChat={onShareChat}
+              showShareChatButton={showShareChatButton}
               showConfigButton={showConfigButton}
               showClearButton={showClearButton}
               messages={messages}

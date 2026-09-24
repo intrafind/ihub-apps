@@ -173,6 +173,11 @@ anything else about it, and only then asks for the bytes. An artifact id is
 minted server-side and is never a capability on its own; a chat that is not
 yours answers `404`, like every other chat endpoint.
 
+A [share](chat-sharing.md) is the one other scope a route authorizes: it
+serves the artifacts its frozen transcript named — an allow-list of ids
+recorded when the share was created — out of the chat's scope, and nothing
+else in that scope.
+
 ## API
 
 Today the surface is the chat's, because chats are the only producer:
@@ -181,6 +186,8 @@ Today the surface is the chat's, because chats are the only producer:
 | ---------------------------------------------- | ---------------------------------------------------- |
 | `GET /api/chats/:chatId/artifacts`             | What this chat produced, newest first, as descriptors |
 | `GET /api/chats/:chatId/artifacts/:artifactId` | The bytes of one, as its own media type              |
+| `GET /api/shares/:shareId/artifacts`           | Through a [share](chat-sharing.md): the ones its snapshot named |
+| `GET /api/shares/:shareId/artifacts/:artifactId` | The bytes of one of those; `?download=1` attaches    |
 
 The listing never carries payloads — it is the index, and the bytes are a
 separate request per entry. It walks the artifact keys rather than the

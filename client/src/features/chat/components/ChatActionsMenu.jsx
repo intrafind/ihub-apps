@@ -12,6 +12,9 @@ function ChatActionsMenu({
   onToggleConfig,
   onShare,
   showShareButton = false,
+  // Share the stored conversation itself as a read-only link (not the app).
+  onShareChat,
+  showShareChatButton = false,
   showConfigButton = true,
   showClearButton = true,
   showParametersButton = false,
@@ -130,6 +133,17 @@ function ChatActionsMenu({
               className="w-full text-left px-3 py-2 text-sm text-gray-700 dark:text-gray-200 hover:bg-gray-100 dark:hover:bg-gray-700 flex items-center gap-2 whitespace-nowrap"
             >
               <Icon name="share" size="sm" /> {t('pages.appChat.share', 'Share')}
+            </button>
+          )}
+          {showShareChatButton && (
+            <button
+              onClick={() => {
+                onShareChat?.();
+                setOpen(false);
+              }}
+              className="w-full text-left px-3 py-2 text-sm text-gray-700 dark:text-gray-200 hover:bg-gray-100 dark:hover:bg-gray-700 flex items-center gap-2 whitespace-nowrap"
+            >
+              <Icon name="link" size="sm" /> {t('pages.appChat.shareChat', 'Share chat')}
             </button>
           )}
           {showCompareModeToggle && (

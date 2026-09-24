@@ -102,6 +102,26 @@ export const RUNTIME_NAMESPACES = Object.freeze({
   /** Chat transcripts, one document per chat. */
   chatMessages: 'chat-messages',
   /**
+   * Chat shares — one document per share link. Keyed by the share token and
+   * filed under the chat id as the document owner, because every lookup
+   * except "open this link" is per chat: the owner's list of a chat's shares
+   * and the delete cascade both ask "which shares does this chat have".
+   */
+  chatShares: 'chat-shares',
+  /**
+   * The frozen transcript a share hands out, one document per share. Kept
+   * apart from the share document for the same reason a chat's transcript is
+   * kept apart from the chat: the listings read the small document, and only
+   * a viewer reads the messages.
+   */
+  chatShareMessages: 'chat-share-messages',
+  /**
+   * Recipient markers for `users`-mode shares, filed under the recipient's
+   * user id as the document owner so "shared with me" is an index read
+   * rather than a scan of every share.
+   */
+  chatShareRecipients: 'chat-share-recipients',
+  /**
    * Artifacts — content a run produced that is worth keeping in its own
    * right. One document per artifact, keyed `<scopeType>__<scopeId>__<id>`.
    *
