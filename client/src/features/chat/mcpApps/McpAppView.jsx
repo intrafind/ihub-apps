@@ -79,7 +79,7 @@ function isSameOriginUrl(url) {
  * messages, model-context updates, size changes and fullscreen.
  *
  * @param {Object} props
- * @param {Object} props.view - View descriptor (see features/chat/mcpApps/mcpAppViews)
+ * @param {Object} props.view - View descriptor (see features/chat/mcpApps/mcpAppViewList)
  * @param {string} props.appId - iHub app of the chat
  * @param {string} props.chatId
  * @param {{sendMessage: (text: string) => void, isProcessing: boolean}|null} [props.host] -

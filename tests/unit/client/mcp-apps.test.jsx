@@ -15,7 +15,7 @@ import {
 import {
   buildMcpAppViews,
   normalizeMcpAppViews
-} from '../../../client/src/features/chat/mcpApps/mcpAppViews';
+} from '../../../client/src/features/chat/mcpApps/mcpAppViewList';
 import {
   clearMcpAppModelContext,
   setMcpAppModelContext,
