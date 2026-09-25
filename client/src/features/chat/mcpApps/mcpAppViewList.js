@@ -8,7 +8,7 @@
  * projects them onto `message.mcpApps`, the same shape the server stores with
  * the answer so a reopened chat renders them again.
  *
- * @module features/chat/mcpApps/mcpAppViews
+ * @module features/chat/mcpApps/mcpAppViewList
  */
 
 /**

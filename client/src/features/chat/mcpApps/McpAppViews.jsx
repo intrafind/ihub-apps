@@ -1,7 +1,7 @@
 import { useTranslation } from 'react-i18next';
 import Icon from '../../../shared/components/Icon';
 import McpAppView from './McpAppView';
-import { normalizeMcpAppViews } from './mcpAppViews';
+import { normalizeMcpAppViews } from './mcpAppViewList';
 
 /**
  * The MCP App views of one assistant answer.

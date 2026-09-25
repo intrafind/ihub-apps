@@ -16,7 +16,7 @@
 import { isRunFinished, getInteractions } from '../../shared/run/runReducer';
 import { extractGroundingSources } from './groundingSources';
 import { buildToolActivity } from './toolActivity';
-import { buildMcpAppViews } from './mcpApps/mcpAppViews';
+import { buildMcpAppViews } from './mcpApps/mcpAppViewList';
 import {
   interactionToCheckpoint,
   isCheckpointInteraction,
