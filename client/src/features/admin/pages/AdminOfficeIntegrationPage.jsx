@@ -111,6 +111,7 @@ function AdminOfficeIntegrationPage() {
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [toggling, setToggling] = useState(false);
+  const [regeneratingId, setRegeneratingId] = useState(false);
   const [message, setMessage] = useState(null);
   const [status, setStatus] = useState(null);
 
@@ -283,6 +284,43 @@ function AdminOfficeIntegrationPage() {
       });
     } finally {
       setToggling(false);
+    }
+  };
+
+  const handleRegenerateAddinId = async () => {
+    if (
+      !window.confirm(
+        t(
+          'admin.officeIntegration.regenerateAddinIdConfirm',
+          'Outlook treats a manifest with a new ID as a different add-in. Everyone using the add-in must install the new manifest, and the old one keeps pointing at this server until it is removed. Continue?'
+        )
+      )
+    ) {
+      return;
+    }
+    try {
+      setRegeneratingId(true);
+      setMessage(null);
+      const res = await makeAdminApiCall('/admin/office-integration/regenerate-addin-id', {
+        method: 'POST'
+      });
+      // From the response, not a status reload: with several server workers the
+      // reload can hit one that has not picked up the new platform.json yet.
+      setStatus(prev => ({ ...prev, addinId: res.data.addinId, addinIdIsShared: false }));
+      setMessage({
+        type: 'success',
+        text: t(
+          'admin.officeIntegration.regenerateAddinIdDone',
+          'New add-in ID generated. Download the manifest and deploy it again.'
+        )
+      });
+    } catch (err) {
+      setMessage({
+        type: 'error',
+        text: `${t('admin.officeIntegration.regenerateAddinIdError', 'Failed to generate a new add-in ID')}: ${getAdminApiErrorMessage(err)}`
+      });
+    } finally {
+      setRegeneratingId(false);
     }
   };
 
@@ -647,6 +685,32 @@ function AdminOfficeIntegrationPage() {
                     className="shrink-0 rounded-lg bg-indigo-600 text-white px-3 py-2 text-sm font-medium hover:bg-indigo-700"
                   >
                     {t('admin.officeIntegration.download', 'Download')}
+                  </button>
+                </div>
+                <div className="mt-4 flex items-center gap-3">
+                  <div className="flex-1 min-w-0">
+                    <div className="text-sm font-medium text-gray-700 dark:text-gray-300">
+                      {t('admin.officeIntegration.addinId', 'Add-in ID')}
+                    </div>
+                    <div className="text-sm font-mono text-gray-600 dark:text-gray-400 truncate">
+                      {status?.addinId}
+                    </div>
+                    {status?.addinIdIsShared && (
+                      <p className="mt-1 text-xs text-amber-700 dark:text-amber-400">
+                        {t(
+                          'admin.officeIntegration.addinIdShared',
+                          'Every iHub installation ships this ID. Generate a new one to install this server next to another one (for example dev and production) in the same Outlook.'
+                        )}
+                      </p>
+                    )}
+                  </div>
+                  <button
+                    type="button"
+                    onClick={handleRegenerateAddinId}
+                    disabled={regeneratingId}
+                    className="shrink-0 rounded-lg border border-gray-300 dark:border-gray-600 px-3 py-2 text-sm text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-700 disabled:opacity-50"
+                  >
+                    {t('admin.officeIntegration.regenerateAddinId', 'Generate new ID')}
                   </button>
                 </div>
               </div>

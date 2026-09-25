@@ -2,14 +2,11 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useEmbeddedHost } from '../contexts/EmbeddedHostContext';
 import { traceOffice, shortItemId } from '../utilities/officeLog';
 
-// Outlook dispatches this for both `ItemChanged` (the pinned pane now shows a
-// different item) and `SelectedItemsChanged` (the list selection moved, which
-// also fires on re-selecting the open email and on list refreshes). See
-// client/office/taskpane-entry.jsx.
+// Dispatched for Outlook's `ItemChanged` (the pinned pane now shows a
+// different item). See client/office/taskpane-entry.jsx.
 const ITEM_CHANGED_EVENT = 'ihub:itemchanged';
-// A burst of events (a single click fires both of the above) costs one read,
-// and the pause gives the host a moment to finish swapping
-// Office.context.mailbox.item.
+// A burst of events (quick clicks through the list) costs one read, and the
+// pause gives the host a moment to finish swapping Office.context.mailbox.item.
 const RELOAD_DEBOUNCE_MS = 150;
 
 /**
@@ -58,10 +55,8 @@ export function useOutlookMailContextSnapshot() {
   // Bumped when the snapshot moves to a different item so the chat panel can
   // reset its edit state too.
   const [generation, setGeneration] = useState(0);
-  // Monotonic sequence for context loads. A single click in Outlook fires
-  // both ItemChanged and SelectedItemsChanged (each dispatching
-  // 'ihub:itemchanged'), so loads overlap; only the newest one may publish
-  // its result. Without this, a slow load that started on the previous
+  // Monotonic sequence for context loads. Quick clicks through the list make
+  // loads overlap; only the newest one may publish its result. Without this, a slow load that started on the previous
   // email resolves last and clobbers the fresh snapshot with stale
   // attachments ("not part of this item" errors).
   const loadSeqRef = useRef(0);

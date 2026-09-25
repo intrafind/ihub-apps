@@ -117,8 +117,7 @@ function OfficeChatPanel({
     addEmails: handleAddEmails,
     unpin: handleUnpin,
     clearPinned: handleClearPinned,
-    addEmailsLoading,
-    multiSelectSupported
+    addEmailsLoading
   } = usePinnedEmails();
 
   // The host item as the adapter will send it, for the live token estimate.
@@ -693,17 +692,12 @@ function OfficeChatPanel({
               onUnpin={handleUnpin}
               onClearPinned={handleClearPinned}
               onAddEmails={handleAddEmails}
-              canAddEmails={!isAppointment && (!!currentItemId || multiSelectSupported)}
+              canAddEmails={!isAppointment && !!currentItemId}
               addEmailsLoading={addEmailsLoading}
-              // When multi-select isn't available we can reliably tell the
-              // single open email is already attached, so we disable the
-              // button and show "Already added". With multi-select the user
-              // may still want to pull other selected emails, so it stays
-              // enabled and the prompt builder dedupes by itemId.
+              // The open email is already attached: disable the button and
+              // show "Already added".
               addEmailsDisabled={
-                !multiSelectSupported &&
-                !!currentItemId &&
-                pinnedEmails.some(p => p.itemId === currentItemId)
+                !!currentItemId && pinnedEmails.some(p => p.itemId === currentItemId)
               }
               collapseOnMessageSent={collapseStripCounter}
             />

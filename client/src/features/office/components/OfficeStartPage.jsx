@@ -253,12 +253,10 @@ function OfficeStartPage({ user, onLogout, onSelectApp, onStartChat, onBrowseApp
                   onUnpin={pinned.unpin}
                   onClearPinned={pinned.clearPinned}
                   onAddEmails={pinned.addEmails}
-                  canAddEmails={!isAppointment && (!!currentItemId || pinned.multiSelectSupported)}
+                  canAddEmails={!isAppointment && !!currentItemId}
                   addEmailsLoading={pinned.addEmailsLoading}
                   addEmailsDisabled={
-                    !pinned.multiSelectSupported &&
-                    !!currentItemId &&
-                    pinned.pinnedEmails.some(p => p.itemId === currentItemId)
+                    !!currentItemId && pinned.pinnedEmails.some(p => p.itemId === currentItemId)
                   }
                 />
 

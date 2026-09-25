@@ -50,7 +50,6 @@
 
 import { marked } from 'marked';
 import { isMailboxAvailable } from './officeCapabilities';
-import { withMailboxLock, withSelectedItemLocked } from './outlookMailContext';
 import { describeOfficeError, logOfficeError } from './officeLog';
 import {
   MAIL_ACTION_ANSWER,
@@ -495,10 +494,6 @@ async function runNew(html, plainText) {
 /**
  * Run one answer action against the current Outlook item.
  *
- * Serialized through the mailbox lock: Office redirects
- * `Office.context.mailbox.item` while another reader has an item loaded, and a
- * forward that read its fields mid-load would quote the wrong email.
- *
  * @param {string} action - one of `OFFICE_MAIL_ACTIONS`
  * @param {string} markdownText - the assistant's answer
  * @param {object} [options]
@@ -514,75 +509,55 @@ export async function runOutlookMailAction(action, markdownText, options = {}) {
   const plainText = String(markdownText ?? '');
   const html = marked.parse(plainText);
 
-  // The selected email, not the live item: on Mac the live item stays on the
-  // email the pane was opened on, and reply would answer that one.
-  return withMailboxLock(() =>
-    withSelectedItemLocked(async item => {
-      // Inside the lock, not before it: Office redirects
-      // `Office.context.mailbox.item` to whichever item another reader has loaded
-      // via `loadItemByIdAsync`, so a mode read taken outside the queue can refuse
-      // an action the real item supports ("Add email(s)" is the reader that does
-      // this).
-      const mode = detectOutlookMode(item);
-      if (!isMailActionAvailable(action, mode)) {
-        return failed(
-          action,
-          mode === OUTLOOK_COMPOSE_MODE
-            ? 'Outlook only allows inserting into the draft while you are composing an email.'
-            : 'This action is not available for the selected item.'
-        );
-      }
+  let item = null;
+  try {
+    item = Office.context.mailbox.item;
+  } catch {}
+  const mode = detectOutlookMode(item);
+  if (!isMailActionAvailable(action, mode)) {
+    return failed(
+      action,
+      mode === OUTLOOK_COMPOSE_MODE
+        ? 'Outlook only allows inserting into the draft while you are composing an email.'
+        : 'This action is not available for the selected item.'
+    );
+  }
 
-      try {
-        // `return await`, not a bare `return`: returning a promise out of a try
-        // block hands it to the caller unawaited, so an async rejection — which
-        // is what a stale item read inside `runForward` produces — would sail
-        // straight past the catch below.
-        switch (action) {
-          case MAIL_ACTION_INSERT:
-            return await runInsert(item, html);
-          case MAIL_ACTION_ANSWER:
-          case MAIL_ACTION_ANSWER_ALL:
-            return await runReply(item, action, html, plainText);
-          case MAIL_ACTION_FORWARD:
-            return await runForward(
-              item,
-              html,
-              plainText,
-              options.forwardLabels,
-              options.originalAttachedNotice ||
-                'The original message is attached so none of its attachments are lost.'
-            );
-          case MAIL_ACTION_NEW:
-            return await runNew(html, plainText);
-          default:
-            return failed(action, `Unknown action: ${action}`);
-        }
-      } catch (error) {
-        // Reading a stale `Office.context.mailbox.item` — or any of its
-        // properties — throws rather than returning an error result, which is why
-        // every other reader in this feature wraps that access. Without this the
-        // rejection escapes to a caller that does not catch it and the pane shows
-        // nothing at all, which is worse than the alert this module replaced.
-        logOfficeError('runOutlookMailAction', error, { action, mode });
-        return failed(
-          action,
-          `Outlook could not run this action. ${describeOfficeError(error)}`.trim()
+  try {
+    // `return await`, not a bare `return`: returning a promise out of a try
+    // block hands it to the caller unawaited, so an async rejection — which
+    // is what a stale item read inside `runForward` produces — would sail
+    // straight past the catch below.
+    switch (action) {
+      case MAIL_ACTION_INSERT:
+        return await runInsert(item, html);
+      case MAIL_ACTION_ANSWER:
+      case MAIL_ACTION_ANSWER_ALL:
+        return await runReply(item, action, html, plainText);
+      case MAIL_ACTION_FORWARD:
+        return await runForward(
+          item,
+          html,
+          plainText,
+          options.forwardLabels,
+          options.originalAttachedNotice ||
+            'The original message is attached so none of its attachments are lost.'
         );
-      }
-    })
-  );
-}
-
-/**
- * `detectOutlookMode()` taken through the mailbox lock, for callers that keep
- * the mode in state. A lock-free read taken while another reader has an item
- * loaded reports that item's mode — and nothing re-detects when the load
- * finishes, so the wrong action list would stick until the user selects
- * another item.
- *
- * @returns {Promise<'read'|'compose'|null>}
- */
-export function readOutlookMode() {
-  return withMailboxLock(() => withSelectedItemLocked(async item => detectOutlookMode(item)));
+      case MAIL_ACTION_NEW:
+        return await runNew(html, plainText);
+      default:
+        return failed(action, `Unknown action: ${action}`);
+    }
+  } catch (error) {
+    // Reading a stale `Office.context.mailbox.item` — or any of its
+    // properties — throws rather than returning an error result, which is why
+    // every other reader in this feature wraps that access. Without this the
+    // rejection escapes to a caller that does not catch it and the pane shows
+    // nothing at all, which is worse than the alert this module replaced.
+    logOfficeError('runOutlookMailAction', error, { action, mode });
+    return failed(
+      action,
+      `Outlook could not run this action. ${describeOfficeError(error)}`.trim()
+    );
+  }
 }

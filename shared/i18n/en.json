@@ -1363,7 +1363,13 @@
       "mailActionAnswer": "Reply to sender",
       "mailActionForward": "Forward",
       "mailActionNew": "New email",
-      "mailActionInsert": "Insert into the open draft"
+      "mailActionInsert": "Insert into the open draft",
+      "addinId": "Add-in ID",
+      "addinIdShared": "Every iHub installation ships this ID. Generate a new one to install this server next to another one (for example dev and production) in the same Outlook.",
+      "regenerateAddinId": "Generate new ID",
+      "regenerateAddinIdConfirm": "Outlook treats a manifest with a new ID as a different add-in. Everyone using the add-in must install the new manifest, and the old one keeps pointing at this server until it is removed. Continue?",
+      "regenerateAddinIdDone": "New add-in ID generated. Download the manifest and deploy it again.",
+      "regenerateAddinIdError": "Failed to generate a new add-in ID"
     },
     "nextcloudEmbed": {
       "title": "Nextcloud Embed",
