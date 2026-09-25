@@ -1762,7 +1762,7 @@ class ConfigCache {
     }
 
     if (allowedTools) {
-      const granted = new Set(filterResourcesByPermissions(tools, allowedTools, 'tools'));
+      const granted = new Set(filterResourcesByPermissions(tools, allowedTools));
       // The chat's tools menu asks for the tools of the app it runs in. Those
       // are callable in that app whatever the group grants say, so they are
       // listed too — otherwise the menu cannot name them or tell which MCP
