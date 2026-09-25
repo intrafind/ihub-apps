@@ -12,7 +12,6 @@ import { installOfficeAuthInterceptor } from '../src/features/office/api/officeA
 import { openOfficeAuthDialog } from '../src/features/office/utilities/officeAuthDialog';
 import { fetchCurrentOutlookItemContext } from '../src/features/office/utilities/outlookMailContext';
 import { initOfficeTheme } from '../src/features/office/utilities/officeTheme';
-import { traceOffice, shortItemId } from '../src/features/office/utilities/officeLog';
 
 /**
  * Derive the base path from the current URL so the config fetch works
@@ -64,17 +63,9 @@ Office.onReady(async () => {
   // it was opened on). It also fires before ItemChanged there, which made
   // every switch refresh twice.
   if (Office.context?.mailbox?.addHandlerAsync) {
-    Office.context.mailbox.addHandlerAsync(Office.EventType.ItemChanged, eventArgs => {
-      let liveItemId = null;
-      let liveSubject = null;
-      try {
-        const item = Office.context.mailbox.item;
-        liveItemId = shortItemId(item?.itemId);
-        liveSubject = typeof item?.subject === 'string' ? item.subject : null;
-      } catch {}
-      traceOffice('event', { liveItemId, liveSubject, eventType: eventArgs?.type ?? null });
-      document.dispatchEvent(new CustomEvent('ihub:itemchanged'));
-    });
+    Office.context.mailbox.addHandlerAsync(Office.EventType.ItemChanged, () =>
+      document.dispatchEvent(new CustomEvent('ihub:itemchanged'))
+    );
   }
 
   const rootEl = document.getElementById('office-root');

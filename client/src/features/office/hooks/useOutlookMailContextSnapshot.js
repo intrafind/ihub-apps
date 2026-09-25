@@ -1,6 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useEmbeddedHost } from '../contexts/EmbeddedHostContext';
-import { traceOffice, shortItemId } from '../utilities/officeLog';
 
 // Dispatched for Outlook's `ItemChanged` (the pinned pane now shows a
 // different item). See client/office/taskpane-entry.jsx.
@@ -56,9 +55,10 @@ export function useOutlookMailContextSnapshot() {
   // reset its edit state too.
   const [generation, setGeneration] = useState(0);
   // Monotonic sequence for context loads. Quick clicks through the list make
-  // loads overlap; only the newest one may publish its result. Without this, a slow load that started on the previous
-  // email resolves last and clobbers the fresh snapshot with stale
-  // attachments ("not part of this item" errors).
+  // loads overlap; only the newest one may publish its result. Without this,
+  // a slow load that started on the previous email resolves last and
+  // clobbers the fresh snapshot with stale attachments ("not part of this
+  // item" errors).
   const loadSeqRef = useRef(0);
   const reloadTimerRef = useRef(null);
   // itemId of the snapshot last published (null when it had no item).
@@ -78,13 +78,7 @@ export function useOutlookMailContextSnapshot() {
       } catch {
         ctx = null;
       }
-      const superseded = disposed || seq !== loadSeqRef.current;
-      traceOffice(superseded ? 'snapshot-dropped' : 'snapshot-published', {
-        seq,
-        itemId: shortItemId(ctx?.itemId),
-        subject: ctx?.subject ?? null
-      });
-      if (superseded) return;
+      if (disposed || seq !== loadSeqRef.current) return;
 
       // Per-email edits belong to one email. No id (browser extension, or a
       // read that found no item) always counts as different, as before.
