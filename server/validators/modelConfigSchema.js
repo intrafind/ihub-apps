@@ -37,9 +37,9 @@ const thinkingSchema = z
     level: z
       .enum(['minimal', 'low', 'medium', 'high', 'MINIMAL', 'LOW', 'MEDIUM', 'HIGH'])
       .optional(),
-    // Ask the provider for thought summaries (Gemini's `includeThoughts`).
-    // Defaults to true when thinking is enabled; set false to keep the
-    // reasoning hidden.
+    // Return the reasoning text to the user (Gemini's `includeThoughts`, vLLM's
+    // `include_reasoning`). Defaults to true when thinking is enabled; set false
+    // to keep the reasoning hidden. The app/user setting overrides it.
     thoughts: z.boolean().optional(),
     // vLLM (provider: "local", or "openai" pointed at a vLLM server): per-request
     // chat-template knobs that toggle reasoning. Model-specific keys, e.g.

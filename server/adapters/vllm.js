@@ -142,6 +142,14 @@ class VLLMAdapterClass extends BaseAdapter {
       if (thinkingEnabled && level) {
         body.reasoning_effort = this.resolveReasoningEffort(options, model);
       }
+      // Hide the reasoning text: vLLM still generates the reasoning tokens (so
+      // answer quality is unchanged) but leaves them out of the response. The
+      // user/app setting wins over the model default; only sent when false so
+      // servers that predate `include_reasoning` see an unchanged request.
+      const includeThoughts = options.thinkingThoughts ?? model.thinking.thoughts ?? true;
+      if (thinkingEnabled && includeThoughts === false) {
+        body.include_reasoning = false;
+      }
     }
 
     // Use vLLM-specific tool conversion with schema sanitization

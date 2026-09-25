@@ -84,6 +84,44 @@ describe('vLLM reasoning — request side', () => {
     const req = await VLLMAdapter.createCompletionRequest(model, messages, 'key', {});
     expect(req.body.reasoning_effort).toBe('high');
   });
+
+  test('include_reasoning omitted by default', async () => {
+    const model = { ...baseModel, thinking: { enabled: true } };
+    const req = await VLLMAdapter.createCompletionRequest(model, messages, 'key', {});
+    expect(req.body.include_reasoning).toBeUndefined();
+  });
+
+  test('model default thoughts:false → include_reasoning:false', async () => {
+    const model = { ...baseModel, thinking: { enabled: true, thoughts: false } };
+    const req = await VLLMAdapter.createCompletionRequest(model, messages, 'key', {});
+    expect(req.body.include_reasoning).toBe(false);
+    // Reasoning still runs — only its text is hidden.
+    expect(req.body.chat_template_kwargs).toEqual({ enable_thinking: true });
+  });
+
+  test('user thinkingThoughts:true overrides model default thoughts:false', async () => {
+    const model = { ...baseModel, thinking: { enabled: true, thoughts: false } };
+    const req = await VLLMAdapter.createCompletionRequest(model, messages, 'key', {
+      thinkingThoughts: true
+    });
+    expect(req.body.include_reasoning).toBeUndefined();
+  });
+
+  test('user thinkingThoughts:false hides reasoning on a model that shows it', async () => {
+    const model = { ...baseModel, thinking: { enabled: true, thoughts: true } };
+    const req = await VLLMAdapter.createCompletionRequest(model, messages, 'key', {
+      thinkingThoughts: false
+    });
+    expect(req.body.include_reasoning).toBe(false);
+  });
+
+  test('include_reasoning not sent when thinking is turned off', async () => {
+    const model = { ...baseModel, thinking: { enabled: true, thoughts: false } };
+    const req = await VLLMAdapter.createCompletionRequest(model, messages, 'key', {
+      thinkingEnabled: false
+    });
+    expect(req.body.include_reasoning).toBeUndefined();
+  });
 });
 
 describe('vLLM reasoning — response side', () => {

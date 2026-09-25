@@ -413,6 +413,13 @@ support reasoning — iHub reads `reasoning` (current vLLM) or `reasoning_conten
   key). Multi-key overrides are passed through verbatim for advanced setups.
 - For models that honor `reasoning_effort` (e.g. gpt-oss), add `"level": "low"|"medium"|
   "high"` and iHub will also send `reasoning_effort`.
+- To let the model reason without showing the reasoning, set `"thoughts": false`. iHub then
+  sends `include_reasoning: false`: vLLM still generates the reasoning tokens (answer quality
+  is unchanged, and they still take time and count against `maxOutputTokens`) but leaves them
+  out of the response. This is the model default; an app's `thinking.thoughts` and the user's
+  "Show thinking process" toggle override it. Requires a vLLM version that supports
+  `include_reasoning` and the dedicated `"provider": "local"` — the `openai` provider does
+  not send it, because the OpenAI API rejects unknown fields.
 
 > Note: the `reasoning` field only appears when vLLM was started with a matching
 > `--reasoning-parser`. Without it, vLLM inlines the chain-of-thought into the normal
