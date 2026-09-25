@@ -371,7 +371,6 @@ function generateManifest({
                     <Action xsi:type="ShowTaskpane">
                       <SourceLocation resid="Taskpane.Url"/>
                       <SupportsPinning>true</SupportsPinning>
-                      <SupportsMultiSelect>true</SupportsMultiSelect>
                     </Action>
                   </Control>
                 </Group>

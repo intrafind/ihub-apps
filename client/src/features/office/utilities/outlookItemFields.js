@@ -2,8 +2,7 @@
 
 /**
  * Shared readers for Office.js item fields that come in two flavours: plain
- * values in read mode (MessageRead / AppointmentRead, and the
- * LoadedMessageRead handed out by `loadItemByIdAsync`) and async accessor
+ * values in read mode (MessageRead / AppointmentRead) and async accessor
  * objects with `getAsync` in compose mode. The mail and the calendar context
  * readers both normalize through these helpers so the model always sees the
  * same `{ name, email }` identity shape and ISO timestamps.

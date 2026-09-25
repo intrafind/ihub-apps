@@ -12,11 +12,7 @@ import {
   readAdminMailActionDefault,
   resolveDefaultMailAction
 } from '../utilities/officeMailAction';
-import {
-  detectOutlookMode,
-  readOutlookMode,
-  runOutlookMailAction
-} from '../utilities/outlookMailActions';
+import { detectOutlookMode, runOutlookMailAction } from '../utilities/outlookMailActions';
 import { describeOfficeError, logOfficeError } from '../utilities/officeLog';
 
 /** Outlook's own iconography: the reply arrow, the forward arrow, a new draft. */
@@ -56,27 +52,11 @@ export default function useOutlookMailActions({ officeConfig } = {}) {
   const [notice, setNotice] = useState(null);
 
   useEffect(() => {
-    let cancelled = false;
-    // Through the mailbox lock: a read taken while "Add email(s)" has another
-    // item loaded reports that item's mode, and nothing re-detects once the
-    // load finishes — the action list would stay wrong until the next
-    // selection. The lock-free read seeding `useState` above is only the first
-    // paint; this corrects it.
-    const refreshMode = () => {
-      readOutlookMode().then(
-        next => {
-          if (!cancelled) setMode(next);
-        },
-        () => {}
-      );
-    };
+    const refreshMode = () => setMode(detectOutlookMode());
     const refreshPreference = () => setUserPreference(getStoredMailActionPreference());
     document.addEventListener('ihub:itemchanged', refreshMode);
     document.addEventListener(MAIL_ACTION_PREFERENCE_EVENT, refreshPreference);
-    // Office.js may still have been initialising when this hook first ran.
-    refreshMode();
     return () => {
-      cancelled = true;
       document.removeEventListener('ihub:itemchanged', refreshMode);
       document.removeEventListener(MAIL_ACTION_PREFERENCE_EVENT, refreshPreference);
     };

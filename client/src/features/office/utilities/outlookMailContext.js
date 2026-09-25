@@ -7,28 +7,6 @@ import {
 import { readMailboxUserProfile, readMessageHeaders } from './outlookItemFields';
 import { traceOffice, shortItemId } from './officeLog';
 
-/**
- * All Office mailbox item operations in this module run through this promise
- * queue. Office.js allows only ONE item to be loaded via `loadItemByIdAsync`
- * at a time and redirects `Office.context.mailbox.item` to the loaded item
- * until `unloadAsync` completes — a context read that interleaves with a
- * load/unload cycle observes the wrong item, and a load started while
- * another is active fails outright. Serializing every reader keeps the
- * mailbox state coherent no matter how many callers fire at once (double
- * ItemChanged/SelectedItemsChanged dispatch, pin-button clicks, sends).
- */
-let mailboxQueue = Promise.resolve();
-
-export function withMailboxLock(fn) {
-  const result = mailboxQueue.then(() => fn());
-  // Keep the chain alive whether the operation succeeds or fails.
-  mailboxQueue = result.then(
-    () => undefined,
-    () => undefined
-  );
-  return result;
-}
-
 function getLiveItem() {
   try {
     return Office.context?.mailbox?.item ?? null;
@@ -47,70 +25,6 @@ export function getLiveItemId() {
     return Office.context?.mailbox?.item?.itemId ?? null;
   } catch {
     return null;
-  }
-}
-
-// True while withSelectedItemLocked has the selected email loaded. Loading
-// fires ItemChanged on the hosts that fire it at all; taskpane-entry.jsx drops
-// those, or every read would trigger another read.
-let loadingSelectedItem = false;
-
-export function isLoadingSelectedItem() {
-  return loadingSelectedItem;
-}
-
-/**
- * Run `fn(item)` against the email the user has selected, not whatever
- * `Office.context.mailbox.item` happens to hold. Must run inside
- * `withMailboxLock`.
- *
- * Outlook on Mac never fires ItemChanged for this pane — only
- * SelectedItemsChanged — and never moves `Office.context.mailbox.item`: it
- * stays on the email the pane was opened on, or null if none was selected
- * (verified with the office trace; see OfficeDev/office-js#4013, #4960).
- * When exactly one message is selected and the live item is missing or a
- * different read-mode message, the selection is loaded by id for the
- * duration of `fn` and unloaded afterwards. Everywhere else — Windows and
- * the web, where the live item follows the selection, compose mode, a
- * multi-selection, hosts without the API — `fn` gets the live item.
- */
-export async function withSelectedItemLocked(fn) {
-  const live = getLiveItem();
-  const liveId = getLiveItemId();
-  // An item without an id is a draft being composed: that is the item.
-  if (live && !liveId) return fn(live);
-
-  let stubs;
-  try {
-    stubs = await getSelectedItemsAsync();
-  } catch (e) {
-    traceOffice('selected-items-failed', { message: e?.message ?? String(e) });
-    return fn(live);
-  }
-  const selectedId = stubs.length === 1 ? (stubs[0]?.itemId ?? null) : null;
-  if (!selectedId || selectedId === liveId) return fn(live);
-
-  let loaded;
-  loadingSelectedItem = true;
-  try {
-    loaded = await loadItemByIdAsync(selectedId);
-  } catch (e) {
-    loadingSelectedItem = false;
-    traceOffice('load-selected-failed', {
-      itemId: shortItemId(selectedId),
-      message: e?.message ?? String(e)
-    });
-    return fn(live);
-  }
-  traceOffice('load-selected', {
-    itemId: shortItemId(selectedId),
-    liveItemId: shortItemId(liveId)
-  });
-  try {
-    return await fn(loaded);
-  } finally {
-    await unloadItemWithRetry(loaded);
-    loadingSelectedItem = false;
   }
 }
 
@@ -224,20 +138,12 @@ function getSubjectAsync(item) {
  * strip, chat adapter) can pick the right banner / prompt formatter.
  */
 export async function fetchCurrentOutlookItemContext() {
-  // The itemType probe and both readers run under the mailbox lock: while a
-  // multi-select loadItemByIdAsync cycle is active, Office.context.mailbox.item
-  // is redirected to the loaded message, so probing outside the lock could
-  // classify a calendar item as mail (or hand the appointment reader a
-  // redirected item). Note fetchCurrentMailContextLocked is called directly —
-  // the public fetchCurrentMailContext would try to take the lock again.
-  return withMailboxLock(async () => {
-    const itemType = getCurrentOutlookItemType();
-    if (itemType === 'appointment' || isOutlookAppointmentItemAvailable()) {
-      return fetchCurrentAppointmentContext();
-    }
-    const ctx = await fetchCurrentMailContextLocked();
-    return { ...ctx, itemKind: 'message' };
-  });
+  const itemType = getCurrentOutlookItemType();
+  if (itemType === 'appointment' || isOutlookAppointmentItemAvailable()) {
+    return fetchCurrentAppointmentContext();
+  }
+  const ctx = await fetchCurrentMailContext();
+  return { ...ctx, itemKind: 'message' };
 }
 
 // How often a snapshot read restarts against the new item before giving up
@@ -253,40 +159,28 @@ const SNAPSHOT_RETRY_DELAY_MS = 200;
 const INVALID_ATTACHMENT_ID_RE = /does not exist|InvalidAttachmentId|not part of this item/i;
 
 export async function fetchCurrentMailContext() {
-  return withMailboxLock(fetchCurrentMailContextLocked);
-}
-
-async function fetchCurrentMailContextLocked() {
   for (let attempt = 0; attempt < MAX_SNAPSHOT_ATTEMPTS; attempt++) {
     // Capture the item exactly once per attempt. Every read below goes
     // against this capture so one snapshot can never mix two emails.
-    const result = await withSelectedItemLocked(async item => {
-      if (!item) return null;
-      const itemId = item.itemId ?? null;
-      // A loaded item stays put until it is unloaded; the live item can
-      // move under the read.
-      const isLive = item === getLiveItem();
-      const stillCurrent = () => !isLive || getLiveItemId() === itemId;
-      const read = await readMailSnapshot(item, itemId, stillCurrent);
-      traceOffice('read', {
-        attempt,
-        itemId: shortItemId(itemId),
-        subject: read.snapshot.subject,
-        loaded: !isLive,
-        liveItemIdAfter: shortItemId(getLiveItemId()),
-        aborted: read.aborted,
-        torn: read.torn
-      });
-      return { ...read, current: stillCurrent() };
-    });
-    if (!result) {
+    const item = getLiveItem();
+    if (!item) {
       return {
         available: false,
         reason: 'Not running in Outlook with a mail item (Office.js item missing).',
         attachments: []
       };
     }
-    const { snapshot, aborted, torn, current } = result;
+    const itemId = item.itemId ?? null;
+
+    const { snapshot, aborted, torn } = await readMailSnapshot(item, itemId);
+    traceOffice('read', {
+      attempt,
+      itemId: shortItemId(itemId),
+      subject: snapshot.subject,
+      liveItemIdAfter: shortItemId(getLiveItemId()),
+      aborted,
+      torn
+    });
 
     // Body and attachment content are host round-trips — the user may have
     // selected a different email while we were reading. A torn snapshot
@@ -294,7 +188,7 @@ async function fetchCurrentMailContextLocked() {
     // restart against the item that is now selected. The `aborted` flag
     // covers the switch-away-and-back case, where the live itemId matches
     // again by the time we check but the attachment list was cut short.
-    if (aborted || !current) continue;
+    if (aborted || getLiveItemId() !== itemId) continue;
 
     // Right after ItemChanged the host can still hand out the previous
     // email's cached fields (id, subject, attachment list) while the async
@@ -328,7 +222,7 @@ async function fetchCurrentMailContextLocked() {
  * can tell the user's own contributions in a quoted thread from everyone
  * else's. Every header degrades to null / [] on its own.
  */
-async function readMailSnapshot(item, itemId, stillCurrent) {
+async function readMailSnapshot(item, itemId) {
   let bodyText = null;
   try {
     bodyText = await getBodyTextAsync(item);
@@ -360,7 +254,7 @@ async function readMailSnapshot(item, itemId, stillCurrent) {
     // The explicit flag matters for the switch-away-and-back case: the
     // live itemId can match the capture again by the time the caller
     // checks, but the attachment list would be silently truncated.
-    if (!stillCurrent()) {
+    if (getLiveItemId() !== itemId) {
       aborted = true;
       break;
     }
@@ -406,173 +300,4 @@ async function readMailSnapshot(item, itemId, stillCurrent) {
     },
     aborted
   };
-}
-
-function getSelectedItemsAsync() {
-  return new Promise((resolve, reject) => {
-    if (
-      typeof Office === 'undefined' ||
-      !Office.context ||
-      !Office.context.mailbox ||
-      typeof Office.context.mailbox.getSelectedItemsAsync !== 'function'
-    ) {
-      reject(new Error('getSelectedItemsAsync is not available (requires Mailbox 1.13+).'));
-      return;
-    }
-    Office.context.mailbox.getSelectedItemsAsync(result => {
-      if (result.status === Office.AsyncResultStatus.Failed) {
-        reject(result.error);
-        return;
-      }
-      resolve(Array.isArray(result.value) ? result.value : []);
-    });
-  });
-}
-
-function loadItemByIdAsync(itemId) {
-  return new Promise((resolve, reject) => {
-    if (
-      typeof Office === 'undefined' ||
-      !Office.context ||
-      !Office.context.mailbox ||
-      typeof Office.context.mailbox.loadItemByIdAsync !== 'function'
-    ) {
-      reject(new Error('loadItemByIdAsync is not available (requires Mailbox 1.15+).'));
-      return;
-    }
-    Office.context.mailbox.loadItemByIdAsync(itemId, result => {
-      if (result.status === Office.AsyncResultStatus.Failed) {
-        reject(result.error);
-        return;
-      }
-      resolve(result.value);
-    });
-  });
-}
-
-function getLoadedItemBodyTextAsync(loadedItem) {
-  return new Promise(resolve => {
-    if (!loadedItem || !loadedItem.body || typeof loadedItem.body.getAsync !== 'function') {
-      resolve(null);
-      return;
-    }
-    loadedItem.body.getAsync(Office.CoercionType.Text, result => {
-      resolve(result.status === Office.AsyncResultStatus.Succeeded ? (result.value ?? null) : null);
-    });
-  });
-}
-
-function unloadItemAsync(loadedItem) {
-  return new Promise(resolve => {
-    if (!loadedItem || typeof loadedItem.unloadAsync !== 'function') {
-      resolve(true);
-      return;
-    }
-    loadedItem.unloadAsync(result => {
-      resolve(result?.status !== Office.AsyncResultStatus.Failed);
-    });
-  });
-}
-
-/**
- * Unload a loaded multi-select item, retrying once on failure. This must not
- * fail silently: while an item is loaded, `Office.context.mailbox.item` is
- * redirected to it, so a leaked load freezes every subsequent context read
- * on that email until the taskpane is reloaded (Office.js offers no other
- * recovery).
- */
-async function unloadItemWithRetry(loadedItem) {
-  let unloaded = false;
-  try {
-    unloaded = await unloadItemAsync(loadedItem);
-  } catch {}
-  if (!unloaded) {
-    try {
-      unloaded = await unloadItemAsync(loadedItem);
-    } catch {}
-  }
-  if (!unloaded) {
-    console.warn(
-      '[office] unloadAsync failed — Office.context.mailbox.item may stay stale until the taskpane reloads'
-    );
-  }
-  return unloaded;
-}
-
-/**
- * Read body, subject and headers for every email the user has currently
- * selected in Outlook (Ctrl-click multi-select). Requires Mailbox 1.15+ — callers should
- * gate this behind `isMultiSelectBodySupported()` from officeCapabilities.js.
- *
- * Attachments are intentionally NOT pulled here: loadItemByIdAsync's loaded
- * item doesn't expose getAttachmentContentAsync, and round-tripping every
- * selected email's attachments would explode token budgets. Pinned single
- * emails (added one-by-one via `fetchCurrentMailContext`) still carry their
- * attachments.
- */
-export async function fetchSelectedItemsContext() {
-  return withMailboxLock(fetchSelectedItemsContextLocked);
-}
-
-async function fetchSelectedItemsContextLocked() {
-  const stubs = await getSelectedItemsAsync();
-
-  // Single selection: the selected email is the one open in the reading
-  // pane, which callers already read in full (body + attachments) via
-  // fetchCurrentMailContext. Skip the loadItemByIdAsync/unloadAsync cycle
-  // entirely — it redirects Office.context.mailbox.item to the loaded item
-  // and a failed unload freezes the taskpane on that email — and Microsoft's
-  // multi-select guidance is to avoid loadItemByIdAsync whenever the data is
-  // available another way.
-  if (stubs.length <= 1) {
-    const liveId = getLiveItemId();
-    const only = stubs[0];
-    if (!only || !only.itemId || (liveId && only.itemId === liveId)) {
-      return [];
-    }
-  }
-
-  const out = [];
-  for (const stub of stubs) {
-    if (!stub || !stub.itemId) continue;
-    let loaded = null;
-    try {
-      traceOffice('loadItemById', {
-        itemId: shortItemId(stub.itemId),
-        liveItemId: shortItemId(getLiveItemId()),
-        selected: stubs.length
-      });
-      loaded = await loadItemByIdAsync(stub.itemId);
-      const [bodyText, headers] = await Promise.all([
-        getLoadedItemBodyTextAsync(loaded),
-        readMessageHeaders(loaded)
-      ]);
-      out.push({
-        available: true,
-        subject: stub.subject ?? null,
-        itemId: stub.itemId,
-        ...headers,
-        bodyText,
-        attachments: []
-      });
-    } catch {
-      out.push({
-        available: true,
-        subject: stub.subject ?? null,
-        itemId: stub.itemId,
-        bodyText: null,
-        attachments: []
-      });
-    } finally {
-      if (loaded) {
-        const unloaded = await unloadItemWithRetry(loaded);
-        traceOffice('unload', {
-          itemId: shortItemId(stub.itemId),
-          unloaded,
-          liveItemIdAfter: shortItemId(getLiveItemId())
-        });
-      }
-    }
-  }
-  return out;
 }
