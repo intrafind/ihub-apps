@@ -12,6 +12,7 @@ import { getLocalizedContent } from '../../../shared/localize.js';
 import { sanitizeOfficeStartPage } from '../../utils/officeStartPage.js';
 import { sanitizeOfficeMailAction } from '../../utils/officeMailActions.js';
 import logger from '../../utils/logger.js';
+import { officeManifestVersion, resolveOfficeAddinId } from '../../utils/officeAddinManifest.js';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = dirname(__filename);
@@ -143,6 +144,8 @@ router.get('/manifest.xml', (req, res) => {
   });
 
   const manifest = generateManifest({
+    addinId: resolveOfficeAddinId(officeConfig),
+    version: officeManifestVersion(),
     baseUrl,
     origin,
     displayNameEn,
@@ -159,6 +162,8 @@ router.get('/manifest.xml', (req, res) => {
 });
 
 function generateManifest({
+  addinId,
+  version,
   baseUrl,
   origin,
   displayNameEn,
@@ -174,8 +179,8 @@ function generateManifest({
            xmlns:bt="http://schemas.microsoft.com/office/officeappbasictypes/1.0"
            xmlns:mailappor="http://schemas.microsoft.com/office/mailappversionoverrides/1.0"
            xsi:type="MailApp">
-  <Id>4fe644da-8036-47f8-ac9f-e478bcbe5274</Id>
-  <Version>1.1.0.0</Version>
+  <Id>${addinId}</Id>
+  <Version>${version}</Version>
   <ProviderName>intrafind</ProviderName>
   <DefaultLocale>en-US</DefaultLocale>
   <DisplayName DefaultValue="${escapeXml(displayNameEn)}">
