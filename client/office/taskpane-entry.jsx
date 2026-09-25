@@ -12,6 +12,7 @@ import { installOfficeAuthInterceptor } from '../src/features/office/api/officeA
 import { openOfficeAuthDialog } from '../src/features/office/utilities/officeAuthDialog';
 import { fetchCurrentOutlookItemContext } from '../src/features/office/utilities/outlookMailContext';
 import { initOfficeTheme } from '../src/features/office/utilities/officeTheme';
+import { traceOffice, shortItemId } from '../src/features/office/utilities/officeLog';
 
 /**
  * Derive the base path from the current URL so the config fetch works
@@ -68,8 +69,22 @@ Office.onReady(async () => {
     // events the same and re-read the item; which email is open is decided
     // by what that read returns, never by the event or by the synchronous
     // `Office.context.mailbox.item.itemId`, which lags the selection (#2509).
-    const dispatchItemChanged = source => () =>
+    const dispatchItemChanged = source => eventArgs => {
+      let liveItemId = null;
+      let liveSubject = null;
+      try {
+        const item = Office.context.mailbox.item;
+        liveItemId = shortItemId(item?.itemId);
+        liveSubject = typeof item?.subject === 'string' ? item.subject : null;
+      } catch {}
+      traceOffice('event', {
+        source,
+        liveItemId,
+        liveSubject,
+        eventType: eventArgs?.type ?? null
+      });
       document.dispatchEvent(new CustomEvent('ihub:itemchanged', { detail: { source } }));
+    };
     Office.context.mailbox.addHandlerAsync(
       Office.EventType.ItemChanged,
       dispatchItemChanged('ItemChanged')

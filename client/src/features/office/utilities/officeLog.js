@@ -72,7 +72,32 @@ export function describeOfficeError(error) {
   return message ? `${label}: ${message}` : label;
 }
 
+const MAX_TRACE = 200;
+const trace = [];
+
+/**
+ * Diagnostic trace of the email-switch flow (Outlook event → item read →
+ * published snapshot), dumped with `window.ihubOfficeTrace()`. Exists because
+ * every earlier fix of the pinned-pane "stuck on one email" bug (#2470, #2505,
+ * #2509, #2533) guessed Outlook's event timing without a real-client trace.
+ */
+export function traceOffice(step, data = {}) {
+  const record = { at: new Date().toISOString().slice(11, 23), step, ...data };
+  trace.push(record);
+  if (trace.length > MAX_TRACE) trace.shift();
+  console.info('[iHub][office-trace]', step, data);
+}
+
+/** Short, still-distinguishable form of an Exchange item id for the trace. */
+export function shortItemId(id) {
+  return id ? `…${String(id).slice(-10)}` : null;
+}
+
 if (typeof window !== 'undefined') {
   // Dumped by a user reproducing a problem in the task pane's devtools.
   window.ihubOfficeErrors = getOfficeErrorLog;
+  window.ihubOfficeTrace = () => {
+    console.table(trace);
+    return JSON.stringify(trace, null, 1);
+  };
 }
