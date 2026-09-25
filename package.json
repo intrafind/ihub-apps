@@ -1,6 +1,6 @@
 {
   "name": "ihub-apps",
-  "version": "5.5.18",
+  "version": "5.5.20",
   "description": "iHub Applications Platform",
   "type": "module",
   "bin": {
