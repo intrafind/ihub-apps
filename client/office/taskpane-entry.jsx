@@ -10,10 +10,7 @@ import { EmbeddedHostProvider } from '../src/features/office/contexts/EmbeddedHo
 import OfficeApp from '../src/features/office/components/OfficeApp';
 import { installOfficeAuthInterceptor } from '../src/features/office/api/officeAuthBridge';
 import { openOfficeAuthDialog } from '../src/features/office/utilities/officeAuthDialog';
-import {
-  fetchCurrentOutlookItemContext,
-  isLoadingSelectedItem
-} from '../src/features/office/utilities/outlookMailContext';
+import { fetchCurrentOutlookItemContext } from '../src/features/office/utilities/outlookMailContext';
 import { initOfficeTheme } from '../src/features/office/utilities/officeTheme';
 import { traceOffice, shortItemId } from '../src/features/office/utilities/officeLog';
 
@@ -60,19 +57,14 @@ Office.onReady(async () => {
   // can call refreshTokenOrExpireSession() without threading config everywhere.
   installOfficeAuthInterceptor(config);
 
-  // Register the ItemChanged event so the chat can start over when the user
-  // switches to a different email.
-  // Also listen for SelectedItemsChanged so the taskpane reacts when the user
-  // Ctrl-selects multiple messages in the list (ItemChanged does NOT fire for
-  // multi-select transitions). Both dispatch the same internal event so the
-  // chat panel can refresh its current-item state and the "Add email(s)"
-  // control stays in sync with the live Outlook selection. Issue #1553.
+  // ItemChanged fires when the pinned pane shows a different email; listeners
+  // re-read the item. SelectedItemsChanged is deliberately not handled: it
+  // only matters with SupportsMultiSelect, which the manifest dropped because
+  // it turns off ItemChanged in Outlook for Mac (the pane stayed on the email
+  // it was opened on). It also fires before ItemChanged there, which made
+  // every switch refresh twice.
   if (Office.context?.mailbox?.addHandlerAsync) {
-    // `detail.source` is carried for diagnostics only. Listeners treat both
-    // events the same and re-read the item; which email is open is decided
-    // by what that read returns, never by the event or by the synchronous
-    // `Office.context.mailbox.item.itemId`, which lags the selection (#2509).
-    const dispatchItemChanged = source => eventArgs => {
+    Office.context.mailbox.addHandlerAsync(Office.EventType.ItemChanged, eventArgs => {
       let liveItemId = null;
       let liveSubject = null;
       try {
@@ -80,33 +72,9 @@ Office.onReady(async () => {
         liveItemId = shortItemId(item?.itemId);
         liveSubject = typeof item?.subject === 'string' ? item.subject : null;
       } catch {}
-      const ownLoad = source === 'ItemChanged' && isLoadingSelectedItem();
-      traceOffice('event', {
-        source,
-        liveItemId,
-        liveSubject,
-        eventType: eventArgs?.type ?? null,
-        ignored: ownLoad
-      });
-      // Our own loadItemByIdAsync of the selected email, not a user switch.
-      if (ownLoad) return;
-      document.dispatchEvent(new CustomEvent('ihub:itemchanged', { detail: { source } }));
-    };
-    Office.context.mailbox.addHandlerAsync(
-      Office.EventType.ItemChanged,
-      dispatchItemChanged('ItemChanged')
-    );
-    if (Office.EventType?.SelectedItemsChanged) {
-      try {
-        Office.context.mailbox.addHandlerAsync(
-          Office.EventType.SelectedItemsChanged,
-          dispatchItemChanged('SelectedItemsChanged')
-        );
-      } catch {
-        // SelectedItemsChanged requires Mailbox 1.13+; older hosts simply
-        // keep the ItemChanged-only behavior.
-      }
-    }
+      traceOffice('event', { liveItemId, liveSubject, eventType: eventArgs?.type ?? null });
+      document.dispatchEvent(new CustomEvent('ihub:itemchanged'));
+    });
   }
 
   const rootEl = document.getElementById('office-root');

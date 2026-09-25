@@ -20,3 +20,22 @@ A blank prefix now gets the default, and the upgrade removes the stored empty pr
 apps reported by migration V134: tick the named MCP server under **MCP servers** in each of them
 and remove the reported tool names from **Tools**. Anything else that names these tools directly,
 such as a workflow node, needs the new tool ids.
+
+## Outlook Add-in: The Pinned Pane Follows the Open Email on Mac; Multi-Select Removed
+
+On Outlook for Mac, the pinned iHub pane stayed on the email it was opened on. Clicking another
+email refreshed the pane but showed the same email again, and only closing and reopening the pane
+picked up the new one. The add-in manifest declared support for selecting several emails at once,
+and with that declaration Outlook for Mac never tells the add-in that the open email changed. The
+manifest no longer declares it.
+
+- On every Outlook client the pinned pane now switches to the email you open, with one refresh.
+  Keep the pane pinned and click through your emails to collect several with **Add email(s)**,
+  one at a time.
+- Ctrl-selecting several emails and adding them in one go is no longer offered. It needed full
+  mailbox access, which the add-in never requested, so it did not work in any installation.
+
+**Before upgrading:** No action is needed beforehand. After the upgrade, deploy the manifest from
+**Admin → Office Integration → Office Manifest** again (in the Microsoft 365 admin center, or by
+re-adding it in Outlook for a sideloaded add-in). Until then, Outlook keeps the old manifest and
+Mac users keep seeing the old behaviour.
