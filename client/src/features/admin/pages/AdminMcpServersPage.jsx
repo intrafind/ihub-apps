@@ -476,6 +476,8 @@ function AdminMcpServersPage() {
   // Build the request body shared by save() and the in-dialog test probe.
   const buildBody = () => ({
     ...form,
+    // A blank prefix is left out, so the server uses its `<id>__` default.
+    toolPrefix: form.toolPrefix?.trim() || undefined,
     transport: transportFromForm(form.transport),
     name: form.name ? { en: form.name } : undefined,
     description: form.description ? { en: form.description } : undefined,

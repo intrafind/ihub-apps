@@ -58,6 +58,15 @@ describe('McpServerConnection.listTools with MCP Apps', () => {
     expect(tools[1]._mcp.ui).toBeUndefined();
   });
 
+  it('uses the `<id>__` default for a blank tool prefix and honours a typed one', async () => {
+    // The admin form used to save a blank prefix as "", which exposed the tools
+    // with no prefix at all and let two servers' tools collide.
+    const blank = await connectionWith({ toolPrefix: '' }).listTools();
+    expect(blank[0].id).toBe('excalidraw__create_view');
+    const typed = await connectionWith({ toolPrefix: 'ex_' }).listTools();
+    expect(typed[0].id).toBe('ex_create_view');
+  });
+
   it('lets a view call app-visible tools but not model-only ones', async () => {
     const conn = connectionWith();
     expect(await conn.getAppTool('save_checkpoint')).toMatchObject({ name: 'save_checkpoint' });

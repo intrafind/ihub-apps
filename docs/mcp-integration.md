@@ -128,7 +128,7 @@ To intentionally point at a private host, list its hostname in
 
 `McpClientManager.listAllTools()` aggregates `tools/list` across every
 enabled, healthy server. Each tool is exposed with `id` = `${prefix}${name}`,
-defaulting to `<serverId>__<toolName>` if no `toolPrefix` is set.
+defaulting to `<serverId>__<toolName>` if `toolPrefix` is not set or empty.
 
 `runTool(toolId, params)` detects MCP tools by the `_mcp` marker on the
 tool definition and forwards to `McpClientManager.callTool`, which:
