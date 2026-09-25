@@ -559,3 +559,104 @@ describe('mailbox access serialization', () => {
     expect(bodyRead).toBeGreaterThan(lastUnload);
   });
 });
+
+// Outlook on Mac: only SelectedItemsChanged fires and Office.context.mailbox.item
+// never follows the selection — it stays on the email the pane was opened on,
+// or null when none was selected (confirmed with the office trace).
+describe('reading the selected email when the live item does not follow the selection (Mac)', () => {
+  function installSelection(selectedItem) {
+    const calls = { load: [], unload: [] };
+    Office.context.mailbox.getSelectedItemsAsync = cb =>
+      setTimeout(
+        () =>
+          cb({
+            status: SUCCEEDED,
+            value: selectedItem
+              ? [{ itemId: selectedItem.itemId, subject: selectedItem.subject }]
+              : []
+          }),
+        0
+      );
+    Office.context.mailbox.loadItemByIdAsync = (itemId, cb) => {
+      calls.load.push(itemId);
+      // Documented: the loaded item becomes Office.context.mailbox.item.
+      const previous = Office.context.mailbox.item;
+      Office.context.mailbox.item = selectedItem;
+      selectedItem.unloadAsync = unloadCb => {
+        calls.unload.push(itemId);
+        Office.context.mailbox.item = previous;
+        setTimeout(() => unloadCb({ status: SUCCEEDED }), 0);
+      };
+      setTimeout(() => cb({ status: SUCCEEDED, value: selectedItem }), 0);
+    };
+    return calls;
+  }
+
+  const mailA = () => makeMailItem({ itemId: 'A', subject: 'Mail A', bodyText: 'body of A' });
+  const mailB = () =>
+    makeMailItem({
+      itemId: 'B',
+      subject: 'Mail B',
+      bodyText: 'body of B',
+      attachments: [{ id: 'b1', name: 'invoice.pdf' }]
+    });
+
+  test('reads the selected email when the live item is still the one the pane opened on', async () => {
+    const a = mailA();
+    Office.context.mailbox.item = a;
+    const calls = installSelection(mailB());
+
+    const ctx = await fetchCurrentMailContext();
+
+    expect(ctx).toMatchObject({
+      available: true,
+      itemId: 'B',
+      subject: 'Mail B',
+      bodyText: 'body of B'
+    });
+    expect(ctx.attachments[0]).toMatchObject({ id: 'b1', content: { content: 'CONTENT(b1)' } });
+    expect(calls).toEqual({ load: ['B'], unload: ['B'] });
+    expect(Office.context.mailbox.item).toBe(a);
+  });
+
+  test('reads the selected email when the pane was opened with nothing selected', async () => {
+    Office.context.mailbox.item = null;
+    installSelection(mailB());
+
+    const ctx = await fetchCurrentMailContext();
+
+    expect(ctx).toMatchObject({ available: true, itemId: 'B', subject: 'Mail B' });
+  });
+
+  test('uses the live item without loading when it already is the selected email', async () => {
+    const a = mailA();
+    Office.context.mailbox.item = a;
+    const calls = installSelection(a);
+
+    const ctx = await fetchCurrentMailContext();
+
+    expect(ctx.subject).toBe('Mail A');
+    expect(calls.load).toEqual([]);
+  });
+
+  test('never swaps a draft being composed for the selected list email', async () => {
+    const draft = makeMailItem({ itemId: undefined, subject: 'Draft', bodyText: 'draft body' });
+    Office.context.mailbox.item = draft;
+    const calls = installSelection(mailB());
+
+    const ctx = await fetchCurrentMailContext();
+
+    expect(ctx.subject).toBe('Draft');
+    expect(calls.load).toEqual([]);
+  });
+
+  test('falls back to the live item when the host cannot list the selection', async () => {
+    Office.context.mailbox.item = mailA();
+    Office.context.mailbox.getSelectedItemsAsync = cb =>
+      setTimeout(() => cb({ status: FAILED, error: { message: 'error 5001' } }), 0);
+
+    const ctx = await fetchCurrentMailContext();
+
+    expect(ctx.subject).toBe('Mail A');
+  });
+});

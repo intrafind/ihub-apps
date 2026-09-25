@@ -7,19 +7,6 @@ import {
 import { readMailboxUserProfile, readMessageHeaders } from './outlookItemFields';
 import { traceOffice, shortItemId } from './officeLog';
 
-export function isOutlookMailItemAvailable() {
-  try {
-    return (
-      typeof Office !== 'undefined' &&
-      Office.context &&
-      Office.context.mailbox &&
-      Office.context.mailbox.item
-    );
-  } catch {
-    return false;
-  }
-}
-
 /**
  * All Office mailbox item operations in this module run through this promise
  * queue. Office.js allows only ONE item to be loaded via `loadItemByIdAsync`
@@ -42,6 +29,14 @@ export function withMailboxLock(fn) {
   return result;
 }
 
+function getLiveItem() {
+  try {
+    return Office.context?.mailbox?.item ?? null;
+  } catch {
+    return null;
+  }
+}
+
 /**
  * itemId of the live `Office.context.mailbox.item`, or null when no item is
  * selected (the user deselected, compose mode, reading pane off). Cheap and
@@ -52,6 +47,70 @@ export function getLiveItemId() {
     return Office.context?.mailbox?.item?.itemId ?? null;
   } catch {
     return null;
+  }
+}
+
+// True while withSelectedItemLocked has the selected email loaded. Loading
+// fires ItemChanged on the hosts that fire it at all; taskpane-entry.jsx drops
+// those, or every read would trigger another read.
+let loadingSelectedItem = false;
+
+export function isLoadingSelectedItem() {
+  return loadingSelectedItem;
+}
+
+/**
+ * Run `fn(item)` against the email the user has selected, not whatever
+ * `Office.context.mailbox.item` happens to hold. Must run inside
+ * `withMailboxLock`.
+ *
+ * Outlook on Mac never fires ItemChanged for this pane — only
+ * SelectedItemsChanged — and never moves `Office.context.mailbox.item`: it
+ * stays on the email the pane was opened on, or null if none was selected
+ * (verified with the office trace; see OfficeDev/office-js#4013, #4960).
+ * When exactly one message is selected and the live item is missing or a
+ * different read-mode message, the selection is loaded by id for the
+ * duration of `fn` and unloaded afterwards. Everywhere else — Windows and
+ * the web, where the live item follows the selection, compose mode, a
+ * multi-selection, hosts without the API — `fn` gets the live item.
+ */
+export async function withSelectedItemLocked(fn) {
+  const live = getLiveItem();
+  const liveId = getLiveItemId();
+  // An item without an id is a draft being composed: that is the item.
+  if (live && !liveId) return fn(live);
+
+  let stubs;
+  try {
+    stubs = await getSelectedItemsAsync();
+  } catch (e) {
+    traceOffice('selected-items-failed', { message: e?.message ?? String(e) });
+    return fn(live);
+  }
+  const selectedId = stubs.length === 1 ? (stubs[0]?.itemId ?? null) : null;
+  if (!selectedId || selectedId === liveId) return fn(live);
+
+  let loaded;
+  loadingSelectedItem = true;
+  try {
+    loaded = await loadItemByIdAsync(selectedId);
+  } catch (e) {
+    loadingSelectedItem = false;
+    traceOffice('load-selected-failed', {
+      itemId: shortItemId(selectedId),
+      message: e?.message ?? String(e)
+    });
+    return fn(live);
+  }
+  traceOffice('load-selected', {
+    itemId: shortItemId(selectedId),
+    liveItemId: shortItemId(liveId)
+  });
+  try {
+    return await fn(loaded);
+  } finally {
+    await unloadItemWithRetry(loaded);
+    loadingSelectedItem = false;
   }
 }
 
@@ -199,28 +258,35 @@ export async function fetchCurrentMailContext() {
 
 async function fetchCurrentMailContextLocked() {
   for (let attempt = 0; attempt < MAX_SNAPSHOT_ATTEMPTS; attempt++) {
-    if (!isOutlookMailItemAvailable()) {
+    // Capture the item exactly once per attempt. Every read below goes
+    // against this capture so one snapshot can never mix two emails.
+    const result = await withSelectedItemLocked(async item => {
+      if (!item) return null;
+      const itemId = item.itemId ?? null;
+      // A loaded item stays put until it is unloaded; the live item can
+      // move under the read.
+      const isLive = item === getLiveItem();
+      const stillCurrent = () => !isLive || getLiveItemId() === itemId;
+      const read = await readMailSnapshot(item, itemId, stillCurrent);
+      traceOffice('read', {
+        attempt,
+        itemId: shortItemId(itemId),
+        subject: read.snapshot.subject,
+        loaded: !isLive,
+        liveItemIdAfter: shortItemId(getLiveItemId()),
+        aborted: read.aborted,
+        torn: read.torn
+      });
+      return { ...read, current: stillCurrent() };
+    });
+    if (!result) {
       return {
         available: false,
         reason: 'Not running in Outlook with a mail item (Office.js item missing).',
         attachments: []
       };
     }
-
-    // Capture the item exactly once per attempt. Every read below goes
-    // against this capture so one snapshot can never mix two emails.
-    const item = Office.context.mailbox.item;
-    const itemId = item.itemId ?? null;
-
-    const { snapshot, aborted, torn } = await readMailSnapshot(item, itemId);
-    traceOffice('read', {
-      attempt,
-      itemId: shortItemId(itemId),
-      subject: snapshot.subject,
-      liveItemIdAfter: shortItemId(getLiveItemId()),
-      aborted,
-      torn
-    });
+    const { snapshot, aborted, torn, current } = result;
 
     // Body and attachment content are host round-trips — the user may have
     // selected a different email while we were reading. A torn snapshot
@@ -228,7 +294,7 @@ async function fetchCurrentMailContextLocked() {
     // restart against the item that is now selected. The `aborted` flag
     // covers the switch-away-and-back case, where the live itemId matches
     // again by the time we check but the attachment list was cut short.
-    if (aborted || getLiveItemId() !== itemId) continue;
+    if (aborted || !current) continue;
 
     // Right after ItemChanged the host can still hand out the previous
     // email's cached fields (id, subject, attachment list) while the async
@@ -262,7 +328,7 @@ async function fetchCurrentMailContextLocked() {
  * can tell the user's own contributions in a quoted thread from everyone
  * else's. Every header degrades to null / [] on its own.
  */
-async function readMailSnapshot(item, itemId) {
+async function readMailSnapshot(item, itemId, stillCurrent) {
   let bodyText = null;
   try {
     bodyText = await getBodyTextAsync(item);
@@ -294,7 +360,7 @@ async function readMailSnapshot(item, itemId) {
     // The explicit flag matters for the switch-away-and-back case: the
     // live itemId can match the capture again by the time the caller
     // checks, but the attachment list would be silently truncated.
-    if (getLiveItemId() !== itemId) {
+    if (!stillCurrent()) {
       aborted = true;
       break;
     }

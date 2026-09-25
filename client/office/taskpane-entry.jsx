@@ -10,7 +10,10 @@ import { EmbeddedHostProvider } from '../src/features/office/contexts/EmbeddedHo
 import OfficeApp from '../src/features/office/components/OfficeApp';
 import { installOfficeAuthInterceptor } from '../src/features/office/api/officeAuthBridge';
 import { openOfficeAuthDialog } from '../src/features/office/utilities/officeAuthDialog';
-import { fetchCurrentOutlookItemContext } from '../src/features/office/utilities/outlookMailContext';
+import {
+  fetchCurrentOutlookItemContext,
+  isLoadingSelectedItem
+} from '../src/features/office/utilities/outlookMailContext';
 import { initOfficeTheme } from '../src/features/office/utilities/officeTheme';
 import { traceOffice, shortItemId } from '../src/features/office/utilities/officeLog';
 
@@ -77,12 +80,16 @@ Office.onReady(async () => {
         liveItemId = shortItemId(item?.itemId);
         liveSubject = typeof item?.subject === 'string' ? item.subject : null;
       } catch {}
+      const ownLoad = source === 'ItemChanged' && isLoadingSelectedItem();
       traceOffice('event', {
         source,
         liveItemId,
         liveSubject,
-        eventType: eventArgs?.type ?? null
+        eventType: eventArgs?.type ?? null,
+        ignored: ownLoad
       });
+      // Our own loadItemByIdAsync of the selected email, not a user switch.
+      if (ownLoad) return;
       document.dispatchEvent(new CustomEvent('ihub:itemchanged', { detail: { source } }));
     };
     Office.context.mailbox.addHandlerAsync(

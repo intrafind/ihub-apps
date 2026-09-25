@@ -457,3 +457,25 @@ test('an unknown host is refused with an explanation, not an exception', async (
   expect(result.ok).toBe(false);
   expect(result.message).toMatch(/Outlook/);
 });
+
+describe('the selected email, not the live item (Outlook on Mac)', () => {
+  test('answer replies to the selected email while the live item is still the one the pane opened on', async () => {
+    const m = loadModule();
+    const opened = readModeItem({ itemId: 'A' });
+    const selected = readModeItem({ itemId: 'B', unloadAsync: jest.fn(cb => cb(SUCCESS)) });
+    installOffice({
+      item: opened,
+      mailbox: {
+        getSelectedItemsAsync: cb => cb({ ...SUCCESS, value: [{ itemId: 'B' }] }),
+        loadItemByIdAsync: jest.fn((_id, cb) => cb({ ...SUCCESS, value: selected }))
+      }
+    });
+
+    const result = await m.runOutlookMailAction('answer', 'Sounds good.');
+
+    expect(result.ok).toBe(true);
+    expect(selected.displayReplyFormAsync).toHaveBeenCalledTimes(1);
+    expect(opened.displayReplyFormAsync).not.toHaveBeenCalled();
+    expect(selected.unloadAsync).toHaveBeenCalledTimes(1);
+  });
+});
