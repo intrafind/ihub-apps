@@ -192,6 +192,15 @@ class McpClientManager {
   }
 
   /**
+   * Whether an MCP server with this id is configured.
+   * @param {string} serverId
+   * @returns {boolean}
+   */
+  hasServer(serverId) {
+    return this.connections.has(serverId);
+  }
+
+  /**
    * Resolve a prefixed tool id to its owning connection and tool definition.
    * @param {string} prefixedName - iHub tool id
    * @returns {Promise<{conn: McpServerConnection, tool: Object}|null>}
@@ -281,6 +290,7 @@ class McpClientManager {
         const entry = {
           id: conn.config.id,
           name: conn.config.name || conn.config.id,
+          ...(conn.config.description ? { description: conn.config.description } : {}),
           enabled: conn.config.enabled !== false,
           tools: [],
           error: null
@@ -329,12 +339,26 @@ class McpClientManager {
       throw err;
     }
     // Force-enable for the probe: the admin explicitly asked to test it, even
-    // if they intend to leave the server disabled after saving.
-    const conn = new McpServerConnection({ ...parsed.data, enabled: true }, this.security);
+    // if they intend to leave the server disabled after saving. The probe lists
+    // every tool the server offers, so the dialog can let the admin pick which
+    // ones to allow; `tools` stays the allowlisted subset.
+    const allow = parsed.data.allowedTools || ['*'];
+    const allowAll = allow.includes('*');
+    const conn = new McpServerConnection(
+      { ...parsed.data, enabled: true, allowedTools: ['*'] },
+      this.security
+    );
     try {
       await conn.connect();
-      const tools = await conn.listTools();
-      return { status: conn.status(), tools: summarizeTools(tools) };
+      const catalog = summarizeTools(await conn.listTools()).map(tool => ({
+        ...tool,
+        allowed: allowAll || allow.includes(tool.originalName)
+      }));
+      return {
+        status: conn.status(),
+        tools: catalog.filter(tool => tool.allowed).map(({ allowed: _allowed, ...tool }) => tool),
+        catalog
+      };
     } finally {
       await conn.disconnect().catch(() => {});
     }

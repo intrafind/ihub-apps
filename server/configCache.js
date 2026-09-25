@@ -23,6 +23,7 @@ import { SECRET_FIELDS_BY_TYPE } from './validators/credentialSchema.js';
 import logger from './utils/logger.js';
 import { getLocalizedString } from './utils/localize.js';
 import { findByIdCaseInsensitive } from './utils/resourceLookup.js';
+import { isToolSelected } from './utils/toolSelection.js';
 import { resolveEnvVarsInObject } from './utils/envVars.js';
 
 // Re-exported under the name it has always had here: `telemetry.js` and the
@@ -1736,7 +1737,7 @@ class ConfigCache {
    * @param {string} language - User language for localization
    * @returns {Promise<Object>} Filtered tools with user-specific ETag
    */
-  async getToolsForUser(user, platformConfig, language = 'en') {
+  async getToolsForUser(user, platformConfig, language = 'en', { appId } = {}) {
     // Get all tools (including MCP discovered ones) with localization
     let tools = await loadTools(language);
     const { etag: toolsEtag } = this.getTools();
@@ -1752,13 +1753,24 @@ class ConfigCache {
     let userSpecificEtag = toolsEtag || 'no-etag';
 
     // Apply filtering based on user permissions
+    let allowedTools = null;
     if (user && user.permissions && user.permissions.tools) {
-      const allowedTools = user.permissions.tools;
-      tools = filterResourcesByPermissions(tools, allowedTools, 'tools');
+      allowedTools = user.permissions.tools;
     } else if (isAnonymousAccessAllowed(platformConfig)) {
       // For anonymous users, filter to only anonymous-allowed tools
-      const allowedTools = new Set(); // No default tools for anonymous
-      tools = filterResourcesByPermissions(tools, allowedTools, 'tools');
+      allowedTools = new Set(); // No default tools for anonymous
+    }
+
+    if (allowedTools) {
+      const granted = new Set(filterResourcesByPermissions(tools, allowedTools, 'tools'));
+      // The chat's tools menu asks for the tools of the app it runs in. Those
+      // are callable in that app whatever the group grants say, so they are
+      // listed too — otherwise the menu cannot name them or tell which MCP
+      // server they belong to.
+      const appToolRefs = appId
+        ? await this.getAppToolRefsForUser(user, platformConfig, appId)
+        : [];
+      tools = tools.filter(tool => granted.has(tool) || isToolSelected(tool, appToolRefs));
     }
 
     // Generate user-specific ETag if tools were filtered
@@ -1772,6 +1784,20 @@ class ConfigCache {
     }
 
     return { data: tools, etag: userSpecificEtag };
+  }
+
+  /**
+   * The tool references (`app.tools`) of an app the user may access, or an
+   * empty list when the app is unknown or not available to them.
+   * @param {object} user
+   * @param {object} platformConfig
+   * @param {string} appId
+   * @returns {Promise<string[]>}
+   */
+  async getAppToolRefsForUser(user, platformConfig, appId) {
+    const { data: apps = [] } = await this.getAppsForUser(user, platformConfig);
+    const app = findByIdCaseInsensitive(apps || [], appId);
+    return Array.isArray(app?.tools) ? app.tools : [];
   }
 
   /**

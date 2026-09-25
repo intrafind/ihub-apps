@@ -14,6 +14,13 @@ describe('mcp/permissions toolVisibleInSet', () => {
     expect(toolVisibleInSet('jira_searchTickets', new Set(['jira']))).toBe(true);
   });
 
+  it('grants a tool of an MCP server the set references by server id', () => {
+    // Holds whatever tool prefix the server uses, including none.
+    expect(toolVisibleInSet('create_diagram', new Set(['drawio']), 'drawio')).toBe(true);
+    expect(toolVisibleInSet('create_diagram', new Set(['drawio']), 'excalidraw')).toBe(false);
+    expect(toolVisibleInSet('create_diagram', new Set(['drawio']))).toBe(false);
+  });
+
   it('denies a tool not in the set (default-deny)', () => {
     expect(toolVisibleInSet('secretTool', new Set(['other']))).toBe(false);
   });

@@ -55,4 +55,31 @@ describe('groupToolsByMcpServer', () => {
     const { grouped } = groupToolsByMcpServer(['drawio__create_diagram'], available, localize);
     expect(grouped[0].name).toBe('drawio');
   });
+
+  test('an app that references the server by id gets one group, not a raw id', () => {
+    // The shipped draw.io app lists `tools: ["drawio"]` — the server, not a tool.
+    // It must render as the server's toggle, with no stray "drawio" entry and no
+    // per-tool toggles next to it.
+    const available = [
+      { id: 'create_diagram', _mcp: { serverId: 'drawio', serverName: { en: 'draw.io' } } },
+      { id: 'search_shapes', _mcp: { serverId: 'drawio', serverName: { en: 'draw.io' } } }
+    ];
+    const { grouped, individual } = groupToolsByMcpServer(['drawio'], available, localize);
+    expect(grouped).toEqual([{ id: 'mcp-drawio', name: 'draw.io', matchedTools: ['drawio'] }]);
+    expect(individual).toEqual([]);
+  });
+
+  test('a server reference and older per-tool references share one toggle', () => {
+    const available = [
+      { id: 'drawio__create_diagram', _mcp: { serverId: 'drawio', serverName: 'draw.io' } }
+    ];
+    const { grouped, individual } = groupToolsByMcpServer(
+      ['drawio', 'drawio__create_diagram'],
+      available,
+      localize
+    );
+    expect(grouped).toHaveLength(1);
+    expect(grouped[0].matchedTools).toEqual(['drawio', 'drawio__create_diagram']);
+    expect(individual).toEqual([]);
+  });
 });

@@ -104,7 +104,7 @@ function ChatInputActionsMenu({
 
       try {
         setToolsLoading(true);
-        const tools = await fetchToolsBasic();
+        const tools = await fetchToolsBasic({ appId: app.id });
         setAvailableTools(tools || []);
       } catch (error) {
         console.error('Failed to fetch tools:', error);
@@ -115,7 +115,7 @@ function ChatInputActionsMenu({
     };
 
     loadTools();
-  }, [app?.tools]);
+  }, [app?.id, app?.tools]);
 
   // Close dropdown when clicking outside
   useEffect(() => {

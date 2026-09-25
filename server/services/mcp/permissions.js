@@ -1,5 +1,6 @@
 import configCache from '../../configCache.js';
 import logger from '../../utils/logger.js';
+import { isToolSelected } from '../../utils/toolSelection.js';
 
 /**
  * Sources have no standalone group-level permission — they are scoped through
@@ -65,13 +66,17 @@ export async function getVisibleToolIds(user, platform) {
 /**
  * True if `toolId` (or its base id) is referenced by any app the user can
  * access. Used by the gateway to decide tool visibility + call permission.
+ *
+ * @param {string} toolId
+ * @param {Set<string>} visibleSet
+ * @param {string} [mcpServerId] - Owning server of a tool discovered from an
+ *   MCP server; an app that references the server by id sees all its tools.
  */
-export function toolVisibleInSet(toolId, visibleSet) {
+export function toolVisibleInSet(toolId, visibleSet, mcpServerId) {
   if (!(visibleSet instanceof Set)) return false;
   if (visibleSet.has('*')) return true;
-  if (visibleSet.has(toolId)) return true;
-  const baseId = toolId.includes('_') ? toolId.split('_')[0] : toolId;
-  return visibleSet.has(baseId);
+  const tool = { id: toolId, ...(mcpServerId ? { _mcp: { serverId: mcpServerId } } : {}) };
+  return isToolSelected(tool, visibleSet);
 }
 
 /**

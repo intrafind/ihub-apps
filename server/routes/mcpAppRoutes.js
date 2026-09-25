@@ -117,11 +117,20 @@ export async function resolveMcpApp(req, appId, toolId) {
   if (!app) throw new McpAppAccessError(403, 'App not available');
 
   const appTools = new Set(Array.isArray(app.tools) ? app.tools : []);
+  let found = null;
   if (!toolVisibleInSet(toolId, appTools)) {
-    throw new McpAppAccessError(403, 'Tool not available in this app');
+    // An app that uses an MCP server as a whole lists the server's id, and
+    // only the tool's own `_mcp` marker says which server it belongs to. Look
+    // the tool up only for such an app, so a request for a tool the app does
+    // not offer never reaches an MCP server.
+    const usesMcpServer = [...appTools].some(id => mcpClientManager.hasServer?.(id));
+    found = usesMcpServer ? await mcpClientManager.findTool(toolId) : null;
+    if (!toolVisibleInSet(toolId, appTools, found?.tool?._mcp?.serverId)) {
+      throw new McpAppAccessError(403, 'Tool not available in this app');
+    }
+  } else {
+    found = await mcpClientManager.findTool(toolId);
   }
-
-  const found = await mcpClientManager.findTool(toolId);
   if (!found || !found.tool._mcp?.ui?.resourceUri) {
     throw new McpAppAccessError(404, 'MCP App not found');
   }

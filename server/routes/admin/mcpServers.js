@@ -163,8 +163,8 @@ export default function registerAdminMcpServersRoutes(app) {
   app.post(buildServerPath('/api/admin/mcp/test'), adminAuth, async (req, res) => {
     try {
       const incoming = { ...req.body };
-      const { status, tools } = await mcpClientManager.testConfig(incoming);
-      res.json({ success: true, status, tools });
+      const { status, tools, catalog } = await mcpClientManager.testConfig(incoming);
+      res.json({ success: true, status, tools, catalog });
     } catch (error) {
       logger.warn('[MCP Admin] Test config failed', {
         component: 'AdminMcp',

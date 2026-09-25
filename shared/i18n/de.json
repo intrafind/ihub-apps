@@ -2246,8 +2246,10 @@
           "running": "Verbindung wird getestet …",
           "success": "Verbunden — {{count}} Tools gefunden",
           "failed": "Verbindung fehlgeschlagen: {{error}}",
-          "noTools": "Der Server ist verbunden, stellt aber keine Tools bereit (oder alle wurden durch die Allowlist gefiltert).",
-          "rendersView": "interaktive Ansicht"
+          "noTools": "Der Server ist verbunden, stellt aber keine Tools bereit.",
+          "rendersView": "interaktive Ansicht",
+          "showMore": "Mehr anzeigen",
+          "showLess": "Weniger anzeigen"
         },
         "status": {
           "unknown": "unbekannt",
@@ -2276,7 +2278,7 @@
           "password": "Passwort",
           "toolPrefix": "Tool-Präfix",
           "timeout": "Timeout (ms)",
-          "allowedTools": "Erlaubte Tools (kommagetrennt oder *)",
+          "allowedTools": "Für Apps freigegebene Tools",
           "appsEnabled": "Interaktive Ansichten anzeigen (MCP Apps)",
           "appsEnabledHint": "Kündigt die MCP-Apps-Erweiterung an und zeigt die interaktiven Ansichten, die die Tools dieses Servers deklarieren, direkt im Chat an. Deaktivieren für reine Textergebnisse.",
           "transportStreamableHttp": "Streamable HTTP (empfohlen)",
@@ -2289,7 +2291,11 @@
           "apiKey": "API-Schlüssel",
           "valueRefHint": "Gespeichertes Credential-Profil mit dem API-Schlüssel auswählen.",
           "headers": "Zusätzliche Header (optional)",
-          "headersHint": "Ein „Name: Wert“ pro Zeile, wird bei jeder Anfrage gesendet. Im Klartext gespeichert — Schlüssel und Tokens gehören unter Authentifizierung."
+          "headersHint": "Ein „Name: Wert“ pro Zeile, wird bei jeder Anfrage gesendet. Im Klartext gespeichert — Schlüssel und Tokens gehören unter Authentifizierung.",
+          "allowedToolsHint": "Apps aktivieren diesen Server als Ganzes und erhalten genau die hier freigegebenen Tools. Benutzer sehen den Server im Chat als einen einzigen Eintrag.",
+          "allowedToolsAll": "Alle Tools des Servers",
+          "allowedToolsSelected": "Nur die ausgewählten Tools",
+          "allowedToolsManual": "Tool-Namen, wie der Server sie nennt, kommagetrennt. Testen Sie die Verbindung, um sie stattdessen aus einer Liste auszuwählen."
         }
       },
       "gateway": {
@@ -2532,18 +2538,15 @@
         "created": "App erstellt",
         "idRequired": "Die App-ID ist erforderlich",
         "mcpTools": {
-          "title": "MCP-Server-Tools",
-          "desc": "Aktivieren Sie Tools, die von verbundenen MCP-Servern bereitgestellt werden, für diese App.",
-          "loading": "MCP-Tools werden geladen …",
-          "error": "MCP-Tools konnten nicht geladen werden: {{error}}",
-          "empty": "Es sind keine MCP-Server konfiguriert. Fügen Sie unter Integrationen → MCP-Server einen hinzu, um dessen Tools hier anzuzeigen.",
+          "title": "MCP-Server",
+          "desc": "Wählen Sie die MCP-Server, die diese App verwendet. Benutzer sehen jeden davon im Chat als einen einzigen Eintrag.",
+          "loading": "MCP-Server werden geladen …",
+          "error": "MCP-Server konnten nicht geladen werden: {{error}}",
+          "empty": "Es sind keine MCP-Server konfiguriert. Fügen Sie unter Integrationen → MCP-Server einen hinzu, um ihn hier zu verwenden.",
           "disabled": "deaktiviert",
-          "selectedCount": "{{count}} ausgewählt",
-          "selectAll": "Alle auswählen",
-          "deselectAll": "Alle abwählen",
           "serverError": "Tools konnten nicht aufgelistet werden: {{error}}",
-          "noServerTools": "Dieser Server stellt keine Tools bereit.",
-          "helper": "Von verbundenen MCP-Servern bereitgestellte Tools. Die Auswahl wird mit der App gespeichert und zur Laufzeit aufgelöst."
+          "helper": "Welche Tools ein Server bereitstellt, legen Sie unter Integrationen → MCP-Server fest.",
+          "legacySelection": "Diese App listet einzelne Tools dieses Servers auf. Schalten Sie den Server aus und wieder ein, um die auf dem Server freigegebenen Tools zu verwenden."
         },
         "websearch": "Websuche",
         "websearchDesc": "Websuch-Funktionen für diese App konfigurieren",
