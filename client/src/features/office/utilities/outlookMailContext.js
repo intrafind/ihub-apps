@@ -5,6 +5,7 @@ import {
   isOutlookAppointmentItemAvailable
 } from './outlookCalendarContext';
 import { readMailboxUserProfile, readMessageHeaders } from './outlookItemFields';
+import { traceOffice, shortItemId } from './officeLog';
 
 export function isOutlookMailItemAvailable() {
   try {
@@ -212,6 +213,14 @@ async function fetchCurrentMailContextLocked() {
     const itemId = item.itemId ?? null;
 
     const { snapshot, aborted, torn } = await readMailSnapshot(item, itemId);
+    traceOffice('read', {
+      attempt,
+      itemId: shortItemId(itemId),
+      subject: snapshot.subject,
+      liveItemIdAfter: shortItemId(getLiveItemId()),
+      aborted,
+      torn
+    });
 
     // Body and attachment content are host round-trips — the user may have
     // selected a different email while we were reading. A torn snapshot
@@ -462,6 +471,11 @@ async function fetchSelectedItemsContextLocked() {
     if (!stub || !stub.itemId) continue;
     let loaded = null;
     try {
+      traceOffice('loadItemById', {
+        itemId: shortItemId(stub.itemId),
+        liveItemId: shortItemId(getLiveItemId()),
+        selected: stubs.length
+      });
       loaded = await loadItemByIdAsync(stub.itemId);
       const [bodyText, headers] = await Promise.all([
         getLoadedItemBodyTextAsync(loaded),
@@ -485,7 +499,12 @@ async function fetchSelectedItemsContextLocked() {
       });
     } finally {
       if (loaded) {
-        await unloadItemWithRetry(loaded);
+        const unloaded = await unloadItemWithRetry(loaded);
+        traceOffice('unload', {
+          itemId: shortItemId(stub.itemId),
+          unloaded,
+          liveItemIdAfter: shortItemId(getLiveItemId())
+        });
       }
     }
   }

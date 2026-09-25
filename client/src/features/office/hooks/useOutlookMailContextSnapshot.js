@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useEmbeddedHost } from '../contexts/EmbeddedHostContext';
+import { traceOffice, shortItemId } from '../utilities/officeLog';
 
 // Outlook dispatches this for both `ItemChanged` (the pinned pane now shows a
 // different item) and `SelectedItemsChanged` (the list selection moved, which
@@ -82,7 +83,13 @@ export function useOutlookMailContextSnapshot() {
       } catch {
         ctx = null;
       }
-      if (disposed || seq !== loadSeqRef.current) return;
+      const superseded = disposed || seq !== loadSeqRef.current;
+      traceOffice(superseded ? 'snapshot-dropped' : 'snapshot-published', {
+        seq,
+        itemId: shortItemId(ctx?.itemId),
+        subject: ctx?.subject ?? null
+      });
+      if (superseded) return;
 
       // Per-email edits belong to one email. No id (browser extension, or a
       // read that found no item) always counts as different, as before.
