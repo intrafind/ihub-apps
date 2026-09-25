@@ -21,6 +21,8 @@ import {
 import { probeOfficeJsUrl } from '../../services/OfficeJsProxyService.js';
 import { assertPublicTarget, createPinnedLookup } from '../../utils/ssrfGuard.js';
 import { oauthClientsFile } from '../../utils/contentsPath.js';
+import { randomUUID } from 'crypto';
+import { LEGACY_OFFICE_ADDIN_ID, resolveOfficeAddinId } from '../../utils/officeAddinManifest.js';
 
 /**
  * Merge updates into the platform configuration and publish them.
@@ -88,9 +90,50 @@ export default function registerAdminOfficeIntegrationRoutes(app) {
       // the admin page surfaces rather than showing a silent contradiction.
       officeJsResolvedMode: resolvedOfficeJs.mode,
       manifestUrl: `${baseUrl}/api/integrations/office-addin/manifest.xml`,
-      taskpaneUrl: `${baseUrl}/office/taskpane.html`
+      taskpaneUrl: `${baseUrl}/office/taskpane.html`,
+      addinId: resolveOfficeAddinId(officeConfig),
+      // Every installation shares this Id until an admin regenerates it, so
+      // two iHub instances (dev + prod) cannot be installed side by side.
+      addinIdIsShared: resolveOfficeAddinId(officeConfig) === LEGACY_OFFICE_ADDIN_ID
     });
   });
+
+  /**
+   * @swagger
+   * /api/admin/office-integration/regenerate-addin-id:
+   *   post:
+   *     summary: Give this installation's Outlook add-in a new manifest Id
+   *     description: Outlook treats a manifest with a new Id as a different add-in. Users of the
+   *       add-in deployed with the previous Id must install the new manifest.
+   *     tags:
+   *       - Admin - Office Integration
+   *     security:
+   *       - bearerAuth: []
+   *       - sessionAuth: []
+   *     responses:
+   *       200:
+   *         description: The new add-in Id
+   */
+  app.post(
+    buildServerPath('/api/admin/office-integration/regenerate-addin-id'),
+    adminAuth,
+    async (req, res) => {
+      try {
+        const platform = configCache.getPlatform();
+        const addinId = randomUUID();
+        await savePlatformConfig({
+          officeIntegration: { ...(platform?.officeIntegration || {}), addinId }
+        });
+        logger.info('Office add-in Id regenerated', {
+          component: 'AdminOfficeIntegration',
+          addinId
+        });
+        res.json({ addinId });
+      } catch (error) {
+        return sendInternalError(res, error, 'regenerate the Office add-in Id');
+      }
+    }
+  );
 
   /**
    * @swagger

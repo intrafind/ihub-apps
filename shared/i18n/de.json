@@ -1647,7 +1647,13 @@
       "mailActionAnswer": "Absender antworten",
       "mailActionForward": "Weiterleiten",
       "mailActionNew": "Neue E-Mail",
-      "mailActionInsert": "In den geöffneten Entwurf einfügen"
+      "mailActionInsert": "In den geöffneten Entwurf einfügen",
+      "addinId": "Add-in-ID",
+      "addinIdShared": "Jede iHub-Installation liefert diese ID aus. Erzeugen Sie eine neue, um diesen Server neben einem anderen (zum Beispiel Entwicklung und Produktion) im selben Outlook zu installieren.",
+      "regenerateAddinId": "Neue ID erzeugen",
+      "regenerateAddinIdConfirm": "Outlook behandelt ein Manifest mit neuer ID als anderes Add-in. Alle Nutzer müssen das neue Manifest installieren, und das alte zeigt weiter auf diesen Server, bis es entfernt wird. Fortfahren?",
+      "regenerateAddinIdDone": "Neue Add-in-ID erzeugt. Laden Sie das Manifest herunter und stellen Sie es erneut bereit.",
+      "regenerateAddinIdError": "Neue Add-in-ID konnte nicht erzeugt werden"
     },
     "nextcloudEmbed": {
       "title": "Nextcloud-Embed",
