@@ -5,7 +5,6 @@ import {
   isOutlookAppointmentItemAvailable
 } from './outlookCalendarContext';
 import { readMailboxUserProfile, readMessageHeaders } from './outlookItemFields';
-import { traceOffice, shortItemId } from './officeLog';
 
 function getLiveItem() {
   try {
@@ -173,14 +172,6 @@ export async function fetchCurrentMailContext() {
     const itemId = item.itemId ?? null;
 
     const { snapshot, aborted, torn } = await readMailSnapshot(item, itemId);
-    traceOffice('read', {
-      attempt,
-      itemId: shortItemId(itemId),
-      subject: snapshot.subject,
-      liveItemIdAfter: shortItemId(getLiveItemId()),
-      aborted,
-      torn
-    });
 
     // Body and attachment content are host round-trips — the user may have
     // selected a different email while we were reading. A torn snapshot
