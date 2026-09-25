@@ -4,7 +4,8 @@ import { useNavigate } from 'react-router-dom';
 import Icon from '../../../shared/components/Icon';
 import { makeAdminApiCall } from '../../../api/adminApi';
 import { fetchToolsBasic, fetchModels } from '../../../api';
-import { DEFAULT_LANGUAGE } from '../../../utils/localizeContent';
+import { DEFAULT_LANGUAGE, getLocalizedContent } from '../../../utils/localizeContent';
+import { collapseMcpTools } from '../../chat/utils/groupToolsByMcpServer';
 import {
   validateAppId,
   APP_ID_MAX_LENGTH,
@@ -1498,7 +1499,7 @@ function VariablesStep({ appData, updateAppData }) {
 
 // Step 6: Tools
 function ToolsStep({ appData, updateAppData }) {
-  const { t } = useTranslation();
+  const { t, i18n } = useTranslation();
   const [availableTools, setAvailableTools] = useState([]);
   const [searchTerm, setSearchTerm] = useState('');
 
@@ -1507,13 +1508,16 @@ function ToolsStep({ appData, updateAppData }) {
     const loadTools = async () => {
       try {
         const tools = await fetchToolsBasic();
-        setAvailableTools(tools);
+        // An MCP server is picked as a whole, never tool by tool.
+        setAvailableTools(
+          collapseMcpTools(tools, name => getLocalizedContent(name, i18n.language))
+        );
       } catch (error) {
         console.error('Failed to load tools:', error);
       }
     };
     loadTools();
-  }, []);
+  }, [i18n.language]);
 
   const toggleTool = toolId => {
     const currentTools = appData.tools || [];
@@ -1528,8 +1532,12 @@ function ToolsStep({ appData, updateAppData }) {
 
   const filteredTools = availableTools.filter(
     tool =>
-      tool.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      tool.description.toLowerCase().includes(searchTerm.toLowerCase())
+      String(tool.name || '')
+        .toLowerCase()
+        .includes(searchTerm.toLowerCase()) ||
+      String(tool.description || '')
+        .toLowerCase()
+        .includes(searchTerm.toLowerCase())
   );
 
   return (
@@ -1579,7 +1587,9 @@ function ToolsStep({ appData, updateAppData }) {
             />
             <div className="ml-3 flex-1">
               <div className="text-sm font-medium text-gray-900">{tool.name}</div>
-              <div className="text-sm text-gray-500">{tool.description}</div>
+              {tool.description && (
+                <div className="text-sm text-gray-500 line-clamp-2">{tool.description}</div>
+              )}
             </div>
           </label>
         ))}

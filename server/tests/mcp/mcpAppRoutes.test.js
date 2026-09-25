@@ -11,6 +11,7 @@ import request from 'supertest';
 
 let apps = [];
 const findTool = jest.fn();
+const hasServer = jest.fn(() => false);
 
 jest.unstable_mockModule('../../configCache.js', () => ({
   default: {
@@ -27,7 +28,7 @@ jest.unstable_mockModule('../../middleware/authRequired.js', () => ({
   }
 }));
 jest.unstable_mockModule('../../services/mcp/McpClientManager.js', () => ({
-  default: { findTool }
+  default: { findTool, hasServer }
 }));
 jest.unstable_mockModule('../../utils/logger.js', () => ({
   default: { info: jest.fn(), warn: jest.fn(), error: jest.fn(), debug: jest.fn() }
@@ -86,6 +87,8 @@ beforeEach(() => {
   apps = [{ id: 'whiteboard', tools: ['excalidraw__create_view'] }];
   conn = fakeConnection();
   findTool.mockReset();
+  hasServer.mockReset();
+  hasServer.mockImplementation(id => id === 'excalidraw');
   findTool.mockImplementation(async id => (id === VIEW_TOOL.id ? { conn, tool: VIEW_TOOL } : null));
 });
 
@@ -134,6 +137,27 @@ describe('GET /api/mcp-apps/resource', () => {
     const res = await asUser(request(app).get('/api/mcp-apps/resource').query(ref));
     expect(res.status).toBe(403);
     expect(findTool).not.toHaveBeenCalled();
+  });
+
+  it('serves a view for an app that uses the whole MCP server by its id', async () => {
+    // Prefix-agnostic: the app lists the server, not the tool id.
+    apps = [{ id: 'whiteboard', tools: ['excalidraw'] }];
+    findTool.mockImplementation(async id =>
+      id === 'create_view' ? { conn, tool: { ...VIEW_TOOL, id: 'create_view' } } : null
+    );
+    const res = await asUser(
+      request(app)
+        .get('/api/mcp-apps/resource')
+        .query({ appId: 'whiteboard', toolId: 'create_view' })
+    );
+    expect(res.status).toBe(200);
+  });
+
+  it('refuses a tool of another MCP server than the one the app uses', async () => {
+    apps = [{ id: 'whiteboard', tools: ['drawio'] }];
+    hasServer.mockImplementation(id => id === 'drawio' || id === 'excalidraw');
+    const res = await asUser(request(app).get('/api/mcp-apps/resource').query(ref));
+    expect(res.status).toBe(403);
   });
 
   it('404s a tool that renders no view', async () => {

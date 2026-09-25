@@ -34,11 +34,16 @@ export default function registerToolRoutes(app) {
         const defaultLang = platformConfig?.defaultLanguage || 'en';
         const userLanguage = req.query.language || req.query.lang || defaultLang;
 
+        // The chat's tools menu passes the app it runs in, so that app's tools
+        // are listed even when no group grants them directly.
+        const appId = typeof req.query.appId === 'string' ? req.query.appId : undefined;
+
         // Use centralized method to get filtered tools with user-specific ETag
         const { data: tools, etag: userSpecificEtag } = await configCache.getToolsForUser(
           req.user,
           platformConfig,
-          userLanguage
+          userLanguage,
+          { appId }
         );
 
         res.setHeader('ETag', userSpecificEtag);

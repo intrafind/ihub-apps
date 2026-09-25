@@ -5,6 +5,7 @@ import { actionTracker } from './actionTracker.js';
 import { emitToolProgress } from './services/loop/RunStream.js';
 import { isFeatureEnabled } from './featureRegistry.js';
 import { isValidId } from './utils/pathSecurity.js';
+import { isToolSelected } from './utils/toolSelection.js';
 import mcpClientManager from './services/mcp/McpClientManager.js';
 import { isBraveSearchConfigured } from './services/search/braveApiKey.js';
 import { isStaanSearchConfigured } from './services/search/staanApiKey.js';
@@ -478,15 +479,7 @@ export async function getToolsForApp(app, language = null, context = {}) {
   let appTools = [];
 
   if (Array.isArray(app.tools) && app.tools.length > 0) {
-    appTools = allTools.filter(t => {
-      // Check if tool ID matches directly
-      if (app.tools.includes(t.id)) {
-        return true;
-      }
-      // For function-based tools (e.g., jira_searchTickets), check if base tool (e.g., jira) is requested
-      const baseToolId = t.id.includes('_') ? t.id.split('_')[0] : t.id;
-      return app.tools.includes(baseToolId);
-    });
+    appTools = allTools.filter(t => isToolSelected(t, app.tools));
 
     // Filter by enabledTools if provided in context
     if (
@@ -494,15 +487,7 @@ export async function getToolsForApp(app, language = null, context = {}) {
       context.enabledTools !== null &&
       Array.isArray(context.enabledTools)
     ) {
-      appTools = appTools.filter(t => {
-        // Check if tool ID is in enabledTools
-        if (context.enabledTools.includes(t.id)) {
-          return true;
-        }
-        // For function-based tools, check if base tool is enabled
-        const baseToolId = t.id.includes('_') ? t.id.split('_')[0] : t.id;
-        return context.enabledTools.includes(baseToolId);
-      });
+      appTools = appTools.filter(t => isToolSelected(t, context.enabledTools));
     }
   }
 

@@ -7,17 +7,20 @@ import { getLocalizedContent } from '../../../utils/localizeContent';
 
 import { getAdminApiErrorMessage } from '../../../api/adminApi';
 /**
- * Dedicated picker for tools exposed by configured MCP servers. Unlike the
- * generic ToolsSelector (which lists statically configured tools), this groups
- * tools by their originating MCP server. Selected MCP tool ids are stored in
- * the same `app.tools` array — the runtime tool loader already resolves MCP
- * ids back to their server — but the UI keeps them in a separate section so
- * admins manage them per server rather than hunting through a flat list.
+ * Picker for the MCP servers an app uses. The app admin decides per server
+ * whether the app uses it — never which of its tools: that is the server's
+ * `allowedTools`, set under Integrations → MCP servers. A used server is
+ * stored as its id in `app.tools` (e.g. `"drawio"`), and the runtime tool
+ * loader expands it to every tool the server offers.
+ *
+ * Apps configured before this listed a server's tool ids one by one. Such an
+ * app shows the server as used; turning the server off removes those ids, and
+ * turning it on stores the server id alone.
  *
  * @param {string[]} selectedTools - The full app.tools array
  * @param {(tools:string[])=>void} onToolsChange - Receives the updated full array
- * @param {(ids:string[])=>void} [onMcpToolIdsChange] - Reports all known MCP tool
- *   ids so the parent can exclude them from the generic tools picker
+ * @param {(ids:string[])=>void} [onMcpToolIdsChange] - Reports every MCP server
+ *   id and tool id so the parent can exclude them from the generic tools picker
  */
 function McpToolsSelector({ selectedTools = [], onToolsChange, onMcpToolIdsChange }) {
   const { t, i18n } = useTranslation();
@@ -34,7 +37,7 @@ function McpToolsSelector({ selectedTools = [], onToolsChange, onMcpToolIdsChang
         const data = await fetchMcpToolCatalog();
         if (!active) return;
         setServers(data);
-        const ids = data.flatMap(s => (s.tools || []).map(tool => tool.name));
+        const ids = data.flatMap(s => [s.id, ...(s.tools || []).map(tool => tool.name)]);
         onMcpToolIdsChange?.(ids);
       } catch (err) {
         if (active) setError(getAdminApiErrorMessage(err));
@@ -48,37 +51,26 @@ function McpToolsSelector({ selectedTools = [], onToolsChange, onMcpToolIdsChang
     // eslint-disable-next-line @eslint-react/exhaustive-deps
   }, []);
 
-  const toolNamesFor = server => (server.tools || []).map(tool => tool.name);
-
-  const toggleTool = name => {
-    if (selectedTools.includes(name)) {
-      onToolsChange(selectedTools.filter(id => id !== name));
-    } else {
-      onToolsChange([...selectedTools, name]);
-    }
-  };
-
-  const allSelected = server => {
-    const names = toolNamesFor(server);
-    return names.length > 0 && names.every(n => selectedTools.includes(n));
+  // The app.tools entries that belong to a server: its id and any tool ids
+  // listed one by one.
+  const referencesOf = server => {
+    const toolNames = new Set((server.tools || []).map(tool => tool.name));
+    return selectedTools.filter(id => id === server.id || toolNames.has(id));
   };
 
   const toggleServer = server => {
-    const names = toolNamesFor(server);
-    if (allSelected(server)) {
-      onToolsChange(selectedTools.filter(id => !names.includes(id)));
-    } else {
-      const set = new Set(selectedTools);
-      names.forEach(n => set.add(n));
-      onToolsChange(Array.from(set));
-    }
+    const refs = referencesOf(server);
+    const rest = selectedTools.filter(id => !refs.includes(id));
+    onToolsChange(refs.length > 0 ? rest : [...rest, server.id]);
   };
 
   if (loading) {
     return (
       <div className="flex items-center text-sm text-gray-500 dark:text-gray-400">
         <LoadingSpinner size="sm" />
-        <span className="ml-2">{t('admin.apps.edit.mcpTools.loading', 'Loading MCP tools…')}</span>
+        <span className="ml-2">
+          {t('admin.apps.edit.mcpTools.loading', 'Loading MCP servers…')}
+        </span>
       </div>
     );
   }
@@ -86,7 +78,7 @@ function McpToolsSelector({ selectedTools = [], onToolsChange, onMcpToolIdsChang
   if (error) {
     return (
       <div className="text-sm text-red-700 dark:text-red-400">
-        {t('admin.apps.edit.mcpTools.error', 'Failed to load MCP tools: {{error}}', { error })}
+        {t('admin.apps.edit.mcpTools.error', 'Failed to load MCP servers: {{error}}', { error })}
       </div>
     );
   }
@@ -96,101 +88,78 @@ function McpToolsSelector({ selectedTools = [], onToolsChange, onMcpToolIdsChang
       <p className="text-sm text-gray-500 dark:text-gray-400">
         {t(
           'admin.apps.edit.mcpTools.empty',
-          'No MCP servers are configured. Add one under Integrations → MCP servers to expose its tools here.'
+          'No MCP servers are configured. Add one under Integrations → MCP servers to use it here.'
         )}
       </p>
     );
   }
 
   return (
-    <div className="space-y-4">
+    <div className="space-y-3">
       {servers.map(server => {
-        const names = toolNamesFor(server);
-        const selectedCount = names.filter(n => selectedTools.includes(n)).length;
+        const refs = referencesOf(server);
+        const used = refs.length > 0;
+        const legacy = used && !refs.includes(server.id);
         const serverName = getLocalizedContent(server.name, lang) || server.id;
+        const description = getLocalizedContent(server.description, lang);
+        const inputId = `mcp-server-${server.id}`;
         return (
           <div
             key={server.id}
-            className="rounded-lg border border-gray-200 dark:border-gray-700 overflow-hidden"
+            className="rounded-lg border border-gray-200 dark:border-gray-700 px-3 py-2"
           >
-            <div className="flex items-center justify-between bg-gray-50 dark:bg-gray-900/40 px-3 py-2">
-              <div className="flex items-center space-x-2 min-w-0">
-                <span className="font-medium text-sm text-gray-900 dark:text-gray-100 truncate">
-                  {serverName}
+            <label htmlFor={inputId} className="flex items-start gap-2 cursor-pointer">
+              <input
+                id={inputId}
+                type="checkbox"
+                className="mt-0.5 rounded-sm border-gray-300 dark:border-gray-600 text-indigo-600 focus:ring-indigo-500"
+                checked={used}
+                onChange={() => toggleServer(server)}
+              />
+              <span className="min-w-0 flex-1">
+                <span className="flex flex-wrap items-center gap-x-2 gap-y-1">
+                  <span className="font-medium text-sm text-gray-900 dark:text-gray-100">
+                    {serverName}
+                  </span>
+                  <span className="font-mono text-xs text-gray-400 dark:text-gray-500">
+                    {server.id}
+                  </span>
+                  {!server.enabled && (
+                    <span className="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium bg-yellow-100 dark:bg-yellow-900/50 text-yellow-800 dark:text-yellow-300">
+                      {t('admin.apps.edit.mcpTools.disabled', 'disabled')}
+                    </span>
+                  )}
                 </span>
-                <span className="font-mono text-xs text-gray-400 dark:text-gray-500">
-                  {server.id}
-                </span>
-                {!server.enabled && (
-                  <span className="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium bg-yellow-100 dark:bg-yellow-900/50 text-yellow-800 dark:text-yellow-300">
-                    {t('admin.apps.edit.mcpTools.disabled', 'disabled')}
+                {description && (
+                  <span className="block text-xs text-gray-500 dark:text-gray-400 mt-0.5 line-clamp-2">
+                    {description}
                   </span>
                 )}
-                {selectedCount > 0 && (
-                  <span className="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium bg-indigo-100 dark:bg-indigo-900/50 text-indigo-800 dark:text-indigo-300">
-                    {t('admin.apps.edit.mcpTools.selectedCount', '{{count}} selected', {
-                      count: selectedCount
+                {legacy && (
+                  <span className="block text-xs text-amber-700 dark:text-amber-400 mt-1">
+                    {t(
+                      'admin.apps.edit.mcpTools.legacySelection',
+                      'This app lists some of this server’s tools one by one. Turn the server off and on again to use the tools allowed on the server.'
+                    )}
+                  </span>
+                )}
+                {server.error && (
+                  <span className="flex items-center text-xs text-red-700 dark:text-red-400 mt-1">
+                    <Icon name="x-circle" size="sm" className="mr-1.5 shrink-0" />
+                    {t('admin.apps.edit.mcpTools.serverError', 'Could not list tools: {{error}}', {
+                      error: server.error
                     })}
                   </span>
                 )}
-              </div>
-              {names.length > 0 && (
-                <button
-                  type="button"
-                  onClick={() => toggleServer(server)}
-                  className="text-xs font-medium text-indigo-600 dark:text-indigo-400 hover:text-indigo-800 dark:hover:text-indigo-300 whitespace-nowrap ml-2"
-                >
-                  {allSelected(server)
-                    ? t('admin.apps.edit.mcpTools.deselectAll', 'Deselect all')
-                    : t('admin.apps.edit.mcpTools.selectAll', 'Select all')}
-                </button>
-              )}
-            </div>
-
-            {server.error ? (
-              <div className="px-3 py-2 text-sm text-red-700 dark:text-red-400 flex items-center">
-                <Icon name="x-circle" size="sm" className="mr-1.5 shrink-0" />
-                {t('admin.apps.edit.mcpTools.serverError', 'Could not list tools: {{error}}', {
-                  error: server.error
-                })}
-              </div>
-            ) : names.length === 0 ? (
-              <p className="px-3 py-2 text-sm text-gray-500 dark:text-gray-400">
-                {t('admin.apps.edit.mcpTools.noServerTools', 'This server exposes no tools.')}
-              </p>
-            ) : (
-              <ul className="divide-y divide-gray-100 dark:divide-gray-700">
-                {server.tools.map(tool => (
-                  <li key={tool.name}>
-                    <label className="flex items-start gap-2 px-3 py-2 cursor-pointer hover:bg-gray-50 dark:hover:bg-gray-700/50">
-                      <input
-                        type="checkbox"
-                        className="mt-0.5 rounded-sm border-gray-300 dark:border-gray-600 text-indigo-600 focus:ring-indigo-500"
-                        checked={selectedTools.includes(tool.name)}
-                        onChange={() => toggleTool(tool.name)}
-                      />
-                      <span className="min-w-0">
-                        <span className="block font-mono text-xs text-gray-900 dark:text-gray-100">
-                          {tool.name}
-                        </span>
-                        {tool.description && (
-                          <span className="block text-xs text-gray-500 dark:text-gray-400 mt-0.5">
-                            {tool.description}
-                          </span>
-                        )}
-                      </span>
-                    </label>
-                  </li>
-                ))}
-              </ul>
-            )}
+              </span>
+            </label>
           </div>
         );
       })}
       <p className="text-sm text-gray-500 dark:text-gray-400">
         {t(
           'admin.apps.edit.mcpTools.helper',
-          'Tools provided by connected MCP servers. Selections are saved with the app and resolved at runtime.'
+          'Which tools a server offers is set under Integrations → MCP servers.'
         )}
       </p>
     </div>

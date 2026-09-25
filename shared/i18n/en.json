@@ -1962,8 +1962,10 @@
           "running": "Testing connection…",
           "success": "Connected — {{count}} tools discovered",
           "failed": "Connection failed: {{error}}",
-          "noTools": "The server connected but exposed no tools (or all were filtered by the allowlist).",
-          "rendersView": "interactive view"
+          "noTools": "The server connected but offers no tools.",
+          "rendersView": "interactive view",
+          "showMore": "Show more",
+          "showLess": "Show less"
         },
         "status": {
           "unknown": "unknown",
@@ -1992,7 +1994,7 @@
           "password": "Password",
           "toolPrefix": "Tool prefix",
           "timeout": "Timeout (ms)",
-          "allowedTools": "Allowed tools (comma-separated, or *)",
+          "allowedTools": "Tools offered to apps",
           "appsEnabled": "Render interactive views (MCP Apps)",
           "appsEnabledHint": "Advertise the MCP Apps extension and show the interactive views this server's tools declare inline in the chat. Turn off to get text-only results.",
           "transportStreamableHttp": "Streamable HTTP (recommended)",
@@ -2005,7 +2007,11 @@
           "apiKey": "API key",
           "valueRefHint": "Select a stored credential profile holding the API key.",
           "headers": "Additional headers (optional)",
-          "headersHint": "One \"Name: value\" per line, sent with every request. Stored in plain text — put keys and tokens under Authentication instead."
+          "headersHint": "One \"Name: value\" per line, sent with every request. Stored in plain text — put keys and tokens under Authentication instead.",
+          "allowedToolsHint": "Apps enable this server as a whole; they get exactly the tools allowed here. Users see the server as a single entry in the chat.",
+          "allowedToolsAll": "All tools the server offers",
+          "allowedToolsSelected": "Only the tools I select",
+          "allowedToolsManual": "Tool names as the server calls them, comma-separated. Test the connection to pick them from a list instead."
         }
       },
       "gateway": {
@@ -2248,18 +2254,15 @@
         "created": "App created",
         "idRequired": "App ID is required",
         "mcpTools": {
-          "title": "MCP server tools",
-          "desc": "Enable tools provided by connected MCP servers for this app.",
-          "loading": "Loading MCP tools…",
-          "error": "Failed to load MCP tools: {{error}}",
-          "empty": "No MCP servers are configured. Add one under Integrations → MCP servers to expose its tools here.",
+          "title": "MCP servers",
+          "desc": "Choose the MCP servers this app uses. Users see each one as a single entry in the chat.",
+          "loading": "Loading MCP servers…",
+          "error": "Failed to load MCP servers: {{error}}",
+          "empty": "No MCP servers are configured. Add one under Integrations → MCP servers to use it here.",
           "disabled": "disabled",
-          "selectedCount": "{{count}} selected",
-          "selectAll": "Select all",
-          "deselectAll": "Deselect all",
           "serverError": "Could not list tools: {{error}}",
-          "noServerTools": "This server exposes no tools.",
-          "helper": "Tools provided by connected MCP servers. Selections are saved with the app and resolved at runtime."
+          "helper": "Which tools a server offers is set under Integrations → MCP servers.",
+          "legacySelection": "This app lists some of this server’s tools one by one. Turn the server off and on again to use the tools allowed on the server."
         },
         "websearch": "Web Search",
         "websearchDesc": "Configure web search capabilities for this app",

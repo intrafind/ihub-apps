@@ -306,6 +306,45 @@ function authFields(auth, onChange, t) {
   );
 }
 
+// `allowedTools` as a list: the form holds an array, or the comma-separated
+// text the admin typed when no tool catalog is loaded.
+function allowedToolList(allowedTools) {
+  if (Array.isArray(allowedTools)) return allowedTools;
+  if (typeof allowedTools === 'string') {
+    return allowedTools
+      .split(',')
+      .map(s => s.trim())
+      .filter(Boolean);
+  }
+  return ['*'];
+}
+
+// MCP tool descriptions are written for the model and can run to pages (the
+// draw.io server's create_diagram is a full prompt). Show two lines and let
+// the admin expand the rest.
+function ToolDescription({ text, t }) {
+  const [expanded, setExpanded] = useState(false);
+  if (!text) return null;
+  return (
+    <div className="mt-0.5 text-xs text-gray-500 dark:text-gray-400">
+      <p className={expanded ? 'whitespace-pre-line break-words' : 'line-clamp-2 break-words'}>
+        {text}
+      </p>
+      {text.length > 160 && (
+        <button
+          type="button"
+          onClick={() => setExpanded(v => !v)}
+          className="mt-0.5 font-medium text-blue-600 dark:text-blue-400 hover:underline"
+        >
+          {expanded
+            ? t('admin.mcp.servers.test.showLess', 'Show less')
+            : t('admin.mcp.servers.test.showMore', 'Show more')}
+        </button>
+      )}
+    </div>
+  );
+}
+
 function StatusBadge({ status, t }) {
   if (!status) {
     return (
@@ -437,16 +476,12 @@ function AdminMcpServersPage() {
   // Build the request body shared by save() and the in-dialog test probe.
   const buildBody = () => ({
     ...form,
+    // A blank prefix is left out, so the server uses its `<id>__` default.
+    toolPrefix: form.toolPrefix?.trim() || undefined,
     transport: transportFromForm(form.transport),
     name: form.name ? { en: form.name } : undefined,
     description: form.description ? { en: form.description } : undefined,
-    allowedTools:
-      typeof form.allowedTools === 'string'
-        ? form.allowedTools
-            .split(',')
-            .map(s => s.trim())
-            .filter(Boolean)
-        : form.allowedTools || ['*']
+    allowedTools: allowedToolList(form.allowedTools)
   });
 
   // Probe the connection for the config currently in the dialog, without
@@ -461,7 +496,13 @@ function AdminMcpServersPage() {
         headers: { 'Content-Type': 'application/json' },
         body: buildBody()
       });
-      setDraftTest({ ok: true, status: data.status, tools: data.tools || [] });
+      setDraftTest({
+        ok: true,
+        status: data.status,
+        tools: data.tools || [],
+        // Every tool the server offers, whatever the allowlist says.
+        catalog: data.catalog || data.tools || []
+      });
     } catch (err) {
       setDraftTest({
         ok: false,
@@ -537,6 +578,11 @@ function AdminMcpServersPage() {
       });
     }
   };
+
+  const allowedTools = allowedToolList(form.allowedTools);
+  const allowAllTools = allowedTools.includes('*');
+  // The server's full tool list, known once the connection was tested.
+  const toolCatalog = draftTest?.ok ? draftTest.catalog : null;
 
   if (loading) {
     return (
@@ -850,24 +896,67 @@ function AdminMcpServersPage() {
                 </div>
               </div>
 
-              <div>
-                <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+              <fieldset>
+                <legend className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+                  {t('admin.mcp.servers.form.allowedTools', 'Tools offered to apps')}
+                </legend>
+                <p className="text-xs text-gray-500 dark:text-gray-400 mb-2">
                   {t(
-                    'admin.mcp.servers.form.allowedTools',
-                    'Allowed tools (comma-separated, or *)'
+                    'admin.mcp.servers.form.allowedToolsHint',
+                    'Apps enable this server as a whole; they get exactly the tools allowed here. Users see the server as a single entry in the chat.'
                   )}
-                </label>
-                <input
-                  type="text"
-                  value={
-                    Array.isArray(form.allowedTools)
-                      ? form.allowedTools.join(', ')
-                      : form.allowedTools || '*'
-                  }
-                  onChange={e => setForm({ ...form, allowedTools: e.target.value })}
-                  className={MONO_INPUT_CLASS}
-                />
-              </div>
+                </p>
+                <div className="space-y-1">
+                  <label className="flex items-center gap-2 text-sm text-gray-700 dark:text-gray-300">
+                    <input
+                      type="radio"
+                      name="allowedToolsMode"
+                      checked={allowAllTools}
+                      onChange={() => setForm({ ...form, allowedTools: ['*'] })}
+                    />
+                    {t('admin.mcp.servers.form.allowedToolsAll', 'All tools the server offers')}
+                  </label>
+                  <label className="flex items-center gap-2 text-sm text-gray-700 dark:text-gray-300">
+                    <input
+                      type="radio"
+                      name="allowedToolsMode"
+                      checked={!allowAllTools}
+                      onChange={() =>
+                        setForm({
+                          ...form,
+                          // Start from every known tool so the admin unticks
+                          // what they do not want.
+                          allowedTools: toolCatalog
+                            ? toolCatalog.map(tool => tool.originalName)
+                            : []
+                        })
+                      }
+                    />
+                    {t('admin.mcp.servers.form.allowedToolsSelected', 'Only the tools I select')}
+                  </label>
+                </div>
+                {!allowAllTools && !toolCatalog && (
+                  <div className="mt-2">
+                    <input
+                      type="text"
+                      value={
+                        Array.isArray(form.allowedTools)
+                          ? form.allowedTools.join(', ')
+                          : form.allowedTools || ''
+                      }
+                      onChange={e => setForm({ ...form, allowedTools: e.target.value })}
+                      placeholder="create_diagram, search_shapes"
+                      className={MONO_INPUT_CLASS}
+                    />
+                    <p className="mt-1 text-xs text-gray-500 dark:text-gray-400">
+                      {t(
+                        'admin.mcp.servers.form.allowedToolsManual',
+                        'Tool names as the server calls them, comma-separated. Test the connection to pick them from a list instead.'
+                      )}
+                    </p>
+                  </div>
+                )}
+              </fieldset>
 
               <div className="flex items-start space-x-2">
                 <input
@@ -908,38 +997,62 @@ function AdminMcpServersPage() {
                         {t(
                           'admin.mcp.servers.test.success',
                           'Connected — {{count}} tools discovered',
-                          { count: draftTest.tools.length }
+                          { count: toolCatalog.length }
                         )}
                       </div>
-                      {draftTest.tools.length > 0 ? (
-                        <ul className="mt-3 max-h-56 overflow-y-auto divide-y divide-gray-200 dark:divide-gray-700 rounded-sm border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800">
-                          {draftTest.tools.map(tool => (
-                            <li key={tool.name} className="px-3 py-2">
-                              <div className="flex items-center gap-2 font-mono text-xs text-gray-900 dark:text-gray-100">
-                                <span>{tool.name}</span>
-                                {tool.uiResourceUri && (
-                                  <span
-                                    className="inline-flex items-center gap-1 rounded-sm bg-blue-50 dark:bg-blue-900/40 px-1.5 py-0.5 font-sans text-[11px] text-blue-700 dark:text-blue-300"
-                                    title={tool.uiResourceUri}
+                      {toolCatalog.length > 0 ? (
+                        <ul className="mt-3 max-h-80 overflow-y-auto divide-y divide-gray-200 dark:divide-gray-700 rounded-sm border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800">
+                          {toolCatalog.map(tool => {
+                            const checkboxId = `mcp-allowed-${tool.originalName}`;
+                            const allowed =
+                              allowAllTools || allowedTools.includes(tool.originalName);
+                            return (
+                              <li key={tool.name} className="flex items-start gap-2 px-3 py-2">
+                                <input
+                                  id={checkboxId}
+                                  type="checkbox"
+                                  className="mt-0.5"
+                                  checked={allowed}
+                                  disabled={allowAllTools}
+                                  onChange={() =>
+                                    setForm({
+                                      ...form,
+                                      allowedTools: allowed
+                                        ? allowedTools.filter(n => n !== tool.originalName)
+                                        : [...allowedTools, tool.originalName]
+                                    })
+                                  }
+                                />
+                                <div className="min-w-0 flex-1">
+                                  <label
+                                    htmlFor={checkboxId}
+                                    className="flex flex-wrap items-center gap-2 font-mono text-xs text-gray-900 dark:text-gray-100"
                                   >
-                                    <Icon name="cube" size="xs" />
-                                    {t('admin.mcp.servers.test.rendersView', 'interactive view')}
-                                  </span>
-                                )}
-                              </div>
-                              {tool.description && (
-                                <div className="mt-0.5 text-xs text-gray-500 dark:text-gray-400">
-                                  {tool.description}
+                                    <span>{tool.originalName}</span>
+                                    {tool.uiResourceUri && (
+                                      <span
+                                        className="inline-flex items-center gap-1 rounded-sm bg-blue-50 dark:bg-blue-900/40 px-1.5 py-0.5 font-sans text-[11px] text-blue-700 dark:text-blue-300"
+                                        title={tool.uiResourceUri}
+                                      >
+                                        <Icon name="cube" size="xs" />
+                                        {t(
+                                          'admin.mcp.servers.test.rendersView',
+                                          'interactive view'
+                                        )}
+                                      </span>
+                                    )}
+                                  </label>
+                                  <ToolDescription text={tool.description} t={t} />
                                 </div>
-                              )}
-                            </li>
-                          ))}
+                              </li>
+                            );
+                          })}
                         </ul>
                       ) : (
                         <p className="mt-2 text-xs text-gray-500 dark:text-gray-400">
                           {t(
                             'admin.mcp.servers.test.noTools',
-                            'The server connected but exposed no tools (or all were filtered by the allowlist).'
+                            'The server connected but offers no tools.'
                           )}
                         </p>
                       )}

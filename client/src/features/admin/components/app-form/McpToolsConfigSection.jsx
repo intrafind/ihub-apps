@@ -9,12 +9,12 @@ function McpToolsConfigSection({ selectedTools, onToolsChange, onMcpToolIdsChang
       <div className="md:grid md:grid-cols-3 md:gap-6">
         <div className="md:col-span-1">
           <h3 className="text-lg font-medium leading-6 text-gray-900 dark:text-gray-100">
-            {t('admin.apps.edit.mcpTools.title', 'MCP server tools')}
+            {t('admin.apps.edit.mcpTools.title', 'MCP servers')}
           </h3>
           <p className="mt-1 text-sm text-gray-500 dark:text-gray-400">
             {t(
               'admin.apps.edit.mcpTools.desc',
-              'Enable tools provided by connected MCP servers for this app.'
+              'Choose the MCP servers this app uses. Users see each one as a single entry in the chat.'
             )}
           </p>
         </div>

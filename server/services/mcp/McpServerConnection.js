@@ -339,7 +339,9 @@ export class McpServerConnection {
       if (!cursor) break;
     }
 
-    const prefix = this.config.toolPrefix ?? `${this.config.id}__`;
+    // A blank prefix means the default: tools of two servers must never share
+    // an id, and the admin form leaves the field empty to accept `<id>__`.
+    const prefix = this.config.toolPrefix?.trim() || `${this.config.id}__`;
     const allow = this.config.allowedTools || ['*'];
     const allowAll = allow.includes('*');
     const appsEnabled = appsEnabledFor(this.config);

@@ -124,7 +124,7 @@ export const mcpServerConfigSchema = z.object({
   auth: authSchema.optional(),
   // Tools surface with this prefix to keep multi-server names collision-free.
   // Defaults to `<id>__` so a server named "github" with tool "search_repos"
-  // appears as "github__search_repos".
+  // appears as "github__search_repos". An empty prefix also means the default.
   toolPrefix: z
     .string()
     .regex(/^[a-zA-Z0-9_]*$/, 'toolPrefix may only contain alphanumeric or underscore characters')
