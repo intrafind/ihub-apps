@@ -336,3 +336,114 @@ describe('switching emails', () => {
     expect(loads).toHaveLength(2);
   });
 });
+
+// Outlook for Mac fires SelectedItemsChanged first and ItemChanged a moment
+// later for one click. Treating both as a reload blanked the strip twice and
+// repainted the old email in between, so the switch felt like a full reload.
+describe('SelectedItemsChanged is a quiet check', () => {
+  let loads;
+
+  beforeEach(() => {
+    loads = [];
+    mockHostImpl = {
+      kind: 'office',
+      readMessageContext: jest.fn(() => {
+        const d = deferred();
+        loads.push(d);
+        return d.promise;
+      })
+    };
+  });
+
+  function dispatch(source) {
+    document.dispatchEvent(new CustomEvent('ihub:itemchanged', { detail: { source } }));
+  }
+
+  async function mountWithEmailA() {
+    const hook = renderHook(() => useOutlookMailContextSnapshot());
+    await act(async () => {
+      loads[0].resolve(mailCtx('A'));
+    });
+    return hook;
+  }
+
+  test('never blanks the strip, and a read of the email already shown changes nothing', async () => {
+    const { result } = await mountWithEmailA();
+    const shown = result.current.ctx;
+
+    await act(async () => {
+      dispatch('SelectedItemsChanged');
+    });
+    expect(result.current.loading).toBe(false);
+    expect(result.current.ctx).toBe(shown);
+
+    await act(async () => {
+      jest.advanceTimersByTime(150);
+    });
+    expect(loads).toHaveLength(2);
+    await act(async () => {
+      loads[1].resolve(mailCtx('A'));
+    });
+    expect(result.current.loading).toBe(false);
+    expect(result.current.ctx).toBe(shown);
+  });
+
+  test('swaps straight to a different email the quiet read found (multi-select hosts)', async () => {
+    const { result } = await mountWithEmailA();
+
+    await act(async () => {
+      dispatch('SelectedItemsChanged');
+      jest.advanceTimersByTime(150);
+    });
+    await act(async () => {
+      loads[1].resolve(mailCtx('B'));
+    });
+    expect(result.current.loading).toBe(false);
+    expect(result.current.ctx?.itemId).toBe('B');
+  });
+
+  test('the Mac sequence — quiet check, then ItemChanged — shows the new email once', async () => {
+    const { result } = await mountWithEmailA();
+
+    await act(async () => {
+      dispatch('SelectedItemsChanged');
+      jest.advanceTimersByTime(150);
+    });
+    await act(async () => {
+      loads[1].resolve(mailCtx('A')); // mailbox.item has not moved yet
+    });
+    expect(result.current.ctx?.itemId).toBe('A');
+
+    await act(async () => {
+      dispatch('ItemChanged');
+    });
+    expect(result.current.loading).toBe(true);
+    await act(async () => {
+      jest.advanceTimersByTime(150);
+    });
+    await act(async () => {
+      loads[2].resolve(mailCtx('B'));
+    });
+    expect(result.current.ctx?.itemId).toBe('B');
+  });
+
+  test('a quiet read that supersedes a visible one still ends the loading state', async () => {
+    const { result } = await mountWithEmailA();
+
+    await act(async () => {
+      dispatch('ItemChanged');
+      jest.advanceTimersByTime(150);
+    });
+    expect(loads).toHaveLength(2); // visible read in flight
+    await act(async () => {
+      dispatch('SelectedItemsChanged');
+      jest.advanceTimersByTime(150);
+    });
+    expect(loads).toHaveLength(3);
+    await act(async () => {
+      loads[2].resolve(mailCtx('A'));
+    });
+    expect(result.current.loading).toBe(false);
+    expect(result.current.ctx?.itemId).toBe('A');
+  });
+});

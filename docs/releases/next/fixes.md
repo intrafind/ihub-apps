@@ -1,13 +1,15 @@
 # Fixes — Unreleased
 
-## Outlook Add-in: The Task Pane Follows the Selected Email on Mac
+## Outlook Add-in: Switching Emails in the Pinned Pane Refreshes Once
 
-On Outlook for Mac, the pinned iHub pane stayed on the email it was opened on. Clicking another
-email refreshed the pane but showed the same email again, and only closing and reopening the pane
-picked up the new one. Outlook for Mac does not update the add-in's current email when the
-selection changes, so the pane now reads the selected email itself.
+Clicking another email with the iHub pane pinned refreshed the pane twice, showing the previous
+email again in between, so every switch felt like a full reload. Outlook for Mac reports the
+selection change before the email change, and the pane treated both as a reload.
 
-- The email context, "Add email(s)" and the token estimate follow every email you click, so you
-  can switch between emails and collect several without reopening the pane.
-- Reply, Reply all and Forward act on the selected email, not the one the pane was opened on.
-- If the pane is opened with no email selected, it picks up the first email you click.
+- The pane now refreshes once per switch, straight to the new email. Re-selecting the open email
+  or a refresh of the message list no longer changes anything on screen.
+- Where Outlook lets add-ins read the selected message directly (Mailbox 1.15 and full mailbox
+  access), the pane reads it even when Outlook has not reported the email change yet, and Reply,
+  Reply all and Forward act on that email.
+- Outlook versions that do not allow this, such as Outlook for Mac 16.x, are no longer asked, so
+  the pane stops logging "not available" and "elevated permission" errors on every click.

@@ -564,9 +564,11 @@ describe('mailbox access serialization', () => {
 // never follows the selection — it stays on the email the pane was opened on,
 // or null when none was selected (confirmed with the office trace).
 describe('reading the selected email when the live item does not follow the selection (Mac)', () => {
-  function installSelection(selectedItem) {
-    const calls = { load: [], unload: [] };
-    Office.context.mailbox.getSelectedItemsAsync = cb =>
+  function installSelection(selectedItem, { mailbox115 = true } = {}) {
+    const calls = { load: [], unload: [], listSelection: 0 };
+    Office.context.requirements = { isSetSupported: (_set, v) => mailbox115 || v !== '1.15' };
+    Office.context.mailbox.getSelectedItemsAsync = cb => {
+      calls.listSelection++;
       setTimeout(
         () =>
           cb({
@@ -577,6 +579,7 @@ describe('reading the selected email when the live item does not follow the sele
           }),
         0
       );
+    };
     Office.context.mailbox.loadItemByIdAsync = (itemId, cb) => {
       calls.load.push(itemId);
       // Documented: the loaded item becomes Office.context.mailbox.item.
@@ -615,7 +618,7 @@ describe('reading the selected email when the live item does not follow the sele
       bodyText: 'body of B'
     });
     expect(ctx.attachments[0]).toMatchObject({ id: 'b1', content: { content: 'CONTENT(b1)' } });
-    expect(calls).toEqual({ load: ['B'], unload: ['B'] });
+    expect(calls).toMatchObject({ load: ['B'], unload: ['B'] });
     expect(Office.context.mailbox.item).toBe(a);
   });
 
@@ -652,11 +655,50 @@ describe('reading the selected email when the live item does not follow the sele
 
   test('falls back to the live item when the host cannot list the selection', async () => {
     Office.context.mailbox.item = mailA();
+    installSelection(mailB());
     Office.context.mailbox.getSelectedItemsAsync = cb =>
       setTimeout(() => cb({ status: FAILED, error: { message: 'error 5001' } }), 0);
 
     const ctx = await fetchCurrentMailContext();
 
     expect(ctx.subject).toBe('Mail A');
+  });
+
+  // Outlook for Mac 16.113 reports Mailbox 1.14: there is no loadItemByIdAsync,
+  // so asking for the selection would only produce errors.
+  test('does not ask for the selection when the host cannot load it (Mailbox < 1.15)', async () => {
+    Office.context.mailbox.item = mailA();
+    const calls = installSelection(mailB(), { mailbox115: false });
+
+    const ctx = await fetchCurrentMailContext();
+
+    expect(ctx.subject).toBe('Mail A');
+    expect(calls.listSelection).toBe(0);
+  });
+
+  // Keep last: the refusal is remembered for the rest of the module's life.
+  test('stops asking once the manifest lacks the permission (ReadWriteItem)', async () => {
+    Office.context.mailbox.item = mailA();
+    const calls = installSelection(mailB());
+    Office.context.mailbox.getSelectedItemsAsync = cb => {
+      calls.listSelection++;
+      setTimeout(
+        () =>
+          cb({
+            status: FAILED,
+            error: {
+              message:
+                "Elevated permission is required to call the method: 'getSelectedItemsAsync'."
+            }
+          }),
+        0
+      );
+    };
+
+    await fetchCurrentMailContext();
+    await fetchCurrentMailContext();
+
+    expect(calls.listSelection).toBe(1);
+    expect(calls.load).toEqual([]);
   });
 });

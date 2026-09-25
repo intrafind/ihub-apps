@@ -6,6 +6,7 @@ import {
 } from './outlookCalendarContext';
 import { readMailboxUserProfile, readMessageHeaders } from './outlookItemFields';
 import { traceOffice, shortItemId } from './officeLog';
+import { isMultiSelectBodySupported } from './officeCapabilities';
 
 /**
  * All Office mailbox item operations in this module run through this promise
@@ -54,6 +55,9 @@ export function getLiveItemId() {
 // fires ItemChanged on the hosts that fire it at all; taskpane-entry.jsx drops
 // those, or every read would trigger another read.
 let loadingSelectedItem = false;
+// Set once the host refuses getSelectedItemsAsync — the manifest lacks
+// ReadWriteMailbox — so later reads stop asking.
+let selectionReadDenied = false;
 
 export function isLoadingSelectedItem() {
   return loadingSelectedItem;
@@ -79,12 +83,17 @@ export async function withSelectedItemLocked(fn) {
   const liveId = getLiveItemId();
   // An item without an id is a draft being composed: that is the item.
   if (live && !liveId) return fn(live);
+  // Loading needs Mailbox 1.15 (Outlook for Mac 16.113 stops at 1.14) and the
+  // ReadWriteMailbox permission. Without either there is nothing to load.
+  if (selectionReadDenied || !isMultiSelectBodySupported()) return fn(live);
 
   let stubs;
   try {
     stubs = await getSelectedItemsAsync();
   } catch (e) {
-    traceOffice('selected-items-failed', { message: e?.message ?? String(e) });
+    const message = e?.message ?? String(e);
+    if (/permission/i.test(message)) selectionReadDenied = true;
+    traceOffice('selected-items-failed', { message });
     return fn(live);
   }
   const selectedId = stubs.length === 1 ? (stubs[0]?.itemId ?? null) : null;

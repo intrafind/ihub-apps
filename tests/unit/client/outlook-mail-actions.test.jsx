@@ -463,13 +463,14 @@ describe('the selected email, not the live item (Outlook on Mac)', () => {
     const m = loadModule();
     const opened = readModeItem({ itemId: 'A' });
     const selected = readModeItem({ itemId: 'B', unloadAsync: jest.fn(cb => cb(SUCCESS)) });
-    installOffice({
+    const office = installOffice({
       item: opened,
       mailbox: {
         getSelectedItemsAsync: cb => cb({ ...SUCCESS, value: [{ itemId: 'B' }] }),
         loadItemByIdAsync: jest.fn((_id, cb) => cb({ ...SUCCESS, value: selected }))
       }
     });
+    office.context.requirements = { isSetSupported: () => true };
 
     const result = await m.runOutlookMailAction('answer', 'Sounds good.');
 

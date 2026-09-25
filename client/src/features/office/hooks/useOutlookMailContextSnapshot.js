@@ -30,11 +30,12 @@ const RELOAD_DEBOUNCE_MS = 150;
  *
  * Behavior:
  *  - Fetches `host.readMessageContext()` on mount and again, debounced,
- *    whenever Outlook fires `ihub:itemchanged` — for either Outlook event,
- *    unconditionally. What the read returns is what gets published; there is
- *    no id-matching gate deciding whether a read may be published, because a
- *    gate keyed on a lagging id can (and did) leave the pane stuck on the
- *    previous email forever.
+ *    whenever Outlook fires `ihub:itemchanged`. ItemChanged shows the loading
+ *    state and publishes what the read returns. SelectedItemsChanged alone
+ *    reads quietly and publishes only when the read found a different email
+ *    than the one shown — decided from the read's result, never from the
+ *    synchronous `Office.context.mailbox.item.itemId`, so it cannot wedge
+ *    the pane on the previous email the way the id gates of #2505/#2509 did.
  *  - Tracks per-message edits: a set of attachment ids the user removed via
  *    the banner, and an email-body opt-out. Both reset when the published
  *    snapshot moves to a different item, so re-selecting the open email or a
@@ -68,52 +69,74 @@ export function useOutlookMailContextSnapshot() {
   const reloadTimerRef = useRef(null);
   // itemId of the snapshot last published (null when it had no item).
   const itemIdRef = useRef(null);
+  // Mirrors state.loading for the load callbacks.
+  const loadingRef = useRef(true);
+  // Whether the pending debounced read was asked for by a visible event.
+  const visiblePendingRef = useRef(false);
 
   const hostKind = host?.kind;
 
   useEffect(() => {
     let disposed = false;
 
-    async function load() {
+    function setSnapshot(next) {
+      loadingRef.current = next.loading;
+      setState(next);
+    }
+
+    // `quiet`: read without blanking the strip, and leave the screen alone
+    // when the read finds the email already shown.
+    async function load({ quiet = false } = {}) {
       const seq = ++loadSeqRef.current;
-      setState({ loading: true, ctx: null });
+      if (!quiet) setSnapshot({ loading: true, ctx: null });
       let ctx = null;
       try {
         ctx = await host.readMessageContext();
       } catch {
         ctx = null;
       }
+      const itemId = ctx?.itemId ?? null;
       const superseded = disposed || seq !== loadSeqRef.current;
-      traceOffice(superseded ? 'snapshot-dropped' : 'snapshot-published', {
-        seq,
-        itemId: shortItemId(ctx?.itemId),
-        subject: ctx?.subject ?? null
-      });
-      if (superseded) return;
+      const unchanged = quiet && !loadingRef.current && itemId && itemId === itemIdRef.current;
+      traceOffice(
+        superseded ? 'snapshot-dropped' : unchanged ? 'snapshot-unchanged' : 'snapshot-published',
+        { seq, quiet, itemId: shortItemId(itemId), subject: ctx?.subject ?? null }
+      );
+      if (superseded || unchanged) return;
 
       // Per-email edits belong to one email. No id (browser extension, or a
       // read that found no item) always counts as different, as before.
-      const itemId = ctx?.itemId ?? null;
       if (!itemId || itemId !== itemIdRef.current) {
         setRemovedAttachmentIds(new Set());
         setIncludeBody(true);
         setGeneration(g => g + 1);
       }
       itemIdRef.current = itemId;
-      setState({ loading: false, ctx });
+      setSnapshot({ loading: false, ctx });
     }
 
     load();
 
-    function onItemChange() {
-      // Supersede any in-flight load right away and show the loading state,
-      // but debounce the actual read.
-      loadSeqRef.current++;
-      setState({ loading: true, ctx: null });
+    function onItemChange(event) {
+      // SelectedItemsChanged also fires for re-selecting the open email, list
+      // refreshes and, on Outlook for Mac, just before the ItemChanged of a
+      // real switch. Blanking the strip for it made every click a double
+      // refresh that repainted the old email first, so it only gets a quiet
+      // check. ItemChanged (and an event without a source) means the open
+      // email changed: supersede any in-flight load and show the loading
+      // state right away. Either way the read itself is debounced.
+      const quiet = event?.detail?.source === 'SelectedItemsChanged';
+      if (!quiet) {
+        visiblePendingRef.current = true;
+        loadSeqRef.current++;
+        setSnapshot({ loading: true, ctx: null });
+      }
       if (reloadTimerRef.current) clearTimeout(reloadTimerRef.current);
       reloadTimerRef.current = setTimeout(() => {
         reloadTimerRef.current = null;
-        load();
+        const visible = visiblePendingRef.current;
+        visiblePendingRef.current = false;
+        load({ quiet: !visible });
       }, RELOAD_DEBOUNCE_MS);
     }
 
