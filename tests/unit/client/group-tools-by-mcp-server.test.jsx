@@ -3,7 +3,10 @@
  * collapses an app's selected MCP tool ids into one entry per server for the
  * end-user tools menu.
  */
-import { groupToolsByMcpServer } from '../../../client/src/features/chat/utils/groupToolsByMcpServer';
+import {
+  groupToolsByMcpServer,
+  collapseMcpTools
+} from '../../../client/src/features/chat/utils/groupToolsByMcpServer';
 
 const localize = name => (typeof name === 'object' ? name?.en : name) || '';
 
@@ -81,5 +84,46 @@ describe('groupToolsByMcpServer', () => {
     expect(grouped).toHaveLength(1);
     expect(grouped[0].matchedTools).toEqual(['drawio', 'drawio__create_diagram']);
     expect(individual).toEqual([]);
+  });
+
+  test('never shows a reference that resolves to no loaded tool', () => {
+    // An old bare name after the tool prefix fix, or a server that is down: a
+    // toggle would do nothing, and it must not appear as a stray tool entry.
+    const available = [
+      { id: 'drawio__create_diagram', _mcp: { serverId: 'drawio', serverName: 'draw.io' } },
+      { id: 'iFinder_search' }
+    ];
+    const { grouped, individual } = groupToolsByMcpServer(
+      ['drawio', 'create_diagram', 'excalidraw', 'iFinder'],
+      available,
+      localize
+    );
+    expect(grouped.map(g => g.name)).toEqual(['draw.io']);
+    // A function-style base id still resolves and stays.
+    expect(individual).toEqual(['iFinder']);
+  });
+
+  test('keeps every reference while no tools are loaded', () => {
+    const { individual } = groupToolsByMcpServer(['drawio', 'braveSearch'], [], localize);
+    expect(individual).toEqual(['drawio', 'braveSearch']);
+  });
+});
+
+describe('collapseMcpTools', () => {
+  test('offers one entry per MCP server, keyed by the server id', () => {
+    const tools = [
+      { id: 'braveSearch', name: 'Brave', description: 'Search' },
+      {
+        id: 'drawio__create_diagram',
+        name: 'drawio__create_diagram',
+        description: 'x'.repeat(50000),
+        _mcp: { serverId: 'drawio', serverName: { en: 'draw.io' } }
+      },
+      { id: 'drawio__search_shapes', _mcp: { serverId: 'drawio', serverName: { en: 'draw.io' } } }
+    ];
+    expect(collapseMcpTools(tools, localize)).toEqual([
+      tools[0],
+      { id: 'drawio', name: 'draw.io', description: '', mcpServer: true }
+    ]);
   });
 });

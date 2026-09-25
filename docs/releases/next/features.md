@@ -6,9 +6,10 @@ An app now enables an MCP server as one unit, and users see it as a single entry
 **+** menu. Which of the server's tools exist is decided once, on the server, instead of in
 every app.
 
-- **Chat:** each MCP server is one toggle, named after the server (e.g. "draw.io"). The server
-  no longer shows up next to its own tools — as it did for the shipped draw.io Diagrams app — and
-  users without a direct tool grant see the server's name instead of raw tool ids.
+- **Chat:** for every user and every MCP server, the **+** menu shows one toggle named after the
+  server (e.g. "draw.io") and never the server's single tools. The server no longer shows up next
+  to its own tools, as it did for the shipped draw.io Diagrams app.
+- **Create app wizard:** MCP servers are offered as one entry each instead of tool by tool.
 - **App editor:** the **MCP servers** section lists servers with a checkbox each; the individual
   tools are no longer shown there. Apps that picked a server's tools one by one keep working and
   are marked; turning the server off and on again switches them to the server's tool settings.

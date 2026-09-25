@@ -164,8 +164,10 @@ function ChatInputActionsMenu({
   };
 
   const hasTools = app?.tools && app.tools.length > 0 && enabledTools !== null;
-  const toolCount = app?.tools?.length || 0;
-  const enabledCount = hasTools ? app.tools.filter(t => enabledTools.includes(t)).length : 0;
+  // The references the menu shows: one toggle per MCP server plus plain tools.
+  const menuToolRefs = [...grouped.flatMap(g => g.matchedTools), ...individual];
+  const toolCount = menuToolRefs.length;
+  const enabledCount = hasTools ? menuToolRefs.filter(t => enabledTools.includes(t)).length : 0;
   const hasWebsearch = app?.websearch?.enabled === true && onWebsearchEnabledChange !== null;
   const hasTranscription = transcriptionAvailable === true && onTranscriptionEnabledChange !== null;
 
@@ -566,7 +568,7 @@ function ChatInputActionsMenu({
           )}
 
           {/* Tools Section */}
-          {hasTools && (
+          {hasTools && (toolsLoading || toolCount > 0) && (
             <div className="p-3">
               <h3 className="text-sm font-semibold text-gray-900 dark:text-gray-100 mb-3">
                 {t('tools.enableDisable', 'Tools')}
