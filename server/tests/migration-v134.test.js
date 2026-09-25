@@ -39,8 +39,9 @@ function makeCtx(dir) {
         .stat(path.join(dir, rel))
         .then(() => true)
         .catch(() => false),
+    // The migration only asks for `*.json`: match on the suffix after the `*`.
     listFiles: async (rel, pattern) => {
-      const ext = pattern.replace('*', '');
+      const ext = pattern.startsWith('*') ? pattern.slice(1) : pattern;
       const entries = await fs.readdir(path.join(dir, rel)).catch(() => []);
       return entries.filter(name => name.endsWith(ext));
     },
