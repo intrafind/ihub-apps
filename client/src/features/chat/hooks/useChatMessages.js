@@ -76,6 +76,27 @@ export function transformStoredMessage(msg) {
  * @param {Object} msg - Conversation message.
  * @returns {Object} Chat message.
  */
+/**
+ * A message without the bytes of its documents. A document carries `base64`
+ * only so a tool with file inputs can receive it on the request that sends
+ * it; earlier turns and the browser's copy of the transcript keep the
+ * extracted text and the descriptor. Returns the same object when there is
+ * nothing to strip.
+ *
+ * @param {Object} msg - Chat message
+ * @returns {Object}
+ */
+function withoutDocumentBytes(msg) {
+  const files = Array.isArray(msg?.fileData) ? msg.fileData : msg?.fileData ? [msg.fileData] : [];
+  if (!files.some(file => file && typeof file === 'object' && file.base64)) return msg;
+  const stripped = files.map(file => {
+    if (!file || typeof file !== 'object' || !file.base64) return file;
+    const { base64: _base64, ...rest } = file;
+    return rest;
+  });
+  return { ...msg, fileData: Array.isArray(msg.fileData) ? stripped : stripped[0] };
+}
+
 function transformConversationMessage(msg) {
   const message = {
     id: msg.id || `server-${Date.now()}-${Math.floor(Math.random() * 1000)}`,
@@ -327,10 +348,13 @@ function useChatMessages(chatId = 'default', { ephemeral = false, serverBacked =
       // Strip image data to avoid sessionStorage quota issues
       // Images can be very large (base64 encoded) and exceed the ~5-10MB quota
       const messagesWithoutImageData = persistableMessages.map(msg => {
+        // A document's own bytes are for the request that sent it (tools with
+        // file inputs); the transcript keeps its extracted text.
+        const withoutBytes = withoutDocumentBytes(msg);
         if (msg.images && msg.images.length > 0) {
           // Keep metadata but remove the actual image data
           return {
-            ...msg,
+            ...withoutBytes,
             images: msg.images.map(img => ({
               mimeType: img.mimeType,
               // Mark that image data was present but not persisted
@@ -338,7 +362,7 @@ function useChatMessages(chatId = 'default', { ephemeral = false, serverBacked =
             }))
           };
         }
-        return msg;
+        return withoutBytes;
       });
 
       // Debug logging for image persistence
@@ -706,9 +730,16 @@ function useChatMessages(chatId = 'default', { ephemeral = false, serverBacked =
       }
 
       // Strip UI-specific properties that the API doesn't need. MCP App views
-      // carry their full tool payload and must not ride along with history.
-      return messagesForApi.map(msg => {
-        const { rawContent, mcpApps: _mcpApps, ...apiMsg } = msg;
+      // carry their full tool payload and must not ride along with history,
+      // and only the new message keeps its documents' bytes: the server hands
+      // attachments of the current message to tools, never earlier ones.
+      return messagesForApi.map((msg, index) => {
+        const isNewMessage = additionalMessage && index === messagesForApi.length - 1;
+        const {
+          rawContent,
+          mcpApps: _mcpApps,
+          ...apiMsg
+        } = isNewMessage ? msg : withoutDocumentBytes(msg);
         const content = rawContent !== undefined ? rawContent : apiMsg.content;
         return { ...apiMsg, content };
       });

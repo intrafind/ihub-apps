@@ -1059,6 +1059,36 @@ test('passthrough: tool text streams as step/delta, closes with tool/completed{a
   assert.deepEqual(endOutcomes(telemetry), ['completed']);
 });
 
+test("server tool with attachments: the message's attachments reach the tool as _attachments; _fileData stays a workflow matter", async t => {
+  const chatId = newChatId('tool-attachments');
+  const frames = captureFrames(t, chatId);
+  const { service, runTool } = makeService(
+    [toolTurn([{ name: 'webSearch', args: { query: 'q' } }]), textTurn('Done.')],
+    { runTool: async () => ({ ok: true }) }
+  );
+  const userAttachments = [
+    { type: 'document', fileName: 'brief.pdf', fileType: 'application/pdf', base64: 'JVBERg==' },
+    { type: 'image', fileName: 'photo.png', fileType: 'image/png', base64: 'iVBORw0KGgo=' }
+  ];
+  const prep = makePrep({
+    tools: [webSearchTool],
+    userFileData: userAttachments[0],
+    userAttachments
+  });
+
+  const summary = await runTurn(service, { chatId, prep });
+
+  assertWellFormed(frames, { runId: summary.runId });
+  assert.equal(runTool.calls.length, 1);
+  const params = runTool.calls[0][1];
+  assert.equal(params.query, 'q');
+  assert.equal(params.chatId, chatId);
+  assert.equal(params.user, USER);
+  assert.equal(params._attachments, userAttachments, 'every attachment, files and images alike');
+  assert.equal(Object.hasOwn(params, '_fileData'), false, 'only workflow tools get _fileData');
+  assert.equal(summary.content, 'Done.');
+});
+
 test('passthrough without an upload: no _fileData is handed to the tool', async t => {
   const chatId = newChatId('passthrough-nofile');
   const frames = captureFrames(t, chatId);

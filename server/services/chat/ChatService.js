@@ -390,10 +390,14 @@ class ChatService {
       responseFormat,
       responseSchema,
       llmOptions = {},
-      userFileData
+      userFileData,
+      userAttachments = []
     } = prep;
     const log = typeof buildLogData === 'function' ? buildLogData : () => ({});
     const loopTools = markInteractiveTools(tools);
+    // The message's attachments, for tools that take a file (MCP file inputs);
+    // handed over only when there are any, so a plain call stays as it was.
+    const attachmentParams = userAttachments.length ? { _attachments: userAttachments } : {};
     const startedAt = Date.now();
     const runId = givenRunId && isValidRunId(givenRunId) ? givenRunId : newRunId('chat');
     const refs = { chatId, appId: app?.id, ...(messageId ? { messageId } : {}) };
@@ -561,7 +565,7 @@ class ChatService {
         executeTool: (call, { toolId, args, info }) =>
           this.runTool(
             toolId,
-            { language, ...args, chatId, user, appConfig: app },
+            { language, ...args, chatId, user, appConfig: app, ...attachmentParams },
             {
               onMcpAppResult: result => {
                 if (info) info.mcpAppResult = result;
@@ -957,8 +961,10 @@ class ChatService {
         responseFormat,
         responseSchema,
         llmOptions = {},
-        userFileData
+        userFileData,
+        userAttachments = []
       } = prepResult.data;
+      const attachmentParams = userAttachments.length ? { _attachments: userAttachments } : {};
 
       // What is retained is what the model saw — the loop's bounded (spilled)
       // tool message, not the raw result — under an aggregate cap, so a chatty
@@ -1047,7 +1053,14 @@ class ChatService {
           collector
         ],
         executeTool: (call, { toolId, args }) =>
-          this.runTool(toolId, { language, ...args, chatId, user, appConfig: app })
+          this.runTool(toolId, {
+            language,
+            ...args,
+            chatId,
+            user,
+            appConfig: app,
+            ...attachmentParams
+          })
       });
 
       if (result.status === 'error' || result.status === 'aborted') {

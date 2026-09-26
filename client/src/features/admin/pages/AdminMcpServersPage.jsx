@@ -17,6 +17,7 @@ const BLANK_FORM = {
   toolPrefix: '',
   allowedTools: ['*'],
   timeoutMs: 30000,
+  fileInputs: { maxFileSizeMB: 20 },
   apps: { enabled: true }
 };
 
@@ -896,6 +897,36 @@ function AdminMcpServersPage() {
                 </div>
               </div>
 
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+                    {t('admin.mcp.servers.form.maxFileSizeMB', 'Max. file size for tools (MB)')}
+                  </label>
+                  <input
+                    type="number"
+                    min="1"
+                    max="200"
+                    value={form.fileInputs?.maxFileSizeMB ?? BLANK_FORM.fileInputs.maxFileSizeMB}
+                    onChange={e =>
+                      setForm({
+                        ...form,
+                        fileInputs: {
+                          ...(form.fileInputs || {}),
+                          maxFileSizeMB: Number(e.target.value)
+                        }
+                      })
+                    }
+                    className={INPUT_CLASS}
+                  />
+                  <p className="mt-1 text-xs text-gray-500 dark:text-gray-400">
+                    {t(
+                      'admin.mcp.servers.form.maxFileSizeMBHint',
+                      'Largest chat attachment handed to a tool parameter that takes a file.'
+                    )}
+                  </p>
+                </div>
+              </div>
+
               <fieldset>
                 <legend className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
                   {t('admin.mcp.servers.form.allowedTools', 'Tools offered to apps')}
@@ -1038,6 +1069,22 @@ function AdminMcpServersPage() {
                                         {t(
                                           'admin.mcp.servers.test.rendersView',
                                           'interactive view'
+                                        )}
+                                      </span>
+                                    )}
+                                    {tool.fileInputs?.length > 0 && (
+                                      <span
+                                        className="inline-flex items-center gap-1 rounded-sm bg-amber-50 dark:bg-amber-900/40 px-1.5 py-0.5 font-sans text-[11px] text-amber-700 dark:text-amber-300"
+                                        title={t(
+                                          'admin.mcp.servers.test.fileInputHint',
+                                          'Receives a chat attachment of the current message as a file.'
+                                        )}
+                                      >
+                                        <Icon name="paper-clip" size="xs" />
+                                        {t(
+                                          'admin.mcp.servers.test.fileInput',
+                                          'file input: {{params}}',
+                                          { params: tool.fileInputs.map(f => f.name).join(', ') }
                                         )}
                                       </span>
                                     )}

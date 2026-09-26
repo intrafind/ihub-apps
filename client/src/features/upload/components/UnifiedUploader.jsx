@@ -13,7 +13,8 @@ import {
   formatAcceptAttribute,
   processImageFile,
   extractAudioFromVideo,
-  loadMimetypesConfig
+  loadMimetypesConfig,
+  blobToBase64
 } from '../utils/fileProcessing';
 
 /**
@@ -321,6 +322,14 @@ const UnifiedUploader = ({
       ? getExtensionDisplay(file.name)
       : getFileTypeDisplay(file.type);
 
+    // The document's own bytes, as a data URL like images carry, so a tool
+    // that takes a file (MCP `format: "file"` inputs) can receive the PDF
+    // itself and not only its extracted text. Bounded by the app's document
+    // size limit; a larger document travels as text only. Never shown to the
+    // model and never stored — the server keeps a descriptor of the upload.
+    const documentBytesLimit = (fileConfig.maxFileSizeMB || MAX_FILE_SIZE_MB) * 1024 * 1024;
+    const base64 = file.size <= documentBytesLimit ? await blobToBase64(file) : undefined;
+
     return {
       preview: {
         type: 'document',
@@ -333,6 +342,7 @@ const UnifiedUploader = ({
         source: 'local',
         content: processedContent,
         pageImages,
+        ...(base64 ? { base64 } : {}),
         fileName: file.name,
         fileSize: file.size,
         fileType: file.type || (isGenericText ? 'text/plain' : ''),

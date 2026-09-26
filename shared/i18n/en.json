@@ -1970,6 +1970,8 @@
           "failed": "Connection failed: {{error}}",
           "noTools": "The server connected but offers no tools.",
           "rendersView": "interactive view",
+          "fileInput": "file input: {{params}}",
+          "fileInputHint": "Receives a chat attachment of the current message as a file.",
           "showMore": "Show more",
           "showLess": "Show less"
         },
@@ -2000,6 +2002,8 @@
           "password": "Password",
           "toolPrefix": "Tool prefix",
           "timeout": "Timeout (ms)",
+          "maxFileSizeMB": "Max. file size for tools (MB)",
+          "maxFileSizeMBHint": "Largest chat attachment handed to a tool parameter that takes a file.",
           "allowedTools": "Tools offered to apps",
           "appsEnabled": "Render interactive views (MCP Apps)",
           "appsEnabledHint": "Advertise the MCP Apps extension and show the interactive views this server's tools declare inline in the chat. Turn off to get text-only results.",

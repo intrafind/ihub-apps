@@ -640,7 +640,7 @@ const writeString = (view, offset, string) => {
  * @param {Blob} blob - The blob to convert
  * @returns {Promise<string>} Base64 data URL
  */
-const blobToBase64 = blob => {
+export const blobToBase64 = blob => {
   return new Promise((resolve, reject) => {
     const reader = new FileReader();
     reader.onload = () => resolve(reader.result);

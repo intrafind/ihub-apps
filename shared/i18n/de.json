@@ -2254,6 +2254,8 @@
           "failed": "Verbindung fehlgeschlagen: {{error}}",
           "noTools": "Der Server ist verbunden, stellt aber keine Tools bereit.",
           "rendersView": "interaktive Ansicht",
+          "fileInput": "Datei-Eingabe: {{params}}",
+          "fileInputHint": "Erhält einen Chat-Anhang der aktuellen Nachricht als Datei.",
           "showMore": "Mehr anzeigen",
           "showLess": "Weniger anzeigen"
         },
@@ -2284,6 +2286,8 @@
           "password": "Passwort",
           "toolPrefix": "Tool-Präfix",
           "timeout": "Timeout (ms)",
+          "maxFileSizeMB": "Max. Dateigröße für Tools (MB)",
+          "maxFileSizeMBHint": "Größter Chat-Anhang, der an einen Tool-Parameter übergeben wird, der eine Datei erwartet.",
           "allowedTools": "Für Apps freigegebene Tools",
           "appsEnabled": "Interaktive Ansichten anzeigen (MCP Apps)",
           "appsEnabledHint": "Kündigt die MCP-Apps-Erweiterung an und zeigt die interaktiven Ansichten, die die Tools dieses Servers deklarieren, direkt im Chat an. Deaktivieren für reine Textergebnisse.",

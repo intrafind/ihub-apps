@@ -15,6 +15,24 @@ servers (draw.io, Google Maps, ArcGIS, ServiceNow) are examples of this style.
   its resource's `_meta.ui.csp`; the MCP integration guide's _Sandbox_ section now has a
   troubleshooting note for blank views.
 
+## MCP Tools Can Receive Chat Attachments
+
+A tool of an external MCP server that declares a parameter with `format: "file"` now receives a
+file the user attached to their message — the PDF, image or text file itself, as
+`{ fileName, mimeType, base64, size }` — instead of a description of it. The model refers to the
+attachment by its file name or as `attachment:<n>`; iHub resolves the reference before the call.
+
+- Only attachments of the current message can be handed over; a file from an earlier turn has to
+  be attached again.
+- Admins cap the size of one such file per server with **Max. file size for tools (MB)** on the
+  MCP server form (default 20 MB). Existing servers get the default on upgrade.
+- The tool preview in the server dialog marks tools with file inputs and names the parameters.
+- Documents uploaded in the chat now travel with their bytes (up to the app's document size
+  limit) so a PDF can reach such a tool; the model still sees the extracted text only, and
+  stored chats keep only the upload's name, type and size.
+- Tools reached through the MCP gateway or the A2A endpoint have no attachments to draw from and
+  report a clear error instead.
+
 ## A2A 0.3: iHub Apps and Workflows as Skills of an A2A Agent
 
 The Agent-to-Agent endpoint now speaks A2A 0.3, so A2A clients (the A2A Inspector, Langdock's

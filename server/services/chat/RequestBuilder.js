@@ -7,6 +7,7 @@ import { filterResourcesByPermissions } from '../../utils/authorization.js';
 import logger from '../../utils/logger.js';
 import { findByIdCaseInsensitive } from '../../utils/resourceLookup.js';
 import { normalizeFiles } from '../../../shared/promptContext.js';
+import { describeAttachments, normalizeAttachments } from '../mcp/mcpFileInputs.js';
 
 /**
  * Attach the page images of image-based PDFs to their message.
@@ -30,6 +31,36 @@ function attachDocumentPageImages(messages) {
         : [];
     return { ...msg, imageData: [...existing, ...pageImages] };
   });
+}
+
+/**
+ * Tell the model which attachments it can hand to a tool with file inputs.
+ *
+ * The model learns document names only from the `<content type="document">`
+ * blocks and never sees an image's name, so a tool with a `format: "file"`
+ * parameter could not be called reliably. When the turn offers such a tool and
+ * the message carries attachments, the last user message gets one line per
+ * attachment, numbered the way `attachment:<n>` references count them. Turns
+ * without a file-input tool are left untouched.
+ *
+ * @param {Array} llmMessages - Prepared messages (mutated in place)
+ * @param {Array} tools - The turn's tool definitions
+ * @param {Array<Object>} userAttachments - The last user message's attachments
+ * @returns {boolean} true when a note was appended
+ */
+export function appendAttachmentNote(llmMessages, tools, userAttachments) {
+  if (!Array.isArray(userAttachments) || userAttachments.length === 0) return false;
+  if (!(tools || []).some(tool => tool?._mcp?.fileInputs?.length)) return false;
+  const lastUserMsg = [...llmMessages].reverse().find(m => m.role === 'user');
+  if (!lastUserMsg || typeof lastUserMsg.content !== 'string') return false;
+
+  const note = [
+    'Attachments of this message. A tool parameter that takes a file accepts the file ' +
+      'name or the attachment:<n> reference:',
+    ...describeAttachments(userAttachments)
+  ].join('\n');
+  lastUserMsg.content = lastUserMsg.content ? `${lastUserMsg.content}\n\n${note}` : note;
+  return true;
 }
 
 /**
@@ -453,6 +484,15 @@ class RequestBuilder {
       // inputFiles mechanism.
       const lastUserMsg = [...llmMessages].reverse().find(m => m.role === 'user');
       const userFileData = lastUserMsg?.fileData || lastUserMsg?.imageData || null;
+      // Every attachment of that message, files and images alike, as one list:
+      // tools with file inputs resolve their references against it, and the
+      // model is told about it in the same order. Taken before the page images
+      // of image-only PDFs join `imageData`; those carry no file name.
+      const userAttachments = normalizeAttachments(
+        lastUserMsg?.fileData,
+        lastUserMsg?.imageData,
+        lastUserMsg?.audioData
+      );
 
       logger.info('File data extraction from messages', {
         component: 'RequestBuilder',
@@ -521,6 +561,8 @@ class RequestBuilder {
       // The positive counterpart: with web search on, tell the model to research
       // in several steps so the loop's room for several tool rounds is used.
       appendWebSearchResearchGuidance(llmMessages, app, websearchEnabled);
+      // A tool that takes a file needs the model to know what is attached.
+      appendAttachmentNote(llmMessages, tools, userAttachments);
 
       // Build imageConfig if image generation is supported and parameters are provided
       // Pass raw user parameters to adapter for provider-specific translation
@@ -577,7 +619,8 @@ class RequestBuilder {
           responseFormat: outputFormat,
           responseSchema: app.outputSchema,
           llmOptions,
-          userFileData
+          userFileData,
+          userAttachments
         }
       };
     } catch (error) {

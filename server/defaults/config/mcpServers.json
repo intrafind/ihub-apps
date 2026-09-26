@@ -20,6 +20,9 @@
       },
       "allowedTools": ["*"],
       "timeoutMs": 60000,
+      "fileInputs": {
+        "maxFileSizeMB": 20
+      },
       "apps": {
         "enabled": true
       }
@@ -44,6 +47,9 @@
       },
       "allowedTools": ["*"],
       "timeoutMs": 60000,
+      "fileInputs": {
+        "maxFileSizeMB": 20
+      },
       "apps": {
         "enabled": true
       }
