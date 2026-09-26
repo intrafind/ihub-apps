@@ -5,7 +5,8 @@ import {
   buildMcpAppSandboxUrl,
   callMcpAppTool,
   fetchMcpAppResource,
-  readMcpAppResource
+  readMcpAppResource,
+  reportMcpAppHandshake
 } from '../../../api/endpoints/mcpApps';
 import {
   McpAppHostBridge,
@@ -77,6 +78,16 @@ function isSameOriginUrl(url) {
  * delivers the tool input and result, proxies `tools/call` and
  * `resources/read` to the view's own MCP server, and handles links, follow-up
  * messages, model-context updates, size changes and fullscreen.
+ *
+ * Tool data is delivered once the view says it is ready. The specification's
+ * way is the `ui/initialize` request followed by `ui/notifications/initialized`.
+ * Views written against the older mcp-ui protocol never send those; they post
+ * a plain `{ type: "appReady" }` instead and read the tool result's `_meta`
+ * (`mcpui.dev/ui-initial-render-data`). Such a view is treated as initialized
+ * when `appReady` arrives — unless it already started the `ui/initialize`
+ * handshake, which then stays the only trigger — so the same tool input and
+ * result reach it exactly once. The fallback is reported to the server so
+ * admins can see which servers rely on it.
  *
  * @param {Object} props
  * @param {Object} props.view - View descriptor (see features/chat/mcpApps/mcpAppViewList)
@@ -185,6 +196,8 @@ function McpAppView({ view, appId, chatId, host = null }) {
 
     const state = {
       resourceSent: false,
+      /** 'spec' once `ui/initialize` arrived, 'legacy' once `appReady` did; null before either. */
+      handshake: null,
       initialized: false,
       inputSent: false,
       resultSent: false,
@@ -200,6 +213,7 @@ function McpAppView({ view, appId, chatId, host = null }) {
       post: message => iframe.contentWindow?.postMessage(message, '*'),
       requests: {
         'ui/initialize': params => {
+          if (!state.handshake) state.handshake = 'spec';
           const modes = params?.appCapabilities?.availableDisplayModes;
           state.appModes = Array.isArray(modes) ? modes : null;
           return {
@@ -287,6 +301,7 @@ function McpAppView({ view, appId, chatId, host = null }) {
         },
         'ui/notifications/initialized': () => {
           if (state.initialized) return;
+          if (!state.handshake) state.handshake = 'spec';
           state.initialized = true;
           flushToolData();
         },
@@ -297,6 +312,26 @@ function McpAppView({ view, appId, chatId, host = null }) {
         },
         'notifications/message': params => {
           console.debug('[MCP App]', viewRef.current.toolName, params?.level, params?.data);
+        }
+      },
+      legacy: {
+        // mcp-ui's "I am ready" — the only handshake views written before MCP
+        // Apps know. A view that already began `ui/initialize` is spec-driven
+        // and is not initialized early by this.
+        appReady: () => {
+          if (state.initialized || state.handshake) return;
+          state.handshake = 'legacy';
+          state.initialized = true;
+          const current = viewRef.current;
+          console.info(
+            '[MCP App]',
+            current.toolName,
+            'uses the legacy mcp-ui handshake (appReady); tool data delivered without ui/initialize'
+          );
+          reportMcpAppHandshake({ appId, toolId: current.toolId, handshake: 'legacy' }).catch(
+            () => {}
+          );
+          flushToolData();
         }
       }
     });
@@ -311,8 +346,9 @@ function McpAppView({ view, appId, chatId, host = null }) {
     return () => {
       window.removeEventListener('message', onMessage);
       // Best effort: the iframe goes away with this component, so there is no
-      // waiting for the answer the specification lets the host wait for.
-      if (state.initialized) {
+      // waiting for the answer the specification lets the host wait for. A
+      // legacy view does not know the request and would only let it time out.
+      if (state.initialized && state.handshake === 'spec') {
         bridge.request('ui/resource-teardown', { reason: 'View closed' }).catch(() => {});
       }
       bridge.close();
