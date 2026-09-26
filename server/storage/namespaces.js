@@ -154,6 +154,12 @@ export const RUNTIME_NAMESPACES = Object.freeze({
    * app with the same conversation.
    */
   a2aContexts: 'a2a-contexts',
+  /**
+   * Files uploaded through the App API (`POST /api/v1/attachments`): the
+   * metadata document and the bytes (blob facet) share this namespace, keyed
+   * by the attachment id and owned by the uploader.
+   */
+  apiAttachments: 'api-attachments',
   /** One-time import markers, shared by every runtime store that has one. */
   runtimeImports: 'runtime-imports'
 });

@@ -357,6 +357,10 @@ class ChatService {
    *   `identityMode` are the run principal resolved once by the caller, and `content` is the
    *   raw text of the new user message (the stored history is never client-asserted, but the
    *   message being sent comes from the request).
+   * @param {RunStreamEmitter} [params.emitter] - stream emitter to use instead of the chat's
+   *   SSE-delivered one (the App API consumes the frames itself)
+   * @param {boolean} [params.headless=!streaming] - no user can answer a clarification: the
+   *   ask_user tool is refused instead of pausing the turn
    * @returns {Promise<Object>} `{ runId, status, content, finishReason, usage, messages, knowledgeSources,
    *   pendingInteraction?, toolName?, error?, errorInfo? }`
    */
@@ -372,7 +376,9 @@ class ChatService {
     language = 'en',
     user,
     runId: givenRunId,
-    persistence = null
+    persistence = null,
+    emitter = null,
+    headless = !streaming
   }) {
     const {
       app,
@@ -409,8 +415,12 @@ class ChatService {
     }
 
     // The turn's SSE v2 emitter (chat stream id = chatId, run id = this turn).
+    // A caller with its own consumer (the App API turning frames into
+    // OpenAI-shaped chunks) injects an emitter; the chat UI gets the default
+    // one, delivered through the SSE layer.
     const stream =
-      streaming && chatId ? new RunStreamEmitter({ streamId: chatId, runId }) : NO_STREAM;
+      emitter ||
+      (streaming && chatId ? new RunStreamEmitter({ streamId: chatId, runId }) : NO_STREAM);
     if (stream !== NO_STREAM) bindStreamRun(chatId, runId, stream);
 
     logger.info('Chat turn started', {
@@ -492,7 +502,7 @@ class ChatService {
           appId: app?.id,
           buildLogData: log,
           logInteraction: this.logInteraction,
-          headless: !streaming,
+          headless,
           getCount: () => this.getClarificationCount(chatId),
           incrementCount: () => this.incrementClarificationCount(chatId),
           interactionService: this.interactionService

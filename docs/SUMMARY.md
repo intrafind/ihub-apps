@@ -81,6 +81,7 @@
     - [Workflows](workflows.md)
     - [Agent Factory (V1)](agents.md)
     - [OpenAI-Compatible API](openai-compatible-api.md)
+    - [App API](app-api.md)
     - [Server Configuration](server-config.md)
     - [Environment Variables](environment-variables.md)
   - [Operations]()
