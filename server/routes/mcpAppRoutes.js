@@ -11,6 +11,9 @@
  *   GET  /api/mcp-apps/resource         the view's HTML + CSP/permission metadata
  *   POST /api/mcp-apps/tools/call       a `tools/call` from the view
  *   POST /api/mcp-apps/resources/read   a `resources/read` from the view
+ *   POST /api/mcp-apps/handshake        how the view announced itself (the
+ *                                       legacy mcp-ui `appReady` instead of
+ *                                       `ui/initialize`), logged for admins
  *
  * Authorization mirrors the chat itself: a view belongs to a tool call made by
  * an iHub app, so every request names that app and tool. The caller must be
@@ -66,6 +69,11 @@ const toolCallBodySchema = z.object({
 const resourceReadBodySchema = z.object({
   ...toolRefShape,
   uri: z.string().min(1).max(2048)
+});
+
+const handshakeBodySchema = z.object({
+  ...toolRefShape,
+  handshake: z.enum(['legacy'])
 });
 
 class McpAppAccessError extends Error {
@@ -235,6 +243,34 @@ export default function registerMcpAppRoutes(app) {
         return res.json(toViewToolResult(result));
       } catch (error) {
         return sendError(res, error, 'tool call');
+      }
+    }
+  );
+
+  // The handshake happens in the browser, so the host tells the server about
+  // the one worth knowing: a view that never sent `ui/initialize` and was
+  // initialized on mcp-ui's `appReady` instead. Logged, nothing else — it lets
+  // admins see which servers depend on the compatibility path.
+  app.post(
+    buildServerPath('/api/mcp-apps/handshake'),
+    authRequired,
+    validate({ body: handshakeBodySchema }),
+    async (req, res) => {
+      const { appId, toolId, handshake } = req.body;
+      try {
+        const { conn, tool, user } = await resolveMcpApp(req, appId, toolId);
+        logger.info('MCP App view used the legacy mcp-ui handshake', {
+          component: COMPONENT,
+          handshake,
+          appId,
+          viaToolId: toolId,
+          serverId: conn.config.id,
+          tool: tool._mcp.originalName,
+          userId: user.id
+        });
+        return res.status(204).end();
+      } catch (error) {
+        return sendError(res, error, 'handshake report');
       }
     }
   );

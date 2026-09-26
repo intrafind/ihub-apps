@@ -51,12 +51,17 @@ export class McpAppHostBridge {
    * @param {(message: Object) => void} options.post - Send a message to the view
    * @param {Object<string, Function>} [options.requests] - `method -> (params) => result`
    * @param {Object<string, Function>} [options.notifications] - `method -> (params) => void`
+   * @param {Object<string, Function>} [options.legacy] - `type -> (message) => void` for
+   *   the non-JSON-RPC messages of the mcp-ui postMessage protocol that
+   *   predates MCP Apps (`{ type: "appReady" }`). Only the listed types are
+   *   handled; everything else that is not JSON-RPC 2.0 is still ignored.
    * @param {() => number} [options.now] - Clock (tests)
    */
-  constructor({ post, requests = {}, notifications = {}, now = () => Date.now() }) {
+  constructor({ post, requests = {}, notifications = {}, legacy = {}, now = () => Date.now() }) {
     this.post = post;
     this.requests = requests;
     this.notifications = notifications;
+    this.legacy = legacy;
     this.now = now;
     this.nextId = 1;
     this.pending = new Map(); // host request id -> { resolve, reject, timer }
@@ -67,11 +72,16 @@ export class McpAppHostBridge {
 
   /**
    * Handle one message from the view. Anything that is not JSON-RPC 2.0 is
-   * ignored; a malformed request is answered with an error.
+   * ignored — except a legacy mcp-ui message whose `type` has a handler; a
+   * malformed request is answered with an error.
    * @param {unknown} data
    */
   handleMessage(data) {
-    if (this.closed || !data || typeof data !== 'object' || data.jsonrpc !== '2.0') return;
+    if (this.closed || !data || typeof data !== 'object') return;
+    if (data.jsonrpc !== '2.0') {
+      this._handleLegacy(data);
+      return;
+    }
     const hasMethod = typeof data.method === 'string';
 
     // A response to a host → view request.
@@ -163,6 +173,22 @@ export class McpAppHostBridge {
       clearTimeout(entry.timer);
       entry.reject(new Error('Bridge closed'));
       this.pending.delete(id);
+    }
+  }
+
+  /**
+   * A message of the legacy mcp-ui protocol: a plain object with a string
+   * `type`, no `jsonrpc`. Dispatched only when the host registered a handler
+   * for that type.
+   */
+  _handleLegacy(data) {
+    if (typeof data.type !== 'string') return;
+    const handler = this.legacy[data.type];
+    if (typeof handler !== 'function') return;
+    try {
+      handler(data);
+    } catch (error) {
+      console.warn('[MCP App] legacy message handler failed', data.type, error);
     }
   }
 

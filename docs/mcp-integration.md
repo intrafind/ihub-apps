@@ -246,6 +246,18 @@ cannot use `localStorage`/`sessionStorage` (the reference apps handle that).
 Views are not rendered where the API is served from a different origin than
 the page (an API base override, such as the browser extension).
 
+**Troubleshooting — a view stays blank or a map never appears.** The sandbox
+blocks every origin the resource did not declare, so a view that loads an
+external script (the Google Maps or ArcGIS JavaScript API, a CDN-hosted
+library) renders empty unless its `ui://` resource lists those origins in
+`_meta.ui.csp`: `resourceDomains` for scripts, styles, images and fonts,
+`connectDomains` for `fetch`/XHR/WebSocket targets, `frameDomains` for nested
+iframes (draw.io's `embed.diagrams.net`, for example). The browser console of
+the chat page shows the blocked request as a Content-Security-Policy
+violation naming the missing origin. This is the server author's declaration
+to fix; iHub does not add origins on its own, and hosts that apply no CSP will
+happily render a view whose declaration is incomplete.
+
 #### What a view can do
 
 | Method | iHub behaviour |
@@ -265,6 +277,21 @@ the page (an API base override, such as the browser extension).
 Requests are rate-limited per view, and the server logs every call a view
 makes (`component: McpApps`).
 
+**Views without the `ui/initialize` handshake.** The specification delivers
+the tool input and result only after the view has sent `ui/initialize` and
+`ui/notifications/initialized`. Views written against the older
+[mcp-ui](https://mcpui.dev) protocol never do; they post a plain
+`{ "type": "appReady" }` message and read their data from the tool result's
+`_meta["mcpui.dev/ui-initial-render-data"]`. iHub accepts that message as the
+view's "ready" signal when no `ui/initialize` has arrived, and then delivers
+the same `tool-input` and `tool-result` notifications (the full result, `_meta`
+included) exactly once. A view that started `ui/initialize` is not initialized
+early by an `appReady` it also happens to send. Each use of this fallback is
+logged on the server (`component: McpApps`, `handshake: legacy`, with the
+server and tool), so admins can see which servers still depend on it. Views
+that only ship their HTML inside the tool result, without a `ui://` resource
+declared on the tool, are not rendered.
+
 #### Host endpoints
 
 All but the sandbox page require the chat's authentication and name the app
@@ -276,6 +303,9 @@ the app, and the app must offer the tool.
   The server derives the `ui://` URI from the tool; the client never names it.
 - `POST /api/mcp-apps/tools/call` — `{ appId, toolId, name, arguments }`.
 - `POST /api/mcp-apps/resources/read` — `{ appId, toolId, uri }`.
+- `POST /api/mcp-apps/handshake` — `{ appId, toolId, handshake: "legacy" }`;
+  the chat reports a view that was initialized by the legacy `appReady`
+  message, and the server logs it.
 
 #### Persistence
 

@@ -30,8 +30,9 @@ jest.unstable_mockModule('../../middleware/authRequired.js', () => ({
 jest.unstable_mockModule('../../services/mcp/McpClientManager.js', () => ({
   default: { findTool, hasServer }
 }));
+const logInfo = jest.fn();
 jest.unstable_mockModule('../../utils/logger.js', () => ({
-  default: { info: jest.fn(), warn: jest.fn(), error: jest.fn(), debug: jest.fn() }
+  default: { info: logInfo, warn: jest.fn(), error: jest.fn(), debug: jest.fn() }
 }));
 
 const { default: registerMcpAppRoutes, resolveMcpApp } =
@@ -255,6 +256,48 @@ describe('POST /api/mcp-apps/tools/call', () => {
       request(app)
         .post('/api/mcp-apps/tools/call')
         .send({ ...ref })
+    );
+    expect(res.status).toBe(400);
+  });
+});
+
+describe('POST /api/mcp-apps/handshake', () => {
+  it('logs a legacy handshake for admins, naming the server and tool', async () => {
+    logInfo.mockClear();
+    const res = await asUser(
+      request(app)
+        .post('/api/mcp-apps/handshake')
+        .send({ ...ref, handshake: 'legacy' })
+    );
+    expect(res.status).toBe(204);
+    const entry = logInfo.mock.calls.find(([, meta]) => meta?.handshake === 'legacy');
+    expect(entry).toBeDefined();
+    expect(entry[1]).toMatchObject({
+      component: 'McpApps',
+      handshake: 'legacy',
+      appId: 'whiteboard',
+      viaToolId: 'excalidraw__create_view',
+      serverId: 'excalidraw',
+      tool: 'create_view',
+      userId: 'u1'
+    });
+  });
+
+  it('refuses a caller without access to the app', async () => {
+    apps = [];
+    const res = await asUser(
+      request(app)
+        .post('/api/mcp-apps/handshake')
+        .send({ ...ref, handshake: 'legacy' })
+    );
+    expect(res.status).toBe(403);
+  });
+
+  it('accepts only known handshake kinds', async () => {
+    const res = await asUser(
+      request(app)
+        .post('/api/mcp-apps/handshake')
+        .send({ ...ref, handshake: 'spec' })
     );
     expect(res.status).toBe(400);
   });
