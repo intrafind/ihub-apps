@@ -40,6 +40,7 @@ hosted server, use **Browse catalog** there (see [Server catalog](#server-catalo
       "toolPrefix": "github__",
       "allowedTools": ["*"],
       "timeoutMs": 30000,
+      "fileInputs": { "maxFileSizeMB": 20 },
       "reconnect": {
         "enabled": true,
         "maxRetries": 5,
@@ -139,8 +140,61 @@ tool definition and forwards to `McpClientManager.callTool`, which:
 - Lazy-connects on first use; reconnects with exponential backoff up to
   `reconnect.maxRetries` before marking the server unhealthy.
 - Sends only the tool's own arguments. The context iHub adds for its native
-  tools (`user`, `chatId`, `appConfig`, workflow plumbing) never leaves iHub;
-  `language` is forwarded only when the tool's schema declares it.
+  tools (`user`, `chatId`, `appConfig`, workflow plumbing, the message's
+  attachments) never leaves iHub; `language` is forwarded only when the
+  tool's schema declares it.
+
+#### File inputs
+
+A tool takes a chat attachment when its input schema marks a parameter with
+`format: "file"` — on the property itself, whatever its `type` (an object in
+the Langdock convention, `z.object({...}).meta({ format: "file" })`), or on
+the items of an array. iHub sends such a parameter as
+
+```json
+{ "fileName": "report.pdf", "mimeType": "application/pdf", "base64": "...", "size": 1234 }
+```
+
+with the base64 of the file's bytes (no data-URL prefix) and `size` in bytes.
+An array parameter receives one such object per element.
+
+The model never sees that shape. The tool it is offered has a string in the
+parameter's place, its description asks for the file name of an attachment or
+`attachment:<n>` (the n-th attachment of the message), and the tool's
+description ends with "Attach the file to your message and pass its file name
+as `<param>`." When the turn offers such a tool and the message carries
+attachments, the user message also lists them as
+`attachment:1 — report.pdf (application/pdf, 1.2 MB)`, so images — whose
+names the model would otherwise never learn — can be referenced too. The
+reference is resolved right before `tools/call`; file names match
+case-insensitively.
+
+- **Scope.** A reference resolves only against the attachments of the current
+  message of the calling user. That is the only place the bytes exist: a
+  stored chat keeps a descriptor of each upload (type, name, size), never its
+  contents. A file uploaded in an earlier turn has to be attached again.
+- **Size.** `fileInputs.maxFileSizeMB` (per server, default 20, 1–200) caps
+  one file; the admin form has the field next to the timeout. The web client
+  sends a document's bytes only up to the app's document upload limit
+  (`upload.fileUpload.maxFileSizeMB`); a larger document travels as extracted
+  text only.
+- **Text fallback.** A document without its bytes is delivered as the base64
+  of its extracted text when its media type is `text/*`, under that type.
+  Anything else fails with `MCP_FILE_UNAVAILABLE` ("re-attach the file").
+- **Errors.** An unknown reference fails with `MCP_FILE_NOT_FOUND` and lists
+  the attachments available; a file over the limit with `MCP_FILE_TOO_LARGE`.
+  The model gets the message as the tool's error and can correct the call.
+- **Headless callers.** The inbound gateway (iHub as an MCP server) and the
+  A2A endpoint carry no attachments, so a tool with file inputs fails there
+  with `MCP_FILE_NOT_FOUND`.
+- **Not supported.** Nested file inputs — a `format: "file"` property inside an
+  object or below the first level of an array — are sent as the model wrote
+  them.
+
+The admin tool preview marks a tool with file inputs and names the
+parameters. MCP App views keep the server's own schema as
+`hostContext.toolInfo.tool.inputSchema`; a view-initiated `tools/call`
+carries the view's arguments as they are, without file resolution.
 
 ### MCP Apps — interactive views
 

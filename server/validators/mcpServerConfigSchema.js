@@ -134,6 +134,14 @@ export const mcpServerConfigSchema = z.object({
   allowedTools: z.array(z.string()).prefault(['*']),
   // Hard timeout (ms) for `tools/call`; the client aborts past this.
   timeoutMs: z.number().int().min(1000).max(600000).prefault(30000),
+  // Tool parameters declared with `format: "file"` receive a chat attachment
+  // of the current message as `{ fileName, mimeType, base64, size }`. The
+  // largest file handed over, per file input.
+  fileInputs: z
+    .object({
+      maxFileSizeMB: z.number().int().min(1).max(200).prefault(20)
+    })
+    .prefault({}),
   // MCP Apps (extension `io.modelcontextprotocol/ui`): when enabled, iHub
   // advertises the extension on connect and renders the interactive views the
   // server's tools declare (`_meta.ui.resourceUri`) inline in the chat. When

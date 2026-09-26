@@ -15,6 +15,7 @@ import {
   isModelVisible,
   readToolUiMeta
 } from './mcpApps.js';
+import { findFileInputs, rewriteFileInputSchema, fileInputHint } from './mcpFileInputs.js';
 import logger from '../../utils/logger.js';
 
 /** How long a fetched MCP App UI resource is reused before re-reading it. */
@@ -371,18 +372,28 @@ export class McpServerConnection {
       }
 
       if (!allowed || !isModelVisible(ui)) continue;
+      // File inputs (`format: "file"`): the model is offered a string that
+      // names an attachment in place of the server's file shape, and told so;
+      // the server's own schema stays on the marker for the call and for views.
+      const inputSchema = t.inputSchema || { type: 'object', properties: {} };
+      const fileInputs = findFileInputs(inputSchema);
+      const description = (t.description || '').trim();
+      const hintSeparator = !description ? '' : /[.!?]$/.test(description) ? ' ' : '. ';
       tools.push({
         // iHub-facing id; runMcpTool splits on the prefix delimiter.
         id: `${prefix}${t.name}`,
         name: `${prefix}${t.name}`,
-        description: t.description || '',
-        parameters: t.inputSchema || { type: 'object', properties: {} },
+        description: fileInputs.length
+          ? `${description}${hintSeparator}${fileInputHint(fileInputs)}`
+          : t.description || '',
+        parameters: fileInputs.length ? rewriteFileInputSchema(inputSchema) : inputSchema,
         // Internal markers so toolLoader.runTool knows how to dispatch.
         _mcp: {
           serverId: this.config.id,
           originalName: t.name,
           ...(this.config.name ? { serverName: this.config.name } : {}),
-          ...(ui?.resourceUri ? { ui: { resourceUri: ui.resourceUri } } : {})
+          ...(ui?.resourceUri ? { ui: { resourceUri: ui.resourceUri } } : {}),
+          ...(fileInputs.length ? { inputSchema, fileInputs } : {})
         }
       });
     }
