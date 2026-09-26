@@ -916,7 +916,11 @@ curl https://ihub.example.com/.well-known/oauth-protected-resource/mcp
 
 curl https://ihub.example.com/mcp/.well-known
 # MCP-specific metadata: issuer, mcp_endpoint, transports, scopes_supported,
-# oauth_authorization_server link
+# oauth_authorization_server link; a2a_endpoint + a2a_agent_card when A2A is on
+
+curl https://ihub.example.com/.well-known/agent-card.json
+# A2A 0.3 Agent Card (when A2A is enabled); with credentials it lists the
+# caller's skills
 ```
 
 ### Connections — who is connected to what
@@ -1120,33 +1124,87 @@ Troubleshooting:
 Every rejection the transport makes is logged under the `McpGateway`
 component, so `npm run logs` shows the reason a client was turned away.
 
-## Agent-to-Agent (A2A) endpoint — experimental
+## Agent-to-Agent (A2A) — iHub as an A2A agent
 
-Set `platform.mcpServer.a2a.enabled: true` (Admin → MCP gateway → A2A
-toggle) to mount `/a2a` alongside `/mcp`. It uses the **same OAuth
-Bearer + `mcp:*` scope gate** as the MCP gateway — no separate
-credential or scope.
+Set `platform.mcpServer.a2a.enabled: true` (Admin → MCP gateway → **A2A**)
+and iHub becomes an [A2A 0.3](https://a2a-protocol.org) agent: its apps and
+workflows are the agent's **skills**, callable from any A2A client (the
+`@a2a-js/sdk`, the A2A Inspector, Langdock's "Connect Remote Agent", Google
+ADK, …). The endpoint uses the **same OAuth Bearer + `mcp:*` scope gate** as
+the MCP gateway — no separate credential or scope.
 
-A2A is JSON-RPC 2.0 over HTTP, task-oriented. iHub today implements
-the well-defined subset of the v0.x draft:
+### Agent Card
+
+| URL | Contents |
+|-----|----------|
+| `/.well-known/agent-card.json` | The agent: `url` (`<base>/a2a`), `protocolVersion: "0.3.0"`, capabilities, security schemes. Public. |
+| `/a2a/.well-known/agent-card.json` | The same card, gateway-scoped. |
+| `/a2a/skills/<skillId>/.well-known/agent-card.json` | A card bound to one skill: its `url` is `<base>/a2a/skills/<skillId>` and every message sent there runs that skill. |
+
+The public card lists **no skills**: which apps and workflows a caller may use
+depends on its token and groups. Fetch the card with credentials (any of the
+schemes below), or call `agent/getAuthenticatedExtendedCard`, and `skills`
+holds the caller's apps (`app__<appId>`) and workflows (`workflow__<id>`) with
+name, description, tags and the apps' starter prompts as `examples`.
+
+`securitySchemes` on the card:
+
+| Scheme | How to call |
+|--------|-------------|
+| `oauth2` | iHub's authorization server (`/.well-known/oauth-authorization-server`): authorization code + PKCE for users, client credentials for services; scopes `mcp:apps:invoke`, `mcp:workflows:run` |
+| `bearer` | `Authorization: Bearer <token>` — an OAuth access token or a personal API key |
+| `apiKey` | `X-API-Key: <personal API key>` — for clients built against an API-key scheme; iHub treats it as the bearer token |
+
+### Methods
+
+JSON-RPC 2.0 over `POST /a2a` (or `POST /a2a/skills/<skillId>`):
 
 | Method | Behaviour |
 |--------|-----------|
-| `agent/info` | Returns capability + auth metadata |
-| `agent/skills` | Enumerates iHub tools / apps / workflows as A2A skills |
-| `tasks/send` | Synchronous send-and-wait — dispatches to the underlying tool/app/workflow and returns the output in one response |
+| `message/send` | Runs a skill and returns the finished **Task** (`status.state: completed`, the answer as a text `artifact` and as `status.message`). With `configuration.blocking: false` the submitted task is returned at once and the client polls `tasks/get`. |
+| `message/stream` | The same over Server-Sent Events: the Task, a `status-update` (`working`), `artifact-update` events with the answer as it streams (`append: true`, `lastChunk: true` on the last), then a final `status-update`. Each SSE `data:` line is a JSON-RPC response with the request's `id`. |
+| `tasks/get` | A task the caller created (`historyLength` trims the history). Works on every worker: tasks are stored on the storage provider (`a2a-tasks`) for 24 hours. |
+| `tasks/cancel` | Aborts a running task (`canceled`); a finished task answers `-32002`. |
+| `agent/getAuthenticatedExtendedCard` | The caller's Agent Card with skills. |
 
-Stateful methods (`tasks/get`, `tasks/cancel`, streaming
-`tasks/sendSubscribe`) return JSON-RPC `method not found`. The spec is
-still moving and a persistent task store is out of scope for this
-landing.
+`tasks/resubscribe` and push notifications (`tasks/pushNotificationConfig/*`)
+are not supported and answer `-32004` / `-32003`. Messages carry `text` parts
+(and optional `data` parts, whose keys become app variables or workflow input
+variables); `file` parts answer `-32005`.
+
+**Which skill runs.** In order: the per-skill endpoint the message was sent
+to; `metadata.skillId` on the params or the message; the skill the message's
+`contextId` is bound to; the administrator's **A2A default skill**
+(`platform.mcpServer.a2a.defaultSkill`, Admin → MCP gateway); and, when the
+caller has exactly one skill, that one. Otherwise `message/send` answers
+`-32602` naming the options. Generic clients that only know an Agent Card URL
+therefore either get a per-skill card URL, or the administrator sets a default.
+
+**Conversations.** A Task's `contextId` identifies the conversation; send the
+next message with the same `contextId` (and no `taskId`) and the app receives
+the earlier exchange as history. Contexts belong to the caller who created
+them and are kept for seven days.
+
+Permissions are those of the caller: the gateway's **Exposed resources**
+toggles, the token's scopes and the caller's groups decide which apps and
+workflows are skills, exactly as on `/mcp`. A client-credentials token acts as
+its OAuth client, whose groups grant apps but no workflows, so workflow skills
+appear for user tokens and personal API keys only. Every task is logged
+(`component: A2A`) with its skill and caller.
+
+### Deprecated draft methods
+
+`agent/info`, `agent/skills` and `tasks/send` — the pre-0.3 draft iHub
+implemented first — are still answered so existing callers keep working, but
+are deprecated in favour of the Agent Card, `message/send` and `tasks/get`, and
+will be removed in a later release.
 
 Discovery: `/mcp/.well-known` advertises `a2a_endpoint` when enabled.
 
 ## Out of scope (follow-up)
 
-- **Streaming task subscriptions** (`tasks/sendSubscribe`,
-  `tasks/get`, `tasks/cancel`) over A2A — needs a persistent task store.
+- **A2A push notifications and `tasks/resubscribe`** — a client that loses a
+  `message/stream` connection starts a new task or polls `tasks/get`.
 - **In-app tool calling over MCP** — apps invoked via `tools/call`
   currently run the LLM call synchronously without iHub's tool
   executor; an MCP-side tool loop is a follow-up.

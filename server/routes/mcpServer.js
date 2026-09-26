@@ -4,7 +4,8 @@ import { randomUUID } from 'crypto';
 import express from 'express';
 import mcpAuth from '../middleware/mcpAuth.js';
 import { buildMcpServer } from '../services/mcp/McpServerService.js';
-import { dispatchA2A } from '../services/mcp/a2aHandler.js';
+import { dispatchA2A, buildAgentCard, A2aError, A2A_ERRORS } from '../services/mcp/a2aHandler.js';
+import { getA2aTaskStore } from '../services/mcp/a2aTaskStore.js';
 import configCache from '../configCache.js';
 import { buildServerPath } from '../utils/basePath.js';
 import logger from '../utils/logger.js';
@@ -17,6 +18,14 @@ import logger from '../utils/logger.js';
  *   DELETE /mcp         — Streamable HTTP session termination
  *   GET  /mcp/sse       — Legacy SSE transport (back-compat)
  *   POST /mcp/messages  — Legacy SSE client→server messages
+ *
+ * and, when `platform.mcpServer.a2a.enabled` is on, the A2A 0.3 agent:
+ *
+ *   GET  /.well-known/agent-card.json             — public Agent Card
+ *   GET  /a2a/.well-known/agent-card.json          — the same, gateway-scoped
+ *   POST /a2a                                      — JSON-RPC (message/send, message/stream, tasks/*)
+ *   GET  /a2a/skills/:skillId/.well-known/agent-card.json — card bound to one skill
+ *   POST /a2a/skills/:skillId                      — JSON-RPC bound to one skill
  *
  * Sessions are stateful by default: an MCP `initialize` request receives a
  * session id that the client echoes back via `Mcp-Session-Id` on subsequent
@@ -49,6 +58,23 @@ function gatewayEnabled() {
 
 function gatewayConfig() {
   return (configCache.getPlatform() || {}).mcpServer || {};
+}
+
+/**
+ * Public base URL of this iHub for discovery documents: the configured
+ * `publicUrl`, else derived from the request. No trailing slash.
+ */
+function gatewayBaseUrl(req, cfg) {
+  let baseUrl =
+    cfg.publicUrl ||
+    `${req.protocol || (req.secure ? 'https' : 'http')}://${req.get('host')}${buildServerPath('')}`;
+  // Linear trailing-slash trim (the Host header is user-controlled; a regex
+  // like /\/+$/ is polynomial under CodeQL's ReDoS rule even though it's
+  // anchored — string ops sidestep that entirely).
+  while (baseUrl.length > 0 && baseUrl.charCodeAt(baseUrl.length - 1) === 47) {
+    baseUrl = baseUrl.slice(0, -1);
+  }
+  return baseUrl;
 }
 
 async function closeServer(server, sessionId) {
@@ -462,15 +488,7 @@ export default function registerMcpServerRoutes(app) {
   app.get(buildServerPath('/mcp/.well-known'), enabledCheck, (req, res) => {
     const cfg = gatewayConfig();
     const oauthCfg = (configCache.getPlatform() || {}).oauth || {};
-    let baseUrl =
-      cfg.publicUrl ||
-      `${req.protocol || (req.secure ? 'https' : 'http')}://${req.get('host')}${buildServerPath('')}`;
-    // Linear trailing-slash trim (the Host header is user-controlled; a regex
-    // like /\/+$/ is polynomial under CodeQL's ReDoS rule even though it's
-    // anchored — string ops sidestep that entirely).
-    while (baseUrl.length > 0 && baseUrl.charCodeAt(baseUrl.length - 1) === 47) {
-      baseUrl = baseUrl.slice(0, -1);
-    }
+    const baseUrl = gatewayBaseUrl(req, cfg);
     const a2aEnabled = cfg.a2a?.enabled === true;
     // Only advertise transports the operator has actually enabled so clients
     // don't pick a disabled one.
@@ -494,6 +512,7 @@ export default function registerMcpServerRoutes(app) {
       mcp_endpoint: streamableHttpEnabled ? `${baseUrl}/mcp` : null,
       mcp_sse_endpoint: sseEnabled ? `${baseUrl}/mcp/sse` : null,
       a2a_endpoint: a2aEnabled ? `${baseUrl}/a2a` : null,
+      a2a_agent_card: a2aEnabled ? `${baseUrl}/a2a/.well-known/agent-card.json` : null,
       transports,
       scopes_supported: allScopes,
       // Recommended scopes an MCP-aware client should request by default
@@ -512,12 +531,10 @@ export default function registerMcpServerRoutes(app) {
     });
   });
 
-  // ---- A2A endpoint (experimental) --------------------------------------
-  // The A2A wire protocol is still v0.x; this scaffold implements the
-  // well-defined subset (agent/info, agent/skills, tasks/send) and uses
-  // the same OAuth Bearer + mcp:* scope gate as /mcp. Stateful tasks
-  // (tasks/get, tasks/cancel, sendSubscribe) return method-not-found
-  // until the spec stabilises.
+  // ---- A2A (Agent-to-Agent) 0.3 -------------------------------------------
+  // JSON-RPC 2.0 over HTTP behind the same OAuth Bearer + mcp:* scope gate as
+  // /mcp. The Agent Card is public; skills on it appear for authenticated
+  // callers only. See services/mcp/a2aHandler.js for the method set.
   const a2aEnabledCheck = (req, res, next) => {
     const cfg = gatewayConfig();
     if (cfg.a2a?.enabled !== true) {
@@ -528,26 +545,156 @@ export default function registerMcpServerRoutes(app) {
     return enabledCheck(req, res, next);
   };
 
-  app.post(buildServerPath('/a2a'), a2aEnabledCheck, jsonBody, mcpAuth, async (req, res) => {
+  // A2A clients written against an `apiKey` security scheme send the key in
+  // `X-API-Key` (the cookbook agents do). It is the same personal API key the
+  // gateway already accepts as a bearer token, so present it as one.
+  const acceptApiKeyHeader = (req, _res, next) => {
+    const key = req.headers['x-api-key'];
+    if (!req.headers.authorization && typeof key === 'string' && key.trim()) {
+      req.headers.authorization = `Bearer ${key.trim()}`;
+    }
+    next();
+  };
+
+  // The card itself is public. Credentials, when sent, are checked as on every
+  // other gateway request — a bad token is a 401, not a public card — and a
+  // valid one gets the caller's skills on the card.
+  const optionalMcpAuth = (req, res, next) =>
+    req.headers.authorization ? mcpAuth(req, res, next) : next();
+
+  const sendA2aHttpError = (res, error, status = 400) =>
+    res.status(status).json({ error: 'invalid_request', error_description: error.message });
+
+  const agentCardHandler = (req, res) => {
+    try {
+      const cfg = gatewayConfig();
+      const platform = configCache.getPlatform() || {};
+      const skillId = typeof req.params.skillId === 'string' ? req.params.skillId : null;
+      const card = buildAgentCard({
+        baseUrl: gatewayBaseUrl(req, cfg),
+        platform,
+        user: req.user || null,
+        skillId,
+        language: platform.defaultLanguage
+      });
+      res.setHeader('Cache-Control', 'no-store');
+      return res.json(card);
+    } catch (error) {
+      if (error instanceof A2aError) return sendA2aHttpError(res, error, 404);
+      logger.error('A2A agent card failed', { component: 'A2A', error: error.message });
+      return res.status(500).json({ error: 'internal_error', error_description: error.message });
+    }
+  };
+
+  const cardMiddleware = [a2aEnabledCheck, acceptApiKeyHeader, optionalMcpAuth];
+  // The well-known card lives at the host root (RFC 8615), like the OAuth
+  // discovery documents in routes/wellKnown.js.
+  app.get('/.well-known/agent-card.json', ...cardMiddleware, agentCardHandler);
+  app.get(buildServerPath('/a2a/.well-known/agent-card.json'), ...cardMiddleware, agentCardHandler);
+  app.get(
+    buildServerPath('/a2a/skills/:skillId/.well-known/agent-card.json'),
+    ...cardMiddleware,
+    agentCardHandler
+  );
+
+  /** Write one A2A SSE frame the way the reference server does. */
+  const writeSseFrame = (res, payload, { event } = {}) => {
+    res.write(`id: ${Date.now()}\n`);
+    if (event) res.write(`event: ${event}\n`);
+    res.write(`data: ${JSON.stringify(payload)}\n\n`);
+  };
+
+  const a2aRpcHandler = async (req, res) => {
     const platform = configCache.getPlatform() || {};
+    const cfg = gatewayConfig();
     const body = req.body;
+    const fixedSkillId = typeof req.params.skillId === 'string' ? req.params.skillId : undefined;
+    const ctx = {
+      user: req.user,
+      platform,
+      baseUrl: gatewayBaseUrl(req, cfg),
+      fixedSkillId,
+      store: getA2aTaskStore()
+    };
     try {
       if (Array.isArray(body)) {
-        // JSON-RPC batch.
-        const responses = await Promise.all(
-          body.map(msg => dispatchA2A(msg, { user: req.user, platform }))
-        );
+        // JSON-RPC batch. Streaming cannot be batched; the dispatcher refuses
+        // message/stream without a stream callback.
+        const responses = await Promise.all(body.map(msg => dispatchA2A(msg, ctx)));
         return res.json(responses);
       }
-      const response = await dispatchA2A(body, { user: req.user, platform });
-      return res.json(response);
+      if (body?.method !== 'message/stream') {
+        const response = await dispatchA2A(body, ctx);
+        return res.json(response);
+      }
+
+      // message/stream: every event is a JSON-RPC response on an SSE stream.
+      // Headers go out with the first event, so a request that fails before
+      // anything streamed still gets an ordinary JSON error response.
+      let started = false;
+      const stream = payload => {
+        if (res.writableEnded) return;
+        if (!started) {
+          started = true;
+          res.status(200);
+          res.setHeader('Content-Type', 'text/event-stream');
+          res.setHeader('Cache-Control', 'no-cache, no-store');
+          res.setHeader('Connection', 'keep-alive');
+          res.setHeader('X-Accel-Buffering', 'no');
+          res.flushHeaders();
+        }
+        writeSseFrame(res, payload);
+      };
+      // A client that goes away cancels the task it was streaming; the store
+      // knows which task this response is attached to only through the
+      // events, so watch for the first Task event to learn its id.
+      let taskId = null;
+      const watched = payload => {
+        if (!taskId && payload?.result?.kind === 'task' && payload.result.id) {
+          taskId = payload.result.id;
+        }
+        stream(payload);
+      };
+      res.on('close', () => {
+        if (taskId && !res.writableEnded) ctx.store.abortLocal(taskId);
+      });
+      const errorResponse = await dispatchA2A(body, { ...ctx, stream: watched });
+      if (errorResponse && !started) {
+        // The dispatcher answered with an error before the stream began.
+        return res.json(errorResponse);
+      }
+      if (errorResponse && started) {
+        writeSseFrame(res, errorResponse, { event: 'error' });
+      }
+      if (!res.writableEnded) res.end();
+      return undefined;
     } catch (err) {
       logger.error('A2A endpoint error', { component: 'A2A', error: err.message });
-      return res.status(500).json({
+      const errorResponse = {
         jsonrpc: '2.0',
         id: body?.id ?? null,
-        error: { code: -32603, message: err.message || 'internal error' }
-      });
+        error: { code: A2A_ERRORS.INTERNAL, message: err.message || 'internal error' }
+      };
+      if (res.headersSent) {
+        if (!res.writableEnded) {
+          writeSseFrame(res, errorResponse, { event: 'error' });
+          res.end();
+        }
+        return undefined;
+      }
+      return res.status(500).json(errorResponse);
     }
-  });
+  };
+
+  const rpcMiddleware = [a2aEnabledCheck, jsonBody, acceptApiKeyHeader, mcpAuth];
+  app.post(buildServerPath('/a2a'), ...rpcMiddleware, a2aRpcHandler);
+  app.post(buildServerPath('/a2a/skills/:skillId'), ...rpcMiddleware, a2aRpcHandler);
+
+  // Finished tasks and idle contexts are kept for a while for tasks/get, then
+  // dropped. unref() so the sweep never keeps the process alive on shutdown.
+  setInterval(() => {
+    getA2aTaskStore()
+      .sweep()
+      .catch(() => {});
+  }, SESSION_SWEEP_INTERVAL_MS).unref();
 }

@@ -198,11 +198,21 @@ export const mcpGatewayConfigSchema = z.object({
       resources: z.boolean().prefault(false)
     })
     .prefault({}),
-  // Optional Agent-to-Agent (A2A) endpoint alongside /mcp. The wire
-  // protocol is still moving; iHub mounts an auth-gated stub today.
+  // Optional Agent-to-Agent (A2A 0.3) endpoint alongside /mcp, behind the
+  // same OAuth + mcp:* gate. `defaultSkill` is the app or workflow
+  // (`app__<id>` / `workflow__<id>`) a message runs when the client names
+  // none — what generic A2A clients that only know the Agent Card URL need.
   a2a: z
     .object({
-      enabled: z.boolean().prefault(false)
+      enabled: z.boolean().prefault(false),
+      defaultSkill: z
+        .string()
+        .trim()
+        .regex(/^(app|workflow)__[A-Za-z0-9][A-Za-z0-9_.-]*$/, {
+          message: 'Use app__<appId> or workflow__<workflowId>'
+        })
+        .or(z.literal(''))
+        .optional()
     })
     .prefault({})
 });
