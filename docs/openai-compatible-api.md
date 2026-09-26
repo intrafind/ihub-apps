@@ -402,6 +402,8 @@ primary sources are:
 4. **Supporting references** — [Rate Limiting](rate-limiting.md) (`inferenceApi` limiter),
    [Telemetry & Observability](telemetry.md) (`inference_api` metrics, `inference-api` app id),
    and [Admin UI Guide](admin-ui.md) (model/provider configuration).
+5. **[App API](app-api.md)** — the same OpenAI shape against an iHub **app** (prompt, sources,
+   tools, skills, attachments, stored conversations) under `/api/v1/apps/{appId}/chat/completions`.
 
 ---
 
@@ -431,6 +433,8 @@ Errors are JSON objects with a `code` from iHub's canonical LLM error taxonomy
   never appear in the OpenAI wire.
 - **Compatibility scope.** The proxy implements `chat/completions` and `models`. Other OpenAI
   endpoints (e.g. legacy `completions`, `embeddings`, `images`) are not exposed here.
+- **Models, not apps.** Nothing runs server-side here — no app prompt, sources or tools. To call an
+  iHub app with its full pipeline, use the [App API](app-api.md).
 
 ---
 
