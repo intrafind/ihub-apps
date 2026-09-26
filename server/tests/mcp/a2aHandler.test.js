@@ -23,9 +23,9 @@ describe('A2A dispatcher', () => {
     expect(r.error.code).toBe(-32600);
   });
 
-  it('returns -32601 for unsupported methods', async () => {
+  it('returns -32601 for unknown methods', async () => {
     const r = await dispatchA2A(
-      { jsonrpc: '2.0', id: 1, method: 'tasks/get', params: {} },
+      { jsonrpc: '2.0', id: 1, method: 'agent/unknown', params: {} },
       { user: { id: 'u', scopes: [] }, platform }
     );
     expect(r.error.code).toBe(-32601);
