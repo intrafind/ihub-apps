@@ -2320,8 +2320,8 @@
         "transportStreamableHttpDesc": "Kanonischer MCP-HTTP-Transport gemäß Spezifikation 2025-03-26+. Unterstützt Session-Resumption über Mcp-Session-Id + Last-Event-ID.",
         "transportSse": "SSE (veraltet)",
         "transportSseDesc": "Älterer Transport zur Abwärtskompatibilität mit MCP-Clients, die noch nicht auf Streamable HTTP umgestellt haben. Wiederholt laufende Anfragen statt sie fortzusetzen — deaktivieren, wenn Idempotenz wichtig ist.",
-        "transportA2a": "A2A (experimentell)",
-        "transportA2aDesc": "Stellt /a2a neben /mcp bereit, mit demselben OAuth- + mcp:*-Scope-Gate. Implementiert die definierte Teilmenge des A2A-Entwurfs (agent/info, agent/skills, tasks/send). Zustandsbehaftete Tasks liefern method-not-found, bis die Spezifikation stabil ist.",
+        "transportA2a": "A2A (Agent-to-Agent) 0.3",
+        "transportA2aDesc": "Stellt eine Agent Card unter /.well-known/agent-card.json bereit und mountet /a2a neben /mcp, hinter demselben OAuth- + mcp:*-Scope-Gate (persönliche API-Schlüssel funktionieren ebenfalls). Apps und Workflows werden zu den Skills des Agenten; unterstützt message/send, message/stream, tasks/get und tasks/cancel.",
         "expose": "Bereitgestellte Ressourcen",
         "exposeDesc": "Über MCP veröffentlichte Ressourcenfamilien. Pro-OAuth-Client-Allowlists schränken weiter ein, was ein einzelner Aufrufer sieht.",
         "exposeTools": "iHub-Tools",
@@ -2355,7 +2355,9 @@
         "cimdApprovalMode": "Neue Clients",
         "cimdApprovalModeDesc": "Ein vertrauenswürdiger Host veröffentlicht mehrere verschiedene Clients — Claude Web, Claude Desktop, Claude Code — unter einem Hostnamen. Mit Freigabepflicht wartet jeder einzelne auf Sie: der Benutzer wird gebeten, sich an die Administration zu wenden, und der Client erscheint hier als wartend. Clients, über die bereits Verbindungen bestehen, sind nicht betroffen.",
         "cimdApprovalRequired": "Freigabe erforderlich (empfohlen)",
-        "cimdApprovalAuto": "Automatisch verbinden"
+        "cimdApprovalAuto": "Automatisch verbinden",
+        "a2aDefaultSkill": "A2A-Standard-Skill",
+        "a2aDefaultSkillDesc": "Die App oder der Workflow, den eine Nachricht ausführt, wenn der A2A-Client keinen Skill nennt, als app__<appId> oder workflow__<workflowId>. Clients können jederzeit einen Skill über metadata.skillId oder den Skill-Endpunkt /a2a/skills/<skillId> wählen. Leer lassen, um eine Auswahl zu verlangen (ein Aufrufer mit genau einem Skill braucht keine)."
       },
       "catalog": {
         "open": "Katalog durchsuchen",

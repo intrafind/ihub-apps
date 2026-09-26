@@ -143,6 +143,17 @@ export const RUNTIME_NAMESPACES = Object.freeze({
   workflowState: 'workflow-state',
   /** Conversation state for the integration adapters. */
   integrationConversations: 'integration-conversations',
+  /**
+   * A2A tasks the inbound `/a2a` endpoint created, one document per task,
+   * owned by the caller, so `tasks/get` and `tasks/cancel` work on any worker.
+   */
+  a2aTasks: 'a2a-tasks',
+  /**
+   * A2A conversation contexts (`contextId`): which skill a context is bound to
+   * and its recent message history, so a follow-up message reaches the same
+   * app with the same conversation.
+   */
+  a2aContexts: 'a2a-contexts',
   /** One-time import markers, shared by every runtime store that has one. */
   runtimeImports: 'runtime-imports'
 });

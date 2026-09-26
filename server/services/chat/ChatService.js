@@ -885,6 +885,9 @@ class ChatService {
    * @param {string} [opts.language='en']
    * @param {number} [opts.timeoutMs=120000] - hard timeout per model call
    * @param {number} [opts.maxWallClockMs=180000] - deadline for the whole invocation
+   * @param {(text: string, info: {step: number}) => void} [opts.onTextDelta] - called with
+   *   each streamed text fragment of the model's answer (every step; the final
+   *   answer is `finalMessage.content`)
    * @returns {Promise<Object>} `{ status: 'ok'|'error', runId, finalMessage, toolCalls, citations, usage, finishReason, error? }`
    */
   async invokeAppInternal({
@@ -897,7 +900,8 @@ class ChatService {
     runId: parentRunId,
     language = 'en',
     timeoutMs = 120_000,
-    maxWallClockMs = 180_000
+    maxWallClockMs = 180_000,
+    onTextDelta = null
   }) {
     if (!appId) throw new Error('appId is required');
     const chatId = `agent:${parentRunId || 'no-run'}:${uuidv4().slice(0, 8)}`;
@@ -968,6 +972,13 @@ class ChatService {
         },
         onChunk(ctx, chunk) {
           if (chunk.citations) collected.citations.push(chunk.citations);
+          // A caller that streams (the A2A endpoint) gets the model's text as
+          // it arrives; the assembled answer is still what `finalMessage` holds.
+          if (typeof onTextDelta === 'function') {
+            for (const text of chunk.content || []) {
+              if (text) onTextDelta(text, { step: ctx.iteration });
+            }
+          }
         }
       };
 
