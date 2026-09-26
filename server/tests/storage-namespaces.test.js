@@ -32,6 +32,7 @@ import {
 import { IMPORT_STATE_NAMESPACE as RUN_IMPORT_NAMESPACE } from '../services/runtime/runSummaryImport.js';
 import { INTEGRATION_CONVERSATIONS_NAMESPACE } from '../services/integrations/ConversationStateManager.js';
 import { A2A_TASKS_NAMESPACE, A2A_CONTEXTS_NAMESPACE } from '../services/mcp/a2aTaskStore.js';
+import { API_ATTACHMENTS_NAMESPACE } from '../services/api/attachmentStore.js';
 
 describe('storage namespaces', () => {
   it('declares no runtime namespace that is also a raw one', () => {
@@ -69,7 +70,8 @@ describe('storage namespaces', () => {
         INTEGRATION_CONVERSATIONS_NAMESPACE
       ],
       ['A2aTaskStore.A2A_TASKS_NAMESPACE', A2A_TASKS_NAMESPACE],
-      ['A2aTaskStore.A2A_CONTEXTS_NAMESPACE', A2A_CONTEXTS_NAMESPACE]
+      ['A2aTaskStore.A2A_CONTEXTS_NAMESPACE', A2A_CONTEXTS_NAMESPACE],
+      ['ApiAttachmentStore.API_ATTACHMENTS_NAMESPACE', API_ATTACHMENTS_NAMESPACE]
     ]) {
       assert.ok(declared.has(ns), `${label} is '${ns}', which RUNTIME_NAMESPACES does not declare`);
     }

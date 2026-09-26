@@ -31,6 +31,7 @@ import registerAppSessionStartRoute from './routes/appSessionRoutes.js';
 import registerMagicPromptRoutes from './routes/magicPromptRoutes.js';
 import registerShortLinkRoutes from './routes/shortLinkRoutes.js';
 import registerOpenAIProxyRoutes from './routes/openaiProxy.js';
+import registerAppApiRoutes from './routes/appApi.js';
 import registerAuthRoutes from './routes/auth.js';
 import registerOAuthRoutes from './routes/oauth.js';
 import registerOAuthAuthorizeRoutes from './routes/oauthAuthorize.js';
@@ -682,6 +683,7 @@ if (cluster.isPrimary && workerCount > 1) {
     DEFAULT_TIMEOUT
   });
   registerOpenAIProxyRoutes(app);
+  registerAppApiRoutes(app, { getLocalizedError, DEFAULT_TIMEOUT });
   await registerAdminRoutes(app);
   registerShortLinkRoutes(app);
   await registerSwaggerRoutes(app);
