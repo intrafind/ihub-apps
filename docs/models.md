@@ -353,7 +353,7 @@ For models that support extended thinking (such as Claude claude-3-7-sonnet), th
 | Property           | Type    | Description                                                                                                                 |
 | ------------------ | ------- | --------------------------------------------------------------------------------------------------------------------------- |
 | `thinking.enabled` | Boolean | Enable extended thinking mode for this model                                                                                |
-| `thinking.thoughts`| Boolean | Whether the model's internal thinking steps are returned and shown in the response. Defaults to `true` when thinking is enabled; set `false` to keep the reasoning hidden. On Gemini it maps to `includeThoughts` |
+| `thinking.thoughts`| Boolean | Whether the model's internal thinking steps are returned and shown in the response. Defaults to `true` when thinking is enabled; set `false` to keep the reasoning hidden. On Gemini it maps to `includeThoughts`, on vLLM (`provider: "local"`) to `include_reasoning`. This is the model default — an app's `thinking.thoughts` and the user's "Show thinking process" toggle override it |
 | `thinking.level`   | String  | Reasoning effort: `minimal`, `low`, `medium`, or `high`. Defaults to `medium`. The only way to ask for more or less reasoning — Gemini sends it as `thinkingLevel`, OpenAI/vLLM as `reasoning_effort` |
 | `thinking.chatTemplateKwargs` | Object | vLLM only: per-request chat-template knobs to toggle reasoning, e.g. `{ "enable_thinking": false }` (Qwen3) or `{ "thinking": true }` (Granite). When omitted, the vLLM adapter defaults to `{ "enable_thinking": <toggle> }` |
 
