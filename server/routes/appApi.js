@@ -34,7 +34,7 @@ import validate from '../validators/validate.js';
 import logger from '../utils/logger.js';
 import activityTracker from '../telemetry/ActivityTracker.js';
 import { recordAppUsage } from '../telemetry/metrics.js';
-import defaultChatService from '../services/chat/ChatService.js';
+import ChatService from '../services/chat/ChatService.js';
 import { RunStreamEmitter } from '../services/loop/RunStream.js';
 import runLog, { newRunId } from '../services/loop/RunLog.js';
 import { resolvePrincipal, isAnonymousUser } from '../services/loop/runIdentity.js';
@@ -300,7 +300,8 @@ function openAiFinishReason(finishReason) {
 export default function registerAppApiRoutes(
   app,
   {
-    chatService = defaultChatService,
+    // The shared chat pipeline; tests inject a double.
+    chatService = new ChatService(),
     getLocalizedError = async key => key,
     DEFAULT_TIMEOUT,
     attachmentStore = null
@@ -614,22 +615,18 @@ export default function registerAppApiRoutes(
           chatId
         });
         if (!prep.success) {
-          const message = await getLocalizedError(
-            prep.error?.code || 'internalError',
-            {},
-            language
-          );
           const code = prep.error?.code || 'REQUEST_PREPARATION_FAILED';
+          // The catalogue has no text for every preparation failure; then the
+          // builder's own message says more than the "Error: <CODE>" fallback.
+          const localized = await getLocalizedError(code, {}, language);
+          const message =
+            localized && !/^Error: /.test(localized) ? localized : prep.error?.message || localized;
           const status = /modelAccessDenied|accessDenied/i.test(code)
             ? 403
             : /notFound/i.test(code)
               ? 404
               : 400;
-          throw new ApiError(
-            status,
-            code,
-            message || prep.error?.message || 'Request could not be prepared'
-          );
+          throw new ApiError(status, code, message || 'Request could not be prepared');
         }
         if (body.max_tokens)
           prep.data.maxTokens = Math.min(body.max_tokens, prep.data.maxTokens || body.max_tokens);
