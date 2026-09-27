@@ -24,6 +24,7 @@ import {
   hostStyles
 } from './hostContext';
 import { setMcpAppModelContext } from './modelContextStore';
+import { selectViewHtml } from './embeddedViewHtml';
 
 /** Inline views grow with their content up to this height (px). */
 const INLINE_MAX_HEIGHT = 720;
@@ -89,6 +90,13 @@ function isSameOriginUrl(url) {
  * result reach it exactly once. The fallback is reported to the server so
  * admins can see which servers rely on it.
  *
+ * The HTML is the tool's declared `ui://` resource as `resources/read` returns
+ * it — unless the tool result embeds that same resource (same URI) with its
+ * own inline HTML, as servers that bake the call's data into the page do; then
+ * that copy is rendered, under the same CSP, permissions and sandbox (see
+ * `embeddedViewHtml`). When the result only arrives after the static copy is
+ * already showing, the sandbox is reloaded once with the embedded copy.
+ *
  * @param {Object} props
  * @param {Object} props.view - View descriptor (see features/chat/mcpApps/mcpAppViewList)
  * @param {string} props.appId - iHub app of the chat
@@ -139,6 +147,16 @@ function McpAppView({ view, appId, chatId, host = null }) {
     };
   }, [appId, view.toolId]);
 
+  // What the sandbox renders: the embedded copy from the tool result, or the
+  // `resources/read` copy. `source` keys the iframe, so switching to the
+  // embedded copy (the result arrived after the view opened) loads it afresh.
+  const viewHtml = useMemo(
+    () => selectViewHtml(resource, { resourceUri: view.resourceUri, toolResult: view.toolResult }),
+    [resource, view.resourceUri, view.toolResult]
+  );
+  const html = viewHtml?.html ?? null;
+  const htmlSource = viewHtml?.source ?? 'resource';
+
   const sandboxUrl = useMemo(
     () => (resource ? buildMcpAppSandboxUrl(resource.csp) : null),
     [resource]
@@ -188,9 +206,9 @@ function McpAppView({ view, appId, chatId, host = null }) {
     }
   }, []);
 
-  // The bridge lives as long as the resource (and so the iframe) does.
+  // The bridge lives as long as the resource and its HTML (and so the iframe) do.
   useEffect(() => {
-    if (!resource || !sandboxUsable) return undefined;
+    if (!resource || html == null || !sandboxUsable) return undefined;
     const iframe = iframeRef.current;
     if (!iframe) return undefined;
 
@@ -293,8 +311,15 @@ function McpAppView({ view, appId, chatId, host = null }) {
         'ui/notifications/sandbox-proxy-ready': () => {
           if (state.resourceSent) return;
           state.resourceSent = true;
+          if (htmlSource === 'embedded') {
+            console.info(
+              '[MCP App]',
+              viewRef.current.toolName,
+              'renders the view HTML embedded in its tool result'
+            );
+          }
           bridge.notify('ui/notifications/sandbox-resource-ready', {
-            html: resource.html,
+            html,
             permissions: resource.permissions || {},
             title: viewRef.current.toolName
           });
@@ -355,7 +380,7 @@ function McpAppView({ view, appId, chatId, host = null }) {
       bridgeRef.current = null;
       protocolRef.current = null;
     };
-  }, [resource, sandboxUsable, appId, chatId, dimensions, flushToolData]);
+  }, [resource, html, htmlSource, sandboxUsable, appId, chatId, dimensions, flushToolData]);
 
   // New tool data (the call finished while the view was open).
   useEffect(() => {
@@ -513,6 +538,7 @@ function McpAppView({ view, appId, chatId, host = null }) {
           </div>
         )}
         <iframe
+          key={htmlSource}
           ref={iframeRef}
           src={sandboxUrl}
           title={t('mcpApps.frameTitle', 'Interactive view: {{name}}', { name })}

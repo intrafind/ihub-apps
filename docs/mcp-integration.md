@@ -484,9 +484,28 @@ the same `tool-input` and `tool-result` notifications (the full result, `_meta`
 included) exactly once. A view that started `ui/initialize` is not initialized
 early by an `appReady` it also happens to send. Each use of this fallback is
 logged on the server (`component: McpApps`, `handshake: legacy`, with the
-server and tool), so admins can see which servers still depend on it. Views
-that only ship their HTML inside the tool result, without a `ui://` resource
-declared on the tool, are not rendered.
+server and tool), so admins can see which servers still depend on it.
+
+**Views whose data is baked into the HTML.** Some servers declare
+`_meta.ui.resourceUri` on the tool but put the call's data into the page
+itself: the tool result carries an embedded resource item
+(`{ "type": "resource", "resource": { "uri", "mimeType", "text" } }`) for the
+same `ui://` URI whose HTML sets the data inline (the Langdock Cookbook
+ServiceNow `render_ticket` injects `window.TICKET_DATA`). The static copy from
+`resources/read` has no data and would render empty, so iHub renders the
+embedded copy instead — only when its `uri` is exactly the tool's declared
+`resourceUri`, its `mimeType` is `text/html` or `text/html;profile=mcp-app`,
+it carries inline `text` (not `blob`), and it is within the same 5 MB cap as
+`resources/read` HTML (in practice the 1 MB view payload limit under
+_Persistence_ applies first). Otherwise the `resources/read` copy is used. Nothing
+else changes: the CSP, permissions, sandbox and bridge still come from the
+declared resource as `resources/read` returns it (the embedded item's own
+`_meta` is ignored). The embedded HTML travels in the tool result the view
+already receives and is stored with it (see _Persistence_); when the result
+only arrives after the view opened, the sandbox is reloaded once with the
+embedded copy. Views that only ship their HTML inside the tool result, without
+a `ui://` resource declared on the tool, or under a different URI than the
+declared one, are not rendered from it.
 
 #### Host endpoints
 

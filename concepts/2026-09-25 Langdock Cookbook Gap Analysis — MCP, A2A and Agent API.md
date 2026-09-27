@@ -107,6 +107,23 @@ Langdock's host is lenient here, so servers written against it will keep appeari
 - Log the fallback (`component: McpApps`, `handshake: legacy`) so admins can see which servers
   depend on it.
 
+**Status (2026-09-27): embedded HTML for a declared resource.** The ServiceNow `render_ticket`
+view still rendered empty after the `appReady` fallback: the tool declares
+`_meta.ui.resourceUri`, but its data travels only inside an embedded `resource` item for that same
+URI whose HTML sets `window.TICKET_DATA`; iHub rendered the static `resources/read` copy. The client
+now renders the embedded copy when its `uri` equals the tool's declared `resourceUri`, it is
+`text/html` / `text/html;profile=mcp-app` inline `text`, and it is within the 5 MB
+`resources/read` cap — see `client/src/features/chat/mcpApps/embeddedViewHtml.js` (pure selection
+rules) and `McpAppView.jsx` (`selectViewHtml`, the iframe is keyed by the HTML source so a result
+that arrives after the view opened reloads the sandbox once). No server change: the embedded item
+already reached the browser in `view.toolResult` (`toViewToolResult`), and was already stored with
+the message. CSP, permissions and sandbox still come from `resources/read`. Tests:
+`tests/unit/client/mcp-apps-embedded-html.test.jsx`. Still out of scope: the "no
+`resourceUri`" case above, and a different embedded URI. Open follow-up: the model also receives
+the embedded HTML, because `normalizeToolResult` (`McpServerConnection.js`) hands the whole content
+array to the loop, which serializes it — consider stripping `resource` items with `ui://` URIs from
+the model-facing result.
+
 **Also check** for each cookbook view: Google Maps and ArcGIS load external scripts. They render
 in iHub only if their resource declares the domains in `_meta.ui.csp`; iHub's sandbox (correctly)
 blocks undeclared origins. Document this in `docs/mcp-integration.md` → _Sandbox_ as a
