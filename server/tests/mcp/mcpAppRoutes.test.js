@@ -12,6 +12,9 @@ import request from 'supertest';
 let apps = [];
 const findTool = jest.fn();
 const hasServer = jest.fn(() => false);
+const connectionForUser = jest.fn();
+const withUserConnection = jest.fn();
+const connectUrlFor = jest.fn(id => `/api/mcp/oauth/authorize?serverId=${id}`);
 
 jest.unstable_mockModule('../../configCache.js', () => ({
   default: {
@@ -28,7 +31,7 @@ jest.unstable_mockModule('../../middleware/authRequired.js', () => ({
   }
 }));
 jest.unstable_mockModule('../../services/mcp/McpClientManager.js', () => ({
-  default: { findTool, hasServer }
+  default: { findTool, hasServer, connectionForUser, withUserConnection, connectUrlFor }
 }));
 const logInfo = jest.fn();
 jest.unstable_mockModule('../../utils/logger.js', () => ({
@@ -191,6 +194,69 @@ describe('GET /api/mcp-apps/resource', () => {
     apps = [{ id: 'whiteboard', tools: ['excalidraw'] }];
     const res = await asUser(request(app).get('/api/mcp-apps/resource').query(ref));
     expect(res.status).toBe(200);
+  });
+});
+
+describe('per-user OAuth servers', () => {
+  const oauthConn = () => ({ ...conn, config: { id: 'excalidraw', auth: { type: 'oauthUser' } } });
+  const authRequired = () =>
+    Object.assign(new Error('Sign-in required'), {
+      code: 'MCP_AUTH_REQUIRED',
+      serverId: 'excalidraw'
+    });
+
+  beforeEach(() => {
+    connectionForUser.mockReset();
+    withUserConnection.mockReset();
+    const shared = oauthConn();
+    findTool.mockImplementation(async id =>
+      id === VIEW_TOOL.id ? { conn: shared, tool: VIEW_TOOL } : null
+    );
+  });
+
+  it('answers "connect first" with 409, never 401 (which signs the user out of iHub)', async () => {
+    connectionForUser.mockRejectedValue(authRequired());
+    const res = await asUser(request(app).get('/api/mcp-apps/resource').query(ref));
+    expect(res.status).toBe(409);
+    expect(res.body).toEqual({
+      error: 'auth_required',
+      code: 'MCP_AUTH_REQUIRED',
+      connectUrl: '/api/mcp/oauth/authorize?serverId=excalidraw'
+    });
+  });
+
+  it("runs the view's requests on the caller's own connection, and maps a later sign-in loss to 409", async () => {
+    connectionForUser.mockResolvedValue(conn);
+    withUserConnection.mockImplementation(async (_id, _user, operation) => operation(conn));
+    const ok = await asUser(
+      request(app)
+        .post('/api/mcp-apps/tools/call')
+        .send({ ...ref, name: 'save_checkpoint', arguments: {} })
+    );
+    expect(ok.status).toBe(200);
+    expect(withUserConnection).toHaveBeenCalledWith(
+      'excalidraw',
+      expect.objectContaining({ id: 'u1' }),
+      expect.any(Function)
+    );
+
+    withUserConnection.mockRejectedValue(authRequired());
+    const lost = await asUser(
+      request(app)
+        .post('/api/mcp-apps/resources/read')
+        .send({ ...ref, uri: 'ui://excalidraw/data' })
+    );
+    expect(lost.status).toBe(409);
+    expect(lost.body.code).toBe('MCP_AUTH_REQUIRED');
+  });
+
+  it('answers a refresh that failed for a transient reason with 503', async () => {
+    connectionForUser.mockResolvedValue(conn);
+    withUserConnection.mockRejectedValue(
+      Object.assign(new Error('AS down'), { code: 'MCP_AUTH_REFRESH_FAILED' })
+    );
+    const res = await asUser(request(app).get('/api/mcp-apps/resource').query(ref));
+    expect(res.status).toBe(503);
   });
 });
 

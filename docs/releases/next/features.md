@@ -100,5 +100,7 @@ tokens for every user.
 - **Settings → Integrations** lists these servers with **Connect** and **Disconnect**.
 - Admins see how many users connected each server; **Test connection** uses the admin's own
   account and loads the server's tools for everybody.
-- Behind a reverse proxy, set the MCP gateway's **Public URL** so the sign-in callback URL
-  stays stable.
+- Behind a reverse proxy, or when iHub is reached under more than one address, set the MCP
+  gateway's **Public URL**. Every server has its own sign-in callback,
+  `<Public URL>/api/mcp/oauth/callback/<server id>`; register exactly that URL for a client you
+  registered by hand.

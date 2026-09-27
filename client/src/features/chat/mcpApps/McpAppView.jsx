@@ -58,6 +58,14 @@ function errorMessage(error) {
 }
 
 /**
+ * Whether the server answered "connect this MCP server first" (per-user
+ * sign-in). It answers 409, not 401, so the iHub session is left alone.
+ */
+function isMcpAuthRequired(error) {
+  return error?.response?.data?.code === 'MCP_AUTH_REQUIRED';
+}
+
+/**
  * The sandbox page must share iHub's origin: it takes the host's origin from
  * its own URL. When the API is served elsewhere (an API base override, e.g. a
  * browser extension) views cannot be hosted.
@@ -114,6 +122,7 @@ function McpAppView({ view, appId, chatId, host = null }) {
   const bridgeRef = useRef(null);
   const [resource, setResource] = useState(null);
   const [loadError, setLoadError] = useState(null);
+  const [needsConnect, setNeedsConnect] = useState(false);
   const [height, setHeight] = useState(INITIAL_HEIGHT);
   const [displayMode, setDisplayMode] = useState('inline');
 
@@ -139,7 +148,9 @@ function McpAppView({ view, appId, chatId, host = null }) {
         if (!cancelled) setResource(data);
       },
       error => {
-        if (!cancelled) setLoadError(errorMessage(error));
+        if (cancelled) return;
+        if (isMcpAuthRequired(error)) setNeedsConnect(true);
+        else setLoadError(errorMessage(error));
       }
     );
     return () => {
@@ -465,6 +476,15 @@ function McpAppView({ view, appId, chatId, host = null }) {
       t(
         'mcpApps.payloadOmitted',
         'This interactive view was too large to keep and cannot be shown again.'
+      )
+    );
+  }
+  if (needsConnect) {
+    return notice(
+      'lock-closed',
+      t(
+        'mcpApps.authRequired',
+        'Connect this server with your own account to see its interactive view.'
       )
     );
   }

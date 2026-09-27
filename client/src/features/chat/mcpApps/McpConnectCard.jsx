@@ -1,8 +1,9 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import Icon from '../../../shared/components/Icon';
 import { consumeMcpConnectResult, normalizeMcpAuthPrompts } from './mcpConnectPrompts';
 import { buildMcpConnectUrl } from './mcpConnectUrl';
+import { fetchMcpConnectionStates, invalidateMcpConnectionStates } from './mcpConnectionStatus';
 
 /**
  * Asks the user to connect an MCP server that uses per-user sign-in, shown
@@ -10,7 +11,9 @@ import { buildMcpConnectUrl } from './mcpConnectUrl';
  *
  * **Connect** leaves the page for the server's sign-in and comes back here;
  * the card then reads the result from the URL (once) and says whether the
- * server is connected, so the user can ask again.
+ * server is connected, so the user can ask again. A stored card (a reopened
+ * chat) asks the server whether the user is connected now and shows that
+ * instead of the stale prompt.
  *
  * @param {Object} props
  * @param {{serverId: string, serverName: string}} props.prompt
@@ -21,10 +24,25 @@ export function McpConnectCard({ prompt, readOnly = false, navigate }) {
   const { t } = useTranslation();
   const [result] = useState(() => {
     const returned = consumeMcpConnectResult();
+    if (returned.connected || returned.error) invalidateMcpConnectionStates();
     if (returned.connected === prompt.serverId) return 'connected';
     if (returned.error && returned.errorServer === prompt.serverId) return 'error';
     return null;
   });
+  // Live state: true / false once known; null while unknown.
+  const [live, setLive] = useState(null);
+  useEffect(() => {
+    if (readOnly) return undefined;
+    let cancelled = false;
+    fetchMcpConnectionStates().then(states => {
+      if (!cancelled && states.has(prompt.serverId)) setLive(states.get(prompt.serverId));
+    });
+    return () => {
+      cancelled = true;
+    };
+  }, [prompt.serverId, readOnly]);
+  const state =
+    live === true ? 'connected' : live === false && result === 'connected' ? null : result;
 
   const connect = () => {
     const url = buildMcpConnectUrl(prompt.serverId);
@@ -32,7 +50,7 @@ export function McpConnectCard({ prompt, readOnly = false, navigate }) {
     else window.location.assign(url);
   };
 
-  if (result === 'connected') {
+  if (state === 'connected') {
     return (
       <div
         className="my-2 flex items-center gap-2 rounded-lg border border-green-200 dark:border-green-800 bg-green-50 dark:bg-green-900/30 px-3 py-2 text-sm text-green-800 dark:text-green-200"
@@ -63,7 +81,7 @@ export function McpConnectCard({ prompt, readOnly = false, navigate }) {
               { name: prompt.serverName }
             )}
           </p>
-          {result === 'error' && (
+          {state === 'error' && (
             <p className="mt-1 text-red-700 dark:text-red-300" role="alert">
               {t('mcpConnect.failed', 'Connecting {{name}} did not succeed. Try again.', {
                 name: prompt.serverName

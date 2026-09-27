@@ -6,15 +6,27 @@ import {
 import { DEFAULT_MAX_FILE_SIZE_MB, resolveFileInputs } from './mcpFileInputs.js';
 import {
   isAuthRequiredError,
+  isTokenRefreshError,
   McpAuthRequiredError,
   McpUserOAuthProvider
 } from './McpUserOAuthProvider.js';
-import { getMcpOAuthClientStore } from './mcpOAuthClientStore.js';
+import { getMcpOAuthClientStore, registrationFingerprint } from './mcpOAuthClientStore.js';
 import { getMcpToolCatalogStore } from './mcpToolCatalogStore.js';
-import { readUserTokens } from './mcpUserTokens.js';
+import {
+  accessTokenExpired,
+  deleteServerTokens,
+  deleteUserTokens,
+  readUserTokens,
+  readUserTokensFor
+} from './mcpUserTokens.js';
 import { resolveMcpPublicBase, mcpConnectPath } from './mcpOAuthPublicUrl.js';
-import { buildAuthRequiredResult, isUserOAuthServer } from './mcpOAuthService.js';
-import { isAnonymousUser } from '../loop/runIdentity.js';
+import {
+  buildAuthRequiredResult,
+  isUserOAuthServer,
+  refreshUserTokens,
+  serverDisplayName
+} from './mcpOAuthService.js';
+import { isAdminUser, isAnonymousUser } from '../loop/runIdentity.js';
 import logger from '../../utils/logger.js';
 
 /** A per-user connection nobody used for this long is closed. */
@@ -23,6 +35,12 @@ export const USER_CONNECTION_IDLE_MS = 30 * 60 * 1000;
 const USER_CONNECTION_SWEEP_MS = 5 * 60 * 1000;
 /** How long the in-memory copy of a per-user server's catalog is trusted before re-reading it. */
 const CATALOG_REFRESH_MS = 60 * 1000;
+/**
+ * After a definitive refresh refusal, how long to wait before re-reading the
+ * stored tokens once more: another worker that refreshed with the same
+ * (rotating) refresh token a moment earlier may still be writing its result.
+ */
+const REFRESH_RACE_GRACE_MS = 250;
 
 /**
  * Pool key of a user's connection to a server.
@@ -106,7 +124,14 @@ function summarizeTools(tools) {
  * admin tests run on the calling user's own connection from `userConnections`
  * (`<serverId>::<userId>`, closed after USER_CONNECTION_IDLE_MS idle). A
  * caller without a token gets the structured `MCP_AUTH_REQUIRED` result —
- * never another user's connection.
+ * never another user's connection. The caller is always `params.user`, which
+ * every entry point sets from the authenticated request (never from caller
+ * input, see `utils/toolCallContext.js`).
+ *
+ * Token refresh is iHub's, not the SDK's: on a 401 (or an access token known
+ * to be expired) `_refreshUserTokens` refreshes once per (user, server) —
+ * concurrent calls share the one refresh — and retries the call. Tokens are
+ * deleted only when the authorization server definitively refuses them.
  *
  * Lifecycle:
  *   1. `initialize(config)` is called once after configCache loads
@@ -132,6 +157,11 @@ class McpClientManager {
     // Resolved lazily; tests may replace them.
     this.catalogStore = null;
     this.clientStore = null;
+    /** @type {Map<string, Promise<Object>>} In-flight token refreshes per (server, user). */
+    this._refreshes = new Map();
+    this.refreshGraceMs = REFRESH_RACE_GRACE_MS;
+    /** Test seam: replaces the SDK's `refreshAuthorization`. */
+    this.refreshAuthorization = null;
   }
 
   _catalogs() {
@@ -140,6 +170,15 @@ class McpClientManager {
 
   _clients() {
     return this.clientStore || getMcpOAuthClientStore();
+  }
+
+  /**
+   * The per-server OAuth client registration store every sign-in, refresh
+   * and revocation of this manager's servers uses.
+   * @returns {import('./mcpOAuthClientStore.js').McpOAuthClientStore}
+   */
+  clientRegistrations() {
+    return this._clients();
   }
 
   /** Build the manager's own connection for a server config. */
@@ -223,7 +262,11 @@ class McpClientManager {
   /**
    * A per-user server was reconfigured or removed: close every user's pooled
    * connection; drop the client registration when the endpoint or auth block
-   * changed, and the tool catalog when the endpoint changed.
+   * changed, the tool catalog when the endpoint changed, and every user's
+   * tokens when the server was removed or its endpoint / auth block (the
+   * registration fingerprint) changed — tokens issued for the old endpoint
+   * are never sent to a new one. (Tokens are also bound to that fingerprint,
+   * so a change made while iHub was down is caught on read.)
    *
    * @param {Object} previous - The config the manager had
    * @param {Object|undefined} next - The new config, or undefined when removed
@@ -235,10 +278,24 @@ class McpClientManager {
       endpointChanged ||
       JSON.stringify(previous.transport) !== JSON.stringify(next.transport) ||
       JSON.stringify(previous.auth) !== JSON.stringify(next.auth);
+    const tokensInvalid =
+      !next ||
+      !isUserOAuthServer(next) ||
+      registrationFingerprint(previous) !== registrationFingerprint(next);
     if (authChanged) {
       await this._clients()
         .clear(id)
         .catch(() => {});
+    }
+    if (tokensInvalid) {
+      const removed = await deleteServerTokens(id).catch(() => 0);
+      if (removed > 0) {
+        logger.info('MCP user tokens removed after the server was removed or repointed', {
+          component: 'McpClientManager',
+          serverId: id,
+          removed
+        });
+      }
     }
     if (endpointChanged) {
       await this._catalogs()
@@ -306,45 +363,62 @@ class McpClientManager {
    * The pooled connection of `userId` to an `oauthUser` server, created on
    * first use. It connects lazily, with the user's own tokens.
    *
+   * Synchronous between the pool lookup and the insert, so parallel calls
+   * for the same (server, user) always share one connection. The server's
+   * live config is used when the caller holds an older copy (a reload ran
+   * while it awaited something).
+   *
    * @param {Object} serverConfig
    * @param {string} userId
-   * @returns {Promise<{conn: McpServerConnection, provider: McpUserOAuthProvider}>}
+   * @param {Object} [options]
+   * @param {boolean} [options.authoritativeCatalog=false] - This user's listings
+   *   replace the shared catalog (admins); others only add to it
+   * @returns {{conn: McpServerConnection, provider: McpUserOAuthProvider, serverId: string, userId: string, lastUsed: number, authoritativeCatalog: boolean}}
    */
-  async _userConnection(serverConfig, userId) {
-    const key = userConnectionKey(serverConfig.id, userId);
+  _userConnection(serverConfig, userId, { authoritativeCatalog = false } = {}) {
+    const live = this.connections.get(serverConfig.id)?.config || serverConfig;
+    const key = userConnectionKey(live.id, userId);
     const existing = this.userConnections.get(key);
     if (existing) {
       existing.lastUsed = Date.now();
+      if (authoritativeCatalog) existing.authoritativeCatalog = true;
       return existing;
     }
-    const provider = await this._providerFor(serverConfig, userId);
-    const conn = new McpServerConnection(serverConfig, this.security, {
+    const provider = this._providerFor(live, userId);
+    const entry = {
+      conn: null,
+      provider,
+      serverId: live.id,
+      userId,
+      lastUsed: Date.now(),
+      authoritativeCatalog
+    };
+    entry.conn = new McpServerConnection(live, this.security, {
       authProvider: provider,
       onToolsListed: rawTools => {
-        this.saveCatalog(serverConfig, rawTools).catch(() => {});
+        this.saveCatalog(live, rawTools, { authoritative: entry.authoritativeCatalog }).catch(
+          () => {}
+        );
       }
     });
-    const entry = { conn, provider, serverId: serverConfig.id, userId, lastUsed: Date.now() };
     this.userConnections.set(key, entry);
     return entry;
   }
 
-  /** The OAuth provider for (server, user), with the registration's public base. */
-  async _providerFor(serverConfig, userId) {
-    const registration = await this._clients()
-      .getFor(serverConfig)
-      .catch(() => null);
+  /** The OAuth provider for (server, user). Synchronous: no registration read. */
+  _providerFor(serverConfig, userId) {
     return new McpUserOAuthProvider({
       serverConfig,
       userId,
-      publicBase: registration?.publicBase || resolveMcpPublicBase() || null,
+      publicBase: resolveMcpPublicBase() || null,
       clientStore: this._clients()
     });
   }
 
   /**
    * The connection a caller uses for a server: the shared one for ordinary
-   * servers, the caller's own for `oauthUser` servers.
+   * servers, the caller's own for `oauthUser` servers. Prefer
+   * {@link withUserConnection}, which also refreshes an expired token.
    *
    * @param {string} serverId
    * @param {Object} [user] - The caller (req.user / params.user)
@@ -357,9 +431,205 @@ class McpClientManager {
     if (!isUserOAuthServer(shared.config)) return shared;
     if (isAnonymousUser(user)) throw new McpAuthRequiredError(serverId);
     const userId = String(user.id);
-    if (!(await readUserTokens(userId, serverId))) throw new McpAuthRequiredError(serverId);
-    const { conn } = await this._userConnection(shared.config, userId);
-    return conn;
+    if (!(await readUserTokensFor(userId, shared.config))) {
+      throw new McpAuthRequiredError(serverId);
+    }
+    return this._userConnection(shared.config, userId, {
+      authoritativeCatalog: isAdminUser(user)
+    }).conn;
+  }
+
+  /**
+   * Run `operation(conn)` on the connection the caller uses for a server:
+   * the shared one for ordinary servers; for an `oauthUser` server the
+   * caller's own, refreshing the token when it is expired or rejected and
+   * retrying once.
+   *
+   * @template T
+   * @param {string} serverId
+   * @param {Object} user - The authenticated caller
+   * @param {(conn: McpServerConnection) => Promise<T>} operation
+   * @returns {Promise<T>}
+   * @throws {McpAuthRequiredError} The caller must (re)connect
+   * @throws {import('./McpUserOAuthProvider.js').McpTokenRefreshError} Transient refresh failure
+   */
+  async withUserConnection(serverId, user, operation) {
+    const shared = this.getConnection(serverId);
+    if (!shared) throw new Error(`MCP server not found: ${serverId}`);
+    if (!isUserOAuthServer(shared.config)) return operation(shared);
+    if (isAnonymousUser(user)) throw new McpAuthRequiredError(serverId);
+    return this._withUserConnection(shared.config, user, operation);
+  }
+
+  /**
+   * The per-user core of {@link withUserConnection}.
+   *
+   * @param {Object} serverConfig - `oauthUser` server
+   * @param {Object} user - Non-anonymous caller
+   * @param {Function} operation
+   * @param {Object} [options]
+   * @param {McpServerConnection} [options.connection] - Use this connection
+   *   (an admin probe) instead of the pooled one
+   * @param {boolean} [options.authoritativeCatalog] - The listing replaces the
+   *   shared catalog; default: whether the caller is an admin
+   */
+  async _withUserConnection(
+    serverConfig,
+    user,
+    operation,
+    { connection, authoritativeCatalog = isAdminUser(user) } = {}
+  ) {
+    const serverId = serverConfig.id;
+    const userId = String(user.id);
+    let stored = await readUserTokensFor(userId, serverConfig);
+    if (!stored?.access_token) throw new McpAuthRequiredError(serverId);
+    if (stored.refresh_token && accessTokenExpired(stored)) {
+      stored = await this._refreshUserTokens(serverConfig, userId, stored.access_token);
+    }
+    const conn =
+      connection || this._userConnection(serverConfig, userId, { authoritativeCatalog }).conn;
+    const evict = async () => {
+      if (!connection) await this.evictUserConnection(serverId, userId);
+    };
+    try {
+      return await operation(conn);
+    } catch (error) {
+      if (!isAuthRequiredError(error)) throw error;
+    }
+    // The server rejected the token: refresh (or learn that another call
+    // already did) and retry once.
+    let fresh;
+    try {
+      fresh = await this._refreshUserTokens(serverConfig, userId, stored.access_token);
+    } catch (error) {
+      // Transient failures keep the connection (and the tokens) for the retry.
+      if (isAuthRequiredError(error)) await evict();
+      throw error;
+    }
+    try {
+      return await operation(conn);
+    } catch (error) {
+      if (!isAuthRequiredError(error)) throw error;
+      // Even a fresh token is refused: it is useless for this server.
+      await this._dropUserTokens(serverConfig, userId, fresh.access_token);
+      await evict();
+      logger.info('MCP user token rejected after a refresh; sign-in required', {
+        component: 'McpClientManager',
+        serverId,
+        userId
+      });
+      throw new McpAuthRequiredError(serverId);
+    }
+  }
+
+  /**
+   * Refresh a user's tokens for a server — at most one refresh per
+   * (server, user) at a time; concurrent callers share its result.
+   *
+   * @param {Object} serverConfig
+   * @param {string} userId
+   * @param {string} usedAccessToken - The access token the caller sent
+   * @returns {Promise<Object>} The current token payload
+   * @throws {McpAuthRequiredError} The user must connect again
+   * @throws {import('./McpUserOAuthProvider.js').McpTokenRefreshError} Transient failure
+   */
+  _refreshUserTokens(serverConfig, userId, usedAccessToken) {
+    const key = userConnectionKey(serverConfig.id, userId);
+    let pending = this._refreshes.get(key);
+    if (!pending) {
+      pending = this._refreshOnce(serverConfig, userId, usedAccessToken).finally(() => {
+        if (this._refreshes.get(key) === pending) this._refreshes.delete(key);
+      });
+      this._refreshes.set(key, pending);
+    }
+    return pending;
+  }
+
+  async _refreshOnce(serverConfig, userId, usedAccessToken) {
+    const serverId = serverConfig.id;
+    // Re-read first: another call or worker may have refreshed already.
+    const current = await readUserTokensFor(userId, serverConfig);
+    if (!current?.access_token) throw new McpAuthRequiredError(serverId);
+    if (usedAccessToken && current.access_token !== usedAccessToken) return current;
+    if (!current.refresh_token) {
+      // Nothing to renew the rejected access token with.
+      await this._dropUserTokens(serverConfig, userId, current.access_token);
+      throw new McpAuthRequiredError(serverId);
+    }
+    try {
+      return await refreshUserTokens({
+        serverConfig,
+        userId,
+        current,
+        security: this.security,
+        clientStore: this._clients(),
+        ...(this.refreshAuthorization ? { refresh: this.refreshAuthorization } : {})
+      });
+    } catch (error) {
+      if (isTokenRefreshError(error)) {
+        logger.warn('MCP token refresh failed; keeping the tokens', {
+          component: 'McpClientManager',
+          serverId,
+          userId,
+          error: error.message
+        });
+        throw error;
+      }
+      if (!error?.rejection) throw error;
+      // Definitively refused. A rotating refresh token may have just been
+      // used by another worker, whose new tokens win.
+      const latest = await this._tokensChangedSince(serverConfig, userId, current.access_token);
+      if (latest) return latest;
+      await this._dropUserTokens(serverConfig, userId, current.access_token);
+      if (error.rejection === 'invalid_client' && error.source !== 'config') {
+        await this._clients()
+          .clear(serverId)
+          .catch(() => {});
+      }
+      logger.info('MCP token refresh refused; sign-in required', {
+        component: 'McpClientManager',
+        serverId,
+        userId,
+        reason: error.rejection
+      });
+      throw error;
+    }
+  }
+
+  /** The stored tokens when they no longer hold `accessToken` (re-read after a short grace), else null. */
+  async _tokensChangedSince(serverConfig, userId, accessToken) {
+    for (let attempt = 0; attempt < 2; attempt++) {
+      const latest = await readUserTokensFor(userId, serverConfig);
+      if (latest?.access_token && latest.access_token !== accessToken) return latest;
+      if (attempt === 0 && this.refreshGraceMs > 0) {
+        await new Promise(resolve => setTimeout(resolve, this.refreshGraceMs));
+      }
+    }
+    return null;
+  }
+
+  /** Delete a user's tokens, but only while they still hold `accessToken`. */
+  async _dropUserTokens(serverConfig, userId, accessToken) {
+    const current = await readUserTokens(userId, serverConfig.id);
+    if (!current || (accessToken && current.access_token !== accessToken)) return false;
+    await deleteUserTokens(userId, serverConfig.id).catch(() => false);
+    logger.info('MCP user tokens invalidated', {
+      component: 'McpClientManager',
+      serverId: serverConfig.id,
+      userId
+    });
+    return true;
+  }
+
+  /**
+   * Forget iHub's OAuth client registration for a per-user server (admin
+   * action): the next sign-in registers afresh.
+   * @param {string} serverId
+   * @returns {Promise<void>}
+   */
+  async resetClientRegistration(serverId) {
+    await this._clients().clear(serverId);
+    await this._closeUserConnections(serverId);
   }
 
   /**
@@ -396,19 +666,57 @@ class McpClientManager {
   }
 
   /**
-   * Store a user connection's `tools/list` result as the server's catalog.
+   * Store a user connection's `tools/list` result in the server's shared
+   * catalog.
+   *
+   * Policy (the upstream may list different tools to different users): an
+   * authoritative listing — an admin's connection or Test connection —
+   * replaces the catalog; anybody else's listing only adds tools the catalog
+   * does not have yet, never removes or rewrites one. A user whose upstream
+   * role sees fewer tools can therefore never shrink everybody's tool set.
+   * Tools removed upstream disappear at the next admin Test connection (or
+   * endpoint change). The upstream still authorizes every call with the
+   * caller's own token, so a listed tool is no grant.
+   *
    * @param {Object} serverConfig
    * @param {Object[]} rawTools
+   * @param {Object} [options]
+   * @param {boolean} [options.authoritative=false]
    * @returns {Promise<void>}
    */
-  async saveCatalog(serverConfig, rawTools) {
-    await this._catalogs().put(serverConfig.id, rawTools, {
-      endpoint: serverConfig.transport?.url || null
-    });
-    const shared = this.connections.get(serverConfig.id);
+  async saveCatalog(serverConfig, rawTools, { authoritative = false } = {}) {
+    const endpoint = serverConfig.transport?.url || null;
+    let tools = Array.isArray(rawTools) ? rawTools : [];
+    if (!authoritative) {
+      let record = null;
+      try {
+        record = await this._catalogs().get(serverConfig.id);
+      } catch {
+        record = null;
+      }
+      const existing =
+        record && (!record.endpoint || record.endpoint === endpoint) && Array.isArray(record.tools)
+          ? record.tools
+          : [];
+      if (existing.length > 0) {
+        const known = new Set(existing.map(tool => tool?.name));
+        const added = tools.filter(tool => tool?.name && !known.has(tool.name));
+        if (added.length === 0) {
+          this._applySharedCatalog(serverConfig.id, existing);
+          return;
+        }
+        tools = [...existing, ...added];
+      }
+    }
+    await this._catalogs().put(serverConfig.id, tools, { endpoint });
+    this._applySharedCatalog(serverConfig.id, tools);
+  }
+
+  _applySharedCatalog(serverId, tools) {
+    const shared = this.connections.get(serverId);
     if (shared && shared.catalogOnly) {
-      shared.applyCatalog(rawTools);
-      this.catalogLoadedAt.set(serverConfig.id, Date.now());
+      shared.applyCatalog(tools);
+      this.catalogLoadedAt.set(serverId, Date.now());
     }
   }
 
@@ -422,8 +730,7 @@ class McpClientManager {
    */
   async refreshCatalogForUser(serverId, user) {
     try {
-      const conn = await this.connectionForUser(serverId, user);
-      return await conn.listTools();
+      return await this.withUserConnection(serverId, user, conn => conn.listTools());
     } catch (error) {
       logger.warn('MCP tool catalog refresh after sign-in failed', {
         component: 'McpClientManager',
@@ -597,31 +904,26 @@ class McpClientManager {
    * A tool call on an `oauthUser` server, on the caller's own connection.
    * Without a user or a token the caller gets the structured auth-required
    * result (headless callers — gateway, A2A, workflows without a user —
-   * included); there is no fallback to anybody else's connection.
+   * included); there is no fallback to anybody else's connection. A refresh
+   * that fails for a transient reason is an ordinary tool error: the tokens
+   * are kept and the next call tries again.
    */
   async _callUserTool(serverConfig, tool, args, params, callOptions) {
     const user = params?.user;
     const language = params?.language;
     if (isAnonymousUser(user)) return buildAuthRequiredResult(serverConfig, language);
-    const userId = String(user.id);
-    if (!(await readUserTokens(userId, serverConfig.id))) {
-      return buildAuthRequiredResult(serverConfig, language);
-    }
-    const entry = await this._userConnection(serverConfig, userId);
     try {
-      return await entry.conn.callTool(tool._mcp.originalName, args, callOptions);
+      return await this._withUserConnection(serverConfig, user, conn =>
+        conn.callTool(tool._mcp.originalName, args, callOptions)
+      );
     } catch (error) {
-      if (!isAuthRequiredError(error)) throw error;
-      // The token was rejected and could not be refreshed: drop it so the
-      // user is asked to connect again instead of failing on every call.
-      await entry.provider.invalidateTokens().catch(() => {});
-      await this.evictUserConnection(serverConfig.id, userId);
-      logger.info('MCP user token rejected; sign-in required', {
-        component: 'McpClientManager',
-        serverId: serverConfig.id,
-        userId
-      });
-      return buildAuthRequiredResult(serverConfig, language);
+      if (isAuthRequiredError(error)) return buildAuthRequiredResult(serverConfig, language);
+      if (isTokenRefreshError(error)) {
+        throw new Error(
+          `The sign-in to ${serverDisplayName(serverConfig, language)} could not be renewed right now (its authorization server did not answer). Try again in a moment.`
+        );
+      }
+      throw error;
     }
   }
 
@@ -707,16 +1009,23 @@ class McpClientManager {
     const conn = this.connections.get(serverId);
     if (!conn) throw new Error(`MCP server not found: ${serverId}`);
     if (conn.catalogOnly) {
-      // Test as the acting admin, with their own token; the listing also
-      // becomes the server's shared catalog.
-      if (isAnonymousUser(user) || !(await readUserTokens(String(user.id), serverId))) {
+      // Test as the acting admin, with their own token; the listing replaces
+      // the server's shared catalog (see saveCatalog).
+      if (isAnonymousUser(user) || !(await readUserTokensFor(String(user.id), conn.config))) {
         return this._authRequiredTest(serverId);
       }
       await this.evictUserConnection(serverId, String(user.id));
       try {
-        const userConn = await this.connectionForUser(serverId, user);
-        const tools = await userConn.listTools();
-        return { status: userConn.status(), tools: summarizeTools(tools) };
+        const result = await this._withUserConnection(
+          conn.config,
+          user,
+          async userConn => {
+            const tools = await userConn.listTools();
+            return { status: userConn.status(), tools: summarizeTools(tools) };
+          },
+          { authoritativeCatalog: true }
+        );
+        return result;
       } catch (error) {
         if (isAuthRequiredError(error)) return this._authRequiredTest(serverId);
         throw error;
@@ -730,13 +1039,6 @@ class McpClientManager {
     return { status: conn.status(), tools: summarizeTools(tools) };
   }
 
-  /**
-   * Probe an arbitrary (possibly unsaved) server config without registering
-   * it. Used by the admin dialog so an operator can validate a connection and
-   * preview the available tools before persisting the server. The ephemeral
-   * connection is always torn down, even on failure, so no socket or child
-   * process leaks.
-   */
   /** The admin test result for a per-user server the admin has not connected. */
   _authRequiredTest(serverId) {
     return {
@@ -747,6 +1049,19 @@ class McpClientManager {
     };
   }
 
+  /**
+   * Probe an arbitrary (possibly unsaved) server config without registering
+   * it. Used by the admin dialog so an operator can validate a connection and
+   * preview the available tools before persisting the server. The ephemeral
+   * connection is always torn down, even on failure, so no socket or child
+   * process leaks.
+   *
+   * A per-user OAuth draft is probed with the acting admin's own token only
+   * when its endpoint and auth block are exactly the saved server's: the
+   * token was issued for that endpoint and must never reach an edited or new
+   * URL. Otherwise the result asks to save first (`reason: 'unsaved_changes'`).
+   * The probe never touches the shared registration or catalog.
+   */
   async testConfig(rawServerConfig, user = null) {
     const parsed = mcpServerConfigSchema.safeParse(rawServerConfig);
     if (!parsed.success) {
@@ -761,19 +1076,28 @@ class McpClientManager {
     const allow = parsed.data.allowedTools || ['*'];
     const allowAll = allow.includes('*');
     const probeConfig = { ...parsed.data, enabled: true, allowedTools: ['*'] };
-    let provider = null;
+    let saved = null;
     if (isUserOAuthServer(parsed.data)) {
-      // Per-user server: probe with the acting admin's own token for this
-      // server id. Without one the admin is offered the Connect button.
-      if (isAnonymousUser(user) || !(await readUserTokens(String(user.id), parsed.data.id))) {
+      // Per-user server: probe with the acting admin's own token, and only
+      // for exactly the saved endpoint and auth block.
+      const current = this.connections.get(parsed.data.id)?.config;
+      if (
+        !current ||
+        !isUserOAuthServer(current) ||
+        registrationFingerprint(current) !== registrationFingerprint(parsed.data) ||
+        JSON.stringify(current.transport) !== JSON.stringify(parsed.data.transport)
+      ) {
+        return { ...this._authRequiredTest(parsed.data.id), reason: 'unsaved_changes' };
+      }
+      if (isAnonymousUser(user) || !(await readUserTokensFor(String(user.id), current))) {
         return this._authRequiredTest(parsed.data.id);
       }
-      provider = await this._providerFor(parsed.data, String(user.id));
+      saved = current;
     }
     const conn = new McpServerConnection(probeConfig, this.security, {
-      ...(provider ? { authProvider: provider } : {})
+      ...(saved ? { authProvider: this._providerFor(saved, String(user.id)) } : {})
     });
-    try {
+    const probe = async () => {
       await conn.connect();
       const catalog = summarizeTools(await conn.listTools()).map(tool => ({
         ...tool,
@@ -784,8 +1108,12 @@ class McpClientManager {
         tools: catalog.filter(tool => tool.allowed).map(({ allowed: _allowed, ...tool }) => tool),
         catalog
       };
+    };
+    try {
+      if (!saved) return await probe();
+      return await this._withUserConnection(saved, user, probe, { connection: conn });
     } catch (error) {
-      if (provider && isAuthRequiredError(error)) return this._authRequiredTest(parsed.data.id);
+      if (saved && isAuthRequiredError(error)) return this._authRequiredTest(parsed.data.id);
       throw error;
     } finally {
       await conn.disconnect().catch(() => {});

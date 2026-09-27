@@ -4,6 +4,7 @@ import configCache from '../../configCache.js';
 import { MCP_SCOPES } from './scopes.js';
 import { invokeApp, invokeAppNonStreaming } from './appInvoker.js';
 import { runTool, loadConfiguredTools } from '../../toolLoader.js';
+import { withTrustedToolContext } from '../../utils/toolCallContext.js';
 import { getVisibleToolIds, toolVisibleInSet } from './permissions.js';
 import { isValidId } from '../../utils/pathSecurity.js';
 import logger from '../../utils/logger.js';
@@ -246,7 +247,12 @@ async function handleTasksSend(params, { user, platform }) {
       if (!(allowedWf instanceof Set) || (!allowedWf.has('*') && !allowedWf.has(safeWfId))) {
         return { __rpcError: { code: -32004, message: 'access_denied: workflow not permitted' } };
       }
-      output = await runTool(`workflow_${safeWfId}`, input || {});
+      // The caller's input never names the user: the workflow (and every
+      // per-user OAuth MCP call inside it) runs as the authenticated caller.
+      output = await runTool(
+        `workflow_${safeWfId}`,
+        withTrustedToolContext(input, { user, chatId: `a2a-${params.taskId || Date.now()}` })
+      );
     } else {
       // Treat as a raw iHub tool id.
       if (!(user.scopes || []).includes(MCP_SCOPES.TOOLS_CALL)) {
@@ -271,7 +277,10 @@ async function handleTasksSend(params, { user, platform }) {
       ) {
         return { __rpcError: { code: -32004, message: 'access_denied: tool not permitted' } };
       }
-      output = await runTool(safeSkillId, input || {});
+      output = await runTool(
+        safeSkillId,
+        withTrustedToolContext(input, { user, chatId: `a2a-${params.taskId || Date.now()}` })
+      );
     }
 
     return {
@@ -735,13 +744,13 @@ async function runTask({ task, skill, text, data, userMessage, user, platform, s
       });
       answer = result;
     } else {
-      const output = await runTool(`workflow_${skill._id}`, {
-        input: text,
-        ...data,
-        user,
-        chatId: `a2a-${task.id}`,
-        language
-      });
+      const output = await runTool(
+        `workflow_${skill._id}`,
+        withTrustedToolContext(
+          { input: text, ...data },
+          { user, chatId: `a2a-${task.id}`, language }
+        )
+      );
       answer = typeof output === 'string' ? output : JSON.stringify(output);
     }
     if (controller.signal.aborted) throw new A2aError(A2A_ERRORS.INTERNAL, 'Task cancelled');
