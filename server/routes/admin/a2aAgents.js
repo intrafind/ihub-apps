@@ -7,7 +7,9 @@ import {
   a2aAgentConfigSchema
 } from '../../validators/a2aAgentConfigSchema.js';
 import a2aClientManager from '../../services/a2a/A2aClientManager.js';
+import { findAgentIdConflict } from '../../services/a2a/a2aTools.js';
 import configCache from '../../configCache.js';
+import { markConfigApplied } from '../../configReloadHooks.js';
 import logger from '../../utils/logger.js';
 
 /**
@@ -15,7 +17,8 @@ import logger from '../../utils/logger.js';
  * `contents/config/a2aAgents.json`, their health and their skill catalog.
  *
  *   GET    /api/admin/a2a/agents           list, with each agent's status
- *   POST   /api/admin/a2a/agents           create (409 on a duplicate id)
+ *   POST   /api/admin/a2a/agents           create (409 on a duplicate id, or one
+ *                                           a tool or MCP server already uses)
  *   PUT    /api/admin/a2a/agents/:id       update
  *   DELETE /api/admin/a2a/agents/:id       delete
  *   POST   /api/admin/a2a/agents/:id/test  re-fetch a saved agent's card
@@ -54,7 +57,35 @@ async function writeConfig(updated) {
   await configStore.writeJson(A2A_FILE, parsed.data);
   await configCache.refreshCacheEntry?.(A2A_FILE);
   await a2aClientManager.initialize(configCache.getA2aAgents().data);
+  // This worker applied the change inline; move its reload-hook baseline too,
+  // or a later announcement restoring the previous content would be skipped.
+  markConfigApplied(A2A_FILE);
   return parsed.data;
+}
+
+/**
+ * Refuse an agent id that is also a local tool's (base) id or an MCP server's
+ * id: apps and groups select a whole agent by its id, so the same reference
+ * would enable both — e.g. an agent `jira` would silently reach every app
+ * that lists `jira` for the local Jira tools.
+ *
+ * @param {import('express').Response} res
+ * @param {string} agentId
+ * @returns {boolean} true when a 409 was sent
+ */
+function refuseIdConflict(res, agentId) {
+  const conflict = findAgentIdConflict(agentId, {
+    tools: configCache.getTools?.(true)?.data || [],
+    mcpServers: configCache.getMcpServers?.()?.data?.servers || []
+  });
+  if (!conflict) return false;
+  const what = conflict.kind === 'mcpServer' ? 'MCP server' : 'tool';
+  res.status(409).json({
+    success: false,
+    error: `Agent id "${agentId}" is already used by the ${what} "${conflict.id}". Apps and groups reference agents, tools and MCP servers by id, so the agent needs an id of its own.`,
+    conflict
+  });
+  return true;
 }
 
 function invalid(res, parsed) {
@@ -96,6 +127,7 @@ export default function registerAdminA2aAgentsRoutes(app) {
       if ((cfg.agents || []).some(agent => agent.id === parsed.data.id)) {
         return res.status(409).json({ success: false, error: 'Agent id already exists' });
       }
+      if (refuseIdConflict(res, parsed.data.id)) return;
       await writeConfig({ ...cfg, agents: [...(cfg.agents || []), parsed.data] });
       res.status(201).json({ success: true, agent: parsed.data });
     } catch (error) {
@@ -115,6 +147,9 @@ export default function registerAdminA2aAgentsRoutes(app) {
       if (idx === -1) {
         return res.status(404).json({ success: false, error: 'Agent not found' });
       }
+      // The id cannot change here, so no id-clash check: an agent whose id a
+      // tool or MCP server took later stays editable (e.g. to disable it);
+      // the tool loader already stops selecting it by that id.
       await writeConfig({
         ...cfg,
         agents: cfg.agents.map((agent, i) => (i === idx ? parsed.data : agent))
@@ -178,9 +213,19 @@ export default function registerAdminA2aAgentsRoutes(app) {
 
   // Per-agent skill catalog for the app editor's picker. Best-effort: an agent
   // whose card cannot be fetched is listed with an `error`.
+  // An agent whose id clashes with a tool or MCP server is flagged
+  // `idConflict`: the app editor then enables it by its skills' tool ids,
+  // because the bare id keeps selecting the tool or MCP server only.
   app.get(buildServerPath('/api/admin/a2a/skills'), adminAuth, async (req, res) => {
     try {
-      res.json({ success: true, agents: await a2aClientManager.listSkillsByAgent() });
+      const taken = {
+        tools: configCache.getTools?.(true)?.data || [],
+        mcpServers: configCache.getMcpServers?.()?.data?.servers || []
+      };
+      const agents = (await a2aClientManager.listSkillsByAgent()).map(agent =>
+        findAgentIdConflict(agent.id, taken) ? { ...agent, idConflict: true } : agent
+      );
+      res.json({ success: true, agents });
     } catch (error) {
       logger.error('[A2A Admin] Skill catalog error', { component: 'AdminA2a', error });
       res.status(500).json({ success: false, error: 'Failed to list A2A agent skills' });

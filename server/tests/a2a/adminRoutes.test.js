@@ -11,7 +11,15 @@ import request from 'supertest';
  * entry and re-initialise the manager.
  */
 
-const state = { file: null, writes: [], refreshed: [], initialized: [] };
+const state = {
+  file: null,
+  writes: [],
+  refreshed: [],
+  initialized: [],
+  applied: [],
+  tools: [],
+  mcpServers: []
+};
 
 jest.unstable_mockModule('../../services/config/ConfigStore.js', () => ({
   default: {
@@ -25,9 +33,14 @@ jest.unstable_mockModule('../../configCache.js', () => ({
   default: {
     getA2aAgents: () => ({ data: structuredClone(state.file), etag: null }),
     refreshCacheEntry: async key => state.refreshed.push(key),
-    getPlatform: () => ({})
+    getPlatform: () => ({}),
+    getTools: () => ({ data: state.tools }),
+    getMcpServers: () => ({ data: { servers: state.mcpServers } })
   },
   resolveEnvVarsInObject: value => value
+}));
+jest.unstable_mockModule('../../configReloadHooks.js', () => ({
+  markConfigApplied: entry => state.applied.push(entry)
 }));
 jest.unstable_mockModule('../../middleware/adminAuth.js', () => ({
   adminAuth: (req, res, next) =>
@@ -71,6 +84,9 @@ beforeEach(() => {
   state.writes.length = 0;
   state.refreshed.length = 0;
   state.initialized.length = 0;
+  state.applied.length = 0;
+  state.tools = [];
+  state.mcpServers = [];
 });
 
 describe('admin A2A agent routes', () => {
@@ -86,6 +102,8 @@ describe('admin A2A agent routes', () => {
     expect(state.writes[0].file).toBe('config/a2aAgents.json');
     expect(state.refreshed).toEqual(['config/a2aAgents.json']);
     expect(state.initialized[0].agents.map(a => a.id)).toEqual(['langdock']);
+    // The reload-hook baseline of this worker follows the inline re-apply.
+    expect(state.applied).toEqual(['config/a2aAgents.json']);
 
     const list = await admin(request(app).get('/api/admin/a2a/agents'));
     expect(list.body.agents[0]).toMatchObject({ id: 'langdock', status: { connected: true } });
@@ -103,6 +121,38 @@ describe('admin A2A agent routes', () => {
     expect(bad.status).toBe(400);
     expect(bad.body.details.length).toBeGreaterThan(0);
     expect(state.writes).toHaveLength(1);
+  });
+
+  it('refuse an id a local tool or an MCP server already uses (409)', async () => {
+    state.tools = [{ id: 'jira_searchTickets' }];
+    state.mcpServers = [{ id: 'atlassian' }];
+
+    const tool = await admin(request(app).post('/api/admin/a2a/agents')).send({
+      ...langdock,
+      id: 'jira'
+    });
+    expect(tool.status).toBe(409);
+    expect(tool.body.conflict).toEqual({ kind: 'tool', id: 'jira_searchTickets' });
+    expect(tool.body.error).toMatch(/tool "jira_searchTickets"/);
+
+    const server = await admin(request(app).post('/api/admin/a2a/agents')).send({
+      ...langdock,
+      id: 'Atlassian'
+    });
+    expect(server.status).toBe(409);
+    expect(server.body.error).toMatch(/MCP server "atlassian"/);
+    expect(state.writes).toHaveLength(0);
+
+    // The skill catalog flags an agent that clashes (e.g. from a hand-edited file).
+    manager.listSkillsByAgent.mockResolvedValueOnce([
+      { id: 'jira', skills: [], error: null },
+      { id: 'langdock', skills: [], error: null }
+    ]);
+    const skills = await admin(request(app).get('/api/admin/a2a/skills'));
+    expect(skills.body.agents).toEqual([
+      { id: 'jira', skills: [], error: null, idConflict: true },
+      { id: 'langdock', skills: [], error: null }
+    ]);
   });
 
   it('update and delete an agent, 404 for unknown ones', async () => {

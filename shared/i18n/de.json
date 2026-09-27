@@ -2432,7 +2432,7 @@
           "clientSecret": "Client-Secret",
           "clientSecretHint": "Gespeichertes Credential-Profil mit dem OAuth-Client-Secret auswählen.",
           "id": "ID",
-          "idHint": "Die Tools dieses Agenten heißen a2a__<id>__<skill>; Apps aktivieren den Agenten über diese ID.",
+          "idHint": "Nur Buchstaben, Ziffern, _ und - (kein __). Die Tools dieses Agenten heißen a2a__<id>__<skill>; Apps aktivieren den Agenten über diese ID, daher muss sie sich von allen Tool- und MCP-Server-IDs unterscheiden.",
           "name": "Name",
           "description": "Beschreibung",
           "enabled": "Aktiviert",
@@ -2667,6 +2667,7 @@
           "disabled": "deaktiviert",
           "skills": "Skills: {{skills}}",
           "agentError": "Die Agent Card konnte nicht gelesen werden: {{error}}",
+          "idConflict": "Ein Tool oder MCP-Server nutzt die ID \"{{id}}\" ebenfalls, daher wird dieser Agent über seine Skill-Tools aktiviert. Geben Sie dem Agenten eine eigene ID, um ihn als Ganzes zu aktivieren.",
           "helper": "Jeder Skill eines Agenten wird zu einem Tool, das das Modell aufrufen kann; der Agent läuft auf seinen eigenen Servern. Welche Skills angeboten werden, legen Sie unter Integrationen → A2A-Agenten fest.",
           "title": "Entfernte A2A-Agenten",
           "desc": "Wählen Sie die entfernten Agenten (Agent-to-Agent-Protokoll), an die diese App Aufgaben delegieren kann. Benutzer sehen jeden Agenten im Chat als einen einzigen Eintrag."

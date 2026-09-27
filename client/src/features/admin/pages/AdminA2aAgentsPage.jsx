@@ -4,6 +4,7 @@ import Icon from '../../../shared/components/Icon';
 import LoadingSpinner from '../../../shared/components/LoadingSpinner';
 import { makeAdminApiCall } from '../../../api/adminApi';
 import { CredentialRefSelect } from '../components/OpenApiToolEditor';
+import { editableText, mergeLocalizedText } from '../utils/localizedField';
 
 /**
  * Admin → Integrations → A2A agents: the remote agents iHub calls as a client
@@ -340,6 +341,10 @@ function AdminA2aAgentsPage() {
   const [form, setForm] = useState(BLANK_FORM);
   const [draftTesting, setDraftTesting] = useState(false);
   const [draftTest, setDraftTest] = useState(null); // null | { ok, card, skills } | { ok:false, error }
+  // The dialog edits one language of name and description; the stored
+  // translations are kept aside and merged back on save (the PUT route
+  // replaces the whole agent, so anything not sent would be lost).
+  const [storedTexts, setStoredTexts] = useState(null);
 
   const errorText = err => err.response?.data?.error || err.message;
 
@@ -366,6 +371,7 @@ function AdminA2aAgentsPage() {
   }, []);
 
   const startCreate = () => {
+    setStoredTexts(null);
     setForm(BLANK_FORM);
     setDraftTest(null);
     setEditing('new');
@@ -373,11 +379,19 @@ function AdminA2aAgentsPage() {
 
   const startEdit = agent => {
     const { status: _status, ...config } = agent;
+    const name = editableText(agent.name);
+    const description = editableText(agent.description);
+    setStoredTexts({
+      name: agent.name,
+      nameLang: name.lang,
+      description: agent.description,
+      descriptionLang: description.lang
+    });
     setForm({
       ...BLANK_FORM,
       ...config,
-      name: plainText(agent.name) || agent.id,
-      description: plainText(agent.description)
+      name: name.text || agent.id,
+      description: description.text
     });
     setDraftTest(null);
     setEditing(agent.id);
@@ -391,8 +405,12 @@ function AdminA2aAgentsPage() {
   // The request body shared by save() and the in-dialog test probe.
   const buildBody = () => ({
     ...form,
-    name: form.name ? { en: form.name } : undefined,
-    description: form.description ? { en: form.description } : undefined,
+    name: mergeLocalizedText(storedTexts?.name, form.name, storedTexts?.nameLang),
+    description: mergeLocalizedText(
+      storedTexts?.description,
+      form.description,
+      storedTexts?.descriptionLang
+    ),
     allowedSkills: allowedSkillList(form.allowedSkills)
   });
 
@@ -633,7 +651,7 @@ function AdminA2aAgentsPage() {
                   <p className="mt-1 text-xs text-gray-500 dark:text-gray-400">
                     {t(
                       'admin.a2a.agents.form.idHint',
-                      'Tools of this agent are named a2a__<id>__<skill>; apps enable the agent by this id.'
+                      'Letters, digits, _ and - only (no __). Tools of this agent are named a2a__<id>__<skill>; apps enable the agent by this id, so it must differ from every tool and MCP server id.'
                     )}
                   </p>
                 </div>

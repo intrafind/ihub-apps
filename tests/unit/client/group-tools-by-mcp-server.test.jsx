@@ -153,6 +153,36 @@ describe('groupToolsByMcpServer', () => {
       expect(grouped.map(g => g.id)).toEqual(['a2a-x', 'mcp-x']);
     });
 
+    test('a bare id shared by an agent and an MCP server is the MCP server', () => {
+      const tools = [
+        { id: 'a2a__x__ask', _a2a: { agentId: 'x', agentName: 'Agent X', idConflict: true } },
+        { id: 'x__tool', _mcp: { serverId: 'x', serverName: 'Server X' } }
+      ];
+      // Whatever order the tools load in, the reference means the server.
+      for (const list of [tools, [...tools].reverse()]) {
+        expect(groupToolsByMcpServer(['x'], list, localize).grouped).toEqual([
+          { id: 'mcp-x', name: 'Server X', matchedTools: ['x'] }
+        ]);
+      }
+    });
+
+    test('an agent whose id clashes with a local tool is not enabled by that id', () => {
+      const tools = [
+        {
+          id: 'a2a__jira__ask',
+          _a2a: { agentId: 'jira', agentName: 'Jira agent', idConflict: true }
+        },
+        { id: 'jira_searchTickets' }
+      ];
+      const { grouped, individual } = groupToolsByMcpServer(['jira'], tools, localize);
+      expect(grouped).toEqual([]);
+      expect(individual).toEqual(['jira']);
+      // By its tool id the agent still gets its own toggle.
+      expect(groupToolsByMcpServer(['a2a__jira__ask'], tools, localize).grouped).toEqual([
+        { id: 'a2a-jira', name: 'Jira agent', matchedTools: ['a2a__jira__ask'] }
+      ]);
+    });
+
     test('the literal reference "a2a" is not a base id for every agent', () => {
       const { grouped, individual } = groupToolsByMcpServer(['a2a'], a2aTools, localize);
       expect(grouped).toEqual([]);
@@ -187,5 +217,19 @@ describe('collapseMcpTools', () => {
     expect(collapseMcpTools(tools, localize)).toEqual([
       { id: 'langdock', name: 'Langdock', description: '', a2aAgent: true }
     ]);
+  });
+});
+
+describe('collapseMcpTools with a clashing agent id', () => {
+  test('offers the skills of an agent marked idConflict one by one', () => {
+    const tools = [
+      { id: 'x__tool', _mcp: { serverId: 'x', serverName: 'Server X' } },
+      { id: 'a2a__x__ask', _a2a: { agentId: 'x', agentName: 'Agent X', idConflict: true } },
+      { id: 'a2a__x__sum', _a2a: { agentId: 'x', agentName: 'Agent X', idConflict: true } }
+    ];
+    const entries = collapseMcpTools(tools, localize);
+    expect(entries.map(e => e.id)).toEqual(['x', 'a2a__x__ask', 'a2a__x__sum']);
+    // No two picker entries share an id (they would share a React key and a checkbox).
+    expect(new Set(entries.map(e => e.id)).size).toBe(entries.length);
   });
 });
