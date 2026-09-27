@@ -640,9 +640,13 @@ describe('message/stream', () => {
   });
 });
 
-describe('legacy draft methods', () => {
-  it('agent/info still answers', async () => {
-    const r = await dispatchA2A(rpc('agent/info'), ctx());
-    expect(r.result.name).toBe('ihub-apps');
+describe('pre-0.3 draft methods', () => {
+  it('are no longer answered', async () => {
+    for (const method of ['agent/info', 'agent/skills', 'tasks/send']) {
+      const r = await dispatchA2A(rpc(method, { skillId: 'app__chat', input: {} }), ctx());
+      expect(r.error.code).toBe(A2A_ERRORS.METHOD_NOT_FOUND);
+    }
+    expect(invokeApp).not.toHaveBeenCalled();
+    expect(runTool).not.toHaveBeenCalled();
   });
 });

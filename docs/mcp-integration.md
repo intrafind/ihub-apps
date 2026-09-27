@@ -253,7 +253,7 @@ view for such a call. The MCP App routes answer an unconnected server with
 
 The calling user is always the authenticated one. Every entry point that
 turns a request into tool parameters — `POST /api/tools/:toolId`, A2A
-`tasks/send` and `message/send`, the inbound MCP gateway — drops `user`,
+`message/send` and `message/stream`, the inbound MCP gateway — drops `user`,
 `chatId`, `appConfig` and iHub's other context keys from the caller's input
 and sets them itself, so no request can name another user and run a tool
 with their token. Callers without a signed-in user — the inbound MCP
@@ -1500,12 +1500,11 @@ its OAuth client, whose groups grant apps but no workflows, so workflow skills
 appear for user tokens and personal API keys only. Every task is logged
 (`component: A2A`) with its skill and caller.
 
-### Deprecated draft methods
-
-`agent/info`, `agent/skills` and `tasks/send` — the pre-0.3 draft iHub
-implemented first — are still answered so existing callers keep working, but
-are deprecated in favour of the Agent Card, `message/send` and `tasks/get`, and
-will be removed in a later release.
+The pre-0.3 draft methods iHub implemented first (`agent/info`,
+`agent/skills`, `tasks/send`) are no longer answered; they return `-32601`
+(method not found). Use the Agent Card, `message/send` and `tasks/get`
+instead. A2A skills are apps and workflows only: raw iHub tools are available
+through the MCP gateway (`/mcp`), not through A2A.
 
 Discovery: `/mcp/.well-known` advertises `a2a_endpoint` when enabled.
 
