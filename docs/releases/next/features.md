@@ -64,3 +64,19 @@ from outside just through MCP `tools/call`, without streaming and without its to
   caller's history.
 - Documented in the new **App API** page of the docs and in the running server's API docs.
 
+
+## A2A: Connect Remote Agents as Tools
+
+Admins can now connect remote agents that speak the Agent-to-Agent protocol (A2A 0.3) — a
+Langdock agent, an agent built with Google ADK, another iHub — under **Admin → Integrations → A2A
+agents**. Each skill on the agent's Agent Card becomes a tool; apps enable the agent as a whole in
+the app editor's new **Remote A2A agents** list, and users see it as one entry in the chat's tool
+menu.
+
+- Add an agent by its Agent Card URL; authenticate with an API key (the header the card names, e.g.
+  `X-API-Key`), a bearer token or OAuth client credentials from the credential store.
+- **Test connection** shows the card and its skills; choose which skills apps may use.
+- Answers stream when the agent supports it and show its progress in the chat; long-running tasks
+  are polled and cancelled after the agent's timeout (default 60 s).
+- Follow-up calls from the same chat continue the conversation with the agent.
+- Every user of an agent shares its configured credential; per-user sign-in is not available yet.

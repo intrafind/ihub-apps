@@ -164,6 +164,7 @@ const AdminMcpServersPage = lazyWithRetry(
 const AdminMcpGatewayPage = lazyWithRetry(
   () => import('./features/admin/pages/AdminMcpGatewayPage')
 );
+const AdminA2aAgentsPage = lazyWithRetry(() => import('./features/admin/pages/AdminA2aAgentsPage'));
 const AdminCredentialsPage = lazyWithRetry(
   () => import('./features/admin/pages/AdminCredentialsPage')
 );
@@ -668,6 +669,9 @@ function App() {
               path="mcp/gateway"
               element={<LazyAdminRoute component={AdminMcpGatewayPage} />}
             />
+
+            {/* A2A (remote agents as tools) */}
+            <Route path="a2a/agents" element={<LazyAdminRoute component={AdminA2aAgentsPage} />} />
             <Route
               path="credentials"
               element={<LazyAdminRoute component={AdminCredentialsPage} />}

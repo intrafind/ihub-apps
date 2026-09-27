@@ -217,6 +217,9 @@ function isToolAllowed(tool, expose, visibleToolIds) {
   // that would proxy another server's tools (and their credentials) to inbound
   // callers. loadConfiguredTools already excludes these, but guard anyway.
   if (tool._mcp) return false;
+  // Likewise for skills of remote A2A agents (#2546): iHub is their client,
+  // not a proxy that hands its agent credentials to inbound callers.
+  if (tool._a2a) return false;
   return toolVisibleInSet(tool.id, visibleToolIds);
 }
 

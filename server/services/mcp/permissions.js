@@ -71,11 +71,17 @@ export async function getVisibleToolIds(user, platform) {
  * @param {Set<string>} visibleSet
  * @param {string} [mcpServerId] - Owning server of a tool discovered from an
  *   MCP server; an app that references the server by id sees all its tools.
+ * @param {string} [a2aAgentId] - Owning agent of a remote A2A agent's skill;
+ *   an app or group that references the agent by id sees all its skills.
  */
-export function toolVisibleInSet(toolId, visibleSet, mcpServerId) {
+export function toolVisibleInSet(toolId, visibleSet, mcpServerId, a2aAgentId) {
   if (!(visibleSet instanceof Set)) return false;
   if (visibleSet.has('*')) return true;
-  const tool = { id: toolId, ...(mcpServerId ? { _mcp: { serverId: mcpServerId } } : {}) };
+  const tool = {
+    id: toolId,
+    ...(mcpServerId ? { _mcp: { serverId: mcpServerId } } : {}),
+    ...(a2aAgentId ? { _a2a: { agentId: a2aAgentId } } : {})
+  };
   return isToolSelected(tool, visibleSet);
 }
 

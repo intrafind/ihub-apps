@@ -13,9 +13,10 @@ import { getA2aTaskStore, taskStatus } from './a2aTaskStore.js';
 
 // Tools that are surfaced as their own A2A skill kinds (apps/workflows) or
 // that wrap filesystem access (skill meta-tools) must never be invocable as
-// a raw tool via A2A. Mirrors McpServerService.isToolAllowed.
+// a raw tool via A2A. Mirrors McpServerService.isToolAllowed. Tools of outbound
+// MCP servers (`_mcp`) and remote A2A agents (`_a2a`) are never re-exported.
 function isRawToolExposable(tool) {
-  if (!tool || tool._mcp) return false;
+  if (!tool || tool._mcp || tool._a2a) return false;
   if (tool.id?.startsWith('workflow_')) return false;
   if (tool.id?.startsWith('source_')) return false;
   if (tool.id === 'activate_skill' || tool.id === 'read_skill_resource') return false;

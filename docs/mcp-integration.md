@@ -1180,6 +1180,9 @@ component, so `npm run logs` shows the reason a client was turned away.
 
 ## Agent-to-Agent (A2A) — iHub as an A2A agent
 
+iHub can also call remote agents: an A2A agent's skills can be connected as tools that apps use
+(Admin → Integrations → A2A agents). See [Remote A2A agents as tools](a2a-agents.md).
+
 Set `platform.mcpServer.a2a.enabled: true` (Admin → MCP gateway → **A2A**)
 and iHub becomes an [A2A 0.3](https://a2a-protocol.org) agent: its apps and
 workflows are the agent's **skills**, callable from any A2A client (the
