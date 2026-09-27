@@ -1389,7 +1389,10 @@ therefore either get a per-skill card URL, or the administrator sets a default.
 **Conversations.** A Task's `contextId` identifies the conversation; send the
 next message with the same `contextId` (and no `taskId`) and the app receives
 the earlier exchange as history. Contexts belong to the caller who created
-them and are kept for seven days.
+them and are kept for seven days. Two callers that pick the same `contextId`
+(for example `default`) get two separate conversations. An error that happens
+before a `message/stream` starts, such as an unknown skill, arrives as a single
+SSE frame with `event: error`, as with the reference A2A server.
 
 Permissions are those of the caller: the gateway's **Exposed resources**
 toggles, the token's scopes and the caller's groups decide which apps and

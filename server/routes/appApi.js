@@ -182,6 +182,16 @@ function messageText(message) {
  * parts and uploaded attachment ids — into the chat's `imageData` /
  * `fileData` lists.
  */
+function assertInlineSize(buffer) {
+  if (buffer.length > MAX_ATTACHMENT_BYTES) {
+    throw new ApiError(
+      413,
+      'FILE_TOO_LARGE',
+      `The file exceeds ${MAX_ATTACHMENT_BYTES / (1024 * 1024)} MB`
+    );
+  }
+}
+
 async function resolveMessageFiles(message, { user, store }) {
   const imageData = [];
   const fileData = [];
@@ -211,6 +221,7 @@ async function resolveMessageFiles(message, { user, store }) {
           'image_url must be a data: URL (remote image URLs are not fetched)'
         );
       }
+      assertInlineSize(decoded.buffer);
       inlineIndex += 1;
       const ext = decoded.mimeType.split('/').pop() || 'png';
       take(
@@ -233,6 +244,7 @@ async function resolveMessageFiles(message, { user, store }) {
           'file.file_data must be a data: URL, or pass file.file_id of an uploaded attachment'
         );
       }
+      assertInlineSize(decoded.buffer);
       take(
         await processAttachment({
           buffer: decoded.buffer,

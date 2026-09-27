@@ -17,6 +17,12 @@ import * as pdfjs from 'pdfjs-dist/legacy/build/pdf.mjs';
 
 /** Largest document text kept, in characters — beyond this the rest is dropped. */
 export const MAX_DOCUMENT_CHARS = 2_000_000;
+/**
+ * Pages read from one PDF. Near-empty pages never reach MAX_DOCUMENT_CHARS,
+ * so without a page cap a crafted PDF with tens of thousands of blank pages
+ * would keep the text extraction busy for its whole page count.
+ */
+export const MAX_PDF_PAGES = 2_000;
 
 const IMAGE_TYPES = new Set(['image/png', 'image/jpeg', 'image/gif', 'image/webp']);
 
@@ -115,7 +121,8 @@ export async function extractPdfText(buffer) {
   try {
     const pages = [];
     let total = 0;
-    for (let n = 1; n <= doc.numPages; n++) {
+    const lastPage = Math.min(doc.numPages, MAX_PDF_PAGES);
+    for (let n = 1; n <= lastPage; n++) {
       const page = await doc.getPage(n);
       const content = await page.getTextContent();
       const text = content.items

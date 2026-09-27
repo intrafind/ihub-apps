@@ -134,7 +134,8 @@ curl https://ihub.example.com/api/v1/apps/chat/chat/completions \
 - Attachments count only on the **last** user message of the request. Tools that take files
   (MCP file inputs) receive the uploaded bytes.
 - Inline alternatives: an `image_url` part or a `file` part with `file_data`, both as `data:`
-  URLs, need no upload step.
+  URLs, need no upload step. The same 20 MB limit applies to each inline file (`413`,
+  `FILE_TOO_LARGE`). Text is read from the first 2,000 pages of a PDF.
 
 ## Stored conversations
 

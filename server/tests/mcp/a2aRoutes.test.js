@@ -256,7 +256,7 @@ describe('POST /a2a', () => {
     expect(text).toBe('Hi there');
   });
 
-  it('answers a message/stream that fails before streaming with a JSON error', async () => {
+  it('answers a message/stream that fails before streaming with one SSE error frame', async () => {
     const res = await request(app)
       .post('/a2a')
       .set('Authorization', 'Bearer good')
@@ -267,8 +267,12 @@ describe('POST /a2a', () => {
         params: { message: message('hello', { skillId: 'app__nope' }) }
       });
     expect(res.status).toBe(200);
-    expect(res.headers['content-type']).toMatch(/json/);
-    expect(res.body.error.code).toBe(-32602);
+    expect(res.headers['content-type']).toMatch(/text\/event-stream/);
+    const frames = res.text.split('\n\n').filter(Boolean);
+    expect(frames).toHaveLength(1);
+    expect(frames[0]).toMatch(/^id: \d+\nevent: error\ndata: /);
+    const payload = JSON.parse(frames[0].split('data: ')[1]);
+    expect(payload).toMatchObject({ jsonrpc: '2.0', id: 3, error: { code: -32602 } });
   });
 
   it('refuses message/stream inside a batch and still answers the rest', async () => {
