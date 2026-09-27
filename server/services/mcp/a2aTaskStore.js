@@ -20,7 +20,7 @@
  *
  * @module services/mcp/a2aTaskStore
  */
-import { randomUUID } from 'crypto';
+import { createHash, randomUUID } from 'crypto';
 import { getStorage, readFacet } from '../../storage/bootstrap.js';
 import { RUNTIME_NAMESPACES } from '../../storage/namespaces.js';
 import { publish, subscribe } from '../../clusterBus.js';
@@ -55,6 +55,24 @@ const CANCEL_CHANNEL = 'a2a:cancel';
  */
 export function isFinalTaskState(state) {
   return FINAL_TASK_STATES.includes(state);
+}
+
+/**
+ * Storage key of a context. `contextId` is chosen by the caller, so two
+ * principals may pick the same one ("default", "support"); keying by owner
+ * and context keeps their conversations apart instead of one overwriting the
+ * other. The digest also keeps the key path-safe and of fixed length.
+ *
+ * @param {string} contextId
+ * @param {string} ownerId
+ * @returns {string}
+ */
+export function contextStorageKey(contextId, ownerId) {
+  const digest = createHash('sha256')
+    .update(`${ownerId}\u0000${contextId}`)
+    .digest('hex')
+    .slice(0, 40);
+  return `ctx_${digest}`;
 }
 
 /** Insert or refresh `key`, dropping the oldest entries past the cap. */
@@ -241,14 +259,16 @@ export class A2aTaskStore {
    */
   async getContext(contextId, ownerId) {
     if (typeof contextId !== 'string' || !contextId) return null;
-    let context = this.contexts.get(contextId) || null;
+    if (typeof ownerId !== 'string' || !ownerId) return null;
+    const key = contextStorageKey(contextId, ownerId);
+    let context = this.contexts.get(key) || null;
     const documents = this._docs();
     if (documents) {
       try {
-        const doc = await documents.get(A2A_CONTEXTS_NAMESPACE, contextId);
+        const doc = await documents.get(A2A_CONTEXTS_NAMESPACE, key);
         if (doc?.data?.contextId) {
           context = doc.data;
-          remember(this.contexts, contextId, context);
+          remember(this.contexts, key, context);
         }
       } catch (error) {
         logger.warn('A2A context read failed; using in-memory copy', {
@@ -258,7 +278,7 @@ export class A2aTaskStore {
         });
       }
     }
-    if (!context || context.ownerId !== ownerId) return null;
+    if (!context || context.ownerId !== ownerId || context.contextId !== contextId) return null;
     return context;
   }
 
@@ -285,11 +305,12 @@ export class A2aTaskStore {
       history: [...(existing.history || []), ...messages].slice(-MAX_CONTEXT_HISTORY),
       updatedAt: this.now()
     };
-    remember(this.contexts, contextId, context);
+    const key = contextStorageKey(contextId, ownerId);
+    remember(this.contexts, key, context);
     const documents = this._docs();
     if (documents) {
       try {
-        await documents.put(A2A_CONTEXTS_NAMESPACE, contextId, context, { ownerId });
+        await documents.put(A2A_CONTEXTS_NAMESPACE, key, context, { ownerId });
       } catch (error) {
         logger.warn('A2A context write failed; context is visible on this worker only', {
           component: COMPONENT,

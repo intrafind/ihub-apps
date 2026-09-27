@@ -104,7 +104,19 @@ jest.unstable_mockModule('../services/loop/runIdentity.js', () => ({
 }));
 // The route's default ChatService is replaced per test; keep its import graph
 // (adapters, request builder, …) out of this suite.
-jest.unstable_mockModule('../services/chat/ChatService.js', () => ({ default: {} }));
+// It is a class the route instantiates when no chatService is passed; that
+// default instance delegates to `defaultService`, so a test can drive it.
+let defaultService = null;
+jest.unstable_mockModule('../services/chat/ChatService.js', () => ({
+  default: class {
+    prepareChatRequest(...args) {
+      return defaultService.prepareChatRequest(...args);
+    }
+    runTurn(...args) {
+      return defaultService.runTurn(...args);
+    }
+  }
+}));
 jest.unstable_mockModule('../services/loop/LLMClient.js', () => ({
   usageToOpenAI: usage => ({
     prompt_tokens: usage.promptTokens,
@@ -165,11 +177,11 @@ function fakeChatService({
   };
 }
 
-function buildApp(chatService, attachmentStore) {
+function buildApp(chatService, attachmentStore, { jsonLimit = '10mb' } = {}) {
   const app = express();
-  app.use(express.json({ limit: '10mb' }));
+  app.use(express.json({ limit: jsonLimit }));
   registerAppApiRoutes(app, {
-    chatService,
+    ...(chatService ? { chatService } : {}),
     getLocalizedError: async key => `localized:${key}`,
     DEFAULT_TIMEOUT: 1000,
     attachmentStore
@@ -493,6 +505,49 @@ describe('POST /api/v1/apps/:appId/chat/completions', () => {
     });
     expect(remote.status).toBe(400);
     expect(remote.body.code).toBe('IMAGE_URL_NOT_SUPPORTED');
+  });
+});
+
+describe('App API defaults', () => {
+  it('runs requests through a ChatService instance when none is injected', async () => {
+    defaultService = fakeChatService();
+    const res = await asAlice(
+      request(buildApp(null)).post('/api/v1/apps/chat/chat/completions')
+    ).send({
+      messages: [userMessage('hi')]
+    });
+    expect(res.status).toBe(200);
+    expect(res.body.choices[0].message.content).toBe('Hello from the app');
+    expect(defaultService.prepareChatRequest).toHaveBeenCalledTimes(1);
+    expect(defaultService.runTurn).toHaveBeenCalledTimes(1);
+    defaultService = null;
+  });
+
+  it('applies the upload size limit to inline data URLs too', async () => {
+    const service = fakeChatService();
+    const store = new ApiAttachmentStore({ documents: null, blobs: null });
+    const app = buildApp(service, store, { jsonLimit: '40mb' });
+    const big = Buffer.alloc(20 * 1024 * 1024 + 1, 0x61).toString('base64');
+    const file = await asAlice(request(app).post('/api/v1/apps/chat/chat/completions')).send({
+      messages: [
+        userMessage([
+          { type: 'text', text: 'read' },
+          {
+            type: 'file',
+            file: { filename: 'big.txt', file_data: `data:text/plain;base64,${big}` }
+          }
+        ])
+      ]
+    });
+    expect(file.status).toBe(413);
+    expect(file.body.code).toBe('FILE_TOO_LARGE');
+    const image = await asAlice(request(app).post('/api/v1/apps/chat/chat/completions')).send({
+      messages: [
+        userMessage([{ type: 'image_url', image_url: { url: `data:image/png;base64,${big}` } }])
+      ]
+    });
+    expect(image.status).toBe(413);
+    expect(service.prepareChatRequest).not.toHaveBeenCalled();
   });
 });
 
