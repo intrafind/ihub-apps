@@ -9,6 +9,10 @@ but stayed empty (a blank map, an empty ticket panel or diagram). The Langdock C
 servers (draw.io, Google Maps, ArcGIS, ServiceNow) are examples of this style.
 
 - Spec-compliant views behave exactly as before; a view never receives its data twice.
+- Views whose server bakes the data into the page — the tool result embeds the tool's own declared
+  `ui://` resource with the data in its HTML, as the ServiceNow ticket panel does — now render that
+  embedded copy instead of the empty static page. It gets the same sandbox and content security
+  policy; an embedded page under a different URI, or too large to render, is not used.
 - Each use of the fallback is logged with `component: McpApps` and `handshake: legacy`, naming
   the server and tool, so admins can see which servers still rely on it.
 - A view that loads external scripts (maps, CDN libraries) still has to declare those origins in

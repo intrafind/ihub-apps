@@ -226,6 +226,30 @@ describe('view payload', () => {
     });
   });
 
+  it('keeps an embedded view resource in the result the browser gets', () => {
+    // The Langdock cookbook ServiceNow `render_ticket` shape: the declared
+    // resource embedded with its data baked into the HTML. The client renders
+    // that copy (features/chat/mcpApps/embeddedViewHtml.js), so it must reach
+    // the view descriptor unchanged.
+    const embedded = {
+      type: 'resource',
+      resource: {
+        uri: 'ui://s/a',
+        mimeType: MCP_APP_MIME_TYPE,
+        text: '<html><head><script>window.TICKET_DATA = {};</script></head></html>'
+      }
+    };
+    const view = buildViewDescriptor({
+      callId: 'c1',
+      toolId: 's__draw',
+      mcp,
+      args: {},
+      toolResult: toViewToolResult({ content: [{ type: 'text', text: 'Opened' }, embedded] })
+    });
+    expect(view.payloadOmitted).toBeUndefined();
+    expect(view.toolResult.content[1]).toEqual(embedded);
+  });
+
   it('omits a payload too large to ship', () => {
     const view = buildViewDescriptor({
       callId: 'c1',
