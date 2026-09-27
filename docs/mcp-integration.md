@@ -98,15 +98,157 @@ The `auth` block on a server entry supports:
 - `{ "type": "oauth", "tokenUrl": "...", "clientId": "...", "clientSecretRef": "..." }`
   — OAuth client credentials: iHub fetches a token and refreshes it before
   it expires.
+- `{ "type": "oauthUser", "scopes": ["..."] }` — every user signs in with
+  their own account; see [Per-user sign-in](#per-user-sign-in-oauthuser).
 
 Every `*Ref` field names a profile in the central credential store
 (**Admin → Credentials**, `contents/config/credentials.json`). The secret
 is encrypted at rest there and resolved only when the connection is
 opened, so `mcpServers.json` never holds secret material.
 
-There is no per-user sign-in yet: every user of a server shares the one
-credential configured for it. Servers that only accept an interactive
-OAuth login for each user cannot be connected today.
+With every type except `oauthUser`, all users of a server share the one
+credential configured for it. Servers that only accept an interactive OAuth
+login for each user use `oauthUser`: each user connects their own account and
+the server's tools act as that user.
+
+### Per-user sign-in (`oauthUser`)
+
+Some MCP servers act as the person using them — "who am I", "my tickets",
+"my calendar" — and accept no shared credential: every user signs in at the
+server's own authorization server. With `auth.type: "oauthUser"` iHub runs
+that sign-in for each user (OAuth 2.1 authorization code with PKCE, as the
+MCP authorization specification describes) and keeps one set of tokens per
+user and server.
+
+```jsonc
+{
+  "id": "okta",
+  "name": "Okta directory",
+  "transport": { "type": "streamableHttp", "url": "https://okta-mcp.example.com/mcp" },
+  "auth": {
+    "type": "oauthUser",
+    // Optional. Default: the scopes the server's metadata advertises.
+    "scopes": ["openid", "profile", "email"]
+    // Optional, only for a client registered by hand at the authorization server:
+    // "clientId": "ihub", "clientSecretRef": "okta-mcp-client-secret",
+    // Optional, when the server does not advertise its authorization server:
+    // "authorizationServer": "https://login.example.com"
+  }
+}
+```
+
+Only the `streamableHttp` and `sse` transports support it.
+
+**Discovery.** When a user connects, iHub reads the server's protected-resource
+metadata (RFC 9728, `/.well-known/oauth-protected-resource`) to find its
+authorization server, then that server's metadata (RFC 8414
+`/.well-known/oauth-authorization-server`, or OpenID Connect discovery). A
+server without RFC 9728 metadata is treated as its own authorization server
+(its origin). `authorizationServer` skips the first step.
+
+**How iHub identifies itself**, in this order:
+
+1. A pre-registered client from the config (`clientId`, plus
+   `clientSecretRef` for a confidential client).
+2. iHub's Client ID Metadata Document, when the authorization server
+   advertises `client_id_metadata_document_supported` and iHub's public URL
+   is https. The document is served unauthenticated at
+   `GET /api/mcp/oauth/client-metadata.json`; its URL is the client id. It
+   declares a public client (`token_endpoint_auth_method: none`) with the
+   authorization-code and refresh-token grants and one redirect URI.
+3. Dynamic client registration (RFC 7591) at the server's
+   `registration_endpoint`.
+
+The registration is made once per server and reused for every user. It is
+stored in the storage provider (namespace `mcp-oauth-clients`, a client
+secret encrypted with the installation key) and dropped when the server's URL
+or auth block changes, or when the authorization server answers
+`invalid_client`.
+
+**Callback URL and public URL.** The redirect URI iHub registers is
+`<public URL>/api/mcp/oauth/callback`. The public URL is the MCP gateway's
+**Public URL** (`platform.mcpServer.publicUrl`) when it is set, else it is
+derived from the request (`X-Forwarded-Proto` / `X-Forwarded-Host` and the
+base path). **Behind a reverse proxy, set the Public URL**: the redirect URI
+must stay the same between the sign-in and every later token request, and an
+authorization server that checks redirect URIs rejects a different one. For a
+client registered by hand, register exactly that callback URL.
+
+**Tokens.** A user's tokens are stored encrypted (AES-256-GCM, installation
+key `contents/.encryption-key`) in
+`contents/integrations/mcp/<userId>__<serverId>.json`; user ids with
+characters outside `A-Z a-z 0-9 . _ @ + -` are filed under a hash
+(`u_<32 hex>`), with the real id inside the encrypted file. Tokens are never
+logged. An expired access token is refreshed with the refresh token when the
+server rejects it; a refresh the authorization server refuses deletes the
+tokens, and the user is asked to connect again.
+
+**Tool catalog.** `tools/list` on such a server needs a token, so iHub keeps
+one catalog per server: the tool list of the most recent successful listing
+of any user's connection. It is stored (namespace `mcp-tool-catalog`) so it
+survives restarts and is shared by all workers, and it is what the chat, the
+app editor and the gateway see — no connection is opened for that. A server
+nobody has connected yet offers no tools: connect it once, typically as the
+admin with **Test connection** or under **Settings → Integrations**.
+
+**Using the tools.** Every call runs on the calling user's own connection. A
+user who has not connected the server gets a structured result instead of a
+call:
+
+```json
+{
+  "error": "MCP_AUTH_REQUIRED",
+  "message": "Connect Okta directory to use this tool: /api/mcp/oauth/authorize?serverId=okta",
+  "authRequired": { "serverId": "okta", "serverName": "Okta directory", "connectUrl": "/api/mcp/oauth/authorize?serverId=okta" }
+}
+```
+
+The model sees the message; the chat shows a **Connect** card under the
+answer. Connect opens the server's sign-in and returns to the chat, where the
+card shows the server as connected; the user then sends the request again.
+The card is stored with the answer, so it is still there after the redirect.
+
+Callers without a signed-in user — the inbound MCP gateway, A2A, workflows
+started without a user — get the same result. iHub never uses another user's
+token.
+
+**Settings → Integrations** lists the per-user servers the user may use (an
+app they can open offers the server or one of its tools; admins see all)
+with **Connect** and **Disconnect**. Disconnect revokes the tokens at the
+authorization server's `revocation_endpoint` when it has one (RFC 7009, best
+effort) and deletes them.
+
+**Admins** see how many users connected each per-user server on
+**Admin → MCP servers**. **Test connection** uses the admin's own account;
+without one it offers **Connect my account**.
+
+**Security notes.**
+
+- The OAuth `state` is a signed ticket (HMAC-SHA256 with the platform's JWT
+  secret, 15 minutes) that names the user who started the sign-in; the
+  callback refuses it in anyone else's session.
+- The PKCE (S256) verifier travels inside that ticket encrypted with the
+  installation key; it never leaves iHub in clear text.
+- The authorization request carries the RFC 8707 `resource` indicator (the
+  MCP server's URL, or the resource its metadata names).
+- Discovery, registration, token and revocation requests use the same
+  SSRF-guarded `safeFetch` as the MCP connection (`security.allowedHosts`,
+  `security.blockPrivateIps`).
+- The return URL is checked like every other OAuth return URL (same host or
+  a relative path); errors come back as fixed codes
+  (`?mcp_error=oauth_failed|missing_code|invalid_state|state_expired|user_mismatch|server_not_found|exchange_failed|discovery_failed|registration_failed`),
+  never as text from the authorization server.
+
+Routes:
+
+- `GET /api/mcp/oauth/authorize?serverId=&returnUrl=` — start a sign-in (302).
+- `GET /api/mcp/oauth/callback` — the redirect URI.
+- `GET /api/mcp/oauth/connections` — the caller's per-user servers and their state.
+- `POST /api/mcp/oauth/disconnect` `{ "serverId": "…" }`.
+- `GET /api/mcp/oauth/client-metadata.json` — iHub's Client ID Metadata Document.
+- `GET /api/admin/mcp/servers/:id/connections` and
+  `DELETE /api/admin/mcp/servers/:id/connections/:userId` — admin view and
+  disconnect.
 
 ### Security
 
@@ -389,7 +531,13 @@ where a view was without running it.
   in a secret field preserves the existing encrypted value.
 - `DELETE /api/admin/mcp/servers/:id`.
 - `POST /api/admin/mcp/servers/:id/test` — drop the cached connection,
-  reconnect, run `tools/list`, return the resulting status.
+  reconnect, run `tools/list`, return the resulting status. For an
+  `oauthUser` server this runs on the acting admin's own connection (and
+  refreshes the server's tool catalog); without one it answers
+  `{ "status": "auth_required", "connectUrl": "…" }`.
+- `GET /api/admin/mcp/servers/:id/connections` /
+  `DELETE /api/admin/mcp/servers/:id/connections/:userId` — users connected
+  to an `oauthUser` server; disconnect one (revokes upstream when possible).
 - `GET /api/admin/mcp/catalog` — the built-in server catalog (see below),
   each entry flagged `installed` when a configured server already uses its
   id or URL.
@@ -405,8 +553,9 @@ saves; nothing is added until then.
 
 The catalog ships with iHub (`server/services/mcp/serverCatalog.js`), so it
 updates with each release and needs no configuration. Servers that only
-support an interactive OAuth login for each user are not listed: iHub has
-no per-user outbound OAuth yet.
+support an interactive OAuth login for each user are not listed yet; they can
+be added by hand with `auth.type: "oauthUser"` (see
+[Per-user sign-in](#per-user-sign-in-oauthuser)).
 
 draw.io and Excalidraw are MCP App servers (see [MCP Apps](#mcp-apps--interactive-views)):
 their tools return a view that renders in the chat. iHub already ships both

@@ -4288,6 +4288,22 @@
                 },
                 "required": ["serverId", "toolName", "resourceUri", "callId", "toolId"],
                 "additionalProperties": false
+              },
+              "authRequired": {
+                "type": "object",
+                "properties": {
+                  "serverId": {
+                    "type": "string"
+                  },
+                  "serverName": {
+                    "type": "string"
+                  },
+                  "connectUrl": {
+                    "type": "string"
+                  }
+                },
+                "required": ["serverId", "serverName", "connectUrl"],
+                "additionalProperties": false
               }
             },
             "required": ["step", "callId", "toolId", "name", "resultPreview"],

@@ -84,6 +84,22 @@ const authSchema = z
       // credentialRef to the client secret in the central credential store.
       clientSecretRef: z.string().min(1),
       scope: z.string().optional()
+    }),
+    z.object({
+      // Per-user sign-in: every user authorizes iHub at the server's
+      // authorization server (authorization code + PKCE) and gets their own
+      // tokens. iHub identifies itself with `clientId` when set (a client the
+      // admin pre-registered), else through its Client ID Metadata Document,
+      // else by dynamic client registration.
+      type: z.literal('oauthUser'),
+      scopes: z.array(z.string().min(1)).optional(),
+      clientId: z.string().min(1).optional(),
+      // credentialRef to the client secret of a pre-registered confidential
+      // client; a pre-registered public client needs only `clientId`.
+      clientSecretRef: z.string().min(1).optional(),
+      // Overrides RFC 9728 discovery when the server does not advertise its
+      // authorization server.
+      authorizationServer: z.string().url().startsWith('https://').optional()
     })
   ])
   .prefault({ type: 'none' });
@@ -115,55 +131,68 @@ const transportSchema = z.discriminatedUnion('type', [
   })
 ]);
 
-export const mcpServerConfigSchema = z.object({
-  id: idSchema,
-  name: z.union([localizedStringSchema, z.string().min(1)]),
-  description: z.union([localizedStringSchema, z.string()]).optional(),
-  enabled: z.boolean().prefault(true),
-  transport: transportSchema,
-  auth: authSchema.optional(),
-  // Tools surface with this prefix to keep multi-server names collision-free.
-  // Defaults to `<id>__` so a server named "github" with tool "search_repos"
-  // appears as "github__search_repos". An empty prefix also means the default.
-  toolPrefix: z
-    .string()
-    .regex(/^[a-zA-Z0-9_]*$/, 'toolPrefix may only contain alphanumeric or underscore characters')
-    .max(32)
-    .optional(),
-  // Allowlist patterns; "*" means all tools. Otherwise exact match.
-  allowedTools: z.array(z.string()).prefault(['*']),
-  // Hard timeout (ms) for `tools/call`; the client aborts past this.
-  timeoutMs: z.number().int().min(1000).max(600000).prefault(30000),
-  // Tool parameters declared with `format: "file"` receive a chat attachment
-  // of the current message as `{ fileName, mimeType, base64, size }`. The
-  // largest file handed over, per file input.
-  fileInputs: z
-    .object({
-      maxFileSizeMB: z.number().int().min(1).max(200).prefault(20)
-    })
-    .prefault({}),
-  // MCP Apps (extension `io.modelcontextprotocol/ui`): when enabled, iHub
-  // advertises the extension on connect and renders the interactive views the
-  // server's tools declare (`_meta.ui.resourceUri`) inline in the chat. When
-  // disabled the extension is not advertised, so a well-behaved server falls
-  // back to text-only results.
-  apps: z
-    .object({
-      enabled: z.boolean().prefault(true)
-    })
-    .prefault({}),
-  // Auto-reconnect window. After `maxRetries` failures the connection is
-  // marked unhealthy and excluded from `tools/list` aggregation.
-  reconnect: z
-    .object({
-      enabled: z.boolean().prefault(true),
-      maxRetries: z.number().int().min(0).max(20).prefault(5),
-      initialDelayMs: z.number().int().min(100).max(60000).prefault(1000),
-      maxDelayMs: z.number().int().min(1000).max(120000).prefault(30000),
-      growthFactor: z.number().min(1).max(5).prefault(1.5)
-    })
-    .prefault({})
-});
+export const mcpServerConfigSchema = z
+  .object({
+    id: idSchema,
+    name: z.union([localizedStringSchema, z.string().min(1)]),
+    description: z.union([localizedStringSchema, z.string()]).optional(),
+    enabled: z.boolean().prefault(true),
+    transport: transportSchema,
+    auth: authSchema.optional(),
+    // Tools surface with this prefix to keep multi-server names collision-free.
+    // Defaults to `<id>__` so a server named "github" with tool "search_repos"
+    // appears as "github__search_repos". An empty prefix also means the default.
+    toolPrefix: z
+      .string()
+      .regex(/^[a-zA-Z0-9_]*$/, 'toolPrefix may only contain alphanumeric or underscore characters')
+      .max(32)
+      .optional(),
+    // Allowlist patterns; "*" means all tools. Otherwise exact match.
+    allowedTools: z.array(z.string()).prefault(['*']),
+    // Hard timeout (ms) for `tools/call`; the client aborts past this.
+    timeoutMs: z.number().int().min(1000).max(600000).prefault(30000),
+    // Tool parameters declared with `format: "file"` receive a chat attachment
+    // of the current message as `{ fileName, mimeType, base64, size }`. The
+    // largest file handed over, per file input.
+    fileInputs: z
+      .object({
+        maxFileSizeMB: z.number().int().min(1).max(200).prefault(20)
+      })
+      .prefault({}),
+    // MCP Apps (extension `io.modelcontextprotocol/ui`): when enabled, iHub
+    // advertises the extension on connect and renders the interactive views the
+    // server's tools declare (`_meta.ui.resourceUri`) inline in the chat. When
+    // disabled the extension is not advertised, so a well-behaved server falls
+    // back to text-only results.
+    apps: z
+      .object({
+        enabled: z.boolean().prefault(true)
+      })
+      .prefault({}),
+    // Auto-reconnect window. After `maxRetries` failures the connection is
+    // marked unhealthy and excluded from `tools/list` aggregation.
+    reconnect: z
+      .object({
+        enabled: z.boolean().prefault(true),
+        maxRetries: z.number().int().min(0).max(20).prefault(5),
+        initialDelayMs: z.number().int().min(100).max(60000).prefault(1000),
+        maxDelayMs: z.number().int().min(1000).max(120000).prefault(30000),
+        growthFactor: z.number().min(1).max(5).prefault(1.5)
+      })
+      .prefault({})
+  })
+  // Per-user OAuth is an HTTP affair: the SDK's `authProvider` exists on the
+  // Streamable HTTP and SSE transports only.
+  .refine(
+    cfg =>
+      cfg.auth?.type !== 'oauthUser' ||
+      cfg.transport.type === 'streamableHttp' ||
+      cfg.transport.type === 'sse',
+    {
+      message: 'auth.type "oauthUser" requires a streamableHttp or sse transport',
+      path: ['auth', 'type']
+    }
+  );
 
 export const mcpServersFileSchema = z.object({
   servers: z.array(mcpServerConfigSchema).prefault([]),

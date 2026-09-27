@@ -10,6 +10,20 @@ import PersonalApiKeysCard from '../components/PersonalApiKeysCard';
 import ConnectedAppsCard from '../components/ConnectedAppsCard';
 import { getLocalizedContent } from '../../../utils/localizeContent';
 import { buildApiUrl } from '../../../utils/runtimeBasePath';
+import { buildMcpConnectUrl } from '../../chat/mcpApps/mcpConnectUrl';
+
+/** Stable error codes of the MCP sign-in callback (server/routes/mcpOAuth.js). */
+const MCP_ERROR_CODES = [
+  'oauth_failed',
+  'missing_code',
+  'invalid_state',
+  'state_expired',
+  'user_mismatch',
+  'server_not_found',
+  'exchange_failed',
+  'discovery_failed',
+  'registration_failed'
+];
 
 export default function IntegrationsPage() {
   const { t, i18n } = useTranslation();
@@ -32,6 +46,8 @@ export default function IntegrationsPage() {
   const [connectionOverview, setConnectionOverview] = useState(null);
   const [connectionBusy, setConnectionBusy] = useState(false);
   const [connectionPendingRevoke, setConnectionPendingRevoke] = useState(null);
+  // MCP servers with per-user sign-in the user may connect. Null until loaded.
+  const [mcpServers, setMcpServers] = useState(null);
 
   // Derive cloud storage providers from platform config
   const cloudStorage = platformConfig?.cloudStorage || { enabled: false, providers: [] };
@@ -61,6 +77,35 @@ export default function IntegrationsPage() {
         text: t('integrations.page.jira.connectionFailed', {
           message: decodeURIComponent(jiraError)
         })
+      });
+      navigate('/settings/integrations', { replace: true });
+    }
+
+    // Handle MCP server sign-in callbacks
+    const mcpConnected = params.get('mcp_connected');
+    const mcpError = params.get('mcp_error');
+    if (mcpConnected) {
+      // eslint-disable-next-line @eslint-react/set-state-in-effect
+      setMessage({
+        type: 'success',
+        text: t('integrations.page.mcp.connected', '{{name}} connected successfully.', {
+          name: mcpConnected
+        })
+      });
+      navigate('/settings/integrations', { replace: true });
+    } else if (mcpError) {
+      const code = MCP_ERROR_CODES.includes(mcpError) ? mcpError : 'oauth_failed';
+      // eslint-disable-next-line @eslint-react/set-state-in-effect
+      setMessage({
+        type: 'error',
+        text: t(
+          'integrations.page.mcp.connectionFailed',
+          'Connecting {{name}} failed: {{message}}',
+          {
+            name: params.get('mcp_server') || 'MCP',
+            message: t(`integrations.page.mcp.errors.${code}`, code)
+          }
+        )
       });
       navigate('/settings/integrations', { replace: true });
     }
@@ -145,6 +190,19 @@ export default function IntegrationsPage() {
           }
         } catch (err) {
           console.error('Error loading connections:', err);
+        }
+
+        // MCP servers with per-user sign-in visible to this user.
+        try {
+          const mcpResponse = await fetch(buildApiUrl('mcp/oauth/connections'), {
+            credentials: 'include'
+          });
+          if (mcpResponse.ok) {
+            const data = await mcpResponse.json();
+            setMcpServers(Array.isArray(data.servers) ? data.servers : []);
+          }
+        } catch (err) {
+          console.error('Error loading MCP connections:', err);
         }
 
         // Check cloud storage provider status dynamically
@@ -250,6 +308,60 @@ export default function IntegrationsPage() {
                 name: displayName,
                 message: error.message
               })
+      });
+    }
+  };
+
+  // MCP servers: Connect leaves for the server's sign-in and comes back here.
+  const handleMcpConnect = server => {
+    window.location.href = buildMcpConnectUrl(
+      server.serverId,
+      window.location.origin + window.location.pathname
+    );
+  };
+
+  const handleMcpDisconnect = async server => {
+    const name = getLocalizedContent(server.name, lang) || server.serverId;
+    try {
+      const response = await fetch(buildApiUrl('mcp/oauth/disconnect'), {
+        method: 'POST',
+        credentials: 'include',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ serverId: server.serverId })
+      });
+      const data = await response.json().catch(() => ({}));
+      if (!response.ok) {
+        setMessage({
+          type: 'error',
+          text: t(
+            'integrations.page.mcp.disconnectFailed',
+            'Failed to disconnect {{name}}: {{message}}',
+            {
+              name,
+              message: data.error || response.statusText
+            }
+          )
+        });
+        return;
+      }
+      setMcpServers(prev =>
+        (prev || []).map(s => (s.serverId === server.serverId ? { ...s, connected: false } : s))
+      );
+      setMessage({
+        type: 'success',
+        text: t('integrations.page.mcp.disconnected', '{{name}} disconnected', { name })
+      });
+    } catch (error) {
+      setMessage({
+        type: 'error',
+        text: t(
+          'integrations.page.mcp.disconnectFailed',
+          'Failed to disconnect {{name}}: {{message}}',
+          {
+            name,
+            message: error.message
+          }
+        )
       });
     }
   };
@@ -591,6 +703,45 @@ export default function IntegrationsPage() {
                   />
                 ))}
 
+                {/* MCP servers with per-user sign-in */}
+                {mcpServers?.length > 0 && (
+                  <div className="space-y-4">
+                    <div>
+                      <h2 className="text-lg font-semibold text-gray-900 dark:text-gray-100">
+                        {t('integrations.page.mcp.title', 'MCP servers')}
+                      </h2>
+                      <p className="text-sm text-gray-600 dark:text-gray-400">
+                        {t(
+                          'integrations.page.mcp.description',
+                          'Tools of these servers act with your own account. Connect a server to use its tools in chats.'
+                        )}
+                      </p>
+                    </div>
+                    {mcpServers.map(server => {
+                      const name = getLocalizedContent(server.name, lang) || server.serverId;
+                      return (
+                        <IntegrationCard
+                          key={server.serverId}
+                          icon="cube"
+                          iconBgClassName="bg-indigo-600"
+                          connectButtonClassName="bg-indigo-600 hover:bg-indigo-700"
+                          title={name}
+                          description={
+                            getLocalizedContent(server.description, lang) ||
+                            t('integrations.page.mcp.serverDescription', 'MCP server')
+                          }
+                          connected={!!server.connected}
+                          connectLabel={t('integrations.page.mcp.connect', 'Connect {{name}}', {
+                            name
+                          })}
+                          onConnect={() => handleMcpConnect(server)}
+                          onDisconnect={() => handleMcpDisconnect(server)}
+                        />
+                      );
+                    })}
+                  </div>
+                )}
+
                 {/* Office Integration — shown when enabled by admin */}
                 {officeEnabled && (
                   <div className="border border-gray-200 dark:border-gray-700 rounded-lg p-6">
@@ -677,6 +828,7 @@ export default function IntegrationsPage() {
                 {/* Empty state when no integrations are configured */}
                 {!jiraEnabled &&
                   cloudProviders.length === 0 &&
+                  !mcpServers?.length &&
                   !officeEnabled &&
                   !apiKeyOverview?.enabled &&
                   !connectionOverview?.enabled && (
@@ -694,6 +846,7 @@ export default function IntegrationsPage() {
                 {/* Placeholder for future integrations */}
                 {(jiraEnabled ||
                   cloudProviders.length > 0 ||
+                  mcpServers?.length > 0 ||
                   officeEnabled ||
                   apiKeyOverview?.enabled ||
                   connectionOverview?.enabled) && (

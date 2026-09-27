@@ -160,6 +160,20 @@ export const RUNTIME_NAMESPACES = Object.freeze({
    * by the attachment id and owned by the uploader.
    */
   apiAttachments: 'api-attachments',
+  /**
+   * OAuth client registrations of outbound `oauthUser` MCP servers, one
+   * document per server: how iHub identified itself at the server's
+   * authorization server (pre-registered, CIMD or DCR) and the discovery
+   * state, shared by every worker so any of them can refresh a user's token.
+   */
+  mcpOauthClients: 'mcp-oauth-clients',
+  /**
+   * Tool catalogs of outbound `oauthUser` MCP servers, one document per
+   * server: the tool list of the most recent successful `tools/list` of any
+   * user's connection, so the catalog survives restarts and needs no token
+   * to be read.
+   */
+  mcpToolCatalog: 'mcp-tool-catalog',
   /** One-time import markers, shared by every runtime store that has one. */
   runtimeImports: 'runtime-imports'
 });
