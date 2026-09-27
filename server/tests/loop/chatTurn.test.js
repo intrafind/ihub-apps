@@ -1089,6 +1089,46 @@ test("server tool with attachments: the message's attachments reach the tool as 
   assert.equal(summary.content, 'Done.');
 });
 
+test("passthrough workflow: _fileData carries no document bytes, only the document's text; images keep theirs", async t => {
+  const chatId = newChatId('passthrough-nobytes');
+  captureFrames(t, chatId);
+  const document = {
+    type: 'document',
+    fileName: 'brief.pdf',
+    fileType: 'application/pdf',
+    content: 'brief',
+    pageImages: [],
+    base64: 'data:application/pdf;base64,JVBERi0xLjQ='
+  };
+  const { service, runTool } = makeService(
+    [toolTurn([{ name: 'workflow_x', args: {} }]), toolTurn([{ name: 'workflow_x', args: {} }])],
+    { runTool: async () => 'plain answer' }
+  );
+
+  await runTurn(service, {
+    chatId,
+    prep: makePrep({ tools: [workflowTool], userFileData: [document] })
+  });
+  const [workflowFile] = runTool.calls[0][1]._fileData;
+  assert.equal(Object.hasOwn(workflowFile, 'base64'), false, 'the document bytes stay out');
+  assert.equal(workflowFile.content, 'brief', 'the extracted text is what the workflow reads');
+  assert.equal(workflowFile.fileName, 'brief.pdf');
+  assert.equal(document.base64.startsWith('data:'), true, "the message's own entry is untouched");
+
+  const image = { type: 'image', fileName: 'photo.png', base64: 'data:image/png;base64,iVBORw0=' };
+  const second = newChatId('passthrough-image');
+  captureFrames(t, second);
+  await runTurn(service, {
+    chatId: second,
+    prep: makePrep({ tools: [workflowTool], userFileData: image })
+  });
+  assert.equal(
+    runTool.calls[1][1]._fileData,
+    image,
+    'an image upload reaches the workflow as before'
+  );
+});
+
 test('passthrough without an upload: no _fileData is handed to the tool', async t => {
   const chatId = newChatId('passthrough-nofile');
   const frames = captureFrames(t, chatId);
