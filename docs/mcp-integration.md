@@ -315,11 +315,23 @@ case-insensitively.
   message of the calling user. That is the only place the bytes exist: a
   stored chat keeps a descriptor of each upload (type, name, size), never its
   contents. A file uploaded in an earlier turn has to be attached again.
+- **When the web client sends a document's bytes.** Only when the app offers
+  at least one tool with file inputs (and, at send time, that tool is enabled
+  for the turn in the chat's tools menu). In every other app a document travels
+  as its extracted text only, as it did before file inputs existed, so the
+  request does not grow by the ~1.37x of the base64. Images and audio always
+  carry their bytes, as before.
 - **Size.** `fileInputs.maxFileSizeMB` (per server, default 20, 1–200) caps
   one file; the admin form has the field next to the timeout. The web client
   sends a document's bytes only up to the app's document upload limit
-  (`upload.fileUpload.maxFileSizeMB`); a larger document travels as extracted
-  text only.
+  (`upload.fileUpload.maxFileSizeMB`), and the bytes of all documents of one
+  message only up to 60% of the platform's request body limit
+  (`requestBodyLimitMB`, default 50, so 30 MB of base64). A document beyond
+  either limit travels as extracted text only; the upload itself never fails
+  because of it. Earlier documents of the message keep their bytes first.
+- **Workflows.** Workflow tools (`_fileData`) receive a document's extracted
+  text and page images, never its bytes, so the upload does not double the
+  size of every workflow checkpoint. Images keep their base64 there as before.
 - **Text fallback.** A document without its bytes is delivered as the base64
   of its extracted text when its media type is `text/*`, under that type.
   Anything else fails with `MCP_FILE_UNAVAILABLE` ("re-attach the file").

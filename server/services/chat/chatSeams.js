@@ -17,6 +17,7 @@ import defaultInteractionService from '../loop/InteractionService.js';
 import defaultRunLog from '../loop/RunLog.js';
 import { buildQuestionPrompt } from '../loop/questionPrompt.js';
 import { buildViewDescriptor, toViewToolResult } from '../mcp/mcpApps.js';
+import { withoutDocumentBytes } from '../mcp/mcpFileInputs.js';
 
 /**
  * A clarification nobody answers expires after a day, so abandoned chats do
@@ -546,9 +547,11 @@ export function chatPassthroughOptions({
       const { runId: _modelRunId, ...args } = info.args || {};
       const params = { ...args, chatId, user, passthrough: true, appConfig: app };
       // Workflow tools receive the upload so their inputFiles mechanism can
-      // inject file content into agent node messages.
+      // inject file content into agent node messages. A document's bytes are
+      // for tools with file inputs only: workflows read its extracted text and
+      // page images, and the upload is copied into every state checkpoint.
       if (String(info.toolId).startsWith('workflow_') && userFileData)
-        params._fileData = userFileData;
+        params._fileData = withoutDocumentBytes(userFileData);
       return params;
     },
     onChunk(text, info, ctx) {
