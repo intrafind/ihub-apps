@@ -6,8 +6,13 @@
  * `contents/integrations/mcp/<storageId>__<serverId>.json`, AES-256-GCM,
  * context-bound to the storage id. The payload is the MCP SDK's `OAuthTokens`
  * shape (`access_token`, `token_type`, `expires_in`, `scope`, `refresh_token`)
- * plus `expiresIn` (what drives the file's `expiresAt`), the real `userId` and
- * the `serverId`.
+ * plus `expiresIn` (what drives the file's `expiresAt`), the real `userId`,
+ * the `serverId` and a `binding`: the {@link registrationFingerprint} of the
+ * server config the tokens were issued under (endpoint + auth block), the
+ * authorization server, the client id and the RFC 8707 resource. Tokens whose
+ * binding does not match the current config are treated as "not connected"
+ * ({@link readUserTokensFor}), so a repointed or re-created server id never
+ * receives tokens issued for another endpoint.
  *
  * The token store's file-name allowlist (`/^[A-Za-z0-9._@+-]+$/`) rejects some
  * OIDC subjects (`auth0|abc`, `urn:...`). Such ids are mapped to a stable
@@ -20,6 +25,7 @@ import crypto from 'crypto';
 import fs from 'fs/promises';
 import path from 'path';
 import tokenStorageService from '../TokenStorageService.js';
+import { registrationFingerprint } from './mcpOAuthClientStore.js';
 import logger from '../../utils/logger.js';
 
 const COMPONENT = 'McpUserTokens';
@@ -78,25 +84,92 @@ export async function readUserTokens(userId, serverId) {
 }
 
 /**
+ * @typedef {Object} McpTokenBinding
+ * @property {string} fingerprint - {@link registrationFingerprint} of the config at sign-in
+ * @property {string} [authorizationServerUrl] - The authorization server that issued the tokens
+ * @property {string} [clientId] - The client the tokens were issued to
+ * @property {string} [resource] - RFC 8707 resource indicator of the sign-in
+ */
+
+/**
+ * The binding of tokens issued for a server config.
+ *
+ * @param {Object} serverConfig
+ * @param {Object} [extra] - `authorizationServerUrl`, `clientId`, `resource`
+ * @returns {McpTokenBinding}
+ */
+export function tokenBindingFor(serverConfig, extra = {}) {
+  const binding = { fingerprint: registrationFingerprint(serverConfig) };
+  for (const key of ['authorizationServerUrl', 'clientId', 'resource']) {
+    if (typeof extra[key] === 'string' && extra[key]) binding[key] = extra[key];
+  }
+  return binding;
+}
+
+/**
+ * Whether a stored payload was issued for this server config (same endpoint
+ * and auth block). Payloads without a binding never match.
+ *
+ * @param {Object|null} payload
+ * @param {Object} serverConfig
+ * @returns {boolean}
+ */
+export function tokensMatchServer(payload, serverConfig) {
+  const fingerprint = payload?.binding?.fingerprint;
+  return typeof fingerprint === 'string' && fingerprint === registrationFingerprint(serverConfig);
+}
+
+/**
+ * The stored tokens of a user for a server config, or null when there are
+ * none or they were issued for another endpoint / auth block.
+ *
+ * @param {string} userId
+ * @param {Object} serverConfig
+ * @returns {Promise<Object|null>}
+ */
+export async function readUserTokensFor(userId, serverConfig) {
+  const payload = await readUserTokens(userId, serverConfig.id);
+  return payload && tokensMatchServer(payload, serverConfig) ? payload : null;
+}
+
+/**
  * Store the tokens the authorization server issued (or refreshed).
  *
  * @param {string} userId
  * @param {string} serverId
  * @param {Object} tokens - SDK `OAuthTokens`
+ * @param {McpTokenBinding} [binding] - What the tokens were issued for ({@link tokenBindingFor})
  * @returns {Promise<void>}
  */
-export async function writeUserTokens(userId, serverId, tokens) {
+export async function writeUserTokens(userId, serverId, tokens, binding) {
   const storageId = tokenStorageIdFor(userId);
   const expiresIn = Number.isFinite(tokens?.expires_in) ? tokens.expires_in : undefined;
+  const { binding: _ignored, ...plainTokens } = tokens || {};
   const payload = {
-    ...tokens,
+    ...plainTokens,
     ...(expiresIn !== undefined ? { expiresIn } : {}),
     ...(typeof tokens?.scope === 'string' ? { scope: tokens.scope } : {}),
+    ...(binding ? { binding } : {}),
     userId,
     serverId,
     obtainedAt: new Date().toISOString()
   };
   await tokenStorageService.storeUserTokens(storageId, MCP_TOKEN_SERVICE, payload, serverId);
+}
+
+/**
+ * Whether a stored access token has expired (30 s early, so a call does not
+ * race the expiry). Unknown lifetimes count as not expired.
+ *
+ * @param {Object|null} payload
+ * @param {number} [now]
+ * @returns {boolean}
+ */
+export function accessTokenExpired(payload, now = Date.now()) {
+  const expiresIn = Number(payload?.expiresIn ?? payload?.expires_in);
+  const obtainedAt = Date.parse(payload?.obtainedAt || '');
+  if (!Number.isFinite(expiresIn) || !Number.isFinite(obtainedAt)) return false;
+  return obtainedAt + expiresIn * 1000 - 30 * 1000 <= now;
 }
 
 /**
@@ -113,13 +186,16 @@ export async function deleteUserTokens(userId, serverId) {
 
 /**
  * Connection state of one user on one server, without decrypting more than
- * needed for the Settings page.
+ * needed for the Settings page. Given the server config, tokens issued for
+ * another endpoint or auth block count as not connected.
  *
  * @param {string} userId
- * @param {string} serverId
+ * @param {string|Object} server - Server id, or the server config
  * @returns {Promise<{connected: boolean, expiresAt: (string|null), expired: boolean, scope: (string|null)}>}
  */
-export async function userTokenStatus(userId, serverId) {
+export async function userTokenStatus(userId, server) {
+  const serverConfig = server && typeof server === 'object' ? server : null;
+  const serverId = serverConfig ? serverConfig.id : server;
   const storageId = tokenStorageIdFor(userId);
   let metadata;
   try {
@@ -127,7 +203,9 @@ export async function userTokenStatus(userId, serverId) {
   } catch {
     return { connected: false, expiresAt: null, expired: false, scope: null };
   }
-  const payload = await readUserTokens(userId, serverId);
+  const payload = serverConfig
+    ? await readUserTokensFor(userId, serverConfig)
+    : await readUserTokens(userId, serverId);
   if (!payload) return { connected: false, expiresAt: null, expired: false, scope: null };
   return {
     connected: true,
@@ -142,12 +220,17 @@ export async function userTokenStatus(userId, serverId) {
 /**
  * Every user connected to a server, from the token files on disk. Used by the
  * admin view; the real user id is taken from the encrypted payload when the
- * file is readable, else the storage id is reported.
+ * file is readable, else the storage id is reported. Given the server config,
+ * files issued for another endpoint or auth block are left out.
+ *
+ * `expired` means the user must connect again: the access token expired and
+ * there is no refresh token to renew it.
  *
  * @param {string} serverId
+ * @param {Object} [serverConfig]
  * @returns {Promise<Array<{userId: string, storageId: string, createdAt: (string|null), expiresAt: (string|null), expired: boolean}>>}
  */
-export async function listServerConnections(serverId) {
+export async function listServerConnections(serverId, serverConfig) {
   if (typeof serverId !== 'string' || !SAFE_STORAGE_ID.test(serverId)) return [];
   const dir = path.join(tokenStorageService.storageBasePath, MCP_TOKEN_SERVICE);
   let entries;
@@ -170,19 +253,54 @@ export async function listServerConnections(serverId) {
       continue;
     }
     let userId = storageId;
+    let payload = null;
     try {
-      const payload = tokenStorageService.decryptTokens(raw, storageId, MCP_TOKEN_SERVICE);
+      payload = tokenStorageService.decryptTokens(raw, storageId, MCP_TOKEN_SERVICE);
       if (typeof payload?.userId === 'string' && payload.userId) userId = payload.userId;
     } catch {
       /* unreadable payload — the storage id is the best we can report */
     }
+    if (serverConfig && !tokensMatchServer(payload, serverConfig)) continue;
+    const accessExpired = raw.expiresAt ? new Date(raw.expiresAt) <= new Date() : false;
     out.push({
       userId,
       storageId,
       createdAt: raw.createdAt || null,
       expiresAt: raw.expiresAt || null,
-      expired: raw.expiresAt ? new Date(raw.expiresAt) <= new Date() : false
+      expired: accessExpired && !payload?.refresh_token
     });
   }
   return out.sort((a, b) => a.userId.localeCompare(b.userId));
+}
+
+/**
+ * Delete every user's tokens for a server — when the server is removed or its
+ * endpoint / auth block changes, so no token issued for the old endpoint is
+ * ever sent to a new one. Best effort per file.
+ *
+ * @param {string} serverId
+ * @returns {Promise<number>} How many token files were removed
+ */
+export async function deleteServerTokens(serverId) {
+  let connections;
+  try {
+    connections = await listServerConnections(serverId);
+  } catch {
+    return 0;
+  }
+  let removed = 0;
+  for (const { storageId } of connections) {
+    try {
+      if (await tokenStorageService.deleteUserTokens(storageId, MCP_TOKEN_SERVICE, serverId)) {
+        removed += 1;
+      }
+    } catch (error) {
+      logger.warn('MCP user token file could not be deleted', {
+        component: COMPONENT,
+        serverId,
+        error: error.message
+      });
+    }
+  }
+  return removed;
 }

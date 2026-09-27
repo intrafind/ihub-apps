@@ -55,6 +55,38 @@ function isHttpTransport(transport) {
   return transport?.type === 'streamableHttp' || transport?.type === 'sse';
 }
 
+/**
+ * The form after the transport type changed: a fresh transport block of that
+ * type, and — since per-user sign-in needs an HTTP transport — auth reset to
+ * none when it was `oauthUser` and the new transport is not HTTP.
+ *
+ * @param {Object} form
+ * @param {string} type - New transport type
+ * @returns {Object}
+ */
+export function formWithTransportType(form, type) {
+  const transport = type === 'stdio' ? { type, command: '', args: [] } : { type, url: '' };
+  const auth =
+    form.auth?.type === 'oauthUser' && !isHttpTransport(transport) ? { type: 'none' } : form.auth;
+  return { ...form, transport, auth };
+}
+
+/**
+ * The message of a failed admin API call: the server's error plus the
+ * validation messages it sent along (`details`), so an invalid config says
+ * what is wrong with it.
+ * @param {Error} err
+ * @returns {string}
+ */
+export function apiErrorText(err) {
+  const data = err?.response?.data;
+  const base = data?.error || err?.message || '';
+  const details = Array.isArray(data?.details)
+    ? data.details.map(issue => issue?.message).filter(Boolean)
+    : [];
+  return details.length ? `${base}: ${details.join('; ')}` : base;
+}
+
 // `auth.scopes` is edited as comma-separated text. The text is kept next to
 // the parsed list while typing (`scopesText`) and dropped before saving.
 function scopesFromText(text) {
@@ -171,7 +203,15 @@ function transportFields(transport, onChange, t) {
   return null;
 }
 
-function authFields(auth, onChange, t) {
+/**
+ * The authentication fields of the server form.
+ * @param {Object} auth
+ * @param {(auth: Object) => void} onChange
+ * @param {Function} t
+ * @param {Object} transport - Per-user sign-in is offered for HTTP transports only
+ */
+export function authFields(auth, onChange, t, transport) {
+  const perUserAllowed = isHttpTransport(transport);
   return (
     <div className="space-y-3">
       <div>
@@ -201,10 +241,20 @@ function authFields(auth, onChange, t) {
           <option value="oauth">
             {t('admin.mcp.servers.form.authOauth', 'OAuth (client credentials)')}
           </option>
-          <option value="oauthUser">
-            {t('admin.mcp.servers.form.authOauthUser', 'OAuth — each user signs in')}
-          </option>
+          {perUserAllowed && (
+            <option value="oauthUser">
+              {t('admin.mcp.servers.form.authOauthUser', 'OAuth — each user signs in')}
+            </option>
+          )}
         </select>
+        {!perUserAllowed && (
+          <p className="mt-1 text-xs text-gray-500 dark:text-gray-400">
+            {t(
+              'admin.mcp.servers.form.oauthUserHttpOnly',
+              'Per-user sign-in is available for the Streamable HTTP and SSE transports only.'
+            )}
+          </p>
+        )}
       </div>
       {auth?.type === 'oauthUser' && (
         <>
@@ -619,8 +669,14 @@ function AdminMcpServersPage() {
         body: buildBody()
       });
       if (data.status === 'auth_required') {
-        // Per-user sign-in: the admin tests with their own account.
-        setDraftTest({ ok: false, authRequired: true, serverId: form.id });
+        // Per-user sign-in: the admin tests with their own account, and only
+        // the saved endpoint and auth settings.
+        setDraftTest({
+          ok: false,
+          authRequired: true,
+          serverId: form.id,
+          unsaved: data.reason === 'unsaved_changes'
+        });
         return;
       }
       setDraftTest({
@@ -633,7 +689,7 @@ function AdminMcpServersPage() {
     } catch (err) {
       setDraftTest({
         ok: false,
-        error: err.response?.data?.error || err.message
+        error: apiErrorText(err)
       });
     } finally {
       setDraftTesting(false);
@@ -660,7 +716,7 @@ function AdminMcpServersPage() {
       setMessage({
         type: 'error',
         text: t('admin.mcp.servers.saveError', 'Save failed: {{error}}', {
-          error: err.response?.data?.error || err.message
+          error: apiErrorText(err)
         })
       });
     }
@@ -679,6 +735,37 @@ function AdminMcpServersPage() {
       setMessage({
         type: 'error',
         text: t('admin.mcp.servers.deleteError', 'Delete failed: {{error}}', { error: err.message })
+      });
+    }
+  };
+
+  // Forget iHub's OAuth client registration at a per-user server's
+  // authorization server, e.g. after that server lost its registered clients.
+  const resetRegistration = async id => {
+    if (
+      !window.confirm(
+        t(
+          'admin.mcp.servers.resetRegistrationConfirm',
+          'Reset the OAuth client registration of "{{id}}"? The next sign-in registers iHub afresh; connected users may have to connect again.',
+          { id }
+        )
+      )
+    )
+      return;
+    try {
+      await makeAdminApiCall(`/admin/mcp/servers/${encodeURIComponent(id)}/registration/reset`, {
+        method: 'POST'
+      });
+      setMessage({
+        type: 'success',
+        text: t('admin.mcp.servers.resetRegistrationDone', 'OAuth client registration reset')
+      });
+    } catch (err) {
+      setMessage({
+        type: 'error',
+        text: t('admin.mcp.servers.resetRegistrationError', 'Reset failed: {{error}}', {
+          error: apiErrorText(err)
+        })
       });
     }
   };
@@ -834,11 +921,9 @@ function AdminMcpServersPage() {
                         {s.auth?.type === 'oauthUser' && (
                           <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-xs font-medium bg-indigo-100 dark:bg-indigo-900/50 text-indigo-800 dark:text-indigo-300">
                             <Icon name="user-group" size="xs" />
-                            {t(
-                              'admin.mcp.servers.status.connectedUsers',
-                              '{{count}} users connected',
-                              { count: s.connectedUsers ?? 0 }
-                            )}
+                            {t('admin.mcp.servers.status.connectedUsers', {
+                              count: s.connectedUsers ?? 0
+                            })}
                           </span>
                         )}
                       </div>
@@ -859,6 +944,22 @@ function AdminMcpServersPage() {
                       >
                         <Icon name="play" size="sm" />
                       </button>
+                      {s.auth?.type === 'oauthUser' && (
+                        <button
+                          onClick={() => resetRegistration(s.id)}
+                          className="inline-flex items-center px-3 py-2 border border-gray-300 dark:border-gray-600 shadow-xs text-sm leading-4 font-medium rounded-md text-gray-700 dark:text-gray-200 bg-white dark:bg-gray-700 hover:bg-gray-50 dark:hover:bg-gray-600"
+                          title={t(
+                            'admin.mcp.servers.actions.resetRegistration',
+                            'Reset OAuth client registration'
+                          )}
+                          aria-label={t(
+                            'admin.mcp.servers.actions.resetRegistration',
+                            'Reset OAuth client registration'
+                          )}
+                        >
+                          <Icon name="refresh" size="sm" />
+                        </button>
+                      )}
                       <button
                         onClick={() => startEdit(s)}
                         className="inline-flex items-center px-3 py-2 border border-gray-300 dark:border-gray-600 shadow-xs text-sm leading-4 font-medium rounded-md text-gray-700 dark:text-gray-200 bg-white dark:bg-gray-700 hover:bg-gray-50 dark:hover:bg-gray-600"
@@ -989,12 +1090,7 @@ function AdminMcpServersPage() {
                 <div className="space-y-3">
                   <select
                     value={form.transport.type}
-                    onChange={e => {
-                      const type = e.target.value;
-                      const next =
-                        type === 'stdio' ? { type, command: '', args: [] } : { type, url: '' };
-                      setForm({ ...form, transport: next });
-                    }}
+                    onChange={e => setForm(formWithTransportType(form, e.target.value))}
                     className={INPUT_CLASS}
                   >
                     <option value="streamableHttp">
@@ -1025,7 +1121,7 @@ function AdminMcpServersPage() {
                 <legend className="text-sm font-medium text-gray-700 dark:text-gray-300 px-1">
                   {t('admin.mcp.servers.form.authType', 'Authentication')}
                 </legend>
-                {authFields(form.auth, a => setForm({ ...form, auth: a }), t)}
+                {authFields(form.auth, a => setForm({ ...form, auth: a }), t, form.transport)}
               </fieldset>
 
               <div className="grid grid-cols-2 gap-3">
@@ -1266,7 +1362,7 @@ function AdminMcpServersPage() {
                   ) : draftTest?.authRequired ? (
                     <div className="text-sm text-blue-800 dark:text-blue-200">
                       <p>
-                        {editing === 'new'
+                        {editing === 'new' || draftTest.unsaved
                           ? t(
                               'admin.mcp.servers.test.authRequiredUnsaved',
                               'This server needs each user to sign in. Save it, then connect your own account to test it and load its tools.'
@@ -1276,7 +1372,7 @@ function AdminMcpServersPage() {
                               'This server needs each user to sign in. Connect your own account to test it and load its tools.'
                             )}
                       </p>
-                      {editing !== 'new' && (
+                      {editing !== 'new' && !draftTest.unsaved && (
                         <button
                           type="button"
                           onClick={() => {

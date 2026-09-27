@@ -59,7 +59,7 @@ export default function registerAdminMcpServersRoutes(app) {
           // Per-user OAuth: how many users have connected their account.
           ...(isUserOAuthServer(s)
             ? {
-                connectedUsers: (await listServerConnections(s.id).catch(() => [])).length
+                connectedUsers: (await listServerConnections(s.id, s).catch(() => [])).length
               }
             : {})
         }))
@@ -209,7 +209,7 @@ export default function registerAdminMcpServersRoutes(app) {
         if (!isUserOAuthServer(server)) {
           return res.json({ success: true, connections: [] });
         }
-        const connections = await listServerConnections(id);
+        const connections = await listServerConnections(id, server);
         res.json({
           success: true,
           connections: connections.map(({ storageId: _storageId, ...c }) => c)
@@ -217,6 +217,37 @@ export default function registerAdminMcpServersRoutes(app) {
       } catch (error) {
         logger.error('[MCP Admin] List user connections error', { component: 'AdminMcp', error });
         res.status(500).json({ success: false, error: 'Failed to list connections' });
+      }
+    }
+  );
+
+  // Forget iHub's OAuth client registration at a per-user server's
+  // authorization server (CIMD / DCR), so the next sign-in registers afresh.
+  // The recovery path when the authorization server no longer knows the
+  // client (it then refuses the sign-in on its own page, which never comes
+  // back to iHub). Users' tokens stay; a refresh with the old client fails
+  // and asks them to connect again.
+  app.post(
+    buildServerPath('/api/admin/mcp/servers/:id/registration/reset'),
+    adminAuth,
+    async (req, res) => {
+      try {
+        const { id } = req.params;
+        if (!validateIdForPath(id, 'mcpServer', res)) return;
+        const conn = mcpClientManager.getConnection(id);
+        if (!conn || !isUserOAuthServer(conn.config)) {
+          return res.status(404).json({ success: false, error: 'Server not found' });
+        }
+        await mcpClientManager.resetClientRegistration(id);
+        logger.info('[MCP Admin] OAuth client registration reset', {
+          component: 'AdminMcp',
+          serverId: id,
+          adminId: req.user?.id
+        });
+        res.json({ success: true });
+      } catch (error) {
+        logger.error('[MCP Admin] Reset registration error', { component: 'AdminMcp', error });
+        res.status(500).json({ success: false, error: 'Failed to reset the registration' });
       }
     }
   );
@@ -243,7 +274,8 @@ export default function registerAdminMcpServersRoutes(app) {
         const result = await revokeUserConnection({
           serverConfig: conn.config,
           userId,
-          security: mcpClientManager.security
+          security: mcpClientManager.security,
+          clientStore: mcpClientManager.clientRegistrations()
         });
         await mcpClientManager.evictUserConnection(id, userId);
         if (!result.removed) {

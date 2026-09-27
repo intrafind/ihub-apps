@@ -1961,8 +1961,12 @@
         "testError": "Test failed: {{error}}",
         "createTitle": "Create MCP server",
         "editTitle": "Edit {{id}}",
+        "resetRegistrationConfirm": "Reset the OAuth client registration of \"{{id}}\"? The next sign-in registers iHub afresh; connected users may have to connect again.",
+        "resetRegistrationDone": "OAuth client registration reset",
+        "resetRegistrationError": "Reset failed: {{error}}",
         "actions": {
-          "test": "Test connection"
+          "test": "Test connection",
+          "resetRegistration": "Reset OAuth client registration"
         },
         "test": {
           "button": "Test connection",
@@ -1987,7 +1991,8 @@
           "connected": "connected ({{count}} tools)",
           "idle": "idle",
           "disabled": "disabled",
-          "connectedUsers": "{{count}} users connected"
+          "connectedUsers_one": "{{count}} user connected",
+          "connectedUsers_other": "{{count}} users connected"
         },
         "form": {
           "id": "ID",
@@ -2030,6 +2035,7 @@
           "allowedToolsSelected": "Only the tools I select",
           "allowedToolsManual": "Tool names as the server calls them, comma-separated. Test the connection to pick them from a list instead.",
           "authOauthUser": "OAuth — each user signs in",
+          "oauthUserHttpOnly": "Per-user sign-in is available for the Streamable HTTP and SSE transports only.",
           "oauthUserHint": "Every user connects their own account (authorization code + PKCE). iHub finds the authorization server and registers itself automatically. Behind a reverse proxy, set the MCP gateway public URL so the callback URL stays stable.",
           "scopes": "Scopes (optional, comma-separated)",
           "preregisteredClientId": "Client ID (optional)",
@@ -3594,7 +3600,9 @@
           "server_not_found": "the server is not available to you",
           "exchange_failed": "the server did not accept the sign-in",
           "discovery_failed": "the server's sign-in could not be found",
-          "registration_failed": "iHub could not register with the server"
+          "registration_failed": "iHub could not register with the server",
+          "issuer_mismatch": "the sign-in answer came from another authorization server than expected",
+          "public_url_mismatch": "iHub was reached under another address than the one registered with the server; ask your administrator to set the MCP gateway public URL"
         }
       }
     }
@@ -4167,6 +4175,7 @@
     "caption": "Interactive view · {{name}}",
     "loading": "Loading interactive view…",
     "loadFailed": "The interactive view could not be loaded: {{error}}",
+    "authRequired": "Connect this server with your own account to see its interactive view.",
     "payloadOmitted": "This interactive view was too large to keep and cannot be shown again.",
     "unsupportedSurface": "Interactive views are not available in this window.",
     "exitFullscreen": "Exit full screen",

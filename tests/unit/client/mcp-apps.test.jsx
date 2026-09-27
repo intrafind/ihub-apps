@@ -29,6 +29,7 @@ import {
 import { projectRunToMessage } from '../../../client/src/features/chat/runToMessage';
 import { transformStoredMessage } from '../../../client/src/features/chat/hooks/useChatMessages';
 import McpAppViews from '../../../client/src/features/chat/mcpApps/McpAppViews';
+import { fetchMcpAppResource } from '../../../client/src/api/endpoints/mcpApps';
 
 jest.mock('react-i18next', () => ({
   useTranslation: () => ({
@@ -264,6 +265,24 @@ describe('message.mcpApps', () => {
     });
   });
 
+  test('a call that needs a per-user sign-in first renders no view', () => {
+    const needsSignIn = env(3, 'tool/completed', {
+      step: 1,
+      callId: 'c1',
+      toolId: 'drawio__create_diagram',
+      name: 'drawio__create_diagram',
+      resultPreview: { error: 'MCP_AUTH_REQUIRED' },
+      authRequired: {
+        serverId: 'drawio',
+        serverName: 'draw.io',
+        connectUrl: '/api/mcp/oauth/authorize?serverId=drawio'
+      }
+    });
+    const run = runFrom([started, toolStarted, needsSignIn]);
+    expect(buildMcpAppViews(run)).toBeNull();
+    expect(projectRunToMessage(run).extras.mcpApps).toBeUndefined();
+  });
+
   test('turns without views carry no mcpApps', () => {
     const { extras } = projectRunToMessage(runFrom([started]));
     expect(extras.mcpApps).toBeUndefined();
@@ -329,6 +348,29 @@ describe('McpAppViews', () => {
     expect(iframe.getAttribute('src')).toMatch(/^\/api\/mcp-apps\/sandbox\?csp=/);
     expect(iframe.getAttribute('allow')).toBe('clipboard-write');
     expect(iframe.getAttribute('referrerpolicy')).toBe('no-referrer');
+  });
+
+  test('a server that needs a per-user sign-in asks to connect it (409, not a sign-out)', async () => {
+    fetchMcpAppResource.mockRejectedValueOnce(
+      Object.assign(new Error('Request failed with status code 409'), {
+        response: {
+          status: 409,
+          data: { error: 'auth_required', code: 'MCP_AUTH_REQUIRED', connectUrl: '/x' }
+        }
+      })
+    );
+    const { container } = render(
+      <McpAppViews
+        views={[{ ...view, callId: 'c-auth', toolId: 'demo__needs_sign_in' }]}
+        appId="app-1"
+        chatId="chat-1"
+      />
+    );
+    await waitFor(() =>
+      expect(screen.getByText(/Connect this server with your own account/)).toBeInTheDocument()
+    );
+    expect(container.querySelector('iframe')).toBeNull();
+    expect(screen.queryByText(/could not be loaded/)).not.toBeInTheDocument();
   });
 
   test('a view whose payload was dropped explains why it cannot be shown', () => {

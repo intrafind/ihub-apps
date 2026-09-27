@@ -150,44 +150,82 @@ server without RFC 9728 metadata is treated as its own authorization server
 
 1. A pre-registered client from the config (`clientId`, plus
    `clientSecretRef` for a confidential client).
-2. iHub's Client ID Metadata Document, when the authorization server
-   advertises `client_id_metadata_document_supported` and iHub's public URL
-   is https. The document is served unauthenticated at
-   `GET /api/mcp/oauth/client-metadata.json`; its URL is the client id. It
-   declares a public client (`token_endpoint_auth_method: none`) with the
-   authorization-code and refresh-token grants and one redirect URI.
+2. iHub's Client ID Metadata Document for this server, when the
+   authorization server advertises `client_id_metadata_document_supported`
+   and iHub's public URL is https. Every server has its own document, served
+   unauthenticated at `GET /api/mcp/oauth/client-metadata/<serverId>`; its URL
+   is the client id. It declares a public client
+   (`token_endpoint_auth_method: none`) with the authorization-code and
+   refresh-token grants and exactly one redirect URI — that server's
+   callback.
 3. Dynamic client registration (RFC 7591) at the server's
    `registration_endpoint`.
 
-The registration is made once per server and reused for every user. It is
-stored in the storage provider (namespace `mcp-oauth-clients`, a client
+The registration is made once per server and reused for every user; two
+users connecting a fresh server at the same moment share one registration.
+It is stored in the storage provider (namespace `mcp-oauth-clients`, a client
 secret encrypted with the installation key) and dropped when the server's URL
-or auth block changes, or when the authorization server answers
-`invalid_client`.
+or auth block changes, when the authorization server answers
+`invalid_client`, or when an admin resets it (**Admin → MCP servers**, the
+reset button of a per-user server). Reset it when the authorization server
+lost its registered clients (for example an MCP server that keeps them in
+memory and was restarted): such a server refuses the sign-in on its own page,
+which never comes back to iHub.
 
-**Callback URL and public URL.** The redirect URI iHub registers is
-`<public URL>/api/mcp/oauth/callback`. The public URL is the MCP gateway's
-**Public URL** (`platform.mcpServer.publicUrl`) when it is set, else it is
-derived from the request (`X-Forwarded-Proto` / `X-Forwarded-Host` and the
-base path). **Behind a reverse proxy, set the Public URL**: the redirect URI
-must stay the same between the sign-in and every later token request, and an
-authorization server that checks redirect URIs rejects a different one. For a
-client registered by hand, register exactly that callback URL.
+**Callback URL and public URL.** Every server has its own redirect URI:
+`<public URL>/api/mcp/oauth/callback/<serverId>`. For a client registered by
+hand, register exactly that URL for the server. The public URL is the MCP
+gateway's **Public URL** (`platform.mcpServer.publicUrl`) when it is set,
+else the request's protocol and host as Express resolves them —
+`X-Forwarded-Proto` / `X-Forwarded-Host` count only when `platform.trustProxy`
+trusts the proxy that sent them — plus the base path.
+
+**Set the Public URL** in any deployment reached under more than one address
+or behind a reverse proxy. A registration made for one public URL is replaced
+only from a trusted one: the configured Public URL, or an admin's own sign-in.
+A user's sign-in that reaches iHub under another address (another host name,
+or a forged `Host` header) is refused with `public_url_mismatch`, and the
+server log says to set the Public URL — it never replaces the registration
+every other user's tokens depend on. The client metadata document is
+cacheable (`Cache-Control: public, max-age=3600`) only when the Public URL is
+set; otherwise it is sent `no-store` with `Vary: Host, X-Forwarded-Host,
+X-Forwarded-Proto`.
 
 **Tokens.** A user's tokens are stored encrypted (AES-256-GCM, installation
 key `contents/.encryption-key`) in
 `contents/integrations/mcp/<userId>__<serverId>.json`; user ids with
 characters outside `A-Z a-z 0-9 . _ @ + -` are filed under a hash
 (`u_<32 hex>`), with the real id inside the encrypted file. Tokens are never
-logged. An expired access token is refreshed with the refresh token when the
-server rejects it; a refresh the authorization server refuses deletes the
-tokens, and the user is asked to connect again.
+logged. They are bound to the server's endpoint and auth block (URL,
+`clientId`, `clientSecretRef`, `authorizationServer`, `scopes`) and to the
+authorization server and client that issued them: when the server is
+removed, or its URL or auth block changes, every user's tokens for it are
+deleted, and tokens issued under another config are never sent (a change
+made while iHub was down counts too). Users then connect again.
+
+**Refresh.** iHub refreshes the tokens itself; the MCP SDK never sees the
+refresh token. A token known to be expired is refreshed before the call, a
+token the server rejects is refreshed once and the call retried. Parallel
+calls of one user share one refresh, so a rotating refresh token is never
+used twice. The tokens are deleted only when the authorization server
+definitively refuses them (`invalid_grant`, `invalid_client`,
+`unauthorized_client`) and no other worker stored newer ones in the
+meantime, or when the MCP server rejects even a freshly refreshed token. A
+network error, a timeout or a 5xx keeps them: the call fails with "could not
+be renewed right now" and the next one tries again. `invalid_client` also
+drops the registration.
 
 **Tool catalog.** `tools/list` on such a server needs a token, so iHub keeps
-one catalog per server: the tool list of the most recent successful listing
-of any user's connection. It is stored (namespace `mcp-tool-catalog`) so it
+one catalog per server. It is stored (namespace `mcp-tool-catalog`) so it
 survives restarts and is shared by all workers, and it is what the chat, the
-app editor and the gateway see — no connection is opened for that. A server
+app editor and the gateway see — no connection is opened for that. An MCP
+server may list different tools to different users, so the catalog follows
+one rule: an admin's listing (**Test connection**, or any listing on an
+admin's own connection) replaces it; anybody else's listing only adds tools
+it does not have yet and never removes or changes one. A user whose upstream
+role sees fewer tools cannot shrink everybody's tool set, and tools removed
+upstream disappear at the next admin **Test connection**. A listed tool is no
+grant: the server authorizes every call with the caller's own token. A server
 nobody has connected yet offers no tools: connect it once, typically as the
 admin with **Test connection** or under **Settings → Integrations**.
 
@@ -206,11 +244,21 @@ call:
 The model sees the message; the chat shows a **Connect** card under the
 answer. Connect opens the server's sign-in and returns to the chat, where the
 card shows the server as connected; the user then sends the request again.
-The card is stored with the answer, so it is still there after the redirect.
+The card is stored with the answer, so it is still there after the redirect;
+when the chat is opened again later, the card asks the server whether the
+user is connected now and shows that. A tool with an MCP App view shows no
+view for such a call. The MCP App routes answer an unconnected server with
+**409** `{ "error": "auth_required", "code": "MCP_AUTH_REQUIRED", "connectUrl": … }`
+(never 401, which would read as an expired iHub session).
 
-Callers without a signed-in user — the inbound MCP gateway, A2A, workflows
-started without a user — get the same result. iHub never uses another user's
-token.
+The calling user is always the authenticated one. Every entry point that
+turns a request into tool parameters — `POST /api/tools/:toolId`, A2A
+`tasks/send` and `message/send`, the inbound MCP gateway — drops `user`,
+`chatId`, `appConfig` and iHub's other context keys from the caller's input
+and sets them itself, so no request can name another user and run a tool
+with their token. Callers without a signed-in user — the inbound MCP
+gateway's anonymous callers, workflows started without a user — get the
+auth-required result. iHub never uses another user's token.
 
 **Settings → Integrations** lists the per-user servers the user may use (an
 app they can open offers the server or one of its tools; admins see all)
@@ -220,35 +268,55 @@ effort) and deletes them.
 
 **Admins** see how many users connected each per-user server on
 **Admin → MCP servers**. **Test connection** uses the admin's own account;
-without one it offers **Connect my account**.
+without one it offers **Connect my account**. In the edit dialog it tests
+with the admin's account only while the URL and auth settings are the saved
+ones — an edited draft is never probed with a token issued for the saved
+endpoint and never touches the live registration; save it first. The form
+offers per-user sign-in for the Streamable HTTP and SSE transports only.
 
 **Security notes.**
 
 - The OAuth `state` is a signed ticket (HMAC-SHA256 with the platform's JWT
   secret, 15 minutes) that names the user who started the sign-in; the
   callback refuses it in anyone else's session.
+- OAuth mix-up defence (RFC 9700 §4.4): the ticket also names the server,
+  its authorization server's issuer and the client the request went to. The
+  callback refuses a ticket that arrives at another server's callback, an
+  RFC 9207 `iss` that names another issuer, and a missing `iss` when the
+  authorization server advertises
+  `authorization_response_iss_parameter_supported`; the code is exchanged
+  only while the server's registration still is that authorization server
+  and client. Against an authorization server that neither sends `iss` nor
+  requires a per-server registration (a CIMD server without RFC 9207
+  support), the per-server redirect URI cannot rule out a mix-up on its own —
+  prefer authorization servers that support RFC 9207.
 - The PKCE (S256) verifier travels inside that ticket encrypted with the
   installation key; it never leaves iHub in clear text.
 - The authorization request carries the RFC 8707 `resource` indicator (the
   MCP server's URL, or the resource its metadata names).
 - Discovery, registration, token and revocation requests use the same
   SSRF-guarded `safeFetch` as the MCP connection (`security.allowedHosts`,
-  `security.blockPrivateIps`).
+  `security.blockPrivateIps`) and never follow redirects: a 3xx answer is an
+  error, so an authorization server cannot steer iHub to an internal address
+  through a `Location` header.
 - The return URL is checked like every other OAuth return URL (same host or
   a relative path); errors come back as fixed codes
-  (`?mcp_error=oauth_failed|missing_code|invalid_state|state_expired|user_mismatch|server_not_found|exchange_failed|discovery_failed|registration_failed`),
+  (`?mcp_error=oauth_failed|missing_code|invalid_state|state_expired|user_mismatch|server_not_found|exchange_failed|discovery_failed|registration_failed|issuer_mismatch|public_url_mismatch`),
   never as text from the authorization server.
 
 Routes:
 
 - `GET /api/mcp/oauth/authorize?serverId=&returnUrl=` — start a sign-in (302).
-- `GET /api/mcp/oauth/callback` — the redirect URI.
+- `GET /api/mcp/oauth/callback/:serverId` — the server's redirect URI.
 - `GET /api/mcp/oauth/connections` — the caller's per-user servers and their state.
 - `POST /api/mcp/oauth/disconnect` `{ "serverId": "…" }`.
-- `GET /api/mcp/oauth/client-metadata.json` — iHub's Client ID Metadata Document.
+- `GET /api/mcp/oauth/client-metadata/:serverId` — iHub's Client ID Metadata
+  Document for that server.
 - `GET /api/admin/mcp/servers/:id/connections` and
   `DELETE /api/admin/mcp/servers/:id/connections/:userId` — admin view and
   disconnect.
+- `POST /api/admin/mcp/servers/:id/registration/reset` — forget iHub's client
+  registration at the server's authorization server.
 
 ### Security
 

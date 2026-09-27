@@ -299,7 +299,12 @@ export function chatToolSeam({
     async postTool(ctx, info, outcome) {
       const { toolId, args } = info;
       const mcp = mcpAppOf(info);
-      const mcpApp = mcp ? recordView(mcpAppViewFor(info, mcp)) : null;
+      // A call that never reached its per-user OAuth server ("connect first")
+      // has no view to show: the Connect card stands in for it.
+      const mcpApp =
+        mcp && !(!outcome.error && authRequiredOf(outcome.rawResult))
+          ? recordView(mcpAppViewFor(info, mcp))
+          : null;
       if (outcome.error) {
         const err = outcome.error;
         const causeMessage =

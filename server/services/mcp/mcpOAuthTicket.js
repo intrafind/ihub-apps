@@ -2,7 +2,7 @@
  * The OAuth `state` of an outbound per-user MCP sign-in, as a signed ticket.
  *
  * The flow spans two requests — `GET /api/mcp/oauth/authorize` sends the
- * browser to the authorization server, `GET /api/mcp/oauth/callback` receives
+ * browser to the authorization server, `GET /api/mcp/oauth/callback/:serverId` receives
  * the code — and in cluster mode they land on different workers. Instead of a
  * session, everything the callback needs travels in the `state` parameter,
  * protected by an HMAC exactly like the consent ticket of iHub's own
@@ -15,7 +15,16 @@
  *     store's key. It never leaves the server in clear text, and a callback
  *     with a forged ticket cannot present a verifier the signature covers.
  *   - `redirectUri`, `resource`: what the authorization request used, so the
- *     token exchange repeats them verbatim.
+ *     token exchange repeats them verbatim. The redirect URI is the server's
+ *     own callback (`…/callback/<serverId>`).
+ *   - `issuer`, `authorizationServerUrl`, `clientId`, `issRequired`: which
+ *     authorization server the request went to and as which client. The
+ *     callback refuses an RFC 9207 `iss` that names another issuer (and a
+ *     missing one when the server advertises
+ *     `authorization_response_iss_parameter_supported`), and the exchange
+ *     refuses to run when the server's registration no longer matches — so a
+ *     code can only ever be redeemed at the server that issued it (OAuth
+ *     mix-up defence, RFC 9700 §4.4).
  *   - `returnUrl`: where to send the browser afterwards (validated before it
  *     is put in here).
  *   - `nonce`, `exp`: uniqueness and a 15-minute lifetime.
@@ -35,7 +44,7 @@ const COMPONENT = 'McpOAuthTicket';
 /** Ticket lifetime — long enough to log in and consent at the IdP. */
 export const MCP_OAUTH_TICKET_TTL_MS = 15 * 60 * 1000;
 
-const TICKET_VERSION = 1;
+const TICKET_VERSION = 2;
 
 /**
  * HMAC-SHA256 over the encoded payload with the platform's JWT secret.
@@ -61,6 +70,10 @@ function sign(encodedPayload) {
  * @param {string} context.returnUrl - Already validated
  * @param {string} context.codeVerifier - PKCE verifier in clear text; encrypted here
  * @param {string} context.redirectUri
+ * @param {string} context.issuer - Expected RFC 9207 `iss` (the AS metadata's `issuer`)
+ * @param {string} context.authorizationServerUrl - The AS the request was sent to
+ * @param {string} context.clientId - The client id the request used
+ * @param {boolean} [context.issRequired=false] - The AS promises `iss` on every response
  * @param {string} [context.resource] - RFC 8707 resource indicator
  * @param {number} [context.now] - Test seam
  * @returns {string} `<payload>.<signature>`
@@ -71,6 +84,10 @@ export function issueMcpOAuthTicket({
   returnUrl,
   codeVerifier,
   redirectUri,
+  issuer,
+  authorizationServerUrl,
+  clientId,
+  issRequired = false,
   resource,
   now = Date.now()
 }) {
@@ -79,7 +96,10 @@ export function issueMcpOAuthTicket({
     userId,
     returnUrl,
     codeVerifier,
-    redirectUri
+    redirectUri,
+    issuer,
+    authorizationServerUrl,
+    clientId
   })) {
     if (typeof value !== 'string' || !value) {
       throw new Error(`MCP OAuth ticket needs a ${name}`);
@@ -92,6 +112,10 @@ export function issueMcpOAuthTicket({
     returnUrl,
     cv: tokenStorageService.encryptString(codeVerifier),
     redirectUri,
+    issuer,
+    authorizationServerUrl,
+    clientId,
+    issRequired: issRequired === true,
     ...(resource ? { resource } : {}),
     nonce: crypto.randomBytes(16).toString('hex'),
     exp: now + MCP_OAUTH_TICKET_TTL_MS
@@ -108,7 +132,8 @@ export function issueMcpOAuthTicket({
  * @param {number} [options.now] - Test seam
  * @returns {{ok: true, ticket: Object}|{ok: false, reason: 'invalid'|'expired'}}
  *   On success `ticket` carries `serverId`, `userId`, `returnUrl`,
- *   `codeVerifier` (clear text), `redirectUri`, `resource?`, `nonce`, `exp`.
+ *   `codeVerifier` (clear text), `redirectUri`, `issuer`,
+ *   `authorizationServerUrl`, `clientId`, `issRequired`, `resource?`, `nonce`, `exp`.
  */
 export function verifyMcpOAuthTicket(ticket, { now = Date.now() } = {}) {
   const invalid = { ok: false, reason: 'invalid' };
@@ -144,9 +169,20 @@ export function verifyMcpOAuthTicket(ticket, { now = Date.now() } = {}) {
     return invalid;
   }
   if (!payload || typeof payload !== 'object' || payload.v !== TICKET_VERSION) return invalid;
-  for (const field of ['serverId', 'userId', 'returnUrl', 'cv', 'redirectUri', 'nonce']) {
+  for (const field of [
+    'serverId',
+    'userId',
+    'returnUrl',
+    'cv',
+    'redirectUri',
+    'issuer',
+    'authorizationServerUrl',
+    'clientId',
+    'nonce'
+  ]) {
     if (typeof payload[field] !== 'string' || !payload[field]) return invalid;
   }
+  if (typeof payload.issRequired !== 'boolean') return invalid;
   if (typeof payload.exp !== 'number') return invalid;
   if (now > payload.exp) return { ok: false, reason: 'expired' };
 

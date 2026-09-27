@@ -12,20 +12,31 @@
  *      first step. When the MCP server publishes no RFC 9728 document, its
  *      origin is taken as the authorization server (the SDK's legacy rule).
  *   2. Client identity, in this order: a pre-registered client from the config
- *      (`clientId` + optional `clientSecretRef`); iHub's Client ID Metadata
- *      Document, when the authorization server advertises
+ *      (`clientId` + optional `clientSecretRef`); iHub's per-server Client ID
+ *      Metadata Document, when the authorization server advertises
  *      `client_id_metadata_document_supported` and iHub's public base is https;
  *      dynamic client registration (RFC 7591). The result is stored per
- *      server (`mcpOAuthClientStore.js`) and reused for every user.
+ *      server (`mcpOAuthClientStore.js`) and reused for every user. It is
+ *      only ever replaced from a trusted public base (the configured Public
+ *      URL, or an admin's own sign-in), never because one request carried
+ *      another Host header.
  *   3. Authorization request — authorization code + PKCE (S256), the RFC 8707
- *      `resource` indicator, the fixed redirect URI, and a signed `state`
- *      ticket that carries the encrypted verifier (`mcpOAuthTicket.js`).
- *   4. Callback — the ticket is verified and bound to the signed-in user, the
- *      code is exchanged with the verifier, the tokens are stored encrypted
- *      per (user, server).
+ *      `resource` indicator, the server's own redirect URI
+ *      (`…/callback/<serverId>`), and a signed `state` ticket that carries the
+ *      encrypted verifier and names the authorization server (issuer) and
+ *      client the request went to (`mcpOAuthTicket.js`).
+ *   4. Callback — the ticket is verified, bound to the signed-in user and to
+ *      the callback's server; an RFC 9207 `iss` must name the ticket's
+ *      issuer (and is required when the server advertises
+ *      `authorization_response_iss_parameter_supported`); the code is
+ *      exchanged only when the server's registration still is the ticket's
+ *      authorization server and client; the tokens are stored encrypted per
+ *      (user, server), bound to the server's endpoint and auth block.
+ *   5. Refresh — {@link refreshUserTokens}, driven single-flight by the
+ *      manager.
  *
  * Every HTTP request goes through `safeFetch` with the MCP servers' SSRF
- * policy. Tokens, codes and verifiers are never logged.
+ * policy, redirects refused. Tokens, codes and verifiers are never logged.
  *
  * @module services/mcp/mcpOAuthService
  */
@@ -34,6 +45,7 @@ import {
   discoverOAuthProtectedResourceMetadata,
   discoverOAuthServerInfo,
   exchangeAuthorization,
+  refreshAuthorization,
   registerClient,
   startAuthorization
 } from '@modelcontextprotocol/sdk/client/auth.js';
@@ -52,8 +64,18 @@ import {
   registrationFingerprint
 } from './mcpOAuthClientStore.js';
 import { issueMcpOAuthTicket } from './mcpOAuthTicket.js';
-import { buildMcpOAuthFetch, McpUserOAuthProvider } from './McpUserOAuthProvider.js';
-import { readUserTokens, writeUserTokens, deleteUserTokens } from './mcpUserTokens.js';
+import {
+  buildMcpOAuthFetch,
+  McpAuthRequiredError,
+  McpTokenRefreshError,
+  McpUserOAuthProvider
+} from './McpUserOAuthProvider.js';
+import {
+  readUserTokens,
+  writeUserTokens,
+  deleteUserTokens,
+  tokenBindingFor
+} from './mcpUserTokens.js';
 import {
   buildMcpClientMetadata,
   isCimdCapableBase,
@@ -79,8 +101,45 @@ export const MCP_OAUTH_ERROR_CODES = Object.freeze({
   SERVER_NOT_FOUND: 'server_not_found',
   EXCHANGE_FAILED: 'exchange_failed',
   DISCOVERY_FAILED: 'discovery_failed',
-  REGISTRATION_FAILED: 'registration_failed'
+  REGISTRATION_FAILED: 'registration_failed',
+  ISSUER_MISMATCH: 'issuer_mismatch',
+  PUBLIC_URL_MISMATCH: 'public_url_mismatch'
 });
+
+/**
+ * OAuth error codes that mean the authorization server definitively refused
+ * the refresh token or the client — the stored tokens are dead. Anything else
+ * (network error, timeout, 5xx, `server_error`, an unparsable answer) is
+ * transient and keeps them.
+ */
+const DEFINITIVE_REFRESH_ERRORS = new Set([
+  'invalid_grant',
+  'invalid_client',
+  'unauthorized_client'
+]);
+const DEFINITIVE_REFRESH_ERROR_NAMES = new Set([
+  'InvalidGrantError',
+  'InvalidClientError',
+  'UnauthorizedClientError'
+]);
+
+/**
+ * The OAuth error code of a definitive refusal, or null.
+ * @param {unknown} error
+ * @returns {string|null} `invalid_grant` | `invalid_client` | `unauthorized_client`
+ */
+export function definitiveOAuthRejection(error) {
+  const code = typeof error?.errorCode === 'string' ? error.errorCode : null;
+  if (code && DEFINITIVE_REFRESH_ERRORS.has(code)) return code;
+  if (DEFINITIVE_REFRESH_ERROR_NAMES.has(error?.name)) {
+    return error.name === 'InvalidGrantError'
+      ? 'invalid_grant'
+      : error.name === 'InvalidClientError'
+        ? 'invalid_client'
+        : 'unauthorized_client';
+  }
+  return null;
+}
 
 /** A flow failure with one of {@link MCP_OAUTH_ERROR_CODES}. */
 export class McpOAuthFlowError extends Error {
@@ -221,29 +280,61 @@ export function resourceIndicatorFor(serverUrl, resourceMetadata) {
   return fallback;
 }
 
+/** In-flight registrations per server id: concurrent first sign-ins share one. */
+const pendingRegistrations = new Map();
+
 /**
  * Resolve (and persist) iHub's client identity at the server's authorization
  * server: pre-registered → CIMD → DCR. An existing registration for the same
- * config, authorization server and redirect URI is reused.
+ * config, authorization server and redirect URI is reused. Concurrent calls
+ * for one server share a single registration (single-flight per worker).
+ *
+ * An existing registration made for another public base is replaced only
+ * when the base is trusted — the configured Public URL, or an admin's own
+ * sign-in. A base derived from one request's Host header is not: replacing
+ * the shared registration on its say-so would break every other user's
+ * refresh. The sign-in is then refused with `public_url_mismatch` and the
+ * server log tells the admin to set the Public URL.
  *
  * @param {Object} params
  * @param {Object} params.serverConfig
  * @param {Object} params.discovery - Result of {@link discoverServer}
  * @param {string} params.publicBase
+ * @param {boolean} [params.trustedBase=false] - May replace a registration made for another base
  * @param {Function} params.fetchFn
  * @param {McpOAuthClientStore} [params.clientStore]
  * @returns {Promise<{clientInformation: Object, registration: Object}>}
- * @throws {McpOAuthFlowError} `registration_failed`
+ * @throws {McpOAuthFlowError} `registration_failed` | `public_url_mismatch`
  */
-export async function resolveClientRegistration({
+export async function resolveClientRegistration(params) {
+  const serverId = params.serverConfig.id;
+  const inFlight = pendingRegistrations.get(serverId);
+  if (inFlight) {
+    try {
+      await inFlight;
+    } catch {
+      /* the other sign-in failed; this one tries for itself */
+    }
+  }
+  const run = resolveClientRegistrationOnce(params);
+  pendingRegistrations.set(serverId, run);
+  try {
+    return await run;
+  } finally {
+    if (pendingRegistrations.get(serverId) === run) pendingRegistrations.delete(serverId);
+  }
+}
+
+async function resolveClientRegistrationOnce({
   serverConfig,
   discovery,
   publicBase,
+  trustedBase = false,
   fetchFn,
   clientStore = getMcpOAuthClientStore()
 }) {
   const serverId = serverConfig.id;
-  const redirectUri = mcpCallbackUrl(publicBase);
+  const redirectUri = mcpCallbackUrl(publicBase, serverId);
   const metadata = discovery.authorizationServerMetadata;
   const base = {
     authorizationServerUrl: discovery.authorizationServerUrl,
@@ -256,6 +347,18 @@ export async function resolveClientRegistration({
     publicBase,
     fingerprint: registrationFingerprint(serverConfig)
   };
+
+  const existing = await clientStore.getFor(serverConfig);
+  if (existing?.publicBase && existing.publicBase !== publicBase && !trustedBase) {
+    logger.error(
+      'MCP OAuth sign-in refused: the request reached iHub under another public URL than the one the server was registered for. Set the MCP gateway Public URL (platform.mcpServer.publicUrl).',
+      { component: COMPONENT, serverId }
+    );
+    throw new McpOAuthFlowError(
+      MCP_OAUTH_ERROR_CODES.PUBLIC_URL_MISMATCH,
+      'Public base differs from the registered one'
+    );
+  }
 
   // 1. Pre-registered client from the config. Its secret stays in the
   //    credential store; the record only remembers discovery and the base.
@@ -271,7 +374,6 @@ export async function resolveClientRegistration({
   }
 
   // Reuse a registration made for this authorization server and redirect URI.
-  const existing = await clientStore.getFor(serverConfig);
   if (
     existing?.clientId &&
     existing.source !== 'config' &&
@@ -285,9 +387,9 @@ export async function resolveClientRegistration({
     };
   }
 
-  // 2. Client ID Metadata Document.
+  // 2. Client ID Metadata Document (one per server).
   if (metadata?.client_id_metadata_document_supported === true && isCimdCapableBase(publicBase)) {
-    const clientMetadataUrl = mcpClientMetadataUrl(publicBase);
+    const clientMetadataUrl = mcpClientMetadataUrl(publicBase, serverId);
     const registration = await clientStore.put(serverId, {
       ...base,
       source: 'cimd',
@@ -306,6 +408,7 @@ export async function resolveClientRegistration({
       metadata,
       clientMetadata: buildMcpClientMetadata({
         publicBase,
+        serverId,
         clientName: mcpClientName(),
         withClientId: false
       }),
@@ -332,14 +435,27 @@ export async function resolveClientRegistration({
 }
 
 /**
+ * The issuer identifier RFC 9207 `iss` must carry for this discovery result:
+ * the metadata's `issuer`, else the authorization server URL.
+ * @param {Object} discovery
+ * @returns {string}
+ */
+function expectedIssuer(discovery) {
+  const issuer = discovery.authorizationServerMetadata?.issuer;
+  return typeof issuer === 'string' && issuer ? issuer : String(discovery.authorizationServerUrl);
+}
+
+/**
  * Start a user's sign-in: discovery, client identity, PKCE, signed state.
  *
  * @param {Object} params
  * @param {Object} params.serverConfig - `oauthUser` server
  * @param {Object} params.user - Signed-in user
  * @param {string} params.publicBase
+ * @param {boolean} [params.trustedBase=false] - See {@link resolveClientRegistration}
  * @param {string} params.returnUrl - Validated return URL
  * @param {Object} [params.security] - MCP SSRF policy
+ * @param {McpOAuthClientStore} [params.clientStore]
  * @returns {Promise<{authorizationUrl: URL}>}
  * @throws {McpOAuthFlowError}
  */
@@ -347,8 +463,10 @@ export async function startUserAuthorization({
   serverConfig,
   user,
   publicBase,
+  trustedBase = false,
   returnUrl,
-  security
+  security,
+  clientStore = getMcpOAuthClientStore()
 }) {
   const fetchFn = buildMcpOAuthFetch(security);
   const discovery = await discoverServer(serverConfig, fetchFn);
@@ -356,7 +474,9 @@ export async function startUserAuthorization({
     serverConfig,
     discovery,
     publicBase,
-    fetchFn
+    trustedBase,
+    fetchFn,
+    clientStore
   });
 
   const scopes = Array.isArray(serverConfig.auth?.scopes) ? serverConfig.auth.scopes : [];
@@ -364,7 +484,7 @@ export async function startUserAuthorization({
     ? scopes.join(' ')
     : discovery.resourceMetadata?.scopes_supported?.join(' ') || undefined;
   const resource = resourceIndicatorFor(serverConfig.transport.url, discovery.resourceMetadata);
-  const redirectUri = mcpCallbackUrl(publicBase);
+  const redirectUri = mcpCallbackUrl(publicBase, serverConfig.id);
 
   let started;
   try {
@@ -387,6 +507,12 @@ export async function startUserAuthorization({
     returnUrl,
     codeVerifier: started.codeVerifier,
     redirectUri,
+    issuer: expectedIssuer(discovery),
+    authorizationServerUrl: String(discovery.authorizationServerUrl),
+    clientId: clientInformation.client_id,
+    issRequired:
+      discovery.authorizationServerMetadata?.authorization_response_iss_parameter_supported ===
+      true,
     resource: resource.href
   });
   const authorizationUrl = new URL(started.authorizationUrl.href);
@@ -400,25 +526,48 @@ export async function startUserAuthorization({
 }
 
 /**
- * Finish a sign-in: exchange the code with the verifier from the (already
+ * Finish a sign-in: check the authorization response came from the server
+ * the request went to, exchange the code with the verifier from the (already
  * verified and user-bound) ticket, and store the tokens.
+ *
+ * Mix-up defence (RFC 9700 §4.4): an `iss` parameter (RFC 9207) must equal
+ * the ticket's issuer, and a missing one is refused when the authorization
+ * server promised to send it. The code is then exchanged only when the
+ * server's current registration is still the ticket's authorization server
+ * and client — never at whatever registration happens to be current.
  *
  * @param {Object} params
  * @param {Object} params.serverConfig
  * @param {Object} params.ticket - Verified ticket (see mcpOAuthTicket.verifyMcpOAuthTicket)
  * @param {string} params.code - Authorization code
+ * @param {string} [params.iss] - RFC 9207 `iss` of the authorization response
  * @param {Object} [params.security]
  * @param {McpOAuthClientStore} [params.clientStore]
  * @returns {Promise<void>}
- * @throws {McpOAuthFlowError} `exchange_failed`
+ * @throws {McpOAuthFlowError} `issuer_mismatch` | `exchange_failed`
  */
 export async function completeUserAuthorization({
   serverConfig,
   ticket,
   code,
+  iss,
   security,
   clientStore = getMcpOAuthClientStore()
 }) {
+  if (typeof iss === 'string' && iss) {
+    if (iss !== ticket.issuer) {
+      throw new McpOAuthFlowError(
+        MCP_OAUTH_ERROR_CODES.ISSUER_MISMATCH,
+        'Authorization response names another issuer'
+      );
+    }
+  } else if (iss !== undefined || ticket.issRequired) {
+    throw new McpOAuthFlowError(
+      MCP_OAUTH_ERROR_CODES.ISSUER_MISMATCH,
+      'Authorization response without the required iss parameter'
+    );
+  }
+
   const fetchFn = buildMcpOAuthFetch(security);
   const registration = await clientStore.getFor(serverConfig);
   const provider = new McpUserOAuthProvider({
@@ -435,6 +584,15 @@ export async function completeUserAuthorization({
       'No OAuth client registration for this server'
     );
   }
+  if (
+    registration.authorizationServerUrl !== ticket.authorizationServerUrl ||
+    clientInformation.client_id !== ticket.clientId
+  ) {
+    throw new McpOAuthFlowError(
+      MCP_OAUTH_ERROR_CODES.EXCHANGE_FAILED,
+      'The OAuth client registration changed since the sign-in started'
+    );
+  }
 
   let tokens;
   try {
@@ -448,18 +606,105 @@ export async function completeUserAuthorization({
       fetchFn
     });
   } catch (error) {
-    // `invalid_client`: the registration is dead for everybody.
-    if (error?.name === 'InvalidClientError' || error?.errorCode === 'invalid_client') {
+    // `invalid_client`: the registration is dead for everybody; the next
+    // sign-in registers afresh.
+    if (definitiveOAuthRejection(error) === 'invalid_client' && registration.source !== 'config') {
       await clientStore.clear(serverConfig.id);
     }
     throw new McpOAuthFlowError(MCP_OAUTH_ERROR_CODES.EXCHANGE_FAILED, error.message);
   }
-  await writeUserTokens(ticket.userId, serverConfig.id, tokens);
+  await writeUserTokens(
+    ticket.userId,
+    serverConfig.id,
+    tokens,
+    tokenBindingFor(serverConfig, {
+      authorizationServerUrl: registration.authorizationServerUrl,
+      clientId: clientInformation.client_id,
+      resource: ticket.resource
+    })
+  );
   logger.info('MCP OAuth sign-in completed', {
     component: COMPONENT,
     serverId: serverConfig.id,
     userId: ticket.userId
   });
+}
+
+/**
+ * One refresh of a user's tokens at the authorization server that issued
+ * them. The caller (`McpClientManager._refreshUserTokens`) makes it
+ * single-flight per (user, server) and decides what to delete.
+ *
+ * @param {Object} params
+ * @param {Object} params.serverConfig
+ * @param {string} params.userId
+ * @param {Object} params.current - The stored token payload (with `refresh_token`)
+ * @param {Object} [params.security]
+ * @param {McpOAuthClientStore} [params.clientStore]
+ * @param {Function} [params.refresh] - Test seam; the SDK's `refreshAuthorization`
+ * @returns {Promise<Object>} The new stored payload
+ * @throws {McpAuthRequiredError} Definitively refused (`error.rejection` names why:
+ *   `invalid_grant` | `invalid_client` | `unauthorized_client` | `other_client`), or
+ *   no client to refresh with (no `rejection`: the tokens are not the problem)
+ * @throws {McpTokenRefreshError} Transient failure — the tokens are still good
+ */
+export async function refreshUserTokens({
+  serverConfig,
+  userId,
+  current,
+  security,
+  clientStore = getMcpOAuthClientStore(),
+  refresh = refreshAuthorization
+}) {
+  const serverId = serverConfig.id;
+  const registration = await clientStore.getFor(serverConfig);
+  const provider = new McpUserOAuthProvider({ serverConfig, userId, clientStore });
+  const clientInformation =
+    provider.configuredClientInformation() || McpOAuthClientStore.clientInformationOf(registration);
+  const authorizationServerUrl = registration?.authorizationServerUrl;
+  if (!clientInformation || !authorizationServerUrl) {
+    throw new McpAuthRequiredError(serverId, 'No OAuth client registration to refresh with');
+  }
+  const binding = current.binding || {};
+  // A refresh token goes back only to the authorization server and client it
+  // was issued to; one made for another is useless — and must not leak.
+  if (
+    (binding.authorizationServerUrl && binding.authorizationServerUrl !== authorizationServerUrl) ||
+    (binding.clientId && binding.clientId !== clientInformation.client_id)
+  ) {
+    const error = new McpAuthRequiredError(serverId, 'Tokens were issued to another client');
+    error.rejection = 'other_client';
+    throw error;
+  }
+
+  let tokens;
+  try {
+    tokens = await refresh(authorizationServerUrl, {
+      metadata: registration.discovery?.authorizationServerMetadata,
+      clientInformation,
+      refreshToken: current.refresh_token,
+      ...(binding.resource ? { resource: new URL(binding.resource) } : {}),
+      fetchFn: buildMcpOAuthFetch(security)
+    });
+  } catch (error) {
+    const rejection = definitiveOAuthRejection(error);
+    if (rejection) {
+      const refused = new McpAuthRequiredError(serverId, `Refresh refused: ${rejection}`);
+      refused.rejection = rejection;
+      refused.source = registration.source;
+      throw refused;
+    }
+    throw new McpTokenRefreshError(serverId, error?.message || String(error));
+  }
+  await writeUserTokens(userId, serverId, tokens, {
+    ...tokenBindingFor(serverConfig, {
+      authorizationServerUrl,
+      clientId: clientInformation.client_id,
+      resource: binding.resource
+    })
+  });
+  logger.info('MCP user tokens refreshed', { component: COMPONENT, serverId, userId });
+  return readUserTokens(userId, serverId);
 }
 
 /**

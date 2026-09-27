@@ -16,7 +16,12 @@ import {
   readToolUiMeta
 } from './mcpApps.js';
 import { findFileInputs, rewriteFileInputSchema, fileInputHint } from './mcpFileInputs.js';
-import { isAuthRequiredError, McpAuthRequiredError } from './McpUserOAuthProvider.js';
+import {
+  isAuthRequiredError,
+  isTokenRefreshError,
+  McpAuthRequiredError,
+  withoutRedirects
+} from './McpUserOAuthProvider.js';
 import logger from '../../utils/logger.js';
 
 /** How long a fetched MCP App UI resource is reused before re-reading it. */
@@ -224,6 +229,18 @@ export class McpServerConnection {
           }
         );
       };
+      // Per-user OAuth: on a 401 the SDK's auth() runs OAuth discovery through
+      // this same fetch. Those requests go to URLs the MCP server (or its
+      // authorization server) names, so they are sent without following
+      // redirects — the SSRF guard checks only the first URL. MCP requests to
+      // the endpoint's own origin keep the default behaviour.
+      const guardedOAuthFetch = withoutRedirects(pinnedFetch);
+      const transportFetch = this.authProvider
+        ? (input, init = {}) =>
+            isOAuthSideRequest(input, url)
+              ? guardedOAuthFetch(input, init)
+              : pinnedFetch(input, init)
+        : pinnedFetch;
 
       // Per-user OAuth: the SDK transport sets the bearer token and runs the
       // refresh / re-consent logic itself. `_getAuthHeaders` adds nothing for
@@ -234,7 +251,7 @@ export class McpServerConnection {
         const r = this.config.reconnect || {};
         return new StreamableHTTPClientTransport(url, {
           requestInit,
-          fetch: pinnedFetch,
+          fetch: transportFetch,
           ...authOptions,
           reconnectionOptions: {
             maxReconnectionDelay: r.maxDelayMs ?? 30000,
@@ -249,7 +266,7 @@ export class McpServerConnection {
       // by Streamable HTTP; we keep this for back-compat with older servers.
       return new SSEClientTransport(url, {
         requestInit,
-        fetch: pinnedFetch,
+        fetch: transportFetch,
         eventSourceInit: { fetch: pinnedFetch },
         ...authOptions
       });
@@ -316,7 +333,7 @@ export class McpServerConnection {
       } catch (err) {
         // A missing or rejected user token is not a server fault: it must not
         // count towards marking the server unhealthy for everybody.
-        if (isAuthRequiredError(err)) {
+        if (isAuthRequiredError(err) || isTokenRefreshError(err)) {
           await this._closeQuietly();
           throw err;
         }
@@ -633,6 +650,27 @@ export class McpServerConnection {
       ...(this.config.auth?.type === 'oauthUser' ? { authType: 'oauthUser' } : {})
     };
   }
+}
+
+/**
+ * Whether a request of a per-user OAuth transport is OAuth discovery rather
+ * than MCP traffic: another origin than the MCP endpoint, or a
+ * `/.well-known/` document on it.
+ *
+ * @param {string|URL|Request} input
+ * @param {URL} endpoint - The MCP endpoint URL
+ * @returns {boolean}
+ */
+function isOAuthSideRequest(input, endpoint) {
+  let target;
+  try {
+    target = new URL(
+      typeof input === 'string' ? input : input?.url || input?.href || String(input)
+    );
+  } catch {
+    return true;
+  }
+  return target.origin !== endpoint.origin || target.pathname.startsWith('/.well-known/');
 }
 
 /**

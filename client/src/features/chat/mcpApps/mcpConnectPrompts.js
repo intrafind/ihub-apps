@@ -12,8 +12,11 @@
  * The sign-in leaves the page (full redirect to the authorization server) and
  * comes back to the chat with `?mcp_connected=<serverId>` or
  * `?mcp_error=<code>&mcp_server=<serverId>`. {@link consumeMcpConnectResult}
- * reads those parameters once per page load and removes them from the URL, so
- * a reload does not show the result again. The URL that starts a sign-in is
+ * reads those parameters once and removes them from the URL (telling the
+ * router, so it does not put them back), so a reload does not show the result
+ * again. The result belongs to the page the sign-in returned to: after an
+ * in-app navigation to another path it no longer applies. Whether a server is
+ * connected *now* comes from `mcpConnectionStatus.js`. The URL that starts a sign-in is
  * built in `mcpConnectUrl.js` (kept apart: it depends on the runtime base
  * path, which this projection module must not load).
  *
@@ -68,40 +71,48 @@ export function buildMcpAuthPrompts(run) {
   return prompts.length > 0 ? prompts : null;
 }
 
-/** The sign-in result of this page load, read once. */
+const EMPTY_RESULT = Object.freeze({ connected: null, error: null, errorServer: null });
+
+/** The sign-in result read for one page (path), read once. */
 let consumed = null;
 
 /**
  * The result of a sign-in that just returned to this page, read from the URL
  * on first call and then removed from it (history entry replaced, other
- * parameters kept).
+ * parameters kept, the router told through a `popstate` so its copy of the
+ * search parameters drops them too). It applies to the path it was read on
+ * only; on any other path the result is empty.
  *
  * @returns {{connected: string|null, error: string|null, errorServer: string|null}}
  */
 export function consumeMcpConnectResult() {
-  if (consumed) return consumed;
-  consumed = { connected: null, error: null, errorServer: null };
-  if (typeof window === 'undefined' || !window.location) return consumed;
+  if (typeof window === 'undefined' || !window.location) return EMPTY_RESULT;
+  const path = window.location.pathname;
+  if (consumed && consumed.path === path) return consumed.result;
   let url;
   try {
     url = new URL(window.location.href);
   } catch {
-    return consumed;
+    return EMPTY_RESULT;
   }
   consumed = {
-    connected: url.searchParams.get('mcp_connected'),
-    error: url.searchParams.get('mcp_error'),
-    errorServer: url.searchParams.get('mcp_server')
+    path,
+    result: {
+      connected: url.searchParams.get('mcp_connected'),
+      error: url.searchParams.get('mcp_error'),
+      errorServer: url.searchParams.get('mcp_server')
+    }
   };
   if (MCP_CONNECT_PARAMS.some(name => url.searchParams.has(name))) {
     for (const name of MCP_CONNECT_PARAMS) url.searchParams.delete(name);
     try {
       window.history.replaceState(window.history.state, '', url.toString());
+      window.dispatchEvent(new PopStateEvent('popstate', { state: window.history.state }));
     } catch {
       /* a sandboxed frame may refuse; the result is still read once */
     }
   }
-  return consumed;
+  return consumed.result;
 }
 
 /** Test seam: forget the result read for this page load. */
