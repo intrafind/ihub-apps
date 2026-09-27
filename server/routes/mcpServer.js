@@ -629,20 +629,24 @@ export default function registerMcpServerRoutes(app) {
       }
 
       // message/stream: every event is a JSON-RPC response on an SSE stream.
-      // Headers go out with the first event, so a request that fails before
-      // anything streamed still gets an ordinary JSON error response.
+      // Headers go out with the first event. A request that fails before
+      // anything streamed still answers as a stream carrying one error frame,
+      // as the reference server does: A2A clients require text/event-stream
+      // for message/stream and would drop a JSON body with its error.
       let started = false;
+      const startStream = () => {
+        if (started) return;
+        started = true;
+        res.status(200);
+        res.setHeader('Content-Type', 'text/event-stream');
+        res.setHeader('Cache-Control', 'no-cache, no-store');
+        res.setHeader('Connection', 'keep-alive');
+        res.setHeader('X-Accel-Buffering', 'no');
+        res.flushHeaders();
+      };
       const stream = payload => {
         if (res.writableEnded) return;
-        if (!started) {
-          started = true;
-          res.status(200);
-          res.setHeader('Content-Type', 'text/event-stream');
-          res.setHeader('Cache-Control', 'no-cache, no-store');
-          res.setHeader('Connection', 'keep-alive');
-          res.setHeader('X-Accel-Buffering', 'no');
-          res.flushHeaders();
-        }
+        startStream();
         writeSseFrame(res, payload);
       };
       // A client that goes away cancels the task it was streaming; the store
@@ -659,11 +663,8 @@ export default function registerMcpServerRoutes(app) {
         if (taskId && !res.writableEnded) ctx.store.abortLocal(taskId);
       });
       const errorResponse = await dispatchA2A(body, { ...ctx, stream: watched });
-      if (errorResponse && !started) {
-        // The dispatcher answered with an error before the stream began.
-        return res.json(errorResponse);
-      }
-      if (errorResponse && started) {
+      if (errorResponse && !res.writableEnded) {
+        startStream();
         writeSseFrame(res, errorResponse, { event: 'error' });
       }
       if (!res.writableEnded) res.end();

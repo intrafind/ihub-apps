@@ -1,4 +1,7 @@
 import { describe, it, expect, jest, beforeEach } from '@jest/globals';
+import fs from 'fs/promises';
+import os from 'os';
+import path from 'path';
 
 /**
  * A2A 0.3 protocol handler: Agent Card, skills, message/send, message/stream,
@@ -69,7 +72,10 @@ jest.unstable_mockModule('../../clusterBus.js', () => ({
 
 const { dispatchA2A, buildAgentCard, listA2aSkills, parseSkillId, A2aError, A2A_ERRORS } =
   await import('../../services/mcp/a2aHandler.js');
-const { A2aTaskStore, FINAL_TASK_STATES } = await import('../../services/mcp/a2aTaskStore.js');
+const { A2aTaskStore, FINAL_TASK_STATES, contextStorageKey } =
+  await import('../../services/mcp/a2aTaskStore.js');
+const { FilesystemDocumentStore } =
+  await import('../../storage/providers/filesystem/FilesystemDocumentStore.js');
 
 const fullUser = () => ({
   id: 'alice',
@@ -295,6 +301,55 @@ describe('message/send', () => {
     );
     // Bob has several skills and the context is not his, so no skill is inferred.
     expect(r.error.code).toBe(A2A_ERRORS.INVALID_PARAMS);
+  });
+
+  it("keeps two callers' contexts apart when they pick the same contextId", async () => {
+    const bob = { ...fullUser(), id: 'bob' };
+    const send = (user, text, messageId) =>
+      dispatchA2A(
+        rpc('message/send', {
+          message: textMessage(text, {
+            contextId: 'support',
+            messageId,
+            metadata: { skillId: 'app__chat' }
+          })
+        }),
+        ctx({ user })
+      );
+    await send(fullUser(), 'alice 1', 'a1');
+    await send(bob, 'bob 1', 'b1');
+    await send(fullUser(), 'alice 2', 'a2');
+    expect(invokeApp.mock.calls[1][0].messages).toEqual([{ role: 'user', content: 'bob 1' }]);
+    expect(invokeApp.mock.calls[2][0].messages).toEqual([
+      { role: 'user', content: 'alice 1' },
+      { role: 'assistant', content: 'Hello' },
+      { role: 'user', content: 'alice 2' }
+    ]);
+  });
+
+  it('stores contexts under an owner-scoped key on the storage provider', async () => {
+    const dir = await fs.mkdtemp(path.join(os.tmpdir(), 'a2a-ctx-'));
+    const documents = new FilesystemDocumentStore({ baseDir: dir });
+    const persisted = new A2aTaskStore({ documents, relayCancel: false });
+    await persisted.appendToContext({
+      contextId: 'support',
+      ownerId: 'alice',
+      skillId: 'app__chat',
+      messages: [textMessage('alice')]
+    });
+    await persisted.appendToContext({
+      contextId: 'support',
+      ownerId: 'bob',
+      skillId: 'app__chat',
+      messages: [textMessage('bob')]
+    });
+    // A fresh store (another worker) reads each owner's own document back.
+    const other = new A2aTaskStore({ documents, relayCancel: false });
+    expect((await other.getContext('support', 'alice')).history).toHaveLength(1);
+    expect((await other.getContext('support', 'alice')).history[0].parts[0].text).toBe('alice');
+    expect((await other.getContext('support', 'bob')).history[0].parts[0].text).toBe('bob');
+    expect(contextStorageKey('support', 'alice')).not.toBe(contextStorageKey('support', 'bob'));
+    await fs.rm(dir, { recursive: true, force: true });
   });
 
   it('falls back to the configured default skill, and to the only skill', async () => {
