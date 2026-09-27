@@ -1974,14 +1974,20 @@
           "fileInput": "file input: {{params}}",
           "fileInputHint": "Receives a chat attachment of the current message as a file.",
           "showMore": "Show more",
-          "showLess": "Show less"
+          "showLess": "Show less",
+          "authRequired": "This server needs each user to sign in. Connect your own account to test it and load its tools.",
+          "authRequiredUnsaved": "This server needs each user to sign in. Save it, then connect your own account to test it and load its tools.",
+          "connect": "Connect my account",
+          "accountConnected": "Your account is connected to {{id}}. Its tools are loaded in the background; test the connection to refresh them.",
+          "accountConnectFailed": "Connecting your account failed ({{code}})."
         },
         "status": {
           "unknown": "unknown",
           "unhealthy": "unhealthy",
           "connected": "connected ({{count}} tools)",
           "idle": "idle",
-          "disabled": "disabled"
+          "disabled": "disabled",
+          "connectedUsers": "{{count}} users connected"
         },
         "form": {
           "id": "ID",
@@ -2022,7 +2028,15 @@
           "allowedToolsHint": "Apps enable this server as a whole; they get exactly the tools allowed here. Users see the server as a single entry in the chat.",
           "allowedToolsAll": "All tools the server offers",
           "allowedToolsSelected": "Only the tools I select",
-          "allowedToolsManual": "Tool names as the server calls them, comma-separated. Test the connection to pick them from a list instead."
+          "allowedToolsManual": "Tool names as the server calls them, comma-separated. Test the connection to pick them from a list instead.",
+          "authOauthUser": "OAuth — each user signs in",
+          "oauthUserHint": "Every user connects their own account (authorization code + PKCE). iHub finds the authorization server and registers itself automatically. Behind a reverse proxy, set the MCP gateway public URL so the callback URL stays stable.",
+          "scopes": "Scopes (optional, comma-separated)",
+          "preregisteredClientId": "Client ID (optional)",
+          "preregisteredClientIdHint": "Only for a client registered at the authorization server by hand. Leave empty to let iHub register itself.",
+          "clientSecretOptional": "Client secret (optional)",
+          "clientSecretRefHint": "Select a stored credential profile holding the OAuth client secret.",
+          "authorizationServer": "Authorization server (optional override)"
         }
       },
       "gateway": {
@@ -3560,6 +3574,27 @@
           "mcpWorkflowsRun": "Run iHub workflows on your behalf",
           "mcpResourcesRead": "Read iHub sources and skills available to you"
         }
+      },
+      "mcp": {
+        "title": "MCP servers",
+        "description": "Tools of these servers act with your own account. Connect a server to use its tools in chats.",
+        "serverDescription": "MCP server",
+        "connect": "Connect {{name}}",
+        "connected": "{{name}} connected successfully.",
+        "connectionFailed": "Connecting {{name}} failed: {{message}}",
+        "disconnected": "{{name}} disconnected",
+        "disconnectFailed": "Failed to disconnect {{name}}: {{message}}",
+        "errors": {
+          "oauth_failed": "the sign-in was cancelled or refused",
+          "missing_code": "the sign-in returned no authorization code",
+          "invalid_state": "the sign-in link is invalid",
+          "state_expired": "the sign-in took too long, please start again",
+          "user_mismatch": "the sign-in was started by a different user",
+          "server_not_found": "the server is not available to you",
+          "exchange_failed": "the server did not accept the sign-in",
+          "discovery_failed": "the server's sign-in could not be found",
+          "registration_failed": "iHub could not register with the server"
+        }
       }
     }
   },
@@ -4262,5 +4297,12 @@
       "attachmentNotIncluded": "Attachment not included: {{name}}",
       "attachmentUnnamed": "file"
     }
+  },
+  "mcpConnect": {
+    "title": "Connect {{name}}",
+    "explanation": "{{name}} needs you to sign in with your own account before its tools can be used.",
+    "connect": "Connect",
+    "connected": "{{name}} is connected. Send your request again to use it.",
+    "failed": "Connecting {{name}} did not succeed. Try again."
   }
 }

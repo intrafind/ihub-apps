@@ -161,7 +161,9 @@ const OPTIONAL_MESSAGE_FIELDS = [
   'attachments',
   'artifacts',
   // MCP App views of an assistant answer (see services/mcp/mcpApps.js).
-  'mcpApps'
+  'mcpApps',
+  // Connect cards for per-user OAuth MCP servers (see chatSeams.authRequiredOf).
+  'mcpAuthRequired'
 ];
 
 /**

@@ -6,6 +6,8 @@ import { makeAdminApiCall } from '../../../api/adminApi';
 import { CredentialRefSelect } from '../components/OpenApiToolEditor';
 import McpServerCatalogDialog from '../components/McpServerCatalogDialog';
 import { getLocalizedContent } from '../../../utils/localizeContent';
+import { consumeMcpConnectResult } from '../../chat/mcpApps/mcpConnectPrompts';
+import { buildMcpConnectUrl } from '../../chat/mcpApps/mcpConnectUrl';
 
 const BLANK_FORM = {
   id: '',
@@ -51,6 +53,28 @@ function textToHeaders(text) {
 
 function isHttpTransport(transport) {
   return transport?.type === 'streamableHttp' || transport?.type === 'sse';
+}
+
+// `auth.scopes` is edited as comma-separated text. The text is kept next to
+// the parsed list while typing (`scopesText`) and dropped before saving.
+function scopesFromText(text) {
+  return (text || '')
+    .split(/[\s,]+/)
+    .map(s => s.trim())
+    .filter(Boolean);
+}
+
+function authForSave(auth) {
+  if (auth?.type !== 'oauthUser') return auth;
+  const { scopesText, ...rest } = auth;
+  const scopes = scopesText !== undefined ? scopesFromText(scopesText) : rest.scopes || [];
+  return {
+    ...rest,
+    ...(scopes.length ? { scopes } : { scopes: undefined }),
+    clientId: rest.clientId || undefined,
+    clientSecretRef: rest.clientSecretRef || undefined,
+    authorizationServer: rest.authorizationServer || undefined
+  };
 }
 
 function transportToForm(transport) {
@@ -164,6 +188,7 @@ function authFields(auth, onChange, t) {
             if (v === 'header') return onChange({ type: 'header', headerName: '', valueRef: '' });
             if (v === 'oauth')
               return onChange({ type: 'oauth', tokenUrl: '', clientId: '', clientSecretRef: '' });
+            if (v === 'oauthUser') return onChange({ type: 'oauthUser' });
           }}
           className={INPUT_CLASS}
         >
@@ -176,8 +201,77 @@ function authFields(auth, onChange, t) {
           <option value="oauth">
             {t('admin.mcp.servers.form.authOauth', 'OAuth (client credentials)')}
           </option>
+          <option value="oauthUser">
+            {t('admin.mcp.servers.form.authOauthUser', 'OAuth — each user signs in')}
+          </option>
         </select>
       </div>
+      {auth?.type === 'oauthUser' && (
+        <>
+          <p className="text-xs text-gray-500 dark:text-gray-400">
+            {t(
+              'admin.mcp.servers.form.oauthUserHint',
+              'Every user connects their own account (authorization code + PKCE). iHub finds the authorization server and registers itself automatically. Behind a reverse proxy, set the MCP gateway public URL so the callback URL stays stable.'
+            )}
+          </p>
+          <div>
+            <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+              {t('admin.mcp.servers.form.scopes', 'Scopes (optional, comma-separated)')}
+            </label>
+            <input
+              type="text"
+              value={auth.scopesText ?? (auth.scopes || []).join(', ')}
+              onChange={e => onChange({ ...auth, scopesText: e.target.value })}
+              className={INPUT_CLASS}
+              placeholder="openid, profile, email"
+            />
+          </div>
+          <div>
+            <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+              {t('admin.mcp.servers.form.preregisteredClientId', 'Client ID (optional)')}
+            </label>
+            <input
+              type="text"
+              value={auth.clientId || ''}
+              onChange={e => onChange({ ...auth, clientId: e.target.value })}
+              className={MONO_INPUT_CLASS}
+            />
+            <p className="mt-1 text-xs text-gray-500 dark:text-gray-400">
+              {t(
+                'admin.mcp.servers.form.preregisteredClientIdHint',
+                'Only for a client registered at the authorization server by hand. Leave empty to let iHub register itself.'
+              )}
+            </p>
+          </div>
+          {auth.clientId && (
+            <CredentialRefSelect
+              value={auth.clientSecretRef || ''}
+              onChange={id => onChange({ ...auth, clientSecretRef: id })}
+              types={['secret', 'oauth2']}
+              label={t('admin.mcp.servers.form.clientSecretOptional', 'Client secret (optional)')}
+              help={t(
+                'admin.mcp.servers.form.clientSecretRefHint',
+                'Select a stored credential profile holding the OAuth client secret.'
+              )}
+            />
+          )}
+          <div>
+            <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+              {t(
+                'admin.mcp.servers.form.authorizationServer',
+                'Authorization server (optional override)'
+              )}
+            </label>
+            <input
+              type="url"
+              value={auth.authorizationServer || ''}
+              onChange={e => onChange({ ...auth, authorizationServer: e.target.value })}
+              className={MONO_INPUT_CLASS}
+              placeholder="https://login.example.com"
+            />
+          </div>
+        </>
+      )}
       {auth?.type === 'bearer' && (
         <CredentialRefSelect
           value={auth.tokenRef || ''}
@@ -397,7 +491,33 @@ function AdminMcpServersPage() {
   const { t, i18n } = useTranslation();
   const [loading, setLoading] = useState(true);
   const [servers, setServers] = useState([]);
-  const [message, setMessage] = useState(null);
+  // Coming back from connecting an admin's own account to a per-user server.
+  const [message, setMessage] = useState(() => {
+    const returned = consumeMcpConnectResult();
+    if (returned.connected) {
+      return {
+        type: 'success',
+        text: t(
+          'admin.mcp.servers.test.accountConnected',
+          'Your account is connected to {{id}}. Its tools are loaded in the background; test the connection to refresh them.',
+          { id: returned.connected }
+        )
+      };
+    }
+    if (returned.error) {
+      return {
+        type: 'error',
+        text: t(
+          'admin.mcp.servers.test.accountConnectFailed',
+          'Connecting your account failed ({{code}}).',
+          {
+            code: returned.error
+          }
+        )
+      };
+    }
+    return null;
+  });
   const [editing, setEditing] = useState(null); // null | server | 'new'
   const [form, setForm] = useState(BLANK_FORM);
   const [draftTesting, setDraftTesting] = useState(false);
@@ -480,6 +600,7 @@ function AdminMcpServersPage() {
     // A blank prefix is left out, so the server uses its `<id>__` default.
     toolPrefix: form.toolPrefix?.trim() || undefined,
     transport: transportFromForm(form.transport),
+    auth: authForSave(form.auth),
     name: form.name ? { en: form.name } : undefined,
     description: form.description ? { en: form.description } : undefined,
     allowedTools: allowedToolList(form.allowedTools)
@@ -497,6 +618,11 @@ function AdminMcpServersPage() {
         headers: { 'Content-Type': 'application/json' },
         body: buildBody()
       });
+      if (data.status === 'auth_required') {
+        // Per-user sign-in: the admin tests with their own account.
+        setDraftTest({ ok: false, authRequired: true, serverId: form.id });
+        return;
+      }
       setDraftTest({
         ok: true,
         status: data.status,
@@ -563,6 +689,17 @@ function AdminMcpServersPage() {
       const { data } = await makeAdminApiCall(`/admin/mcp/servers/${encodeURIComponent(id)}/test`, {
         method: 'POST'
       });
+      if (data.status === 'auth_required') {
+        setMessage({
+          type: 'info',
+          text: t(
+            'admin.mcp.servers.test.authRequired',
+            'This server needs each user to sign in. Connect your own account to test it and load its tools.'
+          ),
+          connectServerId: id
+        });
+        return;
+      }
       setMessage({
         type: 'success',
         text: t('admin.mcp.common.testOk', 'OK — {{count}} tools discovered', {
@@ -639,6 +776,18 @@ function AdminMcpServersPage() {
             }`}
           >
             {message.text}
+            {message.connectServerId && (
+              <button
+                type="button"
+                onClick={() => {
+                  window.location.href = buildMcpConnectUrl(message.connectServerId);
+                }}
+                className="ml-3 inline-flex items-center rounded-md bg-blue-600 px-3 py-1 text-sm font-medium text-white hover:bg-blue-700"
+              >
+                <Icon name="link" size="sm" className="mr-1.5" />
+                {t('admin.mcp.servers.test.connect', 'Connect my account')}
+              </button>
+            )}
           </div>
         )}
 
@@ -680,6 +829,16 @@ function AdminMcpServersPage() {
                         {!s.enabled && (
                           <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-yellow-100 dark:bg-yellow-900/50 text-yellow-800 dark:text-yellow-300">
                             {t('admin.mcp.servers.status.disabled', 'disabled')}
+                          </span>
+                        )}
+                        {s.auth?.type === 'oauthUser' && (
+                          <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-xs font-medium bg-indigo-100 dark:bg-indigo-900/50 text-indigo-800 dark:text-indigo-300">
+                            <Icon name="user-group" size="xs" />
+                            {t(
+                              'admin.mcp.servers.status.connectedUsers',
+                              '{{count}} users connected',
+                              { count: s.connectedUsers ?? 0 }
+                            )}
                           </span>
                         )}
                       </div>
@@ -1102,6 +1261,32 @@ function AdminMcpServersPage() {
                             'The server connected but offers no tools.'
                           )}
                         </p>
+                      )}
+                    </div>
+                  ) : draftTest?.authRequired ? (
+                    <div className="text-sm text-blue-800 dark:text-blue-200">
+                      <p>
+                        {editing === 'new'
+                          ? t(
+                              'admin.mcp.servers.test.authRequiredUnsaved',
+                              'This server needs each user to sign in. Save it, then connect your own account to test it and load its tools.'
+                            )
+                          : t(
+                              'admin.mcp.servers.test.authRequired',
+                              'This server needs each user to sign in. Connect your own account to test it and load its tools.'
+                            )}
+                      </p>
+                      {editing !== 'new' && (
+                        <button
+                          type="button"
+                          onClick={() => {
+                            window.location.href = buildMcpConnectUrl(draftTest.serverId);
+                          }}
+                          className="mt-2 inline-flex items-center rounded-md bg-blue-600 px-3 py-1.5 text-sm font-medium text-white hover:bg-blue-700"
+                        >
+                          <Icon name="link" size="sm" className="mr-1.5" />
+                          {t('admin.mcp.servers.test.connect', 'Connect my account')}
+                        </button>
                       )}
                     </div>
                   ) : (

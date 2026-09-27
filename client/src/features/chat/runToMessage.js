@@ -7,7 +7,8 @@
  * `extras` carries exactly the message fields the chat UI reads today:
  * thoughts, images, clarification/awaitingInput/clarificationAnswered,
  * workflowCheckpoint, workflowSteps/workflowStep, workflowResult/outputFormat,
- * activeSkills, searchStatus, searchSummary, toolActivity, mcpApps, citations, groundingSources,
+ * activeSkills, searchStatus, searchSummary, toolActivity, mcpApps, mcpAuthRequired, citations,
+ * groundingSources,
  * answerSource, finishReason, ifinderMessageId. The hook (`useAppChat`) only decides WHEN to write the
  * projection and which message it belongs to — it never interprets events.
  *
@@ -17,6 +18,7 @@ import { isRunFinished, getInteractions } from '../../shared/run/runReducer';
 import { extractGroundingSources } from './groundingSources';
 import { buildToolActivity } from './toolActivity';
 import { buildMcpAppViews } from './mcpApps/mcpAppViewList';
+import { buildMcpAuthPrompts } from './mcpApps/mcpConnectPrompts';
 import {
   interactionToCheckpoint,
   isCheckpointInteraction,
@@ -221,6 +223,9 @@ export function projectRunToMessage(run, options = {}) {
   // Interactive MCP App views the turn's tools rendered.
   const mcpApps = buildMcpAppViews(run);
   if (mcpApps) extras.mcpApps = mcpApps;
+  // MCP servers with per-user sign-in the user has to connect (one per server).
+  const mcpAuthRequired = buildMcpAuthPrompts(run);
+  if (mcpAuthRequired) extras.mcpAuthRequired = mcpAuthRequired;
 
   // ── completion metadata ──────────────────────────────────────────────
   if (finished) {

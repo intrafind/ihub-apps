@@ -2258,14 +2258,20 @@
           "fileInput": "Datei-Eingabe: {{params}}",
           "fileInputHint": "Erhält einen Chat-Anhang der aktuellen Nachricht als Datei.",
           "showMore": "Mehr anzeigen",
-          "showLess": "Weniger anzeigen"
+          "showLess": "Weniger anzeigen",
+          "authRequired": "Bei diesem Server meldet sich jede Person selbst an. Verbinden Sie Ihr eigenes Konto, um ihn zu testen und seine Tools zu laden.",
+          "authRequiredUnsaved": "Bei diesem Server meldet sich jede Person selbst an. Speichern Sie ihn und verbinden Sie dann Ihr eigenes Konto, um ihn zu testen und seine Tools zu laden.",
+          "connect": "Mein Konto verbinden",
+          "accountConnected": "Ihr Konto ist mit {{id}} verbunden. Die Tools werden im Hintergrund geladen; testen Sie die Verbindung, um sie zu aktualisieren.",
+          "accountConnectFailed": "Das Verbinden Ihres Kontos ist fehlgeschlagen ({{code}})."
         },
         "status": {
           "unknown": "unbekannt",
           "unhealthy": "fehlerhaft",
           "connected": "verbunden ({{count}} Tools)",
           "idle": "inaktiv",
-          "disabled": "deaktiviert"
+          "disabled": "deaktiviert",
+          "connectedUsers": "{{count}} Personen verbunden"
         },
         "form": {
           "id": "ID",
@@ -2306,7 +2312,15 @@
           "allowedToolsHint": "Apps aktivieren diesen Server als Ganzes und erhalten genau die hier freigegebenen Tools. Benutzer sehen den Server im Chat als einen einzigen Eintrag.",
           "allowedToolsAll": "Alle Tools des Servers",
           "allowedToolsSelected": "Nur die ausgewählten Tools",
-          "allowedToolsManual": "Tool-Namen, wie der Server sie nennt, kommagetrennt. Testen Sie die Verbindung, um sie stattdessen aus einer Liste auszuwählen."
+          "allowedToolsManual": "Tool-Namen, wie der Server sie nennt, kommagetrennt. Testen Sie die Verbindung, um sie stattdessen aus einer Liste auszuwählen.",
+          "authOauthUser": "OAuth — jede Person meldet sich an",
+          "oauthUserHint": "Jede Person verbindet ihr eigenes Konto (Authorization Code + PKCE). iHub findet den Autorisierungsserver und registriert sich automatisch. Hinter einem Reverse Proxy die öffentliche URL des MCP-Gateways setzen, damit die Callback-URL stabil bleibt.",
+          "scopes": "Scopes (optional, durch Kommas getrennt)",
+          "preregisteredClientId": "Client-ID (optional)",
+          "preregisteredClientIdHint": "Nur für einen Client, der beim Autorisierungsserver von Hand registriert wurde. Leer lassen, damit iHub sich selbst registriert.",
+          "clientSecretOptional": "Client-Secret (optional)",
+          "clientSecretRefHint": "Ein gespeichertes Zugangsdaten-Profil mit dem OAuth-Client-Secret auswählen.",
+          "authorizationServer": "Autorisierungsserver (optional, überschreibt die Erkennung)"
         }
       },
       "gateway": {
@@ -3525,6 +3539,27 @@
           "mcpWorkflowsRun": "iHub-Workflows in Ihrem Namen ausführen",
           "mcpResourcesRead": "Für Sie verfügbare iHub-Quellen und -Skills lesen"
         }
+      },
+      "mcp": {
+        "title": "MCP-Server",
+        "description": "Die Tools dieser Server handeln mit Ihrem eigenen Konto. Verbinden Sie einen Server, um seine Tools in Chats zu nutzen.",
+        "serverDescription": "MCP-Server",
+        "connect": "{{name}} verbinden",
+        "connected": "{{name}} wurde erfolgreich verbunden.",
+        "connectionFailed": "Verbinden von {{name}} fehlgeschlagen: {{message}}",
+        "disconnected": "{{name}} getrennt",
+        "disconnectFailed": "{{name}} konnte nicht getrennt werden: {{message}}",
+        "errors": {
+          "oauth_failed": "die Anmeldung wurde abgebrochen oder abgelehnt",
+          "missing_code": "die Anmeldung lieferte keinen Autorisierungscode",
+          "invalid_state": "der Anmeldelink ist ungültig",
+          "state_expired": "die Anmeldung hat zu lange gedauert, bitte neu starten",
+          "user_mismatch": "die Anmeldung wurde von einer anderen Person gestartet",
+          "server_not_found": "der Server steht Ihnen nicht zur Verfügung",
+          "exchange_failed": "der Server hat die Anmeldung nicht akzeptiert",
+          "discovery_failed": "die Anmeldung des Servers wurde nicht gefunden",
+          "registration_failed": "iHub konnte sich nicht beim Server registrieren"
+        }
       }
     }
   },
@@ -4227,5 +4262,12 @@
       "attachmentNotIncluded": "Anhang nicht enthalten: {{name}}",
       "attachmentUnnamed": "Datei"
     }
+  },
+  "mcpConnect": {
+    "title": "{{name}} verbinden",
+    "explanation": "{{name}} erfordert eine Anmeldung mit Ihrem eigenen Konto, bevor die Tools genutzt werden können.",
+    "connect": "Verbinden",
+    "connected": "{{name}} ist verbunden. Senden Sie Ihre Anfrage erneut, um es zu nutzen.",
+    "failed": "Das Verbinden von {{name}} hat nicht geklappt. Bitte erneut versuchen."
   }
 }

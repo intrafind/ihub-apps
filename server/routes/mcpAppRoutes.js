@@ -26,6 +26,8 @@
 import { z } from 'zod';
 import configCache from '../configCache.js';
 import mcpClientManager from '../services/mcp/McpClientManager.js';
+import { isAuthRequiredError } from '../services/mcp/McpUserOAuthProvider.js';
+import { isUserOAuthServer } from '../services/mcp/mcpOAuthService.js';
 import { toolVisibleInSet } from '../services/mcp/permissions.js';
 import {
   buildAllowAttribute,
@@ -77,9 +79,10 @@ const handshakeBodySchema = z.object({
 });
 
 class McpAppAccessError extends Error {
-  constructor(status, message) {
+  constructor(status, message, extra = {}) {
     super(message);
     this.status = status;
+    this.extra = extra;
   }
 }
 
@@ -142,12 +145,34 @@ export async function resolveMcpApp(req, appId, toolId) {
   if (!found || !found.tool._mcp?.ui?.resourceUri) {
     throw new McpAppAccessError(404, 'MCP App not found');
   }
-  return { app, conn: found.conn, tool: found.tool, user };
+  // A per-user OAuth server is reached on the caller's own connection only;
+  // a caller who has not connected it is told where to do so.
+  if (!isUserOAuthServer(found.conn.config)) {
+    return { app, conn: found.conn, tool: found.tool, user };
+  }
+  let conn;
+  try {
+    conn = await mcpClientManager.connectionForUser(found.conn.config.id, user);
+  } catch (error) {
+    if (isAuthRequiredError(error)) {
+      throw new McpAppAccessError(401, 'auth_required', {
+        connectUrl: mcpClientManager.connectUrlFor(found.conn.config.id)
+      });
+    }
+    throw error;
+  }
+  return { app, conn, tool: found.tool, user };
 }
 
 function sendError(res, error, action) {
   if (error instanceof McpAppAccessError) {
-    return res.status(error.status).json({ error: error.message });
+    return res.status(error.status).json({ error: error.message, ...error.extra });
+  }
+  if (isAuthRequiredError(error)) {
+    return res.status(401).json({
+      error: 'auth_required',
+      ...(error.serverId ? { connectUrl: mcpClientManager.connectUrlFor(error.serverId) } : {})
+    });
   }
   logger.warn(`MCP App ${action} failed`, { component: COMPONENT, error: error.message });
   return res.status(502).json({ error: error.message || `MCP App ${action} failed` });
