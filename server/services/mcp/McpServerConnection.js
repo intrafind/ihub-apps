@@ -657,12 +657,28 @@ function extractErrorText(result) {
   return '';
 }
 
+/**
+ * An embedded MCP App view (`ui://…` resource) in a tool result. It is for
+ * the host to render, not for the model: a view page is tens of kilobytes of
+ * HTML and script. The raw result, view included, still reaches the chat
+ * through `onRawResult`.
+ */
+function isEmbeddedUiResource(part) {
+  return (
+    part?.type === 'resource' &&
+    typeof part.resource?.uri === 'string' &&
+    part.resource.uri.startsWith('ui://')
+  );
+}
+
 function normalizeToolResult(result) {
   if (!result?.content) return result;
   // Most callers in iHub want a string. If the MCP response is a single text
   // block, surface it as-is; otherwise return the structured array so callers
   // that handle multi-modal output still get everything.
-  const parts = result.content;
+  const all = Array.isArray(result.content) ? result.content : [];
+  const withoutViews = all.filter(part => !isEmbeddedUiResource(part));
+  const parts = withoutViews.length ? withoutViews : all;
   if (parts.length === 1 && parts[0]?.type === 'text') return parts[0].text;
   return parts;
 }

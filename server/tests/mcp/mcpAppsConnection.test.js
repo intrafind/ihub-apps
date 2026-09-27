@@ -149,6 +149,22 @@ describe('McpServerConnection tool results for views', () => {
     expect(onRawResult).toHaveBeenCalledWith(raw);
   });
 
+  it('keeps an embedded view page out of what the model sees, but not out of the raw result', async () => {
+    const view = {
+      type: 'resource',
+      resource: { uri: 'ui://ticket', mimeType: 'text/html', text: '<html>ticket page</html>' }
+    };
+    const raw = { content: [{ type: 'text', text: 'Ticket INC1 rendered' }, view] };
+    const conn = connectionWith({}, { client: { callTool: jest.fn(async () => raw) } });
+    const onRawResult = jest.fn();
+    expect(await conn.callTool('render_ticket', {}, { onRawResult })).toBe('Ticket INC1 rendered');
+    expect(onRawResult).toHaveBeenCalledWith(raw);
+
+    const other = { type: 'resource', resource: { uri: 'file:///a.txt', text: 'data' } };
+    conn.client.callTool = jest.fn(async () => ({ content: [view, other] }));
+    expect(await conn.callTool('render_ticket', {})).toEqual([other]);
+  });
+
   it('callToolRaw returns the full CallToolResult', async () => {
     const raw = { content: [], structuredContent: { id: 'cp1' } };
     const conn = connectionWith({}, { client: { callTool: jest.fn(async () => raw) } });

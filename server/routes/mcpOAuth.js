@@ -73,20 +73,26 @@ function defaultReturnUrl() {
 }
 
 /**
- * `returnUrl` with query parameters added. Works for relative and absolute
- * URLs and keeps any existing query and fragment.
+ * `returnUrl` as a path on this origin, with query parameters added. The URL
+ * is parsed the way a browser would (so `/\\host` or `//host` resolve to a
+ * foreign host and lose it) and only its path, query and fragment are kept,
+ * with leading slashes collapsed: the result always starts with exactly one
+ * `/` and can never leave this origin, whatever the validator let through.
  *
  * @param {string} returnUrl - Already validated
  * @param {Object<string, string>} params
  * @returns {string}
  */
 export function withQuery(returnUrl, params) {
-  const hashIndex = returnUrl.indexOf('#');
-  const base = hashIndex >= 0 ? returnUrl.slice(0, hashIndex) : returnUrl;
-  const hash = hashIndex >= 0 ? returnUrl.slice(hashIndex) : '';
-  const query = new URLSearchParams(params).toString();
-  const sep = base.includes('?') ? '&' : '?';
-  return `${base}${sep}${query}${hash}`;
+  let url;
+  try {
+    url = new URL(String(returnUrl), 'http://ihub.invalid');
+  } catch {
+    url = new URL(defaultReturnUrl(), 'http://ihub.invalid');
+  }
+  for (const [key, value] of Object.entries(params)) url.searchParams.set(key, value);
+  const path = `${url.pathname}${url.search}${url.hash}`.replace(/^[/\\]+/, '');
+  return `/${path}`;
 }
 
 function redirectWithError(res, returnUrl, code, serverId) {
