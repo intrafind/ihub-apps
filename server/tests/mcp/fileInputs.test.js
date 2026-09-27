@@ -7,7 +7,8 @@ import {
   normalizeAttachments,
   resolveFileInputs,
   rewriteFileInputSchema,
-  toFileData
+  toFileData,
+  withoutDocumentBytes
 } from '../../services/mcp/mcpFileInputs.js';
 
 /**
@@ -290,5 +291,42 @@ describe('attachment lists', () => {
     expect(describeAttachments([{ fileType: 'image/png', base64: PNG_DATA_URL }])).toEqual([
       'attachment:1 — (unnamed) (image/png, 8 B)'
     ]);
+  });
+});
+
+describe('withoutDocumentBytes', () => {
+  const document = {
+    type: 'document',
+    fileName: 'a.pdf',
+    content: 'text',
+    base64: 'data:application/pdf;base64,JVBERg=='
+  };
+  const image = { type: 'image', fileName: 'b.png', base64: 'data:image/png;base64,iVBORw==' };
+  const audio = { type: 'audio', fileName: 'c.mp3', base64: 'data:audio/mpeg;base64,SUQz' };
+
+  it('drops the base64 of documents and keeps their text', () => {
+    expect(withoutDocumentBytes(document)).toEqual({
+      type: 'document',
+      fileName: 'a.pdf',
+      content: 'text'
+    });
+    expect(document.base64).toBeDefined();
+  });
+
+  it('keeps the base64 of images and audio, which workflows read', () => {
+    const out = withoutDocumentBytes([document, image, audio]);
+    expect(out).toHaveLength(3);
+    expect(out[0].base64).toBeUndefined();
+    expect(out[1]).toBe(image);
+    expect(out[2]).toBe(audio);
+  });
+
+  it('returns the input itself when there is nothing to strip', () => {
+    const plain = { type: 'document', fileName: 'a.txt', content: 'text' };
+    expect(withoutDocumentBytes(plain)).toBe(plain);
+    const list = [plain, image];
+    expect(withoutDocumentBytes(list)).toBe(list);
+    expect(withoutDocumentBytes(null)).toBeNull();
+    expect(withoutDocumentBytes(undefined)).toBeUndefined();
   });
 });

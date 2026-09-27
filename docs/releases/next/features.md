@@ -31,9 +31,11 @@ attachment by its file name or as `attachment:<n>`; iHub resolves the reference 
 - Admins cap the size of one such file per server with **Max. file size for tools (MB)** on the
   MCP server form (default 20 MB). Existing servers get the default on upgrade.
 - The tool preview in the server dialog marks tools with file inputs and names the parameters.
-- Documents uploaded in the chat now travel with their bytes (up to the app's document size
-  limit) so a PDF can reach such a tool; the model still sees the extracted text only, and
-  stored chats keep only the upload's name, type and size.
+- In an app that offers such a tool, documents uploaded in the chat travel with their bytes (up
+  to the app's document size limit, and together up to 60% of the platform's request body limit)
+  so a PDF can reach the tool; a document beyond that is sent as text only. Other apps send
+  documents as text only, as before. The model still sees the extracted text only, workflows
+  get the text and never the bytes, and stored chats keep only the upload's name, type and size.
 - Tools reached through the MCP gateway or the A2A endpoint have no attachments to draw from and
   report a clear error instead.
 

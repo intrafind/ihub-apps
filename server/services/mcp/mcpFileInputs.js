@@ -139,6 +139,48 @@ export function normalizeAttachments(...sources) {
   return out;
 }
 
+/** Attachment types whose `base64` predates MCP file inputs and stays as it is. */
+const MEDIA_ATTACHMENT_TYPES = new Set(['image', 'audio']);
+
+function isDocumentWithBytes(entry) {
+  return (
+    Boolean(entry) &&
+    typeof entry === 'object' &&
+    !Array.isArray(entry) &&
+    !MEDIA_ATTACHMENT_TYPES.has(entry.type) &&
+    entry.base64 !== undefined
+  );
+}
+
+/**
+ * File data without the bytes of its documents, for consumers that only ever
+ * read a document's extracted text and page images — the workflow tools'
+ * `_fileData`, which is copied into the workflow state and serialised into
+ * every checkpoint (bounded by the state-size limit).
+ *
+ * A document carries `base64` only so that a tool with file inputs can receive
+ * it on the request that sent it. Images and audio keep their `base64`: they
+ * had it before file inputs existed and workflows read it. Accepts a single
+ * entry or an array and returns the same shape; returns the input itself when
+ * there is nothing to strip.
+ *
+ * @param {Object|Array<Object>|null|undefined} fileData - `fileData`/`imageData` of a message
+ * @returns {Object|Array<Object>|null|undefined}
+ * @example
+ *   withoutDocumentBytes({ type: 'document', fileName: 'a.pdf', content: 'text', base64: 'data:…' })
+ *   // → { type: 'document', fileName: 'a.pdf', content: 'text' }
+ */
+export function withoutDocumentBytes(fileData) {
+  const list = Array.isArray(fileData) ? fileData : fileData ? [fileData] : [];
+  if (!list.some(isDocumentWithBytes)) return fileData;
+  const stripped = list.map(entry => {
+    if (!isDocumentWithBytes(entry)) return entry;
+    const { base64: _base64, ...rest } = entry;
+    return rest;
+  });
+  return Array.isArray(fileData) ? stripped : stripped[0];
+}
+
 function attachmentName(attachment) {
   const name = attachment?.fileName || attachment?.name;
   return typeof name === 'string' && name.trim() ? name.trim() : '';
