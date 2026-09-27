@@ -33,6 +33,8 @@ import { IMPORT_STATE_NAMESPACE as RUN_IMPORT_NAMESPACE } from '../services/runt
 import { INTEGRATION_CONVERSATIONS_NAMESPACE } from '../services/integrations/ConversationStateManager.js';
 import { A2A_TASKS_NAMESPACE, A2A_CONTEXTS_NAMESPACE } from '../services/mcp/a2aTaskStore.js';
 import { API_ATTACHMENTS_NAMESPACE } from '../services/api/attachmentStore.js';
+import { MCP_OAUTH_CLIENTS_NAMESPACE } from '../services/mcp/mcpOAuthClientStore.js';
+import { MCP_TOOL_CATALOG_NAMESPACE } from '../services/mcp/mcpToolCatalogStore.js';
 
 describe('storage namespaces', () => {
   it('declares no runtime namespace that is also a raw one', () => {
@@ -71,7 +73,9 @@ describe('storage namespaces', () => {
       ],
       ['A2aTaskStore.A2A_TASKS_NAMESPACE', A2A_TASKS_NAMESPACE],
       ['A2aTaskStore.A2A_CONTEXTS_NAMESPACE', A2A_CONTEXTS_NAMESPACE],
-      ['ApiAttachmentStore.API_ATTACHMENTS_NAMESPACE', API_ATTACHMENTS_NAMESPACE]
+      ['ApiAttachmentStore.API_ATTACHMENTS_NAMESPACE', API_ATTACHMENTS_NAMESPACE],
+      ['McpOAuthClientStore.MCP_OAUTH_CLIENTS_NAMESPACE', MCP_OAUTH_CLIENTS_NAMESPACE],
+      ['McpToolCatalogStore.MCP_TOOL_CATALOG_NAMESPACE', MCP_TOOL_CATALOG_NAMESPACE]
     ]) {
       assert.ok(declared.has(ns), `${label} is '${ns}', which RUNTIME_NAMESPACES does not declare`);
     }

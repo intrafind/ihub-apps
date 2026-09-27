@@ -203,6 +203,30 @@ function mcpAppViewFor(info, mcp) {
   });
 }
 
+/** Longest string kept from an auth-required marker (ids, names, paths). */
+const AUTH_REQUIRED_FIELD_CHARS = 512;
+
+/**
+ * The "connect first" marker of a per-user OAuth MCP tool result
+ * (`{ error: 'MCP_AUTH_REQUIRED', authRequired: { serverId, serverName,
+ * connectUrl } }`, see services/mcp/mcpOAuthService.js), or null.
+ *
+ * @param {*} rawResult - The tool's result as the loop saw it
+ * @returns {{serverId: string, serverName: string, connectUrl: string}|null}
+ */
+export function authRequiredOf(rawResult) {
+  const marker = rawResult && typeof rawResult === 'object' ? rawResult.authRequired : null;
+  if (!marker || typeof marker !== 'object') return null;
+  const { serverId, serverName, connectUrl } = marker;
+  if (typeof serverId !== 'string' || !serverId) return null;
+  if (typeof connectUrl !== 'string' || !connectUrl.startsWith('/')) return null;
+  return {
+    serverId: serverId.slice(0, AUTH_REQUIRED_FIELD_CHARS),
+    serverName: String(serverName || serverId).slice(0, AUTH_REQUIRED_FIELD_CHARS),
+    connectUrl: connectUrl.slice(0, AUTH_REQUIRED_FIELD_CHARS)
+  };
+}
+
 /**
  * Tool call projection: `tool/started` / `tool/completed` frames, the
  * interaction log, and the rich error envelope the chat model has always been
@@ -211,11 +235,31 @@ function mcpAppViewFor(info, mcp) {
  * MCP App tools also announce their view on `tool/started` (so the client can
  * mount it while the tool runs) and ship the view's data on `tool/completed`;
  * the views are collected on `mcpAppViews` for the stored answer.
+ *
+ * A per-user OAuth MCP tool whose caller has not connected the server returns
+ * an auth-required marker; it rides on `tool/completed` as `authRequired` so
+ * the chat renders a Connect card, and is collected on `mcpAuthPrompts`
+ * (one per server) for the stored answer.
  */
-export function chatToolSeam({ chatId, buildLogData, logInteraction, mcpAppViews = null }) {
+export function chatToolSeam({
+  chatId,
+  buildLogData,
+  logInteraction,
+  mcpAppViews = null,
+  mcpAuthPrompts = null
+}) {
   const recordView = view => {
     if (Array.isArray(mcpAppViews)) mcpAppViews.push(view);
     return view;
+  };
+  const recordAuthPrompt = prompt => {
+    if (
+      Array.isArray(mcpAuthPrompts) &&
+      !mcpAuthPrompts.some(p => p.serverId === prompt.serverId)
+    ) {
+      mcpAuthPrompts.push(prompt);
+    }
+    return prompt;
   };
   return {
     name: 'chat-tools',
@@ -289,6 +333,8 @@ export function chatToolSeam({ chatId, buildLogData, logInteraction, mcpAppViews
         );
         return;
       }
+      const authRequired = authRequiredOf(outcome.rawResult);
+      if (authRequired) recordAuthPrompt(authRequired);
       emit(ctx, SSE_V2_EVENTS.TOOL_COMPLETED, {
         step: ctx.iteration,
         callId: callIdOf(info),
@@ -298,7 +344,8 @@ export function chatToolSeam({ chatId, buildLogData, logInteraction, mcpAppViews
         ...(Number.isInteger(outcome.durationMs) ? { durationMs: outcome.durationMs } : {}),
         ...(outcome.knowledgeSource ? { knowledgeSource: outcome.knowledgeSource } : {}),
         ...(outcome.webSources?.length ? { webSources: outcome.webSources } : {}),
-        ...(mcpApp ? { mcpApp } : {})
+        ...(mcpApp ? { mcpApp } : {}),
+        ...(authRequired ? { authRequired } : {})
       });
       await logInteraction(
         'tool_usage',

@@ -147,7 +147,14 @@ export const toolCompletedData = z.object({
   /** Pages the call found or read (search / fetch tools), from the full result. */
   webSources: z.array(webSourceSchema).optional(),
   /** MCP App view drawn from this call's full result. */
-  mcpApp: mcpAppViewSchema.optional()
+  mcpApp: mcpAppViewSchema.optional(),
+  /**
+   * A per-user OAuth MCP server the caller has not connected: the chat shows
+   * a Connect card for it (`connectUrl` is a same-origin path).
+   */
+  authRequired: z
+    .object({ serverId: z.string(), serverName: z.string(), connectUrl: z.string() })
+    .optional()
 });
 
 export const interactionRaisedData = z.object({

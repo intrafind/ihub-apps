@@ -59,6 +59,7 @@ function ChatCheckpoint({ executionId, checkpoint }) {
 import AnswerSourceBadge from './AnswerSourceBadge';
 import ExportDialog from './ExportDialog';
 import McpAppViews from '../mcpApps/McpAppViews';
+import McpConnectCards from '../mcpApps/McpConnectCard';
 import './ChatMessage.css';
 
 function ChatMessage({
@@ -855,6 +856,10 @@ function ChatMessage({
             readOnly={readOnly}
             host={mcpAppHost}
           />
+        )}
+        {/* MCP servers with per-user sign-in the answer's tools could not use yet. */}
+        {!isUser && message.mcpAuthRequired?.length > 0 && (
+          <McpConnectCards prompts={message.mcpAuthRequired} readOnly={readOnly} />
         )}
         {renderContent()}
         {isUser && hasVariables && <MessageVariables variables={message.variables} />}

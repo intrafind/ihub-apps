@@ -80,3 +80,19 @@ menu.
   are polled and cancelled after the agent's timeout (default 60 s).
 - Follow-up calls from the same chat continue the conversation with the agent.
 - Every user of an agent shares its configured credential; per-user sign-in is not available yet.
+
+## MCP Servers With Per-User Sign-In
+
+iHub can now connect to MCP servers that require every user to sign in with their own account
+(for example servers built on Okta, Microsoft Entra ID or Keycloak). Set the server's
+authentication to **OAuth — each user signs in** under **Admin → MCP servers**; iHub finds the
+server's authorization server, registers itself automatically and keeps separate, encrypted
+tokens for every user.
+
+- When a user asks for one of the server's tools before connecting it, the chat shows a
+  **Connect** card; after signing in, the user sends the request again.
+- **Settings → Integrations** lists these servers with **Connect** and **Disconnect**.
+- Admins see how many users connected each server; **Test connection** uses the admin's own
+  account and loads the server's tools for everybody.
+- Behind a reverse proxy, set the MCP gateway's **Public URL** so the sign-in callback URL
+  stays stable.

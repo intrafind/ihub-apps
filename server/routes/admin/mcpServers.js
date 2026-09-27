@@ -10,6 +10,8 @@ import mcpClientManager from '../../services/mcp/McpClientManager.js';
 import { MCP_SERVER_CATALOG, MCP_CATALOG_CATEGORIES } from '../../services/mcp/serverCatalog.js';
 import configCache from '../../configCache.js';
 import logger from '../../utils/logger.js';
+import { listServerConnections } from '../../services/mcp/mcpUserTokens.js';
+import { isUserOAuthServer, revokeUserConnection } from '../../services/mcp/mcpOAuthService.js';
 
 const MCP_FILE = 'config/mcpServers.json';
 
@@ -50,14 +52,19 @@ export default function registerAdminMcpServersRoutes(app) {
     try {
       const cfg = await readConfig();
       const statuses = new Map(mcpClientManager.status().map(s => [s.id, s]));
-      res.json({
-        success: true,
-        servers: (cfg.servers || []).map(s => ({
+      const servers = await Promise.all(
+        (cfg.servers || []).map(async s => ({
           ...s,
-          status: statuses.get(s.id) || null
-        })),
-        security: cfg.security
-      });
+          status: statuses.get(s.id) || null,
+          // Per-user OAuth: how many users have connected their account.
+          ...(isUserOAuthServer(s)
+            ? {
+                connectedUsers: (await listServerConnections(s.id).catch(() => [])).length
+              }
+            : {})
+        }))
+      );
+      res.json({ success: true, servers, security: cfg.security });
     } catch (error) {
       logger.error('[MCP Admin] List error', { component: 'AdminMcp', error });
       res.status(500).json({ success: false, error: 'Failed to list MCP servers' });
@@ -144,8 +151,10 @@ export default function registerAdminMcpServersRoutes(app) {
     try {
       const { id } = req.params;
       if (!validateIdForPath(id, 'mcpServer', res)) return;
-      const { status, tools } = await mcpClientManager.testConnection(id);
-      res.json({ success: true, status, tools });
+      // Per-user OAuth servers are tested with the acting admin's own token;
+      // without one the result is `status: 'auth_required'` plus a connectUrl.
+      const result = await mcpClientManager.testConnection(id, req.user);
+      res.json({ success: true, ...result });
     } catch (error) {
       logger.warn('[MCP Admin] Test connection failed', {
         component: 'AdminMcp',
@@ -163,8 +172,8 @@ export default function registerAdminMcpServersRoutes(app) {
   app.post(buildServerPath('/api/admin/mcp/test'), adminAuth, async (req, res) => {
     try {
       const incoming = { ...req.body };
-      const { status, tools, catalog } = await mcpClientManager.testConfig(incoming);
-      res.json({ success: true, status, tools, catalog });
+      const result = await mcpClientManager.testConfig(incoming, req.user);
+      res.json({ success: true, ...result });
     } catch (error) {
       logger.warn('[MCP Admin] Test config failed', {
         component: 'AdminMcp',
@@ -173,6 +182,74 @@ export default function registerAdminMcpServersRoutes(app) {
       res.status(400).json({ success: false, error: error.message, details: error.details });
     }
   });
+
+  // Users who connected their own account to a per-user OAuth server.
+  app.get(
+    buildServerPath('/api/admin/mcp/servers/:id/connections'),
+    adminAuth,
+    async (req, res) => {
+      try {
+        const { id } = req.params;
+        if (!validateIdForPath(id, 'mcpServer', res)) return;
+        const cfg = await readConfig();
+        const server = (cfg.servers || []).find(s => s.id === id);
+        if (!server) return res.status(404).json({ success: false, error: 'Server not found' });
+        if (!isUserOAuthServer(server)) {
+          return res.json({ success: true, connections: [] });
+        }
+        const connections = await listServerConnections(id);
+        res.json({
+          success: true,
+          connections: connections.map(({ storageId: _storageId, ...c }) => c)
+        });
+      } catch (error) {
+        logger.error('[MCP Admin] List user connections error', { component: 'AdminMcp', error });
+        res.status(500).json({ success: false, error: 'Failed to list connections' });
+      }
+    }
+  );
+
+  // Disconnect one user from a per-user OAuth server: revoke at the
+  // authorization server when possible, delete the stored tokens.
+  app.delete(
+    buildServerPath('/api/admin/mcp/servers/:id/connections/:userId'),
+    adminAuth,
+    async (req, res) => {
+      try {
+        const { id } = req.params;
+        if (!validateIdForPath(id, 'mcpServer', res)) return;
+        // A store key, never a path: the token store maps ids outside its
+        // file-name allowlist to a hashed storage id itself.
+        const userId = String(req.params.userId || '');
+        if (!userId || userId.length > 256) {
+          return res.status(400).json({ success: false, error: 'Invalid userId' });
+        }
+        const conn = mcpClientManager.getConnection(id);
+        if (!conn || !isUserOAuthServer(conn.config)) {
+          return res.status(404).json({ success: false, error: 'Server not found' });
+        }
+        const result = await revokeUserConnection({
+          serverConfig: conn.config,
+          userId,
+          security: mcpClientManager.security
+        });
+        await mcpClientManager.evictUserConnection(id, userId);
+        if (!result.removed) {
+          return res.status(404).json({ success: false, error: 'Connection not found' });
+        }
+        logger.info('[MCP Admin] User disconnected from MCP server', {
+          component: 'AdminMcp',
+          serverId: id,
+          userId,
+          adminId: req.user?.id
+        });
+        res.json({ success: true, ...result });
+      } catch (error) {
+        logger.error('[MCP Admin] Disconnect user error', { component: 'AdminMcp', error });
+        res.status(500).json({ success: false, error: 'Failed to disconnect user' });
+      }
+    }
+  );
 
   // Built-in catalog of hosted MCP servers the admin can start from. An entry
   // is `installed` when a configured server already uses its id or endpoint.

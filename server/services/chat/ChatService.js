@@ -484,6 +484,9 @@ class ChatService {
     // MCP App views this turn rendered, stored with the answer so reopening
     // the chat draws them again.
     const mcpAppViews = [];
+    // Per-user OAuth MCP servers the turn's tools asked the user to connect,
+    // stored with the answer so the Connect card survives the sign-in redirect.
+    const mcpAuthPrompts = [];
     const turnSeam = chatTurnSeam({
       chatId,
       buildLogData: log,
@@ -498,7 +501,8 @@ class ChatService {
         chatId,
         buildLogData: log,
         logInteraction: this.logInteraction,
-        mcpAppViews
+        mcpAppViews,
+        mcpAuthPrompts
       }),
       questionSeam(
         chatQuestionOptions({
@@ -586,6 +590,7 @@ class ChatService {
         language,
         channel,
         mcpAppViews,
+        mcpAuthPrompts,
         takePendingCall: () => turnSeam.takePendingCall()
       });
       // The ledger's terminal frame first, then the chat document.
@@ -683,6 +688,7 @@ class ChatService {
     language,
     channel,
     mcpAppViews = [],
+    mcpAuthPrompts = [],
     takePendingCall = () => null
   }) {
     const loopSources = result.knowledgeSources || [];
@@ -703,6 +709,7 @@ class ChatService {
       images: result.images || [],
       // Same reasoning for MCP App views: part of the answer, restored on reopen.
       mcpApps: mcpAppViews,
+      mcpAuthRequired: mcpAuthPrompts,
       knowledgeSources: this.getKnowledgeSources(chatId, loopSources)
     };
     const translate = async (key, params) => {
