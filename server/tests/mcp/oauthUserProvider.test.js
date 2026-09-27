@@ -8,7 +8,8 @@ import {
   readUserTokens,
   writeUserTokens,
   listServerConnections,
-  userTokenStatus
+  userTokenStatus,
+  tokenBindingFor
 } from '../../services/mcp/mcpUserTokens.js';
 import {
   McpUserOAuthProvider,
@@ -110,6 +111,8 @@ describe('per-user token files', () => {
     expect(connections).toEqual([
       expect.objectContaining({ userId: 'auth0|carol', expired: false })
     ]);
+    // Bound to the server config: an unbound file is not a connection of it.
+    expect(await listServerConnections('okta', SERVER)).toEqual([]);
     expect(await userTokenStatus('auth0|carol', 'okta')).toMatchObject({
       connected: true,
       scope: 'openid'
@@ -133,12 +136,12 @@ describe('McpUserOAuthProvider', () => {
     clientStore = new McpOAuthClientStore({ documents: null });
   });
 
-  it('exposes the fixed redirect URI and the CIMD URL for an https base', () => {
+  it("exposes the server's own redirect URI and CIMD URL for an https base", () => {
     const p = provider();
-    expect(p.redirectUrl).toBe('https://ihub.example.com/api/mcp/oauth/callback');
-    expect(p.clientMetadataUrl).toBe('https://ihub.example.com/api/mcp/oauth/client-metadata.json');
+    expect(p.redirectUrl).toBe('https://ihub.example.com/api/mcp/oauth/callback/okta');
+    expect(p.clientMetadataUrl).toBe('https://ihub.example.com/api/mcp/oauth/client-metadata/okta');
     expect(p.clientMetadata).toMatchObject({
-      redirect_uris: ['https://ihub.example.com/api/mcp/oauth/callback'],
+      redirect_uris: ['https://ihub.example.com/api/mcp/oauth/callback/okta'],
       token_endpoint_auth_method: 'none',
       scope: 'openid profile'
     });
@@ -158,12 +161,57 @@ describe('McpUserOAuthProvider', () => {
     expect(await provider('bob').tokens()).toBeUndefined();
   });
 
+  it('never hands the refresh token to the SDK (iHub refreshes itself)', async () => {
+    await writeUserTokens(
+      'alice',
+      'okta',
+      { access_token: 'a1', token_type: 'bearer', refresh_token: 'r1' },
+      tokenBindingFor(SERVER)
+    );
+    const tokens = await provider('alice').tokens();
+    expect(tokens.access_token).toBe('a1');
+    expect(tokens.refresh_token).toBeUndefined();
+  });
+
+  it('treats tokens issued for another endpoint or auth block as not connected', async () => {
+    const other = mcpServerConfigSchema.parse({
+      ...SERVER,
+      transport: { type: 'streamableHttp', url: 'https://vendor.example.com/mcp' }
+    });
+    await writeUserTokens(
+      'alice',
+      'okta',
+      { access_token: 'for-old-endpoint', token_type: 'bearer' },
+      tokenBindingFor(other)
+    );
+    expect(await provider('alice').tokens()).toBeUndefined();
+    // Unbound files (no binding at all) never match either.
+    await writeUserTokens('alice', 'okta', { access_token: 'unbound', token_type: 'bearer' });
+    expect(await provider('alice').tokens()).toBeUndefined();
+    expect(await userTokenStatus('alice', SERVER)).toMatchObject({ connected: false });
+  });
+
   it('invalidates tokens it handed out, but keeps tokens refreshed elsewhere', async () => {
     const alice = provider('alice');
+    // Never handed out a token: nothing is deleted.
+    await writeUserTokens(
+      'alice',
+      'okta',
+      { access_token: 'untouched', token_type: 'bearer' },
+      tokenBindingFor(SERVER)
+    );
+    expect(await alice.invalidateTokens()).toBe(false);
+    expect((await readUserTokens('alice', 'okta')).access_token).toBe('untouched');
+
     await alice.saveTokens({ access_token: 'old', token_type: 'bearer' });
     await alice.tokens();
     // Another worker refreshed the token in the meantime.
-    await writeUserTokens('alice', 'okta', { access_token: 'new', token_type: 'bearer' });
+    await writeUserTokens(
+      'alice',
+      'okta',
+      { access_token: 'new', token_type: 'bearer' },
+      tokenBindingFor(SERVER)
+    );
     expect(await alice.invalidateTokens()).toBe(false);
     expect((await readUserTokens('alice', 'okta')).access_token).toBe('new');
 
@@ -207,7 +255,7 @@ describe('McpUserOAuthProvider', () => {
     await expect(p.clientInformation()).rejects.toBeInstanceOf(McpAuthRequiredError);
   });
 
-  it('ignores a registration made for another endpoint or auth block', async () => {
+  it('ignores a registration made for another endpoint or auth block, without deleting it', async () => {
     await clientStore.put('okta', {
       source: 'dcr',
       clientId: 'dcr-1',
@@ -215,7 +263,8 @@ describe('McpUserOAuthProvider', () => {
       fingerprint: 'made-for-an-older-config'
     });
     await expect(provider().clientInformation()).rejects.toBeInstanceOf(McpAuthRequiredError);
-    expect(await clientStore.get('okta')).toBeNull();
+    // A draft or a stale worker config must never delete the live record.
+    expect((await clientStore.get('okta')).clientId).toBe('dcr-1');
   });
 
   it('prefers a pre-registered client from the config', async () => {
@@ -256,7 +305,11 @@ describe('MCP OAuth state ticket', () => {
     userId: 'alice',
     returnUrl: '/chat/1',
     codeVerifier: 'the-pkce-verifier',
-    redirectUri: 'https://ihub.example.com/api/mcp/oauth/callback',
+    redirectUri: 'https://ihub.example.com/api/mcp/oauth/callback/okta',
+    issuer: 'https://okta-mcp.example.com/',
+    authorizationServerUrl: 'https://okta-mcp.example.com/',
+    clientId: 'dcr-1',
+    issRequired: true,
     resource: 'https://okta-mcp.example.com/mcp'
   };
 
@@ -285,6 +338,11 @@ describe('MCP OAuth state ticket', () => {
     expect(verifyMcpOAuthTicket('').ok).toBe(false);
   });
 
+  it('refuses to issue a ticket without the issuer and client it is bound to', () => {
+    expect(() => issueMcpOAuthTicket({ ...context, issuer: '' })).toThrow(/issuer/);
+    expect(() => issueMcpOAuthTicket({ ...context, clientId: undefined })).toThrow(/clientId/);
+  });
+
   it('expires after 15 minutes', () => {
     const now = Date.now();
     const ticket = issueMcpOAuthTicket({ ...context, now });
@@ -302,15 +360,17 @@ describe("iHub's Client ID Metadata Document", () => {
   it("is accepted by iHub's own CIMD validator", () => {
     const doc = buildMcpClientMetadata({
       publicBase: 'https://ihub.example.com/ihub',
+      serverId: 'okta',
       clientName: 'iHub Apps'
     });
-    expect(doc.client_id).toBe('https://ihub.example.com/ihub/api/mcp/oauth/client-metadata.json');
+    expect(doc.client_id).toBe('https://ihub.example.com/ihub/api/mcp/oauth/client-metadata/okta');
     const result = validateClientMetadata(doc, doc.client_id);
+    // One document per server, listing exactly that server's callback.
     expect(result).toMatchObject({
       ok: true,
       metadata: {
         name: 'iHub Apps',
-        redirectUris: ['https://ihub.example.com/ihub/api/mcp/oauth/callback']
+        redirectUris: ['https://ihub.example.com/ihub/api/mcp/oauth/callback/okta']
       }
     });
     expect(Buffer.byteLength(JSON.stringify(doc))).toBeLessThan(8 * 1024);

@@ -2245,8 +2245,12 @@
         "testError": "Test fehlgeschlagen: {{error}}",
         "createTitle": "MCP-Server erstellen",
         "editTitle": "{{id}} bearbeiten",
+        "resetRegistrationConfirm": "OAuth-Client-Registrierung von \"{{id}}\" zurücksetzen? Bei der nächsten Anmeldung registriert sich iHub neu; verbundene Personen müssen sich eventuell neu verbinden.",
+        "resetRegistrationDone": "OAuth-Client-Registrierung zurückgesetzt",
+        "resetRegistrationError": "Zurücksetzen fehlgeschlagen: {{error}}",
         "actions": {
-          "test": "Verbindung testen"
+          "test": "Verbindung testen",
+          "resetRegistration": "OAuth-Client-Registrierung zurücksetzen"
         },
         "test": {
           "button": "Verbindung testen",
@@ -2271,7 +2275,8 @@
           "connected": "verbunden ({{count}} Tools)",
           "idle": "inaktiv",
           "disabled": "deaktiviert",
-          "connectedUsers": "{{count}} Personen verbunden"
+          "connectedUsers_one": "{{count}} Person verbunden",
+          "connectedUsers_other": "{{count}} Personen verbunden"
         },
         "form": {
           "id": "ID",
@@ -2314,6 +2319,7 @@
           "allowedToolsSelected": "Nur die ausgewählten Tools",
           "allowedToolsManual": "Tool-Namen, wie der Server sie nennt, kommagetrennt. Testen Sie die Verbindung, um sie stattdessen aus einer Liste auszuwählen.",
           "authOauthUser": "OAuth — jede Person meldet sich an",
+          "oauthUserHttpOnly": "Die Anmeldung pro Person ist nur mit den Transporten Streamable HTTP und SSE verfügbar.",
           "oauthUserHint": "Jede Person verbindet ihr eigenes Konto (Authorization Code + PKCE). iHub findet den Autorisierungsserver und registriert sich automatisch. Hinter einem Reverse Proxy die öffentliche URL des MCP-Gateways setzen, damit die Callback-URL stabil bleibt.",
           "scopes": "Scopes (optional, durch Kommas getrennt)",
           "preregisteredClientId": "Client-ID (optional)",
@@ -3559,7 +3565,9 @@
           "server_not_found": "der Server steht Ihnen nicht zur Verfügung",
           "exchange_failed": "der Server hat die Anmeldung nicht akzeptiert",
           "discovery_failed": "die Anmeldung des Servers wurde nicht gefunden",
-          "registration_failed": "iHub konnte sich nicht beim Server registrieren"
+          "registration_failed": "iHub konnte sich nicht beim Server registrieren",
+          "issuer_mismatch": "die Antwort der Anmeldung kam von einem anderen Autorisierungsserver als erwartet",
+          "public_url_mismatch": "iHub wurde unter einer anderen Adresse aufgerufen als der beim Server registrierten; bitten Sie Ihre Administration, die öffentliche URL des MCP-Gateways zu setzen"
         }
       }
     }
@@ -4132,6 +4140,7 @@
     "caption": "Interaktive Ansicht · {{name}}",
     "loading": "Interaktive Ansicht wird geladen…",
     "loadFailed": "Die interaktive Ansicht konnte nicht geladen werden: {{error}}",
+    "authRequired": "Verbinden Sie diesen Server mit Ihrem eigenen Konto, um seine interaktive Ansicht zu sehen.",
     "payloadOmitted": "Diese interaktive Ansicht war zu groß zum Speichern und kann nicht erneut angezeigt werden.",
     "unsupportedSurface": "Interaktive Ansichten sind in diesem Fenster nicht verfügbar.",
     "exitFullscreen": "Vollbild beenden",

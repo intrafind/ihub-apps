@@ -22,7 +22,9 @@ const MCP_ERROR_CODES = [
   'server_not_found',
   'exchange_failed',
   'discovery_failed',
-  'registration_failed'
+  'registration_failed',
+  'issuer_mismatch',
+  'public_url_mismatch'
 ];
 
 export default function IntegrationsPage() {
@@ -84,28 +86,18 @@ export default function IntegrationsPage() {
     // Handle MCP server sign-in callbacks
     const mcpConnected = params.get('mcp_connected');
     const mcpError = params.get('mcp_error');
+    // The URL carries the server id; the text is built at render time with
+    // the server's display name once the server list has loaded.
     if (mcpConnected) {
       // eslint-disable-next-line @eslint-react/set-state-in-effect
-      setMessage({
-        type: 'success',
-        text: t('integrations.page.mcp.connected', '{{name}} connected successfully.', {
-          name: mcpConnected
-        })
-      });
+      setMessage({ type: 'success', mcp: { kind: 'connected', serverId: mcpConnected } });
       navigate('/settings/integrations', { replace: true });
     } else if (mcpError) {
       const code = MCP_ERROR_CODES.includes(mcpError) ? mcpError : 'oauth_failed';
       // eslint-disable-next-line @eslint-react/set-state-in-effect
       setMessage({
         type: 'error',
-        text: t(
-          'integrations.page.mcp.connectionFailed',
-          'Connecting {{name}} failed: {{message}}',
-          {
-            name: params.get('mcp_server') || 'MCP',
-            message: t(`integrations.page.mcp.errors.${code}`, code)
-          }
-        )
+        mcp: { kind: 'error', serverId: params.get('mcp_server') || '', code }
       });
       navigate('/settings/integrations', { replace: true });
     }
@@ -133,6 +125,24 @@ export default function IntegrationsPage() {
       }
     });
   }, [location.search, navigate, cloudProviders, t]);
+
+  /** Display name of a per-user MCP server, falling back to its id. */
+  const mcpServerName = serverId => {
+    const server = (mcpServers || []).find(entry => entry.serverId === serverId);
+    return (server && getLocalizedContent(server.name, lang)) || serverId || 'MCP';
+  };
+
+  /** The text of the current message; MCP sign-in results name the server. */
+  const messageText = !message?.mcp
+    ? message?.text
+    : message.mcp.kind === 'connected'
+      ? t('integrations.page.mcp.connected', '{{name}} connected successfully.', {
+          name: mcpServerName(message.mcp.serverId)
+        })
+      : t('integrations.page.mcp.connectionFailed', 'Connecting {{name}} failed: {{message}}', {
+          name: mcpServerName(message.mcp.serverId),
+          message: t(`integrations.page.mcp.errors.${message.mcp.code}`, message.mcp.code)
+        });
 
   // Derive Jira enabled state from platform config
   const jiraEnabled = platformConfig?.jira?.enabled;
@@ -582,7 +592,7 @@ export default function IntegrationsPage() {
                     }`}
                   />
                   <span className={message.type === 'success' ? 'text-green-800' : 'text-red-800'}>
-                    {message.text}
+                    {messageText}
                   </span>
                 </div>
                 <button

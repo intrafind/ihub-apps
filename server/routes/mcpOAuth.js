@@ -1,12 +1,15 @@
 /**
  * Per-user OAuth for outbound MCP servers (`auth.type: "oauthUser"`).
  *
- *   GET  /api/mcp/oauth/client-metadata.json  iHub's Client ID Metadata Document
- *                                             (unauthenticated, cacheable)
- *   GET  /api/mcp/oauth/authorize             start a sign-in (302 to the AS)
- *   GET  /api/mcp/oauth/callback              finish it (302 back to returnUrl)
- *   GET  /api/mcp/oauth/connections           the caller's per-user servers
- *   POST /api/mcp/oauth/disconnect            revoke + delete the caller's tokens
+ *   GET  /api/mcp/oauth/client-metadata/:serverId  iHub's Client ID Metadata Document
+ *                                                  for one server (unauthenticated)
+ *   GET  /api/mcp/oauth/authorize                  start a sign-in (302 to the AS)
+ *   GET  /api/mcp/oauth/callback/:serverId         finish it (302 back to returnUrl)
+ *   GET  /api/mcp/oauth/connections                the caller's per-user servers
+ *   POST /api/mcp/oauth/disconnect                 revoke + delete the caller's tokens
+ *
+ * Each server has its own callback and CIMD, so a code delivered to one
+ * server's callback can never complete another server's sign-in.
  *
  * The flow logic lives in `services/mcp/mcpOAuthService.js`; these handlers
  * validate input, bind the flow to the signed-in user and translate failures
@@ -33,12 +36,12 @@ import { userTokenStatus } from '../services/mcp/mcpUserTokens.js';
 import {
   buildMcpClientMetadata,
   mcpConnectPath,
-  resolveMcpPublicBase,
+  resolveMcpPublicBaseInfo,
   MCP_OAUTH_AUTHORIZE_PATH,
   MCP_OAUTH_CALLBACK_PATH,
   MCP_OAUTH_CLIENT_METADATA_PATH
 } from '../services/mcp/mcpOAuthPublicUrl.js';
-import { isAnonymousUser } from '../services/loop/runIdentity.js';
+import { isAdminUser, isAnonymousUser } from '../services/loop/runIdentity.js';
 import { authRequired } from '../middleware/authRequired.js';
 import { isValidReturnUrl } from '../utils/oauthReturnUrl.js';
 import { buildServerPath } from '../utils/basePath.js';
@@ -122,20 +125,29 @@ function catalogToolsOf(serverId) {
  * @param {import('express').Express} app
  */
 export default function registerMcpOAuthRoutes(app) {
-  // iHub's Client ID Metadata Document. Authorization servers that support
-  // CIMD fetch it with no credentials and no redirects; `client_id` must be
-  // this exact URL.
-  app.get(buildServerPath(MCP_OAUTH_CLIENT_METADATA_PATH), (req, res) => {
-    const publicBase = resolveMcpPublicBase(req);
+  // iHub's Client ID Metadata Document for one server. Authorization servers
+  // that support CIMD fetch it with no credentials and no redirects;
+  // `client_id` must be this exact URL. Only a configured Public URL makes the
+  // document cacheable: one derived from the request depends on its Host.
+  app.get(buildServerPath(`${MCP_OAUTH_CLIENT_METADATA_PATH}/:serverId`), (req, res) => {
+    const parsedId = serverIdSchema.safeParse(req.params.serverId);
+    const serverConfig = parsedId.success ? userOAuthServer(parsedId.data) : null;
+    if (!serverConfig) return res.status(404).json({ error: 'Not found' });
+    const { publicBase, configured } = resolveMcpPublicBaseInfo(req);
     if (!publicBase) return res.status(503).json({ error: 'Public URL unknown' });
-    const document = buildMcpClientMetadata({ publicBase });
+    const document = buildMcpClientMetadata({ publicBase, serverId: serverConfig.id });
     const body = JSON.stringify(document);
     if (Buffer.byteLength(body, 'utf8') > MAX_CLIENT_METADATA_BYTES) {
       logger.error('MCP client metadata document exceeds 8 KB', { component: COMPONENT });
       return res.status(500).json({ error: 'Client metadata document too large' });
     }
     res.setHeader('Content-Type', 'application/json; charset=utf-8');
-    res.setHeader('Cache-Control', 'public, max-age=3600');
+    if (configured) {
+      res.setHeader('Cache-Control', 'public, max-age=3600');
+    } else {
+      res.setHeader('Cache-Control', 'no-store');
+      res.setHeader('Vary', 'Host, X-Forwarded-Host, X-Forwarded-Proto');
+    }
     res.setHeader('X-Content-Type-Options', 'nosniff');
     return res.status(200).send(body);
   });
@@ -164,7 +176,7 @@ export default function registerMcpOAuthRoutes(app) {
         return redirectWithError(res, returnUrl, MCP_OAUTH_ERROR_CODES.SERVER_NOT_FOUND, serverId);
       }
 
-      const publicBase = resolveMcpPublicBase(req);
+      const { publicBase, configured } = resolveMcpPublicBaseInfo(req);
       if (!publicBase) {
         return redirectWithError(res, returnUrl, MCP_OAUTH_ERROR_CODES.DISCOVERY_FAILED, serverId);
       }
@@ -173,8 +185,12 @@ export default function registerMcpOAuthRoutes(app) {
           serverConfig,
           user: req.user,
           publicBase,
+          // Only a configured Public URL or an admin's own sign-in may replace
+          // a registration made for another base — never one request's Host.
+          trustedBase: configured || isAdminUser(req.user),
           returnUrl,
-          security: mcpClientManager.security
+          security: mcpClientManager.security,
+          clientStore: mcpClientManager.clientRegistrations()
         });
         return res.redirect(302, authorizationUrl.href);
       } catch (error) {
@@ -192,78 +208,107 @@ export default function registerMcpOAuthRoutes(app) {
     }
   );
 
-  app.get(buildServerPath(MCP_OAUTH_CALLBACK_PATH), authRequired, async (req, res) => {
-    if (isAnonymousUser(req.user)) return sendAuthRequired(res);
+  app.get(
+    buildServerPath(`${MCP_OAUTH_CALLBACK_PATH}/:serverId`),
+    authRequired,
+    async (req, res) => {
+      if (isAnonymousUser(req.user)) return sendAuthRequired(res);
 
-    const verified = verifyMcpOAuthTicket(
-      typeof req.query.state === 'string' ? req.query.state : ''
-    );
-    if (!verified.ok) {
-      const code =
-        verified.reason === 'expired'
-          ? MCP_OAUTH_ERROR_CODES.STATE_EXPIRED
-          : MCP_OAUTH_ERROR_CODES.INVALID_STATE;
-      return redirectWithError(res, defaultReturnUrl(), code);
-    }
-    const { ticket } = verified;
-    const { serverId, returnUrl } = ticket;
+      const verified = verifyMcpOAuthTicket(
+        typeof req.query.state === 'string' ? req.query.state : ''
+      );
+      if (!verified.ok) {
+        const code =
+          verified.reason === 'expired'
+            ? MCP_OAUTH_ERROR_CODES.STATE_EXPIRED
+            : MCP_OAUTH_ERROR_CODES.INVALID_STATE;
+        return redirectWithError(res, defaultReturnUrl(), code);
+      }
+      const { ticket } = verified;
+      const { serverId, returnUrl } = ticket;
+      // Each server has its own callback: a code for one server's ticket that
+      // arrives at another server's callback was steered there (mix-up).
+      if (req.params.serverId !== serverId) {
+        logger.warn('MCP OAuth callback for another server refused', {
+          component: COMPONENT,
+          serverId,
+          callbackServerId: String(req.params.serverId).slice(0, 64),
+          userId: req.user.id
+        });
+        return redirectWithError(res, returnUrl, MCP_OAUTH_ERROR_CODES.INVALID_STATE, serverId);
+      }
 
-    // The ticket is bound to the user who started the flow. Completing it in
-    // another user's session would attach the attacker's upstream account to
-    // the victim (or the reverse), so it is refused.
-    if (String(req.user.id) !== ticket.userId) {
-      logger.warn('MCP OAuth callback for a different user refused', {
-        component: COMPONENT,
-        serverId,
-        userId: req.user.id
-      });
-      return redirectWithError(res, returnUrl, MCP_OAUTH_ERROR_CODES.USER_MISMATCH, serverId);
-    }
-    if (req.query.error) {
-      logger.info('MCP OAuth sign-in declined or failed at the authorization server', {
+      // The ticket is bound to the user who started the flow. Completing it in
+      // another user's session would attach the attacker's upstream account to
+      // the victim (or the reverse), so it is refused.
+      if (String(req.user.id) !== ticket.userId) {
+        logger.warn('MCP OAuth callback for a different user refused', {
+          component: COMPONENT,
+          serverId,
+          userId: req.user.id
+        });
+        return redirectWithError(res, returnUrl, MCP_OAUTH_ERROR_CODES.USER_MISMATCH, serverId);
+      }
+      if (req.query.error) {
+        logger.info('MCP OAuth sign-in declined or failed at the authorization server', {
+          component: COMPONENT,
+          serverId,
+          userId: ticket.userId
+        });
+        return redirectWithError(res, returnUrl, MCP_OAUTH_ERROR_CODES.OAUTH_FAILED, serverId);
+      }
+      const code = typeof req.query.code === 'string' ? req.query.code : '';
+      if (!code) {
+        return redirectWithError(res, returnUrl, MCP_OAUTH_ERROR_CODES.MISSING_CODE, serverId);
+      }
+      const serverConfig = userOAuthServer(serverId);
+      if (!serverConfig) {
+        return redirectWithError(res, returnUrl, MCP_OAUTH_ERROR_CODES.SERVER_NOT_FOUND, serverId);
+      }
+
+      try {
+        await completeUserAuthorization({
+          serverConfig,
+          ticket,
+          code,
+          // RFC 9207: present → must match the ticket's issuer. A repeated
+          // parameter is not a valid issuer.
+          iss:
+            req.query.iss === undefined
+              ? undefined
+              : typeof req.query.iss === 'string'
+                ? req.query.iss
+                : '',
+          security: mcpClientManager.security,
+          clientStore: mcpClientManager.clientRegistrations()
+        });
+      } catch (error) {
+        const failure =
+          error instanceof McpOAuthFlowError && error.code === MCP_OAUTH_ERROR_CODES.ISSUER_MISMATCH
+            ? MCP_OAUTH_ERROR_CODES.ISSUER_MISMATCH
+            : MCP_OAUTH_ERROR_CODES.EXCHANGE_FAILED;
+        logger.warn('MCP OAuth code exchange failed', {
+          component: COMPONENT,
+          serverId,
+          userId: ticket.userId,
+          code: failure,
+          error: error.message
+        });
+        return redirectWithError(res, returnUrl, failure, serverId);
+      }
+
+      // The next call reconnects with the new token; listing the tools now
+      // fills the server's shared catalog (best effort, not awaited).
+      await mcpClientManager.evictUserConnection(serverId, ticket.userId);
+      mcpClientManager.refreshCatalogForUser(serverId, req.user).catch(() => {});
+      logger.info('MCP server connected for user', {
         component: COMPONENT,
         serverId,
         userId: ticket.userId
       });
-      return redirectWithError(res, returnUrl, MCP_OAUTH_ERROR_CODES.OAUTH_FAILED, serverId);
+      return res.redirect(withQuery(returnUrl, { mcp_connected: serverId }));
     }
-    const code = typeof req.query.code === 'string' ? req.query.code : '';
-    if (!code) {
-      return redirectWithError(res, returnUrl, MCP_OAUTH_ERROR_CODES.MISSING_CODE, serverId);
-    }
-    const serverConfig = userOAuthServer(serverId);
-    if (!serverConfig) {
-      return redirectWithError(res, returnUrl, MCP_OAUTH_ERROR_CODES.SERVER_NOT_FOUND, serverId);
-    }
-
-    try {
-      await completeUserAuthorization({
-        serverConfig,
-        ticket,
-        code,
-        security: mcpClientManager.security
-      });
-    } catch (error) {
-      logger.warn('MCP OAuth code exchange failed', {
-        component: COMPONENT,
-        serverId,
-        userId: ticket.userId,
-        error: error.message
-      });
-      return redirectWithError(res, returnUrl, MCP_OAUTH_ERROR_CODES.EXCHANGE_FAILED, serverId);
-    }
-
-    // The next call reconnects with the new token; listing the tools now
-    // fills the server's shared catalog (best effort, not awaited).
-    await mcpClientManager.evictUserConnection(serverId, ticket.userId);
-    mcpClientManager.refreshCatalogForUser(serverId, req.user).catch(() => {});
-    logger.info('MCP server connected for user', {
-      component: COMPONENT,
-      serverId,
-      userId: ticket.userId
-    });
-    return res.redirect(withQuery(returnUrl, { mcp_connected: serverId }));
-  });
+  );
 
   app.get(buildServerPath('/api/mcp/oauth/connections'), authRequired, async (req, res) => {
     if (isAnonymousUser(req.user)) return sendAuthRequired(res);
@@ -273,7 +318,7 @@ export default function registerMcpOAuthRoutes(app) {
         const cfg = conn.config;
         if (cfg.enabled === false || !isUserOAuthServer(cfg)) continue;
         if (!(await isServerVisibleToUser(req.user, cfg, await catalogToolsOf(cfg.id)))) continue;
-        const status = await userTokenStatus(String(req.user.id), cfg.id);
+        const status = await userTokenStatus(String(req.user.id), cfg);
         out.push({
           serverId: cfg.id,
           name: cfg.name,
@@ -309,7 +354,8 @@ export default function registerMcpOAuthRoutes(app) {
       const result = await revokeUserConnection({
         serverConfig: conn.config,
         userId,
-        security: mcpClientManager.security
+        security: mcpClientManager.security,
+        clientStore: mcpClientManager.clientRegistrations()
       });
       await mcpClientManager.evictUserConnection(serverId, userId);
       return res.json({ success: true, ...result });

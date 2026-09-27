@@ -9,7 +9,11 @@ import path from 'path';
  * Per-user OAuth for outbound MCP servers — the flow routes, end to end with
  * the MCP SDK's OAuth functions mocked: start (discovery, DCR / CIMD, PKCE,
  * signed state), callback (state checks, user binding, code exchange, token
- * storage), connections listing, disconnect (revocation) and the CIMD document.
+ * storage), connections listing, disconnect (revocation) and the CIMD document
+ * — plus the review fixes: per-server callbacks and the RFC 9207 issuer check
+ * against an OAuth mix-up between two authorization servers, a forged Host
+ * that must not replace the shared registration, and OAuth requests that
+ * refuse redirects.
  */
 
 const state = {
@@ -47,6 +51,11 @@ jest.unstable_mockModule('@modelcontextprotocol/sdk/client/auth.js', () => ({
   UnauthorizedError: FakeUnauthorizedError
 }));
 
+// The per-IP limit of the start route is not what these tests exercise.
+jest.unstable_mockModule('express-rate-limit', () => ({
+  default: () => (_req, _res, next) => next()
+}));
+
 const safeFetch = jest.fn();
 jest.unstable_mockModule('../../services/mcp/safeFetch.js', () => ({
   safeFetch,
@@ -68,8 +77,9 @@ jest.unstable_mockModule('../../configCache.js', () => ({
 jest.unstable_mockModule('../../middleware/authRequired.js', () => ({
   authRequired: (req, _res, next) => {
     const id = req.headers['x-test-user'];
+    const groups = req.headers['x-test-admin'] ? ['admins'] : ['users'];
     req.user = id
-      ? { id, groups: ['users'], permissions: {} }
+      ? { id, groups, permissions: {} }
       : { id: 'anonymous', groups: ['anonymous'], permissions: {} };
     next();
   }
@@ -79,8 +89,10 @@ const { default: tokenStorage } = await import('../../services/TokenStorageServi
 const { default: mcpClientManager } = await import('../../services/mcp/McpClientManager.js');
 const { McpOAuthClientStore } = await import('../../services/mcp/mcpOAuthClientStore.js');
 const { McpToolCatalogStore } = await import('../../services/mcp/mcpToolCatalogStore.js');
-const { readUserTokens, writeUserTokens } = await import('../../services/mcp/mcpUserTokens.js');
+const { readUserTokens, writeUserTokens, tokenBindingFor } =
+  await import('../../services/mcp/mcpUserTokens.js');
 const { issueMcpOAuthTicket } = await import('../../services/mcp/mcpOAuthTicket.js');
+const { buildMcpOAuthFetch } = await import('../../services/mcp/McpUserOAuthProvider.js');
 const { validateClientMetadata } = await import('../../utils/clientIdMetadata.js');
 const { default: registerMcpOAuthRoutes, withQuery } = await import('../../routes/mcpOAuth.js');
 
@@ -189,12 +201,22 @@ describe('GET /api/mcp/oauth/authorize', () => {
     expect(location.searchParams.get('client_id')).toBe('dcr-client');
     expect(location.searchParams.get('resource')).toBe('https://okta-mcp.example.com/mcp');
     expect(location.searchParams.get('scope')).toBe('openid profile');
+    // The server's own callback.
     expect(location.searchParams.get('redirect_uri')).toMatch(
-      /^http:\/\/127\.0\.0\.1:\d+\/api\/mcp\/oauth\/callback$/
+      /^http:\/\/127\.0\.0\.1:\d+\/api\/mcp\/oauth\/callback\/okta$/
     );
 
     const { payload } = decodeState(res.headers.location);
-    expect(payload).toMatchObject({ serverId: 'okta', userId: 'alice', returnUrl: '/chat/abc' });
+    expect(payload).toMatchObject({
+      serverId: 'okta',
+      userId: 'alice',
+      returnUrl: '/chat/abc',
+      // Bound to the authorization server and client the request went to.
+      issuer: 'https://okta-mcp.example.com/',
+      authorizationServerUrl: 'https://okta-mcp.example.com/',
+      clientId: 'dcr-client',
+      issRequired: false
+    });
     // The verifier travels encrypted only.
     expect(JSON.stringify(payload)).not.toContain('pkce-verifier-123');
     expect(payload.cv).toMatch(/^ENC\[/);
@@ -231,10 +253,10 @@ describe('GET /api/mcp/oauth/authorize', () => {
     expect(res.status).toBe(302);
     const location = new URL(res.headers.location);
     expect(location.searchParams.get('client_id')).toBe(
-      'https://ihub.example.com/api/mcp/oauth/client-metadata.json'
+      'https://ihub.example.com/api/mcp/oauth/client-metadata/okta'
     );
     expect(location.searchParams.get('redirect_uri')).toBe(
-      'https://ihub.example.com/api/mcp/oauth/callback'
+      'https://ihub.example.com/api/mcp/oauth/callback/okta'
     );
     expect(sdk.registerClient).not.toHaveBeenCalled();
   });
@@ -275,9 +297,12 @@ describe('GET /api/mcp/oauth/authorize', () => {
   });
 });
 
-describe('GET /api/mcp/oauth/callback', () => {
-  async function callback(query, user = 'alice') {
-    return request(app).get('/api/mcp/oauth/callback').query(query).set('x-test-user', user);
+describe('GET /api/mcp/oauth/callback/:serverId', () => {
+  async function callback(query, user = 'alice', serverId = 'okta') {
+    return request(app)
+      .get(`/api/mcp/oauth/callback/${serverId}`)
+      .query(query)
+      .set('x-test-user', user);
   }
 
   it('exchanges the code with the verifier, stores the tokens and returns', async () => {
@@ -291,14 +316,21 @@ describe('GET /api/mcp/oauth/callback', () => {
         authorizationCode: 'auth-code-1',
         codeVerifier: 'pkce-verifier-123',
         clientInformation: { client_id: 'dcr-client' },
-        redirectUri: expect.stringMatching(/\/api\/mcp\/oauth\/callback$/),
+        redirectUri: expect.stringMatching(/\/api\/mcp\/oauth\/callback\/okta$/),
         resource: new URL('https://okta-mcp.example.com/mcp'),
         fetchFn: expect.any(Function)
       })
     );
     expect(await readUserTokens('alice', 'okta')).toMatchObject({
       access_token: 'access-1',
-      refresh_token: 'refresh-1'
+      refresh_token: 'refresh-1',
+      // Bound to the endpoint, AS, client and resource it was issued for.
+      binding: {
+        ...tokenBindingFor(SERVER),
+        authorizationServerUrl: 'https://okta-mcp.example.com/',
+        clientId: 'dcr-client',
+        resource: 'https://okta-mcp.example.com/mcp'
+      }
     });
     expect(await readUserTokens('bob', 'okta')).toBeNull();
   });
@@ -330,7 +362,10 @@ describe('GET /api/mcp/oauth/callback', () => {
       userId: 'alice',
       returnUrl: '/chat/abc',
       codeVerifier: 'v',
-      redirectUri: 'http://127.0.0.1/api/mcp/oauth/callback',
+      redirectUri: 'http://127.0.0.1/api/mcp/oauth/callback/okta',
+      issuer: 'https://okta-mcp.example.com/',
+      authorizationServerUrl: 'https://okta-mcp.example.com/',
+      clientId: 'dcr-client',
       now: Date.now() - 16 * 60 * 1000
     });
     const late = await callback({ code: 'c', state: expired });
@@ -363,12 +398,12 @@ describe('GET /api/mcp/oauth/callback', () => {
 
 describe('connections and disconnect', () => {
   it('lists the per-user servers with their connection state', async () => {
-    await writeUserTokens('alice', 'okta', {
-      access_token: 'a',
-      token_type: 'bearer',
-      expires_in: 3600,
-      scope: 'openid'
-    });
+    await writeUserTokens(
+      'alice',
+      'okta',
+      { access_token: 'a', token_type: 'bearer', expires_in: 3600, scope: 'openid' },
+      tokenBindingFor(SERVER)
+    );
     const alice = await request(app).get('/api/mcp/oauth/connections').set('x-test-user', 'alice');
     expect(alice.status).toBe(200);
     expect(alice.body.servers).toEqual([
@@ -391,7 +426,7 @@ describe('connections and disconnect', () => {
   it('revokes at the authorization server and deletes the tokens', async () => {
     const { stateParam } = decodeState((await startFlow()).headers.location);
     await request(app)
-      .get('/api/mcp/oauth/callback')
+      .get('/api/mcp/oauth/callback/okta')
       .query({ code: 'c', state: stateParam })
       .set('x-test-user', 'alice');
     expect(await readUserTokens('alice', 'okta')).not.toBeNull();
@@ -402,6 +437,10 @@ describe('connections and disconnect', () => {
       .send({ serverId: 'okta' });
     expect(res.status).toBe(200);
     expect(res.body).toMatchObject({ success: true, removed: true, revoked: true });
+    // Revocation requests refuse redirects too.
+    for (const [url, init] of safeFetch.mock.calls) {
+      if (String(url).includes('/revoke')) expect(init.redirect).toBe('manual');
+    }
     const revocations = safeFetch.mock.calls.filter(([url]) => String(url).includes('/revoke'));
     expect(revocations).toHaveLength(2);
     const bodies = revocations.map(([, init]) => new URLSearchParams(init.body));
@@ -427,16 +466,268 @@ describe('connections and disconnect', () => {
   });
 });
 
-describe('GET /api/mcp/oauth/client-metadata.json', () => {
-  it("serves a document iHub's own CIMD validator accepts", async () => {
+describe('GET /api/mcp/oauth/client-metadata/:serverId', () => {
+  it("serves a per-server document iHub's own CIMD validator accepts", async () => {
     state.platform = { ...state.platform, mcpServer: { publicUrl: 'https://ihub.example.com/' } };
-    const res = await request(app).get('/api/mcp/oauth/client-metadata.json');
+    const res = await request(app).get('/api/mcp/oauth/client-metadata/okta');
     expect(res.status).toBe(200);
     expect(res.headers['content-type']).toMatch(/^application\/json/);
     expect(res.headers['cache-control']).toBe('public, max-age=3600');
-    expect(res.body.client_id).toBe('https://ihub.example.com/api/mcp/oauth/client-metadata.json');
+    expect(res.body.client_id).toBe('https://ihub.example.com/api/mcp/oauth/client-metadata/okta');
+    expect(res.body.redirect_uris).toEqual([
+      'https://ihub.example.com/api/mcp/oauth/callback/okta'
+    ]);
     expect(res.body.token_endpoint_auth_method).toBe('none');
     expect(validateClientMetadata(res.body, res.body.client_id).ok).toBe(true);
+  });
+
+  it('is not cacheable when the base comes from the request, and 404s for unknown servers', async () => {
+    const derived = await request(app).get('/api/mcp/oauth/client-metadata/okta');
+    expect(derived.status).toBe(200);
+    expect(derived.headers['cache-control']).toBe('no-store');
+    expect(derived.headers.vary).toMatch(/X-Forwarded-Host/);
+    expect((await request(app).get('/api/mcp/oauth/client-metadata/nope')).status).toBe(404);
+  });
+});
+
+describe('OAuth mix-up defence (two authorization servers)', () => {
+  // `evil` is a third-party MCP server whose authorization server the
+  // attacker controls; `corp` is the corporate server behind an honest AS.
+  const EVIL = {
+    id: 'evil',
+    name: 'Evil MCP',
+    transport: { type: 'streamableHttp', url: 'https://evil-mcp.example.net/mcp' },
+    auth: { type: 'oauthUser' }
+  };
+  const CORP = {
+    id: 'corp',
+    name: 'Corp MCP',
+    transport: { type: 'streamableHttp', url: 'https://corp-mcp.example.com/mcp' },
+    auth: { type: 'oauthUser' }
+  };
+  const EVIL_AS = {
+    ...AS_METADATA,
+    issuer: 'https://as.evil.example.net',
+    authorization_endpoint: 'https://as.evil.example.net/authorize',
+    token_endpoint: 'https://as.evil.example.net/token',
+    registration_endpoint: 'https://as.evil.example.net/register'
+  };
+  const HONEST_AS = {
+    ...AS_METADATA,
+    issuer: 'https://login.corp.example.com',
+    authorization_endpoint: 'https://login.corp.example.com/authorize',
+    token_endpoint: 'https://login.corp.example.com/token',
+    registration_endpoint: 'https://login.corp.example.com/register',
+    authorization_response_iss_parameter_supported: true
+  };
+
+  beforeEach(async () => {
+    state.platform = { ...state.platform, mcpServer: { publicUrl: 'https://ihub.example.com' } };
+    state.apps = [{ id: 'assistant', tools: ['evil', 'corp'] }];
+    await mcpClientManager.initialize({ servers: [EVIL, CORP] });
+    sdk.discoverOAuthServerInfo.mockImplementation(async serverUrl =>
+      String(serverUrl).startsWith('https://evil-mcp')
+        ? {
+            authorizationServerUrl: 'https://as.evil.example.net/',
+            authorizationServerMetadata: EVIL_AS
+          }
+        : {
+            authorizationServerUrl: 'https://login.corp.example.com/',
+            authorizationServerMetadata: HONEST_AS
+          }
+    );
+    sdk.registerClient.mockImplementation(async asUrl => ({
+      client_id: String(asUrl).includes('evil') ? 'client-at-evil' : 'client-at-corp'
+    }));
+  });
+
+  async function start(serverId) {
+    const res = await request(app)
+      .get('/api/mcp/oauth/authorize')
+      .query({ serverId, returnUrl: '/chat/abc' })
+      .set('x-test-user', 'alice');
+    expect(res.status).toBe(302);
+    return decodeState(res.headers.location);
+  }
+
+  it("gives every server its own redirect URI and binds the ticket to that server's AS", async () => {
+    const evil = await start('evil');
+    const corp = await start('corp');
+    expect(evil.payload.redirectUri).toBe('https://ihub.example.com/api/mcp/oauth/callback/evil');
+    expect(corp.payload.redirectUri).toBe('https://ihub.example.com/api/mcp/oauth/callback/corp');
+    expect(evil.payload).toMatchObject({
+      issuer: 'https://as.evil.example.net',
+      clientId: 'client-at-evil',
+      issRequired: false
+    });
+    expect(corp.payload).toMatchObject({
+      issuer: 'https://login.corp.example.com',
+      clientId: 'client-at-corp',
+      issRequired: true
+    });
+  });
+
+  it("refuses a code the honest AS sent for the evil server's ticket (iss mismatch)", async () => {
+    // The evil AS relayed the browser to the honest AS with the evil ticket.
+    const { stateParam } = await start('evil');
+    const res = await request(app)
+      .get('/api/mcp/oauth/callback/evil')
+      .query({ code: 'honest-code', state: stateParam, iss: 'https://login.corp.example.com' })
+      .set('x-test-user', 'alice');
+    expect(res.headers.location).toBe('/chat/abc?mcp_error=issuer_mismatch&mcp_server=evil');
+    // The code and the verifier never reach the evil token endpoint.
+    expect(sdk.exchangeAuthorization).not.toHaveBeenCalled();
+    expect(await readUserTokens('alice', 'evil')).toBeNull();
+  });
+
+  it("refuses a code delivered to another server's callback", async () => {
+    const { stateParam } = await start('evil');
+    const res = await request(app)
+      .get('/api/mcp/oauth/callback/corp')
+      .query({ code: 'honest-code', state: stateParam })
+      .set('x-test-user', 'alice');
+    expect(res.headers.location).toBe('/chat/abc?mcp_error=invalid_state&mcp_server=evil');
+    expect(sdk.exchangeAuthorization).not.toHaveBeenCalled();
+  });
+
+  it('requires iss when the AS advertises RFC 9207 support, and accepts the right one', async () => {
+    const { stateParam } = await start('corp');
+    const missing = await request(app)
+      .get('/api/mcp/oauth/callback/corp')
+      .query({ code: 'c1', state: stateParam })
+      .set('x-test-user', 'alice');
+    expect(missing.headers.location).toBe('/chat/abc?mcp_error=issuer_mismatch&mcp_server=corp');
+    expect(sdk.exchangeAuthorization).not.toHaveBeenCalled();
+
+    const ok = await request(app)
+      .get('/api/mcp/oauth/callback/corp')
+      .query({ code: 'c1', state: stateParam, iss: 'https://login.corp.example.com' })
+      .set('x-test-user', 'alice');
+    expect(ok.headers.location).toBe('/chat/abc?mcp_connected=corp');
+    expect(sdk.exchangeAuthorization).toHaveBeenCalledWith(
+      'https://login.corp.example.com/',
+      expect.objectContaining({ clientInformation: { client_id: 'client-at-corp' } })
+    );
+  });
+
+  it('refuses to exchange when the registration changed since the sign-in started', async () => {
+    const { stateParam } = await start('evil');
+    const record = await mcpClientManager.clientStore.get('evil');
+    await mcpClientManager.clientStore.put('evil', {
+      ...record,
+      authorizationServerUrl: 'https://login.corp.example.com/',
+      clientId: 'client-at-corp'
+    });
+    const res = await request(app)
+      .get('/api/mcp/oauth/callback/evil')
+      .query({ code: 'c', state: stateParam, iss: 'https://as.evil.example.net' })
+      .set('x-test-user', 'alice');
+    expect(res.headers.location).toBe('/chat/abc?mcp_error=exchange_failed&mcp_server=evil');
+    expect(sdk.exchangeAuthorization).not.toHaveBeenCalled();
+  });
+});
+
+describe('public base and the shared registration', () => {
+  it('a forged Host does not replace the registration every user depends on', async () => {
+    const first = await request(app)
+      .get('/api/mcp/oauth/authorize')
+      .query({ serverId: 'okta', returnUrl: '/chat/abc' })
+      .set('Host', 'ihub.test')
+      .set('x-test-user', 'alice');
+    expect(first.status).toBe(302);
+    const before = await mcpClientManager.clientStore.get('okta');
+    expect(before).toMatchObject({ clientId: 'dcr-client', publicBase: 'http://ihub.test' });
+
+    // X-Forwarded-Host is ignored while `trust proxy` is off.
+    const forwarded = await request(app)
+      .get('/api/mcp/oauth/authorize')
+      .query({ serverId: 'okta', returnUrl: '/chat/abc' })
+      .set('Host', 'ihub.test')
+      .set('X-Forwarded-Host', 'evil.example')
+      .set('x-test-user', 'mallory');
+    expect(new URL(forwarded.headers.location).searchParams.get('redirect_uri')).toBe(
+      'http://ihub.test/api/mcp/oauth/callback/okta'
+    );
+
+    // A forged Host is refused instead of re-registering.
+    sdk.registerClient.mockResolvedValue({ client_id: 'attacker-client' });
+    const forged = await request(app)
+      .get('/api/mcp/oauth/authorize')
+      .query({ serverId: 'okta', returnUrl: '/chat/abc' })
+      .set('Host', 'evil.example')
+      .set('x-test-user', 'mallory');
+    expect(forged.headers.location).toBe('/chat/abc?mcp_error=public_url_mismatch&mcp_server=okta');
+    expect(sdk.registerClient).toHaveBeenCalledTimes(1);
+    expect(await mcpClientManager.clientStore.get('okta')).toMatchObject({
+      clientId: 'dcr-client',
+      publicBase: 'http://ihub.test'
+    });
+  });
+
+  it('honours X-Forwarded-Host only behind a trusted proxy, and still never replaces the registration', async () => {
+    const proxied = express();
+    proxied.set('trust proxy', true);
+    registerMcpOAuthRoutes(proxied);
+    await request(proxied)
+      .get('/api/mcp/oauth/authorize')
+      .query({ serverId: 'okta', returnUrl: '/chat/abc' })
+      .set('X-Forwarded-Host', 'ihub.example.com')
+      .set('X-Forwarded-Proto', 'https')
+      .set('x-test-user', 'alice');
+    expect(await mcpClientManager.clientStore.get('okta')).toMatchObject({
+      publicBase: 'https://ihub.example.com'
+    });
+    const forged = await request(proxied)
+      .get('/api/mcp/oauth/authorize')
+      .query({ serverId: 'okta', returnUrl: '/chat/abc' })
+      .set('X-Forwarded-Host', 'evil.example')
+      .set('X-Forwarded-Proto', 'https')
+      .set('x-test-user', 'mallory');
+    expect(forged.headers.location).toContain('mcp_error=public_url_mismatch');
+    expect((await mcpClientManager.clientStore.get('okta')).publicBase).toBe(
+      'https://ihub.example.com'
+    );
+  });
+
+  it("lets an admin's own sign-in move the registration to a new base", async () => {
+    await request(app)
+      .get('/api/mcp/oauth/authorize')
+      .query({ serverId: 'okta', returnUrl: '/chat/abc' })
+      .set('Host', 'old.ihub.test')
+      .set('x-test-user', 'alice');
+    sdk.registerClient.mockResolvedValue({ client_id: 'dcr-client-2' });
+    const moved = await request(app)
+      .get('/api/mcp/oauth/authorize')
+      .query({ serverId: 'okta', returnUrl: '/chat/abc' })
+      .set('Host', 'new.ihub.test')
+      .set('x-test-user', 'admin')
+      .set('x-test-admin', '1');
+    expect(moved.status).toBe(302);
+    expect(await mcpClientManager.clientStore.get('okta')).toMatchObject({
+      clientId: 'dcr-client-2',
+      publicBase: 'http://new.ihub.test'
+    });
+  });
+});
+
+describe('OAuth requests refuse redirects', () => {
+  it('sends redirect: manual and turns a 3xx into an error', async () => {
+    safeFetch.mockResolvedValueOnce({
+      ok: false,
+      status: 307,
+      headers: new Map([['location', 'http://169.254.169.254/latest/meta-data']])
+    });
+    const fetchFn = buildMcpOAuthFetch({});
+    await expect(
+      fetchFn('https://as.example.com/token', { method: 'POST', body: 'grant_type=x' })
+    ).rejects.toMatchObject({ code: 'MCP_OAUTH_REDIRECT_REFUSED' });
+    expect(safeFetch).toHaveBeenLastCalledWith(
+      'https://as.example.com/token',
+      expect.objectContaining({ redirect: 'manual', method: 'POST' }),
+      expect.anything()
+    );
+    safeFetch.mockResolvedValueOnce({ ok: true, status: 200 });
+    await expect(fetchFn('https://as.example.com/token')).resolves.toMatchObject({ status: 200 });
   });
 });
 

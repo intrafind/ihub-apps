@@ -2,28 +2,36 @@
  * The MCP SDK `OAuthClientProvider` for one (user, server) pair.
  *
  * `StreamableHTTPClientTransport` / `SSEClientTransport` take an
- * `authProvider`: they send `Authorization: Bearer <tokens().access_token>`,
- * and on 401 run the SDK's `auth()` orchestrator, which refreshes an expired
- * token (`refreshAuthorization`), drops tokens the authorization server calls
- * `invalid_grant` (`invalidateCredentials('tokens')`) and, when nothing else
- * helps, starts a new authorization and calls `redirectToAuthorization`.
+ * `authProvider`: they send `Authorization: Bearer <tokens().access_token>`
+ * and, on 401, run the SDK's `auth()` orchestrator.
  *
  * There is no user agent on the server, so this provider never redirects: it
- * throws {@link McpAuthRequiredError}, which the connection and the manager
- * turn into an "auth required" result carrying the Connect URL. The
- * interactive flow itself lives in `routes/mcpOAuth.js`; this class is the
- * token and registration accessor the transport (and those routes) share.
+ * throws {@link McpAuthRequiredError}, which the manager turns into a token
+ * refresh or an "auth required" result carrying the Connect URL.
  *
- * Tokens are read from and written to the encrypted per-user token files
- * (`mcpUserTokens.js`), the client registration and discovery state from the
- * per-server registration store (`mcpOAuthClientStore.js`). A pre-registered
- * client in the server config (`clientId` + `clientSecretRef`) takes
- * precedence over a stored CIMD/DCR registration.
+ * **iHub owns the refresh.** `tokens()` hands the SDK the access token only,
+ * never the refresh token, so the SDK never refreshes on its own. On a 401
+ * the SDK ends in `redirectToAuthorization`, the manager catches the
+ * auth-required error and refreshes once per (user, server) — single-flight,
+ * re-reading the stored tokens first, deleting them only when the
+ * authorization server definitively rejects them (`invalid_grant`,
+ * `invalid_client`, `unauthorized_client`) and keeping them on network errors
+ * and 5xx (see `McpClientManager._refreshUserTokens`). Parallel calls
+ * therefore never race each other's refresh, and a refresh token is only ever
+ * sent to the authorization server the tokens were issued by.
  *
- * Every HTTP request the SDK makes through this provider (discovery,
- * registration, token endpoint) uses {@link buildMcpOAuthFetch}: `safeFetch`
- * bound to the MCP servers' SSRF policy, so an authorization server cannot
- * steer iHub to a private address.
+ * Tokens are read from the encrypted per-user token files
+ * (`mcpUserTokens.js`) and only when they were issued for this server's
+ * current endpoint and auth block; the client registration and discovery
+ * state come from the per-server registration store
+ * (`mcpOAuthClientStore.js`). A pre-registered client in the server config
+ * (`clientId` + `clientSecretRef`) takes precedence over a stored CIMD/DCR
+ * registration.
+ *
+ * Every OAuth request iHub makes itself (discovery, registration, token,
+ * revocation) uses {@link buildMcpOAuthFetch}: `safeFetch` bound to the MCP
+ * servers' SSRF policy, with redirects refused, so an authorization server
+ * cannot steer iHub to a private address with a 3xx.
  *
  * @module services/mcp/McpUserOAuthProvider
  */
@@ -36,12 +44,19 @@ import {
   McpOAuthClientStore,
   registrationFingerprint
 } from './mcpOAuthClientStore.js';
-import { readUserTokens, writeUserTokens, deleteUserTokens } from './mcpUserTokens.js';
+import {
+  readUserTokens,
+  readUserTokensFor,
+  writeUserTokens,
+  deleteUserTokens,
+  tokenBindingFor
+} from './mcpUserTokens.js';
 import {
   buildMcpClientMetadata,
   isCimdCapableBase,
   mcpCallbackUrl,
-  mcpClientMetadataUrl
+  mcpClientMetadataUrl,
+  PLACEHOLDER_PUBLIC_BASE
 } from './mcpOAuthPublicUrl.js';
 import logger from '../../utils/logger.js';
 
@@ -49,6 +64,12 @@ const COMPONENT = 'McpUserOAuthProvider';
 
 /** Error code of every "the user must connect first" condition. */
 export const MCP_AUTH_REQUIRED = 'MCP_AUTH_REQUIRED';
+
+/** Error code of a refresh that failed for a transient reason (tokens kept). */
+export const MCP_AUTH_REFRESH_FAILED = 'MCP_AUTH_REFRESH_FAILED';
+
+/** Error code of an OAuth request answered with a redirect (refused). */
+export const MCP_OAUTH_REDIRECT_REFUSED = 'MCP_OAUTH_REDIRECT_REFUSED';
 
 /**
  * Thrown instead of redirecting: the user has to complete the interactive
@@ -68,6 +89,24 @@ export class McpAuthRequiredError extends Error {
 }
 
 /**
+ * A token refresh that could not complete for a transient reason — network
+ * error, timeout, 5xx, an unparsable answer. The stored tokens are kept; the
+ * next call tries again.
+ */
+export class McpTokenRefreshError extends Error {
+  /**
+   * @param {string} serverId
+   * @param {string} [message] - For the server log only
+   */
+  constructor(serverId, message = 'The MCP sign-in could not be renewed right now') {
+    super(message);
+    this.name = 'McpTokenRefreshError';
+    this.code = MCP_AUTH_REFRESH_FAILED;
+    this.serverId = serverId;
+  }
+}
+
+/**
  * Whether an error means "the user must (re)connect": our own marker, or the
  * SDK's `UnauthorizedError` from a transport that could not authenticate.
  *
@@ -82,8 +121,50 @@ export function isAuthRequiredError(error) {
 }
 
 /**
- * A `fetch` for the SDK's OAuth calls: `safeFetch` with the MCP servers'
- * SSRF policy (`security.allowedHosts`, `security.blockPrivateIps`).
+ * Whether an error is a transient refresh failure ({@link McpTokenRefreshError}).
+ * @param {unknown} error
+ * @returns {boolean}
+ */
+export function isTokenRefreshError(error) {
+  return Boolean(error) && error?.code === MCP_AUTH_REFRESH_FAILED;
+}
+
+/**
+ * Wrap a fetch so it never follows redirects: the request is sent with
+ * `redirect: 'manual'` and a 3xx answer becomes an error. The SSRF guard
+ * checks and pins only the first URL, so following a `Location` would let the
+ * answering server steer iHub anywhere (an IP literal skips the pinned
+ * lookup). OAuth discovery, registration, token and revocation endpoints must
+ * answer directly.
+ *
+ * @param {(input: string|URL, init?: RequestInit) => Promise<Response>} fetchFn
+ * @returns {(input: string|URL, init?: RequestInit) => Promise<Response>}
+ */
+export function withoutRedirects(fetchFn) {
+  return async (input, init = {}) => {
+    const response = await fetchFn(input, { ...init, redirect: 'manual' });
+    const status = Number(response?.status);
+    if ((status >= 300 && status < 400) || response?.type === 'opaqueredirect') {
+      let origin = 'an OAuth endpoint';
+      try {
+        origin = new URL(typeof input === 'string' ? input : input?.href || input?.url).origin;
+      } catch {
+        /* keep the generic wording */
+      }
+      const error = new Error(
+        `OAuth request to ${origin} answered with a redirect (${status}); redirects are not followed`
+      );
+      error.code = MCP_OAUTH_REDIRECT_REFUSED;
+      throw error;
+    }
+    return response;
+  };
+}
+
+/**
+ * A `fetch` for the OAuth calls: `safeFetch` with the MCP servers' SSRF
+ * policy (`security.allowedHosts`, `security.blockPrivateIps`), redirects
+ * refused ({@link withoutRedirects}).
  *
  * @param {{allowedHosts?: string[], blockPrivateIps?: boolean}} [security]
  * @returns {(input: string|URL, init?: RequestInit) => Promise<Response>}
@@ -93,7 +174,7 @@ export function buildMcpOAuthFetch(security = {}) {
     allowHosts: security.allowedHosts || [],
     blockPrivateIps: security.blockPrivateIps !== false
   };
-  return (input, init = {}) => safeFetch(input, init, policy);
+  return withoutRedirects((input, init = {}) => safeFetch(input, init, policy));
 }
 
 export class McpUserOAuthProvider {
@@ -141,17 +222,20 @@ export class McpUserOAuthProvider {
   // ── OAuthClientProvider ───────────────────────────────────────────────
 
   /**
-   * The fixed redirect URI. The SDK reads this synchronously, so it is built
-   * from the base known at construction; the routes always pass one, and a
-   * pooled connection gets the base of its stored registration.
+   * This server's redirect URI. The SDK reads it synchronously, and only to
+   * decide that this is an interactive (authorization code) client, so it is
+   * always defined — built from the base known at construction, or a
+   * placeholder that never leaves iHub.
    */
   get redirectUrl() {
-    return this.publicBase ? mcpCallbackUrl(this.publicBase) : undefined;
+    return mcpCallbackUrl(this.publicBase || PLACEHOLDER_PUBLIC_BASE, this.serverId);
   }
 
-  /** iHub's CIMD URL, offered only when it would be a valid https client id. */
+  /** iHub's CIMD URL for this server, offered only when it would be a valid https client id. */
   get clientMetadataUrl() {
-    return isCimdCapableBase(this.publicBase) ? mcpClientMetadataUrl(this.publicBase) : undefined;
+    return isCimdCapableBase(this.publicBase)
+      ? mcpClientMetadataUrl(this.publicBase, this.serverId)
+      : undefined;
   }
 
   /** Client metadata for dynamic registration (no `client_id`). */
@@ -161,7 +245,8 @@ export class McpUserOAuthProvider {
       : [];
     return {
       ...buildMcpClientMetadata({
-        publicBase: this.publicBase || 'https://ihub.invalid',
+        publicBase: this.publicBase || PLACEHOLDER_PUBLIC_BASE,
+        serverId: this.serverId,
         clientName: this.clientName,
         withClientId: false
       }),
@@ -226,8 +311,13 @@ export class McpUserOAuthProvider {
     });
   }
 
+  /**
+   * The stored access token, when it was issued for this server's current
+   * endpoint and auth block. The refresh token is never handed to the SDK:
+   * iHub refreshes itself, single-flight (see the module comment).
+   */
   async tokens() {
-    const payload = await readUserTokens(this.userId, this.serverId);
+    const payload = await readUserTokensFor(this.userId, this.serverConfig);
     if (!payload?.access_token) {
       this._lastAccessToken = null;
       return undefined;
@@ -239,13 +329,14 @@ export class McpUserOAuthProvider {
     };
     if (Number.isFinite(payload.expires_in)) tokens.expires_in = payload.expires_in;
     if (typeof payload.scope === 'string') tokens.scope = payload.scope;
-    if (typeof payload.refresh_token === 'string') tokens.refresh_token = payload.refresh_token;
     if (typeof payload.id_token === 'string') tokens.id_token = payload.id_token;
     return tokens;
   }
 
   async saveTokens(tokens) {
-    await writeUserTokens(this.userId, this.serverId, tokens);
+    const current = await readUserTokens(this.userId, this.serverId);
+    const binding = current?.binding || tokenBindingFor(this.serverConfig);
+    await writeUserTokens(this.userId, this.serverId, tokens, binding);
     this._lastAccessToken = tokens?.access_token || null;
     logger.info('MCP user tokens stored', {
       component: COMPONENT,
@@ -256,7 +347,8 @@ export class McpUserOAuthProvider {
 
   /**
    * Never navigates: the server has no user agent. The thrown error surfaces
-   * as "auth required" so the user is shown a Connect button instead.
+   * as "auth required", which the manager answers with a refresh or a
+   * Connect button.
    */
   redirectToAuthorization() {
     throw new McpAuthRequiredError(this.serverId);
@@ -294,15 +386,16 @@ export class McpUserOAuthProvider {
   }
 
   /**
-   * Delete the user's tokens — unless another worker refreshed them in the
-   * meantime (the file no longer holds the access token this provider handed
-   * out), in which case the fresh tokens are kept.
+   * Delete the user's tokens — only the access token this provider handed
+   * out. Tokens refreshed in the meantime (by another call or worker) are
+   * kept, and nothing is deleted when this provider never handed out a token.
    * @returns {Promise<boolean>} True when tokens were deleted
    */
   async invalidateTokens() {
+    if (!this._lastAccessToken) return false;
     const current = await readUserTokens(this.userId, this.serverId);
     if (!current) return false;
-    if (this._lastAccessToken && current.access_token !== this._lastAccessToken) {
+    if (current.access_token !== this._lastAccessToken) {
       logger.info('MCP user tokens were refreshed elsewhere; keeping them', {
         component: COMPONENT,
         serverId: this.serverId,
@@ -327,6 +420,22 @@ export class McpUserOAuthProvider {
 
   async saveDiscoveryState(state) {
     this._discovery = state;
+    // Only onto the registration made for this very config, and never
+    // switching it to another authorization server: the registration's client
+    // (and every user's refresh token) belongs to the one it was made at.
+    const registration = await this.registration();
+    if (!registration) return;
+    if (
+      registration.authorizationServerUrl &&
+      state?.authorizationServerUrl &&
+      String(state.authorizationServerUrl) !== registration.authorizationServerUrl
+    ) {
+      logger.warn('MCP server now names another authorization server; keeping the registered one', {
+        component: COMPONENT,
+        serverId: this.serverId
+      });
+      return;
+    }
     await this.clientStore.update(this.serverId, {
       discovery: state,
       authorizationServerUrl: state?.authorizationServerUrl

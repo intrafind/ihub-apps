@@ -9,6 +9,7 @@ import { buildServerPath } from '../utils/basePath.js';
 import { validateIdForPath } from '../utils/pathSecurity.js';
 import { requireFeature } from '../featureRegistry.js';
 import { sendInternalError } from '../utils/responseHelpers.js';
+import { stripReservedToolContext, withTrustedToolContext } from '../utils/toolCallContext.js';
 
 export default function registerToolRoutes(app) {
   app.get(
@@ -65,15 +66,19 @@ export default function registerToolRoutes(app) {
       // Validate toolId to prevent injection via dynamic import
       if (!validateIdForPath(toolId, 'tool', res)) return;
 
-      const params = req.method === 'GET' ? req.query : req.body;
-      if (req.headers['x-chat-id']) {
-        params.chatId = req.headers['x-chat-id'];
-      }
+      // The caller's arguments never carry iHub's context: `user` (whose
+      // identity and, for per-user OAuth MCP servers, whose stored token the
+      // call uses), `chatId`, `appConfig`, … are stripped and set here, so the
+      // authenticated user always wins over anything in the body or query.
+      const chatId =
+        typeof req.headers['x-chat-id'] === 'string' ? req.headers['x-chat-id'] : undefined;
+      const args = stripReservedToolContext(req.method === 'GET' ? req.query : req.body);
+      const params = withTrustedToolContext(args, { chatId, user: req.user });
       try {
         const result = await runTool(toolId, params);
         await logInteraction('tool_usage', {
           toolId,
-          toolInput: params,
+          toolInput: args,
           toolOutput: result,
           sessionId: req.headers['x-chat-id'] || 'direct',
           userSessionId: req.headers['x-session-id'] || 'unknown',

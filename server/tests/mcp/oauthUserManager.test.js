@@ -13,7 +13,11 @@ import {
   McpToolCatalogStore,
   MCP_TOOL_CATALOG_NAMESPACE
 } from '../../services/mcp/mcpToolCatalogStore.js';
-import { readUserTokens, writeUserTokens } from '../../services/mcp/mcpUserTokens.js';
+import {
+  readUserTokens,
+  writeUserTokens as writeRawUserTokens,
+  tokenBindingFor
+} from '../../services/mcp/mcpUserTokens.js';
 import { chatToolSeam, authRequiredOf } from '../../services/chat/chatSeams.js';
 import { parseSseV2EventData } from '../../services/loop/contracts/sseV2.js';
 import { SSE_V2_EVENTS } from '../../../shared/runEvents.js';
@@ -40,6 +44,10 @@ const RAW_TOOLS = [
     inputSchema: { type: 'object', properties: {} }
   }
 ];
+
+/** Store tokens as a completed sign-in for OKTA would (bound to its config). */
+const writeUserTokens = (userId, serverId, tokens) =>
+  writeRawUserTokens(userId, serverId, tokens, tokenBindingFor(OKTA));
 
 /** An in-memory DocumentStore, enough for the catalog and registration stores. */
 function memoryDocuments() {

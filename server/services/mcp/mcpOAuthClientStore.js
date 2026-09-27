@@ -123,7 +123,14 @@ export class McpOAuthClientStore {
 
   /**
    * The registration for a server config, or null when there is none or it
-   * was made for a different endpoint / auth block (it is then dropped).
+   * was made for a different endpoint / auth block.
+   *
+   * Read-only: a mismatching record is ignored, never deleted. The config
+   * handed in may be an unsaved draft (the admin's "Test connection") or a
+   * worker's not-yet-reloaded copy; deleting the live registration on its
+   * say-so would disconnect every user. Records are dropped only by an actual
+   * config change (`McpClientManager._retireUserServer`), an `invalid_client`
+   * answer, or an admin reset — and overwritten by the next registration.
    *
    * @param {Object} serverConfig
    * @returns {Promise<McpOAuthClientRegistration|null>}
@@ -131,10 +138,7 @@ export class McpOAuthClientStore {
   async getFor(serverConfig) {
     const registration = await this.get(serverConfig?.id);
     if (!registration) return null;
-    if (registration.fingerprint !== registrationFingerprint(serverConfig)) {
-      await this.clear(serverConfig.id);
-      return null;
-    }
+    if (registration.fingerprint !== registrationFingerprint(serverConfig)) return null;
     return registration;
   }
 

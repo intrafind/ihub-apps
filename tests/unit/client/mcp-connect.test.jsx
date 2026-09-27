@@ -57,6 +57,13 @@ jest.mock('../../../client/src/shared/components/Icon', () => ({
   default: ({ name }) => <span data-testid="icon" data-name={name} />
 }));
 
+// The live connection state the cards ask for (GET /api/mcp/oauth/connections).
+const mockConnectionStates = { value: new Map() };
+jest.mock('../../../client/src/features/chat/mcpApps/mcpConnectionStatus', () => ({
+  fetchMcpConnectionStates: jest.fn(async () => mockConnectionStates.value),
+  invalidateMcpConnectionStates: jest.fn()
+}));
+
 const AUTH = {
   serverId: 'okta',
   serverName: 'Okta MCP',
@@ -92,6 +99,7 @@ const runFrom = envelopes =>
 
 afterEach(() => {
   resetMcpConnectResultForTests();
+  mockConnectionStates.value = new Map();
   window.history.replaceState(null, '', '/');
 });
 
@@ -162,6 +170,33 @@ describe('McpConnectCard', () => {
     render(<McpConnectCard prompt={AUTH} navigate={jest.fn()} />);
     expect(screen.getByRole('alert')).toHaveTextContent('did not succeed');
     expect(screen.getByRole('button', { name: /Connect/ })).toBeInTheDocument();
+  });
+
+  test('a stored card of a server the user has connected since shows it as connected', async () => {
+    mockConnectionStates.value = new Map([['okta', true]]);
+    render(<McpConnectCards prompts={[AUTH]} />);
+    expect(await screen.findByRole('status')).toHaveTextContent('Okta MCP is connected');
+    expect(screen.queryByRole('button')).not.toBeInTheDocument();
+  });
+
+  test('a cached "connected" does not outlive a later disconnect', async () => {
+    window.history.replaceState(null, '', '/chat/app-1?mcp_connected=okta');
+    mockConnectionStates.value = new Map([['okta', false]]);
+    render(<McpConnectCard prompt={AUTH} navigate={jest.fn()} />);
+    expect(await screen.findByRole('button', { name: /Connect/ })).toBeInTheDocument();
+  });
+
+  test('the result applies to the page it returned to only, and the router is told', () => {
+    const onPop = jest.fn();
+    window.addEventListener('popstate', onPop);
+    window.history.replaceState(null, '', '/chat/app-1?mcp_error=exchange_failed&mcp_server=okta');
+    expect(consumeMcpConnectResult()).toMatchObject({ error: 'exchange_failed' });
+    // The router re-reads the cleaned URL, so it cannot write the parameters back.
+    expect(onPop).toHaveBeenCalledTimes(1);
+    window.removeEventListener('popstate', onPop);
+    // An in-app navigation to another chat: the old result does not apply there.
+    window.history.pushState(null, '', '/chat/app-2');
+    expect(consumeMcpConnectResult()).toMatchObject({ connected: null, error: null });
   });
 
   test('a read-only chat shows the notice without a button', () => {
