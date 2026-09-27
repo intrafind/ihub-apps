@@ -566,11 +566,12 @@ class ChatService {
         //
         // An MCP tool with an MCP App view hands back its raw result on the
         // shared `info` object, where `chatToolSeam` builds the view from it.
-        executeTool: (call, { toolId, args, info }) =>
+        executeTool: (call, { toolId, args, info, signal }) =>
           this.runTool(
             toolId,
             { language, ...args, chatId, user, appConfig: app, ...attachmentParams },
             {
+              signal,
               onMcpAppResult: result => {
                 if (info) info.mcpAppResult = result;
               }
@@ -1059,15 +1060,19 @@ class ChatService {
           imageLiftSeam,
           collector
         ],
-        executeTool: (call, { toolId, args }) =>
-          this.runTool(toolId, {
-            language,
-            ...args,
-            chatId,
-            user,
-            appConfig: app,
-            ...attachmentParams
-          })
+        executeTool: (call, { toolId, args, signal }) =>
+          this.runTool(
+            toolId,
+            {
+              language,
+              ...args,
+              chatId,
+              user,
+              appConfig: app,
+              ...attachmentParams
+            },
+            { signal }
+          )
       });
 
       if (result.status === 'error' || result.status === 'aborted') {

@@ -46,6 +46,17 @@ describe('a2aAgentConfigSchema', () => {
     }
   });
 
+  it('sends the OAuth client secret over HTTPS only (http for localhost)', () => {
+    const oauth = tokenUrl => ({
+      ...minimal,
+      auth: { type: 'oauth', tokenUrl, clientId: 'ihub', clientSecretRef: 's' }
+    });
+    expect(a2aAgentConfigSchema.safeParse(oauth('http://auth.example.com/token')).success).toBe(
+      false
+    );
+    expect(a2aAgentConfigSchema.safeParse(oauth('http://localhost:9000/token')).success).toBe(true);
+  });
+
   it('leaves the apiKey header name to the card when none is configured', () => {
     const { data } = a2aAgentConfigSchema.safeParse({
       ...minimal,
@@ -90,6 +101,11 @@ describe('a2aAgentConfigSchema', () => {
   it('rejects unsafe or too long ids and out-of-range timings', () => {
     expect(a2aAgentConfigSchema.safeParse({ ...minimal, id: 'bad id' }).success).toBe(false);
     expect(a2aAgentConfigSchema.safeParse({ ...minimal, id: '../x' }).success).toBe(false);
+    // The id is part of every tool name, which OpenAI/Anthropic restrict to
+    // [a-zA-Z0-9_-]; `__` separates the id from the skill slug.
+    expect(a2aAgentConfigSchema.safeParse({ ...minimal, id: 'lang.dock' }).success).toBe(false);
+    expect(a2aAgentConfigSchema.safeParse({ ...minimal, id: 'a__b' }).success).toBe(false);
+    expect(a2aAgentConfigSchema.safeParse({ ...minimal, id: 'lang-dock_2' }).success).toBe(true);
     expect(a2aAgentConfigSchema.safeParse({ ...minimal, id: 'a'.repeat(49) }).success).toBe(false);
     expect(a2aAgentConfigSchema.safeParse({ ...minimal, timeoutMs: 500 }).success).toBe(false);
     expect(a2aAgentConfigSchema.safeParse({ ...minimal, timeoutMs: 600001 }).success).toBe(false);

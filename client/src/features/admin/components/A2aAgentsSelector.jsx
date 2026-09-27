@@ -50,15 +50,22 @@ function A2aAgentsSelector({ selectedTools = [], onToolsChange, onA2aToolIdsChan
     // eslint-disable-next-line @eslint-react/exhaustive-deps
   }, []);
 
+  // An agent flagged `idConflict` shares its id with a tool or MCP server, so
+  // that id selects the tool or server, not the agent: it is enabled by its
+  // skills' tool ids instead, and the bare id is never treated as its own.
   const referencesOf = agent => {
     const toolIds = new Set((agent.skills || []).map(skill => skill.toolId));
-    return selectedTools.filter(id => id === agent.id || toolIds.has(id));
+    return selectedTools.filter(id => (id === agent.id && !agent.idConflict) || toolIds.has(id));
   };
 
   const toggleAgent = agent => {
     const refs = referencesOf(agent);
     const rest = selectedTools.filter(id => !refs.includes(id));
-    onToolsChange(refs.length > 0 ? rest : [...rest, agent.id]);
+    if (refs.length > 0) return onToolsChange(rest);
+    const added = agent.idConflict
+      ? (agent.skills || []).map(skill => skill.toolId).filter(Boolean)
+      : [agent.id];
+    onToolsChange([...rest, ...added]);
   };
 
   if (loading) {
@@ -139,6 +146,15 @@ function A2aAgentsSelector({ selectedTools = [], onToolsChange, onA2aToolIdsChan
                     {t('admin.apps.edit.a2aAgents.skills', 'Skills: {{skills}}', {
                       skills: skillNames
                     })}
+                  </span>
+                )}
+                {agent.idConflict && (
+                  <span className="block text-xs text-yellow-800 dark:text-yellow-300 mt-1">
+                    {t(
+                      'admin.apps.edit.a2aAgents.idConflict',
+                      'A tool or MCP server uses the id "{{id}}" too, so this agent is enabled by its skill tools. Give the agent an id of its own to enable it as a whole.',
+                      { id: agent.id }
+                    )}
                   </span>
                 )}
                 {agent.error && (

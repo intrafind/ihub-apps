@@ -1782,7 +1782,15 @@ class ConfigCache {
     }
 
     if (allowedTools) {
+      // A group grant reads like an app's `tools` reference, as it does for
+      // the MCP gateway (`getVisibleToolIds`): besides the exact tool id
+      // (case-insensitive), a base id covers a function-style tool's
+      // functions, an MCP server id that server's tools and an A2A agent id
+      // that agent's skills.
       const granted = new Set(filterResourcesByPermissions(tools, allowedTools));
+      for (const tool of tools) {
+        if (isToolSelected(tool, allowedTools)) granted.add(tool);
+      }
       // The chat's tools menu asks for the tools of the app it runs in. Those
       // are callable in that app whatever the group grants say, so they are
       // listed too — otherwise the menu cannot name them or tell which MCP
