@@ -35,7 +35,7 @@ jest.unstable_mockModule('../../configCache.js', () => ({
     getPlatform: () => ({ defaultLanguage: 'en', mcpServer: { expose: { workflows: true } } }),
     getFeatures: () => ({}),
     getApps: () => ({ data: [] }),
-    getWorkflows: () => ({ data: [] })
+    getWorkflows: () => ({ data: [{ id: 'hr-lookup', chatIntegration: { enabled: true } }] })
   }
 }));
 
@@ -43,6 +43,7 @@ const { stripReservedToolContext, withTrustedToolContext, RESERVED_TOOL_CONTEXT_
   await import('../../utils/toolCallContext.js');
 const { default: registerToolRoutes } = await import('../../routes/toolRoutes.js');
 const { dispatchA2A } = await import('../../services/mcp/a2aHandler.js');
+const { A2aTaskStore } = await import('../../services/mcp/a2aTaskStore.js');
 
 const app = express();
 app.use(express.json());
@@ -105,30 +106,46 @@ describe('POST /api/tools/:toolId', () => {
   });
 });
 
-describe('A2A tasks/send', () => {
+describe('A2A message/send', () => {
   const caller = {
     id: 'a2a-client',
     scopes: ['mcp:workflows:run'],
     permissions: { workflows: new Set(['*']) }
   };
 
-  it('runs a workflow skill as the authenticated caller, never as input.user', async () => {
+  it('runs a workflow skill as the authenticated caller, never as a user in the message data', async () => {
     const r = await dispatchA2A(
       {
         jsonrpc: '2.0',
         id: 1,
-        method: 'tasks/send',
+        method: 'message/send',
         params: {
-          taskId: 't1',
-          skillId: 'workflow__hr-lookup',
-          input: { input: 'list my direct reports', ...SPOOFED }
+          message: {
+            kind: 'message',
+            role: 'user',
+            messageId: 'm1',
+            metadata: { skillId: 'workflow__hr-lookup' },
+            parts: [
+              { kind: 'text', text: 'list my direct reports' },
+              { kind: 'data', data: SPOOFED }
+            ]
+          }
         }
       },
-      { user: caller, platform: { defaultLanguage: 'en' } }
+      {
+        user: caller,
+        platform: { defaultLanguage: 'en', mcpServer: { expose: { workflows: true } } },
+        store: new A2aTaskStore({ documents: null, relayCancel: false })
+      }
     );
-    expect(r.result.status).toBe('completed');
+    expect(r.result.status.state).toBe('completed');
     const [toolId, params] = runTool.mock.calls[0];
     expect(toolId).toBe('workflow_hr-lookup');
-    expect(params).toEqual({ input: 'list my direct reports', user: caller, chatId: 'a2a-t1' });
+    expect(params.user).toBe(caller);
+    expect(params.input).toBe('list my direct reports');
+    expect(params.chatId).toBe(`a2a-${r.result.id}`);
+    for (const key of Object.keys(SPOOFED).filter(k => k !== 'user' && k !== 'chatId')) {
+      expect(params).not.toHaveProperty(key);
+    }
   });
 });

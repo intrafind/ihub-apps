@@ -175,7 +175,8 @@ counterpart.
 - `tasks/get` and `tasks/cancel` backed by a task store; workflow executions already have
   persistent state (`contents/data/workflow-state/`) and can back tasks directly.
 - Keep `agent/info`, `agent/skills` and `tasks/send` for one release behind the existing toggle,
-  or drop them — **decision needed** (breaking change; the endpoint is marked experimental).
+  or drop them — **decided 2026-09-27: dropped** (they were not used; clean break, listed in the
+  release's breaking changes).
 
 **Proposal — outbound (4b).**
 
