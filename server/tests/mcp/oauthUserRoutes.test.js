@@ -441,11 +441,20 @@ describe('GET /api/mcp/oauth/client-metadata.json', () => {
 });
 
 describe('withQuery', () => {
-  it('appends parameters to relative and absolute URLs', () => {
+  it('appends parameters and keeps the path, query and fragment', () => {
     expect(withQuery('/chat/1', { a: 'b' })).toBe('/chat/1?a=b');
     expect(withQuery('/chat/1?x=1#top', { a: 'b' })).toBe('/chat/1?x=1&a=b#top');
-    expect(withQuery('https://ihub.example.com/c', { a: 'b c' })).toBe(
-      'https://ihub.example.com/c?a=b+c'
-    );
+    // A same-host absolute URL becomes a path on this origin.
+    expect(withQuery('https://ihub.example.com/c', { a: 'b c' })).toBe('/c?a=b+c');
+  });
+
+  it('never produces a redirect that leaves this origin', () => {
+    for (const hostile of ['/\\evil.example', '//evil.example/x', '/\\/evil.example', '\\evil']) {
+      const out = withQuery(hostile, { a: 'b' });
+      expect(out.startsWith('/')).toBe(true);
+      expect(out.startsWith('//')).toBe(false);
+      expect(out.startsWith('/\\')).toBe(false);
+      expect(new URL(out, 'https://ihub.example.com').host).toBe('ihub.example.com');
+    }
   });
 });
