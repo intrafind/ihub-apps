@@ -1,4 +1,5 @@
-import { A2aAgentConnection } from './A2aAgentConnection.js';
+import { A2aAgentConnection, TASK_NOT_FOUND_RPC_CODE } from './A2aAgentConnection.js';
+import { A2A_CLIENT_ERRORS } from './a2aTools.js';
 import {
   a2aAgentsFileSchema,
   a2aAgentConfigSchema
@@ -7,8 +8,15 @@ import { emitToolProgress } from '../loop/RunStream.js';
 import { getLocalizedString } from '../../utils/localize.js';
 import logger from '../../utils/logger.js';
 
-/** Most (user, chat, agent) → contextId entries remembered at once. */
+/** Most (user, chat, agent) → conversation entries remembered at once. */
 export const MAX_REMEMBERED_CONTEXTS = 5000;
+
+/**
+ * How long tool discovery (every chat turn's `loadTools`) waits for an agent
+ * whose card is still being fetched for the first time. Past it the agent is
+ * left out of that turn; the fetch carries on for the next one.
+ */
+export const DISCOVERY_WAIT_MS = 2000;
 
 const DEFAULT_SECURITY = { blockPrivateIps: true, allowedHosts: [] };
 
@@ -51,14 +59,16 @@ function summarizeCard(card) {
  *      or auth changed get a fresh connection; the others keep theirs.
  *   3. `listAllTools()` aggregates the skills of every enabled agent as tools.
  *   4. `callTool(toolId, params)` finds the owning agent, sends the message,
- *      and remembers the conversation (`contextId`) per user, chat and agent.
+ *      and remembers the conversation (`contextId`, plus the `taskId` of a
+ *      task waiting for input) per user, chat and agent.
  */
 class A2aClientManager {
   constructor() {
     this.connections = new Map(); // agentId -> A2aAgentConnection
     this.security = { ...DEFAULT_SECURITY };
     this.initialized = false;
-    // `${userId}\u0000${chatId}\u0000${agentId}` -> contextId, LRU-ordered
+    // `${userId}\u0000${chatId}\u0000${agentId}` -> {contextId, taskId?},
+    // LRU-ordered. `taskId` is set while the agent's last task waits for input.
     this.contexts = new Map();
   }
 
@@ -137,7 +147,9 @@ class A2aClientManager {
 
   /**
    * The tools of every enabled agent. An agent whose card cannot be fetched
-   * contributes nothing and does not affect the others.
+   * contributes nothing and does not affect the others. Every chat turn runs
+   * this, so no agent may hold it up: an expired card keeps serving while it
+   * is refreshed, and a first fetch is awaited for `DISCOVERY_WAIT_MS` at most.
    * @returns {Promise<Array<Object>>}
    */
   async listAllTools() {
@@ -147,7 +159,7 @@ class A2aClientManager {
       Array.from(this.connections.values()).map(async conn => {
         if (conn.config.enabled === false) return;
         try {
-          all.push(...(await conn.listTools()));
+          all.push(...(await conn.listTools({ maxWaitMs: DISCOVERY_WAIT_MS })));
         } catch (err) {
           logger.warn('A2A skill discovery failed for agent', {
             component: 'A2aClientManager',
@@ -227,15 +239,21 @@ class A2aClientManager {
    *
    * The conversation with an agent continues across the tool calls of one
    * chat: the `contextId` of the agent's last answer is remembered for the
-   * (user, chat, agent) triple and sent with the next message. It is never
-   * shared across chats or users. iHub's own context keys (`user`, `chatId`,
-   * `appConfig`, …) never leave iHub — only the message and data do.
+   * (user, chat, agent) triple and sent with the next message. When that
+   * answer was a question (`input-required`), its `taskId` is remembered too,
+   * so the next message — the user's reply — continues the same task instead
+   * of starting a new one. Neither is ever shared across chats or users.
+   * iHub's own context keys (`user`, `chatId`, `appConfig`, …) never leave
+   * iHub — only the message and data do.
    *
    * @param {string} toolId - `a2a__<agentId>__<skillSlug>`
    * @param {Object} params - Params as handed to `runTool`
+   * @param {Object} [options]
+   * @param {AbortSignal} [options.signal] - The chat turn's abort signal; a
+   *   user stop aborts the request and cancels a running task
    * @returns {Promise<string>}
    */
-  async callTool(toolId, params = {}) {
+  async callTool(toolId, params = {}, { signal } = {}) {
     const found = await this.findTool(toolId);
     if (!found) throw new Error(`A2A tool not found: ${toolId}`);
     const { conn, tool } = found;
@@ -248,8 +266,10 @@ class A2aClientManager {
         : undefined;
 
     const key = contextKey(params, conn.config.id);
-    const contextId = key ? this.contexts.get(key) : undefined;
-    if (key && contextId) this._remember(key, contextId); // refresh recency
+    const remembered = key ? this.contexts.get(key) : undefined;
+    const contextId = remembered?.contextId || undefined;
+    const pendingTaskId = remembered?.taskId || undefined;
+    if (key && remembered) this._remember(key, remembered); // refresh recency
     const chatId = typeof params.chatId === 'string' ? params.chatId : null;
     const agentName =
       getLocalizedString(tool._a2a.agentName, params.language || 'en') || conn.config.id;
@@ -259,31 +279,63 @@ class A2aClientManager {
       toolId,
       agentId: conn.config.id,
       skillId: tool._a2a.skillId,
-      continuing: Boolean(contextId)
+      continuing: Boolean(contextId),
+      answeringTask: Boolean(pendingTaskId)
     });
 
-    const result = await conn.sendMessage({
-      skillId: tool._a2a.skillId,
-      text,
-      data,
-      contextId,
-      onProgress: progress => {
-        if (!chatId) return;
-        emitToolProgress(chatId, {
-          phase: PROGRESS_PHASE,
-          message: progress.message || `${agentName}: ${progress.state || 'working'}`,
-          data: { agentId: conn.config.id, skillId: tool._a2a.skillId, state: progress.state },
-          toolId
-        });
+    const send = taskId =>
+      conn.sendMessage({
+        skillId: tool._a2a.skillId,
+        text,
+        data,
+        contextId,
+        taskId,
+        signal,
+        onProgress: progress => {
+          if (!chatId) return;
+          emitToolProgress(chatId, {
+            phase: PROGRESS_PHASE,
+            message: progress.message || `${agentName}: ${progress.state || 'working'}`,
+            data: { agentId: conn.config.id, skillId: tool._a2a.skillId, state: progress.state },
+            toolId
+          });
+        }
+      });
+
+    let result;
+    try {
+      result = await send(pendingTaskId);
+    } catch (err) {
+      if (!pendingTaskId) throw err;
+      // The waiting task could not be continued: forget it, so the next call
+      // starts a new task in the same conversation.
+      if (key) this._remember(key, { contextId });
+      // It is gone on the agent's side (expired, cleaned up): send the reply
+      // as a new task of the same conversation right away.
+      if (err?.code !== A2A_CLIENT_ERRORS.RPC_ERROR || err.rpcCode !== TASK_NOT_FOUND_RPC_CODE) {
+        throw err;
       }
-    });
-    if (key && result.contextId) this._remember(key, result.contextId);
+      result = await send(undefined);
+    }
+    if (key) {
+      this._remember(key, {
+        contextId: result.contextId || contextId,
+        ...(result.state === 'input-required' && result.taskId ? { taskId: result.taskId } : {})
+      });
+    }
     return result.text;
   }
 
-  _remember(key, contextId) {
+  /**
+   * Remember (or, with neither id, forget) the conversation of a key, most
+   * recently used last, dropping the oldest past `MAX_REMEMBERED_CONTEXTS`.
+   * @param {string} key
+   * @param {{contextId?: string|null, taskId?: string}} entry
+   */
+  _remember(key, { contextId, taskId } = {}) {
     this.contexts.delete(key);
-    this.contexts.set(key, contextId);
+    if (!contextId && !taskId) return;
+    this.contexts.set(key, { contextId: contextId || null, ...(taskId ? { taskId } : {}) });
     while (this.contexts.size > MAX_REMEMBERED_CONTEXTS) {
       this.contexts.delete(this.contexts.keys().next().value);
     }

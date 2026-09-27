@@ -2148,7 +2148,7 @@
           "clientSecret": "Client secret",
           "clientSecretHint": "Select a stored credential profile holding the OAuth client secret.",
           "id": "ID",
-          "idHint": "Tools of this agent are named a2a__<id>__<skill>; apps enable the agent by this id.",
+          "idHint": "Letters, digits, _ and - only (no __). Tools of this agent are named a2a__<id>__<skill>; apps enable the agent by this id, so it must differ from every tool and MCP server id.",
           "name": "Name",
           "description": "Description",
           "enabled": "Enabled",
@@ -2383,6 +2383,7 @@
           "disabled": "disabled",
           "skills": "Skills: {{skills}}",
           "agentError": "Could not read the Agent Card: {{error}}",
+          "idConflict": "A tool or MCP server uses the id \"{{id}}\" too, so this agent is enabled by its skill tools. Give the agent an id of its own to enable it as a whole.",
           "helper": "Each skill of an agent becomes a tool the model can call; the agent runs on its own servers. Which skills are offered is set under Integrations → A2A agents.",
           "title": "Remote A2A agents",
           "desc": "Choose the remote agents (Agent-to-Agent protocol) this app can delegate to. Users see each agent as a single entry in the chat."

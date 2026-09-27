@@ -14,9 +14,12 @@ const A2A_TOOL_PREFIX = 'a2a__';
  * - for a skill of a remote A2A agent, the agent's id (`langdock` selects every
  *   `a2a__langdock__*` tool). A2A tools are never selected by base id: every
  *   one of them starts with `a2a_`, so a reference `a2a` would otherwise
- *   enable every agent.
+ *   enable every agent. An agent whose id is also a local tool's (base) id or
+ *   an MCP server's id is marked `_a2a.idConflict` by the tool loader; the
+ *   ambiguous id then keeps selecting only the local tool or MCP server, and
+ *   the agent's skills are selected by their exact tool ids alone.
  *
- * @param {{id: string, _mcp?: {serverId?: string}, _a2a?: {agentId?: string}}} tool - Tool definition
+ * @param {{id: string, _mcp?: {serverId?: string}, _a2a?: {agentId?: string, idConflict?: boolean}}} tool - Tool definition
  * @param {string[]|Set<string>} refs - Tool references
  * @returns {boolean}
  */
@@ -25,7 +28,7 @@ export function isToolSelected(tool, refs) {
   const has = refs instanceof Set ? id => refs.has(id) : id => refs.includes(id);
   if (has(tool.id)) return true;
   if (tool._mcp?.serverId && has(tool._mcp.serverId)) return true;
-  if (tool._a2a?.agentId && has(tool._a2a.agentId)) return true;
+  if (tool._a2a?.agentId && !tool._a2a.idConflict && has(tool._a2a.agentId)) return true;
   if (tool._a2a || tool.id.startsWith(A2A_TOOL_PREFIX)) return false;
   const baseId = tool.id.includes('_') ? tool.id.split('_')[0] : tool.id;
   return has(baseId);

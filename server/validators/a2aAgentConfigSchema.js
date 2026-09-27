@@ -1,5 +1,4 @@
 import { z } from 'zod';
-import { zSafeId } from './common.js';
 
 /**
  * Schema for `contents/config/a2aAgents.json` — the remote A2A agents iHub
@@ -22,7 +21,20 @@ const localizedStringSchema = z.record(
  */
 export const MAX_AGENT_ID_LENGTH = 48;
 
-const idSchema = zSafeId.min(1).max(MAX_AGENT_ID_LENGTH);
+/**
+ * Characters an agent id may use. The id goes verbatim into every tool name,
+ * and OpenAI and Anthropic accept only `^[a-zA-Z0-9_-]{1,64}$` there — a dot
+ * (which `zSafeId` allows) makes the provider reject the whole request.
+ */
+export const A2A_AGENT_ID_PATTERN = /^[a-zA-Z0-9_-]+$/;
+
+const idSchema = z
+  .string()
+  .min(1)
+  .max(MAX_AGENT_ID_LENGTH)
+  .regex(A2A_AGENT_ID_PATTERN, 'Agent id may only contain letters, digits, "_" and "-"')
+  // `__` separates the agent id from the skill slug in a tool id.
+  .refine(id => !id.includes('__'), { message: 'Agent id must not contain "__"' });
 
 /** Header an `apiKey` auth block uses when neither it nor the card names one. */
 export const A2A_DEFAULT_API_KEY_HEADER = 'X-API-Key';
@@ -42,26 +54,33 @@ const headerNameSchema = z
 const LOOPBACK_HOSTS = new Set(['localhost', '127.0.0.1', '[::1]']);
 
 /**
- * The Agent Card URL. A2A agents are reached over HTTPS; plain HTTP is
- * accepted for a loopback host only (a locally running agent during
- * development). The SSRF policy in `security` still applies at request time.
+ * Whether a URL may carry iHub's credentials and messages to a remote agent:
+ * HTTPS, or plain HTTP for a loopback host only (a locally running agent
+ * during development). Applied to the configured `cardUrl` and OAuth
+ * `tokenUrl`, and at runtime to the JSON-RPC endpoint the Agent Card names.
+ *
+ * @param {string} value
+ * @returns {boolean}
  */
-const cardUrlSchema = z
-  .string()
-  .url()
-  .refine(
-    value => {
-      let url;
-      try {
-        url = new URL(value);
-      } catch {
-        return false;
-      }
-      if (url.protocol === 'https:') return true;
-      return url.protocol === 'http:' && LOOPBACK_HOSTS.has(url.hostname.toLowerCase());
-    },
-    { message: 'cardUrl must be an https URL (http is allowed for localhost only)' }
-  );
+export function isAllowedAgentUrl(value) {
+  let url;
+  try {
+    url = new URL(value);
+  } catch {
+    return false;
+  }
+  if (url.protocol === 'https:') return true;
+  return url.protocol === 'http:' && LOOPBACK_HOSTS.has(url.hostname.toLowerCase());
+}
+
+/**
+ * The Agent Card URL. A2A agents are reached over HTTPS; plain HTTP is
+ * accepted for a loopback host only. The SSRF policy in `security` still
+ * applies at request time.
+ */
+const cardUrlSchema = z.string().url().refine(isAllowedAgentUrl, {
+  message: 'cardUrl must be an https URL (http is allowed for localhost only)'
+});
 
 /**
  * How iHub authenticates against the agent. Left open for a later `oauthUser`
@@ -86,7 +105,10 @@ const authSchema = z
     z.object({
       // OAuth 2.0 client credentials; the token is cached until it expires.
       type: z.literal('oauth'),
-      tokenUrl: z.string().url(),
+      // Receives the client secret, so the same https rule as `cardUrl`.
+      tokenUrl: z.string().url().refine(isAllowedAgentUrl, {
+        message: 'tokenUrl must be an https URL (http is allowed for localhost only)'
+      }),
       clientId: z.string().min(1),
       // credentialRef to the client secret in the central credential store.
       clientSecretRef: z.string().min(1),

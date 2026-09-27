@@ -17,6 +17,8 @@ jest.unstable_mockModule('../../services/mcp/safeFetch.js', () => ({
       method: init.method || 'GET',
       headers: Object.fromEntries(new Headers(init.headers || {})),
       body: init.body ? tryJson(init.body) : undefined,
+      redirect: init.redirect,
+      signal: init.signal,
       opts
     };
     requests.push(entry);
@@ -534,5 +536,314 @@ describe('message/stream', () => {
       text: 'q'
     });
     expect(result.text).toBe('via message/send');
+  });
+});
+
+/** A response that never arrives — until the request's signal aborts. */
+function hang(req) {
+  return new Promise((_, reject) => {
+    req.signal?.addEventListener('abort', () => reject(req.signal.reason));
+  });
+}
+
+describe('redirects are never followed', () => {
+  it('sends every request with redirect: manual', async () => {
+    const TOKEN_URL = 'https://auth.example.com/token';
+    handler = req => {
+      if (req.url === TOKEN_URL) return json({ access_token: 'at', expires_in: 3600 });
+      if (req.url === CARD_URL) return json(card());
+      return rpcOk(req, agentMessage('ok'));
+    };
+    await connection({
+      auth: { type: 'oauth', tokenUrl: TOKEN_URL, clientId: 'c', clientSecretRef: 's' }
+    }).sendMessage({ skillId: 'Ask Agent', text: 'hi' });
+    expect(requests.length).toBeGreaterThanOrEqual(3);
+    for (const r of requests) expect(r.redirect).toBe('manual');
+  });
+
+  it('refuses a redirect of the card, the JSON-RPC call and the token request', async () => {
+    const redirect = () =>
+      new Response(null, { status: 307, headers: { Location: 'http://10.0.0.5/internal' } });
+
+    handler = redirect;
+    await expect(connection().getCard()).rejects.toMatchObject({
+      code: 'A2A_REDIRECT_REFUSED',
+      message: expect.stringContaining('http://10.0.0.5/internal')
+    });
+
+    agentWith({ rpc: redirect });
+    await expect(
+      connection({ auth: { type: 'apiKey', valueRef: 'k' } }).sendMessage({
+        skillId: 'Ask Agent',
+        text: 'secret question'
+      })
+    ).rejects.toMatchObject({ code: 'A2A_REDIRECT_REFUSED' });
+    // Nothing was sent to the redirect target.
+    expect(requests.some(r => r.url.includes('10.0.0.5'))).toBe(false);
+
+    const TOKEN_URL = 'https://auth.example.com/token';
+    handler = req => (req.url === TOKEN_URL ? redirect() : json(card()));
+    await expect(
+      connection({
+        auth: { type: 'oauth', tokenUrl: TOKEN_URL, clientId: 'c', clientSecretRef: 's' }
+      }).getCard()
+    ).rejects.toMatchObject({ code: 'A2A_REDIRECT_REFUSED' });
+  });
+});
+
+describe('time limits', () => {
+  it('gives up on a card that never arrives within min(timeoutMs, 10 s)', async () => {
+    handler = hang;
+    const conn = connection({ timeoutMs: 1000 });
+    const started = Date.now();
+    await expect(conn.getCard()).rejects.toMatchObject({ code: 'A2A_TIMEOUT' });
+    expect(Date.now() - started).toBeLessThan(2500);
+    expect(conn.status()).toMatchObject({ connected: false, consecutiveFailures: 1 });
+  });
+
+  it('counts a slow card against the call budget of sendMessage', async () => {
+    handler = hang;
+    const started = Date.now();
+    await expect(
+      connection({ timeoutMs: 1000 }).sendMessage({ skillId: 'Ask Agent', text: 'q' })
+    ).rejects.toMatchObject({ code: 'A2A_TIMEOUT' });
+    expect(Date.now() - started).toBeLessThan(2500);
+  });
+
+  it('passes a signal to the OAuth token request', async () => {
+    const TOKEN_URL = 'https://auth.example.com/token';
+    handler = req => (req.url === TOKEN_URL ? json({ access_token: 'at' }) : json(card()));
+    await connection({
+      auth: { type: 'oauth', tokenUrl: TOKEN_URL, clientId: 'c', clientSecretRef: 's' }
+    }).getCard();
+    expect(requests.find(r => r.url === TOKEN_URL).signal).toBeInstanceOf(AbortSignal);
+  });
+
+  it('does not hold tool discovery up while a first card fetch is pending', async () => {
+    handler = hang;
+    const started = Date.now();
+    await expect(connection().listTools({ maxWaitMs: 50 })).rejects.toMatchObject({
+      code: 'A2A_TIMEOUT'
+    });
+    expect(Date.now() - started).toBeLessThan(1000);
+  });
+});
+
+describe('size limits', () => {
+  it('refuses an oversized card and JSON-RPC body', async () => {
+    const big = 'x'.repeat(1024 * 1024 + 10);
+    agentWith({ cardBody: card({ description: big }), rpc: () => json({}) });
+    await expect(connection().getCard()).rejects.toMatchObject({
+      code: 'A2A_RESPONSE_TOO_LARGE'
+    });
+
+    agentWith({
+      rpc: (method, req) => rpcOk(req, agentMessage('y'.repeat(4 * 1024 * 1024 + 10)))
+    });
+    await expect(
+      connection().sendMessage({ skillId: 'Ask Agent', text: 'q' })
+    ).rejects.toMatchObject({ code: 'A2A_RESPONSE_TOO_LARGE' });
+  });
+
+  it('refuses a declared Content-Length over the limit without reading it', async () => {
+    agentWith({
+      rpc: () =>
+        new Response('{}', {
+          status: 200,
+          headers: {
+            'Content-Type': 'application/json',
+            'Content-Length': String(64 * 1024 * 1024)
+          }
+        })
+    });
+    await expect(
+      connection().sendMessage({ skillId: 'Ask Agent', text: 'q' })
+    ).rejects.toMatchObject({ code: 'A2A_RESPONSE_TOO_LARGE' });
+  });
+});
+
+describe('task states that need the client', () => {
+  const question = text => ({
+    status: { message: { kind: 'message', role: 'agent', parts: [{ kind: 'text', text }] } }
+  });
+
+  it('reports auth-required at once instead of polling until the timeout', async () => {
+    agentWith({
+      rpc: (method, req) => rpcOk(req, task('auth-required', question('Sign in to X')))
+    });
+    const started = Date.now();
+    await expect(
+      connection({ timeoutMs: 5000, streaming: 'never' }).sendMessage({
+        skillId: 'Ask Agent',
+        text: 'q'
+      })
+    ).rejects.toMatchObject({
+      code: 'A2A_AUTH_REQUIRED',
+      state: 'auth-required',
+      message: expect.stringContaining('Sign in to X')
+    });
+    expect(Date.now() - started).toBeLessThan(1000);
+    expect(requests.some(r => r.body?.method === 'tasks/get')).toBe(false);
+    expect(requests.some(r => r.body?.method === 'tasks/cancel')).toBe(false);
+  });
+
+  it('fails an unknown or unrecognised state instead of polling it', async () => {
+    for (const state of ['unknown', 'bogus']) {
+      agentWith({ rpc: (method, req) => rpcOk(req, task(state)) });
+      await expect(
+        connection().sendMessage({ skillId: 'Ask Agent', text: 'q' })
+      ).rejects.toMatchObject({ code: 'A2A_TASK_FAILED' });
+    }
+    expect(requests.some(r => r.body?.method === 'tasks/get')).toBe(false);
+  });
+
+  it('treats auth-required the same on the streaming path', async () => {
+    agentWith({
+      cardBody: card({ capabilities: { streaming: true } }),
+      rpc: (method, req) =>
+        sse([
+          {
+            jsonrpc: '2.0',
+            id: req.body.id,
+            result: {
+              kind: 'status-update',
+              taskId: 't',
+              contextId: 'c',
+              status: { state: 'auth-required' },
+              final: true
+            }
+          }
+        ])
+    });
+    await expect(
+      connection().sendMessage({ skillId: 'Ask Agent', text: 'q' })
+    ).rejects.toMatchObject({ code: 'A2A_AUTH_REQUIRED' });
+  });
+
+  it('continues a task waiting for input when given its id', async () => {
+    agentWith({ rpc: (method, req) => rpcOk(req, task('completed')) });
+    await connection().sendMessage({
+      skillId: 'Ask Agent',
+      text: 'EU',
+      contextId: 'ctx-1',
+      taskId: 'task-1'
+    });
+    const sent = requests.find(r => r.body?.method === 'message/send').body.params.message;
+    expect(sent).toMatchObject({ taskId: 'task-1', contextId: 'ctx-1' });
+  });
+});
+
+describe('stream events and the task they belong to', () => {
+  const streamingCard = card({ capabilities: { streaming: true } });
+  const frame = (req, result) => ({ jsonrpc: '2.0', id: req.body.id, result });
+
+  it('learns the task and context from status and artifact updates (no Task event)', async () => {
+    agentWith({
+      cardBody: streamingCard,
+      rpc: (method, req) =>
+        sse([
+          frame(req, {
+            kind: 'status-update',
+            taskId: 't1',
+            contextId: 'c1',
+            status: { state: 'submitted' }
+          }),
+          frame(req, {
+            kind: 'artifact-update',
+            taskId: 't1',
+            contextId: 'c1',
+            artifact: { artifactId: 'a', parts: [{ kind: 'text', text: 'hi' }] }
+          }),
+          frame(req, {
+            kind: 'status-update',
+            taskId: 't1',
+            contextId: 'c1',
+            status: { state: 'completed' },
+            final: true
+          })
+        ])
+    });
+    const result = await connection().sendMessage({ skillId: 'Ask Agent', text: 'q' });
+    expect(result).toEqual({ text: 'hi', taskId: 't1', contextId: 'c1', state: 'completed' });
+  });
+
+  it('ignores updates that name another task or context', async () => {
+    agentWith({
+      cardBody: streamingCard,
+      rpc: (method, req) =>
+        sse([
+          frame(req, task('working')),
+          frame(req, {
+            kind: 'artifact-update',
+            taskId: 'other-task',
+            contextId: 'ctx-1',
+            artifact: { artifactId: 'x', parts: [{ kind: 'text', text: 'injected' }] }
+          }),
+          frame(req, {
+            kind: 'status-update',
+            taskId: 'task-1',
+            contextId: 'other-ctx',
+            status: { state: 'failed' },
+            final: true
+          }),
+          frame(req, {
+            kind: 'artifact-update',
+            taskId: 'task-1',
+            contextId: 'ctx-1',
+            artifact: { artifactId: 'a', parts: [{ kind: 'text', text: 'real' }] }
+          }),
+          frame(req, {
+            kind: 'status-update',
+            taskId: 'task-1',
+            contextId: 'ctx-1',
+            status: { state: 'completed' },
+            final: true
+          })
+        ])
+    });
+    const result = await connection().sendMessage({ skillId: 'Ask Agent', text: 'q' });
+    expect(result).toMatchObject({ text: 'real', state: 'completed', taskId: 'task-1' });
+  });
+});
+
+describe('the endpoint the card names', () => {
+  it('must be HTTPS (plain HTTP for localhost only)', async () => {
+    agentWith({ cardBody: card({ url: 'http://agent.example.com/a2a' }), rpc: () => json({}) });
+    await expect(connection().getCard()).rejects.toMatchObject({ code: 'A2A_CARD_INVALID' });
+  });
+});
+
+describe('a user stop', () => {
+  it('aborts the call and cancels the running task', async () => {
+    agentWith({
+      rpc: (method, req) => {
+        if (method === 'tasks/cancel') return rpcOk(req, task('canceled'));
+        return rpcOk(req, task('working'));
+      }
+    });
+    const controller = new AbortController();
+    const pending = connection({ timeoutMs: 60000, pollIntervalMs: 250 }).sendMessage({
+      skillId: 'Ask Agent',
+      text: 'q',
+      signal: controller.signal
+    });
+    setTimeout(() => controller.abort(), 300);
+    const started = Date.now();
+    await expect(pending).rejects.toMatchObject({ code: 'A2A_CANCELLED', taskId: 'task-1' });
+    expect(Date.now() - started).toBeLessThan(2000);
+    await new Promise(resolve => setTimeout(resolve, 20));
+    expect(requests.find(r => r.body?.method === 'tasks/cancel').body.params).toEqual({
+      id: 'task-1'
+    });
+  });
+
+  it('never starts a call whose signal is already aborted', async () => {
+    agentWith({ rpc: (method, req) => rpcOk(req, agentMessage('x')) });
+    const controller = new AbortController();
+    controller.abort();
+    await expect(
+      connection().sendMessage({ skillId: 'Ask Agent', text: 'q', signal: controller.signal })
+    ).rejects.toMatchObject({ code: 'A2A_CANCELLED' });
+    expect(requests.some(r => r.body?.method === 'message/send')).toBe(false);
   });
 });

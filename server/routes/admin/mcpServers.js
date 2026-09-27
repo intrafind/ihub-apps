@@ -86,6 +86,18 @@ export default function registerAdminMcpServersRoutes(app) {
       if ((cfg.servers || []).some(s => s.id === parsed.data.id)) {
         return res.status(409).json({ success: false, error: 'Server id already exists' });
       }
+      // Apps and groups reference MCP servers and remote A2A agents by the
+      // same bare id; a shared id would enable both at once.
+      const a2aAgents = configCache.getA2aAgents?.()?.data?.agents || [];
+      const clash = a2aAgents.find(
+        agent => String(agent?.id).toLowerCase() === parsed.data.id.toLowerCase()
+      );
+      if (clash) {
+        return res.status(409).json({
+          success: false,
+          error: `Server id "${parsed.data.id}" is already used by the A2A agent "${clash.id}". Apps and groups reference servers and agents by id, so the server needs an id of its own.`
+        });
+      }
       const updated = { ...cfg, servers: [...(cfg.servers || []), parsed.data] };
       await writeConfig(updated);
       res.status(201).json({ success: true, server: parsed.data });
