@@ -355,6 +355,10 @@ const CONFIG_LOADERS = {
   'config/installations.json': {
     label: 'installations',
     count: data => Object.keys(data.installations || {}).length
+  },
+  'config/a2aAgents.json': {
+    label: 'A2A agents',
+    count: data => (data.agents || []).length
   }
 };
 
@@ -430,6 +434,7 @@ class ConfigCache {
       'config/registries.json',
       'config/installations.json',
       'config/mcpServers.json',
+      'config/a2aAgents.json',
       'config/credentials.json',
       'config/agents.json',
       // Alongside users.json, and for the same reason: `loadOAuthClients` is a
@@ -1512,6 +1517,21 @@ class ConfigCache {
     if (!cached || !cached.data) {
       return {
         data: { servers: [], security: { blockPrivateIps: true, allowedHosts: [] } },
+        etag: null
+      };
+    }
+    return cached;
+  }
+
+  /**
+   * Get the remote A2A agents configuration (outbound A2A client, #2546).
+   * @returns {{ data: { agents: Array, security: Object }, etag: string|null }}
+   */
+  getA2aAgents() {
+    const cached = this.get('config/a2aAgents.json');
+    if (!cached || !cached.data) {
+      return {
+        data: { agents: [], security: { blockPrivateIps: true, allowedHosts: [] } },
         etag: null
       };
     }

@@ -590,6 +590,25 @@ if (cluster.isPrimary && workerCount > 1) {
     logger.warn('Failed to initialise MCP client manager', { component: 'Server', error });
   }
 
+  // Initialise the A2A client manager (remote A2A agents as tools) from the
+  // cached a2aAgents.json, on every worker; the singleton worker fetches the
+  // Agent Cards in the background, the others lazily on first use. Failure is
+  // non-fatal.
+  try {
+    const { default: a2aManager } = await import('./services/a2a/A2aClientManager.js');
+    await a2aManager.initialize(configCache.getA2aAgents().data);
+    if (ownsClusterSingletons) {
+      a2aManager.warmUp().catch(err => {
+        logger.warn('Initial A2A Agent Card fetch failed', {
+          component: 'Server',
+          error: err.message
+        });
+      });
+    }
+  } catch (error) {
+    logger.warn('Failed to initialise A2A client manager', { component: 'Server', error });
+  }
+
   // Start audit log cleanup scheduler
   if (ownsClusterSingletons) {
     try {

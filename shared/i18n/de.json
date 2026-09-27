@@ -2218,6 +2218,7 @@
       "marketplace": "Marktplatz",
       "mcpGateway": "MCP-Gateway",
       "mcpServers": "MCP-Server",
+      "a2aAgents": "A2A-Agenten",
       "telemetry": "Telemetrie",
       "voiceInput": "Spracheingabe",
       "changelog": "Neuigkeiten",
@@ -2397,6 +2398,90 @@
         }
       }
     },
+    "a2a": {
+      "agents": {
+        "form": {
+          "authType": "Authentifizierungstyp",
+          "authNone": "Keine",
+          "authApiKey": "API-Schlüssel in einem Header",
+          "authBearer": "Bearer-Token",
+          "authOauth": "OAuth (Client Credentials)",
+          "headerName": "Header-Name (optional)",
+          "headerNameHint": "Leer lassen, um den Header zu verwenden, den die Agent Card für ihren API-Schlüssel nennt, sonst X-API-Key.",
+          "apiKey": "API-Schlüssel",
+          "apiKeyHint": "Gespeichertes Credential-Profil mit dem API-Schlüssel auswählen.",
+          "token": "Token",
+          "tokenHint": "Gespeichertes Credential-Profil mit dem Bearer-Token auswählen.",
+          "tokenUrl": "Token-URL",
+          "clientId": "Client-ID",
+          "scope": "Scope (optional)",
+          "clientSecret": "Client-Secret",
+          "clientSecretHint": "Gespeichertes Credential-Profil mit dem OAuth-Client-Secret auswählen.",
+          "id": "ID",
+          "idHint": "Die Tools dieses Agenten heißen a2a__<id>__<skill>; Apps aktivieren den Agenten über diese ID.",
+          "name": "Name",
+          "description": "Beschreibung",
+          "enabled": "Aktiviert",
+          "cardUrl": "Agent-Card-URL",
+          "cardUrlHint": "HTTPS ist erforderlich; einfaches HTTP funktioniert nur für localhost. Private Adressen brauchen einen Eintrag in allowedHosts der a2aAgents.json.",
+          "authentication": "Authentifizierung",
+          "timeout": "Timeout (ms)",
+          "streaming": "Streaming",
+          "streamingAuto": "Wenn der Agent es unterstützt",
+          "streamingNever": "Nie (stattdessen abfragen)",
+          "pollInterval": "Abfrageintervall (ms)",
+          "timingHint": "Das Timeout gilt für den gesamten Aufruf; ein dann noch laufender Task wird abgebrochen. Lang laufende Tasks werden mit tasks/get abgefragt.",
+          "allowedSkills": "Für Apps freigegebene Skills",
+          "allowedSkillsAll": "Alle Skills auf der Card",
+          "allowedSkillsSelected": "Nur die ausgewählten Skills",
+          "allowedSkillsManual": "Skill-IDs, wie die Card sie nennt, kommagetrennt. Testen Sie die Verbindung, um sie stattdessen aus einer Liste auszuwählen."
+        },
+        "status": {
+          "disabled": "deaktiviert",
+          "unknown": "unbekannt",
+          "unhealthy": "nicht erreichbar",
+          "connected": "Card geladen ({{count}} Skills)",
+          "idle": "noch nicht kontaktiert"
+        },
+        "test": {
+          "failed": "Verbindung fehlgeschlagen: {{error}}",
+          "success": "Agent Card geladen — {{count}} Skills",
+          "cardName": "Agent",
+          "cardDescription": "Beschreibung",
+          "cardVersion": "Version",
+          "cardEndpoint": "Endpunkt",
+          "cardStreaming": "Streaming",
+          "yes": "ja",
+          "no": "nein",
+          "noSkills": "Der Agent nennt auf seiner Card keine Skills.",
+          "running": "Agent Card wird abgerufen …",
+          "button": "Verbindung testen"
+        },
+        "loadError": "A2A-Agenten konnten nicht geladen werden: {{error}}",
+        "saveError": "Speichern fehlgeschlagen: {{error}}",
+        "deleteConfirm": "A2A-Agent \"{{id}}\" löschen?",
+        "deleteError": "Löschen fehlgeschlagen: {{error}}",
+        "testError": "Test fehlgeschlagen: {{error}}",
+        "title": "A2A-Agenten (entfernt)",
+        "subtitle": "Entfernte Agenten, die iHub über das Agent-to-Agent-Protokoll (A2A) aufruft. Jeder Skill auf der Card eines Agenten wird zu einem Tool, das Apps verwenden können.",
+        "create": "A2A-Agent hinzufügen",
+        "empty": "Keine A2A-Agenten konfiguriert",
+        "emptyHint": "Fügen Sie einen Agenten über die URL seiner Agent Card hinzu, meist <agent>/.well-known/agent-card.json.",
+        "actions": {
+          "test": "Verbindung testen",
+          "edit": "Bearbeiten",
+          "delete": "Löschen"
+        },
+        "createTitle": "A2A-Agent hinzufügen",
+        "editTitle": "{{id}} bearbeiten"
+      },
+      "common": {
+        "saved": "Gespeichert",
+        "deleted": "Gelöscht",
+        "testing": "{{id}} wird getestet...",
+        "testOk": "OK — {{name}} bietet {{count}} Skills"
+      }
+    },
     "telemetry": {
       "title": "Telemetrie & Observability",
       "description": "OpenTelemetry-Instrumentierung gemäß den Gen-AI Semantic Conventions konfigurieren. Spans, Events und Metriken können an die Konsole, Prometheus oder ein beliebiges OTLP-kompatibles Backend (Jaeger, Tempo, Grafana, ...) exportiert werden.",
@@ -2559,6 +2644,18 @@
           "serverError": "Tools konnten nicht aufgelistet werden: {{error}}",
           "helper": "Welche Tools ein Server bereitstellt, legen Sie unter Integrationen → MCP-Server fest.",
           "legacySelection": "Diese App listet einzelne Tools dieses Servers auf. Schalten Sie den Server aus und wieder ein, um die auf dem Server freigegebenen Tools zu verwenden."
+        },
+        "a2aAgents": {
+          "loading": "A2A-Agenten werden geladen …",
+          "error": "A2A-Agenten konnten nicht geladen werden: {{error}}",
+          "empty": "Es sind keine entfernten A2A-Agenten konfiguriert. Fügen Sie unter Integrationen → A2A-Agenten einen hinzu, um ihn hier zu verwenden.",
+          "remoteBadge": "entfernter Agent",
+          "disabled": "deaktiviert",
+          "skills": "Skills: {{skills}}",
+          "agentError": "Die Agent Card konnte nicht gelesen werden: {{error}}",
+          "helper": "Jeder Skill eines Agenten wird zu einem Tool, das das Modell aufrufen kann; der Agent läuft auf seinen eigenen Servern. Welche Skills angeboten werden, legen Sie unter Integrationen → A2A-Agenten fest.",
+          "title": "Entfernte A2A-Agenten",
+          "desc": "Wählen Sie die entfernten Agenten (Agent-to-Agent-Protokoll), an die diese App Aufgaben delegieren kann. Benutzer sehen jeden Agenten im Chat als einen einzigen Eintrag."
         },
         "websearch": "Websuche",
         "websearchDesc": "Websuch-Funktionen für diese App konfigurieren",

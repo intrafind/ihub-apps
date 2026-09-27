@@ -107,6 +107,58 @@ describe('groupToolsByMcpServer', () => {
     const { individual } = groupToolsByMcpServer(['drawio', 'braveSearch'], [], localize);
     expect(individual).toEqual(['drawio', 'braveSearch']);
   });
+
+  describe('remote A2A agents', () => {
+    const a2aTools = [
+      {
+        id: 'a2a__langdock__ask_langdock_agent',
+        _a2a: { agentId: 'langdock', agentName: { en: 'Langdock agent' }, skillId: 'Ask' }
+      },
+      {
+        id: 'a2a__langdock__summarize',
+        _a2a: { agentId: 'langdock', agentName: { en: 'Langdock agent' }, skillId: 'sum' }
+      },
+      { id: 'drawio__create_diagram', _mcp: { serverId: 'drawio', serverName: 'draw.io' } }
+    ];
+
+    test('an app that references the agent by id gets one toggle for all its skills', () => {
+      const { grouped, individual } = groupToolsByMcpServer(
+        ['langdock', 'drawio'],
+        a2aTools,
+        localize
+      );
+      expect(grouped).toEqual([
+        { id: 'a2a-langdock', name: 'Langdock agent', matchedTools: ['langdock'] },
+        { id: 'mcp-drawio', name: 'draw.io', matchedTools: ['drawio'] }
+      ]);
+      expect(individual).toEqual([]);
+    });
+
+    test('single skill tools fold into the agent toggle', () => {
+      const { grouped } = groupToolsByMcpServer(
+        ['a2a__langdock__summarize', 'langdock'],
+        a2aTools,
+        localize
+      );
+      expect(grouped).toHaveLength(1);
+      expect(grouped[0].matchedTools).toEqual(['a2a__langdock__summarize', 'langdock']);
+    });
+
+    test('an agent and an MCP server with the same id stay separate', () => {
+      const tools = [
+        { id: 'a2a__x__ask', _a2a: { agentId: 'x', agentName: 'Agent X' } },
+        { id: 'x__tool', _mcp: { serverId: 'x', serverName: 'Server X' } }
+      ];
+      const { grouped } = groupToolsByMcpServer(['a2a__x__ask', 'x__tool'], tools, localize);
+      expect(grouped.map(g => g.id)).toEqual(['a2a-x', 'mcp-x']);
+    });
+
+    test('the literal reference "a2a" is not a base id for every agent', () => {
+      const { grouped, individual } = groupToolsByMcpServer(['a2a'], a2aTools, localize);
+      expect(grouped).toEqual([]);
+      expect(individual).toEqual([]);
+    });
+  });
 });
 
 describe('collapseMcpTools', () => {
@@ -124,6 +176,16 @@ describe('collapseMcpTools', () => {
     expect(collapseMcpTools(tools, localize)).toEqual([
       tools[0],
       { id: 'drawio', name: 'draw.io', description: '', mcpServer: true }
+    ]);
+  });
+
+  test('offers one entry per remote A2A agent, keyed by the agent id', () => {
+    const tools = [
+      { id: 'a2a__langdock__ask', _a2a: { agentId: 'langdock', agentName: 'Langdock' } },
+      { id: 'a2a__langdock__sum', _a2a: { agentId: 'langdock', agentName: 'Langdock' } }
+    ];
+    expect(collapseMcpTools(tools, localize)).toEqual([
+      { id: 'langdock', name: 'Langdock', description: '', a2aAgent: true }
     ]);
   });
 });
