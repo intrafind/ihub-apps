@@ -95,6 +95,17 @@ export const fetchMcpToolCatalog = async () => {
   return data?.servers || [];
 };
 
+/**
+ * Per-agent skill catalog of the configured remote A2A agents, for the app
+ * editor's agent picker. Each entry: `{ id, name, description?, enabled,
+ * skills: [{ id, name, description, toolId }], error }`.
+ * @returns {Promise<Array>}
+ */
+export const fetchA2aSkillCatalog = async () => {
+  const data = await handleApiResponse(() => apiClient.get('/admin/a2a/skills'), null, null, false);
+  return data?.agents || [];
+};
+
 // ---------------------------------------------------------------------------
 // Admin skill endpoints
 // ---------------------------------------------------------------------------

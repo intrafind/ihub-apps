@@ -7,6 +7,7 @@ import { isFeatureEnabled } from './featureRegistry.js';
 import { isValidId } from './utils/pathSecurity.js';
 import { isToolSelected } from './utils/toolSelection.js';
 import mcpClientManager from './services/mcp/McpClientManager.js';
+import a2aClientManager from './services/a2a/A2aClientManager.js';
 import { isBraveSearchConfigured } from './services/search/braveApiKey.js';
 import { isStaanSearchConfigured } from './services/search/staanApiKey.js';
 import logger from './utils/logger.js';
@@ -207,12 +208,26 @@ export async function discoverMcpTools() {
 }
 
 /**
- * Load tools from local configuration and MCP servers.
+ * Discover the skills of all configured remote A2A agents as tools via
+ * A2aClientManager (ids `a2a__<agentId>__<skill>`, marked with `_a2a`).
+ */
+export async function discoverA2aTools() {
+  try {
+    return await a2aClientManager.listAllTools();
+  } catch (error) {
+    logger.error('Error discovering A2A agent tools', { component: 'ToolLoader', error });
+    return [];
+  }
+}
+
+/**
+ * Load tools from local configuration, MCP servers and remote A2A agents.
  * @param {string} language - Optional language for localization
  */
 export async function loadTools(language = null) {
   const configured = await loadConfiguredTools(language);
-  const discovered = await discoverMcpTools();
+  const [mcpTools, a2aTools] = await Promise.all([discoverMcpTools(), discoverA2aTools()]);
+  const discovered = [...mcpTools, ...a2aTools];
   const all = [...configured];
   for (const tool of discovered) {
     if (!all.find(t => t.id === tool.id)) {
@@ -800,6 +815,16 @@ export async function runTool(toolId, params = {}, options = {}) {
     return await mcpClientManager.callTool(toolId, params, {
       onRawResult: options.onMcpAppResult
     });
+  }
+
+  // Skills of remote A2A agents are dispatched through A2aClientManager.callTool.
+  if (tool._a2a) {
+    logger.info('Dispatching A2A agent tool call', {
+      component: 'ToolLoader',
+      toolId,
+      agentId: tool._a2a.agentId
+    });
+    return await a2aClientManager.callTool(toolId, params);
   }
 
   // OpenAPI tools are dispatched through the OpenApiToolRunner.
