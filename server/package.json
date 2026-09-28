@@ -52,7 +52,7 @@
     "jwks-rsa": "^4.1.0",
     "ldap-authentication": "^4.4.1",
     "memorystore": "^1.6.8",
-    "multer": "^2.3.0",
+    "multer": "^2.4.0",
     "node-fetch": "^3.3.0",
     "passport": "^0.7.0",
     "passport-oauth2": "^1.8.0",
