@@ -4,6 +4,7 @@ import {
   mcpServerConfigSchema
 } from '../../validators/mcpServerConfigSchema.js';
 import { DEFAULT_MAX_FILE_SIZE_MB, resolveFileInputs } from './mcpFileInputs.js';
+import { appsEnabledFor } from './mcpApps.js';
 import {
   isAuthRequiredError,
   isTokenRefreshError,
@@ -878,7 +879,8 @@ class McpClientManager {
    * @param {Object} params - Params as handed to `runTool`
    * @param {Object} [options]
    * @param {Function} [options.onRawResult] - Receives the raw CallToolResult
-   *   of a tool that renders an MCP App view
+   *   of a tool of a server with MCP Apps enabled: a tool that declares a view,
+   *   or one whose result may embed a view page (see `findEmbeddedView`)
    */
   async callTool(prefixedName, params, { onRawResult } = {}) {
     const found = await this.findTool(prefixedName);
@@ -893,7 +895,7 @@ class McpClientManager {
       });
     }
     const callOptions =
-      tool._mcp.ui?.resourceUri && typeof onRawResult === 'function' ? { onRawResult } : {};
+      appsEnabledFor(conn.config) && typeof onRawResult === 'function' ? { onRawResult } : {};
     if (!isUserOAuthServer(conn.config)) {
       return conn.callTool(tool._mcp.originalName, args, callOptions);
     }

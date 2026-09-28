@@ -16,7 +16,7 @@ import * as defaultTelemetry from './chatTelemetry.js';
 import defaultInteractionService from '../loop/InteractionService.js';
 import defaultRunLog from '../loop/RunLog.js';
 import { buildQuestionPrompt } from '../loop/questionPrompt.js';
-import { buildViewDescriptor, toViewToolResult } from '../mcp/mcpApps.js';
+import { buildViewDescriptor, findEmbeddedView, toViewToolResult } from '../mcp/mcpApps.js';
 import { withoutDocumentBytes } from '../mcp/mcpFileInputs.js';
 
 /**
@@ -204,6 +204,28 @@ function mcpAppViewFor(info, mcp) {
   });
 }
 
+/**
+ * MCP App view of a tool that declares none but whose result embeds a view
+ * page (`ui://…` HTML, as mcp-ui servers return it), or null. Only a server
+ * with MCP Apps enabled hands its raw result back (`mcpAppResult`), so a
+ * disabled server never gets a view this way.
+ */
+function embeddedMcpAppViewFor(info) {
+  const mcp = info?.toolDef?._mcp;
+  const raw = info?.mcpAppResult;
+  if (!mcp?.serverId || mcp.ui?.resourceUri || !raw) return null;
+  const embedded = findEmbeddedView(raw);
+  if (!embedded) return null;
+  return buildViewDescriptor({
+    callId: callIdOf(info),
+    toolId: String(info.toolId),
+    mcp,
+    embeddedUri: embedded.uri,
+    args: info.args,
+    toolResult: toViewToolResult(raw)
+  });
+}
+
 /** Longest string kept from an auth-required marker (ids, names, paths). */
 const AUTH_REQUIRED_FIELD_CHARS = 512;
 
@@ -235,7 +257,9 @@ export function authRequiredOf(rawResult) {
  *
  * MCP App tools also announce their view on `tool/started` (so the client can
  * mount it while the tool runs) and ship the view's data on `tool/completed`;
- * the views are collected on `mcpAppViews` for the stored answer.
+ * the views are collected on `mcpAppViews` for the stored answer. A tool that
+ * declares no view but returns an embedded view page gets its view on
+ * `tool/completed` only (`mcpApp.embedded`).
  *
  * A per-user OAuth MCP tool whose caller has not connected the server returns
  * an auth-required marker; it rides on `tool/completed` as `authRequired` so
@@ -301,10 +325,14 @@ export function chatToolSeam({
       const mcp = mcpAppOf(info);
       // A call that never reached its per-user OAuth server ("connect first")
       // has no view to show: the Connect card stands in for it.
-      const mcpApp =
+      let mcpApp =
         mcp && !(!outcome.error && authRequiredOf(outcome.rawResult))
           ? recordView(mcpAppViewFor(info, mcp))
           : null;
+      if (!mcp && !outcome.error) {
+        const embedded = embeddedMcpAppViewFor(info);
+        if (embedded) mcpApp = recordView(embedded);
+      }
       if (outcome.error) {
         const err = outcome.error;
         const causeMessage =

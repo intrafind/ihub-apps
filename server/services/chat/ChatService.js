@@ -564,8 +564,9 @@ class ChatService {
         // args of the same name win, while chatId/user/appConfig can never be
         // overridden by the model.
         //
-        // An MCP tool with an MCP App view hands back its raw result on the
-        // shared `info` object, where `chatToolSeam` builds the view from it.
+        // An MCP tool of a server with MCP Apps enabled hands back its raw
+        // result on the shared `info` object, where `chatToolSeam` builds the
+        // view from it (declared, or embedded in the result).
         executeTool: (call, { toolId, args, info, signal }) =>
           this.runTool(
             toolId,

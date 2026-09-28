@@ -24,7 +24,7 @@ import {
   hostStyles
 } from './hostContext';
 import { setMcpAppModelContext } from './modelContextStore';
-import { selectViewHtml } from './embeddedViewHtml';
+import { embeddedViewResource, selectViewHtml } from './embeddedViewHtml';
 
 /** Inline views grow with their content up to this height (px). */
 const INLINE_MAX_HEIGHT = 720;
@@ -103,7 +103,10 @@ function isSameOriginUrl(url) {
  * own inline HTML, as servers that bake the call's data into the page do; then
  * that copy is rendered, under the same CSP, permissions and sandbox (see
  * `embeddedViewHtml`). When the result only arrives after the static copy is
- * already showing, the sandbox is reloaded once with the embedded copy.
+ * already showing, the sandbox is reloaded once with the embedded copy. A tool
+ * that declares no view but embeds a `ui://` page in its result
+ * (`view.embedded`) renders that page, with the CSP domains it declares and no
+ * device permissions.
  *
  * @param {Object} props
  * @param {Object} props.view - View descriptor (see features/chat/mcpApps/mcpAppViewList)
@@ -120,8 +123,8 @@ function McpAppView({ view, appId, chatId, host = null }) {
   const iframeRef = useRef(null);
   const containerRef = useRef(null);
   const bridgeRef = useRef(null);
-  const [resource, setResource] = useState(null);
-  const [loadError, setLoadError] = useState(null);
+  const [fetchedResource, setFetchedResource] = useState(null);
+  const [fetchError, setFetchError] = useState(null);
   const [needsConnect, setNeedsConnect] = useState(false);
   const [height, setHeight] = useState(INITIAL_HEIGHT);
   const [displayMode, setDisplayMode] = useState('inline');
@@ -139,24 +142,54 @@ function McpAppView({ view, appId, chatId, host = null }) {
   // Per-connection protocol state, reset whenever the bridge is rebuilt.
   const protocolRef = useRef(null);
 
+  // A view of a tool that declares none has no `resources/read` copy: it is
+  // the page the result embeds.
+  const embeddedResource = useMemo(
+    () =>
+      view.embedded && !view.payloadOmitted
+        ? embeddedViewResource({
+            resourceUri: view.resourceUri,
+            toolResult: view.toolResult,
+            toolName: view.toolName,
+            toolId: view.toolId,
+            serverId: view.serverId
+          })
+        : null,
+    [
+      view.embedded,
+      view.payloadOmitted,
+      view.resourceUri,
+      view.toolResult,
+      view.toolName,
+      view.toolId,
+      view.serverId
+    ]
+  );
+  const resource = view.embedded ? embeddedResource : fetchedResource;
+  const loadError =
+    view.embedded && !view.payloadOmitted && !embeddedResource
+      ? t('mcpApps.embeddedMissing', 'The tool result holds no view page.')
+      : fetchError;
+
   // A view keeps its app and tool for its whole life (it is keyed by its call
   // id), so the resource is loaded once per mount.
   useEffect(() => {
+    if (view.embedded) return undefined;
     let cancelled = false;
     loadResource(appId, view.toolId).then(
       data => {
-        if (!cancelled) setResource(data);
+        if (!cancelled) setFetchedResource(data);
       },
       error => {
         if (cancelled) return;
         if (isMcpAuthRequired(error)) setNeedsConnect(true);
-        else setLoadError(errorMessage(error));
+        else setFetchError(errorMessage(error));
       }
     );
     return () => {
       cancelled = true;
     };
-  }, [appId, view.toolId]);
+  }, [appId, view.toolId, view.embedded]);
 
   // What the sandbox renders: the embedded copy from the tool result, or the
   // `resources/read` copy. `source` keys the iframe, so switching to the

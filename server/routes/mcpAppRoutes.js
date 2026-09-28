@@ -18,8 +18,11 @@
  * Authorization mirrors the chat itself: a view belongs to a tool call made by
  * an iHub app, so every request names that app and tool. The caller must be
  * able to open the app, the app must offer the tool, and the tool must render
- * an MCP App view. A view may then call tools of the same MCP server whose
- * visibility includes `"app"` — never tools of another server.
+ * an MCP App view: one it declares (`_meta.ui.resourceUri`) or, on a server
+ * with MCP Apps enabled, one its result embeds (such a view has no
+ * `resources/read` copy, so `GET /resource` answers 404 for it). A view may
+ * then call tools of the same MCP server whose visibility includes `"app"` —
+ * never tools of another server.
  *
  * A per-user OAuth server the caller has not connected answers **409**
  * `{ error: 'auth_required', code: 'MCP_AUTH_REQUIRED', connectUrl }` — never
@@ -39,6 +42,7 @@ import {
 import { isUserOAuthServer } from '../services/mcp/mcpOAuthService.js';
 import { toolVisibleInSet } from '../services/mcp/permissions.js';
 import {
+  appsEnabledFor,
   buildAllowAttribute,
   buildSandboxCsp,
   isUiResourceUri,
@@ -121,13 +125,17 @@ function resolveUser(req) {
  * @param {import('express').Request} req
  * @param {string} appId - iHub app the chat belongs to
  * @param {string} toolId - iHub id of the tool whose call rendered the view
+ * @param {Object} [options]
+ * @param {boolean} [options.declaredView=false] - Require a declared view
+ *   (`_meta.ui.resourceUri`); otherwise any tool of a server with MCP Apps
+ *   enabled qualifies, since its result may embed the view
  * @returns {Promise<{app: Object, conn: Object, tool: Object, user: Object, serverId: string, run: Function}>}
  *   `run(operation)` calls `operation(conn)` on the connection the caller
  *   uses — for a per-user OAuth server their own, with the token refreshed
  *   when needed. Use it for every request to the MCP server.
  * @throws {McpAppAccessError}
  */
-export async function resolveMcpApp(req, appId, toolId) {
+export async function resolveMcpApp(req, appId, toolId, { declaredView = false } = {}) {
   // The routes validate both with zod already; checked again here because a
   // query parameter can also arrive as an array (`?toolId=a&toolId=b`), and
   // everything below treats them as strings.
@@ -157,7 +165,10 @@ export async function resolveMcpApp(req, appId, toolId) {
   } else {
     found = await mcpClientManager.findTool(toolId);
   }
-  if (!found || !found.tool._mcp?.ui?.resourceUri) {
+  const rendersView = found?.tool._mcp?.ui?.resourceUri
+    ? true
+    : !declaredView && !!found?.tool._mcp && appsEnabledFor(found.conn.config);
+  if (!rendersView) {
     throw new McpAppAccessError(404, 'MCP App not found');
   }
   const serverId = found.conn.config.id;
@@ -239,7 +250,12 @@ export default function registerMcpAppRoutes(app) {
     validate({ query: resourceQuerySchema }),
     async (req, res) => {
       try {
-        const { run, tool, serverId } = await resolveMcpApp(req, req.query.appId, req.query.toolId);
+        const { run, tool, serverId } = await resolveMcpApp(
+          req,
+          req.query.appId,
+          req.query.toolId,
+          { declaredView: true }
+        );
         const { resource, appTool } = await run(async conn => ({
           resource: await conn.getUiResource(tool._mcp.ui.resourceUri),
           appTool: await conn.getAppTool(tool._mcp.originalName)

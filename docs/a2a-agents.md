@@ -111,8 +111,9 @@ putting the agent id into `tools`:
 { "id": "support-desk", "tools": ["langdock", "braveSearch"] }
 ```
 
-The agent id selects every tool of that agent (limited by `allowedSkills`); a single tool id such as
-`a2a__langdock__ask_langdock_agent` selects just that skill. The literal reference `a2a` does not
+The agent id selects every tool of that agent (limited by `allowedSkills`), and so does
+`a2a__<agentId>` (`a2a__langdock`), a reference that always means the agent; a single tool id such
+as `a2a__langdock__ask_langdock_agent` selects just that skill. The literal reference `a2a` does not
 select anything — it is not a shortcut for "all agents". In the chat's tool menu each agent is one
 toggle.
 
@@ -124,14 +125,15 @@ the id of an MCP server: `POST /api/admin/a2a/agents` refuses such an id with `4
 MCP server with the id of an A2A agent is refused the same way (ids are compared ignoring case).
 
 Should an agent and a tool or MCP server share an id anyway (a hand-edited file, or a tool added
-after the agent), the id keeps selecting only the tool or MCP server: the agent is never granted by
-it. Its skills can still be enabled by their tool ids, which the app editor then does for you, and
-the server log names the clash. Rename the agent (delete and re-create it) to enable it by id again.
+after the agent), the bare id keeps selecting only the tool or MCP server: the agent is never
+granted by it. The agent is then enabled as a whole by `a2a__<agentId>`, which the app editor
+writes for you, and the server log names the clash. Apps and group grants that already use
+`a2a__<agentId>` need no change when a clash appears later.
 
 ### Group permissions
 
 Group `tools` grants in `groups.json` read like an app's `tools`: grant the agent id
-(`"langdock"`) for all its skills or a tool id for one — just as an MCP server id grants the
+(`"langdock"`, or `"a2a__langdock"`) for all its skills or a tool id for one — just as an MCP server id grants the
 server's tools and a base id (`"iFinder"`) a tool's functions. As for every tool, which tools an app
 can call is decided by the app's own `tools` list; the group grant decides what users see in the
 tool list (`GET /api/tools`). iHub's own MCP gateway and A2A endpoint never re-export remote agents: a remote agent's
@@ -198,9 +200,11 @@ When the model calls an A2A tool, iHub sends one A2A `Message` to the agent:
 The `contextId` of an agent's answer is remembered for the combination of user, chat and agent,
 and sent with the next call from the same chat, so the agent can keep the conversation going
 ("and what about last year?"). The same goes for the `taskId` of a task waiting for the user's
-answer (`input-required`), until that task moves on. Neither is ever shared across chats or users. The memory is per server
-process and bounded (5,000 conversations); after a restart, or when a later tool call is served by
-another worker, the agent starts a fresh conversation.
+answer (`input-required`), until that task moves on. Neither is ever shared across chats or users.
+The conversations are kept on the storage provider (`a2a-client-contexts`, see
+[Storage](storage.md)), so a chat continues its conversation with an agent after a restart and on
+whichever worker serves the next tool call. A conversation nobody continued for 30 days is dropped.
+Without a storage provider the memory is per server process (5,000 conversations).
 
 ## Admin page
 

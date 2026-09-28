@@ -4284,6 +4284,9 @@
                   },
                   "payloadOmitted": {
                     "type": "boolean"
+                  },
+                  "embedded": {
+                    "type": "boolean"
                   }
                 },
                 "required": ["serverId", "toolName", "resourceUri", "callId", "toolId"],

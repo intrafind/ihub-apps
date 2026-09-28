@@ -575,7 +575,7 @@ ServiceNow `render_ticket` injects `window.TICKET_DATA`). The static copy from
 `resources/read` has no data and would render empty, so iHub renders the
 embedded copy instead — only when its `uri` is exactly the tool's declared
 `resourceUri`, its `mimeType` is `text/html` or `text/html;profile=mcp-app`,
-it carries inline `text` (not `blob`), and it is within the same 5 MB cap as
+it carries the HTML as `text` or base64 `blob`, and it is within the same 5 MB cap as
 `resources/read` HTML (in practice the 1 MB view payload limit under
 _Persistence_ applies first). Otherwise the `resources/read` copy is used. Nothing
 else changes: the CSP, permissions, sandbox and bridge still come from the
@@ -583,9 +583,31 @@ declared resource as `resources/read` returns it (the embedded item's own
 `_meta` is ignored). The embedded HTML travels in the tool result the view
 already receives and is stored with it (see _Persistence_); when the result
 only arrives after the view opened, the sandbox is reloaded once with the
-embedded copy. Views that only ship their HTML inside the tool result, without
-a `ui://` resource declared on the tool, or under a different URI than the
-declared one, are not rendered from it.
+embedded copy. An embedded page under a different URI than the declared one
+is not rendered.
+
+**Views of tools that declare none.** mcp-ui servers often declare no
+`_meta.ui.resourceUri` at all and return the view only inside the tool
+result: an embedded resource item with a `ui://` URI and `text/html` (or
+`text/html;profile=mcp-app`) HTML. On a server with MCP Apps enabled, iHub
+renders the first such item as the call's view (the SSE `tool/completed`
+frame and the stored answer mark it `embedded: true`; there is no
+`tool/started` announcement, since nothing says in advance that the tool has
+one). Its rules:
+
+- The view is the embedded page alone; there is no `resources/read` copy
+  (`GET /api/mcp-apps/resource` answers 404 for such a tool).
+- The page loads only from the origins its own `_meta.ui.csp` declares
+  (sanitized as for a declared resource). It never gets device permissions
+  (camera, microphone, geolocation, clipboard): only a declared resource can
+  ask for those.
+- The view may call the same server's app-callable tools and read its
+  resources through the host endpoints, like any other view.
+- `apps.enabled: false` on the server turns these views off.
+- A page larger than the 1 MB view payload (see _Persistence_) is not shown;
+  the chat says the view was too large.
+
+Other kinds of embedded UI (`text/uri-list`, remote-dom) are not rendered.
 
 #### Host endpoints
 
@@ -1137,6 +1159,11 @@ tool grant lets an MCP client call integrations such as iFinder, Jira and
 Entra **as the user**, with no app prompt or system prompt mediating the
 call. It does not change which tools a chat app may use — that is still the
 app's own `tools` list.
+
+The same rule decides which tools a user may run with a direct REST call,
+`POST /api/tools/:toolId`: a tool an app they can access declares, or one
+their group grants. Admins may run every tool that way. Any other tool
+answers `403`.
 
 ### Session model
 
