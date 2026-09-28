@@ -7,9 +7,16 @@ import {
 import { emitToolProgress } from '../loop/RunStream.js';
 import { getLocalizedString } from '../../utils/localize.js';
 import logger from '../../utils/logger.js';
+import {
+  A2aClientContextStore,
+  MAX_REMEMBERED_CONTEXTS,
+  clientContextRef
+} from './a2aClientContextStore.js';
 
-/** Most (user, chat, agent) → conversation entries remembered at once. */
-export const MAX_REMEMBERED_CONTEXTS = 5000;
+export { MAX_REMEMBERED_CONTEXTS };
+
+/** Conversations nobody continued are swept from storage this often. */
+const CONTEXT_SWEEP_INTERVAL_MS = 60 * 60 * 1000;
 
 /**
  * How long tool discovery (every chat turn's `loadTools`) waits for an agent
@@ -60,16 +67,18 @@ function summarizeCard(card) {
  *   3. `listAllTools()` aggregates the skills of every enabled agent as tools.
  *   4. `callTool(toolId, params)` finds the owning agent, sends the message,
  *      and remembers the conversation (`contextId`, plus the `taskId` of a
- *      task waiting for input) per user, chat and agent.
+ *      task waiting for input) per user, chat and agent — on the storage
+ *      provider, so it holds across restarts and workers.
  */
 class A2aClientManager {
   constructor() {
     this.connections = new Map(); // agentId -> A2aAgentConnection
     this.security = { ...DEFAULT_SECURITY };
     this.initialized = false;
-    // `${userId}\u0000${chatId}\u0000${agentId}` -> {contextId, taskId?},
-    // LRU-ordered. `taskId` is set while the agent's last task waits for input.
-    this.contexts = new Map();
+    // (user, chat, agent) -> {contextId, taskId?}. `taskId` is set while the
+    // agent's last task waits for input.
+    this.contexts = new A2aClientContextStore();
+    this._sweepTimer = null;
   }
 
   /**
@@ -112,16 +121,32 @@ class A2aClientManager {
     }
 
     this.initialized = true;
+    this._scheduleSweep();
     logger.info('A2aClientManager initialised', {
       component: 'A2aClientManager',
       agentCount: this.connections.size
     });
   }
 
-  /** Forget every connection and remembered conversation. */
+  /**
+   * Forget every connection and the conversations held in memory; the stored
+   * conversations stay for the next configuration.
+   */
   async shutdown() {
     this.connections.clear();
-    this.contexts.clear();
+    this.contexts.clearMemory();
+  }
+
+  /**
+   * Sweep conversations past their retention from storage, hourly, once any
+   * agent is configured. unref() so the timer never keeps the process alive.
+   */
+  _scheduleSweep() {
+    if (this._sweepTimer || this.connections.size === 0) return;
+    this._sweepTimer = setInterval(() => {
+      this.contexts.sweep().catch(() => {});
+    }, CONTEXT_SWEEP_INTERVAL_MS);
+    this._sweepTimer.unref?.();
   }
 
   /**
@@ -265,11 +290,10 @@ class A2aClientManager {
         ? params.data
         : undefined;
 
-    const key = contextKey(params, conn.config.id);
-    const remembered = key ? this.contexts.get(key) : undefined;
+    const ref = clientContextRef(params, conn.config.id);
+    const remembered = ref ? await this.contexts.get(ref) : null;
     const contextId = remembered?.contextId || undefined;
     const pendingTaskId = remembered?.taskId || undefined;
-    if (key && remembered) this._remember(key, remembered); // refresh recency
     const chatId = typeof params.chatId === 'string' ? params.chatId : null;
     const agentName =
       getLocalizedString(tool._a2a.agentName, params.language || 'en') || conn.config.id;
@@ -309,7 +333,7 @@ class A2aClientManager {
       if (!pendingTaskId) throw err;
       // The waiting task could not be continued: forget it, so the next call
       // starts a new task in the same conversation.
-      if (key) this._remember(key, { contextId });
+      if (ref) await this.contexts.set(ref, { contextId });
       // It is gone on the agent's side (expired, cleaned up): send the reply
       // as a new task of the same conversation right away.
       if (err?.code !== A2A_CLIENT_ERRORS.RPC_ERROR || err.rpcCode !== TASK_NOT_FOUND_RPC_CODE) {
@@ -317,28 +341,13 @@ class A2aClientManager {
       }
       result = await send(undefined);
     }
-    if (key) {
-      this._remember(key, {
+    if (ref) {
+      await this.contexts.set(ref, {
         contextId: result.contextId || contextId,
         ...(result.state === 'input-required' && result.taskId ? { taskId: result.taskId } : {})
       });
     }
     return result.text;
-  }
-
-  /**
-   * Remember (or, with neither id, forget) the conversation of a key, most
-   * recently used last, dropping the oldest past `MAX_REMEMBERED_CONTEXTS`.
-   * @param {string} key
-   * @param {{contextId?: string|null, taskId?: string}} entry
-   */
-  _remember(key, { contextId, taskId } = {}) {
-    this.contexts.delete(key);
-    if (!contextId && !taskId) return;
-    this.contexts.set(key, { contextId: contextId || null, ...(taskId ? { taskId } : {}) });
-    while (this.contexts.size > MAX_REMEMBERED_CONTEXTS) {
-      this.contexts.delete(this.contexts.keys().next().value);
-    }
   }
 
   /**
@@ -435,13 +444,6 @@ class A2aClientManager {
 }
 
 /** The (user, chat, agent) key a conversation is remembered under, or null. */
-function contextKey(params, agentId) {
-  const userId = params?.user?.id;
-  const chatId = params?.chatId;
-  if (typeof userId !== 'string' || !userId || typeof chatId !== 'string' || !chatId) return null;
-  return `${userId}\u0000${chatId}\u0000${agentId}`;
-}
-
 function connectionChanged(a, b) {
   return a.cardUrl !== b.cardUrl || JSON.stringify(a.auth) !== JSON.stringify(b.auth);
 }

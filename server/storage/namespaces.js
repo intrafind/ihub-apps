@@ -155,6 +155,12 @@ export const RUNTIME_NAMESPACES = Object.freeze({
    */
   a2aContexts: 'a2a-contexts',
   /**
+   * Conversations of the outbound A2A client with remote agents, one document
+   * per (user, chat, agent), owned by the user: the agent's `contextId`, and
+   * the `taskId` of a task waiting for the user's answer.
+   */
+  a2aClientContexts: 'a2a-client-contexts',
+  /**
    * Files uploaded through the App API (`POST /api/v1/attachments`): the
    * metadata document and the bytes (blob facet) share this namespace, keyed
    * by the attachment id and owned by the uploader.

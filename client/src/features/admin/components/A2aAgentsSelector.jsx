@@ -5,14 +5,17 @@ import LoadingSpinner from '../../../shared/components/LoadingSpinner';
 import { fetchA2aSkillCatalog } from '../../../api';
 import { getLocalizedContent } from '../../../utils/localizeContent';
 import { getAdminApiErrorMessage } from '../../../api/adminApi';
+import { a2aAgentReference } from '../../chat/utils/groupToolsByMcpServer';
 
 /**
  * Picker for the remote A2A agents an app uses. Like an MCP server, an agent
  * is enabled as a whole: its id is stored in `app.tools` (e.g. `"langdock"`)
  * and the runtime tool loader expands it to one tool per skill the agent
  * offers (`a2a__langdock__<skill>`), limited by the agent's `allowedSkills`
- * under Integrations → A2A agents. Single skill tools listed one by one are
- * recognised too; turning the agent off removes them.
+ * under Integrations → A2A agents. An agent whose id is also a tool's or MCP
+ * server's id is stored as `a2a__<agentId>` instead, the reference that
+ * always means the agent. The bare id, `a2a__<agentId>` and single skill tools
+ * listed one by one are all recognised; turning the agent off removes them.
  *
  * @param {Object} props
  * @param {string[]} props.selectedTools - The full app.tools array
@@ -36,7 +39,11 @@ function A2aAgentsSelector({ selectedTools = [], onToolsChange, onA2aToolIdsChan
         if (!active) return;
         setAgents(data);
         onA2aToolIdsChange?.(
-          data.flatMap(agent => [agent.id, ...(agent.skills || []).map(skill => skill.toolId)])
+          data.flatMap(agent => [
+            agent.id,
+            a2aAgentReference(agent.id),
+            ...(agent.skills || []).map(skill => skill.toolId)
+          ])
         );
       } catch (err) {
         if (active) setError(getAdminApiErrorMessage(err));
@@ -51,21 +58,21 @@ function A2aAgentsSelector({ selectedTools = [], onToolsChange, onA2aToolIdsChan
   }, []);
 
   // An agent flagged `idConflict` shares its id with a tool or MCP server, so
-  // that id selects the tool or server, not the agent: it is enabled by its
-  // skills' tool ids instead, and the bare id is never treated as its own.
+  // that id selects the tool or server, not the agent: it is enabled by
+  // `a2a__<agentId>` instead, and the bare id is never treated as its own.
   const referencesOf = agent => {
     const toolIds = new Set((agent.skills || []).map(skill => skill.toolId));
-    return selectedTools.filter(id => (id === agent.id && !agent.idConflict) || toolIds.has(id));
+    const namespaced = a2aAgentReference(agent.id);
+    return selectedTools.filter(
+      id => (id === agent.id && !agent.idConflict) || id === namespaced || toolIds.has(id)
+    );
   };
 
   const toggleAgent = agent => {
     const refs = referencesOf(agent);
     const rest = selectedTools.filter(id => !refs.includes(id));
     if (refs.length > 0) return onToolsChange(rest);
-    const added = agent.idConflict
-      ? (agent.skills || []).map(skill => skill.toolId).filter(Boolean)
-      : [agent.id];
-    onToolsChange([...rest, ...added]);
+    onToolsChange([...rest, agent.idConflict ? a2aAgentReference(agent.id) : agent.id]);
   };
 
   if (loading) {
@@ -152,8 +159,8 @@ function A2aAgentsSelector({ selectedTools = [], onToolsChange, onA2aToolIdsChan
                   <span className="block text-xs text-yellow-800 dark:text-yellow-300 mt-1">
                     {t(
                       'admin.apps.edit.a2aAgents.idConflict',
-                      'A tool or MCP server uses the id "{{id}}" too, so this agent is enabled by its skill tools. Give the agent an id of its own to enable it as a whole.',
-                      { id: agent.id }
+                      'A tool or MCP server uses the id "{{id}}" too, so this app refers to the agent as "{{reference}}".',
+                      { id: agent.id, reference: a2aAgentReference(agent.id) }
                     )}
                   </span>
                 )}
