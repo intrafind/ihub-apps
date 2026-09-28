@@ -242,12 +242,29 @@ export function authRequiredOf(rawResult) {
   if (!marker || typeof marker !== 'object') return null;
   const { serverId, serverName, connectUrl } = marker;
   if (typeof serverId !== 'string' || !serverId) return null;
-  if (typeof connectUrl !== 'string' || !connectUrl.startsWith('/')) return null;
+  // A path on this origin only: `//host` and `/\host` are other hosts to a browser.
+  if (typeof connectUrl !== 'string' || !/^\/(?![/\\])/.test(connectUrl)) return null;
   return {
     serverId: serverId.slice(0, AUTH_REQUIRED_FIELD_CHARS),
     serverName: String(serverName || serverId).slice(0, AUTH_REQUIRED_FIELD_CHARS),
     connectUrl: connectUrl.slice(0, AUTH_REQUIRED_FIELD_CHARS)
   };
+}
+
+/**
+ * The auth-required marker of a call, taken only from a tool of the MCP server
+ * the marker names: any other tool (an OpenAPI tool relaying a remote JSON
+ * body, a script) could return an object of the same shape.
+ *
+ * @param {Object} info - Loop tool info
+ * @param {*} rawResult
+ * @returns {{serverId: string, serverName: string, connectUrl: string}|null}
+ */
+function mcpAuthRequiredOf(info, rawResult) {
+  const serverId = info?.toolDef?._mcp?.serverId;
+  if (!serverId) return null;
+  const marker = authRequiredOf(rawResult);
+  return marker && marker.serverId === serverId ? marker : null;
 }
 
 /**
@@ -326,7 +343,7 @@ export function chatToolSeam({
       // A call that never reached its per-user OAuth server ("connect first")
       // has no view to show: the Connect card stands in for it.
       let mcpApp =
-        mcp && !(!outcome.error && authRequiredOf(outcome.rawResult))
+        mcp && !(!outcome.error && mcpAuthRequiredOf(info, outcome.rawResult))
           ? recordView(mcpAppViewFor(info, mcp))
           : null;
       if (!mcp && !outcome.error) {
@@ -367,7 +384,7 @@ export function chatToolSeam({
         );
         return;
       }
-      const authRequired = authRequiredOf(outcome.rawResult);
+      const authRequired = mcpAuthRequiredOf(info, outcome.rawResult);
       if (authRequired) recordAuthPrompt(authRequired);
       emit(ctx, SSE_V2_EVENTS.TOOL_COMPLETED, {
         step: ctx.iteration,

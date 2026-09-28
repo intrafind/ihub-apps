@@ -287,4 +287,23 @@ describe('POST /a2a', () => {
     expect(res.body[0].error.code).toBe(-32600);
     expect(res.body[1].error.code).toBe(-32001);
   });
+
+  it('refuses an empty batch and one of more than 20 requests', async () => {
+    const tooMany = Array.from({ length: 21 }, (_, i) => ({
+      jsonrpc: '2.0',
+      id: i,
+      method: 'tasks/get',
+      params: { id: 'nope' }
+    }));
+    for (const batch of [[], tooMany]) {
+      const res = await request(app).post('/a2a').set('Authorization', 'Bearer good').send(batch);
+      expect(res.status).toBe(200);
+      expect(res.body).toMatchObject({ jsonrpc: '2.0', id: null, error: { code: -32600 } });
+    }
+    const ok = await request(app)
+      .post('/a2a')
+      .set('Authorization', 'Bearer good')
+      .send(tooMany.slice(0, 20));
+    expect(ok.body).toHaveLength(20);
+  });
 });

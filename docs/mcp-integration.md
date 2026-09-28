@@ -1502,7 +1502,9 @@ JSON-RPC 2.0 over `POST /a2a` (or `POST /a2a/skills/<skillId>`):
 `tasks/resubscribe` and push notifications (`tasks/pushNotificationConfig/*`)
 are not supported and answer `-32004` / `-32003`. Messages carry `text` parts
 (and optional `data` parts, whose keys become app variables or workflow input
-variables); `file` parts answer `-32005`.
+variables); `file` parts answer `-32005`. A JSON-RPC batch holds 1 to 20
+requests (`message/stream` cannot be batched); an empty or larger batch
+answers `-32600`.
 
 **Which skill runs.** In order: the per-skill endpoint the message was sent
 to; `metadata.skillId` on the params or the message; the skill the message's

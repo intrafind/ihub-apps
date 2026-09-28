@@ -40,7 +40,8 @@ the code fits together and where to continue.
    without waiting and throws `A2A_TIMEOUT`.
 4. Status updates call `onProgress`, which the manager turns into `emitToolProgress(chatId, {
    phase: 'a2a.status', … })` — a `tool/progress` SSE frame the chat already records.
-5. The answer's `contextId` is stored (LRU, 5000 entries) for the next call from the same chat.
+5. The answer's `contextId` is stored (`a2a-client-contexts` on the storage provider) for the next
+   call from the same chat.
 
 Every HTTP request goes through `server/services/mcp/safeFetch.js` with the file's `security`
 block. Auth headers are computed per request (`_authHeaders`), so a credential change in the store
@@ -59,11 +60,11 @@ applies without a restart; an OAuth token is cached on the connection until 5 s 
 - **A failed card fetch is remembered for 30 s** so an unreachable agent does not add a network
   round trip to every chat turn's tool listing.
 - **`input-required`** is returned as a normal result (the agent's question) rather than an error,
-  so the model can relay it. `auth-required` is not handled specially yet (it is not final, so a
-  task stuck there runs into the timeout).
-- **Conversation memory is in-process.** With several workers a follow-up call may land on
-  another worker and start a new remote conversation. Persisting it on the storage provider (like
-  `a2aContexts` of the inbound side) is the natural next step if that matters.
+  so the model can relay it. `auth-required` fails at once with `A2A_AUTH_REQUIRED`.
+- **Conversation memory is on the storage provider** (`a2a-client-contexts`, one document per
+  `(user, chat, agent)`, owned by the user, 30-day retention; `a2aClientContextStore.js`), so a
+  follow-up call continues the conversation on any worker and after a restart. Without a provider
+  it falls back to a per-process LRU of 5000 entries.
 
 ## How to continue
 

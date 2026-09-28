@@ -17,6 +17,7 @@
 import { randomUUID } from 'crypto';
 import { getStorage, readFacet } from '../../storage/bootstrap.js';
 import { RUNTIME_NAMESPACES } from '../../storage/namespaces.js';
+import { SweepPages } from '../../storage/sweepPages.js';
 import logger from '../../utils/logger.js';
 import { sha256Hex } from './attachmentProcessing.js';
 
@@ -48,6 +49,7 @@ export class ApiAttachmentStore {
     this._blobs = blobs;
     this._pinned = documents !== undefined || blobs !== undefined;
     this.now = now;
+    this.sweepPages = new SweepPages();
     /** @type {Map<string, {meta: Object, data: Buffer}>} */
     this.memory = new Map();
     this.memoryBytes = 0;
@@ -175,7 +177,8 @@ export class ApiAttachmentStore {
   }
 
   /**
-   * Drop expired attachments: everything in memory, and one page of documents.
+   * Drop expired attachments: everything in memory, and the next page of
+   * documents (successive calls walk the whole namespace).
    * @returns {Promise<number>} How many were removed
    */
   async sweep() {
@@ -190,7 +193,11 @@ export class ApiAttachmentStore {
     const { documents, blobs } = this._facets();
     if (!documents || !blobs) return removed;
     try {
-      const page = await documents.list(API_ATTACHMENTS_NAMESPACE, { limit: SWEEP_PAGE_SIZE });
+      const page = await this.sweepPages.next(
+        documents,
+        API_ATTACHMENTS_NAMESPACE,
+        SWEEP_PAGE_SIZE
+      );
       for (const doc of page.items || []) {
         const expiresAt = Date.parse(doc.data?.expiresAt || doc.updatedAt || 0);
         if (Number.isFinite(expiresAt) && expiresAt <= now) {

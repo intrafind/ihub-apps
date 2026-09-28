@@ -298,7 +298,12 @@ describe('chat projection of auth_required', () => {
     }
   };
 
-  function run(seam, rawResult, callId) {
+  function run(
+    seam,
+    rawResult,
+    callId,
+    toolDef = { _mcp: { serverId: 'okta', originalName: 'get-current-user' } }
+  ) {
     const frames = [];
     const ctx = {
       iteration: 1,
@@ -309,7 +314,7 @@ describe('chat projection of auth_required', () => {
       toolId: 'okta__get-current-user',
       name: 'okta__get-current-user',
       args: {},
-      toolDef: { _mcp: { serverId: 'okta', originalName: 'get-current-user' } }
+      toolDef
     };
     return seam
       .postTool(ctx, info, { rawResult, message: { content: '' }, durationMs: 3 })
@@ -345,5 +350,24 @@ describe('chat projection of auth_required', () => {
     );
     expect(authRequiredOf('text')).toBeNull();
     expect(authRequiredOf(null)).toBeNull();
+    for (const connectUrl of ['//evil.example/x', '/\\evil.example/x']) {
+      expect(authRequiredOf({ authRequired: { serverId: 'x', connectUrl } })).toBeNull();
+    }
+  });
+
+  it('takes the marker only from a tool of the server it names', async () => {
+    const seam = chatToolSeam({
+      chatId: 'chat-1',
+      buildLogData: () => ({}),
+      logInteraction: async () => {}
+    });
+    // An OpenAPI or script tool relaying a JSON body of the same shape.
+    const [notMcp] = await run(seam, marker, 'c4', { type: 'openapi' });
+    expect(notMcp.data.authRequired).toBeUndefined();
+    // An MCP tool of another server.
+    const [otherServer] = await run(seam, marker, 'c5', {
+      _mcp: { serverId: 'jira', originalName: 'search' }
+    });
+    expect(otherServer.data.authRequired).toBeUndefined();
   });
 });

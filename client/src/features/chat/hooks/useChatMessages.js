@@ -401,7 +401,7 @@ function useChatMessages(chatId = 'default', { ephemeral = false, serverBacked =
           const textOnlyMessages = messages
             .filter(msg => !msg.isGreeting)
             .map(msg => {
-              const { images: _images, ...rest } = msg;
+              const { images: _images, ...rest } = withoutDocumentBytes(msg);
               return rest;
             });
           if (textOnlyMessages.length > 0) {

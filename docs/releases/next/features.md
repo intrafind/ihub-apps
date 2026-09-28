@@ -56,6 +56,7 @@ personal API keys (also as `X-API-Key`) and `mcp:*` scopes.
 - Which skill runs: the per-skill endpoint `/a2a/skills/<skillId>`, `metadata.skillId` on the
   message, the conversation's earlier choice, or the new **A2A default skill** setting.
 - Follow-up messages with the same `contextId` continue the conversation with the app.
+- A JSON-RPC batch holds at most 20 requests.
 
 ## App API: Call an iHub App From Outside, OpenAI-Style
 

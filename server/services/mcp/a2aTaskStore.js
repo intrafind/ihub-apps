@@ -23,6 +23,7 @@
 import { createHash, randomUUID } from 'crypto';
 import { getStorage, readFacet } from '../../storage/bootstrap.js';
 import { RUNTIME_NAMESPACES } from '../../storage/namespaces.js';
+import { SweepPages } from '../../storage/sweepPages.js';
 import { publish, subscribe } from '../../clusterBus.js';
 import logger from '../../utils/logger.js';
 
@@ -106,6 +107,7 @@ export class A2aTaskStore {
     this._documents = documents;
     this._pinned = documents !== undefined;
     this.now = now;
+    this.sweepPages = new SweepPages();
     /** @type {Map<string, {task: Object, ownerId: string, skillId: string, updatedAt: number}>} */
     this.tasks = new Map();
     /** @type {Map<string, Object>} */
@@ -401,14 +403,18 @@ export class A2aTaskStore {
     const documents = this._docs();
     if (!documents) return removed;
     try {
-      const tasks = await documents.list(A2A_TASKS_NAMESPACE, { limit: SWEEP_PAGE_SIZE });
+      const tasks = await this.sweepPages.next(documents, A2A_TASKS_NAMESPACE, SWEEP_PAGE_SIZE);
       for (const doc of tasks.items || []) {
         const updatedAt = doc.data?.updatedAt || Date.parse(doc.updatedAt) || 0;
         if (now - updatedAt > TASK_RETENTION_MS) {
           if (await documents.delete(A2A_TASKS_NAMESPACE, doc.key)) removed.tasks += 1;
         }
       }
-      const contexts = await documents.list(A2A_CONTEXTS_NAMESPACE, { limit: SWEEP_PAGE_SIZE });
+      const contexts = await this.sweepPages.next(
+        documents,
+        A2A_CONTEXTS_NAMESPACE,
+        SWEEP_PAGE_SIZE
+      );
       for (const doc of contexts.items || []) {
         const updatedAt = doc.data?.updatedAt || Date.parse(doc.updatedAt) || 0;
         if (now - updatedAt > CONTEXT_RETENTION_MS) {

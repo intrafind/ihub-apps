@@ -14,6 +14,7 @@
 import { createHash } from 'crypto';
 import { getStorage, readFacet } from '../../storage/bootstrap.js';
 import { RUNTIME_NAMESPACES } from '../../storage/namespaces.js';
+import { SweepPages } from '../../storage/sweepPages.js';
 import logger from '../../utils/logger.js';
 
 const COMPONENT = 'A2aClientContextStore';
@@ -71,6 +72,7 @@ export class A2aClientContextStore {
     this._documents = documents;
     this._pinned = documents !== undefined;
     this.now = now;
+    this.sweepPages = new SweepPages();
     /** @type {Map<string, {contextId: string|null, taskId?: string, updatedAt: number}>} LRU-ordered */
     this.entries = new Map();
   }
@@ -203,7 +205,11 @@ export class A2aClientContextStore {
     const documents = this._docs();
     if (!documents) return removed;
     try {
-      const page = await documents.list(A2A_CLIENT_CONTEXTS_NAMESPACE, { limit: SWEEP_PAGE_SIZE });
+      const page = await this.sweepPages.next(
+        documents,
+        A2A_CLIENT_CONTEXTS_NAMESPACE,
+        SWEEP_PAGE_SIZE
+      );
       for (const doc of page.items || []) {
         const updatedAt = doc.data?.updatedAt || Date.parse(doc.updatedAt) || 0;
         if (now - updatedAt > CLIENT_CONTEXT_RETENTION_MS) {

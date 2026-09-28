@@ -10,6 +10,9 @@ import configCache from '../configCache.js';
 import { buildServerPath } from '../utils/basePath.js';
 import logger from '../utils/logger.js';
 
+/** Most requests one JSON-RPC batch to `/a2a` may hold. */
+export const MAX_A2A_BATCH = 20;
+
 /**
  * Mounts the iHub-as-MCP-server gateway endpoints:
  *
@@ -618,6 +621,18 @@ export default function registerMcpServerRoutes(app) {
     };
     try {
       if (Array.isArray(body)) {
+        // Every message/send element runs an app, so one request must not
+        // carry an unbounded number of them.
+        if (body.length === 0 || body.length > MAX_A2A_BATCH) {
+          return res.json({
+            jsonrpc: '2.0',
+            id: null,
+            error: {
+              code: A2A_ERRORS.INVALID_REQUEST,
+              message: `A batch must hold 1 to ${MAX_A2A_BATCH} requests`
+            }
+          });
+        }
         // JSON-RPC batch. Streaming cannot be batched; the dispatcher refuses
         // message/stream without a stream callback.
         const responses = await Promise.all(body.map(msg => dispatchA2A(msg, ctx)));
