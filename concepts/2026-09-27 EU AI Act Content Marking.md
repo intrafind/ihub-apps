@@ -1,7 +1,7 @@
 # EU AI Act Art. 50 — AI Content Marking, Labelling & Detection
 
 **Date:** 2026-09-27
-**Status:** Concept / planning (enterprise feature)
+**Status:** Concept / planning (enterprise feature) — decisions from 2026-09-28 folded in (§10.1)
 **Scope:** Text, images and exports produced by iHub Apps, including open-weight models we host ourselves
 
 > This is an engineering reading of the regulation. It is not legal advice. Legal/compliance must confirm the role split (provider vs. deployer) and the exemptions we rely on before we commit to a scope.
@@ -21,10 +21,12 @@
   - For systems already on the market before 2 Aug 2026, **machine-readable marking (50(2)) is due by 2 Dec 2026**. This grace period comes from the AI Omnibus, Reg. (EU) 2026/1744.
   - For CoP signatories, **interoperable watermark detection is due by 2 Feb 2027**.
   - Fines: up to €15 M or 3 % of worldwide turnover.
-- **Role:** IntraFind puts iHub on the market under its own name, so IntraFind is the **provider** of a generative *and* interactive AI system (guidelines ¶11). The upstream model vendor (OpenAI, Google, Mistral, or an open-weight model) does not take over our duty. We may *rely* on their marking, but the responsibility stays with us. Our customers are **deployers**: they own the 50(4) labelling, and we should give them the tools for it (CoP Measure 1.4).
+- **Role:** where IntraFind installs and operates iHub (most cases), IntraFind is the **provider** of a generative *and* interactive AI system (guidelines ¶11). **Whoever downloads the open-source iHub and puts it into service themselves becomes the provider** of that installation (decided 2026-09-28). The upstream model vendor (OpenAI, Google, Mistral, or an open-weight model) does not take over the provider's duty. We may *rely* on their marking, but the responsibility stays with us. Our customers are **deployers**: they own the 50(4) labelling, and we should give them the tools for it (CoP Measure 1.4). Because self-installers are providers too, the open-source defaults must be **compliant out of the box**.
 - **Open-weight models:** text watermarking needs control over sampling. Only models we run ourselves can have it. **vLLM now ships a native watermark** (Gumbel-max, `--watermark-config`, separate detection server; announced 24 Sep 2026). SynthID-Text (Apache-2.0), MarkLLM and Meta TextSeal are the open-source alternatives. Ollama, LM Studio and llama.cpp have nothing built in.
 - **Images:** C2PA manifest (`c2pa-rs` / `c2pa-node`) plus an invisible watermark (Adobe **TrustMark**, MIT; or Meta **Pixel Seal**, MIT), linked as a C2PA *soft binding*. Gemini images arrive with SynthID already; we must keep it and add our own layers.
-- **Exports:** all of our exports are built **in the browser**, and PDF goes through the print dialog. That means they cannot carry signed metadata today. We need a **server-side signing/export step**.
+- **Exports:** all of our exports are built **in the browser**, and PDF goes through the print dialog. That means they cannot carry signed metadata today. **Decision: all exports move to the server** (§8.3). Browser print does not work reliably everywhere anyway.
+- **Signing identity:** no IntraFind certificate can ship in the open-source repo. **Each installation generates its own local CA and C2PA signing certificate on first start** (§8.5). Customers can replace it with a certificate from their own PKI or a C2PA-conformant CA.
+- **Detection is built into iHub itself:** a `/verify` UI and API, plus a `verify` mode of the downloadable iHub binary. There is no separate detector tool (§8.4).
 
 ---
 
@@ -164,7 +166,7 @@ What follows for the product: marking must be **policy-driven per app, per conte
 
 Practical limits we must document (these are what CoP Measures 3.2/3.3 test):
 
-- **Low-entropy output hurts watermarks.** Temperature 0 or greedy decoding, RAG answers that quote sources, tables, lists and code leave the sampler no freedom. At temperature 0 a distortion-free scheme has nothing to embed. We need to decide whether to enforce a minimum temperature or accept weaker marks.
+- **Low-entropy output hurts watermarks.** Temperature 0 or greedy decoding, RAG answers that quote sources, tables, lists and code leave the sampler no freedom. At temperature 0 a distortion-free scheme has nothing to embed. **Decision:** we do not force a minimum temperature. Instead we document the reduced reliability per app/model in the compliance report; many providers no longer accept a temperature parameter anyway.
 - **Robustness:** heavy editing, paraphrasing, translation or re-generation by another model removes the mark. Copy-paste of longer passages survives.
 - **Short text:** detection is unreliable below ~200 tokens, which is why the CoP exempts it.
 
@@ -174,11 +176,18 @@ Practical limits we must document (these are what CoP Measures 3.2/3.3 test):
 2. **Post-hoc text watermarking**, such as keyed synonym/lexical substitution or re-writing with a small local model. It works on any text, costs quality and latency, and is less robust. Worth a spike, not a default.
 3. Treat these outputs as unwatermarked and **compensate with logging/fingerprints plus perceptible labels**. Honest, but *not sufficient alone* for text over 200 tokens under the CoP.
 
+**Decision (2026-09-28):**
+
+- iHub gets a **marking capability registry**: for every model, which modalities are marked, by whom (iHub, vLLM, the upstream vendor), and with what technique.
+- **Every model without text marking is flagged** in the admin model list, in the AI Transparency status matrix and in the compliance report. Admins see the gap before they enable the model.
+- Post-hoc watermarking stays an optional, later capability (Phase 3). We expect the cloud vendors to close the gap themselves; the registry makes it visible when they do.
+
 **Unicode-embedded provenance (a signpost, not a watermark):**
 
 - The **C2PA text manifest** puts a signed C2PA manifest into invisible Unicode *variation selectors* at the end of the text (`C2PATXT\0` wrapper). Reference implementations: `encypherai/c2pa-text` (Rust/Go/Python) and `writerslogic/c2pa-unstructured-text`. It is still a **draft**, not in the C2PA 2.4 release.
 - It survives copy-paste between apps. It is **trivially strippable** and some sanitizers remove it, so it must not be the only layer.
 - It is a good candidate for the CoP 3.4 **signpost**, because it tells a verifier where to look.
+- **Decision:** it must be switchable off by admins, because we don't know yet which downstream systems choke on invisible Unicode. Proposed defaults, to validate in a pilot: **on** for text file exports that can't carry C2PA (MD, TXT, JSON, CSV), **off** for clipboard copy. Switchable at platform and app level.
 - Zero-width-character schemes are the fragile predecessor. Avoid them.
 
 **Logging / fingerprinting (optional supplement):**
@@ -199,7 +208,7 @@ Practical limits we must document (these are what CoP Measures 3.2/3.3 test):
 | Upstream | Google **SynthID** (Gemini images) | proprietary | Arrives with the image. We must keep it (we store raw bytes today, which is good) and check whether the Gemini API response carries C2PA too |
 | Visible | **EU icon** overlay (optional, deployer-controlled) | free | For deep-fake-capable apps; top-right corner |
 
-C2PA signing requires an **X.509 signing certificate**. For verifiers to show "trusted" we need a cert from a CA on the C2PA trust list (C2PA conformance program). On-prem customers without secure key storage fall under the CoP 1.1.1 "local deployment" carve-out; document that per installation.
+C2PA signing requires an **X.509 certificate chain**: a leaf certificate, issued by a CA, with a C2PA-accepted EKU. Public verifiers only show a signer as **trusted** if its root is on the C2PA Trust List (C2PA conformance program; SSL.com was the first public CA to issue such certificates). A chain from any other CA still validates cryptographically, but verifiers report it as `signingCredential.untrusted`. See §8.5 for how iHub handles this per installation. On-prem customers without secure key storage fall under the CoP 1.1.1 "local deployment" carve-out; document that per installation.
 
 ### 5.3 Exports (containerised text)
 
@@ -286,6 +295,7 @@ server/services/provenance/
   policy.js                   # exemptions: <200 tokens, code/JSON, translation apps, B2B declared, etc.
   signing/
     C2paSigner.js             # c2pa-node; cert + TSA from platform config (encrypted at rest)
+    InstallationCA.js         # first start: generate local root CA + C2PA leaf cert (§8.5); rotation
     KeyStore.js               # reuse TokenStorageService AES-GCM; HSM/KMS option later
   image/
     ImageMarker.js            # TrustMark (Python sidecar or ONNX) + C2PA manifest + soft binding
@@ -294,11 +304,14 @@ server/services/provenance/
     TextSignpost.js           # optional C2PA text manifest (variation selectors) — config-gated
     Fingerprint.js            # keyed winnowing hashes → fingerprint store (deployer-controlled retention)
   export/
+    ExportService.js          # server-side generation of ALL export formats (§8.3)
     ExportSigner.js           # PDF (C2PA + XMP), OOXML (custom props + sidecar), HTML/MD metadata
   detection/
     DetectionService.js       # C2PA verify, TrustMark decode, text watermark detect, fingerprint lookup
     ReportSigner.js           # signed detection report (hash, detector id, timestamp)
-server/routes/provenance.js   # POST /api/provenance/verify, POST /api/provenance/sign-export, GET /.well-known/ai-provenance
+server/routes/provenance.js   # POST /api/provenance/verify, GET /.well-known/ai-provenance (trust anchor, detector info)
+server/routes/exports.js      # POST /api/exports/{pdf,docx,pptx,xlsx,md,html,json,…}
+server/cli/verify.js          # `ihub verify <file|->` — same DetectionService, no server needed (§8.4)
 ```
 
 Hook points:
@@ -319,14 +332,15 @@ Create `platform.aiTransparency`. It is a new top-level section, so defaults com
   "images":   { "c2pa": true, "watermark": "trustmark", "visibleIcon": false },
   "text":     { "watermarkMinTokens": 200, "signpost": false, "fingerprint": { "enabled": false, "retentionDays": 90 } },
   "exports":  { "sign": true },
-  "signing":  { "certificate": "<encrypted>", "privateKey": "<encrypted>", "tsaUrl": "…" },
+  "signing":  { "mode": "auto" /* | "custom" */, "certificate": "<pem>", "privateKey": "<encrypted>",
+                "tsaUrl": "…" /* optional; offline installs use the local clock */, "trustedAnchors": [] },
   "detection":{ "access": "authenticated" /* | "public" */, "zeroRetention": true }
 }
 ```
 
 Per-app overrides (`app.aiTransparency`):
 
-- Disable 50(1) disclosure, with a mandatory `reason` (e.g. "internal trained staff").
+- Disable 50(1) disclosure. **Decision:** only an admin can do this, and it requires a `reason` (e.g. "internal, trained staff only"). The audit log records **who** switched it off, **when** and **why**, and the compliance report lists every app where it is off.
 - Declare `exemption: "standardEditing" | "b2bTechnical"`, with a `justification`.
 - Choose the label style.
 
@@ -335,27 +349,57 @@ Per-model settings (`model.contentMarking`): `{ textWatermark: { scheme, keyId }
 **Admin "AI Transparency" page:**
 
 - A status matrix per model × modality: *marked / upstream / gap*.
-- Certificate upload.
+- Signing certificate: status (auto-generated or custom), expiry, replace with a customer certificate, download the installation's trust anchor.
+- The list of apps where the 50(1) disclosure is switched off, with who, when and why.
+- The list of models flagged as unmarked.
 - Editorial-responsibility contact.
 - An exportable **compliance report** for CoP 4.1.
 
-### 8.3 Exports — decision needed
+### 8.3 Exports — decided: everything server-side
 
-Exports are generated in the browser, but signing keys must stay on the server. Options:
+**Decision (2026-09-28):** all exports are generated on the server. Browser print-to-PDF does not work reliably everywhere, and signing keys must stay on the server anyway.
 
-- **A. Sign-on-server round-trip:** the client builds the file and POSTs it to `/api/provenance/sign-export`, which checks it, embeds or attaches the manifest and returns it. Least refactoring, but we sign bytes the client produced. The manifest should then bind to the server-known message IDs and hashes, so we only vouch for "contains AI output X".
-- **B. Server-side export generation:** move PDF/DOCX/PPTX generation to the server. That means real PDFs instead of the print dialog (pdf-lib already exists server-side) and full control. Bigger change, and it also fixes print-dialog inconsistencies.
-- **Recommendation:** **B for PDF and DOCX** (the most shared formats), **A for the rest**. Browser print-to-PDF stays as "unsigned quick print", clearly labelled.
+- A new `ExportService` builds every format: PDF, DOCX, PPTX, XLSX, CSV, MD, TXT, HTML, JSON/JSONL.
+  - PDF uses real generation (`pdf-lib` is already a server dependency; HTML→PDF via the Playwright already installed for screenshot tools is the alternative for rich layout).
+  - `docx`, `pptxgenjs` and `write-excel-file` also run in Node.
+- The export takes **message/chat IDs, not client-supplied content**. The server loads the content from the chat store or RunLog, so the manifest vouches for what iHub actually generated.
+- Each file then goes through `ExportSigner`: C2PA/XMP for PDF, custom properties plus sidecar manifest for OOXML, visible label, and the signpost where configured.
+- Client code in `client/src/api/endpoints/apps.js`, `client/src/utils/exportFormats.js`, `markdownExports.js`, canvas `ExportMenu.jsx` and admin `artifactDownload.js` becomes a thin "request export → download" call. The browser print path is removed.
+- **Prerequisite:** messages must be available server-side. Today `chatPersistence` is a preview feature, off by default, and the client falls back to `sessionStorage`. We need either persistence or a short-lived server-side cache for every chat, so exports work without that feature. The same applies to the canvas editor, whose content is edited in the browser: canvas exports must send the edited document and be marked "AI-assisted, edited by user" (`c2pa.edited`).
+- This is also a UI change, so it gets a release-notes entry when it ships.
 
-### 8.4 Detection for on-prem customers
+### 8.4 Detection — decided: built into iHub
 
-Each iHub installation is its own provider instance. That leaves three options:
+**Decision (2026-09-28):** there is no separate detector tool. iHub can already be downloaded as a single binary (`npm run build:binary`, Node SEA via `build-sea.sh`), so detection ships inside iHub itself:
 
-- **(a)** Each installation runs its own `/verify` (tenant-internal access is allowed in professional settings, CoP 2.1.2).
-- **(b)** Publish an offline detector: a CLI/library for C2PA + TrustMark + our text scheme spec.
-- **(c)** Join a shared or consortium detector for the 2027-02-02 interoperability deadline.
+- **`/verify` page and API** in every installation. Access is tenant-internal by default (allowed in professional settings, CoP 2.1.2) and can be switched to public, e.g. for publicly shared chats.
+- **`ihub verify <file>` mode of the same binary.** It runs the same `DetectionService` locally, without starting the server and without uploading anything. Anyone can download the iHub binary and call it directly. This covers the CoP 2.1.1 "piece of software" option and the "locally executable" guidance (guidelines ¶76).
+  - It checks C2PA manifests, TrustMark / Pixel Seal image watermarks and fingerprints (if the installation's store is reachable).
+  - **Text watermark detection needs the watermark key.** The offline binary can only check text for installations whose keys it has. Keys must never be public, so public text detection runs only through the installation's `/verify` API, with access restricted to verified experts as the CoP allows for free-form text (2.1.2).
+- Output: a human-readable result stating which technique found the mark, plus the signed JSON report (hash, detector ID, timestamp) required by CoP 2.1.2.
+- **2027-02-02 interoperability:** publish the detection spec and `/.well-known/ai-provenance` endpoint, and embed the signpost pointing to the installation's detector. Whether we also join a consortium detector remains to be evaluated.
 
-Plan: (a) + (b) now, (c) to evaluate.
+### 8.5 Signing identity — per-installation certificate
+
+We cannot ship an IntraFind certificate or key in the open-source repository. Instead:
+
+1. **On first start** (or when `aiTransparency` is enabled), iHub generates an **installation root CA** and a **C2PA leaf signing certificate** issued by it.
+   - C2PA validators expect a chain: a leaf issued by a CA, not a self-signed leaf.
+   - The leaf gets a C2PA-accepted EKU. Candidates are document signing or e-mail protection; confirm against the current c2pa-rs trust configuration.
+   - Keys are ECDSA P-256 (ES256).
+   - The subject is the installation name and the provider (IntraFind for installations we operate; the operator's organisation for self-installs, entered in the setup wizard).
+   - The private keys are stored encrypted with the existing `contents/.encryption-key` (AES-256-GCM, same mechanism as other platform secrets). The root key can be kept offline or deleted after issuing the leaf; rotation re-issues from a new root.
+2. **Trust:** signatures validate cryptographically everywhere. Public tools (e.g. contentcredentials.org verify) will show the signer as *untrusted/unknown* until the root is on the C2PA Trust List. Our own `/verify` and `ihub verify` trust:
+   - the installation's own root, and
+   - the `trustedAnchors` list, for other installations of the same customer or IntraFind's managed fleet.
+   Each installation publishes its root at `/.well-known/ai-provenance`.
+3. **Upgrade path:**
+   - **Customer PKI:** the admin uploads a certificate from the customer's CA (`signing.mode: "custom"`).
+   - **C2PA-conformant CA:** a paid certificate from a CA on the trust list, where a customer wants public "trusted" status.
+   - **IntraFind managed CA (optional, later):** for installations IntraFind operates, IntraFind issues leaf certificates from its own CA via CSR at install time. The certificate never goes into the repository.
+4. **Compliance fit:** CoP 1.1.1 requires signed, time-stamped, tamper-evident metadata with secure key handling. It does not require trust-list membership. The interoperability measure asks for established standards, which C2PA is.
+   - **Time-stamping:** use an RFC 3161 TSA where there is network access. Offline installs use the local clock and document it.
+   - **Legal to confirm:** that an "untrusted" signer status in public validators is acceptable for the presumption of conformity.
 
 ---
 
@@ -363,23 +407,36 @@ Plan: (a) + (b) now, (c) to evaluate.
 
 | Phase | Deadline | Scope |
 |---|---|---|
-| **0 — Now** | ASAP (overdue since 2026-08-02) | 50(1): disclosure before the first interaction, persistent badge, "are you an AI?" guardrail, labels on Outlook/Jira/agent outputs. Legal: AUP/ToS removal clause, role assessment, model-vendor marking statements. Compliance-process doc skeleton |
-| **1 — Images & metadata** | **2026-12-02** | C2PA signing service + key management; TrustMark on Gemini images; keep SynthID; server-side signed PDF/DOCX; OOXML custom props + sidecar; provenance field on messages / API / MCP |
-| **1b — Text** | **2026-12-02** | vLLM watermark integration (model schema, detection key, detector service); capability registry for cloud models; robustness/FPR test harness; `/verify` page + API with signed reports |
-| **2 — Interoperability** | **2027-02-02** | Signpost (C2PA text manifest and/or C2PA soft binding) + publish detector integration info; offline detector package; decide on consortium participation |
-| **3 — Hardening** | 2027 H1 | Fingerprint store; post-hoc text watermark spike for cloud models; EU icon second layer; HSM/KMS; red-team exercise; SynthID-Text / KGW options in vLLM |
+| **0 — Now** | ASAP (overdue since 2026-08-02) | 50(1): disclosure before the first interaction, persistent badge, "are you an AI?" guardrail, labels on Outlook/Jira/agent outputs; admin-only per-app switch-off with audit trail. Legal: AUP/ToS removal clause, model-vendor marking statements, notes for self-installers (they are providers). Compliance-process doc skeleton. Model marking capability registry + "unmarked" flags |
+| **1 — Images & metadata** | **2026-12-02** | Per-installation CA + C2PA signing (§8.5); TrustMark on Gemini images; keep SynthID; server-side `ExportService` for all formats, starting with PDF/DOCX (§8.3); OOXML custom props + sidecar; provenance field on messages / API / MCP |
+| **1b — Text** | **2026-12-02** | vLLM watermark integration (model schema, detection key, detector); robustness/FPR test harness; `/verify` page + API with signed reports; `ihub verify` binary mode |
+| **2 — Interoperability** | **2027-02-02** | Signpost (C2PA text manifest, switchable) and/or C2PA soft binding; `/.well-known/ai-provenance` + published detection spec; remaining export formats server-side, browser print removed; consortium decision; CoP signature decision |
+| **3 — Hardening** | 2027 H1 | Fingerprint store; optional post-hoc text watermark for cloud models; EU icon second layer; HSM/KMS; optional IntraFind managed CA; red-team exercise; SynthID-Text / KGW options in vLLM |
 
 ---
 
-## 10. Open questions
+## 10. Decisions and open questions
 
-1. **Role:** is IntraFind the provider for every on-prem installation, or do customers become providers when they white-label or substantially configure iHub? This affects who signs (whose certificate) and who runs detection.
-2. **Do we sign the Code of Practice?** It gives a presumption of conformity and ~190 organisations have signed. The SME/SMC simplifications may apply.
-3. **Cloud-model text gap:** accept vendor marking + fingerprints, or invest in post-hoc watermarking? This needs a legal risk call.
-4. **Temperature 0 apps:** force a minimum temperature for watermark-eligible apps, or document the reduced reliability?
-5. **Signing identity:** one IntraFind C2PA certificate, or per-customer certificates (and who pays for trust-list CAs)?
-6. **Default for internal deployments:** should the 50(1) disclosure be switchable off per app ("trained staff") or never?
-7. **Signpost in copy/paste:** do customers accept invisible Unicode in copied text? It can break some downstream systems.
+### 10.1 Decisions (2026-09-28)
+
+| # | Topic | Decision |
+|---|---|---|
+| 1 | Role | IntraFind is the provider where it installs iHub, which is most cases. Whoever downloads and runs iHub themselves becomes the provider of that installation. So the open-source defaults must be compliant out of the box, and the docs must tell self-installers what that means |
+| 2 | Code of Practice | Intent to sign, once the gaps in this concept are solvable |
+| 3 | Cloud-model text | Build a marking capability registry; flag every model without text marking (admin UI, status matrix, compliance report). Post-hoc watermarking is optional and later; we expect vendors to close the gap |
+| 4 | Temperature 0 | No forced minimum temperature; document reduced reliability |
+| 5 | Signing identity | No IntraFind certificate in the repo. Auto-generated CA + signing certificate per installation, replaceable by a customer or C2PA-conformant certificate (§8.5) |
+| 6 | 50(1) disclosure | On by default. Only an admin can switch it off per app, with a mandatory reason; who and when is audit-logged |
+| 7 | Copy/paste signpost | Must be switchable off. Defaults to be validated in a pilot (proposal: on for text file exports, off for clipboard) |
+| 8.3 | Exports | All exports server-side; browser print path goes away |
+| 8.4 | Detection | Built into iHub: `/verify` UI/API plus `ihub verify` mode of the downloadable binary; no separate tool |
+
+### 10.2 Still open
+
+1. **Legal confirmation:** that per-installation certificates showing "untrusted signer" in public C2PA validators still meet CoP 1.1.1 and the interoperability measure. And whether publishing iHub as open source makes IntraFind a provider for self-installs anyway, or whether the "alert users in the documentation" route for FOSS (CoP 1.2(b)) is enough.
+2. **Server-side message availability** for exports when `chatPersistence` is off (short-lived cache vs. making persistence mandatory for export).
+3. **Text detection keys:** how installations that trust each other (one customer, several instances) share text watermark detection keys, if at all.
+4. **Consortium detector** for the 2027-02-02 interoperability deadline: join one, or rely on the signpost + published spec?
 
 ---
 
@@ -397,3 +454,4 @@ Plan: (a) + (b) now, (c) to evaluate.
 - C2PA text embedding reference — <https://github.com/encypherai/c2pa-text>
 - Adobe TrustMark — <https://github.com/adobe/trustmark>, <https://opensource.contentauthenticity.org/docs/trustmark/c2pa/>
 - Meta Seal (Pixel Seal, Video Seal, AudioSeal, TextSeal) — <https://github.com/facebookresearch/content-seal>, <https://github.com/facebookresearch/videoseal>
+- C2PA signing certificates (chain, EKU, trust list, "untrusted" status) — <https://provemark.github.io/articles/c2pa-certificates/>, <https://github.com/contentauth/c2pa-rs/blob/main/cli/docs/x_509.md>
