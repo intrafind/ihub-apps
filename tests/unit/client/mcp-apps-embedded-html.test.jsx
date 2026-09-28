@@ -7,9 +7,11 @@
 import { render, waitFor } from '@testing-library/react';
 import '@testing-library/jest-dom';
 import McpAppViews from '../../../client/src/features/chat/mcpApps/McpAppViews';
+import { fetchMcpAppResource } from '../../../client/src/api/endpoints/mcpApps';
 import {
   MAX_VIEW_HTML_BYTES,
   embeddedViewHtml,
+  embeddedViewResource,
   isViewHtmlMimeType,
   selectViewHtml
 } from '../../../client/src/features/chat/mcpApps/embeddedViewHtml';
@@ -129,10 +131,10 @@ describe('embeddedViewHtml / selectViewHtml', () => {
     ).toEqual({ html: '<p>v2</p>', source: 'resource' });
   });
 
-  test('blob-only, empty and oversized embedded HTML fall back to resources/read', () => {
+  test('a base64 blob is decoded; empty and oversized embedded HTML fall back to resources/read', () => {
     expect(
       embeddedViewHtml(renderTicketResult({ text: undefined, blob: 'PGgxPg==' }), declaredUri)
-    ).toBeNull();
+    ).toBe('<h1>');
     expect(embeddedViewHtml(renderTicketResult({ text: '   ' }), declaredUri)).toBeNull();
     // Same cap as the server's MAX_UI_RESOURCE_BYTES for resources/read HTML.
     expect(MAX_VIEW_HTML_BYTES).toBe(5 * 1024 * 1024);
@@ -257,6 +259,113 @@ describe('McpAppView with an embedded view resource', () => {
     await waitFor(() => expect(container.querySelector('iframe')).not.toBe(first.iframe));
     const second = await proxyReady(container);
     expect(renderedHtml(second.posted)).toBe(ticketHtml);
+    unmount();
+  });
+});
+
+describe('views of tools that declare none (page embedded in the result)', () => {
+  const pageUri = 'ui://mcpui/greeting';
+  const pageHtml = '<html><body><h1>Hello</h1></body></html>';
+  const mcpUiResult = (resource = {}) => ({
+    content: [
+      { type: 'text', text: 'Greeting ready.' },
+      {
+        type: 'resource',
+        resource: { uri: pageUri, mimeType: 'text/html', text: pageHtml, ...resource }
+      }
+    ]
+  });
+  const embeddedView = {
+    callId: 'c-embedded',
+    toolId: 'mcpui__greet',
+    serverId: 'mcpui',
+    toolName: 'greet',
+    resourceUri: pageUri,
+    embedded: true,
+    args: {}
+  };
+
+  let infoSpy;
+  beforeEach(() => {
+    infoSpy = jest.spyOn(console, 'info').mockImplementation(() => {});
+    fetchMcpAppResource.mockClear();
+  });
+  afterEach(() => infoSpy.mockRestore());
+
+  test('embeddedViewResource takes the HTML and CSP from the item and grants no permissions', () => {
+    const csp = { resourceDomains: ['https://cdn.example'] };
+    const resource = embeddedViewResource({
+      ...embeddedView,
+      toolResult: mcpUiResult({
+        _meta: { ui: { csp, permissions: { camera: {} }, prefersBorder: false } }
+      })
+    });
+    expect(resource).toMatchObject({
+      uri: pageUri,
+      html: pageHtml,
+      csp,
+      permissions: {},
+      allow: '',
+      prefersBorder: false,
+      tool: { name: 'greet' }
+    });
+  });
+
+  test('embeddedViewResource decodes a base64 blob and refuses other HTML dialects', () => {
+    const blob = btoa(pageHtml);
+    expect(
+      embeddedViewResource({ ...embeddedView, toolResult: mcpUiResult({ text: undefined, blob }) })
+        ?.html
+    ).toBe(pageHtml);
+    expect(
+      embeddedViewResource({
+        ...embeddedView,
+        toolResult: mcpUiResult({ mimeType: 'text/html+skybridge' })
+      })
+    ).toBeNull();
+  });
+
+  test('renders the embedded page without asking resources/read', async () => {
+    const view = {
+      ...embeddedView,
+      toolResult: mcpUiResult({
+        _meta: { ui: { csp: { resourceDomains: ['https://cdn.example'] } } }
+      })
+    };
+    const { container, unmount } = render(
+      <McpAppViews views={[view]} appId="app-1" chatId="chat-1" />
+    );
+    await waitFor(() => expect(container.querySelector('iframe')).not.toBeNull());
+    const iframe = container.querySelector('iframe');
+    const posted = [];
+    iframe.contentWindow.postMessage = message => posted.push(message);
+    window.dispatchEvent(
+      new MessageEvent('message', {
+        data: { jsonrpc: '2.0', method: 'ui/notifications/sandbox-proxy-ready', params: {} },
+        source: iframe.contentWindow
+      })
+    );
+    await flush();
+    expect(
+      posted.find(m => m.method === 'ui/notifications/sandbox-resource-ready')?.params.html
+    ).toBe(pageHtml);
+    expect(decodeURIComponent(iframe.getAttribute('src'))).toContain('https://cdn.example');
+    expect(iframe.getAttribute('allow')).toBeNull();
+    expect(fetchMcpAppResource).not.toHaveBeenCalled();
+    unmount();
+  });
+
+  test('says so when the result holds no page', async () => {
+    const view = { ...embeddedView, toolResult: { content: [{ type: 'text', text: 'x' }] } };
+    const { findByText, unmount } = render(
+      <McpAppViews views={[view]} appId="app-1" chatId="chat-1" />
+    );
+    expect(
+      await findByText(
+        'The interactive view could not be loaded: The tool result holds no view page.'
+      )
+    ).toBeInTheDocument();
+    expect(fetchMcpAppResource).not.toHaveBeenCalled();
     unmount();
   });
 });

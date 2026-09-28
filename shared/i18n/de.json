@@ -2673,7 +2673,7 @@
           "disabled": "deaktiviert",
           "skills": "Skills: {{skills}}",
           "agentError": "Die Agent Card konnte nicht gelesen werden: {{error}}",
-          "idConflict": "Ein Tool oder MCP-Server nutzt die ID \"{{id}}\" ebenfalls, daher wird dieser Agent über seine Skill-Tools aktiviert. Geben Sie dem Agenten eine eigene ID, um ihn als Ganzes zu aktivieren.",
+          "idConflict": "Ein Tool oder MCP-Server nutzt die ID \"{{id}}\" ebenfalls, daher verweist diese App auf den Agenten als \"{{reference}}\".",
           "helper": "Jeder Skill eines Agenten wird zu einem Tool, das das Modell aufrufen kann; der Agent läuft auf seinen eigenen Servern. Welche Skills angeboten werden, legen Sie unter Integrationen → A2A-Agenten fest.",
           "title": "Entfernte A2A-Agenten",
           "desc": "Wählen Sie die entfernten Agenten (Agent-to-Agent-Protokoll), an die diese App Aufgaben delegieren kann. Benutzer sehen jeden Agenten im Chat als einen einzigen Eintrag."
@@ -4139,6 +4139,7 @@
   "mcpApps": {
     "caption": "Interaktive Ansicht · {{name}}",
     "loading": "Interaktive Ansicht wird geladen…",
+    "embeddedMissing": "Das Tool-Ergebnis enthält keine Ansichtsseite.",
     "loadFailed": "Die interaktive Ansicht konnte nicht geladen werden: {{error}}",
     "authRequired": "Verbinden Sie diesen Server mit Ihrem eigenen Konto, um seine interaktive Ansicht zu sehen.",
     "payloadOmitted": "Diese interaktive Ansicht war zu groß zum Speichern und kann nicht erneut angezeigt werden.",

@@ -13,6 +13,10 @@ servers (draw.io, Google Maps, ArcGIS, ServiceNow) are examples of this style.
   `ui://` resource with the data in its HTML, as the ServiceNow ticket panel does — now render that
   embedded copy instead of the empty static page. It gets the same sandbox and content security
   policy; an embedded page under a different URI, or too large to render, is not used.
+- Tools that declare no view at all but return a `ui://` page in their result, as mcp-ui servers
+  do, now show that page as an interactive view. It may load only from the origins its own
+  `_meta.ui.csp` declares and never gets camera, microphone, location or clipboard access.
+  Turning MCP Apps off for a server (`apps.enabled: false`) turns these views off too.
 - Each use of the fallback is logged with `component: McpApps` and `handshake: legacy`, naming
   the server and tool, so admins can see which servers still rely on it.
 - A view that loads external scripts (maps, CDN libraries) still has to declare those origins in
@@ -82,7 +86,10 @@ menu.
 - **Test connection** shows the card and its skills; choose which skills apps may use.
 - Answers stream when the agent supports it and show its progress in the chat; long-running tasks
   are polled and cancelled after the agent's timeout (default 60 s).
-- Follow-up calls from the same chat continue the conversation with the agent.
+- Follow-up calls from the same chat continue the conversation with the agent, also after a
+  restart and on another worker: the conversation is kept in iHub's storage for 30 days.
+- An app or group can reference an agent as `a2a__<agentId>`. This always means the agent, even
+  when a tool or MCP server has the same id; the app editor uses it in that case.
 - Every user of an agent shares its configured credential; per-user sign-in is not available yet.
 
 ## MCP Servers With Per-User Sign-In

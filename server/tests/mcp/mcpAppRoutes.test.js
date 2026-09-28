@@ -327,6 +327,50 @@ describe('POST /api/mcp-apps/tools/call', () => {
   });
 });
 
+describe('views embedded in the result of a tool without a declared view', () => {
+  const PLAIN_TOOL = {
+    id: 'excalidraw__show',
+    description: 'Show',
+    parameters: { type: 'object', properties: {} },
+    _mcp: { serverId: 'excalidraw', originalName: 'show' }
+  };
+  const plainRef = { appId: 'whiteboard', toolId: PLAIN_TOOL.id };
+
+  beforeEach(() => {
+    apps = [{ id: 'whiteboard', tools: ['excalidraw'] }];
+    findTool.mockImplementation(async id =>
+      id === PLAIN_TOOL.id ? { conn, tool: PLAIN_TOOL } : null
+    );
+  });
+
+  it('lets the view call app-callable tools of the same server', async () => {
+    const res = await asUser(
+      request(app)
+        .post('/api/mcp-apps/tools/call')
+        .send({ ...plainRef, name: 'save_checkpoint' })
+    );
+    expect(res.status).toBe(200);
+    expect(conn.callToolRaw).toHaveBeenCalledWith('save_checkpoint', {});
+  });
+
+  it('has no resources/read copy to serve', async () => {
+    const res = await asUser(request(app).get('/api/mcp-apps/resource').query(plainRef));
+    expect(res.status).toBe(404);
+    expect(conn.getUiResource).not.toHaveBeenCalled();
+  });
+
+  it('is refused for a server with MCP Apps disabled', async () => {
+    conn.config = { id: 'excalidraw', apps: { enabled: false } };
+    const res = await asUser(
+      request(app)
+        .post('/api/mcp-apps/tools/call')
+        .send({ ...plainRef, name: 'save_checkpoint' })
+    );
+    expect(res.status).toBe(404);
+    expect(conn.callToolRaw).not.toHaveBeenCalled();
+  });
+});
+
 describe('POST /api/mcp-apps/handshake', () => {
   it('logs a legacy handshake for admins, naming the server and tool', async () => {
     logInfo.mockClear();
