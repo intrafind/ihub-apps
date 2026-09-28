@@ -439,7 +439,7 @@ We cannot ship an IntraFind certificate or key in the open-source repository. In
 
 ### 8.6 EU AI Act admin page and compliance warnings
 
-Anyone who installs iHub themselves is the provider, and IntraFind cannot be legally responsible for every download. So iHub must make it **possible and visible** for every operator to configure an installation the way IntraFind does. There is **feature parity**: nothing compliance-relevant is reserved for IntraFind-operated or non-white-label installations.
+Anyone who installs iHub themselves is treated as the provider (the conservative planning assumption from §1; see Art. 3(3) there), and IntraFind cannot be legally responsible for every download. So iHub must make it **possible and visible** for every operator to configure an installation the way IntraFind does. There is **feature parity**: nothing compliance-relevant is reserved for IntraFind-operated or non-white-label installations.
 
 **Dedicated admin page `/admin/eu-ai-act`** (a new admin route; it lives under `/admin`, so no new entries in `KNOWN_ROUTES` / `index.html` are needed):
 
@@ -516,7 +516,7 @@ Only signatories are *bound* to the 2027-02-02 date. Since we intend to sign, th
 
 | # | Topic | Decision |
 |---|---|---|
-| 1 | Role | IntraFind is the provider where it installs iHub, which is most cases. Whoever downloads and runs iHub themselves becomes the provider of that installation; IntraFind cannot be liable for every download. So: full feature parity for self-installers and white-label operators, compliant defaults, and an EU AI Act admin page plus start-page warnings that show whether the installation conforms (§8.6) |
+| 1 | Role | IntraFind is the provider where it installs iHub, which is most cases. Whoever downloads and runs iHub themselves is treated as the provider of that installation (conservative assumption; under Art. 3(3) an operator running it unmodified, not under their own name, may be a deployer, which legal assesses per case); IntraFind cannot be liable for every download. So: full feature parity for self-installers and white-label operators, compliant defaults, and an EU AI Act admin page plus start-page warnings that show whether the installation conforms (§8.6) |
 | 2 | Code of Practice | Intent to sign, once the gaps in this concept are solvable |
 | 3 | Cloud-model text | Build a marking capability registry; flag every model without text marking (admin UI, status matrix, compliance report). Post-hoc watermarking is optional and later; we expect vendors to close the gap |
 | 4 | Temperature 0 | No forced minimum temperature; document reduced reliability |
