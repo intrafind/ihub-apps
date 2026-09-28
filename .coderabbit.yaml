@@ -1,0 +1,6 @@
+# yaml-language-server: $schema=https://coderabbit.ai/integrations/schema.v2.json
+# CodeRabbit configuration — https://docs.coderabbit.ai/reference/configuration
+reviews:
+  auto_review:
+    # Review draft pull requests too (CodeRabbit skips them by default).
+    drafts: true
