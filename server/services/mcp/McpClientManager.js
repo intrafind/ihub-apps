@@ -3,7 +3,6 @@ import {
   mcpServersFileSchema,
   mcpServerConfigSchema
 } from '../../validators/mcpServerConfigSchema.js';
-import { DEFAULT_MAX_FILE_SIZE_MB, resolveFileInputs } from './mcpFileInputs.js';
 import { appsEnabledFor } from './mcpApps.js';
 import {
   isAuthRequiredError,
@@ -55,19 +54,11 @@ export function userConnectionKey(serverId, userId) {
 
 /**
  * Keys iHub adds to every tool call's params for its own tools (the chat's
- * identity, the acting user, the app config, workflow plumbing, the message's
- * attachments). They are never the model's arguments and must not leave iHub:
- * an external MCP server would otherwise receive the full user object, the
- * app configuration or every upload of the message.
+ * identity, the acting user, the app config, workflow plumbing). They are
+ * never the model's arguments and must not leave iHub: an external MCP server
+ * would otherwise receive the full user object or the app configuration.
  */
-const IHUB_CONTEXT_KEYS = new Set([
-  'chatId',
-  'user',
-  'appConfig',
-  'passthrough',
-  '_fileData',
-  '_attachments'
-]);
+const IHUB_CONTEXT_KEYS = new Set(['chatId', 'user', 'appConfig', 'passthrough', '_fileData']);
 
 /**
  * `language` is a default iHub adds that the model may also set; it is
@@ -108,10 +99,6 @@ function summarizeTools(tools) {
     description: t.description || '',
     // MCP Apps: the view this tool renders, shown in the admin tool preview.
     ...(t._mcp?.ui?.resourceUri ? { uiResourceUri: t._mcp.ui.resourceUri } : {}),
-    // Parameters that take a chat attachment (`format: "file"`).
-    ...(t._mcp?.fileInputs?.length
-      ? { fileInputs: t._mcp.fileInputs.map(({ name, array }) => ({ name, array })) }
-      : {}),
     parameters: t.parameters || { type: 'object', properties: {} }
   }));
 }
@@ -869,11 +856,7 @@ class McpClientManager {
    * Throws if no connection produces a matching tool.
    *
    * iHub's context keys (`user`, `chatId`, `appConfig`, …) are stripped
-   * before the call leaves iHub — see `toMcpArguments`. A tool with file
-   * inputs gets the attachments of the current message (`params._attachments`)
-   * resolved into FileData in their place, bounded by the server's
-   * `fileInputs.maxFileSizeMB`; a caller without attachments (the inbound
-   * gateway, A2A) gets a clear `MCP_FILE_*` error instead of a call.
+   * before the call leaves iHub — see `toMcpArguments`.
    *
    * @param {string} prefixedName - iHub tool id
    * @param {Object} params - Params as handed to `runTool`
@@ -886,14 +869,7 @@ class McpClientManager {
     const found = await this.findTool(prefixedName);
     if (!found) throw new Error(`MCP tool not found: ${prefixedName}`);
     const { conn, tool } = found;
-    let args = toMcpArguments(params, tool.parameters);
-    if (tool._mcp.fileInputs?.length) {
-      const maxMb = conn.config.fileInputs?.maxFileSizeMB ?? DEFAULT_MAX_FILE_SIZE_MB;
-      args = resolveFileInputs(args, tool._mcp.fileInputs, params?._attachments, {
-        maxBytes: maxMb * 1024 * 1024,
-        serverId: conn.config.id
-      });
-    }
+    const args = toMcpArguments(params, tool.parameters);
     const callOptions =
       appsEnabledFor(conn.config) && typeof onRawResult === 'function' ? { onRawResult } : {};
     if (!isUserOAuthServer(conn.config)) {

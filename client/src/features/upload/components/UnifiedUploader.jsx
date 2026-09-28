@@ -13,33 +13,13 @@ import {
   formatAcceptAttribute,
   processImageFile,
   extractAudioFromVideo,
-  loadMimetypesConfig,
-  blobToBase64
+  loadMimetypesConfig
 } from '../utils/fileProcessing';
-import {
-  capDocumentBytes,
-  estimateDataUrlLength,
-  getDocumentBytesBudget
-} from '../utils/documentBytes';
 
 /**
  * Unified uploader component that handles both images and files in a single interface.
  * Automatically detects file type and applies appropriate processing.
  * Wraps children with drag-drop handlers to make any area a drop zone.
- *
- * @param {Object} props
- * @param {Function} props.onFileSelect - Receives the selection (one entry, an array or null)
- * @param {boolean} [props.disabled]
- * @param {Object|Array|null} [props.fileData] - The current selection, for the previews
- * @param {Object} [props.config] - The app's upload config
- * @param {Object} [props.openDialogRef] - Receives the function that opens the file dialog
- * @param {boolean} [props.includeDocumentBytes=false] - Attach each document's own bytes
- *   (`base64` data URL) for tools with file inputs. Off unless the app offers such a
- *   tool (see `useDocumentBytesPolicy`); documents then carry their text only.
- * @param {number} [props.documentBytesBudget] - Characters of base64 all documents of
- *   the selection may carry together; a document beyond it is kept as text only.
- *   Defaults to the budget for the default body limit.
- * @param {React.ReactNode} props.children
  */
 const UnifiedUploader = ({
   onFileSelect,
@@ -47,18 +27,9 @@ const UnifiedUploader = ({
   fileData = null,
   config = {},
   openDialogRef = null,
-  includeDocumentBytes = false,
-  documentBytesBudget = getDocumentBytesBudget(),
   children
 }) => {
   const { t } = useTranslation();
-
-  // The selection goes out with its documents' bytes capped to the budget, so
-  // several documents together never outgrow the request body. The uploader
-  // keeps the full entries, so removing a document lets a later one fit again.
-  const handleFileSelect = selection => {
-    if (onFileSelect) onFileSelect(capDocumentBytes(selection, documentBytesBudget));
-  };
 
   // Load the server mimetypes config so the file picker's `accept` attribute
   // gets real file extensions (e.g. `.msg`, `.eml`, `.xlsx`). Without it the
@@ -350,20 +321,6 @@ const UnifiedUploader = ({
       ? getExtensionDisplay(file.name)
       : getFileTypeDisplay(file.type);
 
-    // The document's own bytes, as a data URL like images carry, so a tool
-    // that takes a file (MCP `format: "file"` inputs) can receive the PDF
-    // itself and not only its extracted text. Only read when the app offers
-    // such a tool, and bounded by the app's document size limit and by the
-    // per-message budget; a document beyond either travels as text only.
-    // Never shown to the model and never stored — the server keeps a
-    // descriptor of the upload.
-    const documentBytesLimit = (fileConfig.maxFileSizeMB || MAX_FILE_SIZE_MB) * 1024 * 1024;
-    const readBytes =
-      includeDocumentBytes &&
-      file.size <= documentBytesLimit &&
-      estimateDataUrlLength(file.size, file.type) <= documentBytesBudget;
-    const base64 = readBytes ? await blobToBase64(file) : undefined;
-
     return {
       preview: {
         type: 'document',
@@ -376,7 +333,6 @@ const UnifiedUploader = ({
         source: 'local',
         content: processedContent,
         pageImages,
-        ...(base64 ? { base64 } : {}),
         fileName: file.name,
         fileSize: file.size,
         fileType: file.type || (isGenericText ? 'text/plain' : ''),
@@ -459,7 +415,7 @@ const UnifiedUploader = ({
       accept={ALL_FORMATS}
       maxSizeMB={MAX_FILE_SIZE_MB}
       disabled={disabled}
-      onSelect={handleFileSelect}
+      onSelect={onFileSelect}
       onProcessFile={processFile}
       data={fileData}
       allowMultiple={allowMultiple}

@@ -4,7 +4,8 @@ import Icon from '../../../shared/components/Icon';
 import LoadingSpinner from '../../../shared/components/LoadingSpinner';
 import { makeAdminApiCall } from '../../../api/adminApi';
 import { CredentialRefSelect } from '../components/OpenApiToolEditor';
-import { editableText, mergeLocalizedText } from '../utils/localizedField';
+import DynamicLanguageEditor from '../../../shared/components/DynamicLanguageEditor';
+import { getLocalizedContent } from '../../../utils/localizeContent';
 
 /**
  * Admin → Integrations → A2A agents: the remote agents iHub calls as a client
@@ -19,8 +20,8 @@ import { editableText, mergeLocalizedText } from '../utils/localizedField';
 
 const BLANK_FORM = {
   id: '',
-  name: '',
-  description: '',
+  name: { en: '' },
+  description: { en: '' },
   enabled: true,
   cardUrl: '',
   auth: { type: 'none' },
@@ -39,10 +40,16 @@ const LABEL_CLASS = 'block text-sm font-medium text-gray-700 dark:text-gray-300 
 const BUTTON_CLASS =
   'inline-flex items-center px-3 py-2 border border-gray-300 dark:border-gray-600 shadow-xs text-sm leading-4 font-medium rounded-md text-gray-700 dark:text-gray-200 bg-white dark:bg-gray-700 hover:bg-gray-50 dark:hover:bg-gray-600';
 
-/** A localized-or-plain name as the English text the form edits. */
-function plainText(value) {
-  if (!value) return '';
-  return typeof value === 'string' ? value : value.en || Object.values(value)[0] || '';
+/** A stored name or description (a plain string or a map per language) as the map the editor takes. */
+function asLocalized(value) {
+  if (typeof value === 'string') return { en: value };
+  return value && Object.keys(value).length > 0 ? value : { en: '' };
+}
+
+/** A language map without its empty entries (the schema rejects `{ en: '' }`), or undefined. */
+function withoutEmptyTexts(value) {
+  const texts = Object.entries(value || {}).filter(([, text]) => text?.trim());
+  return texts.length > 0 ? Object.fromEntries(texts) : undefined;
 }
 
 /**
@@ -333,7 +340,7 @@ function TestResult({ result, allowedSkills, onToggleSkill, t }) {
 }
 
 function AdminA2aAgentsPage() {
-  const { t } = useTranslation();
+  const { t, i18n } = useTranslation();
   const [loading, setLoading] = useState(true);
   const [agents, setAgents] = useState([]);
   const [message, setMessage] = useState(null);
@@ -341,10 +348,6 @@ function AdminA2aAgentsPage() {
   const [form, setForm] = useState(BLANK_FORM);
   const [draftTesting, setDraftTesting] = useState(false);
   const [draftTest, setDraftTest] = useState(null); // null | { ok, card, skills } | { ok:false, error }
-  // The dialog edits one language of name and description; the stored
-  // translations are kept aside and merged back on save (the PUT route
-  // replaces the whole agent, so anything not sent would be lost).
-  const [storedTexts, setStoredTexts] = useState(null);
 
   const errorText = err => err.response?.data?.error || err.message;
 
@@ -371,7 +374,6 @@ function AdminA2aAgentsPage() {
   }, []);
 
   const startCreate = () => {
-    setStoredTexts(null);
     setForm(BLANK_FORM);
     setDraftTest(null);
     setEditing('new');
@@ -379,19 +381,11 @@ function AdminA2aAgentsPage() {
 
   const startEdit = agent => {
     const { status: _status, ...config } = agent;
-    const name = editableText(agent.name);
-    const description = editableText(agent.description);
-    setStoredTexts({
-      name: agent.name,
-      nameLang: name.lang,
-      description: agent.description,
-      descriptionLang: description.lang
-    });
     setForm({
       ...BLANK_FORM,
       ...config,
-      name: name.text || agent.id,
-      description: description.text
+      name: asLocalized(agent.name),
+      description: asLocalized(agent.description)
     });
     setDraftTest(null);
     setEditing(agent.id);
@@ -405,12 +399,8 @@ function AdminA2aAgentsPage() {
   // The request body shared by save() and the in-dialog test probe.
   const buildBody = () => ({
     ...form,
-    name: mergeLocalizedText(storedTexts?.name, form.name, storedTexts?.nameLang),
-    description: mergeLocalizedText(
-      storedTexts?.description,
-      form.description,
-      storedTexts?.descriptionLang
-    ),
+    name: withoutEmptyTexts(form.name),
+    description: withoutEmptyTexts(form.description),
     allowedSkills: allowedSkillList(form.allowedSkills)
   });
 
@@ -574,7 +564,7 @@ function AdminA2aAgentsPage() {
                   <div className="flex-1 min-w-0">
                     <div className="flex items-center space-x-3">
                       <h3 className="text-lg font-medium text-gray-900 dark:text-gray-100 truncate">
-                        {plainText(agent.name) || agent.id}
+                        {getLocalizedContent(agent.name, i18n.language) || agent.id}
                       </h3>
                       <StatusBadge agent={agent} t={t} />
                     </div>
@@ -656,30 +646,18 @@ function AdminA2aAgentsPage() {
                   </p>
                 </div>
               )}
-              <div>
-                <label htmlFor="a2a-name" className={LABEL_CLASS}>
-                  {t('admin.a2a.agents.form.name', 'Name')}
-                </label>
-                <input
-                  id="a2a-name"
-                  type="text"
-                  value={form.name || ''}
-                  onChange={e => setForm({ ...form, name: e.target.value })}
-                  className={INPUT_CLASS}
-                />
-              </div>
-              <div>
-                <label htmlFor="a2a-description" className={LABEL_CLASS}>
-                  {t('admin.a2a.agents.form.description', 'Description')}
-                </label>
-                <textarea
-                  id="a2a-description"
-                  rows={2}
-                  value={form.description || ''}
-                  onChange={e => setForm({ ...form, description: e.target.value })}
-                  className={INPUT_CLASS}
-                />
-              </div>
+              <DynamicLanguageEditor
+                label={t('admin.a2a.agents.form.name', 'Name')}
+                value={form.name}
+                onChange={name => setForm({ ...form, name })}
+                required
+              />
+              <DynamicLanguageEditor
+                label={t('admin.a2a.agents.form.description', 'Description')}
+                value={form.description}
+                onChange={description => setForm({ ...form, description })}
+                type="textarea"
+              />
               <div className="flex items-center space-x-2">
                 <input
                   id="a2a-enabled"

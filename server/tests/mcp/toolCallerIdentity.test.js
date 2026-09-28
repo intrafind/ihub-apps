@@ -72,7 +72,6 @@ const SPOOFED = {
   passthrough: true,
   runId: 'r',
   _fileData: [{ name: 'f' }],
-  _attachments: [{ name: 'a' }],
   _chatHistory: [{ role: 'user', content: 'hi' }]
 };
 

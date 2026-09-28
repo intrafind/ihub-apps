@@ -268,13 +268,11 @@ export default function registerMcpAppRoutes(app) {
           permissions: resource.permissions,
           allow: buildAllowAttribute(resource.permissions),
           prefersBorder: resource.prefersBorder,
-          // `hostContext.toolInfo.tool` for the view. A tool with file inputs
-          // keeps the server's own schema here; `parameters` is the model's.
+          // `hostContext.toolInfo.tool` for the view.
           tool: {
             name: tool._mcp.originalName,
             description: tool.description || '',
-            inputSchema: tool._mcp.inputSchema ||
-              tool.parameters || { type: 'object', properties: {} },
+            inputSchema: tool.parameters || { type: 'object', properties: {} },
             ...(appTool?.title ? { title: appTool.title } : {})
           },
           serverId

@@ -403,7 +403,7 @@ primary sources are:
    [Telemetry & Observability](telemetry.md) (`inference_api` metrics, `inference-api` app id),
    and [Admin UI Guide](admin-ui.md) (model/provider configuration).
 5. **[App API](app-api.md)** — the same OpenAI shape against an iHub **app** (prompt, sources,
-   tools, skills, attachments, stored conversations) under `/api/v1/apps/{appId}/chat/completions`.
+   tools, skills, stored conversations) under `/api/v1/apps/{appId}/chat/completions`.
 
 ---
 

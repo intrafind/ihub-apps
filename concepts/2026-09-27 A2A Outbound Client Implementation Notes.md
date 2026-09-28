@@ -72,8 +72,9 @@ applies without a restart; an OAuth token is cached on the connection until 5 s 
   `a2aAgentConfigSchema.js`, resolve a per-user token in `A2aAgentConnection._authHeaders`
   (`params.user` would need to reach `sendMessage`), and cache cards per user if the agent's
   authenticated card differs by user.
-- **File parts:** `params._attachments` (see `McpClientManager.callTool` / `mcpFileInputs.js`)
-  could be sent as A2A `file` parts; add an opt-in per agent and a size cap.
+- **File parts:** tools receive no chat attachments today. Once file inputs for MCP tools exist
+  (#2589), the same mechanism could send them as A2A `file` parts; add an opt-in per agent and a
+  size cap.
 - **Group permission picker:** `GET /api/admin/groups/resources` lists only configured tools; it
   does not offer agent ids yet (the same is true for MCP servers).
 

@@ -723,13 +723,8 @@ export { localizeTools };
  * @param {AbortSignal} [options.signal] - The chat turn's abort signal. Remote
  *   A2A agents honour it: a user stop aborts the request and cancels the task.
  */
-export async function runTool(toolId, allParams = {}, options = {}) {
+export async function runTool(toolId, params = {}, options = {}) {
   logger.info('Running tool', { component: 'ToolLoader', toolId });
-  // `_attachments` carries the current message's files, bytes included, for
-  // MCP tools with file inputs. It goes to McpClientManager only: every other
-  // tool kind (app-as-tool, workflows, sources, scripts, A2A agents) would
-  // otherwise receive the bytes as a parameter, variable or prompt text.
-  const { _attachments: attachments, ...params } = allParams || {};
   if (!isValidId(toolId)) {
     throw new Error('Invalid tool id');
   }
@@ -855,11 +850,9 @@ export async function runTool(toolId, allParams = {}, options = {}) {
       toolId,
       serverId: tool._mcp.serverId
     });
-    return await mcpClientManager.callTool(
-      toolId,
-      attachments ? { ...params, _attachments: attachments } : params,
-      { onRawResult: options.onMcpAppResult }
-    );
+    return await mcpClientManager.callTool(toolId, params, {
+      onRawResult: options.onMcpAppResult
+    });
   }
 
   // Skills of remote A2A agents are dispatched through A2aClientManager.callTool.
