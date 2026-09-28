@@ -112,6 +112,11 @@ export class A2aTaskStore {
     this.contexts = new Map();
     /** @type {Map<string, AbortController>} tasks running on this worker */
     this.runs = new Map();
+    /** Cursors of the next sweep page for each namespace, so successive
+     *  ticks page through the whole namespace instead of re-reading the
+     *  same page forever. */
+    this._taskSweepCursor = null;
+    this._contextSweepCursor = null;
     this._unsubscribe = relayCancel
       ? subscribe(CANCEL_CHANNEL, payload => {
           const taskId = payload?.taskId;
@@ -401,21 +406,35 @@ export class A2aTaskStore {
     const documents = this._docs();
     if (!documents) return removed;
     try {
-      const tasks = await documents.list(A2A_TASKS_NAMESPACE, { limit: SWEEP_PAGE_SIZE });
+      const tasks = await documents.list(A2A_TASKS_NAMESPACE, {
+        limit: SWEEP_PAGE_SIZE,
+        cursor: this._taskSweepCursor || undefined
+      });
       for (const doc of tasks.items || []) {
         const updatedAt = doc.data?.updatedAt || Date.parse(doc.updatedAt) || 0;
         if (now - updatedAt > TASK_RETENTION_MS) {
           if (await documents.delete(A2A_TASKS_NAMESPACE, doc.key)) removed.tasks += 1;
         }
       }
-      const contexts = await documents.list(A2A_CONTEXTS_NAMESPACE, { limit: SWEEP_PAGE_SIZE });
+      this._taskSweepCursor = tasks.nextCursor || null;
+    } catch (error) {
+      this._taskSweepCursor = null;
+      logger.warn('A2A retention sweep failed', { component: COMPONENT, error: error.message });
+    }
+    try {
+      const contexts = await documents.list(A2A_CONTEXTS_NAMESPACE, {
+        limit: SWEEP_PAGE_SIZE,
+        cursor: this._contextSweepCursor || undefined
+      });
       for (const doc of contexts.items || []) {
         const updatedAt = doc.data?.updatedAt || Date.parse(doc.updatedAt) || 0;
         if (now - updatedAt > CONTEXT_RETENTION_MS) {
           if (await documents.delete(A2A_CONTEXTS_NAMESPACE, doc.key)) removed.contexts += 1;
         }
       }
+      this._contextSweepCursor = contexts.nextCursor || null;
     } catch (error) {
+      this._contextSweepCursor = null;
       logger.warn('A2A retention sweep failed', { component: COMPONENT, error: error.message });
     }
     return removed;

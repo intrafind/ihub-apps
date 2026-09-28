@@ -242,7 +242,14 @@ export function authRequiredOf(rawResult) {
   if (!marker || typeof marker !== 'object') return null;
   const { serverId, serverName, connectUrl } = marker;
   if (typeof serverId !== 'string' || !serverId) return null;
-  if (typeof connectUrl !== 'string' || !connectUrl.startsWith('/')) return null;
+  if (
+    typeof connectUrl !== 'string' ||
+    !connectUrl.startsWith('/') ||
+    connectUrl.startsWith('//') ||
+    connectUrl.startsWith('/\\')
+  ) {
+    return null;
+  }
   return {
     serverId: serverId.slice(0, AUTH_REQUIRED_FIELD_CHARS),
     serverName: String(serverName || serverId).slice(0, AUTH_REQUIRED_FIELD_CHARS),
@@ -323,10 +330,20 @@ export function chatToolSeam({
     async postTool(ctx, info, outcome) {
       const { toolId, args } = info;
       const mcp = mcpAppOf(info);
+      // The auth-required marker is only ever produced by an MCP tool call
+      // (McpClientManager._callUserTool); gate on the tool's own declared
+      // server so an unrelated tool's result object cannot spoof a Connect
+      // card for a server it has no relation to.
+      const mcpServerId = info.toolDef?._mcp?.serverId;
+      const gatedAuthRequiredOf = raw => {
+        if (!mcpServerId) return null;
+        const marker = authRequiredOf(raw);
+        return marker?.serverId === mcpServerId ? marker : null;
+      };
       // A call that never reached its per-user OAuth server ("connect first")
       // has no view to show: the Connect card stands in for it.
       let mcpApp =
-        mcp && !(!outcome.error && authRequiredOf(outcome.rawResult))
+        mcp && !(!outcome.error && gatedAuthRequiredOf(outcome.rawResult))
           ? recordView(mcpAppViewFor(info, mcp))
           : null;
       if (!mcp && !outcome.error) {
@@ -367,7 +384,7 @@ export function chatToolSeam({
         );
         return;
       }
-      const authRequired = authRequiredOf(outcome.rawResult);
+      const authRequired = gatedAuthRequiredOf(outcome.rawResult);
       if (authRequired) recordAuthPrompt(authRequired);
       emit(ctx, SSE_V2_EVENTS.TOOL_COMPLETED, {
         step: ctx.iteration,

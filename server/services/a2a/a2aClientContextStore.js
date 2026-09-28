@@ -73,6 +73,9 @@ export class A2aClientContextStore {
     this.now = now;
     /** @type {Map<string, {contextId: string|null, taskId?: string, updatedAt: number}>} LRU-ordered */
     this.entries = new Map();
+    /** Cursor of the next sweep page, so successive ticks page through the
+     *  whole namespace instead of re-reading the same page forever. */
+    this._sweepCursor = null;
   }
 
   _docs() {
@@ -203,14 +206,19 @@ export class A2aClientContextStore {
     const documents = this._docs();
     if (!documents) return removed;
     try {
-      const page = await documents.list(A2A_CLIENT_CONTEXTS_NAMESPACE, { limit: SWEEP_PAGE_SIZE });
+      const page = await documents.list(A2A_CLIENT_CONTEXTS_NAMESPACE, {
+        limit: SWEEP_PAGE_SIZE,
+        cursor: this._sweepCursor || undefined
+      });
       for (const doc of page.items || []) {
         const updatedAt = doc.data?.updatedAt || Date.parse(doc.updatedAt) || 0;
         if (now - updatedAt > CLIENT_CONTEXT_RETENTION_MS) {
           if (await documents.delete(A2A_CLIENT_CONTEXTS_NAMESPACE, doc.key)) removed += 1;
         }
       }
+      this._sweepCursor = page.nextCursor || null;
     } catch (error) {
+      this._sweepCursor = null;
       logger.warn('A2A conversation sweep failed', { component: COMPONENT, error: error.message });
     }
     return removed;

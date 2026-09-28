@@ -51,6 +51,9 @@ export class ApiAttachmentStore {
     /** @type {Map<string, {meta: Object, data: Buffer}>} */
     this.memory = new Map();
     this.memoryBytes = 0;
+    /** Cursor of the next sweep page, so successive ticks page through the
+     *  whole namespace instead of re-reading the same page forever. */
+    this._sweepCursor = null;
   }
 
   _facets() {
@@ -190,7 +193,10 @@ export class ApiAttachmentStore {
     const { documents, blobs } = this._facets();
     if (!documents || !blobs) return removed;
     try {
-      const page = await documents.list(API_ATTACHMENTS_NAMESPACE, { limit: SWEEP_PAGE_SIZE });
+      const page = await documents.list(API_ATTACHMENTS_NAMESPACE, {
+        limit: SWEEP_PAGE_SIZE,
+        cursor: this._sweepCursor || undefined
+      });
       for (const doc of page.items || []) {
         const expiresAt = Date.parse(doc.data?.expiresAt || doc.updatedAt || 0);
         if (Number.isFinite(expiresAt) && expiresAt <= now) {
@@ -198,7 +204,9 @@ export class ApiAttachmentStore {
           if (await documents.delete(API_ATTACHMENTS_NAMESPACE, doc.key)) removed += 1;
         }
       }
+      this._sweepCursor = page.nextCursor || null;
     } catch (error) {
+      this._sweepCursor = null;
       logger.warn('Attachment sweep failed', { component: COMPONENT, error: error.message });
     }
     return removed;

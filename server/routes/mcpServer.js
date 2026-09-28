@@ -51,6 +51,12 @@ const sessions = new Map();
 const SESSION_IDLE_TTL_MS = 60 * 60 * 1000;
 const SESSION_SWEEP_INTERVAL_MS = 5 * 60 * 1000;
 
+// Each JSON-RPC batch element runs a full app invocation (an LLM call) and,
+// with `blocking: false`, a detached background run. Without a cap, the 4 MB
+// `jsonBody` limit alone would let one authenticated request start thousands
+// of concurrent app runs.
+const MAX_A2A_BATCH = 20;
+
 function gatewayEnabled() {
   const platform = configCache.getPlatform() || {};
   return platform.mcpServer?.enabled === true;
@@ -620,6 +626,16 @@ export default function registerMcpServerRoutes(app) {
       if (Array.isArray(body)) {
         // JSON-RPC batch. Streaming cannot be batched; the dispatcher refuses
         // message/stream without a stream callback.
+        if (body.length === 0 || body.length > MAX_A2A_BATCH) {
+          return res.json({
+            jsonrpc: '2.0',
+            id: null,
+            error: {
+              code: A2A_ERRORS.INVALID_REQUEST,
+              message: `Batch must hold 1-${MAX_A2A_BATCH} requests`
+            }
+          });
+        }
         const responses = await Promise.all(body.map(msg => dispatchA2A(msg, ctx)));
         return res.json(responses);
       }

@@ -59,11 +59,12 @@ applies without a restart; an OAuth token is cached on the connection until 5 s 
 - **A failed card fetch is remembered for 30 s** so an unreachable agent does not add a network
   round trip to every chat turn's tool listing.
 - **`input-required`** is returned as a normal result (the agent's question) rather than an error,
-  so the model can relay it. `auth-required` is not handled specially yet (it is not final, so a
-  task stuck there runs into the timeout).
-- **Conversation memory is in-process.** With several workers a follow-up call may land on
-  another worker and start a new remote conversation. Persisting it on the storage provider (like
-  `a2aContexts` of the inbound side) is the natural next step if that matters.
+  so the model can relay it. A task that stops at `auth-required` fails at once with
+  `A2A_AUTH_REQUIRED` instead of running into the timeout.
+- **Conversation memory is kept on the storage provider** (`a2a-client-contexts`, like `a2aContexts`
+  of the inbound side), so a chat continues its conversation with an agent after a restart and on
+  whichever worker serves the next tool call. Without a storage provider the memory is per server
+  process.
 
 ## How to continue
 
