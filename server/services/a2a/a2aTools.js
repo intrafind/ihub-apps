@@ -669,8 +669,8 @@ export function findAgentIdConflict(agentId, { tools = [], mcpServers = [] } = {
  * Mark the A2A tools whose agent id clashes with a local tool or an MCP
  * server (`_a2a.idConflict: true`). `isToolSelected` then no longer selects
  * them by the agent id: the ambiguous reference keeps meaning the local tool
- * or MCP server, and the agent's skills are reachable by their exact tool ids
- * only. The admin API refuses such ids; this guards a hand-edited config and
+ * or MCP server, and the agent is selected by `a2a__<agentId>` (or its skills'
+ * exact tool ids). The admin API refuses such ids; this guards a hand-edited config and
  * a tool or MCP server added after the agent.
  *
  * @param {Array<Object>} a2aTools - Tools carrying `_a2a`

@@ -183,6 +183,27 @@ describe('groupToolsByMcpServer', () => {
       ]);
     });
 
+    test('a2a__<agentId> enables a clashing agent as a whole', () => {
+      const tools = [
+        {
+          id: 'a2a__jira__ask',
+          _a2a: { agentId: 'jira', agentName: 'Jira agent', idConflict: true }
+        },
+        {
+          id: 'a2a__jira__sum',
+          _a2a: { agentId: 'jira', agentName: 'Jira agent', idConflict: true }
+        },
+        { id: 'jira_searchTickets' }
+      ];
+      const { grouped, individual } = groupToolsByMcpServer(['jira', 'a2a__jira'], tools, localize);
+      expect(grouped).toEqual([
+        { id: 'a2a-jira', name: 'Jira agent', matchedTools: ['a2a__jira'] }
+      ]);
+      expect(individual).toEqual(['jira']);
+      // Also for an agent without a clash.
+      expect(groupToolsByMcpServer(['a2a__langdock'], a2aTools, localize).grouped).toHaveLength(1);
+    });
+
     test('the literal reference "a2a" is not a base id for every agent', () => {
       const { grouped, individual } = groupToolsByMcpServer(['a2a'], a2aTools, localize);
       expect(grouped).toEqual([]);
@@ -221,14 +242,15 @@ describe('collapseMcpTools', () => {
 });
 
 describe('collapseMcpTools with a clashing agent id', () => {
-  test('offers the skills of an agent marked idConflict one by one', () => {
+  test('offers an agent marked idConflict as one entry keyed a2a__<agentId>', () => {
     const tools = [
       { id: 'x__tool', _mcp: { serverId: 'x', serverName: 'Server X' } },
       { id: 'a2a__x__ask', _a2a: { agentId: 'x', agentName: 'Agent X', idConflict: true } },
       { id: 'a2a__x__sum', _a2a: { agentId: 'x', agentName: 'Agent X', idConflict: true } }
     ];
     const entries = collapseMcpTools(tools, localize);
-    expect(entries.map(e => e.id)).toEqual(['x', 'a2a__x__ask', 'a2a__x__sum']);
+    expect(entries.map(e => e.id)).toEqual(['x', 'a2a__x']);
+    expect(entries[1]).toMatchObject({ name: 'Agent X', a2aAgent: true });
     // No two picker entries share an id (they would share a React key and a checkbox).
     expect(new Set(entries.map(e => e.id)).size).toBe(entries.length);
   });

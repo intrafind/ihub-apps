@@ -120,6 +120,18 @@ describe('tool selection of A2A tools', () => {
     expect(isToolSelected(clashing, ['a2a__langdock__ask'])).toBe(true);
   });
 
+  it('selects every skill of an agent by a2a__<agentId>, clash or not', () => {
+    const clashing = { ...tool, _a2a: { agentId: 'langdock', idConflict: true } };
+    expect(isToolSelected(clashing, ['a2a__langdock'])).toBe(true);
+    expect(isToolSelected(tool, new Set(['a2a__langdock']))).toBe(true);
+    // It names one agent only.
+    expect(isToolSelected({ ...tool, _a2a: { agentId: 'other' } }, ['a2a__langdock'])).toBe(false);
+    expect(isToolSelected({ id: 'langdock_search' }, ['a2a__langdock'])).toBe(false);
+    expect(
+      toolVisibleInSet('a2a__langdock__ask', new Set(['a2a__langdock']), null, 'langdock')
+    ).toBe(true);
+  });
+
   it('never selects every agent through the literal base id "a2a"', () => {
     expect(isToolSelected(tool, ['a2a'])).toBe(false);
     expect(isToolSelected({ id: 'a2a__langdock__ask' }, ['a2a'])).toBe(false);

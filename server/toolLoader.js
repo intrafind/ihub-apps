@@ -228,7 +228,7 @@ const reportedA2aIdConflicts = new Set();
  * Mark the skills of every A2A agent whose id is also a local tool's (base)
  * id or an MCP server's id (`_a2a.idConflict`), so that reference keeps
  * selecting only the local tool or MCP server and never silently grants the
- * remote agent. The admin API refuses such ids; this covers a hand-edited
+ * remote agent; `a2a__<agentId>` still selects the agent as a whole. The admin API refuses such ids; this covers a hand-edited
  * config and a tool or MCP server added after the agent.
  *
  * @param {Array<Object>} a2aTools - Discovered A2A tools
@@ -245,7 +245,7 @@ function guardA2aAgentIds(a2aTools, otherTools) {
     if (reportedA2aIdConflicts.has(agentId)) continue;
     reportedA2aIdConflicts.add(agentId);
     logger.warn(
-      'A2A agent id is also a tool or MCP server id; the agent is only selectable by its tool ids',
+      'A2A agent id is also a tool or MCP server id; select the agent as a2a__<agentId>',
       { component: 'ToolLoader', agentId, conflictKind: conflict.kind, conflictId: conflict.id }
     );
   }

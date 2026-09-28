@@ -11,11 +11,20 @@ import request from 'supertest';
  */
 
 const runTool = jest.fn(async () => 'ok');
+const loadedTools = [
+  { id: 'okta__get_my_profile', _mcp: { serverId: 'okta' } },
+  { id: 'jira_searchTickets' },
+  { id: 'a2a__desk__ask', _a2a: { agentId: 'desk' } }
+];
+let apps = [];
+/** Group `tools` grants of the calling user; null for a user without permissions. */
+let grantedTools = new Set(['okta']);
+let adminAccess = false;
 
 jest.unstable_mockModule('../../toolLoader.js', () => ({
   runTool,
   loadConfiguredTools: jest.fn(async () => []),
-  loadTools: jest.fn(async () => [])
+  loadTools: jest.fn(async () => loadedTools)
 }));
 jest.unstable_mockModule('../../services/mcp/appInvoker.js', () => ({
   invokeApp: jest.fn(),
@@ -26,7 +35,13 @@ jest.unstable_mockModule('../../featureRegistry.js', () => ({
 }));
 jest.unstable_mockModule('../../middleware/authRequired.js', () => ({
   authRequired: (req, _res, next) => {
-    req.user = { id: 'bob', groups: ['users'], permissions: {} };
+    req.user = {
+      id: 'bob',
+      groups: ['users'],
+      permissions: grantedTools
+        ? { tools: grantedTools, ...(adminAccess ? { adminAccess: true } : {}) }
+        : {}
+    };
     next();
   }
 }));
@@ -35,6 +50,7 @@ jest.unstable_mockModule('../../configCache.js', () => ({
     getPlatform: () => ({ defaultLanguage: 'en', mcpServer: { expose: { workflows: true } } }),
     getFeatures: () => ({}),
     getApps: () => ({ data: [] }),
+    getAppsForUser: async () => ({ data: apps }),
     getWorkflows: () => ({ data: [{ id: 'hr-lookup', chatIntegration: { enabled: true } }] })
   }
 }));
@@ -62,6 +78,9 @@ const SPOOFED = {
 
 beforeEach(() => {
   runTool.mockClear();
+  apps = [];
+  grantedTools = new Set(['okta']);
+  adminAccess = false;
 });
 
 describe('withTrustedToolContext', () => {
@@ -92,7 +111,7 @@ describe('POST /api/tools/:toolId', () => {
     expect(params).toEqual({
       query: 'me',
       chatId: 'chat-bob',
-      user: { id: 'bob', groups: ['users'], permissions: {} }
+      user: { id: 'bob', groups: ['users'], permissions: { tools: new Set(['okta']) } }
     });
   });
 
@@ -103,6 +122,44 @@ describe('POST /api/tools/:toolId', () => {
     const [, params] = runTool.mock.calls[0];
     expect(params.user.id).toBe('bob');
     expect(params.q).toBe('x');
+  });
+});
+
+describe('POST /api/tools/:toolId permissions', () => {
+  const call = toolId => request(app).post(`/api/tools/${toolId}`).send({});
+
+  it('refuses a tool neither the groups nor an app of the caller grant', async () => {
+    const res = await call('jira_searchTickets');
+    expect(res.status).toBe(403);
+    expect(runTool).not.toHaveBeenCalled();
+  });
+
+  it('refuses a caller without tool permissions, and unknown tools alike', async () => {
+    grantedTools = null;
+    expect((await call('okta__get_my_profile')).status).toBe(403);
+    grantedTools = new Set(['okta']);
+    expect((await call('nope')).status).toBe(403);
+    expect((await call('workflow_hr-lookup')).status).toBe(403);
+    expect(runTool).not.toHaveBeenCalled();
+  });
+
+  it('runs a tool an app the caller can open lists', async () => {
+    apps = [{ id: 'support', tools: ['jira'] }];
+    expect((await call('jira_searchTickets')).status).toBe(200);
+    expect(runTool).toHaveBeenCalledWith('jira_searchTickets', expect.any(Object));
+  });
+
+  it('reads grants like app references: A2A agent reference, and * for all', async () => {
+    grantedTools = new Set(['a2a__desk']);
+    expect((await call('a2a__desk__ask')).status).toBe(200);
+    grantedTools = new Set(['*']);
+    expect((await call('workflow_hr-lookup')).status).toBe(200);
+  });
+
+  it('lets an admin run any tool', async () => {
+    grantedTools = new Set();
+    adminAccess = true;
+    expect((await call('jira_searchTickets')).status).toBe(200);
   });
 });
 

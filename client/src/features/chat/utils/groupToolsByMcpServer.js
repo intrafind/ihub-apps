@@ -1,8 +1,21 @@
 /**
+ * The reference that enables every skill of a remote A2A agent whatever else
+ * uses its id (server/utils/toolSelection.js `a2aAgentReference`).
+ *
+ * @param {string} agentId
+ * @returns {string}
+ */
+export function a2aAgentReference(agentId) {
+  return `a2a__${agentId}`;
+}
+
+/**
  * The remote source a tool belongs to — an MCP server (`_mcp`) or a remote
  * A2A agent (`_a2a`) — as `{ key, id, name, kind }`, or null for a tool of
  * iHub itself. `key` is unique across both kinds; `id` is the reference an app
- * stores in `app.tools` to enable the whole source.
+ * stores in `app.tools` to enable the whole source — for an A2A agent marked
+ * `_a2a.idConflict` (its id is also a tool's or MCP server's) that is
+ * `a2a__<agentId>`, since the bare id selects the tool or server.
  *
  * @param {Object} [tool]
  * @returns {{key:string,id:string,name:any,kind:'mcp'|'a2a'}|null}
@@ -19,7 +32,7 @@ function ownerOf(tool) {
   if (tool?._a2a?.agentId) {
     return {
       key: `a2a-${tool._a2a.agentId}`,
-      id: tool._a2a.agentId,
+      id: tool._a2a.idConflict ? a2aAgentReference(tool._a2a.agentId) : tool._a2a.agentId,
       name: tool._a2a.agentName,
       kind: 'a2a'
     };
@@ -28,11 +41,11 @@ function ownerOf(tool) {
 }
 
 /**
- * A tool of the MCP server or A2A agent a bare reference (`"drawio"`,
- * `"langdock"`) enables, the way the server's `isToolSelected` reads it: an
- * MCP server wins, and an A2A agent marked `_a2a.idConflict` (its id is also a
- * tool's or MCP server's id) is never enabled by the bare id — only by its
- * skills' tool ids.
+ * A tool of the MCP server or A2A agent a whole-source reference (`"drawio"`,
+ * `"langdock"`, `"a2a__langdock"`) enables, the way the server's
+ * `isToolSelected` reads it: an MCP server wins, `a2a__<agentId>` always
+ * names the agent, and an A2A agent marked `_a2a.idConflict` (its id is also
+ * a tool's or MCP server's id) is never enabled by the bare id.
  *
  * @param {Array<Object>} tools
  * @param {string} reference
@@ -41,7 +54,12 @@ function ownerOf(tool) {
 function ownerByReference(tools, reference) {
   return (
     tools.find(candidate => candidate._mcp?.serverId === reference) ||
-    tools.find(candidate => candidate._a2a?.agentId === reference && !candidate._a2a.idConflict)
+    tools.find(
+      candidate =>
+        candidate._a2a?.agentId &&
+        (a2aAgentReference(candidate._a2a.agentId) === reference ||
+          (candidate._a2a.agentId === reference && !candidate._a2a.idConflict))
+    )
   );
 }
 
@@ -103,9 +121,9 @@ export function groupToolsByMcpServer(appToolIds, availableTools, localize) {
 /**
  * The tools a picker offers, with every MCP server and every remote A2A agent
  * collapsed into one entry whose id is the server's (agent's) id — the
- * reference an app stores to enable it as a whole. Other tools are returned
- * as they are — so are the skills of an A2A agent marked `_a2a.idConflict`,
- * whose id would select a local tool or MCP server instead of the agent.
+ * reference an app stores to enable it as a whole (`a2a__<agentId>` for an A2A
+ * agent marked `_a2a.idConflict`, whose bare id would select a local tool or
+ * MCP server instead). Other tools are returned as they are.
  *
  * @param {Array<{id:string,name?:any,description?:any,_mcp?:{serverId:string,serverName?:any},_a2a?:{agentId:string,agentName?:any,idConflict?:boolean}}>} tools
  * @param {(content:any)=>string} localize
@@ -115,7 +133,7 @@ export function collapseMcpTools(tools, localize) {
   const out = [];
   const seen = new Set();
   (tools || []).forEach(tool => {
-    const owner = tool?._a2a?.idConflict ? null : ownerOf(tool);
+    const owner = ownerOf(tool);
     if (!owner) {
       out.push(tool);
       return;

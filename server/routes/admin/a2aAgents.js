@@ -214,7 +214,7 @@ export default function registerAdminA2aAgentsRoutes(app) {
   // Per-agent skill catalog for the app editor's picker. Best-effort: an agent
   // whose card cannot be fetched is listed with an `error`.
   // An agent whose id clashes with a tool or MCP server is flagged
-  // `idConflict`: the app editor then enables it by its skills' tool ids,
+  // `idConflict`: the app editor then enables it as `a2a__<agentId>`,
   // because the bare id keeps selecting the tool or MCP server only.
   app.get(buildServerPath('/api/admin/a2a/skills'), adminAuth, async (req, res) => {
     try {

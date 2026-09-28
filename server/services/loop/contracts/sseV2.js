@@ -112,7 +112,12 @@ export const mcpAppViewSchema = mcpAppRefSchema.extend({
   args: z.record(z.string(), z.any()).optional(),
   toolResult: z.record(z.string(), z.any()).optional(),
   cancelled: z.boolean().optional(),
-  payloadOmitted: z.boolean().optional()
+  payloadOmitted: z.boolean().optional(),
+  /**
+   * The tool declares no view; the view is the `ui://` page embedded in
+   * `toolResult` under `resourceUri`, never read with `resources/read`.
+   */
+  embedded: z.boolean().optional()
 });
 
 export const toolStartedData = z.object({

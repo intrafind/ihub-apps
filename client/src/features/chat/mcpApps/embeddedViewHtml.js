@@ -1,7 +1,9 @@
 /**
  * Which HTML an MCP App view renders: the tool's declared `ui://` resource as
  * `resources/read` returns it, or — for servers that bake the call's data into
- * the page — the copy of that same resource embedded in the tool result.
+ * the page — the copy of that same resource embedded in the tool result. A
+ * tool that declares no view at all but embeds a `ui://` page in its result
+ * (mcp-ui servers) is rendered from that page alone (`embeddedViewResource`).
  *
  * Some MCP servers (the Langdock cookbook's ServiceNow `render_ticket`, and
  * mcp-ui servers in general) declare `_meta.ui.resourceUri` and then return,
@@ -68,6 +70,49 @@ function utf8ByteLength(text) {
 }
 
 /**
+ * UTF-8 text of a base64 `blob`, or null when it does not decode.
+ * @param {string} blob
+ * @returns {string|null}
+ */
+function decodeBase64Utf8(blob) {
+  try {
+    const binary = atob(blob);
+    const bytes = Uint8Array.from(binary, char => char.charCodeAt(0));
+    return new TextDecoder().decode(bytes);
+  } catch {
+    return null;
+  }
+}
+
+/**
+ * The embedded resource item for `uri` in a tool result with usable view
+ * HTML — inline `text`, or a base64 `blob` — within the size cap.
+ *
+ * @param {Object} [toolResult]
+ * @param {string} uri
+ * @returns {{resource: Object, html: string}|null}
+ */
+function findEmbeddedViewItem(toolResult, uri) {
+  const content = Array.isArray(toolResult?.content) ? toolResult.content : [];
+  for (const item of content) {
+    if (item?.type !== 'resource') continue;
+    const resource = item.resource;
+    if (!resource || typeof resource !== 'object' || resource.uri !== uri) continue;
+    if (!isViewHtmlMimeType(resource.mimeType)) continue;
+    const html =
+      typeof resource.text === 'string'
+        ? resource.text
+        : typeof resource.blob === 'string'
+          ? decodeBase64Utf8(resource.blob)
+          : null;
+    if (typeof html !== 'string' || !html.trim()) continue;
+    if (utf8ByteLength(html) > MAX_VIEW_HTML_BYTES) continue;
+    return { resource, html };
+  }
+  return null;
+}
+
+/**
  * The inline HTML of the embedded resource item in a tool result whose URI is
  * the tool's declared view resource, or null when there is none to use.
  *
@@ -83,18 +128,45 @@ function utf8ByteLength(text) {
  */
 export function embeddedViewHtml(toolResult, declaredUri) {
   if (typeof declaredUri !== 'string' || !declaredUri.startsWith('ui://')) return null;
-  const content = Array.isArray(toolResult?.content) ? toolResult.content : [];
-  for (const item of content) {
-    if (item?.type !== 'resource') continue;
-    const resource = item.resource;
-    if (!resource || typeof resource !== 'object' || resource.uri !== declaredUri) continue;
-    if (!isViewHtmlMimeType(resource.mimeType)) continue;
-    const html = resource.text;
-    if (typeof html !== 'string' || !html.trim()) continue;
-    if (utf8ByteLength(html) > MAX_VIEW_HTML_BYTES) continue;
-    return html;
-  }
-  return null;
+  return findEmbeddedViewItem(toolResult, declaredUri)?.html ?? null;
+}
+
+/**
+ * The view resource of a tool that declares no view, built from the page its
+ * result embeds (`view.embedded`, see server/services/mcp/mcpApps.js
+ * `findEmbeddedView`): the HTML, and the CSP domains the item's own
+ * `_meta.ui.csp` declares — the sandbox page's server sanitizes them into
+ * its CSP header, as it does for a `resources/read` copy. Device permissions
+ * (camera, microphone, geolocation, clipboard) are never granted to such a
+ * view: only a declared resource can ask for them.
+ *
+ * @param {Object} view - View descriptor (`{ resourceUri, toolResult, toolName, … }`)
+ * @returns {Object|null} Shaped like the `GET /api/mcp-apps/resource` response,
+ *   or null when the result holds no usable page
+ */
+export function embeddedViewResource(view) {
+  const uri = view?.resourceUri;
+  if (typeof uri !== 'string' || !uri.startsWith('ui://')) return null;
+  const found = findEmbeddedViewItem(view?.toolResult, uri);
+  if (!found) return null;
+  const ui =
+    found.resource._meta?.ui && typeof found.resource._meta.ui === 'object'
+      ? found.resource._meta.ui
+      : {};
+  return {
+    uri,
+    html: found.html,
+    csp: ui.csp && typeof ui.csp === 'object' ? ui.csp : {},
+    permissions: {},
+    allow: '',
+    prefersBorder: typeof ui.prefersBorder === 'boolean' ? ui.prefersBorder : null,
+    tool: {
+      name: view.toolName || view.toolId || '',
+      description: '',
+      inputSchema: { type: 'object', properties: {} }
+    },
+    serverId: view.serverId
+  };
 }
 
 /**
