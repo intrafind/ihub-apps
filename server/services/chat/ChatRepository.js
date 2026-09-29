@@ -161,7 +161,9 @@ const OPTIONAL_MESSAGE_FIELDS = [
   'attachments',
   'artifacts',
   // MCP App views of an assistant answer (see services/mcp/mcpApps.js).
-  'mcpApps'
+  'mcpApps',
+  // Documents behind an assistant answer (see services/chat/chatCitations.js).
+  'citations'
 ];
 
 /**

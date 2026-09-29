@@ -27,3 +27,15 @@ Cancel and Send buttons now stay inside the bubble at every pane width.
 
 - The browser extension and Nextcloud integration use the same styling and get the same fix.
 - The main web app was not affected.
+
+## iAssistant Documents Come Back When a Chat Is Reopened
+
+The **Documents** panel under an iAssistant answer disappeared when a stored chat was reopened from
+the chat history. The documents are now stored with the answer and the panel comes back with it.
+When an iAssistant conversation is resumed without chat history, its documents get the same
+document access as during the live answer, so **Preview**, **Download** and **Add to email** work
+there too.
+
+- Documents are still fetched with the signed-in user's own iFinder permissions.
+- Shared links do not include the Documents panel: its documents were found with the owner's
+  iFinder permissions, and a viewer may not be allowed to see them.

@@ -6,28 +6,61 @@ import { authRequired } from '../../middleware/authRequired.js';
 import configCache from '../../configCache.js';
 import conversationApiService from '../../services/integrations/ConversationApiService.js';
 import iAssistantService from '../../services/integrations/iAssistantService.js';
+import iAssistantProfileResolver from '../../services/integrations/iAssistantProfileResolver.js';
+import { withConversationAccessLinks } from '../../services/integrations/iFinderCitations.js';
+import logger from '../../utils/logger.js';
 import { buildServerPath } from '../../utils/basePath.js';
 import { sendInternalError, sendNotFound, sendBadRequest } from '../../utils/responseHelpers.js';
 import { findByIdCaseInsensitive } from '../../utils/resourceLookup.js';
+
+/** The `config` block of an app's preferred model, or an empty object. */
+function preferredModelConfig(app) {
+  const modelId = app?.preferredModel;
+  if (!modelId) return {};
+  const { data: models = [] } = configCache.getModels() || {};
+  return findByIdCaseInsensitive(models, modelId)?.config || {};
+}
 
 /**
  * Resolve the iAssistant base URL for an app's conversation API calls.
  * Checks app config -> model config -> service defaults.
  */
 function resolveBaseUrl(app) {
-  // Check app-level iassistant config
-  if (app?.iassistant?.baseUrl) return app.iassistant.baseUrl;
+  return (
+    app?.iassistant?.baseUrl ||
+    preferredModelConfig(app).baseUrl ||
+    iAssistantService.getConfig().baseUrl
+  );
+}
 
-  // Check the app's preferred model config
-  const modelId = app?.preferredModel;
-  if (modelId) {
-    const { data: models = [] } = configCache.getModels() || {};
-    const model = findByIdCaseInsensitive(models, modelId);
-    if (model?.config?.baseUrl) return model.config.baseUrl;
+/**
+ * The search profile an app's conversations search, resolved the way the
+ * adapter does when it creates one: the iAssistant profile's own search
+ * profile first, then the configured one (app → model → service defaults).
+ * Never throws — without a profile the history is returned as iFinder sent it.
+ */
+async function resolveConversationSearchProfile(app, { user, baseUrl }) {
+  const modelConfig = preferredModelConfig(app);
+  const serviceConfig = iAssistantService.getConfig();
+  try {
+    const { searchProfile } = await iAssistantProfileResolver.resolveSearchProfile({
+      profileId:
+        app?.iassistant?.profileId || modelConfig.profileId || serviceConfig.defaultProfileId,
+      configuredSearchProfile:
+        app?.iassistant?.searchProfile ||
+        modelConfig.searchProfile ||
+        serviceConfig.defaultSearchProfile,
+      user,
+      baseUrl
+    });
+    return searchProfile;
+  } catch (error) {
+    logger.debug('Could not resolve the conversation search profile', {
+      component: 'ConversationRoutes',
+      error: error?.message
+    });
+    return undefined;
   }
-
-  // Fall back to service defaults
-  return iAssistantService.getConfig().baseUrl;
 }
 
 export default function registerConversationRoutes(app) {
@@ -120,7 +153,14 @@ export default function registerConversationRoutes(app) {
           nextCursor
         });
 
-        res.json(result);
+        // The documents of a reopened conversation get the ACCESS links the
+        // live stream gives them, so their tiles can preview, download and
+        // attach again.
+        const searchProfile = await resolveConversationSearchProfile(appConfig, {
+          user,
+          baseUrl
+        });
+        res.json(withConversationAccessLinks(result, searchProfile));
       } catch (error) {
         return sendInternalError(res, error, 'fetch conversation messages');
       }

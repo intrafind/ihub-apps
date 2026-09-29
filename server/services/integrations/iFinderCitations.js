@@ -21,6 +21,57 @@
 /** Most documents one turn lists; a search returns at most 100 hits, usually 10. */
 export const MAX_CITATION_DOCUMENTS = 50;
 
+/**
+ * Give citation items that lack one an ACCESS link into the search profile
+ * they were found in. iAssistant documents can arrive without one, and the
+ * link is what preview, download and "Add to email" fetch a document through.
+ *
+ * @param {Array<Object>} items - `references` or `resultItems`
+ * @param {string} searchProfile
+ * @returns {Array<Object>} the items, those with a `document_id` and no links given one
+ */
+export function withAccessLinks(items, searchProfile) {
+  if (!Array.isArray(items)) return items;
+  return items.map(item =>
+    item?.document_id && !Array.isArray(item.links)
+      ? { ...item, links: [{ type: 'ACCESS', documentId: item.document_id, searchProfile }] }
+      : item
+  );
+}
+
+/**
+ * The same, for a page of iAssistant conversation history as
+ * `GET /conversations/:id/messages` returns it — `{ messages: [...] }` or a
+ * bare array, each message carrying `references` and `result_items` — so a
+ * resumed conversation's documents get the links the live stream gives them.
+ *
+ * @param {Object|Array} page - the conversation API's response
+ * @param {string} [searchProfile] - the conversation's search profile
+ * @returns {Object|Array} the page, unchanged when no profile is known
+ */
+export function withConversationAccessLinks(page, searchProfile) {
+  if (!searchProfile) return page;
+  const linkMessages = messages =>
+    messages.map(message =>
+      message && typeof message === 'object'
+        ? {
+            ...message,
+            ...(Array.isArray(message.references)
+              ? { references: withAccessLinks(message.references, searchProfile) }
+              : {}),
+            ...(Array.isArray(message.result_items)
+              ? { result_items: withAccessLinks(message.result_items, searchProfile) }
+              : {})
+          }
+        : message
+    );
+  if (Array.isArray(page)) return linkMessages(page);
+  if (page && Array.isArray(page.messages)) {
+    return { ...page, messages: linkMessages(page.messages) };
+  }
+  return page;
+}
+
 const MAX_TEXT_CHARS = 300;
 
 const DOCUMENT_TOOLS = new Set(['ifinder_search', 'ifinder_getmetadata', 'ifinder_getcontent']);

@@ -39,3 +39,6 @@ the same way iAssistant answers do. Each document has the full menu: **Preview**
   fold away behind **Show N more documents**, so a turn that ran several searches does not bury
   the few documents it used.
 - Documents read or looked up with `iFinder_getContent` and `iFinder_getMetadata` are listed too.
+- With chat history on, the documents are stored with the answer and come back when the chat is
+  reopened. Shared links leave them out, since they were found with the owner's iFinder
+  permissions.

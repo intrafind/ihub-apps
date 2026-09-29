@@ -10,16 +10,10 @@
  */
 import { SSE_V2_EVENTS } from '../../../shared/runEvents.js';
 import conversationStateManager from '../integrations/ConversationStateManager.js';
-import { createIFinderCitationCollector } from '../integrations/iFinderCitations.js';
-
-function withAccessLinks(items, searchProfile) {
-  if (!Array.isArray(items)) return items;
-  return items.map(item =>
-    item?.document_id && !Array.isArray(item.links)
-      ? { ...item, links: [{ type: 'ACCESS', documentId: item.document_id, searchProfile }] }
-      : item
-  );
-}
+import {
+  createIFinderCitationCollector,
+  withAccessLinks
+} from '../integrations/iFinderCitations.js';
 
 function thoughtToDelta(thought) {
   if (typeof thought === 'string') return { content: thought };
@@ -130,13 +124,17 @@ export function createChatChannel({ chatId, stream }) {
     },
     // The panel keeps the latest `resultItems` it was sent, so every frame
     // carries the turn's whole list rather than just this call's documents.
+    // Recorded on the loop like the iAssistant citations above, so the list
+    // is stored with the answer and drawn again when the chat is reopened.
     onToolEnd({ toolId, outcome, verdict }, ctx) {
       if (outcome?.error || verdict?.failed) return;
       if (!iFinderDocuments.add(toolId, outcome?.rawResult ?? outcome?.message?.content)) return;
+      const citation = { resultItems: iFinderDocuments.items() };
+      ctx.addCitation(citation);
       emit(SSE_V2_EVENTS.TOOL_PROGRESS, {
         step: ctx.iteration,
         phase: 'citation',
-        data: { resultItems: iFinderDocuments.items() }
+        data: citation
       });
     }
   };

@@ -570,6 +570,26 @@ describe('what a viewer sees', () => {
     }
   });
 
+  it('never carries the documents behind an answer, which were found with the owner’s iFinder permissions', async () => {
+    const chatId = await seedChat(ADA, { turns: 1 });
+    await getChatRepository().appendMessage(chatId, {
+      role: 'assistant',
+      content: 'See the contract.',
+      citations: {
+        references: [],
+        resultItems: [{ document_id: 'sp-7f3a9c11', title: 'Supplier contract ACME' }]
+      }
+    });
+    const { messages: stored } = await getChatRepository().getMessages(chatId);
+    assert.ok(stored.at(-1).citations, 'the owner’s own chat keeps them');
+
+    const { share } = (await createShare(ADA, chatId, { mode: 'public' })).body;
+    const res = await drive(openHandlers, { params: { shareId: share.id }, user: ANONYMOUS });
+    assert.equal(res.statusCode, 200);
+    assert.equal(res.body.messages.at(-1).content, 'See the contract.');
+    for (const message of res.body.messages) assert.equal('citations' in message, false);
+  });
+
   it('hides the owner’s name on a public link unless they opted in', async () => {
     const chatId = await seedChat(ADA);
     const hidden = (await createShare(ADA, chatId, { mode: 'public' })).body.share;

@@ -740,7 +740,7 @@ test('iFinder tools: each call that finds documents sends the turn’s whole doc
     }
   );
 
-  await runTurn(service, {
+  const summary = await runTurn(service, {
     chatId,
     prep: makePrep({
       tools: [
@@ -770,6 +770,21 @@ test('iFinder tools: each call that finds documents sends the turn’s whole doc
   // Sent after the call it comes from has completed.
   const firstDone = frames.indexOf(frame(frames, TOOL_COMPLETED));
   assert.ok(frames.indexOf(citations[0]) > firstDone);
+  // The summary the materializer stores carries the final list, so the
+  // reopened chat draws the same tiles.
+  assert.deepEqual(
+    summary.citations.resultItems.map(item => item.document_id),
+    ['sp-7f3a9c11', 'fs-0042aa99']
+  );
+  assert.deepEqual(summary.citations.references, []);
+});
+
+test('a turn without iFinder documents has no citations on its summary', async t => {
+  const chatId = newChatId('no-citations');
+  captureFrames(t, chatId);
+  const { service } = makeService([textTurn('Hello.')]);
+  const summary = await runTurn(service, { chatId, prep: makePrep() });
+  assert.equal(summary.citations, null);
 });
 
 // ── 5. tool failure ─────────────────────────────────────────────────────────

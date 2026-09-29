@@ -36,6 +36,7 @@ import {
   questionSeam
 } from '../loop/seams/index.js';
 import { createChatChannel } from './chatChannel.js';
+import { mergeCitations } from './chatCitations.js';
 import {
   materializeAssistantTurn,
   materializeUserTurn,
@@ -689,6 +690,9 @@ class ChatService {
       images: result.images || [],
       // Same reasoning for MCP App views: part of the answer, restored on reopen.
       mcpApps: mcpAppViews,
+      // And for the documents behind the answer (iAssistant citations, iFinder
+      // tool documents), which the Documents panel draws again on reopen.
+      citations: mergeCitations(result.citations),
       knowledgeSources: this.getKnowledgeSources(chatId, loopSources)
     };
     const translate = async (key, params) => {

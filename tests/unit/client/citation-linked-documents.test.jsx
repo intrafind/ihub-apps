@@ -1,6 +1,7 @@
 import { render, screen, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import '@testing-library/jest-dom';
+import { transformStoredMessage } from '../../../client/src/features/chat/hooks/useChatMessages';
 
 /**
  * Documents found by the iFinder tools (issue #2597).
@@ -28,6 +29,12 @@ jest.mock('../../../client/src/api/endpoints/documents', () => ({
   __esModule: true,
   fetchIFinderDocument: jest.fn(),
   fetchIFinderDocumentMetadata: jest.fn().mockResolvedValue({})
+}));
+
+// `debugLog` reads `import.meta`, which the Jest transform cannot compile.
+jest.mock('../../../client/src/utils/debugLog', () => ({
+  __esModule: true,
+  debugLog: () => {}
 }));
 
 jest.mock('../../../client/src/features/workflows/components/AppSelectionModal', () => ({
@@ -161,5 +168,45 @@ describe('CitationPanel with documents found by the iFinder tools', () => {
     expect(tileTitles()).toEqual(['Supplier contract ACME', 'Board minutes']);
     const toggle = screen.getByRole('button', { name: 'Show 1 more document' });
     expect(within(toggle.parentElement).getAllByText('Referenced')).toHaveLength(2);
+  });
+});
+
+describe('a reopened chat', () => {
+  it('brings back the documents stored with the answer, with their document menu', async () => {
+    const user = userEvent.setup();
+    const content =
+      'See [Supplier contract ACME](https://sp.example/sites/legal/acme.pdf "SharePoint · sp-7f3a9c11").';
+    const message = transformStoredMessage({
+      id: 'm2',
+      role: 'assistant',
+      content,
+      citations: { references: [], resultItems: [agreement, contract] }
+    });
+    expect(message.citations).toEqual({ references: [], resultItems: [agreement, contract] });
+
+    render(<CitationPanel citations={message.citations} content={message.content} />);
+    expect(tileTitles()).toEqual(['Supplier contract ACME']);
+    expect(screen.getByText('Referenced')).toBeInTheDocument();
+    await user.click(screen.getByRole('button', { name: 'Menu' }));
+    expect(screen.getByText('Preview (PDF)')).toBeInTheDocument();
+    expect(screen.getByText('Download')).toBeInTheDocument();
+  });
+
+  it('a stored answer without documents gets no panel', () => {
+    expect(
+      transformStoredMessage({ id: 'm1', role: 'assistant', content: 'x' }).citations
+    ).toBeUndefined();
+    expect(
+      transformStoredMessage({
+        id: 'm1',
+        role: 'assistant',
+        content: 'x',
+        citations: { references: [], resultItems: [] }
+      }).citations
+    ).toBeUndefined();
+    expect(
+      transformStoredMessage({ id: 'm1', role: 'assistant', content: 'x', citations: 'junk' })
+        .citations
+    ).toBeUndefined();
   });
 });

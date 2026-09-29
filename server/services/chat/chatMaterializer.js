@@ -15,6 +15,7 @@
  * @module services/chat/chatMaterializer
  */
 import { boundStoredViews } from '../mcp/mcpApps.js';
+import { boundStoredCitations } from './chatCitations.js';
 import logger from '../../utils/logger.js';
 import { deriveChatTitle } from './ChatRepository.js';
 import { getArtifactRepository } from '../artifacts/ArtifactRepository.js';
@@ -318,7 +319,8 @@ export async function materializeUserTurn({
  * @param {string} params.runId
  * @param {Object} params.summary - the turn outcome: `status`, `content`, `finishReason`,
  *   `usage`, `images` (generated pictures, stored beside the transcript as
- *   artifacts), and `error`/`errorInfo` on a failure
+ *   artifacts), `mcpApps`, `citations` (see `chatCitations.js`), and
+ *   `error`/`errorInfo` on a failure
  * @param {boolean} params.clientConnected - whether an SSE client was attached when the
  *   turn ended, sampled with `hasChatClient()`; the emit result cannot tell you
  * @returns {Promise<Object|null>} the stored message, or null when nothing was written
@@ -383,6 +385,9 @@ export async function materializeAssistantTurn({
     // MCP App views the turn rendered (tool input + result per view), bounded
     // so a chat document cannot grow without limit.
     const mcpApps = pausedWithoutAnswer ? [] : boundStoredViews(summary?.mcpApps);
+    // The documents behind the answer, so the reopened chat draws the same
+    // Documents panel — bounded, and only the fields the panel reads.
+    const citations = pausedWithoutAnswer ? null : boundStoredCitations(summary?.citations);
 
     let appended = null;
     if (!pausedWithoutAnswer) {
@@ -398,7 +403,8 @@ export async function materializeAssistantTurn({
             ...(usage ? { usage } : {}),
             ...(error ? { error } : {}),
             ...(artifacts.length > 0 ? { artifacts } : {}),
-            ...(mcpApps.length > 0 ? { mcpApps } : {})
+            ...(mcpApps.length > 0 ? { mcpApps } : {}),
+            ...(citations ? { citations } : {})
           },
           // The end of the transcript for an ordinary turn, and the position
           // right after this run's own question for a superseded one.

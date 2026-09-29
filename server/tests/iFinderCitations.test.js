@@ -10,7 +10,9 @@ import {
   MAX_CITATION_DOCUMENTS,
   createIFinderCitationCollector,
   extractIFinderCitationItems,
-  isIFinderDocumentTool
+  isIFinderDocumentTool,
+  withAccessLinks,
+  withConversationAccessLinks
 } from '../services/integrations/iFinderCitations.js';
 
 const searchResult = {
@@ -210,4 +212,49 @@ test('collector: bounded per turn', () => {
     collector.add('iFinder_search', { searchProfile: 'p', results: [{ id: 'late-000001' }] }),
     false
   );
+});
+
+test('withAccessLinks: items without links get one into the profile; linked or id-less ones are left alone', () => {
+  const own = [{ type: 'ACCESS', documentId: 'b', searchProfile: 'other' }];
+  assert.deepEqual(
+    withAccessLinks([{ document_id: 'a' }, { document_id: 'b', links: own }, { title: 'x' }], 'p'),
+    [
+      { document_id: 'a', links: [{ type: 'ACCESS', documentId: 'a', searchProfile: 'p' }] },
+      { document_id: 'b', links: own },
+      { title: 'x' }
+    ]
+  );
+  assert.equal(withAccessLinks(undefined, 'p'), undefined);
+});
+
+test('withConversationAccessLinks: a resumed conversation’s documents get the links the live stream gives them', () => {
+  const page = {
+    messages: [
+      { id: 'm1', type: 'USER', content: 'q' },
+      {
+        id: 'm2',
+        type: 'ASSISTANT',
+        content: 'a',
+        references: [{ document_id: 'doc-1', content: 'passage' }],
+        result_items: [{ document_id: 'doc-1', title: 'Doc 1' }]
+      }
+    ],
+    next_cursor: 'c1'
+  };
+  const linked = withConversationAccessLinks(page, 'sales');
+  const access = [{ type: 'ACCESS', documentId: 'doc-1', searchProfile: 'sales' }];
+  assert.equal(linked.next_cursor, 'c1');
+  assert.deepEqual(linked.messages[0], page.messages[0]);
+  assert.deepEqual(linked.messages[1].references[0].links, access);
+  assert.deepEqual(linked.messages[1].result_items[0].links, access);
+  assert.equal(page.messages[1].result_items[0].links, undefined, 'the input is not mutated');
+
+  const bare = withConversationAccessLinks([page.messages[1]], 'sales');
+  assert.deepEqual(bare[0].result_items[0].links, access);
+});
+
+test('withConversationAccessLinks: without a known profile the page is returned as iFinder sent it', () => {
+  const page = { messages: [{ result_items: [{ document_id: 'doc-1' }] }] };
+  assert.equal(withConversationAccessLinks(page, undefined), page);
+  assert.equal(withConversationAccessLinks(null, 'p'), null);
 });
