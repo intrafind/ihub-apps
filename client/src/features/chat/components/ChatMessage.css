@@ -65,6 +65,29 @@
   color: #fecaca; /* red-200 */
 }
 
+/*
+ * Inline "edit message" form (textarea + Cancel/Send) rendered inside the
+ * bubble above.
+ *
+ * The bubble is `box-sizing: content-box` so its `max-width` excludes the
+ * padding. The embedded entry points (Office task pane, browser extension,
+ * Nextcloud) additionally reset every element to `box-sizing: inherit`, which
+ * beats Tailwind's preflight `border-box` (layered rules always lose to
+ * unlayered ones) — so everything inside the bubble inherits `content-box`
+ * there. A `w-full` textarea with padding and a border then becomes 100% + its
+ * padding + border wide and sticks out of the bubble (issue #2594).
+ *
+ * Pin the form back to `border-box`. This must be an unlayered rule: Tailwind's
+ * `box-border` utility is layered and would lose the same way. It is a no-op in
+ * the main app, where preflight already makes everything `border-box`.
+ */
+.chat-widget-message-edit,
+.chat-widget-message-edit *,
+.chat-widget-message-edit *::before,
+.chat-widget-message-edit *::after {
+  box-sizing: border-box;
+}
+
 /* Print styles: Hide interactive UI elements */
 @media print {
   /* Hide action buttons and toolbars */

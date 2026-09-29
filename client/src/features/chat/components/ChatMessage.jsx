@@ -540,7 +540,7 @@ function ChatMessage({
         /Mac|iPhone|iPad|iPod/i.test(navigator.platform || navigator.userAgent || '');
       const submitShortcut = isMac ? '⌘ + Enter' : 'Ctrl + Enter';
       return (
-        <div className="w-full">
+        <div className="chat-widget-message-edit w-full">
           <textarea
             ref={editTextareaRef}
             value={editedContent}
@@ -1116,7 +1116,16 @@ function ChatMessage({
               <Icon name="chevron-down" size="sm" />
             </button>
             {showCopyMenu && (
-              <div className="absolute right-0 mt-1 w-40 max-w-[calc(100vw-2rem)] bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-sm shadow-sm z-50 text-gray-700 dark:text-gray-200">
+              /*
+                Anchor the menu on the side that has room. Assistant rows are
+                left-aligned, so the copy button sits at the pane's left edge and a
+                right-anchored menu would grow leftward out of the pane (clipped in
+                the narrow Outlook task pane, issue #2592). User rows are
+                right-aligned, so there the menu must open leftward instead.
+              */
+              <div
+                className={`absolute ${isUser ? 'right-0' : 'left-0'} mt-1 w-40 max-w-[calc(100vw-2rem)] bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-sm shadow-sm z-50 text-gray-700 dark:text-gray-200`}
+              >
                 <button
                   onClick={() => handleCopy('text')}
                   className="block px-3 py-1 text-sm hover:bg-gray-100 dark:hover:bg-gray-700 w-full text-left whitespace-nowrap"

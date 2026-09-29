@@ -119,7 +119,7 @@
     "test:oauth": "cd server && node --experimental-vm-modules node_modules/jest/bin/jest.js tests/oauth-dcr-validation.test.js tests/oauth-dcr-dedup.test.js tests/oauth-cimd.test.js tests/oauth-cimd-governance.test.js tests/oauth-connections.test.js",
     "test:mcp": "cd server && node --experimental-vm-modules node_modules/jest/bin/jest.js tests/mcp/",
     "test:a2a": "cd server && node --experimental-vm-modules node_modules/jest/bin/jest.js tests/a2a/",
-    "test:office-addin": "node --test server/tests/office-start-page-config.test.js server/tests/office-mail-action-config.test.js",
+    "test:office-addin": "node --test server/tests/office-start-page-config.test.js server/tests/office-mail-action-config.test.js server/tests/office-app-access.test.js && cd server && node --experimental-vm-modules node_modules/jest/bin/jest.js tests/office-integration-app-access-route.test.js",
     "test:voice": "cd server && node --experimental-vm-modules node_modules/jest/bin/jest.js tests/voice-azure-token-route.test.js tests/azureSpeechToken.test.js",
     "test:admin-config": "cd server && node --experimental-vm-modules node_modules/jest/bin/jest.js tests/admin-changes-group-rollback.test.js tests/admin-config-read-fails-closed.test.js tests/config-routing-conditional-writes.test.js tests/admin-content-access.test.js tests/admin-chat-history.test.js",
     "test:marketplace": "cd server && node --experimental-vm-modules node_modules/jest/bin/jest.js tests/ContentInstaller.skill-path-traversal.test.js tests/ContentInstaller.install-guards.test.js tests/appConfigSchema.variables.test.js",
