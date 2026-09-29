@@ -16,6 +16,7 @@
  */
 import { boundStoredViews } from '../mcp/mcpApps.js';
 import { boundStoredCitations } from './chatCitations.js';
+import { boundStoredProposals } from '../scheduler/tasks/proposals.js';
 
 /** Connect cards kept per stored answer. */
 const MAX_STORED_AUTH_PROMPTS = 10;
@@ -437,6 +438,10 @@ export async function materializeAssistantTurn({
     const mcpAuthRequired = pausedWithoutAnswer
       ? []
       : boundStoredAuthPrompts(summary?.mcpAuthRequired);
+    // Confirmation cards for scheduled tasks the scheduling tools proposed.
+    const scheduledTaskProposals = pausedWithoutAnswer
+      ? []
+      : boundStoredProposals(summary?.scheduledTaskProposals);
 
     let appended = null;
     if (!pausedWithoutAnswer) {
@@ -459,7 +464,8 @@ export async function materializeAssistantTurn({
             ...(artifacts.length > 0 ? { artifacts } : {}),
             ...(mcpApps.length > 0 ? { mcpApps } : {}),
             ...(citations ? { citations } : {}),
-            ...(mcpAuthRequired.length > 0 ? { mcpAuthRequired } : {})
+            ...(mcpAuthRequired.length > 0 ? { mcpAuthRequired } : {}),
+            ...(scheduledTaskProposals.length > 0 ? { scheduledTaskProposals } : {})
           },
           // The end of the transcript for an ordinary turn, and the position
           // right after this run's own question for a superseded one.

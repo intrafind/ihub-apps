@@ -80,6 +80,7 @@
     - [OCR Feature](ocr-feature.md)
     - [React Component Feature](react-component-feature.md)
     - [Workflows](workflows.md)
+    - [Scheduled Tasks](scheduled-tasks.md)
     - [Agent Factory (V1)](agents.md)
     - [OpenAI-Compatible API](openai-compatible-api.md)
     - [Server Configuration](server-config.md)

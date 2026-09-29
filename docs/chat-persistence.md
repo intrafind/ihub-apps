@@ -445,7 +445,10 @@ guessable resource, so `chatAccess.authorizeChat()` now runs on the chat SSE
   existence oracle.
 - **An absent chat is authorized.** A chat nobody has stored yet is not somebody
   else's chat — the caller is about to create it.
-- Admins may read any chat, matching `runAccess`.
+- Admins may read any chat, matching `runAccess`. Ownership is checked first:
+  an admin opening their own chat is its owner reading it (the unseen badge
+  clears), and only a read of somebody else's chat rests on the bypass — that
+  one never clears the owner's badge, because the owner has not seen anything.
 
 The owner id is the run principal in `platform.runLog.identityMode` (`default`,
 `full` or `pseudonymized`), resolved once at the start of the turn. The mode is
@@ -483,7 +486,8 @@ index can answer "list my chats" without scanning:
   hasUnseenActivity,    // an answer landed with nobody watching
   status,               // 'active' | 'running' | 'error'
   runIds: [],           // most recent 200, for the delete cascade
-  origin,               // { createdVia: 'ui' | 'responses-api', clientId?, authMode? }
+  origin,               // { createdVia: 'ui' | 'responses-api' | 'scheduled-task',
+                        //   clientId?, authMode?, taskId?, runId?, taskName? }
   // Chats made through the inference API's Conversations API also carry:
   metadata?,            // the conversation's caller-defined key/value pairs
   binding?              // 'app' | 'model' — what the first response bound it to
@@ -667,6 +671,13 @@ tick so an admin's change takes effect without a restart:
 Set either to **zero or less to disable that rule**: `retentionDays: 0` keeps
 chats until someone deletes them, `maxChatsPerUser: 0` removes the per-user cap.
 Disable both and the sweep skips its scan entirely.
+
+Chats a [scheduled task](scheduled-tasks.md) run created
+(`origin.createdVia: 'scheduled-task'`) do **not** count toward
+`maxChatsPerUser` — a task that runs every quarter hour would otherwise push its
+owner's own conversations out. They have their own cap instead: each task keeps
+its newest `scheduledTasks.maxRunChatsPerTask` (20) run chats. The age rule
+applies to them like to any other chat.
 
 Every removal is the same cascade `DELETE /api/chats/:id` performs, ledger runs
 included. The sweep runs once at startup — so a misconfigured retention shows up

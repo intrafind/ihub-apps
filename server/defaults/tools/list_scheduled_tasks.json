@@ -1,0 +1,17 @@
+{
+  "id": "list_scheduled_tasks",
+  "name": {
+    "en": "List Scheduled Tasks",
+    "de": "Geplante Aufgaben auflisten"
+  },
+  "description": {
+    "en": "List the user's scheduled tasks with their schedule, next run and the status of the last run. Use it before changing, running or deleting a task to find its taskId.",
+    "de": "Die geplanten Aufgaben des Nutzers mit Zeitplan, nächstem Lauf und Status des letzten Laufs auflisten. Vor dem Ändern, Starten oder Löschen einer Aufgabe verwenden, um ihre taskId zu finden."
+  },
+  "script": "scheduledTaskTools.js",
+  "method": "listScheduledTasks",
+  "parameters": {
+    "type": "object",
+    "properties": {}
+  }
+}

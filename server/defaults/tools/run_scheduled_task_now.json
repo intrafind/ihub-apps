@@ -1,0 +1,26 @@
+{
+  "id": "run_scheduled_task_now",
+  "name": {
+    "en": "Run Scheduled Task Now",
+    "de": "Geplante Aufgabe jetzt ausführen"
+  },
+  "description": {
+    "en": "Start a run of one of the user's scheduled tasks right away, outside its schedule. The result becomes its own chat, linked from the task.",
+    "de": "Einen Lauf einer geplanten Aufgabe des Nutzers sofort starten, außerhalb ihres Zeitplans. Das Ergebnis wird ein eigener Chat, verlinkt bei der Aufgabe."
+  },
+  "script": "scheduledTaskTools.js",
+  "method": "runScheduledTaskNow",
+  "parameters": {
+    "type": "object",
+    "properties": {
+      "taskId": {
+        "type": "string",
+        "description": {
+          "en": "Id of the task (from list_scheduled_tasks)",
+          "de": "ID der Aufgabe (aus list_scheduled_tasks)"
+        }
+      }
+    },
+    "required": ["taskId"]
+  }
+}

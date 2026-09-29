@@ -11,6 +11,7 @@ import { isValidLanguageCode } from '../../utils/pathSecurity.js';
 import { resolveFeatures, requireFeature } from '../../featureRegistry.js';
 import { isChatPersistenceConfigured } from '../../services/chat/chatPersistence.js';
 import { chatSharingClientConfig } from '../../services/chat/chatSharing.js';
+import { scheduledTasksClientConfig } from '../../services/scheduler/tasks/taskPolicy.js';
 import crypto from 'crypto';
 import logger from '../../utils/logger.js';
 import { sendInternalError, sendFailedOperationError } from '../../utils/responseHelpers.js';
@@ -980,6 +981,10 @@ export default function registerDataRoutes(app) {
           // respect. The server enforces the same caps on create.
           sharing: chatSharingClientConfig(configCache.getFeatures(), platform)
         },
+        // Scheduled tasks: on only when the flag, durable chats and the
+        // platform switch agree. Whether this user may create tasks is their
+        // `permissions.scheduledTasks` on /api/auth/status.
+        scheduledTasks: scheduledTasksClientConfig(configCache.getFeatures(), platform),
         rateLimit: platform.rateLimit,
         swagger: platform.swagger
           ? {

@@ -1980,7 +1980,8 @@
       "voiceInput": "Voice Input",
       "changelog": "What's New",
       "feedback": "Feedback",
-      "localization": "Localization"
+      "localization": "Localization",
+      "scheduledTasks": "Scheduled Tasks"
     },
     "mcp": {
       "common": {
@@ -2689,7 +2690,9 @@
       "externalGroupNames": "External Group Names",
       "externalMappingsPlaceholder": "Type a group name and press Enter…",
       "externalMappingsEmpty": "No external mappings yet",
-      "externalMappingsHelp": "Enter external group names that should be mapped to this group. Users with these external groups will automatically be assigned to this internal group."
+      "externalMappingsHelp": "Enter external group names that should be mapped to this group. Users with these external groups will automatically be assigned to this internal group.",
+      "scheduledTasks": "Scheduled Tasks",
+      "scheduledTasksHint": "Allow members to create scheduled tasks that run by themselves as the member (needs the Scheduled Tasks feature). Inherited by groups that inherit this one."
     },
     "contentAccess": {
       "title": "Group access",
@@ -2985,6 +2988,52 @@
       "saveError": "Failed to save the default language",
       "loadError": "Failed to load the platform configuration",
       "noTranslations": "no translations"
+    },
+    "scheduledTasks": {
+      "saved": "Settings saved",
+      "unchanged": "Nothing changed",
+      "confirmDelete": "Delete \"{{name}}\" of {{owner}}?",
+      "gates": {
+        "feature": "Feature \"Scheduled Tasks\" is on",
+        "chats": "Durable chats are available",
+        "platform": "Scheduled tasks are enabled below"
+      },
+      "intro": "Tasks users saved to run by themselves. Who may create them is the \"Scheduled tasks\" permission of a group.",
+      "running": "Scheduled tasks are running",
+      "notRunning": "Scheduled tasks are not running",
+      "openFeatures": "Turn it on under Features",
+      "limits": "Limits",
+      "enabled": "Enabled",
+      "zeroHint": "0 turns off the per-user task limit, the auto-pause after failures, run record retention and the run chat cap.",
+      "allTasks": "All tasks",
+      "filter": "Filter by status",
+      "all": "All",
+      "none": "No scheduled tasks.",
+      "columns": {
+        "task": "Task",
+        "owner": "Owner",
+        "schedule": "Schedule",
+        "status": "Status",
+        "lastRun": "Last run",
+        "failures": "Failures"
+      },
+      "runs": "Runs",
+      "disable": "Disable",
+      "runsOf": "Runs of \"{{name}}\"",
+      "settings": {
+        "maxTasksPerUser": "Tasks per user",
+        "minIntervalMinutes": "Shortest interval (minutes)",
+        "maxConcurrentRuns": "Runs at the same time",
+        "maxConcurrentRunsPerUser": "Runs at the same time per user",
+        "staggerMinutes": "Start spread (minutes)",
+        "catchUpWindowHours": "Catch-up window (hours)",
+        "maxConsecutiveFailures": "Pause after failures in a row",
+        "approvalTimeoutHours": "Approval timeout (hours)",
+        "runRetentionDays": "Keep run records (days)",
+        "maxRunChatsPerTask": "Run chats kept per task",
+        "maxInstructionLength": "Longest instructions (characters)",
+        "maxRunMinutes": "Longest run (minutes)"
+      }
     }
   },
   "cloudStorage": {
@@ -3842,7 +3891,8 @@
     "workflows": "Workflows",
     "prompts": "Prompts",
     "apps": "Apps",
-    "chats": "Chats"
+    "chats": "Chats",
+    "tasks": "Scheduled tasks"
   },
   "darkMode": {
     "auto": "Auto (system)",
@@ -4086,7 +4136,8 @@
     "noChats": "No chats yet",
     "noChatsMatch": "No chats match",
     "chatsUnavailable": "Chats could not be loaded",
-    "unseenBadge": "{{count}} new"
+    "unseenBadge": "{{count}} new",
+    "tasks": "Scheduled tasks"
   },
   "chatHistory": {
     "title": "Your chats",
@@ -4136,7 +4187,8 @@
     "sharedBy": "Shared by {{name}}",
     "sharedWithYou": "Shared with you",
     "sharedNew": "New",
-    "sharedNewHint": "You have not opened this yet"
+    "sharedNewHint": "You have not opened this yet",
+    "scheduled": "Scheduled"
   },
   "transcription": {
     "record": "Record audio to transcribe",
@@ -4364,5 +4416,204 @@
     "connect": "Connect",
     "connected": "{{name}} is connected. Send your request again to use it.",
     "failed": "Connecting {{name}} did not succeed. Try again."
+  },
+  "scheduledTasks": {
+    "scheduleThis": "Schedule this…",
+    "banner": {
+      "title": "Scheduled run of",
+      "task": "a task"
+    },
+    "schedule": {
+      "types": {
+        "manual": "Only when I start it",
+        "once": "Once",
+        "interval": "Every … minutes, hours or days",
+        "daily": "Every day",
+        "weekdays": "Every weekday (Mon–Fri)",
+        "weekly": "On selected weekdays",
+        "monthly": "Monthly",
+        "cron": "Cron expression (advanced)"
+      },
+      "repeat": "Runs",
+      "timezone": "Time zone",
+      "at": "Date and time",
+      "every": "Every",
+      "unit": "Unit",
+      "minutes": "Minutes",
+      "hours": "Hours",
+      "days": "Days",
+      "atTime": "At",
+      "onDays": "On",
+      "onDaysOfMonth": "On day",
+      "lastDay": "Last day of the month",
+      "monthEndHint": "The 29th to 31st fall back to the last day of shorter months.",
+      "cron": "Cron expression",
+      "cronHint": "Minute, hour, day of month, month, weekday — e.g. \"0 8 * * 1-5\" is 08:00 on weekdays.",
+      "window": "Start, end and number of runs",
+      "startAt": "Start",
+      "endAt": "End",
+      "maxRuns": "Stop after … runs",
+      "checking": "Checking the schedule…",
+      "nextRuns": "Next runs",
+      "noFutureRuns": "This schedule has no future runs.",
+      "staggerNote": "To spread the load, a run may start up to {{minutes}} minutes late."
+    },
+    "approval": {
+      "question": "Allow this run to use {{tool}}?",
+      "aTool": "a tool",
+      "expires": "Expires {{time}}",
+      "alwaysAllow": "Always allow for this task",
+      "approve": "Approve",
+      "reject": "Reject"
+    },
+    "status": {
+      "active": "Active",
+      "paused": "Paused",
+      "completed": "Completed",
+      "disabled": "Disabled"
+    },
+    "runStatus": {
+      "queued": "Queued",
+      "running": "Running",
+      "awaiting_approval": "Needs approval",
+      "succeeded": "Succeeded",
+      "failed": "Failed",
+      "skipped": "Skipped",
+      "cancelled": "Cancelled"
+    },
+    "trigger": {
+      "schedule": "Scheduled",
+      "manual": "Run now",
+      "catchUp": "Catch-up"
+    },
+    "toast": {
+      "failed": "failed",
+      "awaitingApproval": "needs your approval",
+      "finished": "finished",
+      "title": "\"{{name}}\" {{status}}"
+    },
+    "openChat": "Open chat",
+    "openTask": "Open task",
+    "errors": {
+      "save": "The task could not be saved",
+      "load": "Tasks could not be loaded"
+    },
+    "proposal": {
+      "createTitle": "Schedule this task?",
+      "updateTitle": "Change this task?",
+      "deleteTitle": "Delete this task?",
+      "apply": "Apply changes",
+      "before": "Before",
+      "applied": "Changes applied.",
+      "saved": "Saved.",
+      "deleted": "Deleted.",
+      "dismissed": "Not saved.",
+      "edit": "Edit in form",
+      "unavailable": "Scheduled tasks are not available right now."
+    },
+    "fields": {
+      "name": "Name",
+      "app": "App",
+      "schedule": "Schedule",
+      "tools": "Tools and integrations",
+      "instructions": "Instructions",
+      "description": "Description (optional)",
+      "model": "Model",
+      "appDefaultModel": "App's default",
+      "appDefaultTools": "Use the app's defaults",
+      "alwaysIncluded": "always included",
+      "notify": "Notify me",
+      "variables": "App variables"
+    },
+    "noTools": "None",
+    "title": "Scheduled tasks",
+    "subtitle": "Prompts that run by themselves, as you. Every run becomes its own chat.",
+    "limitReached": "You have reached the limit of {{limit}} tasks",
+    "newTask": "New task",
+    "emptyTitle": "No scheduled tasks yet",
+    "emptyText": "Save a prompt to run it every morning, once next week, or only when you click Run now. You can also ask an app with scheduling tools to set one up for you.",
+    "unseen": "{{count}} new",
+    "nextRun": "Next run",
+    "lastRun": "Last run",
+    "pause": "Pause",
+    "resume": "Resume",
+    "backToTasks": "Scheduled tasks",
+    "editTitle": "Edit scheduled task",
+    "newTitle": "New scheduled task",
+    "editorIntro": "The instructions are sent to the app on every run, as you, with the tools and integrations you pick. Each run becomes its own chat.",
+    "variablesHelp": "Variables you can use",
+    "variablesHelpText": "Runs do not see each other. To ask for \"what changed since last time\", use the time of the last run in the instructions:",
+    "needsApproval": "Asks for approval",
+    "notify": {
+      "always": "After every run",
+      "failure": "Only when a run fails",
+      "never": "Never"
+    },
+    "create": "Create task",
+    "notFound": "Task not found",
+    "runQueued": "Run started",
+    "runNow": "Run now",
+    "duplicate": "Duplicate",
+    "allowedActions": "Allowed without asking",
+    "allowedActionsHint": "Tools that need approval pause a run until you answer. Those you chose \"Always allow for this task\" for run without asking.",
+    "revoke": "Revoke",
+    "noAllowedActions": "Nothing yet.",
+    "runHistory": "Run history",
+    "succeededHint": "\"Succeeded\" means the run finished without an error — open its chat to see whether it did what you wanted.",
+    "noRuns": "No runs yet.",
+    "runs": {
+      "status": "Status",
+      "trigger": "Trigger",
+      "scheduled": "Scheduled",
+      "started": "Started",
+      "duration": "Duration",
+      "result": "Result"
+    },
+    "reconnect": "Reconnect",
+    "chatRemoved": "Chat removed (older runs keep only their record)",
+    "cancelRun": "Cancel",
+    "loadMore": "Show older runs",
+    "deleteTitle": "Delete this task?",
+    "deleteText": "The task and its run history are deleted. Its run chats stay in your chat history unless you delete them too.",
+    "deleteChats": "Also delete the chats of its runs",
+    "variables": {
+      "run_time": "when this run started",
+      "scheduled_time": "the time this run was scheduled for",
+      "last_run_at": "when the previous run started (\"never\" on the first)",
+      "last_successful_run_at": "when the last successful run started",
+      "run_number": "the number of this run",
+      "task_name": "the name of the task"
+    },
+    "reasons": {
+      "ABORTED": "The run was stopped",
+      "APP_NOT_ACCESSIBLE": "You no longer have access to the app of this task",
+      "APP_NOT_AVAILABLE": "The app of this task no longer exists or is disabled",
+      "APPROVAL_REJECTED": "You rejected the tool this run needed",
+      "APPROVAL_TIMED_OUT": "Nobody answered the approval in time",
+      "AUTHENTICATION_REQUIRED": "Scheduled tasks need a signed-in user",
+      "AWAITING_APPROVAL": "Waiting for your approval",
+      "CANCELLED_BY_OWNER": "Cancelled by you",
+      "INTERRUPTED": "The server stopped while the run was in progress",
+      "MAX_RUNS": "The maximum number of runs was reached",
+      "MISSED": "The last scheduled run was missed",
+      "MISSED_one": "This run was missed while the server was not running",
+      "MISSED_other": "{{count}} runs were missed while the server was not running",
+      "MODEL_NOT_ACCESSIBLE": "You no longer have access to the model of this task",
+      "MODEL_NOT_AVAILABLE": "The model of this task is no longer available",
+      "NO_FUTURE_RUNS": "The schedule has no more runs",
+      "ONCE": "The one-time run has happened",
+      "OWNER_DEACTIVATED": "The owner account has been deactivated",
+      "OWNER_DELETED": "The owner account no longer exists",
+      "OWNER_LOOKUP_FAILED": "The owner account could not be checked",
+      "OWNER_MISSING": "The task has no owner",
+      "PAUSED_BY_OWNER": "Paused by you",
+      "PERMISSION_REVOKED": "You are no longer allowed to run scheduled tasks",
+      "PREVIOUS_RUN_ACTIVE": "The previous run was still running",
+      "TASK_DELETED": "The task was deleted",
+      "TASK_NOT_ACTIVE": "The task was no longer active when the run was due",
+      "TOO_MANY_APPROVALS": "The run asked for approval too many times",
+      "TOO_MANY_FAILURES": "Paused after too many failed runs in a row",
+      "TOOL_NOT_AVAILABLE": "The app no longer offers a tool this task uses"
+    }
   }
 }

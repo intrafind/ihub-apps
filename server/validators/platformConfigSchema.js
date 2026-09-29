@@ -478,6 +478,28 @@ export const platformConfigSchema = z
       })
       .passthrough()
       .prefault({}),
+    // Scheduled tasks: prompts users save to run by themselves, gated by
+    // features.scheduledTasks (and durable chats, since every run is a chat).
+    // Zero turns off `maxTasksPerUser`, `maxConsecutiveFailures`,
+    // `runRetentionDays` and `maxRunChatsPerTask`.
+    scheduledTasks: z
+      .object({
+        enabled: z.boolean().prefault(true),
+        maxTasksPerUser: z.number().prefault(10),
+        minIntervalMinutes: z.number().prefault(15),
+        maxConcurrentRuns: z.number().prefault(4),
+        maxConcurrentRunsPerUser: z.number().prefault(1),
+        staggerMinutes: z.number().prefault(5),
+        catchUpWindowHours: z.number().prefault(24),
+        maxConsecutiveFailures: z.number().prefault(3),
+        approvalTimeoutHours: z.number().prefault(24),
+        runRetentionDays: z.number().prefault(90),
+        maxRunChatsPerTask: z.number().prefault(20),
+        maxInstructionLength: z.number().prefault(8000),
+        maxRunMinutes: z.number().prefault(30)
+      })
+      .passthrough()
+      .prefault({}),
     // Storage abstraction: which provider backs runtime data (documents,
     // append-logs, locks, change events). Durable chats are its first consumer
     // — `server/storage/bootstrap.js` brings this provider up at boot and the

@@ -66,7 +66,9 @@ function ChatMessageList({
   // A shared, read-only transcript — see ChatMessage.
   readOnly = false,
   // What MCP App views may do in the composer — see ChatMessage.
-  mcpAppHost = null
+  mcpAppHost = null,
+  // The chat's enabled tools, for a message's "Schedule this…" — see ChatMessage.
+  scheduleEnabledTools = null
 }) {
   const { t } = useTranslation();
   const chatContainerRef = useRef(null);
@@ -227,6 +229,7 @@ function ChatMessageList({
                 onDocumentAction={onDocumentAction}
                 linkPath={linkPath}
                 mcpAppHost={mcpAppHost}
+                scheduleEnabledTools={scheduleEnabledTools}
               />
             </div>
           </div>

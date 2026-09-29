@@ -254,6 +254,18 @@ Like all defaults, these files live in `server/defaults/workflows/` and are copi
 
 All of them run **sequentially** — none sets `concurrency`. Each round accumulates shared state (collected evidence records, the coverage counter, the merged corpus), and as described under **Parallel mode caveat** above, body state updates are not propagated in parallel mode. Raising `concurrency` on these loops would silently discard that accumulated state.
 
+## Schedule triggers
+
+A workflow runs on a schedule with a `schedule` trigger:
+
+```json
+{
+  "triggers": [{ "id": "weekday-digest", "type": "schedule", "cron": "0 8 * * 1-5", "timezone": "Europe/Berlin" }]
+}
+```
+
+Schedule triggers run on the same scheduler as [Scheduled Tasks](scheduled-tasks.md): one worker in the cluster fires each slot once, the next run follows the trigger's `timezone` across DST, and adding, editing or removing a trigger applies **without a restart**. The workflow runs as the non-privileged `system` principal. A slot missed while the server was down is skipped, not caught up. Webhook triggers are unaffected.
+
 ## Execution records and retention
 
 Every run of a workflow leaves two records behind, and until this release

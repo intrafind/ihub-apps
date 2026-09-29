@@ -17,6 +17,7 @@ import defaultInteractionService from '../loop/InteractionService.js';
 import defaultRunLog from '../loop/RunLog.js';
 import { buildQuestionPrompt } from '../loop/questionPrompt.js';
 import { buildViewDescriptor, findEmbeddedView, toViewToolResult } from '../mcp/mcpApps.js';
+import { isSchedulingToolDef, proposalOf } from '../scheduler/tasks/proposals.js';
 
 /**
  * A clarification nobody answers expires after a day, so abandoned chats do
@@ -277,7 +278,8 @@ export function chatToolSeam({
   buildLogData,
   logInteraction,
   mcpAppViews = null,
-  mcpAuthPrompts = null
+  mcpAuthPrompts = null,
+  scheduledTaskProposals = null
 }) {
   const recordView = view => {
     if (Array.isArray(mcpAppViews)) mcpAppViews.push(view);
@@ -385,6 +387,14 @@ export function chatToolSeam({
       }
       const authRequired = gatedAuthRequiredOf(outcome.rawResult);
       if (authRequired) recordAuthPrompt(authRequired);
+      // Only the scheduling tools may draw a confirmation card; any other
+      // tool's result carrying the same field is ignored.
+      const scheduledTaskProposal = isSchedulingToolDef(info.toolDef)
+        ? proposalOf(outcome.rawResult)
+        : null;
+      if (scheduledTaskProposal && Array.isArray(scheduledTaskProposals)) {
+        scheduledTaskProposals.push(scheduledTaskProposal);
+      }
       emit(ctx, SSE_V2_EVENTS.TOOL_COMPLETED, {
         step: ctx.iteration,
         callId: callIdOf(info),
@@ -395,7 +405,8 @@ export function chatToolSeam({
         ...(outcome.knowledgeSource ? { knowledgeSource: outcome.knowledgeSource } : {}),
         ...(outcome.webSources?.length ? { webSources: outcome.webSources } : {}),
         ...(mcpApp ? { mcpApp } : {}),
-        ...(authRequired ? { authRequired } : {})
+        ...(authRequired ? { authRequired } : {}),
+        ...(scheduledTaskProposal ? { scheduledTaskProposal } : {})
       });
       await logInteraction(
         'tool_usage',
