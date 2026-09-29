@@ -42,7 +42,7 @@ const schemaMetadata = {
         url: 'https://api.openai.com/v1',
         provider: 'openai',
         contextWindow: 128000,
-        maxOutputTokens: 4096,
+        maxOutputTokens: 16384,
         supportsTools: true,
         enabled: true
       }

@@ -48,6 +48,13 @@ import StarterPromptsView from '../../chat/components/StarterPromptsView';
 import GreetingView from '../../chat/components/GreetingView';
 import NoMessagesView from '../../chat/components/NoMessagesView';
 import InputVariables from '../../chat/components/InputVariables';
+import ChatStartForm from '../../chat/components/ChatStartForm';
+import {
+  isStartFormEnabled,
+  localizeVariables,
+  renderStartFormPrompt,
+  resolveVariableValues
+} from '../../chat/utils/startForm';
 import SharedAppHeader from '../components/SharedAppHeader';
 import AIDisclaimerBanner from '../../chat/components/AIDisclaimerBanner';
 import { recordAppUsage } from '../../../utils/recentApps';
@@ -256,6 +263,10 @@ function AppChat({ preloadedApp = null, embedded = false, appId: embeddedAppId =
   const [showConfig, setShowConfig] = useState(false);
   const [variables, setVariables] = useState({});
   const [showParameters, setShowParameters] = useState(false);
+  // The chat a message was last sent in. With a start form, it keeps the chat
+  // a chat once the form is sent: regenerating or deleting the first exchange
+  // empties the transcript, and the resend goes out through the composer.
+  const [sentInChatId, setSentInChatId] = useState(null);
   // One share dialog for both: a short link to the app, and the stored
   // conversation itself as a read-only link. The latter is gated by the
   // server's answer (feature on, admin switch on, storage up) and needs a
@@ -270,6 +281,13 @@ function AppChat({ preloadedApp = null, embedded = false, appId: embeddedAppId =
   const compareModeFeatureEnabled =
     featureFlags.isEnabled('compareMode', false) && app?.features?.compareMode?.enabled !== false;
   const [compareModeActive, setCompareModeActive] = useState(false);
+  // Whether the start form has been sent to the compare panels. Entering or
+  // leaving compare mode starts the panels afresh, and with them the form.
+  const [compareFormSent, setCompareFormSent] = useState(false);
+  const changeCompareMode = useCallback(active => {
+    setCompareModeActive(active);
+    setCompareFormSent(false);
+  }, []);
   // Imperative handle exposed by CompareModeView for sendMessage / clearAll / cancelAll.
   const compareViewRef = useRef(null);
   // Each panel reports its processing state; compare mode is "processing" if any are active.
@@ -724,6 +742,17 @@ function AppChat({ preloadedApp = null, embedded = false, appId: embeddedAppId =
     serverBacked: serverBackedChat
   });
 
+  // Form-based start (issue #2581): a new chat — or a new comparison, whose
+  // panels hold transcripts of their own — opens with the start form in place
+  // of the composer, and the variables are asked for nowhere else.
+  const startFormActive = isStartFormEnabled(app);
+  const showStartForm =
+    startFormActive &&
+    (compareModeActive
+      ? !compareFormSent
+      : sentInChatId !== chatId && !messages.some(m => m.role === 'user'));
+  const showVariablesPanel = app?.variables?.length > 0 && !startFormActive;
+
   // What an MCP App view in this chat may do in the composer: post a follow-up
   // message (`ui/message`) the way a starter prompt with autoSend does.
   const mcpAppHost = useMemo(
@@ -842,6 +871,9 @@ function AppChat({ preloadedApp = null, embedded = false, appId: embeddedAppId =
             ? { ...(stored || {}), ...(storedModelId ? { modelId: storedModelId } : {}) }
             : null
         );
+        // The variables the chat was given, over the app's defaults: the
+        // panel shows them again, and a start form's chat continues with them.
+        if (result?.chat?.variables) setVariables(v => ({ ...v, ...result.chat.variables }));
         // Opening a chat is what "seen" means: this same GET cleared the
         // chat's unseen flag server-side, so every list already on screen is
         // now showing a badge the server no longer reports.
@@ -992,13 +1024,26 @@ function AppChat({ preloadedApp = null, embedded = false, appId: embeddedAppId =
     newSearch.delete('prefill');
     navigate(`${window.location.pathname}?${newSearch.toString()}`, { replace: true });
 
+    // A start form has no composer to submit: it shows the prefilled text and
+    // sends it, as the template's {{content}}, once the form is filled in.
+    if (showStartForm) return;
+
     // Trigger the form submission after a short delay to ensure everything is initialized
     setTimeout(() => {
       if (formRef.current) {
         formRef.current.dispatchEvent(new Event('submit', { cancelable: true, bubbles: true }));
       }
     }, 100);
-  }, [app, processing, prefillMessage, searchParams, navigate, modelsLoading, selectedModel]);
+  }, [
+    app,
+    processing,
+    prefillMessage,
+    searchParams,
+    navigate,
+    modelsLoading,
+    selectedModel,
+    showStartForm
+  ]);
 
   // Fetch and attach document when navigated from "Open in App" with source params
   const documentAttached = useRef(false);
@@ -1121,6 +1166,7 @@ function AppChat({ preloadedApp = null, embedded = false, appId: embeddedAppId =
     // Check if we should auto-start the conversation
     const shouldAutoStart =
       app?.autoStart === true && // App has autoStart enabled
+      !isStartFormEnabled(app) && // A start form is sent by the user, not on open
       messages.length === 0 && // No messages yet
       // …and an empty transcript really does mean "new chat". In server-backed
       // mode it is also what a chat with a hundred stored turns looks like
@@ -1638,6 +1684,10 @@ function AppChat({ preloadedApp = null, embedded = false, appId: embeddedAppId =
       }
     }
 
+    // Held from here on: resending the first exchange of a form-started chat
+    // empties the transcript, and the composer has to stay to send it.
+    setSentInChatId(chatId);
+
     // Submitting via a bare setTimeout races React's commit of the state set
     // above: when this whole resend is itself already running inside a
     // setTimeout (ChatMessage's edit-then-resend flow), the update can still
@@ -1754,6 +1804,7 @@ function AppChat({ preloadedApp = null, embedded = false, appId: embeddedAppId =
       if (compareModeActive) {
         // Clear every compare panel (regenerates their chatIds internally)
         compareViewRef.current?.clearAll();
+        setCompareFormSent(false);
       } else {
         // Clear regular chat
         clearMessages();
@@ -1822,6 +1873,7 @@ function AppChat({ preloadedApp = null, embedded = false, appId: embeddedAppId =
       const abortController = new AbortController();
       transcribeAbortRef.current = abortController;
       setIsTranscribing(true);
+      let transcribed = false;
       try {
         for (const source of sources) {
           if (!source) continue;
@@ -1875,6 +1927,7 @@ function AppChat({ preloadedApp = null, embedded = false, appId: embeddedAppId =
               transcript || t('transcription.empty', '_(No speech detected)_'),
               false
             );
+            if (transcript) transcribed = true;
           } catch (err) {
             // Whenever partial text exists, keep it and append a notice on a new
             // line instead of replacing everything: cancels are user-initiated,
@@ -1902,6 +1955,7 @@ function AppChat({ preloadedApp = null, embedded = false, appId: embeddedAppId =
         setIsTranscribing(false);
         transcribeAbortRef.current = null;
       }
+      return transcribed && !abortController.signal.aborted;
     },
     [app, addUserMessage, addAssistantMessage, updateAssistantMessage, addSystemMessage, t]
   );
@@ -1993,8 +2047,16 @@ function AppChat({ preloadedApp = null, embedded = false, appId: embeddedAppId =
     };
   }, []);
 
-  const handleSubmit = async e => {
+  /**
+   * Send the composer's message — or, with `startFormMessage`, the rendered
+   * start form, which already holds the composer's text as its {{content}}.
+   *
+   * @param {Event} e
+   * @param {string|null} [startFormMessage]
+   */
+  const handleSubmit = async (e, startFormMessage = null) => {
     e.preventDefault();
+    const typed = startFormMessage ?? input;
 
     // While recording, "send" means: finish the recording and transcribe it.
     // Anything typed stays in the input (nothing is cleared here), and this
@@ -2004,7 +2066,7 @@ function AppChat({ preloadedApp = null, embedded = false, appId: embeddedAppId =
       return;
     }
 
-    if (!input.trim() && !fileUploadHandler.selectedFile && !app?.allowEmptyContent) {
+    if (!typed.trim() && !fileUploadHandler.selectedFile && !app?.allowEmptyContent) {
       return;
     }
 
@@ -2021,19 +2083,27 @@ function AppChat({ preloadedApp = null, embedded = false, appId: embeddedAppId =
         // Only the audio is consumed by transcription. Typed text and other
         // attachments are restored afterwards so nothing is silently dropped —
         // the user can then send them with the transcript in the history.
-        const typedText = input;
+        const typedText = typed;
         const remainingFiles = selected.filter(f => f?.type !== 'audio');
         setInput('');
         magicPromptHandler.resetMagicPrompt();
         fileUploadHandler.clearSelectedFile();
         fileUploadHandler.hideUploader();
         pendingVariablesRef.current = null;
-        await transcribeToChat(audioFiles);
+        const transcribed = await transcribeToChat(audioFiles);
         if (typedText.trim()) setInput(typedText);
         // Non-empty only when the original selection was an array (a single
         // attachment that reached this branch was itself the audio file).
         if (remainingFiles.length > 0) {
           fileUploadHandler.setSelectedFile(remainingFiles);
+        }
+        // A start form's prompt is what the audio was attached for: it goes on
+        // through the composer, after the transcript. Typed text waits instead.
+        // Still the form's message, so it still sets the chat's variables —
+        // also when a failed transcription leaves it for the user to send.
+        if (startFormMessage !== null && (typedText.trim() || remainingFiles.length > 0)) {
+          pendingVariablesRef.current = resolveVariableValues(app, variables, currentLanguage);
+          if (transcribed) setPendingAutoSubmit(true);
         }
         return;
       }
@@ -2059,7 +2129,9 @@ function AppChat({ preloadedApp = null, embedded = false, appId: embeddedAppId =
     // otherwise use the state variables. This avoids race condition with async state updates.
     const currentVariables = pendingVariablesRef.current || variables;
 
-    if (app?.variables) {
+    // A start form checks its own required fields; after it, the variables
+    // are no longer on screen to be filled in.
+    if (app?.variables && !startFormActive) {
       const missingRequiredVars = app.variables
         .filter(v => v.required)
         .filter(v => !currentVariables[v.name] || currentVariables[v.name].trim() === '');
@@ -2080,7 +2152,7 @@ function AppChat({ preloadedApp = null, embedded = false, appId: embeddedAppId =
 
     if (compareModeActive ? compareIsProcessing : processing) return;
 
-    let finalInput = input.trim();
+    let finalInput = typed.trim();
     let messageContent = finalInput;
     let messageData = {};
 
@@ -2194,21 +2266,30 @@ function AppChat({ preloadedApp = null, embedded = false, appId: embeddedAppId =
       });
     }
 
+    // Which messages carry the app variables. Beside the chat they may change
+    // between messages, so every message does. With a start form only the
+    // form's message does, or a resend of it (which restored them): the server
+    // keeps them for the rest of the chat.
+    const carriesVariables =
+      !startFormActive || startFormMessage !== null || pendingVariablesRef.current !== null;
+
     // Prepare the message structure for sending
     const messageStructure = {
       displayMessage: {
         content: messageContent,
         meta: {
-          rawContent: input,
+          rawContent: typed,
           variables:
-            app?.variables && app.variables.length > 0 ? { ...validatedVariables } : undefined,
+            carriesVariables && app?.variables?.length > 0 ? { ...validatedVariables } : undefined,
           ...messageData
         }
       },
       apiMessage: {
-        content: input,
-        promptTemplate: app?.prompt || null,
-        variables: { ...validatedVariables },
+        content: typed,
+        // A start form's message is its prompt, already rendered; the ones
+        // after it go as typed.
+        promptTemplate: startFormActive ? null : app?.prompt || null,
+        variables: carriesVariables ? { ...validatedVariables } : undefined,
         imageData: (() => {
           // Handle image data: convert to object/array/null based on count
           const imageFiles = Array.isArray(fileUploadHandler.selectedFile)
@@ -2263,8 +2344,10 @@ function AppChat({ preloadedApp = null, embedded = false, appId: embeddedAppId =
     // If compare mode is active, broadcast to every panel; otherwise send through the regular chat
     if (compareModeActive) {
       compareViewRef.current?.sendMessage(messageStructure);
+      if (startFormMessage !== null) setCompareFormSent(true);
     } else {
       sendChatMessage(messageStructure);
+      setSentInChatId(chatId);
     }
 
     setInput('');
@@ -2274,6 +2357,18 @@ function AppChat({ preloadedApp = null, embedded = false, appId: embeddedAppId =
     // Clear pending variables ref after successful submission
     pendingVariablesRef.current = null;
   };
+
+  // The first message of a form-started chat: the app's prompt, rendered with
+  // the form's answers and, as {{content}}, text prefilled from the URL.
+  const startFormMessage = showStartForm
+    ? renderStartFormPrompt(
+        app,
+        resolveVariableValues(app, variables, currentLanguage),
+        currentLanguage,
+        input
+      )
+    : '';
+  const handleStartFormSubmit = e => handleSubmit(e, startFormMessage);
 
   // Function to reload the current app
   const clearAppCache = useCallback(() => {
@@ -2312,23 +2407,10 @@ function AppChat({ preloadedApp = null, embedded = false, appId: embeddedAppId =
   };
 
   // Memoize localizedVariables calculation to prevent unnecessary work on every render
-  const localizedVariables = useMemo(() => {
-    if (!app?.variables || !Array.isArray(app.variables)) return [];
-
-    return app.variables.map(variable => ({
-      ...variable,
-      localizedLabel: getLocalizedContent(variable.label, currentLanguage) || variable.name,
-      localizedDescription: getLocalizedContent(variable.description, currentLanguage),
-      localizedDefaultValue: getLocalizedContent(variable.defaultValue, currentLanguage),
-      localizedPlaceholder: getLocalizedContent(variable.placeholder, currentLanguage),
-      predefinedValues: variable.predefinedValues
-        ? variable.predefinedValues.map(option => ({
-            ...option,
-            localizedLabel: getLocalizedContent(option.label, currentLanguage) || option.value
-          }))
-        : undefined
-    }));
-  }, [app?.variables, currentLanguage]);
+  const localizedVariables = useMemo(
+    () => localizeVariables(app?.variables, currentLanguage),
+    [app?.variables, currentLanguage]
+  );
 
   // Initialize temp variables when variables change
   useEffect(() => {
@@ -2449,6 +2531,49 @@ function AppChat({ preloadedApp = null, embedded = false, appId: embeddedAppId =
     );
   };
 
+  // The start form, for a new chat — or, below the compare panels' model
+  // pickers, for a new comparison, which it is then sent to as a whole.
+  const renderStartForm = () => {
+    // A chat of unknown mode shows nothing, and a stored one its transcript
+    // first — see renderStartupState. Compare panels never load anything.
+    if (!compareModeActive && chatModeResolving) return null;
+    if (!compareModeActive && hydrating) {
+      return <LoadingSpinner message={t('pages.appChat.loadingChat', 'Loading chat...')} />;
+    }
+    return (
+      <div className="min-h-full flex items-center justify-center p-4">
+        <div className="w-full max-w-2xl">
+          <ChatStartForm
+            app={app}
+            localizedVariables={localizedVariables}
+            variables={variables}
+            onVariablesChange={setVariables}
+            message={input}
+            onMessageChange={setInput}
+            uploadConfig={fileUploadHandler.createUploadConfig(
+              app,
+              models.find(m => m.id === selectedModel)
+            )}
+            selectedFile={fileUploadHandler.selectedFile}
+            onFileSelect={fileUploadHandler.handleFileSelect}
+            onSubmit={handleStartFormSubmit}
+            canSubmit={
+              startFormMessage.trim() !== '' ||
+              fileUploadHandler.selectedFile !== null ||
+              app?.allowEmptyContent === true
+            }
+            isProcessing={(compareModeActive ? compareIsProcessing : processing) || isTranscribing}
+            welcomeMessage={welcomeMessage}
+            errorMessage={
+              messages.filter(m => m.role === 'system' && m.error).at(-1)?.content || null
+            }
+            currentLanguage={currentLanguage}
+          />
+        </div>
+      </div>
+    );
+  };
+
   if (loading) {
     return <LoadingSpinner message={t('app.loading')} />;
   }
@@ -2510,19 +2635,20 @@ function AppChat({ preloadedApp = null, embedded = false, appId: embeddedAppId =
         onToggleConfig={toggleConfig}
         onToggleParameters={toggleParameters}
         showParameters={showParameters}
+        hideParametersButton={!showVariablesPanel}
         onShare={() => setShowShare(true)}
         showShareButton={shareEnabled || chatShareReady}
         conversationTitle={conversationTitle}
         showCompareModeToggle={compareModeFeatureEnabled && models.length >= 2}
         compareModeActive={compareModeActive}
-        onCompareModeChange={setCompareModeActive}
+        onCompareModeChange={changeCompareMode}
         compareModeDisabled={processing || compareIsProcessing}
         showBackButton={!embedded}
         showEditAppButton={!embedded}
         onOpenCanvas={embedded ? () => openInNewTab(`/apps/${appId}/canvas`) : undefined}
       />
 
-      {app?.variables && app.variables.length > 0 && showParameters && (
+      {showVariablesPanel && showParameters && (
         <div
           className="md:hidden fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4"
           onClick={e => {
@@ -2601,12 +2727,18 @@ function AppChat({ preloadedApp = null, embedded = false, appId: embeddedAppId =
                   onDocumentAction={handleDocumentAction}
                   linkPath={appPagePath}
                   ephemeral={ephemeral}
+                  startForm={showStartForm ? renderStartForm() : null}
                 />
               </div>
-              <div className="shrink-0 px-4 pt-2">
-                <div className="w-full max-w-4xl mx-auto">{renderChatInput()}</div>
-              </div>
+              {!showStartForm && (
+                <div className="shrink-0 px-4 pt-2">
+                  <div className="w-full max-w-4xl mx-auto">{renderChatInput()}</div>
+                </div>
+              )}
             </>
+          ) : showStartForm ? (
+            /* Start form, in place of the transcript and the composer */
+            <div className="flex-1 min-h-0 overflow-y-auto">{renderStartForm()}</div>
           ) : shouldCenterInput ? (
             /* Centered layout for example prompts */
             <>
@@ -2779,7 +2911,7 @@ function AppChat({ preloadedApp = null, embedded = false, appId: embeddedAppId =
           )}
         </div>
 
-        {app?.variables && app.variables.length > 0 && (
+        {showVariablesPanel && (
           <div
             className={`hidden md:block overflow-y-auto p-4 bg-gray-50 dark:bg-gray-800 rounded-lg shrink-0 ${embedded ? 'order-first max-h-60' : 'w-80 lg:w-96'}`}
           >

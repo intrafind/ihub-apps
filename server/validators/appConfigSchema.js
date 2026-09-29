@@ -54,6 +54,19 @@ const starterPromptSchema = z.object({
   autoSend: z.boolean().optional().prefault(false)
 });
 
+// Form-based start (issue #2581): a new chat opens with the app's variables,
+// plus a drop zone when uploads are on, as a form instead of the composer.
+// Submitting sends the `prompt` filled with the answers as the first user
+// message; follow-up messages go out as typed, without the template.
+const startFormSchema = z
+  .object({
+    enabled: z.boolean().optional().prefault(false),
+    // Text of the form's send button. An empty or missing language falls back
+    // to the built-in label, so an emptied field in the admin editor saves.
+    submitLabel: z.record(z.string().regex(LANGUAGE_CODE_PATTERN), z.string()).optional()
+  })
+  .optional();
+
 // Web search configuration schema
 const websearchSchema = z
   .object({
@@ -430,6 +443,7 @@ const baseAppConfigSchema = z.object({
   messagePlaceholder: localizedStringSchema.optional(),
   prompt: localizedStringSchema.optional(),
   variables: z.array(variableSchema).optional(),
+  startForm: startFormSchema,
   settings: settingsSchema.optional(),
   inputMode: inputModeSchema.optional(),
   upload: uploadSchema.optional(),

@@ -40,7 +40,8 @@ import { authorizeChat } from '../../services/chat/chatAccess.js';
 import {
   getChatRepository,
   isPersistableChatId,
-  normalizeChatSettings
+  normalizeChatSettings,
+  normalizeChatVariables
 } from '../../services/chat/ChatRepository.js';
 import { isChatPersistenceActive } from '../../services/chat/chatPersistence.js';
 import validate from '../../validators/validate.js';
@@ -160,6 +161,7 @@ async function materializeWorkflowUserTurn({ persistence, chatId, appId, modelId
   if (!persistence) return;
   await materializeUserTurn({
     settings: persistence.settings,
+    variables: persistence.variables,
     repository: persistence.repository,
     chatId,
     ownerId: persistence.ownerId,
@@ -1010,10 +1012,25 @@ export default function registerSessionRoutes(app, { getLocalizedError, DEFAULT_
           // says the same thing for one turn: with the client posting a single
           // message either way, this field is the only channel it has left.
           const chatApp = (configCache.getApps().data || []).find(a => a.id === appId);
+          // The app variables are chat state: a turn that sets them (the
+          // start form's, or any turn of an app that asks for them beside the
+          // chat) stores them, and a turn that does not gets the stored ones —
+          // for the system prompt, never as a re-rendered `prompt` template.
+          const turnVariables = normalizeChatVariables(newMessage.variables);
+          const chatVariables =
+            turnVariables ||
+            (chatApp?.variables?.length
+              ? normalizeChatVariables((await repository.getChat(chatId))?.variables)
+              : null);
+          // The prompt reads the variables as they are stored, so this turn and
+          // the ones after it render them alike (`false` is "false" in both).
+          const promptMessage = chatVariables
+            ? { ...newMessage, variables: chatVariables }
+            : newMessage;
           conversation =
             chatApp?.sendChatHistory === false || sendChatHistory === false
-              ? [newMessage]
-              : [...historyForPrompt(history), newMessage];
+              ? [promptMessage]
+              : [...historyForPrompt(history), promptMessage];
 
           // Resolved once here and carried on the turn: `resolvePrincipal` is
           // async and hits the filesystem, and the run finishes with no request
@@ -1030,6 +1047,7 @@ export default function registerSessionRoutes(app, { getLocalizedError, DEFAULT_
             content: typeof newMessage.content === 'string' ? newMessage.content : '',
             clientMessageId: messageId,
             attachments: messageAttachments(newMessage),
+            variables: turnVariables,
             replaceFromMessageId: forkStoredId,
             // How this turn is being answered, so reopening the chat comes
             // back with the same setup rather than the app's defaults. Only

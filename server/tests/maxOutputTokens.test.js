@@ -1,5 +1,6 @@
 import assert from 'assert';
 import logger from '../utils/logger.js';
+import { DEFAULT_MAX_OUTPUT_TOKENS, resolveMaxOutputTokens } from '../../shared/outputTokens.js';
 import { estimateTokens, computeContextUsage } from '../../shared/tokenEstimator.js';
 
 logger.info('Testing maxOutputTokens / contextWindow handling...');
@@ -8,13 +9,11 @@ logger.info('Testing maxOutputTokens / contextWindow handling...');
  * Output-cap logic in RequestBuilder after the token-limit split:
  *   - Apps no longer carry a token limit.
  *   - The output cap sent to the provider is model.maxOutputTokens.
- *   - If the model has none, fall back to DEFAULT_MAX_OUTPUT (4096).
+ *   - If the model has none, fall back to DEFAULT_MAX_OUTPUT (16384).
  *   - contextWindow is a separate concept, used only for capacity/fit.
  */
-const DEFAULT_MAX_OUTPUT = 4096;
-function resolveOutputCap(model) {
-  return model.maxOutputTokens || DEFAULT_MAX_OUTPUT;
-}
+const DEFAULT_MAX_OUTPUT = DEFAULT_MAX_OUTPUT_TOKENS;
+const resolveOutputCap = resolveMaxOutputTokens;
 
 // Test 1: Model defines maxOutputTokens
 function testModelMaxOutput() {
@@ -26,9 +25,12 @@ function testModelMaxOutput() {
 
 // Test 2: Model has no maxOutputTokens -> default
 function testDefaultOutput() {
-  logger.info('Test 2: model without maxOutputTokens falls back to 4096');
-  const model = { contextWindow: 8192 };
+  logger.info('Test 2: model without maxOutputTokens falls back to the default');
+  const model = { contextWindow: 1000000 };
   assert.strictEqual(resolveOutputCap(model), DEFAULT_MAX_OUTPUT);
+  assert.strictEqual(resolveOutputCap({}), DEFAULT_MAX_OUTPUT);
+  // A small window caps the default so prompt + max_tokens still fits.
+  assert.strictEqual(resolveOutputCap({ contextWindow: 8192 }), 4096);
   logger.info('  ✓ Passed\n');
 }
 

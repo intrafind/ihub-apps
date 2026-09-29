@@ -146,13 +146,19 @@ describe('useStoredChatHydration', () => {
     expect(chat.finishHydration).not.toHaveBeenCalled();
   });
 
-  test('a stored chat is loaded with its settings, and the list is refreshed', async () => {
+  test('a stored chat is loaded with its settings and variables, and the list is refreshed', async () => {
     const stored = [
       { id: 'm1', role: 'user', content: 'Draft an offer' },
       { id: 'm2', role: 'assistant', content: 'Here it is', runId: 'r1' }
     ];
     mockFetchChat.mockResolvedValue({
-      chat: { id: 'c1', status: 'active', modelId: 'gpt', settings: { websearchEnabled: true } },
+      chat: {
+        id: 'c1',
+        status: 'active',
+        modelId: 'gpt',
+        settings: { websearchEnabled: true },
+        variables: { tone: 'formal' }
+      },
       messages: stored
     });
     const chat = makeChat();
@@ -161,7 +167,10 @@ describe('useStoredChatHydration', () => {
 
     expect(mockFetchChat).toHaveBeenCalledWith('c1');
     expect(chat.loadServerMessages).toHaveBeenCalledWith(stored, { preserveLocal: true });
-    expect(result.current).toEqual({ websearchEnabled: true, modelId: 'gpt' });
+    expect(result.current).toEqual({
+      chatSettings: { websearchEnabled: true, modelId: 'gpt' },
+      chatVariables: { tone: 'formal' }
+    });
     // Opening the chat cleared its unseen flag server-side.
     expect(mockInvalidateChatsCache).toHaveBeenCalled();
     expect(chat.reattachToRun).not.toHaveBeenCalled();
@@ -242,7 +251,13 @@ describe('useStoredChatHydration', () => {
 describe('<OfficeChatPanel /> with durable chats', () => {
   // The adapter is the seam: what the panel asks it for is the contract.
   const mockAdapterCalls = [];
-  const mockAdapterState = { hydrating: false, storedChatSettings: null, messages: {} };
+  const mockAdapterState = {
+    hydrating: false,
+    storedChatSettings: null,
+    storedChatVariables: null,
+    messages: {}
+  };
+  const mockSends = [];
   const mockAppSettingsCalls = [];
 
   beforeAll(() => {
@@ -258,8 +273,11 @@ describe('<OfficeChatPanel /> with durable chats', () => {
             processing: false,
             hydrating: mockAdapterState.hydrating,
             storedChatSettings: mockAdapterState.storedChatSettings,
+            storedChatVariables: mockAdapterState.storedChatVariables,
             clarificationPending: false,
-            sendMessage: ({ displayMessage }) => {
+            sendMessage: sent => {
+              mockSends.push(sent);
+              const { displayMessage } = sent;
               mockAdapterState.messages[options.chatId] = [
                 { id: 'u1', role: 'user', content: displayMessage.content },
                 { id: 'a1', role: 'assistant', content: 'Answer' }
@@ -365,7 +383,9 @@ describe('<OfficeChatPanel /> with durable chats', () => {
     mockAppSettingsCalls.length = 0;
     mockAdapterState.hydrating = false;
     mockAdapterState.storedChatSettings = null;
+    mockAdapterState.storedChatVariables = null;
     mockAdapterState.messages = {};
+    mockSends.length = 0;
   });
 
   const app = {
@@ -460,6 +480,40 @@ describe('<OfficeChatPanel /> with durable chats', () => {
     // The history is still there for other chats, but this one is not in it.
     openHistoryFromMenu();
     expect(onOpenHistory).toHaveBeenLastCalledWith({ returnChatId: null });
+  });
+
+  const variablesApp = {
+    ...app,
+    variables: [{ name: 'tone', label: { en: 'Tone' }, type: 'string', required: true }]
+  };
+
+  test('a chat from the history continues with its stored variables, without asking for them', () => {
+    mockAdapterState.storedChatVariables = { tone: 'formal' };
+    renderPanel({ openChatId: 'stored-1', selectedApp: variablesApp });
+
+    // The required variable is empty by the app's defaults, but this chat
+    // already has it: no dialog.
+    expect(screen.queryByRole('heading', { name: 'Variables' })).not.toBeInTheDocument();
+
+    fireEvent.change(screen.getByLabelText('message'), { target: { value: 'Follow up' } });
+    fireEvent.click(screen.getByRole('button', { name: 'Send' }));
+    // The stored values, not the defaults, so the turn does not replace them.
+    expect(mockSends[mockSends.length - 1].apiMessage.variables).toEqual({ tone: 'formal' });
+  });
+
+  test('a new chat of the same app still asks for a required variable', () => {
+    renderPanel({ selectedApp: variablesApp });
+    expect(screen.getByRole('heading', { name: 'Variables' })).toBeInTheDocument();
+  });
+
+  test('a start form is not shown while a stored chat of that app loads', () => {
+    mockAdapterState.hydrating = true;
+    renderPanel({
+      openChatId: 'stored-1',
+      selectedApp: { ...variablesApp, startForm: { enabled: true } }
+    });
+    expect(screen.getByRole('status')).toHaveTextContent('Loading chat…');
+    expect(screen.queryByRole('button', { name: 'Start' })).not.toBeInTheDocument();
   });
 
   test('without durable chats the panel behaves as before: no store, no history', async () => {

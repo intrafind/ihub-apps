@@ -19,7 +19,9 @@ import { invalidateChatsCache } from '../../../shared/hooks/chatListStore';
  *   replayed and the live stream followed, then the transcript is re-read once
  *   the turn settles, because the store is what the answer finally was.
  * - The settings the chat was last answered with (model, tools, websearch, …)
- *   are handed back for `useAppSettings`, so a reopened chat keeps its setup.
+ *   are handed back for `useAppSettings`, and the app variables it was given
+ *   for the prompt, so a reopened chat keeps its setup — a later turn that
+ *   sent the app's default variables instead would replace the stored ones.
  *
  * Also keeps the shared chat list fresh: opening a chat clears its unseen flag
  * server-side, and a finished turn moves a chat to the top of the list.
@@ -30,16 +32,19 @@ import { invalidateChatsCache } from '../../../shared/hooks/chatListStore';
  * @param {boolean} options.serverBacked - Whether the chat is stored server-side.
  * @param {boolean} options.isFreshChat - Whether the pane minted this chat and
  *   has not sent anything in it yet.
- * @returns {Object|null} The stored chat's settings, or null for a new chat.
+ * @returns {{ chatSettings: Object|null, chatVariables: Object|null }} What the
+ *   stored chat was set up with; null for a new chat or one that recorded none.
  */
 export default function useStoredChatHydration({ chat, chatId, serverBacked, isFreshChat }) {
   const { messages, processing, finishHydration, loadServerMessages, reattachToRun } = chat;
   const [chatSettings, setChatSettings] = useState(null);
+  const [chatVariables, setChatVariables] = useState(null);
 
   // A different chat drops the previous chat's setup straight away; the app's
   // defaults apply until the new one's document arrives.
   useEffect(() => {
     setChatSettings(null);
+    setChatVariables(null);
   }, [chatId]);
 
   // The chat the last hydration attempt was for, and whether its fetch is
@@ -81,6 +86,10 @@ export default function useStoredChatHydration({ chat, chatId, serverBacked, isF
           stored || storedModelId
             ? { ...(stored || {}), ...(storedModelId ? { modelId: storedModelId } : {}) }
             : null
+        );
+        const storedVariables = result?.chat?.variables;
+        setChatVariables(
+          storedVariables && typeof storedVariables === 'object' ? storedVariables : null
         );
         invalidateChatsCache();
 
@@ -135,5 +144,5 @@ export default function useStoredChatHydration({ chat, chatId, serverBacked, isF
     if (serverBacked && wasProcessing && !processing) invalidateChatsCache();
   }, [processing, serverBacked]);
 
-  return chatSettings;
+  return { chatSettings, chatVariables };
 }

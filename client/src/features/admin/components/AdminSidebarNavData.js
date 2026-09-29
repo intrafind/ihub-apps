@@ -209,6 +209,13 @@ export function getAdminNavSections({ t, showAdminPage, featureFlags }) {
           visible: true
         },
         {
+          key: 'a2a-agents',
+          label: t('admin.nav.a2aAgents', 'A2A agents'),
+          href: '/admin/a2a/agents',
+          icon: LinkIcon,
+          visible: true
+        },
+        {
           key: 'credentials',
           label: t('admin.nav.credentials', 'Credentials'),
           href: '/admin/credentials',

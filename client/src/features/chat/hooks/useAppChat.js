@@ -660,7 +660,7 @@ function useAppChat({
           imageDataToRestore || fileDataToRestore || audioDataToRestore
             ? prevUser.rawContent || ''
             : prevUser.rawContent || prevUser.content;
-        variablesToRestore = prevUser.meta?.variables || null;
+        variablesToRestore = prevUser.variables || null;
         deleteFromMessage(prevUser.id);
       } else {
         deleteFromMessage(messageId);
@@ -675,7 +675,7 @@ function useAppChat({
               ? messageToResend.rawContent || ''
               : messageToResend.rawContent || messageToResend.content;
         }
-        variablesToRestore = messageToResend.meta?.variables || null;
+        variablesToRestore = messageToResend.variables || null;
         if (!imageDataToRestore) imageDataToRestore = messageToResend.imageData || null;
         if (!fileDataToRestore) fileDataToRestore = messageToResend.fileData || null;
         if (!audioDataToRestore) audioDataToRestore = messageToResend.audioData || null;

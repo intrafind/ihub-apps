@@ -15,6 +15,12 @@ import {
   isModelVisible,
   readToolUiMeta
 } from './mcpApps.js';
+import {
+  isAuthRequiredError,
+  isTokenRefreshError,
+  McpAuthRequiredError,
+  withoutRedirects
+} from './McpUserOAuthProvider.js';
 import logger from '../../utils/logger.js';
 
 /** How long a fetched MCP App UI resource is reused before re-reading it. */
@@ -35,11 +41,35 @@ const MAX_TOOL_LIST_PAGES = 20;
  *     reading `_meta.ui` off tools, and fetching `ui://` resources
  *
  * Multiple servers are coordinated by McpClientManager.
+ *
+ * Per-user OAuth (`auth.type: "oauthUser"`): the manager builds one
+ * connection per (server, user) and hands it an `authProvider`
+ * (McpUserOAuthProvider) that the SDK transport uses for the bearer token,
+ * refresh and re-consent. The manager's own connection for such a server is
+ * `catalogOnly`: it never connects and answers `listTools` from the shared
+ * tool catalog it is given with `applyCatalog`.
  */
 export class McpServerConnection {
-  constructor(serverConfig, security = {}) {
+  /**
+   * @param {Object} serverConfig - Parsed `mcpServers.json` entry
+   * @param {Object} [security] - `{ blockPrivateIps, allowedHosts }`
+   * @param {Object} [options]
+   * @param {import('@modelcontextprotocol/sdk/client/auth.js').OAuthClientProvider} [options.authProvider] -
+   *   Per-user OAuth provider for the HTTP transports
+   * @param {boolean} [options.catalogOnly=false] - Never connect; serve tools from `applyCatalog`
+   * @param {(rawTools: Object[]) => void} [options.onToolsListed] - Receives every successful
+   *   `tools/list` result (the manager persists it as the server's catalog)
+   */
+  constructor(
+    serverConfig,
+    security = {},
+    { authProvider, catalogOnly = false, onToolsListed } = {}
+  ) {
     this.config = serverConfig;
     this.security = security;
+    this.authProvider = authProvider || null;
+    this.catalogOnly = catalogOnly === true;
+    this.onToolsListed = typeof onToolsListed === 'function' ? onToolsListed : null;
     this.client = null;
     this.transport = null;
     this.connected = false;
@@ -67,6 +97,10 @@ export class McpServerConnection {
    */
   _resolveAuth(auth) {
     if (!auth) return { type: 'none' };
+    // Per-user OAuth: the transport's authProvider supplies the token; a
+    // pre-registered client's secret is resolved by that provider when a
+    // token request needs it, never here.
+    if (auth.type === 'oauthUser') return { type: 'oauthUser' };
     const out = { ...auth };
     const refFields = {
       tokenRef: 'token',
@@ -194,12 +228,30 @@ export class McpServerConnection {
           }
         );
       };
+      // Per-user OAuth: on a 401 the SDK's auth() runs OAuth discovery through
+      // this same fetch. Those requests go to URLs the MCP server (or its
+      // authorization server) names, so they are sent without following
+      // redirects — the SSRF guard checks only the first URL. MCP requests to
+      // the endpoint's own origin keep the default behaviour.
+      const guardedOAuthFetch = withoutRedirects(pinnedFetch);
+      const transportFetch = this.authProvider
+        ? (input, init = {}) =>
+            isOAuthSideRequest(input, url)
+              ? guardedOAuthFetch(input, init)
+              : pinnedFetch(input, init)
+        : pinnedFetch;
+
+      // Per-user OAuth: the SDK transport sets the bearer token and runs the
+      // refresh / re-consent logic itself. `_getAuthHeaders` adds nothing for
+      // this auth type, so the two never collide.
+      const authOptions = this.authProvider ? { authProvider: this.authProvider } : {};
 
       if (t.type === 'streamableHttp') {
         const r = this.config.reconnect || {};
         return new StreamableHTTPClientTransport(url, {
           requestInit,
-          fetch: pinnedFetch,
+          fetch: transportFetch,
+          ...authOptions,
           reconnectionOptions: {
             maxReconnectionDelay: r.maxDelayMs ?? 30000,
             initialReconnectionDelay: r.initialDelayMs ?? 1000,
@@ -213,8 +265,9 @@ export class McpServerConnection {
       // by Streamable HTTP; we keep this for back-compat with older servers.
       return new SSEClientTransport(url, {
         requestInit,
-        fetch: pinnedFetch,
-        eventSourceInit: { fetch: pinnedFetch }
+        fetch: transportFetch,
+        eventSourceInit: { fetch: pinnedFetch },
+        ...authOptions
       });
     }
 
@@ -240,6 +293,10 @@ export class McpServerConnection {
   }
 
   async connect() {
+    if (this.catalogOnly) {
+      // The shared entry of a per-user server has no token of its own.
+      throw new McpAuthRequiredError(this.config.id);
+    }
     if (this.connected) return;
     if (this.connecting) return this.connecting;
 
@@ -273,6 +330,12 @@ export class McpServerConnection {
           /* SDK version without this hook — fine, manual refresh still works */
         }
       } catch (err) {
+        // A missing or rejected user token is not a server fault: it must not
+        // count towards marking the server unhealthy for everybody.
+        if (isAuthRequiredError(err) || isTokenRefreshError(err)) {
+          await this._closeQuietly();
+          throw err;
+        }
         this.consecutiveFailures++;
         this.lastError = err.message || String(err);
         const r = this.config.reconnect || {};
@@ -292,6 +355,18 @@ export class McpServerConnection {
       }
     })();
     return this.connecting;
+  }
+
+  /** Close a half-open client after a failed connect, keeping the caches. */
+  async _closeQuietly() {
+    try {
+      await this.client?.close();
+    } catch {
+      /* already closed */
+    }
+    this.client = null;
+    this.transport = null;
+    this.connected = false;
   }
 
   async disconnect() {
@@ -325,8 +400,9 @@ export class McpServerConnection {
    * the chat can render its view. Both kinds land in `appToolsCache`.
    */
   async listTools() {
-    if (this.unhealthy) return [];
     if (this.config.enabled === false) return [];
+    if (this.catalogOnly) return this.toolsCache || [];
+    if (this.unhealthy) return [];
     if (!this.connected) await this.connect();
     if (this.toolsCache) return this.toolsCache;
 
@@ -339,6 +415,49 @@ export class McpServerConnection {
       if (!cursor) break;
     }
 
+    const { tools, appTools } = this.buildToolSets(rawTools);
+    this.toolsCache = tools;
+    this.appToolsCache = appTools;
+    if (this.onToolsListed) {
+      try {
+        this.onToolsListed(rawTools);
+      } catch (err) {
+        logger.warn('MCP tools/list listener failed', {
+          component: 'McpServerConnection',
+          serverId: this.config.id,
+          error: err.message
+        });
+      }
+    }
+    return tools;
+  }
+
+  /**
+   * Serve `listTools` / `getAppTool` from a stored `tools/list` result
+   * (the shared catalog of a per-user server) instead of a live connection.
+   *
+   * @param {Object[]|null} rawTools - Tools as the server listed them, or null for none
+   */
+  applyCatalog(rawTools) {
+    if (!Array.isArray(rawTools)) {
+      this.toolsCache = null;
+      this.appToolsCache = null;
+      return;
+    }
+    const { tools, appTools } = this.buildToolSets(rawTools);
+    this.toolsCache = tools;
+    this.appToolsCache = appTools;
+  }
+
+  /**
+   * Turn the server's `tools/list` result into the iHub tool definitions the
+   * model is offered and the tools this server's MCP App views may call,
+   * applying this connection's prefix, allowlist and MCP Apps settings.
+   *
+   * @param {Object[]} rawTools
+   * @returns {{tools: Object[], appTools: Map<string, Object>}}
+   */
+  buildToolSets(rawTools) {
     // A blank prefix means the default: tools of two servers must never share
     // an id, and the admin form leaves the field empty to accept `<id>__`.
     const prefix = this.config.toolPrefix?.trim() || `${this.config.id}__`;
@@ -348,7 +467,7 @@ export class McpServerConnection {
 
     const tools = [];
     const appTools = new Map();
-    for (const t of rawTools) {
+    for (const t of rawTools || []) {
       if (!t || typeof t.name !== 'string') continue;
       // Visibility is honoured even with apps disabled: an app-only helper
       // must never reach the model. Only the view link is dropped.
@@ -386,9 +505,7 @@ export class McpServerConnection {
         }
       });
     }
-    this.toolsCache = tools;
-    this.appToolsCache = appTools;
-    return tools;
+    return { tools, appTools };
   }
 
   /**
@@ -415,6 +532,7 @@ export class McpServerConnection {
    * @returns {Promise<Object>} CallToolResult
    */
   async callToolRaw(originalName, args) {
+    if (this.catalogOnly) throw new McpAuthRequiredError(this.config.id);
     if (this.unhealthy) {
       throw new Error(`MCP server ${this.config.id} is unhealthy: ${this.lastError}`);
     }
@@ -517,9 +635,31 @@ export class McpServerConnection {
       consecutiveFailures: this.consecutiveFailures,
       lastError: this.lastError,
       transport: this.config.transport.type,
-      toolCount: this.toolsCache ? this.toolsCache.length : null
+      toolCount: this.toolsCache ? this.toolsCache.length : null,
+      ...(this.config.auth?.type === 'oauthUser' ? { authType: 'oauthUser' } : {})
     };
   }
+}
+
+/**
+ * Whether a request of a per-user OAuth transport is OAuth discovery rather
+ * than MCP traffic: another origin than the MCP endpoint, or a
+ * `/.well-known/` document on it.
+ *
+ * @param {string|URL|Request} input
+ * @param {URL} endpoint - The MCP endpoint URL
+ * @returns {boolean}
+ */
+function isOAuthSideRequest(input, endpoint) {
+  let target;
+  try {
+    target = new URL(
+      typeof input === 'string' ? input : input?.url || input?.href || String(input)
+    );
+  } catch {
+    return true;
+  }
+  return target.origin !== endpoint.origin || target.pathname.startsWith('/.well-known/');
 }
 
 /**
@@ -544,12 +684,28 @@ function extractErrorText(result) {
   return '';
 }
 
+/**
+ * An embedded MCP App view (`ui://…` resource) in a tool result. It is for
+ * the host to render, not for the model: a view page is tens of kilobytes of
+ * HTML and script. The raw result, view included, still reaches the chat
+ * through `onRawResult`.
+ */
+function isEmbeddedUiResource(part) {
+  return (
+    part?.type === 'resource' &&
+    typeof part.resource?.uri === 'string' &&
+    part.resource.uri.startsWith('ui://')
+  );
+}
+
 function normalizeToolResult(result) {
   if (!result?.content) return result;
   // Most callers in iHub want a string. If the MCP response is a single text
   // block, surface it as-is; otherwise return the structured array so callers
   // that handle multi-modal output still get everything.
-  const parts = result.content;
+  const all = Array.isArray(result.content) ? result.content : [];
+  const withoutViews = all.filter(part => !isEmbeddedUiResource(part));
+  const parts = withoutViews.length ? withoutViews : all;
   if (parts.length === 1 && parts[0]?.type === 'text') return parts[0].text;
   return parts;
 }

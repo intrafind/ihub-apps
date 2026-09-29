@@ -65,7 +65,8 @@ function combineUploadData(manualData, mailData) {
  * @param {boolean} [options.isFreshChat=false] - Whether the pane minted this chat and has
  *   not sent anything in it yet, so there is nothing stored to fetch
  * @returns {Object} useAppChat's result with the enriched `sendMessage`, plus
- *   `storedChatSettings` — the settings a reopened chat was last answered with.
+ *   `storedChatSettings` and `storedChatVariables` — the settings and the app
+ *   variables a reopened chat was last answered with.
  */
 function useOfficeChatAdapter({
   appId,
@@ -75,7 +76,8 @@ function useOfficeChatAdapter({
   isFreshChat = false
 }) {
   const chat = useAppChat({ appId, chatId, onMessageComplete, serverBacked });
-  const storedChatSettings = useStoredChatHydration({ chat, chatId, serverBacked, isFreshChat });
+  const { chatSettings: storedChatSettings, chatVariables: storedChatVariables } =
+    useStoredChatHydration({ chat, chatId, serverBacked, isFreshChat });
   const host = useEmbeddedHost();
 
   const sendMessage = useCallback(
@@ -171,7 +173,7 @@ function useOfficeChatAdapter({
     [chat, host]
   );
 
-  return { ...chat, sendMessage, storedChatSettings };
+  return { ...chat, sendMessage, storedChatSettings, storedChatVariables };
 }
 
 export default useOfficeChatAdapter;
