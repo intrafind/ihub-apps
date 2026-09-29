@@ -69,9 +69,12 @@ function snippetOf(item) {
     value => typeof value === 'string' && value.trim()
   );
   if (!text) return null;
-  // Search engines mark the matched terms with HTML (`<strong>`); a card shows text.
+  // Search engines mark the matched terms with HTML (`<strong>`); a card shows
+  // text. After the tags go, any angle bracket left (a broken or nested tag) is
+  // dropped too, so no markup can survive into the snippet.
   const plain = text
     .replace(/<[^>]*>/g, '')
+    .replace(/[<>]/g, '')
     .replace(/\s+/g, ' ')
     .trim();
   return plain ? plain.slice(0, MAX_SNIPPET_CHARS) : null;

@@ -110,6 +110,29 @@ describe('extractHtmlPage', () => {
     assert.doesNotMatch(page.markdown, /\[\]\(/);
   });
 
+  it('keeps a table cell in its column: pipes escaped, backslashes as Turndown escaped them', () => {
+    const page = extractHtmlPage(
+      `<html><body><article><p>${'Setting reference for the page reader. '.repeat(10)}</p>
+        <table><tr><th>Syntax</th><th>Meaning</th></tr>
+        <tr><td>a|b</td><td>C:\\temp</td></tr></table></article></body></html>`,
+      { url: 'https://example.com/' }
+    );
+    assert.match(page.markdown, /^\| a\\\|b \| C:\\\\temp \|$/m);
+  });
+
+  it('percent-encodes link targets that would end the Markdown link early', () => {
+    const page = extractHtmlPage(
+      `<html><body><article><p>${'About parentheses in URLs. '.repeat(12)}
+        See <a href="https://en.wikipedia.org/wiki/Foo_(bar)">Foo</a> and
+        <a href="https://example.com/a\\)b c">odd</a>.</p></article></body></html>`,
+      { url: 'https://example.com/' }
+    );
+    assert.match(page.markdown, /\[Foo\]\(https:\/\/en\.wikipedia\.org\/wiki\/Foo_%28bar%29\)/);
+    // Resolving the link against the page turns the backslash into a slash (URL
+    // parsing rules); the parenthesis and the space are encoded.
+    assert.match(page.markdown, /\[odd\]\(https:\/\/example\.com\/a\/%29b%20c\)/);
+  });
+
   it('drops navigation, footer and styles', () => {
     const page = extractHtmlPage(ARTICLE, { url: 'https://example.com/' });
     assert.doesNotMatch(page.markdown, /Imprint/);

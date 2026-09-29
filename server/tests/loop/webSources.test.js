@@ -46,6 +46,20 @@ test('extractWebSources: web sources carry what a source card shows', () => {
   ]);
 });
 
+test('extractWebSources: a snippet keeps no markup, not even from broken tags', () => {
+  const [source] = extractWebSources('braveSearch', {
+    results: [
+      {
+        title: 'T',
+        url: 'https://example.com/',
+        description: 'Hello <<script>script>alert(1)</script> <b>world</b> <img src=x'
+      }
+    ]
+  });
+  assert.doesNotMatch(source.snippet, /[<>]/);
+  assert.match(source.snippet, /world/);
+});
+
 test('extractWebSources: a page read reports words read and truncation', () => {
   const [source] = extractWebSources('webContentExtractor', {
     url: 'https://example.com/long',

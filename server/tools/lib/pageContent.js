@@ -135,11 +135,43 @@ const BODY_ONLY_UNWANTED = [
  * @param {Element} cell
  */
 function tableCell(service, cell) {
-  return service
-    .turndown(cell.innerHTML || '')
-    .replace(/\s*\n+\s*/g, ' ')
-    .replace(/\|/g, '\\|')
-    .trim();
+  return escapeCellPipes(
+    service
+      .turndown(cell.innerHTML || '')
+      .replace(/\s*\n+\s*/g, ' ')
+      .trim()
+  );
+}
+
+/**
+ * Escape the pipes of a table cell's Markdown so they do not split the cell.
+ *
+ * Only pipes need it: Turndown has already escaped every backslash of the
+ * cell's text (`\` → `\\`), so a backslash in its output either escapes a
+ * Markdown character or is itself escaped, and a pipe after it is still a bare
+ * pipe that needs its own escape. Code spans keep their backslashes verbatim,
+ * as GFM tables expect (`\|` is a pipe inside a code span in a table too).
+ *
+ * @param {string} markdown - A cell's Markdown, on one line
+ * @returns {string}
+ */
+function escapeCellPipes(markdown) {
+  let out = '';
+  for (const char of markdown) out += char === '|' ? '\\|' : char;
+  return out;
+}
+
+/**
+ * A URL as a Markdown link destination: characters that would end the
+ * destination early — parentheses, whitespace, backslashes — percent-encoded.
+ * @param {string} href
+ * @returns {string}
+ */
+function linkDestination(href) {
+  return href.replace(
+    /[()\\\s]/g,
+    char => `%${char.charCodeAt(0).toString(16).toUpperCase().padStart(2, '0')}`
+  );
 }
 
 /**
@@ -177,7 +209,7 @@ export function createMarkdownConverter() {
       if (!text) return '';
       const href = node.getAttribute('href').trim();
       if (href.startsWith('#') || /^javascript:/i.test(href)) return content;
-      return `[${content}](${href.replace(/([()])/g, '\\$1')})`;
+      return `[${content}](${linkDestination(href)})`;
     }
   });
 
