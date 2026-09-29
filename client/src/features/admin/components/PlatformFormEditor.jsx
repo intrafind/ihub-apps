@@ -382,6 +382,60 @@ function PlatformFormEditor({ value: config, onChange, onValidationChange, avail
               </p>
             </div>
 
+            {/* LDAP Group Lookup */}
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              <div>
+                <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+                  LDAP Group Lookup Provider
+                </label>
+                <select
+                  value={config.proxyAuth?.ldapGroupLookupProvider || ''}
+                  onChange={e =>
+                    updateNestedConfig(
+                      'proxyAuth',
+                      'ldapGroupLookupProvider',
+                      e.target.value || undefined
+                    )
+                  }
+                  className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md shadow-xs focus:ring-blue-500 focus:border-blue-500 sm:text-sm dark:bg-gray-700 dark:text-gray-200"
+                >
+                  <option value="">None (use header/JWT groups only)</option>
+                  {(config.ldapAuth?.providers || []).map(p => (
+                    <option key={p.name} value={p.name}>
+                      {p.displayName || p.name}
+                    </option>
+                  ))}
+                </select>
+                <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">
+                  When set, look up the authenticated user's group memberships in the selected LDAP
+                  provider and merge them with the groups supplied via the groups header and JWT
+                  claim. The LDAP provider must have admin credentials and group search configured.
+                </p>
+              </div>
+              <div>
+                <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+                  LDAP Group Cache TTL (seconds)
+                </label>
+                <input
+                  type="number"
+                  min="0"
+                  value={config.proxyAuth?.ldapGroupLookupCacheTtlSeconds ?? 600}
+                  onChange={e =>
+                    updateNestedConfig(
+                      'proxyAuth',
+                      'ldapGroupLookupCacheTtlSeconds',
+                      Number(e.target.value)
+                    )
+                  }
+                  className="w-full px-3 py-2 border border-gray-300 rounded-md shadow-xs focus:ring-blue-500 focus:border-blue-500 sm:text-sm"
+                  placeholder="600"
+                />
+                <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">
+                  How long to cache LDAP group results per user. Set to 0 to disable caching.
+                </p>
+              </div>
+            </div>
+
             {/* JWT Providers */}
             <JwtProvidersSection config={config} onChange={onChange} t={t} />
           </div>

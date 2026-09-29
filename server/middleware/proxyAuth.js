@@ -5,6 +5,7 @@ import config from '../config.js';
 import configCache from '../configCache.js';
 import { enhanceUserGroups } from '../utils/authorization.js';
 import { validateAndPersistExternalUser } from '../utils/userManager.js';
+import { getLdapProviderByName, lookupLdapGroupsForUser } from './ldapAuth.js';
 import logger from '../utils/logger.js';
 
 // JWKS documents are cached per provider URL, but only for a bounded TTL. The
@@ -23,6 +24,170 @@ const jwksCache = new Map();
 // is awaited, so without this a burst of concurrent requests arriving after the
 // TTL expires would each start their own outbound call.
 const inFlightFetches = new Map();
+
+// Proxy auth runs on every request. An uncached LDAP lookup per request would
+// hammer the directory server, so cache the resolved group list per user with
+// a bounded TTL. Keyed by `<providerName>::<userId>` so switching the
+// configured provider (or user impersonation across sessions) doesn't reuse a
+// stale entry.
+const ldapGroupsCache = new Map();
+const ldapGroupsInFlight = new Map();
+const DEFAULT_LDAP_GROUPS_TTL_MS = 10 * 60 * 1000; // 10 minutes
+// Hard cap on cached users per process. Without this, a long-running server
+// with churn in the proxy-authenticated user set would accumulate one entry
+// per distinct user for the process lifetime. Map preserves insertion order,
+// so evicting `keys().next()` drops the least-recently-refreshed entry.
+const LDAP_GROUPS_CACHE_MAX_ENTRIES = 5000;
+// Cooldown between LDAP lookups for the same user after a failure. Without it,
+// every request during a directory outage opens its own LDAP timeout, piling
+// latency on top of the outage and load on the recovering server.
+const LDAP_GROUPS_FAILURE_COOLDOWN_MS = 30 * 1000;
+// Absolute cap on how long a pre-outage group set is trusted while LDAP is
+// unavailable. Without it, repeated failures keep re-serving the same snapshot
+// forever, so a group revoked at the directory (e.g. offboarded employee)
+// stays effective as long as the outage lasts. Header/JWT-only groups take
+// over past this age.
+const LDAP_GROUPS_MAX_STALE_MS = 60 * 60 * 1000; // 1 hour
+
+function getLdapGroupsCacheKey(providerName, userId) {
+  return `${providerName}::${userId}`;
+}
+
+function storeLdapGroupsCacheEntry(cacheKey, entry) {
+  // Delete + re-set refreshes insertion order, so recently-used entries
+  // survive when the cap kicks in.
+  ldapGroupsCache.delete(cacheKey);
+  ldapGroupsCache.set(cacheKey, entry);
+  while (ldapGroupsCache.size > LDAP_GROUPS_CACHE_MAX_ENTRIES) {
+    const oldest = ldapGroupsCache.keys().next().value;
+    if (oldest === undefined) break;
+    ldapGroupsCache.delete(oldest);
+  }
+}
+
+async function fetchLdapGroupsForProxyUser(providerName, userId) {
+  const ldapProvider = getLdapProviderByName(providerName);
+
+  if (!ldapProvider) {
+    logger.error('Proxy Auth: ldapGroupLookupProvider references non-existent LDAP provider', {
+      component: 'ProxyAuth',
+      ldapGroupLookupProvider: providerName
+    });
+    return [];
+  }
+
+  if (!ldapProvider.adminDn || !ldapProvider.adminPasswordRef) {
+    logger.error(
+      'Proxy Auth: LDAP provider for group lookup is missing adminDn or adminPasswordRef',
+      {
+        component: 'ProxyAuth',
+        ldapProvider: providerName
+      }
+    );
+    return [];
+  }
+
+  return await lookupLdapGroupsForUser(userId, ldapProvider);
+}
+
+/**
+ * Resolve a proxy user's LDAP groups through the per-user cache.
+ *
+ * `ttlMs` of 0 disables caching entirely: no entry is written, and no entry
+ * left over from a positive TTL is served — not as a fresh hit, not during a
+ * failure cooldown and not as a stale fallback after a failed lookup.
+ *
+ * @param {string} providerName - Name of the `ldapAuth.providers` entry to query
+ * @param {string} userId - User identifier taken from the proxy header or JWT
+ * @param {number} ttlMs - Cache TTL in milliseconds, 0 to disable caching
+ * @returns {Promise<string[]>} LDAP group names, empty when none apply
+ */
+async function getLdapGroupsForProxyUser(providerName, userId, ttlMs) {
+  const cacheKey = getLdapGroupsCacheKey(providerName, userId);
+  const cachingEnabled = ttlMs > 0;
+  if (!cachingEnabled) {
+    // The TTL may have been lowered to 0 at runtime. Drop whatever an earlier
+    // lookup cached so none of the branches below can hand it back.
+    ldapGroupsCache.delete(cacheKey);
+  }
+
+  const now = Date.now();
+  const entry = ldapGroupsCache.get(cacheKey);
+  if (entry) {
+    if (entry.fetchedAt !== undefined && now - entry.fetchedAt < ttlMs) {
+      return entry.groups;
+    }
+    if (entry.failedAt !== undefined && now - entry.failedAt < LDAP_GROUPS_FAILURE_COOLDOWN_MS) {
+      // Recent failure: skip the LDAP round-trip. Serve the pre-outage groups
+      // only if they are within the max-stale window; past it, fall back to
+      // header/JWT groups only so a revoked permission does not remain
+      // effective for the entire duration of a long outage.
+      if (entry.fetchedAt !== undefined && now - entry.fetchedAt < LDAP_GROUPS_MAX_STALE_MS) {
+        return entry.groups;
+      }
+      return [];
+    }
+  }
+
+  let pending = ldapGroupsInFlight.get(cacheKey);
+  if (!pending) {
+    pending = (async () => {
+      try {
+        const groups = await fetchLdapGroupsForProxyUser(providerName, userId);
+        if (cachingEnabled) {
+          storeLdapGroupsCacheEntry(cacheKey, { groups, fetchedAt: Date.now() });
+        } else {
+          // A lookup started under a positive TTL may have stored an entry
+          // while this one was in flight.
+          ldapGroupsCache.delete(cacheKey);
+        }
+        return { groups, stale: false };
+      } catch (error) {
+        // Fall back to the stale copy, if any, instead of locking a user out
+        // while the directory is briefly unreachable.
+        logger.error(
+          'Proxy Auth: LDAP group lookup failed, continuing with header/JWT groups only',
+          {
+            component: 'ProxyAuth',
+            username: userId,
+            ldapGroupLookupProvider: providerName,
+            error
+          }
+        );
+        // Preserve the *original* successful `fetchedAt` (if any) instead of
+        // dropping it or resetting it to the failure time. That anchor lets the
+        // max-stale check bound how long a group set survives across repeated
+        // failures — otherwise the failure branch would keep re-serving a snapshot
+        // from an old success forever.
+        const priorFetchedAt = entry?.fetchedAt;
+        const withinMaxStale =
+          priorFetchedAt !== undefined && Date.now() - priorFetchedAt < LDAP_GROUPS_MAX_STALE_MS;
+        const staleGroups = withinMaxStale ? (entry?.groups ?? []) : [];
+        if (cachingEnabled) {
+          // Record the failure so the next request within the cooldown skips
+          // another LDAP call. Even when the failure is because of pure
+          // misconfiguration (bad DN, missing password) the cooldown is fine —
+          // the operator has to change config to fix it either way.
+          storeLdapGroupsCacheEntry(cacheKey, {
+            groups: staleGroups,
+            fetchedAt: priorFetchedAt,
+            failedAt: Date.now()
+          });
+        }
+        return { groups: staleGroups, stale: true };
+      } finally {
+        ldapGroupsInFlight.delete(cacheKey);
+      }
+    })();
+    ldapGroupsInFlight.set(cacheKey, pending);
+  }
+
+  const { groups, stale } = await pending;
+  // A caller running with caching disabled can join a lookup that started
+  // under a positive TTL and fell back to its cached snapshot; it must not use
+  // that snapshot.
+  return stale && !cachingEnabled ? [] : groups;
+}
 
 async function requestJwks(jwkUrl, previous) {
   const attemptedAt = Date.now();
@@ -115,7 +280,9 @@ export async function proxyAuth(req, res, next) {
     userHeader:
       config.PROXY_AUTH_USER_HEADER || platform?.proxyAuth?.userHeader || 'x-forwarded-user',
     groupsHeader: config.PROXY_AUTH_GROUPS_HEADER || platform?.proxyAuth?.groupsHeader,
-    jwtProviders: platform?.proxyAuth?.jwtProviders || []
+    jwtProviders: platform?.proxyAuth?.jwtProviders || [],
+    ldapGroupLookupProvider: platform?.proxyAuth?.ldapGroupLookupProvider,
+    ldapGroupLookupCacheTtlSeconds: platform?.proxyAuth?.ldapGroupLookupCacheTtlSeconds
   };
 
   if (!proxyCfg.enabled) {
@@ -222,6 +389,21 @@ export async function proxyAuth(req, res, next) {
   if (!userId) {
     req.user = null;
     return next();
+  }
+
+  if (proxyCfg.ldapGroupLookupProvider) {
+    const ttlSeconds = Number.isFinite(proxyCfg.ldapGroupLookupCacheTtlSeconds)
+      ? proxyCfg.ldapGroupLookupCacheTtlSeconds
+      : DEFAULT_LDAP_GROUPS_TTL_MS / 1000;
+    const ttlMs = Math.max(0, ttlSeconds) * 1000;
+    const ldapGroups = await getLdapGroupsForProxyUser(
+      proxyCfg.ldapGroupLookupProvider,
+      userId,
+      ttlMs
+    );
+    if (ldapGroups.length > 0) {
+      groups = [...new Set([...groups, ...ldapGroups])];
+    }
   }
 
   let user = {
