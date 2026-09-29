@@ -27,7 +27,8 @@ import {
   NewspaperIcon,
   MicrophoneIcon,
   StarIcon,
-  ChatBubbleLeftRightIcon
+  ChatBubbleLeftRightIcon,
+  ScaleIcon
 } from '@heroicons/react/24/outline';
 
 /**
@@ -319,6 +320,13 @@ export function getAdminNavSections({ t, showAdminPage, featureFlags }) {
           href: '/admin/features',
           icon: FlagIcon,
           visible: showAdminPage('features')
+        },
+        {
+          key: 'eu-ai-act',
+          label: t('admin.nav.euAiAct', 'EU AI Act'),
+          href: '/admin/eu-ai-act',
+          icon: ScaleIcon,
+          visible: showAdminPage('euAiAct')
         },
         {
           key: 'voice-input',

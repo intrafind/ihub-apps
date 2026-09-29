@@ -30,6 +30,7 @@ const ADMIN_PAGES = [
   { label: 'Chat History', href: '/admin/chat-history' },
   { label: 'Voice Input', href: '/admin/voice-input' },
   { label: 'Features', href: '/admin/features' },
+  { label: 'EU AI Act', href: '/admin/eu-ai-act' },
   { label: 'Security', href: '/admin/security' },
   { label: 'Backup & Restore', href: '/admin/backup' },
   { label: 'Updates', href: '/admin/updates' },
