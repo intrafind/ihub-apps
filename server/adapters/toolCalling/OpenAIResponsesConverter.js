@@ -216,6 +216,67 @@ function processAnnotations(contentItem, annotations) {
 }
 
 /**
+ * Native web search activity in the `groundingMetadata` shape the other
+ * providers use (see `features/chat/webSearch` on the client and
+ * `shared/webCitations.js`):
+ *
+ *  - `webSearchQueries` — what a `web_search_call` searched for
+ *    (`action.query`, or `action.queries` on newer models);
+ *  - `searchResults` — the pages it looked at (`action.sources`, present when
+ *    the request asks for them), as `{ url, title? }`;
+ *  - `citations` — the `url_citation` annotations on the answer text, as
+ *    `{ url, title, start_index, end_index }`.
+ *
+ * Without this, a streamed OpenAI web search answer carried its citations
+ * nowhere the chat reads: they were parsed only on the non-streaming path,
+ * into `metadata.annotations`, which nothing used.
+ *
+ * @param {Object[]} webSearchCalls - `web_search_call` items
+ * @param {Object[]} annotations - output_text annotations
+ * @returns {Object|null} grounding metadata, or null when there is none
+ */
+export function toGroundingMetadata(webSearchCalls = [], annotations = []) {
+  const queries = [];
+  const searchResults = [];
+  for (const call of webSearchCalls) {
+    const action = call?.action;
+    if (!action || typeof action !== 'object') continue;
+    const asked = [action.query, ...(Array.isArray(action.queries) ? action.queries : [])];
+    for (const query of asked) {
+      if (typeof query === 'string' && query.trim() && !queries.includes(query.trim())) {
+        queries.push(query.trim());
+      }
+    }
+    for (const source of Array.isArray(action.sources) ? action.sources : []) {
+      if (typeof source?.url === 'string' && source.url) {
+        searchResults.push({
+          url: source.url,
+          ...(typeof source.title === 'string' && source.title ? { title: source.title } : {})
+        });
+      }
+    }
+  }
+  const citations = [];
+  for (const annotation of annotations) {
+    if (annotation?.type !== 'url_citation' || typeof annotation.url !== 'string') continue;
+    citations.push({
+      url: annotation.url,
+      ...(typeof annotation.title === 'string' && annotation.title
+        ? { title: annotation.title }
+        : {}),
+      ...(Number.isInteger(annotation.start_index) ? { start_index: annotation.start_index } : {}),
+      ...(Number.isInteger(annotation.end_index) ? { end_index: annotation.end_index } : {})
+    });
+  }
+  if (!queries.length && !searchResults.length && !citations.length) return null;
+  return {
+    ...(queries.length ? { webSearchQueries: queries } : {}),
+    ...(searchResults.length ? { searchResults } : {}),
+    ...(citations.length ? { citations } : {})
+  };
+}
+
+/**
  * Convert OpenAI Responses API tool calls to generic format
  * @param {Object[]} responsesToolCalls - OpenAI Responses API formatted tool calls
  * @returns {import('./GenericToolCalling.js').GenericToolCall[]} Generic tool calls
@@ -469,6 +530,12 @@ export async function convertOpenaiResponsesResponseToGeneric(data, _streamId = 
         // Store web search metadata for tracking
         addWebSearchMetadata(webSearchMetadata, parsed.item);
       }
+
+      // Event: response.output_text.annotation.added - a citation on the
+      // answer text (`url_citation` for web search), streamed as it is made.
+      if (parsed.type === 'response.output_text.annotation.added' && parsed.annotation) {
+        annotations.push(parsed.annotation);
+      }
     }
     // Handle full response object (non-streaming)
     else if (parsed.output && Array.isArray(parsed.output)) {
@@ -564,7 +631,7 @@ export async function convertOpenaiResponsesResponseToGeneric(data, _streamId = 
       metadata.usage = nonStreamingUsage;
     }
 
-    return createGenericStreamingResponse(
+    const response = createGenericStreamingResponse(
       content,
       thinking,
       genericToolCalls,
@@ -574,6 +641,12 @@ export async function convertOpenaiResponsesResponseToGeneric(data, _streamId = 
       normalizeFinishReason(finishReason),
       metadata
     );
+    const groundingMetadata = toGroundingMetadata(
+      webSearchMetadata.map(item => ({ action: item.action })),
+      annotations
+    );
+    if (groundingMetadata) response.groundingMetadata = groundingMetadata;
+    return response;
   } catch (error) {
     logger.error('Error parsing OpenAI Responses API response', {
       component: 'OpenAIResponsesConverter',

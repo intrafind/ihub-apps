@@ -109,7 +109,13 @@ function toolCallRecords(toolCalls) {
  * aborted or failed — is still recorded, with the estimate taken when it
  * started: on the next `preStep`, or by the owner via `takePendingCall()`.
  */
-export function chatTurnSeam({ chatId, buildLogData, streaming, telemetry = defaultTelemetry }) {
+export function chatTurnSeam({
+  chatId,
+  buildLogData,
+  streaming,
+  telemetry = defaultTelemetry,
+  webSearchLog = null
+}) {
   /** The model call in flight: `{ model, request }` until its request side is recorded. */
   let pending = null;
   const take = () => {
@@ -152,6 +158,9 @@ export function chatTurnSeam({ chatId, buildLogData, streaming, telemetry = defa
     },
     async stepEnd(ctx, step) {
       const call = take();
+      if (webSearchLog && step.result?.groundingMetadata) {
+        webSearchLog.grounding.push(step.result.groundingMetadata);
+      }
       await telemetry.recordChatCallEnd({
         baseLog: buildLogData(streaming),
         model: ctx.model,
@@ -277,7 +286,8 @@ export function chatToolSeam({
   buildLogData,
   logInteraction,
   mcpAppViews = null,
-  mcpAuthPrompts = null
+  mcpAuthPrompts = null,
+  webSearchLog = null
 }) {
   const recordView = view => {
     if (Array.isArray(mcpAppViews)) mcpAppViews.push(view);
@@ -328,6 +338,14 @@ export function chatToolSeam({
     },
     async postTool(ctx, info, outcome) {
       const { toolId, args } = info;
+      if (webSearchLog) {
+        webSearchLog.tools.push({
+          toolId: String(toolId),
+          args,
+          webSources: outcome.webSources || [],
+          status: outcome.error ? 'error' : 'completed'
+        });
+      }
       const mcp = mcpAppOf(info);
       // The auth-required marker is only ever produced by an MCP tool call
       // (McpClientManager._callUserTool); gate on the tool's own declared

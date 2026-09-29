@@ -1,11 +1,25 @@
-import { JSDOM } from 'jsdom';
 import * as pdfjs from 'pdfjs-dist/legacy/build/pdf.mjs';
 import { throttledFetch } from '../requestThrottler.js';
 import { emitToolProgress } from '../services/loop/RunStream.js';
+import config from '../config.js';
 import configCache from '../configCache.js';
+import {
+  DEFAULT_PAGE_CACHE_TTL_MS,
+  getCachedPage,
+  makePageCacheKey,
+  setCachedPage
+} from '../services/pageCache.js';
+import { resolveSearchLanguage } from '../services/search/searchLanguage.js';
 import logger from '../utils/logger.js';
 import { enhanceFetchOptions, getSSLConfig, isDomainWhitelisted } from '../utils/httpConfig.js';
 import { assertPublicTarget, createPinnedLookup } from '../utils/ssrfGuard.js';
+import {
+  acceptLanguageFor,
+  countWords,
+  extractHtmlPage,
+  extractPdf,
+  sliceDocument
+} from './lib/pageContent.js';
 
 // Bound manual redirect-following so a malicious/misconfigured server can't
 // force an unbounded hop chain.
@@ -44,17 +58,212 @@ async function assertHopIsSafe(parsedUrl, sslConfig) {
   return result.addresses;
 }
 
+/** Browser user agent: many sites answer a default Node user agent with a block page. */
+export const DEFAULT_READER_USER_AGENT =
+  'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/140.0.0.0 Safari/537.36';
+
 /**
- * Extract clean, readable content from a web page
- * Removes headers, footers, navigation, ads, and other non-content elements
+ * Fetch a page, following redirects manually so every hop is re-validated
+ * against the SSRF guard and DNS is pinned to the validated address (closing
+ * the rebinding window). A public initial hostname can otherwise redirect to a
+ * private/internal address after the first check.
+ *
+ * @returns {Promise<{response: Object, finalUrl: URL}>}
+ */
+async function fetchPage(validUrl, { sslConfig, shouldIgnoreSSL, acceptLanguage }) {
+  let hopUrl = validUrl;
+  let response;
+  for (let redirectCount = 0; ; redirectCount++) {
+    if (redirectCount > MAX_REDIRECTS) {
+      throw createError('Too many redirects while fetching webpage', 'TOO_MANY_REDIRECTS');
+    }
+
+    const addresses = await assertHopIsSafe(hopUrl, sslConfig);
+    const pinnedLookup = addresses ? createPinnedLookup(addresses) : null;
+
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort(), 10000); // 10 second timeout
+
+    // Build base fetch options
+    const fetchOptions = {
+      headers: {
+        'User-Agent': config.WEB_READER_USER_AGENT || DEFAULT_READER_USER_AGENT,
+        Accept:
+          'text/html,application/xhtml+xml,application/xml;q=0.9,application/pdf;q=0.9,*/*;q=0.8',
+        // The user's language, so a multilingual site serves the page they read.
+        'Accept-Language': acceptLanguage,
+        'Accept-Encoding': 'gzip, deflate',
+        'Upgrade-Insecure-Requests': '1'
+      },
+      signal: controller.signal,
+      // Follow redirects manually so each hop is re-validated above instead
+      // of letting the fetch implementation resolve/connect to it directly.
+      redirect: 'manual'
+    };
+
+    // Apply SSL and proxy configuration using the centralized httpConfig utility,
+    // pinning DNS resolution to the addresses just validated for this hop.
+    const enhancedOptions = enhanceFetchOptions(
+      fetchOptions,
+      hopUrl.toString(),
+      shouldIgnoreSSL,
+      pinnedLookup
+    );
+
+    try {
+      response = await throttledFetch('webContentExtractor', hopUrl.toString(), enhancedOptions);
+    } finally {
+      clearTimeout(timeoutId);
+    }
+
+    if (response.status >= 300 && response.status < 400) {
+      const location = response.headers.get('location');
+      if (!location) break;
+
+      let nextUrl;
+      try {
+        nextUrl = new URL(location, hopUrl);
+      } catch {
+        throw createError(`Invalid redirect location: ${location}`, 'INVALID_URL');
+      }
+      if (!['http:', 'https:'].includes(nextUrl.protocol)) {
+        throw createError('Only HTTP and HTTPS URLs are supported', 'UNSUPPORTED_PROTOCOL');
+      }
+      hopUrl = nextUrl;
+      continue;
+    }
+    break;
+  }
+  return { response, finalUrl: hopUrl };
+}
+
+/**
+ * Fetch and extract a whole document: Markdown for HTML, text for PDFs, with
+ * its metadata. What the page cache stores; a window of `text` is what one
+ * call returns.
+ */
+async function loadDocument(validUrl, { sslConfig, shouldIgnoreSSL, acceptLanguage, progress }) {
+  const { response, finalUrl } = await fetchPage(validUrl, {
+    sslConfig,
+    shouldIgnoreSSL,
+    acceptLanguage
+  });
+
+  progress('parsing');
+
+  if (!response.ok) {
+    if (response.status === 404) {
+      throw createError('Page could not be found (HTTP 404)', 'PAGE_NOT_FOUND');
+    }
+    if (response.status === 401 || response.status === 403) {
+      throw createError(
+        `Authentication required to access this page (HTTP ${response.status})`,
+        'AUTH_REQUIRED'
+      );
+    }
+    throw createError(
+      `Failed to fetch webpage: ${response.status} ${response.statusText}`,
+      'FETCH_ERROR'
+    );
+  }
+
+  const contentType = response.headers.get('content-type') || '';
+  if (contentType.includes('application/pdf')) {
+    progress('extracting', { type: 'pdf' });
+    try {
+      const pdf = await extractPdf(pdfjs, await response.arrayBuffer(), {
+        url: finalUrl.toString()
+      });
+      return {
+        finalUrl: finalUrl.toString(),
+        contentType: 'pdf',
+        format: 'text',
+        title: pdf.title,
+        description: 'PDF document',
+        author: pdf.author,
+        siteName: '',
+        publishedDate: pdf.publishedDate,
+        language: '',
+        text: pdf.text,
+        pageCount: pdf.pageCount,
+        pagesRead: pdf.pagesRead,
+        thin: !pdf.text.trim()
+      };
+    } catch (pdfError) {
+      throw createError(`Failed to parse PDF: ${pdfError.message}`, 'PDF_PARSE_ERROR');
+    }
+  }
+
+  const html = await response.text();
+  progress('extracting', { type: 'html' });
+  const page = extractHtmlPage(html, { url: finalUrl.toString() });
+  return {
+    finalUrl: finalUrl.toString(),
+    contentType: 'html',
+    format: 'markdown',
+    title: page.title,
+    description: page.description,
+    author: page.author,
+    siteName: page.siteName,
+    publishedDate: page.publishedDate,
+    language: page.language,
+    text: page.markdown,
+    thin: page.thin
+  };
+}
+
+/** How long an extracted page stays cached (the web search cache TTL). */
+function pageCacheTtlMs() {
+  const parsed = Number(config.SEARCH_CACHE_TTL_MS);
+  return Number.isFinite(parsed) && parsed > 0 ? parsed : DEFAULT_PAGE_CACHE_TTL_MS;
+}
+
+/**
+ * What the model is told about the window it got, beyond the text itself.
+ * @returns {string|undefined}
+ */
+function readerNote(doc, slice) {
+  const notes = [];
+  if (slice.totalLength > 0 && slice.offset >= slice.totalLength) {
+    notes.push(
+      `The offset is past the end of the document, which has ${slice.totalLength} characters.`
+    );
+  } else if (slice.truncated) {
+    const shownEnd = slice.nextOffset;
+    notes.push(
+      `Showing characters ${slice.offset}-${shownEnd} of ${slice.totalLength}. ` +
+        `To read on, call this tool again with the same url and offset ${slice.nextOffset}.`
+    );
+  }
+  if (doc.contentType === 'pdf' && doc.pagesRead < doc.pageCount) {
+    notes.push(`Only the first ${doc.pagesRead} of ${doc.pageCount} pages were read.`);
+  }
+  if (doc.thin) {
+    notes.push(
+      'The page returned little readable text. It may need JavaScript to render, or block automated access; use another source if this is not enough.'
+    );
+  }
+  return notes.length ? notes.join(' ') : undefined;
+}
+
+/**
+ * Extract clean, readable content from a web page (or PDF) as Markdown.
+ *
+ * Headings, lists, tables, links and code survive; navigation, ads, headers
+ * and footers do not (see `lib/pageContent.js`). The document is cached for a
+ * short time, and each call returns one window of it: `truncated` says there
+ * is more, `nextOffset` where to continue, `totalLength` how long it is.
+ *
  * @param {Object} params - The extraction parameters
  * @param {string} [params.url] - The URL to extract content from
  * @param {string} [params.uri] - Alternative URL parameter name
  * @param {string} [params.link] - Alternative URL parameter name
  * @param {number} [params.maxLength=5000] - Maximum content length to return
+ * @param {number} [params.offset=0] - Character offset to start reading at
+ * @param {string} [params.language] - The reader's language (Accept-Language)
  * @param {boolean} [params.ignoreSSL=null] - Whether to ignore SSL certificate errors
  * @param {string} [params.chatId] - The chat ID for action tracking
- * @returns {Promise<{url: string, title: string, description: string, author: string, content: string, wordCount: number, extractedAt: string}>} Extracted content with metadata
+ * @returns {Promise<Object>} The window of content with the page's metadata
  * @throws {Error} If URL is missing, invalid, or content extraction fails
  */
 export default async function webContentExtractor({
@@ -62,6 +271,8 @@ export default async function webContentExtractor({
   uri,
   link,
   maxLength = 5000,
+  offset = 0,
+  language,
   ignoreSSL = null,
   chatId
 }) {
@@ -99,291 +310,40 @@ export default async function webContentExtractor({
   const shouldIgnoreSSL =
     ignoreSSL !== null ? ignoreSSL : platformConfig.ssl?.ignoreInvalidCertificates || false;
 
+  const acceptLanguage = acceptLanguageFor(resolveSearchLanguage(language));
+
   try {
-    // Fetch the webpage, following redirects manually so every hop is
-    // re-validated against the SSRF guard and DNS is pinned to the validated
-    // address (closing the rebinding window). A public initial hostname can
-    // otherwise redirect to a private/internal address after the first check.
-    let hopUrl = validUrl;
-    let response;
-    for (let redirectCount = 0; ; redirectCount++) {
-      if (redirectCount > MAX_REDIRECTS) {
-        throw createError('Too many redirects while fetching webpage', 'TOO_MANY_REDIRECTS');
-      }
-
-      const addresses = await assertHopIsSafe(hopUrl, sslConfig);
-      const pinnedLookup = addresses ? createPinnedLookup(addresses) : null;
-
-      const controller = new AbortController();
-      const timeoutId = setTimeout(() => controller.abort(), 10000); // 10 second timeout
-
-      // Build base fetch options
-      const fetchOptions = {
-        headers: {
-          'User-Agent':
-            'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36',
-          Accept: 'text/html,application/xhtml+xml,application/xml;q=0.9,image/webp,*/*;q=0.8',
-          'Accept-Language': 'en-US,en;q=0.5',
-          'Accept-Encoding': 'gzip, deflate',
-          'Upgrade-Insecure-Requests': '1'
-        },
-        signal: controller.signal,
-        // Follow redirects manually so each hop is re-validated above instead
-        // of letting the fetch implementation resolve/connect to it directly.
-        redirect: 'manual'
-      };
-
-      // Apply SSL and proxy configuration using the centralized httpConfig utility,
-      // pinning DNS resolution to the addresses just validated for this hop.
-      const enhancedOptions = enhanceFetchOptions(
-        fetchOptions,
-        hopUrl.toString(),
-        shouldIgnoreSSL,
-        pinnedLookup
-      );
-
-      try {
-        response = await throttledFetch('webContentExtractor', hopUrl.toString(), enhancedOptions);
-      } finally {
-        clearTimeout(timeoutId);
-      }
-
-      if (response.status >= 300 && response.status < 400) {
-        const location = response.headers.get('location');
-        if (!location) break;
-
-        let nextUrl;
-        try {
-          nextUrl = new URL(location, hopUrl);
-        } catch {
-          throw createError(`Invalid redirect location: ${location}`, 'INVALID_URL');
-        }
-        if (!['http:', 'https:'].includes(nextUrl.protocol)) {
-          throw createError('Only HTTP and HTTPS URLs are supported', 'UNSUPPORTED_PROTOCOL');
-        }
-        hopUrl = nextUrl;
-        continue;
-      }
-      break;
+    const cacheKey = makePageCacheKey(validUrl.toString(), acceptLanguage);
+    let doc = getCachedPage(cacheKey);
+    if (!doc) {
+      doc = await loadDocument(validUrl, { sslConfig, shouldIgnoreSSL, acceptLanguage, progress });
+      setCachedPage(cacheKey, doc, doc.text.length, pageCacheTtlMs());
+    } else {
+      logger.debug('Page reader cache hit', { component: 'WebContentExtractor' });
     }
 
-    progress('parsing');
-
-    if (!response.ok) {
-      if (response.status === 404) {
-        throw createError('Page could not be found (HTTP 404)', 'PAGE_NOT_FOUND');
-      }
-      if (response.status === 401 || response.status === 403) {
-        throw createError(
-          `Authentication required to access this page (HTTP ${response.status})`,
-          'AUTH_REQUIRED'
-        );
-      }
-      throw createError(
-        `Failed to fetch webpage: ${response.status} ${response.statusText}`,
-        'FETCH_ERROR'
-      );
-    }
-
-    // Handle PDF content
-    const contentType = response.headers.get('content-type') || '';
-    if (contentType.includes('application/pdf')) {
-      progress('extracting', { type: 'pdf' });
-
-      try {
-        const arrayBuffer = await response.arrayBuffer();
-
-        // Use pdfjs-dist to parse the PDF
-        const loadingTask = pdfjs.getDocument({
-          data: new Uint8Array(arrayBuffer),
-          verbosity: 0 // Suppress console output
-        });
-
-        const pdf = await loadingTask.promise;
-
-        let fullText = '';
-        const maxPagesToProcess = Math.min(pdf.numPages, 10); // Limit to first 10 pages for performance
-
-        // Extract text from each page
-        for (let pageNum = 1; pageNum <= maxPagesToProcess; pageNum++) {
-          const page = await pdf.getPage(pageNum);
-          const textContent = await page.getTextContent();
-          const pageText = textContent.items.map(item => item.str).join(' ');
-          fullText += pageText + '\n';
-
-          // Stop if we have enough content
-          if (fullText.length > maxLength * 2) break;
-        }
-
-        const textContent = fullText.substring(0, maxLength);
-        const output = {
-          url: targetUrl,
-          title: targetUrl.split('/').pop(), // Use filename as title
-          description: 'PDF document',
-          author: '', // pdfjs-dist doesn't easily expose metadata
-          content: textContent.trim(),
-          wordCount: textContent.trim().split(/\s+/).length,
-          extractedAt: new Date().toISOString()
-        };
-        return output;
-      } catch (pdfError) {
-        throw createError(`Failed to parse PDF: ${pdfError.message}`, 'PDF_PARSE_ERROR');
-      }
-    }
-
-    let html = await response.text();
-    progress('extracting', { type: 'html' });
-    // Pre-emptively remove style tags to prevent CSS parsing errors from JSDOM
-    // Loop to handle nested/overlapping patterns that a single pass would miss
-    let prevHtml;
-    do {
-      prevHtml = html;
-      html = html.replace(/<style\b[^>]*>[\s\S]*?<\/style>/gi, '');
-    } while (html !== prevHtml);
-
-    const dom = new JSDOM(html);
-    const document = dom.window.document;
-
-    // Remove unwanted elements
-    const unwantedSelectors = [
-      'script',
-      'style',
-      'noscript',
-      'iframe',
-      'embed',
-      'object',
-      'header',
-      'footer',
-      'nav',
-      'aside',
-      'menu',
-      '.advertisement',
-      '.ad',
-      '.ads',
-      '.sidebar',
-      '.popup',
-      '.cookie-banner',
-      '.newsletter',
-      '.social-share',
-      '.related-articles',
-      '.comments',
-      '.pagination',
-      '[role="banner"]',
-      '[role="navigation"]',
-      '[role="complementary"]',
-      '.header',
-      '.footer',
-      '.nav',
-      '.navbar',
-      '.menu',
-      '.sidebar',
-      '.ad-container',
-      '.advertisement-container',
-      '.sponsored',
-      '.cookie-notice',
-      '.gdpr-banner',
-      '.privacy-notice'
-    ];
-
-    unwantedSelectors.forEach(selector => {
-      const elements = document.querySelectorAll(selector);
-      elements.forEach(el => el.remove());
-    });
-
-    // Try to find the main content area
-    let contentElement = null;
-    const contentSelectors = [
-      'main',
-      'article',
-      '[role="main"]',
-      '.content',
-      '.main-content',
-      '.article-content',
-      '.post-content',
-      '.entry-content',
-      '.page-content',
-      '.body-content',
-      '#content',
-      '#main-content',
-      '#article-content'
-    ];
-
-    for (const selector of contentSelectors) {
-      contentElement = document.querySelector(selector);
-      if (contentElement) break;
-    }
-
-    // If no main content area found, use body but filter more aggressively
-    if (!contentElement) {
-      contentElement = document.body;
-
-      // Remove more elements that are typically not main content
-      const additionalUnwanted = [
-        '.breadcrumb',
-        '.breadcrumbs',
-        '.tags',
-        '.categories',
-        '.meta',
-        '.metadata',
-        '.author-info',
-        '.date',
-        '.share-buttons',
-        '.social-buttons',
-        '.widget',
-        '.promo',
-        '.promotion',
-        '.banner',
-        '.alert'
-      ];
-
-      additionalUnwanted.forEach(selector => {
-        const elements = contentElement.querySelectorAll(selector);
-        elements.forEach(el => el.remove());
-      });
-    }
-
-    if (!contentElement) {
-      throw createError('Could not find content in the webpage', 'CONTENT_NOT_FOUND');
-    }
-
-    // Extract text content
-    let textContent = contentElement.textContent || '';
-
-    // Clean up the text
-    textContent = textContent
-      .replace(/\s+/g, ' ') // Replace multiple whitespace with single space
-      .replace(/\n\s*\n/g, '\n') // Replace multiple newlines with single newline
-      .trim();
-
-    // Remove empty lines and excessive whitespace
-    textContent = textContent
-      .split('\n')
-      .map(line => line.trim())
-      .filter(line => line.length > 0)
-      .join('\n');
-
-    // Truncate if too long
-    if (textContent.length > maxLength) {
-      textContent = textContent.substring(0, maxLength) + '...';
-    }
-
-    // Extract some metadata
-    const title = document.querySelector('title')?.textContent?.trim() || '';
-    const description =
-      document.querySelector('meta[name="description"]')?.getAttribute('content')?.trim() || '';
-    const author =
-      document.querySelector('meta[name="author"]')?.getAttribute('content')?.trim() || '';
-
-    const output = {
+    const slice = sliceDocument(doc.text, { offset, maxLength });
+    const note = readerNote(doc, slice);
+    return {
       url: targetUrl,
-      title: title,
-      description: description,
-      author: author,
-      content: textContent,
-      wordCount: textContent.split(/\s+/).length,
+      ...(doc.finalUrl && doc.finalUrl !== validUrl.toString() ? { finalUrl: doc.finalUrl } : {}),
+      title: doc.title,
+      description: doc.description,
+      author: doc.author,
+      ...(doc.siteName ? { siteName: doc.siteName } : {}),
+      ...(doc.publishedDate ? { publishedDate: doc.publishedDate } : {}),
+      contentType: doc.contentType,
+      format: doc.format,
+      content: slice.content,
+      offset: slice.offset,
+      nextOffset: slice.nextOffset,
+      truncated: slice.truncated,
+      totalLength: slice.totalLength,
+      wordCount: countWords(slice.content),
+      ...(doc.contentType === 'pdf' ? { pageCount: doc.pageCount, pagesRead: doc.pagesRead } : {}),
+      ...(note ? { note } : {}),
       extractedAt: new Date().toISOString()
     };
-    return output;
   } catch (error) {
     if (error.name === 'AbortError') {
       throw createError('Request timed out while fetching webpage', 'TIMEOUT');
@@ -410,20 +370,30 @@ const TOOL_DEFAULT_LENGTH = 10000;
  * Entry point for the `webContentExtractor` tool the model calls.
  *
  * Tool arguments come straight from the model, and nothing validates them
- * against the schema, so this wrapper does it for the two arguments that
- * matter: `maxLength` is clamped to the schema's bounds (an oversized value
- * would otherwise land a whole PDF in the context), and `ignoreSSL` is never
- * taken from the model — certificate checking stays with the platform's
- * `ssl.ignoreInvalidCertificates` setting and the SSL domain whitelist.
+ * against the schema, so this wrapper does it for the arguments that matter:
+ * `maxLength` is clamped to the schema's bounds (an oversized value would
+ * otherwise land a whole PDF in the context), `offset` to a whole number of
+ * characters from the start, and `ignoreSSL` is never taken from the model —
+ * certificate checking stays with the platform's `ssl.ignoreInvalidCertificates`
+ * setting and the SSL domain whitelist.
  *
  * @param {Object} params - Tool arguments plus the runtime context runTool adds
  * @returns {Promise<Object>} Same result as {@link webContentExtractor}
  */
-export async function extractForTool({ url, uri, link, maxLength, chatId } = {}) {
+export async function extractForTool({ url, uri, link, maxLength, offset, language, chatId } = {}) {
   let length = Number(maxLength);
   if (!Number.isFinite(length)) length = TOOL_DEFAULT_LENGTH;
   length = Math.min(TOOL_MAX_LENGTH, Math.max(TOOL_MIN_LENGTH, Math.floor(length)));
-  return webContentExtractor({ url, uri, link, maxLength: length, chatId });
+  const start = Number(offset);
+  return webContentExtractor({
+    url,
+    uri,
+    link,
+    maxLength: length,
+    offset: Number.isFinite(start) && start > 0 ? Math.floor(start) : 0,
+    language,
+    chatId
+  });
 }
 
 // CLI interface for direct execution

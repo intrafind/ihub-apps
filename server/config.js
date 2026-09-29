@@ -68,7 +68,11 @@ const env = cleanEnv(
     // Staan's web search endpoint. STAAN_API_KEY needs no declaration: it
     // reaches `config` through the dynamic `*_API_KEY` pass-through below.
     STAAN_SEARCH_ENDPOINT: str({ optional: true }),
-    // TTL of the in-memory web-search result cache (services/searchCache.js).
+    // User agent the page reader (tools/webContentExtractor.js) fetches with.
+    // A current browser one by default: many sites block a Node user agent.
+    WEB_READER_USER_AGENT: str({ optional: true }),
+    // TTL of the in-memory web-search result cache (services/searchCache.js),
+    // also used for pages the page reader extracted (services/pageCache.js).
     SEARCH_CACHE_TTL_MS: num({ default: 600000 })
   },
   {
@@ -120,6 +124,7 @@ const config = Object.freeze({
   QWANT_SEARCH_ENDPOINT: env.QWANT_SEARCH_ENDPOINT,
   QWANT_SEARCH_USER_AGENT: env.QWANT_SEARCH_USER_AGENT,
   STAAN_SEARCH_ENDPOINT: env.STAAN_SEARCH_ENDPOINT,
+  WEB_READER_USER_AGENT: env.WEB_READER_USER_AGENT,
   SEARCH_CACHE_TTL_MS: env.SEARCH_CACHE_TTL_MS
 });
 

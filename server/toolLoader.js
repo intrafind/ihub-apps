@@ -290,6 +290,19 @@ const NATIVE_WEB_SEARCH_PROVIDERS = new Set(['google', 'openai-responses', 'anth
  */
 export const DEFAULT_NATIVE_WEB_SEARCH_MAX_USES = 5;
 
+/**
+ * Native search providers whose requests take function tools next to the
+ * search, so the page reader can be offered with it: the model searches with
+ * the provider and opens a result, or a URL the user pasted, with the reader.
+ *
+ * Google is not one of them. Gemini drops every function declaration next to
+ * `google_search` (see adapters/google.js); combining the two is a preview
+ * feature for Gemini 3 only, and needs the server-side tool calls circulated
+ * back through the conversation, which the adapter does not do.
+ * @type {Set<string>}
+ */
+export const NATIVE_SEARCH_WITH_PAGE_READER = new Set(['anthropic', 'openai-responses']);
+
 /** Script-backed search tool offered when native search cannot be used. */
 export const NATIVE_WEB_SEARCH_FALLBACK_TOOL_ID = 'braveSearch';
 
@@ -492,7 +505,8 @@ function withPageReader(searchTool, allTools) {
  * @param {Array} allTools - All available tool definitions
  * @param {boolean|undefined} websearchEnabled - User toggle: undefined = use enabledByDefault, false = disabled
  * @param {Object} [model] - Full model config (per-model native search opt-out)
- * @returns {Array} No tools, or the search tool followed by the page reader
+ * @returns {Array} No tools, the search tool followed by the page reader, or — with
+ *   native search on a provider in {@link NATIVE_SEARCH_WITH_PAGE_READER} — the reader alone
  */
 function resolveWebsearchTool(app, modelProvider, allTools, websearchEnabled, model) {
   if (!app.websearch?.enabled) return [];
@@ -502,8 +516,14 @@ function resolveWebsearchTool(app, modelProvider, allTools, websearchEnabled, mo
   const effectiveEnabled = websearchEnabled !== undefined ? websearchEnabled : enabledByDefault;
   if (!effectiveEnabled) return [];
 
-  // Native search handles this app/model combination — no tool needed.
-  if (resolveAppNativeWebSearch(app, modelProvider, websearchEnabled, model)) return [];
+  // Native search handles this app/model combination — no search tool needed,
+  // but the page reader still is where the provider accepts function tools.
+  const native = resolveAppNativeWebSearch(app, modelProvider, websearchEnabled, model);
+  if (native) {
+    if (!NATIVE_SEARCH_WITH_PAGE_READER.has(native.provider)) return [];
+    const reader = allTools.find(t => t.id === WEB_CONTENT_EXTRACTOR_TOOL_ID);
+    return reader ? [reader] : [];
+  }
 
   const toolId = resolveWebsearchToolId(app.websearch.provider);
   const toolDef = allTools.find(t => t.id === toolId);

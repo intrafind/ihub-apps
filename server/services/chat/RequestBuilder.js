@@ -1,6 +1,10 @@
 import configCache from '../../configCache.js';
 import { isFeatureEnabled } from '../../featureRegistry.js';
-import { getToolsForApp, resolveAppNativeWebSearch } from '../../toolLoader.js';
+import {
+  getToolsForApp,
+  resolveAppNativeWebSearch,
+  WEB_CONTENT_EXTRACTOR_TOOL_ID
+} from '../../toolLoader.js';
 import ErrorHandler from '../../utils/ErrorHandler.js';
 import ApiKeyVerifier from '../../utils/ApiKeyVerifier.js';
 import { filterResourcesByPermissions } from '../../utils/authorization.js';
@@ -149,6 +153,78 @@ export function appendWebSearchResearchGuidance(llmMessages, app, websearchEnabl
     component: 'RequestBuilder',
     appId: app.id
   });
+  return true;
+}
+
+/**
+ * How to cite with script-backed search. The chat turns Markdown links to the
+ * turn's sources into numbered citation badges and lists the sources beside
+ * the answer (`shared/webCitations.js`), so it needs every claim linked to the
+ * page it came from — and only to pages the turn actually returned. Native
+ * search needs no such instruction: Anthropic and Google report their
+ * citations themselves, and OpenAI links its sources in the text on its own.
+ */
+export const WEB_SEARCH_CITATION_GUIDANCE =
+  'Citing sources: right after each statement that relies on a web source, cite it as a ' +
+  "Markdown link to that source's URL whose text is its number, for example " +
+  '[1](https://example.com/page). Number sources in the order you first cite them and reuse ' +
+  'the number when you cite the same source again. Cite only URLs your searches or page ' +
+  'reads returned, never URLs from memory, and do not add a separate list of sources at the ' +
+  'end — the chat shows them next to the answer.';
+
+/** When the user names a site, search that site. */
+export const WEB_SEARCH_NAMED_SITE_GUIDANCE =
+  'When the user names a website or domain, limit the search to it: use the search ' +
+  "tool's includeDomains parameter where it has one, otherwise add site:example.com to the query.";
+
+/** When the user pastes URLs and the page reader is available, read them. */
+export const WEB_SEARCH_PASTED_URL_GUIDANCE =
+  'When the user gives you URLs, open them with the webContentExtractor page reader instead ' +
+  'of searching for them. When a page reader result says it is truncated and you need more, ' +
+  'call it again with the offset it gives.';
+
+/**
+ * How to handle sources for this turn's search setup, appended to the system
+ * prompt next to the research guidance. Unlike the research guidance it is not
+ * an admin setting: the chat's citation display depends on it.
+ *
+ * @param {Object} options
+ * @param {boolean} options.native - Provider-run search handles the searching
+ * @param {boolean} options.pageReader - The page reader is offered this turn
+ * @returns {string}
+ */
+export function buildWebSearchSourceGuidance({ native, pageReader }) {
+  const parts = [WEB_SEARCH_NAMED_SITE_GUIDANCE];
+  if (!native) parts.unshift(WEB_SEARCH_CITATION_GUIDANCE);
+  if (pageReader) parts.push(WEB_SEARCH_PASTED_URL_GUIDANCE);
+  return parts.join('\n');
+}
+
+/**
+ * Append {@link buildWebSearchSourceGuidance} when web search is on for the
+ * turn. No-op when it is off, when the app has no web search, when there is
+ * no system message, or when the guidance is already there.
+ *
+ * @param {Array} llmMessages - Prepared messages (mutated in place)
+ * @param {Object} app - App configuration
+ * @param {boolean|undefined} websearchEnabled - User toggle: undefined = use app default
+ * @param {{native: boolean, pageReader: boolean}} setup - This turn's search setup
+ * @returns {boolean} true when guidance was appended
+ */
+export function appendWebSearchSourceGuidance(llmMessages, app, websearchEnabled, setup) {
+  if (!app?.websearch?.enabled) return false;
+  const enabledByDefault = app.websearch.enabledByDefault ?? false;
+  const effectiveEnabled = websearchEnabled !== undefined ? websearchEnabled : enabledByDefault;
+  if (!effectiveEnabled) return false;
+
+  const systemMessage = llmMessages.find(m => m.role === 'system');
+  if (!systemMessage || typeof systemMessage.content !== 'string') return false;
+
+  const guidance = buildWebSearchSourceGuidance(setup);
+  if (systemMessage.content.includes(guidance)) return false;
+  systemMessage.content = systemMessage.content
+    ? `${systemMessage.content}\n\n${guidance}`
+    : guidance;
   return true;
 }
 
@@ -521,6 +597,11 @@ class RequestBuilder {
       // The positive counterpart: with web search on, tell the model to research
       // in several steps so the loop's room for several tool rounds is used.
       appendWebSearchResearchGuidance(llmMessages, app, websearchEnabled);
+      // How to cite, search a named site and read pasted URLs.
+      appendWebSearchSourceGuidance(llmMessages, app, websearchEnabled, {
+        native: Boolean(nativeWebSearch),
+        pageReader: tools.some(t => t.id === WEB_CONTENT_EXTRACTOR_TOOL_ID)
+      });
 
       // Build imageConfig if image generation is supported and parameters are provided
       // Pass raw user parameters to adapter for provider-specific translation

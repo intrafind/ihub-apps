@@ -79,6 +79,9 @@ const websearchSchema = z
     enabledByDefault: z.boolean().optional().prefault(false),
     // Cap on provider-run searches per model call (Anthropic web search `max_uses`).
     maxSearches: z.number().int().min(1).max(50).optional().prefault(5),
+    // Cap on pages the model opens with the page reader in one chat answer
+    // (services/chat/pageReadLimit.js). Unset = the built-in default of 5.
+    maxPageReads: z.number().int().min(1).max(50).optional(),
     // Guidance appended to the system prompt when web search is on, telling the
     // model to research in several steps. true/unset = built-in text, false = off,
     // string = custom text replacing the built-in one.

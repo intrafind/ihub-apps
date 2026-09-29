@@ -166,7 +166,9 @@ const OPTIONAL_MESSAGE_FIELDS = [
   // Documents behind an assistant answer (see services/chat/chatCitations.js).
   'citations',
   // Connect cards for per-user OAuth MCP servers (see chatSeams.authRequiredOf).
-  'mcpAuthRequired'
+  'mcpAuthRequired',
+  // Web search queries and sources behind an assistant answer (shared/webCitations.js).
+  'webSearch'
 ];
 
 /** Variables kept per message, and the longest value kept. */

@@ -16,9 +16,62 @@ test('extractWebSources: search results become sources, in order', () => {
     ]
   });
   assert.deepEqual(sources, [
-    { url: 'https://example.com/a', title: 'Example' },
+    { url: 'https://example.com/a', title: 'Example', snippet: 'x' },
     { url: 'https://other.org/', title: 'Other' }
   ]);
+});
+
+test('extractWebSources: web sources carry what a source card shows', () => {
+  const sources = extractWebSources('braveSearch', {
+    results: [
+      {
+        title: 'Example',
+        url: 'https://example.com/a',
+        description: 'The <strong>matched</strong>   terms',
+        publishedDate: '2026-09-01T10:00:00Z',
+        favicon: 'https://imgs.search.brave.com/icon.png'
+      },
+      { title: 'Bad favicon', url: 'https://other.org/', favicon: 'javascript:alert(1)' }
+    ]
+  });
+  assert.deepEqual(sources, [
+    {
+      url: 'https://example.com/a',
+      title: 'Example',
+      snippet: 'The matched terms',
+      publishedDate: '2026-09-01T10:00:00.000Z',
+      favicon: 'https://imgs.search.brave.com/icon.png'
+    },
+    { url: 'https://other.org/', title: 'Bad favicon' }
+  ]);
+});
+
+test('extractWebSources: a page read reports words read and truncation', () => {
+  const [source] = extractWebSources('webContentExtractor', {
+    url: 'https://example.com/long',
+    title: 'Long page',
+    content: 'Some words here',
+    wordCount: 3,
+    truncated: true,
+    nextOffset: 15
+  });
+  assert.deepEqual(source, {
+    url: 'https://example.com/long',
+    title: 'Long page',
+    read: true,
+    wordCount: 3,
+    truncated: true
+  });
+  // The new fields survive the wire contract instead of being stripped.
+  const sse = toolCompletedData.parse({
+    step: 1,
+    callId: 'c',
+    toolId: 'webContentExtractor',
+    name: 'webContentExtractor',
+    resultPreview: '…',
+    webSources: [source]
+  });
+  assert.deepEqual(sse.webSources, [source]);
 });
 
 test('extractWebSources: extracted pages are marked read or failed', () => {

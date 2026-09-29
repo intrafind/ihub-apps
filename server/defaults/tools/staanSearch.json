@@ -75,6 +75,14 @@
           "en": "Drop results from these domains, e.g. ['example.com']. Maximum 10. Cannot be combined with includeDomains.",
           "de": "Ergebnisse von diesen Domains ausschließen, z. B. ['example.com']. Maximal 10. Nicht mit includeDomains kombinierbar."
         }
+      },
+      "freshness": {
+        "type": "string",
+        "enum": ["day", "week", "month", "year"],
+        "description": {
+          "en": "Only return results from the last day, week, month or year. Use it when the question is about recent events or the user asks for current information.",
+          "de": "Nur Ergebnisse aus dem letzten Tag, der letzten Woche, dem letzten Monat oder Jahr zurückgeben. Verwenden, wenn es um aktuelle Ereignisse geht oder der Benutzer nach aktuellen Informationen fragt."
+        }
       }
     },
     "required": ["query"]

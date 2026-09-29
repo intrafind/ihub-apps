@@ -306,10 +306,11 @@ export function parseStaanError(payload, httpStatus) {
  * `description`), so an app can switch `websearch.provider` without the model
  * seeing a different contract; `snippet` is Staan's name for the description.
  * `hostname` is carried through because Staan supplies it and it is what a
- * model cites.
+ * model cites; `favicon` (Staan's `favicon_url`) is what the chat's source
+ * cards show.
  *
  * @param {Object} payload - Parsed, successful response body
- * @returns {Array<{title: string, url: string, description: string, hostname?: string}>}
+ * @returns {Array<{title: string, url: string, description: string, hostname?: string, favicon?: string}>}
  */
 export function parseStaanWebResults(payload) {
   const items = payload?.web?.results;
@@ -324,6 +325,9 @@ export function parseStaanWebResults(payload) {
       description: typeof item.snippet === 'string' ? item.snippet : ''
     };
     if (typeof item.hostname === 'string' && item.hostname) result.hostname = item.hostname;
+    if (typeof item.favicon_url === 'string' && /^https?:\/\//i.test(item.favicon_url)) {
+      result.favicon = item.favicon_url;
+    }
     results.push(result);
   }
   return results;
@@ -365,6 +369,11 @@ class StaanSearchProvider extends SearchProvider {
   /** Staan needs an API key; without one every call would come back 401. */
   isConfigured() {
     return Boolean(this.getApiKey());
+  }
+
+  /** `include_domains` is a first-class request field (see {@link buildStaanRequest}). */
+  supportsDomainFilter() {
+    return true;
   }
 
   /**
