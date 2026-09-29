@@ -90,8 +90,27 @@ async function fetchLdapGroupsForProxyUser(providerName, userId) {
   return await lookupLdapGroupsForUser(userId, ldapProvider);
 }
 
+/**
+ * Resolve a proxy user's LDAP groups through the per-user cache.
+ *
+ * `ttlMs` of 0 disables caching entirely: no entry is written, and no entry
+ * left over from a positive TTL is served — not as a fresh hit, not during a
+ * failure cooldown and not as a stale fallback after a failed lookup.
+ *
+ * @param {string} providerName - Name of the `ldapAuth.providers` entry to query
+ * @param {string} userId - User identifier taken from the proxy header or JWT
+ * @param {number} ttlMs - Cache TTL in milliseconds, 0 to disable caching
+ * @returns {Promise<string[]>} LDAP group names, empty when none apply
+ */
 async function getLdapGroupsForProxyUser(providerName, userId, ttlMs) {
   const cacheKey = getLdapGroupsCacheKey(providerName, userId);
+  const cachingEnabled = ttlMs > 0;
+  if (!cachingEnabled) {
+    // The TTL may have been lowered to 0 at runtime. Drop whatever an earlier
+    // lookup cached so none of the branches below can hand it back.
+    ldapGroupsCache.delete(cacheKey);
+  }
+
   const now = Date.now();
   const entry = ldapGroupsCache.get(cacheKey);
   if (entry) {
@@ -110,58 +129,64 @@ async function getLdapGroupsForProxyUser(providerName, userId, ttlMs) {
     }
   }
 
-  const inFlight = ldapGroupsInFlight.get(cacheKey);
-  if (inFlight) return inFlight;
-
-  const pending = (async () => {
-    try {
-      const groups = await fetchLdapGroupsForProxyUser(providerName, userId);
-      if (ttlMs > 0) {
-        storeLdapGroupsCacheEntry(cacheKey, { groups, fetchedAt: Date.now() });
-      } else if (ldapGroupsCache.has(cacheKey)) {
-        // TTL was lowered to 0 at runtime; drop any pre-existing entry so the
-        // stale-fallback branch below can't hand back a value the operator
-        // just asked us to stop caching.
-        ldapGroupsCache.delete(cacheKey);
+  let pending = ldapGroupsInFlight.get(cacheKey);
+  if (!pending) {
+    pending = (async () => {
+      try {
+        const groups = await fetchLdapGroupsForProxyUser(providerName, userId);
+        if (cachingEnabled) {
+          storeLdapGroupsCacheEntry(cacheKey, { groups, fetchedAt: Date.now() });
+        } else {
+          // A lookup started under a positive TTL may have stored an entry
+          // while this one was in flight.
+          ldapGroupsCache.delete(cacheKey);
+        }
+        return { groups, stale: false };
+      } catch (error) {
+        // Fall back to the stale copy, if any, instead of locking a user out
+        // while the directory is briefly unreachable.
+        logger.error(
+          'Proxy Auth: LDAP group lookup failed, continuing with header/JWT groups only',
+          {
+            component: 'ProxyAuth',
+            username: userId,
+            ldapGroupLookupProvider: providerName,
+            error
+          }
+        );
+        // Preserve the *original* successful `fetchedAt` (if any) instead of
+        // dropping it or resetting it to the failure time. That anchor lets the
+        // max-stale check bound how long a group set survives across repeated
+        // failures — otherwise the failure branch would keep re-serving a snapshot
+        // from an old success forever.
+        const priorFetchedAt = entry?.fetchedAt;
+        const withinMaxStale =
+          priorFetchedAt !== undefined && Date.now() - priorFetchedAt < LDAP_GROUPS_MAX_STALE_MS;
+        const staleGroups = withinMaxStale ? (entry?.groups ?? []) : [];
+        if (cachingEnabled) {
+          // Record the failure so the next request within the cooldown skips
+          // another LDAP call. Even when the failure is because of pure
+          // misconfiguration (bad DN, missing password) the cooldown is fine —
+          // the operator has to change config to fix it either way.
+          storeLdapGroupsCacheEntry(cacheKey, {
+            groups: staleGroups,
+            fetchedAt: priorFetchedAt,
+            failedAt: Date.now()
+          });
+        }
+        return { groups: staleGroups, stale: true };
+      } finally {
+        ldapGroupsInFlight.delete(cacheKey);
       }
-      return groups;
-    } catch (error) {
-      // Fall back to the stale copy, if any, instead of locking a user out
-      // while the directory is briefly unreachable.
-      logger.error('Proxy Auth: LDAP group lookup failed, continuing with header/JWT groups only', {
-        component: 'ProxyAuth',
-        username: userId,
-        ldapGroupLookupProvider: providerName,
-        error
-      });
-      // Preserve the *original* successful `fetchedAt` (if any) instead of
-      // dropping it or resetting it to the failure time. That anchor lets the
-      // max-stale check bound how long a group set survives across repeated
-      // failures — otherwise the failure branch would keep re-serving a snapshot
-      // from an old success forever.
-      const priorFetchedAt = entry?.fetchedAt;
-      const withinMaxStale =
-        priorFetchedAt !== undefined && Date.now() - priorFetchedAt < LDAP_GROUPS_MAX_STALE_MS;
-      const staleGroups = withinMaxStale ? (entry?.groups ?? []) : [];
-      if (ttlMs > 0) {
-        // Record the failure so the next request within the cooldown skips
-        // another LDAP call. Even when the failure is because of pure
-        // misconfiguration (bad DN, missing password) the cooldown is fine —
-        // the operator has to change config to fix it either way.
-        storeLdapGroupsCacheEntry(cacheKey, {
-          groups: staleGroups,
-          fetchedAt: priorFetchedAt,
-          failedAt: Date.now()
-        });
-      }
-      return staleGroups;
-    } finally {
-      ldapGroupsInFlight.delete(cacheKey);
-    }
-  })();
+    })();
+    ldapGroupsInFlight.set(cacheKey, pending);
+  }
 
-  ldapGroupsInFlight.set(cacheKey, pending);
-  return pending;
+  const { groups, stale } = await pending;
+  // A caller running with caching disabled can join a lookup that started
+  // under a positive TTL and fell back to its cached snapshot; it must not use
+  // that snapshot.
+  return stale && !cachingEnabled ? [] : groups;
 }
 
 async function requestJwks(jwkUrl, previous) {
