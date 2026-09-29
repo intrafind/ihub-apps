@@ -42,6 +42,12 @@ const LDAP_GROUPS_CACHE_MAX_ENTRIES = 5000;
 // every request during a directory outage opens its own LDAP timeout, piling
 // latency on top of the outage and load on the recovering server.
 const LDAP_GROUPS_FAILURE_COOLDOWN_MS = 30 * 1000;
+// Absolute cap on how long a pre-outage group set is trusted while LDAP is
+// unavailable. Without it, repeated failures keep re-serving the same snapshot
+// forever, so a group revoked at the directory (e.g. offboarded employee)
+// stays effective as long as the outage lasts. Header/JWT-only groups take
+// over past this age.
+const LDAP_GROUPS_MAX_STALE_MS = 60 * 60 * 1000; // 1 hour
 
 function getLdapGroupsCacheKey(providerName, userId) {
   return `${providerName}::${userId}`;
@@ -96,9 +102,17 @@ async function getLdapGroupsForProxyUser(providerName, userId, ttlMs) {
       entry.failedAt !== undefined &&
       now - entry.failedAt < LDAP_GROUPS_FAILURE_COOLDOWN_MS
     ) {
-      // Recent failure: skip the LDAP round-trip and return whatever we last
-      // had (empty for a first-time failure, or the pre-outage groups).
-      return entry.groups;
+      // Recent failure: skip the LDAP round-trip. Serve the pre-outage groups
+      // only if they are within the max-stale window; past it, fall back to
+      // header/JWT groups only so a revoked permission does not remain
+      // effective for the entire duration of a long outage.
+      if (
+        entry.fetchedAt !== undefined &&
+        now - entry.fetchedAt < LDAP_GROUPS_MAX_STALE_MS
+      ) {
+        return entry.groups;
+      }
+      return [];
     }
   }
 
@@ -126,13 +140,25 @@ async function getLdapGroupsForProxyUser(providerName, userId, ttlMs) {
         ldapGroupLookupProvider: providerName,
         error
       });
-      const staleGroups = entry?.groups ?? [];
+      // Preserve the *original* successful `fetchedAt` (if any) instead of
+      // dropping it or resetting it to the failure time. That anchor lets the
+      // max-stale check bound how long a group set survives across repeated
+      // failures — otherwise the failure branch would keep re-serving a snapshot
+      // from an old success forever.
+      const priorFetchedAt = entry?.fetchedAt;
+      const withinMaxStale =
+        priorFetchedAt !== undefined && Date.now() - priorFetchedAt < LDAP_GROUPS_MAX_STALE_MS;
+      const staleGroups = withinMaxStale ? (entry?.groups ?? []) : [];
       if (ttlMs > 0) {
         // Record the failure so the next request within the cooldown skips
         // another LDAP call. Even when the failure is because of pure
         // misconfiguration (bad DN, missing password) the cooldown is fine —
         // the operator has to change config to fix it either way.
-        storeLdapGroupsCacheEntry(cacheKey, { groups: staleGroups, failedAt: Date.now() });
+        storeLdapGroupsCacheEntry(cacheKey, {
+          groups: staleGroups,
+          fetchedAt: priorFetchedAt,
+          failedAt: Date.now()
+        });
       }
       return staleGroups;
     } finally {

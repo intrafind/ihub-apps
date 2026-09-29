@@ -163,6 +163,32 @@ describe('proxyAuth LDAP group cache', () => {
     expect(cooledReq.req.user?.externalGroups).toEqual(expect.arrayContaining(['g1', 'g2']));
   });
 
+  it('stops serving stale groups once the max-stale window elapses', async () => {
+    lookupLdapGroupsForUser.mockResolvedValueOnce(['g1', 'g2']);
+
+    // Populate the cache with a successful lookup.
+    const okReq = await callProxyAuth(proxyAuth, 'alice');
+    expect(okReq.req.user?.externalGroups).toEqual(expect.arrayContaining(['g1', 'g2']));
+
+    // From here on LDAP is down.
+    lookupLdapGroupsForUser.mockRejectedValue(new Error('LDAP unreachable'));
+
+    // Advance past the TTL and drive many failure/cooldown cycles until the
+    // 1h max-stale window has elapsed.
+    now += 700 * 1000; // past 600s TTL, first failure recorded
+    await callProxyAuth(proxyAuth, 'alice');
+    for (let i = 0; i < 120; i++) {
+      now += 31 * 1000; // past 30s cooldown, retry, fail again
+      await callProxyAuth(proxyAuth, 'alice');
+    }
+
+    // Beyond the 1h max-stale window: the pre-outage groups must no longer be
+    // applied. The user now sees only whatever came from the request itself
+    // (no header/JWT groups in this test, so an empty externalGroups array).
+    const outageReq = await callProxyAuth(proxyAuth, 'alice');
+    expect(outageReq.req.user?.externalGroups).toEqual([]);
+  });
+
   it('does not record failure cooldown when TTL is 0', async () => {
     mockPlatformConfig.proxyAuth.ldapGroupLookupCacheTtlSeconds = 0;
     lookupLdapGroupsForUser.mockRejectedValue(new Error('LDAP unreachable'));
