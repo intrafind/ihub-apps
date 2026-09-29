@@ -87,11 +87,14 @@ export const stopAppChatStream = async (appId, chatId) => {
  * @param {Object} [options] - Pagination options
  * @param {number} [options.size] - Page size
  * @param {string} [options.nextCursor] - Cursor for pagination
+ * @param {string} [options.chatId] - The chat being resumed, so the documents'
+ *   access links use the search profile the conversation was created with
  */
 export const getConversationMessages = async (appId, conversationId, options = {}) => {
   const params = {};
   if (options.size) params.size = options.size;
   if (options.nextCursor) params.next_cursor = options.nextCursor;
+  if (options.chatId) params.chat_id = options.chatId;
 
   return handleApiResponse(
     () =>

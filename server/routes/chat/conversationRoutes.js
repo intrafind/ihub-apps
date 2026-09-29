@@ -5,6 +5,7 @@
 import { authRequired } from '../../middleware/authRequired.js';
 import configCache from '../../configCache.js';
 import conversationApiService from '../../services/integrations/ConversationApiService.js';
+import conversationStateManager from '../../services/integrations/ConversationStateManager.js';
 import iAssistantService from '../../services/integrations/iAssistantService.js';
 import iAssistantProfileResolver from '../../services/integrations/iAssistantProfileResolver.js';
 import { withConversationAccessLinks } from '../../services/integrations/iFinderCitations.js';
@@ -12,6 +13,7 @@ import logger from '../../utils/logger.js';
 import { buildServerPath } from '../../utils/basePath.js';
 import { sendInternalError, sendNotFound, sendBadRequest } from '../../utils/responseHelpers.js';
 import { findByIdCaseInsensitive } from '../../utils/resourceLookup.js';
+import { isValidId } from '../../utils/pathSecurity.js';
 
 /** The `config` block of an app's preferred model, or an empty object. */
 function preferredModelConfig(app) {
@@ -40,9 +42,9 @@ function resolveBaseUrl(app) {
  * Never throws — without a profile the history is returned as iFinder sent it.
  */
 async function resolveConversationSearchProfile(app, { user, baseUrl }) {
-  const modelConfig = preferredModelConfig(app);
-  const serviceConfig = iAssistantService.getConfig();
   try {
+    const modelConfig = preferredModelConfig(app);
+    const serviceConfig = iAssistantService.getConfig();
     const { searchProfile } = await iAssistantProfileResolver.resolveSearchProfile({
       profileId:
         app?.iassistant?.profileId || modelConfig.profileId || serviceConfig.defaultProfileId,
@@ -61,6 +63,40 @@ async function resolveConversationSearchProfile(app, { user, baseUrl }) {
     });
     return undefined;
   }
+}
+
+/**
+ * The search profile a resumed conversation searched.
+ *
+ * The adapter pins it on the chat's conversation state when it creates the
+ * conversation, and every later turn builds its document links with it, so a
+ * search profile an admin changed since does not move an existing
+ * conversation's documents into another corpus. That pinned profile is used
+ * when the client names the chat it is resuming and that chat's state — read
+ * as the requesting user — is this conversation. Otherwise (another tab, whose
+ * chat id is not the one the conversation was started under, or state that
+ * has expired) the profile is resolved as for a new conversation.
+ *
+ * @param {Object} app - The app's configuration
+ * @param {Object} params
+ * @param {string} [params.chatId] - The chat the client is resuming
+ * @param {string} params.conversationId - The conversation whose history is read
+ * @param {Object} params.user - The requesting user
+ * @param {string} params.baseUrl - iFinder base URL
+ * @returns {Promise<string|undefined>}
+ */
+export async function conversationSearchProfile(app, { chatId, conversationId, user, baseUrl }) {
+  if (isValidId(chatId)) {
+    const state = await conversationStateManager.loadState(chatId, { ownerId: user?.id ?? null });
+    if (
+      state?.conversationId === conversationId &&
+      typeof state.searchProfile === 'string' &&
+      state.searchProfile
+    ) {
+      return state.searchProfile;
+    }
+  }
+  return resolveConversationSearchProfile(app, { user, baseUrl });
 }
 
 export default function registerConversationRoutes(app) {
@@ -101,6 +137,14 @@ export default function registerConversationRoutes(app) {
    *         schema:
    *           type: string
    *         description: Pagination cursor from a previous response
+   *       - in: query
+   *         name: chat_id
+   *         schema:
+   *           type: string
+   *         description: |
+   *           The chat being resumed. When its conversation state is this
+   *           conversation, the documents' access links use the search profile
+   *           the conversation was created with.
    *     responses:
    *       200:
    *         description: Message history retrieved successfully
@@ -131,7 +175,7 @@ export default function registerConversationRoutes(app) {
     async (req, res) => {
       try {
         const { appId, conversationId } = req.params;
-        const { size = 50, next_cursor: nextCursor } = req.query;
+        const { size = 50, next_cursor: nextCursor, chat_id: chatId } = req.query;
         const user = req.user;
 
         // Load app config to get baseUrl
@@ -156,7 +200,9 @@ export default function registerConversationRoutes(app) {
         // The documents of a reopened conversation get the ACCESS links the
         // live stream gives them, so their tiles can preview, download and
         // attach again.
-        const searchProfile = await resolveConversationSearchProfile(appConfig, {
+        const searchProfile = await conversationSearchProfile(appConfig, {
+          chatId,
+          conversationId,
           user,
           baseUrl
         });

@@ -23,20 +23,26 @@ export const MAX_CITATION_DOCUMENTS = 50;
 
 /**
  * Give citation items that lack one an ACCESS link into the search profile
- * they were found in. iAssistant documents can arrive without one, and the
- * link is what preview, download and "Add to email" fetch a document through.
+ * they were found in. iAssistant documents can arrive without one — no
+ * `links` at all, an empty list, or only other link types — and the ACCESS
+ * link is what preview, download and "Add to email" fetch a document
+ * through. Links an item already carries are kept.
  *
  * @param {Array<Object>} items - `references` or `resultItems`
  * @param {string} searchProfile
- * @returns {Array<Object>} the items, those with a `document_id` and no links given one
+ * @returns {Array<Object>} the items, those with a `document_id` and no ACCESS link given one
  */
 export function withAccessLinks(items, searchProfile) {
   if (!Array.isArray(items)) return items;
-  return items.map(item =>
-    item?.document_id && !Array.isArray(item.links)
-      ? { ...item, links: [{ type: 'ACCESS', documentId: item.document_id, searchProfile }] }
-      : item
-  );
+  return items.map(item => {
+    if (!item?.document_id) return item;
+    const links = Array.isArray(item.links) ? item.links : [];
+    if (links.some(link => link?.type === 'ACCESS')) return item;
+    return {
+      ...item,
+      links: [...links, { type: 'ACCESS', documentId: item.document_id, searchProfile }]
+    };
+  });
 }
 
 /**

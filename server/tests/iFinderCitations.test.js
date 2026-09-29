@@ -214,14 +214,29 @@ test('collector: bounded per turn', () => {
   );
 });
 
-test('withAccessLinks: items without links get one into the profile; linked or id-less ones are left alone', () => {
+test('withAccessLinks: items without an ACCESS link get one into the profile; others are left alone', () => {
   const own = [{ type: 'ACCESS', documentId: 'b', searchProfile: 'other' }];
+  const access = id => ({ type: 'ACCESS', documentId: id, searchProfile: 'p' });
   assert.deepEqual(
-    withAccessLinks([{ document_id: 'a' }, { document_id: 'b', links: own }, { title: 'x' }], 'p'),
+    withAccessLinks(
+      [
+        { document_id: 'a' },
+        { document_id: 'b', links: own },
+        { title: 'x' },
+        { document_id: 'c', links: [] },
+        { document_id: 'd', links: [{ type: 'PREVIEW', href: 'https://x.example/d' }] }
+      ],
+      'p'
+    ),
     [
-      { document_id: 'a', links: [{ type: 'ACCESS', documentId: 'a', searchProfile: 'p' }] },
+      { document_id: 'a', links: [access('a')] },
       { document_id: 'b', links: own },
-      { title: 'x' }
+      { title: 'x' },
+      { document_id: 'c', links: [access('c')] },
+      {
+        document_id: 'd',
+        links: [{ type: 'PREVIEW', href: 'https://x.example/d' }, access('d')]
+      }
     ]
   );
   assert.equal(withAccessLinks(undefined, 'p'), undefined);
