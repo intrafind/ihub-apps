@@ -564,7 +564,7 @@ LDAP (Lightweight Directory Access Protocol) authentication integrates with corp
       {
         "name": "corporate-ldap",
         "displayName": "Corporate Directory",
-        "url": "ldap://dc.company.com",
+        "url": "ldaps://dc.company.com:636",
         "userSearchBase": "ou=people,dc=company,dc=com",
         "usernameAttribute": "uid",
         "userDn": "uid={{username}},ou=people,dc=company,dc=com",
@@ -631,7 +631,7 @@ NTLM (Windows Integrated Authentication) allows users on domain-joined Windows m
   "ntlmAuth": {
     "enabled": true,
     "domain": "COMPANY",
-    "domainController": "ldap://dc.company.com",
+    "domainController": "ldaps://dc.company.com:636",
     "domainControllerUser": "CN=Service Account,OU=Users,DC=company,DC=com",
     "domainControllerPassword": "${NTLM_LDAP_PASSWORD}",
     "getGroups": true,

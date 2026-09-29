@@ -49,11 +49,11 @@ function NtlmAuthSection({ config, onChange, t, availableGroups = [] }) {
             value={config.ntlmAuth?.domainController || ''}
             onChange={e => updateNtlmAuth('domainController', e.target.value)}
             className="w-full px-3 py-2 border border-gray-300 rounded-md shadow-xs focus:ring-blue-500 focus:border-blue-500 sm:text-sm"
-            placeholder="ldap://dc.example.com:389"
+            placeholder="ldaps://dc.example.com:636"
           />
           <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">
-            LDAP URL of domain controller (e.g., ldap://dc.example.com:389 or
-            ldaps://dc.example.com:636)
+            LDAP URL of domain controller (e.g., ldaps://dc.example.com:636, or
+            ldap://dc.example.com:389 for an unencrypted connection)
           </p>
         </div>
         <div>

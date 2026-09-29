@@ -1,3 +1,4 @@
+import net from 'node:net';
 import logger from './logger.js';
 
 /**
@@ -83,6 +84,47 @@ export const USER_SEARCH_ATTRIBUTES = ['*', 'msDS-PrincipalName'];
 const USERNAME_PLACEHOLDER = '{{username}}';
 
 const trimmed = value => (typeof value === 'string' ? value.trim() : '');
+
+const isLdapsUrl = url => trimmed(url).toLowerCase().startsWith('ldaps://');
+const isPlainLdapUrl = url => trimmed(url).toLowerCase().startsWith('ldap://');
+
+/**
+ * Whether a provider upgrades its connection with StartTLS. Only an ldap://
+ * connection can be upgraded; an ldaps:// one is TLS from the first byte, so
+ * `starttls` is ignored there.
+ * @param {Object} provider - Raw or resolved provider config
+ * @returns {boolean}
+ */
+export function usesStartTls(provider = {}) {
+  return provider.starttls === true && !isLdapsUrl(provider.url);
+}
+
+/**
+ * TLS options for the StartTLS upgrade. `ldap-authentication` hands the
+ * provider's `tlsOptions` to ldapts' `startTLS()`, which upgrades the open
+ * socket without telling Node which host it is connected to. Node then checks
+ * the server certificate against "localhost" and rejects every real directory.
+ * Naming the host from the URL makes that check, and SNI, use the right name;
+ * explicit `tlsOptions` still win.
+ * @param {string} url - Provider URL
+ * @param {Object} [tlsOptions] - Provider `tlsOptions`
+ * @returns {Object} TLS options for `startTLS()`
+ */
+function buildStartTlsOptions(url, tlsOptions = {}) {
+  let hostname = '';
+  try {
+    hostname = new URL(trimmed(url)).hostname.replace(/^\[|\]$/g, '');
+  } catch {
+    // An invalid URL is reported by the LDAP client when it connects.
+  }
+  if (!hostname) return { ...tlsOptions };
+  return {
+    host: hostname,
+    // RFC 6066 forbids an IP address as the SNI server name.
+    ...(net.isIP(hostname) === 0 && { servername: hostname }),
+    ...tlsOptions
+  };
+}
 
 /**
  * Escape special characters in a string for use in LDAP search filters
@@ -244,6 +286,17 @@ export function describeLdapProvider(provider = {}) {
   }
 
   const warnings = [];
+  if (isLdapsUrl(resolved.url)) {
+    if (resolved.starttls === true) {
+      warnings.push(
+        'StartTLS is ignored for ldaps:// URLs: the connection is encrypted from the start.'
+      );
+    }
+  } else if (isPlainLdapUrl(resolved.url) && !usesStartTls(resolved)) {
+    warnings.push(
+      'This ldap:// connection is not encrypted, so passwords — including the bind password — reach the directory in plain text. Use an ldaps:// URL (port 636) or enable StartTLS.'
+    );
+  }
   if (!resolved.groupSearchBase) {
     warnings.push(
       'No base DN or group search base is configured, so no LDAP groups are read. Users get only the default groups of this provider.'
@@ -341,14 +394,19 @@ export function buildLdapAuthOptions(
   // missing field, instead of silently falling back to a direct user bind that
   // fails for an unrelated-looking reason.
   const useAdminBind = Boolean(resolved.adminDn);
+  const startTls = usesStartTls(resolved);
+  const tlsOptions = startTls
+    ? buildStartTlsOptions(resolved.url, resolved.tlsOptions)
+    : resolved.tlsOptions;
 
   return {
     ldapOpts: {
       url: resolved.url,
-      ...(resolved.tlsOptions && { tlsOptions: resolved.tlsOptions }),
+      ...(tlsOptions && { tlsOptions }),
       ...(resolved.timeout && { timeout: resolved.timeout }),
       ...(resolved.reconnect && { reconnect: resolved.reconnect })
     },
+    ...(startTls && { starttls: true }),
     ...(useAdminBind && { adminDn: resolved.adminDn, adminPassword }),
     ...(resolved.userDn && { userDn: resolved.userDn }),
     ...(verifyUserExists ? { verifyUserExists: true } : { userPassword: password }),

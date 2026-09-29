@@ -59,7 +59,7 @@ The authentication system processes requests in this order:
   "ntlmAuth": {
     "enabled": true,
     "domain": "EXAMPLE",
-    "domainController": "ldap://dc.example.com:389",
+    "domainController": "ldaps://dc.example.com:636",
     "getGroups": true,
     "generateJwtToken": true
   }
@@ -115,7 +115,7 @@ NTLM_LDAP_PASSWORD="password123"
       {
         "name": "company-ldap",
         "displayName": "Company LDAP",
-        "url": "ldap://ldap.example.com:389",
+        "url": "ldaps://ldap.example.com:636",
         "userSearchBase": "ou=users,dc=example,dc=com",
         "usernameAttribute": "uid",
         "groupSearchBase": "ou=groups,dc=example,dc=com"

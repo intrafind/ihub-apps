@@ -82,7 +82,7 @@ Add to `contents/config/platform.json`:
   "ntlmAuth": {
     "enabled": true,
     "domain": "EXAMPLE",
-    "domainController": "ldap://dc.example.com:389",
+    "domainController": "ldaps://dc.example.com:636",
     "type": "ntlm",
     "debug": false,
     "getUserInfo": true,
@@ -303,7 +303,7 @@ For groups to be retrieved:
       {
         "name": "corporate-ldap",
         "displayName": "Corporate LDAP",
-        "url": "ldap://ldap.example.com:389",
+        "url": "ldaps://ldap.example.com:636",
         "adminDn": "${LDAP_ADMIN_DN}",
         "adminPassword": "${LDAP_ADMIN_PASSWORD}",
         "userSearchBase": "ou=people,dc=example,dc=org",

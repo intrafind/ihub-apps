@@ -198,3 +198,19 @@ the same way iAssistant answers do. Each document has the full menu: **Preview**
 - With chat history on, the documents are stored with the answer and come back when the chat is
   reopened. Shared links leave them out, since they were found with the owner's iFinder
   permissions.
+
+## LDAP: Encrypt `ldap://` Connections With StartTLS
+
+LDAP providers can now upgrade an `ldap://` connection to TLS with StartTLS before any password is
+sent. A provider on plain `ldap://` sends the user's password at every login, and the bind password
+at every group lookup, unencrypted. Switch such providers to `ldaps://` or turn StartTLS on.
+
+- New **Use StartTLS** option per provider on **Admin → Authentication** (`"starttls": true` in
+  `ldapAuth.providers`). It covers LDAP logins, group lookups for NTLM users, and the connection
+  test.
+- The server certificate is checked against the host name in the URL. For a private CA, trust the
+  CA on the iHub server, or enable **Allow self-signed / internal CA certificates**.
+- If the server refuses StartTLS, the login fails instead of falling back to plain text.
+- `ldaps://` providers are unchanged; StartTLS is ignored for them.
+- The LDAP connection test now warns about providers that still use `ldap://` without StartTLS.
+- The documentation and example configurations now use `ldaps://`.

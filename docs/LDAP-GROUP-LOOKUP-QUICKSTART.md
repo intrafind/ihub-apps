@@ -27,7 +27,7 @@ Edit `contents/config/platform.json`:
     "providers": [
       {
         "name": "corporate-ldap",
-        "url": "ldap://your-ldap-server:389",
+        "url": "ldaps://your-ldap-server:636",
         "preset": "openldap",  // or "activeDirectory"
         "adminDn": "cn=admin,dc=example,dc=org",
         "adminPasswordRef": "ldap_corporate-ldap",
@@ -171,14 +171,14 @@ Use `ldapsearch` to discover group names:
 
 ```bash
 # Generic LDAP
-ldapsearch -x -H ldap://ldap.example.com:389 \
+ldapsearch -x -H ldaps://ldap.example.com:636 \
   -D "cn=admin,dc=example,dc=org" \
   -w "password" \
   -b "ou=people,dc=example,dc=org" \
   "(uid=testuser)" memberOf
 
 # Active Directory
-ldapsearch -x -H ldap://ad.example.com:389 \
+ldapsearch -x -H ldaps://ad.example.com:636 \
   -D "admin@example.com" \
   -w "password" \
   -b "dc=example,dc=com" \
@@ -198,7 +198,7 @@ For Active Directory environments:
     "providers": [
       {
         "name": "active-directory",
-        "url": "ldap://ad.example.com:389",
+        "url": "ldaps://ad.example.com:636",
         "adminDn": "admin@example.com",
         "adminPassword": "${AD_PASSWORD}",
         "userSearchBase": "dc=example,dc=com",

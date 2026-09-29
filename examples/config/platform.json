@@ -199,15 +199,12 @@
       {
         "name": "corporate-ldap",
         "displayName": "Corporate LDAP",
-        "url": "ldap://ldap.example.com:389",
+        "url": "ldaps://ldap.example.com:636",
         "preset": "openldap",
         "baseDn": "dc=example,dc=org",
         "adminDn": "cn=admin,dc=example,dc=org",
         "adminPasswordRef": "ldap_corporate-ldap",
-        "defaultGroups": ["ldap-users"],
-        "tlsOptions": {
-          "rejectUnauthorized": false
-        }
+        "defaultGroups": ["ldap-users"]
       },
       {
         "name": "active-directory",

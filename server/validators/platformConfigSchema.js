@@ -73,7 +73,13 @@ const ldapAttributeMappingSchema = z.object({
 const ldapProviderSchema = z.object({
   name: z.string(),
   displayName: z.string().optional().describe('Name shown on the login page. Defaults to `name`.'),
-  url: z.string().describe('ldap://host:389 or ldaps://host:636'),
+  url: z.string().describe('ldaps://host:636, or ldap://host:389 together with `starttls`'),
+  starttls: z
+    .boolean()
+    .optional()
+    .describe(
+      'Upgrade an ldap:// connection to TLS (StartTLS) before binding, so no password crosses the network in plain text. Ignored for ldaps://, which is encrypted from the start.'
+    ),
   preset: z
     .enum(['openldap', 'activeDirectory'])
     .optional()

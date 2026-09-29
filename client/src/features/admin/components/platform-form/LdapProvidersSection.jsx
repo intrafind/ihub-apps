@@ -204,10 +204,10 @@ function LdapProvidersSection({ config, onChange, t, availableGroups = [] }) {
                 label={t('admin.auth.ldap.url', 'LDAP URL')}
                 value={provider.url}
                 onChange={value => updateLdapProvider(index, 'url', value)}
-                placeholder="ldap://ldap.example.com:389"
+                placeholder="ldaps://ldap.example.com:636"
                 help={t(
                   'admin.auth.ldap.urlHelp',
-                  'ldap://host:389 for plain connections, ldaps://host:636 for TLS'
+                  'ldaps://host:636 for TLS. For ldap://host:389, enable StartTLS below — without it, passwords are sent in plain text.'
                 )}
                 wide
               />
@@ -307,6 +307,28 @@ function LdapProvidersSection({ config, onChange, t, availableGroups = [] }) {
                 <label className="flex items-center space-x-3 cursor-pointer">
                   <input
                     type="checkbox"
+                    checked={provider.starttls === true}
+                    onChange={e =>
+                      updateLdapProvider(index, 'starttls', e.target.checked || undefined)
+                    }
+                    className="h-4 w-4 text-blue-600 border-gray-300 rounded-sm focus:ring-blue-500"
+                  />
+                  <span className="text-sm font-medium text-gray-700 dark:text-gray-300">
+                    {t('admin.auth.ldap.starttls', 'Use StartTLS (encrypt ldap:// connections)')}
+                  </span>
+                </label>
+                <p className="text-xs text-gray-500 dark:text-gray-400 mt-1 ml-7">
+                  {t(
+                    'admin.auth.ldap.starttlsHelp',
+                    'Upgrades an ldap:// connection to TLS before any password is sent. The server must support StartTLS. Not needed for ldaps://.'
+                  )}
+                </p>
+              </div>
+
+              <div className="md:col-span-2">
+                <label className="flex items-center space-x-3 cursor-pointer">
+                  <input
+                    type="checkbox"
                     checked={provider.tlsOptions?.rejectUnauthorized === false}
                     onChange={e =>
                       updateLdapProvider(
@@ -320,14 +342,14 @@ function LdapProvidersSection({ config, onChange, t, availableGroups = [] }) {
                   <span className="text-sm font-medium text-gray-700 dark:text-gray-300">
                     {t(
                       'admin.auth.ldap.selfSigned',
-                      'Allow self-signed / internal CA certificates (ldaps://)'
+                      'Allow self-signed / internal CA certificates (ldaps:// and StartTLS)'
                     )}
                   </span>
                 </label>
                 <p className="text-xs text-gray-500 dark:text-gray-400 mt-1 ml-7">
                   {t(
                     'admin.auth.ldap.selfSignedHelp',
-                    'Enable when the LDAP server uses a certificate from a private or internal CA. Required for most on-premise ldaps:// setups.'
+                    'Enable when the LDAP server uses a certificate from a private or internal CA. Required for most on-premise ldaps:// and StartTLS setups.'
                   )}
                 </p>
               </div>

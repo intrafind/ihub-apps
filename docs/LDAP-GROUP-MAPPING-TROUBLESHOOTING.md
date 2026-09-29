@@ -94,14 +94,14 @@ Verify groups are in LDAP:
 
 ```bash
 # For generic LDAP
-ldapsearch -x -H ldap://ldap.example.com:389 \
+ldapsearch -x -H ldaps://ldap.example.com:636 \
   -D "cn=admin,dc=example,dc=org" \
   -w "password" \
   -b "ou=people,dc=example,dc=org" \
   "(uid=testuser)" memberOf
 
 # For Active Directory
-ldapsearch -x -H ldap://ad.example.com:389 \
+ldapsearch -x -H ldaps://ad.example.com:636 \
   -D "admin@example.com" \
   -w "password" \
   -b "dc=example,dc=com" \
@@ -282,7 +282,7 @@ Follow steps in [No Groups Retrieved](#no-groups-retrieved-from-ldap).
     "providers": [
       {
         "name": "active-directory",
-        "url": "ldap://ad.example.com:389",
+        "url": "ldaps://ad.example.com:636",
         "adminDn": "admin@example.com",
         "adminPassword": "${AD_PASSWORD}",
         "userSearchBase": "dc=example,dc=com",
@@ -336,7 +336,7 @@ Follow steps in [No Groups Retrieved](#no-groups-retrieved-from-ldap).
     "providers": [
       {
         "name": "company-ldap",
-        "url": "ldap://ldap.company.com:389",
+        "url": "ldaps://ldap.company.com:636",
         "userSearchBase": "ou=people,dc=company,dc=com",
         "groupSearchBase": "ou=groups,dc=company,dc=com",
         "groupClass": "groupOfNames"
@@ -428,7 +428,7 @@ tail -f logs/app.log
 Use `ldapsearch` to verify LDAP connectivity and group retrieval:
 
 ```bash
-ldapsearch -x -H ldap://your-ldap-server:389 \
+ldapsearch -x -H ldaps://your-ldap-server:636 \
   -D "admin-dn" \
   -w "password" \
   -b "search-base" \
