@@ -333,7 +333,10 @@ describe('MCP OAuth state ticket', () => {
       ok: false,
       reason: 'invalid'
     });
-    expect(verifyMcpOAuthTicket(`${payload}.x${signature.slice(1)}`).ok).toBe(false);
+    // A different first character every time: a fixed 'x' leaves the signature
+    // unchanged (and valid) whenever it already starts with 'x'.
+    const swapped = signature[0] === 'x' ? 'y' : 'x';
+    expect(verifyMcpOAuthTicket(`${payload}.${swapped}${signature.slice(1)}`).ok).toBe(false);
     expect(verifyMcpOAuthTicket('garbage').ok).toBe(false);
     expect(verifyMcpOAuthTicket('').ok).toBe(false);
   });
