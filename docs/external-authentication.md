@@ -410,7 +410,9 @@ auth can query an LDAP/AD directory server for the user's groups after the fact.
 
 Configure an entry in `ldapAuth.providers` with admin bind credentials and a
 `groupSearchBase` (see [LDAP and NTLM Authentication](./ldap-ntlm-authentication.md)),
-then reference it from `proxyAuth.ldapGroupLookupProvider`:
+then reference it from `proxyAuth.ldapGroupLookupProvider`. The bind password
+lives in the credential store — set `adminPasswordRef` to the id of a credential
+profile (Admin → Credentials), not the password itself:
 
 ```json
 {
@@ -428,7 +430,7 @@ then reference it from `proxyAuth.ldapGroupLookupProvider`:
         "name": "corporate-ldap",
         "url": "ldap://ldap.example.com:389",
         "adminDn": "cn=service,dc=example,dc=org",
-        "adminPassword": "${LDAP_ADMIN_PASSWORD}",
+        "adminPasswordRef": "ldap_corporate-ldap",
         "userSearchBase": "ou=people,dc=example,dc=org",
         "usernameAttribute": "sAMAccountName",
         "groupSearchBase": "ou=groups,dc=example,dc=org",
@@ -442,6 +444,8 @@ then reference it from `proxyAuth.ldapGroupLookupProvider`:
 Notes:
 
 - `ldapAuth.enabled` does not need to be `true` — the provider only has to exist.
+- The provider **must** have both `adminDn` and `adminPasswordRef` set; without
+  them the lookup is skipped and only the header/JWT groups are used.
 - Retrieved LDAP groups are **merged** with groups from `X-Forwarded-Groups` and the
   JWT `groups` claim (deduplicated) before external → internal group mapping via
   `groups.json`.
