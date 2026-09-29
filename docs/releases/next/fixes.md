@@ -19,7 +19,7 @@ thought used the whole limit, the chat showed the thinking and then nothing, wit
 - The bundled **Local vLLM** model now uses the `local` provider, which sends the reasoning
   settings vLLM understands (`chat_template_kwargs`, `include_reasoning`). Existing model files are
   not changed; set `"provider": "local"` on a vLLM model to get the same.
-
+  
 ## Reopened chats show your message when you only uploaded a file
 
 In apps like the NDA Risk Analyzer, you can upload a document and send it without typing anything.
