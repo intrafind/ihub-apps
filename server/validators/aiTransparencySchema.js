@@ -70,7 +70,10 @@ export const contentMarkingSchema = z
         z
           .object({
             scheme: z.enum(TEXT_WATERMARK_SCHEMES),
-            keyGroup: z.string().regex(/^[a-z0-9._-]+$/).optional(),
+            keyGroup: z
+              .string()
+              .regex(/^[a-z0-9._-]+$/)
+              .optional(),
             /** Send `watermarking: true` per request (vLLM RFC #53916). */
             perRequest: z.boolean().optional()
           })

@@ -199,7 +199,9 @@ function deletePath(obj, dotPath) {
 }
 
 function readPath(obj, dotPath) {
-  return dotPath.split('.').reduce((node, key) => (isPlainObject(node) ? node[key] : undefined), obj);
+  return dotPath
+    .split('.')
+    .reduce((node, key) => (isPlainObject(node) ? node[key] : undefined), obj);
 }
 
 /**

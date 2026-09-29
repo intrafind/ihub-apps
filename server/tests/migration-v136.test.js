@@ -63,7 +63,8 @@ function flatten(obj, prefix = '') {
   const out = {};
   for (const [key, value] of Object.entries(obj)) {
     const p = prefix ? `${prefix}.${key}` : key;
-    if (value && typeof value === 'object' && !Array.isArray(value)) Object.assign(out, flatten(value, p));
+    if (value && typeof value === 'object' && !Array.isArray(value))
+      Object.assign(out, flatten(value, p));
     else out[p] = value;
   }
   return out;
@@ -106,7 +107,9 @@ describe('V136 platform defaults', () => {
 
   it('keeps values an admin already set', async () => {
     const { ctx } = await seed({
-      platform: { aiTransparency: { detection: { access: 'public' }, images: { watermark: 'none' } } }
+      platform: {
+        aiTransparency: { detection: { access: 'public' }, images: { watermark: 'none' } }
+      }
     });
     await up(ctx);
     const { aiTransparency } = await ctx.readJson('config/platform.json');
