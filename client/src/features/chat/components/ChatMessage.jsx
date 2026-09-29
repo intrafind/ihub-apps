@@ -958,9 +958,14 @@ function ChatMessage({
             with the other provenance. */}
         {!isUser && !message.loading && <SearchSummary summary={message.searchSummary} />}
 
-        {/* Citation panel for iAssistant Conversation */}
+        {/* Documents behind the answer: an iAssistant conversation's, or the
+            ones the turn's iFinder tool calls found */}
         {!isUser && message.citations && !message.loading && (
-          <CitationPanel citations={message.citations} onDocumentAction={onDocumentAction} />
+          <CitationPanel
+            citations={message.citations}
+            content={message.content}
+            onDocumentAction={onDocumentAction}
+          />
         )}
 
         {/* Sources behind a grounded answer (provider-run web search) */}

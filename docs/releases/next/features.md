@@ -25,3 +25,17 @@ conversation held for that app. The previous chat stays in the chat history and 
   page keeps the conversation.
 - Without chat history (for example anonymous users), opening an app still restores the
   conversation from the current browser tab, as before.
+
+## Document Actions for Answers From the iFinder Search Tools
+
+Answers researched with the iFinder tools (the **iFinder Search** app, or any app using
+`iFinder_search`) now list the documents they found in the **Documents** panel under the answer,
+the same way iAssistant answers do. Each document has the full menu: **Preview**, **Download**,
+**Details**, **Open in App**, **Open in browser** and, in the Outlook task pane, **Add to email**.
+
+- Documents are fetched with the signed-in user's own iFinder permissions, from the search profile
+  the tool searched.
+- The documents the answer links to are marked **Referenced** and listed first. Other search hits
+  fold away behind **Show N more documents**, so a turn that ran several searches does not bury
+  the few documents it used.
+- Documents read or looked up with `iFinder_getContent` and `iFinder_getMetadata` are listed too.
