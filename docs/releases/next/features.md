@@ -206,8 +206,8 @@ sent. A provider on plain `ldap://` sends the user's password at every login, an
 at every group lookup, unencrypted. Switch such providers to `ldaps://` or turn StartTLS on.
 
 - New **Use StartTLS** option per provider on **Admin → Authentication** (`"starttls": true` in
-  `ldapAuth.providers`). It covers LDAP logins, group lookups for NTLM users, and the connection
-  test.
+  `ldapAuth.providers`). It covers LDAP logins, group lookups for NTLM and proxy-auth users, and
+  the connection test.
 - The server certificate is checked against the host name in the URL. For a private CA, trust the
   CA on the iHub server, or enable **Allow self-signed / internal CA certificates**.
 - If the server refuses StartTLS, the login fails instead of falling back to plain text.
