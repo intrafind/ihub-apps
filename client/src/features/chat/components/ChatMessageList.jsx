@@ -6,6 +6,23 @@ import { useUIConfig } from '../../../shared/contexts/UIConfigContext';
 import IntegrationAuthPrompts from '../../../shared/components/integrations/IntegrationAuthPrompts';
 
 /**
+ * Whether a user message carries an upload: the live payload (`fileData`,
+ * `imageData`, `audioData`) or, for a reopened chat, the stored descriptors.
+ *
+ * @param {Object} message - Chat message.
+ * @returns {boolean}
+ */
+function hasUserAttachments(message) {
+  return [
+    message.fileData,
+    message.imageData,
+    message.audioData,
+    message.attachments,
+    message.sharedAttachments
+  ].some(value => (Array.isArray(value) ? value.length > 0 : !!value));
+}
+
+/**
  * A reusable component to display chat messages with smart auto-scrolling
  * Auto-scrolls to new messages and during streaming unless user manually scrolls up
  * Only renders when there are actual messages to display
@@ -124,9 +141,17 @@ function ChatMessageList({
     return null;
   }
 
-  // Filter out empty user messages (used for auto-start feature)
+  // Filter out empty user messages (used for auto-start feature). A turn that
+  // only uploaded a file has no text either, but it is still the user's turn:
+  // a reopened chat stores it as empty content plus attachment descriptors, and
+  // hiding it left the answer standing without the question (issue #2601).
   const displayedMessages = messages.filter(
-    message => !(message.role === 'user' && (!message.content || message.content.trim() === ''))
+    message =>
+      !(
+        message.role === 'user' &&
+        (!message.content || message.content.trim() === '') &&
+        !hasUserAttachments(message)
+      )
   );
 
   // Don't render anything if all messages were filtered out

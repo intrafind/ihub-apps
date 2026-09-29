@@ -1,5 +1,14 @@
 # Fixes — Unreleased
 
+## Reopened chats show your message when you only uploaded a file
+
+In apps like the NDA Risk Analyzer, you can upload a document and send it without typing anything.
+When you reopened such a chat from history, your message was missing and only the answer was
+shown. The message now appears again, showing the name of the file you sent.
+
+- Messages where you typed text and attached a file now also show the file name after reopening.
+- The file itself is not stored with the chat, so only its name is shown.
+
 ## vLLM models respect "Show reasoning" being turned off
 
 On vLLM models (`provider: "local"`), turning off "Show reasoning" in the model settings, or

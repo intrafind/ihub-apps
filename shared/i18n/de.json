@@ -523,6 +523,7 @@
     "copied": "Kopiert!",
     "edit": "Bearbeiten",
     "resend": "Erneut senden",
+    "attachmentsLabel": "Anhänge",
     "editMessage": "Nachricht bearbeiten",
     "editHint": "{{submit}} zum Senden · Esc zum Abbrechen",
     "resendMessage": "Nachricht erneut senden",
