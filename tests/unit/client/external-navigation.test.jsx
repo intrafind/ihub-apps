@@ -2,6 +2,7 @@ import {
   detectExternalNavigationHost,
   filenameFromContentDisposition,
   openExternalUrl,
+  openExternalUrlSettled,
   saveBlobAs
 } from '../../../client/src/utils/externalNavigation';
 
@@ -115,6 +116,52 @@ describe('openExternalUrl', () => {
   it('reports failure when there is no URL', () => {
     expect(openExternalUrl('')).toBe(false);
     expect(windowOpen).not.toHaveBeenCalled();
+  });
+});
+
+describe('openExternalUrlSettled', () => {
+  let windowOpen;
+
+  beforeEach(() => {
+    windowOpen = jest.spyOn(window, 'open').mockReturnValue({});
+  });
+
+  afterEach(() => {
+    windowOpen.mockRestore();
+    delete global.Office;
+    delete global.chrome;
+  });
+
+  it('resolves true once the extension has created the tab', async () => {
+    const create = jest.fn(() => Promise.resolve({}));
+    global.chrome = { tabs: { create } };
+
+    await expect(openExternalUrlSettled('https://example.test/doc')).resolves.toBe(true);
+    expect(create).toHaveBeenCalledWith({ url: 'https://example.test/doc' });
+  });
+
+  it('resolves false when the extension refuses the tab, where openExternalUrl says true', async () => {
+    global.chrome = { tabs: { create: jest.fn(() => Promise.reject(new Error('no tab'))) } };
+
+    await expect(openExternalUrlSettled('https://example.test/doc')).resolves.toBe(false);
+    expect(openExternalUrl('https://example.test/doc')).toBe(true);
+    expect(windowOpen).not.toHaveBeenCalled();
+  });
+
+  it('hands the URL over before it returns, inside the click that asked for it', () => {
+    const openBrowserWindow = jest.fn();
+    global.Office = { context: { ui: { openBrowserWindow } } };
+
+    const settled = openExternalUrlSettled('https://example.test/doc');
+    expect(openBrowserWindow).toHaveBeenCalledWith('https://example.test/doc');
+    return expect(settled).resolves.toBe(true);
+  });
+
+  it('resolves what openExternalUrl reports in the web app', async () => {
+    await expect(openExternalUrlSettled('https://example.test/doc')).resolves.toBe(true);
+    windowOpen.mockReturnValue(null);
+    await expect(openExternalUrlSettled('https://example.test/doc')).resolves.toBe(false);
+    await expect(openExternalUrlSettled('')).resolves.toBe(false);
   });
 });
 
