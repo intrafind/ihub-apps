@@ -33,6 +33,11 @@ const inFlightFetches = new Map();
 const ldapGroupsCache = new Map();
 const ldapGroupsInFlight = new Map();
 const DEFAULT_LDAP_GROUPS_TTL_MS = 10 * 60 * 1000; // 10 minutes
+// Hard cap on cached users per process. Without this, a long-running server
+// with churn in the proxy-authenticated user set would accumulate one entry
+// per distinct user for the process lifetime. Map preserves insertion order,
+// so evicting `keys().next()` drops the least-recently-refreshed entry.
+const LDAP_GROUPS_CACHE_MAX_ENTRIES = 5000;
 
 function getLdapGroupsCacheKey(providerName, userId) {
   return `${providerName}::${userId}`;
@@ -77,7 +82,22 @@ async function getLdapGroupsForProxyUser(providerName, userId, ttlMs) {
   const pending = (async () => {
     try {
       const groups = await fetchLdapGroupsForProxyUser(providerName, userId);
-      ldapGroupsCache.set(cacheKey, { groups, fetchedAt: Date.now() });
+      if (ttlMs > 0) {
+        // Delete + re-set refreshes insertion order, so recently-used entries
+        // survive when the cap kicks in below.
+        ldapGroupsCache.delete(cacheKey);
+        ldapGroupsCache.set(cacheKey, { groups, fetchedAt: Date.now() });
+        while (ldapGroupsCache.size > LDAP_GROUPS_CACHE_MAX_ENTRIES) {
+          const oldest = ldapGroupsCache.keys().next().value;
+          if (oldest === undefined) break;
+          ldapGroupsCache.delete(oldest);
+        }
+      } else if (ldapGroupsCache.has(cacheKey)) {
+        // TTL was lowered to 0 at runtime; drop any pre-existing entry so the
+        // stale-fallback branch below can't hand back a value the operator
+        // just asked us to stop caching.
+        ldapGroupsCache.delete(cacheKey);
+      }
       return groups;
     } catch (error) {
       // Fall back to the stale copy, if any, instead of locking a user out
