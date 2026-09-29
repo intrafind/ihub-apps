@@ -3,6 +3,7 @@ import { useTranslation } from 'react-i18next';
 import { getLocalizedContent } from '../../../utils/localizeContent';
 import Icon from '../../../shared/components/Icon';
 import { useKeyboardNavigation } from '../../../shared/hooks/useKeyboardNavigation';
+import { modelSupportsWebSearch } from '../webSearch';
 
 /**
  * Inline model selector component for next-gen chat input
@@ -165,6 +166,9 @@ function ModelSelector({
                 const name = getLocalizedContent(model.name, currentLanguage);
                 const desc = getLocalizedContent(model.description, currentLanguage);
                 const isSelected = model.id === selectedModel;
+                // Web search apps mark each model: globe where web search
+                // works with it, greyed out where it does not.
+                const webSearch = modelSupportsWebSearch(app, model);
 
                 return (
                   <button
@@ -209,6 +213,33 @@ function ModelSelector({
                           </div>
                         )}
                       </div>
+                      {webSearch !== null && (
+                        <span
+                          className={`shrink-0 ${
+                            webSearch
+                              ? 'text-indigo-500 dark:text-indigo-400'
+                              : 'text-gray-300 dark:text-gray-600'
+                          }`}
+                          title={
+                            webSearch
+                              ? t('websearch.modelSupported', 'Web search works with this model')
+                              : t(
+                                  'websearch.modelUnsupported',
+                                  'Web search does not work with this model in this app'
+                                )
+                          }
+                        >
+                          <Icon name="globe-alt" size="sm" aria-hidden="true" />
+                          <span className="sr-only">
+                            {webSearch
+                              ? t('websearch.modelSupported', 'Web search works with this model')
+                              : t(
+                                  'websearch.modelUnsupported',
+                                  'Web search does not work with this model in this app'
+                                )}
+                          </span>
+                        </span>
+                      )}
                       {isSelected && (
                         <Icon
                           name="check"

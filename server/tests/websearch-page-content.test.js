@@ -92,6 +92,24 @@ describe('extractHtmlPage', () => {
     assert.ok(page.markdown.split('\n').length > 8);
   });
 
+  it('keeps in-page links as text and drops footnote markers and link tooltips', () => {
+    const page = extractHtmlPage(
+      `<html><body><article><h2><a href="#usage">Usage</a></h2>
+        <p>${'Markdown is a lightweight markup language. '.repeat(10)}<sup class="reference"><a href="#cite_note-1">[1]</a></sup>
+        See <a href="/wiki/Text_editor" title="Text editor">plain-text editors</a> and <a href="/icon"><img src="i.png"></a>.</p>
+      </article></body></html>`,
+      { url: 'https://en.wikipedia.org/wiki/Markdown' }
+    );
+    assert.match(page.markdown, /^## Usage$/m);
+    assert.doesNotMatch(page.markdown, /cite_note|\[1\]/);
+    assert.match(
+      page.markdown,
+      /\[plain-text editors\]\(https:\/\/en\.wikipedia\.org\/wiki\/Text_editor\)/
+    );
+    assert.doesNotMatch(page.markdown, /"Text editor"/);
+    assert.doesNotMatch(page.markdown, /\[\]\(/);
+  });
+
   it('drops navigation, footer and styles', () => {
     const page = extractHtmlPage(ARTICLE, { url: 'https://example.com/' });
     assert.doesNotMatch(page.markdown, /Imprint/);

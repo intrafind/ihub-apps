@@ -21,7 +21,7 @@ iHub Apps provides a unified web search system that automatically selects the be
 
 | Tool | Purpose |
 |------|---------|
-| **webContentExtractor** | Open a web page or PDF by URL and read its main text (offered automatically with script-backed web search) |
+| **webContentExtractor** | Open a web page or PDF by URL and read its main content as Markdown (offered automatically with web search) |
 | **playwrightScreenshot** | Capture screenshots or PDFs using Playwright |
 | **seleniumScreenshot** | Capture screenshots or PDFs using Selenium |
 | **deepResearch** | Iterative multi-round web research |
@@ -68,6 +68,7 @@ Add a `websearch` object to your app configuration:
 | `enabledByDefault` | Boolean | `false` | Whether web search is active by default (users can toggle it in the chat) |
 | `maxSearches` | Number | `5` | Cap on provider-run searches per model call when native search is used (sent to Anthropic as `max_uses`; 1-50). Anthropic bills each search separately |
 | `researchGuidance` | Boolean or String | `true` | Guidance added to the system prompt when web search is on, telling the model to research in several steps. `true` uses the built-in text, `false` turns it off, a string replaces the built-in text. See [Multi-Step Research](#multi-step-research) |
+| `maxPageReads` | Number | `5` | Cap on pages the model opens with the page reader (`webContentExtractor`) in one chat answer (1-50). Pages the search tool fetches for its own excerpts (`extractContent`) do not count. See [Page read limit](#page-read-limit) |
 
 ### How Provider Resolution Works
 
@@ -105,9 +106,15 @@ reader [`webContentExtractor`](#web-content-extractor-webcontentextractor) is
 offered next to it. The search tool's automatic extraction only copies a short
 excerpt of the top results (`contentMaxLength` each); the page reader lets the
 model open one specific result, or a URL the user pasted, and read it in full.
-It is not offered with native search (the provider's own search tool handles
-that request), and an admin can switch it off by disabling the tool under
-**Admin → Tools**.
+
+The page reader is also offered next to **Anthropic** and **OpenAI Responses**
+native search, whose requests accept function tools alongside the provider's
+search: the provider searches, the reader opens a result or a pasted URL. It is
+not offered next to **Google** native search. Gemini drops every function
+declaration next to `google_search`; combining the two is a preview feature for
+Gemini 3 models only and requires the server-side tool calls to be circulated
+back through the conversation, which the adapter does not do yet. An admin can
+switch the reader off by disabling the tool under **Admin → Tools**.
 
 `"auto"` exists so an install without a Brave subscription still gets working
 web search. It walks the keyed engines first, in registration order, so an
@@ -128,7 +135,11 @@ Web search settings can be configured through the admin panel:
 
 ### User Toggle
 
-When web search is enabled for an app, users see a toggle in the chat input area to enable/disable web search per conversation. The `enabledByDefault` setting controls whether this toggle starts in the on or off state.
+When web search is enabled for an app, users see a toggle in the chat input's **+** menu to enable/disable web search per conversation. The `enabledByDefault` setting controls whether this toggle starts in the on or off state.
+
+While web search is on, a highlighted **Web search** chip next to the **+** button says so; one click on it turns web search off.
+
+In the model picker of a web search app, a globe marks the models web search works with, and is greyed out on the others — for example a model whose provider has no native search, while native search is off for it and no script-backed provider is usable (a named Brave or Staan provider without an API key, or a disabled search tool). The server reports what is usable per app on `GET /api/apps/:appId` as `websearchAvailability` (`{ native: [providers], script: boolean }`).
 
 ### Multi-Step Research
 
@@ -176,6 +187,72 @@ How much the model can act on it depends on the search path:
 The default **Web Chat** app's prompt was reworded to match. Migration V124 updates an existing
 `contents/apps/web-chat.json` only in the languages whose prompt is still exactly the old shipped
 default; a prompt an admin changed is left as is (the added guidance applies to it anyway).
+
+### Sources and Citations
+
+Every answer that used web search gets a **Searched for “…”** entry under it
+(**N searches** when there were several), with the icons of the sites it found.
+It opens the **sources view**, a side panel on desktop and a bottom sheet on
+phones, with two sections:
+
+- **Cited in this answer**: the sources the answer cites, numbered in the order
+  it first cites them;
+- **Also considered**: what the searches returned, or the page reader read,
+  without being cited.
+
+Each source card shows the site's favicon (as the search provider returned it;
+iHub fetches none from a third-party service, sites without one get their
+initial), the site, the title (opening the page in a new tab), the snippet or
+the cited passage, the published date when known, and whether the page was
+**Read** or **Not readable**, with the words read and a *truncated* hint.
+
+In the answer, each citation is a numbered superscript badge. Hovering or
+focusing a badge highlights the paragraph it supports and its card; hovering a
+card highlights every passage that cites it. A click or tap opens the sources
+view on that card and pins the highlight until the view is closed. A badge stays
+a link to the page, so a middle or modifier click opens the page itself.
+
+A citation is a Markdown link to one of the turn's sources, conventionally
+`[n](url)`. The number the model writes does not matter: sources are numbered by
+the order the answer first links them. **A link to a URL that the turn's searches
+and page reads did not return is never shown as a citation**, only as an
+ordinary link. How the links get into the answer depends on the search path:
+
+| Path | Citations come from |
+|------|---------------------|
+| Brave, Staan, Qwant | The model, which the source guidance (below) asks to cite with `[n](url)` links |
+| Anthropic | Claude's `citations`: a marker follows each cited text block. Uncited search results are listed under *Also considered*, the `cited_text` on the card |
+| Google | The grounding supports: markers go after the passage each one backs |
+| OpenAI Responses | The links OpenAI writes into the text; its streamed `url_citation` annotations and `web_search_call` items are read into the same grounding metadata as the other providers |
+
+The queries and sources are stored with the saved answer (`webSearch` on the
+message), so a reopened or shared chat shows the same sources view and badges.
+For Google the markers are written into the stored text.
+
+When web search is on for a turn, the server adds a short source instruction to
+the system prompt, next to the research guidance. It is not an admin setting —
+the display depends on it — and it covers:
+
+- **Citation format** (script-backed search only): cite each claim with a
+  Markdown link to the source URL, numbered, only URLs the turn returned, no
+  separate source list at the end.
+- **Named sites**: when the user names a site or domain, limit the search to it
+  (`includeDomains`, or `site:` in the query).
+- **Pasted URLs** (when the page reader is offered): open them with the page
+  reader instead of searching for them, and read on with `offset` when a page is
+  truncated.
+
+### Page Read Limit
+
+`websearch.maxPageReads` (default 5, **Admin → Apps → Web Search → Max Page
+Reads per Answer**) caps how many pages the model opens with the page reader in
+one chat answer. Past the cap, the read is not made and the model is told:
+*page read limit reached for this turn, answer with what you have, and tell the
+user they can continue in the next message*. The chat shows the refused read as
+**Not read** with the same explanation. The pages the search tool fetches for
+its own excerpts (`extractContent`) do not count; they stay capped by
+`maxResults`. The cap applies to chats (and apps invoked as tools from a chat);
+agents and workflows keep their own budgets.
 
 ### Migration from Legacy Tool Configuration
 
@@ -314,6 +391,7 @@ BRAVE_SEARCH_ENDPOINT=https://api.search.brave.com/res/v1/web/search
 QWANT_SEARCH_ENDPOINT=https://api.qwant.com/v3/search/
 QWANT_SEARCH_USER_AGENT=          # override the browser UA Qwant is sent
 STAAN_SEARCH_ENDPOINT=https://api.staan.ai/v2/search/web
+WEB_READER_USER_AGENT=            # override the browser UA the page reader sends
 ```
 
 ### Native Search Providers
@@ -346,8 +424,10 @@ The billable search count (`server_tool_use.web_search_requests`) is recorded as
 - `maxResults` (number, optional): Maximum results to return (default: configured by app, max: 10)
 - `contentMaxLength` (number, optional): Maximum content length per page (default: configured by app)
 - `language` (string, optional): Language or locale for the results, e.g. `en`, `de` or `en-GB` (default: the user's language — see [Search Language](#search-language))
+- `freshness` (string, optional): Only results from the last `day`, `week`, `month` or `year` (sent to Brave as its own `freshness` parameter)
+- `includeDomains` (string[], optional): Only results from these domains (max 10; sent as `site:` operators in the query)
 
-**Returns**: Array of search results with titles, URLs, descriptions, and optionally extracted page content.
+**Returns**: Search results with title, URL, description and hostname, plus the page's date (`publishedDate` from Brave's `page_age`, and Brave's `age` label), extra snippets (on plans that include them) and the site's favicon; optionally extracted page content. See [Result Shape and Filters](#result-shape-and-filters).
 
 ### Qwant Search (`qwantSearch`)
 
@@ -365,8 +445,10 @@ app's `websearch` config rather than listed in the app's `tools` array.
 - `maxResults` (number, optional): Maximum results to return (default: configured by app, max: 10 — one Qwant web request pages in tens)
 - `contentMaxLength` (number, optional): Maximum content length per page (default: configured by app)
 - `language` (string, optional): Language or locale for the results, e.g. `en`, `de`, `de-CH` (default: `en_US`)
+- `freshness` (string, optional): Only results from the last `day`, `week`, `month` or `year`. Qwant has no such parameter: dated results outside the window are dropped, undated ones kept, and the result says so
+- `includeDomains` (string[], optional): Only results from these domains (max 10; sent as `site:` operators in the query)
 
-**Returns**: Array of search results with titles, URLs, descriptions, an optional `publishedDate`, and optionally extracted page content.
+**Returns**: Search results with title, URL, description, hostname and an optional `publishedDate`, and optionally extracted page content.
 
 > **Egress IP matters.** Qwant fronts its API with DataDome, which answers
 > requests from data-centre IP ranges with a captcha instead of results. On a
@@ -388,8 +470,9 @@ injected from the app's `websearch` config rather than listed in the app's
 
 - It answers requests from data-centre IP ranges, so it works on the cloud
   hosting where Qwant is blocked.
-- It takes **domain scoping** as a request parameter, which neither of the
-  others does.
+- It takes **domain scoping** as a request parameter (`include_domains` /
+  `exclude_domains`); the others restrict domains through `site:` in the query,
+  and only Staan can exclude them.
 
 **Parameters**:
 
@@ -400,11 +483,27 @@ injected from the app's `websearch` config rather than listed in the app's
 - `language` (string, optional): Language or locale for the results, e.g. `en`, `de`, `en-GB` (default: `en-us`)
 - `includeDomains` (string[], optional): Only return results from these domains (max 10)
 - `excludeDomains` (string[], optional): Drop results from these domains (max 10)
+- `freshness` (string, optional): Only results from the last `day`, `week`, `month` or `year`. Staan has no such parameter and returns no dates, so the filter cannot drop anything; the result says so
 
 `includeDomains` and `excludeDomains` are mutually exclusive — the API rejects a
 request carrying both, so `includeDomains` wins when both are given.
 
-**Returns**: Array of search results with titles, URLs, descriptions, an optional `hostname`, and optionally extracted page content.
+**Returns**: Search results with title, URL, description, `hostname` and the site's favicon (Staan's `favicon_url`), and optionally extracted page content.
+
+### Result Shape and Filters
+
+All three script-backed tools share one result shape (`tools/lib/searchWithExtraction.js`),
+so an app can switch provider without the model seeing a different contract:
+`{ title, url, description, hostname }` plus, where the provider returns them,
+`publishedDate` (ISO 8601), `age`, `snippets` and `favicon`. The chat's source
+cards are drawn from these fields.
+
+`freshness` and `includeDomains` work with every provider. A provider that
+filters natively gets its own parameter (Brave `freshness`, Staan
+`include_domains`); otherwise domains become `site:` operators in the query, and
+freshness drops the dated results outside the window — keeping undated ones —
+with a `note` in the result telling the model so. The filters applied are echoed
+as `filters` in the result.
 
 > **Markets.** Staan serves the German, French and English markets
 > (`de-de`, `fr-fr`, `en-us`, `en-gb`, `en-fr`, `en-ca`, `en-au`, `en-in`,
@@ -423,38 +522,42 @@ Google Search grounding, OpenAI Web Search, and Anthropic Web Search are **not**
 | OpenAI (Responses API) | OpenAI Web Search | Combinable with function tools in the same request |
 | Anthropic Claude | Anthropic's server-side [web search tool](https://platform.claude.com/docs/en/agents-and-tools/tool-use/web-search-tool) | Combinable with function tools; Claude runs the search itself and returns results and citations in the same response, without a round trip through iHub; billed separately by Anthropic per search |
 
-None of these take any parameters — they're automatically enabled when `websearch.useNativeSearch` is on and the app's model supports them (Anthropic additionally receives the app's search cap as `max_uses`). Search results and citations are surfaced as grounding metadata, which powers the "Grounding" answer-source badge and the collapsible **Sources** list under the answer: the pages the model cited, with title, site and the cited passage where the provider supplies it.
+None of these take any parameters — they're automatically enabled when `websearch.useNativeSearch` is on and the app's model supports them (Anthropic additionally receives the app's search cap as `max_uses`). Search queries, results and citations are surfaced as grounding metadata, which powers the "Grounding" answer-source badge and the [sources view and inline citations](#sources-and-citations). For OpenAI this includes streamed answers: the `url_citation` annotations and `web_search_call` items of the stream are read into the grounding metadata (before, only a non-streamed response's annotations were parsed, and nothing read them).
 
 ### Web Content Extractor (`webContentExtractor`)
 
-**Purpose**: Extract clean, readable content from any webpage URL, automatically removing headers, footers, navigation, ads, and other non-content elements.
+**Purpose**: Open a web page or PDF by URL and return its main content as Markdown, without headers, footers, navigation, ads and other non-content elements.
 
 **Parameters**:
 
-- `url` (string, required): The URL of the webpage to extract content from
-- `maxLength` (integer, optional): Maximum length of extracted content in characters (default: 10000, clamped to 500-50,000)
+- `url` (string, required): The URL of the page to open
+- `maxLength` (integer, optional): Most characters returned per call (default: 10000, clamped to 500-50,000)
+- `offset` (integer, optional): Character offset to start reading at — the previous result's `nextOffset`, to read on in a long page (default: 0)
 
-**Availability**: Shipped as `contents/tools/webContentExtractor.json` and offered automatically next to the script-backed search tool whenever an app has `websearch.enabled` (see [How Provider Resolution Works](#how-provider-resolution-works)). An app or workflow can also list it in `tools` directly; it is only offered once. Disable the tool to stop offering it.
+**Availability**: Shipped as `contents/tools/webContentExtractor.json` and offered automatically next to the script-backed search tool whenever an app has `websearch.enabled`, and next to Anthropic and OpenAI native search (see [How Provider Resolution Works](#how-provider-resolution-works)). An app or workflow can also list it in `tools` directly; it is only offered once. Disable the tool to stop offering it. In chats, `websearch.maxPageReads` caps how often one answer may call it (see [Page Read Limit](#page-read-limit)).
 
 **Certificates**: The model cannot switch certificate checking off. Invalid certificates are accepted only when the platform's `ssl.ignoreInvalidCertificates` setting allows it; domains in the SSL whitelist also bypass the SSRF check below.
 
 **Returns**:
 
-- Clean text content
-- Page metadata (title, description, author)
-- Word count and extraction timestamp
+- `content`: one window of the page as Markdown — headings, lists, tables, links (absolute) and code are kept; images are reduced to their alt text. PDFs are returned as text
+- `title`, `description`, `author`, and `siteName` / `publishedDate` when the page declares them. A PDF's title and author come from its metadata (the file name when it has no title)
+- `truncated`, `totalLength`, `offset` and `nextOffset`: whether the page has more than this window, how long it is, and where the next window starts. A `note` repeats it in words, with the call to make to read on
+- `wordCount` (words in this window), `contentType` (`html` or `pdf`), `format` (`markdown` or `text`), and `pageCount` / `pagesRead` for PDFs
+- a `note` when the page returned little readable text (it may need JavaScript to render, or block automated access)
 - If an error occurs, an exception is thrown with a `code` property for translation
 
 **Features**:
 
-- Removes ads, navigation menus, headers, footers
-- Extracts main article content intelligently
-- Handles various webpage structures
-- Provides metadata extraction
-- Error handling for invalid URLs or failed requests
+- Main content found with Mozilla's Readability (the Firefox reader view), with the previous selector rules (`main`, `article`, known content containers, else `body` without chrome) as the fallback for pages that have no single article
+- PDFs are read across all pages up to the length cap (400,000 characters, 500 pages), no longer only the first 10
+- Requests go out with `Accept-Language` in the user's language (the platform default otherwise) and a current browser user agent (`WEB_READER_USER_AGENT` overrides it)
+- Extracted pages are cached for a short time (the search cache TTL, `SEARCH_CACHE_TTL_MS`, default 10 minutes; bounded by size), so reading a page again, or reading on from an offset, costs no request
 - Detects missing pages or authentication requirements and reports them clearly
 - Returned errors include a `code` field so applications can translate messages and the UI automatically shows a localized error when possible
 - **SSRF protection**: Blocks access to private/internal IP addresses. Domains listed in the SSL whitelist configuration bypass this check (added in v5.2.12)
+
+In the chat's tool activity, a page read shows the page's title, its site, the words read and a *truncated* hint.
 
 ### Playwright Screenshot (`playwrightScreenshot`)
 
@@ -587,13 +690,14 @@ Here is a complete app configuration with web search enabled:
 
 The web content extractor uses the following approach:
 
-1. **Fetch webpage** with appropriate headers and timeout
-2. **Parse HTML** using JSDOM
-3. **Remove unwanted elements** (ads, navigation, etc.)
-4. **Identify main content** using semantic selectors
-5. **Clean and format text** for readability
-6. **Extract metadata** (title, description, author)
-7. **Apply length limits** and return structured result
+1. **Fetch the page** with the user's `Accept-Language`, a browser user agent and a timeout, re-validating every redirect hop against the SSRF guard (or serve it from the page cache)
+2. **Parse HTML** using JSDOM, with the page's URL as the base for relative links
+3. **Find the main content** with Readability; when it finds no article, strip navigation, ads and chrome and take the first known content container
+4. **Convert to Markdown** with Turndown (ATX headings, fenced code, GFM tables)
+5. **Extract metadata** (title, description, author, site name, published date)
+6. **Cache the whole document** and return the window starting at `offset`, ending at a paragraph break where possible, with `truncated` / `totalLength` / `nextOffset`
+
+`tools/lib/pageContent.js` holds the extraction rules as pure functions; `tools/webContentExtractor.js` does the fetching and caching.
 
 ### SSRF Protection
 

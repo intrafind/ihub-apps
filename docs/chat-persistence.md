@@ -495,7 +495,7 @@ index can answer "list my chats" without scanning:
   messages: [
     { id, role, content, ts, runId,
       clientMessageId?, usage?, finishReason?, error?, attachments?, artifacts?,
-      mcpApps?, citations?,
+      mcpApps?, citations?, webSearch?,
       // inference API turns: on a user message the variables it was rendered
       // with and the rendered text the model saw; on an answer the validated
       // structured output and the model identifier that produced it
@@ -557,6 +557,14 @@ Details that matter:
   passages are dropped first when that is exceeded. The documents are fetched
   again with the reader's own iFinder permissions. A share never carries them
   — see [Chat Sharing](chat-sharing.md#what-is-shared--and-what-is-not).
+- **The web sources behind an answer are stored with it** — `webSearch:
+  { queries, sources }`: what the turn searched for, and every source its
+  searches and page reads returned or the provider reported (URL, title, site,
+  snippet, cited passage, date, favicon, read / not readable, words read), at
+  most 30 queries and 100 sources. The citation markers are part of the stored
+  text (Google's are written into it when the answer is stored), so a reopened
+  or shared chat draws the same sources view and citation badges — see
+  [Web Tools → Sources and Citations](web-tools.md#sources-and-citations).
 - **Failures are recorded.** An aborted turn stores its (possibly empty) answer
   with `error: { code: 'ABORTED', … }`, an errored turn with its error code, so a
   truncated answer never reads as a complete one. A turn that paused for a

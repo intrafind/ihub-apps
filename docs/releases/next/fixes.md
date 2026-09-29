@@ -91,3 +91,9 @@ there too.
 - Documents are still fetched with the signed-in user's own iFinder permissions.
 - Shared links do not include the Documents panel: its documents were found with the owner's
   iFinder permissions, and a viewer may not be allowed to see them.
+
+## OpenAI Web Search Answers Show Their Sources
+
+Streamed answers from OpenAI models with native web search showed no sources, and their badge
+said **Based on AI knowledge**. The citations of a streamed answer are now read, so the answer
+lists its sources and carries the web search badge.

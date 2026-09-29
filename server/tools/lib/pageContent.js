@@ -167,6 +167,32 @@ export function createMarkdownConverter() {
     }
   });
 
+  // Links keep their text and target, not their tooltip. A link inside the
+  // page (`#section`) is only its text — heading anchors, "back to top" — and a
+  // link without text (an icon, an image) is dropped.
+  service.addRule('link', {
+    filter: node => node.nodeName === 'A' && Boolean(node.getAttribute('href')),
+    replacement: (content, node) => {
+      const text = content.replace(/\s+/g, ' ').trim();
+      if (!text) return '';
+      const href = node.getAttribute('href').trim();
+      if (href.startsWith('#') || /^javascript:/i.test(href)) return content;
+      return `[${content}](${href.replace(/([()])/g, '\\$1')})`;
+    }
+  });
+
+  // Footnote markers that only point further down the page (`[1]` → #cite_note-1).
+  service.addRule('inPageFootnote', {
+    filter: node => {
+      if (node.nodeName !== 'SUP') return false;
+      const links = Array.from(node.querySelectorAll('a'));
+      return (
+        links.length > 0 && links.every(link => (link.getAttribute('href') || '').startsWith('#'))
+      );
+    },
+    replacement: () => ''
+  });
+
   // One space after the list marker instead of Turndown's three: the same
   // Markdown, fewer characters of the page's budget spent on indentation.
   service.addRule('listItem', {

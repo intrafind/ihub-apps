@@ -6,7 +6,7 @@ import { debugLog } from '../../../utils/debugLog';
  *
  * Shape on the wire (`GET /api/chats/:chatId` → `messages[]`):
  * `{ id, role, content, ts, runId, clientMessageId?, usage?, finishReason?,
- * error?, attachments?, artifacts?, mcpApps?, citations? }`.
+ * error?, attachments?, artifacts?, mcpApps?, citations?, webSearch? }`.
  *
  * The stored id is adopted as the message id and kept a second time on
  * `serverId`: `replaceFromMessageId` addresses the server's history by that
@@ -57,6 +57,18 @@ export function transformStoredMessage(msg) {
   // Connect cards for MCP servers with per-user sign-in.
   if (Array.isArray(msg.mcpAuthRequired) && msg.mcpAuthRequired.length > 0) {
     message.mcpAuthRequired = msg.mcpAuthRequired;
+  }
+  // The web searches and sources behind the answer, so the sources view and
+  // the inline citations come back (the citation markers are in the content).
+  if (msg.webSearch && typeof msg.webSearch === 'object') {
+    const queries = Array.isArray(msg.webSearch.queries) ? msg.webSearch.queries : [];
+    const sources = Array.isArray(msg.webSearch.sources) ? msg.webSearch.sources : [];
+    if (queries.length > 0 || sources.length > 0) {
+      message.webSearch = { queries, sources };
+      // The answer-source badge is not stored; a web answer is not "based on
+      // AI knowledge" when it is reopened.
+      message.answerSource = { sources: ['websearch'], type: 'mixed' };
+    }
   }
   if (Array.isArray(msg.artifacts) && msg.artifacts.length > 0) {
     message.artifacts = msg.artifacts;

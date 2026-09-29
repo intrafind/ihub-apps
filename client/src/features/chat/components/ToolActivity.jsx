@@ -203,13 +203,19 @@ function ActivityItem({ item }) {
   }
 
   if (item.kind === 'fetch') {
-    const url = item.url || item.sources[0]?.url;
-    const label = item.sources[0]?.title || item.title || (url ? hostnameOf(url) : item.documentId);
+    const page = item.sources[0];
+    const url = item.url || page?.url;
+    const host = url ? hostnameOf(url) : null;
+    const label = page?.title || item.title || host || item.documentId;
     return (
       <li>
         <div className="flex flex-wrap items-center gap-1.5">
           <StatusIcon item={item} fallback="document-text" />
-          <span>{t('toolActivity.readPage', 'Read')}</span>
+          <span>
+            {item.limitReached
+              ? t('toolActivity.notRead', 'Not read')
+              : t('toolActivity.readPage', 'Read')}
+          </span>
           {url ? (
             <a
               href={url}
@@ -223,8 +229,32 @@ function ActivityItem({ item }) {
           ) : (
             label && <span className="text-gray-700 dark:text-gray-300 break-all">{label}</span>
           )}
+          {label !== host && host && (
+            <span className="text-gray-400 dark:text-gray-500">{host}</span>
+          )}
+          {Number.isInteger(page?.wordCount) && page.wordCount > 0 && (
+            <span className="text-gray-400 dark:text-gray-500">
+              {t('toolActivity.wordsRead', { count: page.wordCount })}
+            </span>
+          )}
+          {page?.truncated && (
+            <span
+              className="text-amber-600 dark:text-amber-400"
+              title={t('toolActivity.truncatedTitle', 'The page is longer than what was read')}
+            >
+              {t('toolActivity.truncated', 'truncated')}
+            </span>
+          )}
           <ItemStatus item={item} />
         </div>
+        {item.limitReached && (
+          <p className="mt-1 ms-5 text-amber-600 dark:text-amber-400">
+            {t(
+              'toolActivity.pageReadLimit',
+              'Page read limit reached for this answer — ask to continue in the next message to read more.'
+            )}
+          </p>
+        )}
         <ItemDetails item={item} />
         <ItemError item={item} />
       </li>

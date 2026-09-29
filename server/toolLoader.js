@@ -353,6 +353,34 @@ export function resolveWebsearchToolId(
   return WEBSEARCH_TOOL_IDS.qwant;
 }
 
+/**
+ * Whether web search can work for an app, as the chat's model picker needs to
+ * know it: which providers run it natively (when the app allows native
+ * search), and whether the app's script-backed search tool is installed and
+ * has what it needs to answer (Brave and Staan need a key; Qwant needs none).
+ * A model supports web search in the app when it is on one of the native
+ * providers, or when it can call tools and the script-backed search works.
+ *
+ * @param {Object} app - App configuration
+ * @returns {Promise<{native: string[], script: boolean}|null>} null when the app has no web search
+ */
+export async function describeWebSearchAvailability(app) {
+  if (!app?.websearch?.enabled) return null;
+  const toolId = resolveWebsearchToolId(app.websearch.provider);
+  const tools = await loadConfiguredTools();
+  const installed = tools.some(t => t.id === toolId && t.enabled !== false);
+  const configured =
+    toolId === WEBSEARCH_TOOL_IDS.brave
+      ? isBraveSearchConfigured()
+      : toolId === WEBSEARCH_TOOL_IDS.staan
+        ? isStaanSearchConfigured()
+        : true;
+  return {
+    native: app.websearch.useNativeSearch === false ? [] : [...NATIVE_WEB_SEARCH_PROVIDERS],
+    script: installed && configured
+  };
+}
+
 function normalizeMaxUses(value) {
   const n = Number(value);
   return Number.isInteger(n) && n > 0 ? n : DEFAULT_NATIVE_WEB_SEARCH_MAX_USES;
