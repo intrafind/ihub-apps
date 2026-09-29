@@ -52,7 +52,9 @@ const ALLOWED_METRIC_LABELS = new Set([
   'upload.kind',
   'source.type',
   'config.file',
-  'feedback.rating'
+  'feedback.rating',
+  'structured_output.outcome',
+  'structured_output.source'
 ]);
 
 function filterMetricLabels(attrs) {
@@ -97,6 +99,7 @@ let configReloadDurationHistogram = null;
 let magicPromptUsageCounter = null;
 let feedbackCounter = null;
 let feedbackRatingHistogram = null;
+let structuredOutputCounter = null;
 
 /**
  * Initialize metrics from a meter source. Accepts anything with a
@@ -173,6 +176,11 @@ export function initializeMetrics(meterSource) {
   rateLimitHitsCounter = meter.createCounter('ihub.ratelimit.hits', {
     description: 'Number of times a request was rate-limited / throttled',
     unit: '{hit}'
+  });
+
+  structuredOutputCounter = meter.createCounter('ihub.structured_output.validation', {
+    description: 'Server-side structured-output validations by outcome',
+    unit: '{validation}'
   });
 
   streamOutcomeCounter = meter.createCounter('ihub.stream.outcome', {
@@ -516,6 +524,24 @@ export function recordStreamOutcome(outcome, extra = {}) {
     streamOutcomeCounter.add(1, filterMetricLabels({ 'stream.outcome': outcome, ...extra }));
   } catch (error) {
     console.warn('Failed to record stream outcome:', error.message);
+  }
+}
+
+/**
+ * Record the outcome of a server-side structured-output validation.
+ * @param {string} outcome - 'valid' | 'valid_after_retry' | 'invalid' | 'skipped'
+ * @param {Object} extra - additional dimensions filtered through the allow-list
+ *   (`structured_output.source`: 'app' | 'request', `app.id`, `gen_ai.request.model`)
+ */
+export function recordStructuredOutputValidation(outcome, extra = {}) {
+  if (!structuredOutputCounter) return;
+  try {
+    structuredOutputCounter.add(
+      1,
+      filterMetricLabels({ 'structured_output.outcome': outcome, ...extra })
+    );
+  } catch (error) {
+    console.warn('Failed to record structured output validation:', error.message);
   }
 }
 

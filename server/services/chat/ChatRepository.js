@@ -166,6 +166,13 @@ const OPTIONAL_MESSAGE_FIELDS = [
   'mcpAuthRequired'
 ];
 
+/** Variables kept per message, and the longest value kept. */
+const MAX_STORED_VARIABLES = 100;
+const MAX_STORED_VARIABLE_CHARS = 10_000;
+
+/** Longest model identifier kept on a message. */
+const MAX_MODEL_LABEL_CHARS = 300;
+
 /**
  * Whether a chat id can be a storage key.
  *
@@ -453,7 +460,48 @@ function buildMessage(message = {}) {
     if (field === 'clientMessageId') continue;
     if (message[field] !== undefined && message[field] !== null) stored[field] = message[field];
   }
+  Object.assign(stored, storableMessageExtras(message));
   return stored;
+}
+
+/**
+ * The inference API's extra message fields in their storable form: the app
+ * variables a user turn was rendered with (`variables`) and the rendered text
+ * the model saw (`renderedContent`), and on an answer the validated
+ * structured output (`output`) and the model identifier that produced it
+ * (`model`). Each is
+ * bounded the way `content` is — they come from a request or a model and are
+ * read back for as long as the chat lives — and one that does not fit is left
+ * out rather than stored cut in half.
+ *
+ * @param {Object} message - Message as the materializer describes it.
+ * @returns {Object} The fields worth storing.
+ */
+export function storableMessageExtras(message = {}) {
+  const out = {};
+  const { variables, renderedContent, output, model } = message;
+  if (variables && typeof variables === 'object' && !Array.isArray(variables)) {
+    const kept = {};
+    for (const [name, value] of Object.entries(variables).slice(0, MAX_STORED_VARIABLES)) {
+      if (typeof value === 'string') kept[name] = value.slice(0, MAX_STORED_VARIABLE_CHARS);
+    }
+    out.variables = kept;
+  }
+  if (typeof renderedContent === 'string') {
+    out.renderedContent = renderedContent.slice(0, MAX_MESSAGE_CHARS);
+  }
+  if (output !== undefined && output !== null) {
+    try {
+      const serialized = JSON.stringify(output);
+      if (typeof serialized === 'string' && serialized.length <= MAX_MESSAGE_CHARS) {
+        out.output = JSON.parse(serialized);
+      }
+    } catch {
+      // Not serializable: nothing sensible to store.
+    }
+  }
+  if (typeof model === 'string' && model) out.model = model.slice(0, MAX_MODEL_LABEL_CHARS);
+  return out;
 }
 
 /**
@@ -1012,9 +1060,23 @@ export class ChatRepository {
    * @param {Object} [options.settings] - Answering settings of the opening turn.
    * @param {string} [options.title] - Initial title; the first user message
    *   supplies one when this is empty.
+   * @param {Object} [options.origin] - How the chat came about:
+   *   `{ createdVia: 'ui'|'responses-api', clientId? }`.
+   * @param {Object} [options.metadata] - Caller-defined key/value pairs (the
+   *   Conversations API's `metadata`).
    * @returns {Promise<Object|null>} The chat, or null when it cannot be stored.
    */
-  async ensureChat({ chatId, ownerId, identityMode, appId, modelId, settings, title } = {}) {
+  async ensureChat({
+    chatId,
+    ownerId,
+    identityMode,
+    appId,
+    modelId,
+    settings,
+    title,
+    origin,
+    metadata
+  } = {}) {
     if (!this._usable(chatId, 'ensureChat') || !ownerId) return null;
     return this._withChatLock(chatId, async () => {
       const { chat: existing, etag } = await this._loadChat(chatId);
@@ -1036,10 +1098,55 @@ export class ChatRepository {
           activeRunId: null,
           hasUnseenActivity: false,
           status: 'active',
-          runIds: []
+          runIds: [],
+          ...(origin && typeof origin === 'object' ? { origin: { ...origin } } : {}),
+          ...(metadata && typeof metadata === 'object' ? { metadata: { ...metadata } } : {})
         },
         etag
       );
+    });
+  }
+
+  /**
+   * Claim a chat for a run: make `runId` its active run, unless another run
+   * still holds it.
+   *
+   * Turns from the chat UI supersede one another; the inference API refuses a
+   * second concurrent turn instead. The check and the claim happen inside the
+   * chat's own lock, so two requests cannot both see an idle chat and both
+   * start. `isBusy` decides whether the run on record is still alive — a chat
+   * left `running` by a process that died must not stay locked forever.
+   *
+   * @param {string} chatId - Chat id.
+   * @param {string} runId - Run claiming the chat.
+   * @param {Object} [options]
+   * @param {(chat: Object) => boolean} [options.isBusy] - Whether the chat's
+   *   current active run is still in flight.
+   * @param {Object} [options.patch] - Further fields to apply with the claim.
+   * @returns {Promise<{claimed: boolean, chat: Object|null}>} `chat` is null
+   *   when the chat does not exist or cannot be stored.
+   */
+  async claimRun(chatId, runId, { isBusy = () => true, patch = {} } = {}) {
+    if (!this._usable(chatId, 'claimRun')) return { claimed: false, chat: null };
+    return this._withChatLock(chatId, async () => {
+      const { chat: existing, etag } = await this._loadChat(chatId);
+      if (!existing) return { claimed: false, chat: null };
+      const held =
+        existing.status === 'running' &&
+        typeof existing.activeRunId === 'string' &&
+        existing.activeRunId &&
+        existing.activeRunId !== runId;
+      if (held && isBusy(existing)) return { claimed: false, chat: existing };
+      const chat = await this._writeChat(
+        applyChatPatch(existing, {
+          ...patch,
+          activeRunId: runId,
+          status: 'running',
+          runClaimedAt: new Date().toISOString()
+        }),
+        etag
+      );
+      return { claimed: true, chat };
     });
   }
 
@@ -1322,6 +1429,50 @@ export class ChatRepository {
       }
 
       return { message: entry, messages };
+    });
+  }
+
+  /**
+   * Remove one message from a chat's transcript.
+   *
+   * The artifacts only that message referenced go with it, unless a share
+   * link still hands them out — the same rule a truncating edit follows.
+   *
+   * @param {string} chatId - Chat id.
+   * @param {string} messageId - Stored message id.
+   * @returns {Promise<{deleted: boolean, chat: Object|null}>} `chat` is null
+   *   when the chat does not exist or cannot be stored.
+   */
+  async deleteMessage(chatId, messageId) {
+    if (!this._usable(chatId, 'deleteMessage')) return { deleted: false, chat: null };
+    return this._withChatLock(chatId, async () => {
+      const { chat, etag: chatEtag } = await this._loadChat(chatId);
+      if (!chat) return { deleted: false, chat: null };
+      const { stored, etag: messagesEtag } = await this._loadMessages(chatId);
+      const index = stored.messages.findIndex(entry => entry.id === messageId);
+      if (index === -1) return { deleted: false, chat };
+      const removed = stored.messages[index];
+      const messages = [...stored.messages.slice(0, index), ...stored.messages.slice(index + 1)];
+      await this._writeMessages(chatId, {
+        ownerId: chat.ownerId,
+        messages,
+        retiredRunIds: stored.retiredRunIds,
+        etag: messagesEtag
+      });
+      const updated = await this._writeChat(
+        applyChatPatch(chat, { messageCount: messages.length }),
+        chatEtag
+      );
+      const orphaned = artifactIdsOfMessages([removed]);
+      if (orphaned.length > 0) {
+        const stillUsed = new Set(artifactIdsOfMessages(messages));
+        const retained = await this.shareStore().artifactIdsRetainedByShares(chatId);
+        const deletable = orphaned.filter(id => !stillUsed.has(id) && !retained.has(id));
+        if (deletable.length > 0) {
+          await this.artifactStore().deleteMany(this.artifactScope(chatId), deletable);
+        }
+      }
+      return { deleted: true, chat: updated };
     });
   }
 
