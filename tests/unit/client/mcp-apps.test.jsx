@@ -29,6 +29,7 @@ import {
 import { projectRunToMessage } from '../../../client/src/features/chat/runToMessage';
 import { transformStoredMessage } from '../../../client/src/features/chat/hooks/useChatMessages';
 import McpAppViews from '../../../client/src/features/chat/mcpApps/McpAppViews';
+import { fetchMcpAppResource } from '../../../client/src/api/endpoints/mcpApps';
 
 jest.mock('react-i18next', () => ({
   useTranslation: () => ({
@@ -67,6 +68,7 @@ jest.mock('../../../client/src/api/endpoints/mcpApps', () => ({
   })),
   callMcpAppTool: jest.fn(),
   readMcpAppResource: jest.fn(),
+  reportMcpAppHandshake: jest.fn(async () => {}),
   buildMcpAppSandboxUrl: csp =>
     `/api/mcp-apps/sandbox?csp=${encodeURIComponent(JSON.stringify(csp))}`
 }));
@@ -120,6 +122,32 @@ describe('McpAppHostBridge', () => {
     expect(onSize).toHaveBeenCalledTimes(1);
     expect(onSize).toHaveBeenCalledWith({ height: 300 });
     expect(sent).toEqual([]);
+  });
+
+  test('hands legacy mcp-ui messages to their handler and ignores the rest', () => {
+    const onReady = jest.fn();
+    const { bridge, sent } = bridgeWith({ legacy: { appReady: onReady } });
+    bridge.handleMessage({ type: 'appReady', name: 'Google Maps' });
+    bridge.handleMessage({ type: 'somethingElse' });
+    bridge.handleMessage({ appReady: true });
+    expect(onReady).toHaveBeenCalledTimes(1);
+    expect(onReady).toHaveBeenCalledWith({ type: 'appReady', name: 'Google Maps' });
+    expect(sent).toEqual([]);
+  });
+
+  test('a legacy message with a failing handler does not break the bridge', async () => {
+    const { bridge, sent } = bridgeWith({
+      requests: { ping: () => ({}) },
+      legacy: {
+        appReady: () => {
+          throw new Error('boom');
+        }
+      }
+    });
+    bridge.handleMessage({ type: 'appReady' });
+    bridge.handleMessage({ jsonrpc: '2.0', id: 1, method: 'ping' });
+    await flush();
+    expect(sent).toEqual([{ jsonrpc: '2.0', id: 1, result: {} }]);
   });
 
   test('resolves host requests with the view response', async () => {
@@ -237,6 +265,24 @@ describe('message.mcpApps', () => {
     });
   });
 
+  test('a call that needs a per-user sign-in first renders no view', () => {
+    const needsSignIn = env(3, 'tool/completed', {
+      step: 1,
+      callId: 'c1',
+      toolId: 'drawio__create_diagram',
+      name: 'drawio__create_diagram',
+      resultPreview: { error: 'MCP_AUTH_REQUIRED' },
+      authRequired: {
+        serverId: 'drawio',
+        serverName: 'draw.io',
+        connectUrl: '/api/mcp/oauth/authorize?serverId=drawio'
+      }
+    });
+    const run = runFrom([started, toolStarted, needsSignIn]);
+    expect(buildMcpAppViews(run)).toBeNull();
+    expect(projectRunToMessage(run).extras.mcpApps).toBeUndefined();
+  });
+
   test('turns without views carry no mcpApps', () => {
     const { extras } = projectRunToMessage(runFrom([started]));
     expect(extras.mcpApps).toBeUndefined();
@@ -304,6 +350,29 @@ describe('McpAppViews', () => {
     expect(iframe.getAttribute('referrerpolicy')).toBe('no-referrer');
   });
 
+  test('a server that needs a per-user sign-in asks to connect it (409, not a sign-out)', async () => {
+    fetchMcpAppResource.mockRejectedValueOnce(
+      Object.assign(new Error('Request failed with status code 409'), {
+        response: {
+          status: 409,
+          data: { error: 'auth_required', code: 'MCP_AUTH_REQUIRED', connectUrl: '/x' }
+        }
+      })
+    );
+    const { container } = render(
+      <McpAppViews
+        views={[{ ...view, callId: 'c-auth', toolId: 'demo__needs_sign_in' }]}
+        appId="app-1"
+        chatId="chat-1"
+      />
+    );
+    await waitFor(() =>
+      expect(screen.getByText(/Connect this server with your own account/)).toBeInTheDocument()
+    );
+    expect(container.querySelector('iframe')).toBeNull();
+    expect(screen.queryByText(/could not be loaded/)).not.toBeInTheDocument();
+  });
+
   test('a view whose payload was dropped explains why it cannot be shown', () => {
     const { container } = render(
       <McpAppViews
@@ -314,5 +383,103 @@ describe('McpAppViews', () => {
     );
     expect(container.querySelector('iframe')).toBeNull();
     expect(screen.getByText(/too large to keep/)).toBeInTheDocument();
+  });
+});
+
+describe('McpAppView handshake', () => {
+  const { reportMcpAppHandshake } = jest.requireMock('../../../client/src/api/endpoints/mcpApps');
+  const view = {
+    callId: 'c2',
+    toolId: 'demo__show',
+    serverId: 'demo',
+    toolName: 'show',
+    resourceUri: 'ui://demo/app.html',
+    args: { q: 'berlin' },
+    toolResult: {
+      content: [{ type: 'text', text: '{}' }],
+      _meta: { 'mcpui.dev/ui-initial-render-data': { center: [52.5, 13.4] } }
+    }
+  };
+
+  /** Mount a view and wire a fake iframe window: what the view posts, what the host posts. */
+  async function mountView() {
+    const { container, unmount } = render(
+      <McpAppViews views={[view]} appId="app-1" chatId="chat-1" />
+    );
+    await waitFor(() => expect(container.querySelector('iframe')).not.toBeNull());
+    const iframe = container.querySelector('iframe');
+    const posted = [];
+    // The component addresses the view through its iframe's window.
+    iframe.contentWindow.postMessage = message => posted.push(message);
+    const fromView = data => {
+      window.dispatchEvent(new MessageEvent('message', { data, source: iframe.contentWindow }));
+    };
+    // The sandbox proxy announces itself first; the host then hands over the resource.
+    fromView({ jsonrpc: '2.0', method: 'ui/notifications/sandbox-proxy-ready', params: {} });
+    await flush();
+    expect(posted.at(-1)).toMatchObject({ method: 'ui/notifications/sandbox-resource-ready' });
+    posted.length = 0;
+    return { posted, fromView, unmount };
+  }
+
+  const methods = posted => posted.map(m => m.method);
+
+  beforeEach(() => {
+    reportMcpAppHandshake.mockClear();
+  });
+
+  test('a spec-compliant view gets its data only after ui/notifications/initialized', async () => {
+    const { posted, fromView, unmount } = await mountView();
+    fromView({ jsonrpc: '2.0', id: 1, method: 'ui/initialize', params: {} });
+    await flush();
+    expect(posted[0]).toMatchObject({ id: 1, result: { protocolVersion: expect.any(String) } });
+    expect(methods(posted)).not.toContain('ui/notifications/tool-result');
+    fromView({ jsonrpc: '2.0', method: 'ui/notifications/initialized' });
+    await flush();
+    expect(methods(posted)).toEqual(
+      expect.arrayContaining(['ui/notifications/tool-input', 'ui/notifications/tool-result'])
+    );
+    expect(reportMcpAppHandshake).not.toHaveBeenCalled();
+    unmount();
+  });
+
+  test('a legacy mcp-ui view is initialized by appReady and gets input and result once', async () => {
+    const { posted, fromView, unmount } = await mountView();
+    fromView({ type: 'appReady', name: 'Google Maps' });
+    await flush();
+    const input = posted.find(m => m.method === 'ui/notifications/tool-input');
+    const result = posted.find(m => m.method === 'ui/notifications/tool-result');
+    expect(input.params).toEqual({ arguments: { q: 'berlin' } });
+    // The full CallToolResult including `_meta` — where mcp-ui views read their render data.
+    expect(result.params._meta['mcpui.dev/ui-initial-render-data']).toEqual({
+      center: [52.5, 13.4]
+    });
+    expect(reportMcpAppHandshake).toHaveBeenCalledWith({
+      appId: 'app-1',
+      toolId: 'demo__show',
+      handshake: 'legacy'
+    });
+
+    // Neither a second appReady nor a late spec handshake delivers anything twice.
+    fromView({ type: 'appReady', name: 'Google Maps' });
+    fromView({ jsonrpc: '2.0', method: 'ui/notifications/initialized' });
+    await flush();
+    expect(methods(posted).filter(m => m === 'ui/notifications/tool-input')).toHaveLength(1);
+    expect(methods(posted).filter(m => m === 'ui/notifications/tool-result')).toHaveLength(1);
+    unmount();
+  });
+
+  test('appReady from a view that already started ui/initialize does not short-circuit the handshake', async () => {
+    const { posted, fromView, unmount } = await mountView();
+    fromView({ jsonrpc: '2.0', id: 1, method: 'ui/initialize', params: {} });
+    await flush();
+    fromView({ type: 'appReady', name: 'Hybrid' });
+    await flush();
+    expect(methods(posted)).not.toContain('ui/notifications/tool-result');
+    expect(reportMcpAppHandshake).not.toHaveBeenCalled();
+    fromView({ jsonrpc: '2.0', method: 'ui/notifications/initialized' });
+    await flush();
+    expect(methods(posted).filter(m => m === 'ui/notifications/tool-result')).toHaveLength(1);
+    unmount();
   });
 });

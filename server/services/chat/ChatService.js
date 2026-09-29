@@ -357,6 +357,10 @@ class ChatService {
    *   `identityMode` are the run principal resolved once by the caller, and `content` is the
    *   raw text of the new user message (the stored history is never client-asserted, but the
    *   message being sent comes from the request).
+   * @param {RunStreamEmitter} [params.emitter] - stream emitter to use instead of the chat's
+   *   SSE-delivered one (the App API consumes the frames itself)
+   * @param {boolean} [params.headless=!streaming] - no user can answer a clarification: the
+   *   ask_user tool is refused instead of pausing the turn
    * @returns {Promise<Object>} `{ runId, status, content, finishReason, usage, messages, knowledgeSources,
    *   pendingInteraction?, toolName?, error?, errorInfo? }`
    */
@@ -372,7 +376,9 @@ class ChatService {
     language = 'en',
     user,
     runId: givenRunId,
-    persistence = null
+    persistence = null,
+    emitter = null,
+    headless = !streaming
   }) {
     const {
       app,
@@ -409,8 +415,12 @@ class ChatService {
     }
 
     // The turn's SSE v2 emitter (chat stream id = chatId, run id = this turn).
+    // A caller with its own consumer (the App API turning frames into
+    // OpenAI-shaped chunks) injects an emitter; the chat UI gets the default
+    // one, delivered through the SSE layer.
     const stream =
-      streaming && chatId ? new RunStreamEmitter({ streamId: chatId, runId }) : NO_STREAM;
+      emitter ||
+      (streaming && chatId ? new RunStreamEmitter({ streamId: chatId, runId }) : NO_STREAM);
     if (stream !== NO_STREAM) bindStreamRun(chatId, runId, stream);
 
     logger.info('Chat turn started', {
@@ -470,6 +480,9 @@ class ChatService {
     // MCP App views this turn rendered, stored with the answer so reopening
     // the chat draws them again.
     const mcpAppViews = [];
+    // Per-user OAuth MCP servers the turn's tools asked the user to connect,
+    // stored with the answer so the Connect card survives the sign-in redirect.
+    const mcpAuthPrompts = [];
     const turnSeam = chatTurnSeam({
       chatId,
       buildLogData: log,
@@ -484,7 +497,8 @@ class ChatService {
         chatId,
         buildLogData: log,
         logInteraction: this.logInteraction,
-        mcpAppViews
+        mcpAppViews,
+        mcpAuthPrompts
       }),
       questionSeam(
         chatQuestionOptions({
@@ -492,7 +506,7 @@ class ChatService {
           appId: app?.id,
           buildLogData: log,
           logInteraction: this.logInteraction,
-          headless: !streaming,
+          headless,
           getCount: () => this.getClarificationCount(chatId),
           incrementCount: () => this.incrementClarificationCount(chatId),
           interactionService: this.interactionService
@@ -546,13 +560,15 @@ class ChatService {
         // args of the same name win, while chatId/user/appConfig can never be
         // overridden by the model.
         //
-        // An MCP tool with an MCP App view hands back its raw result on the
-        // shared `info` object, where `chatToolSeam` builds the view from it.
-        executeTool: (call, { toolId, args, info }) =>
+        // An MCP tool of a server with MCP Apps enabled hands back its raw
+        // result on the shared `info` object, where `chatToolSeam` builds the
+        // view from it (declared, or embedded in the result).
+        executeTool: (call, { toolId, args, info, signal }) =>
           this.runTool(
             toolId,
             { language, ...args, chatId, user, appConfig: app },
             {
+              signal,
               onMcpAppResult: result => {
                 if (info) info.mcpAppResult = result;
               }
@@ -572,6 +588,7 @@ class ChatService {
         language,
         channel,
         mcpAppViews,
+        mcpAuthPrompts,
         takePendingCall: () => turnSeam.takePendingCall()
       });
       // The ledger's terminal frame first, then the chat document.
@@ -669,6 +686,7 @@ class ChatService {
     language,
     channel,
     mcpAppViews = [],
+    mcpAuthPrompts = [],
     takePendingCall = () => null
   }) {
     const loopSources = result.knowledgeSources || [];
@@ -689,6 +707,7 @@ class ChatService {
       images: result.images || [],
       // Same reasoning for MCP App views: part of the answer, restored on reopen.
       mcpApps: mcpAppViews,
+      mcpAuthRequired: mcpAuthPrompts,
       knowledgeSources: this.getKnowledgeSources(chatId, loopSources)
     };
     const translate = async (key, params) => {
@@ -885,6 +904,9 @@ class ChatService {
    * @param {string} [opts.language='en']
    * @param {number} [opts.timeoutMs=120000] - hard timeout per model call
    * @param {number} [opts.maxWallClockMs=180000] - deadline for the whole invocation
+   * @param {(text: string, info: {step: number}) => void} [opts.onTextDelta] - called with
+   *   each streamed text fragment of the model's answer (every step; the final
+   *   answer is `finalMessage.content`)
    * @returns {Promise<Object>} `{ status: 'ok'|'error', runId, finalMessage, toolCalls, citations, usage, finishReason, error? }`
    */
   async invokeAppInternal({
@@ -897,7 +919,8 @@ class ChatService {
     runId: parentRunId,
     language = 'en',
     timeoutMs = 120_000,
-    maxWallClockMs = 180_000
+    maxWallClockMs = 180_000,
+    onTextDelta = null
   }) {
     if (!appId) throw new Error('appId is required');
     const chatId = `agent:${parentRunId || 'no-run'}:${uuidv4().slice(0, 8)}`;
@@ -968,6 +991,13 @@ class ChatService {
         },
         onChunk(ctx, chunk) {
           if (chunk.citations) collected.citations.push(chunk.citations);
+          // A caller that streams (the A2A endpoint) gets the model's text as
+          // it arrives; the assembled answer is still what `finalMessage` holds.
+          if (typeof onTextDelta === 'function') {
+            for (const text of chunk.content || []) {
+              if (text) onTextDelta(text, { step: ctx.iteration });
+            }
+          }
         }
       };
 
@@ -1025,8 +1055,8 @@ class ChatService {
           imageLiftSeam,
           collector
         ],
-        executeTool: (call, { toolId, args }) =>
-          this.runTool(toolId, { language, ...args, chatId, user, appConfig: app })
+        executeTool: (call, { toolId, args, signal }) =>
+          this.runTool(toolId, { language, ...args, chatId, user, appConfig: app }, { signal })
       });
 
       if (result.status === 'error' || result.status === 'aborted') {

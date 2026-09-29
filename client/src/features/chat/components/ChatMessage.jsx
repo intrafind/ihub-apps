@@ -60,6 +60,7 @@ function ChatCheckpoint({ executionId, checkpoint }) {
 import AnswerSourceBadge from './AnswerSourceBadge';
 import ExportDialog from './ExportDialog';
 import McpAppViews from '../mcpApps/McpAppViews';
+import McpConnectCards from '../mcpApps/McpConnectCard';
 import './ChatMessage.css';
 
 function ChatMessage({
@@ -857,6 +858,10 @@ function ChatMessage({
             host={mcpAppHost}
           />
         )}
+        {/* MCP servers with per-user sign-in the answer's tools could not use yet. */}
+        {!isUser && message.mcpAuthRequired?.length > 0 && (
+          <McpConnectCards prompts={message.mcpAuthRequired} readOnly={readOnly} />
+        )}
         {renderContent()}
         {isUser && hasVariables && <MessageVariables variables={message.variables} />}
 
@@ -887,6 +892,33 @@ function ChatMessage({
             ))}
           </ul>
         )}
+
+        {/* A reopened chat keeps an upload only as its descriptor — the live
+            turn's file chip was never stored — so name what was sent. Without
+            it an upload-only turn has nothing to show at all (issue #2601). */}
+        {isUser &&
+          !message.sharedAttachments?.length &&
+          Array.isArray(message.attachments) &&
+          message.attachments.length > 0 && (
+            <ul
+              className="flex flex-wrap gap-1"
+              aria-label={t('chatMessage.attachmentsLabel', 'Attachments')}
+            >
+              {message.attachments.map((attachment, idx) => (
+                <li
+                  key={`${attachment?.name || attachment?.type || 'attachment'}-${idx}`}
+                  className="inline-flex items-center gap-1 rounded-md border border-gray-300 bg-gray-600 px-2 py-1 text-sm text-white"
+                >
+                  <Icon name="paper-clip" size="sm" />
+                  <span>
+                    {attachment?.name ||
+                      attachment?.type ||
+                      t('chatSharing.viewer.attachmentUnnamed', 'file')}
+                  </span>
+                </li>
+              ))}
+            </ul>
+          )}
 
         {/* Display generated images */}
         {message.images && message.images.length > 0 && (

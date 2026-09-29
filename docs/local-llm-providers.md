@@ -394,7 +394,7 @@ support reasoning — iHub reads `reasoning` (current vLLM) or `reasoning_conten
   "url": "http://localhost:8000/v1/chat/completions",
   "provider": "local",
   "contextWindow": 32768,
-  "maxOutputTokens": 8192,
+  "maxOutputTokens": 16384,
   "supportsTools": true,
   "thinking": {
     "enabled": true,

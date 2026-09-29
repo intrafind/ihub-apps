@@ -458,12 +458,44 @@ function AdminMcpGatewayPage() {
                   }
                 }))
               }
-              label={t('admin.mcp.gateway.transportA2a', 'A2A (experimental)')}
+              label={t('admin.mcp.gateway.transportA2a', 'A2A (Agent-to-Agent) 0.3')}
               description={t(
                 'admin.mcp.gateway.transportA2aDesc',
-                'Mount /a2a alongside /mcp using the same OAuth + mcp:* scope gate. Implements the well-defined subset of the A2A draft (agent/info, agent/skills, tasks/send). Stateful tasks return method-not-found until the spec stabilises.'
+                "Serve an Agent Card at /.well-known/agent-card.json and mount /a2a alongside /mcp, behind the same OAuth + mcp:* scope gate (personal API keys work too). Apps and workflows become the agent's skills; supports message/send, message/stream, tasks/get and tasks/cancel."
               )}
             />
+            {gateway.a2a?.enabled && (
+              <div className="py-3">
+                <label
+                  htmlFor="a2a-default-skill"
+                  className="block text-sm font-medium text-gray-900 dark:text-gray-100"
+                >
+                  {t('admin.mcp.gateway.a2aDefaultSkill', 'A2A default skill')}
+                </label>
+                <p className="text-xs text-gray-500 dark:text-gray-400 mt-0.5 mb-2">
+                  {t(
+                    'admin.mcp.gateway.a2aDefaultSkillDesc',
+                    'The app or workflow a message runs when the A2A client names none, as app__<appId> or workflow__<workflowId>. Clients can always choose a skill with metadata.skillId or by using the per-skill endpoint /a2a/skills/<skillId>. Leave empty to require a choice (a caller with exactly one skill needs none).'
+                  )}
+                </p>
+                <input
+                  id="a2a-default-skill"
+                  type="text"
+                  placeholder="app__chat"
+                  value={gateway.a2a?.defaultSkill || ''}
+                  onChange={e =>
+                    setPlatform(prev => ({
+                      ...prev,
+                      mcpServer: {
+                        ...(prev?.mcpServer || {}),
+                        a2a: { ...(prev?.mcpServer?.a2a || {}), defaultSkill: e.target.value }
+                      }
+                    }))
+                  }
+                  className="w-full rounded-md border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100"
+                />
+              </div>
+            )}
           </div>
         </section>
 
