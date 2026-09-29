@@ -152,6 +152,12 @@ document or image from the conversation.
 include them as resolvable references? Proposed: yes, once iHub has a turn-level file registry;
 not required for the first version.
 
+**Status (2026-09-28): not implemented.** A first implementation in #2555 was removed again as too
+invasive: it needed the chat client to send document bytes with the request (a budget below the
+body limit, stripped again for workflows and history) and plumbing of the attachments through the
+chat pipeline. Tracked for a leaner design in
+[#2589](https://github.com/intrafind/ihub-apps/issues/2589).
+
 ### 4. A2A: upgrade the inbound endpoint to A2A 0.3 and add an outbound client
 
 **Today.** `/a2a` (`server/services/mcp/a2aHandler.js`) implements an early draft:
@@ -208,8 +214,9 @@ Nextcloud, Teams, Office and the browser extension, but not for arbitrary websit
   non-streaming), running the full app pipeline (prompt, variables, sources, tools, skills).
   Authenticated with personal API keys or OAuth client credentials; the caller's groups decide
   app access, exactly as in the UI.
-- `POST /api/v1/attachments`: upload a file, get an id; reference it on a user message
-  (`attachments: [id]`). Same limits and processing as chat uploads.
+- ~~`POST /api/v1/attachments`: upload a file, get an id; reference it on a user message
+  (`attachments: [id]`). Same limits and processing as chat uploads.~~ **Dropped (2026-09-28):**
+  the App API takes text only, with no upload endpoint, attachment store or inline files.
 - Optional `chat_id` to continue a stored conversation.
 - An `app:<appId>` model alias on `/api/inference/v1` could give OpenAI SDKs the same access with
   zero client changes — evaluate against the dedicated endpoint.
@@ -224,7 +231,7 @@ paste/drop attachments via the upload endpoint, admin-managed allowed origins
 | Order | Gap                                  | Size   | Why this order                                                         |
 | ----- | ------------------------------------ | ------ | ---------------------------------------------------------------------- |
 | 1     | 2 — MCP Apps legacy handshake        | Small  | Client-only change; makes all four cookbook views work immediately.    |
-| 2     | 3 — File inputs for MCP tools        | Medium | Self-contained; unlocks document- and image-processing MCP servers.    |
+| 2     | 3 — File inputs for MCP tools        | Medium | Not implemented; see [#2589](https://github.com/intrafind/ihub-apps/issues/2589). |
 | 3     | 4a — A2A 0.3 inbound                 | Medium | Makes iHub reachable from the A2A ecosystem; reuses existing dispatch. |
 | 4     | 1 — Per-user outbound MCP OAuth      | Large  | Largest customer-visible gap; needs design decisions above.            |
 | 5     | 4b — A2A outbound client             | Medium | Reuses the MCP client structure; per-user auth reuses gap 1.           |

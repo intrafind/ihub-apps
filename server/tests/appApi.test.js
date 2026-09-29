@@ -5,7 +5,7 @@ import { SSE_V2_EVENTS } from '../../shared/runEvents.js';
 
 /**
  * App API routes (`/api/v1`): OpenAI-shaped chat completions against an app,
- * streamed and not, attachments, stored conversations, and the errors a
+ * streamed and not, stored conversations, and the errors a
  * caller can run into. The chat pipeline is a fake that plays the frames a
  * real turn would emit through the injected emitter.
  */
@@ -126,7 +126,6 @@ jest.unstable_mockModule('../services/loop/LLMClient.js', () => ({
 }));
 
 const { default: registerAppApiRoutes } = await import('../routes/appApi.js');
-const { ApiAttachmentStore } = await import('../services/api/attachmentStore.js');
 
 /** A ChatService double: prepareChatRequest echoes what it got, runTurn plays a scripted answer. */
 function fakeChatService({
@@ -177,14 +176,13 @@ function fakeChatService({
   };
 }
 
-function buildApp(chatService, attachmentStore, { jsonLimit = '10mb' } = {}) {
+function buildApp(chatService) {
   const app = express();
-  app.use(express.json({ limit: jsonLimit }));
+  app.use(express.json());
   registerAppApiRoutes(app, {
     ...(chatService ? { chatService } : {}),
     getLocalizedError: async key => `localized:${key}`,
-    DEFAULT_TIMEOUT: 1000,
-    attachmentStore
+    DEFAULT_TIMEOUT: 1000
   });
   return app;
 }
@@ -401,8 +399,7 @@ describe('POST /api/v1/apps/:appId/chat/completions', () => {
       repository,
       ownerId: 'alice',
       identityMode: 'full',
-      content: 'And now?',
-      attachments: []
+      content: 'And now?'
     });
 
     // Only the new message may be posted for a stored chat.
@@ -444,67 +441,20 @@ describe('POST /api/v1/apps/:appId/chat/completions', () => {
     expect(off.body.code).toBe('CHAT_PERSISTENCE_UNAVAILABLE');
   });
 
-  it('passes inline images and uploaded attachments to the app as imageData / fileData', async () => {
+  it('takes text only: image and file parts are refused', async () => {
     const service = fakeChatService();
-    const store = new ApiAttachmentStore({ documents: null, blobs: null });
-    const app = buildApp(service, store);
-    const meta = await store.put({
-      ownerId: 'alice',
-      fileName: 'notes.md',
-      mimeType: 'text/markdown',
-      buffer: Buffer.from('# Notes\nhello')
-    });
+    const app = buildApp(service);
     const png = Buffer.from('89504e470d0a1a0a', 'hex').toString('base64');
-    const res = await asAlice(request(app).post('/api/v1/apps/chat/chat/completions')).send({
-      messages: [
-        userMessage(
-          [
-            { type: 'text', text: 'Look at this' },
-            { type: 'image_url', image_url: { url: `data:image/png;base64,${png}` } },
-            {
-              type: 'file',
-              file: {
-                filename: 'data.csv',
-                file_data: `data:text/csv;base64,${Buffer.from('a,b\n1,2').toString('base64')}`
-              }
-            }
-          ],
-          { attachments: [meta.id] }
-        )
-      ]
-    });
-    expect(res.status).toBe(200);
-    const last = service.calls.prepare[0].messages.at(-1);
-    expect(last.content).toBe('Look at this');
-    expect(last.imageData).toEqual([
-      expect.objectContaining({
-        type: 'image',
-        fileName: 'image-1.png',
-        fileType: 'image/png',
-        base64: `data:image/png;base64,${png}`
-      })
-    ]);
-    expect(last.fileData.map(f => [f.fileName, f.fileType, f.content])).toEqual([
-      ['data.csv', 'text/csv', 'a,b\n1,2'],
-      ['notes.md', 'text/markdown', '# Notes\nhello']
-    ]);
-
-    const strangers = await request(app)
-      .post('/api/v1/apps/chat/chat/completions')
-      .set('Authorization', 'Bearer bob')
-      .send({
-        messages: [userMessage('x', { attachments: [meta.id] })]
+    for (const part of [
+      { type: 'image_url', image_url: { url: `data:image/png;base64,${png}` } },
+      { type: 'file', file: { filename: 'a.txt', file_data: 'data:text/plain;base64,aGk=' } }
+    ]) {
+      const res = await asAlice(request(app).post('/api/v1/apps/chat/chat/completions')).send({
+        messages: [userMessage([{ type: 'text', text: 'Look at this' }, part])]
       });
-    expect(strangers.status).toBe(404);
-    expect(strangers.body.code).toBe('ATTACHMENT_NOT_FOUND');
-
-    const remote = await asAlice(request(app).post('/api/v1/apps/chat/chat/completions')).send({
-      messages: [
-        userMessage([{ type: 'image_url', image_url: { url: 'https://example.com/a.png' } }])
-      ]
-    });
-    expect(remote.status).toBe(400);
-    expect(remote.body.code).toBe('IMAGE_URL_NOT_SUPPORTED');
+      expect(res.status).toBe(400);
+    }
+    expect(service.prepareChatRequest).not.toHaveBeenCalled();
   });
 });
 
@@ -521,75 +471,5 @@ describe('App API defaults', () => {
     expect(defaultService.prepareChatRequest).toHaveBeenCalledTimes(1);
     expect(defaultService.runTurn).toHaveBeenCalledTimes(1);
     defaultService = null;
-  });
-
-  it('applies the upload size limit to inline data URLs too', async () => {
-    const service = fakeChatService();
-    const store = new ApiAttachmentStore({ documents: null, blobs: null });
-    const app = buildApp(service, store, { jsonLimit: '40mb' });
-    const big = Buffer.alloc(20 * 1024 * 1024 + 1, 0x61).toString('base64');
-    const file = await asAlice(request(app).post('/api/v1/apps/chat/chat/completions')).send({
-      messages: [
-        userMessage([
-          { type: 'text', text: 'read' },
-          {
-            type: 'file',
-            file: { filename: 'big.txt', file_data: `data:text/plain;base64,${big}` }
-          }
-        ])
-      ]
-    });
-    expect(file.status).toBe(413);
-    expect(file.body.code).toBe('FILE_TOO_LARGE');
-    const image = await asAlice(request(app).post('/api/v1/apps/chat/chat/completions')).send({
-      messages: [
-        userMessage([{ type: 'image_url', image_url: { url: `data:image/png;base64,${big}` } }])
-      ]
-    });
-    expect(image.status).toBe(413);
-    expect(service.prepareChatRequest).not.toHaveBeenCalled();
-  });
-});
-
-describe('POST /api/v1/attachments', () => {
-  it('stores an upload for the caller and rejects unsupported or missing files', async () => {
-    const store = new ApiAttachmentStore({ documents: null, blobs: null });
-    const app = buildApp(fakeChatService(), store);
-    const res = await asAlice(request(app).post('/api/v1/attachments')).attach(
-      'file',
-      Buffer.from('hello world'),
-      {
-        filename: 'hello.txt',
-        contentType: 'text/plain'
-      }
-    );
-    expect(res.status).toBe(201);
-    expect(res.body).toMatchObject({
-      object: 'attachment',
-      filename: 'hello.txt',
-      mime_type: 'text/plain',
-      size: 11
-    });
-    expect(res.body.id).toMatch(/^att_/);
-    expect((await store.get(res.body.id, 'alice')).data.toString()).toBe('hello world');
-
-    const none = await asAlice(request(app).post('/api/v1/attachments')).field('other', 'x');
-    expect(none.status).toBe(400);
-    expect(none.body.code).toBe('NO_FILE');
-
-    const zip = await asAlice(request(app).post('/api/v1/attachments')).attach(
-      'file',
-      Buffer.from('PK'),
-      {
-        filename: 'a.zip',
-        contentType: 'application/zip'
-      }
-    );
-    expect(zip.status).toBe(415);
-
-    const anon = await request(app)
-      .post('/api/v1/attachments')
-      .attach('file', Buffer.from('x'), { filename: 'a.txt', contentType: 'text/plain' });
-    expect(anon.status).toBe(401);
   });
 });

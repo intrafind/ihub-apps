@@ -28,7 +28,6 @@ export const RESERVED_TOOL_CONTEXT_KEYS = Object.freeze([
   'passthrough',
   'runId',
   '_fileData',
-  '_attachments',
   '_chatHistory'
 ]);
 

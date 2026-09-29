@@ -161,12 +161,6 @@ export const RUNTIME_NAMESPACES = Object.freeze({
    */
   a2aClientContexts: 'a2a-client-contexts',
   /**
-   * Files uploaded through the App API (`POST /api/v1/attachments`): the
-   * metadata document and the bytes (blob facet) share this namespace, keyed
-   * by the attachment id and owned by the uploader.
-   */
-  apiAttachments: 'api-attachments',
-  /**
    * OAuth client registrations of outbound `oauthUser` MCP servers, one
    * document per server: how iHub identified itself at the server's
    * authorization server (pre-registered, CIMD or DCR) and the discovery

@@ -30,7 +30,6 @@ import { createPresenceMap, hasRemote, publish, subscribe } from '../clusterBus.
 import configCache from '../configCache.js';
 import logger from '../utils/logger.js';
 import { getLocalizedString } from '../utils/localize.js';
-import { withoutDocumentBytes } from '../services/mcp/mcpFileInputs.js';
 
 /**
  * Maps chatId → { executionId, engine } for active workflow executions in chat.
@@ -261,16 +260,10 @@ export default async function workflowRunner(params = {}) {
     runId: chatRunId,
     appConfig: _appConfig,
     _chatHistory,
-    _fileData: givenFileData,
+    _fileData,
     language = 'en',
     ...extraInputVars
   } = params;
-
-  // The upload goes into the workflow state and so into every checkpoint.
-  // Documents travel as their extracted text and page images there; their own
-  // bytes (sent for tools with file inputs) would only double the state.
-  // Images and audio keep their base64 as before.
-  const _fileData = withoutDocumentBytes(givenFileData);
 
   if (!workflowId) {
     throw new Error('workflowId is required');

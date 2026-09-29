@@ -15,21 +15,19 @@ another site.
 1. [Endpoints](#endpoints)
 2. [Authentication and access](#authentication-and-access)
 3. [Chat completions](#chat-completions)
-4. [Attachments](#attachments)
-5. [Stored conversations](#stored-conversations)
-6. [Errors](#errors)
-7. [Limitations](#limitations)
+4. [Stored conversations](#stored-conversations)
+5. [Errors](#errors)
+6. [Limitations](#limitations)
 
 ---
 
 ## Endpoints
 
-| Method | Path                                      | Purpose                                                   |
-| ------ | ----------------------------------------- | --------------------------------------------------------- |
-| `POST` | `/api/v1/apps/{appId}/chat/completions`   | Run the app on a conversation; OpenAI chat-completion shape |
-| `POST` | `/api/v1/attachments`                     | Upload a file to reference from a user message             |
+| Method | Path                                    | Purpose                                                     |
+| ------ | --------------------------------------- | ----------------------------------------------------------- |
+| `POST` | `/api/v1/apps/{appId}/chat/completions` | Run the app on a conversation; OpenAI chat-completion shape |
 
-Both endpoints are rate-limited by the `inferenceApi` limiter (see [Rate Limiting](rate-limiting.md))
+The endpoint is rate-limited by the `inferenceApi` limiter (see [Rate Limiting](rate-limiting.md))
 and documented with `@swagger` annotations (tag **App API**) in the running server's API docs.
 
 ## Authentication and access
@@ -39,7 +37,7 @@ Authenticate like everywhere else on the API: `Authorization: Bearer <token>` wi
 credentials or authorization code; see the [OAuth Integration Guide](oauth-integration-guide.md)).
 The caller's groups decide which apps it may call, exactly as in the UI: an app the caller cannot
 open answers `404`. When the platform allows anonymous access, unauthenticated calls are served
-with the anonymous groups; uploads always need a signed-in caller.
+with the anonymous groups.
 
 ## Chat completions
 
@@ -80,10 +78,9 @@ curl https://ihub.example.com/api/v1/apps/chat/chat/completions \
 | `chat_id`        | **Extension.** Store the conversation server-side and continue it later (see below).                      |
 | `language`       | **Extension.** Response language; defaults to `Accept-Language`, then the platform default.               |
 
-`content` is a string or an array of OpenAI content parts: `text`, `image_url` (a `data:` URL —
-remote image URLs are not fetched) and `file` (`file_data` as a `data:` URL with `filename`, or
-`file_id` of an uploaded attachment). A `system` message is refused with `400`: the app's own
-prompt applies; put instructions in the user message or in `variables`.
+`content` is a string or an array of `text` parts; `image_url` and `file` parts are refused with
+`400`. A `system` message is refused with `400`: the app's own prompt applies; put instructions
+in the user message or in `variables`.
 
 The app runs exactly as in the chat — server-side tool calls, sources, skills, structured output
 — but headlessly: a tool that asks the user a question (`ask_user`) is refused because nobody can
@@ -107,36 +104,6 @@ data: [DONE]
 An OpenAI SDK works unchanged with `base_url = "https://ihub.example.com/api/v1/apps/<appId>"`
 and any `model` value (the app decides; the field is optional here).
 
-## Attachments
-
-Upload a file first, then reference it on the user message:
-
-```bash
-curl https://ihub.example.com/api/v1/attachments \
-  -H "Authorization: Bearer $IHUB_API_KEY" \
-  -F "file=@quarterly-report.pdf"
-# → { "id": "att_3f2c9d1e…", "object": "attachment", "filename": "quarterly-report.pdf",
-#     "mime_type": "application/pdf", "size": 182331, "expires_at": "…" }
-
-curl https://ihub.example.com/api/v1/apps/chat/chat/completions \
-  -H "Authorization: Bearer $IHUB_API_KEY" -H "Content-Type: application/json" \
-  -d '{ "messages": [{ "role": "user", "content": "What changed versus last quarter?",
-                       "attachments": ["att_3f2c9d1e…"] }] }'
-```
-
-- Uploads are `multipart/form-data`, field `file`, at most **20 MB**, and are processed like the
-  chat's uploads: **PDFs** and **text formats** (`txt`, `md`, `csv`, `json`, `xml`, `html`, `yaml`,
-  code) are read as documents whose text reaches the model; **images** (`png`, `jpeg`, `gif`,
-  `webp`) are shown to vision models. A PDF without a text layer (a scan) is refused with `415`;
-  other formats (Office documents, archives) are not supported.
-- An attachment belongs to the caller who uploaded it and expires after **24 hours**; unknown,
-  expired or foreign ids answer `404`. `attachments` is also accepted under `metadata.attachments`.
-- Attachments count only on the **last** user message of the request. Tools that take files
-  (MCP file inputs) receive the uploaded bytes.
-- Inline alternatives: an `image_url` part or a `file` part with `file_data`, both as `data:`
-  URLs, need no upload step. The same 20 MB limit applies to each inline file (`413`,
-  `FILE_TOO_LARGE`). Text is read from the first 2,000 pages of a PDF.
-
 ## Stored conversations
 
 Without `chat_id` a call is stateless: post the whole conversation each time and nothing is
@@ -154,8 +121,7 @@ stored. With `chat_id` the conversation is stored on the server, exactly like a 
 ## Errors
 
 Errors are JSON `{ "error": "<message>", "code": "<CODE>" }`, with `4xx` for request problems
-(`APP_NOT_FOUND`, `SYSTEM_MESSAGE_NOT_ALLOWED`, `ATTACHMENT_NOT_FOUND`, `FILE_TOO_LARGE`,
-`UNSUPPORTED_MEDIA_TYPE`, `CHAT_NOT_FOUND`, …) and `5xx` for provider failures (`502`, `504`).
+(`APP_NOT_FOUND`, `SYSTEM_MESSAGE_NOT_ALLOWED`, `CHAT_NOT_FOUND`, …) and `5xx` for provider failures (`502`, `504`).
 When a stream fails after it started, the error is sent in-band as
 `data: {"error": {"message": …, "type": "server_error", "code": …}}` followed by `data: [DONE]`.
 A client that disconnects mid-stream aborts the running turn.
@@ -165,7 +131,6 @@ A client that disconnects mid-stream aborts the running turn.
 - **Text answers only.** Generated images and MCP App views are not part of the response; tool
   activity is not streamed.
 - **No clarification questions.** Interactive tools are refused in this headless setting.
-- **Attachments are documents and images.** Audio and video uploads, and Office formats, are not
-  processed; scanned PDFs need OCR before upload.
+- **Text requests only.** Images and files cannot be sent with a message.
 - **One caller, one app.** The request runs as the caller; the app-as-tool chain and MCP gateway
   rules for nested apps apply unchanged.

@@ -12,7 +12,6 @@ import { VoiceInputComponent } from '../../voice/components';
 import { useUIConfig } from '../../../shared/contexts/UIConfigContext';
 import { usePlatformConfig } from '../../../shared/contexts/PlatformConfigContext';
 import useFeatureFlags from '../../../shared/hooks/useFeatureFlags';
-import useDocumentBytesPolicy from '../hooks/useDocumentBytesPolicy';
 import MagicPromptLoader from '../../../shared/components/MagicPromptLoader';
 import {
   computeContextUsage,
@@ -140,9 +139,6 @@ function ChatInput({
   const { uiConfig } = useUIConfig();
   const { platformConfig } = usePlatformConfig();
   const featureFlags = useFeatureFlags();
-  // Uploaded documents carry their own bytes only when the app offers a tool
-  // with file inputs, and only up to the per-message budget.
-  const documentBytesPolicy = useDocumentBytesPolicy(app);
   const localInputRef = useRef(null);
   const actualInputRef = inputRef || localInputRef;
   const workflowSearchRef = useRef(null);
@@ -924,8 +920,6 @@ function ChatInput({
           fileData={selectedFile}
           config={uploadConfig}
           openDialogRef={openDialogRef}
-          includeDocumentBytes={documentBytesPolicy.attachBytes}
-          documentBytesBudget={documentBytesPolicy.budget}
         >
           {formContent}
         </UnifiedUploader>

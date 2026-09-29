@@ -390,14 +390,10 @@ class ChatService {
       responseFormat,
       responseSchema,
       llmOptions = {},
-      userFileData,
-      userAttachments = []
+      userFileData
     } = prep;
     const log = typeof buildLogData === 'function' ? buildLogData : () => ({});
     const loopTools = markInteractiveTools(tools);
-    // The message's attachments, for tools that take a file (MCP file inputs);
-    // handed over only when there are any, so a plain call stays as it was.
-    const attachmentParams = userAttachments.length ? { _attachments: userAttachments } : {};
     const startedAt = Date.now();
     const runId = givenRunId && isValidRunId(givenRunId) ? givenRunId : newRunId('chat');
     const refs = { chatId, appId: app?.id, ...(messageId ? { messageId } : {}) };
@@ -570,7 +566,7 @@ class ChatService {
         executeTool: (call, { toolId, args, info, signal }) =>
           this.runTool(
             toolId,
-            { language, ...args, chatId, user, appConfig: app, ...attachmentParams },
+            { language, ...args, chatId, user, appConfig: app },
             {
               signal,
               onMcpAppResult: result => {
@@ -970,10 +966,8 @@ class ChatService {
         responseFormat,
         responseSchema,
         llmOptions = {},
-        userFileData,
-        userAttachments = []
+        userFileData
       } = prepResult.data;
-      const attachmentParams = userAttachments.length ? { _attachments: userAttachments } : {};
 
       // What is retained is what the model saw — the loop's bounded (spilled)
       // tool message, not the raw result — under an aggregate cap, so a chatty
@@ -1062,18 +1056,7 @@ class ChatService {
           collector
         ],
         executeTool: (call, { toolId, args, signal }) =>
-          this.runTool(
-            toolId,
-            {
-              language,
-              ...args,
-              chatId,
-              user,
-              appConfig: app,
-              ...attachmentParams
-            },
-            { signal }
-          )
+          this.runTool(toolId, { language, ...args, chatId, user, appConfig: app }, { signal })
       });
 
       if (result.status === 'error' || result.status === 'aborted') {

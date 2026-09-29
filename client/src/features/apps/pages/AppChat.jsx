@@ -35,8 +35,6 @@ import useMagicPrompt from '../../../shared/hooks/useMagicPrompt';
 import { useIntegrationAuth } from '../../chat/hooks/useIntegrationAuth';
 import useNextcloudEmbedAttachments from '../../nextcloud-embed/hooks/useNextcloudEmbedAttachments';
 import useFeatureFlags from '../../../shared/hooks/useFeatureFlags';
-import useDocumentBytesPolicy from '../../chat/hooks/useDocumentBytesPolicy';
-import { applyDocumentBytesPolicy } from '../../upload/utils/documentBytes';
 import {
   invalidateChatsCache,
   useChatPersistence,
@@ -330,9 +328,6 @@ function AppChat({ preloadedApp = null, embedded = false, appId: embeddedAppId =
   // When tools feature is disabled platform-wide, hide tool UI entirely
   const toolsFeatureEnabled = featureFlags.isEnabled('tools', true);
   const effectiveEnabledTools = toolsFeatureEnabled ? enabledTools : null;
-  // Whether this turn's documents may carry their own bytes (a tool with file
-  // inputs is enabled) and how many of them one request may carry.
-  const documentBytesPolicy = useDocumentBytesPolicy(app, { enabledTools: effectiveEnabledTools });
 
   // Apply settings and variables from URL parameters once app data is loaded
   useEffect(() => {
@@ -2043,20 +2038,12 @@ function AppChat({ preloadedApp = null, embedded = false, appId: embeddedAppId =
     let messageContent = finalInput;
     let messageData = {};
 
-    // Documents keep their own bytes only when a tool with file inputs is
-    // enabled for this turn, and only within the per-message budget; every
-    // other document goes out as its extracted text.
-    const selectedFile = applyDocumentBytesPolicy(
-      fileUploadHandler.selectedFile,
-      documentBytesPolicy
-    );
-
-    if (selectedFile) {
+    if (fileUploadHandler.selectedFile) {
       // Handle multiple files
-      if (Array.isArray(selectedFile)) {
-        const images = selectedFile.filter(f => f.type === 'image');
-        const audioFiles = selectedFile.filter(f => f.type === 'audio');
-        const documents = selectedFile.filter(f => f.type === 'document');
+      if (Array.isArray(fileUploadHandler.selectedFile)) {
+        const images = fileUploadHandler.selectedFile.filter(f => f.type === 'image');
+        const audioFiles = fileUploadHandler.selectedFile.filter(f => f.type === 'audio');
+        const documents = fileUploadHandler.selectedFile.filter(f => f.type === 'document');
 
         let contentParts = [finalInput];
 
@@ -2101,18 +2088,18 @@ function AppChat({ preloadedApp = null, embedded = false, appId: embeddedAppId =
         };
       } else {
         // Handle single file (legacy behavior)
-        if (selectedFile.type === 'image') {
-          const imgPreview = `<img src="${selectedFile.base64}" alt="${t('common.uploadedImage', 'Uploaded image')}" style="max-width: 100%; max-height: 300px; margin-top: 8px;" />`;
+        if (fileUploadHandler.selectedFile.type === 'image') {
+          const imgPreview = `<img src="${fileUploadHandler.selectedFile.base64}" alt="${t('common.uploadedImage', 'Uploaded image')}" style="max-width: 100%; max-height: 300px; margin-top: 8px;" />`;
           messageContent = finalInput ? `${finalInput}\n\n${imgPreview}` : imgPreview;
-          messageData = { imageData: selectedFile };
-        } else if (selectedFile.type === 'audio') {
-          const audioIndicator = `<div style="display: inline-flex; align-items: center; background-color: #4b5563; border: 1px solid #d1d5db; border-radius: 6px; padding: 4px 8px; margin-left: 8px; font-size: 0.875em; color: #ffffff;">\n        <span style="margin-right: 4px;">🎵</span>\n        <span>${selectedFile.fileName}</span>\n      </div>`;
+          messageData = { imageData: fileUploadHandler.selectedFile };
+        } else if (fileUploadHandler.selectedFile.type === 'audio') {
+          const audioIndicator = `<div style="display: inline-flex; align-items: center; background-color: #4b5563; border: 1px solid #d1d5db; border-radius: 6px; padding: 4px 8px; margin-left: 8px; font-size: 0.875em; color: #ffffff;">\n        <span style="margin-right: 4px;">🎵</span>\n        <span>${fileUploadHandler.selectedFile.fileName}</span>\n      </div>`;
           messageContent = finalInput ? `${finalInput} ${audioIndicator}` : audioIndicator;
-          messageData = { audioData: selectedFile };
+          messageData = { audioData: fileUploadHandler.selectedFile };
         } else {
-          const fileIndicator = `<div style="display: inline-flex; align-items: center; background-color: #4b5563; border: 1px solid #d1d5db; border-radius: 6px; padding: 4px 8px; margin-left: 8px; font-size: 0.875em; color: #ffffff;">\n        <span style="margin-right: 4px;">📎</span>\n        <span>${selectedFile.fileName}</span>\n      </div>`;
+          const fileIndicator = `<div style="display: inline-flex; align-items: center; background-color: #4b5563; border: 1px solid #d1d5db; border-radius: 6px; padding: 4px 8px; margin-left: 8px; font-size: 0.875em; color: #ffffff;">\n        <span style="margin-right: 4px;">📎</span>\n        <span>${fileUploadHandler.selectedFile.fileName}</span>\n      </div>`;
           messageContent = finalInput ? `${finalInput} ${fileIndicator}` : fileIndicator;
-          messageData = { fileData: selectedFile };
+          messageData = { fileData: fileUploadHandler.selectedFile };
         }
       }
     }
@@ -2178,10 +2165,10 @@ function AppChat({ preloadedApp = null, embedded = false, appId: embeddedAppId =
         variables: { ...validatedVariables },
         imageData: (() => {
           // Handle image data: convert to object/array/null based on count
-          const imageFiles = Array.isArray(selectedFile)
-            ? selectedFile.filter(f => f.type === 'image')
-            : selectedFile?.type === 'image'
-              ? [selectedFile]
+          const imageFiles = Array.isArray(fileUploadHandler.selectedFile)
+            ? fileUploadHandler.selectedFile.filter(f => f.type === 'image')
+            : fileUploadHandler.selectedFile?.type === 'image'
+              ? [fileUploadHandler.selectedFile]
               : [];
           // Return single object for 1 file, array for multiple, null for none
           return imageFiles.length === 1
@@ -2192,10 +2179,10 @@ function AppChat({ preloadedApp = null, embedded = false, appId: embeddedAppId =
         })(),
         audioData: (() => {
           // Handle audio data: convert to object/array/null based on count
-          const audioFiles = Array.isArray(selectedFile)
-            ? selectedFile.filter(f => f.type === 'audio')
-            : selectedFile?.type === 'audio'
-              ? [selectedFile]
+          const audioFiles = Array.isArray(fileUploadHandler.selectedFile)
+            ? fileUploadHandler.selectedFile.filter(f => f.type === 'audio')
+            : fileUploadHandler.selectedFile?.type === 'audio'
+              ? [fileUploadHandler.selectedFile]
               : [];
           // Return single object for 1 file, array for multiple, null for none
           return audioFiles.length === 1
@@ -2206,10 +2193,10 @@ function AppChat({ preloadedApp = null, embedded = false, appId: embeddedAppId =
         })(),
         fileData: (() => {
           // Handle file data: convert to object/array/null based on count
-          const documentFiles = Array.isArray(selectedFile)
-            ? selectedFile.filter(f => f.type === 'document')
-            : selectedFile?.type === 'document'
-              ? [selectedFile]
+          const documentFiles = Array.isArray(fileUploadHandler.selectedFile)
+            ? fileUploadHandler.selectedFile.filter(f => f.type === 'document')
+            : fileUploadHandler.selectedFile?.type === 'document'
+              ? [fileUploadHandler.selectedFile]
               : [];
           // Return single object for 1 file, array for multiple, null for none
           return documentFiles.length === 1
