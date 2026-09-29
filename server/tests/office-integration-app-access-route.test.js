@@ -171,6 +171,34 @@ describe('PUT /config with allowedApps', () => {
     expect(state.calls).toEqual(['platform']);
     expect(state.client.allowedApps).toEqual(['summarizer']);
   });
+
+  test('an access-only save does not rewrite platform.json', async () => {
+    // The platform block is rewritten from a snapshot that can be seconds old.
+    // With nothing of it to change, writing it back could only overwrite another
+    // admin's fresh save with stale values.
+    const res = await put({ allowedApps: ['summarizer'] });
+
+    expect(res.status).toBe(200);
+    expect(state.calls).toEqual(['client']);
+    expect(state.client.allowedApps).toEqual(['summarizer']);
+  });
+
+  test('a failed access-only write reports the failure and writes no platform config', async () => {
+    state.clientError = new Error('disk full');
+
+    const res = await put({ allowedApps: ['summarizer'] });
+
+    expect(res.status).toBe(500);
+    expect(state.calls).toEqual(['client']);
+    expect(state.client.allowedApps).toEqual([]);
+  });
+
+  test('a save that changes nothing writes nothing', async () => {
+    const res = await put({});
+
+    expect(res.status).toBe(200);
+    expect(state.calls).toEqual([]);
+  });
 });
 
 describe('GET /status app access', () => {

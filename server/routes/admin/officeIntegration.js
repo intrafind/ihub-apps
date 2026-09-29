@@ -510,12 +510,18 @@ export default function registerAdminOfficeIntegrationRoutes(app) {
         appAccessUpdate = { ...officeClient, allowedApps: result.value };
       }
 
-      await savePlatformConfig({
-        officeIntegration: {
-          ...(platform?.officeIntegration || {}),
-          ...allowed
-        }
-      });
+      // Only when the request changes something in it. The block is rewritten
+      // from `platform`, a snapshot that can be a few seconds old, so an
+      // app-access-only request would write that snapshot back over settings
+      // another admin saved in the meantime — and change nothing by doing so.
+      if (Object.keys(allowed).length > 0) {
+        await savePlatformConfig({
+          officeIntegration: {
+            ...(platform?.officeIntegration || {}),
+            ...allowed
+          }
+        });
+      }
 
       // The access change is written last, on purpose. The two files cannot be
       // saved as one transaction, so the order decides what a failure leaves
