@@ -153,9 +153,12 @@ starter prompts of a chat that is not empty. Typing carries straight on — the
 turn posts only the new message and the server appends it to what it already
 holds.
 
-Reloading a plain `/apps/:appId` restores the conversation as well: the tab
-remembers which chat it is in and the transcript is fetched back from the store,
-where before it came from browser storage. Clearing the chat, or starting a new
+Opening an app — a plain `/apps/:appId` — always starts a new chat; the
+previous one is a click away in the list. As soon as the first message is sent,
+the URL switches to `/apps/:appId/c/:chatId` (replacing the history entry), so a
+reload keeps the conversation and fetches it back from the store. Without chat
+persistence the tab still remembers its chat per app and `/apps/:appId` restores
+it from browser storage, as before. Clearing the chat, or starting a new
 one, drops the chat id from the URL and begins a fresh conversation; nothing is
 lost, the previous chat simply stays in the list. The app share link built on a
 chat page points at the **app**, never at the one stored chat — a recipient does
