@@ -18,5 +18,8 @@
   "supportsImages": true,
   "supportsTemperature": false,
   "enabled": false,
-  "default": false
+  "default": false,
+  "contentMarking": {
+    "textWatermark": "none"
+  }
 }

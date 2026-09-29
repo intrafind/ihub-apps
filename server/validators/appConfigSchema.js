@@ -6,6 +6,7 @@ import {
   LANGUAGE_CODE_PATTERN,
   VARIABLE_NAME_PATTERN
 } from '../../shared/validationPatterns.js';
+import { appAiTransparencySchema } from './aiTransparencySchema.js';
 
 // Localized string schema - matches client pattern for language codes
 const localizedStringSchema = z.record(
@@ -475,6 +476,9 @@ const baseAppConfigSchema = z.object({
   rendererConfig: z.object({}).passthrough().optional(),
   category: z.string().optional(),
   enabled: z.boolean().optional().prefault(true),
+  // EU AI Act Art. 50: disclosure opt-out, exemption, sensitive context
+  // (see validators/aiTransparencySchema.js and docs/eu-ai-act.md).
+  aiTransparency: appAiTransparencySchema.optional(),
 
   // Tool-specific configurations
   iassistant: iAssistantConfigSchema,

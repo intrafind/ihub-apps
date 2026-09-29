@@ -28,6 +28,7 @@
     "@opentelemetry/sdk-node": "^0.222.0",
     "@opentelemetry/sdk-trace-node": "^2.10.0",
     "@pdf-lib/fontkit": "^1.1.1",
+    "@peculiar/x509": "^2.1.0",
     "ajv": "^8.20.0",
     "ajv-formats": "^3.0.1",
     "archiver": "^8.0.0",
@@ -35,6 +36,7 @@
     "cookie-parser": "^1.4.7",
     "cors": "^2.8.6",
     "croner": "^10.0.1",
+    "docx": "^9.8.1",
     "dotenv": "^17.4.2",
     "envalid": "^8.2.0",
     "eventsource-parser": "^4.1.1",
@@ -53,6 +55,7 @@
     "jsonwebtoken": "^9.0.2",
     "jwks-rsa": "^4.1.0",
     "ldap-authentication": "^4.4.1",
+    "marked": "^18.0.14",
     "memorystore": "^1.6.8",
     "multer": "^2.4.0",
     "node-fetch": "^3.3.0",
@@ -60,13 +63,17 @@
     "passport-oauth2": "^1.8.0",
     "pdf-lib": "^1.17.1",
     "pdfjs-dist": "^6.2.108",
+    "pkijs": "^3.4.1",
     "playwright": "^1.63.0",
     "pngjs": "^7.0.0",
+    "pptxgenjs": "^4.0.1",
+    "reflect-metadata": "^0.2.2",
     "selenium-webdriver": "^4.49.0",
     "swagger-jsdoc": "^6.3.0",
     "swagger-ui-express": "^5.0.1",
     "uuid": "^14.0.2",
     "winston": "^3.19.0",
+    "write-excel-file": "^4.1.1",
     "ws": "^8.21.3",
     "yauzl": "^3.4.0",
     "zod": "^4.5.4"
@@ -75,6 +82,7 @@
     "@babel/core": "^8.0.6",
     "@babel/preset-env": "^8.0.6",
     "babel-jest": "^30.5.2",
+    "c2pa-text": "^3.0.0",
     "jest": "^30.5.2",
     "nodemon": "^3.1.14",
     "supertest": "^7.3.0"
@@ -88,6 +96,10 @@
     "fsevents@2.3.2": true,
     "protobufjs@7.6.5": true,
     "unrs-resolver@1.12.2": true,
-    "@scarf/scarf": false
+    "@scarf/scarf": false,
+    "@contentauth/c2pa-node@0.9.7": true
+  },
+  "optionalDependencies": {
+    "@contentauth/c2pa-node": "0.9.7"
   }
 }

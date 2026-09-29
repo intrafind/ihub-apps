@@ -17,5 +17,8 @@
   "supportsVision": true,
   "supportsImages": true,
   "enabled": false,
-  "default": false
+  "default": false,
+  "contentMarking": {
+    "textWatermark": "none"
+  }
 }

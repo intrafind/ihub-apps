@@ -29,5 +29,9 @@
     "level": "low"
   },
   "enabled": false,
-  "default": false
+  "default": false,
+  "contentMarking": {
+    "textWatermark": "none",
+    "imageWatermark": "upstream:synthid"
+  }
 }

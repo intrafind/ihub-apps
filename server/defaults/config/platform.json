@@ -433,5 +433,79 @@
       "dataDir": "data",
       "flushIntervalMs": 2000
     }
+  },
+  "aiTransparency": {
+    "provider": {
+      "legalEntity": "",
+      "contact": "",
+      "address": "",
+      "role": "provider"
+    },
+    "editorialResponsibility": {
+      "contact": "",
+      "policyUrl": ""
+    },
+    "termsOfService": {
+      "markRemovalClause": false,
+      "url": ""
+    },
+    "interactionDisclosure": {
+      "enabled": true,
+      "firstTurnNotice": true,
+      "persistentBadge": true,
+      "guardrail": true,
+      "reminderInterval": 5
+    },
+    "labels": {
+      "messageBadge": true,
+      "euIcon": "optional",
+      "exportLabel": true,
+      "outbound": true
+    },
+    "images": {
+      "c2pa": true,
+      "watermark": "trustmark",
+      "watermarkStrength": 0.95,
+      "trustmarkModelPath": "",
+      "xmp": true
+    },
+    "text": {
+      "watermarkMinTokens": 200,
+      "signpost": {
+        "exports": true,
+        "clipboard": false
+      },
+      "strictMode": false
+    },
+    "provenance": {
+      "enabled": true,
+      "retentionDays": 365
+    },
+    "exports": {
+      "sign": true
+    },
+    "signing": {
+      "enabled": true,
+      "tsaUrl": "",
+      "trustedAnchors": [],
+      "organization": "",
+      "commonName": ""
+    },
+    "detection": {
+      "enabled": true,
+      "access": "authenticated",
+      "rateLimit": {
+        "windowMinutes": 15,
+        "limit": 30
+      },
+      "zeroRetention": true,
+      "experts": [],
+      "log": {
+        "enabled": true,
+        "retentionDays": 90
+      }
+    },
+    "installationUrl": "",
+    "dismissals": []
   }
 }

@@ -20,5 +20,8 @@
   "concurrency": 1,
   "requestDelayMs": 1000,
   "enabled": true,
-  "default": false
+  "default": false,
+  "contentMarking": {
+    "textWatermark": "none"
+  }
 }
