@@ -702,7 +702,7 @@ if (cluster.isPrimary && workerCount > 1) {
     getLocalizedError,
     DEFAULT_TIMEOUT
   });
-  registerOpenAIProxyRoutes(app);
+  registerOpenAIProxyRoutes(app, { getLocalizedError, DEFAULT_TIMEOUT });
   await registerAdminRoutes(app);
   registerShortLinkRoutes(app);
   await registerSwaggerRoutes(app);

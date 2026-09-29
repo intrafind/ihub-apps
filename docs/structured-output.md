@@ -9,6 +9,7 @@ This comprehensive guide covers how to implement structured output in iHub Apps,
 - [Progressive Examples](#progressive-examples)
 - [Provider Implementation Guide](#provider-implementation-guide)
 - [Integration Patterns](#integration-patterns)
+- [External API usage](#external-api-usage)
 - [Troubleshooting & Best Practices](#troubleshooting--best-practices)
 
 ## Quick Start
@@ -433,7 +434,11 @@ const displayStructuredContent = (data) => {
 
 ### Validation Workflows
 
-Implement server-side validation:
+Callers of the [inference API](openai-compatible-api.md#structured-output) get server-side
+validation built in: the answer is checked against the schema, retried once when it does not
+match, and refused with `422 output_validation_failed` if it still does not (see
+[External API usage](#external-api-usage)). The chat UI does not validate; to check answers in
+your own code, a JSON Schema validator does it:
 
 ```javascript
 // Server-side validation example
@@ -522,6 +527,174 @@ Complete app configuration with structured output:
   }
 }
 ```
+
+## External API usage
+
+Apps with an `outputSchema` can be called from your own frontend or backend through the
+[OpenAI-compatible inference API](openai-compatible-api.md). The prompt, schema and model stay
+configured in iHub; the caller sends only the input and gets the validated JSON back. The same
+API also gives any plain model structured output (`response_format` / `text.format`).
+
+What the API guarantees:
+
+- The app is chosen with `model: "app:<appId>"` (its configured model) or
+  `app:<appId>/<modelId>` (a model the app allows). The response echoes the model that ran.
+- The answer is **validated on the server** against the schema. Markdown fences and surrounding
+  text are stripped, an invalid answer is retried once with the validation errors, and one that
+  still does not match is a `422 output_validation_failed` (a `response.failed` event when
+  streaming) — never a success. Opt out with `?validate=false` or `"validate": false`.
+- App variables go in `prompt.variables` and are checked against the app's variable definitions.
+- Documents go in the input as files (`input_file` with a `data:` URL; PDF and text files).
+
+The examples use the NDA Risk Analyzer (`nda-risk-analyzer`) and these variables:
+
+```bash
+export IHUB="https://your-ihub-instance.com/api/inference/v1"
+export IHUB_TOKEN="<oauth-access-token-or-api-key>"
+```
+
+### Stateless (curl)
+
+```bash
+PDF_B64=$(base64 -w0 nda.pdf)
+jq -n --arg pdf "data:application/pdf;base64,$PDF_B64" '{
+  model: "app:nda-risk-analyzer",
+  input: [{ role: "user", content: [
+    { type: "input_text", text: "Analyze this NDA." },
+    { type: "input_file", filename: "nda.pdf", file_data: $pdf }
+  ]}]
+}' | curl -s "$IHUB/responses" \
+  -H "Authorization: Bearer $IHUB_TOKEN" -H "Content-Type: application/json" -d @- \
+  | jq '.output[] | select(.type == "message") | .content[0].parsed'
+```
+
+The message item's `output_text` part holds the validated JSON as `text` and the parsed object
+as `parsed`.
+
+### Stateless (Python)
+
+```python
+import base64, json
+from openai import OpenAI
+
+client = OpenAI(base_url="https://your-ihub-instance.com/api/inference/v1", api_key=IHUB_TOKEN)
+pdf = base64.b64encode(open("nda.pdf", "rb").read()).decode()
+
+resp = client.responses.create(
+    model="app:nda-risk-analyzer",            # or "app:nda-risk-analyzer/<modelId>"
+    input=[{"role": "user", "content": [
+        {"type": "input_text", "text": "Analyze this NDA."},
+        {"type": "input_file", "filename": "nda.pdf", "file_data": f"data:application/pdf;base64,{pdf}"},
+    ]}],
+)
+result = json.loads(resp.output_text)
+print(resp.model)   # the model that ran, e.g. "app:nda-risk-analyzer/gpt-5"
+```
+
+### Stateless (JavaScript)
+
+```javascript
+import OpenAI from 'openai';
+
+const client = new OpenAI({ baseURL: process.env.IHUB, apiKey: process.env.IHUB_TOKEN });
+const resp = await client.responses.create({
+  model: 'app:nda-risk-analyzer',
+  input: [{ role: 'user', content: [{ type: 'input_text', text: ndaText }] }]
+});
+const result = JSON.parse(resp.output_text);
+```
+
+### With app variables
+
+```python
+resp = client.responses.create(
+    model="app:summarizer",
+    prompt={"id": "summarizer", "variables": {"action": "summarize", "max_points": 5}},
+    input="…text to summarize…",
+)
+```
+
+Chat Completions takes the same object as an extension field:
+
+```python
+completion = client.chat.completions.create(
+    model="app:summarizer",
+    messages=[{"role": "user", "content": "…text to summarize…"}],
+    extra_body={"prompt": {"variables": {"action": "summarize"}}},
+)
+result = json.loads(completion.choices[0].message.content)
+```
+
+An unknown variable, a missing required one or a value outside its allowed values is a `400
+invalid_prompt_variables` whose `details` lists every problem.
+
+### Stateful: a conversation
+
+A conversation is an iHub chat: it keeps the history on the server and shows up in the caller's
+iHub chat history.
+
+```python
+conv = client.conversations.create(metadata={"customer": "ACME"})
+
+first = client.responses.create(
+    model="app:summarizer", conversation=conv.id,
+    prompt={"id": "summarizer", "variables": {"action": "summarize"}},
+    input="…document…",
+)
+# A follow-up without variables goes to the model as it is: the first turn's template and
+# variables are already in the history, and the system prompt keeps its variables.
+follow_up = client.responses.create(
+    model="app:summarizer", conversation=conv.id, input="Now only the risks, please.")
+
+for item in client.conversations.items.list(conv.id, order="asc"):
+    print(item.role, item.content[0].text)
+```
+
+Assistant items carry the validated JSON as `parsed` and the model that produced it in
+`metadata.model`; user items carry the raw input and, in `metadata.variables`, the variables the
+turn was rendered with.
+
+### Streaming
+
+```python
+with client.responses.stream(model="app:nda-risk-analyzer", input=nda_text) as stream:
+    for event in stream:
+        if event.type == "response.output_text.delta":
+            print(event.delta, end="", flush=True)
+    final = stream.get_final_response()   # the validated output
+result = json.loads(final.output_text)
+```
+
+```javascript
+const stream = client.responses.stream({ model: 'app:nda-risk-analyzer', input: ndaText });
+stream.on('response.output_text.delta', event => process.stdout.write(event.delta));
+const final = await stream.finalResponse(); // the validated output
+const result = JSON.parse(final.output_text);
+```
+
+Deltas are the model's raw text. If an attempt does not validate, its message item ends as
+`incomplete` and the retry streams as a new item; `response.completed` carries only the
+validated output. A turn that fails validation ends with `response.failed`.
+
+### Plain models
+
+Any model can be asked for structured output without an app:
+
+```python
+completion = client.chat.completions.create(
+    model="gpt-5",
+    messages=[{"role": "user", "content": "Rate the risk of: …"}],
+    response_format={"type": "json_schema", "json_schema": {
+        "name": "risk", "strict": True,
+        "schema": {"type": "object", "properties": {"risk": {"type": "string", "enum": ["low", "high"]}},
+                   "required": ["risk"], "additionalProperties": False},
+    }},
+)
+```
+
+`/responses` takes the same through `text={"format": {"type": "json_schema", "name": …, "schema": …}}`.
+A streamed Chat Completion is validated when it ends; the text is already sent, so there is no
+retry, and an invalid answer ends the stream with an error the SDK raises.
 
 ## Troubleshooting & Best Practices
 

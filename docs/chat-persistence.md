@@ -430,7 +430,11 @@ index can answer "list my chats" without scanning:
   activeRunId,          // the run producing right now, null between turns
   hasUnseenActivity,    // an answer landed with nobody watching
   status,               // 'active' | 'running' | 'error'
-  runIds: []            // most recent 200, for the delete cascade
+  runIds: [],           // most recent 200, for the delete cascade
+  origin,               // { createdVia: 'ui' | 'responses-api', clientId?, authMode? }
+  // Chats made through the inference API's Conversations API also carry:
+  metadata?,            // the conversation's caller-defined key/value pairs
+  binding?              // 'app' | 'model' — what the first response bound it to
 }
 
 // chat-messages/<chatId>
@@ -438,7 +442,11 @@ index can answer "list my chats" without scanning:
   version: 1,
   messages: [
     { id, role, content, ts, runId,
-      clientMessageId?, usage?, finishReason?, error?, attachments?, artifacts? }
+      clientMessageId?, usage?, finishReason?, error?, attachments?, artifacts?,
+      // inference API turns: on a user message the variables it was rendered
+      // with and the rendered text the model saw; on an answer the validated
+      // structured output and the model identifier that produced it
+      variables?, renderedContent?, output?, model? }
   ]
 }
 ```
@@ -478,7 +486,9 @@ Details that matter:
   into such a turn. Reopening the chat puts the values back in the variables
   panel. Names must be valid variable names, values are stored as text capped
   at the message length, at most 50 of them; the field is absent until a turn
-  sets it.
+  sets it. The inference API's Conversations API keeps a conversation's
+  variables in the same field, so a chat carries its values between the chat
+  UI and the API.
 - **Attachments are descriptors** — `{ type, name?, bytes? }`. The base64 payload
   of an upload stays in the request; it is never written into a document that is
   read back for as long as the chat lives.
@@ -498,6 +508,12 @@ Details that matter:
 - Every read-modify-write runs under `locks.withLock('chat:<id>')`. Two tabs on
   one chat are ordinary, and an unlocked read-append-write would drop one tab's
   message.
+- **Chats made through the API are ordinary chats.** A conversation of the
+  inference API's [Conversations API](openai-compatible-api.md#conversations-api)
+  is a chat of its caller (for an OAuth client, the client), listed in the chat
+  history with `origin.createdVia: 'responses-api'`. Unlike a UI turn, which
+  supersedes a turn still running, an API turn on a busy chat is refused
+  (`409`).
 
 ## API
 

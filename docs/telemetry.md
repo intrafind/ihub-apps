@@ -173,6 +173,11 @@ iHub product counters & gauges:
 - `ihub.magicprompt.usage` - magic-prompt invocation counter
 - `ihub.feedback` + `ihub.feedback.rating` - user feedback counter (per rating)
   and 1-5 rating histogram
+- `ihub.structured_output.validation` - server-side structured-output checks of
+  the inference API, labelled by `structured_output.outcome` (`valid`,
+  `valid_after_retry`, `invalid`, `skipped`, `not_reached`) and
+  `structured_output.source` (`app` for an app's output schema, `request` for a
+  caller's `response_format` / `text.format`)
 
 Process / runtime gauges (registered automatically when telemetry is enabled):
 

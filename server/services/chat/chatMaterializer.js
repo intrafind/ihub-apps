@@ -235,6 +235,11 @@ function messageError(summary) {
  * @param {Array<Object>} [params.attachments] - already-normalized descriptors
  * @param {string} [params.replaceFromMessageId] - truncate the stored history from this
  *   message (inclusive) before appending — an edit or a regenerate
+ * @param {Object} [params.message] - extra fields for the stored message (`variables`,
+ *   `renderedContent`); the repository keeps the ones it knows
+ * @param {Object} [params.chat] - extra fields patched onto the chat document with this turn
+ * @param {Object} [params.origin] - how a chat created by this turn came about
+ *   (`{ createdVia, clientId? }`); a chat the turn creates without one came from the UI
  * @returns {Promise<Object|null>} the stored message, or null when nothing was written
  */
 export async function materializeUserTurn({
@@ -250,7 +255,10 @@ export async function materializeUserTurn({
   content,
   clientMessageId,
   attachments,
-  replaceFromMessageId
+  replaceFromMessageId,
+  message = null,
+  chat: chatPatch = null,
+  origin = null
 }) {
   if (!repository) return null;
   const text = typeof content === 'string' ? content : '';
@@ -264,7 +272,8 @@ export async function materializeUserTurn({
       appId,
       modelId,
       settings,
-      title
+      title,
+      origin: origin || { createdVia: 'ui' }
     });
     if (!chat) {
       logger.error('Chat user turn not materialized: storage unavailable', {
@@ -275,6 +284,7 @@ export async function materializeUserTurn({
       return null;
     }
     await repository.updateChat(chatId, {
+      ...(chatPatch && typeof chatPatch === 'object' ? chatPatch : {}),
       activeRunId: runId,
       status: 'running',
       // The sender is demonstrably present, so nothing in this chat is unseen.
@@ -297,6 +307,7 @@ export async function materializeUserTurn({
     const appended = await repository.appendMessage(
       chatId,
       {
+        ...(message && typeof message === 'object' ? message : {}),
         role: 'user',
         content: text,
         ts: new Date().toISOString(),
@@ -352,6 +363,8 @@ export async function materializeUserTurn({
  *   artifacts), and `error`/`errorInfo` on a failure
  * @param {boolean} params.clientConnected - whether an SSE client was attached when the
  *   turn ended, sampled with `hasChatClient()`; the emit result cannot tell you
+ * @param {Object} [params.message] - extra fields for the stored answer (`model`). A
+ *   validated structured answer (`summary.structuredOutput`) is stored as `output` too.
  * @returns {Promise<Object|null>} the stored message, or null when nothing was written
  */
 export async function materializeAssistantTurn({
@@ -359,7 +372,8 @@ export async function materializeAssistantTurn({
   chatId,
   runId,
   summary,
-  clientConnected
+  clientConnected,
+  message = null
 }) {
   if (!repository) return null;
   const status = summary?.status;
@@ -422,9 +436,14 @@ export async function materializeAssistantTurn({
     let appended = null;
     if (!pausedWithoutAnswer) {
       try {
+        const structured = summary?.structuredOutput;
         appended = await repository.appendMessage(
           chatId,
           {
+            ...(message && typeof message === 'object' ? message : {}),
+            ...(structured?.valid === true && structured.value !== undefined
+              ? { output: structured.value }
+              : {}),
             role: 'assistant',
             content,
             ts: new Date().toISOString(),
