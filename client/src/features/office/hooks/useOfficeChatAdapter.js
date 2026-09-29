@@ -1,5 +1,6 @@
 import { useCallback } from 'react';
 import useAppChat from '../../chat/hooks/useAppChat';
+import useStoredChatHydration from './useStoredChatHydration';
 import { useEmbeddedHost, applyHostContextFlags } from '../contexts/EmbeddedHostContext';
 import {
   buildHostContext,
@@ -51,13 +52,35 @@ function combineUploadData(manualData, mailData) {
  * without the email body). Only the apiMessage sent to the server carries
  * the host context.
  *
+ * With durable chats on (`serverBacked`), the chat is stored server-side like
+ * one started in the web app: the request carries only the new message, the
+ * chat shows up in the history, and a stored chat opened in the pane is
+ * hydrated from the store (see useStoredChatHydration).
+ *
  * @param {Object} options
  * @param {string} options.appId - App ID
  * @param {string} options.chatId - Chat session ID
  * @param {Function} [options.onMessageComplete] - Forwarded to useAppChat
+ * @param {Function} [options.onMessageAccepted] - Forwarded to useAppChat: called with the
+ *   chat id once the server has the turn, i.e. once a server-backed chat is in the store
+ * @param {boolean} [options.serverBacked=false] - Whether the chat is stored server-side
+ * @param {boolean} [options.isFreshChat=false] - Whether the pane minted this chat and has
+ *   not sent anything in it yet, so there is nothing stored to fetch
+ * @returns {Object} useAppChat's result with the enriched `sendMessage`, plus
+ *   `storedChatSettings` and `storedChatVariables` — the settings and the app
+ *   variables a reopened chat was last answered with.
  */
-function useOfficeChatAdapter({ appId, chatId, onMessageComplete }) {
-  const chat = useAppChat({ appId, chatId, onMessageComplete });
+function useOfficeChatAdapter({
+  appId,
+  chatId,
+  onMessageComplete,
+  onMessageAccepted,
+  serverBacked = false,
+  isFreshChat = false
+}) {
+  const chat = useAppChat({ appId, chatId, onMessageComplete, onMessageAccepted, serverBacked });
+  const { chatSettings: storedChatSettings, chatVariables: storedChatVariables } =
+    useStoredChatHydration({ chat, chatId, serverBacked, isFreshChat });
   const host = useEmbeddedHost();
 
   const sendMessage = useCallback(
@@ -153,7 +176,7 @@ function useOfficeChatAdapter({ appId, chatId, onMessageComplete }) {
     [chat, host]
   );
 
-  return { ...chat, sendMessage };
+  return { ...chat, sendMessage, storedChatSettings, storedChatVariables };
 }
 
 export default useOfficeChatAdapter;

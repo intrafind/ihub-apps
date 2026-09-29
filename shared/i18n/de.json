@@ -200,7 +200,8 @@
     "menu": {
       "settings": "Einstellungen",
       "logout": "Abmelden",
-      "variables": "Variablen anzeigen"
+      "variables": "Variablen anzeigen",
+      "history": "Chatverlauf"
     },
     "startPage": {
       "openApp": "App öffnen",
@@ -210,6 +211,15 @@
     },
     "selectApp": {
       "title": "App auswählen"
+    },
+    "history": {
+      "title": "Chatverlauf",
+      "recent": "Letzte Chats",
+      "allChats": "Alle Chats",
+      "backToChat": "Zurück zum Chat",
+      "loadingChat": "Chat wird geladen…",
+      "retry": "Erneut versuchen",
+      "noneAvailable": "Keiner Ihrer letzten Chats gehört zu einer hier verfügbaren App."
     }
   },
   "pages": {

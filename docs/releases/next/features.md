@@ -152,6 +152,21 @@ added again.
 - Also for apps that show their variables beside the chat: reopening a chat now puts its values
   back in the variables panel instead of the app's defaults.
 
+## Outlook Add-in: Chat History
+
+With chat history enabled (**Admin → Platform → Features → Durable Chats**), the Outlook add-in
+now lists your recent chats, so a discussion from earlier can inform the email you are answering
+or writing. Pick a chat and it opens in the task pane with its full conversation; the next message
+goes out with the email that is open now.
+
+- **Chat history** in the pane's menu lists your chats by date, with search and **Show older
+  chats**. The start page shows the three most recent under **Recent chats**.
+- The list holds chats started in the browser and in Outlook alike: chats in the add-in are now
+  saved like chats in the web app, and show up in the web app's history too.
+- Only chats whose app the add-in offers are listed, since a chat continues in its own app.
+- The browser extension's side panel gets the same history.
+- Without chat history enabled, the add-in keeps its chats in the pane as before.
+
 ## Document Actions for Answers From the iFinder Search Tools
 
 Answers researched with the iFinder tools (the **iFinder Search** app, or any app using

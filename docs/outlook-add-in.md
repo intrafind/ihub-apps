@@ -108,6 +108,12 @@ Three settings in the **Start Page** section control it. They are stored as `off
 
 The start page is built for small panes: it scrolls as one column, drops the subtitle and the app descriptions below roughly 340 px of width and the starter prompts below roughly 480 px of height, and deliberately leaves the model selector, tools menu, uploads and voice input to the opened app. Existing installations receive `defaultPage: "start"` through configuration migration `V107`; pick **All apps** to restore the previous landing view.
 
+### Chat history
+
+With [durable chats](chat-persistence.md) on, the pane's chats are stored like the web app's, and the pane gets the user's chat history: **Chat history** in the menu of the start page, the apps list and the chat, and **Recent chats** — the three latest — at the bottom of the start page. The list holds the chats started in the pane **and** in the browser, grouped by date and searchable. Picking one opens it in the pane with its transcript and settings, and the next message goes out with the email that is open now, so an earlier discussion can inform the reply or the new email being written. The answer actions below work on its answers as on any other.
+
+Only chats whose app the pane offers are listed — a chat is continued through its own app, so a chat of an app outside the add-in's [Available Apps](#step-5--optional-restrict-what-the-add-in-can-access) stays in the web app's history only. The history needs no add-in setting of its own: it follows **Admin → Platform → Features → Durable Chats**, and with that off the pane keeps its chats in the browser as before. What a stored turn keeps is described in [Chat Persistence → In the Outlook add-in](chat-persistence.md#in-the-outlook-add-in).
+
 ### Answer actions
 
 Under every assistant answer the pane shows one button plus a menu. Each entry is a distinct Outlook operation:

@@ -136,6 +136,9 @@ durable chats are off.
   filters the chats that are loaded by title and app name, and **Show older
   chats** pages further back.
 - **The start page** — up to three *Pick up where you left off* chips.
+- **The Outlook add-in** (and the browser extension's side panel, which shares
+  it) — a *Chat history* page and three *Recent chats* on its start page; see
+  [In the Outlook add-in](#in-the-outlook-add-in).
 
 The app name, colour and icon on those rows are joined from the apps the viewer
 can see; the stored chat carries only an `appId` (see [API](#api)). A chat whose
@@ -228,6 +231,55 @@ button; on a touch screen, where nothing hovers, both are always visible.
   is listed, and comes back with an error message if the call fails.
 
 Chats the user never renames are titled from their first message.
+
+### In the Outlook add-in
+
+The Outlook task pane reads the same list with its own sign-in token, and it
+stores its chats the same way: with durable chats on, a conversation started in
+the pane is a stored chat like one started in the browser — it shows up in
+*Recents* and on `/chats`, and it opens in the web app too. The pane only
+learns whether chats are stored once `GET /api/configs/platform` has answered,
+so an app left open in the pane waits for that answer before it shows the chat.
+
+Two ways into the history:
+
+- **Chat history** in the pane's menu (start page, apps list and chat) — the
+  chats grouped by date, searchable by title and app name, paged with **Show
+  older chats**. Its back button returns to the chat it was opened from.
+- **Recent chats** at the bottom of the pane's start page — the three most
+  recent chats, with an **All chats** link to the page above.
+
+Picking a chat opens it in the pane under its own app. The transcript is
+fetched from the store, a turn that is still running is re-attached to, and
+the chat's settings (model, tools, websearch) and app variables come back with
+it — the same steps as `/apps/:appId/c/:chatId`. Typing carries on from there, with the email
+that is open **now** as context. That is the point: a conversation from earlier
+in the day — in the browser or in the pane — can inform the reply being
+written.
+
+The pane lists only chats whose app it offers. A chat can only be continued
+through its own app, so a chat of an app the add-in's
+[Available Apps](outlook-add-in.md#step-5--optional-restrict-what-the-add-in-can-access)
+leave out, or one the user lost access to, is left out rather than listed as a
+dead end. It is still on `/chats`. When the latest chats are mostly in such
+apps, the pane reads a few older pages on its own to fill its lists, and past
+that leaves it to **Show older chats**.
+
+What is stored for a pane turn is what the store keeps for any turn: what the
+user typed, the names of attached files and the answer. The open email reaches
+the model as `hostContext` and is not written to the transcript — so a later
+turn in that chat, in the pane or in the browser, does not get the earlier
+email again. In the pane, the email that is open when the turn is sent goes
+with it.
+
+An app marked [`ephemeral`](apps.md) stays out of the store in the pane too, as
+in the web app: its chats keep their transcript in the browser and never reach
+the history.
+
+Opening a different email still starts a new chat in the pane (see
+[the Outlook guide](outlook-add-in.md)), and **Restore previous chat** fetches
+the one it set aside from the store. With durable chats off the pane keeps its
+transcript in the browser as before and has no history.
 
 ### What never appears in the list
 
