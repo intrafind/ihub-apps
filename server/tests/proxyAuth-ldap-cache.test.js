@@ -119,4 +119,59 @@ describe('proxyAuth LDAP group cache', () => {
 
     expect(lookupLdapGroupsForUser).toHaveBeenCalledTimes(2);
   });
+
+  it('skips retries during the failure cooldown', async () => {
+    lookupLdapGroupsForUser.mockRejectedValue(new Error('LDAP unreachable'));
+
+    // First request tries the LDAP call and fails.
+    await callProxyAuth(proxyAuth, 'alice');
+    expect(lookupLdapGroupsForUser).toHaveBeenCalledTimes(1);
+
+    // Subsequent requests within the cooldown must not call LDAP again.
+    now += 5_000;
+    await callProxyAuth(proxyAuth, 'alice');
+    now += 20_000; // still under 30s cooldown
+    await callProxyAuth(proxyAuth, 'alice');
+    expect(lookupLdapGroupsForUser).toHaveBeenCalledTimes(1);
+
+    // Past the cooldown the next request retries.
+    now += 10_000; // 35s total since failure
+    await callProxyAuth(proxyAuth, 'alice');
+    expect(lookupLdapGroupsForUser).toHaveBeenCalledTimes(2);
+  });
+
+  it('keeps serving stale groups from before an outage', async () => {
+    lookupLdapGroupsForUser.mockResolvedValueOnce(['g1', 'g2']);
+
+    // Success populates the cache.
+    const okReq = await callProxyAuth(proxyAuth, 'alice');
+    expect(okReq.req.user?.externalGroups).toEqual(expect.arrayContaining(['g1', 'g2']));
+
+    // TTL expires, next lookup fails.
+    now += 601 * 1000;
+    lookupLdapGroupsForUser.mockRejectedValueOnce(new Error('LDAP unreachable'));
+    const outageReq = await callProxyAuth(proxyAuth, 'alice');
+
+    // Stale groups still applied to the request rather than the empty set.
+    expect(outageReq.req.user?.externalGroups).toEqual(expect.arrayContaining(['g1', 'g2']));
+
+    // A request during the cooldown reuses the stale groups without another
+    // LDAP call.
+    now += 5_000;
+    const cooledReq = await callProxyAuth(proxyAuth, 'alice');
+    expect(lookupLdapGroupsForUser).toHaveBeenCalledTimes(2);
+    expect(cooledReq.req.user?.externalGroups).toEqual(expect.arrayContaining(['g1', 'g2']));
+  });
+
+  it('does not record failure cooldown when TTL is 0', async () => {
+    mockPlatformConfig.proxyAuth.ldapGroupLookupCacheTtlSeconds = 0;
+    lookupLdapGroupsForUser.mockRejectedValue(new Error('LDAP unreachable'));
+
+    // With caching disabled the operator asked us to hit LDAP on every call.
+    // The failure cooldown is a cache mechanism; without a cache it doesn't
+    // apply, so every request must attempt the LDAP lookup afresh.
+    await callProxyAuth(proxyAuth, 'alice');
+    await callProxyAuth(proxyAuth, 'alice');
+    expect(lookupLdapGroupsForUser).toHaveBeenCalledTimes(2);
+  });
 });

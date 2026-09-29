@@ -38,9 +38,25 @@ const DEFAULT_LDAP_GROUPS_TTL_MS = 10 * 60 * 1000; // 10 minutes
 // per distinct user for the process lifetime. Map preserves insertion order,
 // so evicting `keys().next()` drops the least-recently-refreshed entry.
 const LDAP_GROUPS_CACHE_MAX_ENTRIES = 5000;
+// Cooldown between LDAP lookups for the same user after a failure. Without it,
+// every request during a directory outage opens its own LDAP timeout, piling
+// latency on top of the outage and load on the recovering server.
+const LDAP_GROUPS_FAILURE_COOLDOWN_MS = 30 * 1000;
 
 function getLdapGroupsCacheKey(providerName, userId) {
   return `${providerName}::${userId}`;
+}
+
+function storeLdapGroupsCacheEntry(cacheKey, entry) {
+  // Delete + re-set refreshes insertion order, so recently-used entries
+  // survive when the cap kicks in.
+  ldapGroupsCache.delete(cacheKey);
+  ldapGroupsCache.set(cacheKey, entry);
+  while (ldapGroupsCache.size > LDAP_GROUPS_CACHE_MAX_ENTRIES) {
+    const oldest = ldapGroupsCache.keys().next().value;
+    if (oldest === undefined) break;
+    ldapGroupsCache.delete(oldest);
+  }
 }
 
 async function fetchLdapGroupsForProxyUser(providerName, userId) {
@@ -72,8 +88,18 @@ async function getLdapGroupsForProxyUser(providerName, userId, ttlMs) {
   const cacheKey = getLdapGroupsCacheKey(providerName, userId);
   const now = Date.now();
   const entry = ldapGroupsCache.get(cacheKey);
-  if (entry && now - entry.fetchedAt < ttlMs) {
-    return entry.groups;
+  if (entry) {
+    if (entry.fetchedAt !== undefined && now - entry.fetchedAt < ttlMs) {
+      return entry.groups;
+    }
+    if (
+      entry.failedAt !== undefined &&
+      now - entry.failedAt < LDAP_GROUPS_FAILURE_COOLDOWN_MS
+    ) {
+      // Recent failure: skip the LDAP round-trip and return whatever we last
+      // had (empty for a first-time failure, or the pre-outage groups).
+      return entry.groups;
+    }
   }
 
   const inFlight = ldapGroupsInFlight.get(cacheKey);
@@ -83,15 +109,7 @@ async function getLdapGroupsForProxyUser(providerName, userId, ttlMs) {
     try {
       const groups = await fetchLdapGroupsForProxyUser(providerName, userId);
       if (ttlMs > 0) {
-        // Delete + re-set refreshes insertion order, so recently-used entries
-        // survive when the cap kicks in below.
-        ldapGroupsCache.delete(cacheKey);
-        ldapGroupsCache.set(cacheKey, { groups, fetchedAt: Date.now() });
-        while (ldapGroupsCache.size > LDAP_GROUPS_CACHE_MAX_ENTRIES) {
-          const oldest = ldapGroupsCache.keys().next().value;
-          if (oldest === undefined) break;
-          ldapGroupsCache.delete(oldest);
-        }
+        storeLdapGroupsCacheEntry(cacheKey, { groups, fetchedAt: Date.now() });
       } else if (ldapGroupsCache.has(cacheKey)) {
         // TTL was lowered to 0 at runtime; drop any pre-existing entry so the
         // stale-fallback branch below can't hand back a value the operator
@@ -108,7 +126,15 @@ async function getLdapGroupsForProxyUser(providerName, userId, ttlMs) {
         ldapGroupLookupProvider: providerName,
         error
       });
-      return entry?.groups ?? [];
+      const staleGroups = entry?.groups ?? [];
+      if (ttlMs > 0) {
+        // Record the failure so the next request within the cooldown skips
+        // another LDAP call. Even when the failure is because of pure
+        // misconfiguration (bad DN, missing password) the cooldown is fine —
+        // the operator has to change config to fix it either way.
+        storeLdapGroupsCacheEntry(cacheKey, { groups: staleGroups, failedAt: Date.now() });
+      }
+      return staleGroups;
     } finally {
       ldapGroupsInFlight.delete(cacheKey);
     }
