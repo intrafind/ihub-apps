@@ -97,15 +97,225 @@ The `auth` block on a server entry supports:
 - `{ "type": "oauth", "tokenUrl": "...", "clientId": "...", "clientSecretRef": "..." }`
   — OAuth client credentials: iHub fetches a token and refreshes it before
   it expires.
+- `{ "type": "oauthUser", "scopes": ["..."] }` — every user signs in with
+  their own account; see [Per-user sign-in](#per-user-sign-in-oauthuser).
 
 Every `*Ref` field names a profile in the central credential store
 (**Admin → Credentials**, `contents/config/credentials.json`). The secret
 is encrypted at rest there and resolved only when the connection is
 opened, so `mcpServers.json` never holds secret material.
 
-There is no per-user sign-in yet: every user of a server shares the one
-credential configured for it. Servers that only accept an interactive
-OAuth login for each user cannot be connected today.
+With every type except `oauthUser`, all users of a server share the one
+credential configured for it. Servers that only accept an interactive OAuth
+login for each user use `oauthUser`: each user connects their own account and
+the server's tools act as that user.
+
+### Per-user sign-in (`oauthUser`)
+
+Some MCP servers act as the person using them — "who am I", "my tickets",
+"my calendar" — and accept no shared credential: every user signs in at the
+server's own authorization server. With `auth.type: "oauthUser"` iHub runs
+that sign-in for each user (OAuth 2.1 authorization code with PKCE, as the
+MCP authorization specification describes) and keeps one set of tokens per
+user and server.
+
+```jsonc
+{
+  "id": "okta",
+  "name": "Okta directory",
+  "transport": { "type": "streamableHttp", "url": "https://okta-mcp.example.com/mcp" },
+  "auth": {
+    "type": "oauthUser",
+    // Optional. Default: the scopes the server's metadata advertises.
+    "scopes": ["openid", "profile", "email"]
+    // Optional, only for a client registered by hand at the authorization server:
+    // "clientId": "ihub", "clientSecretRef": "okta-mcp-client-secret",
+    // Optional, when the server does not advertise its authorization server:
+    // "authorizationServer": "https://login.example.com"
+  }
+}
+```
+
+Only the `streamableHttp` and `sse` transports support it.
+
+**Discovery.** When a user connects, iHub reads the server's protected-resource
+metadata (RFC 9728, `/.well-known/oauth-protected-resource`) to find its
+authorization server, then that server's metadata (RFC 8414
+`/.well-known/oauth-authorization-server`, or OpenID Connect discovery). A
+server without RFC 9728 metadata is treated as its own authorization server
+(its origin). `authorizationServer` skips the first step.
+
+**How iHub identifies itself**, in this order:
+
+1. A pre-registered client from the config (`clientId`, plus
+   `clientSecretRef` for a confidential client).
+2. iHub's Client ID Metadata Document for this server, when the
+   authorization server advertises `client_id_metadata_document_supported`
+   and iHub's public URL is https. Every server has its own document, served
+   unauthenticated at `GET /api/mcp/oauth/client-metadata/<serverId>`; its URL
+   is the client id. It declares a public client
+   (`token_endpoint_auth_method: none`) with the authorization-code and
+   refresh-token grants and exactly one redirect URI — that server's
+   callback.
+3. Dynamic client registration (RFC 7591) at the server's
+   `registration_endpoint`.
+
+The registration is made once per server and reused for every user; two
+users connecting a fresh server at the same moment share one registration.
+It is stored in the storage provider (namespace `mcp-oauth-clients`, a client
+secret encrypted with the installation key) and dropped when the server's URL
+or auth block changes, when the authorization server answers
+`invalid_client`, or when an admin resets it (**Admin → MCP servers**, the
+reset button of a per-user server). Reset it when the authorization server
+lost its registered clients (for example an MCP server that keeps them in
+memory and was restarted): such a server refuses the sign-in on its own page,
+which never comes back to iHub.
+
+**Callback URL and public URL.** Every server has its own redirect URI:
+`<public URL>/api/mcp/oauth/callback/<serverId>`. For a client registered by
+hand, register exactly that URL for the server. The public URL is the MCP
+gateway's **Public URL** (`platform.mcpServer.publicUrl`) when it is set,
+else the request's protocol and host as Express resolves them —
+`X-Forwarded-Proto` / `X-Forwarded-Host` count only when `platform.trustProxy`
+trusts the proxy that sent them — plus the base path.
+
+**Set the Public URL** in any deployment reached under more than one address
+or behind a reverse proxy. A registration made for one public URL is replaced
+only from a trusted one: the configured Public URL, or an admin's own sign-in.
+A user's sign-in that reaches iHub under another address (another host name,
+or a forged `Host` header) is refused with `public_url_mismatch`, and the
+server log says to set the Public URL — it never replaces the registration
+every other user's tokens depend on. The client metadata document is
+cacheable (`Cache-Control: public, max-age=3600`) only when the Public URL is
+set; otherwise it is sent `no-store` with `Vary: Host, X-Forwarded-Host,
+X-Forwarded-Proto`.
+
+**Tokens.** A user's tokens are stored encrypted (AES-256-GCM, installation
+key `contents/.encryption-key`) in
+`contents/integrations/mcp/<userId>__<serverId>.json`; user ids with
+characters outside `A-Z a-z 0-9 . _ @ + -` are filed under a hash
+(`u_<32 hex>`), with the real id inside the encrypted file. Tokens are never
+logged. They are bound to the server's endpoint and auth block (URL,
+`clientId`, `clientSecretRef`, `authorizationServer`, `scopes`) and to the
+authorization server and client that issued them: when the server is
+removed, or its URL or auth block changes, every user's tokens for it are
+deleted, and tokens issued under another config are never sent (a change
+made while iHub was down counts too). Users then connect again.
+
+**Refresh.** iHub refreshes the tokens itself; the MCP SDK never sees the
+refresh token. A token known to be expired is refreshed before the call, a
+token the server rejects is refreshed once and the call retried. Parallel
+calls of one user share one refresh, so a rotating refresh token is never
+used twice. The tokens are deleted only when the authorization server
+definitively refuses them (`invalid_grant`, `invalid_client`,
+`unauthorized_client`) and no other worker stored newer ones in the
+meantime, or when the MCP server rejects even a freshly refreshed token. A
+network error, a timeout or a 5xx keeps them: the call fails with "could not
+be renewed right now" and the next one tries again. `invalid_client` also
+drops the registration.
+
+**Tool catalog.** `tools/list` on such a server needs a token, so iHub keeps
+one catalog per server. It is stored (namespace `mcp-tool-catalog`) so it
+survives restarts and is shared by all workers, and it is what the chat, the
+app editor and the gateway see — no connection is opened for that. An MCP
+server may list different tools to different users, so the catalog follows
+one rule: an admin's listing (**Test connection**, or any listing on an
+admin's own connection) replaces it; anybody else's listing only adds tools
+it does not have yet and never removes or changes one. A user whose upstream
+role sees fewer tools cannot shrink everybody's tool set, and tools removed
+upstream disappear at the next admin **Test connection**. A listed tool is no
+grant: the server authorizes every call with the caller's own token. A server
+nobody has connected yet offers no tools: connect it once, typically as the
+admin with **Test connection** or under **Settings → Integrations**.
+
+**Using the tools.** Every call runs on the calling user's own connection. A
+user who has not connected the server gets a structured result instead of a
+call:
+
+```json
+{
+  "error": "MCP_AUTH_REQUIRED",
+  "message": "Connect Okta directory to use this tool: /api/mcp/oauth/authorize?serverId=okta",
+  "authRequired": { "serverId": "okta", "serverName": "Okta directory", "connectUrl": "/api/mcp/oauth/authorize?serverId=okta" }
+}
+```
+
+The model sees the message; the chat shows a **Connect** card under the
+answer. Connect opens the server's sign-in and returns to the chat, where the
+card shows the server as connected; the user then sends the request again.
+The card is stored with the answer, so it is still there after the redirect;
+when the chat is opened again later, the card asks the server whether the
+user is connected now and shows that. A tool with an MCP App view shows no
+view for such a call. The MCP App routes answer an unconnected server with
+**409** `{ "error": "auth_required", "code": "MCP_AUTH_REQUIRED", "connectUrl": … }`
+(never 401, which would read as an expired iHub session).
+
+The calling user is always the authenticated one. Every entry point that
+turns a request into tool parameters — `POST /api/tools/:toolId`, A2A
+`message/send` and `message/stream`, the inbound MCP gateway — drops `user`,
+`chatId`, `appConfig` and iHub's other context keys from the caller's input
+and sets them itself, so no request can name another user and run a tool
+with their token. Callers without a signed-in user — the inbound MCP
+gateway's anonymous callers, workflows started without a user — get the
+auth-required result. iHub never uses another user's token.
+
+**Settings → Integrations** lists the per-user servers the user may use (an
+app they can open offers the server or one of its tools; admins see all)
+with **Connect** and **Disconnect**. Disconnect revokes the tokens at the
+authorization server's `revocation_endpoint` when it has one (RFC 7009, best
+effort) and deletes them.
+
+**Admins** see how many users connected each per-user server on
+**Admin → MCP servers**. **Test connection** uses the admin's own account;
+without one it offers **Connect my account**. In the edit dialog it tests
+with the admin's account only while the URL and auth settings are the saved
+ones — an edited draft is never probed with a token issued for the saved
+endpoint and never touches the live registration; save it first. The form
+offers per-user sign-in for the Streamable HTTP and SSE transports only.
+
+**Security notes.**
+
+- The OAuth `state` is a signed ticket (HMAC-SHA256 with the platform's JWT
+  secret, 15 minutes) that names the user who started the sign-in; the
+  callback refuses it in anyone else's session.
+- OAuth mix-up defence (RFC 9700 §4.4): the ticket also names the server,
+  its authorization server's issuer and the client the request went to. The
+  callback refuses a ticket that arrives at another server's callback, an
+  RFC 9207 `iss` that names another issuer, and a missing `iss` when the
+  authorization server advertises
+  `authorization_response_iss_parameter_supported`; the code is exchanged
+  only while the server's registration still is that authorization server
+  and client. Against an authorization server that neither sends `iss` nor
+  requires a per-server registration (a CIMD server without RFC 9207
+  support), the per-server redirect URI cannot rule out a mix-up on its own —
+  prefer authorization servers that support RFC 9207.
+- The PKCE (S256) verifier travels inside that ticket encrypted with the
+  installation key; it never leaves iHub in clear text.
+- The authorization request carries the RFC 8707 `resource` indicator (the
+  MCP server's URL, or the resource its metadata names).
+- Discovery, registration, token and revocation requests use the same
+  SSRF-guarded `safeFetch` as the MCP connection (`security.allowedHosts`,
+  `security.blockPrivateIps`) and never follow redirects: a 3xx answer is an
+  error, so an authorization server cannot steer iHub to an internal address
+  through a `Location` header.
+- The return URL is checked like every other OAuth return URL (same host or
+  a relative path); errors come back as fixed codes
+  (`?mcp_error=oauth_failed|missing_code|invalid_state|state_expired|user_mismatch|server_not_found|exchange_failed|discovery_failed|registration_failed|issuer_mismatch|public_url_mismatch`),
+  never as text from the authorization server.
+
+Routes:
+
+- `GET /api/mcp/oauth/authorize?serverId=&returnUrl=` — start a sign-in (302).
+- `GET /api/mcp/oauth/callback/:serverId` — the server's redirect URI.
+- `GET /api/mcp/oauth/connections` — the caller's per-user servers and their state.
+- `POST /api/mcp/oauth/disconnect` `{ "serverId": "…" }`.
+- `GET /api/mcp/oauth/client-metadata/:serverId` — iHub's Client ID Metadata
+  Document for that server.
+- `GET /api/admin/mcp/servers/:id/connections` and
+  `DELETE /api/admin/mcp/servers/:id/connections/:userId` — admin view and
+  disconnect.
+- `POST /api/admin/mcp/servers/:id/registration/reset` — forget iHub's client
+  registration at the server's authorization server.
 
 ### Security
 
@@ -246,6 +456,18 @@ cannot use `localStorage`/`sessionStorage` (the reference apps handle that).
 Views are not rendered where the API is served from a different origin than
 the page (an API base override, such as the browser extension).
 
+**Troubleshooting — a view stays blank or a map never appears.** The sandbox
+blocks every origin the resource did not declare, so a view that loads an
+external script (the Google Maps or ArcGIS JavaScript API, a CDN-hosted
+library) renders empty unless its `ui://` resource lists those origins in
+`_meta.ui.csp`: `resourceDomains` for scripts, styles, images and fonts,
+`connectDomains` for `fetch`/XHR/WebSocket targets, `frameDomains` for nested
+iframes (draw.io's `embed.diagrams.net`, for example). The browser console of
+the chat page shows the blocked request as a Content-Security-Policy
+violation naming the missing origin. This is the server author's declaration
+to fix; iHub does not add origins on its own, and hosts that apply no CSP will
+happily render a view whose declaration is incomplete.
+
 #### What a view can do
 
 | Method | iHub behaviour |
@@ -265,6 +487,62 @@ the page (an API base override, such as the browser extension).
 Requests are rate-limited per view, and the server logs every call a view
 makes (`component: McpApps`).
 
+**Views without the `ui/initialize` handshake.** The specification delivers
+the tool input and result only after the view has sent `ui/initialize` and
+`ui/notifications/initialized`. Views written against the older
+[mcp-ui](https://mcpui.dev) protocol never do; they post a plain
+`{ "type": "appReady" }` message and read their data from the tool result's
+`_meta["mcpui.dev/ui-initial-render-data"]`. iHub accepts that message as the
+view's "ready" signal when no `ui/initialize` has arrived, and then delivers
+the same `tool-input` and `tool-result` notifications (the full result, `_meta`
+included) exactly once. A view that started `ui/initialize` is not initialized
+early by an `appReady` it also happens to send. Each use of this fallback is
+logged on the server (`component: McpApps`, `handshake: legacy`, with the
+server and tool), so admins can see which servers still depend on it.
+
+**Views whose data is baked into the HTML.** Some servers declare
+`_meta.ui.resourceUri` on the tool but put the call's data into the page
+itself: the tool result carries an embedded resource item
+(`{ "type": "resource", "resource": { "uri", "mimeType", "text" } }`) for the
+same `ui://` URI whose HTML sets the data inline (the Langdock Cookbook
+ServiceNow `render_ticket` injects `window.TICKET_DATA`). The static copy from
+`resources/read` has no data and would render empty, so iHub renders the
+embedded copy instead — only when its `uri` is exactly the tool's declared
+`resourceUri`, its `mimeType` is `text/html` or `text/html;profile=mcp-app`,
+it carries the HTML as `text` or base64 `blob`, and it is within the same 5 MB cap as
+`resources/read` HTML (in practice the 1 MB view payload limit under
+_Persistence_ applies first). Otherwise the `resources/read` copy is used. Nothing
+else changes: the CSP, permissions, sandbox and bridge still come from the
+declared resource as `resources/read` returns it (the embedded item's own
+`_meta` is ignored). The embedded HTML travels in the tool result the view
+already receives and is stored with it (see _Persistence_); when the result
+only arrives after the view opened, the sandbox is reloaded once with the
+embedded copy. An embedded page under a different URI than the declared one
+is not rendered.
+
+**Views of tools that declare none.** mcp-ui servers often declare no
+`_meta.ui.resourceUri` at all and return the view only inside the tool
+result: an embedded resource item with a `ui://` URI and `text/html` (or
+`text/html;profile=mcp-app`) HTML. On a server with MCP Apps enabled, iHub
+renders the first such item as the call's view (the SSE `tool/completed`
+frame and the stored answer mark it `embedded: true`; there is no
+`tool/started` announcement, since nothing says in advance that the tool has
+one). Its rules:
+
+- The view is the embedded page alone; there is no `resources/read` copy
+  (`GET /api/mcp-apps/resource` answers 404 for such a tool).
+- The page loads only from the origins its own `_meta.ui.csp` declares
+  (sanitized as for a declared resource). It never gets device permissions
+  (camera, microphone, geolocation, clipboard): only a declared resource can
+  ask for those.
+- The view may call the same server's app-callable tools and read its
+  resources through the host endpoints, like any other view.
+- `apps.enabled: false` on the server turns these views off.
+- A page larger than the 1 MB view payload (see _Persistence_) is not shown;
+  the chat says the view was too large.
+
+Other kinds of embedded UI (`text/uri-list`, remote-dom) are not rendered.
+
 #### Host endpoints
 
 All but the sandbox page require the chat's authentication and name the app
@@ -276,6 +554,9 @@ the app, and the app must offer the tool.
   The server derives the `ui://` URI from the tool; the client never names it.
 - `POST /api/mcp-apps/tools/call` — `{ appId, toolId, name, arguments }`.
 - `POST /api/mcp-apps/resources/read` — `{ appId, toolId, uri }`.
+- `POST /api/mcp-apps/handshake` — `{ appId, toolId, handshake: "legacy" }`;
+  the chat reports a view that was initialized by the legacy `appReady`
+  message, and the server logs it.
 
 #### Persistence
 
@@ -305,7 +586,13 @@ where a view was without running it.
   in a secret field preserves the existing encrypted value.
 - `DELETE /api/admin/mcp/servers/:id`.
 - `POST /api/admin/mcp/servers/:id/test` — drop the cached connection,
-  reconnect, run `tools/list`, return the resulting status.
+  reconnect, run `tools/list`, return the resulting status. For an
+  `oauthUser` server this runs on the acting admin's own connection (and
+  refreshes the server's tool catalog); without one it answers
+  `{ "status": "auth_required", "connectUrl": "…" }`.
+- `GET /api/admin/mcp/servers/:id/connections` /
+  `DELETE /api/admin/mcp/servers/:id/connections/:userId` — users connected
+  to an `oauthUser` server; disconnect one (revokes upstream when possible).
 - `GET /api/admin/mcp/catalog` — the built-in server catalog (see below),
   each entry flagged `installed` when a configured server already uses its
   id or URL.
@@ -321,8 +608,9 @@ saves; nothing is added until then.
 
 The catalog ships with iHub (`server/services/mcp/serverCatalog.js`), so it
 updates with each release and needs no configuration. Servers that only
-support an interactive OAuth login for each user are not listed: iHub has
-no per-user outbound OAuth yet.
+support an interactive OAuth login for each user are not listed yet; they can
+be added by hand with `auth.type: "oauthUser"` (see
+[Per-user sign-in](#per-user-sign-in-oauthuser)).
 
 draw.io and Excalidraw are MCP App servers (see [MCP Apps](#mcp-apps--interactive-views)):
 their tools return a view that renders in the chat. iHub already ships both
@@ -806,6 +1094,11 @@ Entra **as the user**, with no app prompt or system prompt mediating the
 call. It does not change which tools a chat app may use — that is still the
 app's own `tools` list.
 
+The same rule decides which tools a user may run with a direct REST call,
+`POST /api/tools/:toolId`: a tool an app they can access declares, or one
+their group grants. Admins may run every tool that way. Any other tool
+answers `403`.
+
 ### Session model
 
 By default the gateway is stateful: an `initialize` request receives a
@@ -886,7 +1179,11 @@ curl https://ihub.example.com/.well-known/oauth-protected-resource/mcp
 
 curl https://ihub.example.com/mcp/.well-known
 # MCP-specific metadata: issuer, mcp_endpoint, transports, scopes_supported,
-# oauth_authorization_server link
+# oauth_authorization_server link; a2a_endpoint + a2a_agent_card when A2A is on
+
+curl https://ihub.example.com/.well-known/agent-card.json
+# A2A 0.3 Agent Card (when A2A is enabled); with credentials it lists the
+# caller's skills
 ```
 
 ### Connections — who is connected to what
@@ -1090,33 +1387,92 @@ Troubleshooting:
 Every rejection the transport makes is logged under the `McpGateway`
 component, so `npm run logs` shows the reason a client was turned away.
 
-## Agent-to-Agent (A2A) endpoint — experimental
+## Agent-to-Agent (A2A) — iHub as an A2A agent
 
-Set `platform.mcpServer.a2a.enabled: true` (Admin → MCP gateway → A2A
-toggle) to mount `/a2a` alongside `/mcp`. It uses the **same OAuth
-Bearer + `mcp:*` scope gate** as the MCP gateway — no separate
-credential or scope.
+iHub can also call remote agents: an A2A agent's skills can be connected as tools that apps use
+(Admin → Integrations → A2A agents). See [Remote A2A agents as tools](a2a-agents.md).
 
-A2A is JSON-RPC 2.0 over HTTP, task-oriented. iHub today implements
-the well-defined subset of the v0.x draft:
+Set `platform.mcpServer.a2a.enabled: true` (Admin → MCP gateway → **A2A**)
+and iHub becomes an [A2A 0.3](https://a2a-protocol.org) agent: its apps and
+workflows are the agent's **skills**, callable from any A2A client (the
+`@a2a-js/sdk`, the A2A Inspector, Langdock's "Connect Remote Agent", Google
+ADK, …). The endpoint uses the **same OAuth Bearer + `mcp:*` scope gate** as
+the MCP gateway — no separate credential or scope.
+
+### Agent Card
+
+| URL | Contents |
+|-----|----------|
+| `/.well-known/agent-card.json` | The agent: `url` (`<base>/a2a`), `protocolVersion: "0.3.0"`, capabilities, security schemes. Public. |
+| `/a2a/.well-known/agent-card.json` | The same card, gateway-scoped. |
+| `/a2a/skills/<skillId>/.well-known/agent-card.json` | A card bound to one skill: its `url` is `<base>/a2a/skills/<skillId>` and every message sent there runs that skill. |
+
+The public card lists **no skills**: which apps and workflows a caller may use
+depends on its token and groups. Fetch the card with credentials (any of the
+schemes below), or call `agent/getAuthenticatedExtendedCard`, and `skills`
+holds the caller's apps (`app__<appId>`) and workflows (`workflow__<id>`) with
+name, description, tags and the apps' starter prompts as `examples`.
+
+`securitySchemes` on the card:
+
+| Scheme | How to call |
+|--------|-------------|
+| `oauth2` | iHub's authorization server (`/.well-known/oauth-authorization-server`): authorization code + PKCE for users, client credentials for services; scopes `mcp:apps:invoke`, `mcp:workflows:run` |
+| `bearer` | `Authorization: Bearer <token>` — an OAuth access token or a personal API key |
+| `apiKey` | `X-API-Key: <personal API key>` — for clients built against an API-key scheme; iHub treats it as the bearer token |
+
+### Methods
+
+JSON-RPC 2.0 over `POST /a2a` (or `POST /a2a/skills/<skillId>`):
 
 | Method | Behaviour |
 |--------|-----------|
-| `agent/info` | Returns capability + auth metadata |
-| `agent/skills` | Enumerates iHub tools / apps / workflows as A2A skills |
-| `tasks/send` | Synchronous send-and-wait — dispatches to the underlying tool/app/workflow and returns the output in one response |
+| `message/send` | Runs a skill and returns the finished **Task** (`status.state: completed`, the answer as a text `artifact` and as `status.message`). With `configuration.blocking: false` the submitted task is returned at once and the client polls `tasks/get`. |
+| `message/stream` | The same over Server-Sent Events: the Task, a `status-update` (`working`), `artifact-update` events with the answer as it streams (`append: true`, `lastChunk: true` on the last), then a final `status-update`. Each SSE `data:` line is a JSON-RPC response with the request's `id`. |
+| `tasks/get` | A task the caller created (`historyLength` trims the history). Works on every worker: tasks are stored on the storage provider (`a2a-tasks`) for 24 hours. |
+| `tasks/cancel` | Aborts a running task (`canceled`); a finished task answers `-32002`. |
+| `agent/getAuthenticatedExtendedCard` | The caller's Agent Card with skills. |
 
-Stateful methods (`tasks/get`, `tasks/cancel`, streaming
-`tasks/sendSubscribe`) return JSON-RPC `method not found`. The spec is
-still moving and a persistent task store is out of scope for this
-landing.
+`tasks/resubscribe` and push notifications (`tasks/pushNotificationConfig/*`)
+are not supported and answer `-32004` / `-32003`. Messages carry `text` parts
+(and optional `data` parts, whose keys become app variables or workflow input
+variables); `file` parts answer `-32005`.
+
+**Which skill runs.** In order: the per-skill endpoint the message was sent
+to; `metadata.skillId` on the params or the message; the skill the message's
+`contextId` is bound to; the administrator's **A2A default skill**
+(`platform.mcpServer.a2a.defaultSkill`, Admin → MCP gateway); and, when the
+caller has exactly one skill, that one. Otherwise `message/send` answers
+`-32602` naming the options. Generic clients that only know an Agent Card URL
+therefore either get a per-skill card URL, or the administrator sets a default.
+
+**Conversations.** A Task's `contextId` identifies the conversation; send the
+next message with the same `contextId` (and no `taskId`) and the app receives
+the earlier exchange as history. Contexts belong to the caller who created
+them and are kept for seven days. Two callers that pick the same `contextId`
+(for example `default`) get two separate conversations. An error that happens
+before a `message/stream` starts, such as an unknown skill, arrives as a single
+SSE frame with `event: error`, as with the reference A2A server.
+
+Permissions are those of the caller: the gateway's **Exposed resources**
+toggles, the token's scopes and the caller's groups decide which apps and
+workflows are skills, exactly as on `/mcp`. A client-credentials token acts as
+its OAuth client, whose groups grant apps but no workflows, so workflow skills
+appear for user tokens and personal API keys only. Every task is logged
+(`component: A2A`) with its skill and caller.
+
+The pre-0.3 draft methods iHub implemented first (`agent/info`,
+`agent/skills`, `tasks/send`) are no longer answered; they return `-32601`
+(method not found). Use the Agent Card, `message/send` and `tasks/get`
+instead. A2A skills are apps and workflows only: raw iHub tools are available
+through the MCP gateway (`/mcp`), not through A2A.
 
 Discovery: `/mcp/.well-known` advertises `a2a_endpoint` when enabled.
 
 ## Out of scope (follow-up)
 
-- **Streaming task subscriptions** (`tasks/sendSubscribe`,
-  `tasks/get`, `tasks/cancel`) over A2A — needs a persistent task store.
+- **A2A push notifications and `tasks/resubscribe`** — a client that loses a
+  `message/stream` connection starts a new task or polls `tasks/get`.
 - **In-app tool calling over MCP** — apps invoked via `tools/call`
   currently run the LLM call synchronously without iHub's tool
   executor; an MCP-side tool loop is a follow-up.

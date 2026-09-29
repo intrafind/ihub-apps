@@ -15,6 +15,7 @@ import {
   isPromptCachingEnabled,
   supportsPromptCaching
 } from '../../../../../shared/promptCaching.js';
+import { DEFAULT_MAX_OUTPUT_TOKENS } from '../../../../../shared/outputTokens.js';
 
 /**
  * Editor for a JSON-typed provider config field. Keeps the raw textarea contents in
@@ -618,8 +619,19 @@ function ModelFormEditor({
                         className={`mt-1 focus:ring-indigo-500 focus:border-indigo-500 block w-full shadow-xs sm:text-sm border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100 rounded-md ${
                           errors.maxOutputTokens ? 'border-red-300 text-red-900' : ''
                         }`}
+                        placeholder={t('admin.models.placeholders.maxOutputTokens', {
+                          defaultValue: 'Default: {{value}}',
+                          value: DEFAULT_MAX_OUTPUT_TOKENS
+                        })}
                         required={isFieldRequired('maxOutputTokens', jsonSchema)}
                       />
+                      <p className="mt-1 text-xs text-gray-500 dark:text-gray-400">
+                        {t('admin.models.hints.maxOutputTokens', {
+                          defaultValue:
+                            'Empty means the default ({{value}}), not unlimited. Reasoning models spend their thinking tokens from this limit, so keep it well above the longest answer you expect.',
+                          value: DEFAULT_MAX_OUTPUT_TOKENS
+                        })}
+                      </p>
                       {errors.maxOutputTokens && (
                         <p className="mt-2 text-sm text-red-600 dark:text-red-400">
                           {errors.maxOutputTokens}

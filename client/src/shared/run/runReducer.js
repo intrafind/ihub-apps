@@ -428,6 +428,8 @@ export function reduceRunEvent(state, envelope) {
         webSources: Array.isArray(data.webSources) ? data.webSources : [],
         // The finished MCP App view: tool input + the full result it draws.
         mcpApp: data.mcpApp || base.mcpApp || null,
+        // A per-user OAuth MCP server the user must connect first.
+        authRequired: data.authRequired || null,
         completedAt: ts
       };
       const tools =

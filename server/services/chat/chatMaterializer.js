@@ -16,6 +16,32 @@
  */
 import { boundStoredViews } from '../mcp/mcpApps.js';
 import { boundStoredCitations } from './chatCitations.js';
+
+/** Connect cards kept per stored answer. */
+const MAX_STORED_AUTH_PROMPTS = 10;
+
+/**
+ * The auth-required markers of a turn as stored with the answer: well-formed
+ * entries only, one per server, bounded.
+ *
+ * @param {unknown} prompts
+ * @returns {Array<{serverId: string, serverName: string, connectUrl: string}>}
+ */
+export function boundStoredAuthPrompts(prompts) {
+  if (!Array.isArray(prompts)) return [];
+  const out = [];
+  for (const p of prompts) {
+    if (!p || typeof p.serverId !== 'string' || typeof p.connectUrl !== 'string') continue;
+    if (out.some(existing => existing.serverId === p.serverId)) continue;
+    out.push({
+      serverId: p.serverId,
+      serverName: typeof p.serverName === 'string' ? p.serverName : p.serverId,
+      connectUrl: p.connectUrl
+    });
+    if (out.length >= MAX_STORED_AUTH_PROMPTS) break;
+  }
+  return out;
+}
 import logger from '../../utils/logger.js';
 import { deriveChatTitle } from './ChatRepository.js';
 import { getArtifactRepository } from '../artifacts/ArtifactRepository.js';
@@ -388,6 +414,10 @@ export async function materializeAssistantTurn({
     // The documents behind the answer, so the reopened chat draws the same
     // Documents panel — bounded, and only the fields the panel reads.
     const citations = pausedWithoutAnswer ? null : boundStoredCitations(summary?.citations);
+    // Connect cards for per-user OAuth MCP servers (see chatSeams.authRequiredOf).
+    const mcpAuthRequired = pausedWithoutAnswer
+      ? []
+      : boundStoredAuthPrompts(summary?.mcpAuthRequired);
 
     let appended = null;
     if (!pausedWithoutAnswer) {
@@ -404,7 +434,8 @@ export async function materializeAssistantTurn({
             ...(error ? { error } : {}),
             ...(artifacts.length > 0 ? { artifacts } : {}),
             ...(mcpApps.length > 0 ? { mcpApps } : {}),
-            ...(citations ? { citations } : {})
+            ...(citations ? { citations } : {}),
+            ...(mcpAuthRequired.length > 0 ? { mcpAuthRequired } : {})
           },
           // The end of the transcript for an ordinary turn, and the position
           // right after this run's own question for a superseded one.

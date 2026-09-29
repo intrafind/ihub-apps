@@ -354,6 +354,8 @@
       "copyToClipboard": "In die Zwischenablage kopieren",
       "copied": "In die Zwischenablage kopiert!",
       "showThoughts": "Denkanalyse anzeigen",
+      "truncated": "Abgeschnitten",
+      "truncatedHint": "Das Modell hat sein Ausgabelimit erreicht, bevor es fertig war. Reasoning-Modelle verbrauchen dasselbe Limit für ihr Denken, sodass ein langer Gedankengang es aufbrauchen kann, bevor die Antwort beginnt. Erhöhen Sie „Max. Ausgabe-Tokens“ des Modells oder senken Sie den Reasoning-Aufwand.",
       "hideThoughts": "Denkanalyse verbergen",
       "configureApp": "Konfigurieren",
       "inputParameters": "Eingabeparameter",
@@ -526,6 +528,7 @@
     "copied": "Kopiert!",
     "edit": "Bearbeiten",
     "resend": "Erneut senden",
+    "attachmentsLabel": "Anhänge",
     "editMessage": "Nachricht bearbeiten",
     "editHint": "{{submit}} zum Senden · Esc zum Abbrechen",
     "resendMessage": "Nachricht erneut senden",
@@ -1165,9 +1168,11 @@
         "nativeWebSearchDynamicFiltering": "Führt die Websuche aus der Code-Ausführung heraus aus (ab Claude 4.6 über die Claude API). Wenn aus, wird die neuere Tool-Version direkt aufgerufen.",
         "thinkingEnabled": "Das Modell vor der Antwort nachdenken lassen. Das Reasoning wird getrennt von der Antwort zurückgegeben; ohne diese Option schreibt ein Reasoning-Modell seine Gedanken stattdessen in den Antworttext.",
         "thinkingLevel": "Wird als reasoning_effort (OpenAI, vLLM) bzw. thinkingLevel (Gemini) gesendet. Server ohne Unterstützung ignorieren den Wert — beim Provider-Standard belassen, sofern das Modell diese Stufen nicht dokumentiert.",
-        "thinkingThoughts": "Das Reasoning Nutzern hinter dem Umschalter „Denkprozess anzeigen“ zugänglich machen. Zum Verbergen deaktivieren."
+        "thinkingThoughts": "Das Reasoning Nutzern hinter dem Umschalter „Denkprozess anzeigen“ zugänglich machen. Zum Verbergen deaktivieren.",
+        "maxOutputTokens": "Leer bedeutet der Standardwert ({{value}}), nicht unbegrenzt. Reasoning-Modelle verbrauchen ihre Denk-Tokens aus diesem Limit – halten Sie es deutlich über der längsten erwarteten Antwort."
       },
       "placeholders": {
+        "maxOutputTokens": "Standard: {{value}}",
         "selectProvider": "Anbieter auswählen",
         "apiModelId": "z.B. gpt-4, claude-3-opus",
         "apiUrl": "https://api.anbieter.com/v1/chat/completions",
@@ -2240,6 +2245,7 @@
       "marketplace": "Marktplatz",
       "mcpGateway": "MCP-Gateway",
       "mcpServers": "MCP-Server",
+      "a2aAgents": "A2A-Agenten",
       "telemetry": "Telemetrie",
       "voiceInput": "Spracheingabe",
       "changelog": "Neuigkeiten",
@@ -2266,8 +2272,12 @@
         "testError": "Test fehlgeschlagen: {{error}}",
         "createTitle": "MCP-Server erstellen",
         "editTitle": "{{id}} bearbeiten",
+        "resetRegistrationConfirm": "OAuth-Client-Registrierung von \"{{id}}\" zurücksetzen? Bei der nächsten Anmeldung registriert sich iHub neu; verbundene Personen müssen sich eventuell neu verbinden.",
+        "resetRegistrationDone": "OAuth-Client-Registrierung zurückgesetzt",
+        "resetRegistrationError": "Zurücksetzen fehlgeschlagen: {{error}}",
         "actions": {
-          "test": "Verbindung testen"
+          "test": "Verbindung testen",
+          "resetRegistration": "OAuth-Client-Registrierung zurücksetzen"
         },
         "test": {
           "button": "Verbindung testen",
@@ -2276,15 +2286,24 @@
           "failed": "Verbindung fehlgeschlagen: {{error}}",
           "noTools": "Der Server ist verbunden, stellt aber keine Tools bereit.",
           "rendersView": "interaktive Ansicht",
+          "fileInput": "Datei-Eingabe: {{params}}",
+          "fileInputHint": "Erhält einen Chat-Anhang der aktuellen Nachricht als Datei.",
           "showMore": "Mehr anzeigen",
-          "showLess": "Weniger anzeigen"
+          "showLess": "Weniger anzeigen",
+          "authRequired": "Bei diesem Server meldet sich jede Person selbst an. Verbinden Sie Ihr eigenes Konto, um ihn zu testen und seine Tools zu laden.",
+          "authRequiredUnsaved": "Bei diesem Server meldet sich jede Person selbst an. Speichern Sie ihn und verbinden Sie dann Ihr eigenes Konto, um ihn zu testen und seine Tools zu laden.",
+          "connect": "Mein Konto verbinden",
+          "accountConnected": "Ihr Konto ist mit {{id}} verbunden. Die Tools werden im Hintergrund geladen; testen Sie die Verbindung, um sie zu aktualisieren.",
+          "accountConnectFailed": "Das Verbinden Ihres Kontos ist fehlgeschlagen ({{code}})."
         },
         "status": {
           "unknown": "unbekannt",
           "unhealthy": "fehlerhaft",
           "connected": "verbunden ({{count}} Tools)",
           "idle": "inaktiv",
-          "disabled": "deaktiviert"
+          "disabled": "deaktiviert",
+          "connectedUsers_one": "{{count}} Person verbunden",
+          "connectedUsers_other": "{{count}} Personen verbunden"
         },
         "form": {
           "id": "ID",
@@ -2306,6 +2325,8 @@
           "password": "Passwort",
           "toolPrefix": "Tool-Präfix",
           "timeout": "Timeout (ms)",
+          "maxFileSizeMB": "Max. Dateigröße für Tools (MB)",
+          "maxFileSizeMBHint": "Größter Chat-Anhang, der an einen Tool-Parameter übergeben wird, der eine Datei erwartet.",
           "allowedTools": "Für Apps freigegebene Tools",
           "appsEnabled": "Interaktive Ansichten anzeigen (MCP Apps)",
           "appsEnabledHint": "Kündigt die MCP-Apps-Erweiterung an und zeigt die interaktiven Ansichten, die die Tools dieses Servers deklarieren, direkt im Chat an. Deaktivieren für reine Textergebnisse.",
@@ -2323,7 +2344,16 @@
           "allowedToolsHint": "Apps aktivieren diesen Server als Ganzes und erhalten genau die hier freigegebenen Tools. Benutzer sehen den Server im Chat als einen einzigen Eintrag.",
           "allowedToolsAll": "Alle Tools des Servers",
           "allowedToolsSelected": "Nur die ausgewählten Tools",
-          "allowedToolsManual": "Tool-Namen, wie der Server sie nennt, kommagetrennt. Testen Sie die Verbindung, um sie stattdessen aus einer Liste auszuwählen."
+          "allowedToolsManual": "Tool-Namen, wie der Server sie nennt, kommagetrennt. Testen Sie die Verbindung, um sie stattdessen aus einer Liste auszuwählen.",
+          "authOauthUser": "OAuth — jede Person meldet sich an",
+          "oauthUserHttpOnly": "Die Anmeldung pro Person ist nur mit den Transporten Streamable HTTP und SSE verfügbar.",
+          "oauthUserHint": "Jede Person verbindet ihr eigenes Konto (Authorization Code + PKCE). iHub findet den Autorisierungsserver und registriert sich automatisch. Hinter einem Reverse Proxy die öffentliche URL des MCP-Gateways setzen, damit die Callback-URL stabil bleibt.",
+          "scopes": "Scopes (optional, durch Kommas getrennt)",
+          "preregisteredClientId": "Client-ID (optional)",
+          "preregisteredClientIdHint": "Nur für einen Client, der beim Autorisierungsserver von Hand registriert wurde. Leer lassen, damit iHub sich selbst registriert.",
+          "clientSecretOptional": "Client-Secret (optional)",
+          "clientSecretRefHint": "Ein gespeichertes Zugangsdaten-Profil mit dem OAuth-Client-Secret auswählen.",
+          "authorizationServer": "Autorisierungsserver (optional, überschreibt die Erkennung)"
         }
       },
       "gateway": {
@@ -2342,8 +2372,8 @@
         "transportStreamableHttpDesc": "Kanonischer MCP-HTTP-Transport gemäß Spezifikation 2025-03-26+. Unterstützt Session-Resumption über Mcp-Session-Id + Last-Event-ID.",
         "transportSse": "SSE (veraltet)",
         "transportSseDesc": "Älterer Transport zur Abwärtskompatibilität mit MCP-Clients, die noch nicht auf Streamable HTTP umgestellt haben. Wiederholt laufende Anfragen statt sie fortzusetzen — deaktivieren, wenn Idempotenz wichtig ist.",
-        "transportA2a": "A2A (experimentell)",
-        "transportA2aDesc": "Stellt /a2a neben /mcp bereit, mit demselben OAuth- + mcp:*-Scope-Gate. Implementiert die definierte Teilmenge des A2A-Entwurfs (agent/info, agent/skills, tasks/send). Zustandsbehaftete Tasks liefern method-not-found, bis die Spezifikation stabil ist.",
+        "transportA2a": "A2A (Agent-to-Agent) 0.3",
+        "transportA2aDesc": "Stellt eine Agent Card unter /.well-known/agent-card.json bereit und mountet /a2a neben /mcp, hinter demselben OAuth- + mcp:*-Scope-Gate (persönliche API-Schlüssel funktionieren ebenfalls). Apps und Workflows werden zu den Skills des Agenten; unterstützt message/send, message/stream, tasks/get und tasks/cancel.",
         "expose": "Bereitgestellte Ressourcen",
         "exposeDesc": "Über MCP veröffentlichte Ressourcenfamilien. Pro-OAuth-Client-Allowlists schränken weiter ein, was ein einzelner Aufrufer sieht.",
         "exposeTools": "iHub-Tools",
@@ -2377,7 +2407,9 @@
         "cimdApprovalMode": "Neue Clients",
         "cimdApprovalModeDesc": "Ein vertrauenswürdiger Host veröffentlicht mehrere verschiedene Clients — Claude Web, Claude Desktop, Claude Code — unter einem Hostnamen. Mit Freigabepflicht wartet jeder einzelne auf Sie: der Benutzer wird gebeten, sich an die Administration zu wenden, und der Client erscheint hier als wartend. Clients, über die bereits Verbindungen bestehen, sind nicht betroffen.",
         "cimdApprovalRequired": "Freigabe erforderlich (empfohlen)",
-        "cimdApprovalAuto": "Automatisch verbinden"
+        "cimdApprovalAuto": "Automatisch verbinden",
+        "a2aDefaultSkill": "A2A-Standard-Skill",
+        "a2aDefaultSkillDesc": "Die App oder der Workflow, den eine Nachricht ausführt, wenn der A2A-Client keinen Skill nennt, als app__<appId> oder workflow__<workflowId>. Clients können jederzeit einen Skill über metadata.skillId oder den Skill-Endpunkt /a2a/skills/<skillId> wählen. Leer lassen, um eine Auswahl zu verlangen (ein Aufrufer mit genau einem Skill braucht keine)."
       },
       "catalog": {
         "open": "Katalog durchsuchen",
@@ -2411,6 +2443,90 @@
           "data": "Daten & Recherche",
           "finance": "Finanzen & Zahlungen"
         }
+      }
+    },
+    "a2a": {
+      "agents": {
+        "form": {
+          "authType": "Authentifizierungstyp",
+          "authNone": "Keine",
+          "authApiKey": "API-Schlüssel in einem Header",
+          "authBearer": "Bearer-Token",
+          "authOauth": "OAuth (Client Credentials)",
+          "headerName": "Header-Name (optional)",
+          "headerNameHint": "Leer lassen, um den Header zu verwenden, den die Agent Card für ihren API-Schlüssel nennt, sonst X-API-Key.",
+          "apiKey": "API-Schlüssel",
+          "apiKeyHint": "Gespeichertes Credential-Profil mit dem API-Schlüssel auswählen.",
+          "token": "Token",
+          "tokenHint": "Gespeichertes Credential-Profil mit dem Bearer-Token auswählen.",
+          "tokenUrl": "Token-URL",
+          "clientId": "Client-ID",
+          "scope": "Scope (optional)",
+          "clientSecret": "Client-Secret",
+          "clientSecretHint": "Gespeichertes Credential-Profil mit dem OAuth-Client-Secret auswählen.",
+          "id": "ID",
+          "idHint": "Nur Buchstaben, Ziffern, _ und - (kein __). Die Tools dieses Agenten heißen a2a__<id>__<skill>; Apps aktivieren den Agenten über diese ID, daher muss sie sich von allen Tool- und MCP-Server-IDs unterscheiden.",
+          "name": "Name",
+          "description": "Beschreibung",
+          "enabled": "Aktiviert",
+          "cardUrl": "Agent-Card-URL",
+          "cardUrlHint": "HTTPS ist erforderlich; einfaches HTTP funktioniert nur für localhost. Private Adressen brauchen einen Eintrag in allowedHosts der a2aAgents.json.",
+          "authentication": "Authentifizierung",
+          "timeout": "Timeout (ms)",
+          "streaming": "Streaming",
+          "streamingAuto": "Wenn der Agent es unterstützt",
+          "streamingNever": "Nie (stattdessen abfragen)",
+          "pollInterval": "Abfrageintervall (ms)",
+          "timingHint": "Das Timeout gilt für den gesamten Aufruf; ein dann noch laufender Task wird abgebrochen. Lang laufende Tasks werden mit tasks/get abgefragt.",
+          "allowedSkills": "Für Apps freigegebene Skills",
+          "allowedSkillsAll": "Alle Skills auf der Card",
+          "allowedSkillsSelected": "Nur die ausgewählten Skills",
+          "allowedSkillsManual": "Skill-IDs, wie die Card sie nennt, kommagetrennt. Testen Sie die Verbindung, um sie stattdessen aus einer Liste auszuwählen."
+        },
+        "status": {
+          "disabled": "deaktiviert",
+          "unknown": "unbekannt",
+          "unhealthy": "nicht erreichbar",
+          "connected": "Card geladen ({{count}} Skills)",
+          "idle": "noch nicht kontaktiert"
+        },
+        "test": {
+          "failed": "Verbindung fehlgeschlagen: {{error}}",
+          "success": "Agent Card geladen — {{count}} Skills",
+          "cardName": "Agent",
+          "cardDescription": "Beschreibung",
+          "cardVersion": "Version",
+          "cardEndpoint": "Endpunkt",
+          "cardStreaming": "Streaming",
+          "yes": "ja",
+          "no": "nein",
+          "noSkills": "Der Agent nennt auf seiner Card keine Skills.",
+          "running": "Agent Card wird abgerufen …",
+          "button": "Verbindung testen"
+        },
+        "loadError": "A2A-Agenten konnten nicht geladen werden: {{error}}",
+        "saveError": "Speichern fehlgeschlagen: {{error}}",
+        "deleteConfirm": "A2A-Agent \"{{id}}\" löschen?",
+        "deleteError": "Löschen fehlgeschlagen: {{error}}",
+        "testError": "Test fehlgeschlagen: {{error}}",
+        "title": "A2A-Agenten (entfernt)",
+        "subtitle": "Entfernte Agenten, die iHub über das Agent-to-Agent-Protokoll (A2A) aufruft. Jeder Skill auf der Card eines Agenten wird zu einem Tool, das Apps verwenden können.",
+        "create": "A2A-Agent hinzufügen",
+        "empty": "Keine A2A-Agenten konfiguriert",
+        "emptyHint": "Fügen Sie einen Agenten über die URL seiner Agent Card hinzu, meist <agent>/.well-known/agent-card.json.",
+        "actions": {
+          "test": "Verbindung testen",
+          "edit": "Bearbeiten",
+          "delete": "Löschen"
+        },
+        "createTitle": "A2A-Agent hinzufügen",
+        "editTitle": "{{id}} bearbeiten"
+      },
+      "common": {
+        "saved": "Gespeichert",
+        "deleted": "Gelöscht",
+        "testing": "{{id}} wird getestet...",
+        "testOk": "OK — {{name}} bietet {{count}} Skills"
       }
     },
     "telemetry": {
@@ -2575,6 +2691,19 @@
           "serverError": "Tools konnten nicht aufgelistet werden: {{error}}",
           "helper": "Welche Tools ein Server bereitstellt, legen Sie unter Integrationen → MCP-Server fest.",
           "legacySelection": "Diese App listet einzelne Tools dieses Servers auf. Schalten Sie den Server aus und wieder ein, um die auf dem Server freigegebenen Tools zu verwenden."
+        },
+        "a2aAgents": {
+          "loading": "A2A-Agenten werden geladen …",
+          "error": "A2A-Agenten konnten nicht geladen werden: {{error}}",
+          "empty": "Es sind keine entfernten A2A-Agenten konfiguriert. Fügen Sie unter Integrationen → A2A-Agenten einen hinzu, um ihn hier zu verwenden.",
+          "remoteBadge": "entfernter Agent",
+          "disabled": "deaktiviert",
+          "skills": "Skills: {{skills}}",
+          "agentError": "Die Agent Card konnte nicht gelesen werden: {{error}}",
+          "idConflict": "Ein Tool oder MCP-Server nutzt die ID \"{{id}}\" ebenfalls, daher verweist diese App auf den Agenten als \"{{reference}}\".",
+          "helper": "Jeder Skill eines Agenten wird zu einem Tool, das das Modell aufrufen kann; der Agent läuft auf seinen eigenen Servern. Welche Skills angeboten werden, legen Sie unter Integrationen → A2A-Agenten fest.",
+          "title": "Entfernte A2A-Agenten",
+          "desc": "Wählen Sie die entfernten Agenten (Agent-to-Agent-Protokoll), an die diese App Aufgaben delegieren kann. Benutzer sehen jeden Agenten im Chat als einen einzigen Eintrag."
         },
         "websearch": "Websuche",
         "websearchDesc": "Websuch-Funktionen für diese App konfigurieren",
@@ -3444,6 +3573,29 @@
           "mcpWorkflowsRun": "iHub-Workflows in Ihrem Namen ausführen",
           "mcpResourcesRead": "Für Sie verfügbare iHub-Quellen und -Skills lesen"
         }
+      },
+      "mcp": {
+        "title": "MCP-Server",
+        "description": "Die Tools dieser Server handeln mit Ihrem eigenen Konto. Verbinden Sie einen Server, um seine Tools in Chats zu nutzen.",
+        "serverDescription": "MCP-Server",
+        "connect": "{{name}} verbinden",
+        "connected": "{{name}} wurde erfolgreich verbunden.",
+        "connectionFailed": "Verbinden von {{name}} fehlgeschlagen: {{message}}",
+        "disconnected": "{{name}} getrennt",
+        "disconnectFailed": "{{name}} konnte nicht getrennt werden: {{message}}",
+        "errors": {
+          "oauth_failed": "die Anmeldung wurde abgebrochen oder abgelehnt",
+          "missing_code": "die Anmeldung lieferte keinen Autorisierungscode",
+          "invalid_state": "der Anmeldelink ist ungültig",
+          "state_expired": "die Anmeldung hat zu lange gedauert, bitte neu starten",
+          "user_mismatch": "die Anmeldung wurde von einer anderen Person gestartet",
+          "server_not_found": "der Server steht Ihnen nicht zur Verfügung",
+          "exchange_failed": "der Server hat die Anmeldung nicht akzeptiert",
+          "discovery_failed": "die Anmeldung des Servers wurde nicht gefunden",
+          "registration_failed": "iHub konnte sich nicht beim Server registrieren",
+          "issuer_mismatch": "die Antwort der Anmeldung kam von einem anderen Autorisierungsserver als erwartet",
+          "public_url_mismatch": "iHub wurde unter einer anderen Adresse aufgerufen als der beim Server registrierten; bitten Sie Ihre Administration, die öffentliche URL des MCP-Gateways zu setzen"
+        }
       }
     }
   },
@@ -4014,7 +4166,9 @@
   "mcpApps": {
     "caption": "Interaktive Ansicht · {{name}}",
     "loading": "Interaktive Ansicht wird geladen…",
+    "embeddedMissing": "Das Tool-Ergebnis enthält keine Ansichtsseite.",
     "loadFailed": "Die interaktive Ansicht konnte nicht geladen werden: {{error}}",
+    "authRequired": "Verbinden Sie diesen Server mit Ihrem eigenen Konto, um seine interaktive Ansicht zu sehen.",
     "payloadOmitted": "Diese interaktive Ansicht war zu groß zum Speichern und kann nicht erneut angezeigt werden.",
     "unsupportedSurface": "Interaktive Ansichten sind in diesem Fenster nicht verfügbar.",
     "exitFullscreen": "Vollbild beenden",
@@ -4146,5 +4300,12 @@
       "attachmentNotIncluded": "Anhang nicht enthalten: {{name}}",
       "attachmentUnnamed": "Datei"
     }
+  },
+  "mcpConnect": {
+    "title": "{{name}} verbinden",
+    "explanation": "{{name}} erfordert eine Anmeldung mit Ihrem eigenen Konto, bevor die Tools genutzt werden können.",
+    "connect": "Verbinden",
+    "connected": "{{name}} ist verbunden. Senden Sie Ihre Anfrage erneut, um es zu nutzen.",
+    "failed": "Das Verbinden von {{name}} hat nicht geklappt. Bitte erneut versuchen."
   }
 }

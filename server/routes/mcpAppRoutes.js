@@ -11,20 +11,38 @@
  *   GET  /api/mcp-apps/resource         the view's HTML + CSP/permission metadata
  *   POST /api/mcp-apps/tools/call       a `tools/call` from the view
  *   POST /api/mcp-apps/resources/read   a `resources/read` from the view
+ *   POST /api/mcp-apps/handshake        how the view announced itself (the
+ *                                       legacy mcp-ui `appReady` instead of
+ *                                       `ui/initialize`), logged for admins
  *
  * Authorization mirrors the chat itself: a view belongs to a tool call made by
  * an iHub app, so every request names that app and tool. The caller must be
  * able to open the app, the app must offer the tool, and the tool must render
- * an MCP App view. A view may then call tools of the same MCP server whose
- * visibility includes `"app"` — never tools of another server.
+ * an MCP App view: one it declares (`_meta.ui.resourceUri`) or, on a server
+ * with MCP Apps enabled, one its result embeds (such a view has no
+ * `resources/read` copy, so `GET /resource` answers 404 for it). A view may
+ * then call tools of the same MCP server whose visibility includes `"app"` —
+ * never tools of another server.
+ *
+ * A per-user OAuth server the caller has not connected answers **409**
+ * `{ error: 'auth_required', code: 'MCP_AUTH_REQUIRED', connectUrl }` — never
+ * 401, which the client reads as an expired iHub session and signs the user
+ * out for. A sign-in that could not be renewed right now answers 503.
  *
  * @module routes/mcpAppRoutes
  */
 import { z } from 'zod';
 import configCache from '../configCache.js';
 import mcpClientManager from '../services/mcp/McpClientManager.js';
+import {
+  isAuthRequiredError,
+  isTokenRefreshError,
+  MCP_AUTH_REQUIRED
+} from '../services/mcp/McpUserOAuthProvider.js';
+import { isUserOAuthServer } from '../services/mcp/mcpOAuthService.js';
 import { toolVisibleInSet } from '../services/mcp/permissions.js';
 import {
+  appsEnabledFor,
   buildAllowAttribute,
   buildSandboxCsp,
   isUiResourceUri,
@@ -68,10 +86,19 @@ const resourceReadBodySchema = z.object({
   uri: z.string().min(1).max(2048)
 });
 
+const handshakeBodySchema = z.object({
+  ...toolRefShape,
+  handshake: z.enum(['legacy'])
+});
+
+/** Status of "connect this MCP server first" — deliberately not 401 (see module comment). */
+export const MCP_APP_AUTH_REQUIRED_STATUS = 409;
+
 class McpAppAccessError extends Error {
-  constructor(status, message) {
+  constructor(status, message, extra = {}) {
     super(message);
     this.status = status;
+    this.extra = extra;
   }
 }
 
@@ -98,10 +125,17 @@ function resolveUser(req) {
  * @param {import('express').Request} req
  * @param {string} appId - iHub app the chat belongs to
  * @param {string} toolId - iHub id of the tool whose call rendered the view
- * @returns {Promise<{app: Object, conn: Object, tool: Object, user: Object}>}
+ * @param {Object} [options]
+ * @param {boolean} [options.declaredView=false] - Require a declared view
+ *   (`_meta.ui.resourceUri`); otherwise any tool of a server with MCP Apps
+ *   enabled qualifies, since its result may embed the view
+ * @returns {Promise<{app: Object, conn: Object, tool: Object, user: Object, serverId: string, run: Function}>}
+ *   `run(operation)` calls `operation(conn)` on the connection the caller
+ *   uses — for a per-user OAuth server their own, with the token refreshed
+ *   when needed. Use it for every request to the MCP server.
  * @throws {McpAppAccessError}
  */
-export async function resolveMcpApp(req, appId, toolId) {
+export async function resolveMcpApp(req, appId, toolId, { declaredView = false } = {}) {
   // The routes validate both with zod already; checked again here because a
   // query parameter can also arrive as an array (`?toolId=a&toolId=b`), and
   // everything below treats them as strings.
@@ -131,15 +165,53 @@ export async function resolveMcpApp(req, appId, toolId) {
   } else {
     found = await mcpClientManager.findTool(toolId);
   }
-  if (!found || !found.tool._mcp?.ui?.resourceUri) {
+  const rendersView = found?.tool._mcp?.ui?.resourceUri
+    ? true
+    : !declaredView && !!found?.tool._mcp && appsEnabledFor(found.conn.config);
+  if (!rendersView) {
     throw new McpAppAccessError(404, 'MCP App not found');
   }
-  return { app, conn: found.conn, tool: found.tool, user };
+  const serverId = found.conn.config.id;
+  // A per-user OAuth server is reached on the caller's own connection only;
+  // a caller who has not connected it is told where to do so.
+  if (!isUserOAuthServer(found.conn.config)) {
+    const conn = found.conn;
+    return { app, conn, tool: found.tool, user, serverId, run: operation => operation(conn) };
+  }
+  let conn;
+  try {
+    conn = await mcpClientManager.connectionForUser(serverId, user);
+  } catch (error) {
+    if (isAuthRequiredError(error)) throw authRequiredAccessError(serverId);
+    throw error;
+  }
+  return {
+    app,
+    conn,
+    tool: found.tool,
+    user,
+    serverId,
+    run: operation => mcpClientManager.withUserConnection(serverId, user, operation)
+  };
+}
+
+/** The "connect first" answer for a per-user server. */
+function authRequiredAccessError(serverId) {
+  return new McpAppAccessError(MCP_APP_AUTH_REQUIRED_STATUS, 'auth_required', {
+    code: MCP_AUTH_REQUIRED,
+    ...(serverId ? { connectUrl: mcpClientManager.connectUrlFor(serverId) } : {})
+  });
 }
 
 function sendError(res, error, action) {
+  if (isAuthRequiredError(error) && !(error instanceof McpAppAccessError)) {
+    error = authRequiredAccessError(error.serverId);
+  }
   if (error instanceof McpAppAccessError) {
-    return res.status(error.status).json({ error: error.message });
+    return res.status(error.status).json({ error: error.message, ...error.extra });
+  }
+  if (isTokenRefreshError(error)) {
+    return res.status(503).json({ error: 'auth_refresh_failed', code: error.code });
   }
   logger.warn(`MCP App ${action} failed`, { component: COMPONENT, error: error.message });
   return res.status(502).json({ error: error.message || `MCP App ${action} failed` });
@@ -178,9 +250,16 @@ export default function registerMcpAppRoutes(app) {
     validate({ query: resourceQuerySchema }),
     async (req, res) => {
       try {
-        const { conn, tool } = await resolveMcpApp(req, req.query.appId, req.query.toolId);
-        const resource = await conn.getUiResource(tool._mcp.ui.resourceUri);
-        const appTool = await conn.getAppTool(tool._mcp.originalName);
+        const { run, tool, serverId } = await resolveMcpApp(
+          req,
+          req.query.appId,
+          req.query.toolId,
+          { declaredView: true }
+        );
+        const { resource, appTool } = await run(async conn => ({
+          resource: await conn.getUiResource(tool._mcp.ui.resourceUri),
+          appTool: await conn.getAppTool(tool._mcp.originalName)
+        }));
         res.setHeader('Cache-Control', 'no-store');
         res.json({
           uri: resource.uri,
@@ -196,7 +275,7 @@ export default function registerMcpAppRoutes(app) {
             inputSchema: tool.parameters || { type: 'object', properties: {} },
             ...(appTool?.title ? { title: appTool.title } : {})
           },
-          serverId: conn.config.id
+          serverId
         });
       } catch (error) {
         return sendError(res, error, 'resource fetch');
@@ -212,29 +291,60 @@ export default function registerMcpAppRoutes(app) {
       const { appId, toolId, name } = req.body;
       const args = req.body.arguments || {};
       try {
-        const { conn, user } = await resolveMcpApp(req, appId, toolId);
+        const { run, user, serverId } = await resolveMcpApp(req, appId, toolId);
         if (jsonByteLength(args) > MAX_ARGUMENT_BYTES) {
           return res.status(413).json({ error: 'Tool arguments too large' });
         }
-        // Visibility: only tools of this same server that list "app".
-        const target = await conn.getAppTool(name);
-        if (!target) {
+        const outcome = await run(async conn => {
+          // Visibility: only tools of this same server that list "app".
+          const target = await conn.getAppTool(name);
+          if (!target) return { forbidden: true };
+          // The specification asks hosts to log view-initiated calls.
+          logger.info('MCP App tool call', {
+            component: COMPONENT,
+            appId,
+            viaToolId: toolId,
+            serverId,
+            tool: name,
+            userId: user.id,
+            argKeys: Object.keys(args).join(', ')
+          });
+          return { result: await conn.callToolRaw(name, args) };
+        });
+        if (outcome.forbidden) {
           return res.status(403).json({ error: `Tool ${name} is not callable from this app` });
         }
-        // The specification asks hosts to log view-initiated calls.
-        logger.info('MCP App tool call', {
-          component: COMPONENT,
-          appId,
-          viaToolId: toolId,
-          serverId: conn.config.id,
-          tool: name,
-          userId: user.id,
-          argKeys: Object.keys(args).join(', ')
-        });
-        const result = await conn.callToolRaw(name, args);
-        return res.json(toViewToolResult(result));
+        return res.json(toViewToolResult(outcome.result));
       } catch (error) {
         return sendError(res, error, 'tool call');
+      }
+    }
+  );
+
+  // The handshake happens in the browser, so the host tells the server about
+  // the one worth knowing: a view that never sent `ui/initialize` and was
+  // initialized on mcp-ui's `appReady` instead. Logged, nothing else — it lets
+  // admins see which servers depend on the compatibility path.
+  app.post(
+    buildServerPath('/api/mcp-apps/handshake'),
+    authRequired,
+    validate({ body: handshakeBodySchema }),
+    async (req, res) => {
+      const { appId, toolId, handshake } = req.body;
+      try {
+        const { tool, user, serverId } = await resolveMcpApp(req, appId, toolId);
+        logger.info('MCP App view used the legacy mcp-ui handshake', {
+          component: COMPONENT,
+          handshake,
+          appId,
+          viaToolId: toolId,
+          serverId,
+          tool: tool._mcp.originalName,
+          userId: user.id
+        });
+        return res.status(204).end();
+      } catch (error) {
+        return sendError(res, error, 'handshake report');
       }
     }
   );
@@ -246,16 +356,16 @@ export default function registerMcpAppRoutes(app) {
     async (req, res) => {
       const { appId, toolId, uri } = req.body;
       try {
-        const { conn, user } = await resolveMcpApp(req, appId, toolId);
+        const { run, user, serverId } = await resolveMcpApp(req, appId, toolId);
         logger.info('MCP App resource read', {
           component: COMPONENT,
           appId,
           viaToolId: toolId,
-          serverId: conn.config.id,
+          serverId,
           uri: isUiResourceUri(uri) ? uri : uri.slice(0, 200),
           userId: user.id
         });
-        const result = await conn.readResource(uri);
+        const result = await run(conn => conn.readResource(uri));
         const contents = Array.isArray(result?.contents) ? result.contents : [];
         if (jsonByteLength(contents) > MAX_UI_RESOURCE_BYTES) {
           return res.status(413).json({ error: 'Resource too large' });

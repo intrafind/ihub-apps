@@ -10,9 +10,9 @@
     "de": "Vorlage für einen selbst gehosteten vLLM-/LM-Studio-/Jan.ai-Endpunkt. Richten Sie die URL auf Ihren Server und aktivieren Sie das Modell; autoDiscovery erkennt das geladene Modell."
   },
   "url": "http://localhost:8080/v1/chat/completions",
-  "provider": "openai",
+  "provider": "local",
   "contextWindow": 32000,
-  "maxOutputTokens": 8000,
+  "maxOutputTokens": 16000,
   "supportsTools": false,
   "enabled": false,
   "default": false,

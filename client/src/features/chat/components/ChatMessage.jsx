@@ -6,6 +6,7 @@ import { getConversationId } from '../../../utils/chatId';
 import StarRating from '../../../shared/components/StarRating';
 import MessageVariables from './MessageVariables';
 import Icon from '../../../shared/components/Icon';
+import { splitThoughts } from '../splitThoughts';
 import StreamingMarkdown from './StreamingMarkdown';
 import {
   htmlToMarkdown,
@@ -59,6 +60,7 @@ function ChatCheckpoint({ executionId, checkpoint }) {
 import AnswerSourceBadge from './AnswerSourceBadge';
 import ExportDialog from './ExportDialog';
 import McpAppViews from '../mcpApps/McpAppViews';
+import McpConnectCards from '../mcpApps/McpConnectCard';
 import './ChatMessage.css';
 
 function ChatMessage({
@@ -825,7 +827,7 @@ function ChatMessage({
             </button>
             {showThoughts && (
               <ul className="list-disc pl-4 mt-1 space-y-1">
-                {message.thoughts.map((th, idx) => (
+                {splitThoughts(message.thoughts).map((th, idx) => (
                   /* Streamed reasoning is one merged block of text and carries its
                      own line breaks (numbered steps, blank lines); without this it
                      collapses into a single run-on paragraph. */
@@ -855,6 +857,10 @@ function ChatMessage({
             readOnly={readOnly}
             host={mcpAppHost}
           />
+        )}
+        {/* MCP servers with per-user sign-in the answer's tools could not use yet. */}
+        {!isUser && message.mcpAuthRequired?.length > 0 && (
+          <McpConnectCards prompts={message.mcpAuthRequired} readOnly={readOnly} />
         )}
         {renderContent()}
         {isUser && hasVariables && <MessageVariables variables={message.variables} />}
@@ -886,6 +892,33 @@ function ChatMessage({
             ))}
           </ul>
         )}
+
+        {/* A reopened chat keeps an upload only as its descriptor — the live
+            turn's file chip was never stored — so name what was sent. Without
+            it an upload-only turn has nothing to show at all (issue #2601). */}
+        {isUser &&
+          !message.sharedAttachments?.length &&
+          Array.isArray(message.attachments) &&
+          message.attachments.length > 0 && (
+            <ul
+              className="flex flex-wrap gap-1"
+              aria-label={t('chatMessage.attachmentsLabel', 'Attachments')}
+            >
+              {message.attachments.map((attachment, idx) => (
+                <li
+                  key={`${attachment?.name || attachment?.type || 'attachment'}-${idx}`}
+                  className="inline-flex items-center gap-1 rounded-md border border-gray-300 bg-gray-600 px-2 py-1 text-sm text-white"
+                >
+                  <Icon name="paper-clip" size="sm" />
+                  <span>
+                    {attachment?.name ||
+                      attachment?.type ||
+                      t('chatSharing.viewer.attachmentUnnamed', 'file')}
+                  </span>
+                </li>
+              ))}
+            </ul>
+          )}
 
         {/* Display generated images */}
         {message.images && message.images.length > 0 && (
@@ -1081,6 +1114,18 @@ function ChatMessage({
       {/* Info about finish reason and retry options */}
       {!isUser && !isError && !message.loading && message.finishReason && (
         <div className="flex items-center gap-2 text-xs text-gray-600 mb-1">
+          {message.finishReason === 'length' && (
+            <span
+              className="inline-flex items-center gap-1 rounded-full bg-amber-100 px-2 py-0.5 font-medium text-amber-800 dark:bg-amber-900/30 dark:text-amber-300"
+              title={t(
+                'pages.appChat.truncatedHint',
+                'The model reached its output limit before it finished. Reasoning models spend the same limit on their thinking, so a long thought can use it up before the answer starts. Raise "Max Output Tokens" of the model, or lower its reasoning effort.'
+              )}
+            >
+              <Icon name="exclamation-triangle" size="sm" />
+              {t('pages.appChat.truncated', 'Truncated')}
+            </span>
+          )}
           {(message.finishReason === 'connection_closed' || message.finishReason === 'error') && (
             <>
               <Icon name="exclamation-circle" size="sm" className="text-red-500" />

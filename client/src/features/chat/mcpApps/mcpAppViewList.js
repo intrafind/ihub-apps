@@ -20,6 +20,9 @@ export function buildMcpAppViews(run) {
   for (const tool of run?.tools || []) {
     const ref = tool?.mcpApp;
     if (!ref || typeof ref.resourceUri !== 'string') continue;
+    // A call that never reached its per-user OAuth server ("connect first")
+    // has no view; its Connect card stands in for it.
+    if (tool.authRequired) continue;
     if (ref.callId) {
       // The finished view from `tool/completed`.
       views.push({ ...ref, status: tool.status === 'error' ? 'error' : 'completed' });
