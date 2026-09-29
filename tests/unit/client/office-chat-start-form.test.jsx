@@ -1,4 +1,4 @@
-import { fireEvent, render, screen, waitFor } from '@testing-library/react';
+import { act, fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { MemoryRouter } from 'react-router-dom';
 import '@testing-library/jest-dom';
 
@@ -41,6 +41,7 @@ jest.mock('../../../client/src/features/office/contexts/OfficeConfigContext', ()
 }));
 
 const mockSendMessage = jest.fn();
+const mockResendMessage = jest.fn();
 const mockAdapter = { messages: [] };
 jest.mock('../../../client/src/features/office/hooks/useOfficeChatAdapter', () => ({
   __esModule: true,
@@ -52,7 +53,7 @@ jest.mock('../../../client/src/features/office/hooks/useOfficeChatAdapter', () =
     clearMessages: jest.fn(),
     deleteMessage: jest.fn(),
     editMessage: jest.fn(),
-    resendMessage: jest.fn(),
+    resendMessage: mockResendMessage,
     cancelGeneration: jest.fn()
   })
 }));
@@ -103,9 +104,13 @@ jest.mock('../../../client/src/features/office/hooks/useOutlookMailContextSnapsh
   })
 }));
 
+const mockTranscript = { props: null };
 jest.mock('../../../client/src/features/chat/components/ChatMessageList', () => ({
   __esModule: true,
-  default: () => <div data-testid="transcript" />
+  default: props => {
+    mockTranscript.props = props;
+    return <div data-testid="transcript" />;
+  }
 }));
 
 jest.mock('../../../client/src/features/chat/components/ChatInput', () => ({
@@ -164,6 +169,7 @@ beforeEach(() => {
   mockSendMessage.mockReset();
   mockAdapter.messages = [];
   mockUpload.selectedFile = null;
+  mockResendMessage.mockReset();
   consumePendingChatStart('reply');
 });
 
@@ -272,6 +278,25 @@ test('the email snapshot handed over from the start page is the one the form sen
   fireEvent.change(screen.getByPlaceholderText('Who signs'), { target: { value: 'Ada' } });
   fireEvent.submit(screen.getByTestId('start-form'));
   expect(mockSendMessage.mock.calls[0][0].params.hostContextOverride).toBe(override);
+});
+
+test('resending a message keeps all of its uploads, not the first one only', () => {
+  const docs = [
+    { type: 'document', fileName: 'a.pdf', content: 'A' },
+    { type: 'document', fileName: 'b.pdf', content: 'B' }
+  ];
+  const image = { type: 'image', fileName: 'c.png', base64: 'data:image/png;base64,AA' };
+  mockAdapter.messages = [{ id: 'u1', role: 'user', content: 'Compare them' }];
+  mockResendMessage.mockReturnValue({ content: 'Compare them', imageData: image, fileData: docs });
+  renderPanel();
+
+  act(() => mockTranscript.props.onResend('u1'));
+
+  expect(mockSendMessage.mock.calls[0][0].apiMessage).toMatchObject({
+    content: 'Compare them',
+    imageData: image,
+    fileData: docs
+  });
 });
 
 test('an app without a start form is unchanged', () => {

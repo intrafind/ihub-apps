@@ -447,14 +447,11 @@ function OfficeChatPanel({
   // must only re-attach the manual uploads here — the email attachments will
   // be re-pulled fresh by useOfficeChatAdapter so the user still sees the
   // current message context, not a stale one. Manual uploads carry a
-  // `type: 'image' | 'file'` field; email attachments do not.
-  const pickManualUpload = data => {
-    if (!data) return null;
+  // `type: 'image' | 'document' | 'file'` field; email attachments do not.
+  const pickManualUploads = data => {
+    if (!data) return [];
     const arr = Array.isArray(data) ? data : [data];
-    const manuals = arr.filter(
-      d => d && (d.type === 'image' || d.type === 'document' || d.type === 'file')
-    );
-    return manuals.length > 0 ? manuals[0] : null;
+    return arr.filter(d => d && (d.type === 'image' || d.type === 'document' || d.type === 'file'));
   };
 
   const handleResend = useCallback(
@@ -463,7 +460,11 @@ function OfficeChatPanel({
         messageId,
         editedContent
       );
-      const manualUpload = pickManualUpload(imageData) || pickManualUpload(fileData);
+      // Every manual upload the message had, in the uploader's own shape: one
+      // file, or an array of several.
+      const manuals = [...pickManualUploads(imageData), ...pickManualUploads(fileData)];
+      const manualUpload =
+        manuals.length === 0 ? null : manuals.length === 1 ? manuals[0] : manuals;
 
       if (!content && !manualUpload && !selectedApp?.allowEmptyContent) return;
 
