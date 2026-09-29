@@ -99,16 +99,20 @@ function OfficeChatPanel({
   const chatIdRef = useRef(initialChatId);
   const selectedStarterPromptRef = useRef(null);
   const isFreshChat = freshChatIdsRef.current.has(chatIdRef.current);
+  // Whether this chat goes to the store. An app marked `ephemeral` never does,
+  // as in the web app — the pane has no incognito toggle, so the app's own
+  // setting is the whole answer.
+  const chatStored = chatPersistence && selectedApp?.ephemeral !== true;
 
   const adapter = useOfficeChatAdapter({
     appId: selectedApp?.id,
     chatId: chatIdRef.current,
-    serverBacked: chatPersistence,
+    serverBacked: chatStored,
     isFreshChat
   });
   // A stored chat is being fetched. A fresh one has nothing to wait for, so it
   // shows its greeting straight away.
-  const loadingStoredChat = chatPersistence && !isFreshChat && adapter.hydrating === true;
+  const loadingStoredChat = chatStored && !isFreshChat && adapter.hydrating === true;
 
   const {
     models,
@@ -621,9 +625,13 @@ function OfficeChatPanel({
           {
             key: 'history',
             label: t('office.menu.history', 'Chat history'),
-            // Back from the history returns to this chat — unless nothing was
-            // sent in it yet, in which case there is nothing to return to.
-            onClick: () => onOpenHistory({ returnChatId: isFreshChat ? null : chatIdRef.current })
+            // Back from the history returns to this chat — unless it is not in
+            // the store (nothing sent yet, or an ephemeral app), in which case
+            // there is nothing to return to.
+            onClick: () =>
+              onOpenHistory({
+                returnChatId: chatStored && !isFreshChat ? chatIdRef.current : null
+              })
           }
         ]
       : []),
@@ -735,7 +743,7 @@ function OfficeChatPanel({
                 showAvatars={false}
                 // A stored chat keeps its generated images; don't warn that
                 // they are lost on leaving.
-                imagesPersisted={chatPersistence}
+                imagesPersisted={chatStored}
               />
             </div>
 

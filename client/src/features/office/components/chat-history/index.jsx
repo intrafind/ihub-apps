@@ -38,10 +38,14 @@ function OfficeChatHistoryPage({ user, onBack, backLabel, onOpenChat, onLogout }
   const [isSettingsOpen, setIsSettingsOpen] = useState(false);
   const [query, setQuery] = useState('');
   const { apps, loading: appsLoading, error: appsError, retry: retryApps } = useOfficeApps();
+  // One row is enough to page towards: the empty state must not show while
+  // older pages may still hold chats the pane can open.
   const { rows, loading, error, hasMore, loadMore } = useOfficeChats({
     user,
     enabled: true,
-    apps
+    apps,
+    appsReady: !appsLoading && !appsError,
+    minRows: 1
   });
 
   const groups = useMemo(() => groupOfficeChats(filterOfficeChats(rows, query)), [rows, query]);
@@ -94,22 +98,35 @@ function OfficeChatHistoryPage({ user, onBack, backLabel, onOpenChat, onLogout }
         </button>
       </div>
     );
+  } else if (groups.length === 0 && searching) {
+    status = (
+      <div className="office-history-status text-slate-500 dark:text-slate-400" role="status">
+        <p>{t('chatHistory.noResults', 'No chats match your search')}</p>
+      </div>
+    );
+  } else if (groups.length === 0 && hasMore) {
+    // The loaded chats are all in apps the pane does not offer, and the
+    // automatic paging stopped short: older chats may still qualify.
+    status = (
+      <div className="office-history-status text-slate-500 dark:text-slate-400" role="status">
+        <p>
+          {t(
+            'office.history.noneAvailable',
+            'None of your latest chats is in an app available here.'
+          )}
+        </p>
+      </div>
+    );
   } else if (groups.length === 0) {
     status = (
       <div className="office-history-status text-slate-500 dark:text-slate-400" role="status">
-        {searching ? (
-          <p>{t('chatHistory.noResults', 'No chats match your search')}</p>
-        ) : (
-          <>
-            <p className="font-medium">{t('chatHistory.empty', 'No chats yet')}</p>
-            <p className="mt-1">
-              {t(
-                'chatHistory.emptyHint',
-                'Chats you start with an app are saved here so you can pick them up later.'
-              )}
-            </p>
-          </>
-        )}
+        <p className="font-medium">{t('chatHistory.empty', 'No chats yet')}</p>
+        <p className="mt-1">
+          {t(
+            'chatHistory.emptyHint',
+            'Chats you start with an app are saved here so you can pick them up later.'
+          )}
+        </p>
       </div>
     );
   }

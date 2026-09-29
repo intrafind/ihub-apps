@@ -451,6 +451,17 @@ describe('<OfficeChatPanel /> with durable chats', () => {
     expect(onOpenHistory).toHaveBeenLastCalledWith({ returnChatId: fresh.chatId });
   });
 
+  test('an ephemeral app stays out of the store, like in the web app', () => {
+    const { onOpenHistory } = renderPanel({ selectedApp: { ...app, ephemeral: true } });
+    expect(lastAdapterCall()).toMatchObject({ serverBacked: false });
+
+    fireEvent.change(screen.getByLabelText('message'), { target: { value: 'Confidential' } });
+    fireEvent.click(screen.getByRole('button', { name: 'Send' }));
+    // The history is still there for other chats, but this one is not in it.
+    openHistoryFromMenu();
+    expect(onOpenHistory).toHaveBeenLastCalledWith({ returnChatId: null });
+  });
+
   test('without durable chats the panel behaves as before: no store, no history', async () => {
     renderPanel({ chatPersistence: false, onOpenHistory: undefined });
     expect(lastAdapterCall()).toMatchObject({ serverBacked: false });

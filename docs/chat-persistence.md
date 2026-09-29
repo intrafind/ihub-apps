@@ -261,7 +261,9 @@ The pane lists only chats whose app it offers. A chat can only be continued
 through its own app, so a chat of an app the add-in's
 [Available Apps](outlook-add-in.md#step-5--optional-restrict-what-the-add-in-can-access)
 leave out, or one the user lost access to, is left out rather than listed as a
-dead end. It is still on `/chats`.
+dead end. It is still on `/chats`. When the latest chats are mostly in such
+apps, the pane reads a few older pages on its own to fill its lists, and past
+that leaves it to **Show older chats**.
 
 What is stored for a pane turn is what the store keeps for any turn: what the
 user typed, the names of attached files and the answer. The open email reaches
@@ -269,6 +271,10 @@ the model as `hostContext` and is not written to the transcript — so a later
 turn in that chat, in the pane or in the browser, does not get the earlier
 email again. In the pane, the email that is open when the turn is sent goes
 with it.
+
+An app marked [`ephemeral`](apps.md) stays out of the store in the pane too, as
+in the web app: its chats keep their transcript in the browser and never reach
+the history.
 
 Opening a different email still starts a new chat in the pane (see
 [the Outlook guide](outlook-add-in.md)), and **Restore previous chat** fetches

@@ -48,6 +48,9 @@ const {
 } = require('../../../client/src/features/office/utilities/officeChatHistory');
 const OfficeChatHistoryPage =
   require('../../../client/src/features/office/components/chat-history').default;
+const {
+  OFFICE_CHATS_AUTO_PAGES
+} = require('../../../client/src/features/office/hooks/useOfficeChats');
 const { invalidateChatsCache } = require('../../../client/src/shared/hooks/chatListStore');
 
 const apps = [
@@ -174,6 +177,42 @@ describe('<OfficeChatHistoryPage />', () => {
     expect(screen.getByText('No chats match your search')).toBeInTheDocument();
   });
 
+  test('reads older pages on its own while the loaded ones hold no chat it can open', async () => {
+    mockFetchApps.mockResolvedValue(apps);
+    const elsewhere = id => ({ id, appId: 'web-only', title: id, lastMessageAt: daysAgo(0) });
+    mockFetchChats
+      .mockResolvedValueOnce({ items: [elsewhere('w1'), elsewhere('w2')], nextCursor: 'p2' })
+      .mockResolvedValueOnce({ items: [chats[3]], nextCursor: 'p3' });
+    renderPage();
+
+    expect(await screen.findByText('Offer for Globex')).toBeInTheDocument();
+    expect(mockFetchChats).toHaveBeenLastCalledWith(expect.objectContaining({ cursor: 'p2' }));
+    // One row is enough: the rest waits for "Show older chats".
+    expect(mockFetchChats).toHaveBeenCalledTimes(2);
+    expect(screen.queryByText('No chats yet')).not.toBeInTheDocument();
+  });
+
+  test('stops paging on its own after a few pages, and does not call that empty', async () => {
+    mockFetchApps.mockResolvedValue(apps);
+    let n = 0;
+    mockFetchChats.mockImplementation(async () => {
+      n += 1;
+      return {
+        items: [{ id: `w${n}`, appId: 'web-only', lastMessageAt: daysAgo(0) }],
+        nextCursor: `p${n + 1}`
+      };
+    });
+    renderPage();
+
+    expect(
+      await screen.findByText('None of your latest chats is in an app available here.')
+    ).toBeInTheDocument();
+    // The first page plus the automatic ones, then it is the user's call.
+    expect(mockFetchChats).toHaveBeenCalledTimes(1 + OFFICE_CHATS_AUTO_PAGES);
+    expect(screen.queryByText('No chats yet')).not.toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Show older chats' })).toBeInTheDocument();
+  });
+
   test('pages further back with "Show older chats"', async () => {
     mockFetchApps.mockResolvedValue(apps);
     mockFetchChats
@@ -225,6 +264,7 @@ describe('<OfficeChatHistoryPage />', () => {
     // The button is the retry; a page that arrives clears the error.
     fireEvent.click(screen.getByRole('button', { name: 'Show older chats' }));
     expect(await screen.findByText('Contract terms')).toBeInTheDocument();
+    expect(screen.getByText('Reply to ACME')).toBeInTheDocument();
     expect(screen.queryByRole('alert')).not.toBeInTheDocument();
   });
 

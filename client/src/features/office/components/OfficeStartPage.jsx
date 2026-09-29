@@ -93,11 +93,14 @@ function OfficeStartPage({
   const { apps, loading, error } = useOfficeApps();
 
   // The most recent chats — started here or in the browser — whose app the
-  // pane offers, so each one can be picked up next to the open email.
+  // pane offers, so each one can be picked up next to the open email. Older
+  // pages are read when the first holds fewer than that.
   const { rows: chatRows } = useOfficeChats({
     user,
     enabled: chatHistoryEnabled && !!onOpenChat,
-    apps
+    apps,
+    appsReady: !loading && !error,
+    minRows: OFFICE_START_PAGE_CHATS_COUNT
   });
   const recentChats = chatRows.slice(0, OFFICE_START_PAGE_CHATS_COUNT);
 

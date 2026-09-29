@@ -490,6 +490,19 @@ describe('<OfficeStartPage /> recent chats (durable chats, issue #2598)', () => 
     expect(screen.queryByRole('region', { name: 'Recent chats' })).not.toBeInTheDocument();
   });
 
+  test('reads further back when the latest chats hold fewer than three it can open', async () => {
+    mockFetchApps.mockResolvedValue(apps);
+    mockFetchChats
+      .mockResolvedValueOnce({ items: storedChats.slice(0, 2), nextCursor: 'p2' })
+      .mockResolvedValueOnce({ items: storedChats.slice(2), nextCursor: null });
+    renderPage({ chatHistoryEnabled: true });
+
+    const section = await screen.findByRole('region', { name: 'Recent chats' });
+    await waitFor(() => expect(section.querySelectorAll('li')).toHaveLength(3));
+    expect(mockFetchChats).toHaveBeenLastCalledWith(expect.objectContaining({ cursor: 'p2' }));
+    expect(section).toHaveTextContent('Offer draft');
+  });
+
   test('without durable chats nothing is asked for and nothing is shown', async () => {
     mockFetchApps.mockResolvedValue(apps);
     renderPage({ chatHistoryEnabled: false });

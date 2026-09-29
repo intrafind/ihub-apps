@@ -1,4 +1,4 @@
-import { useState, useRef, useCallback, useEffect } from 'react';
+import { useState, useRef, useCallback, useEffect, useLayoutEffect } from 'react';
 import { v4 as uuidv4 } from 'uuid';
 import { useTranslation } from 'react-i18next';
 import useChatMessages from './useChatMessages';
@@ -114,6 +114,17 @@ function useAppChat({
   const streamStateRef = useRef(createStreamState(chatId));
   // runId → assistant message id (bound on run/started via refs.messageId).
   const runMessageMapRef = useRef(new Map());
+
+  // The chat on screen, for work that outlives the render it started in. A
+  // re-attach replays a run's ledger over several awaits and then connects;
+  // if the user moves to another chat meanwhile, the rest of that replay (and
+  // the stream after it) belongs to the chat that was left and must not be
+  // folded into the one now open. Set in a layout effect so the switch is
+  // visible before any awaited replay step can resume.
+  const currentChatIdRef = useRef(chatId);
+  useLayoutEffect(() => {
+    currentChatIdRef.current = chatId;
+  }, [chatId]);
 
   // `/apps/:appId/c/:chatId` swaps chats without remounting this hook, so a
   // chat change has to tear the current turn down the way `clearChat` does.
@@ -911,6 +922,10 @@ function useAppChat({
       lastMessageIdRef.current = placeholderId;
       setProcessing(true);
 
+      // Still the chat this replay was started for? The chat switch itself has
+      // already reset the stream state and the busy flag for the new chat.
+      const stillCurrent = () => currentChatIdRef.current === chatId;
+
       let ended = false;
       try {
         const { events } = await fetchAllLedgerEvents(async (after, limit) => {
@@ -924,6 +939,7 @@ function useAppChat({
           return res.json();
         });
         for (const envelope of events) {
+          if (!stillCurrent()) return false;
           if (!envelope || envelope.v !== 2) continue;
           // The ledger numbers a run's own events; the live stream numbers the
           // chat's. Folding a ledger seq would poison gap detection with a
@@ -935,6 +951,8 @@ function useAppChat({
       } catch (err) {
         console.warn('Could not replay the running turn:', err.message);
       }
+
+      if (!stillCurrent()) return false;
 
       if (ended) {
         // It finished between the chat document being read and this replay.

@@ -218,7 +218,8 @@
       "allChats": "Alle Chats",
       "backToChat": "Zurück zum Chat",
       "loadingChat": "Chat wird geladen…",
-      "retry": "Erneut versuchen"
+      "retry": "Erneut versuchen",
+      "noneAvailable": "Keiner Ihrer letzten Chats gehört zu einer hier verfügbaren App."
     }
   },
   "pages": {

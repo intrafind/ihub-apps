@@ -197,7 +197,8 @@
       "allChats": "All chats",
       "backToChat": "Back to chat",
       "loadingChat": "Loading chat…",
-      "retry": "Try again"
+      "retry": "Try again",
+      "noneAvailable": "None of your latest chats is in an app available here."
     }
   },
   "pages": {
