@@ -35,8 +35,13 @@ jest.mock('../../../client/src/utils/runtimeBasePath', () => ({
   KNOWN_ROUTES: []
 }));
 
+// The panel also asks whether the server stores chats ("Open in web"); it does
+// not here, so that menu entry stays out of these tests.
 jest.mock('../../../client/src/api', () => ({
-  fetchApps: jest.fn(() => Promise.resolve([]))
+  fetchApps: jest.fn(() => Promise.resolve([])),
+  fetchPlatformConfig: jest.fn(() => Promise.resolve({ chats: { persistence: false } })),
+  fetchChat: jest.fn(),
+  importChat: jest.fn()
 }));
 
 jest.mock('../../../client/src/features/office/contexts/OfficeConfigContext', () => ({

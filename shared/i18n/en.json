@@ -179,7 +179,15 @@
     "menu": {
       "settings": "Settings",
       "logout": "Logout",
-      "variables": "Show variables"
+      "variables": "Show variables",
+      "openInWeb": "Open in web"
+    },
+    "openInWeb": {
+      "blocked": "The browser could not be opened. Open this address yourself: {{url}}",
+      "unavailable": "This iHub does not store chats, so the conversation cannot be opened in the web app.",
+      "denied": "You do not have access to this app in the web app.",
+      "tooLong": "This conversation is too long to open in the web app. Start a new chat and try again.",
+      "failed": "The conversation could not be opened in the web app. Try again."
     },
     "startPage": {
       "openApp": "Open app",

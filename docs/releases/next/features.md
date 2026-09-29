@@ -25,3 +25,20 @@ conversation held for that app. The previous chat stays in the chat history and 
   page keeps the conversation.
 - Without chat history (for example anonymous users), opening an app still restores the
   conversation from the current browser tab, as before.
+
+## Outlook Add-in: Open a Chat in the Web App
+
+Users can now continue an Outlook conversation in the iHub web app. **Open in web** in the task-pane
+menu (☰) saves the conversation as a chat and opens it in the browser, where it is one of the user's
+chats like any other — handy when a longer back-and-forth outgrows the narrow pane.
+
+- Available when chat history is enabled on the installation; otherwise the entry is not shown.
+- Only what was typed and what the assistant answered is carried over. The open email, the emails
+  added as context and all attachments are not stored, so follow-up questions in the web app do not
+  see them.
+- Nothing is stored until the user chooses it, and choosing it again for an unchanged conversation
+  reopens the same chat instead of adding another.
+- The user needs access to the app in the web app; the add-in's **Available Apps** limit applies.
+- The browser-extension side panel offers the same entry.
+- The same handoff is available to other clients as `POST /api/chats/import`; see
+  [Chat Persistence](../../chat-persistence.md#importing-a-conversation).

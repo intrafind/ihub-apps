@@ -1,5 +1,7 @@
 /**
- * Materialization — the only module that writes chat turns to durable storage.
+ * Materialization — the module that writes the turns of a live chat request to
+ * durable storage. (`chatImport` is the other writer: it stores a finished
+ * transcript another surface hands over, with no run behind it.)
  *
  * A turn becomes two writes: the human half at run start and the assistant
  * half at run end. Both are best effort *with respect to the turn* — a storage

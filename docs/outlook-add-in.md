@@ -192,6 +192,37 @@ iFinder is refused by iFinder, not by the add-in.
 
 A rejected Office call never raises a browser alert. The pane shows a notice naming the Office error (its `name` and `code`), the same record is written to the browser console, and the last 25 failures can be dumped from the task pane's devtools with `window.ihubOfficeErrors()` — quote that output in a support request. Where the answer could otherwise be lost (a body past the 32 K cap), it is copied to the clipboard first and the notice says so.
 
+### Open in web
+
+The task pane is narrow. For a longer back-and-forth, the task-pane menu (**☰**) has **Open in web**,
+which continues the current conversation in the iHub web app.
+
+The pane keeps its chats to itself — nothing a user types there is stored on the server. **Open in
+web** is the one step that stores something, and only when the user asks: it saves a copy of the
+conversation as a chat and opens it in the browser (`/apps/<app>/c/<chat>`, under your deployment's
+base path). From there it behaves like any other chat — it is in the user's chat history, can be
+renamed and deleted (and shared, where chat sharing is on), and follows the
+[retention rules](chat-persistence.md#retention).
+
+- **Only when the server stores chats.** The entry is offered when durable chats are enabled (see
+  [Chat Persistence](chat-persistence.md)); otherwise it is not in the menu. It is greyed out until
+  there is a conversation and while an answer is still streaming.
+- **What is carried over:** what the user typed and what the assistant answered — nothing else. The
+  open email, its headers, the collected emails and every attachment are **not** stored and are not
+  available to follow-up questions in the web app; the user attaches or pastes again if a follow-up
+  needs them. This keeps email content out of the chat store.
+- **Same rights as in the pane.** The user needs the app in the web app, and the add-in's
+  [Available Apps](#step-5--optional-restrict-what-the-add-in-can-access) limit applies to the
+  import. An app the user cannot use is refused with a notice in the pane.
+- **The browser signs in on its own.** If the user is not signed in to iHub in the browser, they sign
+  in there first and land on the chat afterwards.
+- **No duplicates.** Choosing it again for a conversation that has not changed opens the copy that
+  exists. Once the conversation has moved on, a new copy is stored and the earlier one stays in the
+  history.
+- A conversation of more than 200 messages is not opened this way; the pane says so.
+
+The browser-extension side panel shows the same entry.
+
 ---
 
 ## What the model receives
@@ -548,6 +579,19 @@ attempting an outbound request. An Outlook add-in needs about 600 KB —
 - **Outlook refuses the attachment:** the notice names the Office error; a size complaint means the
   mailbox's message limit is below the document's size. Download it and share it another way.
 
+### "Open in web" is missing, or fails
+
+- **Not in the menu at all:** the server does not store chats. Enable durable chats first — see
+  [Chat Persistence](chat-persistence.md#enabling). The pane asks the platform configuration once
+  when it opens; reopen the task pane after changing it.
+- **Greyed out:** there is no conversation yet, or an answer is still streaming.
+- **"You do not have access to this app in the web app":** the user's groups, or the add-in's
+  Available Apps limit, do not include the app.
+- **The notice shows an address instead of opening the browser:** Outlook would not open a window
+  (a locked-down client). Open that address by hand — the chat is already stored.
+- **The web app opens on an empty chat:** the chat was deleted, or the user signed in to iHub as a
+  different user in the browser than in Outlook. Chats belong to the signed-in user.
+
 ### CI / staging environments
 
 For non-production tests, sideload the manifest instead of using centralized deployment:
@@ -571,6 +615,7 @@ Sideloading is per-user and ideal for QA, but does not survive mailbox moves and
   - [`server/utils/officeStartPage.js`](../server/utils/officeStartPage.js) — start-page settings: sanitized for the pane, validated for the admin API
   - [`server/utils/officeAppAccess.js`](../server/utils/officeAppAccess.js) — the add-in's app limit (`allowedApps` of its OAuth client): read for the admin page, validated for the admin API
 - **Task pane:** [`client/src/features/office/components/OfficeApp.jsx`](../client/src/features/office/components/OfficeApp.jsx) (routing — where "home" is), [`OfficeStartPage.jsx`](../client/src/features/office/components/OfficeStartPage.jsx) (the start page), [`OfficeChatPanel.jsx`](../client/src/features/office/components/OfficeChatPanel.jsx) (the chat, which sends a message handed over from the start page)
+- **Open in web:** [`useOpenChatInWeb.js`](../client/src/features/office/hooks/useOpenChatInWeb.js) (the menu action), [`officeWebHandoff.js`](../client/src/features/office/utilities/officeWebHandoff.js) (what is sent, the web address), and `POST /api/chats/import` in [`server/routes/chats.js`](../server/routes/chats.js) / [`chatImport.js`](../server/services/chat/chatImport.js) — see [Chat Persistence → Importing a conversation](chat-persistence.md#importing-a-conversation)
 - **Message assembly:** [`buildChatApiMessages.js`](../client/src/features/office/utilities/buildChatApiMessages.js) (the tagged blocks above), [`outlookMailContext.js`](../client/src/features/office/utilities/outlookMailContext.js) and [`outlookItemFields.js`](../client/src/features/office/utilities/outlookItemFields.js) (reading body, headers and the mailbox user from Office.js)
 - **Default config:** `officeIntegration` block in [`server/defaults/config/platform.json`](../server/defaults/config/platform.json)
 - **Migrations:** `V028__add_office_integration_config.js`, `V029__fix_empty_office_description.js`, `V030__add_office_integration_starter_prompts.js`, `V107__add_office_start_page_config.js`, `V108__office_context_xml_tags.js`, `V118__office_js_source_modes.js`

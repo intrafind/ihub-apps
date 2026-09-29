@@ -4,7 +4,8 @@ import { handleApiResponse } from '../utils/requestHandler';
 /**
  * Durable chats (`/api/chats/*`) — list, open, rename and erase the chats the
  * server stored for the caller. The transcripts themselves are written off the
- * chat request path; nothing here creates or appends to a chat.
+ * chat request path; the one call here that creates a chat is `importChat`,
+ * which stores a finished transcript another surface handed over.
  *
  * Every call passes `cacheKey = null, ttl = null`: a chat list changes on every
  * turn, and a stale list would show a chat the user just deleted or hide the one
@@ -108,6 +109,35 @@ export const renameChat = async (chatId, title) => {
 
   return handleApiResponse(
     () => apiClient.patch(`/chats/${encodeURIComponent(chatId)}`, { title: title ?? '' }),
+    null,
+    null
+  );
+};
+
+/**
+ * Store a conversation another surface holds as a new durable chat, so the web
+ * app can open it (`/apps/:appId/c/:chatId`) and the user can continue there.
+ * This is what the Outlook task pane's "Open in web" does: its own chats live
+ * only in the pane.
+ *
+ * The server mints the chat id and keeps `role` and `content` only. It answers
+ * `503 CHAT_PERSISTENCE_UNAVAILABLE` when the installation stores no chats, and
+ * `403 APP_ACCESS_DENIED` for an app the caller may not use.
+ *
+ * @param {Object} params
+ * @param {string} params.appId - App the conversation was held with.
+ * @param {string} [params.modelId] - Model it last used.
+ * @param {Array<{ role: 'user'|'assistant', content: string, ts?: string }>} params.messages -
+ *   The transcript, oldest first.
+ * @returns {Promise<{ chat: Object }>} the response body; `chat.id` is the new chat's id
+ */
+export const importChat = async ({ appId, modelId, messages } = {}) => {
+  if (!appId || !Array.isArray(messages)) {
+    throw new Error('Missing required parameters');
+  }
+
+  return handleApiResponse(
+    () => apiClient.post('/chats/import', { appId, modelId, messages }),
     null,
     null
   );

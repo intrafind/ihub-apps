@@ -200,7 +200,15 @@
     "menu": {
       "settings": "Einstellungen",
       "logout": "Abmelden",
-      "variables": "Variablen anzeigen"
+      "variables": "Variablen anzeigen",
+      "openInWeb": "Im Web öffnen"
+    },
+    "openInWeb": {
+      "blocked": "Der Browser konnte nicht geöffnet werden. Öffnen Sie diese Adresse selbst: {{url}}",
+      "unavailable": "Dieses iHub speichert keine Chats, daher kann die Unterhaltung nicht in der Web-App geöffnet werden.",
+      "denied": "Sie haben in der Web-App keinen Zugriff auf diese App.",
+      "tooLong": "Diese Unterhaltung ist zu lang, um sie in der Web-App zu öffnen. Starten Sie einen neuen Chat und versuchen Sie es erneut.",
+      "failed": "Die Unterhaltung konnte nicht in der Web-App geöffnet werden. Bitte versuchen Sie es erneut."
     },
     "startPage": {
       "openApp": "App öffnen",

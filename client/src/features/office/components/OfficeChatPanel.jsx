@@ -20,6 +20,7 @@ import useOutlookMailContextSnapshot from '../hooks/useOutlookMailContextSnapsho
 import useAppSettings from '../../../shared/hooks/useAppSettings';
 import useFileUploadHandler from '../../../shared/hooks/useFileUploadHandler';
 import useOutlookMailActions from '../hooks/useOutlookMailActions';
+import useOpenChatInWeb from '../hooks/useOpenChatInWeb';
 import {
   buildPromptTemplate,
   buildHostContext,
@@ -305,6 +306,25 @@ function OfficeChatPanel({
   // forward / new in read mode, insert while the user is composing (#2446).
   const mailActions = useOutlookMailActions({ officeConfig });
 
+  // Continue this conversation in the web app (issue #2591). Stores a copy as a
+  // durable chat when the user asks and opens it in the browser.
+  const webHandoff = useOpenChatInWeb({
+    baseUrl: officeConfig.baseUrl,
+    appId: selectedApp?.id,
+    chatId: chatIdRef.current,
+    messages: adapter.messages,
+    modelId: selectedModel,
+    processing: adapter.processing
+  });
+  // The strip below shows one outcome at a time, and the latest action wins: a
+  // fresh answer-action notice replaces an older "Open in web" one (the other
+  // direction is handled where the menu entry starts the handoff).
+  const { dismissNotice: dismissWebNotice } = webHandoff;
+  const mailNotice = mailActions.notice;
+  useEffect(() => {
+    if (mailNotice) dismissWebNotice();
+  }, [mailNotice, dismissWebNotice]);
+
   // The compact icon button (hosts that do not promote the action to a primary
   // button — the browser-extension side panel) and any surface that renders no
   // action list. Running the resolved default keeps the notice strip as the one
@@ -580,6 +600,22 @@ function OfficeChatPanel({
           }
         ]
       : []),
+    // Only where the installation stores chats. Disabled — not hidden — while
+    // there is nothing to continue yet or an answer is still streaming, so the
+    // entry does not appear and vanish as the conversation moves along.
+    ...(webHandoff.available
+      ? [
+          {
+            key: 'openInWeb',
+            label: t('office.menu.openInWeb', 'Open in web'),
+            disabled: !webHandoff.canOpen,
+            onClick: () => {
+              mailActions.dismissNotice();
+              webHandoff.open();
+            }
+          }
+        ]
+      : []),
     {
       key: 'settings',
       label: t('office.menu.settings', 'Settings'),
@@ -587,6 +623,14 @@ function OfficeChatPanel({
     },
     { key: 'logout', label: t('office.menu.logout', 'Logout'), onClick: onLogout }
   ];
+
+  // One strip for the outcome of whichever action ran last: an answer action
+  // or "Open in web".
+  const notice = webHandoff.notice || mailActions.notice;
+  const dismissNotice = () => {
+    webHandoff.dismissNotice();
+    mailActions.dismissNotice();
+  };
 
   const hasMessages = adapter.messages.length > 0;
 
@@ -736,19 +780,19 @@ function OfficeChatPanel({
                 Office call names the error here (and the answer is on the
                 clipboard where one could be lost), an attached-original
                 forward explains itself. See issue #2446. */}
-            {mailActions.notice && (
+            {notice && (
               <div
-                role={mailActions.notice.tone === 'error' ? 'alert' : 'status'}
+                role={notice.tone === 'error' ? 'alert' : 'status'}
                 className={`shrink-0 flex items-start gap-2 border-t px-3 py-2 text-xs ${
-                  mailActions.notice.tone === 'error'
+                  notice.tone === 'error'
                     ? 'border-red-200 bg-red-50 text-red-800 dark:border-red-900 dark:bg-red-950/50 dark:text-red-200'
                     : 'border-slate-200 bg-slate-50 text-slate-700 dark:border-slate-700 dark:bg-slate-800/60 dark:text-slate-200'
                 }`}
               >
-                <span className="flex-1">{mailActions.notice.message}</span>
+                <span className="flex-1">{notice.message}</span>
                 <button
                   type="button"
-                  onClick={mailActions.dismissNotice}
+                  onClick={dismissNotice}
                   aria-label={t('common.close', 'Close')}
                   className="shrink-0 rounded p-0.5 hover:bg-black/5 dark:hover:bg-white/10"
                 >

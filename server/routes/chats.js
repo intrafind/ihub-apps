@@ -7,10 +7,15 @@
  *   GET    /api/chats/:chatId/artifacts/:artifactId  the bytes of one of them
  *   PATCH  /api/chats/:chatId    { title }       rename a chat
  *   DELETE /api/chats/:chatId                    erase a chat, its transcript and its runs
+ *   POST   /api/chats/import     { appId, modelId?, messages }
+ *                                                store a conversation another surface holds
+ *                                                (the Outlook pane) as a new chat
  *
  * The turns themselves are written by `services/chat/chatMaterializer.js` off
- * the chat request path; nothing here creates or appends to a chat. This
- * router only lists, reads, renames and erases what that path stored.
+ * the chat request path; the only thing here that creates a chat is the
+ * import, which writes a finished transcript in one go and never appends to an
+ * existing chat. Everything else lists, reads, renames and erases what the
+ * request path stored.
  *
  * Two deliberate differences from the sibling `routes/runs.js`:
  *
@@ -32,6 +37,8 @@
 import { authenticatedOnly } from '../middleware/authRequired.js';
 import { buildServerPath } from '../utils/basePath.js';
 import { validateIdForPath } from '../utils/pathSecurity.js';
+import { canUserAccessResource } from '../utils/authorization.js';
+import { findByIdCaseInsensitive } from '../utils/resourceLookup.js';
 import {
   sendBadRequest,
   sendErrorResponse,
@@ -50,6 +57,11 @@ import { abortChatRequest } from '../sse.js';
 import { cancelChatWorkflow } from '../tools/workflowRunner.js';
 import { getWorkflowStateRepository } from '../services/workflow/WorkflowStateRepository.js';
 import { deleteChatWithCascade } from '../services/chat/chatDeletion.js';
+import {
+  ChatImportError,
+  importChat,
+  normalizeImportMessages
+} from '../services/chat/chatImport.js';
 
 const COMPONENT = 'ChatRoutes';
 
@@ -198,6 +210,61 @@ export default function registerChatRoutes(app) {
       res.json({ items, nextCursor });
     } catch (error) {
       sendChatStorageError(res, error, 'list chats');
+    }
+  });
+
+  // "Open in web": a surface that keeps its conversation client-side (the
+  // Outlook task pane) hands the transcript over so the web app can continue
+  // it. The caller is the owner by construction — it is `req.user` — and the
+  // chat id is minted here, so there is nothing to authorize against a stored
+  // chat; what does need authorizing is the app, because the web app will
+  // answer follow-ups with it.
+  app.post(buildServerPath('/api/chats/import'), authenticatedOnly, async (req, res) => {
+    try {
+      const { appId, modelId, messages } = req.body || {};
+      if (typeof appId !== 'string') return sendBadRequest(res, 'appId is required');
+      if (!validateIdForPath(appId, 'app', res)) return;
+      let transcript;
+      try {
+        transcript = normalizeImportMessages(messages);
+      } catch (error) {
+        if (error instanceof ChatImportError) {
+          return sendBadRequest(res, error.message, { code: error.code });
+        }
+        throw error;
+      }
+      const repository = requireRepository(res);
+      if (!repository) return;
+
+      // The configured id, not the requested one: the permission set and the
+      // stored chat both key on it, and a request may differ in case.
+      const chatApp = findByIdCaseInsensitive(configCache.getApps()?.data, appId);
+      if (!chatApp || chatApp.enabled === false) return sendNotFound(res, 'App');
+      // Same rule `chatAuthRequired` applies to a chat turn, including the
+      // OAuth client's allowed-apps narrowing that the Outlook token carries.
+      // Fails closed: a principal without resolved permissions gets nothing.
+      if (!canUserAccessResource(req.user, 'apps', chatApp.id)) {
+        return sendErrorResponse(res, 403, `You do not have permission to access app: ${appId}`, {
+          details: { code: 'APP_ACCESS_DENIED' }
+        });
+      }
+
+      const identityMode = runLog.identityMode();
+      const principal = await resolvePrincipal(req.user, { mode: identityMode });
+      const chat = await importChat({
+        repository,
+        ownerId: principal.id,
+        identityMode: principal.mode || identityMode,
+        appId: chatApp.id,
+        modelId,
+        messages: transcript
+      });
+      res.status(201).json({ chat });
+    } catch (error) {
+      if (error instanceof ChatImportError) {
+        return sendErrorResponse(res, 503, error.message, { details: { code: error.code } });
+      }
+      return sendChatStorageError(res, error, 'import chat');
     }
   });
 

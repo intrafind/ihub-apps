@@ -503,10 +503,38 @@ with the other public API prefixes (500 requests/minute/IP by default).
 | `GET /api/chats/:chatId/artifacts/:artifactId` | The bytes of one artifact, as its own media type |
 | `PATCH /api/chats/:chatId` | `{ title }` — rename; capped at 200 characters and marked as user-set     |
 | `DELETE /api/chats/:chatId` | Erase the chat, its transcript and its runs                             |
+| `POST /api/chats/import` | `{ appId, modelId?, messages }` — store a conversation another surface holds as a new chat; `201 { chat }` |
 
 `GET /api/chats` returns the chat documents exactly as stored. App name, colour
 and icon are joined on the client from the apps list it already holds, so the
 endpoint stays independent of app configuration.
+
+### Importing a conversation
+
+`POST /api/chats/import` is how a surface that keeps its conversation on the
+client — the [Outlook add-in's](outlook-add-in.md#open-in-web) **Open in web** —
+hands it to the web app. Every turn such a surface sends is `ephemeral`, so
+there is nothing stored to open; the import stores a copy on request and the web
+app opens it like any other chat (`/apps/:appId/c/:chatId`).
+
+- **Only the conversation.** `messages` is `{ role, content, ts? }`, oldest
+  first. Roles other than `user` and `assistant` and blank messages are dropped;
+  a transcript with nothing left is refused (`EMPTY_TRANSCRIPT`). Nothing else
+  travels: the host item a turn was sent with (an email and its attachments)
+  is never stored, so a follow-up in the web app cannot see it.
+- **The server picks the id** (`chat-<uuid>`) and the caller is the owner. An
+  import can neither overwrite nor append to an existing chat.
+- **The app is authorized like a chat turn.** The caller needs the app in their
+  resolved permissions — including the OAuth client's allowed-apps narrowing for
+  tokens issued to the add-in — or the answer is `403 APP_ACCESS_DENIED`; an
+  unknown app is `404`.
+- **All or nothing.** More than 200 messages is refused (`TOO_MANY_MESSAGES`)
+  rather than trimmed, and a write that fails part-way removes the chat again.
+- **Timestamps** the client supplies are kept when they are valid dates and not
+  in the future; otherwise the moment of the import is recorded.
+
+The retention rules apply to an imported chat like any other. Nothing is
+imported unless the user asks: the surface never calls this on its own.
 
 `DELETE` cascades: the two documents, every artifact of the chat, then
 `runLog.deleteRun()` for every id in the chat's `runIds`, which in turn removes
@@ -634,7 +662,8 @@ that is what you want.
 | `server/services/chat/chatPersistence.js`   | The policy — the only module that decides "is this persisted" |
 | `server/services/chat/ChatRepository.js`    | The two chat documents, their locks, listing and the cascade  |
 | `server/services/artifacts/ArtifactRepository.js` | What a turn produced — see [Artifacts](artifacts.md)    |
-| `server/services/chat/chatMaterializer.js`  | The only module that writes chat turns                        |
+| `server/services/chat/chatMaterializer.js`  | Writes the turns of a live chat request                       |
+| `server/services/chat/chatImport.js`        | Writes a finished transcript handed over by another surface   |
 | `server/services/chat/chatAccess.js`        | `authorizeChat()` — 404 for unknown and not-yours             |
 | `server/services/chat/chatRetention.js`     | The daily sweep                                               |
 | `server/routes/chats.js`                    | The `/api/chats` surface                                      |
