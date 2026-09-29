@@ -98,18 +98,12 @@ async function getLdapGroupsForProxyUser(providerName, userId, ttlMs) {
     if (entry.fetchedAt !== undefined && now - entry.fetchedAt < ttlMs) {
       return entry.groups;
     }
-    if (
-      entry.failedAt !== undefined &&
-      now - entry.failedAt < LDAP_GROUPS_FAILURE_COOLDOWN_MS
-    ) {
+    if (entry.failedAt !== undefined && now - entry.failedAt < LDAP_GROUPS_FAILURE_COOLDOWN_MS) {
       // Recent failure: skip the LDAP round-trip. Serve the pre-outage groups
       // only if they are within the max-stale window; past it, fall back to
       // header/JWT groups only so a revoked permission does not remain
       // effective for the entire duration of a long outage.
-      if (
-        entry.fetchedAt !== undefined &&
-        now - entry.fetchedAt < LDAP_GROUPS_MAX_STALE_MS
-      ) {
+      if (entry.fetchedAt !== undefined && now - entry.fetchedAt < LDAP_GROUPS_MAX_STALE_MS) {
         return entry.groups;
       }
       return [];
