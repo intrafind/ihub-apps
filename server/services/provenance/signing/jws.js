@@ -42,18 +42,24 @@ export function canonicalJson(value) {
 /**
  * Sign a JSON payload.
  * @param {Object} payload
- * @param {{keyPem: string, chainPem: string, alg?: string, typ?: string}} signer
+ * @param {{keyPem: string, chainPem: string, alg?: string, typ?: string, leafOnly?: boolean}} signer
  * @returns {string} compact JWS
  */
-export function signJws(payload, { keyPem, chainPem, alg = 'es256', typ = 'ihub-provenance+jws' }) {
+export function signJws(
+  payload,
+  { keyPem, chainPem, alg = 'es256', typ = 'ihub-provenance+jws', leafOnly = false }
+) {
   const spec = JWS_ALGS[alg];
   if (!spec) throw new Error(`Unsupported signing algorithm ${alg}`);
   const certs = parsePemCertificates(chainPem);
   if (!certs.length) throw new Error('No signing certificate');
+  // `leafOnly` keeps small carriers (the text signpost) small: the verifier
+  // holds the root as its trust anchor anyway.
+  const embedded = leafOnly ? certs.slice(0, 1) : certs;
   const header = {
     alg: spec.jwa,
     typ,
-    x5c: certs.map(c => Buffer.from(c.rawData).toString('base64')),
+    x5c: embedded.map(c => Buffer.from(c.rawData).toString('base64')),
     kid: describeCertificate(certs[0]).fingerprint.slice(0, 32)
   };
   const signingInput = `${b64u(JSON.stringify(header))}.${b64u(canonicalJson(payload))}`;

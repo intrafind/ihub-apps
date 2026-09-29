@@ -128,9 +128,18 @@ if (fs.existsSync(configPath)) {
   }
 }
 
+// 'verify <file>': the offline EU AI Act detector (no server, no upload)
+const verifyMode = process.argv[2] === 'verify';
 // Check for --update CLI argument before starting the server
 const updateArg = process.argv.find(a => a.startsWith('--update'));
-if (updateArg) {
+if (verifyMode) {
+  import('./server/cli/verify.js').then(mod => mod.runVerifyCLI(process.argv.slice(3))).then(code => {
+    process.exit(code);
+  }).catch(err => {
+    console.error('Failed to run verify:', err.message);
+    process.exit(3);
+  });
+} else if (updateArg) {
   const subcommand = updateArg.includes('=') ? updateArg.split('=')[1] : '';
   const force = process.argv.includes('--force');
   // Dynamic import of the ESM CLI module

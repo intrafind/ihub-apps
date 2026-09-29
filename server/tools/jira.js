@@ -3,6 +3,7 @@
 
 import JiraService from '../services/integrations/JiraService.js';
 import logger from '../utils/logger.js';
+import { labelPlainText } from '../services/provenance/outboundLabel.js';
 
 /**
  * Search and list JIRA tickets using JQL queries
@@ -136,7 +137,12 @@ export async function addComment({ issueKey, comment, requireConfirmation = true
       });
     }
 
-    const result = await JiraService.addComment({ issueKey, comment, userId });
+    // EU AI Act Art. 50(1): a comment the model wrote carries a visible AI label.
+    const result = await JiraService.addComment({
+      issueKey,
+      comment: labelPlainText(comment),
+      userId
+    });
 
     return {
       success: true,
@@ -279,7 +285,7 @@ export async function transitionTicket({
     const result = await JiraService.transitionTicket({
       issueKey,
       transitionId: actualTransitionId,
-      comment,
+      comment: comment ? labelPlainText(comment) : comment,
       userId
     });
 

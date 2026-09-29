@@ -527,17 +527,18 @@ class SigningService {
   /**
    * Sign a payload as a compact JWS with the active certificate.
    * @param {Object} payload
-   * @param {{typ?: string}} [opts]
+   * @param {{typ?: string, leafOnly?: boolean}} [opts]
    * @returns {Promise<string|null>} null when signing is unavailable
    */
-  async signPayload(payload, { typ } = {}) {
+  async signPayload(payload, { typ, leafOnly = false } = {}) {
     const signer = await this.getActiveSigner();
     if (!signer) return null;
     return signJws(payload, {
       keyPem: signer.keyPem,
       chainPem: signer.chainPem,
       alg: signer.alg,
-      typ
+      typ,
+      leafOnly
     });
   }
 

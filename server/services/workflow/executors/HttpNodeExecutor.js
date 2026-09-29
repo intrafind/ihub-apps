@@ -15,6 +15,11 @@ import { BaseNodeExecutor } from './BaseNodeExecutor.js';
 import { throttledFetch } from '../../../requestThrottler.js';
 import logger from '../../../utils/logger.js';
 import { assertPublicTarget, createPinnedLookup } from '../../../utils/ssrfGuard.js';
+import {
+  outboundHeaders,
+  outboundLabel,
+  outboundLabelEnabled
+} from '../../provenance/outboundLabel.js';
 
 /**
  * HTTP node configuration
@@ -204,9 +209,19 @@ export class HttpNodeExecutor extends BaseNodeExecutor {
         nodeId: node.id
       });
 
+      // EU AI Act Art. 50(1): content a workflow sends out is marked as
+      // AI-generated — `X-AI-Generated` / `X-AI-Provenance` headers (unless
+      // the node sets `aiLabel: false`), and `{{aiLabel}}` for a visible label
+      // in the body text.
+      const aiLabelOn = config.aiLabel !== false && outboundLabelEnabled();
+      const templateData = {
+        aiLabel: aiLabelOn ? outboundLabel() : '',
+        ...(state.data || {})
+      };
+
       // Build headers with interpolation
-      const resolvedHeaders = interpolateObject(headers, state.data || {});
-      const fetchHeaders = { ...resolvedHeaders };
+      const resolvedHeaders = interpolateObject(headers, templateData);
+      const fetchHeaders = { ...(aiLabelOn ? outboundHeaders() : {}), ...resolvedHeaders };
 
       // Apply authentication
       if (auth) {
@@ -216,7 +231,7 @@ export class HttpNodeExecutor extends BaseNodeExecutor {
       // Build request body (only for methods that support a body)
       let body;
       if (config.body && method !== 'GET' && method !== 'HEAD') {
-        body = interpolateObject(config.body, state.data || {});
+        body = interpolateObject(config.body, templateData);
         if (typeof body === 'object') {
           body = JSON.stringify(body);
           if (!fetchHeaders['Content-Type']) {

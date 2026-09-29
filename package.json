@@ -19,6 +19,8 @@
     "clean:install": "npm run clean && npm run install:all",
     "// === UTILITIES ===": "",
     "health": "curl -f http://localhost:3000/api/health",
+    "verify": "node server/cli/verify.js",
+    "test:marking-benchmark": "node server/cli/markingBenchmark.js",
     "logs": "tail -f server/server.log 2>/dev/null || echo 'No server log found'",
     "// === BROWSER EXTENSION (DEV / UNPACKED) ===": "",
     "extension:build": "cd client && npx vite build && cd .. && rm -rf browser-extension/extension browser-extension/assets && cp -r client/dist/extension browser-extension/extension && cp -r client/dist/assets browser-extension/assets && echo '\\n✅ Built. Load chrome://extensions → Developer mode → Load unpacked → select browser-extension/'",

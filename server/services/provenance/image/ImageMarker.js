@@ -223,9 +223,16 @@ async function applyWatermark(buffer, mimeType, bits, strength) {
  * @param {string} [params.mimeType]
  * @param {Object|null} [params.model] - model config
  * @param {{buffer: Buffer, mimeType: string}[]} [params.sourceImages] - uploaded inputs (edits)
+ * @param {boolean} [params.record=true] - keep a provenance record (false for self-tests)
  * @returns {Promise<{buffer: Buffer, mimeType: string, provenance: Object}>}
  */
-export async function markImage({ buffer, mimeType, model = null, sourceImages = [] }) {
+export async function markImage({
+  buffer,
+  mimeType,
+  model = null,
+  sourceImages = [],
+  record = true
+}) {
   const cfg = getAiTransparencyConfig();
   const type = sniffImageType(buffer) || mimeType || 'image/png';
   const markings = [];
@@ -356,9 +363,11 @@ export async function markImage({ buffer, mimeType, model = null, sourceImages =
   const conforming = markings.includes('c2pa') && markings.includes('trustmark');
   const provenance = { contentId, sha256, mimeType: type, markings, conforming };
   if (errors.length) provenance.errors = errors;
-  await provenanceStore
-    .recordImage({ contentId, sha256, mimeType: type, model, markings, conforming })
-    .catch(() => {});
+  if (record) {
+    await provenanceStore
+      .recordImage({ contentId, sha256, mimeType: type, model, markings, conforming })
+      .catch(() => {});
+  }
   return { buffer: out, mimeType: type, provenance };
 }
 

@@ -107,7 +107,6 @@ class ProvenanceStore {
     /** @type {Map<string, string>} */
     this.memoryHashes = new Map();
     this._documents = undefined;
-    this._sweepTimer = null;
   }
 
   /** Test hook: pin a DocumentStore (or null for memory only). */
@@ -225,11 +224,49 @@ class ProvenanceStore {
   }
 
   /**
+   * Record a signed export (manifest id → file hash). The detector finds the
+   * file by its hash even after the embedded manifest was stripped, and the
+   * signed manifest serves as the sidecar.
+   * @param {Object} params
+   */
+  async recordExport({ manifestId, fileHash, format, jws, messages, verification }) {
+    const cfg = getAiTransparencyConfig();
+    if (!isAiTransparencyActive() || !cfg.provenance.enabled) return null;
+    const record = {
+      v: 1,
+      contentId: manifestId,
+      contentHash: fileHash,
+      kind: 'export',
+      generatedAt: new Date().toISOString(),
+      generator: { name: 'iHub Apps', version: getAppVersion() },
+      installationId: getInstallationId(),
+      model: null,
+      appId: null,
+      text: null,
+      images: [],
+      format,
+      jws: jws || null,
+      messages: (messages || []).map(m => ({
+        index: m.index,
+        role: m.role,
+        contentHash: m.contentHash,
+        verification: m.verification
+      })),
+      verification,
+      conforming: true
+    };
+    await this._put(record);
+    return record;
+  }
+
+  /**
    * A record by content id.
    * @param {string} contentId
    */
   async get(contentId) {
-    if (typeof contentId !== 'string' || !/^prv_[A-Za-z0-9_-]{8,40}$/.test(contentId)) return null;
+    if (typeof contentId !== 'string' || !/^(prv|exp)_[A-Za-z0-9_-]{8,40}$/.test(contentId)) {
+      return null;
+    }
     const documents = this._docs();
     if (documents) {
       try {
@@ -314,20 +351,6 @@ class ProvenanceStore {
     }
     if (deleted) logger.info('Provenance retention sweep', { component: COMPONENT, deleted, days });
     return deleted;
-  }
-
-  /** Run the sweep daily. */
-  startRetentionScheduler() {
-    if (this._sweepTimer) return;
-    const run = () => this.sweep().catch(() => {});
-    setTimeout(run, 60 * 1000).unref?.();
-    this._sweepTimer = setInterval(run, DAY_MS);
-    this._sweepTimer.unref?.();
-  }
-
-  stopRetentionScheduler() {
-    if (this._sweepTimer) clearInterval(this._sweepTimer);
-    this._sweepTimer = null;
   }
 }
 
