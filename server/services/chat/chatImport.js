@@ -140,21 +140,24 @@ export async function importChat({
     throw new ChatImportError('STORAGE_UNAVAILABLE', 'The chat could not be stored');
   }
   try {
-    for (const message of messages) {
-      const stored = await repository.appendMessage(chatId, {
+    // One write for the whole transcript: it is stored whole or not at all, so
+    // there is no state in which the chat holds half a conversation.
+    const stored = await repository.importMessages(
+      chatId,
+      messages.map(message => ({
         role: message.role,
         content: message.content,
         ts: timestampOf(message.ts, now)
-      });
-      if (!stored) {
-        throw new ChatImportError('STORAGE_UNAVAILABLE', 'The chat could not be stored');
-      }
+      }))
+    );
+    if (!stored) {
+      throw new ChatImportError('STORAGE_UNAVAILABLE', 'The chat could not be stored');
     }
   } catch (error) {
-    // Half a conversation in the history is worse than none: the user would
-    // open it and continue from a transcript that stops mid-way. Best effort —
-    // the chat is brand new, so a failed cleanup leaves nothing else behind
-    // than the retention sweep already collects.
+    // The chat document exists by now, so a failed write leaves an empty chat
+    // in the history. Take it out again. Best effort: if this fails too, what
+    // remains is an empty chat its owner can see and delete — visible on
+    // purpose, unlike a transcript nothing points at.
     await repository.deleteChat(chatId).catch(() => {});
     throw error;
   }

@@ -315,16 +315,131 @@ describe('POST /api/chats/import refuses what it cannot store faithfully', () =>
   });
 });
 
-describe('importChat does not leave half a conversation behind', () => {
-  it('removes the chat when a message cannot be written', async () => {
+describe('an import stores the transcript whole or not at all', () => {
+  /** A chat document with no messages, as `importChat` creates before writing. */
+  async function newChat(chatId, ownerId = 'user-ada') {
+    await getChatRepository().ensureChat({
+      chatId,
+      ownerId,
+      identityMode: 'default',
+      appId: 'chat'
+    });
+  }
+
+  it('writes the transcript in one go: order, count, title and last message time', async () => {
+    const repository = getChatRepository();
+    await newChat('chat-whole-1');
+
+    const result = await repository.importMessages('chat-whole-1', [
+      { role: 'user', content: 'First question', ts: '2026-09-01T08:00:00.000Z' },
+      { role: 'assistant', content: 'First answer', ts: '2026-09-01T08:00:05.000Z' },
+      { role: 'user', content: 'Second question', ts: '2026-09-01T08:01:00.000Z' }
+    ]);
+
+    assert.equal(result.messages.length, 3);
+    const chat = await repository.getChat('chat-whole-1');
+    assert.equal(chat.messageCount, 3);
+    assert.equal(chat.title, 'First question');
+    assert.equal(chat.lastMessageAt, '2026-09-01T08:01:00.000Z');
+    const stored = await repository.getMessages('chat-whole-1');
+    assert.deepEqual(
+      stored.messages.map(m => m.content),
+      ['First question', 'First answer', 'Second question']
+    );
+  });
+
+  it('is fast however long the conversation is', async () => {
+    // Message by message it rewrote the whole transcript each time — about
+    // 1.7 s for 200 messages. One write should not notice the difference.
+    await newChat('chat-whole-fast');
+    const messages = Array.from({ length: MAX_IMPORT_MESSAGES }, (_, index) => ({
+      role: index % 2 === 0 ? 'user' : 'assistant',
+      content: `message ${index} ${'lorem ipsum '.repeat(150)}`
+    }));
+
+    const started = performance.now();
+    await getChatRepository().importMessages('chat-whole-fast', messages);
+
+    assert.ok(performance.now() - started < 800, 'imported without a write per message');
+    assert.equal((await getChatRepository().getMessages('chat-whole-fast')).messages.length, 200);
+  });
+
+  it('refuses a chat that already has messages, and leaves it alone', async () => {
+    // The repository-level half of "an import can never add to somebody's
+    // conversation" — the route also mints the id itself.
+    const repository = getChatRepository();
+    await newChat('chat-whole-busy');
+    await repository.appendMessage('chat-whole-busy', { role: 'user', content: 'Already here' });
+
+    await assert.rejects(
+      repository.importMessages('chat-whole-busy', [{ role: 'user', content: 'Intruder' }]),
+      { code: 'CHAT_NOT_EMPTY' }
+    );
+
+    const stored = await repository.getMessages('chat-whole-busy');
+    assert.deepEqual(
+      stored.messages.map(m => m.content),
+      ['Already here']
+    );
+  });
+
+  it('does nothing for a chat that was never created, or for nothing to store', async () => {
+    const repository = getChatRepository();
+    assert.equal(
+      await repository.importMessages('chat-never-made', [{ role: 'user', content: 'x' }]),
+      null
+    );
+    await newChat('chat-whole-empty');
+    assert.equal(await repository.importMessages('chat-whole-empty', []), null);
+    assert.equal((await repository.getMessages('chat-whole-empty')).messages.length, 0);
+  });
+
+  it('keeps the newest messages when the platform caps a chat lower', async () => {
+    configCache.setCacheEntry('config/platform.json', {
+      chats: { enabled: true, maxMessagesPerChat: 3 }
+    });
+    await newChat('chat-whole-cap');
+
+    await getChatRepository().importMessages(
+      'chat-whole-cap',
+      ['one', 'two', 'three', 'four', 'five'].map(content => ({ role: 'user', content }))
+    );
+
+    const stored = await getChatRepository().getMessages('chat-whole-cap');
+    assert.deepEqual(
+      stored.messages.map(m => m.content),
+      ['three', 'four', 'five']
+    );
+    assert.equal((await getChatRepository().getChat('chat-whole-cap')).messageCount, 3);
+  });
+
+  it('a transcript write that fails leaves no chat behind, and the caller is told', async () => {
+    // The failure the old per-message loop could turn into half a
+    // conversation: the transcript write itself failing.
+    const repository = getChatRepository();
+    const before = (await repository.listChats('user-ada', { limit: 100 })).items.map(c => c.id);
+    const original = repository._writeMessages;
+    repository._writeMessages = async () => {
+      throw new Error('disk full');
+    };
+    let res;
+    try {
+      res = await importAs(ADA, { appId: 'outlook-reply', messages: transcript });
+    } finally {
+      repository._writeMessages = original;
+    }
+
+    assert.equal(res.statusCode, 500);
+    const after = (await repository.listChats('user-ada', { limit: 100 })).items.map(c => c.id);
+    assert.deepEqual(after, before, 'no empty or partial chat was left in the history');
+  });
+
+  it('still removes the chat if it cannot even be cleaned up in the usual way', async () => {
+    // Fake repository: the write reports failure, the cleanup is what we watch.
     const deleted = [];
-    let appended = 0;
     const repository = {
       ensureChat: async ({ chatId }) => ({ id: chatId }),
-      appendMessage: async () => {
-        appended += 1;
-        return appended < 3 ? { message: {} } : null;
-      },
+      importMessages: async () => null,
       deleteChat: async chatId => {
         deleted.push(chatId);
       },
@@ -341,7 +456,31 @@ describe('importChat does not leave half a conversation behind', () => {
       }),
       { code: 'STORAGE_UNAVAILABLE' }
     );
-    assert.equal(deleted.length, 1, 'the partial chat was removed');
+    assert.equal(deleted.length, 1, 'the chat created for the import was removed');
     assert.match(deleted[0], /^chat-/);
+  });
+
+  it('a cleanup that fails as well does not hide the original failure', async () => {
+    const repository = {
+      ensureChat: async ({ chatId }) => ({ id: chatId }),
+      importMessages: async () => {
+        throw new Error('disk full');
+      },
+      deleteChat: async () => {
+        throw new Error('still full');
+      },
+      getChat: async () => null
+    };
+
+    await assert.rejects(
+      importChat({
+        repository,
+        ownerId: 'user-ada',
+        identityMode: 'default',
+        appId: 'outlook-reply',
+        messages: transcript
+      }),
+      { message: 'disk full' }
+    );
   });
 });

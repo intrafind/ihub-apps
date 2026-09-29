@@ -528,8 +528,20 @@ app opens it like any other chat (`/apps/:appId/c/:chatId`).
   resolved permissions — including the OAuth client's allowed-apps narrowing for
   tokens issued to the add-in — or the answer is `403 APP_ACCESS_DENIED`; an
   unknown app is `404`.
-- **All or nothing.** More than 200 messages is refused (`TOO_MANY_MESSAGES`)
-  rather than trimmed, and a write that fails part-way removes the chat again.
+- **Whole or not at all.** The transcript is written in a single operation, so
+  it is stored complete or not at all — 200 messages take milliseconds, not a
+  write per message. The chat document is created first, as for every turn, so a
+  failed write leaves a chat with an empty transcript; the import removes it
+  again, and if even that fails what remains is an empty chat its owner can see
+  and delete, never half a conversation. More than 200 messages is refused
+  (`TOO_MANY_MESSAGES`) rather than trimmed; the platform's per-chat message cap
+  (`chats.maxMessagesPerChat`) still applies and drops the oldest.
+- **Not idempotent.** If the response to an import is lost after the chat was
+  stored, asking again stores another copy. The Outlook pane suppresses double
+  clicks and reuses the copy once it has received the chat id, so this takes a
+  lost response *and* a retry; the duplicate is an ordinary chat the owner sees
+  in the history and can delete. An idempotency key would close the gap; it is
+  not implemented.
 - **Timestamps** the client supplies are kept when they are valid dates and not
   in the future; otherwise the moment of the import is recorded.
 

@@ -1324,6 +1324,91 @@ export class ChatRepository {
   }
 
   /**
+   * Store a finished transcript in a chat that has none yet — the write behind
+   * an import.
+   *
+   * One lock, one transcript write and one chat write, however many messages:
+   * the transcript either lands whole or not at all, so a failure cannot leave
+   * half a conversation. That is the difference from appending them one by one,
+   * which rewrote the whole transcript per message (about 1.7 s for 200 of
+   * them) and left every step in between a place to stop.
+   *
+   * The chat document already exists when this runs — `ensureChat` first, like
+   * every turn — so a failure leaves a listable chat with an empty transcript
+   * that its owner can see and delete. The other order would strand a verbatim
+   * transcript that nothing points at (see `deleteChat`).
+   *
+   * Deliberately narrower than {@link ChatRepository#appendMessage}: no fork,
+   * no run bookkeeping, no artifacts, and it refuses a chat that already holds
+   * messages, so an import can never add to somebody's conversation.
+   *
+   * @param {string} chatId - Chat id.
+   * @param {Object[]} messages - Messages, oldest first, as
+   *   `{ role, content, ts? }`.
+   * @returns {Promise<{chat: Object, messages: Object[]}|null>} What was
+   *   stored, or null when the chat does not exist or cannot be stored.
+   * @throws {StorageError} Code `CHAT_NOT_EMPTY` when the chat already has
+   *   messages.
+   */
+  async importMessages(chatId, messages) {
+    if (!this._usable(chatId, 'importMessages')) return null;
+    if (!Array.isArray(messages) || messages.length === 0) return null;
+    return this._withChatLock(chatId, async () => {
+      const { chat, etag: chatEtag } = await this._loadChat(chatId);
+      if (!chat) {
+        this.logger.warn('Cannot import into a chat that was never created', {
+          component: COMPONENT,
+          chatId
+        });
+        return null;
+      }
+      const { stored, etag: messagesEtag } = await this._loadMessages(chatId);
+      if (stored.messages.length > 0) {
+        throw new StorageError(
+          `Chat ${chatId} already has messages; an import only fills a new one`,
+          {
+            code: 'CHAT_NOT_EMPTY'
+          }
+        );
+      }
+
+      let entries = messages.map(buildMessage);
+      // The oldest go first, as `appendMessage` trims — the chat is new, so
+      // what falls off is imported text with no artifacts to leave behind.
+      const cap = this._messageCap();
+      if (cap > 0 && entries.length > cap) {
+        this.logger.info('Trimmed the oldest imported messages at the chat cap', {
+          component: COMPONENT,
+          chatId,
+          dropped: entries.length - cap,
+          cap
+        });
+        entries = entries.slice(entries.length - cap);
+      }
+
+      await this._writeMessages(chatId, {
+        ownerId: chat.ownerId,
+        messages: entries,
+        retiredRunIds: stored.retiredRunIds,
+        etag: messagesEtag
+      });
+
+      const patch = {
+        lastMessageAt: entries[entries.length - 1].ts,
+        messageCount: entries.length
+      };
+      // The first user message names the chat, unless something already did.
+      if (!chat.titleSetByUser && !chat.title) {
+        const first = entries.find(entry => entry.role === 'user');
+        const derived = first ? deriveChatTitle(first.content) : '';
+        if (derived) patch.title = derived;
+      }
+      const updated = await this._writeChat(applyChatPatch(chat, patch), chatEtag);
+      return { chat: updated, messages: entries };
+    });
+  }
+
+  /**
    * Mark a chat as seen — the counterpart of the `hasUnseenActivity` a turn
    * that finished without a connected client sets.
    *
