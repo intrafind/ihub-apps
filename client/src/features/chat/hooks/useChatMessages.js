@@ -45,6 +45,10 @@ export function transformStoredMessage(msg) {
   }
   // Interactive MCP App views of the answer, redrawn from their stored data.
   if (Array.isArray(msg.mcpApps) && msg.mcpApps.length > 0) message.mcpApps = msg.mcpApps;
+  // Connect cards for MCP servers with per-user sign-in.
+  if (Array.isArray(msg.mcpAuthRequired) && msg.mcpAuthRequired.length > 0) {
+    message.mcpAuthRequired = msg.mcpAuthRequired;
+  }
   if (Array.isArray(msg.artifacts) && msg.artifacts.length > 0) {
     message.artifacts = msg.artifacts;
     const images = msg.artifacts.filter(artifact => (artifact?.kind || 'image') === 'image');
@@ -708,7 +712,7 @@ function useChatMessages(chatId = 'default', { ephemeral = false, serverBacked =
       // Strip UI-specific properties that the API doesn't need. MCP App views
       // carry their full tool payload and must not ride along with history.
       return messagesForApi.map(msg => {
-        const { rawContent, mcpApps: _mcpApps, ...apiMsg } = msg;
+        const { rawContent, mcpApps: _mcpApps, mcpAuthRequired: _mcpAuthRequired, ...apiMsg } = msg;
         const content = rawContent !== undefined ? rawContent : apiMsg.content;
         return { ...apiMsg, content };
       });

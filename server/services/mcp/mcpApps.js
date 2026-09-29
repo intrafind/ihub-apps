@@ -292,6 +292,57 @@ export function extractUiResource(readResult, uri) {
 }
 
 /**
+ * Whether a MIME type names view HTML embedded in a tool result: `text/html`
+ * (what mcp-ui servers send), optionally with a charset and the MCP Apps
+ * profile (`text/html;profile=mcp-app`). Other profiles and HTML dialects
+ * written for another host's runtime (`text/html+skybridge`) are not views
+ * iHub can host. The client applies the same rule (embeddedViewHtml.js).
+ *
+ * @param {unknown} mimeType
+ * @returns {boolean}
+ */
+export function isEmbeddedViewMimeType(mimeType) {
+  if (typeof mimeType !== 'string') return false;
+  const [type, ...params] = mimeType.toLowerCase().replace(/\s+/g, '').split(';');
+  if (type !== 'text/html') return false;
+  return params.every(param => {
+    const [name, value] = param.split('=');
+    if (name === 'charset') return true;
+    return name === 'profile' && value?.replace(/"/g, '') === 'mcp-app';
+  });
+}
+
+/**
+ * The view page a tool result embeds, for a tool that declares no view of its
+ * own: the first `{ type: 'resource', resource: { uri: 'ui://…', mimeType:
+ * 'text/html…', text | blob } }` content item with non-empty HTML within
+ * `MAX_UI_RESOURCE_BYTES`. mcp-ui servers and servers that bake the call's
+ * data into the page answer this way instead of declaring
+ * `_meta.ui.resourceUri`.
+ *
+ * @param {Object} [result] - Raw CallToolResult
+ * @returns {{uri: string}|null}
+ */
+export function findEmbeddedView(result) {
+  const content = Array.isArray(result?.content) ? result.content : [];
+  for (const item of content) {
+    if (item?.type !== 'resource') continue;
+    const resource = item.resource;
+    if (!resource || typeof resource !== 'object' || !isUiResourceUri(resource.uri)) continue;
+    if (!isEmbeddedViewMimeType(resource.mimeType)) continue;
+    let html = null;
+    if (typeof resource.text === 'string') html = resource.text;
+    else if (typeof resource.blob === 'string') {
+      html = Buffer.from(resource.blob, 'base64').toString('utf8');
+    }
+    if (!html || !html.trim()) continue;
+    if (Buffer.byteLength(html, 'utf8') > MAX_UI_RESOURCE_BYTES) continue;
+    return { uri: resource.uri };
+  }
+  return null;
+}
+
+/**
  * The browser-facing copy of a tool result: the standard CallToolResult
  * fields only, so iHub-internal data never rides along.
  *
@@ -330,22 +381,38 @@ export function jsonByteLength(value) {
  * render it with (tool input + result), dropping the payload when it is too
  * large to ship to the browser.
  *
+ * A view of a tool that declares none is drawn from the page its result
+ * embeds (`embeddedUri`, see `findEmbeddedView`) and marked `embedded`: the
+ * client renders that page and never asks `resources/read` for it.
+ *
  * @param {Object} params
  * @param {string} params.callId - Tool call id (the view's identity)
  * @param {string} params.toolId - iHub tool id (prefixed)
  * @param {Object} params.mcp - The tool's `_mcp` marker
+ * @param {string} [params.embeddedUri] - `ui://` URI of the page the result embeds,
+ *   for a tool without a declared view
  * @param {Object} [params.args] - Tool input
  * @param {Object} [params.toolResult] - Browser-facing CallToolResult
  * @param {boolean} [params.cancelled] - Tool failed / was cancelled
  * @returns {Object}
  */
-export function buildViewDescriptor({ callId, toolId, mcp, args, toolResult, cancelled }) {
+export function buildViewDescriptor({
+  callId,
+  toolId,
+  mcp,
+  embeddedUri,
+  args,
+  toolResult,
+  cancelled
+}) {
+  const declaredUri = mcp.ui?.resourceUri;
   const view = {
     callId: String(callId),
     toolId: String(toolId),
     serverId: mcp.serverId,
     toolName: mcp.originalName,
-    resourceUri: mcp.ui.resourceUri
+    resourceUri: declaredUri || embeddedUri,
+    ...(declaredUri ? {} : { embedded: true })
   };
   const payload = { args: args && typeof args === 'object' ? args : {} };
   if (toolResult) payload.toolResult = toolResult;

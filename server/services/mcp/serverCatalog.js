@@ -3,10 +3,11 @@
  * Browse catalog. An entry is a template for a `mcpServers.json` server: the
  * admin picks one, stores the API key as a credential, tests and saves.
  *
- * Only servers iHub can connect to today are listed: no auth, or one static
- * credential shared by all users (bearer token, vendor header or basic auth).
- * Servers that insist on an interactive OAuth login for every user are left
- * out until outbound per-user OAuth exists.
+ * The entries use no auth or one static credential shared by all users
+ * (bearer token, vendor header or basic auth). Servers that need an
+ * interactive OAuth login for every user are now supported through
+ * `auth.type: "oauthUser"` and are eligible for the catalog, but none are
+ * listed yet.
  *
  * Entry fields:
  *   id             suggested server id (also the default tool prefix)

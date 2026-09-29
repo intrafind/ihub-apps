@@ -197,7 +197,9 @@ export async function execute(params) {
 
 ### 3. Testing and Validation
 
-Test your tool independently before integration:
+Test your tool independently before integration. A direct call runs only a tool the caller may
+use: admins run every tool; other users need the tool granted to one of their groups
+(`permissions.tools` in `groups.json`) or listed by an app they can open, and get `403` otherwise.
 
 ```bash
 # Test tool execution

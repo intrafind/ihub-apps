@@ -112,7 +112,12 @@ export const mcpAppViewSchema = mcpAppRefSchema.extend({
   args: z.record(z.string(), z.any()).optional(),
   toolResult: z.record(z.string(), z.any()).optional(),
   cancelled: z.boolean().optional(),
-  payloadOmitted: z.boolean().optional()
+  payloadOmitted: z.boolean().optional(),
+  /**
+   * The tool declares no view; the view is the `ui://` page embedded in
+   * `toolResult` under `resourceUri`, never read with `resources/read`.
+   */
+  embedded: z.boolean().optional()
 });
 
 export const toolStartedData = z.object({
@@ -147,7 +152,14 @@ export const toolCompletedData = z.object({
   /** Pages the call found or read (search / fetch tools), from the full result. */
   webSources: z.array(webSourceSchema).optional(),
   /** MCP App view drawn from this call's full result. */
-  mcpApp: mcpAppViewSchema.optional()
+  mcpApp: mcpAppViewSchema.optional(),
+  /**
+   * A per-user OAuth MCP server the caller has not connected: the chat shows
+   * a Connect card for it (`connectUrl` is a same-origin path).
+   */
+  authRequired: z
+    .object({ serverId: z.string(), serverName: z.string(), connectUrl: z.string() })
+    .optional()
 });
 
 export const interactionRaisedData = z.object({

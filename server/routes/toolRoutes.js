@@ -1,4 +1,4 @@
-import { runTool } from '../toolLoader.js';
+import { loadTools, runTool } from '../toolLoader.js';
 import { logInteraction } from '../utils.js';
 import { authRequired } from '../middleware/authRequired.js';
 import validate from '../validators/validate.js';
@@ -9,6 +9,53 @@ import { buildServerPath } from '../utils/basePath.js';
 import { validateIdForPath } from '../utils/pathSecurity.js';
 import { requireFeature } from '../featureRegistry.js';
 import { sendInternalError } from '../utils/responseHelpers.js';
+import { stripReservedToolContext, withTrustedToolContext } from '../utils/toolCallContext.js';
+import { getVisibleToolIds } from '../services/mcp/permissions.js';
+import { isToolSelected } from '../utils/toolSelection.js';
+
+/**
+ * The caller with permissions resolved: an anonymous caller (when anonymous
+ * access is allowed) gets the anonymous permissions.
+ *
+ * @param {import('express').Request} req
+ * @param {Object} platformConfig
+ * @returns {Object|null}
+ */
+function resolveCaller(req, platformConfig) {
+  const authConfig = platformConfig.auth || {};
+  if (req.user && !req.user.permissions) {
+    req.user = enhanceUserWithPermissions(req.user, authConfig, platformConfig);
+  }
+  if (!req.user && isAnonymousAccessAllowed(platformConfig)) {
+    req.user = enhanceUserWithPermissions(null, authConfig, platformConfig);
+  }
+  return req.user || null;
+}
+
+/**
+ * Whether the caller may run a tool directly. The rule is the MCP gateway's
+ * (`services/mcp/permissions.js`): a tool the caller's groups grant
+ * (`permissions.tools`, `*` for all) or an app they can open lists, read the
+ * way an app's `tools` are read — exact id, base id of a function-style tool,
+ * MCP server id, A2A agent reference (see `isToolSelected`). An admin, who
+ * can grant themselves any tool, runs every tool (testing a tool this way is
+ * how tool authors check it).
+ *
+ * @param {Object} user
+ * @param {Object} platformConfig
+ * @param {string} toolId
+ * @returns {Promise<boolean>}
+ */
+async function mayRunTool(user, platformConfig, toolId) {
+  if (user.permissions?.adminAccess === true) return true;
+  const visible = await getVisibleToolIds(user, platformConfig);
+  if (visible.has('*')) return true;
+  const tools = await loadTools(platformConfig.defaultLanguage || 'en');
+  // The loaded definition carries the MCP server / A2A agent it belongs to;
+  // a tool that is not in the list (workflow_, source_, …) is judged by id.
+  const tool = (tools || []).find(t => t.id === toolId) || { id: toolId };
+  return isToolSelected(tool, visible);
+}
 
 export default function registerToolRoutes(app) {
   app.get(
@@ -18,17 +65,7 @@ export default function registerToolRoutes(app) {
     async (req, res) => {
       try {
         const platformConfig = configCache.getPlatform() || {};
-        const authConfig = platformConfig.auth || {};
-
-        // Force permission enhancement if not already done
-        if (req.user && !req.user.permissions) {
-          req.user = enhanceUserWithPermissions(req.user, authConfig, platformConfig);
-        }
-
-        // Create anonymous user if none exists and anonymous access is allowed
-        if (!req.user && isAnonymousAccessAllowed(platformConfig)) {
-          req.user = enhanceUserWithPermissions(null, authConfig, platformConfig);
-        }
+        resolveCaller(req, platformConfig);
 
         // Get user language from query parameters or platform default
         const defaultLang = platformConfig?.defaultLanguage || 'en';
@@ -65,15 +102,31 @@ export default function registerToolRoutes(app) {
       // Validate toolId to prevent injection via dynamic import
       if (!validateIdForPath(toolId, 'tool', res)) return;
 
-      const params = req.method === 'GET' ? req.query : req.body;
-      if (req.headers['x-chat-id']) {
-        params.chatId = req.headers['x-chat-id'];
+      // Only a tool the caller's groups or apps grant runs; the answer is the
+      // same for a tool that does not exist, so it does not disclose which do.
+      const platformConfig = configCache.getPlatform() || {};
+      const caller = resolveCaller(req, platformConfig);
+      try {
+        if (!caller || !(await mayRunTool(caller, platformConfig, toolId))) {
+          return res.status(403).json({ error: 'Tool not available' });
+        }
+      } catch (error) {
+        return sendInternalError(res, error, `authorize tool ${toolId}`);
       }
+
+      // The caller's arguments never carry iHub's context: `user` (whose
+      // identity and, for per-user OAuth MCP servers, whose stored token the
+      // call uses), `chatId`, `appConfig`, … are stripped and set here, so the
+      // authenticated user always wins over anything in the body or query.
+      const chatId =
+        typeof req.headers['x-chat-id'] === 'string' ? req.headers['x-chat-id'] : undefined;
+      const args = stripReservedToolContext(req.method === 'GET' ? req.query : req.body);
+      const params = withTrustedToolContext(args, { chatId, user: req.user });
       try {
         const result = await runTool(toolId, params);
         await logInteraction('tool_usage', {
           toolId,
-          toolInput: params,
+          toolInput: args,
           toolOutput: result,
           sessionId: req.headers['x-chat-id'] || 'direct',
           userSessionId: req.headers['x-session-id'] || 'unknown',
