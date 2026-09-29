@@ -212,6 +212,12 @@ const getTranscriptionErrorMessage = (err, t) => {
   }
 };
 
+// A transcript is built from the user's own audio, not from the model's
+// knowledge. Transcription turns never pass through the server's chat run (which
+// is what reports `answerSource` for other answers), so without this the badge
+// under the transcript falls back to "Based on AI knowledge".
+const TRANSCRIPT_ANSWER_SOURCE = { sources: ['audio'], type: 'mixed' };
+
 // The query string an embedded chat reads: none. Module-level, so its identity
 // is stable across renders like the router's own.
 const NO_SEARCH_PARAMS = new URLSearchParams();
@@ -1934,7 +1940,8 @@ function AppChat({ preloadedApp = null, embedded = false, appId: embeddedAppId =
             updateAssistantMessage(
               assistantId,
               transcript || t('transcription.empty', '_(No speech detected)_'),
-              false
+              false,
+              { answerSource: TRANSCRIPT_ANSWER_SOURCE }
             );
             if (transcript) transcribed = true;
           } catch (err) {
@@ -1952,7 +1959,10 @@ function AppChat({ preloadedApp = null, embedded = false, appId: embeddedAppId =
                       'transcription.errors.interrupted',
                       'Transcription was interrupted — the transcript may be incomplete.'
                     );
-              updateAssistantMessage(assistantId, `${lastText.trim()}\n\n_${notice}_`, false);
+              // Still the audio's text, just incomplete — keep the source badge.
+              updateAssistantMessage(assistantId, `${lastText.trim()}\n\n_${notice}_`, false, {
+                answerSource: TRANSCRIPT_ANSWER_SOURCE
+              });
             } else {
               updateAssistantMessage(assistantId, getTranscriptionErrorMessage(err, t), false, {
                 isError: true

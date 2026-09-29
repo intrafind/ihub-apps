@@ -91,3 +91,15 @@ there too.
 - Documents are still fetched with the signed-in user's own iFinder permissions.
 - Shared links do not include the Documents panel: its documents were found with the owner's
   iFinder permissions, and a viewer may not be allowed to see them.
+
+## Audio Answers No Longer Say "Based on AI Knowledge"
+
+A transcript of a recording or an uploaded audio or video file was labelled "Based on AI knowledge"
+— although the text comes straight from the user's own audio. The badge under the answer now reads
+"Based on audio recording".
+
+- Applies to transcripts from the transcription model (upload, video and microphone recording),
+  including a partial transcript kept after a cancelled or interrupted run.
+- Also applies when audio is sent directly to a chat model that accepts it, such as the
+  **Audio Transcription** app.
+- A failed transcription still shows the error message without a badge.

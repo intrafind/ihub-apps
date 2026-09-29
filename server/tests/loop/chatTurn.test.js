@@ -517,6 +517,47 @@ test('no tools: a message carrying fileData/imageData ends with run/ended.knowle
   assert.deepEqual(many.ended.knowledgeSources, ['file']);
 });
 
+test('no tools: a message carrying audioData ends with run/ended.knowledgeSources ["audio"]', async t => {
+  const single = await sourcesEmittedFor(t, 'audio', [
+    {
+      role: 'user',
+      content: 'Transcribe this',
+      audioData: { base64: 'AAAA', fileType: 'audio/mpeg', fileName: 'memo.mp3', type: 'audio' }
+    }
+  ]);
+  assert.deepEqual(single.ended.knowledgeSources, ['audio']);
+  assert.deepEqual(single.completed.sources, ['audio'], 'the step frame carries the same sources');
+  assert.deepEqual(single.summary.knowledgeSources, ['audio']);
+
+  const many = await sourcesEmittedFor(t, 'audios', [
+    {
+      role: 'user',
+      content: 'Compare these recordings',
+      audioData: [
+        { base64: 'AAAA', fileType: 'audio/wav', type: 'audio' },
+        { base64: 'BBBB', fileType: 'audio/wav', type: 'audio' }
+      ]
+    }
+  ]);
+  assert.deepEqual(many.ended.knowledgeSources, ['audio']);
+
+  const both = await sourcesEmittedFor(t, 'audio-and-file', [
+    {
+      role: 'user',
+      content: 'Does the recording match the notes?',
+      fileData: { fileName: 'notes.txt', fileType: 'text/plain', content: 'notes' },
+      audioData: { base64: 'AAAA', fileType: 'audio/mpeg', type: 'audio' }
+    }
+  ]);
+  assert.deepEqual([...both.ended.knowledgeSources].sort(), ['audio', 'file']);
+
+  // An empty audio list is not a source.
+  const none = await sourcesEmittedFor(t, 'audio-empty', [
+    { role: 'user', content: 'Hello', audioData: [] }
+  ]);
+  assert.deepEqual(none.ended.knowledgeSources, []);
+});
+
 test('no tools: an open email yields knowledgeSources ["email"]; email + upload yields both', async t => {
   const email = await sourcesEmittedFor(t, 'email', [
     {
