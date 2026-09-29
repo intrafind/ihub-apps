@@ -1258,6 +1258,18 @@ class ChatService {
         usage: result.usage,
         startedAt
       });
+      const provenance = await recordTurnProvenance({
+        content: result.content || '',
+        model,
+        app,
+        temperature,
+        images: result.images,
+        kind: String(parentRunId || '').startsWith('a2a-')
+          ? 'a2a'
+          : String(parentRunId || '').startsWith('mcp-')
+            ? 'mcp'
+            : 'chat'
+      });
       return {
         status: 'ok',
         runId,
@@ -1266,7 +1278,8 @@ class ChatService {
         citations: collected.citations,
         usage: result.usage,
         finishReason: result.finishReason,
-        model: model.id
+        model: model.id,
+        ...(provenance ? { provenance } : {})
       };
     } catch (error) {
       logger.error('invokeAppInternal failed', {

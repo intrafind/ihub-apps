@@ -225,7 +225,9 @@ export function itemFromMessage(message) {
     const hasOutput = message.output !== undefined && message.output !== null;
     const metadata = {
       ...(message.model ? { model: message.model } : {}),
-      ...(message.error ? { error: message.error } : {})
+      ...(message.error ? { error: message.error } : {}),
+      // EU AI Act provenance recorded when the answer was generated.
+      ...(message.provenance ? { provenance: message.provenance } : {})
     };
     return {
       type: 'message',

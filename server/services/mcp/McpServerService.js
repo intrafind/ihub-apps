@@ -349,13 +349,16 @@ export async function buildMcpServer({ user, platform }) {
             return toolErrorResult('access_denied: app not permitted for this caller');
           }
           try {
-            const text = await invokeAppNonStreaming({
+            const { text, result } = await invokeAppNonStreaming({
               appId: app.id,
               args: args || {},
               user,
-              language: platform?.defaultLanguage || 'en'
+              language: platform?.defaultLanguage || 'en',
+              withResult: true
             });
-            return toolSuccessResult(text || '');
+            // EU AI Act Art. 50(2): machine clients get the provenance of the
+            // generated text in the result's `_meta`.
+            return withProvenanceMeta(toolSuccessResult(text || ''), result?.provenance);
           } catch (err) {
             logger.warn('MCP gateway app invocation failed', {
               component: 'McpServerService',
@@ -495,6 +498,11 @@ function toolSuccessResult(payload) {
     return { content: [{ type: 'text', text: payload }] };
   }
   return { content: [{ type: 'text', text: JSON.stringify(payload) }] };
+}
+
+function withProvenanceMeta(toolResult, provenance) {
+  if (!provenance) return toolResult;
+  return { ...toolResult, _meta: { ...(toolResult._meta || {}), provenance } };
 }
 
 function toolErrorResult(message) {

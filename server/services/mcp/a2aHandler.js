@@ -497,9 +497,10 @@ async function runTask({ task, skill, text, data, userMessage, user, platform, s
   let statusMessage = null;
   try {
     let answer;
+    let provenance = null;
     if (skill._kind === 'app') {
       const history = contextMessages(await store.getContext(contextId, user.id));
-      const { text: result } = await invokeApp({
+      const { text: result, result: invocation } = await invokeApp({
         appId: skill._id,
         messages: [...history, { role: 'user', content: text }],
         variables: data,
@@ -524,6 +525,7 @@ async function runTask({ task, skill, text, data, userMessage, user, platform, s
           : undefined
       });
       answer = result;
+      provenance = invocation?.provenance || null;
     } else {
       const output = await runTool(
         `workflow_${skill._id}`,
@@ -536,7 +538,13 @@ async function runTask({ task, skill, text, data, userMessage, user, platform, s
     }
     if (controller.signal.aborted) throw new A2aError(A2A_ERRORS.INTERNAL, 'Task cancelled');
 
-    const artifact = { artifactId, name: 'response', parts: [{ kind: 'text', text: answer }] };
+    const artifact = {
+      artifactId,
+      name: 'response',
+      parts: [{ kind: 'text', text: answer }],
+      // EU AI Act Art. 50(2): provenance of the generated text for machine clients.
+      ...(provenance ? { metadata: { provenance } } : {})
+    };
     // Streamed fragments came from every model step; the artifact is the
     // final answer. When they differ, the last event replaces what was
     // streamed (append: false); otherwise it just closes the artifact.
