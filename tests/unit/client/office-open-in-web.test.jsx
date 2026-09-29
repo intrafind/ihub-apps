@@ -167,6 +167,17 @@ const panel = () => (
   </MemoryRouter>
 );
 
+/**
+ * What `importChat` rejects with. `handleApiResponse` does not rethrow the axios
+ * error: it throws a fresh one with `status`, and the axios error — the one
+ * that has the server's response — as `originalError`.
+ */
+const apiError = (status, code) =>
+  Object.assign(new Error('Request failed'), {
+    status,
+    originalError: { response: { status, data: { details: { code } } } }
+  });
+
 /** Render, let the "does the server store chats?" answer land, open the ☰ menu. */
 async function renderWithMenuOpen() {
   const view = render(panel());
@@ -299,9 +310,7 @@ test('stores it again when the earlier copy has been deleted', async () => {
 });
 
 test('says so when the server stores no chats after all, and opens nothing', async () => {
-  mockImportChat.mockRejectedValue({
-    response: { status: 503, data: { details: { code: 'CHAT_PERSISTENCE_UNAVAILABLE' } } }
-  });
+  mockImportChat.mockRejectedValue(apiError(503, 'CHAT_PERSISTENCE_UNAVAILABLE'));
   await renderWithMenuOpen();
 
   await clickOpenInWeb();
@@ -311,9 +320,7 @@ test('says so when the server stores no chats after all, and opens nothing', asy
 });
 
 test('says so when the user may not use the app in the web app', async () => {
-  mockImportChat.mockRejectedValue({
-    response: { status: 403, data: { details: { code: 'APP_ACCESS_DENIED' } } }
-  });
+  mockImportChat.mockRejectedValue(apiError(403, 'APP_ACCESS_DENIED'));
   await renderWithMenuOpen();
 
   await clickOpenInWeb();

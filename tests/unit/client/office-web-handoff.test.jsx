@@ -1,8 +1,21 @@
+// client.js and utils/cache.js read import.meta.env at module scope, which the
+// CommonJS jest transform cannot evaluate. Mock them so the real
+// requestHandler.js runs — the error the pane classifies is the one it throws.
+jest.mock('../../../client/src/api/client', () => ({
+  API_REQUEST_TIMEOUT: 30000
+}));
+jest.mock('../../../client/src/utils/cache', () => ({
+  __esModule: true,
+  default: { get: jest.fn(() => null), set: jest.fn() },
+  DEFAULT_CACHE_TTL: { SHORT: 60 * 1000, MEDIUM: 5 * 60 * 1000 }
+}));
+
 import {
   buildImportMessages,
   buildWebChatUrl,
   classifyImportError
 } from '../../../client/src/features/office/utilities/officeWebHandoff';
+import { handleApiResponse } from '../../../client/src/api/utils/requestHandler';
 
 /**
  * "Open in web" hands the pane's conversation to the web app. What matters
@@ -107,22 +120,66 @@ describe('buildWebChatUrl', () => {
 });
 
 describe('classifyImportError', () => {
-  const failure = (status, code) => ({ response: { status, data: { details: { code } } } });
-
-  it('recognises the server codes', () => {
-    expect(classifyImportError(failure(503, 'CHAT_PERSISTENCE_UNAVAILABLE'))).toBe('unavailable');
-    expect(classifyImportError(failure(403, 'APP_ACCESS_DENIED'))).toBe('denied');
-    expect(classifyImportError(failure(400, 'TOO_MANY_MESSAGES'))).toBe('tooLong');
+  beforeEach(() => {
+    jest.spyOn(console, 'error').mockImplementation(() => {});
+  });
+  afterEach(() => {
+    console.error.mockRestore();
   });
 
-  it('falls back on the status when the body carries no code', () => {
-    expect(classifyImportError({ response: { status: 503 } })).toBe('unavailable');
-    expect(classifyImportError({ response: { status: 403 } })).toBe('denied');
+  /**
+   * The error `importChat` really rejects with: the axios failure, rethrown by
+   * the real `handleApiResponse`. It is *not* the axios error — it has no
+   * `response`, only `status` and `originalError` — and hand-building one here
+   * once hid exactly that from this classifier.
+   */
+  async function importFailure(status, data) {
+    const axiosError = Object.assign(new Error(`Request failed with status code ${status}`), {
+      response: { status, data }
+    });
+    try {
+      await handleApiResponse(() => Promise.reject(axiosError), null, null);
+    } catch (error) {
+      return error;
+    }
+    throw new Error('handleApiResponse should have thrown');
+  }
+
+  const details = code => ({ error: 'refused', details: { code } });
+
+  it('recognises the server codes on the error the API layer throws', async () => {
+    expect(
+      classifyImportError(await importFailure(503, details('CHAT_PERSISTENCE_UNAVAILABLE')))
+    ).toBe('unavailable');
+    expect(classifyImportError(await importFailure(403, details('APP_ACCESS_DENIED')))).toBe(
+      'denied'
+    );
+    expect(classifyImportError(await importFailure(400, details('TOO_MANY_MESSAGES')))).toBe(
+      'tooLong'
+    );
   });
 
-  it('calls everything else a plain failure', () => {
-    expect(classifyImportError(failure(500))).toBe('failed');
+  it('falls back on the status when the body carries no code', async () => {
+    expect(classifyImportError(await importFailure(503, { error: 'down' }))).toBe('unavailable');
+    expect(classifyImportError(await importFailure(403, { error: 'no' }))).toBe('denied');
+  });
+
+  it('calls everything else a plain failure', async () => {
+    expect(classifyImportError(await importFailure(500, { error: 'boom' }))).toBe('failed');
+    expect(classifyImportError(await importFailure(400, details('INVALID_MESSAGES')))).toBe(
+      'failed'
+    );
+    // No response at all (offline): the API layer reports it as a 500.
+    const offline = await handleApiResponse(() => Promise.reject(new Error('Network Error'))).catch(
+      error => error
+    );
+    expect(classifyImportError(offline)).toBe('failed');
     expect(classifyImportError(new Error('Network Error'))).toBe('failed');
     expect(classifyImportError(undefined)).toBe('failed');
+  });
+
+  it('also reads a bare axios error, which has its response on itself', () => {
+    const bare = { response: { status: 403, data: details('APP_ACCESS_DENIED') } };
+    expect(classifyImportError(bare)).toBe('denied');
   });
 });

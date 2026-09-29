@@ -59,12 +59,21 @@ export function buildWebChatUrl(baseUrl, appId, chatId) {
  * What went wrong with an import, as a key the pane can say something useful
  * about. The server's codes are the contract; anything else is "failed".
  *
- * @param {Error & { response?: { status?: number, data?: { details?: { code?: string } } } }} error
+ * The API layer (`handleApiResponse`) does not rethrow the axios error: it
+ * throws a fresh one carrying `status` and the original as `originalError`,
+ * and the server's response lives on that. A bare axios error is read too.
+ *
+ * @param {Error & {
+ *   status?: number,
+ *   response?: object,
+ *   originalError?: { response?: { status?: number, data?: { details?: { code?: string } } } }
+ * }} error
  * @returns {'unavailable'|'denied'|'tooLong'|'failed'}
  */
 export function classifyImportError(error) {
-  const status = error?.response?.status;
-  const code = error?.response?.data?.details?.code;
+  const response = error?.response ?? error?.originalError?.response;
+  const status = response?.status ?? error?.status;
+  const code = response?.data?.details?.code;
   if (code === 'CHAT_PERSISTENCE_UNAVAILABLE' || status === 503) return 'unavailable';
   if (code === 'APP_ACCESS_DENIED' || status === 403) return 'denied';
   if (code === 'TOO_MANY_MESSAGES') return 'tooLong';
