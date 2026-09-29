@@ -130,9 +130,9 @@ export default async function registerSwaggerRoutes(app) {
   // OpenAI Compatible APIs Documentation
   const openaiApiConfig = createSwaggerConfig(
     'iHub Apps - OpenAI Compatible APIs',
-    'OpenAI-compatible inference APIs for chat completions and model listings',
+    'OpenAI-compatible inference APIs: chat completions, responses, conversations and model listings, for models and iHub apps',
     '1.0.0',
-    [path.join(__dirname, 'openaiProxy.js')],
+    [path.join(__dirname, 'openaiProxy.js'), path.join(__dirname, 'inference/*.js')],
     basePath
   );
 

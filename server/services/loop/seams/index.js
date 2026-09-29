@@ -14,6 +14,11 @@
  *   onHallucinated(ctx, info)            the model called an unregistered tool
  *   onCircuitBroken(ctx, info)           a tool was withheld for the rest of the segment
  *   onCompaction(ctx, info)              messages were compacted (proactive or overflow)
+ *   onAnswer(ctx, info)                  the model answered without calling a tool; `info` is
+ *                                        `{ content, stepText, finishReason, iteration, canRetry }`.
+ *                                        Return `{ handled: true, retry: '<correction>', error? }`
+ *                                        to reject the answer and let the model try again
+ *                                        (honoured only when `canRetry`)
  *
  * @module services/loop/seams
  */
@@ -21,3 +26,4 @@ export { imageLiftSeam, extractImageData } from './imageLiftSeam.js';
 export { knowledgeSourceSeam, classifyKnowledgeSource } from './knowledgeSourceSeam.js';
 export { passthroughSeam } from './passthroughSeam.js';
 export { questionSeam, markInteractiveTools } from './questionSeam.js';
+export { structuredOutputSeam, structuredOutputRetryPrompt } from './structuredOutputSeam.js';
