@@ -206,7 +206,11 @@
       "settings": "Einstellungen",
       "logout": "Abmelden",
       "variables": "Variablen anzeigen",
-      "history": "Chatverlauf"
+      "history": "Chatverlauf",
+      "openInWeb": "In der Web-App öffnen"
+    },
+    "openInWeb": {
+      "fallback": "Falls sich der Chat nicht im Browser geöffnet hat, öffnen Sie diese Adresse:"
     },
     "startPage": {
       "openApp": "App öffnen",

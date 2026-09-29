@@ -276,6 +276,17 @@ An app marked [`ephemeral`](apps.md) stays out of the store in the pane too, as
 in the web app: its chats keep their transcript in the browser and never reach
 the history.
 
+**Open in web app** in the pane's chat menu opens the chat on screen at
+`/apps/:appId/c/:chatId` in the browser — the route above, so the web app
+fetches, re-attaches and continues it exactly as it would a chat from its own
+history. It is the same stored chat under its `office-<uuid>` id, not a copy,
+and it opens with the browser's web session, so for the user who owns it (or
+an admin, as any stored chat).
+The entry is offered for stored chats only and stays greyed out until the
+server has accepted the chat's first turn. The pane does not re-read a chat
+that was continued in the browser; reopening it from the history does. See
+[the Outlook guide](outlook-add-in.md#open-in-web-app).
+
 Opening a different email still starts a new chat in the pane (see
 [the Outlook guide](outlook-add-in.md)), and **Restore previous chat** fetches
 the one it set aside from the store. With durable chats off the pane keeps its

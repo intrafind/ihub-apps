@@ -111,3 +111,22 @@ export function formatOfficeChatTime(timestamp, language, now = new Date()) {
     return date.toLocaleDateString();
   }
 }
+
+/**
+ * The web app's address for a stored chat — the route its own history opens,
+ * `/apps/:appId/c/:chatId`, so a chat from the pane continues there like any
+ * chat started in the browser.
+ *
+ * `baseUrl` is the deployment's public URL including any base path (the one the
+ * add-in signs in against), so a subpath deployment needs no special case.
+ *
+ * @param {string} baseUrl - Public base URL, e.g. `https://ihub.example.com/ihub`.
+ * @param {string} appId - App the chat belongs to.
+ * @param {string} chatId - Stored chat id.
+ * @returns {string|null} Absolute URL, or null when any part is missing.
+ */
+export function buildWebChatUrl(baseUrl, appId, chatId) {
+  if (typeof baseUrl !== 'string' || !baseUrl.trim() || !appId || !chatId) return null;
+  const base = baseUrl.trim().replace(/\/+$/, '');
+  return `${base}/apps/${encodeURIComponent(appId)}/c/${encodeURIComponent(chatId)}`;
+}

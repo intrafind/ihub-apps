@@ -15,7 +15,9 @@ import '@testing-library/jest-dom';
  *   turn that is still running, its settings handed back) and how a new one
  *   is not (no fetch for a chat that was never sent),
  * - the chat panel's side: which chat it opens, when it waits, and the way to
- *   the history.
+ *   the history,
+ * - "Open in web app" (issue #2591): a stored chat continues in the browser at
+ *   the web app's own chat route.
  */
 
 jest.mock('react-i18next', () => ({
@@ -53,13 +55,26 @@ jest.mock('../../../client/src/shared/hooks/chatListStore', () => ({
 }));
 
 jest.mock('../../../client/src/features/office/contexts/OfficeConfigContext', () => ({
-  useOfficeConfig: () => ({ starterPrompts: [], calendarStarterPrompts: [] })
+  useOfficeConfig: () => ({
+    baseUrl: 'https://ihub.example.com/ihub',
+    starterPrompts: [],
+    calendarStarterPrompts: []
+  })
+}));
+
+const mockOpenExternalUrl = jest.fn(() => Promise.resolve(true));
+jest.mock('../../../client/src/utils/externalNavigation', () => ({
+  ...jest.requireActual('../../../client/src/utils/externalNavigation'),
+  openExternalUrlSettled: (...args) => mockOpenExternalUrl(...args)
 }));
 
 const useStoredChatHydration =
   require('../../../client/src/features/office/hooks/useStoredChatHydration').default;
 const useOfficeChatPersistence =
   require('../../../client/src/features/office/hooks/useOfficeChatPersistence').default;
+const {
+  buildWebChatUrl
+} = require('../../../client/src/features/office/utilities/officeChatHistory');
 
 const flush = () => act(async () => {});
 
@@ -78,6 +93,32 @@ beforeEach(() => {
   mockFetchChat.mockReset();
   mockFetchPlatformConfig.mockReset();
   mockInvalidateChatsCache.mockReset();
+  mockOpenExternalUrl.mockReset();
+  mockOpenExternalUrl.mockResolvedValue(true);
+});
+
+describe('buildWebChatUrl', () => {
+  test("the web app's chat route under the deployment's base URL, subpath included", () => {
+    expect(buildWebChatUrl('https://ihub.example.com/ihub', 'mail', 'office-1')).toBe(
+      'https://ihub.example.com/ihub/apps/mail/c/office-1'
+    );
+    expect(buildWebChatUrl('https://ihub.example.com/', 'mail', 'office-1')).toBe(
+      'https://ihub.example.com/apps/mail/c/office-1'
+    );
+  });
+
+  test('ids are encoded as path segments', () => {
+    expect(buildWebChatUrl('https://ihub.example.com', 'a/b', 'c d')).toBe(
+      'https://ihub.example.com/apps/a%2Fb/c/c%20d'
+    );
+  });
+
+  test('nothing to open without a base URL, an app or a chat', () => {
+    expect(buildWebChatUrl('', 'mail', 'office-1')).toBeNull();
+    expect(buildWebChatUrl(undefined, 'mail', 'office-1')).toBeNull();
+    expect(buildWebChatUrl('https://ihub.example.com', '', 'office-1')).toBeNull();
+    expect(buildWebChatUrl('https://ihub.example.com', 'mail', null)).toBeNull();
+  });
 });
 
 describe('useOfficeChatPersistence', () => {
@@ -350,12 +391,17 @@ describe('<OfficeChatPanel /> with durable chats', () => {
     }));
     jest.doMock('../../../client/src/features/chat/components/ChatMessageList', () => ({
       __esModule: true,
-      default: ({ messages }) => (
-        <ul aria-label="messages">
-          {messages.map(m => (
-            <li key={m.id}>{m.content}</li>
-          ))}
-        </ul>
+      default: ({ messages, onInsertAction }) => (
+        <>
+          <ul aria-label="messages">
+            {messages.map(m => (
+              <li key={m.id}>{m.content}</li>
+            ))}
+          </ul>
+          <button type="button" onClick={() => onInsertAction?.('reply', 'Answer')}>
+            Answer action
+          </button>
+        </>
       )
     }));
     jest.doMock('../../../client/src/features/chat/components/ChatInput', () => ({
@@ -549,5 +595,117 @@ describe('<OfficeChatPanel /> with durable chats', () => {
     await waitFor(() =>
       expect(screen.queryByRole('button', { name: 'Chat history' })).not.toBeInTheDocument()
     );
+    expect(screen.queryByText('Open in web app')).not.toBeInTheDocument();
+  });
+
+  describe('Open in web app', () => {
+    const openMenu = () => fireEvent.click(screen.getByRole('button', { name: 'Open menu' }));
+    const webEntry = () => screen.queryByRole('button', { name: 'Open in web app' });
+    // The host's answer settles after the click (the extension's tab is created
+    // asynchronously), so the click is awaited through it.
+    const openInWeb = async () => {
+      openMenu();
+      await act(async () => {
+        fireEvent.click(webEntry());
+      });
+    };
+
+    test("a chat from the history opens in the browser at the web app's chat route", async () => {
+      renderPanel({ openChatId: 'stored-1' });
+      await openInWeb();
+
+      expect(mockOpenExternalUrl).toHaveBeenCalledTimes(1);
+      expect(mockOpenExternalUrl).toHaveBeenCalledWith(
+        'https://ihub.example.com/ihub/apps/mail/c/stored-1'
+      );
+      // Opened: nothing to report.
+      expect(screen.queryByRole('status')).not.toBeInTheDocument();
+    });
+
+    test('also while the stored chat is still loading: the web app fetches it itself', async () => {
+      mockAdapterState.hydrating = true;
+      renderPanel({ openChatId: 'stored-1' });
+      await openInWeb();
+      expect(mockOpenExternalUrl).toHaveBeenCalledWith(
+        'https://ihub.example.com/ihub/apps/mail/c/stored-1'
+      );
+    });
+
+    test('a new chat can be opened once the server has its first turn, under its own id', async () => {
+      renderPanel();
+      const fresh = lastAdapterCall();
+
+      // Offered, but greyed out: the store has never heard of this chat.
+      openMenu();
+      expect(screen.getByText('Open in web app')).toBeInTheDocument();
+      expect(webEntry()).not.toBeInTheDocument();
+      openMenu();
+
+      fireEvent.change(screen.getByLabelText('message'), { target: { value: 'Draft a reply' } });
+      fireEvent.click(screen.getByRole('button', { name: 'Send' }));
+      // Sent is not stored: the request goes out once the stream connects.
+      openMenu();
+      expect(webEntry()).not.toBeInTheDocument();
+      openMenu();
+
+      act(() => lastAdapterCall().onMessageAccepted(fresh.chatId));
+      await openInWeb();
+      expect(mockOpenExternalUrl).toHaveBeenCalledWith(
+        `https://ihub.example.com/ihub/apps/mail/c/${fresh.chatId}`
+      );
+    });
+
+    test('when the browser does not open — or its tab is refused — the address is shown', async () => {
+      mockOpenExternalUrl.mockResolvedValue(false);
+      renderPanel({ openChatId: 'stored-1' });
+      await openInWeb();
+
+      const notice = screen.getByRole('status');
+      expect(notice).toHaveTextContent(
+        'If the chat did not open in your browser, open this address:'
+      );
+      expect(notice).toHaveTextContent('https://ihub.example.com/ihub/apps/mail/c/stored-1');
+
+      fireEvent.click(screen.getByRole('button', { name: 'Close' }));
+      expect(screen.queryByRole('status')).not.toBeInTheDocument();
+    });
+
+    test('a later attempt that opens clears the address of an earlier one', async () => {
+      mockOpenExternalUrl.mockResolvedValue(false);
+      renderPanel({ openChatId: 'stored-1' });
+      await openInWeb();
+      expect(screen.getByRole('status')).toHaveTextContent('/c/stored-1');
+
+      mockOpenExternalUrl.mockResolvedValue(true);
+      await openInWeb();
+      expect(screen.queryByRole('status')).not.toBeInTheDocument();
+    });
+
+    test("the address goes once its chat is left: it is not the new chat's", async () => {
+      mockOpenExternalUrl.mockResolvedValue(false);
+      renderPanel({ openChatId: 'stored-1' });
+      await openInWeb();
+      expect(screen.getByRole('status')).toHaveTextContent('/c/stored-1');
+
+      fireEvent.click(screen.getByRole('button', { name: 'New chat' }));
+      expect(screen.queryByText(/\/c\/stored-1/)).not.toBeInTheDocument();
+    });
+
+    test('an answer action run afterwards takes the notice strip over', async () => {
+      mockOpenExternalUrl.mockResolvedValue(false);
+      renderPanel({ openChatId: 'stored-1' });
+      await openInWeb();
+      expect(screen.getByRole('status')).toHaveTextContent('/c/stored-1');
+
+      fireEvent.click(screen.getByRole('button', { name: 'Answer action' }));
+      expect(screen.queryByRole('status')).not.toBeInTheDocument();
+    });
+
+    test('an ephemeral app offers no way to the web app: its chat is not stored', () => {
+      renderPanel({ openChatId: 'stored-1', selectedApp: { ...app, ephemeral: true } });
+      openMenu();
+      expect(screen.getByRole('button', { name: 'Chat history' })).toBeInTheDocument();
+      expect(screen.queryByText('Open in web app')).not.toBeInTheDocument();
+    });
   });
 });

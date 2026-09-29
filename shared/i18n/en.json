@@ -185,7 +185,11 @@
       "settings": "Settings",
       "logout": "Logout",
       "variables": "Show variables",
-      "history": "Chat history"
+      "history": "Chat history",
+      "openInWeb": "Open in web app"
+    },
+    "openInWeb": {
+      "fallback": "If the chat did not open in your browser, open this address:"
     },
     "startPage": {
       "openApp": "Open app",
