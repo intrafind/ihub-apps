@@ -18,3 +18,12 @@ not be reached. The menu now opens to the right, inside the pane.
 
 - Applies to every chat view that shows assistant messages, not just the Outlook add-in.
 - Menus under your own messages still open to the left, as those are right-aligned.
+
+## Outlook Add-in: Edit Message Form Stays Inside the Message Bubble
+
+In the Outlook add-in task pane, choosing Edit on one of your messages showed the edit box sticking
+out past the right edge of the message bubble instead of sitting inside it. The edit box and its
+Cancel and Send buttons now stay inside the bubble at every pane width.
+
+- The browser extension and Nextcloud integration use the same styling and get the same fix.
+- The main web app was not affected.
