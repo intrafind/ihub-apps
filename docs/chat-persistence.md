@@ -136,6 +136,9 @@ durable chats are off.
   filters the chats that are loaded by title and app name, and **Show older
   chats** pages further back.
 - **The start page** — up to three *Pick up where you left off* chips.
+- **The Outlook add-in** (and the browser extension's side panel, which shares
+  it) — a *Chat history* page and three *Recent chats* on its start page; see
+  [In the Outlook add-in](#in-the-outlook-add-in).
 
 The app name, colour and icon on those rows are joined from the apps the viewer
 can see; the stored chat carries only an `appId` (see [API](#api)). A chat whose
@@ -153,9 +156,12 @@ starter prompts of a chat that is not empty. Typing carries straight on — the
 turn posts only the new message and the server appends it to what it already
 holds.
 
-Reloading a plain `/apps/:appId` restores the conversation as well: the tab
-remembers which chat it is in and the transcript is fetched back from the store,
-where before it came from browser storage. Clearing the chat, or starting a new
+Opening an app — a plain `/apps/:appId` — always starts a new chat; the
+previous one is a click away in the list. As soon as the first message is sent,
+the URL switches to `/apps/:appId/c/:chatId` (replacing the history entry), so a
+reload keeps the conversation and fetches it back from the store. Without chat
+persistence the tab still remembers its chat per app and `/apps/:appId` restores
+it from browser storage, as before. Clearing the chat, or starting a new
 one, drops the chat id from the URL and begins a fresh conversation; nothing is
 lost, the previous chat simply stays in the list. The app share link built on a
 chat page points at the **app**, never at the one stored chat — a recipient does
@@ -225,6 +231,55 @@ button; on a touch screen, where nothing hovers, both are always visible.
   is listed, and comes back with an error message if the call fails.
 
 Chats the user never renames are titled from their first message.
+
+### In the Outlook add-in
+
+The Outlook task pane reads the same list with its own sign-in token, and it
+stores its chats the same way: with durable chats on, a conversation started in
+the pane is a stored chat like one started in the browser — it shows up in
+*Recents* and on `/chats`, and it opens in the web app too. The pane only
+learns whether chats are stored once `GET /api/configs/platform` has answered,
+so an app left open in the pane waits for that answer before it shows the chat.
+
+Two ways into the history:
+
+- **Chat history** in the pane's menu (start page, apps list and chat) — the
+  chats grouped by date, searchable by title and app name, paged with **Show
+  older chats**. Its back button returns to the chat it was opened from.
+- **Recent chats** at the bottom of the pane's start page — the three most
+  recent chats, with an **All chats** link to the page above.
+
+Picking a chat opens it in the pane under its own app. The transcript is
+fetched from the store, a turn that is still running is re-attached to, and
+the chat's settings (model, tools, websearch) and app variables come back with
+it — the same steps as `/apps/:appId/c/:chatId`. Typing carries on from there, with the email
+that is open **now** as context. That is the point: a conversation from earlier
+in the day — in the browser or in the pane — can inform the reply being
+written.
+
+The pane lists only chats whose app it offers. A chat can only be continued
+through its own app, so a chat of an app the add-in's
+[Available Apps](outlook-add-in.md#step-5--optional-restrict-what-the-add-in-can-access)
+leave out, or one the user lost access to, is left out rather than listed as a
+dead end. It is still on `/chats`. When the latest chats are mostly in such
+apps, the pane reads a few older pages on its own to fill its lists, and past
+that leaves it to **Show older chats**.
+
+What is stored for a pane turn is what the store keeps for any turn: what the
+user typed, the names of attached files and the answer. The open email reaches
+the model as `hostContext` and is not written to the transcript — so a later
+turn in that chat, in the pane or in the browser, does not get the earlier
+email again. In the pane, the email that is open when the turn is sent goes
+with it.
+
+An app marked [`ephemeral`](apps.md) stays out of the store in the pane too, as
+in the web app: its chats keep their transcript in the browser and never reach
+the history.
+
+Opening a different email still starts a new chat in the pane (see
+[the Outlook guide](outlook-add-in.md)), and **Restore previous chat** fetches
+the one it set aside from the store. With durable chats off the pane keeps its
+transcript in the browser as before and has no history.
 
 ### What never appears in the list
 
@@ -420,13 +475,18 @@ index can answer "list my chats" without scanning:
   id, ownerId, identityMode,
   appId, modelId,
   settings,             // how the chat is being answered — see below
+  variables?,           // the app variables the chat was given — see below
   title, titleSetByUser,
   createdAt, lastMessageAt,
   messageCount,
   activeRunId,          // the run producing right now, null between turns
   hasUnseenActivity,    // an answer landed with nobody watching
   status,               // 'active' | 'running' | 'error'
-  runIds: []            // most recent 200, for the delete cascade
+  runIds: [],           // most recent 200, for the delete cascade
+  origin,               // { createdVia: 'ui' | 'responses-api', clientId?, authMode? }
+  // Chats made through the inference API's Conversations API also carry:
+  metadata?,            // the conversation's caller-defined key/value pairs
+  binding?              // 'app' | 'model' — what the first response bound it to
 }
 
 // chat-messages/<chatId>
@@ -434,7 +494,12 @@ index can answer "list my chats" without scanning:
   version: 1,
   messages: [
     { id, role, content, ts, runId,
-      clientMessageId?, usage?, finishReason?, error?, attachments?, artifacts? }
+      clientMessageId?, usage?, finishReason?, error?, attachments?, artifacts?,
+      mcpApps?, citations?,
+      // inference API turns: on a user message the variables it was rendered
+      // with and the rendered text the model saw; on an answer the validated
+      // structured output and the model identifier that produced it
+      variables?, renderedContent?, output?, model? }
   ]
 }
 ```
@@ -465,11 +530,33 @@ Details that matter:
   surfaces: flipping websearch must not erase the style the chat was started
   with. `modelId` is kept alongside rather than inside, since it has its own
   field.
+- **`variables` is the app's variables, and it replaces.** A turn that sends
+  variables sends the whole set — an app's variables panel does so on every
+  message, a [start form](apps.md#start-form) once — and that set replaces the
+  stored one. A turn that sends none gets the stored set for the system prompt,
+  which is how a follow-up after a start form, or a chat reopened later, keeps
+  the values it was started with; the app's `prompt` template is not rendered
+  into such a turn. Reopening the chat puts the values back in the variables
+  panel. Names must be valid variable names, values are stored as text capped
+  at the message length, at most 50 of them; the field is absent until a turn
+  sets it. The inference API's Conversations API keeps a conversation's
+  variables in the same field, so a chat carries its values between the chat
+  UI and the API.
 - **Attachments are descriptors** — `{ type, name?, bytes? }`. The base64 payload
   of an upload stays in the request; it is never written into a document that is
   read back for as long as the chat lives.
 - **So is what a turn produced** — `{ id, kind, mimeType, bytes }`, with the
   payload in the shared artifact store. See [Artifacts](artifacts.md).
+- **The documents behind an answer are stored with it** — `citations:
+  { references, resultItems }`, the passages and documents of an iAssistant
+  answer or the ones the turn's iFinder tool calls found — so a reopened chat
+  draws the same **Documents** panel, with preview, download and "Add to
+  email". Only what the panel reads is kept (id, title, deep link, file name,
+  source, application, the ACCESS link, passage text capped at 4,000
+  characters): at most 50 documents and 100 passages, 256 KB per answer, and
+  passages are dropped first when that is exceeded. The documents are fetched
+  again with the reader's own iFinder permissions. A share never carries them
+  — see [Chat Sharing](chat-sharing.md#what-is-shared--and-what-is-not).
 - **Failures are recorded.** An aborted turn stores its (possibly empty) answer
   with `error: { code: 'ABORTED', … }`, an errored turn with its error code, so a
   truncated answer never reads as a complete one. A turn that paused for a
@@ -484,6 +571,12 @@ Details that matter:
 - Every read-modify-write runs under `locks.withLock('chat:<id>')`. Two tabs on
   one chat are ordinary, and an unlocked read-append-write would drop one tab's
   message.
+- **Chats made through the API are ordinary chats.** A conversation of the
+  inference API's [Conversations API](openai-compatible-api.md#conversations-api)
+  is a chat of its caller (for an OAuth client, the client), listed in the chat
+  history with `origin.createdVia: 'responses-api'`. Unlike a UI turn, which
+  supersedes a turn still running, an API turn on a busy chat is refused
+  (`409`).
 
 ## API
 

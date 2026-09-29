@@ -5,7 +5,8 @@ import {
   buildMcpAppSandboxUrl,
   callMcpAppTool,
   fetchMcpAppResource,
-  readMcpAppResource
+  readMcpAppResource,
+  reportMcpAppHandshake
 } from '../../../api/endpoints/mcpApps';
 import {
   McpAppHostBridge,
@@ -23,6 +24,7 @@ import {
   hostStyles
 } from './hostContext';
 import { setMcpAppModelContext } from './modelContextStore';
+import { embeddedViewResource, selectViewHtml } from './embeddedViewHtml';
 
 /** Inline views grow with their content up to this height (px). */
 const INLINE_MAX_HEIGHT = 720;
@@ -56,6 +58,14 @@ function errorMessage(error) {
 }
 
 /**
+ * Whether the server answered "connect this MCP server first" (per-user
+ * sign-in). It answers 409, not 401, so the iHub session is left alone.
+ */
+function isMcpAuthRequired(error) {
+  return error?.response?.data?.code === 'MCP_AUTH_REQUIRED';
+}
+
+/**
  * The sandbox page must share iHub's origin: it takes the host's origin from
  * its own URL. When the API is served elsewhere (an API base override, e.g. a
  * browser extension) views cannot be hosted.
@@ -78,6 +88,26 @@ function isSameOriginUrl(url) {
  * `resources/read` to the view's own MCP server, and handles links, follow-up
  * messages, model-context updates, size changes and fullscreen.
  *
+ * Tool data is delivered once the view says it is ready. The specification's
+ * way is the `ui/initialize` request followed by `ui/notifications/initialized`.
+ * Views written against the older mcp-ui protocol never send those; they post
+ * a plain `{ type: "appReady" }` instead and read the tool result's `_meta`
+ * (`mcpui.dev/ui-initial-render-data`). Such a view is treated as initialized
+ * when `appReady` arrives — unless it already started the `ui/initialize`
+ * handshake, which then stays the only trigger — so the same tool input and
+ * result reach it exactly once. The fallback is reported to the server so
+ * admins can see which servers rely on it.
+ *
+ * The HTML is the tool's declared `ui://` resource as `resources/read` returns
+ * it — unless the tool result embeds that same resource (same URI) with its
+ * own inline HTML, as servers that bake the call's data into the page do; then
+ * that copy is rendered, under the same CSP, permissions and sandbox (see
+ * `embeddedViewHtml`). When the result only arrives after the static copy is
+ * already showing, the sandbox is reloaded once with the embedded copy. A tool
+ * that declares no view but embeds a `ui://` page in its result
+ * (`view.embedded`) renders that page, with the CSP domains it declares and no
+ * device permissions.
+ *
  * @param {Object} props
  * @param {Object} props.view - View descriptor (see features/chat/mcpApps/mcpAppViewList)
  * @param {string} props.appId - iHub app of the chat
@@ -93,8 +123,9 @@ function McpAppView({ view, appId, chatId, host = null }) {
   const iframeRef = useRef(null);
   const containerRef = useRef(null);
   const bridgeRef = useRef(null);
-  const [resource, setResource] = useState(null);
-  const [loadError, setLoadError] = useState(null);
+  const [fetchedResource, setFetchedResource] = useState(null);
+  const [fetchError, setFetchError] = useState(null);
+  const [needsConnect, setNeedsConnect] = useState(false);
   const [height, setHeight] = useState(INITIAL_HEIGHT);
   const [displayMode, setDisplayMode] = useState('inline');
 
@@ -111,22 +142,64 @@ function McpAppView({ view, appId, chatId, host = null }) {
   // Per-connection protocol state, reset whenever the bridge is rebuilt.
   const protocolRef = useRef(null);
 
+  // A view of a tool that declares none has no `resources/read` copy: it is
+  // the page the result embeds.
+  const embeddedResource = useMemo(
+    () =>
+      view.embedded && !view.payloadOmitted
+        ? embeddedViewResource({
+            resourceUri: view.resourceUri,
+            toolResult: view.toolResult,
+            toolName: view.toolName,
+            toolId: view.toolId,
+            serverId: view.serverId
+          })
+        : null,
+    [
+      view.embedded,
+      view.payloadOmitted,
+      view.resourceUri,
+      view.toolResult,
+      view.toolName,
+      view.toolId,
+      view.serverId
+    ]
+  );
+  const resource = view.embedded ? embeddedResource : fetchedResource;
+  const loadError =
+    view.embedded && !view.payloadOmitted && !embeddedResource
+      ? t('mcpApps.embeddedMissing', 'The tool result holds no view page.')
+      : fetchError;
+
   // A view keeps its app and tool for its whole life (it is keyed by its call
   // id), so the resource is loaded once per mount.
   useEffect(() => {
+    if (view.embedded) return undefined;
     let cancelled = false;
     loadResource(appId, view.toolId).then(
       data => {
-        if (!cancelled) setResource(data);
+        if (!cancelled) setFetchedResource(data);
       },
       error => {
-        if (!cancelled) setLoadError(errorMessage(error));
+        if (cancelled) return;
+        if (isMcpAuthRequired(error)) setNeedsConnect(true);
+        else setFetchError(errorMessage(error));
       }
     );
     return () => {
       cancelled = true;
     };
-  }, [appId, view.toolId]);
+  }, [appId, view.toolId, view.embedded]);
+
+  // What the sandbox renders: the embedded copy from the tool result, or the
+  // `resources/read` copy. `source` keys the iframe, so switching to the
+  // embedded copy (the result arrived after the view opened) loads it afresh.
+  const viewHtml = useMemo(
+    () => selectViewHtml(resource, { resourceUri: view.resourceUri, toolResult: view.toolResult }),
+    [resource, view.resourceUri, view.toolResult]
+  );
+  const html = viewHtml?.html ?? null;
+  const htmlSource = viewHtml?.source ?? 'resource';
 
   const sandboxUrl = useMemo(
     () => (resource ? buildMcpAppSandboxUrl(resource.csp) : null),
@@ -177,14 +250,16 @@ function McpAppView({ view, appId, chatId, host = null }) {
     }
   }, []);
 
-  // The bridge lives as long as the resource (and so the iframe) does.
+  // The bridge lives as long as the resource and its HTML (and so the iframe) do.
   useEffect(() => {
-    if (!resource || !sandboxUsable) return undefined;
+    if (!resource || html == null || !sandboxUsable) return undefined;
     const iframe = iframeRef.current;
     if (!iframe) return undefined;
 
     const state = {
       resourceSent: false,
+      /** 'spec' once `ui/initialize` arrived, 'legacy' once `appReady` did; null before either. */
+      handshake: null,
       initialized: false,
       inputSent: false,
       resultSent: false,
@@ -200,6 +275,7 @@ function McpAppView({ view, appId, chatId, host = null }) {
       post: message => iframe.contentWindow?.postMessage(message, '*'),
       requests: {
         'ui/initialize': params => {
+          if (!state.handshake) state.handshake = 'spec';
           const modes = params?.appCapabilities?.availableDisplayModes;
           state.appModes = Array.isArray(modes) ? modes : null;
           return {
@@ -279,14 +355,22 @@ function McpAppView({ view, appId, chatId, host = null }) {
         'ui/notifications/sandbox-proxy-ready': () => {
           if (state.resourceSent) return;
           state.resourceSent = true;
+          if (htmlSource === 'embedded') {
+            console.info(
+              '[MCP App]',
+              viewRef.current.toolName,
+              'renders the view HTML embedded in its tool result'
+            );
+          }
           bridge.notify('ui/notifications/sandbox-resource-ready', {
-            html: resource.html,
+            html,
             permissions: resource.permissions || {},
             title: viewRef.current.toolName
           });
         },
         'ui/notifications/initialized': () => {
           if (state.initialized) return;
+          if (!state.handshake) state.handshake = 'spec';
           state.initialized = true;
           flushToolData();
         },
@@ -297,6 +381,26 @@ function McpAppView({ view, appId, chatId, host = null }) {
         },
         'notifications/message': params => {
           console.debug('[MCP App]', viewRef.current.toolName, params?.level, params?.data);
+        }
+      },
+      legacy: {
+        // mcp-ui's "I am ready" — the only handshake views written before MCP
+        // Apps know. A view that already began `ui/initialize` is spec-driven
+        // and is not initialized early by this.
+        appReady: () => {
+          if (state.initialized || state.handshake) return;
+          state.handshake = 'legacy';
+          state.initialized = true;
+          const current = viewRef.current;
+          console.info(
+            '[MCP App]',
+            current.toolName,
+            'uses the legacy mcp-ui handshake (appReady); tool data delivered without ui/initialize'
+          );
+          reportMcpAppHandshake({ appId, toolId: current.toolId, handshake: 'legacy' }).catch(
+            () => {}
+          );
+          flushToolData();
         }
       }
     });
@@ -311,15 +415,16 @@ function McpAppView({ view, appId, chatId, host = null }) {
     return () => {
       window.removeEventListener('message', onMessage);
       // Best effort: the iframe goes away with this component, so there is no
-      // waiting for the answer the specification lets the host wait for.
-      if (state.initialized) {
+      // waiting for the answer the specification lets the host wait for. A
+      // legacy view does not know the request and would only let it time out.
+      if (state.initialized && state.handshake === 'spec') {
         bridge.request('ui/resource-teardown', { reason: 'View closed' }).catch(() => {});
       }
       bridge.close();
       bridgeRef.current = null;
       protocolRef.current = null;
     };
-  }, [resource, sandboxUsable, appId, chatId, dimensions, flushToolData]);
+  }, [resource, html, htmlSource, sandboxUsable, appId, chatId, dimensions, flushToolData]);
 
   // New tool data (the call finished while the view was open).
   useEffect(() => {
@@ -407,6 +512,15 @@ function McpAppView({ view, appId, chatId, host = null }) {
       )
     );
   }
+  if (needsConnect) {
+    return notice(
+      'lock-closed',
+      t(
+        'mcpApps.authRequired',
+        'Connect this server with your own account to see its interactive view.'
+      )
+    );
+  }
   if (loadError) {
     return notice(
       'warning',
@@ -477,6 +591,7 @@ function McpAppView({ view, appId, chatId, host = null }) {
           </div>
         )}
         <iframe
+          key={htmlSource}
           ref={iframeRef}
           src={sandboxUrl}
           title={t('mcpApps.frameTitle', 'Interactive view: {{name}}', { name })}

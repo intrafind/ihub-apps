@@ -6,7 +6,7 @@ import { debugLog } from '../../../utils/debugLog';
  *
  * Shape on the wire (`GET /api/chats/:chatId` → `messages[]`):
  * `{ id, role, content, ts, runId, clientMessageId?, usage?, finishReason?,
- * error?, attachments?, artifacts? }`.
+ * error?, attachments?, artifacts?, mcpApps?, citations? }`.
  *
  * The stored id is adopted as the message id and kept a second time on
  * `serverId`: `replaceFromMessageId` addresses the server's history by that
@@ -45,6 +45,19 @@ export function transformStoredMessage(msg) {
   }
   // Interactive MCP App views of the answer, redrawn from their stored data.
   if (Array.isArray(msg.mcpApps) && msg.mcpApps.length > 0) message.mcpApps = msg.mcpApps;
+  // The documents behind the answer — an iAssistant answer's citations or the
+  // ones its iFinder tool calls found — so the Documents panel comes back.
+  if (msg.citations && typeof msg.citations === 'object') {
+    const references = Array.isArray(msg.citations.references) ? msg.citations.references : [];
+    const resultItems = Array.isArray(msg.citations.resultItems) ? msg.citations.resultItems : [];
+    if (references.length > 0 || resultItems.length > 0) {
+      message.citations = { references, resultItems };
+    }
+  }
+  // Connect cards for MCP servers with per-user sign-in.
+  if (Array.isArray(msg.mcpAuthRequired) && msg.mcpAuthRequired.length > 0) {
+    message.mcpAuthRequired = msg.mcpAuthRequired;
+  }
   if (Array.isArray(msg.artifacts) && msg.artifacts.length > 0) {
     message.artifacts = msg.artifacts;
     const images = msg.artifacts.filter(artifact => (artifact?.kind || 'image') === 'image');
@@ -708,7 +721,7 @@ function useChatMessages(chatId = 'default', { ephemeral = false, serverBacked =
       // Strip UI-specific properties that the API doesn't need. MCP App views
       // carry their full tool payload and must not ride along with history.
       return messagesForApi.map(msg => {
-        const { rawContent, mcpApps: _mcpApps, ...apiMsg } = msg;
+        const { rawContent, mcpApps: _mcpApps, mcpAuthRequired: _mcpAuthRequired, ...apiMsg } = msg;
         const content = rawContent !== undefined ? rawContent : apiMsg.content;
         return { ...apiMsg, content };
       });

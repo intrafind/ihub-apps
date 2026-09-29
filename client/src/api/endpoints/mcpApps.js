@@ -42,6 +42,17 @@ export const readMcpAppResource = async ({ appId, toolId, uri }) => {
 };
 
 /**
+ * Tell the server how a view completed its handshake, so admins can see in the
+ * server log which MCP servers still rely on the legacy mcp-ui `appReady`
+ * message instead of `ui/initialize`. Fire-and-forget.
+ * @param {{appId: string, toolId: string, handshake: 'legacy'}} params
+ * @returns {Promise<void>}
+ */
+export const reportMcpAppHandshake = async ({ appId, toolId, handshake }) => {
+  await apiClient.post('/mcp-apps/handshake', { appId, toolId, handshake });
+};
+
+/**
  * URL of the sandbox proxy page, carrying the view's declared CSP domains.
  * The server turns them (sanitized) into the page's CSP header.
  * @param {Object} csp - `{ connectDomains, resourceDomains, frameDomains, baseUriDomains }`

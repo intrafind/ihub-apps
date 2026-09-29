@@ -15,6 +15,33 @@
  * @module services/chat/chatMaterializer
  */
 import { boundStoredViews } from '../mcp/mcpApps.js';
+import { boundStoredCitations } from './chatCitations.js';
+
+/** Connect cards kept per stored answer. */
+const MAX_STORED_AUTH_PROMPTS = 10;
+
+/**
+ * The auth-required markers of a turn as stored with the answer: well-formed
+ * entries only, one per server, bounded.
+ *
+ * @param {unknown} prompts
+ * @returns {Array<{serverId: string, serverName: string, connectUrl: string}>}
+ */
+export function boundStoredAuthPrompts(prompts) {
+  if (!Array.isArray(prompts)) return [];
+  const out = [];
+  for (const p of prompts) {
+    if (!p || typeof p.serverId !== 'string' || typeof p.connectUrl !== 'string') continue;
+    if (out.some(existing => existing.serverId === p.serverId)) continue;
+    out.push({
+      serverId: p.serverId,
+      serverName: typeof p.serverName === 'string' ? p.serverName : p.serverId,
+      connectUrl: p.connectUrl
+    });
+    if (out.length >= MAX_STORED_AUTH_PROMPTS) break;
+  }
+  return out;
+}
 import logger from '../../utils/logger.js';
 import { deriveChatTitle } from './ChatRepository.js';
 import { getArtifactRepository } from '../artifacts/ArtifactRepository.js';
@@ -200,6 +227,8 @@ function messageError(summary) {
  * @param {string} [params.modelId]
  * @param {Object} [params.settings] - How this turn was answered (style, tools,
  *   websearch, thinking …), so reopening the chat restores it
+ * @param {Object} [params.variables] - App variables this turn set; later turns
+ *   and a reopened chat read them from the chat instead of resending them
  * @param {string} params.runId
  * @param {string} params.content - raw text of the new user message
  * @param {string} [params.clientMessageId] - client exchange id, for reconciling an
@@ -207,6 +236,11 @@ function messageError(summary) {
  * @param {Array<Object>} [params.attachments] - already-normalized descriptors
  * @param {string} [params.replaceFromMessageId] - truncate the stored history from this
  *   message (inclusive) before appending — an edit or a regenerate
+ * @param {Object} [params.message] - extra fields for the stored message (`variables`,
+ *   `renderedContent`); the repository keeps the ones it knows
+ * @param {Object} [params.chat] - extra fields patched onto the chat document with this turn
+ * @param {Object} [params.origin] - how a chat created by this turn came about
+ *   (`{ createdVia, clientId? }`); a chat the turn creates without one came from the UI
  * @returns {Promise<Object|null>} the stored message, or null when nothing was written
  */
 export async function materializeUserTurn({
@@ -217,11 +251,15 @@ export async function materializeUserTurn({
   appId,
   modelId,
   settings,
+  variables,
   runId,
   content,
   clientMessageId,
   attachments,
-  replaceFromMessageId
+  replaceFromMessageId,
+  message = null,
+  chat: chatPatch = null,
+  origin = null
 }) {
   if (!repository) return null;
   const text = typeof content === 'string' ? content : '';
@@ -235,7 +273,8 @@ export async function materializeUserTurn({
       appId,
       modelId,
       settings,
-      title
+      title,
+      origin: origin || { createdVia: 'ui' }
     });
     if (!chat) {
       logger.error('Chat user turn not materialized: storage unavailable', {
@@ -246,6 +285,7 @@ export async function materializeUserTurn({
       return null;
     }
     await repository.updateChat(chatId, {
+      ...(chatPatch && typeof chatPatch === 'object' ? chatPatch : {}),
       activeRunId: runId,
       status: 'running',
       // The sender is demonstrably present, so nothing in this chat is unseen.
@@ -254,6 +294,8 @@ export async function materializeUserTurn({
       // How the user has this chat set up right now. The repository merges,
       // so a turn that changed one toggle does not reset the others.
       ...(settings ? { settings } : {}),
+      // Replaces the stored set; a turn without variables keeps it.
+      ...(variables ? { variables } : {}),
       // A chat opened by an empty auto-start turn has no title yet; the first
       // message carrying text names it. A title the user set is never touched.
       ...(!chat.title && title && !chat.titleSetByUser ? { title } : {})
@@ -266,6 +308,7 @@ export async function materializeUserTurn({
     const appended = await repository.appendMessage(
       chatId,
       {
+        ...(message && typeof message === 'object' ? message : {}),
         role: 'user',
         content: text,
         ts: new Date().toISOString(),
@@ -318,9 +361,12 @@ export async function materializeUserTurn({
  * @param {string} params.runId
  * @param {Object} params.summary - the turn outcome: `status`, `content`, `finishReason`,
  *   `usage`, `images` (generated pictures, stored beside the transcript as
- *   artifacts), and `error`/`errorInfo` on a failure
+ *   artifacts), `mcpApps`, `citations` (see `chatCitations.js`), and
+ *   `error`/`errorInfo` on a failure
  * @param {boolean} params.clientConnected - whether an SSE client was attached when the
  *   turn ended, sampled with `hasChatClient()`; the emit result cannot tell you
+ * @param {Object} [params.message] - extra fields for the stored answer (`model`). A
+ *   validated structured answer (`summary.structuredOutput`) is stored as `output` too.
  * @returns {Promise<Object|null>} the stored message, or null when nothing was written
  */
 export async function materializeAssistantTurn({
@@ -328,7 +374,8 @@ export async function materializeAssistantTurn({
   chatId,
   runId,
   summary,
-  clientConnected
+  clientConnected,
+  message = null
 }) {
   if (!repository) return null;
   const status = summary?.status;
@@ -383,13 +430,25 @@ export async function materializeAssistantTurn({
     // MCP App views the turn rendered (tool input + result per view), bounded
     // so a chat document cannot grow without limit.
     const mcpApps = pausedWithoutAnswer ? [] : boundStoredViews(summary?.mcpApps);
+    // The documents behind the answer, so the reopened chat draws the same
+    // Documents panel — bounded, and only the fields the panel reads.
+    const citations = pausedWithoutAnswer ? null : boundStoredCitations(summary?.citations);
+    // Connect cards for per-user OAuth MCP servers (see chatSeams.authRequiredOf).
+    const mcpAuthRequired = pausedWithoutAnswer
+      ? []
+      : boundStoredAuthPrompts(summary?.mcpAuthRequired);
 
     let appended = null;
     if (!pausedWithoutAnswer) {
       try {
+        const structured = summary?.structuredOutput;
         appended = await repository.appendMessage(
           chatId,
           {
+            ...(message && typeof message === 'object' ? message : {}),
+            ...(structured?.valid === true && structured.value !== undefined
+              ? { output: structured.value }
+              : {}),
             role: 'assistant',
             content,
             ts: new Date().toISOString(),
@@ -398,7 +457,9 @@ export async function materializeAssistantTurn({
             ...(usage ? { usage } : {}),
             ...(error ? { error } : {}),
             ...(artifacts.length > 0 ? { artifacts } : {}),
-            ...(mcpApps.length > 0 ? { mcpApps } : {})
+            ...(mcpApps.length > 0 ? { mcpApps } : {}),
+            ...(citations ? { citations } : {}),
+            ...(mcpAuthRequired.length > 0 ? { mcpAuthRequired } : {})
           },
           // The end of the transcript for an ordinary turn, and the position
           // right after this run's own question for a superseded one.

@@ -41,7 +41,9 @@ const platform = {
 };
 
 jest.unstable_mockModule('../configCache.js', () => ({
-  default: { getPlatform: () => platform }
+  default: { getPlatform: () => platform },
+  // Reached through routes/mcpServer.js → a2aTaskStore → storage/bootstrap.
+  resolveEnvVarsInObject: value => value
 }));
 
 // Stand in for the SDK transport so the tests can inspect the options the

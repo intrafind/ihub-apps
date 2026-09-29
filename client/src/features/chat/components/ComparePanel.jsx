@@ -3,6 +3,7 @@ import { v4 as uuidv4 } from 'uuid';
 import useAppChat from '../hooks/useAppChat';
 import ChatMessageList from './ChatMessageList';
 import ModelSelector from './ModelSelector';
+import { isStartFormEnabled } from '../utils/startForm';
 
 /**
  * Self-contained chat panel used in compare mode.
@@ -16,6 +17,9 @@ import ModelSelector from './ModelSelector';
  *   - sendMessage(messageStructure) — sends with this panel's model
  *   - clear()                       — clears messages and regenerates the chatId
  *   - cancel()                      — cancels in-flight generation
+ *
+ * `hideTranscript` leaves only the header with the model picker: the view
+ * shows its start form instead.
  *
  * The parent is notified of processing state via the onProcessingChange callback.
  */
@@ -40,7 +44,8 @@ const ComparePanel = forwardRef(function ComparePanel(
     onClarificationSkip,
     onDocumentAction,
     linkPath,
-    ephemeral
+    ephemeral,
+    hideTranscript = false
   },
   ref
 ) {
@@ -122,7 +127,8 @@ const ComparePanel = forwardRef(function ComparePanel(
       },
       apiMessage: {
         content: data.content || '',
-        promptTemplate: app?.prompt || null,
+        // With a start form, the content already is the rendered prompt.
+        promptTemplate: isStartFormEnabled(app) ? null : app?.prompt || null,
         variables: data.variables || {},
         imageData: data.imageData,
         audioData: data.audioData,
@@ -139,7 +145,9 @@ const ComparePanel = forwardRef(function ComparePanel(
 
   return (
     <div className="flex-1 flex flex-col min-w-0 min-h-0">
-      <div className="shrink-0 mb-3 pb-3 border-b border-gray-200 dark:border-gray-700">
+      <div
+        className={`shrink-0 pb-3 ${hideTranscript ? '' : 'mb-3 border-b border-gray-200 dark:border-gray-700'}`}
+      >
         <div className="flex items-center gap-2">
           <div className={`w-3 h-3 rounded-full shrink-0 ${accentColorClass}`} />
           <span className="text-sm font-semibold text-gray-700 dark:text-gray-300 shrink-0">
@@ -155,7 +163,7 @@ const ComparePanel = forwardRef(function ComparePanel(
           />
         </div>
       </div>
-      <div className="flex-1 min-h-0 flex flex-col">
+      <div className={hideTranscript ? 'hidden' : 'flex-1 min-h-0 flex flex-col'}>
         <ChatMessageList
           messages={chat.messages}
           outputFormat={outputFormat}

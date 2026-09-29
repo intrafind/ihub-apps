@@ -336,6 +336,77 @@ test('a ledger that cannot be read still connects rather than giving up', async 
   expect(mockOpenCalls).toEqual(['/api/apps/acme/chat/chat-abc']);
 });
 
+test('a chat left mid-replay gets neither the rest of the replay nor the stream', async () => {
+  // The ledger read is still out when the user opens another chat.
+  let releaseLedger;
+  fetchWithAuthRetry.mockImplementationOnce(
+    () =>
+      new Promise(resolve => {
+        releaseLedger = () =>
+          resolve({
+            ok: true,
+            json: async () =>
+              page([
+                envelope(1, 'run/started', { kind: 'chat', refs: {} }),
+                envelope(2, 'step/delta', { step: 0, kind: 'text', content: 'Old answer' })
+              ])
+          });
+      })
+  );
+
+  const { result, rerender } = renderHook(
+    ({ chatId }) => useAppChat({ appId: 'acme', chatId, serverBacked: true }),
+    { initialProps: { chatId: 'chat-left' } }
+  );
+
+  let attaching;
+  act(() => {
+    attaching = result.current.reattachToRun(RUN_ID);
+  });
+  rerender({ chatId: 'chat-opened' });
+
+  let attached;
+  await act(async () => {
+    releaseLedger();
+    attached = await attaching;
+  });
+
+  expect(attached).toBe(false);
+  // Nothing of the old run in the chat now open, and no stream for the old one.
+  expect(result.current.messages.some(m => m.content === 'Old answer')).toBe(false);
+  expect(mockOpenCalls).toEqual([]);
+  expect(result.current.processing).toBe(false);
+});
+
+test('reports the chat once the server has accepted the turn', async () => {
+  const { sendAppChatMessage } = require('../../../client/src/api');
+  let accept;
+  sendAppChatMessage.mockImplementationOnce(() => new Promise(resolve => (accept = resolve)));
+  const onMessageAccepted = jest.fn();
+  const { result } = renderHook(() =>
+    useAppChat({ appId: 'acme', chatId: 'chat-abc', serverBacked: true, onMessageAccepted })
+  );
+
+  await act(async () => {
+    result.current.sendMessage({
+      displayMessage: { content: 'Hello' },
+      apiMessage: { content: 'Hello' },
+      params: {}
+    });
+  });
+  // The request goes out once the stream reports it is connected…
+  const emit = mockEmitters[mockEmitters.length - 1];
+  await act(async () => {
+    emit('stream/connected', envelope(1, 'stream/connected', {}));
+  });
+  // …and until the server has answered it, the chat is not accepted.
+  expect(sendAppChatMessage).toHaveBeenCalled();
+  expect(onMessageAccepted).not.toHaveBeenCalled();
+
+  await act(async () => accept({}));
+  expect(onMessageAccepted).toHaveBeenCalledWith('chat-abc');
+});
+
 test('reattaching to nothing is a no-op', async () => {
   const { result } = renderHook(() =>
     useAppChat({ appId: 'acme', chatId: 'chat-abc', serverBacked: true })

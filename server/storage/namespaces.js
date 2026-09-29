@@ -143,6 +143,37 @@ export const RUNTIME_NAMESPACES = Object.freeze({
   workflowState: 'workflow-state',
   /** Conversation state for the integration adapters. */
   integrationConversations: 'integration-conversations',
+  /**
+   * A2A tasks the inbound `/a2a` endpoint created, one document per task,
+   * owned by the caller, so `tasks/get` and `tasks/cancel` work on any worker.
+   */
+  a2aTasks: 'a2a-tasks',
+  /**
+   * A2A conversation contexts (`contextId`): which skill a context is bound to
+   * and its recent message history, so a follow-up message reaches the same
+   * app with the same conversation.
+   */
+  a2aContexts: 'a2a-contexts',
+  /**
+   * Conversations of the outbound A2A client with remote agents, one document
+   * per (user, chat, agent), owned by the user: the agent's `contextId`, and
+   * the `taskId` of a task waiting for the user's answer.
+   */
+  a2aClientContexts: 'a2a-client-contexts',
+  /**
+   * OAuth client registrations of outbound `oauthUser` MCP servers, one
+   * document per server: how iHub identified itself at the server's
+   * authorization server (pre-registered, CIMD or DCR) and the discovery
+   * state, shared by every worker so any of them can refresh a user's token.
+   */
+  mcpOauthClients: 'mcp-oauth-clients',
+  /**
+   * Tool catalogs of outbound `oauthUser` MCP servers, one document per
+   * server: the tool list of the most recent successful `tools/list` of any
+   * user's connection, so the catalog survives restarts and needs no token
+   * to be read.
+   */
+  mcpToolCatalog: 'mcp-tool-catalog',
   /** One-time import markers, shared by every runtime store that has one. */
   runtimeImports: 'runtime-imports'
 });

@@ -37,8 +37,10 @@ jest.mock('../../../client/src/utils/runtimeBasePath', () => ({
 }));
 
 const mockFetchApps = jest.fn();
+const mockFetchChats = jest.fn();
 jest.mock('../../../client/src/api', () => ({
-  fetchApps: (...args) => mockFetchApps(...args)
+  fetchApps: (...args) => mockFetchApps(...args),
+  fetchChats: (...args) => mockFetchChats(...args)
 }));
 
 let mockOfficeConfig = {};
@@ -119,6 +121,7 @@ const {
 } = require('../../../client/src/features/office/utilities/officeStarterPrompts');
 const OfficeStartPage =
   require('../../../client/src/features/office/components/OfficeStartPage').default;
+const { invalidateChatsCache } = require('../../../client/src/shared/hooks/chatListStore');
 
 const apps = [
   { id: 'chat', name: { en: 'Chat' }, description: { en: 'General chat' }, order: 2, icon: 'chat' },
@@ -136,6 +139,8 @@ beforeEach(() => {
   sessionStorage.clear();
   mockOfficeConfig = {};
   mockFetchApps.mockReset();
+  mockFetchChats.mockReset();
+  invalidateChatsCache();
 });
 
 describe('resolveOfficeHomePath', () => {
@@ -419,5 +424,93 @@ describe('<OfficeStartPage />', () => {
       />
     );
     expect(await screen.findByText(/could not be loaded/)).toBeInTheDocument();
+  });
+});
+
+describe('<OfficeStartPage /> recent chats (durable chats, issue #2598)', () => {
+  const user = { id: 'ada', name: 'Ada Lovelace' };
+  const now = Date.now();
+  const at = minutesAgo => new Date(now - minutesAgo * 60_000).toISOString();
+  const storedChats = [
+    { id: 'c1', appId: 'chat', title: 'Budget follow-up', lastMessageAt: at(5) },
+    // Its app is not offered in the pane, so it cannot be continued here.
+    { id: 'c2', appId: 'web-only', title: 'Web research', lastMessageAt: at(10) },
+    { id: 'c3', appId: 'translator', title: '', lastMessageAt: at(20), hasUnseenActivity: true },
+    { id: 'c4', appId: 'writer', title: 'Offer draft', lastMessageAt: at(30) },
+    { id: 'c5', appId: 'coder', title: 'Too old for the start page', lastMessageAt: at(40) }
+  ];
+
+  const renderPage = props => {
+    const handlers = {
+      onLogout: jest.fn(),
+      onSelectApp: jest.fn(),
+      onStartChat: jest.fn(),
+      onBrowseApps: jest.fn(),
+      onOpenHistory: jest.fn(),
+      onOpenChat: jest.fn(),
+      ...props
+    };
+    render(<OfficeStartPage user={user} {...handlers} />);
+    return handlers;
+  };
+
+  test('lists the three latest chats the pane can open, and opens one', async () => {
+    mockFetchApps.mockResolvedValue(apps);
+    mockFetchChats.mockResolvedValue({ items: storedChats, nextCursor: null });
+    const { onOpenChat, onOpenHistory } = renderPage({ chatHistoryEnabled: true });
+
+    const section = await screen.findByRole('region', { name: 'Recent chats' });
+    const rows = [...section.querySelectorAll('li')].map(li => li.textContent);
+    expect(rows).toHaveLength(3);
+    expect(rows[0]).toMatch(/^Budget follow-up.*Chat/);
+    // An untitled chat still gets a name, and an unseen answer is flagged.
+    expect(rows[1]).toMatch(/^Untitled chat.*Translator.*New$/);
+    expect(rows[2]).toMatch(/^Offer draft/);
+    expect(section).not.toHaveTextContent('Web research');
+
+    fireEvent.click(screen.getByRole('button', { name: /Budget follow-up/ }));
+    expect(onOpenChat).toHaveBeenCalledWith(
+      expect.objectContaining({ chat: storedChats[0], app: apps[0] })
+    );
+
+    fireEvent.click(screen.getByRole('button', { name: /All chats/ }));
+    expect(onOpenHistory).toHaveBeenCalledTimes(1);
+  });
+
+  test('the menu leads to the chat history', async () => {
+    mockFetchApps.mockResolvedValue(apps);
+    mockFetchChats.mockResolvedValue({ items: [], nextCursor: null });
+    const { onOpenHistory } = renderPage({ chatHistoryEnabled: true });
+    await waitFor(() => expect(mockFetchChats).toHaveBeenCalled());
+
+    fireEvent.click(screen.getByRole('button', { name: 'Open menu' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Chat history' }));
+    expect(onOpenHistory).toHaveBeenCalledTimes(1);
+    // Nothing stored yet: no empty section.
+    expect(screen.queryByRole('region', { name: 'Recent chats' })).not.toBeInTheDocument();
+  });
+
+  test('reads further back when the latest chats hold fewer than three it can open', async () => {
+    mockFetchApps.mockResolvedValue(apps);
+    mockFetchChats
+      .mockResolvedValueOnce({ items: storedChats.slice(0, 2), nextCursor: 'p2' })
+      .mockResolvedValueOnce({ items: storedChats.slice(2), nextCursor: null });
+    renderPage({ chatHistoryEnabled: true });
+
+    const section = await screen.findByRole('region', { name: 'Recent chats' });
+    await waitFor(() => expect(section.querySelectorAll('li')).toHaveLength(3));
+    expect(mockFetchChats).toHaveBeenLastCalledWith(expect.objectContaining({ cursor: 'p2' }));
+    expect(section).toHaveTextContent('Offer draft');
+  });
+
+  test('without durable chats nothing is asked for and nothing is shown', async () => {
+    mockFetchApps.mockResolvedValue(apps);
+    renderPage({ chatHistoryEnabled: false });
+    await screen.findByTestId('chat-input');
+
+    expect(mockFetchChats).not.toHaveBeenCalled();
+    expect(screen.queryByRole('region', { name: 'Recent chats' })).not.toBeInTheDocument();
+    fireEvent.click(screen.getByRole('button', { name: 'Open menu' }));
+    expect(screen.queryByRole('button', { name: 'Chat history' })).not.toBeInTheDocument();
   });
 });

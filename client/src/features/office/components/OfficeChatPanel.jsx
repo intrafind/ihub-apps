@@ -1,10 +1,11 @@
-import { useState, useRef, useCallback, useEffect, useMemo } from 'react';
+import { useState, useRef, useCallback, useEffect, useMemo, useReducer } from 'react';
 import { useNavigate, Navigate } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
 import { v4 as uuidv4 } from 'uuid';
 import Icon from '../../../shared/components/Icon';
 import ChatMessageList from '../../chat/components/ChatMessageList';
 import ChatInput from '../../chat/components/ChatInput';
+import ChatStartForm from '../../chat/components/ChatStartForm';
 import ChatHeader from './chat/ChatHeader';
 import OfficeContextStrip from './chat/OfficeContextStrip';
 import ItemSelectorDialog from './apps-dialog';
@@ -36,6 +37,12 @@ import { OFFICE_APPS_PAGE_PATH } from '../utilities/officeStartPage';
 import usePinnedEmails from '../hooks/usePinnedEmails';
 import { consumePendingChatStart } from '../../chat/startChatHandoff';
 import { getLocalizedContent } from '../../../utils/localizeContent';
+import {
+  isStartFormEnabled,
+  localizeVariables,
+  renderStartFormPrompt,
+  resolveVariableValues
+} from '../../chat/utils/startForm';
 import { officeLocale } from '../utilities/officeLocale';
 import { fetchApps } from '../../../api';
 import { useOfficeConfig } from '../contexts/OfficeConfigContext';
@@ -56,13 +63,23 @@ function buildParamsFromApp(app) {
  * @param {object} props
  * @param {string} [props.homePath] - Where the back button leads: the start page
  *   or the apps list, whichever the admin made the pane's home.
+ * @param {boolean} [props.chatPersistence=false] - Whether chats are stored
+ *   server-side (durable chats). Fixed for the panel's lifetime: the pane only
+ *   mounts it once that is known.
+ * @param {string|null} [props.openChatId] - A stored chat to open instead of a
+ *   new one — the history page hands it over.
+ * @param {(options: { returnChatId: string|null }) => void} [props.onOpenHistory] -
+ *   Go to the chat history; `returnChatId` is the chat to come back to.
  */
 function OfficeChatPanel({
   authData,
   selectedApp,
   setSelectedApp,
   onLogout,
-  homePath = OFFICE_APPS_PAGE_PATH
+  homePath = OFFICE_APPS_PAGE_PATH,
+  chatPersistence = false,
+  openChatId = null,
+  onOpenHistory
 }) {
   const { t } = useTranslation();
   const navigate = useNavigate();
@@ -73,14 +90,53 @@ function OfficeChatPanel({
   const greetingTitle = getLocalizedContent(selectedApp?.greeting?.title, officeLocale);
   const greetingSubtitle = getLocalizedContent(selectedApp?.greeting?.subtitle, officeLocale);
 
-  // Chat ID: use a stable ref, reset on item change or new chat
-  const chatIdRef = useRef(`office-${uuidv4()}`);
+  // Chats this panel minted and has not sent anything in yet. With durable
+  // chats on, such a chat is not in the store, so there is nothing to fetch
+  // when it comes on screen — asking would only buy a 404 and a spinner.
+  const freshChatIdsRef = useRef(new Set());
+  const mintChatId = useCallback(() => {
+    const id = `office-${uuidv4()}`;
+    freshChatIdsRef.current.add(id);
+    return id;
+  }, []);
+
+  // Chat ID: use a stable ref, reset on item change or new chat. A chat opened
+  // from the history starts out as that stored chat.
+  const [initialChatId] = useState(() => openChatId || mintChatId());
+  const chatIdRef = useRef(initialChatId);
+  // Opened from the history: the chat already has its variables, and the
+  // store's copy arrives with the transcript, so nothing asks for them first.
+  const openedStoredChatRef = useRef(Boolean(openChatId));
   const selectedStarterPromptRef = useRef(null);
+  const isFreshChat = freshChatIdsRef.current.has(chatIdRef.current);
+  // Whether this chat goes to the store. An app marked `ephemeral` never does,
+  // as in the web app — the pane has no incognito toggle, so the app's own
+  // setting is the whole answer.
+  const chatStored = chatPersistence && selectedApp?.ephemeral !== true;
+  // The email snapshot a start-page handoff brought along, kept for the start
+  // form that sends it: the user edited it there (dropped attachments, body
+  // off), and this panel's own snapshot knows nothing of those edits.
+  const handoffContextRef = useRef(null);
+
+  // A chat stops being fresh once the server has its first turn — not when it
+  // is sent: the request goes out only after the stream connects, and until
+  // then the store has never heard of it.
+  // The set is a ref; a re-render lets the panel see the chat is stored now.
+  const [, noteAccepted] = useReducer(n => n + 1, 0);
+  const handleMessageAccepted = useCallback(id => {
+    if (freshChatIdsRef.current.delete(id)) noteAccepted();
+  }, []);
 
   const adapter = useOfficeChatAdapter({
     appId: selectedApp?.id,
-    chatId: chatIdRef.current
+    chatId: chatIdRef.current,
+    onMessageAccepted: handleMessageAccepted,
+    serverBacked: chatStored,
+    isFreshChat
   });
+  // A stored chat is being fetched. A fresh one has nothing to wait for, so it
+  // shows its greeting straight away.
+  const loadingStoredChat = chatStored && !isFreshChat && adapter.hydrating === true;
 
   const {
     models,
@@ -93,7 +149,10 @@ function OfficeChatPanel({
     hostContextFlags,
     setHostContextFlags,
     modelsLoading
-  } = useAppSettings(selectedApp?.id, selectedApp);
+  } = useAppSettings(selectedApp?.id, selectedApp, {
+    // What a reopened chat was last answered with (model, tools, websearch).
+    chatSettings: adapter.storedChatSettings ?? null
+  });
   const fileUploadHandler = useFileUploadHandler();
   const mailSnapshot = useOutlookMailContextSnapshot();
   const currentModel = models.find(m => m.id === selectedModel) || null;
@@ -210,9 +269,35 @@ function OfficeChatPanel({
     const missingRequired = defs.some(
       d => d.required === true && !String(initial[d.name] ?? '').trim()
     );
-    setIsVariablesOpen(missingRequired);
+    // A start form asks for them itself; a chat from the history has them.
+    setIsVariablesOpen(
+      missingRequired && !isStartFormEnabled(selectedApp) && !openedStoredChatRef.current
+    );
     // eslint-disable-next-line @eslint-react/exhaustive-deps
   }, [selectedApp?.id]);
+
+  // A reopened chat continues with the variables it was given, over the app's
+  // defaults — otherwise the next turn would send the defaults and replace them.
+  // Those values belong to that chat, so what the pane had before they were
+  // merged in is kept aside and put back when the chat is left: the next chat
+  // carries on with the user's own values, not with the stored chat's.
+  const variablesBeforeStoredRef = useRef(null);
+  const { storedChatVariables } = adapter;
+  useEffect(() => {
+    if (!storedChatVariables) return;
+    setAppPromptVariables(prev => {
+      // Kept from the latest queued values, not from a render-time copy: the
+      // app's defaults may land in the same commit as the stored values.
+      // Idempotent, so a repeated updater call keeps the first capture.
+      if (variablesBeforeStoredRef.current === null) variablesBeforeStoredRef.current = prev;
+      return { ...prev, ...storedChatVariables };
+    });
+  }, [storedChatVariables]);
+  const leaveStoredVariables = useCallback(() => {
+    const before = variablesBeforeStoredRef.current;
+    variablesBeforeStoredRef.current = null;
+    if (before) setAppPromptVariables(before);
+  }, []);
 
   // Mirror of `pinnedEmails` for the ItemChanged listener — using a ref
   // avoids re-binding the document listener every time the array changes.
@@ -248,7 +333,8 @@ function OfficeChatPanel({
 
   // The conversation set aside by the last automatic new chat, so the user
   // can bring it back. Its transcript stays in session storage under its own
-  // chatId; restoring the id reloads it.
+  // chatId — or in the chat store, with durable chats on — and restoring the
+  // id reloads it.
   const [previousChat, setPreviousChat] = useState(null);
 
   useEffect(() => {
@@ -281,22 +367,25 @@ function OfficeChatPanel({
         starterPrompt: selectedStarterPromptRef.current
       });
     }
-    chatIdRef.current = `office-${uuidv4()}`;
+    chatIdRef.current = mintChatId();
+    handoffContextRef.current = null;
+    leaveStoredVariables();
     selectedStarterPromptRef.current = null;
     adapterRef.current.clearMessages();
     setInputValue('');
     // The refs above are read, not tracked — the effect must run on a
-    // published item change and nothing else.
-  }, [currentItemId]);
+    // published item change and nothing else (the callbacks never change).
+  }, [currentItemId, mintChatId, leaveStoredVariables]);
 
   const handleRestorePreviousChat = useCallback(() => {
     if (!previousChat) return;
     // The chatId change makes the chat hook reload that transcript.
     chatIdRef.current = previousChat.chatId;
+    leaveStoredVariables();
     selectedStarterPromptRef.current = previousChat.starterPrompt;
     setInputValue(previousChat.inputValue);
     setPreviousChat(null);
-  }, [previousChat]);
+  }, [previousChat, leaveStoredVariables]);
 
   // Once the new conversation has its own content, the offer is stale.
   const showRestorePreviousChat = !!previousChat && adapter.messages.length === 0;
@@ -318,9 +407,32 @@ function OfficeChatPanel({
   const submitMessage = useCallback(
     (messageText, overrides = {}) => {
       const text = (messageText ?? '').trim();
-      if (!text && !selectedApp?.allowEmptyContent) return;
 
-      const promptTemplate = buildPromptTemplate(selectedStarterPromptRef.current, selectedApp);
+      // Resend can pass a `selectedFile` override to bypass async state updates;
+      // otherwise we read whatever the user has staged in the uploader — one
+      // file or, with `allowMultiple`, several. UnifiedUploader names a
+      // document `document`; `file` is what this panel used to be handed.
+      const sf =
+        'selectedFile' in overrides ? overrides.selectedFile : fileUploadHandler.selectedFile;
+      const uploads = Array.isArray(sf) ? sf : sf ? [sf] : [];
+      const uploadsOf = kinds => {
+        const found = uploads.filter(upload => kinds.includes(upload?.type));
+        return found.length === 0 ? null : found.length === 1 ? found[0] : found;
+      };
+      const imageData = uploadsOf(['image']);
+      const fileData = uploadsOf(['document', 'file']);
+      if (!text && !imageData && !fileData && !selectedApp?.allowEmptyContent) return;
+
+      // An app that starts with a form sends its prompt rendered, once, with
+      // the variables (`overrides.variables`); the messages after it go as
+      // typed and without them. Otherwise every message carries both.
+      const startForm = isStartFormEnabled(selectedApp);
+      const promptTemplate = startForm
+        ? null
+        : buildPromptTemplate(selectedStarterPromptRef.current, selectedApp);
+      const variables = startForm
+        ? overrides.variables
+        : (overrides.variables ?? appPromptVariables);
       const params = buildParamsFromApp(selectedApp);
       if (selectedModel) params.modelId = selectedModel;
       if (enabledTools?.length) params.enabledTools = enabledTools;
@@ -357,19 +469,18 @@ function OfficeChatPanel({
           : mailSnapshot.buildSnapshotOverride();
       if (snapshotOverride) params.hostContextOverride = snapshotOverride;
 
-      // Resend can pass a `selectedFile` override to bypass async state updates;
-      // otherwise we read whatever the user has staged in the uploader.
-      const sf =
-        'selectedFile' in overrides ? overrides.selectedFile : fileUploadHandler.selectedFile;
-      const imageData = sf?.type === 'image' ? sf : null;
-      const fileData = sf?.type === 'file' ? sf : null;
-
       adapter.sendMessage({
-        displayMessage: { content: text },
+        // The form's message keeps its variables in the transcript: a chat
+        // that is not stored posts its history, and that is what carries them
+        // to the server. A stored chat keeps them on the chat document.
+        displayMessage: {
+          content: text,
+          ...(startForm && variables ? { meta: { variables } } : {})
+        },
         apiMessage: {
           content: text,
           promptTemplate,
-          variables: overrides.variables ?? appPromptVariables,
+          variables,
           imageData,
           fileData
         },
@@ -413,18 +524,24 @@ function OfficeChatPanel({
   // must only re-attach the manual uploads here — the email attachments will
   // be re-pulled fresh by useOfficeChatAdapter so the user still sees the
   // current message context, not a stale one. Manual uploads carry a
-  // `type: 'image' | 'file'` field; email attachments do not.
-  const pickManualUpload = data => {
-    if (!data) return null;
+  // `type: 'image' | 'document' | 'file'` field; email attachments do not.
+  const pickManualUploads = data => {
+    if (!data) return [];
     const arr = Array.isArray(data) ? data : [data];
-    const manuals = arr.filter(d => d && (d.type === 'image' || d.type === 'file'));
-    return manuals.length > 0 ? manuals[0] : null;
+    return arr.filter(d => d && (d.type === 'image' || d.type === 'document' || d.type === 'file'));
   };
 
   const handleResend = useCallback(
     (messageId, editedContent) => {
-      const { content, imageData, fileData } = adapter.resendMessage(messageId, editedContent);
-      const manualUpload = pickManualUpload(imageData) || pickManualUpload(fileData);
+      const { content, imageData, fileData, variables } = adapter.resendMessage(
+        messageId,
+        editedContent
+      );
+      // Every manual upload the message had, in the uploader's own shape: one
+      // file, or an array of several.
+      const manuals = [...pickManualUploads(imageData), ...pickManualUploads(fileData)];
+      const manualUpload =
+        manuals.length === 0 ? null : manuals.length === 1 ? manuals[0] : manuals;
 
       if (!content && !manualUpload && !selectedApp?.allowEmptyContent) return;
 
@@ -435,9 +552,13 @@ function OfficeChatPanel({
       if (manualUpload) {
         fileUploadHandler.setSelectedFile(manualUpload);
       }
-      submitMessage(content || '', { selectedFile: manualUpload });
+      // Resending a start form's message resends the variables it set.
+      submitMessage(content || '', {
+        selectedFile: manualUpload,
+        ...(isStartFormEnabled(selectedApp) && variables ? { variables } : {})
+      });
     },
-    [adapter, selectedApp?.allowEmptyContent, submitMessage, fileUploadHandler]
+    [adapter, selectedApp, submitMessage, fileUploadHandler]
   );
 
   const handlePromptSelect = useCallback(
@@ -509,8 +630,10 @@ function OfficeChatPanel({
       getValidVariableDefinitions(selectedApp.variables),
       variables
     );
+    // A start form is sent by the user: the text waits in it as its message.
     const canSend =
       handoff.autoSend !== false &&
+      !isStartFormEnabled(selectedApp) &&
       (text.trim().length > 0 || selectedApp.allowEmptyContent === true) &&
       missingRequired.length === 0;
 
@@ -521,6 +644,9 @@ function OfficeChatPanel({
         variables
       });
     } else {
+      if (isStartFormEnabled(selectedApp) && handoff.hostContextOverride) {
+        handoffContextRef.current = handoff.hostContextOverride;
+      }
       setInputValue(text);
     }
     // eslint-disable-next-line @eslint-react/exhaustive-deps
@@ -537,7 +663,11 @@ function OfficeChatPanel({
 
   const handleSelectApp = useCallback(
     newApp => {
-      chatIdRef.current = `office-${uuidv4()}`;
+      chatIdRef.current = mintChatId();
+      handoffContextRef.current = null;
+      openedStoredChatRef.current = false;
+      // The app-change effect sets the new app's defaults.
+      variablesBeforeStoredRef.current = null;
       selectedStarterPromptRef.current = null;
       adapter.clearMessages();
       setInputValue('');
@@ -546,17 +676,24 @@ function OfficeChatPanel({
       setSelectedApp(newApp);
       setIsSelectorOpen(false);
     },
-    [adapter, setSelectedApp, setPinnedEmails]
+    [adapter, setSelectedApp, setPinnedEmails, mintChatId]
   );
 
   const handleNewChat = useCallback(() => {
-    chatIdRef.current = `office-${uuidv4()}`;
+    chatIdRef.current = mintChatId();
+    handoffContextRef.current = null;
+    leaveStoredVariables();
     selectedStarterPromptRef.current = null;
     adapter.clearMessages();
     setInputValue('');
     setPinnedEmails([]);
     setPreviousChat(null);
-  }, [adapter, setPinnedEmails]);
+  }, [adapter, setPinnedEmails, mintChatId, leaveStoredVariables]);
+
+  const localizedVariables = useMemo(
+    () => localizeVariables(selectedApp?.variables, officeLocale),
+    [selectedApp?.variables]
+  );
 
   if (!authData) return null;
   if (!selectedApp) return <Navigate to={homePath} replace />;
@@ -570,13 +707,53 @@ function OfficeChatPanel({
     language: officeLocale
   });
 
+  // Form-based start (issue #2581): a new chat opens with the app's variables
+  // as a form — the email goes along with it — and the composer takes over
+  // once it is sent. The variables are asked for nowhere else.
+  const startForm = isStartFormEnabled(selectedApp);
+  // Not while a stored chat is loading: it has been started already, its
+  // messages just have not arrived.
+  const showStartForm =
+    startForm && !loadingStoredChat && !adapter.messages.some(m => m.role === 'user');
+  const startFormVariables = resolveVariableValues(selectedApp, appPromptVariables, officeLocale);
+  const startFormMessage = showStartForm
+    ? renderStartFormPrompt(selectedApp, startFormVariables, officeLocale, inputValue)
+    : '';
+  const handleStartFormSubmit = e => {
+    e?.preventDefault?.();
+    const hostContextOverride = handoffContextRef.current;
+    handoffContextRef.current = null;
+    submitMessage(startFormMessage, {
+      variables: startFormVariables,
+      ...(hostContextOverride ? { hostContextOverride } : {})
+    });
+  };
+
   const menuItems = [
-    ...(getValidVariableDefinitions(selectedApp?.variables).length > 0
+    ...(!startForm && getValidVariableDefinitions(selectedApp?.variables).length > 0
       ? [
           {
             key: 'variables',
             label: t('office.menu.variables', 'Show variables'),
             onClick: () => setIsVariablesOpen(true)
+          }
+        ]
+      : []),
+    ...(chatPersistence && onOpenHistory
+      ? [
+          {
+            key: 'history',
+            label: t('office.menu.history', 'Chat history'),
+            // Back from the history returns to this chat — unless it is not in
+            // the store (nothing sent yet, or an ephemeral app), in which case
+            // there is nothing to return to.
+            onClick: () =>
+              onOpenHistory({
+                returnChatId:
+                  chatStored && !freshChatIdsRef.current.has(chatIdRef.current)
+                    ? chatIdRef.current
+                    : null
+              })
           }
         ]
       : []),
@@ -609,8 +786,53 @@ function OfficeChatPanel({
           />
 
           <div className="flex-1 flex flex-col min-h-0">
+            {/* A stored chat on its way from the history: no greeting and no
+                starter prompts for a chat that is not empty. */}
+            {!hasMessages && loadingStoredChat && (
+              <div
+                role="status"
+                className="office-greeting flex items-center justify-center gap-2 border-b border-slate-100 bg-slate-50/60 text-sm text-slate-500 dark:border-slate-800 dark:bg-slate-800/40 dark:text-slate-400"
+              >
+                <span
+                  className="h-4 w-4 rounded-full border-2 border-slate-300 border-t-slate-700 animate-spin dark:border-slate-600 dark:border-t-slate-300"
+                  aria-hidden
+                />
+                {t('office.history.loadingChat', 'Loading chat…')}
+              </div>
+            )}
+
+            {showStartForm && (
+              <div className="flex-1 min-h-0 overflow-y-auto p-3">
+                <ChatStartForm
+                  app={selectedApp}
+                  localizedVariables={localizedVariables}
+                  variables={appPromptVariables}
+                  onVariablesChange={setAppPromptVariables}
+                  message={inputValue}
+                  onMessageChange={setInputValue}
+                  uploadConfig={uploadConfig}
+                  selectedFile={fileUploadHandler.selectedFile}
+                  onFileSelect={fileUploadHandler.handleFileSelect}
+                  onSubmit={handleStartFormSubmit}
+                  canSubmit={
+                    !mailSnapshot.loading &&
+                    (startFormMessage.trim() !== '' ||
+                      fileUploadHandler.selectedFile != null ||
+                      selectedApp?.allowEmptyContent === true)
+                  }
+                  isProcessing={adapter.processing}
+                  welcomeMessage={
+                    greetingTitle || greetingSubtitle
+                      ? { title: greetingTitle, subtitle: greetingSubtitle }
+                      : null
+                  }
+                  currentLanguage={officeLocale}
+                />
+              </div>
+            )}
+
             {/* Empty state: greeting + starter prompts */}
-            {!hasMessages && (
+            {!showStartForm && !hasMessages && !loadingStoredChat && (
               <div className="office-greeting border-b border-slate-100 bg-slate-50/60 dark:border-slate-800 dark:bg-slate-800/40">
                 <div className="flex flex-col items-center office-greeting-header text-center">
                   {greetingTitle || greetingSubtitle ? (
@@ -653,26 +875,31 @@ function OfficeChatPanel({
             )}
 
             {/* Messages */}
-            <div className="flex-1 min-h-0 flex flex-col overflow-hidden">
-              <ChatMessageList
-                messages={adapter.messages}
-                outputFormat={selectedApp?.preferredOutputFormat || 'markdown'}
-                onDelete={adapter.deleteMessage}
-                onEdit={adapter.editMessage}
-                onResend={handleResend}
-                editable={true}
-                compact={true}
-                onInsert={handleInsert}
-                insertAction={embeddedHost?.insertAction}
-                insertActions={mailActions.actions}
-                defaultInsertActionId={defaultMailActionId}
-                onInsertAction={runMailAction}
-                appId={selectedApp?.id}
-                chatId={chatIdRef.current}
-                app={selectedApp}
-                showAvatars={false}
-              />
-            </div>
+            {!showStartForm && (
+              <div className="flex-1 min-h-0 flex flex-col overflow-hidden">
+                <ChatMessageList
+                  messages={adapter.messages}
+                  outputFormat={selectedApp?.preferredOutputFormat || 'markdown'}
+                  onDelete={adapter.deleteMessage}
+                  onEdit={adapter.editMessage}
+                  onResend={handleResend}
+                  editable={true}
+                  compact={true}
+                  onInsert={handleInsert}
+                  insertAction={embeddedHost?.insertAction}
+                  insertActions={mailActions.actions}
+                  defaultInsertActionId={defaultMailActionId}
+                  onInsertAction={runMailAction}
+                  appId={selectedApp?.id}
+                  chatId={chatIdRef.current}
+                  app={selectedApp}
+                  showAvatars={false}
+                  // A stored chat keeps its generated images; don't warn that
+                  // they are lost on leaving.
+                  imagesPersisted={chatStored}
+                />
+              </div>
+            )}
 
             {/* Collapsible context strip: hosts the email-body banner +
                 the pinned-emails toolbar behind a single chevron so the
@@ -758,57 +985,61 @@ function OfficeChatPanel({
             )}
 
             {/* Input */}
-            <div className="office-chat-input border-t border-gray-200 bg-white shrink-0 dark:border-slate-700 dark:bg-slate-900">
-              <ChatInput
-                app={selectedApp}
-                value={inputValue}
-                onChange={e => setInputValue(e?.target?.value ?? e)}
-                onSubmit={handleSubmit}
-                // While the snapshot reloads we don't know which email is
-                // open, and `buildSnapshotOverride()` returns null — the
-                // adapter would then do its own `readMessageContext()` and
-                // could answer about a different email than the strip shows.
-                disabled={mailSnapshot.loading}
-                isProcessing={adapter.processing}
-                onCancel={adapter.cancelGeneration}
-                allowEmptySubmit={!!selectedApp?.allowEmptyContent}
-                currentLanguage={officeLocale}
-                showModelSelector={
-                  selectedApp?.disallowModelSelection !== true &&
-                  selectedApp?.settings?.model?.enabled !== false
-                }
-                models={models}
-                selectedModel={selectedModel}
-                onModelChange={setSelectedModel}
-                uploadConfig={uploadConfig}
-                onFileSelect={fileUploadHandler.handleFileSelect}
-                selectedFile={fileUploadHandler.selectedFile}
-                showUploader={fileUploadHandler.showUploader}
-                onToggleUploader={fileUploadHandler.toggleUploader}
-                enabledTools={selectedApp?.tools?.length ? enabledTools : null}
-                onEnabledToolsChange={selectedApp?.tools?.length ? setEnabledTools : null}
-                websearchEnabled={websearchEnabled}
-                onWebsearchEnabledChange={
-                  selectedApp?.websearch?.enabled ? setWebsearchEnabled : null
-                }
-                hostContextFlags={hostContextFlags}
-                onHostContextFlagChange={(key, value) =>
-                  setHostContextFlags(prev => ({ ...(prev || {}), [key]: value }))
-                }
-                clarificationPending={adapter.clarificationPending}
-                // Conversation so far + the app's history setting, so the
-                // context-window indicator counts the whole multiturn context.
-                messages={adapter.messages}
-                sendChatHistory={selectedApp?.sendChatHistory !== false}
-                // Include email body, pinned emails AND extracted attachment
-                // content in the live token estimate so the context-window
-                // indicator accounts for what will actually be sent to the LLM.
-                extraContextText={estimateContextText}
-                // Keep the input from dominating the small Outlook task pane;
-                // long prompts scroll inside the 3-line box. Issue #1467.
-                maxRows={3}
-              />
-            </div>
+            {!showStartForm && (
+              <div className="office-chat-input border-t border-gray-200 bg-white shrink-0 dark:border-slate-700 dark:bg-slate-900">
+                <ChatInput
+                  app={selectedApp}
+                  value={inputValue}
+                  onChange={e => setInputValue(e?.target?.value ?? e)}
+                  onSubmit={handleSubmit}
+                  // While the snapshot reloads we don't know which email is
+                  // open, and `buildSnapshotOverride()` returns null — the
+                  // adapter would then do its own `readMessageContext()` and
+                  // could answer about a different email than the strip shows.
+                  // A stored chat that is still loading has no history to
+                  // continue yet.
+                  disabled={mailSnapshot.loading || loadingStoredChat}
+                  isProcessing={adapter.processing}
+                  onCancel={adapter.cancelGeneration}
+                  allowEmptySubmit={!!selectedApp?.allowEmptyContent}
+                  currentLanguage={officeLocale}
+                  showModelSelector={
+                    selectedApp?.disallowModelSelection !== true &&
+                    selectedApp?.settings?.model?.enabled !== false
+                  }
+                  models={models}
+                  selectedModel={selectedModel}
+                  onModelChange={setSelectedModel}
+                  uploadConfig={uploadConfig}
+                  onFileSelect={fileUploadHandler.handleFileSelect}
+                  selectedFile={fileUploadHandler.selectedFile}
+                  showUploader={fileUploadHandler.showUploader}
+                  onToggleUploader={fileUploadHandler.toggleUploader}
+                  enabledTools={selectedApp?.tools?.length ? enabledTools : null}
+                  onEnabledToolsChange={selectedApp?.tools?.length ? setEnabledTools : null}
+                  websearchEnabled={websearchEnabled}
+                  onWebsearchEnabledChange={
+                    selectedApp?.websearch?.enabled ? setWebsearchEnabled : null
+                  }
+                  hostContextFlags={hostContextFlags}
+                  onHostContextFlagChange={(key, value) =>
+                    setHostContextFlags(prev => ({ ...(prev || {}), [key]: value }))
+                  }
+                  clarificationPending={adapter.clarificationPending}
+                  // Conversation so far + the app's history setting, so the
+                  // context-window indicator counts the whole multiturn context.
+                  messages={adapter.messages}
+                  sendChatHistory={selectedApp?.sendChatHistory !== false}
+                  // Include email body, pinned emails AND extracted attachment
+                  // content in the live token estimate so the context-window
+                  // indicator accounts for what will actually be sent to the LLM.
+                  extraContextText={estimateContextText}
+                  // Keep the input from dominating the small Outlook task pane;
+                  // long prompts scroll inside the 3-line box. Issue #1467.
+                  maxRows={3}
+                />
+              </div>
+            )}
           </div>
         </div>
       </div>

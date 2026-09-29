@@ -15,11 +15,12 @@
  *                      user's own favorites.
  *
  * Every view keeps its own route inside the pane's memory router — the start
- * page at `/start`, the apps list at `/select`, the chat at `/chat` — and the
- * setting only decides which one "home" is: after sign-in, and wherever a back
- * button leads out of a chat. Mirrored server-side in utils/officeStartPage.js,
- * which sanitizes what the pane receives; the normalization here is the last
- * line of defence for a config that bypassed it.
+ * page at `/start`, the apps list at `/select`, the chat at `/chat`, the chat
+ * history at `/history` — and the setting only decides which one "home" is:
+ * after sign-in, and wherever a back button leads out of a chat. Mirrored
+ * server-side in utils/officeStartPage.js, which sanitizes what the pane
+ * receives; the normalization here is the last line of defence for a config
+ * that bypassed it.
  */
 
 import { pickDefaultChatApp } from '../../../utils/homePage';
@@ -33,6 +34,9 @@ export const OFFICE_APPS_PAGE_PATH = '/select';
 
 /** The chat with the selected app. */
 export const OFFICE_CHAT_PATH = '/chat';
+
+/** The user's stored chats — only while durable chats are on. */
+export const OFFICE_HISTORY_PATH = '/history';
 
 /** The values `officeIntegration.startPage.defaultPage` accepts. */
 export const OFFICE_START_PAGE_CHOICES = ['start', 'apps'];

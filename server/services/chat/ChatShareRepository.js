@@ -88,8 +88,16 @@ const MAX_SCANNED_SHARES = 5000;
 /** Lock lease for one share write — the same shape `ChatRepository` uses. */
 const LOCK_OPTIONS = { ttlMs: 15000, waitMs: 5000 };
 
-/** Fields of a stored message that a share never carries. */
-const MESSAGE_FIELDS_DROPPED = new Set(['clientMessageId']);
+/**
+ * Fields of a stored message that a share never carries.
+ *
+ * `citations` lists every document the owner's searches found — titles, file
+ * names, source locations and passages — retrieved with the owner's iFinder
+ * permissions. The answer text is what the owner chose to share; the full
+ * list of hits behind it would show a viewer documents iFinder may not let
+ * them see, including to viewers of a public link.
+ */
+const MESSAGE_FIELDS_DROPPED = new Set(['clientMessageId', 'citations']);
 
 /**
  * Mint a share id.

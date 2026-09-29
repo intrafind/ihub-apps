@@ -63,6 +63,7 @@ the owner creates another link.
 | User and assistant messages, as they were stored                | Messages sent after the share, edits made after it   |
 | **Artifacts** the shared messages produced (generated images)   | Artifacts of later turns or edited-away exchanges    |
 | The name, type and size of an uploaded file                     | **The uploaded file itself** — it is never stored    |
+|                                                                 | **The Documents panel** under an answer (citations)  |
 
 Uploads deserve the explicit note: a stored message carries an attachment
 only as `{ type, name, bytes }` (see
@@ -72,8 +73,16 @@ included: plan.pdf_ where the owner saw the file.
 
 A stored message holds what the transcript holds: the text, the failure that
 cut an answer short, the attachment descriptors and the artifact descriptors.
-The tool activity, sources and citations a live turn shows are not stored, so
-neither a reopened chat nor a share carries them.
+The tool activity and sources a live turn shows are not stored, so neither a
+reopened chat nor a share carries them.
+
+The documents listed under an answer are stored, so the owner's reopened chat
+shows them again, but a share leaves them out. They are every document the
+owner's searches found — titles, file names, locations and passages —
+retrieved with the owner's iFinder permissions, and the answer text is what
+the owner chose to share, not the list of hits behind it. A viewer, and on a
+public link anyone with the link, would otherwise see documents iFinder may
+not let them see.
 
 Artifacts are **not copied**. The artifact store is write-once and keyed per
 chat ([Artifacts](artifacts.md)), so the snapshot records the artifact ids its

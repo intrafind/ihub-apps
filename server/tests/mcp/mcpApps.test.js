@@ -9,6 +9,8 @@ import {
   buildSandboxCsp,
   buildViewDescriptor,
   extractUiResource,
+  findEmbeddedView,
+  isEmbeddedViewMimeType,
   isAppOnly,
   isModelVisible,
   normalizePermissions,
@@ -226,6 +228,30 @@ describe('view payload', () => {
     });
   });
 
+  it('keeps an embedded view resource in the result the browser gets', () => {
+    // The Langdock cookbook ServiceNow `render_ticket` shape: the declared
+    // resource embedded with its data baked into the HTML. The client renders
+    // that copy (features/chat/mcpApps/embeddedViewHtml.js), so it must reach
+    // the view descriptor unchanged.
+    const embedded = {
+      type: 'resource',
+      resource: {
+        uri: 'ui://s/a',
+        mimeType: MCP_APP_MIME_TYPE,
+        text: '<html><head><script>window.TICKET_DATA = {};</script></head></html>'
+      }
+    };
+    const view = buildViewDescriptor({
+      callId: 'c1',
+      toolId: 's__draw',
+      mcp,
+      args: {},
+      toolResult: toViewToolResult({ content: [{ type: 'text', text: 'Opened' }, embedded] })
+    });
+    expect(view.payloadOmitted).toBeUndefined();
+    expect(view.toolResult.content[1]).toEqual(embedded);
+  });
+
   it('omits a payload too large to ship', () => {
     const view = buildViewDescriptor({
       callId: 'c1',
@@ -245,5 +271,62 @@ describe('view payload', () => {
     const bounded = boundStoredViews(views, 100);
     expect(bounded[0]).toEqual(views[0]);
     expect(bounded[1]).toEqual({ callId: 'b', payloadOmitted: true });
+  });
+});
+
+describe('embedded views of tools without a declared view', () => {
+  const html = '<html><body>hi</body></html>';
+  const item = (resource, type = 'resource') => ({ content: [{ type, resource }] });
+
+  it('accepts text/html and the MCP Apps profile, nothing else', () => {
+    expect(isEmbeddedViewMimeType('text/html')).toBe(true);
+    expect(isEmbeddedViewMimeType('text/html; charset=utf-8')).toBe(true);
+    expect(isEmbeddedViewMimeType(MCP_APP_MIME_TYPE)).toBe(true);
+    expect(isEmbeddedViewMimeType('text/html+skybridge')).toBe(false);
+    expect(isEmbeddedViewMimeType('text/html;profile=other')).toBe(false);
+    expect(isEmbeddedViewMimeType('text/uri-list')).toBe(false);
+    expect(isEmbeddedViewMimeType(undefined)).toBe(false);
+  });
+
+  it('finds a ui:// page as text or base64 blob', () => {
+    expect(findEmbeddedView(item({ uri: 'ui://s/a', mimeType: 'text/html', text: html }))).toEqual({
+      uri: 'ui://s/a'
+    });
+    const blob = Buffer.from(html).toString('base64');
+    expect(findEmbeddedView(item({ uri: 'ui://s/b', mimeType: MCP_APP_MIME_TYPE, blob }))).toEqual({
+      uri: 'ui://s/b'
+    });
+  });
+
+  it('ignores other schemes, empty or oversized pages and non-resource items', () => {
+    expect(findEmbeddedView(item({ uri: 'https://x/a', mimeType: 'text/html', text: html }))).toBe(
+      null
+    );
+    expect(findEmbeddedView(item({ uri: 'ui://s/a', mimeType: 'text/html', text: '  ' }))).toBe(
+      null
+    );
+    expect(
+      findEmbeddedView(
+        item({ uri: 'ui://s/a', mimeType: 'text/html', text: 'x'.repeat(5 * 1024 * 1024 + 1) })
+      )
+    ).toBe(null);
+    expect(
+      findEmbeddedView(
+        item({ uri: 'ui://s/a', mimeType: 'text/html', text: html }, 'resource_link')
+      )
+    ).toBe(null);
+    expect(findEmbeddedView(null)).toBe(null);
+  });
+
+  it('describes the view by the embedded URI and marks it embedded', () => {
+    const view = buildViewDescriptor({
+      callId: 'c1',
+      toolId: 's__show',
+      mcp: { serverId: 's', originalName: 'show' },
+      embeddedUri: 'ui://s/a',
+      args: {},
+      toolResult: { content: [] }
+    });
+    expect(view).toMatchObject({ resourceUri: 'ui://s/a', embedded: true, toolName: 'show' });
   });
 });

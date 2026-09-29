@@ -355,6 +355,10 @@ const CONFIG_LOADERS = {
   'config/installations.json': {
     label: 'installations',
     count: data => Object.keys(data.installations || {}).length
+  },
+  'config/a2aAgents.json': {
+    label: 'A2A agents',
+    count: data => (data.agents || []).length
   }
 };
 
@@ -430,6 +434,7 @@ class ConfigCache {
       'config/registries.json',
       'config/installations.json',
       'config/mcpServers.json',
+      'config/a2aAgents.json',
       'config/credentials.json',
       'config/agents.json',
       // Alongside users.json, and for the same reason: `loadOAuthClients` is a
@@ -1519,6 +1524,21 @@ class ConfigCache {
   }
 
   /**
+   * Get the remote A2A agents configuration (outbound A2A client, #2546).
+   * @returns {{ data: { agents: Array, security: Object }, etag: string|null }}
+   */
+  getA2aAgents() {
+    const cached = this.get('config/a2aAgents.json');
+    if (!cached || !cached.data) {
+      return {
+        data: { agents: [], security: { blockPrivateIps: true, allowedHosts: [] } },
+        etag: null
+      };
+    }
+    return cached;
+  }
+
+  /**
    * Refresh registries cache from disk.
    * Should be called when registries are added, updated, or removed.
    * @returns {Promise<boolean>} True on success, false on failure
@@ -1762,7 +1782,15 @@ class ConfigCache {
     }
 
     if (allowedTools) {
+      // A group grant reads like an app's `tools` reference, as it does for
+      // the MCP gateway (`getVisibleToolIds`): besides the exact tool id
+      // (case-insensitive), a base id covers a function-style tool's
+      // functions, an MCP server id that server's tools and an A2A agent id
+      // that agent's skills.
       const granted = new Set(filterResourcesByPermissions(tools, allowedTools));
+      for (const tool of tools) {
+        if (isToolSelected(tool, allowedTools)) granted.add(tool);
+      }
       // The chat's tools menu asks for the tools of the app it runs in. Those
       // are callable in that app whatever the group grants say, so they are
       // listed too — otherwise the menu cannot name them or tell which MCP

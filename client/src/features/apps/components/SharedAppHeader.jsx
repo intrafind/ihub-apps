@@ -54,6 +54,8 @@ function SharedAppHeader({
   // Chat-specific props
   onToggleParameters,
   showParameters,
+  // The variables are filled in elsewhere (a start form), not in the panel.
+  hideParametersButton = false,
   onShare,
   showShareButton = false,
   conversationTitle = null,
@@ -132,7 +134,9 @@ function SharedAppHeader({
           icon={appIcon}
           showClearButton={showClearButton}
           showConfigButton={true}
-          showParametersButton={mode === 'chat' && app?.variables && app.variables.length > 0}
+          showParametersButton={
+            mode === 'chat' && !hideParametersButton && app?.variables && app.variables.length > 0
+          }
           showCanvasButton={mode === 'chat' && app?.features?.canvas === true}
           showBackToChatButton={mode === 'canvas'}
           showBackButton={showBackButton}
