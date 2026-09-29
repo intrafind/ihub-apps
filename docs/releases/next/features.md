@@ -99,3 +99,19 @@ conversation held for that app. The previous chat stays in the chat history and 
   page keeps the conversation.
 - Without chat history (for example anonymous users), opening an app still restores the
   conversation from the current browser tab, as before.
+
+## Apps Can Start Chats With a Form
+
+Apps with variables can now open a new chat with a form instead of the chat input. Users fill in
+the variables, optionally drop files onto the form, and send it: the app's prompt template is
+filled in once and sent as the first message. The form then disappears, and the conversation
+continues like any other chat — follow-up messages are sent as typed, without the template being
+added again.
+
+- Switch it on under **Admin → Apps → (app) → Variables → Start chats with a form**, and
+  optionally give the send button its own label (default: **Start**).
+- The form shows a drop zone for files when the app allows uploads.
+- Required variables must be filled in before the form can be sent.
+- A new chat, or clearing the chat, shows the form again.
+- Compare mode, the Outlook add-in and the browser extension are unchanged: they ask for the
+  variables as before and fill in the template for every message.

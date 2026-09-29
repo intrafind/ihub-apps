@@ -48,6 +48,12 @@ import StarterPromptsView from '../../chat/components/StarterPromptsView';
 import GreetingView from '../../chat/components/GreetingView';
 import NoMessagesView from '../../chat/components/NoMessagesView';
 import InputVariables from '../../chat/components/InputVariables';
+import ChatStartForm from '../../chat/components/ChatStartForm';
+import {
+  isStartFormEnabled,
+  renderStartFormPrompt,
+  resolveVariableValues
+} from '../../chat/utils/startForm';
 import SharedAppHeader from '../components/SharedAppHeader';
 import AIDisclaimerBanner from '../../chat/components/AIDisclaimerBanner';
 import { recordAppUsage } from '../../../utils/recentApps';
@@ -256,6 +262,10 @@ function AppChat({ preloadedApp = null, embedded = false, appId: embeddedAppId =
   const [showConfig, setShowConfig] = useState(false);
   const [variables, setVariables] = useState({});
   const [showParameters, setShowParameters] = useState(false);
+  // The chat a message was last sent in. With a start form, it keeps the chat
+  // a chat once the form is sent: regenerating or deleting the first exchange
+  // empties the transcript, and the resend goes out through the composer.
+  const [sentInChatId, setSentInChatId] = useState(null);
   // One share dialog for both: a short link to the app, and the stored
   // conversation itself as a read-only link. The latter is gated by the
   // server's answer (feature on, admin switch on, storage up) and needs a
@@ -1121,6 +1131,7 @@ function AppChat({ preloadedApp = null, embedded = false, appId: embeddedAppId =
     // Check if we should auto-start the conversation
     const shouldAutoStart =
       app?.autoStart === true && // App has autoStart enabled
+      !isStartFormEnabled(app) && // A start form is sent by the user, not on open
       messages.length === 0 && // No messages yet
       // …and an empty transcript really does mean "new chat". In server-backed
       // mode it is also what a chat with a hundred stored turns looks like
@@ -1436,6 +1447,14 @@ function AppChat({ preloadedApp = null, embedded = false, appId: embeddedAppId =
     return greeting;
   }, [app, loading, hydrating, chatModeResolving, currentLanguage, messages.length]);
 
+  // Form-based start (issue #2581): a new chat opens with the start form in
+  // place of the composer and the variables panel. Compare mode keeps both —
+  // its panels hold transcripts of their own.
+  const startFormActive = isStartFormEnabled(app) && !compareModeActive;
+  const showStartForm =
+    startFormActive && sentInChatId !== chatId && !messages.some(m => m.role === 'user');
+  const showVariablesPanel = app?.variables?.length > 0 && !startFormActive;
+
   // Determine if input should be centered (only when showing example prompts)
   const shouldCenterInput = useMemo(() => {
     if (!app || loading || messages.length > 0) return false;
@@ -1637,6 +1656,10 @@ function AppChat({ preloadedApp = null, embedded = false, appId: embeddedAppId =
         fileUploadHandler.setSelectedFile(filesToRestore);
       }
     }
+
+    // Held from here on: resending the first exchange of a form-started chat
+    // empties the transcript, and the composer has to stay to send it.
+    setSentInChatId(chatId);
 
     // Submitting via a bare setTimeout races React's commit of the state set
     // above: when this whole resend is itself already running inside a
@@ -1993,8 +2016,16 @@ function AppChat({ preloadedApp = null, embedded = false, appId: embeddedAppId =
     };
   }, []);
 
-  const handleSubmit = async e => {
+  /**
+   * Send the composer's message — or, with `startFormMessage`, the rendered
+   * start form, which is sent in place of the composer's text.
+   *
+   * @param {Event} e
+   * @param {string|null} [startFormMessage]
+   */
+  const handleSubmit = async (e, startFormMessage = null) => {
     e.preventDefault();
+    const typed = startFormMessage ?? input;
 
     // While recording, "send" means: finish the recording and transcribe it.
     // Anything typed stays in the input (nothing is cleared here), and this
@@ -2004,7 +2035,7 @@ function AppChat({ preloadedApp = null, embedded = false, appId: embeddedAppId =
       return;
     }
 
-    if (!input.trim() && !fileUploadHandler.selectedFile && !app?.allowEmptyContent) {
+    if (!typed.trim() && !fileUploadHandler.selectedFile && !app?.allowEmptyContent) {
       return;
     }
 
@@ -2021,7 +2052,7 @@ function AppChat({ preloadedApp = null, embedded = false, appId: embeddedAppId =
         // Only the audio is consumed by transcription. Typed text and other
         // attachments are restored afterwards so nothing is silently dropped —
         // the user can then send them with the transcript in the history.
-        const typedText = input;
+        const typedText = typed;
         const remainingFiles = selected.filter(f => f?.type !== 'audio');
         setInput('');
         magicPromptHandler.resetMagicPrompt();
@@ -2059,7 +2090,9 @@ function AppChat({ preloadedApp = null, embedded = false, appId: embeddedAppId =
     // otherwise use the state variables. This avoids race condition with async state updates.
     const currentVariables = pendingVariablesRef.current || variables;
 
-    if (app?.variables) {
+    // A start form checks its own required fields; after it, the variables
+    // are no longer on screen to be filled in.
+    if (app?.variables && !startFormActive) {
       const missingRequiredVars = app.variables
         .filter(v => v.required)
         .filter(v => !currentVariables[v.name] || currentVariables[v.name].trim() === '');
@@ -2080,7 +2113,7 @@ function AppChat({ preloadedApp = null, embedded = false, appId: embeddedAppId =
 
     if (compareModeActive ? compareIsProcessing : processing) return;
 
-    let finalInput = input.trim();
+    let finalInput = typed.trim();
     let messageContent = finalInput;
     let messageData = {};
 
@@ -2199,15 +2232,21 @@ function AppChat({ preloadedApp = null, embedded = false, appId: embeddedAppId =
       displayMessage: {
         content: messageContent,
         meta: {
-          rawContent: input,
+          rawContent: typed,
+          // A form-started chat shows its answers in the first message itself.
           variables:
-            app?.variables && app.variables.length > 0 ? { ...validatedVariables } : undefined,
+            app?.variables && app.variables.length > 0 && !startFormActive
+              ? { ...validatedVariables }
+              : undefined,
           ...messageData
         }
       },
       apiMessage: {
-        content: input,
-        promptTemplate: app?.prompt || null,
+        content: typed,
+        // A form-started chat was sent its prompt rendered, once; later
+        // messages go without it. The variables still go along for the
+        // system prompt.
+        promptTemplate: startFormActive ? null : app?.prompt || null,
         variables: { ...validatedVariables },
         imageData: (() => {
           // Handle image data: convert to object/array/null based on count
@@ -2266,14 +2305,27 @@ function AppChat({ preloadedApp = null, embedded = false, appId: embeddedAppId =
     } else {
       sendChatMessage(messageStructure);
     }
+    setSentInChatId(chatId);
 
-    setInput('');
+    // The composer keeps what it holds when the start form is sent.
+    if (startFormMessage === null) setInput('');
     magicPromptHandler.resetMagicPrompt();
     fileUploadHandler.clearSelectedFile();
     fileUploadHandler.hideUploader();
     // Clear pending variables ref after successful submission
     pendingVariablesRef.current = null;
   };
+
+  // The first message of a form-started chat: the app's prompt, rendered with
+  // the form's answers.
+  const startFormMessage = showStartForm
+    ? renderStartFormPrompt(
+        app,
+        resolveVariableValues(app, variables, currentLanguage),
+        currentLanguage
+      )
+    : '';
+  const handleStartFormSubmit = e => handleSubmit(e, startFormMessage);
 
   // Function to reload the current app
   const clearAppCache = useCallback(() => {
@@ -2510,6 +2562,7 @@ function AppChat({ preloadedApp = null, embedded = false, appId: embeddedAppId =
         onToggleConfig={toggleConfig}
         onToggleParameters={toggleParameters}
         showParameters={showParameters}
+        hideParametersButton={!showVariablesPanel}
         onShare={() => setShowShare(true)}
         showShareButton={shareEnabled || chatShareReady}
         conversationTitle={conversationTitle}
@@ -2522,7 +2575,7 @@ function AppChat({ preloadedApp = null, embedded = false, appId: embeddedAppId =
         onOpenCanvas={embedded ? () => openInNewTab(`/apps/${appId}/canvas`) : undefined}
       />
 
-      {app?.variables && app.variables.length > 0 && showParameters && (
+      {showVariablesPanel && showParameters && (
         <div
           className="md:hidden fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4"
           onClick={e => {
@@ -2607,6 +2660,44 @@ function AppChat({ preloadedApp = null, embedded = false, appId: embeddedAppId =
                 <div className="w-full max-w-4xl mx-auto">{renderChatInput()}</div>
               </div>
             </>
+          ) : showStartForm ? (
+            /* Start form, in place of the transcript and the composer */
+            <div className="flex-1 min-h-0 overflow-y-auto">
+              <div className="min-h-full flex items-center justify-center p-4">
+                <div className="w-full max-w-2xl">
+                  {/* Nothing while the chat mode is unknown, and the stored
+                      transcript first while it loads — see renderStartupState. */}
+                  {chatModeResolving ? null : hydrating ? (
+                    <LoadingSpinner message={t('pages.appChat.loadingChat', 'Loading chat...')} />
+                  ) : (
+                    <ChatStartForm
+                      app={app}
+                      localizedVariables={localizedVariables}
+                      variables={variables}
+                      onVariablesChange={setVariables}
+                      uploadConfig={fileUploadHandler.createUploadConfig(
+                        app,
+                        models.find(m => m.id === selectedModel)
+                      )}
+                      selectedFile={fileUploadHandler.selectedFile}
+                      onFileSelect={fileUploadHandler.handleFileSelect}
+                      onSubmit={handleStartFormSubmit}
+                      canSubmit={
+                        startFormMessage.trim() !== '' ||
+                        fileUploadHandler.selectedFile !== null ||
+                        app?.allowEmptyContent === true
+                      }
+                      isProcessing={processing || isTranscribing}
+                      welcomeMessage={welcomeMessage}
+                      errorMessage={
+                        messages.filter(m => m.role === 'system' && m.error).at(-1)?.content || null
+                      }
+                      currentLanguage={currentLanguage}
+                    />
+                  )}
+                </div>
+              </div>
+            </div>
           ) : shouldCenterInput ? (
             /* Centered layout for example prompts */
             <>
@@ -2779,7 +2870,7 @@ function AppChat({ preloadedApp = null, embedded = false, appId: embeddedAppId =
           )}
         </div>
 
-        {app?.variables && app.variables.length > 0 && (
+        {showVariablesPanel && (
           <div
             className={`hidden md:block overflow-y-auto p-4 bg-gray-50 dark:bg-gray-800 rounded-lg shrink-0 ${embedded ? 'order-first max-h-60' : 'w-80 lg:w-96'}`}
           >
