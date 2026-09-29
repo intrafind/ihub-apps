@@ -32,6 +32,7 @@ import {
   captureRunLog
 } from './helpers/llmFixtures.js';
 import { abortChatRequest } from '../../sse.js';
+import { RUN_LOG_EVENTS } from '../../../shared/runEvents.js';
 
 const MODEL_LIST = [
   {
@@ -123,6 +124,15 @@ const APPS = [
     name: { en: 'Agent' },
     system: { en: 'Use the lookup tool.' },
     tools: ['lookup'],
+    preferredModel: 'oa',
+    enabled: true
+  },
+  {
+    id: 'auditor',
+    name: { en: 'Auditor' },
+    system: { en: 'Look the record up, then rate it.' },
+    tools: ['lookup'],
+    outputSchema: RISK_SCHEMA,
     preferredModel: 'oa',
     enabled: true
   }
@@ -273,8 +283,8 @@ function anthropicJson(json) {
 
 const usage = { prompt_tokens: 10, completion_tokens: 4, total_tokens: 14 };
 
-/** An OpenAI turn that calls one tool. */
-function toolCallTurn(name, args, id = 'call_1') {
+/** An OpenAI turn that calls one tool, optionally saying something first. */
+function toolCallTurn(name, args, id = 'call_1', prose = null) {
   return [
     {
       choices: [
@@ -282,6 +292,7 @@ function toolCallTurn(name, args, id = 'call_1') {
           index: 0,
           delta: {
             role: 'assistant',
+            ...(prose ? { content: prose } : {}),
             tool_calls: [
               {
                 index: 0,
@@ -339,7 +350,8 @@ describe('GET /models', () => {
       'app:nda',
       'app:locked',
       'app:docs',
-      'app:agent'
+      'app:agent',
+      'app:auditor'
     ]);
 
     const { app: narrow, as } = setup([]);
@@ -765,6 +777,22 @@ describe('POST /responses (stateless)', () => {
     // The model got the tool result on the second call.
     assert.equal(requests.length, 2);
     assert.ok(sentMessages(requests[1]).some(m => m.role === 'tool'));
+  });
+
+  it("validates a tool-using app's final answer, not the prose before its tool call", async () => {
+    const { app, requests } = setup([
+      toolCallTurn('lookup', { key: 'K-7' }, 'call_1', 'Looking up {K-7} first.'),
+      openaiText(['{"risk":"low"}'])
+    ]);
+    const res = await request(app)
+      .post(RESPONSES)
+      .send({ model: 'app:auditor', input: 'rate K-7' });
+    assert.equal(res.status, 200, JSON.stringify(res.body));
+    const message = res.body.output.find(item => item.type === 'message');
+    assert.equal(message.content[0].text, '{"risk":"low"}');
+    assert.deepEqual(message.content[0].parsed, { risk: 'low' });
+    // Valid on the first answer: no corrected attempt was asked for.
+    assert.equal(requests.length, 2);
   });
 
   it('runs a plain model with instructions and text.format', async () => {
@@ -1199,4 +1227,29 @@ test('ledger records a rejected attempt as a recoverable error and the retry as 
   assert.equal(error.data.recoverable, true);
   const nudge = events.find(e => e.type === 'message/user' && e.data.synthetic === 'nudge');
   assert.match(nudge.data.content, /does not match the required output format/);
+});
+
+test('ledger closes the run of a model response its conversation refused', async () => {
+  const events = [];
+  const unsubscribe = ledger.runLog.subscribeAll(event => events.push(event));
+  const busyRun = 'chat-22222222-2222-4222-8222-222222222222';
+  try {
+    const { app } = setup([]);
+    const { body: conv } = await request(app).post(CONVERSATIONS).send({});
+    const repository = getChatRepository();
+    assert.equal((await repository.claimRun(conv.id, busyRun)).claimed, true);
+    const res = await request(app)
+      .post(RESPONSES)
+      .send({ model: 'oa', conversation: conv.id, input: 'hi' });
+    assert.equal(res.status, 409);
+    assert.equal(res.body.error.code, 'conversation_busy');
+    await repository.releaseRun(conv.id, busyRun, { activeRunId: null, status: 'active' });
+  } finally {
+    unsubscribe?.();
+  }
+  const started = events.filter(e => e.type === RUN_LOG_EVENTS.RUN_START).map(e => e.runId);
+  assert.equal(started.length, 1, 'the response opened one run');
+  const end = events.find(e => e.runId === started[0] && e.type === RUN_LOG_EVENTS.RUN_END);
+  assert.ok(end, 'and closed it');
+  assert.equal(end.data.status, 'error');
 });

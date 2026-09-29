@@ -111,7 +111,7 @@ is an object with any of these hooks; register it for every run with
 | `onHallucinated(ctx, info)`     | Model called an unregistered tool                                   | Record for audit                                   |
 | `onCircuitBroken(ctx, info)`    | A tool was withheld                                                 | Record / notify                                    |
 | `onCompaction(ctx, info)`       | Transcript was compacted (`trigger: 'proactive' | 'overflow'`)      | Telemetry                                          |
-| `onAnswer(ctx, info)`           | The model answered without a tool call (`info.content`, `info.canRetry`) | Return `{ handled, retry, error? }` to reject the answer: the loop appends it and the `retry` correction, and the model answers again (only while `canRetry`) |
+| `onAnswer(ctx, info)`           | The model answered without a tool call (`info.stepText` — this step's answer; `info.content` — the run's text so far; `info.canRetry`) | Return `{ handled, retry, error? }` to reject the answer: the loop appends it and the `retry` correction, and the model answers again (only while `canRetry`) |
 
 Built-in seams live in `server/services/loop/seams/`:
 
@@ -131,7 +131,9 @@ Built-in seams live in `server/services/loop/seams/`:
 - `imageLiftSeam` — image payloads in tool results become `message.imageData`.
 - `knowledgeSourceSeam` — classifies search / source / grounding tools into the
   knowledge-source badges the chat UI shows.
-- `structuredOutputSeam` — checks the final answer against an output contract
+- `structuredOutputSeam` — checks the final answer (the last step's text, not
+  prose written before earlier tool calls; the loop result carries it as
+  `answerText`) against an output contract
   (the inference API's JSON Schema validation) and asks for one corrected
   attempt when it does not hold; the ledger records the rejected attempt as a
   recoverable `error` and the correction as `message/user { synthetic: 'nudge' }`.

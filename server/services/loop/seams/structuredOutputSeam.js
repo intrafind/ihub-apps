@@ -52,9 +52,12 @@ export function structuredOutputSeam({ validate, maxRetries = 1, onAttemptReject
     name: 'structured-output',
     onAnswer(ctx, info) {
       attempts += 1;
+      // The answer is the final step's text: prose a tool-using run wrote
+      // before its tool calls is part of the run's content, not of the JSON.
+      const answer = typeof info.stepText === 'string' ? info.stepText : info.content;
       let result;
       try {
-        result = validate(info.content);
+        result = validate(answer);
       } catch (error) {
         result = { valid: false, errors: [{ path: '', message: error.message }] };
       }

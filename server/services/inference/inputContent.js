@@ -82,9 +82,15 @@ function parseInlineData(data) {
   const [, mimeType, params = '', payload] = match;
   if (!/;base64/i.test(params)) {
     // A percent-encoded data URL: re-encode so every caller sees base64.
+    let decoded;
+    try {
+      decoded = decodeURIComponent(payload);
+    } catch {
+      throw new InferenceApiError(400, 'invalid_file', 'data: URL has invalid percent-encoding');
+    }
     return {
       mimeType: mimeType || null,
-      base64: Buffer.from(decodeURIComponent(payload), 'utf8').toString('base64')
+      base64: Buffer.from(decoded, 'utf8').toString('base64')
     };
   }
   return { mimeType: mimeType || null, base64: payload.replace(/\s+/g, '') };

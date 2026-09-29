@@ -816,6 +816,11 @@ export default function registerResponsesRoutes(
         usage: result.usage
       });
       if (!stream && !disconnected) res.json(response);
+    } catch (error) {
+      // A claim or a store that failed before the model ran still closes the
+      // ledger run; a no-op once the run was finished or failed above.
+      run.fail(error, model);
+      throw error;
     } finally {
       // Whatever failed around the model call, the stored question gets an
       // answer and the chat is released — never left `running`.

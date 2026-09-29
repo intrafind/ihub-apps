@@ -37,6 +37,7 @@ import {
 import {
   assertBinding,
   historyForModel,
+  isFirstTurn,
   itemFromMessage,
   messagesFromItems,
   validateMetadata
@@ -388,6 +389,9 @@ describe('structured output', () => {
     const object = createOutputValidator({ kind: 'json_object' });
     assert.equal(object('{"a":1}').valid, true);
     assert.equal(object('[1,2]').valid, false);
+    assert.equal(object('42').valid, false);
+    assert.equal(object('"text"').valid, false);
+    assert.equal(object('null').valid, false);
   });
 
   it("refuses a caller's known-unsafe pattern and cuts off a slow one", async () => {
@@ -520,6 +524,22 @@ describe('structured output', () => {
     assert.equal(seam.attempts(), 2);
     assert.deepEqual(rejected, [1]);
   });
+
+  it('seam: checks the final step, not prose written before a tool call', () => {
+    const seam = structuredOutputSeam({
+      validate: createOutputValidator({ kind: 'json_schema', schema: normalizeSchema(schema) })
+    });
+    const review = seam.onAnswer(
+      {},
+      {
+        content: 'Looking up {the record} first.{"risk":"low"}',
+        stepText: '{"risk":"low"}',
+        canRetry: true
+      }
+    );
+    assert.equal(review, null);
+    assert.deepEqual(seam.verdict().value, { risk: 'low' });
+  });
 });
 
 describe('request input', () => {
@@ -581,6 +601,10 @@ describe('request input', () => {
         ),
       { status: 400, code: 'unsupported_file_type' }
     );
+    await throwsApi(
+      () => documentFromInlineFile({ data: 'data:text/plain,50%ZZ', filename: 'a.txt' }, 'input'),
+      { status: 400, code: 'invalid_file' }
+    );
   });
 
   it('extracts the text of a PDF', async () => {
@@ -622,6 +646,19 @@ describe('request input', () => {
 });
 
 describe('conversation items', () => {
+  it('counts only answers a turn produced when deciding the first turn', () => {
+    const seeded = [
+      { role: 'user', content: 'example question', runId: null },
+      { role: 'assistant', content: 'example answer', runId: null }
+    ];
+    assert.equal(isFirstTurn([]), true);
+    assert.equal(isFirstTurn(seeded), true);
+    assert.equal(
+      isFirstTurn([...seeded, { role: 'assistant', content: 'answer', runId: 'chat-1' }]),
+      false
+    );
+  });
+
   it('replays user turns as rendered and leaves failed answers out', () => {
     const history = historyForModel([
       { role: 'user', content: 'raw', renderedContent: 'Template: raw' },

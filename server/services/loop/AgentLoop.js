@@ -249,6 +249,7 @@ export class AgentLoop {
     let reactiveAttempts = 0;
     let iteration = 0;
     let content = '';
+    let answerText = ''; // what the last model step answered, without earlier steps' prose
     let finishReason = null;
     let usage = null;
     const thoughtSignatures = [];
@@ -267,6 +268,7 @@ export class AgentLoop {
       runId,
       status,
       content,
+      answerText,
       finishReason: extra.finishReason ?? finishReason,
       usage: usage || { promptTokens: 0, completionTokens: 0, totalTokens: 0, source: 'estimate' },
       runUsage: {
@@ -448,6 +450,7 @@ export class AgentLoop {
             toolCalls = toolCalls.filter(c => c !== jsonCall);
           }
         }
+        answerText = stepText;
 
         const stepUsage = result.usage
           ? result.usage

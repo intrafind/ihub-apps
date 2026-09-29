@@ -163,7 +163,7 @@ POST /api/inference/v1/responses
 
 | Turn | What the model receives |
 | --- | --- |
-| Stateless call, or the first turn of a conversation | The app's `prompt` template rendered with this turn's variables plus defaults, wrapping the input |
+| Stateless call, or the first turn of a conversation (no response has run in it yet — items you added yourself do not count) | The app's `prompt` template rendered with this turn's variables plus defaults, wrapping the input |
 | Follow-up **without** `prompt.variables` | The raw input only — no template. The earlier rendered turns in the history carry it |
 | Follow-up **with** `prompt.variables` | The template again, with exactly these variables plus defaults |
 

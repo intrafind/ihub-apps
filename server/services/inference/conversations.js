@@ -289,9 +289,14 @@ export function historyForModel(messages) {
   return out;
 }
 
-/** Whether no answer has been given in this conversation yet. */
+/**
+ * Whether no answer has been given in this conversation yet. Only an answer
+ * a turn produced counts: assistant items added through the items endpoint
+ * (seeded history, few-shot examples) carry no run, and do not make the next
+ * turn a follow-up.
+ */
 export function isFirstTurn(messages) {
-  return !(messages || []).some(message => message?.role === 'assistant');
+  return !(messages || []).some(message => message?.role === 'assistant' && message?.runId);
 }
 
 /**

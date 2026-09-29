@@ -855,14 +855,22 @@ class ChatService {
 
     // The output contract, checked on the answer the run ended with. A
     // passthrough answer never went through the seam, so this is its only
-    // check; for a model answer it repeats the seam's last verdict. Returns
-    // the terminal summary of a failed check, or null.
+    // check; for a model answer it repeats the seam's last verdict. Either
+    // way it is the answer alone that is checked — the final step's text, or
+    // the passthrough tool's output — not prose written before a tool call.
+    // Returns the terminal summary of a failed check, or null.
     let structuredOutput;
-    const checkStructuredOutput = async () => {
+    const checkStructuredOutput = async ({ passthrough = false } = {}) => {
       if (!structured) return null;
+      const answer =
+        passthrough && typeof result.terminate?.content === 'string'
+          ? result.terminate.content
+          : typeof result.answerText === 'string'
+            ? result.answerText
+            : content;
       let verdict;
       try {
-        verdict = structured.validate(content);
+        verdict = structured.validate(answer);
       } catch (error) {
         verdict = { valid: false, errors: [{ path: '', message: error.message }] };
       }
@@ -917,7 +925,7 @@ class ChatService {
     };
 
     if (result.finishReason === 'tool_passthrough_complete') {
-      const rejected = await checkStructuredOutput();
+      const rejected = await checkStructuredOutput({ passthrough: true });
       if (rejected) return rejected;
       const toolName = result.terminate?.toolName;
       await this.logInteraction(
