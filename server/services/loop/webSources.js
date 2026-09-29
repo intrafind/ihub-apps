@@ -64,19 +64,31 @@ function titleOf(item) {
   return typeof title === 'string' && title.trim() ? title.trim().slice(0, MAX_TITLE_CHARS) : null;
 }
 
+/**
+ * Text without markup. Search engines mark the matched terms with HTML
+ * (`<strong>`), and a source card shows text: everything from a `<` to the
+ * next `>` is dropped, and neither bracket is ever kept, so a broken or nested
+ * tag cannot leave markup behind.
+ * @param {string} text
+ * @returns {string}
+ */
+function stripTags(text) {
+  let out = '';
+  let inTag = false;
+  for (const char of text) {
+    if (char === '<') inTag = true;
+    else if (char === '>') inTag = false;
+    else if (!inTag) out += char;
+  }
+  return out;
+}
+
 function snippetOf(item) {
   const text = [item.description, item.snippet, item.excerpt].find(
     value => typeof value === 'string' && value.trim()
   );
   if (!text) return null;
-  // Search engines mark the matched terms with HTML (`<strong>`); a card shows
-  // text. After the tags go, any angle bracket left (a broken or nested tag) is
-  // dropped too, so no markup can survive into the snippet.
-  const plain = text
-    .replace(/<[^>]*>/g, '')
-    .replace(/[<>]/g, '')
-    .replace(/\s+/g, ' ')
-    .trim();
+  const plain = stripTags(text).replace(/\s+/g, ' ').trim();
   return plain ? plain.slice(0, MAX_SNIPPET_CHARS) : null;
 }
 
