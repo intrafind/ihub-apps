@@ -23,7 +23,7 @@ This example shows how to configure LDAP authentication with automatic group map
       {
         "name": "corporate-ldap",
         "displayName": "Corporate LDAP",
-        "url": "ldap://ldap.example.com:389",
+        "url": "ldaps://ldap.example.com:636",
         "adminDn": "cn=admin,dc=example,dc=org",
         "adminPassword": "${LDAP_ADMIN_PASSWORD}",
         "userSearchBase": "ou=people,dc=example,dc=org",
@@ -126,7 +126,7 @@ For Active Directory environments:
       {
         "name": "active-directory",
         "displayName": "Active Directory",
-        "url": "ldap://ad.example.com:389",
+        "url": "ldaps://ad.example.com:636",
         "adminDn": "admin@example.com",
         "adminPassword": "${AD_BIND_PASSWORD}",
         "userSearchBase": "dc=example,dc=com",
@@ -246,7 +246,7 @@ For organizations with different permission tiers:
 Test LDAP connectivity using `ldapsearch`:
 
 ```bash
-ldapsearch -x -H ldap://ldap.example.com:389 \
+ldapsearch -x -H ldaps://ldap.example.com:636 \
   -D "cn=admin,dc=example,dc=org" \
   -w "password" \
   -b "ou=people,dc=example,dc=org" \

@@ -428,7 +428,7 @@ profile (Admin → Credentials), not the password itself:
     "providers": [
       {
         "name": "corporate-ldap",
-        "url": "ldap://ldap.example.com:389",
+        "url": "ldaps://ldap.example.com:636",
         "adminDn": "cn=service,dc=example,dc=org",
         "adminPasswordRef": "ldap_corporate-ldap",
         "userSearchBase": "ou=people,dc=example,dc=org",
@@ -446,6 +446,8 @@ Notes:
 - `ldapAuth.enabled` does not need to be `true` — the provider only has to exist.
 - The provider **must** have both `adminDn` and `adminPasswordRef` set; without
   them the lookup is skipped and only the header/JWT groups are used.
+- Every lookup binds with that password, so use an `ldaps://` URL, or `ldap://`
+  with `"starttls": true` (see [Encrypting the connection](./ldap-ntlm-authentication.md#encrypting-the-connection-ldaps-or-starttls)).
 - The user ID is searched as-is against the provider's `usernameAttribute`. If
   the proxy forwards a Kerberos principal such as `alice@CORP.EXAMPLE.COM`, set
   `usernameAttribute` to `userPrincipalName` (this assumes the users' UPN suffix
@@ -564,7 +566,7 @@ LDAP (Lightweight Directory Access Protocol) authentication integrates with corp
       {
         "name": "corporate-ldap",
         "displayName": "Corporate Directory",
-        "url": "ldap://dc.company.com",
+        "url": "ldaps://dc.company.com:636",
         "userSearchBase": "ou=people,dc=company,dc=com",
         "usernameAttribute": "uid",
         "userDn": "uid={{username}},ou=people,dc=company,dc=com",
@@ -631,7 +633,7 @@ NTLM (Windows Integrated Authentication) allows users on domain-joined Windows m
   "ntlmAuth": {
     "enabled": true,
     "domain": "COMPANY",
-    "domainController": "ldap://dc.company.com",
+    "domainController": "ldaps://dc.company.com:636",
     "domainControllerUser": "CN=Service Account,OU=Users,DC=company,DC=com",
     "domainControllerPassword": "${NTLM_LDAP_PASSWORD}",
     "getGroups": true,

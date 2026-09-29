@@ -16,7 +16,8 @@ import {
   describeLdapProvider,
   extractGroupNames,
   mapLdapUserAttributes,
-  resolveLdapDomain
+  resolveLdapDomain,
+  usesStartTls
 } from '../../utils/ldapProviderConfig.js';
 import { DiagnosticsReport, STATUS } from '../../services/integrations/integrationDiagnostics.js';
 import logger from '../../utils/logger.js';
@@ -379,7 +380,14 @@ export default function registerAdminLdapTestRoutes(app) {
             message: certificateProblem
               ? `Connected to ${target.hostname}:${target.port}, but the certificate is not trusted: ${probe.certificateError}`
               : `Connected to ${target.hostname}:${target.port}`,
-            details: { ...probe, host: target.hostname, port: target.port, tls: target.secure },
+            details: {
+              ...probe,
+              host: target.hostname,
+              port: target.port,
+              tls: target.secure,
+              // StartTLS is negotiated when binding, in the steps below.
+              starttls: usesStartTls(resolved)
+            },
             hints: certificateProblem
               ? [
                   'The login path uses the same trust settings. Install the issuing CA on this server, or enable "Allow self-signed / internal CA certificates" on this provider.'

@@ -642,7 +642,7 @@ LDAP directory authentication configuration. Allows users to log in using their 
       {
         "name": "corporate-ldap",
         "displayName": "Corporate Directory",
-        "url": "ldap://ldap.company.com:389",
+        "url": "ldaps://ldap.company.com:636",
         "adminDn": "cn=admin,dc=company,dc=com",
         "adminPassword": "${LDAP_ADMIN_PASSWORD}",
         "userSearchBase": "ou=users,dc=company,dc=com",
@@ -669,7 +669,8 @@ LDAP directory authentication configuration. Allows users to log in using their 
 | --------------------------- | ------ | ------- | ---------------------------------------------------------------------------------- |
 | `name`                      | String | -       | Internal identifier for this LDAP provider                                         |
 | `displayName`               | String | -       | Human-readable name shown on the login page                                        |
-| `url`                       | String | -       | LDAP server URL (e.g., `ldap://host:389` or `ldaps://host:636`)                   |
+| `url`                       | String | -       | LDAP server URL: `ldaps://host:636`, or `ldap://host:389` together with `starttls` |
+| `starttls`                  | Boolean | `false` | Upgrade an `ldap://` connection to TLS (StartTLS) before binding. Without it or `ldaps://`, passwords are sent in plain text. Ignored for `ldaps://` |
 | `adminDn`                   | String | -       | Distinguished name used to bind and search the directory                           |
 | `adminPassword`             | String | -       | Password for the admin DN. Encrypted at rest; supports `${ENV_VAR}` references    |
 | `userSearchBase`            | String | -       | Base DN under which to search for users                                            |

@@ -92,6 +92,7 @@ function providerFor(port, overrides = {}) {
     name: 'corp',
     displayName: 'Corporate LDAP',
     url: `ldap://127.0.0.1:${port}`,
+    starttls: true,
     baseDn: 'dc=example,dc=org',
     adminDn: 'cn=admin,dc=example,dc=org',
     adminPasswordRef: 'ldap_corp',
@@ -158,9 +159,13 @@ describe('POST /api/admin/auth/ldap/_test', () => {
     expect(config.details.values.userSearchBase).toContain('(baseDn)');
     expect(config.details.values.userDn).toContain('uid={{username}},dc=example,dc=org');
 
-    expect(stepById(res.body, 'connectivity').status).toBe('ok');
+    const connectivity = stepById(res.body, 'connectivity');
+    expect(connectivity.status).toBe('ok');
+    expect(connectivity.details.starttls).toBe(true);
     expect(stepById(res.body, 'directory-lookup').status).toBe('ok');
     expect(stepById(res.body, 'login').status).toBe('ok');
+    // Both binds are told to upgrade the connection first.
+    expect(state.calls.map(call => call.starttls)).toEqual([true, true]);
 
     // What iHub would make of the entry.
     const attributes = stepById(res.body, 'attributes');
@@ -265,6 +270,20 @@ describe('POST /api/admin/auth/ldap/_test', () => {
     expect(res.body.message).toMatch(/could not be found/);
     expect(stepById(res.body, 'directory-lookup').status).toBe('fail');
     expect(stepById(res.body, 'login')).toBeUndefined();
+  });
+
+  it('warns when passwords would reach the directory in plain text', async () => {
+    state.results = [{ code: AUTH_RESULT_SUCCESS, user: ENTRY, messages: ['ok'] }];
+
+    const res = await request(createTestApp())
+      .post('/api/admin/auth/ldap/_test')
+      .send({ provider: { ...PROVIDER, starttls: false }, username: 'jdoe' });
+
+    const config = stepById(res.body, 'configuration');
+    expect(config.status).toBe('warn');
+    expect(config.hints.join(' ')).toMatch(/not encrypted/);
+    expect(stepById(res.body, 'connectivity').details.starttls).toBe(false);
+    expect(state.calls[0].starttls).toBeUndefined();
   });
 
   it('reports an incomplete configuration instead of dialling out', async () => {

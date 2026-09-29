@@ -43,7 +43,7 @@ and which kind of directory it is. Everything else is derived from those.
       {
         "name": "corporate-ldap",
         "displayName": "Corporate LDAP",
-        "url": "ldap://ldap.example.com:389",
+        "url": "ldaps://ldap.example.com:636",
         "preset": "openldap",
         "baseDn": "dc=example,dc=org",
         "adminDn": "cn=admin,dc=example,dc=org",
@@ -176,7 +176,8 @@ curl -X POST https://ihub.example.com/api/admin/auth/ldap/_test \
 | -------------------------- | ---------------------------------------------------- | -------- | ---------------------------------------------------- |
 | `name`                     | Unique identifier for the LDAP provider              | Yes      | -                                                    |
 | `displayName`              | Human-readable name                                  | No       | Same as `name`                                       |
-| `url`                      | LDAP server URL (ldap:// or ldaps://)                | Yes      | -                                                    |
+| `url`                      | LDAP server URL (`ldaps://host:636`, or `ldap://host:389` with `starttls`) | Yes | - |
+| `starttls`                 | Upgrade an `ldap://` connection to TLS before binding | No      | `false`                                              |
 | `preset`                   | `openldap` or `activeDirectory`                      | No       | `openldap`                                           |
 | `baseDn`                   | Root DN of the directory                             | No\*     | -                                                    |
 | `adminDn`                  | DN of the bind (service) account                     | No       | -                                                    |
@@ -195,6 +196,39 @@ curl -X POST https://ihub.example.com/api/admin/auth/ldap/_test \
 | `tlsOptions`               | TLS connection options                               | No       | `{}`                                                 |
 
 \* Either `baseDn` or `userSearchBase` must be set.
+
+#### Encrypting the connection: `ldaps://` or StartTLS
+
+Every login sends the user's password to the directory, and every group lookup
+sends the bind password. Over a plain `ldap://` connection both cross the
+network unencrypted. Use one of these instead:
+
+1. **`ldaps://host:636`** (recommended). The connection is TLS from the first
+   byte. `starttls` is ignored here.
+2. **`ldap://host:389` with `"starttls": true`.** iHub connects in plain text,
+   upgrades the connection with the LDAP StartTLS operation, and only then
+   binds. The server must support StartTLS, which Active Directory and OpenLDAP
+   do once they have a TLS certificate. If the server refuses the upgrade, the
+   login fails rather than falling back to plain text.
+
+```json
+{
+  "name": "corporate-ldap",
+  "url": "ldap://ldap.example.com:389",
+  "starttls": true,
+  "baseDn": "dc=example,dc=org"
+}
+```
+
+In both cases the server certificate is checked against the host name in `url`.
+For a certificate from a private or internal CA, make the CA trusted on the iHub
+server (see [SSL Certificates](ssl-certificates.md)), or put it in
+`tlsOptions.ca`. The admin option **Allow self-signed / internal CA
+certificates** (`tlsOptions.rejectUnauthorized: false`) also works, but it
+switches the certificate check off entirely.
+
+The connection test on **Admin → Authentication** warns about any provider that
+still uses `ldap://` without StartTLS.
 
 #### The `domain` field
 
@@ -241,7 +275,7 @@ Add NTLM configuration to your `contents/config/platform.json`:
   "ntlmAuth": {
     "enabled": true,
     "domain": "EXAMPLE",
-    "domainController": "ldap://dc.example.com:389",
+    "domainController": "ldaps://dc.example.com:636",
     "type": "ntlm",
     "debug": false,
     "getUserInfo": true,
@@ -259,7 +293,7 @@ Add NTLM configuration to your `contents/config/platform.json`:
 | ----------------------- | -------------------------------------------------------------- | -------- | ------- |
 | `enabled`               | Enable NTLM authentication                                     | Yes      | `false` |
 | `domain`                | Windows domain name                                            | No       | -       |
-| `domainController`          | Domain controller URL (e.g., `ldap://dc.example.com:389`)      | No       | -       |
+| `domainController`          | Domain controller URL (e.g., `ldaps://dc.example.com:636`)     | No       | -       |
 | `domainControllerUser`      | LDAP service account username for group lookup (optional)       | No       | -       |
 | `domainControllerPassword`  | LDAP service account password for group lookup (optional)       | No       | -       |
 | `type`                      | Authentication type (`ntlm` or `negotiate`)                     | No       | `ntlm`  |
@@ -297,7 +331,7 @@ The LDAP group lookup only happens during login (session start), not on every re
       {
         "name": "corporate-ad",
         "displayName": "Corporate Active Directory",
-        "url": "ldap://ad.example.com:389",
+        "url": "ldaps://ad.example.com:636",
         "preset": "activeDirectory",
         "baseDn": "dc=example,dc=com",
         "adminDn": "svc-ihub@example.com",
@@ -308,7 +342,7 @@ The LDAP group lookup only happens during login (session start), not on every re
   "ntlmAuth": {
     "enabled": true,
     "domain": "EXAMPLE",
-    "domainController": "ldap://dc.example.com:389",
+    "domainController": "ldaps://dc.example.com:636",
     "ldapGroupLookupProvider": "corporate-ad",
     "defaultGroups": ["ntlm-users"],
     "generateJwtToken": true
@@ -582,9 +616,11 @@ async function makeAuthenticatedRequest(url) {
    - **Note**: Upgrade to v4.2.0+ to use the unified login endpoint
 
 2. **Connection Errors**
-   - Verify LDAP server URL and port
+   - Verify LDAP server URL and port (636 for `ldaps://`, 389 for `ldap://` with StartTLS)
    - Check network connectivity
    - Ensure TLS/SSL configuration is correct
+   - With `starttls`, check that the server supports StartTLS on that port
+   - A "Hostname/IP does not match certificate's altnames" error means `url` names a host the certificate was not issued for
 
 3. **Authentication Failures**
    - Verify admin DN and password
@@ -636,7 +672,7 @@ async function makeAuthenticatedRequest(url) {
 
 ### LDAP Security
 
-- Use LDAPS (LDAP over SSL/TLS) for production
+- Encrypt the connection: use `ldaps://`, or `ldap://` with `starttls` (see [Encrypting the connection](#encrypting-the-connection-ldaps-or-starttls))
 - Limit admin account permissions
 - Use service accounts with minimal privileges
 - Regularly rotate passwords

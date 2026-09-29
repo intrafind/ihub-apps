@@ -107,7 +107,7 @@ SKIP_NTLM_VITE_PROXY=false npm run dev
   "ntlmAuth": {
     "enabled": true,
     "domain": "EXAMPLE.COM",
-    "domainController": "ldap://dc.example.com:389",
+    "domainController": "ldaps://dc.example.com:636",
     "type": "ntlm",
     "debug": false,
     "getUserInfo": true,
@@ -127,7 +127,7 @@ SKIP_NTLM_VITE_PROXY=false npm run dev
 |-------|------|----------|---------|---------|
 | `enabled` | boolean | Yes | false | Enable/disable NTLM auth |
 | `domain` | string | No | - | Windows domain name (e.g., "EXAMPLE") |
-| `domainController` | string | No | - | LDAP server URL for group queries (ldap://...) |
+| `domainController` | string | No | - | LDAP server URL for group queries (`ldaps://...` recommended) |
 | `type` | string | No | "ntlm" | "ntlm" or "negotiate" |
 | `debug` | boolean | No | false | Enable debug logging |
 | `getUserInfo` | boolean | No | true | Extract user info from token |
@@ -317,7 +317,7 @@ Set-Cookie: authToken=<jwt>; HttpOnly; Secure; SameSite=Lax
    
 2. Pass LDAP Credentials to express-ntlm
    const options = {
-     domaincontroller: "ldap://dc.example.com:389",
+     domaincontroller: "ldaps://dc.example.com:636",
      domaincontrolleruser: "CN=Service,OU=Users,DC=example,DC=com",
      domaincontrollerpassword: "password",
      getGroups: true
@@ -362,7 +362,7 @@ Set-Cookie: authToken=<jwt>; HttpOnly; Secure; SameSite=Lax
 
 // 1. Bind as service account
 const ldapBind = new LDAP({
-  url: "ldap://dc.example.com:389",
+  url: "ldaps://dc.example.com:636",
   adminDn: "CN=Service,OU=Users,DC=example,DC=com",
   adminPassword: "password"
 });
@@ -546,7 +546,7 @@ Check List:
 ```
 Check List:
 1. ✓ Is domainController configured?
-   {"domainController": "ldap://dc.example.com:389"}
+   {"domainController": "ldaps://dc.example.com:636"}
 
 2. ✓ Are LDAP credentials set?
    NTLM_LDAP_USER=CN=Service,OU=Users,DC=example,DC=com
