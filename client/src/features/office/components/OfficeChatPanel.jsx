@@ -35,7 +35,7 @@ import {
 } from '../utilities/officeStarterPrompts';
 import { OFFICE_APPS_PAGE_PATH } from '../utilities/officeStartPage';
 import { buildWebChatUrl } from '../utilities/officeChatHistory';
-import { openExternalUrl } from '../../../utils/externalNavigation';
+import { openExternalUrlSettled } from '../../../utils/externalNavigation';
 import usePinnedEmails from '../hooks/usePinnedEmails';
 import { consumePendingChatStart } from '../../chat/startChatHandoff';
 import { getLocalizedContent } from '../../../utils/localizeContent';
@@ -757,13 +757,15 @@ function OfficeChatPanel({
   // the browser opens it at the web app's own chat route and carries on from
   // the same transcript — nothing is copied. `window.open` is a silent no-op in
   // the task pane, so this goes through the host's own API; when even that
-  // cannot report success, the notice gives the address to open by hand.
-  const handleOpenInWeb = () => {
+  // cannot report success — the extension's tab can still be refused after the
+  // hand-off — the notice gives the address to open by hand.
+  const handleOpenInWeb = async () => {
     const chatId = chatIdRef.current;
     const url = buildWebChatUrl(officeConfig?.baseUrl, selectedApp?.id, chatId);
     if (!url) return;
     dismissMailNotice();
-    setWebNotice(openExternalUrl(url) ? null : { chatId, url });
+    setWebNotice(null);
+    if (!(await openExternalUrlSettled(url))) setWebNotice({ chatId, url });
   };
 
   const menuItems = [

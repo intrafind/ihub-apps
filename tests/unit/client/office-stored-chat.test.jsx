@@ -62,10 +62,10 @@ jest.mock('../../../client/src/features/office/contexts/OfficeConfigContext', ()
   })
 }));
 
-const mockOpenExternalUrl = jest.fn(() => true);
+const mockOpenExternalUrl = jest.fn(() => Promise.resolve(true));
 jest.mock('../../../client/src/utils/externalNavigation', () => ({
   ...jest.requireActual('../../../client/src/utils/externalNavigation'),
-  openExternalUrl: (...args) => mockOpenExternalUrl(...args)
+  openExternalUrlSettled: (...args) => mockOpenExternalUrl(...args)
 }));
 
 const useStoredChatHydration =
@@ -94,7 +94,7 @@ beforeEach(() => {
   mockFetchPlatformConfig.mockReset();
   mockInvalidateChatsCache.mockReset();
   mockOpenExternalUrl.mockReset();
-  mockOpenExternalUrl.mockReturnValue(true);
+  mockOpenExternalUrl.mockResolvedValue(true);
 });
 
 describe('buildWebChatUrl', () => {
@@ -601,31 +601,37 @@ describe('<OfficeChatPanel /> with durable chats', () => {
   describe('Open in web app', () => {
     const openMenu = () => fireEvent.click(screen.getByRole('button', { name: 'Open menu' }));
     const webEntry = () => screen.queryByRole('button', { name: 'Open in web app' });
-
-    test("a chat from the history opens in the browser at the web app's chat route", () => {
-      renderPanel({ openChatId: 'stored-1' });
+    // The host's answer settles after the click (the extension's tab is created
+    // asynchronously), so the click is awaited through it.
+    const openInWeb = async () => {
       openMenu();
-      fireEvent.click(webEntry());
+      await act(async () => {
+        fireEvent.click(webEntry());
+      });
+    };
+
+    test("a chat from the history opens in the browser at the web app's chat route", async () => {
+      renderPanel({ openChatId: 'stored-1' });
+      await openInWeb();
 
       expect(mockOpenExternalUrl).toHaveBeenCalledTimes(1);
       expect(mockOpenExternalUrl).toHaveBeenCalledWith(
         'https://ihub.example.com/ihub/apps/mail/c/stored-1'
       );
-      // Handed to the host: nothing to report.
+      // Opened: nothing to report.
       expect(screen.queryByRole('status')).not.toBeInTheDocument();
     });
 
-    test('also while the stored chat is still loading: the web app fetches it itself', () => {
+    test('also while the stored chat is still loading: the web app fetches it itself', async () => {
       mockAdapterState.hydrating = true;
       renderPanel({ openChatId: 'stored-1' });
-      openMenu();
-      fireEvent.click(webEntry());
+      await openInWeb();
       expect(mockOpenExternalUrl).toHaveBeenCalledWith(
         'https://ihub.example.com/ihub/apps/mail/c/stored-1'
       );
     });
 
-    test('a new chat can be opened once the server has its first turn, under its own id', () => {
+    test('a new chat can be opened once the server has its first turn, under its own id', async () => {
       renderPanel();
       const fresh = lastAdapterCall();
 
@@ -643,18 +649,16 @@ describe('<OfficeChatPanel /> with durable chats', () => {
       openMenu();
 
       act(() => lastAdapterCall().onMessageAccepted(fresh.chatId));
-      openMenu();
-      fireEvent.click(webEntry());
+      await openInWeb();
       expect(mockOpenExternalUrl).toHaveBeenCalledWith(
         `https://ihub.example.com/ihub/apps/mail/c/${fresh.chatId}`
       );
     });
 
-    test('when the host cannot open a browser, the address is shown to open by hand', () => {
-      mockOpenExternalUrl.mockReturnValue(false);
+    test('when the browser does not open — or its tab is refused — the address is shown', async () => {
+      mockOpenExternalUrl.mockResolvedValue(false);
       renderPanel({ openChatId: 'stored-1' });
-      openMenu();
-      fireEvent.click(webEntry());
+      await openInWeb();
 
       const notice = screen.getByRole('status');
       expect(notice).toHaveTextContent(
@@ -666,22 +670,31 @@ describe('<OfficeChatPanel /> with durable chats', () => {
       expect(screen.queryByRole('status')).not.toBeInTheDocument();
     });
 
-    test("the address goes once its chat is left: it is not the new chat's", () => {
-      mockOpenExternalUrl.mockReturnValue(false);
+    test('a later attempt that opens clears the address of an earlier one', async () => {
+      mockOpenExternalUrl.mockResolvedValue(false);
       renderPanel({ openChatId: 'stored-1' });
-      openMenu();
-      fireEvent.click(webEntry());
+      await openInWeb();
+      expect(screen.getByRole('status')).toHaveTextContent('/c/stored-1');
+
+      mockOpenExternalUrl.mockResolvedValue(true);
+      await openInWeb();
+      expect(screen.queryByRole('status')).not.toBeInTheDocument();
+    });
+
+    test("the address goes once its chat is left: it is not the new chat's", async () => {
+      mockOpenExternalUrl.mockResolvedValue(false);
+      renderPanel({ openChatId: 'stored-1' });
+      await openInWeb();
       expect(screen.getByRole('status')).toHaveTextContent('/c/stored-1');
 
       fireEvent.click(screen.getByRole('button', { name: 'New chat' }));
       expect(screen.queryByText(/\/c\/stored-1/)).not.toBeInTheDocument();
     });
 
-    test('an answer action run afterwards takes the notice strip over', () => {
-      mockOpenExternalUrl.mockReturnValue(false);
+    test('an answer action run afterwards takes the notice strip over', async () => {
+      mockOpenExternalUrl.mockResolvedValue(false);
       renderPanel({ openChatId: 'stored-1' });
-      openMenu();
-      fireEvent.click(webEntry());
+      await openInWeb();
       expect(screen.getByRole('status')).toHaveTextContent('/c/stored-1');
 
       fireEvent.click(screen.getByRole('button', { name: 'Answer action' }));
