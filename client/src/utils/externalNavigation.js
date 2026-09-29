@@ -71,6 +71,38 @@ export function detectExternalNavigationHost() {
  *   result means the user saw nothing happen — surface it.
  */
 export function openExternalUrl(url) {
+  // A tab still being created counts as handed off; callers that need to know
+  // whether it was refused use openExternalUrlSettled.
+  const handedOff = handOffExternalUrl(url);
+  return typeof handedOff === 'boolean' ? handedOff : true;
+}
+
+/**
+ * {@link openExternalUrl}, resolving once the host has settled the hand-off.
+ *
+ * The difference is the extension side panel: `chrome.tabs.create` (MV3)
+ * answers with a promise, and a refused tab resolves this to `false` instead
+ * of being reported as opened. Elsewhere it resolves to what
+ * `openExternalUrl` returns.
+ *
+ * The URL is handed to the host before this returns, inside the caller's click
+ * handler, so no host loses the user gesture it needs to open a window.
+ *
+ * @param {string} url Absolute URL to open.
+ * @returns {Promise<boolean>} `false` means the user saw nothing happen.
+ */
+export async function openExternalUrlSettled(url) {
+  return handOffExternalUrl(url);
+}
+
+/**
+ * Hand `url` to whichever host API this surface has.
+ *
+ * @param {string} url
+ * @returns {boolean|Promise<boolean>} A promise only while the extension's tab
+ *   is being created; it never rejects.
+ */
+function handOffExternalUrl(url) {
   if (!url) return false;
 
   const host = detectExternalNavigationHost();
@@ -89,9 +121,14 @@ export function openExternalUrl(url) {
   if (host === 'extension') {
     try {
       const created = chrome.tabs.create({ url });
-      // MV3 returns a promise; swallow rejections so a failed tab creation
-      // never surfaces as an unhandled rejection.
-      if (created && typeof created.catch === 'function') created.catch(() => {});
+      // MV3 returns a promise. Settling it here also means a failed tab
+      // creation never surfaces as an unhandled rejection.
+      if (created && typeof created.then === 'function') {
+        return created.then(
+          () => true,
+          () => false
+        );
+      }
       return true;
     } catch {
       // Fall through to window.open.
