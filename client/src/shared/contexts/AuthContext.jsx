@@ -1,4 +1,5 @@
-import { createContext, useContext, useReducer, useEffect, useCallback, useRef } from 'react';
+import { useContext, useReducer, useEffect, useCallback, useRef } from 'react';
+import { AuthContext, useOptionalAuth } from './authContextValue';
 import { apiClient } from '../../api/client.js';
 import { fetchAuthStatus, invalidateAuthStatusCache } from '../../api';
 import {
@@ -101,7 +102,8 @@ function redirectToReturnUrl(logContext) {
 }
 
 // Create context
-const AuthContext = createContext();
+// The context object lives in its own module; see authContextValue.js.
+export { useOptionalAuth };
 
 // Auth provider component
 export function AuthProvider({ children }) {

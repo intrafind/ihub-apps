@@ -418,6 +418,17 @@
       "maxViewsCap": 0
     }
   },
+  "userPrompts": {
+    "enabled": true,
+    "maxPromptsPerUser": 0,
+    "maxVersions": 50,
+    "sharing": {
+      "allowUsers": true,
+      "allowGroups": true,
+      "allowEveryone": true,
+      "restrictToGroups": []
+    }
+  },
   "artifacts": {
     "enabled": true,
     "maxBytes": 10485760,

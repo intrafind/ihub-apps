@@ -8,7 +8,7 @@
   },
   "icon": "sparkles",
   "prompt": {
-    "en": "Summarize the following text: [content]",
-    "de": "Fasse den folgenden Text zusammen: [content]"
+    "en": "Summarize the following text: {{content}}",
+    "de": "Fasse den folgenden Text zusammen: {{content}}"
   }
 }

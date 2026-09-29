@@ -5,7 +5,7 @@
   "description": { "en": "Translate text into German.", "de": "Text ins Deutsche übersetzen." },
   "icon": "globe",
   "prompt": {
-    "en": "Translate the following into German: [content]",
-    "de": "Übersetze Folgendes ins Deutsche: [content]"
+    "en": "Translate the following into German: {{content}}",
+    "de": "Übersetze Folgendes ins Deutsche: {{content}}"
   }
 }

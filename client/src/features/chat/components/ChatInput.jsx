@@ -3,6 +3,7 @@ import { useTranslation } from 'react-i18next';
 import Icon from '../../../shared/components/Icon';
 import { UnifiedUploader, CloudStoragePicker, AttachedFilesList } from '../../upload/components';
 import PromptSearch from '../../prompts/components/PromptSearch';
+import usePromptLauncher from '../../prompts/hooks/usePromptLauncher';
 import WorkflowMentionSearch from './WorkflowMentionSearch';
 import ChatInputActionsMenu from './ChatInputActionsMenu';
 import ImageGenerationControls from './ImageGenerationControls';
@@ -289,6 +290,33 @@ function ChatInput({
       el.setSelectionRange(len, len);
     }
   }, [actualInputRef]);
+
+  // A prompt picked from the `/` search: its variables are asked for first,
+  // then the text goes into the input — never sent — with the caret where
+  // `{{content}}` was, or at the end.
+  const { launch: launchPrompt, dialog: promptVariablesDialog } = usePromptLauncher();
+  const insertPrompt = useCallback(
+    async prompt => {
+      const result = await launchPrompt(prompt);
+      if (!result) {
+        setTimeout(() => focusInputAtEnd(), 0);
+        return;
+      }
+      onChange({ target: { value: result.text } });
+      setTimeout(() => {
+        const el = actualInputRef.current;
+        if (!el) return;
+        if (result.caret === null || result.caret === undefined) {
+          focusInputAtEnd();
+          return;
+        }
+        el.focus();
+        const at = Math.min(result.caret, el.value.length);
+        el.setSelectionRange(at, at);
+      }, 0);
+    },
+    [launchPrompt, onChange, focusInputAtEnd, actualInputRef]
+  );
 
   // Calculate if single-action optimization is active in ChatInputActionsMenu
   // This logic mirrors the calculation in ChatInputActionsMenu.jsx
@@ -880,21 +908,22 @@ function ChatInput({
 
   return (
     <div className="next-gen-chat-input-container">
+      {promptVariablesDialog}
       {slashCommandEnabled && (
         <PromptSearch
           isOpen={showPromptSearch}
           appId={app?.id}
           onClose={() => setShowPromptSearch(false)}
           onSelect={p => {
+            setShowPromptSearch(false);
             if (p._type === 'skill') {
               onSkillSelect?.(p);
+              setTimeout(() => {
+                focusInputAtEnd();
+              }, 0);
             } else {
-              onChange({ target: { value: p.prompt.replace('[content]', '') } });
+              insertPrompt(p);
             }
-            setShowPromptSearch(false);
-            setTimeout(() => {
-              focusInputAtEnd();
-            }, 0);
           }}
           appSkills={app?.skills}
           promptsEnabled={promptsListEnabled}
