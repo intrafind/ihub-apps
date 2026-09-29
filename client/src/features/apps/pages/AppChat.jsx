@@ -752,8 +752,15 @@ function AppChat({ preloadedApp = null, embedded = false, appId: embeddedAppId =
   // straight back into it.
   const chatStarted = messages.some(message => message.role === 'user');
   useEffect(() => {
-    if (embedded || routeChatId || !serverBackedChat || hydrating || !chatStarted) return;
-    if (chatId !== freshChatRef.current?.id) return;
+    if (
+      embedded ||
+      routeChatId ||
+      !serverBackedChat ||
+      hydrating ||
+      !chatStarted ||
+      chatId !== freshChatRef.current?.id
+    )
+      return;
     navigate(`/apps/${appId}/c/${chatId}`, { replace: true });
   }, [embedded, routeChatId, serverBackedChat, hydrating, chatStarted, appId, chatId, navigate]);
 

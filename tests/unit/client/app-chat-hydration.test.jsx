@@ -460,12 +460,17 @@ describe('starting a new chat', () => {
     );
   });
 
-  test('clicking the app from inside one of its chats leaves that chat for a new one', async () => {
-    // Same page instance: only the route loses its chat id. For a render the
-    // page still holds the stored chat and its transcript, and pinning that
-    // one would send the user straight back into it.
+  test('returning to the bare app route does not restore the previous chat URL', async () => {
+    // Start at the bare route, visit a stored chat, then return. Both routes
+    // render the same page instance, which briefly still holds the previous
+    // chat and its transcript.
     const resolveChat = deferredChat();
-    renderChat({ path: '/apps/acme/c/chat-stored' });
+    renderChat();
+    await waitFor(() => expect(screen.getAllByTestId('greeting')[0]).toBeInTheDocument());
+
+    await act(async () => {
+      mockRouter.navigate('/apps/acme/c/chat-stored');
+    });
     await act(async () => {
       await resolveChat(STORED_MESSAGES);
     });
