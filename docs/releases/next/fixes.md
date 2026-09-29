@@ -10,6 +10,15 @@ The model still reasons, but its reasoning text is no longer returned or shown.
 - Needs a vLLM version that supports `include_reasoning`. Older servers ignore it and keep
   showing the reasoning.
 
+## Outlook Add-in: copy options menu no longer opens off-screen
+
+In the narrow Outlook task pane, the copy options menu under an assistant answer ("as Text",
+"as Markdown", "as HTML") opened to the left of the pane and was cut off, so the copy formats could
+not be reached. The menu now opens to the right, inside the pane.
+
+- Applies to every chat view that shows assistant messages, not just the Outlook add-in.
+- Menus under your own messages still open to the left, as those are right-aligned.
+
 ## Outlook Add-in: Edit Message Form Stays Inside the Message Bubble
 
 In the Outlook add-in task pane, choosing Edit on one of your messages showed the edit box sticking
