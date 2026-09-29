@@ -203,7 +203,7 @@ export const exportChatToPDF = async (
   watermark = {},
   appName = 'iHub Apps',
   appId = null,
-  chatId = null,
+  _chatId = null,
   isSingleMessage = false
 ) => {
   if (!messages) {
@@ -738,42 +738,6 @@ const htmlToMarkdown = content => {
     .trim();
 };
 
-const markdownToHtml = content => {
-  if (!content) return '';
-  // Simple markdown to HTML conversion
-  return content
-    .replace(/\*\*(.*?)\*\*/g, '<strong>$1</strong>')
-    .replace(/\*(.*?)\*/g, '<em>$1</em>')
-    .replace(/`(.*?)`/g, '<code>$1</code>')
-    .replace(/\n\n/g, '</p><p>')
-    .replace(/\n/g, '<br>');
-};
-
-const cleanHtmlForExport = html => {
-  if (!html || typeof html !== 'string') {
-    return '';
-  }
-
-  // Create a temporary DOM element to parse HTML
-  const tempDiv = document.createElement('div');
-  tempDiv.innerHTML = html;
-
-  // Remove code block toolbars (contains buttons and language labels)
-  const toolbars = tempDiv.querySelectorAll('.code-block-toolbar');
-  toolbars.forEach(toolbar => toolbar.remove());
-
-  // Remove mermaid diagram controls if any
-  const diagramControls = tempDiv.querySelectorAll('.mermaid-diagram-controls');
-  diagramControls.forEach(control => control.remove());
-
-  // Remove any button elements that might be left
-  const buttons = tempDiv.querySelectorAll('button');
-  buttons.forEach(button => button.remove());
-
-  // Return the cleaned HTML
-  return tempDiv.innerHTML;
-};
-
 const generateMarkdown = messages => {
   return messages
     .filter(m => !m.isGreeting)
@@ -804,7 +768,7 @@ export const exportChatToJSON = async (
   messages,
   settings,
   appId = null,
-  chatId = null,
+  _chatId = null,
   appName = null,
   isSingleMessage = false
 ) => {
@@ -826,7 +790,7 @@ export const exportChatToJSONL = async (
   messages,
   settings,
   appId = null,
-  chatId = null,
+  _chatId = null,
   appName = null,
   isSingleMessage = false
 ) => {
@@ -848,7 +812,7 @@ export const exportChatToMarkdown = async (
   messages,
   settings,
   appId = null,
-  chatId = null,
+  _chatId = null,
   appName = null,
   isSingleMessage = false
 ) => {
@@ -869,7 +833,7 @@ export const exportChatToHTML = async (
   messages,
   settings,
   appId = null,
-  chatId = null,
+  _chatId = null,
   appName = 'iHub Apps',
   isSingleMessage = false
 ) => {
