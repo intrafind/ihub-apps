@@ -501,6 +501,26 @@ describe('<OfficeChatPanel /> with durable chats', () => {
     expect(mockSends[mockSends.length - 1].apiMessage.variables).toEqual({ tone: 'formal' });
   });
 
+  test("a new chat after a reopened one does not carry that chat's variables", () => {
+    const toneApp = {
+      ...app,
+      variables: [{ name: 'tone', label: { en: 'Tone' }, type: 'string', defaultValue: 'neutral' }]
+    };
+    mockAdapterState.storedChatVariables = { tone: 'formal' };
+    renderPanel({ openChatId: 'stored-1', selectedApp: toneApp });
+
+    fireEvent.change(screen.getByLabelText('message'), { target: { value: 'Follow up' } });
+    fireEvent.click(screen.getByRole('button', { name: 'Send' }));
+    expect(mockSends[mockSends.length - 1].apiMessage.variables).toEqual({ tone: 'formal' });
+
+    // The next chat has no stored variables; it goes on with the pane's own.
+    mockAdapterState.storedChatVariables = null;
+    fireEvent.click(screen.getByRole('button', { name: 'New chat' }));
+    fireEvent.change(screen.getByLabelText('message'), { target: { value: 'Fresh question' } });
+    fireEvent.click(screen.getByRole('button', { name: 'Send' }));
+    expect(mockSends[mockSends.length - 1].apiMessage.variables).toEqual({ tone: 'neutral' });
+  });
+
   test('a new chat of the same app still asks for a required variable', () => {
     renderPanel({ selectedApp: variablesApp });
     expect(screen.getByRole('heading', { name: 'Variables' })).toBeInTheDocument();

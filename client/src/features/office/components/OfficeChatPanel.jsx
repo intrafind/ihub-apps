@@ -268,10 +268,26 @@ function OfficeChatPanel({
 
   // A reopened chat continues with the variables it was given, over the app's
   // defaults — otherwise the next turn would send the defaults and replace them.
+  // Those values belong to that chat, so what the pane had before they were
+  // merged in is kept aside and put back when the chat is left: the next chat
+  // carries on with the user's own values, not with the stored chat's.
+  const variablesBeforeStoredRef = useRef(null);
   const { storedChatVariables } = adapter;
   useEffect(() => {
-    if (storedChatVariables) setAppPromptVariables(prev => ({ ...prev, ...storedChatVariables }));
+    if (!storedChatVariables) return;
+    setAppPromptVariables(prev => {
+      // Kept from the latest queued values, not from a render-time copy: the
+      // app's defaults may land in the same commit as the stored values.
+      // Idempotent, so a repeated updater call keeps the first capture.
+      if (variablesBeforeStoredRef.current === null) variablesBeforeStoredRef.current = prev;
+      return { ...prev, ...storedChatVariables };
+    });
   }, [storedChatVariables]);
+  const leaveStoredVariables = useCallback(() => {
+    const before = variablesBeforeStoredRef.current;
+    variablesBeforeStoredRef.current = null;
+    if (before) setAppPromptVariables(before);
+  }, []);
 
   // Mirror of `pinnedEmails` for the ItemChanged listener — using a ref
   // avoids re-binding the document listener every time the array changes.
@@ -343,21 +359,23 @@ function OfficeChatPanel({
     }
     chatIdRef.current = mintChatId();
     handoffContextRef.current = null;
+    leaveStoredVariables();
     selectedStarterPromptRef.current = null;
     adapterRef.current.clearMessages();
     setInputValue('');
     // The refs above are read, not tracked — the effect must run on a
-    // published item change and nothing else (`mintChatId` never changes).
-  }, [currentItemId, mintChatId]);
+    // published item change and nothing else (the callbacks never change).
+  }, [currentItemId, mintChatId, leaveStoredVariables]);
 
   const handleRestorePreviousChat = useCallback(() => {
     if (!previousChat) return;
     // The chatId change makes the chat hook reload that transcript.
     chatIdRef.current = previousChat.chatId;
+    leaveStoredVariables();
     selectedStarterPromptRef.current = previousChat.starterPrompt;
     setInputValue(previousChat.inputValue);
     setPreviousChat(null);
-  }, [previousChat]);
+  }, [previousChat, leaveStoredVariables]);
 
   // Once the new conversation has its own content, the offer is stale.
   const showRestorePreviousChat = !!previousChat && adapter.messages.length === 0;
@@ -642,6 +660,8 @@ function OfficeChatPanel({
       chatIdRef.current = mintChatId();
       handoffContextRef.current = null;
       openedStoredChatRef.current = false;
+      // The app-change effect sets the new app's defaults.
+      variablesBeforeStoredRef.current = null;
       selectedStarterPromptRef.current = null;
       adapter.clearMessages();
       setInputValue('');
@@ -656,12 +676,13 @@ function OfficeChatPanel({
   const handleNewChat = useCallback(() => {
     chatIdRef.current = mintChatId();
     handoffContextRef.current = null;
+    leaveStoredVariables();
     selectedStarterPromptRef.current = null;
     adapter.clearMessages();
     setInputValue('');
     setPinnedEmails([]);
     setPreviousChat(null);
-  }, [adapter, setPinnedEmails, mintChatId]);
+  }, [adapter, setPinnedEmails, mintChatId, leaveStoredVariables]);
 
   const localizedVariables = useMemo(
     () => localizeVariables(selectedApp?.variables, officeLocale),
