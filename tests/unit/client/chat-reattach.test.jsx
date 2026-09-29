@@ -378,6 +378,35 @@ test('a chat left mid-replay gets neither the rest of the replay nor the stream'
   expect(result.current.processing).toBe(false);
 });
 
+test('reports the chat once the server has accepted the turn', async () => {
+  const { sendAppChatMessage } = require('../../../client/src/api');
+  let accept;
+  sendAppChatMessage.mockImplementationOnce(() => new Promise(resolve => (accept = resolve)));
+  const onMessageAccepted = jest.fn();
+  const { result } = renderHook(() =>
+    useAppChat({ appId: 'acme', chatId: 'chat-abc', serverBacked: true, onMessageAccepted })
+  );
+
+  await act(async () => {
+    result.current.sendMessage({
+      displayMessage: { content: 'Hello' },
+      apiMessage: { content: 'Hello' },
+      params: {}
+    });
+  });
+  // The request goes out once the stream reports it is connected…
+  const emit = mockEmitters[mockEmitters.length - 1];
+  await act(async () => {
+    emit('stream/connected', envelope(1, 'stream/connected', {}));
+  });
+  // …and until the server has answered it, the chat is not accepted.
+  expect(sendAppChatMessage).toHaveBeenCalled();
+  expect(onMessageAccepted).not.toHaveBeenCalled();
+
+  await act(async () => accept({}));
+  expect(onMessageAccepted).toHaveBeenCalledWith('chat-abc');
+});
+
 test('reattaching to nothing is a no-op', async () => {
   const { result } = renderHook(() =>
     useAppChat({ appId: 'acme', chatId: 'chat-abc', serverBacked: true })

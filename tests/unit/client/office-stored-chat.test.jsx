@@ -465,8 +465,14 @@ describe('<OfficeChatPanel /> with durable chats', () => {
 
     fireEvent.change(screen.getByLabelText('message'), { target: { value: 'Draft a reply' } });
     fireEvent.click(screen.getByRole('button', { name: 'Send' }));
-    expect(lastAdapterCall()).toMatchObject({ chatId: fresh.chatId, isFreshChat: false });
+    // Sent, but the request goes out only once the stream connects: until the
+    // server has it, the store has never heard of this chat.
+    expect(lastAdapterCall()).toMatchObject({ chatId: fresh.chatId, isFreshChat: true });
+    openHistoryFromMenu();
+    expect(onOpenHistory).toHaveBeenLastCalledWith({ returnChatId: null });
 
+    act(() => lastAdapterCall().onMessageAccepted(fresh.chatId));
+    expect(lastAdapterCall()).toMatchObject({ chatId: fresh.chatId, isFreshChat: false });
     openHistoryFromMenu();
     expect(onOpenHistory).toHaveBeenLastCalledWith({ returnChatId: fresh.chatId });
   });

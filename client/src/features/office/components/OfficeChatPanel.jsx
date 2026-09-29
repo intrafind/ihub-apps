@@ -1,4 +1,4 @@
-import { useState, useRef, useCallback, useEffect, useMemo } from 'react';
+import { useState, useRef, useCallback, useEffect, useMemo, useReducer } from 'react';
 import { useNavigate, Navigate } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
 import { v4 as uuidv4 } from 'uuid';
@@ -118,9 +118,19 @@ function OfficeChatPanel({
   // off), and this panel's own snapshot knows nothing of those edits.
   const handoffContextRef = useRef(null);
 
+  // A chat stops being fresh once the server has its first turn — not when it
+  // is sent: the request goes out only after the stream connects, and until
+  // then the store has never heard of it.
+  // The set is a ref; a re-render lets the panel see the chat is stored now.
+  const [, noteAccepted] = useReducer(n => n + 1, 0);
+  const handleMessageAccepted = useCallback(id => {
+    if (freshChatIdsRef.current.delete(id)) noteAccepted();
+  }, []);
+
   const adapter = useOfficeChatAdapter({
     appId: selectedApp?.id,
     chatId: chatIdRef.current,
+    onMessageAccepted: handleMessageAccepted,
     serverBacked: chatStored,
     isFreshChat
   });
@@ -459,10 +469,6 @@ function OfficeChatPanel({
           : mailSnapshot.buildSnapshotOverride();
       if (snapshotOverride) params.hostContextOverride = snapshotOverride;
 
-      // From here on the chat is in the store (with durable chats on), so
-      // coming back to it has to fetch it.
-      freshChatIdsRef.current.delete(chatIdRef.current);
-
       adapter.sendMessage({
         // The form's message keeps its variables in the transcript: a chat
         // that is not stored posts its history, and that is what carries them
@@ -743,7 +749,10 @@ function OfficeChatPanel({
             // there is nothing to return to.
             onClick: () =>
               onOpenHistory({
-                returnChatId: chatStored && !isFreshChat ? chatIdRef.current : null
+                returnChatId:
+                  chatStored && !freshChatIdsRef.current.has(chatIdRef.current)
+                    ? chatIdRef.current
+                    : null
               })
           }
         ]

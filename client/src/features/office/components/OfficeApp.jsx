@@ -174,7 +174,6 @@ const OfficeApp = () => {
   const handleSessionExpired = React.useCallback(() => {
     clearTokens();
     localStorage.removeItem(OFFICE_USER_KEY);
-    invalidateChatsCache();
     storeSelectedApp(null);
     setAuthData(null);
     setSelectedApp(null);
@@ -186,6 +185,15 @@ const OfficeApp = () => {
     setOnSessionExpired(handleSessionExpired);
     return () => setOnSessionExpired(null);
   }, [handleSessionExpired]);
+
+  // Signed out (logout or an expired session): the next user must not see this
+  // one's chats for as long as the list would otherwise be reused. Dropped from
+  // an effect rather than the logout handler: by now the signed-in views are
+  // unmounted, whereas invalidating under a mounted list refetches it on the
+  // spot — without a token, and the 401 that earns reads as an expired session.
+  React.useEffect(() => {
+    if (!authData) invalidateChatsCache();
+  }, [authData]);
 
   const handleLoginSuccess = React.useCallback(
     async data => {
@@ -209,9 +217,6 @@ const OfficeApp = () => {
   const handleLogout = React.useCallback(() => {
     clearTokens();
     localStorage.removeItem(OFFICE_USER_KEY);
-    // The next user must not see this one's chats for as long as the list
-    // would otherwise be reused.
-    invalidateChatsCache();
     storeSelectedApp(null);
     setAuthData(null);
     setSelectedApp(null);

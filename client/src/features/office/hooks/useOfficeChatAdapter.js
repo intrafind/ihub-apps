@@ -61,6 +61,8 @@ function combineUploadData(manualData, mailData) {
  * @param {string} options.appId - App ID
  * @param {string} options.chatId - Chat session ID
  * @param {Function} [options.onMessageComplete] - Forwarded to useAppChat
+ * @param {Function} [options.onMessageAccepted] - Forwarded to useAppChat: called with the
+ *   chat id once the server has the turn, i.e. once a server-backed chat is in the store
  * @param {boolean} [options.serverBacked=false] - Whether the chat is stored server-side
  * @param {boolean} [options.isFreshChat=false] - Whether the pane minted this chat and has
  *   not sent anything in it yet, so there is nothing stored to fetch
@@ -72,10 +74,11 @@ function useOfficeChatAdapter({
   appId,
   chatId,
   onMessageComplete,
+  onMessageAccepted,
   serverBacked = false,
   isFreshChat = false
 }) {
-  const chat = useAppChat({ appId, chatId, onMessageComplete, serverBacked });
+  const chat = useAppChat({ appId, chatId, onMessageComplete, onMessageAccepted, serverBacked });
   const { chatSettings: storedChatSettings, chatVariables: storedChatVariables } =
     useStoredChatHydration({ chat, chatId, serverBacked, isFreshChat });
   const host = useEmbeddedHost();

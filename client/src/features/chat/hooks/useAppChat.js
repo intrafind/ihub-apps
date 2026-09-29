@@ -33,6 +33,8 @@ import { takeMcpAppModelContext } from '../mcpApps/modelContextStore';
  * @param {string} options.appId - The app ID
  * @param {string} options.chatId - The chat session ID
  * @param {Function} options.onMessageComplete - Callback fired when a message is completed (optional)
+ * @param {Function} [options.onMessageAccepted] - Called with the chat id once the server has
+ *   accepted a turn's request — for a server-backed chat, the moment the chat is in the store
  * @param {boolean} options.persistConversationId - Whether to persist iAssistant conversationId
  *   to localStorage (keyed by appId). Disable for ephemeral chats (e.g. compare mode panels)
  *   that share an appId so they don't race/overwrite each other. Defaults to true.
@@ -48,6 +50,7 @@ function useAppChat({
   appId,
   chatId: initialChatId,
   onMessageComplete,
+  onMessageAccepted,
   persistConversationId = true,
   ephemeral = false,
   serverBacked = false
@@ -70,6 +73,12 @@ function useAppChat({
 
   // Refs to keep mutable values between renders without relying on window
   const lastMessageIdRef = useRef(null);
+  // Latest `onMessageAccepted`, read when a send resolves rather than bound
+  // into the send callbacks.
+  const onMessageAcceptedRef = useRef(onMessageAccepted);
+  useEffect(() => {
+    onMessageAcceptedRef.current = onMessageAccepted;
+  });
   const pendingMessageDataRef = useRef(null);
   const lastUserMessageRef = useRef(null);
   const isCancellingRef = useRef(false);
@@ -250,6 +259,9 @@ function useAppChat({
       const { appId, chatId, messages, params } = pendingMessageDataRef.current;
       await sendAppChatMessage(appId, chatId, messages, params);
       pendingMessageDataRef.current = null;
+      // The server has the turn — for a server-backed chat, the chat is in
+      // the store from here on.
+      onMessageAcceptedRef.current?.(chatId);
     } catch (error) {
       if (lastMessageIdRef.current && !isCancellingRef.current) {
         // Only show error if this wasn't a manual cancellation

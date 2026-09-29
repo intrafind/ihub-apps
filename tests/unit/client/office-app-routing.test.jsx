@@ -36,19 +36,35 @@ jest.mock('../../../client/src/features/office/components/OfficeLogin', () => ({
   __esModule: true,
   default: () => <div>LOGIN</div>
 }));
-jest.mock('../../../client/src/features/office/components/OfficeStartPage', () => ({
-  __esModule: true,
-  default: ({ chatHistoryEnabled, onOpenHistory }) => (
-    <div>
-      START PAGE history={String(!!chatHistoryEnabled)}
-      {onOpenHistory && (
-        <button type="button" onClick={onOpenHistory}>
-          start: history
-        </button>
-      )}
-    </div>
-  )
-}));
+const mockMountedLists = { count: 0 };
+jest.mock('../../../client/src/features/office/components/OfficeStartPage', () => {
+  const React = require('react');
+  return {
+    __esModule: true,
+    default: ({ chatHistoryEnabled, onOpenHistory, onLogout }) => {
+      // Stands in for the chat list the real start page keeps mounted.
+      React.useEffect(() => {
+        mockMountedLists.count += 1;
+        return () => {
+          mockMountedLists.count -= 1;
+        };
+      }, []);
+      return (
+        <div>
+          START PAGE history={String(!!chatHistoryEnabled)}
+          {onOpenHistory && (
+            <button type="button" onClick={onOpenHistory}>
+              start: history
+            </button>
+          )}
+          <button type="button" onClick={onLogout}>
+            start: logout
+          </button>
+        </div>
+      );
+    }
+  };
+});
 jest.mock('../../../client/src/features/office/components/OfficeChatPanel', () => ({
   __esModule: true,
   default: ({ selectedApp, homePath, chatPersistence, openChatId, onOpenHistory }) => (
@@ -86,8 +102,10 @@ jest.mock('../../../client/src/features/office/hooks/useOfficeChatPersistence', 
   __esModule: true,
   default: signedIn => (signedIn ? mockChatPersistence : { persistence: false, resolving: false })
 }));
+const mockInvalidations = [];
 jest.mock('../../../client/src/shared/hooks/chatListStore', () => ({
-  invalidateChatsCache: jest.fn()
+  // Records how many chat lists were still mounted when the cache was dropped.
+  invalidateChatsCache: () => mockInvalidations.push(mockMountedLists.count)
 }));
 jest.mock('../../../client/src/shared/components/AppListPanel', () => ({
   __esModule: true,
@@ -113,6 +131,7 @@ beforeEach(() => {
   sessionStorage.clear();
   mockOfficeConfig = {};
   mockChatPersistence = { persistence: false, resolving: false };
+  mockInvalidations.length = 0;
 });
 
 test('signed out: the login screen, whatever the setting', () => {
@@ -194,5 +213,18 @@ describe('chat history (durable chats)', () => {
 
     expect(screen.getByText(/CHAT mail home=\/start stored=true open=chat-9/)).toBeInTheDocument();
     expect(JSON.parse(sessionStorage.getItem('office_ihubselectedapp'))).toEqual({ id: 'mail' });
+  });
+
+  test('logging out drops the chat list only once no list is mounted', () => {
+    mockChatPersistence = { persistence: true, resolving: false };
+    renderApp();
+    expect(screen.getByText(/START PAGE/)).toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole('button', { name: 'start: logout' }));
+    expect(screen.getByText('LOGIN')).toBeInTheDocument();
+    // Dropping it under a mounted list refetches it at once, without a token,
+    // and the 401 would sign the user out a second time as "session expired".
+    expect(mockInvalidations.length).toBeGreaterThan(0);
+    expect(mockInvalidations.every(mounted => mounted === 0)).toBe(true);
   });
 });
