@@ -80,7 +80,7 @@ export function describeCertificate(cert) {
     notBefore: cert.notBefore.toISOString(),
     notAfter: cert.notAfter.toISOString(),
     fingerprint: crypto.createHash('sha256').update(der).digest('hex'),
-    ekus: eku ? eku.usages.map(String) : [],
+    ekus: eku ? Array.from(eku.usages, String) : [],
     selfSigned: cert.subject === cert.issuer
   };
 }
@@ -307,7 +307,7 @@ export async function validateSigningBundle({ chainPem, keyPem, now = new Date()
     errors.push('The signing certificate has no authority key identifier extension');
   }
   const eku = leaf.getExtension(x509.ExtendedKeyUsageExtension);
-  const ekus = eku ? eku.usages.map(String) : [];
+  const ekus = eku ? Array.from(eku.usages, String) : [];
   if (!ekus.some(e => C2PA_ACCEPTED_EKUS[e])) {
     errors.push(
       `The signing certificate has no C2PA-accepted extended key usage (need one of ${Object.values(C2PA_ACCEPTED_EKUS).join(', ')})`

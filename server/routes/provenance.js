@@ -15,6 +15,9 @@
 import multer from 'multer';
 import rateLimit from 'express-rate-limit';
 import { buildServerPath } from '../utils/basePath.js';
+import { authRequired } from '../middleware/authRequired.js';
+import provenanceStore from '../services/provenance/ProvenanceStore.js';
+import { applyTextSignpost, signpostEnabled } from '../services/provenance/text/signpost.js';
 import {
   sendBadRequest,
   sendErrorResponse,
@@ -298,6 +301,34 @@ export default function registerProvenanceRoutes(app) {
       }
     }
   );
+
+  /**
+   * Text with a signed signpost for the clipboard (when the admin switched
+   * the clipboard signpost on, platform- or app-wide).
+   */
+  app.post(buildServerPath('/api/provenance/signpost'), authRequired, async (req, res) => {
+    const text = req.body?.text;
+    if (typeof text !== 'string' || !text || text.length > MAX_TEXT_CHARS) {
+      return sendBadRequest(res, 'Send { "text": "..." }');
+    }
+    try {
+      const cfg = getAiTransparencyConfig();
+      const app = req.body?.appId
+        ? (configCache.getApps(true)?.data || []).find(a => a.id === req.body.appId)
+        : null;
+      if (!isAiTransparencyActive() || !signpostEnabled('clipboard', cfg, app)) {
+        return res.json({ text, signed: false });
+      }
+      const record = await provenanceStore.findByContent(text);
+      const signed = await applyTextSignpost(text, {
+        contentId: record?.contentId,
+        verification: record ? 'verified' : 'asserted'
+      });
+      return res.json({ text: signed, signed: signed !== text });
+    } catch (error) {
+      return sendInternalError(res, error, 'sign clipboard text');
+    }
+  });
 
   app.post(buildServerPath('/api/provenance/report/verify'), detectionLimiter, async (req, res) => {
     const report = req.body?.report;
