@@ -15,3 +15,13 @@ the page.
 - The **Start Page** card warns when its default chat app or a default app is not on the list,
   because the task pane skips apps the add-in does not offer.
 - Changes apply to signed-in users right away; no new sign-in or manifest redeploy is needed.
+
+## Opening an App Starts a New Chat
+
+With chat history enabled, clicking an app now always opens a new, empty chat instead of the last
+conversation held for that app. The previous chat stays in the chat history and opens from there.
+
+- Once the first message is sent, the address changes to the chat's own link, so reloading the
+  page keeps the conversation.
+- Without chat history (for example anonymous users), opening an app still restores the
+  conversation from the current browser tab, as before.

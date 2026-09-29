@@ -549,16 +549,37 @@ function AppChat({ preloadedApp = null, embedded = false, appId: embeddedAppId =
   // trip is paid for with a "Loading chat…" spinner where the greeting and the
   // starter prompts belong, plus a red `API Error` in the console every time.
   const mintedChatIdsRef = useRef(new Set());
+  // Whether this viewer's chats are stored server-side. Read up here because it
+  // decides what opening `/apps/:appId` means.
+  const chatPersistence = useChatPersistence();
+  // The new chat `/apps/:appId` shows while chats are durable, as
+  // `{ appId, id }`. Opening an app starts a new chat then — the previous one
+  // is a click away in the history — but re-resolving on the same visit must
+  // not keep minting, so the id is held until the URL names a chat.
+  const freshChatRef = useRef(null);
   // Embedded, the chat is never the one this tab holds for the app page, and
   // it is not stored for it either.
   const resolveChatId = useCallback(() => {
-    if (routeChatId) return routeChatId;
+    if (routeChatId) {
+      freshChatRef.current = null;
+      return routeChatId;
+    }
+    if (!embedded && chatPersistence) {
+      if (freshChatRef.current?.appId !== appId) {
+        const minted = resetChatId(appId);
+        mintedChatIdsRef.current.add(minted);
+        freshChatRef.current = { appId, id: minted };
+      }
+      return freshChatRef.current.id;
+    }
+    // Without durable chats the transcript lives only in this tab, under the
+    // id it holds for the app, so returning to the app has to find it again.
     const stored = embedded ? null : readChatId(appId);
     if (stored) return stored;
     const minted = embedded ? mintChatId() : getOrCreateChatId(appId);
     mintedChatIdsRef.current.add(minted);
     return minted;
-  }, [appId, routeChatId, embedded]);
+  }, [appId, routeChatId, embedded, chatPersistence]);
   const [chatId, setChatId] = useState(resolveChatId);
   // Ref to store variables for resend operations to avoid race condition with state updates
   const pendingVariablesRef = useRef(null);
@@ -584,6 +605,9 @@ function AppChat({ preloadedApp = null, embedded = false, appId: embeddedAppId =
     // Minted here, so the store has never heard of it: skip the hydration
     // round trip that could only 404.
     mintedChatIdsRef.current.add(nextChatId);
+    // Leaving `/c/:chatId` below re-resolves the chat; this is the one it
+    // has to land on.
+    if (!embedded) freshChatRef.current = { appId, id: nextChatId };
     setChatId(nextChatId);
     if (routeChatId) navigate(`/apps/${appId}`, { replace: true });
     return nextChatId;
@@ -660,7 +684,6 @@ function AppChat({ preloadedApp = null, embedded = false, appId: embeddedAppId =
   // back on screen through the hydration below. Incognito switches it off for
   // this chat; anonymous viewers and installations without the capability never
   // had it, and keep exactly the behaviour they have today.
-  const chatPersistence = useChatPersistence();
   const serverBackedChat = chatPersistence && !ephemeral;
   // `chatPersistence` answers false until the platform config and the auth
   // status have both landed, so an early false is "not known yet", not "no".
@@ -718,10 +741,23 @@ function AppChat({ preloadedApp = null, embedded = false, appId: embeddedAppId =
   const chatShareOffered = chatSharingEnabled && serverBackedChat;
   const chatShareReady = chatShareOffered && Boolean(chatId) && messages.length > 0;
 
+  // `/apps/:appId` always opens a new durable chat, so once this one has been
+  // started the URL has to name it — otherwise a reload would leave it for a
+  // blank one. Replaced rather than pushed: Back should lead to where the user
+  // came from, not to an empty copy of this chat. Both routes render the same
+  // element, so the running turn is not interrupted. Not while hydrating: on
+  // a chat switch the previous chat's messages are still on screen for a
+  // render, and they must not pin the new id.
+  const chatStarted = messages.some(message => message.role === 'user');
+  useEffect(() => {
+    if (embedded || routeChatId || !serverBackedChat || hydrating || !chatStarted) return;
+    navigate(`/apps/${appId}/c/${chatId}`, { replace: true });
+  }, [embedded, routeChatId, serverBackedChat, hydrating, chatStarted, appId, chatId, navigate]);
+
   // Hydrate a server-backed chat from the durable store. That mode keeps no
   // browser copy, so this fetch is the only thing that puts a stored transcript
-  // back on screen — both when the history opens a chat by URL and on a plain
-  // reload of `/apps/:appId`, where the id comes from sessionStorage. A chat
+  // back on screen — when the history opens a chat by URL and when a started
+  // chat, pinned to its URL above, is reloaded. A chat
   // this tab minted but never sent is not in the store yet: that 404 is the
   // ordinary case for a new chat, not a failure worth reporting.
   useEffect(() => {

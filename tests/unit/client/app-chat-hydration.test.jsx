@@ -1,6 +1,6 @@
 import '@testing-library/jest-dom';
 import { act, render, screen, waitFor } from '@testing-library/react';
-import { MemoryRouter, Route, Routes } from 'react-router-dom';
+import { MemoryRouter, Route, Routes, useLocation } from 'react-router-dom';
 
 /**
  * Opening, starting and continuing a chat — driven through the real `AppChat`.
@@ -298,6 +298,10 @@ const STORED_MESSAGES = [
  * @param {Object} [options.app] - The app config handed in as `preloadedApp`.
  * @returns {Object} The testing-library result.
  */
+function LocationProbe() {
+  return <div data-testid="location">{useLocation().pathname}</div>;
+}
+
 function renderChat({ path = '/apps/acme', app = APP } = {}) {
   // The auto-send effect strips its query parameters with
   // `navigate(window.location.pathname + …)`, so jsdom's URL has to agree with
@@ -309,6 +313,7 @@ function renderChat({ path = '/apps/acme', app = APP } = {}) {
         <Route path="/apps/:appId" element={<AppChat preloadedApp={app} />} />
         <Route path="/apps/:appId/c/:chatId" element={<AppChat preloadedApp={app} />} />
       </Routes>
+      <LocationProbe />
     </MemoryRouter>
   );
 }
@@ -424,11 +429,51 @@ describe('starting a new chat', () => {
     expect(screen.queryByTestId('spinner')).toBeNull();
   });
 
-  test('a chat id this tab already held is fetched, because the store may know it', async () => {
+  test('opening the app starts a new chat instead of the one this tab held', async () => {
+    // Durable chats keep the previous conversation in the history, one click
+    // away, so opening the app itself means "a new chat".
     sessionStorage.setItem('ai_hub_chat_id_acme', 'chat-from-a-previous-load');
     renderChat();
 
-    await waitFor(() => expect(fetchChat).toHaveBeenCalledWith('chat-from-a-previous-load'));
+    await waitFor(() => expect(screen.getAllByTestId('greeting')[0]).toBeInTheDocument());
+    expect(fetchChat).not.toHaveBeenCalled();
+    expect(sessionStorage.getItem('ai_hub_chat_id_acme')).not.toBe('chat-from-a-previous-load');
+  });
+
+  test('without durable chats the chat this tab held is still restored', async () => {
+    // Its transcript lives only in sessionStorage, so it has no history entry
+    // to come back through.
+    mockCapability.persistence = false;
+    sessionStorage.setItem('ai_hub_chat_id_acme', 'chat-local');
+    sessionStorage.setItem(
+      'ai_hub_chat_messages_chat-local',
+      JSON.stringify([{ id: 'loc-1', role: 'user', content: 'local question' }])
+    );
+    renderChat();
+
+    await waitFor(() =>
+      expect(screen.getAllByTestId('transcript')[0]).toHaveTextContent('local question')
+    );
+  });
+
+  test('the first message pins the chat into the URL, so a reload keeps it', async () => {
+    jest.useFakeTimers();
+    try {
+      renderChat({ path: '/apps/acme?prefill=first%20question&send=true' });
+
+      await act(async () => {
+        jest.advanceTimersByTime(200);
+      });
+
+      expect(mockStreams).toHaveLength(1);
+      const chatId = mockStreams[0].split('/').pop();
+      expect(screen.getByTestId('location')).toHaveTextContent(`/apps/acme/c/${chatId}`);
+      // Pinning the URL is not a chat switch: nothing is fetched or re-sent.
+      expect(fetchChat).not.toHaveBeenCalled();
+      expect(mockStreams).toHaveLength(1);
+    } finally {
+      jest.useRealTimers();
+    }
   });
 });
 
@@ -460,14 +505,13 @@ describe('leaving and re-entering server-backed mode', () => {
 
 describe('a turn that races the hydrate', () => {
   test('the stored transcript still lands in front of the turn that was sent', async () => {
-    // The start page hands a message over as `?prefill=…&send=true` onto the
-    // chat id this tab already holds — a chat that already has a transcript.
-    // The auto-send fires ~100 ms in, while the hydrate is still out.
+    // A message handed over as `?prefill=…&send=true` onto a stored chat — one
+    // that already has a transcript. The auto-send fires ~100 ms in, while the
+    // hydrate is still out.
     jest.useFakeTimers();
     try {
-      sessionStorage.setItem('ai_hub_chat_id_acme', 'chat-handoff');
       const resolveChat = deferredChat();
-      renderChat({ path: '/apps/acme?prefill=a%20second%20question&send=true' });
+      renderChat({ path: '/apps/acme/c/chat-handoff?prefill=a%20second%20question&send=true' });
 
       await act(async () => {
         jest.advanceTimersByTime(200);
