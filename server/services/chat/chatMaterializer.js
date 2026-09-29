@@ -15,6 +15,7 @@
  * @module services/chat/chatMaterializer
  */
 import { boundStoredViews } from '../mcp/mcpApps.js';
+import { boundStoredCitations } from './chatCitations.js';
 
 /** Connect cards kept per stored answer. */
 const MAX_STORED_AUTH_PROMPTS = 10;
@@ -360,7 +361,8 @@ export async function materializeUserTurn({
  * @param {string} params.runId
  * @param {Object} params.summary - the turn outcome: `status`, `content`, `finishReason`,
  *   `usage`, `images` (generated pictures, stored beside the transcript as
- *   artifacts), and `error`/`errorInfo` on a failure
+ *   artifacts), `mcpApps`, `citations` (see `chatCitations.js`), and
+ *   `error`/`errorInfo` on a failure
  * @param {boolean} params.clientConnected - whether an SSE client was attached when the
  *   turn ended, sampled with `hasChatClient()`; the emit result cannot tell you
  * @param {Object} [params.message] - extra fields for the stored answer (`model`). A
@@ -428,6 +430,9 @@ export async function materializeAssistantTurn({
     // MCP App views the turn rendered (tool input + result per view), bounded
     // so a chat document cannot grow without limit.
     const mcpApps = pausedWithoutAnswer ? [] : boundStoredViews(summary?.mcpApps);
+    // The documents behind the answer, so the reopened chat draws the same
+    // Documents panel — bounded, and only the fields the panel reads.
+    const citations = pausedWithoutAnswer ? null : boundStoredCitations(summary?.citations);
     // Connect cards for per-user OAuth MCP servers (see chatSeams.authRequiredOf).
     const mcpAuthRequired = pausedWithoutAnswer
       ? []
@@ -453,6 +458,7 @@ export async function materializeAssistantTurn({
             ...(error ? { error } : {}),
             ...(artifacts.length > 0 ? { artifacts } : {}),
             ...(mcpApps.length > 0 ? { mcpApps } : {}),
+            ...(citations ? { citations } : {}),
             ...(mcpAuthRequired.length > 0 ? { mcpAuthRequired } : {})
           },
           // The end of the transcript for an ordinary turn, and the position

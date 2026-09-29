@@ -443,6 +443,7 @@ index can answer "list my chats" without scanning:
   messages: [
     { id, role, content, ts, runId,
       clientMessageId?, usage?, finishReason?, error?, attachments?, artifacts?,
+      mcpApps?, citations?,
       // inference API turns: on a user message the variables it was rendered
       // with and the rendered text the model saw; on an answer the validated
       // structured output and the model identifier that produced it
@@ -494,6 +495,16 @@ Details that matter:
   read back for as long as the chat lives.
 - **So is what a turn produced** — `{ id, kind, mimeType, bytes }`, with the
   payload in the shared artifact store. See [Artifacts](artifacts.md).
+- **The documents behind an answer are stored with it** — `citations:
+  { references, resultItems }`, the passages and documents of an iAssistant
+  answer or the ones the turn's iFinder tool calls found — so a reopened chat
+  draws the same **Documents** panel, with preview, download and "Add to
+  email". Only what the panel reads is kept (id, title, deep link, file name,
+  source, application, the ACCESS link, passage text capped at 4,000
+  characters): at most 50 documents and 100 passages, 256 KB per answer, and
+  passages are dropped first when that is exceeded. The documents are fetched
+  again with the reader's own iFinder permissions. A share never carries them
+  — see [Chat Sharing](chat-sharing.md#what-is-shared--and-what-is-not).
 - **Failures are recorded.** An aborted turn stores its (possibly empty) answer
   with `error: { code: 'ABORTED', … }`, an errored turn with its error code, so a
   truncated answer never reads as a complete one. A turn that paused for a

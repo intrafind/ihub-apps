@@ -151,3 +151,20 @@ added again.
   reopened from the chat history continues with them.
 - Also for apps that show their variables beside the chat: reopening a chat now puts its values
   back in the variables panel instead of the app's defaults.
+
+## Document Actions for Answers From the iFinder Search Tools
+
+Answers researched with the iFinder tools (the **iFinder Search** app, or any app using
+`iFinder_search`) now list the documents they found in the **Documents** panel under the answer,
+the same way iAssistant answers do. Each document has the full menu: **Preview**, **Download**,
+**Details**, **Open in App**, **Open in browser** and, in the Outlook task pane, **Add to email**.
+
+- Documents are fetched with the signed-in user's own iFinder permissions, from the search profile
+  the tool searched.
+- The documents the answer links to are marked **Referenced** and listed first. Other search hits
+  fold away behind **Show N more documents**, so a turn that ran several searches does not bury
+  the few documents it used.
+- Documents read or looked up with `iFinder_getContent` and `iFinder_getMetadata` are listed too.
+- With chat history on, the documents are stored with the answer and come back when the chat is
+  reopened. Shared links leave them out, since they were found with the owner's iFinder
+  permissions.

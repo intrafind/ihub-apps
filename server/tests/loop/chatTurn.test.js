@@ -694,6 +694,99 @@ test('search tool: tool/completed carries the pages found and read, even when th
   ]);
 });
 
+test('iFinder tools: each call that finds documents sends the turn’s whole document list as tool/progress{citation}, with ACCESS links; a failed call sends none', async t => {
+  const chatId = newChatId('ifinder-citations');
+  const frames = captureFrames(t, chatId);
+  const iFinderTool = name => ({
+    id: name,
+    name,
+    description: name,
+    parameters: { type: 'object', properties: { query: { type: 'string' } } }
+  });
+  const results = {
+    iFinder_search: {
+      searchProfile: 'sales',
+      results: [
+        {
+          id: 'sp-7f3a9c11',
+          title: 'Supplier contract ACME',
+          deepLink: 'https://sp.example/acme.pdf',
+          filename: 'acme.pdf'
+        }
+      ]
+    },
+    iFinder_getContent: {
+      searchProfile: 'sales',
+      documentId: 'fs-0042aa99',
+      content: 'text',
+      metadata: { title: 'Framework agreement' }
+    }
+  };
+  const { service } = makeService(
+    [
+      toolTurn([{ name: 'iFinder_search', args: { query: 'acme' } }]),
+      toolTurn([{ name: 'iFinder_getContent', args: { documentId: 'fs-0042aa99' } }]),
+      toolTurn([{ name: 'iFinder_getFacetValues', args: { query: 'x' } }]),
+      toolTurn([{ name: 'iFinder_search', args: { query: 'boom' } }]),
+      textTurn(
+        'See [Supplier contract ACME](https://sp.example/acme.pdf "SharePoint · sp-7f3a9c11").'
+      )
+    ],
+    {
+      runTool: async (toolId, params) => {
+        if (params.query === 'boom') throw new Error('iFinder unavailable');
+        return results[toolId] || { values: [] };
+      }
+    }
+  );
+
+  const summary = await runTurn(service, {
+    chatId,
+    prep: makePrep({
+      tools: [
+        iFinderTool('iFinder_search'),
+        iFinderTool('iFinder_getContent'),
+        iFinderTool('iFinder_getFacetValues')
+      ]
+    })
+  });
+
+  assertWellFormed(frames);
+  const citations = framesOf(frames, TOOL_PROGRESS).filter(f => f.data.phase === 'citation');
+  assert.equal(citations.length, 2, 'one frame per call that found documents');
+  assert.deepEqual(
+    citations.map(f => f.data.data.resultItems.map(item => item.document_id)),
+    [['sp-7f3a9c11'], ['sp-7f3a9c11', 'fs-0042aa99']]
+  );
+  const [contract, agreement] = citations[1].data.data.resultItems;
+  assert.deepEqual(contract.links, [
+    { type: 'ACCESS', documentId: 'sp-7f3a9c11', searchProfile: 'sales' }
+  ]);
+  assert.equal(
+    contract.additional_document_metadata['accessInfo.deepLink'],
+    'https://sp.example/acme.pdf'
+  );
+  assert.equal(agreement.title, 'Framework agreement');
+  // Sent after the call it comes from has completed.
+  const firstDone = frames.indexOf(frame(frames, TOOL_COMPLETED));
+  assert.ok(frames.indexOf(citations[0]) > firstDone);
+  // The summary the materializer stores carries the final list, so the
+  // reopened chat draws the same tiles.
+  assert.deepEqual(
+    summary.citations.resultItems.map(item => item.document_id),
+    ['sp-7f3a9c11', 'fs-0042aa99']
+  );
+  assert.deepEqual(summary.citations.references, []);
+});
+
+test('a turn without iFinder documents has no citations on its summary', async t => {
+  const chatId = newChatId('no-citations');
+  captureFrames(t, chatId);
+  const { service } = makeService([textTurn('Hello.')]);
+  const summary = await runTurn(service, { chatId, prep: makePrep() });
+  assert.equal(summary.citations, null);
+});
+
 // ── 5. tool failure ─────────────────────────────────────────────────────────
 
 test('tool throws: tool/completed carries the error envelope, the model gets it back, tool_error is logged, the turn still completes', async t => {

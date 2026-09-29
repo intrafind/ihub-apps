@@ -10,15 +10,10 @@
  */
 import { SSE_V2_EVENTS } from '../../../shared/runEvents.js';
 import conversationStateManager from '../integrations/ConversationStateManager.js';
-
-function withAccessLinks(items, searchProfile) {
-  if (!Array.isArray(items)) return items;
-  return items.map(item =>
-    item?.document_id && !Array.isArray(item.links)
-      ? { ...item, links: [{ type: 'ACCESS', documentId: item.document_id, searchProfile }] }
-      : item
-  );
-}
+import {
+  createIFinderCitationCollector,
+  withAccessLinks
+} from '../integrations/iFinderCitations.js';
 
 function thoughtToDelta(thought) {
   if (typeof thought === 'string') return { content: thought };
@@ -32,11 +27,14 @@ function thoughtToDelta(thought) {
  * @param {Object} params
  * @param {string} params.chatId
  * @param {import('../loop/RunStream.js').RunStreamEmitter} params.stream
- * @returns {{ state: {answerOutput: boolean}, onChunk: Function }}
+ * @returns {{ state: {answerOutput: boolean}, onChunk: Function, onToolEnd: Function }}
  */
 export function createChatChannel({ chatId, stream }) {
   const state = { answerOutput: false, conversationIdEmitted: false };
   const emit = (type, data) => stream?.emit(type, data);
+  // iFinder documents the turn's tool calls found, listed in the Documents
+  // panel the way iAssistant's are.
+  const iFinderDocuments = createIFinderCitationCollector();
 
   // iAssistant conversation adapter: citations, search status, title,
   // conversation id and the response message id ride along with the chunks.
@@ -123,6 +121,21 @@ export function createChatChannel({ chatId, stream }) {
         });
       }
       emitConversationEvents(chunk, ctx.stream?.meta?.request, ctx);
+    },
+    // The panel keeps the latest `resultItems` it was sent, so every frame
+    // carries the turn's whole list rather than just this call's documents.
+    // Recorded on the loop like the iAssistant citations above, so the list
+    // is stored with the answer and drawn again when the chat is reopened.
+    onToolEnd({ toolId, outcome, verdict }, ctx) {
+      if (outcome?.error || verdict?.failed) return;
+      if (!iFinderDocuments.add(toolId, outcome?.rawResult ?? outcome?.message?.content)) return;
+      const citation = { resultItems: iFinderDocuments.items() };
+      ctx.addCitation(citation);
+      emit(SSE_V2_EVENTS.TOOL_PROGRESS, {
+        step: ctx.iteration,
+        phase: 'citation',
+        data: citation
+      });
     }
   };
 }

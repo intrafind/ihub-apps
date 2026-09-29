@@ -152,9 +152,10 @@ The Outlook JavaScript API has **no forward-form call** — there is no `display
 
 The other four actions open a **new** form, and Outlook suppresses the automatic signature whenever an add-in supplies the body (`htmlBody`). This is a platform limitation with no add-in-side workaround: there is no API to read the configured signature or to ask Outlook to apply it to a supplied body. Where every outgoing mail must carry a footer, either keep the default on *Insert into draft* (the user starts the reply in Outlook, then inserts), or apply the footer with a transport rule on the mail server, which is unaffected by how the draft was created.
 
-### Documents found by iAssistant
+### Documents found by iAssistant or the iFinder tools
 
-When an app answers from iFinder, its sources are listed under the answer. Each document carries
+When an app answers from iFinder — an iAssistant answer, or one researched with the iFinder search
+tools (the **iFinder Search** app) — its sources are listed under the answer. Each document carries
 the same actions in the task pane as in the browser — **Open in browser**, **Preview (PDF)**,
 **Download**, **Details** — plus one that only exists here:
 
