@@ -534,6 +534,35 @@ describe('AppChat with a start form', () => {
     expect(transcribeAudioBuffer).toHaveBeenCalledTimes(1);
   });
 
+  test('when transcription yields nothing, the prompt waits and a manual send still sets the variables', async () => {
+    const audio = { type: 'audio', fileName: 'call.mp3', base64: 'data:audio/mpeg;base64,AA' };
+    mockUpload.config = { enabled: true, localUploadEnabled: true };
+    mockUpload.dropped = audio;
+    decodeAudioFileToBuffer.mockResolvedValue({ duration: 5 });
+    transcribeAudioBuffer.mockResolvedValue('');
+    renderApp({ ...APP, transcription: { enabled: true, modelId: 'voxtral' } });
+    await screen.findByTestId('start-form');
+    fireEvent.click(screen.getByRole('button', { name: 'drop a file' }));
+
+    await fillAndSend();
+    // Nothing is sent on its own; the rendered prompt waits in the composer.
+    await waitFor(() =>
+      expect(screen.getAllByTestId('composer-input')[0]).toHaveValue(
+        'Write to Ada about the Q3 report.'
+      )
+    );
+    expect(mockStream.opened).toBe(0);
+
+    fireEvent.submit(screen.getAllByTestId('composer')[0]);
+    await answerTurn('run-1');
+    const sent = requestMessages(0);
+    expect(sent[sent.length - 1]).toMatchObject({
+      content: 'Write to Ada about the Q3 report.',
+      promptTemplate: null,
+      variables: { recipient: 'Ada', subject: 'the Q3 report' }
+    });
+  });
+
   test('text the chat was opened with is shown in the form and sent as {{content}}', async () => {
     renderApp(APP, '/apps/acme?prefill=Keep%20it%20brief&send=true');
     await screen.findByTestId('start-form');

@@ -2099,12 +2099,11 @@ function AppChat({ preloadedApp = null, embedded = false, appId: embeddedAppId =
         }
         // A start form's prompt is what the audio was attached for: it goes on
         // through the composer, after the transcript. Typed text waits instead.
-        if (startFormMessage !== null && transcribed) {
-          if (typedText.trim() || remainingFiles.length > 0) {
-            // Still the form's message, so it still sets the chat's variables.
-            pendingVariablesRef.current = resolveVariableValues(app, variables, currentLanguage);
-            setPendingAutoSubmit(true);
-          }
+        // Still the form's message, so it still sets the chat's variables —
+        // also when a failed transcription leaves it for the user to send.
+        if (startFormMessage !== null && (typedText.trim() || remainingFiles.length > 0)) {
+          pendingVariablesRef.current = resolveVariableValues(app, variables, currentLanguage);
+          if (transcribed) setPendingAutoSubmit(true);
         }
         return;
       }

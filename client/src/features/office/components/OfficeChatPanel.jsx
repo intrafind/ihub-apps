@@ -83,6 +83,10 @@ function OfficeChatPanel({
   // Chat ID: use a stable ref, reset on item change or new chat
   const chatIdRef = useRef(`office-${uuidv4()}`);
   const selectedStarterPromptRef = useRef(null);
+  // The email snapshot a start-page handoff brought along, kept for the start
+  // form that sends it: the user edited it there (dropped attachments, body
+  // off), and this panel's own snapshot knows nothing of those edits.
+  const handoffContextRef = useRef(null);
 
   const adapter = useOfficeChatAdapter({
     appId: selectedApp?.id,
@@ -290,6 +294,7 @@ function OfficeChatPanel({
       });
     }
     chatIdRef.current = `office-${uuidv4()}`;
+    handoffContextRef.current = null;
     selectedStarterPromptRef.current = null;
     adapterRef.current.clearMessages();
     setInputValue('');
@@ -326,7 +331,21 @@ function OfficeChatPanel({
   const submitMessage = useCallback(
     (messageText, overrides = {}) => {
       const text = (messageText ?? '').trim();
-      if (!text && !selectedApp?.allowEmptyContent) return;
+
+      // Resend can pass a `selectedFile` override to bypass async state updates;
+      // otherwise we read whatever the user has staged in the uploader — one
+      // file or, with `allowMultiple`, several. UnifiedUploader names a
+      // document `document`; `file` is what this panel used to be handed.
+      const sf =
+        'selectedFile' in overrides ? overrides.selectedFile : fileUploadHandler.selectedFile;
+      const uploads = Array.isArray(sf) ? sf : sf ? [sf] : [];
+      const uploadsOf = kinds => {
+        const found = uploads.filter(upload => kinds.includes(upload?.type));
+        return found.length === 0 ? null : found.length === 1 ? found[0] : found;
+      };
+      const imageData = uploadsOf(['image']);
+      const fileData = uploadsOf(['document', 'file']);
+      if (!text && !imageData && !fileData && !selectedApp?.allowEmptyContent) return;
 
       // An app that starts with a form sends its prompt rendered, once, with
       // the variables (`overrides.variables`); the messages after it go as
@@ -373,13 +392,6 @@ function OfficeChatPanel({
           ? overrides.hostContextOverride
           : mailSnapshot.buildSnapshotOverride();
       if (snapshotOverride) params.hostContextOverride = snapshotOverride;
-
-      // Resend can pass a `selectedFile` override to bypass async state updates;
-      // otherwise we read whatever the user has staged in the uploader.
-      const sf =
-        'selectedFile' in overrides ? overrides.selectedFile : fileUploadHandler.selectedFile;
-      const imageData = sf?.type === 'image' ? sf : null;
-      const fileData = sf?.type === 'file' ? sf : null;
 
       adapter.sendMessage({
         // The form's message keeps its variables in the transcript: this chat
@@ -439,7 +451,9 @@ function OfficeChatPanel({
   const pickManualUpload = data => {
     if (!data) return null;
     const arr = Array.isArray(data) ? data : [data];
-    const manuals = arr.filter(d => d && (d.type === 'image' || d.type === 'file'));
+    const manuals = arr.filter(
+      d => d && (d.type === 'image' || d.type === 'document' || d.type === 'file')
+    );
     return manuals.length > 0 ? manuals[0] : null;
   };
 
@@ -552,6 +566,9 @@ function OfficeChatPanel({
         variables
       });
     } else {
+      if (isStartFormEnabled(selectedApp) && handoff.hostContextOverride) {
+        handoffContextRef.current = handoff.hostContextOverride;
+      }
       setInputValue(text);
     }
     // eslint-disable-next-line @eslint-react/exhaustive-deps
@@ -569,6 +586,7 @@ function OfficeChatPanel({
   const handleSelectApp = useCallback(
     newApp => {
       chatIdRef.current = `office-${uuidv4()}`;
+      handoffContextRef.current = null;
       selectedStarterPromptRef.current = null;
       adapter.clearMessages();
       setInputValue('');
@@ -582,6 +600,7 @@ function OfficeChatPanel({
 
   const handleNewChat = useCallback(() => {
     chatIdRef.current = `office-${uuidv4()}`;
+    handoffContextRef.current = null;
     selectedStarterPromptRef.current = null;
     adapter.clearMessages();
     setInputValue('');
@@ -617,7 +636,12 @@ function OfficeChatPanel({
     : '';
   const handleStartFormSubmit = e => {
     e?.preventDefault?.();
-    submitMessage(startFormMessage, { variables: startFormVariables });
+    const hostContextOverride = handoffContextRef.current;
+    handoffContextRef.current = null;
+    submitMessage(startFormMessage, {
+      variables: startFormVariables,
+      ...(hostContextOverride ? { hostContextOverride } : {})
+    });
   };
 
   const menuItems = [
@@ -674,7 +698,9 @@ function OfficeChatPanel({
                   onSubmit={handleStartFormSubmit}
                   canSubmit={
                     !mailSnapshot.loading &&
-                    (startFormMessage.trim() !== '' || selectedApp?.allowEmptyContent === true)
+                    (startFormMessage.trim() !== '' ||
+                      fileUploadHandler.selectedFile != null ||
+                      selectedApp?.allowEmptyContent === true)
                   }
                   isProcessing={adapter.processing}
                   welcomeMessage={

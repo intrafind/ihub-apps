@@ -431,6 +431,26 @@ describe('POST /api/apps/:appId/chat/:chatId: the server owns the history', () =
     }
   });
 
+  it('renders a turn with its variables as they are stored', async () => {
+    const chatId = 'chat-variables-normalized';
+    await seedChat(chatId);
+
+    await withPreparedRequests(async calls => {
+      await postChat({
+        chatId,
+        body: {
+          messages: [
+            { role: 'user', content: 'Go', variables: { formal: false, count: 0, 'bad key': 'x' } }
+          ]
+        }
+      });
+
+      const posted = calls[0].messages[calls[0].messages.length - 1];
+      // As a later turn will read them back: text, and valid names only.
+      assert.deepEqual(posted.variables, { formal: 'false', count: '0' });
+    });
+  });
+
   it('records the variables a turn sets, for the ones after it', async () => {
     const chatId = 'chat-variables-set';
     await seedChat(chatId);

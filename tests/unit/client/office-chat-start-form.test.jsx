@@ -73,11 +73,12 @@ jest.mock('../../../client/src/shared/hooks/useAppSettings', () => ({
   })
 }));
 
+const mockUpload = { selectedFile: null };
 jest.mock('../../../client/src/shared/hooks/useFileUploadHandler', () => ({
   __esModule: true,
   default: () => ({
     createUploadConfig: () => ({}),
-    selectedFile: null,
+    selectedFile: mockUpload.selectedFile,
     handleFileSelect: jest.fn(),
     showUploader: false,
     toggleUploader: jest.fn(),
@@ -162,6 +163,7 @@ const renderPanel = (selectedApp = APP) =>
 beforeEach(() => {
   mockSendMessage.mockReset();
   mockAdapter.messages = [];
+  mockUpload.selectedFile = null;
   consumePendingChatStart('reply');
 });
 
@@ -235,6 +237,41 @@ test('text handed over from the start page waits in the form as its message', as
   expect(mockSendMessage.mock.calls[0][0].apiMessage.content).toBe(
     'Reply in a firm tone.\n\nMention the deadline'
   );
+});
+
+test('a document dropped on the form goes along, also as the only content', () => {
+  const doc = { type: 'document', fileName: 'brief.pdf', content: 'Brief' };
+  mockUpload.selectedFile = doc;
+  // No template and nothing entered: the document is all there is to send.
+  const { prompt: _prompt, ...app } = APP;
+  renderPanel({ ...app, variables: [] });
+
+  const send = screen.getByRole('button', { name: 'Draft reply' });
+  expect(send).toBeEnabled();
+  fireEvent.click(send);
+
+  expect(mockSendMessage).toHaveBeenCalledTimes(1);
+  expect(mockSendMessage.mock.calls[0][0].apiMessage).toMatchObject({
+    content: '',
+    fileData: doc,
+    imageData: null
+  });
+});
+
+test('the email snapshot handed over from the start page is the one the form sends', async () => {
+  const override = { available: true, itemId: 'ITEM-1', bodyText: 'Edited', attachments: [] };
+  setPendingChatStart({
+    appId: 'reply',
+    text: 'Mention the deadline',
+    autoSend: true,
+    hostContextOverride: override
+  });
+  renderPanel();
+  await waitFor(() => expect(screen.getByLabelText('Message')).toHaveValue('Mention the deadline'));
+
+  fireEvent.change(screen.getByPlaceholderText('Who signs'), { target: { value: 'Ada' } });
+  fireEvent.submit(screen.getByTestId('start-form'));
+  expect(mockSendMessage.mock.calls[0][0].params.hostContextOverride).toBe(override);
 });
 
 test('an app without a start form is unchanged', () => {

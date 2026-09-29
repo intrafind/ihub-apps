@@ -1022,10 +1022,11 @@ export default function registerSessionRoutes(app, { getLocalizedError, DEFAULT_
             (chatApp?.variables?.length
               ? normalizeChatVariables((await repository.getChat(chatId))?.variables)
               : null);
-          const promptMessage =
-            chatVariables && !turnVariables
-              ? { ...newMessage, variables: chatVariables }
-              : newMessage;
+          // The prompt reads the variables as they are stored, so this turn and
+          // the ones after it render them alike (`false` is "false" in both).
+          const promptMessage = chatVariables
+            ? { ...newMessage, variables: chatVariables }
+            : newMessage;
           conversation =
             chatApp?.sendChatHistory === false || sendChatHistory === false
               ? [promptMessage]
