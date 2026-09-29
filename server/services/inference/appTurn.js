@@ -151,6 +151,13 @@ export async function prepareAppTurn({
   }
   const prep = result.data;
   const format = appOutputFormat(app);
+  if (format?.compileError) {
+    throw new InferenceApiError(
+      500,
+      'invalid_output_schema',
+      `The output schema of app ${app.id} is not a valid JSON schema: ${format.compileError}`
+    );
+  }
   const label = appModelLabel(app.id, prep.model.id);
   // An explicit model was checked by the resolver; the default one only now.
   if (!target.modelId) assertStructuredOutputSupported(prep.model, format, label);

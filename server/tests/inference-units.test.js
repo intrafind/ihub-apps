@@ -16,6 +16,7 @@ import {
 import { resolvePromptVariables } from '../services/inference/promptVariables.js';
 import { turnPrompt } from '../services/inference/appTurn.js';
 import {
+  appOutputFormat,
   createOutputValidator,
   normalizeSchema,
   parseResponseFormat,
@@ -342,6 +343,18 @@ describe('structured output', () => {
       { status: 400, code: 'invalid_json_schema' }
     );
     assert.deepEqual(normalizeSchema('{"type":"object"}'), { type: 'object' });
+  });
+
+  it("compiles an app's schema once per config object and reports one that does not compile", () => {
+    const app = { id: 'a', outputSchema: { type: 'object', required: ['x'] } };
+    const first = appOutputFormat(app);
+    assert.equal(typeof first.validate, 'function');
+    assert.equal(appOutputFormat(app).validate, first.validate, 'reused for the same config');
+    assert.equal(createOutputValidator(first)('{"x":1}').valid, true);
+    const broken = appOutputFormat({ id: 'b', outputSchema: { type: 'nope' } });
+    assert.equal(broken.validate, undefined);
+    assert.match(broken.compileError, /schema is invalid|must be equal/);
+    assert.equal(appOutputFormat({ id: 'c' }), null);
   });
 
   it('validates answers, stripping fences and prose', () => {

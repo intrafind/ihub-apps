@@ -42,14 +42,17 @@ export const NATIVE_STRUCTURED_OUTPUT_PROVIDERS = Object.freeze([
  */
 const NO_STRUCTURED_OUTPUT_PROVIDERS = Object.freeze(['iassistant-conversation']);
 
-/** Compiled validators kept, keyed by the schema's JSON. */
-const MAX_CACHED_VALIDATORS = 200;
-
 const ajv = new Ajv({ allErrors: true, strict: false, logger: false });
 addFormats(ajv);
 
-/** @type {Map<string, Function>} */
-const validatorCache = new Map();
+/**
+ * Compiled validators of app schemas, keyed by the configuration object the
+ * schema came from: an app's schema compiles once per config load, and a
+ * reload (new objects) lets the old entry go with the old config.
+ *
+ * @type {WeakMap<Object, {schema: Object|null, validate: Function|null, error: string|null}>}
+ */
+const appValidators = new WeakMap();
 
 /**
  * A schema as the validator compiles it: parsed when it is a JSON string (the
@@ -76,35 +79,35 @@ export function normalizeSchema(schema) {
 }
 
 /**
- * The compiled validator of a schema.
+ * Compile a schema into a validate function.
+ *
+ * Ajv keeps every schema it compiled in a cache of its own, keyed by the
+ * schema object and never evicted; one entry per request would grow it for
+ * as long as the process lives. The compiled function holds what it needs,
+ * so the schema leaves Ajv's cache right away.
  *
  * @param {Object} schema - Normalized schema.
  * @returns {Function} Ajv validate function.
  * @throws {Error} When the schema does not compile.
  */
-function compile(schema) {
-  const key = JSON.stringify(schema);
-  const cached = validatorCache.get(key);
-  if (cached) return cached;
+function compileSchema(schema) {
   const validate = ajv.compile(schema);
-  if (validatorCache.size >= MAX_CACHED_VALIDATORS) {
-    validatorCache.delete(validatorCache.keys().next().value);
-  }
-  validatorCache.set(key, validate);
+  ajv.removeSchema(schema);
   return validate;
 }
 
 /**
- * Check that a caller-supplied schema is usable, so a broken one is a 400
- * before any model is called rather than a validation failure after.
+ * Compile a caller-supplied schema, so a broken one is a 400 before any
+ * model is called rather than a validation failure after.
  *
  * @param {Object} schema
  * @param {string} param - Request field, for the error.
+ * @returns {Function} Ajv validate function.
  * @throws {InferenceApiError}
  */
-function assertCompiles(schema, param) {
+function compileRequestSchema(schema, param) {
   try {
-    compile(schema);
+    return compileSchema(schema);
   } catch (error) {
     throw new InferenceApiError(
       400,
@@ -211,22 +214,43 @@ function schemaFormat(spec, param) {
       }
     );
   }
-  assertCompiles(schema, `${param}.schema`);
+  const validate = compileRequestSchema(schema, `${param}.schema`);
   const name = typeof spec.name === 'string' && spec.name ? spec.name.slice(0, 64) : 'response';
-  return { kind: 'json_schema', schema, name, source: 'request' };
+  return { kind: 'json_schema', schema, name, source: 'request', validate };
 }
 
 /**
- * The format an app imposes through its `outputSchema`, or null.
+ * The format an app imposes through its `outputSchema`, or null. A schema
+ * that does not compile is reported on the format as `compileError`.
  *
  * @param {Object} app
- * @returns {{kind: 'json_schema', schema: Object, name: string, source: 'app'}|null}
+ * @returns {{kind: 'json_schema', schema: Object, name: string, source: 'app',
+ *   validate?: Function, compileError?: string}|null}
  */
 export function appOutputFormat(app) {
   if (!app?.outputSchema) return null;
-  const schema = normalizeSchema(app.outputSchema);
-  if (!schema) return null;
-  return { kind: 'json_schema', schema, name: 'response', source: 'app' };
+  const holder = typeof app.outputSchema === 'object' ? app.outputSchema : app;
+  let entry = appValidators.get(holder);
+  if (!entry) {
+    const schema = normalizeSchema(app.outputSchema);
+    entry = { schema, validate: null, error: null };
+    if (schema) {
+      try {
+        entry.validate = compileSchema(schema);
+      } catch (error) {
+        entry.error = error.message;
+      }
+    }
+    appValidators.set(holder, entry);
+  }
+  if (!entry.schema) return null;
+  return {
+    kind: 'json_schema',
+    schema: entry.schema,
+    name: 'response',
+    source: 'app',
+    ...(entry.validate ? { validate: entry.validate } : { compileError: entry.error })
+  };
 }
 
 /**
@@ -317,7 +341,8 @@ function describeErrors(errors) {
  * @returns {(content: string) => {valid: boolean, value?: *, text?: string, errors?: Array}}
  */
 export function createOutputValidator(format) {
-  const validate = format.kind === 'json_schema' ? compile(format.schema) : null;
+  const validate =
+    format.kind === 'json_schema' ? format.validate || compileSchema(format.schema) : null;
   return content => {
     const value = extractJson(typeof content === 'string' ? content : '');
     if (value === null) {
