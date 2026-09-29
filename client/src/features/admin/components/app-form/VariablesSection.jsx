@@ -6,10 +6,18 @@ import Icon from '../../../../shared/components/Icon';
  * VariablesSection - Input variable list editor for the App form.
  * Extracted from AppFormEditor.jsx (see #1781) as a self-contained slice:
  * owns its own immutable-update handlers since they only ever touch
- * `app.variables`.
+ * `app.variables` and `app.startForm`, the form those variables can be
+ * asked in when a chat starts (issue #2581).
  */
 function VariablesSection({ app, onChange }) {
   const { t } = useTranslation();
+
+  const handleStartFormChange = (field, value) => {
+    onChange({
+      ...app,
+      startForm: { ...(app.startForm || {}), [field]: value }
+    });
+  };
 
   const handleVariableChange = (index, field, value) => {
     onChange({
@@ -106,6 +114,43 @@ function VariablesSection({ app, onChange }) {
         </div>
         <div className="mt-5 md:col-span-2 md:mt-0">
           <div className="space-y-4">
+            <div className="border-b border-gray-200 dark:border-gray-600 pb-4">
+              <div className="flex items-center">
+                <input
+                  id="app-start-form-enabled"
+                  type="checkbox"
+                  checked={app.startForm?.enabled === true}
+                  onChange={e => handleStartFormChange('enabled', e.target.checked)}
+                  className="h-4 w-4 text-indigo-600 focus:ring-indigo-500 border-gray-300 dark:border-gray-600 rounded-sm"
+                />
+                <label
+                  htmlFor="app-start-form-enabled"
+                  className="ml-2 block text-sm text-gray-900 dark:text-gray-100"
+                >
+                  {t('admin.apps.edit.startForm', 'Start chats with a form')}
+                </label>
+              </div>
+              <p className="mt-1 ml-6 text-xs text-gray-500 dark:text-gray-400">
+                {t(
+                  'admin.apps.edit.startFormHelp',
+                  'A new chat opens with these variables as a form instead of the chat input, with a drop zone for files when uploads are enabled. Sending the form fills the prompt template once and sends it as the first message; the conversation then continues without the template.'
+                )}
+              </p>
+              {app.startForm?.enabled === true && (
+                <div className="mt-3 ml-6">
+                  <DynamicLanguageEditor
+                    label={t('admin.apps.edit.startFormSubmitLabel', 'Send button label')}
+                    value={app.startForm?.submitLabel || {}}
+                    onChange={value => handleStartFormChange('submitLabel', value)}
+                    placeholder={{
+                      en: 'Start',
+                      de: 'Starten'
+                    }}
+                  />
+                </div>
+              )}
+            </div>
+
             {(app.variables || []).map((variable, index) => (
               <div
                 key={index}

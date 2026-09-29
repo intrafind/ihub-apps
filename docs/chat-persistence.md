@@ -423,6 +423,7 @@ index can answer "list my chats" without scanning:
   id, ownerId, identityMode,
   appId, modelId,
   settings,             // how the chat is being answered — see below
+  variables?,           // the app variables the chat was given — see below
   title, titleSetByUser,
   createdAt, lastMessageAt,
   messageCount,
@@ -469,6 +470,16 @@ Details that matter:
   surfaces: flipping websearch must not erase the style the chat was started
   with. `modelId` is kept alongside rather than inside, since it has its own
   field.
+- **`variables` is the app's variables, and it replaces.** A turn that sends
+  variables sends the whole set — an app's variables panel does so on every
+  message, a [start form](apps.md#start-form) once — and that set replaces the
+  stored one. A turn that sends none gets the stored set for the system prompt,
+  which is how a follow-up after a start form, or a chat reopened later, keeps
+  the values it was started with; the app's `prompt` template is not rendered
+  into such a turn. Reopening the chat puts the values back in the variables
+  panel. Names must be valid variable names, values are stored as text capped
+  at the message length, at most 50 of them; the field is absent until a turn
+  sets it.
 - **Attachments are descriptors** — `{ type, name?, bytes? }`. The base64 payload
   of an upload stays in the request; it is never written into a document that is
   read back for as long as the chat lives.

@@ -73,6 +73,13 @@ Cancel and Send buttons now stay inside the bubble at every pane width.
 - The browser extension and Nextcloud integration use the same styling and get the same fix.
 - The main web app was not affected.
 
+## Outlook Add-in: Uploaded Documents Reach the Answer
+
+In the Outlook add-in and the browser extension, a document attached with the paperclip or by
+drag and drop showed up under the chat input but was not sent: the model answered without it.
+Several files attached at once were dropped the same way. Uploaded documents and images now go
+along with the message, as they do in the web app.
+
 ## iAssistant Documents Come Back When a Chat Is Reopened
 
 The **Documents** panel under an iAssistant answer disappeared when a stored chat was reopened from

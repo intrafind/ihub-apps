@@ -5,6 +5,7 @@ import { v4 as uuidv4 } from 'uuid';
 import Icon from '../../../shared/components/Icon';
 import ChatMessageList from '../../chat/components/ChatMessageList';
 import ChatInput from '../../chat/components/ChatInput';
+import ChatStartForm from '../../chat/components/ChatStartForm';
 import ChatHeader from './chat/ChatHeader';
 import OfficeContextStrip from './chat/OfficeContextStrip';
 import ItemSelectorDialog from './apps-dialog';
@@ -36,6 +37,12 @@ import { OFFICE_APPS_PAGE_PATH } from '../utilities/officeStartPage';
 import usePinnedEmails from '../hooks/usePinnedEmails';
 import { consumePendingChatStart } from '../../chat/startChatHandoff';
 import { getLocalizedContent } from '../../../utils/localizeContent';
+import {
+  isStartFormEnabled,
+  localizeVariables,
+  renderStartFormPrompt,
+  resolveVariableValues
+} from '../../chat/utils/startForm';
 import { officeLocale } from '../utilities/officeLocale';
 import { fetchApps } from '../../../api';
 import { useOfficeConfig } from '../contexts/OfficeConfigContext';
@@ -76,6 +83,10 @@ function OfficeChatPanel({
   // Chat ID: use a stable ref, reset on item change or new chat
   const chatIdRef = useRef(`office-${uuidv4()}`);
   const selectedStarterPromptRef = useRef(null);
+  // The email snapshot a start-page handoff brought along, kept for the start
+  // form that sends it: the user edited it there (dropped attachments, body
+  // off), and this panel's own snapshot knows nothing of those edits.
+  const handoffContextRef = useRef(null);
 
   const adapter = useOfficeChatAdapter({
     appId: selectedApp?.id,
@@ -210,7 +221,8 @@ function OfficeChatPanel({
     const missingRequired = defs.some(
       d => d.required === true && !String(initial[d.name] ?? '').trim()
     );
-    setIsVariablesOpen(missingRequired);
+    // A start form asks for them itself.
+    setIsVariablesOpen(missingRequired && !isStartFormEnabled(selectedApp));
     // eslint-disable-next-line @eslint-react/exhaustive-deps
   }, [selectedApp?.id]);
 
@@ -282,6 +294,7 @@ function OfficeChatPanel({
       });
     }
     chatIdRef.current = `office-${uuidv4()}`;
+    handoffContextRef.current = null;
     selectedStarterPromptRef.current = null;
     adapterRef.current.clearMessages();
     setInputValue('');
@@ -318,9 +331,32 @@ function OfficeChatPanel({
   const submitMessage = useCallback(
     (messageText, overrides = {}) => {
       const text = (messageText ?? '').trim();
-      if (!text && !selectedApp?.allowEmptyContent) return;
 
-      const promptTemplate = buildPromptTemplate(selectedStarterPromptRef.current, selectedApp);
+      // Resend can pass a `selectedFile` override to bypass async state updates;
+      // otherwise we read whatever the user has staged in the uploader — one
+      // file or, with `allowMultiple`, several. UnifiedUploader names a
+      // document `document`; `file` is what this panel used to be handed.
+      const sf =
+        'selectedFile' in overrides ? overrides.selectedFile : fileUploadHandler.selectedFile;
+      const uploads = Array.isArray(sf) ? sf : sf ? [sf] : [];
+      const uploadsOf = kinds => {
+        const found = uploads.filter(upload => kinds.includes(upload?.type));
+        return found.length === 0 ? null : found.length === 1 ? found[0] : found;
+      };
+      const imageData = uploadsOf(['image']);
+      const fileData = uploadsOf(['document', 'file']);
+      if (!text && !imageData && !fileData && !selectedApp?.allowEmptyContent) return;
+
+      // An app that starts with a form sends its prompt rendered, once, with
+      // the variables (`overrides.variables`); the messages after it go as
+      // typed and without them. Otherwise every message carries both.
+      const startForm = isStartFormEnabled(selectedApp);
+      const promptTemplate = startForm
+        ? null
+        : buildPromptTemplate(selectedStarterPromptRef.current, selectedApp);
+      const variables = startForm
+        ? overrides.variables
+        : (overrides.variables ?? appPromptVariables);
       const params = buildParamsFromApp(selectedApp);
       if (selectedModel) params.modelId = selectedModel;
       if (enabledTools?.length) params.enabledTools = enabledTools;
@@ -357,19 +393,17 @@ function OfficeChatPanel({
           : mailSnapshot.buildSnapshotOverride();
       if (snapshotOverride) params.hostContextOverride = snapshotOverride;
 
-      // Resend can pass a `selectedFile` override to bypass async state updates;
-      // otherwise we read whatever the user has staged in the uploader.
-      const sf =
-        'selectedFile' in overrides ? overrides.selectedFile : fileUploadHandler.selectedFile;
-      const imageData = sf?.type === 'image' ? sf : null;
-      const fileData = sf?.type === 'file' ? sf : null;
-
       adapter.sendMessage({
-        displayMessage: { content: text },
+        // The form's message keeps its variables in the transcript: this chat
+        // is not stored, so the history is what carries them to the server.
+        displayMessage: {
+          content: text,
+          ...(startForm && variables ? { meta: { variables } } : {})
+        },
         apiMessage: {
           content: text,
           promptTemplate,
-          variables: overrides.variables ?? appPromptVariables,
+          variables,
           imageData,
           fileData
         },
@@ -413,18 +447,24 @@ function OfficeChatPanel({
   // must only re-attach the manual uploads here — the email attachments will
   // be re-pulled fresh by useOfficeChatAdapter so the user still sees the
   // current message context, not a stale one. Manual uploads carry a
-  // `type: 'image' | 'file'` field; email attachments do not.
-  const pickManualUpload = data => {
-    if (!data) return null;
+  // `type: 'image' | 'document' | 'file'` field; email attachments do not.
+  const pickManualUploads = data => {
+    if (!data) return [];
     const arr = Array.isArray(data) ? data : [data];
-    const manuals = arr.filter(d => d && (d.type === 'image' || d.type === 'file'));
-    return manuals.length > 0 ? manuals[0] : null;
+    return arr.filter(d => d && (d.type === 'image' || d.type === 'document' || d.type === 'file'));
   };
 
   const handleResend = useCallback(
     (messageId, editedContent) => {
-      const { content, imageData, fileData } = adapter.resendMessage(messageId, editedContent);
-      const manualUpload = pickManualUpload(imageData) || pickManualUpload(fileData);
+      const { content, imageData, fileData, variables } = adapter.resendMessage(
+        messageId,
+        editedContent
+      );
+      // Every manual upload the message had, in the uploader's own shape: one
+      // file, or an array of several.
+      const manuals = [...pickManualUploads(imageData), ...pickManualUploads(fileData)];
+      const manualUpload =
+        manuals.length === 0 ? null : manuals.length === 1 ? manuals[0] : manuals;
 
       if (!content && !manualUpload && !selectedApp?.allowEmptyContent) return;
 
@@ -435,9 +475,13 @@ function OfficeChatPanel({
       if (manualUpload) {
         fileUploadHandler.setSelectedFile(manualUpload);
       }
-      submitMessage(content || '', { selectedFile: manualUpload });
+      // Resending a start form's message resends the variables it set.
+      submitMessage(content || '', {
+        selectedFile: manualUpload,
+        ...(isStartFormEnabled(selectedApp) && variables ? { variables } : {})
+      });
     },
-    [adapter, selectedApp?.allowEmptyContent, submitMessage, fileUploadHandler]
+    [adapter, selectedApp, submitMessage, fileUploadHandler]
   );
 
   const handlePromptSelect = useCallback(
@@ -509,8 +553,10 @@ function OfficeChatPanel({
       getValidVariableDefinitions(selectedApp.variables),
       variables
     );
+    // A start form is sent by the user: the text waits in it as its message.
     const canSend =
       handoff.autoSend !== false &&
+      !isStartFormEnabled(selectedApp) &&
       (text.trim().length > 0 || selectedApp.allowEmptyContent === true) &&
       missingRequired.length === 0;
 
@@ -521,6 +567,9 @@ function OfficeChatPanel({
         variables
       });
     } else {
+      if (isStartFormEnabled(selectedApp) && handoff.hostContextOverride) {
+        handoffContextRef.current = handoff.hostContextOverride;
+      }
       setInputValue(text);
     }
     // eslint-disable-next-line @eslint-react/exhaustive-deps
@@ -538,6 +587,7 @@ function OfficeChatPanel({
   const handleSelectApp = useCallback(
     newApp => {
       chatIdRef.current = `office-${uuidv4()}`;
+      handoffContextRef.current = null;
       selectedStarterPromptRef.current = null;
       adapter.clearMessages();
       setInputValue('');
@@ -551,12 +601,18 @@ function OfficeChatPanel({
 
   const handleNewChat = useCallback(() => {
     chatIdRef.current = `office-${uuidv4()}`;
+    handoffContextRef.current = null;
     selectedStarterPromptRef.current = null;
     adapter.clearMessages();
     setInputValue('');
     setPinnedEmails([]);
     setPreviousChat(null);
   }, [adapter, setPinnedEmails]);
+
+  const localizedVariables = useMemo(
+    () => localizeVariables(selectedApp?.variables, officeLocale),
+    [selectedApp?.variables]
+  );
 
   if (!authData) return null;
   if (!selectedApp) return <Navigate to={homePath} replace />;
@@ -570,8 +626,27 @@ function OfficeChatPanel({
     language: officeLocale
   });
 
+  // Form-based start (issue #2581): a new chat opens with the app's variables
+  // as a form — the email goes along with it — and the composer takes over
+  // once it is sent. The variables are asked for nowhere else.
+  const startForm = isStartFormEnabled(selectedApp);
+  const showStartForm = startForm && !adapter.messages.some(m => m.role === 'user');
+  const startFormVariables = resolveVariableValues(selectedApp, appPromptVariables, officeLocale);
+  const startFormMessage = showStartForm
+    ? renderStartFormPrompt(selectedApp, startFormVariables, officeLocale, inputValue)
+    : '';
+  const handleStartFormSubmit = e => {
+    e?.preventDefault?.();
+    const hostContextOverride = handoffContextRef.current;
+    handoffContextRef.current = null;
+    submitMessage(startFormMessage, {
+      variables: startFormVariables,
+      ...(hostContextOverride ? { hostContextOverride } : {})
+    });
+  };
+
   const menuItems = [
-    ...(getValidVariableDefinitions(selectedApp?.variables).length > 0
+    ...(!startForm && getValidVariableDefinitions(selectedApp?.variables).length > 0
       ? [
           {
             key: 'variables',
@@ -609,8 +684,38 @@ function OfficeChatPanel({
           />
 
           <div className="flex-1 flex flex-col min-h-0">
+            {showStartForm && (
+              <div className="flex-1 min-h-0 overflow-y-auto p-3">
+                <ChatStartForm
+                  app={selectedApp}
+                  localizedVariables={localizedVariables}
+                  variables={appPromptVariables}
+                  onVariablesChange={setAppPromptVariables}
+                  message={inputValue}
+                  onMessageChange={setInputValue}
+                  uploadConfig={uploadConfig}
+                  selectedFile={fileUploadHandler.selectedFile}
+                  onFileSelect={fileUploadHandler.handleFileSelect}
+                  onSubmit={handleStartFormSubmit}
+                  canSubmit={
+                    !mailSnapshot.loading &&
+                    (startFormMessage.trim() !== '' ||
+                      fileUploadHandler.selectedFile != null ||
+                      selectedApp?.allowEmptyContent === true)
+                  }
+                  isProcessing={adapter.processing}
+                  welcomeMessage={
+                    greetingTitle || greetingSubtitle
+                      ? { title: greetingTitle, subtitle: greetingSubtitle }
+                      : null
+                  }
+                  currentLanguage={officeLocale}
+                />
+              </div>
+            )}
+
             {/* Empty state: greeting + starter prompts */}
-            {!hasMessages && (
+            {!showStartForm && !hasMessages && (
               <div className="office-greeting border-b border-slate-100 bg-slate-50/60 dark:border-slate-800 dark:bg-slate-800/40">
                 <div className="flex flex-col items-center office-greeting-header text-center">
                   {greetingTitle || greetingSubtitle ? (
@@ -653,26 +758,28 @@ function OfficeChatPanel({
             )}
 
             {/* Messages */}
-            <div className="flex-1 min-h-0 flex flex-col overflow-hidden">
-              <ChatMessageList
-                messages={adapter.messages}
-                outputFormat={selectedApp?.preferredOutputFormat || 'markdown'}
-                onDelete={adapter.deleteMessage}
-                onEdit={adapter.editMessage}
-                onResend={handleResend}
-                editable={true}
-                compact={true}
-                onInsert={handleInsert}
-                insertAction={embeddedHost?.insertAction}
-                insertActions={mailActions.actions}
-                defaultInsertActionId={defaultMailActionId}
-                onInsertAction={runMailAction}
-                appId={selectedApp?.id}
-                chatId={chatIdRef.current}
-                app={selectedApp}
-                showAvatars={false}
-              />
-            </div>
+            {!showStartForm && (
+              <div className="flex-1 min-h-0 flex flex-col overflow-hidden">
+                <ChatMessageList
+                  messages={adapter.messages}
+                  outputFormat={selectedApp?.preferredOutputFormat || 'markdown'}
+                  onDelete={adapter.deleteMessage}
+                  onEdit={adapter.editMessage}
+                  onResend={handleResend}
+                  editable={true}
+                  compact={true}
+                  onInsert={handleInsert}
+                  insertAction={embeddedHost?.insertAction}
+                  insertActions={mailActions.actions}
+                  defaultInsertActionId={defaultMailActionId}
+                  onInsertAction={runMailAction}
+                  appId={selectedApp?.id}
+                  chatId={chatIdRef.current}
+                  app={selectedApp}
+                  showAvatars={false}
+                />
+              </div>
+            )}
 
             {/* Collapsible context strip: hosts the email-body banner +
                 the pinned-emails toolbar behind a single chevron so the
@@ -758,57 +865,59 @@ function OfficeChatPanel({
             )}
 
             {/* Input */}
-            <div className="office-chat-input border-t border-gray-200 bg-white shrink-0 dark:border-slate-700 dark:bg-slate-900">
-              <ChatInput
-                app={selectedApp}
-                value={inputValue}
-                onChange={e => setInputValue(e?.target?.value ?? e)}
-                onSubmit={handleSubmit}
-                // While the snapshot reloads we don't know which email is
-                // open, and `buildSnapshotOverride()` returns null — the
-                // adapter would then do its own `readMessageContext()` and
-                // could answer about a different email than the strip shows.
-                disabled={mailSnapshot.loading}
-                isProcessing={adapter.processing}
-                onCancel={adapter.cancelGeneration}
-                allowEmptySubmit={!!selectedApp?.allowEmptyContent}
-                currentLanguage={officeLocale}
-                showModelSelector={
-                  selectedApp?.disallowModelSelection !== true &&
-                  selectedApp?.settings?.model?.enabled !== false
-                }
-                models={models}
-                selectedModel={selectedModel}
-                onModelChange={setSelectedModel}
-                uploadConfig={uploadConfig}
-                onFileSelect={fileUploadHandler.handleFileSelect}
-                selectedFile={fileUploadHandler.selectedFile}
-                showUploader={fileUploadHandler.showUploader}
-                onToggleUploader={fileUploadHandler.toggleUploader}
-                enabledTools={selectedApp?.tools?.length ? enabledTools : null}
-                onEnabledToolsChange={selectedApp?.tools?.length ? setEnabledTools : null}
-                websearchEnabled={websearchEnabled}
-                onWebsearchEnabledChange={
-                  selectedApp?.websearch?.enabled ? setWebsearchEnabled : null
-                }
-                hostContextFlags={hostContextFlags}
-                onHostContextFlagChange={(key, value) =>
-                  setHostContextFlags(prev => ({ ...(prev || {}), [key]: value }))
-                }
-                clarificationPending={adapter.clarificationPending}
-                // Conversation so far + the app's history setting, so the
-                // context-window indicator counts the whole multiturn context.
-                messages={adapter.messages}
-                sendChatHistory={selectedApp?.sendChatHistory !== false}
-                // Include email body, pinned emails AND extracted attachment
-                // content in the live token estimate so the context-window
-                // indicator accounts for what will actually be sent to the LLM.
-                extraContextText={estimateContextText}
-                // Keep the input from dominating the small Outlook task pane;
-                // long prompts scroll inside the 3-line box. Issue #1467.
-                maxRows={3}
-              />
-            </div>
+            {!showStartForm && (
+              <div className="office-chat-input border-t border-gray-200 bg-white shrink-0 dark:border-slate-700 dark:bg-slate-900">
+                <ChatInput
+                  app={selectedApp}
+                  value={inputValue}
+                  onChange={e => setInputValue(e?.target?.value ?? e)}
+                  onSubmit={handleSubmit}
+                  // While the snapshot reloads we don't know which email is
+                  // open, and `buildSnapshotOverride()` returns null — the
+                  // adapter would then do its own `readMessageContext()` and
+                  // could answer about a different email than the strip shows.
+                  disabled={mailSnapshot.loading}
+                  isProcessing={adapter.processing}
+                  onCancel={adapter.cancelGeneration}
+                  allowEmptySubmit={!!selectedApp?.allowEmptyContent}
+                  currentLanguage={officeLocale}
+                  showModelSelector={
+                    selectedApp?.disallowModelSelection !== true &&
+                    selectedApp?.settings?.model?.enabled !== false
+                  }
+                  models={models}
+                  selectedModel={selectedModel}
+                  onModelChange={setSelectedModel}
+                  uploadConfig={uploadConfig}
+                  onFileSelect={fileUploadHandler.handleFileSelect}
+                  selectedFile={fileUploadHandler.selectedFile}
+                  showUploader={fileUploadHandler.showUploader}
+                  onToggleUploader={fileUploadHandler.toggleUploader}
+                  enabledTools={selectedApp?.tools?.length ? enabledTools : null}
+                  onEnabledToolsChange={selectedApp?.tools?.length ? setEnabledTools : null}
+                  websearchEnabled={websearchEnabled}
+                  onWebsearchEnabledChange={
+                    selectedApp?.websearch?.enabled ? setWebsearchEnabled : null
+                  }
+                  hostContextFlags={hostContextFlags}
+                  onHostContextFlagChange={(key, value) =>
+                    setHostContextFlags(prev => ({ ...(prev || {}), [key]: value }))
+                  }
+                  clarificationPending={adapter.clarificationPending}
+                  // Conversation so far + the app's history setting, so the
+                  // context-window indicator counts the whole multiturn context.
+                  messages={adapter.messages}
+                  sendChatHistory={selectedApp?.sendChatHistory !== false}
+                  // Include email body, pinned emails AND extracted attachment
+                  // content in the live token estimate so the context-window
+                  // indicator accounts for what will actually be sent to the LLM.
+                  extraContextText={estimateContextText}
+                  // Keep the input from dominating the small Outlook task pane;
+                  // long prompts scroll inside the 3-line box. Issue #1467.
+                  maxRows={3}
+                />
+              </div>
+            )}
           </div>
         </div>
       </div>
