@@ -29,7 +29,10 @@ import config from '../../../config.js';
 import { getRootDir } from '../../../pathUtils.js';
 import { getAppVersion } from '../../../utils/versionHelper.js';
 import logger from '../../../utils/logger.js';
-import { DIGITAL_SOURCE_TYPES, normalizeContentMarking } from '../../../../shared/aiTransparency.js';
+import {
+  DIGITAL_SOURCE_TYPES,
+  normalizeContentMarking
+} from '../../../../shared/aiTransparency.js';
 import { getAiTransparencyConfig, isAiTransparencyActive } from '../config.js';
 import { getInstallationUrl } from '../installation.js';
 import signingService from '../signing/SigningService.js';
@@ -58,7 +61,12 @@ let trustmarkQueue = Promise.resolve();
 /** Directory holding the TrustMark ONNX models. */
 export function trustmarkModelPath(cfg = getAiTransparencyConfig()) {
   if (cfg.images.trustmarkModelPath) return cfg.images.trustmarkModelPath;
-  return path.join(getRootDir(), config.CONTENTS_DIR, config.DATA_DIR || 'data', 'trustmark-models');
+  return path.join(
+    getRootDir(),
+    config.CONTENTS_DIR,
+    config.DATA_DIR || 'data',
+    'trustmark-models'
+  );
 }
 
 function modelsPresent(modelPath) {
@@ -87,7 +95,10 @@ export async function getTrustmark() {
     })().catch(error => {
       trustmarkError = error.message;
       trustmarkPromise = null;
-      logger.warn('TrustMark watermarking unavailable', { component: COMPONENT, error: error.message });
+      logger.warn('TrustMark watermarking unavailable', {
+        component: COMPONENT,
+        error: error.message
+      });
       return null;
     });
   }
@@ -123,7 +134,11 @@ export async function imageMarkerStatus() {
     c2pa: cfg.images.c2pa,
     c2paAvailable,
     watermark: cfg.images.watermark,
-    watermarkAvailable: c2paAvailable && cfg.images.watermark === 'trustmark' && (present || trustmarkPromise !== null) && !trustmarkError,
+    watermarkAvailable:
+      c2paAvailable &&
+      cfg.images.watermark === 'trustmark' &&
+      (present || trustmarkPromise !== null) &&
+      !trustmarkError,
     watermarkModelsPresent: present,
     watermarkError: trustmarkError || (present ? null : 'TrustMark models not downloaded yet'),
     modelPath,
@@ -141,13 +156,19 @@ export function newImagePayload() {
 
 /** Content id of an image from its decoded watermark bits. */
 export function contentIdFromBits(bits) {
-  const clean = String(bits || '').replace(/[^01]/g, '').slice(0, TRUSTMARK_PAYLOAD_BITS);
+  const clean = String(bits || '')
+    .replace(/[^01]/g, '')
+    .slice(0, TRUSTMARK_PAYLOAD_BITS);
   if (clean.length < TRUSTMARK_PAYLOAD_BITS) return null;
   return `prv_img${BigInt(`0b${clean}`).toString(16).padStart(16, '0')}`;
 }
 
 function extFor(mimeType) {
-  return { 'image/png': 'png', 'image/jpeg': 'jpg', 'image/webp': 'webp', 'image/gif': 'gif' }[mimeType] || 'img';
+  return (
+    { 'image/png': 'png', 'image/jpeg': 'jpg', 'image/webp': 'webp', 'image/gif': 'gif' }[
+      mimeType
+    ] || 'img'
+  );
 }
 
 /**
@@ -218,7 +239,12 @@ export async function markImage({ buffer, mimeType, model = null, sourceImages =
   if (cfg.images.c2pa) {
     const upstream = await readAsset(buffer, type).catch(() => null);
     if (upstream?.present) {
-      ingredients.push({ buffer, mimeType: type, title: 'model output', relationship: 'componentOf' });
+      ingredients.push({
+        buffer,
+        mimeType: type,
+        title: 'model output',
+        relationship: 'componentOf'
+      });
       markings.push('upstream:c2pa');
     }
     for (const source of sourceImages) {
@@ -265,7 +291,9 @@ export async function markImage({ buffer, mimeType, model = null, sourceImages =
           action: 'c2pa.created',
           digitalSourceType: DIGITAL_SOURCE_TYPES.trainedAlgorithmicMedia,
           softwareAgent: { name: 'iHub Apps', version },
-          ...(model ? { parameters: { 'com.intrafind.ihub.model': String(model.modelId || model.id) } } : {})
+          ...(model
+            ? { parameters: { 'com.intrafind.ihub.model': String(model.modelId || model.id) } }
+            : {})
         }
       ];
       if (watermarked) {
@@ -293,7 +321,15 @@ export async function markImage({ buffer, mimeType, model = null, sourceImages =
           label: 'c2pa.soft-binding',
           data: {
             alg: TRUSTMARK_SOFT_BINDING_ALG,
-            blocks: [{ scope: {}, value: Buffer.from(BigInt(`0b${bits}`).toString(16).padStart(16, '0'), 'hex').toString('base64') }]
+            blocks: [
+              {
+                scope: {},
+                value: Buffer.from(
+                  BigInt(`0b${bits}`).toString(16).padStart(16, '0'),
+                  'hex'
+                ).toString('base64')
+              }
+            ]
           }
         });
       }
@@ -320,7 +356,9 @@ export async function markImage({ buffer, mimeType, model = null, sourceImages =
   const conforming = markings.includes('c2pa') && markings.includes('trustmark');
   const provenance = { contentId, sha256, mimeType: type, markings, conforming };
   if (errors.length) provenance.errors = errors;
-  await provenanceStore.recordImage({ contentId, sha256, mimeType: type, model, markings, conforming }).catch(() => {});
+  await provenanceStore
+    .recordImage({ contentId, sha256, mimeType: type, model, markings, conforming })
+    .catch(() => {});
   return { buffer: out, mimeType: type, provenance };
 }
 
@@ -374,7 +412,10 @@ export async function markChunkImages(chunk, { model = null, sourceImages = [] }
       image.mimeType = marked.mimeType;
       image.provenance = marked.provenance;
     } catch (error) {
-      logger.error('Could not mark generated image', { component: COMPONENT, error: error.message });
+      logger.error('Could not mark generated image', {
+        component: COMPONENT,
+        error: error.message
+      });
       image.provenance = { markings: [], conforming: false, errors: [error.message] };
     }
   }

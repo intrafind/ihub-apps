@@ -47,7 +47,11 @@ export function decodeRgb(buffer, mimeType) {
     ({ width, height } = png);
     rgba = png.data;
   } else if (mimeType === 'image/jpeg') {
-    const img = jpeg.decode(buffer, { useTArray: true, formatAsRGBA: true, maxMemoryUsageInMB: 1024 });
+    const img = jpeg.decode(buffer, {
+      useTArray: true,
+      formatAsRGBA: true,
+      maxMemoryUsageInMB: 1024
+    });
     ({ width, height } = img);
     rgba = Buffer.from(img.data);
   } else {
@@ -86,14 +90,22 @@ export function encodeRgb({ width, height, rgb }, mimeType, { quality = 95 } = {
 }
 
 function xmlEscape(value) {
-  return String(value).replace(/[<>&"']/g, c => ({ '<': '&lt;', '>': '&gt;', '&': '&amp;', '"': '&quot;', "'": '&apos;' })[c]);
+  return String(value).replace(
+    /[<>&"']/g,
+    c => ({ '<': '&lt;', '>': '&gt;', '&': '&amp;', '"': '&quot;', "'": '&apos;' })[c]
+  );
 }
 
 /**
  * An XMP packet declaring the content AI-generated.
  * @param {{creatorTool: string, createdAt?: string, description?: string, contentId?: string}} fields
  */
-export function buildXmpPacket({ creatorTool, createdAt = new Date().toISOString(), description = 'AI-generated image', contentId }) {
+export function buildXmpPacket({
+  creatorTool,
+  createdAt = new Date().toISOString(),
+  description = 'AI-generated image',
+  contentId
+}) {
   return [
     '<?xpacket begin="﻿" id="W5M0MpCehiHzreSzNTczkc9d"?>',
     '<x:xmpmeta xmlns:x="adobe:ns:meta/">',
@@ -131,7 +143,10 @@ function hasPngXmp(buffer) {
   while (offset + 8 <= buffer.length) {
     const length = buffer.readUInt32BE(offset);
     const type = buffer.toString('ascii', offset + 4, offset + 8);
-    if (type === 'iTXt' && buffer.toString('latin1', offset + 8, offset + 8 + 17) === 'XML:com.adobe.xmp') {
+    if (
+      type === 'iTXt' &&
+      buffer.toString('latin1', offset + 8, offset + 8 + 17) === 'XML:com.adobe.xmp'
+    ) {
       return true;
     }
     if (type === 'IDAT' || type === 'IEND') return false;
@@ -146,7 +161,10 @@ function hasJpegXmp(buffer) {
     const marker = buffer[offset + 1];
     if (marker === 0xda || marker === 0xd9) return false;
     const length = buffer.readUInt16BE(offset + 2);
-    if (marker === 0xe1 && buffer.toString('latin1', offset + 4, offset + 4 + XMP_JPEG_NS.length) === XMP_JPEG_NS) {
+    if (
+      marker === 0xe1 &&
+      buffer.toString('latin1', offset + 4, offset + 4 + XMP_JPEG_NS.length) === XMP_JPEG_NS
+    ) {
       return true;
     }
     offset += 2 + length;
@@ -177,7 +195,11 @@ export function embedXmp(buffer, mimeType, xmp) {
     // Insert right after IHDR (first chunk: 8-byte signature + 25-byte IHDR chunk).
     const ihdrEnd = 8 + 12 + buffer.readUInt32BE(8);
     return {
-      buffer: Buffer.concat([buffer.subarray(0, ihdrEnd), pngChunk('iTXt', data), buffer.subarray(ihdrEnd)]),
+      buffer: Buffer.concat([
+        buffer.subarray(0, ihdrEnd),
+        pngChunk('iTXt', data),
+        buffer.subarray(ihdrEnd)
+      ]),
       embedded: true
     };
   }
@@ -193,7 +215,12 @@ export function embedXmp(buffer, mimeType, xmp) {
     let insertAt = 2;
     if (buffer[2] === 0xff && buffer[3] === 0xe0) insertAt = 4 + buffer.readUInt16BE(4);
     return {
-      buffer: Buffer.concat([buffer.subarray(0, insertAt), segment, payload, buffer.subarray(insertAt)]),
+      buffer: Buffer.concat([
+        buffer.subarray(0, insertAt),
+        segment,
+        payload,
+        buffer.subarray(insertAt)
+      ]),
       embedded: true
     };
   }

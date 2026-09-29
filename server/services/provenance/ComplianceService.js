@@ -121,7 +121,7 @@ function evaluateApp(app, { cfg, models }) {
     temperatureZero,
     foreignRecords: Boolean(
       (app.aiTransparency?.disclosureOptOut && !optOut) ||
-        (app.aiTransparency?.exemption && !exemption)
+      (app.aiTransparency?.exemption && !exemption)
     ),
     issues
   };
@@ -173,11 +173,14 @@ export async function evaluateCompliance({ req } = {}) {
     item(
       'feature',
       featureActive ? 'ok' : 'error',
-      featureActive ? 'AI transparency features are on' : 'The aiTransparency feature is switched off',
+      featureActive
+        ? 'AI transparency features are on'
+        : 'The aiTransparency feature is switched off',
       '/admin/features'
     )
   );
-  if (!featureActive) warn('feature:disabled', 'error', 'AI transparency features are switched off', false);
+  if (!featureActive)
+    warn('feature:disabled', 'error', 'AI transparency features are switched off', false);
 
   // 50(1) disclosure
   const optOuts = apps.filter(a => a.optOut);
@@ -195,7 +198,12 @@ export async function evaluateCompliance({ req } = {}) {
     )
   );
   if (!cfg.interactionDisclosure.enabled) {
-    warn('disclosure:disabled', 'error', 'The Art. 50(1) interaction disclosure is switched off', false);
+    warn(
+      'disclosure:disabled',
+      'error',
+      'The Art. 50(1) interaction disclosure is switched off',
+      false
+    );
   }
 
   // Signing certificate
@@ -204,7 +212,12 @@ export async function evaluateCompliance({ req } = {}) {
   if (!signing.enabled) {
     signingStatus = 'error';
     signingDetail = 'Signing is disabled';
-    warn('signing:disabled', 'error', 'Signing is disabled: generated content carries no signed metadata', false);
+    warn(
+      'signing:disabled',
+      'error',
+      'Signing is disabled: generated content carries no signed metadata',
+      false
+    );
   } else if (!signing.c2paAvailable) {
     signingStatus = 'error';
     signingDetail = 'The C2PA library is not available on this platform';
@@ -216,7 +229,12 @@ export async function evaluateCompliance({ req } = {}) {
   } else if (signing.active.expired) {
     signingStatus = 'error';
     signingDetail = `The signing certificate expired on ${signing.active.notAfter}`;
-    warn('certificate:expired', 'error', 'The signing certificate has expired', signing.active.fingerprint);
+    warn(
+      'certificate:expired',
+      'error',
+      'The signing certificate has expired',
+      signing.active.fingerprint
+    );
   } else if (signing.active.expiresInDays < CERT_WARN_DAYS) {
     signingStatus = 'warning';
     signingDetail = `The signing certificate expires in ${signing.active.expiresInDays} days`;
@@ -241,9 +259,12 @@ export async function evaluateCompliance({ req } = {}) {
   const imageProblems = [];
   if (!cfg.images.c2pa) imageProblems.push('C2PA manifests are switched off');
   else if (!signingUsable) imageProblems.push('C2PA manifests cannot be signed');
-  if (cfg.images.watermark !== 'trustmark') imageProblems.push('the invisible watermark is switched off');
+  if (cfg.images.watermark !== 'trustmark')
+    imageProblems.push('the invisible watermark is switched off');
   else if (!imageStatus.watermarkAvailable) {
-    imageProblems.push(`the TrustMark watermark is unavailable (${imageStatus.watermarkError || 'models missing'})`);
+    imageProblems.push(
+      `the TrustMark watermark is unavailable (${imageStatus.watermarkError || 'models missing'})`
+    );
   }
   if (imageProblems.length) imageItemStatus = enabledImageModels.length ? 'error' : 'warning';
   checklist.push(
@@ -258,7 +279,12 @@ export async function evaluateCompliance({ req } = {}) {
     )
   );
   if (imageProblems.length && enabledImageModels.length) {
-    warn('images:unmarked', 'error', `Generated images are not fully marked: ${imageProblems.join('; ')}`, false);
+    warn(
+      'images:unmarked',
+      'error',
+      `Generated images are not fully marked: ${imageProblems.join('; ')}`,
+      false
+    );
   }
 
   // Server-side exports
@@ -289,7 +315,12 @@ export async function evaluateCompliance({ req } = {}) {
     )
   );
   if (!cfg.detection.enabled) {
-    warn('detection:disabled', 'error', 'No detection is available (/verify is switched off)', false);
+    warn(
+      'detection:disabled',
+      'error',
+      'No detection is available (/verify is switched off)',
+      false
+    );
   }
 
   // Text watermarking per model
@@ -351,11 +382,19 @@ export async function evaluateCompliance({ req } = {}) {
     item(
       'provider',
       providerOk ? 'ok' : 'error',
-      providerOk ? `${cfg.provider.legalEntity} (${cfg.provider.role})` : 'Provider legal entity and contact are missing',
+      providerOk
+        ? `${cfg.provider.legalEntity} (${cfg.provider.role})`
+        : 'Provider legal entity and contact are missing',
       '/admin/eu-ai-act?tab=settings'
     )
   );
-  if (!providerOk) warn('provider:missing', 'error', 'Provider details (legal entity, contact) are missing', false);
+  if (!providerOk)
+    warn(
+      'provider:missing',
+      'error',
+      'Provider details (legal entity, contact) are missing',
+      false
+    );
 
   // Editorial responsibility (50(4) deployers)
   const editorialOk = Boolean(cfg.editorialResponsibility.contact);
@@ -363,7 +402,9 @@ export async function evaluateCompliance({ req } = {}) {
     item(
       'editorial',
       editorialOk ? 'ok' : 'warning',
-      editorialOk ? cfg.editorialResponsibility.contact : 'No editorial-responsibility contact recorded',
+      editorialOk
+        ? cfg.editorialResponsibility.contact
+        : 'No editorial-responsibility contact recorded',
       '/admin/eu-ai-act?tab=settings'
     )
   );
@@ -380,7 +421,12 @@ export async function evaluateCompliance({ req } = {}) {
     )
   );
   if (!cfg.termsOfService.markRemovalClause) {
-    warn('tos:missing', 'error', 'The terms of service lack the clause prohibiting removal of AI markings', false);
+    warn(
+      'tos:missing',
+      'error',
+      'The terms of service lack the clause prohibiting removal of AI markings',
+      false
+    );
   }
 
   // Provenance records

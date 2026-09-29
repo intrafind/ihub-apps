@@ -9,6 +9,7 @@ import {
   sendFailedOperationError,
   sendErrorResponse
 } from '../utils/responseHelpers.js';
+import { publicAppView } from '../services/provenance/clientConfig.js';
 
 /**
  * @swagger
@@ -188,7 +189,7 @@ export default function registerGeneralRoutes(app, { getLocalizedError }) {
       }
 
       res.setHeader('ETag', userSpecificEtag);
-      res.json(apps);
+      res.json(apps.map(publicAppView));
     } catch (error) {
       return sendInternalError(res, error, 'fetch apps');
     }
@@ -369,7 +370,7 @@ export default function registerGeneralRoutes(app, { getLocalizedError }) {
           }
         }
 
-        res.json(appData);
+        res.json(publicAppView(appData));
       } catch (error) {
         return sendInternalError(res, error, 'fetch app details');
       }

@@ -121,7 +121,8 @@ class KeyGroupService {
       if (!group) throw new KeyGroupError('Unknown key group', 404);
       if (name !== undefined) group.name = String(name);
       if (detectorUrl !== undefined) group.detectorUrl = String(detectorUrl);
-      if (contextWidth !== undefined) group.contextWidth = Number(contextWidth) || DEFAULT_CONTEXT_WIDTH;
+      if (contextWidth !== undefined)
+        group.contextWidth = Number(contextWidth) || DEFAULT_CONTEXT_WIDTH;
       return describe(group);
     });
   }
@@ -220,7 +221,12 @@ class KeyGroupService {
     });
     const salt = crypto.randomBytes(16);
     const iv = crypto.randomBytes(12);
-    const key = crypto.scryptSync(passphrase, salt, 32, { N: 2 ** 15, r: 8, p: 1, maxmem: 64 * 1024 * 1024 });
+    const key = crypto.scryptSync(passphrase, salt, 32, {
+      N: 2 ** 15,
+      r: 8,
+      p: 1,
+      maxmem: 64 * 1024 * 1024
+    });
     const cipher = crypto.createCipheriv('aes-256-gcm', key, iv);
     const ciphertext = Buffer.concat([cipher.update(plaintext, 'utf8'), cipher.final()]);
     return {
@@ -257,7 +263,11 @@ class KeyGroupService {
         p: kdf.p,
         maxmem: 64 * 1024 * 1024
       });
-      const decipher = crypto.createDecipheriv('aes-256-gcm', key, Buffer.from(bundle.iv, 'base64'));
+      const decipher = crypto.createDecipheriv(
+        'aes-256-gcm',
+        key,
+        Buffer.from(bundle.iv, 'base64')
+      );
       decipher.setAuthTag(Buffer.from(bundle.tag, 'base64'));
       const plaintext = Buffer.concat([
         decipher.update(Buffer.from(bundle.ciphertext, 'base64')),

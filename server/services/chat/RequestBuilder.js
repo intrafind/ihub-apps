@@ -8,6 +8,7 @@ import logger from '../../utils/logger.js';
 import { findByIdCaseInsensitive } from '../../utils/resourceLookup.js';
 import { normalizeFiles } from '../../../shared/promptContext.js';
 import { resolveMaxOutputTokens } from '../../../shared/outputTokens.js';
+import { appendAiDisclosureGuardrail } from '../provenance/guardrail.js';
 
 /**
  * Attach the page images of image-based PDFs to their message.
@@ -521,6 +522,8 @@ class RequestBuilder {
       // The positive counterpart: with web search on, tell the model to research
       // in several steps so the loop's room for several tool rounds is used.
       appendWebSearchResearchGuidance(llmMessages, app, websearchEnabled);
+      // EU AI Act Art. 50(1): the model admits being an AI whenever asked.
+      appendAiDisclosureGuardrail(llmMessages, model);
 
       // Build imageConfig if image generation is supported and parameters are provided
       // Pass raw user parameters to adapter for provider-specific translation

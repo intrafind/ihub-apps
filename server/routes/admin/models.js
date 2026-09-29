@@ -17,6 +17,12 @@ import { logAudit } from '../../services/AuditLogService.js';
 import { saveSnapshot } from '../../services/ChangeHistoryService.js';
 import llmClient, { isLLMError, LLM_ERROR_CODES } from '../../services/loop/LLMClient.js';
 import { llmErrorToHttpStatus, isMissingApiKeyError } from '../../services/loop/llmHttpErrors.js';
+import {
+  applyUnmarkedModelGate,
+  JUSTIFICATION_FIELD,
+  preserveStoredRecords,
+  UnmarkedModelError
+} from '../../services/provenance/records.js';
 
 /**
  * The file a model id lives in.
@@ -32,6 +38,11 @@ import { llmErrorToHttpStatus, isMissingApiKeyError } from '../../services/loop/
  */
 function modelPath(modelId) {
   return configStore.resolveIdToPath('models', modelId);
+}
+
+/** 409 for enabling a model that does not mark text without a justification. */
+function sendUnmarkedModelError(res, error) {
+  return res.status(409).json({ error: error.message, code: error.code, models: error.models });
 }
 
 /** Prompt sent by the admin "test model" diagnostic. */
@@ -280,6 +291,21 @@ export default function registerAdminModelsRoutes(app) {
         return sendBadRequest(res, 'Model ID cannot be changed');
       }
 
+      // EU AI Act: the acknowledgement of an unmarked model is a record of this
+      // installation, set only through the gate below — never by the editor.
+      const justification = updatedModel[JUSTIFICATION_FIELD];
+      delete updatedModel[JUSTIFICATION_FIELD];
+      const storedForRecords = await configStore.readJson(await modelPath(modelId));
+      preserveStoredRecords('model', updatedModel, storedForRecords);
+      if (updatedModel.enabled !== false && storedForRecords?.enabled === false) {
+        try {
+          applyUnmarkedModelGate([updatedModel], req, justification);
+        } catch (error) {
+          if (error instanceof UnmarkedModelError) return sendUnmarkedModelError(res, error);
+          throw error;
+        }
+      }
+
       // Handle API key encryption
       if (updatedModel.apiKey) {
         // Check if this is a new key or unchanged masked value
@@ -366,6 +392,20 @@ export default function registerAdminModelsRoutes(app) {
         return;
       }
 
+      // EU AI Act: records never arrive with a model (upload, copy from another
+      // installation); enabling an unmarked model needs a justification here.
+      const justification = newModel[JUSTIFICATION_FIELD];
+      delete newModel[JUSTIFICATION_FIELD];
+      if (newModel.contentMarking) delete newModel.contentMarking.acknowledgement;
+      if (newModel.enabled !== false) {
+        try {
+          applyUnmarkedModelGate([newModel], req, justification);
+        } catch (error) {
+          if (error instanceof UnmarkedModelError) return sendUnmarkedModelError(res, error);
+          throw error;
+        }
+      }
+
       // Handle API key encryption
       if (newModel.apiKey && newModel.apiKey !== '••••••••') {
         // New key provided - encrypt it
@@ -429,6 +469,14 @@ export default function registerAdminModelsRoutes(app) {
         return sendNotFound(res, 'Model');
       }
       const newEnabledState = !model.enabled;
+      if (newEnabledState) {
+        try {
+          applyUnmarkedModelGate([model], req, req.body?.[JUSTIFICATION_FIELD]);
+        } catch (error) {
+          if (error instanceof UnmarkedModelError) return sendUnmarkedModelError(res, error);
+          throw error;
+        }
+      }
       model.enabled = newEnabledState;
       if (!newEnabledState && model.default === true) {
         const enabledModels = models.filter(m => m.id !== modelId && m.enabled === true);
@@ -473,6 +521,16 @@ export default function registerAdminModelsRoutes(app) {
 
       const { data: models } = configCache.getModels(true);
       const resolvedIds = ids.includes('*') ? models.map(m => m.id) : ids;
+
+      if (enabled) {
+        const turningOn = models.filter(m => resolvedIds.includes(m.id) && m.enabled === false);
+        try {
+          applyUnmarkedModelGate(turningOn, req, req.body?.[JUSTIFICATION_FIELD]);
+        } catch (error) {
+          if (error instanceof UnmarkedModelError) return sendUnmarkedModelError(res, error);
+          throw error;
+        }
+      }
 
       for (const id of resolvedIds) {
         const model = models.find(m => m.id === id);

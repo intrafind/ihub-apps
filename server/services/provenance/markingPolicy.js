@@ -71,7 +71,13 @@ export function evaluateTextMarking({ content, model, app = null, temperature = 
     return { ...base, required: false, status: 'exempt', reason: exemption.type, conforming: true };
   }
   if (marking.text.kind === 'not-applicable') {
-    return { ...base, required: false, status: 'exempt', reason: 'transcription', conforming: true };
+    return {
+      ...base,
+      required: false,
+      status: 'exempt',
+      reason: 'transcription',
+      conforming: true
+    };
   }
   const required = tokens > min;
 

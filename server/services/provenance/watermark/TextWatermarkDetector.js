@@ -75,7 +75,13 @@ export async function detectTextWatermark(text, { keyGroups, fetchImpl = globalT
   if (!groups.length) return { checked: false, detected: false, results, errors };
   for (const group of groups) {
     const material = await keyGroupService.detectionKeys(group.id);
-    const tokenizers = [...new Set(modelsForKeyGroup(group.id).map(m => m.modelId).filter(Boolean))];
+    const tokenizers = [
+      ...new Set(
+        modelsForKeyGroup(group.id)
+          .map(m => m.modelId)
+          .filter(Boolean)
+      )
+    ];
     if (!tokenizers.length) tokenizers.push(null);
     const tests = material.keys.length * tokenizers.length;
     const threshold = DEFAULT_P_THRESHOLD / Math.max(1, tests);
@@ -94,7 +100,9 @@ export async function detectTextWatermark(text, { keyGroups, fetchImpl = globalT
             fetchImpl
           );
           const pValue = Number(answer?.p_value);
-          const detected = Number.isFinite(pValue) ? pValue < threshold : answer?.is_watermarked === true;
+          const detected = Number.isFinite(pValue)
+            ? pValue < threshold
+            : answer?.is_watermarked === true;
           results.push({
             keyGroup: group.id,
             keyVersion: version,

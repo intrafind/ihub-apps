@@ -135,7 +135,9 @@ class ProvenanceStore {
     const documents = this._docs();
     if (!documents) return;
     try {
-      await documents.put(PROVENANCE_RECORDS_NAMESPACE, record.contentId, record, { ownerId: 'system' });
+      await documents.put(PROVENANCE_RECORDS_NAMESPACE, record.contentId, record, {
+        ownerId: 'system'
+      });
       await documents.put(
         PROVENANCE_HASHES_NAMESPACE,
         hashKey(record.contentHash),
@@ -168,7 +170,9 @@ class ProvenanceStore {
     if (!cfg.provenance.enabled) return null;
     const text = typeof content === 'string' ? content : '';
     if (!text.trim() && images.length === 0) return null;
-    const textMarking = text.trim() ? evaluateTextMarking({ content: text, model, app, temperature, cfg }) : null;
+    const textMarking = text.trim()
+      ? evaluateTextMarking({ content: text, model, app, temperature, cfg })
+      : null;
     const record = {
       v: 1,
       contentId: newContentId(),
@@ -232,7 +236,10 @@ class ProvenanceStore {
         const doc = await documents.get(PROVENANCE_RECORDS_NAMESPACE, contentId);
         if (doc?.data) return doc.data;
       } catch (error) {
-        logger.warn('Provenance record read failed', { component: COMPONENT, error: error.message });
+        logger.warn('Provenance record read failed', {
+          component: COMPONENT,
+          error: error.message
+        });
       }
     }
     return this.memory.get(contentId) || null;
@@ -251,7 +258,10 @@ class ProvenanceStore {
         const doc = await documents.get(PROVENANCE_HASHES_NAMESPACE, key);
         if (doc?.data?.contentId) return this.get(doc.data.contentId);
       } catch (error) {
-        logger.warn('Provenance hash lookup failed', { component: COMPONENT, error: error.message });
+        logger.warn('Provenance hash lookup failed', {
+          component: COMPONENT,
+          error: error.message
+        });
       }
     }
     const id = this.memoryHashes.get(key);
@@ -290,12 +300,17 @@ class ProvenanceStore {
         if (!record?.generatedAt || Date.parse(record.generatedAt) >= cutoff) continue;
         await documents.delete(PROVENANCE_RECORDS_NAMESPACE, doc.key);
         if (record.contentHash) {
-          await documents.delete(PROVENANCE_HASHES_NAMESPACE, hashKey(record.contentHash)).catch(() => {});
+          await documents
+            .delete(PROVENANCE_HASHES_NAMESPACE, hashKey(record.contentHash))
+            .catch(() => {});
         }
         deleted++;
       }
     } catch (error) {
-      logger.warn('Provenance retention sweep failed', { component: COMPONENT, error: error.message });
+      logger.warn('Provenance retention sweep failed', {
+        component: COMPONENT,
+        error: error.message
+      });
     }
     if (deleted) logger.info('Provenance retention sweep', { component: COMPONENT, deleted, days });
     return deleted;

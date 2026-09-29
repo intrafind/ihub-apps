@@ -41,6 +41,7 @@ import { appConfigSchema } from '../../validators/appConfigSchema.js';
 import { modelConfigSchema } from '../../validators/modelConfigSchema.js';
 import { promptConfigSchema } from '../../validators/promptConfigSchema.js';
 import { workflowConfigSchema } from '../../validators/workflowConfigSchema.js';
+import { preserveStoredRecords } from '../provenance/records.js';
 
 const COMPONENT = 'ContentInstaller';
 
@@ -628,6 +629,14 @@ class ContentInstaller {
         const previous = previousPath ? await configStore.readJson(previousPath) : null;
         safeContent = { ...rest, default: previous?.default === true };
         if (previous?.apiKey) safeContent.apiKey = previous.apiKey;
+      }
+
+      // EU AI Act records (disclosure opt-outs, exemptions, unmarked-model
+      // acknowledgements) belong to one installation: a registry item never
+      // brings any, and an update keeps the ones made here.
+      if ((type === 'app' || type === 'model') && safeContent && typeof safeContent === 'object') {
+        const previous = previousPath ? await configStore.readJson(previousPath) : null;
+        safeContent = preserveStoredRecords(type, { ...safeContent }, previous);
       }
 
       await configStore.writeJson(targetPath, safeContent);
