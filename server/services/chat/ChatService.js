@@ -33,9 +33,11 @@ import {
   knowledgeSourceSeam,
   markInteractiveTools,
   passthroughSeam,
-  questionSeam
+  questionSeam,
+  structuredOutputSeam
 } from '../loop/seams/index.js';
 import { createChatChannel } from './chatChannel.js';
+import { mergeCitations } from './chatCitations.js';
 import {
   materializeAssistantTurn,
   materializeUserTurn,
@@ -186,6 +188,22 @@ function wireUsage(usage) {
 }
 
 const NO_STREAM = { emit: () => null, runId: null };
+
+/**
+ * Whether the reader of a durable turn is still there when it ends: the
+ * caller's own answer when it supplied one (the inference API knows whether
+ * its HTTP client is connected), else an attached SSE client.
+ */
+function clientConnectedOf(persist, chatId) {
+  if (typeof persist?.clientConnected === 'function') {
+    try {
+      return persist.clientConnected() === true;
+    } catch {
+      return false;
+    }
+  }
+  return hasChatClient(chatId);
+}
 
 class ChatService {
   /**
@@ -356,9 +374,24 @@ class ChatService {
    *   replaceFromMessageId? }`, where `repository` is a `ChatRepository`, `ownerId`/
    *   `identityMode` are the run principal resolved once by the caller, and `content` is the
    *   raw text of the new user message (the stored history is never client-asserted, but the
-   *   message being sent comes from the request).
+   *   message being sent comes from the request). Optional extras for callers that store more
+   *   than the chat UI does (the inference API): `message` (fields on the stored user message:
+   *   `variables`, `renderedContent`), `chat` (fields patched onto the chat document with the
+   *   user turn), `assistant` (fields on the stored answer: `model`), `origin` (how a chat
+   *   created by this turn came about) and `clientConnected` (`() => boolean`, whether the
+   *   caller is still there to read the answer; default: an SSE client is attached).
+   * @param {RunStreamEmitter} [params.emitter] - Stream emitter to use instead of the chat's
+   *   SSE-delivered one, for a caller that consumes the frames itself (the inference API
+   *   turns them into OpenAI-shaped events).
+   * @param {boolean} [params.headless=!streaming] - No user can answer a clarification: the
+   *   ask_user tool is refused instead of pausing the turn.
+   * @param {Object} [params.structuredOutput] - Check the final answer against an output
+   *   contract: `{ validate: (content) => verdict, maxRetries?: number, onAttemptRejected? }`.
+   *   An invalid answer is retried inside the run (`maxRetries`, default 1); one that never
+   *   becomes valid ends the turn as an error (`OUTPUT_VALIDATION_FAILED`). A valid answer's
+   *   content is the validated JSON, and the summary carries `structuredOutput`.
    * @returns {Promise<Object>} `{ runId, status, content, finishReason, usage, messages, knowledgeSources,
-   *   pendingInteraction?, toolName?, error?, errorInfo? }`
+   *   pendingInteraction?, toolName?, error?, errorInfo?, structuredOutput? }`
    */
   async runTurn({
     prep,
@@ -372,7 +405,10 @@ class ChatService {
     language = 'en',
     user,
     runId: givenRunId,
-    persistence = null
+    persistence = null,
+    emitter = null,
+    headless = !streaming,
+    structuredOutput = null
   }) {
     const {
       app,
@@ -409,8 +445,12 @@ class ChatService {
     }
 
     // The turn's SSE v2 emitter (chat stream id = chatId, run id = this turn).
+    // A caller with its own consumer (the inference API turning frames into
+    // OpenAI-shaped events) injects one; the chat UI gets the default one,
+    // delivered through the SSE layer.
     const stream =
-      streaming && chatId ? new RunStreamEmitter({ streamId: chatId, runId }) : NO_STREAM;
+      emitter ||
+      (streaming && chatId ? new RunStreamEmitter({ streamId: chatId, runId }) : NO_STREAM);
     if (stream !== NO_STREAM) bindStreamRun(chatId, runId, stream);
 
     logger.info('Chat turn started', {
@@ -450,7 +490,10 @@ class ChatService {
         // placeholder, which the client also puts on the message it sends.
         clientMessageId: persist.clientMessageId ?? messageId ?? null,
         attachments,
-        replaceFromMessageId: persist.replaceFromMessageId
+        replaceFromMessageId: persist.replaceFromMessageId,
+        message: persist.message,
+        chat: persist.chat,
+        origin: persist.origin
       });
     }
 
@@ -480,6 +523,16 @@ class ChatService {
       streaming,
       telemetry: this.telemetry
     });
+    const outputSeam =
+      typeof structuredOutput?.validate === 'function'
+        ? structuredOutputSeam({
+            validate: structuredOutput.validate,
+            maxRetries: Number.isInteger(structuredOutput.maxRetries)
+              ? structuredOutput.maxRetries
+              : 1,
+            onAttemptRejected: structuredOutput.onAttemptRejected
+          })
+        : null;
     // knowledgeSourceSeam runs first so its `outcome.knowledgeSource` is on the
     // outcome when chatToolSeam projects the tool result to `tool/completed`.
     const seams = [
@@ -497,7 +550,7 @@ class ChatService {
           appId: app?.id,
           buildLogData: log,
           logInteraction: this.logInteraction,
-          headless: !streaming,
+          headless,
           getCount: () => this.getClarificationCount(chatId),
           incrementCount: () => this.incrementClarificationCount(chatId),
           interactionService: this.interactionService
@@ -516,6 +569,7 @@ class ChatService {
         })
       ),
       imageLiftSeam,
+      ...(outputSeam ? [outputSeam] : []),
       turnSeam
     ];
 
@@ -580,7 +634,14 @@ class ChatService {
         channel,
         mcpAppViews,
         mcpAuthPrompts,
-        takePendingCall: () => turnSeam.takePendingCall()
+        takePendingCall: () => turnSeam.takePendingCall(),
+        structured: outputSeam
+          ? {
+              validate: structuredOutput.validate,
+              attempts: () => outputSeam.attempts(),
+              verdictFor: answer => outputSeam.verdictFor(answer)
+            }
+          : null
       });
       // The ledger's terminal frame first, then the chat document.
       //
@@ -614,7 +675,8 @@ class ChatService {
           chatId,
           runId,
           summary: outcome,
-          clientConnected: hasChatClient(chatId)
+          clientConnected: clientConnectedOf(persist, chatId),
+          message: persist.assistant
         });
       }
       return outcome;
@@ -645,7 +707,7 @@ class ChatService {
             finishReason: 'error',
             errorInfo: { code: 'INTERNAL_ERROR', message: error.message || 'Internal error' }
           },
-          clientConnected: hasChatClient(chatId)
+          clientConnected: clientConnectedOf(persist, chatId)
         });
       }
       throw error;
@@ -678,7 +740,8 @@ class ChatService {
     channel,
     mcpAppViews = [],
     mcpAuthPrompts = [],
-    takePendingCall = () => null
+    takePendingCall = () => null,
+    structured = null
   }) {
     const loopSources = result.knowledgeSources || [];
     const content = result.content || '';
@@ -698,6 +761,9 @@ class ChatService {
       images: result.images || [],
       // Same reasoning for MCP App views: part of the answer, restored on reopen.
       mcpApps: mcpAppViews,
+      // And for the documents behind the answer (iAssistant citations, iFinder
+      // tool documents), which the Documents panel draws again on reopen.
+      citations: mergeCitations(result.citations),
       mcpAuthRequired: mcpAuthPrompts,
       knowledgeSources: this.getKnowledgeSources(chatId, loopSources)
     };
@@ -796,7 +862,84 @@ class ChatService {
       return { ...summary, finishReason: 'clarification', pendingInteraction };
     }
 
+    // The output contract, checked on the answer the run ended with. A
+    // passthrough answer never went through the seam, so this is its only
+    // check; a model answer the seam already judged keeps that verdict (a
+    // second run of the time-bounded pattern checks could disagree), and one
+    // it never saw is checked here. Either way it is the answer alone that is
+    // checked — the final step's text, or the passthrough tool's output — not
+    // prose written before a tool call. Returns the terminal summary of a
+    // failed check, or null.
+    let structuredOutput;
+    const checkStructuredOutput = async ({ passthrough = false } = {}) => {
+      if (!structured) return null;
+      const answer =
+        passthrough && typeof result.terminate?.content === 'string'
+          ? result.terminate.content
+          : typeof result.answerText === 'string'
+            ? result.answerText
+            : content;
+      let verdict = passthrough ? null : structured.verdictFor?.(answer) || null;
+      if (!verdict) {
+        try {
+          verdict = structured.validate(answer);
+        } catch (error) {
+          verdict = { valid: false, errors: [{ path: '', message: error.message }] };
+        }
+      }
+      const attempts = Math.max(1, structured.attempts?.() || 0);
+      if (!verdict.valid) {
+        const errors = Array.isArray(verdict.errors) ? verdict.errors : [];
+        const message =
+          (await translate('outputValidationFailed')) ||
+          `The answer did not match the output schema after ${attempts} attempt${
+            attempts === 1 ? '' : 's'
+          }.`;
+        logger.warn('Structured output failed validation', {
+          component: COMPONENT,
+          chatId,
+          runId,
+          modelId: model?.id,
+          attempts,
+          errorCount: errors.length
+        });
+        await this.logInteraction(
+          'chat_error',
+          buildLogData(streaming, {
+            responseType: 'error',
+            error: { message, code: 'OUTPUT_VALIDATION_FAILED', details: errors },
+            response: content
+          })
+        );
+        stream.emit(SSE_V2_EVENTS.STREAM_ERROR, {
+          code: 'OUTPUT_VALIDATION_FAILED',
+          message,
+          details: errors,
+          retryable: true
+        });
+        endRun({
+          status: 'error',
+          finishReason: 'error',
+          error: { code: 'OUTPUT_VALIDATION_FAILED', message }
+        });
+        return {
+          ...summary,
+          status: 'error',
+          finishReason: 'error',
+          errorInfo: { message, code: 'OUTPUT_VALIDATION_FAILED', details: errors },
+          structuredOutput: { valid: false, errors, attempts }
+        };
+      }
+      structuredOutput = { valid: true, value: verdict.value, attempts };
+      // What the caller and the stored history get is the validated JSON,
+      // without the fences or prose a model may have wrapped it in.
+      if (typeof verdict.text === 'string') summary.content = verdict.text;
+      return null;
+    };
+
     if (result.finishReason === 'tool_passthrough_complete') {
+      const rejected = await checkStructuredOutput({ passthrough: true });
+      if (rejected) return rejected;
       const toolName = result.terminate?.toolName;
       await this.logInteraction(
         'chat_response',
@@ -814,7 +957,13 @@ class ChatService {
         ...(toolName ? { toolName: String(toolName) } : {}),
         knowledgeSources
       });
-      return { ...summary, status: 'completed', toolName, knowledgeSources };
+      return {
+        ...summary,
+        status: 'completed',
+        toolName,
+        knowledgeSources,
+        ...(structuredOutput ? { structuredOutput } : {})
+      };
     }
 
     // Degenerate completion: a failure finish reason (e.g. Gemini's
@@ -866,14 +1015,25 @@ class ChatService {
       };
     }
 
+    const rejected = await checkStructuredOutput();
+    if (rejected) return rejected;
+
     const finishReason = result.finishReason || 'stop';
     const knowledgeSources = this.resolveAnswerSources(chatId, loopSources);
     endRun({ status: result.status || 'completed', finishReason, knowledgeSources });
     await this.logInteraction(
       'chat_response',
-      buildLogData(streaming, { responseType: 'success', response: content.substring(0, 1000) })
+      buildLogData(streaming, {
+        responseType: 'success',
+        response: summary.content.substring(0, 1000)
+      })
     );
-    return { ...summary, finishReason, knowledgeSources };
+    return {
+      ...summary,
+      finishReason,
+      knowledgeSources,
+      ...(structuredOutput ? { structuredOutput } : {})
+    };
   }
 
   // ── headless app invocation (app-as-tool gateway, MCP) ─────────────────

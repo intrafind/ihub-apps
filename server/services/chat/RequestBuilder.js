@@ -158,7 +158,7 @@ export function appendWebSearchResearchGuidance(llmMessages, app, websearchEnabl
  * @param {Object} app - App configuration
  * @returns {Array} Filtered models that match app requirements
  */
-function filterModelsForApp(models, app) {
+export function filterModelsForApp(models, app) {
   let availableModels = models;
 
   // Filter by allowedModels if specified

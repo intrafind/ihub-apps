@@ -56,6 +56,48 @@ export const getCitationDocumentAccess = item => {
 /** True when the document can be fetched through the iFinder proxy. */
 export const hasCitationProxyAccess = item => !!getCitationDocumentAccess(item);
 
+/** Shortest document id looked for in an answer; a shorter one matches too much prose. */
+const MIN_LINKED_ID_CHARS = 6;
+
+/** Characters that continue an id or a URL, so a match inside a longer one is not a match. */
+const TOKEN_CHAR = /[A-Za-z0-9_\-.~%/]/;
+
+/** A full stop ends a token only when nothing token-like follows it ("…12.", not "…12.pdf"). */
+function endsTokenAt(text, index) {
+  const next = text[index] || '';
+  if (next === '.') return !TOKEN_CHAR.test(text[index + 1] || '');
+  return !TOKEN_CHAR.test(next);
+}
+
+function containsToken(text, token) {
+  let from = 0;
+  for (;;) {
+    const at = text.indexOf(token, from);
+    if (at < 0) return false;
+    const before = at > 0 ? text[at - 1] : '';
+    if (!TOKEN_CHAR.test(before) && endsTokenAt(text, at + token.length)) return true;
+    from = at + 1;
+  }
+}
+
+/**
+ * True when an answer links to the document: its text carries the document's
+ * deep link or its id. Answers researched with the iFinder tools cite each
+ * document as `[title](deepLink "source › location · id")`, so either one
+ * marks the document as one the answer is built on.
+ *
+ * @param {Object} item Citation document.
+ * @param {string} text The answer's markdown.
+ * @returns {boolean}
+ */
+export function isCitationLinkedIn(item, text) {
+  if (!text || typeof text !== 'string') return false;
+  const deepLink = getCitationDeepLink(item);
+  if (deepLink && containsToken(text, deepLink)) return true;
+  const id = item?.document_id || getCitationMeta(item, 'id');
+  return typeof id === 'string' && id.length >= MIN_LINKED_ID_CHARS && containsToken(text, id);
+}
+
 /**
  * Open the document's deep link in the user's browser.
  *

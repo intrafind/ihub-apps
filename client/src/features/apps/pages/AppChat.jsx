@@ -971,7 +971,7 @@ function AppChat({ preloadedApp = null, embedded = false, appId: embeddedAppId =
 
     (async () => {
       try {
-        const result = await getConversationMessages(appId, existingConversationId);
+        const result = await getConversationMessages(appId, existingConversationId, { chatId });
         const serverMessages = result?.messages || result;
         if (Array.isArray(serverMessages) && serverMessages.length > 0) {
           loadServerMessages(serverMessages);
@@ -982,7 +982,16 @@ function AppChat({ preloadedApp = null, embedded = false, appId: embeddedAppId =
         clearConversationId(appId);
       }
     })();
-  }, [app, appId, messages.length, loadServerMessages, ephemeral, serverBackedChat, embedded]);
+  }, [
+    app,
+    appId,
+    chatId,
+    messages.length,
+    loadServerMessages,
+    ephemeral,
+    serverBackedChat,
+    embedded
+  ]);
 
   // Auto-send message if send=true query parameter is present
   const autoSendTriggered = useRef(false);

@@ -13,6 +13,7 @@ import {
   getCitationMeta as getMeta,
   hasCitationProxyAccess as hasProxyAccess,
   isCitationAttachSupported,
+  isCitationLinkedIn,
   openCitationDocument
 } from '../utils/citationDocuments';
 import {
@@ -468,11 +469,16 @@ function DocumentDetailsModal({ item, onClose, t }) {
 /**
  * CitationPanel renders below the message content when citations are present.
  * Merges references (passages) and resultItems (documents) into a single unified list,
- * grouped by document_id. Documents with passages are marked as "Referenced",
- * documents without passages are marked as "Mentioned".
+ * grouped by document_id. Documents with passages or linked from the answer are
+ * marked as "Referenced", the others as "Mentioned".
+ *
+ * The documents come from an iAssistant answer or from the iFinder tools a
+ * turn called (`services/integrations/iFinderCitations.js` on the server).
  *
  * @param {Object} props
  * @param {Object} props.citations - { references: [], resultItems: [] }
+ * @param {string} [props.content] - The answer's markdown, to tell which
+ *   documents it links to.
  * @param {Function} [props.onDocumentAction] - Handler for document actions
  *   (openExternal, download, openInApp). May return a
  *   `{ ok: false, reason }` result (or a promise of one) to report that the
@@ -480,9 +486,10 @@ function DocumentDetailsModal({ item, onClose, t }) {
  *   the panel handles openExternal/download itself and the "Open in App"
  *   entry — which needs a router the embedded hosts do not have — is hidden.
  */
-function CitationPanel({ citations, onDocumentAction }) {
+function CitationPanel({ citations, content, onDocumentAction }) {
   const { t } = useTranslation();
   const [expandedDoc, setExpandedDoc] = useState(null);
+  const [showFolded, setShowFolded] = useState(false);
   const [appPickerDoc, setAppPickerDoc] = useState(null);
   const [detailsDoc, setDetailsDoc] = useState(null);
   // { item, passages: string[], initialPassageIndex: number }
@@ -658,6 +665,32 @@ function CitationPanel({ citations, onDocumentAction }) {
     });
   }, [citations]);
 
+  // The documents the answer links to come first: an answer researched with
+  // the iFinder tools cites each document it used as a link. Once it names
+  // them, the documents that were only found along the way — every hit of
+  // every search the turn ran — fold away behind a toggle instead of burying
+  // the few the answer is built on. An answer that links to none (iAssistant
+  // cites passages instead) keeps the full list, in its order.
+  const { listedDocuments, foldedDocuments } = useMemo(() => {
+    const entries = mergedDocuments.map(entry => ({
+      ...entry,
+      linked: isCitationLinkedIn(entry.doc, content)
+    }));
+    if (!entries.some(entry => entry.linked)) {
+      return { listedDocuments: entries, foldedDocuments: [] };
+    }
+    const unlinked = entries.filter(entry => !entry.linked);
+    return {
+      listedDocuments: [
+        ...entries.filter(entry => entry.linked),
+        ...unlinked.filter(entry => entry.passages.length > 0)
+      ],
+      foldedDocuments: unlinked.filter(entry => entry.passages.length === 0)
+    };
+  }, [mergedDocuments, content]);
+
+  const shownDocuments = showFolded ? [...listedDocuments, ...foldedDocuments] : listedDocuments;
+
   // Build a lookup: passage index -> document_id (for citation-navigate events)
   const passageToDocId = useMemo(() => {
     const lookup = {};
@@ -748,7 +781,7 @@ function CitationPanel({ citations, onDocumentAction }) {
         </div>
       )}
       <div className="space-y-2">
-        {mergedDocuments.map(({ doc, passages, resultIndex }, index) => {
+        {shownDocuments.map(({ doc, passages, resultIndex, linked }, index) => {
           const docId = doc.document_id || getMeta(doc, 'id') || `doc-${index}`;
           const title =
             doc.title || getMeta(doc, 'title') || t('citations.untitledDocument', 'Document');
@@ -756,6 +789,7 @@ function CitationPanel({ citations, onDocumentAction }) {
           const fileName = getFileName(doc);
           const deepLink = getDeepLink(doc);
           const hasPassages = passages.length > 0;
+          const isReferenced = hasPassages || linked;
           const isExpanded = expandedDoc === docId;
           const canPreview = hasProxyAccess(doc);
           // Stable display order, also used for the preview's passage indices.
@@ -783,7 +817,7 @@ function CitationPanel({ citations, onDocumentAction }) {
                   )}
                   {/* Badge row: referenced / mentioned + passage count */}
                   <div className="flex items-center gap-2 mt-1.5">
-                    {hasPassages ? (
+                    {isReferenced ? (
                       <span className="inline-flex items-center px-1.5 py-0.5 rounded-sm text-[10px] font-medium bg-indigo-100 dark:bg-indigo-900/30 text-indigo-700 dark:text-indigo-300">
                         {t('citations.referenced', 'Referenced')}
                       </span>
@@ -885,6 +919,35 @@ function CitationPanel({ citations, onDocumentAction }) {
           );
         })}
       </div>
+
+      {foldedDocuments.length > 0 && (
+        <button
+          type="button"
+          onClick={() => setShowFolded(shown => !shown)}
+          aria-expanded={showFolded}
+          className="mt-2 inline-flex items-center gap-1 text-xs text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-300"
+        >
+          <span>
+            {showFolded
+              ? t('citations.showFewerDocuments', 'Show fewer documents')
+              : t('citations.showMoreDocuments', {
+                  count: foldedDocuments.length,
+                  defaultValue:
+                    foldedDocuments.length === 1
+                      ? 'Show {{count}} more document'
+                      : 'Show {{count}} more documents'
+                })}
+          </span>
+          <svg
+            className={`w-3 h-3 transition-transform ${showFolded ? 'rotate-180' : ''}`}
+            fill="none"
+            viewBox="0 0 24 24"
+            stroke="currentColor"
+          >
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
+          </svg>
+        </button>
+      )}
 
       <AppSelectionModal
         isOpen={appPickerDoc !== null}

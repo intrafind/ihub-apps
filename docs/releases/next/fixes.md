@@ -79,3 +79,15 @@ In the Outlook add-in and the browser extension, a document attached with the pa
 drag and drop showed up under the chat input but was not sent: the model answered without it.
 Several files attached at once were dropped the same way. Uploaded documents and images now go
 along with the message, as they do in the web app.
+
+## iAssistant Documents Come Back When a Chat Is Reopened
+
+The **Documents** panel under an iAssistant answer disappeared when a stored chat was reopened from
+the chat history. The documents are now stored with the answer and the panel comes back with it.
+When an iAssistant conversation is resumed without chat history, its documents get the same
+document access as during the live answer, so **Preview**, **Download** and **Add to email** work
+there too.
+
+- Documents are still fetched with the signed-in user's own iFinder permissions.
+- Shared links do not include the Documents panel: its documents were found with the owner's
+  iFinder permissions, and a viewer may not be allowed to see them.

@@ -482,7 +482,11 @@ index can answer "list my chats" without scanning:
   activeRunId,          // the run producing right now, null between turns
   hasUnseenActivity,    // an answer landed with nobody watching
   status,               // 'active' | 'running' | 'error'
-  runIds: []            // most recent 200, for the delete cascade
+  runIds: [],           // most recent 200, for the delete cascade
+  origin,               // { createdVia: 'ui' | 'responses-api', clientId?, authMode? }
+  // Chats made through the inference API's Conversations API also carry:
+  metadata?,            // the conversation's caller-defined key/value pairs
+  binding?              // 'app' | 'model' — what the first response bound it to
 }
 
 // chat-messages/<chatId>
@@ -490,7 +494,12 @@ index can answer "list my chats" without scanning:
   version: 1,
   messages: [
     { id, role, content, ts, runId,
-      clientMessageId?, usage?, finishReason?, error?, attachments?, artifacts? }
+      clientMessageId?, usage?, finishReason?, error?, attachments?, artifacts?,
+      mcpApps?, citations?,
+      // inference API turns: on a user message the variables it was rendered
+      // with and the rendered text the model saw; on an answer the validated
+      // structured output and the model identifier that produced it
+      variables?, renderedContent?, output?, model? }
   ]
 }
 ```
@@ -530,12 +539,24 @@ Details that matter:
   into such a turn. Reopening the chat puts the values back in the variables
   panel. Names must be valid variable names, values are stored as text capped
   at the message length, at most 50 of them; the field is absent until a turn
-  sets it.
+  sets it. The inference API's Conversations API keeps a conversation's
+  variables in the same field, so a chat carries its values between the chat
+  UI and the API.
 - **Attachments are descriptors** — `{ type, name?, bytes? }`. The base64 payload
   of an upload stays in the request; it is never written into a document that is
   read back for as long as the chat lives.
 - **So is what a turn produced** — `{ id, kind, mimeType, bytes }`, with the
   payload in the shared artifact store. See [Artifacts](artifacts.md).
+- **The documents behind an answer are stored with it** — `citations:
+  { references, resultItems }`, the passages and documents of an iAssistant
+  answer or the ones the turn's iFinder tool calls found — so a reopened chat
+  draws the same **Documents** panel, with preview, download and "Add to
+  email". Only what the panel reads is kept (id, title, deep link, file name,
+  source, application, the ACCESS link, passage text capped at 4,000
+  characters): at most 50 documents and 100 passages, 256 KB per answer, and
+  passages are dropped first when that is exceeded. The documents are fetched
+  again with the reader's own iFinder permissions. A share never carries them
+  — see [Chat Sharing](chat-sharing.md#what-is-shared--and-what-is-not).
 - **Failures are recorded.** An aborted turn stores its (possibly empty) answer
   with `error: { code: 'ABORTED', … }`, an errored turn with its error code, so a
   truncated answer never reads as a complete one. A turn that paused for a
@@ -550,6 +571,12 @@ Details that matter:
 - Every read-modify-write runs under `locks.withLock('chat:<id>')`. Two tabs on
   one chat are ordinary, and an unlocked read-append-write would drop one tab's
   message.
+- **Chats made through the API are ordinary chats.** A conversation of the
+  inference API's [Conversations API](openai-compatible-api.md#conversations-api)
+  is a chat of its caller (for an OAuth client, the client), listed in the chat
+  history with `origin.createdVia: 'responses-api'`. Unlike a UI turn, which
+  supersedes a turn still running, an API turn on a busy chat is refused
+  (`409`).
 
 ## API
 

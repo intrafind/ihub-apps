@@ -100,6 +100,38 @@ conversation held for that app. The previous chat stays in the chat history and 
 - Without chat history (for example anonymous users), opening an app still restores the
   conversation from the current browser tab, as before.
 
+## Inference API: Call iHub Apps With Structured Output, Responses and Conversations
+
+The OpenAI-compatible inference API (`/api/inference/v1`) can now run iHub apps, not just models,
+so a custom frontend built on the standard `openai` SDKs gets an app's answer — typed JSON
+included — while its prompt, variables, sources, tools, output schema and model stay configured in
+iHub.
+
+- **Apps as models:** `model: "app:<appId>"` runs an app on its configured model;
+  `app:<appId>/<modelId>` picks one of the models the app allows. `GET /models` lists the apps a
+  caller may use. App and model permissions apply as in the chat UI, and the response names the
+  model that ran.
+- **App variables** go in `prompt.variables` and are checked against the app's variable
+  definitions; every problem is reported at once. The app's prompt template wraps the first turn
+  of a conversation, and follow-ups only when they send variables again.
+- **Structured output is validated on the server.** An app's output schema, or a
+  `response_format` / `text.format` sent to a plain model, is enforced by the provider and checked
+  before the answer is returned; an answer that does not match gets one corrected attempt and is
+  otherwise refused (`422`). `/chat/completions` used to ignore `response_format`; it is now
+  applied, and a model that cannot do structured output answers `400`. Callers can switch the
+  check off with `validate=false`.
+- **Responses API:** `POST /responses` supports a subset of OpenAI's Responses API, streaming
+  included; the tools an app runs appear as their own output items.
+- **Conversations API:** `/conversations` stores multi-turn conversations. A conversation is an
+  iHub chat: it appears in the caller's chat history (for an OAuth client, under that client) and
+  records that it was created through the API. It keeps its app variables where the chat UI keeps
+  a start form's, so a chat continues with the same values in either. It needs chat persistence
+  to be on.
+- Validation outcomes are counted in the new `ihub.structured_output.validation` metric.
+
+See [OpenAI-Compatible API](../../openai-compatible-api.md) and
+[Structured Output → External API usage](../../structured-output.md#external-api-usage).
+
 ## Apps Can Start Chats With a Form
 
 Apps with variables can now open a new chat with a form instead of the chat input. Users fill in
@@ -134,3 +166,20 @@ goes out with the email that is open now.
 - Only chats whose app the add-in offers are listed, since a chat continues in its own app.
 - The browser extension's side panel gets the same history.
 - Without chat history enabled, the add-in keeps its chats in the pane as before.
+
+## Document Actions for Answers From the iFinder Search Tools
+
+Answers researched with the iFinder tools (the **iFinder Search** app, or any app using
+`iFinder_search`) now list the documents they found in the **Documents** panel under the answer,
+the same way iAssistant answers do. Each document has the full menu: **Preview**, **Download**,
+**Details**, **Open in App**, **Open in browser** and, in the Outlook task pane, **Add to email**.
+
+- Documents are fetched with the signed-in user's own iFinder permissions, from the search profile
+  the tool searched.
+- The documents the answer links to are marked **Referenced** and listed first. Other search hits
+  fold away behind **Show N more documents**, so a turn that ran several searches does not bury
+  the few documents it used.
+- Documents read or looked up with `iFinder_getContent` and `iFinder_getMetadata` are listed too.
+- With chat history on, the documents are stored with the answer and come back when the chat is
+  reopened. Shared links leave them out, since they were found with the owner's iFinder
+  permissions.

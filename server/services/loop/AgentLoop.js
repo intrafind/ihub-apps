@@ -138,7 +138,7 @@ export class AgentLoop {
       opts.resolveNativeWebSearchFallbackTools || defaultResolveNativeWebSearchFallbackTools;
   }
 
-  /** Register a seam `{ name, preStep, preTool, postTool, stepEnd, onChunk, onHallucinated, onCircuitBroken, onCompaction }`. */
+  /** Register a seam `{ name, preStep, preTool, postTool, stepEnd, onChunk, onHallucinated, onCircuitBroken, onCompaction, onAnswer }`. */
   use(seam) {
     if (seam) this._seams.push(seam);
     return this;
@@ -249,6 +249,7 @@ export class AgentLoop {
     let reactiveAttempts = 0;
     let iteration = 0;
     let content = '';
+    let answerText = ''; // what the last model step answered, without earlier steps' prose
     let finishReason = null;
     let usage = null;
     const thoughtSignatures = [];
@@ -267,6 +268,7 @@ export class AgentLoop {
       runId,
       status,
       content,
+      answerText,
       finishReason: extra.finishReason ?? finishReason,
       usage: usage || { promptTokens: 0, completionTokens: 0, totalTokens: 0, source: 'estimate' },
       runUsage: {
@@ -431,6 +433,8 @@ export class AgentLoop {
         }
 
         // ── consume the step result ─────────────────────────────────────
+        // `stepText` is what this step answered, `content` the run's running total.
+        let stepText = result.content || '';
         if (result.content) content += result.content;
         if (result.finishReason) finishReason = result.finishReason;
         if (result.thoughtSignatures?.length) thoughtSignatures.push(...result.thoughtSignatures);
@@ -442,9 +446,11 @@ export class AgentLoop {
           const jsonCall = toolCalls.find(c => c.function.name === 'json');
           if (jsonCall?.function?.arguments) {
             content += jsonCall.function.arguments;
+            stepText += jsonCall.function.arguments;
             toolCalls = toolCalls.filter(c => c !== jsonCall);
           }
         }
+        answerText = stepText;
 
         const stepUsage = result.usage
           ? result.usage
@@ -500,6 +506,42 @@ export class AgentLoop {
 
         if (toolCalls.length === 0) {
           if (!finishReason) finishReason = result.finishReason || 'stop';
+          // A seam may reject the final answer and ask for one more attempt
+          // (structured-output validation). The rejected answer and the
+          // correction go into the transcript, and the answer starts over, so
+          // the run's content is the accepted attempt alone. Only while a
+          // round is left; otherwise the seam sees `canRetry: false` and the
+          // answer stands as it is.
+          const canRetry = !forceFinish && iteration < maxRounds;
+          const review = await runHooks(seams, 'onAnswer', ctx, {
+            content,
+            stepText,
+            finishReason,
+            iteration,
+            canRetry
+          });
+          if (canRetry && typeof review?.retry === 'string' && review.retry) {
+            if (review.error) {
+              this._ledger(ledgerId, RUN_LOG_EVENTS.ERROR, {
+                step: iteration,
+                code: String(review.error.code || 'ANSWER_REJECTED'),
+                message: String(review.error.message || 'Answer rejected'),
+                recoverable: true
+              });
+            }
+            // Providers refuse an empty assistant message; an empty answer
+            // is still an answer the correction refers to.
+            ctx.messages.push({ role: 'assistant', content: stepText || '(no answer)' });
+            ctx.messages.push(nudgeMessage(review.retry));
+            this._ledger(ledgerId, RUN_LOG_EVENTS.MESSAGE_USER, {
+              step: iteration,
+              content: review.retry,
+              synthetic: 'nudge'
+            });
+            content = '';
+            finishReason = null;
+            continue;
+          }
           break;
         }
 

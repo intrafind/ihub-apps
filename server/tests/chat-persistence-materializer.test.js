@@ -642,6 +642,71 @@ describe('chatMaterializer: the order the two writes become visible', () => {
   });
 });
 
+describe('chatMaterializer: documents behind the answer', () => {
+  const document = {
+    document_id: 'sp-7f3a9c11',
+    title: 'Supplier contract ACME',
+    additional_document_metadata: {
+      id: 'sp-7f3a9c11',
+      'accessInfo.deepLink': 'https://sp.example/acme.pdf',
+      sourceType: ['SharePoint'],
+      unrelated: 'field the panel never reads'
+    },
+    links: [
+      { type: 'ACCESS', documentId: 'sp-7f3a9c11', searchProfile: 'sales' },
+      { type: 'OTHER', href: 'https://elsewhere.example' }
+    ],
+    score: 12.5
+  };
+
+  it('stores the citations with the answer, only the fields the panel reads', async () => {
+    await withRepository(async ({ repository }) => {
+      await userTurn(repository);
+      await assistantTurn(repository, {
+        citations: {
+          references: [
+            { document_id: 'sp-7f3a9c11', content: 'Notice period: three months.', index: 1 }
+          ],
+          resultItems: [document]
+        }
+      });
+      const { messages } = await repository.getMessages(CHAT_ID);
+      assert.deepEqual(messages.at(-1).citations, {
+        references: [
+          { document_id: 'sp-7f3a9c11', content: 'Notice period: three months.', index: 1 }
+        ],
+        resultItems: [
+          {
+            document_id: 'sp-7f3a9c11',
+            title: 'Supplier contract ACME',
+            additional_document_metadata: {
+              id: 'sp-7f3a9c11',
+              'accessInfo.deepLink': 'https://sp.example/acme.pdf',
+              sourceType: ['SharePoint']
+            },
+            links: [{ type: 'ACCESS', documentId: 'sp-7f3a9c11', searchProfile: 'sales' }]
+          }
+        ]
+      });
+    });
+  });
+
+  it('a turn whose citations list nothing stores no field', async () => {
+    await withRepository(async ({ repository }) => {
+      await userTurn(repository);
+      await assistantTurn(repository, { citations: null });
+      const { messages } = await repository.getMessages(CHAT_ID);
+      assert.equal('citations' in messages.at(-1), false);
+    });
+    await withRepository(async ({ repository }) => {
+      await userTurn(repository);
+      await assistantTurn(repository, { citations: { references: [], resultItems: [] } });
+      const { messages } = await repository.getMessages(CHAT_ID);
+      assert.equal('citations' in messages.at(-1), false);
+    });
+  });
+});
+
 describe('chatMaterializer: MCP App views', () => {
   const view = {
     callId: 'call_1',

@@ -3220,6 +3220,9 @@
     "untitledDocument": "Document",
     "referenced": "Referenced",
     "mentioned": "Mentioned",
+    "showMoreDocuments_one": "Show {{count}} more document",
+    "showMoreDocuments_other": "Show {{count}} more documents",
+    "showFewerDocuments": "Show fewer documents",
     "passages": "{{count}} passage",
     "passages_plural": "{{count}} passages",
     "openExternal": "Open in browser",
@@ -3318,7 +3321,8 @@
     "noCompatibleModels": "No compatible AI models found for this app. The app requires specific model features that are not available. Please contact your administrator.",
     "noModelIdProvided": "No model selected. Please select an AI model to continue.",
     "noModelsForUser": "You don't have permission to access any AI models. Please contact your administrator to request access.",
-    "malformedModelResponse": "The AI model returned an incomplete response and no answer could be generated. This can happen intermittently — please try sending your message again."
+    "malformedModelResponse": "The AI model returned an incomplete response and no answer could be generated. This can happen intermittently — please try sending your message again.",
+    "outputValidationFailed": "The AI model's answer did not match the required output format."
   },
   "toolErrors": {
     "MISSING_URL": "URL parameter is required.",
