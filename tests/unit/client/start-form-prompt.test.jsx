@@ -100,6 +100,22 @@ describe('renderStartFormPrompt', () => {
     );
   });
 
+  test('fills {{content}} with the text the chat was opened with', () => {
+    expect(renderStartFormPrompt(APP, values, 'en', '  Keep it brief ')).toBe(
+      'Write a follow-up email to Ada about the Q3 report.\n\nKeep it brief'
+    );
+  });
+
+  test('appends that text to a template without {{content}}', () => {
+    const app = { ...APP, prompt: { en: 'To: {{recipient}}' } };
+    expect(renderStartFormPrompt(app, values, 'en', 'Keep it brief')).toBe(
+      'To: Ada\n\nKeep it brief'
+    );
+    expect(renderStartFormPrompt({ ...APP, prompt: undefined }, values, 'en', 'Hi')).toBe(
+      'Email type: Follow-up\nRecipient: Ada\nSubject: the Q3 report\n\nHi'
+    );
+  });
+
   test('without a template, lists the answers with their labels', () => {
     const app = { ...APP, prompt: undefined };
     expect(renderStartFormPrompt(app, { ...values, subject: ' ' }, 'de')).toBe(

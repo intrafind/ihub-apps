@@ -443,6 +443,7 @@ class ChatService {
         appId: app?.id,
         modelId: model?.id,
         settings: persist.settings,
+        variables: persist.variables,
         runId,
         content: persist.content,
         // The only client id on the wire is the exchange id of the assistant

@@ -1,5 +1,5 @@
 import '@testing-library/jest-dom';
-import { act, fireEvent, render, screen } from '@testing-library/react';
+import { act, fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { MemoryRouter, Route, Routes } from 'react-router-dom';
 
 /**
@@ -70,12 +70,13 @@ jest.mock('../../../client/src/shared/hooks/useEventSource', () => ({
   }
 }));
 
-// A transcript that lives in this tab: every request posts the whole history,
-// so what earlier turns carry is visible in the payload.
+// By default a transcript that lives in this tab: every request posts the
+// whole history, so what earlier turns carry is visible in the payload.
+const mockPersistence = { on: false };
 jest.mock('../../../client/src/shared/hooks/useChats', () => ({
   __esModule: true,
   invalidateChatsCache: jest.fn(),
-  useChatPersistence: () => false,
+  useChatPersistence: () => mockPersistence.on,
   useChatPersistenceResolving: () => false
 }));
 
@@ -118,7 +119,7 @@ jest.mock('../../../client/src/shared/hooks/useAppSettings', () => ({
 
 // Upload state held in real React state, so a file picked in the form shows up
 // in what the page sends.
-const mockUpload = { config: { enabled: false, localUploadEnabled: false } };
+const mockUpload = { config: { enabled: false, localUploadEnabled: false }, dropped: null };
 jest.mock('../../../client/src/shared/hooks/useFileUploadHandler', () => {
   const React = require('react');
   return {
@@ -148,7 +149,7 @@ jest.mock('../../../client/src/features/upload/components/UnifiedUploader', () =
   __esModule: true,
   default: ({ onFileSelect, children }) => (
     <div data-testid="drop-target">
-      <button type="button" onClick={() => onFileSelect(DROPPED)}>
+      <button type="button" onClick={() => onFileSelect(mockUpload.dropped)}>
         drop a file
       </button>
       {children}
@@ -264,10 +265,23 @@ jest.mock('../../../client/src/features/chat/components/AIDisclaimerBanner', () 
   __esModule: true,
   default: () => null
 }));
-jest.mock('../../../client/src/features/chat/components/CompareModeView', () => ({
-  __esModule: true,
-  default: () => null
-}));
+// The compare view renders the form it is handed and records what is
+// broadcast to its panels.
+const mockCompare = { sent: [] };
+jest.mock('../../../client/src/features/chat/components/CompareModeView', () => {
+  const React = require('react');
+  return {
+    __esModule: true,
+    default: React.forwardRef(function MockCompareModeView({ startForm }, ref) {
+      React.useImperativeHandle(ref, () => ({
+        sendMessage: message => mockCompare.sent.push(message),
+        clearAll: () => {},
+        cancelAll: () => {}
+      }));
+      return <div data-testid="compare-view">{startForm}</div>;
+    })
+  };
+});
 jest.mock('../../../client/src/features/chat/components/StarterPromptsView', () => ({
   __esModule: true,
   default: () => <div data-testid="starter-prompts" />
@@ -298,7 +312,11 @@ jest.mock('../../../client/src/features/chat/components/ChatInput', () => ({
 }));
 
 const AppChat = require('../../../client/src/features/apps/pages/AppChat').default;
-const { sendAppChatMessage } = require('../../../client/src/api');
+const { fetchChat, sendAppChatMessage } = require('../../../client/src/api');
+const {
+  decodeAudioFileToBuffer
+} = require('../../../client/src/features/upload/utils/fileProcessing');
+const { transcribeAudioBuffer } = require('../../../client/src/utils/transcribeAudioBuffer');
 
 const APP = {
   id: 'acme',
@@ -321,12 +339,13 @@ const APP = {
   startForm: { enabled: true, submitLabel: { en: 'Draft it' } }
 };
 
-function renderApp(app = APP) {
-  window.history.replaceState({}, '', '/apps/acme');
+function renderApp(app = APP, url = '/apps/acme') {
+  window.history.replaceState({}, '', url);
   return render(
-    <MemoryRouter initialEntries={['/apps/acme']}>
+    <MemoryRouter initialEntries={[url]}>
       <Routes>
         <Route path="/apps/:appId" element={<AppChat preloadedApp={app} />} />
+        <Route path="/apps/:appId/c/:chatId" element={<AppChat preloadedApp={app} />} />
       </Routes>
     </MemoryRouter>
   );
@@ -372,6 +391,10 @@ beforeEach(() => {
   mockHeader.props = null;
   mockMessageList.props = null;
   mockUpload.config = { enabled: false, localUploadEnabled: false };
+  mockUpload.dropped = DROPPED;
+  mockPersistence.on = false;
+  mockCompare.sent.length = 0;
+  fetchChat.mockReset();
   sendAppChatMessage.mockClear();
   sessionStorage.clear();
 });
@@ -419,7 +442,7 @@ describe('AppChat with a start form', () => {
       role: 'user',
       content: 'Write to Ada about the Q3 report.',
       promptTemplate: null,
-      // Still sent: the system prompt reads them.
+      // Sent once, with the form: the server keeps them for the system prompt.
       variables: { recipient: 'Ada', subject: 'the Q3 report' }
     });
 
@@ -435,10 +458,13 @@ describe('AppChat with a start form', () => {
       'Write to Ada about the Q3 report.',
       'Make it shorter'
     ]);
+    // The first message still carries the variables in the history; the
+    // follow-up itself sets none — the server uses the ones the chat has.
+    expect(second[0].variables).toEqual({ recipient: 'Ada', subject: 'the Q3 report' });
     expect(second[second.length - 1]).toMatchObject({
       content: 'Make it shorter',
       promptTemplate: null,
-      variables: { recipient: 'Ada', subject: 'the Q3 report' }
+      variables: {}
     });
     expect(second.some(m => m.promptTemplate)).toBe(false);
     expect(screen.queryByTestId('start-form')).toBeNull();
@@ -461,7 +487,9 @@ describe('AppChat with a start form', () => {
     expect(resent).toHaveLength(1);
     expect(resent[0]).toMatchObject({
       content: 'Write to Ada about the Q3 report.',
-      promptTemplate: null
+      promptTemplate: null,
+      // Still the form's message, so it still sets the variables.
+      variables: { recipient: 'Ada', subject: 'the Q3 report' }
     });
   });
 
@@ -481,6 +509,92 @@ describe('AppChat with a start form', () => {
     });
   });
 
+  test('a file that is transcribed first is followed by the rendered prompt', async () => {
+    const audio = { type: 'audio', fileName: 'call.mp3', base64: 'data:audio/mpeg;base64,AA' };
+    mockUpload.config = { enabled: true, localUploadEnabled: true };
+    mockUpload.dropped = audio;
+    decodeAudioFileToBuffer.mockResolvedValue({ duration: 5 });
+    transcribeAudioBuffer.mockResolvedValue('Notes from the call');
+    renderApp({ ...APP, transcription: { enabled: true, modelId: 'voxtral' } });
+    await screen.findByTestId('start-form');
+    fireEvent.click(screen.getByRole('button', { name: 'drop a file' }));
+
+    await fillAndSend();
+    // The transcript lands first; the prompt then goes out on its own.
+    await waitFor(() => expect(mockStream.opened).toBe(1));
+    await answerTurn('run-1');
+    const sent = requestMessages(0);
+    expect(sent.map(m => [m.role, m.content])).toEqual([
+      ['user', '🎙 call.mp3'],
+      ['assistant', 'Notes from the call'],
+      ['user', 'Write to Ada about the Q3 report.']
+    ]);
+    expect(sent[2].promptTemplate).toBeNull();
+    expect(sent[2].variables).toEqual({ recipient: 'Ada', subject: 'the Q3 report' });
+    expect(transcribeAudioBuffer).toHaveBeenCalledTimes(1);
+  });
+
+  test('text the chat was opened with is shown in the form and sent as {{content}}', async () => {
+    renderApp(APP, '/apps/acme?prefill=Keep%20it%20brief&send=true');
+    await screen.findByTestId('start-form');
+
+    // Auto-send waits for the form instead of firing into a missing composer.
+    await act(async () => {
+      await new Promise(resolve => setTimeout(resolve, 200));
+    });
+    expect(mockStream.opened).toBe(0);
+    expect(screen.getByLabelText('Message')).toHaveValue('Keep it brief');
+
+    await fillAndSend();
+    await answerTurn('run-1');
+    expect(requestMessages(0)[0].content).toBe(
+      'Write to Ada about the Q3 report.\n\nKeep it brief'
+    );
+    // Consumed: the composer starts empty.
+    expect(screen.getAllByTestId('composer-input')[0]).toHaveValue('');
+  });
+
+  test('in compare mode, one form is sent to every panel', async () => {
+    renderApp();
+    await screen.findByTestId('start-form');
+
+    act(() => mockHeader.props.onCompareModeChange(true));
+    // One form, inside the compare view; no composer and no variables panel.
+    expect(screen.getByTestId('compare-view')).toContainElement(screen.getByTestId('start-form'));
+    expect(screen.queryByTestId('composer')).toBeNull();
+    expect(screen.queryByText('pages.appChat.inputParameters')).toBeNull();
+
+    await fillAndSend();
+    expect(mockCompare.sent).toHaveLength(1);
+    expect(mockCompare.sent[0].apiMessage).toMatchObject({
+      content: 'Write to Ada about the Q3 report.',
+      promptTemplate: null,
+      variables: { recipient: 'Ada', subject: 'the Q3 report' }
+    });
+    expect(screen.queryByTestId('start-form')).toBeNull();
+
+    // A follow-up goes to the panels as typed, without the variables.
+    fireEvent.change(screen.getAllByTestId('composer-input')[0], { target: { value: 'Shorter' } });
+    fireEvent.submit(screen.getAllByTestId('composer')[0]);
+    expect(mockCompare.sent[1].apiMessage).toMatchObject({
+      content: 'Shorter',
+      promptTemplate: null
+    });
+    expect(mockCompare.sent[1].apiMessage.variables).toBeUndefined();
+
+    // The regular chat was never started: leaving compare mode shows its form.
+    act(() => mockHeader.props.onCompareModeChange(false));
+    expect(await screen.findByTestId('start-form')).toBeInTheDocument();
+    expect(mockCompare.sent).toHaveLength(2);
+  });
+
+  test('shows a plain-text greeting above the form', async () => {
+    renderApp({ ...APP, greeting: 'Tell me about the email' });
+    await screen.findByTestId('start-form');
+
+    expect(screen.getByText('Tell me about the email')).toBeInTheDocument();
+  });
+
   test('auto-start waits for the form', async () => {
     jest.useFakeTimers();
     try {
@@ -493,6 +607,44 @@ describe('AppChat with a start form', () => {
     } finally {
       jest.useRealTimers();
     }
+  });
+});
+
+describe('a stored chat, reopened', () => {
+  const STORED = [
+    { id: 'srv-1', role: 'user', content: 'Write to Grace about the budget.' },
+    { id: 'srv-2', role: 'assistant', content: 'Dear Grace, …' }
+  ];
+
+  test('continues without the form and without resending the variables', async () => {
+    mockPersistence.on = true;
+    fetchChat.mockResolvedValue({
+      chat: { id: 'chat-stored', variables: { recipient: 'Grace', subject: 'the budget' } },
+      messages: STORED
+    });
+    renderApp(APP, '/apps/acme/c/chat-stored');
+    await screen.findAllByTestId('composer');
+    expect(screen.queryByTestId('start-form')).toBeNull();
+
+    fireEvent.change(screen.getAllByTestId('composer-input')[0], { target: { value: 'Shorter' } });
+    fireEvent.submit(screen.getAllByTestId('composer')[0]);
+    await answerTurn('run-1');
+
+    // A stored chat posts only the new message; the server has the variables.
+    expect(requestMessages(0)).toEqual([
+      expect.objectContaining({ content: 'Shorter', promptTemplate: null, variables: {} })
+    ]);
+  });
+
+  test('puts the stored variables back in the panel of an app without a form', async () => {
+    mockPersistence.on = true;
+    fetchChat.mockResolvedValue({
+      chat: { id: 'chat-stored', variables: { recipient: 'Grace' } },
+      messages: STORED
+    });
+    renderApp({ ...APP, startForm: undefined }, '/apps/acme/c/chat-stored');
+
+    expect(await screen.findByPlaceholderText('Who')).toHaveValue('Grace');
   });
 });
 

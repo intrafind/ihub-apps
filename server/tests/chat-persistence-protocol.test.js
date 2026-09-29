@@ -404,6 +404,51 @@ describe('POST /api/apps/:appId/chat/:chatId: the server owns the history', () =
     });
   });
 
+  it('gives a follow-up that sets no variables the ones the chat stored', async () => {
+    const chatId = 'chat-variables-follow-up';
+    await seedChat(chatId);
+    await getChatRepository().updateChat(chatId, { variables: { recipient: 'Ada' } });
+    // Only an app that declares variables has any to look up.
+    configCache.setCacheEntry('config/apps.json', [
+      { id: APP_ID, variables: [{ name: 'recipient', label: { en: 'Recipient' }, type: 'string' }] }
+    ]);
+
+    try {
+      await withPreparedRequests(async calls => {
+        await postChat({
+          chatId,
+          body: { messages: [{ role: 'user', content: 'make it shorter', variables: {} }] }
+        });
+
+        const posted = calls[0].messages[calls[0].messages.length - 1];
+        assert.equal(posted.content, 'make it shorter');
+        assert.deepEqual(posted.variables, { recipient: 'Ada' });
+        // For the system prompt only: the app's `prompt` is not rendered again.
+        assert.equal(posted.promptTemplate, undefined);
+      });
+    } finally {
+      configCache.setCacheEntry('config/apps.json', []);
+    }
+  });
+
+  it('records the variables a turn sets, for the ones after it', async () => {
+    const chatId = 'chat-variables-set';
+    await seedChat(chatId);
+
+    await withRecordedTurns(async calls => {
+      await postChat({
+        chatId,
+        body: {
+          messages: [
+            { role: 'user', content: 'Write to Grace.', variables: { recipient: 'Grace' } }
+          ]
+        }
+      });
+
+      assert.deepEqual(calls[0].persistence?.variables, { recipient: 'Grace' });
+    });
+  });
+
   it('assembles the same history on the streaming path', async () => {
     // Both branches of the handler build their own `prepareChatRequest` call;
     // the substitution has to be on each of them.

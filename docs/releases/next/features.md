@@ -109,9 +109,13 @@ continues like any other chat — follow-up messages are sent as typed, without 
 added again.
 
 - Switch it on under **Admin → Apps → (app) → Variables → Start chats with a form**, and
-  optionally give the send button its own label (default: **Start**).
+  optionally give the send button its own label per language (default: **Start**).
 - The form shows a drop zone for files when the app allows uploads.
 - Required variables must be filled in before the form can be sent.
+- Works in the Outlook add-in and the browser extension too, with the email or page going along
+  with the form's message. In compare mode, one form is sent to both models.
 - A new chat, or clearing the chat, shows the form again.
-- Compare mode, the Outlook add-in and the browser extension are unchanged: they ask for the
-  variables as before and fill in the template for every message.
+- The variables are kept with the chat, so follow-up messages no longer send them and a chat
+  reopened from the chat history continues with them.
+- Also for apps that show their variables beside the chat: reopening a chat now puts its values
+  back in the variables panel instead of the app's defaults.

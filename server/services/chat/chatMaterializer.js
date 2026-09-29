@@ -226,6 +226,8 @@ function messageError(summary) {
  * @param {string} [params.modelId]
  * @param {Object} [params.settings] - How this turn was answered (style, tools,
  *   websearch, thinking …), so reopening the chat restores it
+ * @param {Object} [params.variables] - App variables this turn set; later turns
+ *   and a reopened chat read them from the chat instead of resending them
  * @param {string} params.runId
  * @param {string} params.content - raw text of the new user message
  * @param {string} [params.clientMessageId] - client exchange id, for reconciling an
@@ -243,6 +245,7 @@ export async function materializeUserTurn({
   appId,
   modelId,
   settings,
+  variables,
   runId,
   content,
   clientMessageId,
@@ -280,6 +283,8 @@ export async function materializeUserTurn({
       // How the user has this chat set up right now. The repository merges,
       // so a turn that changed one toggle does not reset the others.
       ...(settings ? { settings } : {}),
+      // Replaces the stored set; a turn without variables keeps it.
+      ...(variables ? { variables } : {}),
       // A chat opened by an empty auto-start turn has no title yet; the first
       // message carrying text names it. A title the user set is never touched.
       ...(!chat.title && title && !chat.titleSetByUser ? { title } : {})

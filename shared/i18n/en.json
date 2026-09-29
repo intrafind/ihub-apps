@@ -365,6 +365,7 @@
       "newChat": "New Chat",
       "startForm": {
         "submit": "Start",
+        "message": "Message",
         "attachments": "Attachments",
         "dropZone": "Drag and drop files here, or click to browse"
       }

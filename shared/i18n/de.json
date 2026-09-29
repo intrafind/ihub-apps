@@ -378,6 +378,7 @@
       "newChat": "Neuer Chat",
       "startForm": {
         "submit": "Starten",
+        "message": "Nachricht",
         "attachments": "Anhänge",
         "dropZone": "Dateien hierher ziehen oder zum Auswählen klicken"
       }

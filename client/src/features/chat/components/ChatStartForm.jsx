@@ -19,13 +19,17 @@ import { getMissingRequiredVariables } from '../utils/startForm';
  * @param {Array<Object>} props.localizedVariables - `app.variables` with localized labels
  * @param {Object} props.variables - Variable name → entered value
  * @param {Function} props.onVariablesChange - Receives the new variables object
+ * @param {string} [props.message=''] - Text the chat was opened with (`?prefill=`),
+ *   sent as the template's `{{content}}`; its field only shows when there is some
+ * @param {Function} [props.onMessageChange] - Receives the edited text
  * @param {Object} props.uploadConfig - From `useFileUploadHandler().createUploadConfig`
  * @param {Object|Array|null} props.selectedFile - Attached file(s)
  * @param {Function} props.onFileSelect - Receives the new file selection (or null)
  * @param {Function} props.onSubmit - Called with the submit event once the form is valid
  * @param {boolean} [props.canSubmit=true] - False while there is nothing to send yet
  * @param {boolean} [props.isProcessing=false]
- * @param {Object|null} [props.welcomeMessage] - The app greeting (`{ title, subtitle }`)
+ * @param {Object|string|null} [props.welcomeMessage] - The app greeting (`{ title, subtitle }`
+ *   or a plain title)
  * @param {string|null} [props.errorMessage] - Shown above the send button
  * @param {string} props.currentLanguage
  */
@@ -34,6 +38,8 @@ function ChatStartForm({
   localizedVariables,
   variables,
   onVariablesChange,
+  message = '',
+  onMessageChange,
   uploadConfig,
   selectedFile,
   onFileSelect,
@@ -47,6 +53,9 @@ function ChatStartForm({
   const { t } = useTranslation();
   const openDialogRef = useRef(null);
   const [missing, setMissing] = useState([]);
+  // Stays once shown, so clearing the prefilled text does not remove its field.
+  const [messageEdited, setMessageEdited] = useState(false);
+  const showMessage = Boolean(message) || messageEdited;
 
   const files = useMemo(
     () => (!selectedFile ? [] : Array.isArray(selectedFile) ? selectedFile : [selectedFile]),
@@ -58,9 +67,11 @@ function ChatStartForm({
     t('pages.appChat.startForm.submit', 'Start');
 
   const greeting =
-    welcomeMessage && typeof welcomeMessage === 'object'
-      ? { title: welcomeMessage.title || '', subtitle: welcomeMessage.subtitle || '' }
-      : null;
+    typeof welcomeMessage === 'string'
+      ? { title: welcomeMessage, subtitle: '' }
+      : welcomeMessage && typeof welcomeMessage === 'object'
+        ? { title: welcomeMessage.title || '', subtitle: welcomeMessage.subtitle || '' }
+        : null;
 
   const handleVariablesChange = next => {
     onVariablesChange(next);
@@ -118,6 +129,27 @@ function ChatStartForm({
         setVariables={handleVariablesChange}
         localizedVariables={localizedVariables}
       />
+
+      {showMessage && (
+        <div className="flex flex-col">
+          <label
+            htmlFor="start-form-message"
+            className="mb-1 text-sm font-medium text-gray-700 dark:text-gray-300"
+          >
+            {t('pages.appChat.startForm.message', 'Message')}
+          </label>
+          <textarea
+            id="start-form-message"
+            value={message}
+            onChange={e => {
+              setMessageEdited(true);
+              onMessageChange?.(e.target.value);
+            }}
+            rows={3}
+            className="p-2 border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 rounded-sm focus:ring-indigo-500 focus:border-indigo-500"
+          />
+        </div>
+      )}
 
       {uploadEnabled && (
         <div className="flex flex-col gap-2">

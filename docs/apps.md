@@ -692,14 +692,19 @@ By default the variables sit in a panel next to the chat, and the `prompt` templ
 ```
 
 - **The form**: every variable of the app, the app's greeting above them if it has one, and — when the app allows uploads — a drop zone for files. Required variables must be filled in before the form can be sent.
-- **Sending it**: the `prompt` template is filled with the answers once and sent as the first user message, so the user sees exactly what was asked. `{{content}}` is left empty (the form has no message field); attached files go along with the message as they would from the chat input. Global prompt variables such as `{{user_name}}` are filled in by the server as usual.
-- **After that**: the form and the variables panel are gone. Follow-up messages are sent as typed, without the template. The answers are still sent with each message, so `{{variable}}` placeholders in the `system` prompt keep working.
+- **Sending it**: the `prompt` template is filled with the answers once and sent as the first user message, so the user sees exactly what was asked. Attached files, and in the Outlook add-in the email, go along with it as they would from the chat input. Global prompt variables such as `{{user_name}}` are filled in by the server as usual.
+- **`{{content}}`**: empty, unless the chat was opened with text — typed on the start page or passed as `?prefill=` — which the form then shows as a **Message** field and sends in place of `{{content}}`.
+- **After that**: the form is gone and the variables are shown nowhere else. Follow-up messages are sent as typed: no template, no variables. The server keeps the variables with the chat, so `{{variable}}` placeholders in the `system` prompt keep their values on every turn — also when the chat is reopened later from the chat history. See [Chat History → Data model](chat-persistence.md#data-model).
+- **Audio**: with [transcription](audio-file-support.md#two-audio-paths-multimodal-vs-voxtral-transcription) on, an audio file on the form is transcribed first; the rendered prompt follows the transcript on its own.
 - **Without a `prompt`**: the first message lists the answers as `Label: value` lines.
-- `submitLabel` is optional; without it the button reads **Start**.
+- `submitLabel` is optional and localized like any other text; without it the button reads **Start**.
 
-A new chat, or clearing the chat, shows the form again. Starter prompts and `autoStart` do not apply while an app starts with a form. Compare mode, the Outlook add-in and the browser extension are unchanged: they ask for the variables as before and fill in the template for every message.
+A new chat, or clearing the chat, shows the form again. Starter prompts and `autoStart` do not apply while an app starts with a form.
 
-Admins switch it on under **Admin → Apps → (app) → Variables → Start chats with a form**.
+- **Compare mode**: one form below the panels' model pickers; sending it sends the message to every panel.
+- **Outlook add-in and browser extension**: the task pane and the side panel open the app with the same form; the email or page stays in view and goes along with the message.
+
+Admins switch it on under **Admin → Apps → (app) → Variables → Start chats with a form**, where the button label is edited per language like the app's other texts.
 
 #### Settings Configuration
 
