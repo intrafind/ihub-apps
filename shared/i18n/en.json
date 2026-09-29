@@ -1953,6 +1953,7 @@
       "marketplace": "Marketplace",
       "mcpGateway": "MCP gateway",
       "mcpServers": "MCP servers",
+      "a2aAgents": "A2A agents",
       "telemetry": "Telemetry",
       "voiceInput": "Voice Input",
       "changelog": "What's New",
@@ -1979,8 +1980,12 @@
         "testError": "Test failed: {{error}}",
         "createTitle": "Create MCP server",
         "editTitle": "Edit {{id}}",
+        "resetRegistrationConfirm": "Reset the OAuth client registration of \"{{id}}\"? The next sign-in registers iHub afresh; connected users may have to connect again.",
+        "resetRegistrationDone": "OAuth client registration reset",
+        "resetRegistrationError": "Reset failed: {{error}}",
         "actions": {
-          "test": "Test connection"
+          "test": "Test connection",
+          "resetRegistration": "Reset OAuth client registration"
         },
         "test": {
           "button": "Test connection",
@@ -1989,15 +1994,24 @@
           "failed": "Connection failed: {{error}}",
           "noTools": "The server connected but offers no tools.",
           "rendersView": "interactive view",
+          "fileInput": "file input: {{params}}",
+          "fileInputHint": "Receives a chat attachment of the current message as a file.",
           "showMore": "Show more",
-          "showLess": "Show less"
+          "showLess": "Show less",
+          "authRequired": "This server needs each user to sign in. Connect your own account to test it and load its tools.",
+          "authRequiredUnsaved": "This server needs each user to sign in. Save it, then connect your own account to test it and load its tools.",
+          "connect": "Connect my account",
+          "accountConnected": "Your account is connected to {{id}}. Its tools are loaded in the background; test the connection to refresh them.",
+          "accountConnectFailed": "Connecting your account failed ({{code}})."
         },
         "status": {
           "unknown": "unknown",
           "unhealthy": "unhealthy",
           "connected": "connected ({{count}} tools)",
           "idle": "idle",
-          "disabled": "disabled"
+          "disabled": "disabled",
+          "connectedUsers_one": "{{count}} user connected",
+          "connectedUsers_other": "{{count}} users connected"
         },
         "form": {
           "id": "ID",
@@ -2019,6 +2033,8 @@
           "password": "Password",
           "toolPrefix": "Tool prefix",
           "timeout": "Timeout (ms)",
+          "maxFileSizeMB": "Max. file size for tools (MB)",
+          "maxFileSizeMBHint": "Largest chat attachment handed to a tool parameter that takes a file.",
           "allowedTools": "Tools offered to apps",
           "appsEnabled": "Render interactive views (MCP Apps)",
           "appsEnabledHint": "Advertise the MCP Apps extension and show the interactive views this server's tools declare inline in the chat. Turn off to get text-only results.",
@@ -2036,7 +2052,16 @@
           "allowedToolsHint": "Apps enable this server as a whole; they get exactly the tools allowed here. Users see the server as a single entry in the chat.",
           "allowedToolsAll": "All tools the server offers",
           "allowedToolsSelected": "Only the tools I select",
-          "allowedToolsManual": "Tool names as the server calls them, comma-separated. Test the connection to pick them from a list instead."
+          "allowedToolsManual": "Tool names as the server calls them, comma-separated. Test the connection to pick them from a list instead.",
+          "authOauthUser": "OAuth — each user signs in",
+          "oauthUserHttpOnly": "Per-user sign-in is available for the Streamable HTTP and SSE transports only.",
+          "oauthUserHint": "Every user connects their own account (authorization code + PKCE). iHub finds the authorization server and registers itself automatically. Behind a reverse proxy, set the MCP gateway public URL so the callback URL stays stable.",
+          "scopes": "Scopes (optional, comma-separated)",
+          "preregisteredClientId": "Client ID (optional)",
+          "preregisteredClientIdHint": "Only for a client registered at the authorization server by hand. Leave empty to let iHub register itself.",
+          "clientSecretOptional": "Client secret (optional)",
+          "clientSecretRefHint": "Select a stored credential profile holding the OAuth client secret.",
+          "authorizationServer": "Authorization server (optional override)"
         }
       },
       "gateway": {
@@ -2055,8 +2080,8 @@
         "transportStreamableHttpDesc": "Canonical MCP HTTP transport per spec 2025-03-26+. Supports session resumption via Mcp-Session-Id + Last-Event-ID.",
         "transportSse": "SSE (legacy)",
         "transportSseDesc": "Older transport kept for back-compat with MCP clients that have not migrated to Streamable HTTP. Replays in-flight requests rather than resuming on reconnect — disable if you care about idempotency.",
-        "transportA2a": "A2A (experimental)",
-        "transportA2aDesc": "Mount /a2a alongside /mcp using the same OAuth + mcp:* scope gate. Implements the well-defined subset of the A2A draft (agent/info, agent/skills, tasks/send). Stateful tasks return method-not-found until the spec stabilises.",
+        "transportA2a": "A2A (Agent-to-Agent) 0.3",
+        "transportA2aDesc": "Serve an Agent Card at /.well-known/agent-card.json and mount /a2a alongside /mcp, behind the same OAuth + mcp:* scope gate (personal API keys work too). Apps and workflows become the agent's skills; supports message/send, message/stream, tasks/get and tasks/cancel.",
         "expose": "Exposed resources",
         "exposeDesc": "Resource families surfaced via MCP. Per-OAuth-client allowlists further restrict what an individual caller sees.",
         "exposeTools": "iHub tools",
@@ -2090,7 +2115,9 @@
         "cimdApprovalMode": "New clients",
         "cimdApprovalModeDesc": "A trusted host publishes several different clients — Claude web, Claude Desktop, Claude Code — under one hostname. Requiring approval means each one waits for you: the user is told to ask an administrator, and the client appears here as pending. Clients people are already connected through are unaffected.",
         "cimdApprovalRequired": "Require approval (recommended)",
-        "cimdApprovalAuto": "Connect automatically"
+        "cimdApprovalAuto": "Connect automatically",
+        "a2aDefaultSkill": "A2A default skill",
+        "a2aDefaultSkillDesc": "The app or workflow a message runs when the A2A client names none, as app__<appId> or workflow__<workflowId>. Clients can always choose a skill with metadata.skillId or by using the per-skill endpoint /a2a/skills/<skillId>. Leave empty to require a choice (a caller with exactly one skill needs none)."
       },
       "catalog": {
         "open": "Browse catalog",
@@ -2124,6 +2151,90 @@
           "data": "Data & research",
           "finance": "Finance & payments"
         }
+      }
+    },
+    "a2a": {
+      "agents": {
+        "form": {
+          "authType": "Authentication type",
+          "authNone": "None",
+          "authApiKey": "API key in a header",
+          "authBearer": "Bearer token",
+          "authOauth": "OAuth (client credentials)",
+          "headerName": "Header name (optional)",
+          "headerNameHint": "Leave empty to use the header the agent's card names for its API key, or X-API-Key.",
+          "apiKey": "API key",
+          "apiKeyHint": "Select a stored credential profile holding the API key.",
+          "token": "Token",
+          "tokenHint": "Select a stored credential profile holding the bearer token.",
+          "tokenUrl": "Token URL",
+          "clientId": "Client ID",
+          "scope": "Scope (optional)",
+          "clientSecret": "Client secret",
+          "clientSecretHint": "Select a stored credential profile holding the OAuth client secret.",
+          "id": "ID",
+          "idHint": "Letters, digits, _ and - only (no __). Tools of this agent are named a2a__<id>__<skill>; apps enable the agent by this id, so it must differ from every tool and MCP server id.",
+          "name": "Name",
+          "description": "Description",
+          "enabled": "Enabled",
+          "cardUrl": "Agent Card URL",
+          "cardUrlHint": "HTTPS is required; plain HTTP works for localhost only. Private addresses need an entry in allowedHosts of a2aAgents.json.",
+          "authentication": "Authentication",
+          "timeout": "Timeout (ms)",
+          "streaming": "Streaming",
+          "streamingAuto": "When the agent supports it",
+          "streamingNever": "Never (poll instead)",
+          "pollInterval": "Poll interval (ms)",
+          "timingHint": "The timeout covers the whole call; a task still running then is cancelled. Long-running tasks are polled with tasks/get.",
+          "allowedSkills": "Skills offered to apps",
+          "allowedSkillsAll": "All skills on the card",
+          "allowedSkillsSelected": "Only the skills I select",
+          "allowedSkillsManual": "Skill ids as the card names them, comma-separated. Test the connection to pick them from a list instead."
+        },
+        "status": {
+          "disabled": "disabled",
+          "unknown": "unknown",
+          "unhealthy": "unreachable",
+          "connected": "card loaded ({{count}} skills)",
+          "idle": "not contacted yet"
+        },
+        "test": {
+          "failed": "Connection failed: {{error}}",
+          "success": "Agent Card loaded — {{count}} skills",
+          "cardName": "Agent",
+          "cardDescription": "Description",
+          "cardVersion": "Version",
+          "cardEndpoint": "Endpoint",
+          "cardStreaming": "Streaming",
+          "yes": "yes",
+          "no": "no",
+          "noSkills": "The agent lists no skills on its card.",
+          "running": "Fetching the Agent Card…",
+          "button": "Test connection"
+        },
+        "loadError": "Failed to load A2A agents: {{error}}",
+        "saveError": "Save failed: {{error}}",
+        "deleteConfirm": "Delete A2A agent \"{{id}}\"?",
+        "deleteError": "Delete failed: {{error}}",
+        "testError": "Test failed: {{error}}",
+        "title": "A2A agents (remote)",
+        "subtitle": "Remote agents iHub calls over the Agent-to-Agent (A2A) protocol. Each skill on an agent's card becomes a tool that apps can use.",
+        "create": "Add A2A agent",
+        "empty": "No A2A agents configured",
+        "emptyHint": "Add an agent by the URL of its Agent Card, usually <agent>/.well-known/agent-card.json.",
+        "actions": {
+          "test": "Test connection",
+          "edit": "Edit",
+          "delete": "Delete"
+        },
+        "createTitle": "Add A2A agent",
+        "editTitle": "Edit {{id}}"
+      },
+      "common": {
+        "saved": "Saved",
+        "deleted": "Deleted",
+        "testing": "Testing {{id}}...",
+        "testOk": "OK — {{name}} offers {{count}} skills"
       }
     },
     "telemetry": {
@@ -2288,6 +2399,19 @@
           "serverError": "Could not list tools: {{error}}",
           "helper": "Which tools a server offers is set under Integrations → MCP servers.",
           "legacySelection": "This app lists some of this server’s tools one by one. Turn the server off and on again to use the tools allowed on the server."
+        },
+        "a2aAgents": {
+          "loading": "Loading A2A agents…",
+          "error": "Failed to load A2A agents: {{error}}",
+          "empty": "No remote A2A agents are configured. Add one under Integrations → A2A agents to use it here.",
+          "remoteBadge": "remote agent",
+          "disabled": "disabled",
+          "skills": "Skills: {{skills}}",
+          "agentError": "Could not read the Agent Card: {{error}}",
+          "idConflict": "A tool or MCP server uses the id \"{{id}}\" too, so this app refers to the agent as \"{{reference}}\".",
+          "helper": "Each skill of an agent becomes a tool the model can call; the agent runs on its own servers. Which skills are offered is set under Integrations → A2A agents.",
+          "title": "Remote A2A agents",
+          "desc": "Choose the remote agents (Agent-to-Agent protocol) this app can delegate to. Users see each agent as a single entry in the chat."
         },
         "websearch": "Web Search",
         "websearchDesc": "Configure web search capabilities for this app",
@@ -3476,6 +3600,29 @@
           "mcpWorkflowsRun": "Run iHub workflows on your behalf",
           "mcpResourcesRead": "Read iHub sources and skills available to you"
         }
+      },
+      "mcp": {
+        "title": "MCP servers",
+        "description": "Tools of these servers act with your own account. Connect a server to use its tools in chats.",
+        "serverDescription": "MCP server",
+        "connect": "Connect {{name}}",
+        "connected": "{{name}} connected successfully.",
+        "connectionFailed": "Connecting {{name}} failed: {{message}}",
+        "disconnected": "{{name}} disconnected",
+        "disconnectFailed": "Failed to disconnect {{name}}: {{message}}",
+        "errors": {
+          "oauth_failed": "the sign-in was cancelled or refused",
+          "missing_code": "the sign-in returned no authorization code",
+          "invalid_state": "the sign-in link is invalid",
+          "state_expired": "the sign-in took too long, please start again",
+          "user_mismatch": "the sign-in was started by a different user",
+          "server_not_found": "the server is not available to you",
+          "exchange_failed": "the server did not accept the sign-in",
+          "discovery_failed": "the server's sign-in could not be found",
+          "registration_failed": "iHub could not register with the server",
+          "issuer_mismatch": "the sign-in answer came from another authorization server than expected",
+          "public_url_mismatch": "iHub was reached under another address than the one registered with the server; ask your administrator to set the MCP gateway public URL"
+        }
       }
     }
   },
@@ -4046,7 +4193,9 @@
   "mcpApps": {
     "caption": "Interactive view · {{name}}",
     "loading": "Loading interactive view…",
+    "embeddedMissing": "The tool result holds no view page.",
     "loadFailed": "The interactive view could not be loaded: {{error}}",
+    "authRequired": "Connect this server with your own account to see its interactive view.",
     "payloadOmitted": "This interactive view was too large to keep and cannot be shown again.",
     "unsupportedSurface": "Interactive views are not available in this window.",
     "exitFullscreen": "Exit full screen",
@@ -4178,5 +4327,12 @@
       "attachmentNotIncluded": "Attachment not included: {{name}}",
       "attachmentUnnamed": "file"
     }
+  },
+  "mcpConnect": {
+    "title": "Connect {{name}}",
+    "explanation": "{{name}} needs you to sign in with your own account before its tools can be used.",
+    "connect": "Connect",
+    "connected": "{{name}} is connected. Send your request again to use it.",
+    "failed": "Connecting {{name}} did not succeed. Try again."
   }
 }

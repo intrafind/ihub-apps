@@ -28,6 +28,11 @@ startup. Durable chats were the first consumer; the runtime stores followed.
 | `workflow-state`            | an execution's checkpoint, and what a resume reads           | the principal that started it | [Workflows](workflows.md)              |
 | `integration-conversations` | the iAssistant conversation a chat maps to                   | –                           | –                                        |
 | `runtime-imports`           | markers saying a one-time legacy import has already run       | –                           | [Run Ledger](run-ledger.md)              |
+| `a2a-tasks`                 | tasks of the inbound A2A endpoint, kept 24 hours after they finish | the calling principal | [MCP Integration](mcp-integration.md) |
+| `a2a-contexts`              | A2A conversations (`contextId`): bound skill and recent history, kept 7 days after the last message | the calling principal | [MCP Integration](mcp-integration.md) |
+| `a2a-client-contexts`       | conversations with remote A2A agents: the agent's `contextId` and a waiting `taskId` per user, chat and agent, kept 30 days after the last call | the user | [A2A agents](a2a-agents.md) |
+| `mcp-oauth-clients`         | how iHub is registered at each per-user OAuth MCP server's authorization server | – | [MCP Integration](mcp-integration.md) |
+| `mcp-tool-catalog`          | the last tool list of each per-user OAuth MCP server, readable without a token | – | [MCP Integration](mcp-integration.md) |
 | `config`, `apps`, `models`, `prompts`, `tools`, `workflows`, `agents`, `locales` | an installation's configuration, read and written where it already lives | – | [Configuration Storage](configuration.md) |
 
 `integration-conversations` is the smallest of them and the least visible: two

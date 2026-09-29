@@ -12,6 +12,9 @@ import request from 'supertest';
 let apps = [];
 const findTool = jest.fn();
 const hasServer = jest.fn(() => false);
+const connectionForUser = jest.fn();
+const withUserConnection = jest.fn();
+const connectUrlFor = jest.fn(id => `/api/mcp/oauth/authorize?serverId=${id}`);
 
 jest.unstable_mockModule('../../configCache.js', () => ({
   default: {
@@ -28,10 +31,11 @@ jest.unstable_mockModule('../../middleware/authRequired.js', () => ({
   }
 }));
 jest.unstable_mockModule('../../services/mcp/McpClientManager.js', () => ({
-  default: { findTool, hasServer }
+  default: { findTool, hasServer, connectionForUser, withUserConnection, connectUrlFor }
 }));
+const logInfo = jest.fn();
 jest.unstable_mockModule('../../utils/logger.js', () => ({
-  default: { info: jest.fn(), warn: jest.fn(), error: jest.fn(), debug: jest.fn() }
+  default: { info: logInfo, warn: jest.fn(), error: jest.fn(), debug: jest.fn() }
 }));
 
 const { default: registerMcpAppRoutes, resolveMcpApp } =
@@ -193,6 +197,69 @@ describe('GET /api/mcp-apps/resource', () => {
   });
 });
 
+describe('per-user OAuth servers', () => {
+  const oauthConn = () => ({ ...conn, config: { id: 'excalidraw', auth: { type: 'oauthUser' } } });
+  const authRequired = () =>
+    Object.assign(new Error('Sign-in required'), {
+      code: 'MCP_AUTH_REQUIRED',
+      serverId: 'excalidraw'
+    });
+
+  beforeEach(() => {
+    connectionForUser.mockReset();
+    withUserConnection.mockReset();
+    const shared = oauthConn();
+    findTool.mockImplementation(async id =>
+      id === VIEW_TOOL.id ? { conn: shared, tool: VIEW_TOOL } : null
+    );
+  });
+
+  it('answers "connect first" with 409, never 401 (which signs the user out of iHub)', async () => {
+    connectionForUser.mockRejectedValue(authRequired());
+    const res = await asUser(request(app).get('/api/mcp-apps/resource').query(ref));
+    expect(res.status).toBe(409);
+    expect(res.body).toEqual({
+      error: 'auth_required',
+      code: 'MCP_AUTH_REQUIRED',
+      connectUrl: '/api/mcp/oauth/authorize?serverId=excalidraw'
+    });
+  });
+
+  it("runs the view's requests on the caller's own connection, and maps a later sign-in loss to 409", async () => {
+    connectionForUser.mockResolvedValue(conn);
+    withUserConnection.mockImplementation(async (_id, _user, operation) => operation(conn));
+    const ok = await asUser(
+      request(app)
+        .post('/api/mcp-apps/tools/call')
+        .send({ ...ref, name: 'save_checkpoint', arguments: {} })
+    );
+    expect(ok.status).toBe(200);
+    expect(withUserConnection).toHaveBeenCalledWith(
+      'excalidraw',
+      expect.objectContaining({ id: 'u1' }),
+      expect.any(Function)
+    );
+
+    withUserConnection.mockRejectedValue(authRequired());
+    const lost = await asUser(
+      request(app)
+        .post('/api/mcp-apps/resources/read')
+        .send({ ...ref, uri: 'ui://excalidraw/data' })
+    );
+    expect(lost.status).toBe(409);
+    expect(lost.body.code).toBe('MCP_AUTH_REQUIRED');
+  });
+
+  it('answers a refresh that failed for a transient reason with 503', async () => {
+    connectionForUser.mockResolvedValue(conn);
+    withUserConnection.mockRejectedValue(
+      Object.assign(new Error('AS down'), { code: 'MCP_AUTH_REFRESH_FAILED' })
+    );
+    const res = await asUser(request(app).get('/api/mcp-apps/resource').query(ref));
+    expect(res.status).toBe(503);
+  });
+});
+
 describe('resolveMcpApp', () => {
   it('rejects ids that are not strings (a repeated query parameter arrives as an array)', async () => {
     const req = { user: { id: 'u1', permissions: {} } };
@@ -255,6 +322,92 @@ describe('POST /api/mcp-apps/tools/call', () => {
       request(app)
         .post('/api/mcp-apps/tools/call')
         .send({ ...ref })
+    );
+    expect(res.status).toBe(400);
+  });
+});
+
+describe('views embedded in the result of a tool without a declared view', () => {
+  const PLAIN_TOOL = {
+    id: 'excalidraw__show',
+    description: 'Show',
+    parameters: { type: 'object', properties: {} },
+    _mcp: { serverId: 'excalidraw', originalName: 'show' }
+  };
+  const plainRef = { appId: 'whiteboard', toolId: PLAIN_TOOL.id };
+
+  beforeEach(() => {
+    apps = [{ id: 'whiteboard', tools: ['excalidraw'] }];
+    findTool.mockImplementation(async id =>
+      id === PLAIN_TOOL.id ? { conn, tool: PLAIN_TOOL } : null
+    );
+  });
+
+  it('lets the view call app-callable tools of the same server', async () => {
+    const res = await asUser(
+      request(app)
+        .post('/api/mcp-apps/tools/call')
+        .send({ ...plainRef, name: 'save_checkpoint' })
+    );
+    expect(res.status).toBe(200);
+    expect(conn.callToolRaw).toHaveBeenCalledWith('save_checkpoint', {});
+  });
+
+  it('has no resources/read copy to serve', async () => {
+    const res = await asUser(request(app).get('/api/mcp-apps/resource').query(plainRef));
+    expect(res.status).toBe(404);
+    expect(conn.getUiResource).not.toHaveBeenCalled();
+  });
+
+  it('is refused for a server with MCP Apps disabled', async () => {
+    conn.config = { id: 'excalidraw', apps: { enabled: false } };
+    const res = await asUser(
+      request(app)
+        .post('/api/mcp-apps/tools/call')
+        .send({ ...plainRef, name: 'save_checkpoint' })
+    );
+    expect(res.status).toBe(404);
+    expect(conn.callToolRaw).not.toHaveBeenCalled();
+  });
+});
+
+describe('POST /api/mcp-apps/handshake', () => {
+  it('logs a legacy handshake for admins, naming the server and tool', async () => {
+    logInfo.mockClear();
+    const res = await asUser(
+      request(app)
+        .post('/api/mcp-apps/handshake')
+        .send({ ...ref, handshake: 'legacy' })
+    );
+    expect(res.status).toBe(204);
+    const entry = logInfo.mock.calls.find(([, meta]) => meta?.handshake === 'legacy');
+    expect(entry).toBeDefined();
+    expect(entry[1]).toMatchObject({
+      component: 'McpApps',
+      handshake: 'legacy',
+      appId: 'whiteboard',
+      viaToolId: 'excalidraw__create_view',
+      serverId: 'excalidraw',
+      tool: 'create_view',
+      userId: 'u1'
+    });
+  });
+
+  it('refuses a caller without access to the app', async () => {
+    apps = [];
+    const res = await asUser(
+      request(app)
+        .post('/api/mcp-apps/handshake')
+        .send({ ...ref, handshake: 'legacy' })
+    );
+    expect(res.status).toBe(403);
+  });
+
+  it('accepts only known handshake kinds', async () => {
+    const res = await asUser(
+      request(app)
+        .post('/api/mcp-apps/handshake')
+        .send({ ...ref, handshake: 'spec' })
     );
     expect(res.status).toBe(400);
   });

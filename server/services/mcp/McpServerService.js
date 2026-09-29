@@ -6,6 +6,7 @@ import {
 import { z } from 'zod';
 import configCache from '../../configCache.js';
 import { loadConfiguredTools, runTool } from '../../toolLoader.js';
+import { withTrustedToolContext } from '../../utils/toolCallContext.js';
 import { invokeAppNonStreaming } from './appInvoker.js';
 import { listMcpResources, readMcpResource } from './resourceAdapter.js';
 import { getVisibleToolIds, toolVisibleInSet } from './permissions.js';
@@ -217,6 +218,9 @@ function isToolAllowed(tool, expose, visibleToolIds) {
   // that would proxy another server's tools (and their credentials) to inbound
   // callers. loadConfiguredTools already excludes these, but guard anyway.
   if (tool._mcp) return false;
+  // Likewise for skills of remote A2A agents (#2546): iHub is their client,
+  // not a proxy that hands its agent credentials to inbound callers.
+  if (tool._a2a) return false;
   return toolVisibleInSet(tool.id, visibleToolIds);
 }
 
@@ -303,11 +307,10 @@ export async function buildMcpServer({ user, platform }) {
             // reject calls without an authenticated `user`/`chatId` in their
             // params. MCP args are schema-validated first, so they can never
             // spoof these fields — we set them last regardless.
-            const result = await runTool(tool.id, {
-              ...(args || {}),
-              user,
-              chatId: `mcp-${Date.now()}`
-            });
+            const result = await runTool(
+              tool.id,
+              withTrustedToolContext(args, { user, chatId: `mcp-${Date.now()}` })
+            );
             return toolSuccessResult(result);
           } catch (err) {
             logger.warn('MCP gateway tool call failed', {
@@ -393,7 +396,13 @@ export async function buildMcpServer({ user, platform }) {
             return toolErrorResult('access_denied: workflow not permitted for this caller');
           }
           try {
-            const result = await runTool(`workflow_${wf.id}`, args || {});
+            // The workflow runs as the authenticated caller (its per-user
+            // OAuth MCP calls use the caller's own token); the arguments can
+            // never name another user.
+            const result = await runTool(
+              `workflow_${wf.id}`,
+              withTrustedToolContext(args, { user, chatId: `mcp-${Date.now()}` })
+            );
             return toolSuccessResult(result);
           } catch (err) {
             logger.warn('MCP gateway workflow run failed', {

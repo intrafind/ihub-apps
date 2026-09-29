@@ -1467,6 +1467,90 @@ test('MCP App tool that fails without a result: the view is marked cancelled and
   assert.equal(summary.mcpApps.length, 1);
 });
 
+test('MCP tool without a declared view whose result embeds a ui:// page: tool/completed carries an embedded view', async t => {
+  const chatId = newChatId('mcp-app-embedded');
+  const frames = captureFrames(t, chatId);
+  const ticketTool = {
+    id: 'sn__render_ticket',
+    name: 'sn__render_ticket',
+    description: 'Show a ticket',
+    parameters: { type: 'object', properties: { id: { type: 'string' } } },
+    _mcp: { serverId: 'sn', originalName: 'render_ticket' }
+  };
+  const page = {
+    type: 'resource',
+    resource: {
+      uri: 'ui://sn/ticket',
+      mimeType: 'text/html',
+      text: '<html><script>window.TICKET_DATA = {"id":"INC1"}</script></html>'
+    }
+  };
+  const raw = { content: [{ type: 'text', text: 'Ticket INC1' }, page] };
+  const { service } = makeService(
+    [toolTurn([{ name: ticketTool.id, args: { id: 'INC1' } }]), textTurn('Shown.')],
+    {
+      runTool: async (_toolId, _params, options) => {
+        options?.onMcpAppResult?.(raw);
+        return 'Ticket INC1';
+      }
+    }
+  );
+
+  const summary = await runTurn(service, { chatId, prep: makePrep({ tools: [ticketTool] }) });
+
+  assertWellFormed(frames, { runId: summary.runId });
+  assert.equal(frame(frames, TOOL_STARTED).data.mcpApp, undefined, 'nothing to announce');
+  const done = frame(frames, TOOL_COMPLETED).data;
+  assert.deepEqual(done.mcpApp, {
+    callId: 'call_1',
+    toolId: ticketTool.id,
+    serverId: 'sn',
+    toolName: 'render_ticket',
+    resourceUri: 'ui://sn/ticket',
+    embedded: true,
+    args: { id: 'INC1' },
+    toolResult: raw
+  });
+  assert.deepEqual(summary.mcpApps, [done.mcpApp]);
+});
+
+test('MCP tool without a declared view and without an embedded page carries no view', async t => {
+  const chatId = newChatId('mcp-no-embedded');
+  const frames = captureFrames(t, chatId);
+  const plainTool = {
+    id: 'sn__list',
+    name: 'sn__list',
+    description: 'List',
+    parameters: { type: 'object', properties: {} },
+    _mcp: { serverId: 'sn', originalName: 'list' }
+  };
+  const { service } = makeService(
+    [toolTurn([{ name: plainTool.id, args: {} }]), textTurn('Done.')],
+    {
+      runTool: async (_toolId, _params, options) => {
+        options?.onMcpAppResult?.({
+          content: [
+            { type: 'text', text: 'x' },
+            // Not a view: another scheme, and HTML of another host's dialect.
+            {
+              type: 'resource',
+              resource: { uri: 'https://x/a', mimeType: 'text/html', text: '<p/>' }
+            },
+            {
+              type: 'resource',
+              resource: { uri: 'ui://sn/a', mimeType: 'text/html+skybridge', text: '<p/>' }
+            }
+          ]
+        });
+        return 'x';
+      }
+    }
+  );
+  const summary = await runTurn(service, { chatId, prep: makePrep({ tools: [plainTool] }) });
+  assert.equal(frame(frames, TOOL_COMPLETED).data.mcpApp, undefined);
+  assert.deepEqual(summary.mcpApps, []);
+});
+
 test('ordinary tools carry no MCP App view', async t => {
   const chatId = newChatId('no-mcp-app');
   const frames = captureFrames(t, chatId);

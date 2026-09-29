@@ -7,6 +7,8 @@ import { isFeatureEnabled } from './featureRegistry.js';
 import { isValidId } from './utils/pathSecurity.js';
 import { isToolSelected } from './utils/toolSelection.js';
 import mcpClientManager from './services/mcp/McpClientManager.js';
+import a2aClientManager from './services/a2a/A2aClientManager.js';
+import { markAgentIdConflicts } from './services/a2a/a2aTools.js';
 import { isBraveSearchConfigured } from './services/search/braveApiKey.js';
 import { isStaanSearchConfigured } from './services/search/staanApiKey.js';
 import logger from './utils/logger.js';
@@ -207,12 +209,61 @@ export async function discoverMcpTools() {
 }
 
 /**
- * Load tools from local configuration and MCP servers.
+ * Discover the skills of all configured remote A2A agents as tools via
+ * A2aClientManager (ids `a2a__<agentId>__<skill>`, marked with `_a2a`).
+ */
+export async function discoverA2aTools() {
+  try {
+    return await a2aClientManager.listAllTools();
+  } catch (error) {
+    logger.error('Error discovering A2A agent tools', { component: 'ToolLoader', error });
+    return [];
+  }
+}
+
+/** Agent ids whose id clash has been logged, so each is reported once. */
+const reportedA2aIdConflicts = new Set();
+
+/**
+ * Mark the skills of every A2A agent whose id is also a local tool's (base)
+ * id or an MCP server's id (`_a2a.idConflict`), so that reference keeps
+ * selecting only the local tool or MCP server and never silently grants the
+ * remote agent; `a2a__<agentId>` still selects the agent as a whole. The admin API refuses such ids; this covers a hand-edited
+ * config and a tool or MCP server added after the agent.
+ *
+ * @param {Array<Object>} a2aTools - Discovered A2A tools
+ * @param {Array<Object>} otherTools - Local and MCP tools
+ * @returns {Array<Object>} The A2A tools, clashing ones marked
+ */
+function guardA2aAgentIds(a2aTools, otherTools) {
+  if (!a2aTools.length) return a2aTools;
+  const { tools, conflicts } = markAgentIdConflicts(a2aTools, {
+    tools: otherTools,
+    mcpServers: configCache.getMcpServers?.()?.data?.servers || []
+  });
+  for (const [agentId, conflict] of conflicts) {
+    if (reportedA2aIdConflicts.has(agentId)) continue;
+    reportedA2aIdConflicts.add(agentId);
+    logger.warn(
+      'A2A agent id is also a tool or MCP server id; select the agent as a2a__<agentId>',
+      { component: 'ToolLoader', agentId, conflictKind: conflict.kind, conflictId: conflict.id }
+    );
+  }
+  return tools;
+}
+
+/**
+ * Load tools from local configuration, MCP servers and remote A2A agents.
  * @param {string} language - Optional language for localization
  */
 export async function loadTools(language = null) {
   const configured = await loadConfiguredTools(language);
-  const discovered = await discoverMcpTools();
+  const [mcpTools, discoveredA2aTools] = await Promise.all([
+    discoverMcpTools(),
+    discoverA2aTools()
+  ]);
+  const a2aTools = guardA2aAgentIds(discoveredA2aTools, [...configured, ...mcpTools]);
+  const discovered = [...mcpTools, ...a2aTools];
   const all = [...configured];
   for (const tool of discovered) {
     if (!all.find(t => t.id === tool.id)) {
@@ -669,6 +720,8 @@ export { localizeTools };
  *   MCP App view: receives the raw CallToolResult (structured content, `_meta`,
  *   `isError`) the view is drawn from. The return value stays the model-facing
  *   result either way.
+ * @param {AbortSignal} [options.signal] - The chat turn's abort signal. Remote
+ *   A2A agents honour it: a user stop aborts the request and cancels the task.
  */
 export async function runTool(toolId, params = {}, options = {}) {
   logger.info('Running tool', { component: 'ToolLoader', toolId });
@@ -800,6 +853,18 @@ export async function runTool(toolId, params = {}, options = {}) {
     return await mcpClientManager.callTool(toolId, params, {
       onRawResult: options.onMcpAppResult
     });
+  }
+
+  // Skills of remote A2A agents are dispatched through A2aClientManager.callTool.
+  if (tool._a2a) {
+    logger.info('Dispatching A2A agent tool call', {
+      component: 'ToolLoader',
+      toolId,
+      agentId: tool._a2a.agentId
+    });
+    // `signal` is the chat turn's abort signal: a user stop ends the remote
+    // request and cancels a running task.
+    return await a2aClientManager.callTool(toolId, params, { signal: options.signal });
   }
 
   // OpenAPI tools are dispatched through the OpenApiToolRunner.

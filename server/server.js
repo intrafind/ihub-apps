@@ -24,6 +24,7 @@ import registerGeneralRoutes from './routes/generalRoutes.js';
 import registerModelRoutes from './routes/modelRoutes.js';
 import registerToolRoutes from './routes/toolRoutes.js';
 import registerMcpAppRoutes from './routes/mcpAppRoutes.js';
+import registerMcpOAuthRoutes from './routes/mcpOAuth.js';
 import registerSkillRoutes from './routes/skillRoutes.js';
 import registerPageRoutes from './routes/pageRoutes.js';
 import registerRendererRoutes from './routes/rendererRoutes.js';
@@ -31,6 +32,7 @@ import registerAppSessionStartRoute from './routes/appSessionRoutes.js';
 import registerMagicPromptRoutes from './routes/magicPromptRoutes.js';
 import registerShortLinkRoutes from './routes/shortLinkRoutes.js';
 import registerOpenAIProxyRoutes from './routes/openaiProxy.js';
+import registerAppApiRoutes from './routes/appApi.js';
 import registerAuthRoutes from './routes/auth.js';
 import registerOAuthRoutes from './routes/oauth.js';
 import registerOAuthAuthorizeRoutes from './routes/oauthAuthorize.js';
@@ -589,6 +591,25 @@ if (cluster.isPrimary && workerCount > 1) {
     logger.warn('Failed to initialise MCP client manager', { component: 'Server', error });
   }
 
+  // Initialise the A2A client manager (remote A2A agents as tools) from the
+  // cached a2aAgents.json, on every worker; the singleton worker fetches the
+  // Agent Cards in the background, the others lazily on first use. Failure is
+  // non-fatal.
+  try {
+    const { default: a2aManager } = await import('./services/a2a/A2aClientManager.js');
+    await a2aManager.initialize(configCache.getA2aAgents().data);
+    if (ownsClusterSingletons) {
+      a2aManager.warmUp().catch(err => {
+        logger.warn('Initial A2A Agent Card fetch failed', {
+          component: 'Server',
+          error: err.message
+        });
+      });
+    }
+  } catch (error) {
+    logger.warn('Failed to initialise A2A client manager', { component: 'Server', error });
+  }
+
   // Start audit log cleanup scheduler
   if (ownsClusterSingletons) {
     try {
@@ -671,6 +692,7 @@ if (cluster.isPrimary && workerCount > 1) {
   registerModelRoutes(app, { getLocalizedError });
   registerToolRoutes(app);
   registerMcpAppRoutes(app);
+  registerMcpOAuthRoutes(app);
   registerSkillRoutes(app);
   registerPageRoutes(app);
   registerRendererRoutes(app);
@@ -682,6 +704,7 @@ if (cluster.isPrimary && workerCount > 1) {
     DEFAULT_TIMEOUT
   });
   registerOpenAIProxyRoutes(app);
+  registerAppApiRoutes(app, { getLocalizedError, DEFAULT_TIMEOUT });
   await registerAdminRoutes(app);
   registerShortLinkRoutes(app);
   await registerSwaggerRoutes(app);
