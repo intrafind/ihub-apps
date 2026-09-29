@@ -41,6 +41,7 @@ import { readMemoryBodyForPrompt } from '../../../agents/memory/memoryFile.js';
 import { getAppAsTools, stripAppToolsForAgent } from '../../chat/appToolsGateway.js';
 import { writeArtifactDirect } from '../../../agents/runtime/artifactStore.js';
 import { isFeatureEnabled } from '../../../featureRegistry.js';
+import { resolveMaxOutputTokens } from '../../../../shared/outputTokens.js';
 
 // Bound on the {{previousTaskResults}} digest baked into a per-task worker's
 // prompt (the synthesizer is exempt — it needs the full corpus). Keeps the
@@ -1476,7 +1477,7 @@ export class PromptNodeExecutor extends BaseNodeExecutor {
       )
     );
     const maxTokensPerRun = Math.max(0, Math.floor(Number(budgets.maxTokensPerRun) || 0));
-    const maxTokens = config.maxTokens || model.maxOutputTokens || 4096;
+    const maxTokens = config.maxTokens || resolveMaxOutputTokens(model);
     const language = context.language || 'en';
     const toolList = Array.isArray(tools) ? tools : [];
 

@@ -1,6 +1,7 @@
 import logger from '../utils/logger.js';
 import { createParser } from 'eventsource-parser';
 import { getReadableStream } from '../utils/streamUtils.js';
+import { DEFAULT_MAX_OUTPUT_TOKENS } from '../../shared/outputTokens.js';
 import { convertResponseToGeneric, clearStreamingState } from './toolCalling/index.js';
 
 /**
@@ -58,7 +59,7 @@ export class BaseAdapter {
     return {
       temperature: options.temperature || 0.7,
       stream: options.stream !== undefined ? options.stream : true,
-      maxTokens: options.maxTokens || 1024,
+      maxTokens: options.maxTokens || DEFAULT_MAX_OUTPUT_TOKENS,
       tools: options.tools || null,
       toolChoice: options.toolChoice,
       responseFormat: options.responseFormat || null,
