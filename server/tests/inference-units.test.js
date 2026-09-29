@@ -539,6 +539,9 @@ describe('structured output', () => {
     );
     assert.equal(review, null);
     assert.deepEqual(seam.verdict().value, { risk: 'low' });
+    // Its verdict belongs to the answer it checked, and to no other.
+    assert.equal(seam.verdictFor('{"risk":"low"}'), seam.verdict());
+    assert.equal(seam.verdictFor('{"risk":"high"}'), null);
   });
 });
 

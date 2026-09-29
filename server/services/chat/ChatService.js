@@ -635,7 +635,11 @@ class ChatService {
         mcpAuthPrompts,
         takePendingCall: () => turnSeam.takePendingCall(),
         structured: outputSeam
-          ? { validate: structuredOutput.validate, attempts: () => outputSeam.attempts() }
+          ? {
+              validate: structuredOutput.validate,
+              attempts: () => outputSeam.attempts(),
+              verdictFor: answer => outputSeam.verdictFor(answer)
+            }
           : null
       });
       // The ledger's terminal frame first, then the chat document.
@@ -856,10 +860,12 @@ class ChatService {
 
     // The output contract, checked on the answer the run ended with. A
     // passthrough answer never went through the seam, so this is its only
-    // check; for a model answer it repeats the seam's last verdict. Either
-    // way it is the answer alone that is checked — the final step's text, or
-    // the passthrough tool's output — not prose written before a tool call.
-    // Returns the terminal summary of a failed check, or null.
+    // check; a model answer the seam already judged keeps that verdict (a
+    // second run of the time-bounded pattern checks could disagree), and one
+    // it never saw is checked here. Either way it is the answer alone that is
+    // checked — the final step's text, or the passthrough tool's output — not
+    // prose written before a tool call. Returns the terminal summary of a
+    // failed check, or null.
     let structuredOutput;
     const checkStructuredOutput = async ({ passthrough = false } = {}) => {
       if (!structured) return null;
@@ -869,11 +875,13 @@ class ChatService {
           : typeof result.answerText === 'string'
             ? result.answerText
             : content;
-      let verdict;
-      try {
-        verdict = structured.validate(answer);
-      } catch (error) {
-        verdict = { valid: false, errors: [{ path: '', message: error.message }] };
+      let verdict = passthrough ? null : structured.verdictFor?.(answer) || null;
+      if (!verdict) {
+        try {
+          verdict = structured.validate(answer);
+        } catch (error) {
+          verdict = { valid: false, errors: [{ path: '', message: error.message }] };
+        }
       }
       const attempts = Math.max(1, structured.attempts?.() || 0);
       if (!verdict.valid) {

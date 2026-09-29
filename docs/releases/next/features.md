@@ -124,7 +124,9 @@ iHub.
   included; the tools an app runs appear as their own output items.
 - **Conversations API:** `/conversations` stores multi-turn conversations. A conversation is an
   iHub chat: it appears in the caller's chat history (for an OAuth client, under that client) and
-  records that it was created through the API. It needs chat persistence to be on.
+  records that it was created through the API. It keeps its app variables where the chat UI keeps
+  a start form's, so a chat continues with the same values in either. It needs chat persistence
+  to be on.
 - Validation outcomes are counted in the new `ihub.structured_output.validation` metric.
 
 See [OpenAI-Compatible API](../../openai-compatible-api.md) and

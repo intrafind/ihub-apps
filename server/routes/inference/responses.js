@@ -495,7 +495,7 @@ export default function registerResponsesRoutes(
     const prompt = turnPrompt({
       firstTurn,
       resolved,
-      stored: chat?.promptVariables,
+      stored: chat?.variables,
       historyReplayed
     });
     const history = conversation && historyReplayed ? historyForModel(conversation.stored) : [];
@@ -555,15 +555,15 @@ export default function registerResponsesRoutes(
           clientMessageId: null,
           attachments: attachmentsOf(current),
           settings: normalizeChatSettings({ temperature }),
+          // The chat's variable set, shared with the chat UI (its start
+          // form stores the same field): replaced by a turn that sets them.
+          ...(prompt.storeVariables ? { variables: prompt.variables } : {}),
           message: {
             // The variables this turn was rendered with, when it was.
             ...(prompt.applyTemplate ? { variables: prompt.variables } : {}),
             renderedContent: prepared.renderedContent
           },
-          chat: {
-            ...bindingPatch(target),
-            ...(prompt.storeVariables ? { promptVariables: prompt.variables } : {})
-          },
+          chat: bindingPatch(target),
           assistant: { model: prepared.label },
           origin: apiOrigin(user),
           clientConnected: () => !disconnected

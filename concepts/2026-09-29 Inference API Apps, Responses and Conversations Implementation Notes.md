@@ -57,9 +57,9 @@ agent framework to run the call itself. Unknown item types are tolerated by both
 never believes an override took effect.
 
 **Template rules** (`turnPrompt`): first turn / stateless → template with this turn's variables;
-follow-up without variables → raw input, system prompt on the chat's stored `promptVariables`;
-follow-up with variables → template again, stored set replaced. "First turn" means no assistant
-message stored yet. An app with `sendChatHistory: false` has no history carrying the earlier
+follow-up without variables → raw input, system prompt on the chat's stored `variables` (the
+field the chat UI's start form also keeps); follow-up with variables → template again, stored set
+replaced. "First turn" means no answer a turn produced (an assistant message with a `runId`) yet. An app with `sendChatHistory: false` has no history carrying the earlier
 rendering, so its template wraps every turn (on the stored variables when none are sent).
 
 **Conversation binding and ownership.** The chat stores `binding: 'app' | 'model'` with `appId`;

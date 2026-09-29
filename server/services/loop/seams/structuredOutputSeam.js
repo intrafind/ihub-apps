@@ -43,11 +43,12 @@ export function structuredOutputRetryPrompt(errors = []) {
  * @param {(info: {attempt: number, errors: Array}) => void} [options.onAttemptRejected] -
  *   Called when an answer is rejected and a retry follows, before the retry's
  *   first chunk (a streaming caller closes the rejected attempt there).
- * @returns {Object} The seam, plus `verdict()` and `attempts()`.
+ * @returns {Object} The seam, plus `verdict()`, `verdictFor(answer)` and `attempts()`.
  */
 export function structuredOutputSeam({ validate, maxRetries = 1, onAttemptRejected = null }) {
   let attempts = 0;
   let verdict = null;
+  let checked = null;
   return {
     name: 'structured-output',
     onAnswer(ctx, info) {
@@ -62,6 +63,7 @@ export function structuredOutputSeam({ validate, maxRetries = 1, onAttemptReject
         result = { valid: false, errors: [{ path: '', message: error.message }] };
       }
       verdict = { ...result, attempts };
+      checked = answer;
       if (result.valid) return null;
       if (!info.canRetry || attempts > maxRetries) return null;
       const errors = Array.isArray(result.errors) ? result.errors : [];
@@ -85,6 +87,12 @@ export function structuredOutputSeam({ validate, maxRetries = 1, onAttemptReject
     },
     /** The verdict on the last answer, or null when the run never produced one. */
     verdict: () => verdict,
+    /**
+     * The last verdict when it was given on exactly `answer`, else null. A
+     * run can end on an answer the seam never saw (a forced finish after a
+     * rejected attempt), and that answer must be checked on its own.
+     */
+    verdictFor: answer => (verdict && checked === answer ? verdict : null),
     /** How many answers were checked. */
     attempts: () => attempts
   };

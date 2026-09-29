@@ -1094,6 +1094,29 @@ describe('conversations', () => {
     assert.equal(lastUserOf(requests[1]), 'and the risks?');
   });
 
+  it("keeps the conversation's variables where the chat UI keeps them", async () => {
+    const { app, requests } = setup([openaiText(['one']), openaiText(['two'])]);
+    const { body: conv } = await request(app).post(CONVERSATIONS).send({});
+    await request(app)
+      .post(RESPONSES)
+      .send({
+        model: 'app:docs',
+        conversation: conv.id,
+        input: 'summarize',
+        prompt: { variables: { 'document-id': 'DOC-9' } }
+      });
+    const repository = getChatRepository();
+    assert.deepEqual((await repository.getChat(conv.id)).variables, { 'document-id': 'DOC-9' });
+
+    // A start form in the chat UI replaces the set; the next API turn runs on it.
+    await repository.updateChat(conv.id, { variables: { 'document-id': 'DOC-UI' } });
+    const followUp = await request(app)
+      .post(RESPONSES)
+      .send({ model: 'app:docs', conversation: conv.id, input: 'and the risks?' });
+    assert.equal(followUp.status, 200, JSON.stringify(followUp.body));
+    assert.match(systemOf(requests[1]), /Work on document DOC-UI\./);
+  });
+
   it('stores earlier input items with the documents they carried', async () => {
     const { app, requests } = setup([openaiText(['ok'])]);
     const { body: conv } = await request(app).post(CONVERSATIONS).send({});

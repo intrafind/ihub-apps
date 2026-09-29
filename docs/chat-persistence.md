@@ -434,8 +434,7 @@ index can answer "list my chats" without scanning:
   origin,               // { createdVia: 'ui' | 'responses-api', clientId?, authMode? }
   // Chats made through the inference API's Conversations API also carry:
   metadata?,            // the conversation's caller-defined key/value pairs
-  binding?,             // 'app' | 'model' — what the first response bound it to
-  promptVariables?      // the app variables of the most recent turn that set them
+  binding?              // 'app' | 'model' — what the first response bound it to
 }
 
 // chat-messages/<chatId>
@@ -487,7 +486,9 @@ Details that matter:
   into such a turn. Reopening the chat puts the values back in the variables
   panel. Names must be valid variable names, values are stored as text capped
   at the message length, at most 50 of them; the field is absent until a turn
-  sets it.
+  sets it. The inference API's Conversations API keeps a conversation's
+  variables in the same field, so a chat carries its values between the chat
+  UI and the API.
 - **Attachments are descriptors** — `{ type, name?, bytes? }`. The base64 payload
   of an upload stays in the request; it is never written into a document that is
   read back for as long as the chat lives.
