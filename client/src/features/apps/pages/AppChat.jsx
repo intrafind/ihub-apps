@@ -745,12 +745,15 @@ function AppChat({ preloadedApp = null, embedded = false, appId: embeddedAppId =
   // started the URL has to name it — otherwise a reload would leave it for a
   // blank one. Replaced rather than pushed: Back should lead to where the user
   // came from, not to an empty copy of this chat. Both routes render the same
-  // element, so the running turn is not interrupted. Not while hydrating: on
-  // a chat switch the previous chat's messages are still on screen for a
-  // render, and they must not pin the new id.
+  // element, so the running turn is not interrupted. Only the fresh chat of
+  // this visit is pinned, and not while it hydrates: leaving `/c/:chatId` for
+  // the bare route keeps the chat that was left — its id first, then its
+  // messages — on screen for a render, and pinning it would send the user
+  // straight back into it.
   const chatStarted = messages.some(message => message.role === 'user');
   useEffect(() => {
     if (embedded || routeChatId || !serverBackedChat || hydrating || !chatStarted) return;
+    if (chatId !== freshChatRef.current?.id) return;
     navigate(`/apps/${appId}/c/${chatId}`, { replace: true });
   }, [embedded, routeChatId, serverBackedChat, hydrating, chatStarted, appId, chatId, navigate]);
 

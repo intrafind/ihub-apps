@@ -1,6 +1,6 @@
 import '@testing-library/jest-dom';
 import { act, render, screen, waitFor } from '@testing-library/react';
-import { MemoryRouter, Route, Routes, useLocation } from 'react-router-dom';
+import { MemoryRouter, Route, Routes, useLocation, useNavigate } from 'react-router-dom';
 
 /**
  * Opening, starting and continuing a chat — driven through the real `AppChat`.
@@ -298,7 +298,11 @@ const STORED_MESSAGES = [
  * @param {Object} [options.app] - The app config handed in as `preloadedApp`.
  * @returns {Object} The testing-library result.
  */
+// In-app navigation for the tests, the way a sidebar link moves the router
+// without remounting the page.
+const mockRouter = { navigate: null };
 function LocationProbe() {
+  mockRouter.navigate = useNavigate();
   return <div data-testid="location">{useLocation().pathname}</div>;
 }
 
@@ -454,6 +458,26 @@ describe('starting a new chat', () => {
     await waitFor(() =>
       expect(screen.getAllByTestId('transcript')[0]).toHaveTextContent('local question')
     );
+  });
+
+  test('clicking the app from inside one of its chats leaves that chat for a new one', async () => {
+    // Same page instance: only the route loses its chat id. For a render the
+    // page still holds the stored chat and its transcript, and pinning that
+    // one would send the user straight back into it.
+    const resolveChat = deferredChat();
+    renderChat({ path: '/apps/acme/c/chat-stored' });
+    await act(async () => {
+      await resolveChat(STORED_MESSAGES);
+    });
+    expect(screen.getAllByTestId('transcript')[0]).toHaveTextContent('stored question');
+
+    await act(async () => {
+      mockRouter.navigate('/apps/acme');
+    });
+
+    await waitFor(() => expect(screen.getAllByTestId('greeting')[0]).toBeInTheDocument());
+    expect(screen.getByTestId('location')).toHaveTextContent(/^\/apps\/acme$/);
+    expect(fetchChat).toHaveBeenCalledTimes(1);
   });
 
   test('the first message pins the chat into the URL, so a reload keeps it', async () => {
