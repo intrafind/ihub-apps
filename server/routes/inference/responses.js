@@ -327,9 +327,20 @@ export default function registerResponsesRoutes(
         if (!res.writableEnded) res.end();
         return;
       }
-      sendOpenAiError(res, isInferenceApiErrorLike(error) ? error : fromLLMError(error), COMPONENT);
+      sendTurnError(res, isInferenceApiErrorLike(error) ? error : fromLLMError(error), ctx);
     }
   });
+
+  /**
+   * Answer a failed turn. Once a conversation turn is stored, the OpenAI SDKs
+   * must not repeat the request on their own (they retry 409, 429 and 5xx by
+   * default): a repeat would store the question again, and re-run a turn
+   * somebody stopped.
+   */
+  function sendTurnError(res, error, ctx) {
+    if (ctx.persisted || error?.code === 'turn_aborted') res.setHeader('x-should-retry', 'false');
+    return sendOpenAiError(res, error, COMPONENT);
+  }
 
   function isInferenceApiErrorLike(error) {
     return error instanceof InferenceApiError;
@@ -338,8 +349,13 @@ export default function registerResponsesRoutes(
   /**
    * Take the conversation for this turn, or refuse with 409 while another
    * response is running in it.
+   *
+   * The turn was prepared from the conversation as it was read before the
+   * claim. A turn that finished in between changed the history (and may have
+   * bound the conversation), so the claim is given back and the request is
+   * refused as busy: it stored nothing and can simply be sent again.
    */
-  async function claimConversation(conversation, runId) {
+  async function claimConversation(conversation, runId, target) {
     const { repository, chat } = conversation;
     const claim = await repository.claimRun(chat.id, runId, { isBusy: runStillAlive(chat.id) });
     if (!claim.chat) {
@@ -360,20 +376,53 @@ export default function registerResponsesRoutes(
         { param: 'conversation' }
       );
     }
+    const { messages: now } = await repository.getMessages(chat.id);
+    const before = conversation.stored;
+    const unchanged =
+      now.length === before.length &&
+      now[now.length - 1]?.id === before[before.length - 1]?.id &&
+      (claim.chat.binding || null) === (chat.binding || null) &&
+      (claim.chat.appId || null) === (chat.appId || null);
+    if (!unchanged) {
+      await releaseClaim(conversation, runId);
+      assertBinding(claim.chat, target);
+      throw new InferenceApiError(
+        409,
+        'conversation_busy',
+        `Conversation ${chat.id} changed while this response was prepared; send it again`,
+        { param: 'conversation' }
+      );
+    }
   }
 
-  /** Store the input items that precede this turn's user message. */
+  /**
+   * Store the input items that precede this turn's user message, with the
+   * documents they carried rendered into the text replayed on later turns.
+   */
   async function storeEarlierInput(conversation, inputMessages, runId) {
     for (const message of inputMessages.slice(0, -1)) {
+      const attachments = attachmentsOf(message);
       await conversation.repository.appendMessage(conversation.chat.id, {
         role: message.role,
         content: message.content,
-        runId
+        runId,
+        ...(message.fileData?.length
+          ? {
+              renderedContent: renderUserMessage({
+                content: message.content,
+                files: message.fileData
+              })
+            }
+          : {}),
+        ...(attachments.length > 0 ? { attachments } : {})
       });
     }
   }
 
-  /** Release a claimed conversation whose turn never started. */
+  /**
+   * Give back a claim. A no-op once the turn's own end released the chat:
+   * the release only applies while `runId` is still its active run.
+   */
   async function releaseClaim(conversation, runId) {
     try {
       await conversation.repository.releaseRun(conversation.chat.id, runId, {
@@ -430,16 +479,21 @@ export default function registerResponsesRoutes(
         { param: 'input' }
       );
     }
+    const chat = conversation?.chat || null;
+    const firstTurn = !conversation || isFirstTurn(conversation.stored);
+    const sendsVariables = body.prompt?.variables !== undefined && body.prompt?.variables !== null;
     const resolved = resolvePromptVariables({
       prompt: body.prompt,
       app: appConfig,
       language,
-      fallbackLanguage: platformLanguage()
+      fallbackLanguage: platformLanguage(),
+      // A follow-up without variables runs on the ones the conversation
+      // already has; only a turn that sets them has to set the required ones.
+      enforceRequired: firstTurn || sendsVariables
     });
-    const chat = conversation?.chat || null;
     const historyReplayed = appConfig.sendChatHistory !== false;
     const prompt = turnPrompt({
-      firstTurn: !conversation || isFirstTurn(conversation.stored),
+      firstTurn,
       resolved,
       stored: chat?.promptVariables,
       historyReplayed
@@ -486,10 +540,11 @@ export default function registerResponsesRoutes(
 
     let persistence = null;
     let durable = false;
-    let started = false;
+    let claimed = false;
     try {
       if (chat) {
-        await claimConversation(conversation, runId);
+        await claimConversation(conversation, runId, target);
+        claimed = true;
         await storeEarlierInput(conversation, inputMessages, runId);
         const current = inputMessages[inputMessages.length - 1];
         persistence = {
@@ -524,7 +579,7 @@ export default function registerResponsesRoutes(
         ctx.assembler = assembler;
       }
 
-      started = true;
+      if (chat) ctx.persisted = true;
       const outcome = await executeAppTurn({
         chatService,
         prepared,
@@ -548,7 +603,7 @@ export default function registerResponsesRoutes(
           assembler.fail(error, outcome.usage);
           return;
         }
-        sendOpenAiError(res, error, COMPONENT);
+        sendTurnError(res, error, ctx);
         return;
       }
       const response = assembler.complete({
@@ -558,7 +613,9 @@ export default function registerResponsesRoutes(
       });
       if (!stream) res.json(response);
     } finally {
-      if (chat && !started) await releaseClaim(conversation, runId);
+      // The turn's own end releases the chat; this only matters when it
+      // never got that far (a failure before or around the turn).
+      if (claimed) await releaseClaim(conversation, runId);
       if (durable) clearChatDurable(chatId);
     }
   }
@@ -633,9 +690,12 @@ export default function registerResponsesRoutes(
     });
 
     let durable = false;
+    let claimed = false;
     let userTurnStored = false;
+    let answerStored = false;
     const storeAnswer = async summary => {
-      if (!userTurnStored) return;
+      if (!userTurnStored || answerStored) return;
+      answerStored = true;
       await materializeAssistantTurn({
         repository: conversation.repository,
         chatId: chat.id,
@@ -647,30 +707,31 @@ export default function registerResponsesRoutes(
     };
     try {
       if (chat) {
-        await claimConversation(conversation, runId);
-        try {
-          await storeEarlierInput(conversation, inputMessages, runId);
-          markChatDurable(chat.id);
-          durable = true;
-          await materializeUserTurn({
-            repository: conversation.repository,
-            chatId: chat.id,
-            ownerId: chat.ownerId,
-            identityMode: chat.identityMode,
-            appId: null,
-            modelId: model.id,
-            settings: normalizeChatSettings({ temperature }),
-            runId,
-            content: current.content,
-            attachments: attachmentsOf(current),
-            message: { renderedContent: renderedCurrent.content },
-            chat: bindingPatch(target),
-            origin: apiOrigin(user)
-          });
-          userTurnStored = true;
-        } finally {
-          if (!userTurnStored) await releaseClaim(conversation, runId);
-        }
+        await claimConversation(conversation, runId, target);
+        claimed = true;
+        await storeEarlierInput(conversation, inputMessages, runId);
+        markChatDurable(chat.id);
+        durable = true;
+        // Reachable by Stop and by a delete of the conversation, like a
+        // chat turn: both abort what `activeRequests` holds for the chat.
+        activeRequests.set(chat.id, upstream);
+        await materializeUserTurn({
+          repository: conversation.repository,
+          chatId: chat.id,
+          ownerId: chat.ownerId,
+          identityMode: chat.identityMode,
+          appId: null,
+          modelId: model.id,
+          settings: normalizeChatSettings({ temperature }),
+          runId,
+          content: current.content,
+          attachments: attachmentsOf(current),
+          message: { renderedContent: renderedCurrent.content },
+          chat: bindingPatch(target),
+          origin: apiOrigin(user)
+        });
+        userTurnStored = true;
+        ctx.persisted = true;
       }
 
       activityTracker.recordActivity({ userId: user?.id, chatId });
@@ -705,9 +766,12 @@ export default function registerResponsesRoutes(
         });
       } catch (error) {
         run.fail(error, model);
-        const failure = fromLLMError(error);
+        const aborted = upstream.signal.aborted;
+        const failure = aborted
+          ? new InferenceApiError(409, 'turn_aborted', 'The turn was stopped before it finished')
+          : fromLLMError(error);
         await storeAnswer({
-          status: disconnected || upstream.signal.aborted ? 'aborted' : 'error',
+          status: aborted ? 'aborted' : 'error',
           content: '',
           finishReason: 'error',
           errorInfo: { code: failure.code, message: failure.message }
@@ -753,6 +817,16 @@ export default function registerResponsesRoutes(
       });
       if (!stream && !disconnected) res.json(response);
     } finally {
+      // Whatever failed around the model call, the stored question gets an
+      // answer and the chat is released — never left `running`.
+      await storeAnswer({
+        status: 'error',
+        content: '',
+        finishReason: 'error',
+        errorInfo: { code: 'INTERNAL_ERROR', message: 'The turn failed' }
+      });
+      if (claimed) await releaseClaim(conversation, runId);
+      if (chat && activeRequests.get(chat.id) === upstream) activeRequests.delete(chat.id);
       if (durable) clearChatDurable(chat.id);
     }
   }

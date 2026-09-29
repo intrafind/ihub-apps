@@ -186,7 +186,8 @@ export async function runPlainTurn({
     }
     attemptMessages = [
       ...attemptMessages,
-      { role: 'assistant', content: result.content || '' },
+      // Providers refuse an empty assistant message.
+      { role: 'assistant', content: result.content || '(no answer)' },
       { role: 'user', content: structuredOutputRetryPrompt(verdict.errors || []) }
     ];
   }

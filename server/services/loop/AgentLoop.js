@@ -526,7 +526,9 @@ export class AgentLoop {
                 recoverable: true
               });
             }
-            ctx.messages.push({ role: 'assistant', content: stepText });
+            // Providers refuse an empty assistant message; an empty answer
+            // is still an answer the correction refers to.
+            ctx.messages.push({ role: 'assistant', content: stepText || '(no answer)' });
             ctx.messages.push(nudgeMessage(review.retry));
             this._ledger(ledgerId, RUN_LOG_EVENTS.MESSAGE_USER, {
               step: iteration,

@@ -24,7 +24,14 @@ import RequestBuilder from '../../services/chat/RequestBuilder.js';
 import { AgentLoop } from '../../services/loop/AgentLoop.js';
 import { bootstrapStorage, shutdownStorageBootstrap } from '../../storage/bootstrap.js';
 import { getChatRepository } from '../../services/chat/ChatRepository.js';
-import { makeClient, sseResponse, openaiText, captureRunLog } from './helpers/llmFixtures.js';
+import {
+  makeClient,
+  sseResponse,
+  textResponse,
+  openaiText,
+  captureRunLog
+} from './helpers/llmFixtures.js';
+import { abortChatRequest } from '../../sse.js';
 
 const MODEL_LIST = [
   {
@@ -103,6 +110,15 @@ const APPS = [
     enabled: true
   },
   {
+    id: 'docs',
+    name: { en: 'Document actions' },
+    system: { en: 'Work on document {{document-id}}.' },
+    prompt: { en: 'Task: {{content}}' },
+    variables: [{ name: 'document-id', label: { en: 'Document' }, type: 'string', required: true }],
+    preferredModel: 'oa',
+    enabled: true
+  },
+  {
     id: 'agent',
     name: { en: 'Agent' },
     system: { en: 'Use the lookup tool.' },
@@ -168,7 +184,7 @@ const silent = { debug() {}, info() {}, warn() {}, error() {} };
  * An app over a scripted provider. `script` items are SSE event lists (or
  * functions returning a Response), consumed one per provider call.
  */
-function setup(script, { user = ADA, realRequest = false } = {}) {
+function setup(script, { user = ADA, realRequest = false, onPrepare = null } = {}) {
   const queue = [...script];
   const requests = [];
   const { client } = makeClient({
@@ -186,6 +202,14 @@ function setup(script, { user = ADA, realRequest = false } = {}) {
   requestBuilder.apiKeyVerifier = {
     verifyApiKey: async () => ({ success: true, apiKey: 'sk-test' })
   };
+  if (onPrepare) {
+    const prepare = requestBuilder.prepareChatRequest.bind(requestBuilder);
+    requestBuilder.prepareChatRequest = async params => {
+      const result = await prepare(params);
+      await onPrepare(params);
+      return result;
+    };
+  }
   const chatService = new ChatService({
     requestBuilder,
     agentLoop: new AgentLoop({ llmClient: client, logger: silent, runLog: ledger.runLog }),
@@ -314,6 +338,7 @@ describe('GET /models', () => {
       'app:summarizer',
       'app:nda',
       'app:locked',
+      'app:docs',
       'app:agent'
     ]);
 
@@ -579,6 +604,16 @@ describe('POST /chat/completions with an app', () => {
     assert.deepEqual(requests[0].body.responseSchema, RISK_SCHEMA);
     assert.match(systemOf(requests[0]), /The JSON must match this schema/);
     assert.match(lastUserOf(requests[1]), /does not match the required output format/);
+  });
+
+  it('retries an empty answer with a placeholder in its place', async () => {
+    const { app, requests } = setup([openaiText([]), openaiText(['{"risk":"low"}'])]);
+    const res = await request(app)
+      .post(CHAT)
+      .send({ model: 'app:nda', messages: [{ role: 'user', content: 'contract' }] });
+    assert.equal(res.status, 200, JSON.stringify(res.body));
+    const retry = sentMessages(requests[1]);
+    assert.deepEqual(retry[retry.length - 2], { role: 'assistant', content: '(no answer)' });
   });
 
   it('answers 422 when the app output never validates', async () => {
@@ -1004,6 +1039,133 @@ describe('conversations', () => {
     assert.deepEqual(deleted.body, { id: conv.id, object: 'conversation.deleted', deleted: true });
     const gone = await request(app).get(`${CONVERSATIONS}/${conv.id}`);
     assert.equal(gone.status, 404);
+  });
+
+  it('runs a follow-up without variables on the ones the conversation has', async () => {
+    const { app, requests } = setup([openaiText(['one']), openaiText(['two'])]);
+    const { body: conv } = await request(app).post(CONVERSATIONS).send({});
+    const missing = await request(app)
+      .post(RESPONSES)
+      .send({ model: 'app:docs', conversation: conv.id, input: 'summarize' });
+    assert.equal(missing.status, 400, 'the first turn has to set the required variable');
+    assert.equal(missing.body.error.details[0].code, 'missing_required');
+
+    await request(app)
+      .post(RESPONSES)
+      .send({
+        model: 'app:docs',
+        conversation: conv.id,
+        input: 'summarize',
+        prompt: { variables: { 'document-id': 'DOC-9' } }
+      });
+    const followUp = await request(app)
+      .post(RESPONSES)
+      .send({ model: 'app:docs', conversation: conv.id, input: 'and the risks?' });
+    assert.equal(followUp.status, 200, JSON.stringify(followUp.body));
+    assert.match(systemOf(requests[1]), /Work on document DOC-9\./);
+    assert.equal(lastUserOf(requests[1]), 'and the risks?');
+  });
+
+  it('stores earlier input items with the documents they carried', async () => {
+    const { app, requests } = setup([openaiText(['ok'])]);
+    const { body: conv } = await request(app).post(CONVERSATIONS).send({});
+    const text = Buffer.from('Clause 7: liability capped').toString('base64');
+    const res = await request(app)
+      .post(RESPONSES)
+      .send({
+        model: 'app:summarizer',
+        conversation: conv.id,
+        input: [
+          {
+            role: 'user',
+            content: [
+              { type: 'input_text', text: 'Here is the contract.' },
+              { type: 'input_file', filename: 'c.txt', file_data: `data:text/plain;base64,${text}` }
+            ]
+          },
+          { role: 'user', content: 'Summarize it.' }
+        ]
+      });
+    assert.equal(res.status, 200, JSON.stringify(res.body));
+    assert.match(
+      sentMessages(requests[0]).find(m => m.role === 'user').content,
+      /liability capped/
+    );
+    const [earlier] = (await getChatRepository().getMessages(conv.id)).messages;
+    assert.equal(earlier.content, 'Here is the contract.');
+    assert.match(earlier.renderedContent, /liability capped/);
+    assert.equal(earlier.attachments[0].name, 'c.txt');
+  });
+
+  it('refuses a turn whose conversation changed while it was prepared', async () => {
+    let conversationId = null;
+    const { app, requests } = setup([], {
+      onPrepare: async () => {
+        await getChatRepository().appendMessage(conversationId, {
+          role: 'user',
+          content: 'written by a concurrent turn'
+        });
+      }
+    });
+    const { body: conv } = await request(app).post(CONVERSATIONS).send({});
+    conversationId = conv.id;
+    const res = await request(app)
+      .post(RESPONSES)
+      .send({ model: 'app:summarizer', conversation: conv.id, input: 'mine' });
+    assert.equal(res.status, 409);
+    assert.equal(res.body.error.code, 'conversation_busy');
+    assert.equal(requests.length, 0, 'no model call');
+    const chat = await getChatRepository().getChat(conv.id);
+    assert.equal(chat.activeRunId, null, 'the claim was given back');
+    const stored = (await getChatRepository().getMessages(conv.id)).messages;
+    assert.deepEqual(
+      stored.map(m => m.content),
+      ['written by a concurrent turn'],
+      'nothing of the refused turn was stored'
+    );
+  });
+
+  it('lets Stop abort a plain-model conversation turn, which the SDKs must not retry', async () => {
+    let chatId;
+    const { app } = setup([
+      (_req, ctx) =>
+        new Promise((_resolve, reject) => {
+          ctx.signal.addEventListener('abort', () =>
+            reject(ctx.signal.reason || new Error('aborted'))
+          );
+          // The turn is running: stop it the way the chat's Stop button does.
+          setTimeout(() => abortChatRequest(chatId), 20);
+        })
+    ]);
+    const { body: conv } = await request(app).post(CONVERSATIONS).send({});
+    chatId = conv.id;
+    const res = await request(app)
+      .post(RESPONSES)
+      .send({ model: 'oa', conversation: conv.id, input: 'long job' });
+    assert.equal(res.status, 409, JSON.stringify(res.body));
+    assert.equal(res.body.error.code, 'turn_aborted');
+    assert.equal(res.headers['x-should-retry'], 'false');
+    const chat = await getChatRepository().getChat(conv.id);
+    assert.equal(chat.activeRunId, null);
+    const stored = (await getChatRepository().getMessages(conv.id)).messages;
+    assert.equal(stored[1].error.code, 'ABORTED');
+  });
+
+  it('tells the SDKs not to repeat a conversation turn that failed after it was stored', async () => {
+    // Not a status the loop retries itself, so one scripted reply is enough.
+    const failing = () => textResponse('bad request upstream', { status: 400 });
+    const stateless = setup([failing]);
+    const once = await request(stateless.app).post(RESPONSES).send({ model: 'oa', input: 'x' });
+    assert.equal(once.status, 400);
+    assert.equal(once.headers['x-should-retry'], undefined, 'nothing stored: retrying is safe');
+
+    const { app } = setup([failing]);
+    const { body: conv } = await request(app).post(CONVERSATIONS).send({});
+    const res = await request(app)
+      .post(RESPONSES)
+      .send({ model: 'app:summarizer', conversation: conv.id, input: 'x' });
+    assert.equal(res.status, 400, JSON.stringify(res.body));
+    assert.equal(res.headers['x-should-retry'], 'false');
   });
 
   it('needs chat persistence and a signed-in caller', async () => {

@@ -18,9 +18,13 @@
  *
  * @module services/inference/structuredOutput
  */
+import vm from 'node:vm';
 import Ajv from 'ajv';
+import Ajv2019 from 'ajv/dist/2019.js';
+import Ajv2020 from 'ajv/dist/2020.js';
 import addFormats from 'ajv-formats';
 import { extractJson } from '../loop/extractJson.js';
+import { MAX_PATTERN_LENGTH, validateRegexPattern } from '../../utils/safeRegex.js';
 import { InferenceApiError } from './errors.js';
 
 /**
@@ -42,8 +46,88 @@ export const NATIVE_STRUCTURED_OUTPUT_PROVIDERS = Object.freeze([
  */
 const NO_STRUCTURED_OUTPUT_PROVIDERS = Object.freeze(['iassistant-conversation']);
 
-const ajv = new Ajv({ allErrors: true, strict: false, logger: false });
-addFormats(ajv);
+/** Longest a single `pattern` test of one answer may run. */
+const PATTERN_TEST_TIMEOUT_MS = 50;
+
+/** Total time the `pattern` tests of one answer may take together. */
+const PATTERN_BUDGET_MS = 250;
+
+/**
+ * Deadline for the `pattern` tests of the answer being validated right now.
+ * Validation is synchronous, so one module-level deadline is enough: it is
+ * set before each validation and read by every pattern test inside it.
+ */
+let patternDeadline = 0;
+
+/**
+ * A regular expression for Ajv whose tests run under a hard timeout.
+ *
+ * A caller's schema brings its own `pattern`s, and through the prompt a
+ * caller also shapes the text they are tested against — the two things a
+ * catastrophic-backtracking attack needs. So every test runs in a `vm`
+ * context with a timeout (V8 interrupts a backtracking regex on it), and the
+ * tests of one answer share a time budget. Patterns of a caller's schema are
+ * also checked against the known-unsafe shapes when they are compiled, so the
+ * obvious ones are a 400 up front.
+ *
+ * @param {{screen: boolean}} options - `screen`: refuse known-unsafe shapes at compile time.
+ * @returns {(pattern: string, flags: string) => {test: (value: string) => boolean}}
+ */
+function timedRegExpEngine({ screen }) {
+  return (pattern, flags) => {
+    if (screen && pattern.length <= MAX_PATTERN_LENGTH) {
+      const check = validateRegexPattern(pattern);
+      if (!check.valid) throw new Error(`pattern ${JSON.stringify(pattern)}: ${check.error}`);
+    }
+    const re = new RegExp(pattern, flags);
+    const context = vm.createContext({ re, text: '' });
+    const script = new vm.Script('re.test(text)');
+    return {
+      test(value) {
+        const remaining = patternDeadline - Date.now();
+        if (remaining <= 0) throw new Error('the pattern checks ran out of time');
+        context.text = String(value);
+        try {
+          return (
+            script.runInContext(context, {
+              timeout: Math.max(1, Math.min(PATTERN_TEST_TIMEOUT_MS, remaining))
+            }) === true
+          );
+        } catch (error) {
+          if (error?.code === 'ERR_SCRIPT_EXECUTION_TIMEOUT') {
+            throw new Error(`pattern ${JSON.stringify(pattern)} took too long to check`);
+          }
+          throw error;
+        }
+      },
+      // Ajv shares compiled patterns by this string; it must name the pattern.
+      toString: () => String(re)
+    };
+  };
+}
+
+const AJV_BY_DIALECT = { '2020-12': Ajv2020, '2019-09': Ajv2019, 'draft-07': Ajv };
+
+/**
+ * The JSON Schema dialect a schema declares through `$schema`.
+ *
+ * @param {unknown} schema - Raw schema (object or JSON string).
+ * @returns {'2020-12'|'2019-09'|'draft-07'}
+ */
+export function schemaDialect(schema) {
+  let value = schema;
+  if (typeof value === 'string') {
+    try {
+      value = JSON.parse(value);
+    } catch {
+      return 'draft-07';
+    }
+  }
+  const declared = typeof value?.$schema === 'string' ? value.$schema : '';
+  if (declared.includes('2020-12')) return '2020-12';
+  if (declared.includes('2019-09')) return '2019-09';
+  return 'draft-07';
+}
 
 /**
  * Compiled validators of app schemas, keyed by the configuration object the
@@ -56,10 +140,9 @@ const appValidators = new WeakMap();
 
 /**
  * A schema as the validator compiles it: parsed when it is a JSON string (the
- * app schema allows one), and without the root `$schema` / `$id`. The dialect
- * marker would make the draft-07 validator refuse a 2020-12 schema whose
- * keywords it handles fine, and a root `$id` would clash between two versions
- * of the same app schema.
+ * app schema allows one), and without the root `$schema` / `$id` — the dialect
+ * is chosen from `$schema` separately ({@link schemaDialect}), and providers
+ * take the schema without either.
  *
  * @param {unknown} schema
  * @returns {Object|null}
@@ -79,21 +162,32 @@ export function normalizeSchema(schema) {
 }
 
 /**
- * Compile a schema into a validate function.
+ * Compile a schema into a validate function, on an Ajv instance of its own.
  *
- * Ajv keeps every schema it compiled in a cache of its own, keyed by the
- * schema object and never evicted; one entry per request would grow it for
- * as long as the process lives. The compiled function holds what it needs,
- * so the schema leaves Ajv's cache right away.
+ * An Ajv instance keeps what it compiled — the schema, the generated code and
+ * its values — for as long as the instance lives, and `removeSchema` does not
+ * release all of it. A shared instance would grow with every caller schema;
+ * one instance per compile goes when its validate function goes (with the
+ * request, or with the app config it came from). Compiling that way costs a
+ * few milliseconds, next to a model call.
  *
  * @param {Object} schema - Normalized schema.
+ * @param {Object} [options]
+ * @param {string} [options.dialect='draft-07'] - {@link schemaDialect}.
+ * @param {boolean} [options.screen=true] - Refuse known-unsafe `pattern` shapes.
  * @returns {Function} Ajv validate function.
  * @throws {Error} When the schema does not compile.
  */
-function compileSchema(schema) {
-  const validate = ajv.compile(schema);
-  ajv.removeSchema(schema);
-  return validate;
+function compileSchema(schema, { dialect = 'draft-07', screen = true } = {}) {
+  const AjvClass = AJV_BY_DIALECT[dialect] || Ajv;
+  const ajv = new AjvClass({
+    allErrors: true,
+    strict: false,
+    logger: false,
+    code: { regExp: timedRegExpEngine({ screen }) }
+  });
+  addFormats(ajv);
+  return ajv.compile(schema);
 }
 
 /**
@@ -105,9 +199,9 @@ function compileSchema(schema) {
  * @returns {Function} Ajv validate function.
  * @throws {InferenceApiError}
  */
-function compileRequestSchema(schema, param) {
+function compileRequestSchema(schema, dialect, param) {
   try {
-    return compileSchema(schema);
+    return compileSchema(schema, { dialect, screen: true });
   } catch (error) {
     throw new InferenceApiError(
       400,
@@ -214,7 +308,7 @@ function schemaFormat(spec, param) {
       }
     );
   }
-  const validate = compileRequestSchema(schema, `${param}.schema`);
+  const validate = compileRequestSchema(schema, schemaDialect(spec.schema), `${param}.schema`);
   const name = typeof spec.name === 'string' && spec.name ? spec.name.slice(0, 64) : 'response';
   return { kind: 'json_schema', schema, name, source: 'request', validate };
 }
@@ -236,7 +330,11 @@ export function appOutputFormat(app) {
     entry = { schema, validate: null, error: null };
     if (schema) {
       try {
-        entry.validate = compileSchema(schema);
+        // An admin's schema: its patterns are timed, not screened.
+        entry.validate = compileSchema(schema, {
+          dialect: schemaDialect(app.outputSchema),
+          screen: false
+        });
       } catch (error) {
         entry.error = error.message;
       }
@@ -343,6 +441,19 @@ function describeErrors(errors) {
 export function createOutputValidator(format) {
   const validate =
     format.kind === 'json_schema' ? format.validate || compileSchema(format.schema) : null;
+  const check = value => {
+    patternDeadline = Date.now() + PATTERN_BUDGET_MS;
+    try {
+      return validate(value)
+        ? { ok: true }
+        : { ok: false, errors: describeErrors(validate.errors) };
+    } catch (error) {
+      // A pattern that ran out of time: the answer cannot be shown to match.
+      return { ok: false, errors: [{ path: '/', message: error.message, keyword: 'pattern' }] };
+    } finally {
+      patternDeadline = 0;
+    }
+  };
   return content => {
     const value = extractJson(typeof content === 'string' ? content : '');
     if (value === null) {
@@ -360,8 +471,9 @@ export function createOutputValidator(format) {
       }
       return { valid: true, value, text: JSON.stringify(value) };
     }
-    if (validate(value)) return { valid: true, value, text: JSON.stringify(value) };
-    return { valid: false, value, errors: describeErrors(validate.errors) };
+    const result = check(value);
+    if (result.ok) return { valid: true, value, text: JSON.stringify(value) };
+    return { valid: false, value, errors: result.errors };
   };
 }
 

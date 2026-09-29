@@ -128,12 +128,21 @@ function coerce(variable, raw) {
  * @param {Object} options.app - The app the request runs.
  * @param {string} options.language - Request language (defaults are localized in it).
  * @param {string} [options.fallbackLanguage='en'] - Platform default language.
+ * @param {boolean} [options.enforceRequired=true] - Refuse a missing required variable
+ *   without a default. A conversation follow-up that sends no variables runs on the ones
+ *   the conversation already has, so there it is off.
  * @returns {{provided: boolean, variables: Object<string, string>}} `provided` is true
  *   when the request carried `prompt.variables`; `variables` always holds every declared
  *   variable (defaults for the missing ones).
  * @throws {InferenceApiError} 400 with per-variable `details`.
  */
-export function resolvePromptVariables({ prompt, app, language, fallbackLanguage = 'en' }) {
+export function resolvePromptVariables({
+  prompt,
+  app,
+  language,
+  fallbackLanguage = 'en',
+  enforceRequired = true
+}) {
   const definitions = Array.isArray(app?.variables) ? app.variables : [];
   let given = null;
 
@@ -191,7 +200,7 @@ export function resolvePromptVariables({ prompt, app, language, fallbackLanguage
     const fallback = defaultOf(variable, language, fallbackLanguage);
     if (fallback !== undefined && fallback !== '') {
       variables[variable.name] = fallback;
-    } else if (variable.required === true) {
+    } else if (variable.required === true && enforceRequired) {
       errors.push({
         variable: variable.name,
         code: 'missing_required',

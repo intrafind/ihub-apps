@@ -207,6 +207,10 @@ Mistral `json_schema`, vLLM):
   carries only the validated output. `/chat/completions` cannot take streamed text back, so a
   streamed answer is validated at the end without a retry and, if invalid, the stream ends with an
   in-band error (`code: "output_validation_failed"`), which the OpenAI SDKs raise as an error.
+- Schemas are checked in the draft they declare (`$schema` naming 2020-12 or 2019-09;
+  draft-07 otherwise). `pattern` checks run under a time limit, and a caller's schema with a
+  known catastrophic `pattern` (nested quantifiers such as `(a+)+`) is refused with `400
+  invalid_json_schema`.
 - **Opt out** with `?validate=false`, or `validate: false` in the body (`extra_body` in the SDKs).
 - Validation outcomes are counted in the `ihub.structured_output.validation` metric; a rejected
   attempt is recorded in the run ledger as a recoverable `error` event followed by the correction
@@ -264,7 +268,14 @@ get `401`.
   conversation_app_mismatch`. Switching the real model within the same app
   (`app:x/model-a` → `app:x/model-b`) is fine, as in the UI.
 - Only one response runs in a conversation at a time; a second concurrent one gets `409
-  conversation_busy`. A conversation turn is stored even if your client disconnects mid-way.
+  conversation_busy` (nothing is stored, so it can be sent again). A conversation turn is stored
+  even if your client disconnects mid-way; Stop in the iHub UI or `DELETE /conversations/{id}`
+  aborts it (`409 turn_aborted`).
+- A follow-up without `prompt.variables` does not have to repeat the app's required variables:
+  it runs on the ones the conversation already has.
+- Once a conversation turn is stored, a failure answers with `x-should-retry: false`, which
+  tells the OpenAI SDKs not to repeat the request on their own — the question is already in
+  the conversation. Send it again deliberately if you want another attempt.
 - `GET /conversations/{id}/items` (`limit` 1–100, default 20; `order` `desc` by default;
   `after`) returns the messages as items: a user item holds the **raw input** (the variables it
   was rendered with in `metadata.variables`, attached files as `input_file` entries with their

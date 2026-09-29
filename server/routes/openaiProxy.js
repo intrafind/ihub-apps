@@ -540,7 +540,8 @@ export default function registerOpenAIProxyRoutes(
         result = await runPlainTurn({
           llmClient,
           model,
-          messages: upstreamMessages,
+          // runPlainTurn adds the JSON instruction itself.
+          messages,
           options,
           format,
           validate,
@@ -866,6 +867,8 @@ export default function registerOpenAIProxyRoutes(
         res.write('data: [DONE]\n\n');
         return res.end();
       }
+      // The SDKs retry a 409 on their own; a stopped turn must stay stopped.
+      if (error.code === 'turn_aborted') res.setHeader('x-should-retry', 'false');
       return sendFlatError(res, error);
     }
 

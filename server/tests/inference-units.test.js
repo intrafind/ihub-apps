@@ -246,6 +246,16 @@ describe('prompt.variables', () => {
     });
   });
 
+  it('can leave a required variable to the conversation it already has', () => {
+    const { variables } = resolvePromptVariables({
+      prompt: undefined,
+      app,
+      language: 'en',
+      enforceRequired: false
+    });
+    assert.equal(variables.topic, '');
+  });
+
   it('refuses a prompt.id naming another app', async () => {
     await throwsApi(
       () => resolvePromptVariables({ prompt: { id: 'other' }, app, language: 'en' }),
@@ -378,6 +388,65 @@ describe('structured output', () => {
     const object = createOutputValidator({ kind: 'json_object' });
     assert.equal(object('{"a":1}').valid, true);
     assert.equal(object('[1,2]').valid, false);
+  });
+
+  it("refuses a caller's known-unsafe pattern and cuts off a slow one", async () => {
+    await throwsApi(
+      () =>
+        parseResponseFormat({
+          type: 'json_schema',
+          json_schema: { schema: { type: 'string', pattern: '^(a+)+$' } }
+        }),
+      { status: 400, code: 'invalid_json_schema' }
+    );
+    // Not on the denylist, but backtracks exponentially.
+    const format = parseResponseFormat({
+      type: 'json_schema',
+      json_schema: {
+        schema: {
+          type: 'object',
+          properties: { x: { type: 'string', pattern: '^(a|aa)+$' } }
+        }
+      }
+    });
+    const started = Date.now();
+    const verdict = createOutputValidator(format)(JSON.stringify({ x: `${'a'.repeat(45)}!` }));
+    assert.ok(Date.now() - started < 1000, 'bounded by the time budget');
+    assert.equal(verdict.valid, false);
+    assert.match(verdict.errors[0].message, /took too long/);
+    // Ordinary patterns still work, each with its own expression.
+    const two = parseResponseFormat({
+      type: 'json_schema',
+      json_schema: {
+        schema: {
+          type: 'object',
+          properties: {
+            a: { type: 'string', pattern: '^a+$' },
+            b: { type: 'string', pattern: '^b+$' }
+          }
+        }
+      }
+    });
+    const check = createOutputValidator(two);
+    assert.equal(check('{"a":"aa","b":"bb"}').valid, true);
+    assert.equal(check('{"a":"b"}').valid, false);
+  });
+
+  it('validates with the dialect the schema declares', () => {
+    const format = parseResponseFormat({
+      type: 'json_schema',
+      json_schema: {
+        schema: {
+          $schema: 'https://json-schema.org/draft/2020-12/schema',
+          type: 'array',
+          prefixItems: [{ type: 'string' }],
+          items: false
+        }
+      }
+    });
+    const check = createOutputValidator(format);
+    assert.equal(check('["a"]').valid, true);
+    assert.equal(check('["a", 1]').valid, false);
   });
 
   it('knows which providers enforce a schema', () => {
