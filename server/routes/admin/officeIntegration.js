@@ -510,7 +510,19 @@ export default function registerAdminOfficeIntegrationRoutes(app) {
         appAccessUpdate = { ...officeClient, allowedApps: result.value };
       }
 
-      // The permission change goes first: if it fails, nothing else was saved.
+      await savePlatformConfig({
+        officeIntegration: {
+          ...(platform?.officeIntegration || {}),
+          ...allowed
+        }
+      });
+
+      // The access change is written last, on purpose. The two files cannot be
+      // saved as one transaction, so the order decides what a failure leaves
+      // behind: an error response must never come with a changed access policy.
+      // If the platform write above fails, app access has not moved; if this
+      // write fails, what stays saved is display and start-page configuration
+      // that is harmless to save again.
       if (appAccessUpdate) {
         const { clientId, clientsFile } = appAccessUpdate;
         await updateOAuthClient(
@@ -531,13 +543,6 @@ export default function registerAdminOfficeIntegrationRoutes(app) {
           }`
         });
       }
-
-      await savePlatformConfig({
-        officeIntegration: {
-          ...(platform?.officeIntegration || {}),
-          ...allowed
-        }
-      });
 
       logger.info('Office integration config updated', {
         component: 'AdminOfficeIntegration',
