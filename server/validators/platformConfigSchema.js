@@ -285,7 +285,15 @@ export const platformConfigSchema = z
         allowSelfSignup: z.boolean().prefault(false),
         userHeader: z.string().prefault('X-Forwarded-User'),
         groupsHeader: z.string().prefault('X-Forwarded-Groups'),
-        jwtProviders: z.array(jwtProviderSchema).prefault([])
+        jwtProviders: z.array(jwtProviderSchema).prefault([]),
+        // Name of an entry in `ldapAuth.providers` to query for the user's
+        // group memberships after the proxy has identified them. When set,
+        // the resulting groups are merged with any groups supplied via the
+        // groups header or JWT claim before external→internal group mapping.
+        ldapGroupLookupProvider: z.string().optional(),
+        // Cache TTL for LDAP group lookups. Proxy auth runs on every request,
+        // so results are cached per user; 0 disables caching.
+        ldapGroupLookupCacheTtlSeconds: z.number().min(0).prefault(600)
       })
       .prefault({}),
     localAuth: z

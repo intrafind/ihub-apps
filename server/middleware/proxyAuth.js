@@ -5,6 +5,7 @@ import config from '../config.js';
 import configCache from '../configCache.js';
 import { enhanceUserGroups } from '../utils/authorization.js';
 import { validateAndPersistExternalUser } from '../utils/userManager.js';
+import { getLdapProviderByName, lookupLdapGroupsForUser } from './ldapAuth.js';
 import logger from '../utils/logger.js';
 
 // JWKS documents are cached per provider URL, but only for a bounded TTL. The
@@ -23,6 +24,79 @@ const jwksCache = new Map();
 // is awaited, so without this a burst of concurrent requests arriving after the
 // TTL expires would each start their own outbound call.
 const inFlightFetches = new Map();
+
+// Proxy auth runs on every request. An uncached LDAP lookup per request would
+// hammer the directory server, so cache the resolved group list per user with
+// a bounded TTL. Keyed by `<providerName>::<userId>` so switching the
+// configured provider (or user impersonation across sessions) doesn't reuse a
+// stale entry.
+const ldapGroupsCache = new Map();
+const ldapGroupsInFlight = new Map();
+const DEFAULT_LDAP_GROUPS_TTL_MS = 10 * 60 * 1000; // 10 minutes
+
+function getLdapGroupsCacheKey(providerName, userId) {
+  return `${providerName}::${userId}`;
+}
+
+async function fetchLdapGroupsForProxyUser(providerName, userId) {
+  const ldapProvider = getLdapProviderByName(providerName);
+
+  if (!ldapProvider) {
+    logger.error('Proxy Auth: ldapGroupLookupProvider references non-existent LDAP provider', {
+      component: 'ProxyAuth',
+      ldapGroupLookupProvider: providerName
+    });
+    return [];
+  }
+
+  if (!ldapProvider.adminDn || !ldapProvider.adminPasswordRef) {
+    logger.error(
+      'Proxy Auth: LDAP provider for group lookup is missing adminDn or adminPasswordRef',
+      {
+        component: 'ProxyAuth',
+        ldapProvider: providerName
+      }
+    );
+    return [];
+  }
+
+  return await lookupLdapGroupsForUser(userId, ldapProvider);
+}
+
+async function getLdapGroupsForProxyUser(providerName, userId, ttlMs) {
+  const cacheKey = getLdapGroupsCacheKey(providerName, userId);
+  const now = Date.now();
+  const entry = ldapGroupsCache.get(cacheKey);
+  if (entry && now - entry.fetchedAt < ttlMs) {
+    return entry.groups;
+  }
+
+  const inFlight = ldapGroupsInFlight.get(cacheKey);
+  if (inFlight) return inFlight;
+
+  const pending = (async () => {
+    try {
+      const groups = await fetchLdapGroupsForProxyUser(providerName, userId);
+      ldapGroupsCache.set(cacheKey, { groups, fetchedAt: Date.now() });
+      return groups;
+    } catch (error) {
+      // Fall back to the stale copy, if any, instead of locking a user out
+      // while the directory is briefly unreachable.
+      logger.error('Proxy Auth: LDAP group lookup failed, continuing with header/JWT groups only', {
+        component: 'ProxyAuth',
+        username: userId,
+        ldapGroupLookupProvider: providerName,
+        error
+      });
+      return entry?.groups ?? [];
+    } finally {
+      ldapGroupsInFlight.delete(cacheKey);
+    }
+  })();
+
+  ldapGroupsInFlight.set(cacheKey, pending);
+  return pending;
+}
 
 async function requestJwks(jwkUrl, previous) {
   const attemptedAt = Date.now();
@@ -115,7 +189,9 @@ export async function proxyAuth(req, res, next) {
     userHeader:
       config.PROXY_AUTH_USER_HEADER || platform?.proxyAuth?.userHeader || 'x-forwarded-user',
     groupsHeader: config.PROXY_AUTH_GROUPS_HEADER || platform?.proxyAuth?.groupsHeader,
-    jwtProviders: platform?.proxyAuth?.jwtProviders || []
+    jwtProviders: platform?.proxyAuth?.jwtProviders || [],
+    ldapGroupLookupProvider: platform?.proxyAuth?.ldapGroupLookupProvider,
+    ldapGroupLookupCacheTtlSeconds: platform?.proxyAuth?.ldapGroupLookupCacheTtlSeconds
   };
 
   if (!proxyCfg.enabled) {
@@ -222,6 +298,21 @@ export async function proxyAuth(req, res, next) {
   if (!userId) {
     req.user = null;
     return next();
+  }
+
+  if (proxyCfg.ldapGroupLookupProvider) {
+    const ttlSeconds = Number.isFinite(proxyCfg.ldapGroupLookupCacheTtlSeconds)
+      ? proxyCfg.ldapGroupLookupCacheTtlSeconds
+      : DEFAULT_LDAP_GROUPS_TTL_MS / 1000;
+    const ttlMs = Math.max(0, ttlSeconds) * 1000;
+    const ldapGroups = await getLdapGroupsForProxyUser(
+      proxyCfg.ldapGroupLookupProvider,
+      userId,
+      ttlMs
+    );
+    if (ldapGroups.length > 0) {
+      groups = [...new Set([...groups, ...ldapGroups])];
+    }
   }
 
   let user = {

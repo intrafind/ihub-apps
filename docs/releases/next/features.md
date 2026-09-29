@@ -1,5 +1,20 @@
 # Features — Unreleased
 
+## Proxy Auth: Look Up User Groups From LDAP
+
+When a reverse proxy identifies the user but cannot forward group memberships,
+proxy authentication can now query an LDAP or Active Directory server for the
+user's groups and merge them with any groups already supplied via header or JWT.
+
+- New **LDAP Group Lookup Provider** setting on **Admin → Authentication** for
+  proxy auth, mirroring the existing NTLM option. Pick any configured entry from
+  `ldapAuth.providers` — `ldapAuth.enabled` does not need to be on.
+- Results are cached per user (default 10 minutes, configurable) so the directory
+  server is not queried on every request. Set the TTL to 0 to disable caching.
+- LDAP groups are combined with groups from `X-Forwarded-Groups` and JWT `groups`
+  claims before the usual external → internal mapping in `groups.json`.
+- If the lookup fails, the request still succeeds using the header/JWT groups.
+
 ## Outlook Add-in: Choose Which Apps the Add-in Offers
 
 Admins can now see and change which apps the Outlook add-in offers right on **Admin → Office

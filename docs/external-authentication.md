@@ -402,6 +402,54 @@ curl -H "X-Forwarded-User: user@example.com" \
      http://localhost:3000/api/auth/status
 ```
 
+#### **LDAP Group Lookup**
+
+When the reverse proxy identifies the user but cannot forward group memberships (for
+example, Kerberos or plain header-based SSO without a directory-aware proxy), proxy
+auth can query an LDAP/AD directory server for the user's groups after the fact.
+
+Configure an entry in `ldapAuth.providers` with admin bind credentials and a
+`groupSearchBase` (see [LDAP and NTLM Authentication](./ldap-ntlm-authentication.md)),
+then reference it from `proxyAuth.ldapGroupLookupProvider`:
+
+```json
+{
+  "auth": { "mode": "proxy" },
+  "proxyAuth": {
+    "enabled": true,
+    "userHeader": "X-Forwarded-User",
+    "ldapGroupLookupProvider": "corporate-ldap",
+    "ldapGroupLookupCacheTtlSeconds": 600
+  },
+  "ldapAuth": {
+    "enabled": false,
+    "providers": [
+      {
+        "name": "corporate-ldap",
+        "url": "ldap://ldap.example.com:389",
+        "adminDn": "cn=service,dc=example,dc=org",
+        "adminPassword": "${LDAP_ADMIN_PASSWORD}",
+        "userSearchBase": "ou=people,dc=example,dc=org",
+        "usernameAttribute": "sAMAccountName",
+        "groupSearchBase": "ou=groups,dc=example,dc=org",
+        "groupClass": "group"
+      }
+    ]
+  }
+}
+```
+
+Notes:
+
+- `ldapAuth.enabled` does not need to be `true` — the provider only has to exist.
+- Retrieved LDAP groups are **merged** with groups from `X-Forwarded-Groups` and the
+  JWT `groups` claim (deduplicated) before external → internal group mapping via
+  `groups.json`.
+- Results are cached per user for `ldapGroupLookupCacheTtlSeconds` (default `600`,
+  minimum `0`) to avoid an LDAP query on every request. Set to `0` to disable caching.
+- If the lookup fails, the user still authenticates with whatever groups the header
+  or JWT supplied (falls back to a stale cached copy if one exists).
+
 ### 2. Local Mode
 
 Built-in username/password authentication.
