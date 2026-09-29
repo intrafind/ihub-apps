@@ -64,9 +64,8 @@ The system supports six different types of rate limiters, each configurable thro
 
 ### 4. Inference API Rate Limiter
 - **Default Limit**: 500 requests per 1 minute per IP address (moderate)
-- **Applied to**: AI inference endpoints, which share one counter per client:
+- **Applied to**: AI inference endpoints:
   - `/inference/*` (all inference routes)
-  - `/api/v1/*` ([App API](app-api.md): app chat completions)
 
 ### 5. Default Rate Limiter
 - **Default Limit**: 500 requests per 1 minute per IP address

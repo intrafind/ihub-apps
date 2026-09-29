@@ -210,6 +210,12 @@ Nextcloud, Teams, Office and the browser extension, but not for arbitrary websit
 
 **Proposal — App API (5a).**
 
+> **Removed (2026-09-29):** the App API was built and then removed again before release. It is
+> superseded by apps as models (`model: "app:<appId>"`) plus the Responses and Conversations APIs
+> under `/api/inference/v1`, tracked in
+> [#2580](https://github.com/intrafind/ihub-apps/issues/2580). The widget (5b) should build on
+> that instead.
+
 - `POST /api/v1/apps/{appId}/chat/completions`: OpenAI-shaped request and response (streaming and
   non-streaming), running the full app pipeline (prompt, variables, sources, tools, skills).
   Authenticated with personal API keys or OAuth client credentials; the caller's groups decide

@@ -37,20 +37,6 @@ personal API keys (also as `X-API-Key`) and `mcp:*` scopes.
   message, the conversation's earlier choice, or the new **A2A default skill** setting.
 - Follow-up messages with the same `contextId` continue the conversation with the app.
 
-## App API: Call an iHub App From Outside, OpenAI-Style
-
-A new API under `/api/v1` runs an iHub **app** — with its prompt, variables, sources, tools and
-skills — for external programs, in the request and response shape of the OpenAI chat-completions
-API, streamed or not. Until now the API surface reached raw models only; an app could be called
-from outside just through MCP `tools/call`, without streaming and without its tool loop.
-
-- `POST /api/v1/apps/{appId}/chat/completions`: authenticate with a personal API key or an OAuth
-  token; the caller's groups decide which apps it may call, as in the UI.
-- `chat_id` stores the conversation server-side and continues it later; the chat shows up in the
-  caller's history.
-- Documented in the new **App API** page of the docs and in the running server's API docs.
-
-
 ## A2A: Connect Remote Agents as Tools
 
 Admins can now connect remote agents that speak the Agent-to-Agent protocol (A2A 0.3) — a

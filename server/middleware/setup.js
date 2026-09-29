@@ -641,8 +641,6 @@ export function setupMiddleware(app, platformConfig = {}) {
 
   // Inference API rate limiter for AI inference endpoints
   app.use(buildApiPath('/inference'), rateLimiters.inferenceApiLimiter);
-  // The App API (/api/v1) is the same kind of machine-facing surface.
-  app.use(buildApiPath('/v1'), rateLimiters.inferenceApiLimiter);
 
   // Admin API rate limiter for administrative endpoints (most restrictive)
   app.use(buildApiPath('/admin'), rateLimiters.adminApiLimiter);
