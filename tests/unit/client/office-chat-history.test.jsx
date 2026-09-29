@@ -197,6 +197,37 @@ describe('<OfficeChatHistoryPage />', () => {
     expect(await screen.findByText('No chats yet')).toBeInTheDocument();
   });
 
+  test('failed apps read as a failure with a retry, not as an empty history', async () => {
+    mockFetchApps.mockRejectedValueOnce(new Error('offline')).mockResolvedValue(apps);
+    mockFetchChats.mockResolvedValue({ items: chats, nextCursor: null });
+    renderPage();
+
+    expect(await screen.findByRole('alert')).toHaveTextContent('Your chats could not be loaded');
+    expect(screen.queryByText('No chats yet')).not.toBeInTheDocument();
+    fireEvent.click(screen.getByRole('button', { name: 'Try again' }));
+    expect(await screen.findByText('Reply to ACME')).toBeInTheDocument();
+    expect(mockFetchApps).toHaveBeenCalledTimes(2);
+  });
+
+  test('a failed "Show older chats" says so and keeps the rows', async () => {
+    mockFetchApps.mockResolvedValue(apps);
+    mockFetchChats
+      .mockResolvedValueOnce({ items: chats.slice(0, 2), nextCursor: 'next' })
+      .mockRejectedValueOnce(new Error('offline'))
+      .mockResolvedValueOnce({ items: chats.slice(2), nextCursor: null });
+    renderPage();
+    await screen.findByText('Reply to ACME');
+
+    fireEvent.click(screen.getByRole('button', { name: 'Show older chats' }));
+    expect(await screen.findByRole('alert')).toHaveTextContent('Your chats could not be loaded');
+    expect(screen.getByText('Reply to ACME')).toBeInTheDocument();
+
+    // The button is the retry; a page that arrives clears the error.
+    fireEvent.click(screen.getByRole('button', { name: 'Show older chats' }));
+    expect(await screen.findByText('Contract terms')).toBeInTheDocument();
+    expect(screen.queryByRole('alert')).not.toBeInTheDocument();
+  });
+
   test('a failed load offers a retry that asks again', async () => {
     mockFetchApps.mockResolvedValue(apps);
     mockFetchChats

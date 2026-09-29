@@ -37,7 +37,7 @@ function OfficeChatHistoryPage({ user, onBack, backLabel, onOpenChat, onLogout }
   const { t } = useTranslation();
   const [isSettingsOpen, setIsSettingsOpen] = useState(false);
   const [query, setQuery] = useState('');
-  const { apps, loading: appsLoading } = useOfficeApps();
+  const { apps, loading: appsLoading, error: appsError, retry: retryApps } = useOfficeApps();
   const { rows, loading, error, hasMore, loadMore } = useOfficeChats({
     user,
     enabled: true,
@@ -79,13 +79,15 @@ function OfficeChatHistoryPage({ user, onBack, backLabel, onOpenChat, onLogout }
         {t('pages.appsList.loading', 'Loading…')}
       </div>
     );
-  } else if (error && rows.length === 0) {
+  } else if (appsError || (error && rows.length === 0)) {
+    // Without the apps no chat can be listed (each row needs its app), so a
+    // failed apps load must not read as an empty history.
     status = (
       <div className="office-history-status text-slate-500 dark:text-slate-400" role="alert">
         <p>{t('chatHistory.loadFailed', 'Your chats could not be loaded')}</p>
         <button
           type="button"
-          onClick={invalidateChatsCache}
+          onClick={appsError ? retryApps : invalidateChatsCache}
           className={`office-history-more mt-2 ${BUTTON_CLASS}`}
         >
           {t('office.history.retry', 'Try again')}
@@ -167,7 +169,15 @@ function OfficeChatHistoryPage({ user, onBack, backLabel, onOpenChat, onLogout }
                 </section>
               ))}
 
-            {!initialLoad && hasMore && (
+            {/* A refresh or "Show older chats" that failed with rows on screen:
+                the rows stay, and the failure is said rather than swallowed. */}
+            {!initialLoad && !appsError && error && rows.length > 0 && (
+              <p className="office-history-status text-slate-500 dark:text-slate-400" role="alert">
+                {t('chatHistory.loadFailed', 'Your chats could not be loaded')}
+              </p>
+            )}
+
+            {!initialLoad && !appsError && hasMore && (
               <button
                 type="button"
                 onClick={loadMore}
