@@ -2,10 +2,9 @@
  * Proxy Auth LDAP Group Cache Tests
  *
  * The LDAP group lookup runs on every proxy-auth'd request, so results are
- * cached per user. Without a cap the cache grows by one entry per distinct
- * user for the process lifetime; with TTL=0 (caching disabled) writes still
- * used to happen. These tests lock the eviction and disable-when-zero paths
- * down so a future refactor can't regress them silently.
+ * cached per user. These tests lock down the size cap, the failure cooldown,
+ * the bounded stale fallback and the TTL=0 contract (nothing cached, nothing
+ * cached earlier served) so a future refactor can't regress them silently.
  */
 
 import { jest } from '@jest/globals';
@@ -17,6 +16,7 @@ const mockPlatformConfig = {
   proxyAuth: {
     enabled: true,
     userHeader: 'x-forwarded-user',
+    groupsHeader: 'x-forwarded-groups',
     ldapGroupLookupProvider: 'corp',
     ldapGroupLookupCacheTtlSeconds: 600
   }
@@ -45,8 +45,8 @@ jest.unstable_mockModule('../utils/userManager.js', () => ({
   validateAndPersistExternalUser: jest.fn(async user => user)
 }));
 
-async function callProxyAuth(proxyAuth, userId) {
-  const req = { headers: { 'x-forwarded-user': userId }, path: '/api/apps' };
+async function callProxyAuth(proxyAuth, userId, extraHeaders = {}) {
+  const req = { headers: { 'x-forwarded-user': userId, ...extraHeaders }, path: '/api/apps' };
   const res = { status: jest.fn(() => res), json: jest.fn() };
   const next = jest.fn();
   await proxyAuth(req, res, next);
@@ -69,6 +69,32 @@ describe('proxyAuth LDAP group cache', () => {
 
   afterEach(() => {
     jest.restoreAllMocks();
+  });
+
+  it('merges LDAP groups with header groups, without duplicates', async () => {
+    lookupLdapGroupsForUser.mockResolvedValue(['shared', 'ldap-only']);
+
+    const { req } = await callProxyAuth(proxyAuth, 'alice', {
+      'x-forwarded-groups': 'header-only, shared'
+    });
+
+    expect(lookupLdapGroupsForUser).toHaveBeenCalledWith('alice', LDAP_PROVIDER);
+    expect(req.user.externalGroups).toEqual(['header-only', 'shared', 'ldap-only']);
+  });
+
+  it('shares one LDAP lookup between concurrent requests for the same user', async () => {
+    lookupLdapGroupsForUser.mockResolvedValue(['g1']);
+
+    const results = await Promise.all([
+      callProxyAuth(proxyAuth, 'alice'),
+      callProxyAuth(proxyAuth, 'alice'),
+      callProxyAuth(proxyAuth, 'alice')
+    ]);
+
+    expect(lookupLdapGroupsForUser).toHaveBeenCalledTimes(1);
+    for (const { req } of results) {
+      expect(req.user.externalGroups).toEqual(['g1']);
+    }
   });
 
   it('caches results across requests for the same user', async () => {
@@ -94,20 +120,24 @@ describe('proxyAuth LDAP group cache', () => {
   });
 
   it('evicts the oldest entry when the cap is exceeded', async () => {
-    // The cap sits at 5000 in the module; walking that far in a unit test would
-    // be wasteful. Instead we verify the eviction *shape* by driving the code
-    // past a small cap via mocking the underlying Map is not worth the reach —
-    // so we assert the observable property: after enough distinct users, the
-    // first user's entry is no longer served from cache.
     lookupLdapGroupsForUser.mockResolvedValue(['g1']);
 
-    // First lookup for `alice` populates the cache.
+    // `alice` is cached first, so she is the oldest entry once 5000 more
+    // distinct users push the cache past its cap.
     await callProxyAuth(proxyAuth, 'alice');
-    expect(lookupLdapGroupsForUser).toHaveBeenCalledTimes(1);
+    for (let i = 0; i < 5000; i++) {
+      await callProxyAuth(proxyAuth, `user-${i}`);
+    }
+    expect(lookupLdapGroupsForUser).toHaveBeenCalledTimes(5001);
 
-    // A second request for `alice` before eviction hits the cache.
+    // The most recent user is still served from the cache...
+    await callProxyAuth(proxyAuth, 'user-4999');
+    expect(lookupLdapGroupsForUser).toHaveBeenCalledTimes(5001);
+
+    // ...while `alice` was evicted and needs a fresh lookup, well within TTL.
     await callProxyAuth(proxyAuth, 'alice');
-    expect(lookupLdapGroupsForUser).toHaveBeenCalledTimes(1);
+    expect(lookupLdapGroupsForUser).toHaveBeenCalledTimes(5002);
+    expect(lookupLdapGroupsForUser).toHaveBeenLastCalledWith('alice', LDAP_PROVIDER);
   });
 
   it('refreshes cached entry after the TTL', async () => {
@@ -199,5 +229,76 @@ describe('proxyAuth LDAP group cache', () => {
     await callProxyAuth(proxyAuth, 'alice');
     await callProxyAuth(proxyAuth, 'alice');
     expect(lookupLdapGroupsForUser).toHaveBeenCalledTimes(2);
+  });
+
+  it('stops serving cached groups once the TTL is lowered to 0', async () => {
+    lookupLdapGroupsForUser.mockResolvedValueOnce(['g1', 'g2']);
+    await callProxyAuth(proxyAuth, 'alice');
+
+    // The operator disables caching, then the directory goes down. The entry
+    // cached under the old TTL must not stand in for the failed lookup.
+    mockPlatformConfig.proxyAuth.ldapGroupLookupCacheTtlSeconds = 0;
+    lookupLdapGroupsForUser.mockRejectedValue(new Error('LDAP unreachable'));
+
+    const first = await callProxyAuth(proxyAuth, 'alice');
+    expect(first.req.user.externalGroups).toEqual([]);
+
+    // The dropped entry cannot come back on later failures either.
+    now += 5_000;
+    const second = await callProxyAuth(proxyAuth, 'alice');
+    expect(second.req.user.externalGroups).toEqual([]);
+    expect(lookupLdapGroupsForUser).toHaveBeenCalledTimes(3);
+  });
+
+  it('ignores a failure cooldown recorded before the TTL was lowered to 0', async () => {
+    lookupLdapGroupsForUser.mockResolvedValueOnce(['g1', 'g2']);
+    await callProxyAuth(proxyAuth, 'alice');
+
+    // Past the TTL a lookup fails, which records a cooldown holding the old groups.
+    now += 601 * 1000;
+    lookupLdapGroupsForUser.mockRejectedValueOnce(new Error('LDAP unreachable'));
+    const outage = await callProxyAuth(proxyAuth, 'alice');
+    expect(outage.req.user.externalGroups).toEqual(['g1', 'g2']);
+
+    // Within that cooldown the operator disables caching: the next request
+    // goes to LDAP and uses only what it returns.
+    mockPlatformConfig.proxyAuth.ldapGroupLookupCacheTtlSeconds = 0;
+    lookupLdapGroupsForUser.mockResolvedValueOnce(['g1']);
+    now += 5_000;
+    const afterChange = await callProxyAuth(proxyAuth, 'alice');
+
+    expect(lookupLdapGroupsForUser).toHaveBeenCalledTimes(3);
+    expect(afterChange.req.user.externalGroups).toEqual(['g1']);
+  });
+
+  it('does not hand stale groups to a TTL=0 request that joins an in-flight lookup', async () => {
+    lookupLdapGroupsForUser.mockResolvedValueOnce(['g1', 'g2']);
+    await callProxyAuth(proxyAuth, 'alice');
+
+    // Past the TTL, a refresh starts under the positive TTL and hangs.
+    now += 601 * 1000;
+    let rejectLookup;
+    lookupLdapGroupsForUser.mockImplementationOnce(
+      () =>
+        new Promise((_, reject) => {
+          rejectLookup = reject;
+        })
+    );
+    const underTtl = callProxyAuth(proxyAuth, 'alice');
+
+    // While it is in flight caching is disabled, and a second request joins it.
+    mockPlatformConfig.proxyAuth.ldapGroupLookupCacheTtlSeconds = 0;
+    const underZeroTtl = callProxyAuth(proxyAuth, 'alice');
+
+    // Let both requests reach the shared lookup before it fails.
+    await new Promise(resolve => setImmediate(resolve));
+    rejectLookup(new Error('LDAP unreachable'));
+    const [first, second] = await Promise.all([underTtl, underZeroTtl]);
+
+    expect(lookupLdapGroupsForUser).toHaveBeenCalledTimes(2);
+    // The request that started under the old TTL keeps the documented fallback...
+    expect(first.req.user.externalGroups).toEqual(['g1', 'g2']);
+    // ...but the one running with caching disabled gets no cached groups.
+    expect(second.req.user.externalGroups).toEqual([]);
   });
 });

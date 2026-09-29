@@ -446,13 +446,21 @@ Notes:
 - `ldapAuth.enabled` does not need to be `true` — the provider only has to exist.
 - The provider **must** have both `adminDn` and `adminPasswordRef` set; without
   them the lookup is skipped and only the header/JWT groups are used.
+- The user ID is searched as-is against the provider's `usernameAttribute`. If
+  the proxy forwards a Kerberos principal such as `alice@CORP.EXAMPLE.COM`, set
+  `usernameAttribute` to `userPrincipalName` (this assumes the users' UPN suffix
+  matches the Kerberos realm). A principal never matches `sAMAccountName`, so the
+  lookup would find no user and add no groups.
 - Retrieved LDAP groups are **merged** with groups from `X-Forwarded-Groups` and the
   JWT `groups` claim (deduplicated) before external → internal group mapping via
   `groups.json`.
 - Results are cached per user for `ldapGroupLookupCacheTtlSeconds` (default `600`,
   minimum `0`) to avoid an LDAP query on every request. Set to `0` to disable caching.
 - If the lookup fails, the user still authenticates with whatever groups the header
-  or JWT supplied (falls back to a stale cached copy if one exists).
+  or JWT supplied. While caching is enabled, the groups from the last successful
+  lookup keep applying for up to one hour after it; after that, or with the TTL
+  at `0`, only the header/JWT groups count. A failed lookup is retried after 30
+  seconds at the earliest.
 
 ### 2. Local Mode
 
