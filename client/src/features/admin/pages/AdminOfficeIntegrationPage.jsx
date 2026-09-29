@@ -4,6 +4,7 @@ import { Link } from 'react-router-dom';
 import DynamicLanguageEditor from '../../../shared/components/DynamicLanguageEditor';
 import Icon from '../../../shared/components/Icon';
 import ReorderableList from '../components/ReorderableList';
+import ResourceSelector from '../components/ResourceSelector';
 import { makeAdminApiCall, getAdminApiErrorMessage } from '../../../api/adminApi';
 import { fetchAdminApps } from '../../../api';
 import { buildApiUrl } from '../../../utils/runtimeBasePath';
@@ -94,6 +95,28 @@ function ReachBadge({ state, label, detail }) {
   );
 }
 
+/**
+ * Which apps the add-in offers. `all` is no restriction — each user sees the
+ * apps their groups allow; `limited` narrows that to `appIds`. The server keeps
+ * this as `allowedApps` on the add-in's OAuth client (`['*']` for `all`); see
+ * server/utils/officeAppAccess.js.
+ */
+const APP_ACCESS_MODES = ['all', 'limited'];
+const DEFAULT_APP_ACCESS = { mode: 'all', appIds: [] };
+
+const readAppAccess = value => ({
+  mode: APP_ACCESS_MODES.includes(value?.mode) ? value.mode : 'all',
+  appIds: Array.isArray(value?.appIds)
+    ? value.appIds.filter(id => typeof id === 'string' && id.length > 0)
+    : []
+});
+
+/** What is sent to the server: the wildcard for `all`, the ids otherwise. */
+const appAccessToAllowedApps = access => (access.mode === 'all' ? ['*'] : access.appIds);
+
+// Order does not matter to the server, so it must not make a form look edited.
+const sameAllowedApps = (a, b) => JSON.stringify([...a].sort()) === JSON.stringify([...b].sort());
+
 const DEFAULT_START_PAGE = { defaultPage: 'start', defaultAppId: '', featuredAppIds: [] };
 
 // Only the known fields, each well-formed, whatever the server sent.
@@ -134,6 +157,11 @@ function AdminOfficeIntegrationPage() {
   // The task pane's landing view: which view opens after sign-in, the app
   // whose chat input the start page shows, and the curated app shortcuts.
   const [startPage, setStartPage] = useState(DEFAULT_START_PAGE);
+  // Which apps the add-in offers. Stored on the add-in's OAuth client, where the
+  // server enforces it, but edited here next to the start page it narrows.
+  // `savedAppAccess` is what is live now; `appAccess` is the form.
+  const [appAccess, setAppAccess] = useState(DEFAULT_APP_ACCESS);
+  const [savedAppAccess, setSavedAppAccess] = useState(DEFAULT_APP_ACCESS);
   // What the answer button under each assistant reply does by default. Users
   // may override it per device in the pane's Settings dialog (issue #2446).
   const [defaultMailAction, setDefaultMailAction] = useState(DEFAULT_MAIL_ACTION);
@@ -175,6 +203,10 @@ function AdminOfficeIntegrationPage() {
       setOfficeJsResolvedMode(data.officeJsResolvedMode || '');
       setOfficeJsPresets(Array.isArray(data.officeJsCdnPresets) ? data.officeJsCdnPresets : []);
       setStartPage(readStartPage(data.startPage));
+      // Null when there is no OAuth client to read; the card says so.
+      const access = data.appAccess ? readAppAccess(data.appAccess) : DEFAULT_APP_ACCESS;
+      setAppAccess(access);
+      setSavedAppAccess(access);
       setDefaultMailAction(
         MAIL_ACTION_CHOICES.includes(data.defaultMailAction)
           ? data.defaultMailAction
@@ -230,6 +262,46 @@ function AdminOfficeIntegrationPage() {
     }`;
 
   const updateStartPage = patch => setStartPage(prev => ({ ...prev, ...patch }));
+
+  // The picker's entries. Ids that no longer match an app stay in the list and
+  // stay removable — the server enforces the list as stored, so a stale id is
+  // not something the admin may be unable to see.
+  const appAccessResources = useMemo(() => {
+    const known = apps.map(app => ({
+      id: app.id,
+      name: `${getLocalizedContent(app.name, currentLanguage) || app.id}${
+        app.enabled === false ? ` (${t('admin.officeIntegration.disabledApp', 'disabled')})` : ''
+      }`
+    }));
+    const stale = appsLoading
+      ? []
+      : appAccess.appIds
+          .filter(id => !apps.some(app => app.id === id))
+          .map(id => ({
+            id,
+            name: `${id} (${t('admin.officeIntegration.unknownApp', 'not found')})`
+          }));
+    return [...known, ...stale];
+  }, [apps, appsLoading, appAccess.appIds, currentLanguage, t]);
+
+  // There is only something to save (or to refuse) once the admin has changed it.
+  const appAccessDirty =
+    !!status?.appAccess &&
+    !sameAllowedApps(appAccessToAllowedApps(appAccess), appAccessToAllowedApps(savedAppAccess));
+  const appAccessEmpty = appAccess.mode === 'limited' && appAccess.appIds.length === 0;
+
+  // Start-page apps the allow-list would hide: the pane skips an app the user
+  // may not open, so a default the list leaves out silently never appears.
+  const startPageAppsOutsideList =
+    status?.appAccess && appAccess.mode === 'limited'
+      ? [...new Set([startPage.defaultAppId, ...startPage.featuredAppIds])].filter(
+          id => id && !appAccess.appIds.includes(id)
+        )
+      : [];
+  const startPageAppName = id => {
+    const app = apps.find(entry => entry.id === id);
+    return (app && getLocalizedContent(app.name, currentLanguage)) || id;
+  };
 
   const mailActionLabels = {
     auto: t(
@@ -449,6 +521,20 @@ function AdminOfficeIntegrationPage() {
       : officeJsPresets;
 
   const handleSaveConfig = async () => {
+    // An empty "limited" list would be stored as no restriction at all, the
+    // opposite of what choosing "only selected apps" means — so it is refused
+    // here, and by the server, rather than saved.
+    if (appAccessDirty && appAccessEmpty) {
+      setMessage({
+        type: 'error',
+        text: t(
+          'admin.officeIntegration.allowedAppsEmptyError',
+          'Select at least one app, or choose "All apps the user can access". An empty list would mean no restriction.'
+        )
+      });
+      return;
+    }
+
     try {
       setSaving(true);
       setMessage(null);
@@ -480,7 +566,11 @@ function AdminOfficeIntegrationPage() {
             defaultAppId: startPage.defaultAppId || '',
             featuredAppIds: startPage.featuredAppIds
           },
-          defaultMailAction
+          defaultMailAction,
+          // Only when edited: the list lives on the OAuth client, which an admin
+          // may also have changed there, and a save of unrelated fields must not
+          // overwrite it.
+          ...(appAccessDirty ? { allowedApps: appAccessToAllowedApps(appAccess) } : {})
         }
       });
       await loadStatus();
@@ -736,6 +826,172 @@ function AdminOfficeIntegrationPage() {
                 />
               </div>
             </div>
+
+            {/* Available apps: the add-in's OAuth client allow-list */}
+            {status?.enabled && status?.oauthClientId && (
+              <div className="bg-white dark:bg-gray-800 rounded-xl shadow-xs border border-gray-200 dark:border-gray-700 p-6">
+                <div className="flex items-start justify-between gap-4">
+                  <div>
+                    <h2 className="text-lg font-semibold text-gray-900 dark:text-gray-100 mb-1">
+                      {t('admin.officeIntegration.allowedAppsTitle', 'Available Apps')}
+                    </h2>
+                    <p className="text-sm text-gray-500 dark:text-gray-400">
+                      {t(
+                        'admin.officeIntegration.allowedAppsDesc',
+                        'Which apps the add-in offers. By default a user sees every app their iHub groups allow, exactly as in the web app. Limit the add-in to a few purpose-built apps here. The limit is stored on the add-in’s OAuth client.'
+                      )}
+                    </p>
+                  </div>
+                  {status.appAccess && (
+                    <span
+                      className={`shrink-0 rounded-full px-3 py-1 text-xs font-medium ${
+                        savedAppAccess.mode === 'all'
+                          ? 'bg-green-100 text-green-800 dark:bg-green-900/30 dark:text-green-300'
+                          : 'bg-amber-100 text-amber-800 dark:bg-amber-900/30 dark:text-amber-300'
+                      }`}
+                    >
+                      {savedAppAccess.mode === 'all'
+                        ? t('admin.officeIntegration.allowedAppsBadgeAll', 'Currently: all apps')
+                        : t(
+                            'admin.officeIntegration.allowedAppsBadgeLimited',
+                            'Currently: limited ({{count}} selected)',
+                            { count: savedAppAccess.appIds.length }
+                          )}
+                    </span>
+                  )}
+                </div>
+
+                {!status.appAccess ? (
+                  <div className="mt-4 rounded-lg bg-amber-50 dark:bg-amber-900/20 border border-amber-200 dark:border-amber-700 px-4 py-3 text-sm text-amber-800 dark:text-amber-300">
+                    {t(
+                      'admin.officeIntegration.allowedAppsClientMissing',
+                      'The add-in’s OAuth client could not be found, so its app access cannot be shown. Disable and enable the integration to create it again.'
+                    )}
+                  </div>
+                ) : (
+                  <div className="mt-4 max-w-2xl space-y-3">
+                    {[
+                      {
+                        mode: 'all',
+                        label: t(
+                          'admin.officeIntegration.allowedAppsModeAll',
+                          'All apps the user can access'
+                        ),
+                        desc: t(
+                          'admin.officeIntegration.allowedAppsModeAllDesc',
+                          'No limit from the add-in. Each user sees the apps their groups allow.'
+                        )
+                      },
+                      {
+                        mode: 'limited',
+                        label: t(
+                          'admin.officeIntegration.allowedAppsModeLimited',
+                          'Only selected apps'
+                        ),
+                        desc: t(
+                          'admin.officeIntegration.allowedAppsModeLimitedDesc',
+                          'Users see only the selected apps, and only those their groups allow too. Being on this list never grants access on its own.'
+                        )
+                      }
+                    ].map(({ mode, label, desc }) => (
+                      <div
+                        key={mode}
+                        className="flex items-start gap-3 rounded-lg border border-gray-200 dark:border-gray-700 px-4 py-3 hover:bg-gray-50 dark:hover:bg-gray-700/40"
+                      >
+                        <input
+                          id={`office-appAccess-${mode}`}
+                          type="radio"
+                          name="office-appAccess"
+                          value={mode}
+                          checked={appAccess.mode === mode}
+                          onChange={() => setAppAccess(prev => ({ ...prev, mode }))}
+                          aria-describedby={`office-appAccess-${mode}-desc`}
+                          className="mt-0.5 h-4 w-4 border-gray-300 text-indigo-600 focus:ring-indigo-500"
+                        />
+                        <div className="min-w-0 flex-1">
+                          <label
+                            htmlFor={`office-appAccess-${mode}`}
+                            className="block text-sm font-medium text-gray-700 dark:text-gray-300 cursor-pointer"
+                          >
+                            {label}
+                          </label>
+                          <p
+                            id={`office-appAccess-${mode}-desc`}
+                            className="text-xs text-gray-500 dark:text-gray-400 mt-0.5"
+                          >
+                            {desc}
+                          </p>
+                          {mode === 'limited' && appAccess.mode === 'limited' && (
+                            <div className="mt-3">
+                              {appsLoading ? (
+                                <p className="text-xs text-gray-500 dark:text-gray-400">
+                                  {t('admin.officeIntegration.allowedAppsLoading', 'Loading apps…')}
+                                </p>
+                              ) : (
+                                <ResourceSelector
+                                  label={t(
+                                    'admin.officeIntegration.allowedAppsSelected',
+                                    'Allowed apps'
+                                  )}
+                                  resources={appAccessResources}
+                                  selectedResources={appAccess.appIds}
+                                  onSelectionChange={appIds =>
+                                    setAppAccess(prev => ({ ...prev, appIds }))
+                                  }
+                                  allowWildcard={false}
+                                  placeholder={t(
+                                    'admin.officeIntegration.allowedAppsSearch',
+                                    'Search apps to add...'
+                                  )}
+                                  emptyMessage={t(
+                                    'admin.officeIntegration.allowedAppsNone',
+                                    'No apps selected yet.'
+                                  )}
+                                />
+                              )}
+                              {appAccessEmpty && (
+                                <p className="mt-2 text-xs text-amber-700 dark:text-amber-400">
+                                  {t(
+                                    'admin.officeIntegration.allowedAppsEmptyWarning',
+                                    'Select at least one app before saving. An empty list would mean no limit.'
+                                  )}
+                                </p>
+                              )}
+                            </div>
+                          )}
+                        </div>
+                      </div>
+                    ))}
+
+                    {appAccessDirty && (
+                      <p className="text-xs text-indigo-700 dark:text-indigo-300">
+                        {t(
+                          'admin.officeIntegration.allowedAppsUnsaved',
+                          'Unsaved change. It applies when you click Save at the bottom of the page.'
+                        )}
+                      </p>
+                    )}
+
+                    <p className={helpClass}>
+                      {t(
+                        'admin.officeIntegration.allowedAppsLiveHint',
+                        'Takes effect for signed-in users right away. No sign-in or manifest redeploy is needed.'
+                      )}{' '}
+                      {t(
+                        'admin.officeIntegration.allowedAppsModelsHint',
+                        'Models and prompts can be limited the same way on the OAuth client.'
+                      )}{' '}
+                      <Link
+                        to={`/admin/oauth/clients/${status.oauthClientId}`}
+                        className="text-indigo-600 hover:underline dark:text-indigo-400"
+                      >
+                        {t('admin.officeIntegration.viewClient', 'View OAuth Client')}
+                      </Link>
+                    </p>
+                  </div>
+                )}
+              </div>
+            )}
 
             {/* Office.js source */}
             <div className="bg-white dark:bg-gray-800 rounded-xl shadow-xs border border-gray-200 dark:border-gray-700 p-6">
@@ -1139,6 +1395,16 @@ function AdminOfficeIntegrationPage() {
                     )}
                   </p>
                 </div>
+
+                {startPageAppsOutsideList.length > 0 && (
+                  <div className="rounded-lg bg-amber-50 dark:bg-amber-900/20 border border-amber-200 dark:border-amber-700 px-4 py-3 text-sm text-amber-800 dark:text-amber-300">
+                    {t(
+                      'admin.officeIntegration.startPageOutsideList',
+                      'Not in the available apps above, so the task pane will not show: {{apps}}. Add them there, or pick other apps.',
+                      { apps: startPageAppsOutsideList.map(startPageAppName).join(', ') }
+                    )}
+                  </div>
+                )}
               </div>
             </div>
 
