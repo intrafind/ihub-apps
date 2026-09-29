@@ -539,7 +539,7 @@ function ChatMessage({
         /Mac|iPhone|iPad|iPod/i.test(navigator.platform || navigator.userAgent || '');
       const submitShortcut = isMac ? '⌘ + Enter' : 'Ctrl + Enter';
       return (
-        <div className="w-full">
+        <div className="chat-widget-message-edit w-full">
           <textarea
             ref={editTextareaRef}
             value={editedContent}
