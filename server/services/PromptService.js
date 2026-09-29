@@ -343,11 +343,17 @@ class PromptService {
       return processedMsg;
     });
 
-    let userVariables = {};
-    const lastUserMessage = messages.findLast(msg => msg.role === 'user');
-    if (lastUserMessage && lastUserMessage.variables) {
-      userVariables = lastUserMessage.variables;
-    }
+    // The conversation's app variables are the newest set a user message
+    // carried: a follow-up that sets none keeps the ones the chat started
+    // with. (A stored chat's are attached to the new message by the route.)
+    const variablesMessage = messages.findLast(
+      msg =>
+        msg.role === 'user' &&
+        msg.variables &&
+        typeof msg.variables === 'object' &&
+        Object.keys(msg.variables).length > 0
+    );
+    const userVariables = variablesMessage ? variablesMessage.variables : {};
 
     if (app && !llmMessages.some(msg => msg.role === 'system')) {
       let systemPrompt =

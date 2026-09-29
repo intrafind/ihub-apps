@@ -6,6 +6,7 @@ import { getConversationId } from '../../../utils/chatId';
 import StarRating from '../../../shared/components/StarRating';
 import MessageVariables from './MessageVariables';
 import Icon from '../../../shared/components/Icon';
+import { splitThoughts } from '../splitThoughts';
 import StreamingMarkdown from './StreamingMarkdown';
 import {
   htmlToMarkdown,
@@ -826,7 +827,7 @@ function ChatMessage({
             </button>
             {showThoughts && (
               <ul className="list-disc pl-4 mt-1 space-y-1">
-                {message.thoughts.map((th, idx) => (
+                {splitThoughts(message.thoughts).map((th, idx) => (
                   /* Streamed reasoning is one merged block of text and carries its
                      own line breaks (numbered steps, blank lines); without this it
                      collapses into a single run-on paragraph. */
@@ -1108,6 +1109,18 @@ function ChatMessage({
       {/* Info about finish reason and retry options */}
       {!isUser && !isError && !message.loading && message.finishReason && (
         <div className="flex items-center gap-2 text-xs text-gray-600 mb-1">
+          {message.finishReason === 'length' && (
+            <span
+              className="inline-flex items-center gap-1 rounded-full bg-amber-100 px-2 py-0.5 font-medium text-amber-800 dark:bg-amber-900/30 dark:text-amber-300"
+              title={t(
+                'pages.appChat.truncatedHint',
+                'The model reached its output limit before it finished. Reasoning models spend the same limit on their thinking, so a long thought can use it up before the answer starts. Raise "Max Output Tokens" of the model, or lower its reasoning effort.'
+              )}
+            >
+              <Icon name="exclamation-triangle" size="sm" />
+              {t('pages.appChat.truncated', 'Truncated')}
+            </span>
+          )}
           {(message.finishReason === 'connection_closed' || message.finishReason === 'error') && (
             <>
               <Icon name="exclamation-circle" size="sm" className="text-red-500" />

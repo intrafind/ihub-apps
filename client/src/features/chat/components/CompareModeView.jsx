@@ -13,6 +13,10 @@ import ComparePanel from './ComparePanel';
  *
  * Per-panel state (model selection, chat instance, message handlers) lives
  * inside each ComparePanel — this layout never thinks in "left/right" terms.
+ *
+ * With `startForm` (an app that starts with a form, issue #2581), the panels
+ * show only their model pickers and the one form stands in for their
+ * transcripts; what it sends is broadcast like any message.
  */
 const CompareModeView = forwardRef(function CompareModeView(
   {
@@ -32,7 +36,8 @@ const CompareModeView = forwardRef(function CompareModeView(
     onClarificationSkip,
     onDocumentAction,
     linkPath,
-    ephemeral
+    ephemeral,
+    startForm = null
   },
   ref
 ) {
@@ -78,8 +83,10 @@ const CompareModeView = forwardRef(function CompareModeView(
     []
   );
 
-  return (
-    <div className="flex flex-col md:flex-row gap-4 h-full min-h-0 overflow-hidden divide-y md:divide-y-0 md:divide-x divide-gray-200 dark:divide-gray-700">
+  const panels = (
+    <div
+      className={`flex flex-col md:flex-row gap-4 min-h-0 divide-y md:divide-y-0 md:divide-x divide-gray-200 dark:divide-gray-700 ${startForm ? 'shrink-0' : 'flex-1 overflow-hidden'}`}
+    >
       {panelConfigs.map((config, index) => (
         <ComparePanel
           key={config.key}
@@ -106,8 +113,18 @@ const CompareModeView = forwardRef(function CompareModeView(
           onDocumentAction={onDocumentAction}
           linkPath={linkPath}
           ephemeral={ephemeral}
+          hideTranscript={Boolean(startForm)}
         />
       ))}
+    </div>
+  );
+
+  // One tree with or without the form: the panels must not remount when it
+  // goes, or the message it just sent them is dropped with their state.
+  return (
+    <div className="flex flex-col h-full min-h-0">
+      {panels}
+      {startForm && <div className="flex-1 min-h-0 overflow-y-auto">{startForm}</div>}
     </div>
   );
 });

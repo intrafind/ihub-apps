@@ -7,6 +7,7 @@ import { filterResourcesByPermissions } from '../../utils/authorization.js';
 import logger from '../../utils/logger.js';
 import { findByIdCaseInsensitive } from '../../utils/resourceLookup.js';
 import { normalizeFiles } from '../../../shared/promptContext.js';
+import { resolveMaxOutputTokens } from '../../../shared/outputTokens.js';
 
 /**
  * Attach the page images of image-based PDFs to their message.
@@ -474,8 +475,7 @@ class RequestBuilder {
       // Output cap sent to the provider (max_tokens / maxOutputTokens). This is
       // the model's response limit — NOT the context window. Apps no longer
       // configure token limits; they inherit the output cap from the model.
-      const DEFAULT_MAX_OUTPUT = 4096;
-      const finalTokens = model.maxOutputTokens || DEFAULT_MAX_OUTPUT;
+      const finalTokens = resolveMaxOutputTokens(model);
       logger.info('Max output tokens for request', {
         component: 'RequestBuilder',
         finalTokens,

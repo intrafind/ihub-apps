@@ -38,6 +38,7 @@ import { isValidId } from '../../utils/pathSecurity.js';
 import { StorageError } from '../../storage/errors.js';
 import { getStorage, readFacet } from '../../storage/bootstrap.js';
 import { RUNTIME_NAMESPACES } from '../../storage/namespaces.js';
+import { VARIABLE_NAME_PATTERN } from '../../../shared/validationPatterns.js';
 import { chatMessageCap } from './chatPersistence.js';
 import { getArtifactRepository } from '../artifacts/ArtifactRepository.js';
 import { ChatShareRepository } from './ChatShareRepository.js';
@@ -356,6 +357,36 @@ export function normalizeChatSettings(settings) {
   return Object.keys(out).length > 0 ? out : null;
 }
 
+/** Most app variables a chat stores. */
+const MAX_CHAT_VARIABLES = 50;
+
+/**
+ * The app variables a chat was given (the values of the app's `variables`),
+ * in the form they are stored.
+ *
+ * They are chat state like `settings`: sent by the turn that sets them — the
+ * start form's, or every turn of an app that asks for them beside the chat —
+ * and read back for each turn after, so a follow-up need not carry them and a
+ * reopened chat continues with them. Names must be valid variable names and
+ * values text, each no longer than a message may be; anything else is
+ * dropped, as the values come from a request body.
+ *
+ * @param {unknown} variables - Candidate variables, as a request sent them.
+ * @returns {Object<string, string>|null} The storable variables, or null when
+ *   none survive.
+ */
+export function normalizeChatVariables(variables) {
+  if (!variables || typeof variables !== 'object' || Array.isArray(variables)) return null;
+  const out = {};
+  for (const [name, value] of Object.entries(variables)) {
+    if (Object.keys(out).length >= MAX_CHAT_VARIABLES) break;
+    if (!VARIABLE_NAME_PATTERN.test(name)) continue;
+    if (typeof value === 'string') out[name] = value.slice(0, MAX_MESSAGE_CHARS);
+    else if (typeof value === 'number' || typeof value === 'boolean') out[name] = String(value);
+  }
+  return Object.keys(out).length > 0 ? out : null;
+}
+
 /**
  * Apply a patch to a chat, protecting the immutable fields and re-deriving
  * the values that are computed rather than set.
@@ -388,6 +419,13 @@ function applyChatPatch(chat, patch) {
   } else {
     next.settings = normalizeChatSettings(chat.settings);
   }
+  // Variables replace: a turn that sends them sends the whole set. One that
+  // sends none leaves the stored ones, which is how a follow-up keeps them.
+  const variables =
+    ('variables' in patch ? normalizeChatVariables(patch.variables) : null) ||
+    normalizeChatVariables(chat.variables);
+  if (variables) next.variables = variables;
+  else delete next.variables;
   // An unknown status is dropped rather than stored: the chat list renders it.
   if (!CHAT_STATUSES.includes(next.status)) next.status = chat.status || 'active';
   if (!Number.isFinite(next.messageCount)) next.messageCount = chat.messageCount || 0;

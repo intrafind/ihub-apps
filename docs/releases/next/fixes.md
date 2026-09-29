@@ -1,5 +1,25 @@
 # Fixes — Unreleased
 
+## Reasoning models: no more silent empty answers
+
+A reasoning model spends its thinking tokens from the same output limit as the answer. When a long
+thought used the whole limit, the chat showed the thinking and then nothing, with no hint why.
+
+- A message that stopped at the output limit now carries a **Truncated** label. Hovering it explains
+  the cause and the fix.
+- Output limits are higher: the fallback for a model without a **Max Output Tokens** value is now
+  16384 (was 4096, and never more than half the context window), and the bundled Claude Haiku
+  4.5 (64000), Mistral (32000) and Local vLLM (16000) models ship with more room. Installed copies
+  that still have the old bundled value are raised automatically; values you set yourself are
+  kept.
+- The **Max Output Tokens** field in the model form shows the default as a placeholder and says
+  that an empty field means the default, not unlimited.
+- The thinking behind **Show thinking** is split into separate steps at each blank line instead of
+  one long block of text.
+- The bundled **Local vLLM** model now uses the `local` provider, which sends the reasoning
+  settings vLLM understands (`chat_template_kwargs`, `include_reasoning`). Existing model files are
+  not changed; set `"provider": "local"` on a vLLM model to get the same.
+  
 ## Reopened chats show your message when you only uploaded a file
 
 In apps like the NDA Risk Analyzer, you can upload a document and send it without typing anything.
@@ -52,3 +72,10 @@ Cancel and Send buttons now stay inside the bubble at every pane width.
 
 - The browser extension and Nextcloud integration use the same styling and get the same fix.
 - The main web app was not affected.
+
+## Outlook Add-in: Uploaded Documents Reach the Answer
+
+In the Outlook add-in and the browser extension, a document attached with the paperclip or by
+drag and drop showed up under the chat input but was not sent: the model answered without it.
+Several files attached at once were dropped the same way. Uploaded documents and images now go
+along with the message, as they do in the web app.
