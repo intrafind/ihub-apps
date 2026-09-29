@@ -34,8 +34,12 @@ jest.unstable_mockModule('../configCache.js', () => ({
 }));
 
 // Groups configuration lives under contents/, which isn't present in this checkout.
+// `mapExternalGroups` is unused here but must be declared: `middleware/ldapAuth.js`
+// (pulled in transitively by proxyAuth) imports it, and ESM rejects a mocked module
+// that omits a name any importer statically references.
 jest.unstable_mockModule('../utils/authorization.js', () => ({
-  enhanceUserGroups: jest.fn(user => user)
+  enhanceUserGroups: jest.fn(user => user),
+  mapExternalGroups: jest.fn(groups => groups || [])
 }));
 jest.unstable_mockModule('../utils/userManager.js', () => ({
   validateAndPersistExternalUser: jest.fn(async user => user)
