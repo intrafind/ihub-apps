@@ -463,7 +463,7 @@ export function createOutputValidator(format) {
       };
     }
     if (format.kind === 'json_object') {
-      if (typeof value !== 'object' || value === null || Array.isArray(value)) {
+      if (typeof value !== 'object' || Array.isArray(value)) {
         return {
           valid: false,
           errors: [{ path: '/', message: 'must be a JSON object', keyword: 'type' }]
