@@ -15,6 +15,7 @@ import {
 } from './toolCalling/thoughtSignatures.js';
 import { BaseAdapter } from './BaseAdapter.js';
 import logger from '../utils/logger.js';
+import { watermarkRequestFields } from '../services/provenance/watermark/requestParams.js';
 
 class VLLMAdapterClass extends BaseAdapter {
   /**
@@ -205,6 +206,9 @@ class VLLMAdapterClass extends BaseAdapter {
     } else if (responseFormat === 'json') {
       body.response_format = { type: 'json_object' };
     }
+
+    // EU AI Act text watermark: server-owned, from the model config only.
+    Object.assign(body, watermarkRequestFields(model));
 
     // Note: Request body logging disabled to prevent exposing sensitive data in logs
     // logger.info('vLLM request body:', body);

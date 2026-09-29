@@ -50,6 +50,8 @@ export const runEndedData = z.object({
   knowledgeSources: z.array(z.string()).optional(),
   /** Workflow output (chat-visible result) when the run produced one. */
   output: z.any().optional(),
+  /** EU AI Act provenance of the answer (content id, hash, model, marking). */
+  provenance: z.record(z.string(), z.any()).optional(),
   error: z.object({ code: z.string().optional(), message: z.string() }).optional()
 });
 
@@ -72,7 +74,9 @@ export const stepDeltaData = z.object({
     .object({
       mimeType: z.string(),
       data: z.string(),
-      thoughtSignature: z.string().optional()
+      thoughtSignature: z.string().optional(),
+      /** EU AI Act marking of the image (content id, markings, conforming). */
+      provenance: z.record(z.string(), z.any()).optional()
     })
     .optional(),
   /** Thinking metadata (signature etc.) when kind === 'thinking'. */

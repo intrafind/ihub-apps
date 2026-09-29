@@ -166,7 +166,10 @@ const OPTIONAL_MESSAGE_FIELDS = [
   // Documents behind an assistant answer (see services/chat/chatCitations.js).
   'citations',
   // Connect cards for per-user OAuth MCP servers (see chatSeams.authRequiredOf).
-  'mcpAuthRequired'
+  'mcpAuthRequired',
+  // EU AI Act provenance of an assistant answer: content id, hash, model,
+  // marking status — never content (see services/provenance/ProvenanceStore.js).
+  'provenance'
 ];
 
 /** Variables kept per message, and the longest value kept. */

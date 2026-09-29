@@ -174,6 +174,16 @@ export const RUNTIME_NAMESPACES = Object.freeze({
    * to be read.
    */
   mcpToolCatalog: 'mcp-tool-catalog',
+  /**
+   * EU AI Act provenance records, one document per generated output, keyed by
+   * its content id: content hash, model, time and marking status — never the
+   * content itself. Deployer-controlled retention (CoP 1.1.3).
+   */
+  provenanceRecords: 'provenance-records',
+  /** Content hash → content id, so client-sent content can be verified. */
+  provenanceHashes: 'provenance-hashes',
+  /** Detection log: metadata of each verification (never submitted content). */
+  provenanceDetections: 'provenance-detections',
   /** One-time import markers, shared by every runtime store that has one. */
   runtimeImports: 'runtime-imports'
 });

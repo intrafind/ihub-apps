@@ -146,6 +146,15 @@ function toPayload(data) {
   return null;
 }
 
+/** The provenance fields an artifact keeps (no errors, no free-form text). */
+function sanitizeProvenance(p) {
+  return {
+    ...(typeof p.contentId === 'string' ? { contentId: p.contentId } : {}),
+    ...(Array.isArray(p.markings) ? { markings: p.markings.filter(m => typeof m === 'string') } : {}),
+    ...(typeof p.conforming === 'boolean' ? { conforming: p.conforming } : {})
+  };
+}
+
 /** Whether two scopes address the same thing. */
 function sameScope(a, b) {
   return a?.type === b?.type && a?.id === b?.id;
@@ -168,7 +177,8 @@ function toDescriptor(id, data) {
     ...(typeof data.sha256 === 'string' && data.sha256 ? { sha256: data.sha256 } : {}),
     ...(typeof data.name === 'string' && data.name ? { name: data.name } : {}),
     ...(typeof data.runId === 'string' && data.runId ? { runId: data.runId } : {}),
-    ...(typeof data.createdAt === 'string' ? { createdAt: data.createdAt } : {})
+    ...(typeof data.createdAt === 'string' ? { createdAt: data.createdAt } : {}),
+    ...(data.provenance && typeof data.provenance === 'object' ? { provenance: data.provenance } : {})
   };
 }
 
@@ -238,7 +248,7 @@ export class ArtifactRepository {
    * @returns {Promise<Object|null>} The descriptor to record, or null when
    *   nothing was stored — storage down, scope unusable, policy off.
    */
-  async put(scope, { kind, mimeType, data, name, runId } = {}) {
+  async put(scope, { kind, mimeType, data, name, runId, provenance } = {}) {
     const target = this._scope(scope, 'put');
     if (!target) return null;
     const payload = toPayload(data);
@@ -284,6 +294,9 @@ export class ArtifactRepository {
       sha256: ref.sha256,
       ...(label ? { name: label } : {}),
       ...(typeof runId === 'string' && runId ? { runId } : {}),
+      // EU AI Act marking of a generated image (content id, markings); the
+      // bytes were marked before they reached the store.
+      ...(provenance && typeof provenance === 'object' ? { provenance: sanitizeProvenance(provenance) } : {}),
       createdAt: new Date().toISOString()
     };
     try {

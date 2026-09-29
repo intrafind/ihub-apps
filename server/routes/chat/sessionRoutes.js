@@ -59,6 +59,7 @@ import {
 import { drainPendingFinish } from '../../services/workflow/chatBridge.js';
 import { cancelChatWorkflow, replayChatWorkflowProgress } from '../../tools/workflowRunner.js';
 import { renderUserMessage } from '../../../shared/promptContext.js';
+import { stripWatermarkOverrides } from '../../services/provenance/httpProvenance.js';
 
 /**
  * Report a failure that happened before (or instead of) a model turn on the
@@ -862,6 +863,7 @@ export default function registerSessionRoutes(app, { getLocalizedError, DEFAULT_
   app.post(
     buildServerPath('/api/apps/:appId/chat/:chatId'),
     chatAuthRequired,
+    stripWatermarkOverrides,
     validate(chatPostSchema),
     async (req, res) => {
       // Destructured outside the try, and the durable mark tracked next to it,

@@ -50,6 +50,7 @@
     "http-proxy-agent": "^9.1.0",
     "https-proxy-agent": "^9.1.0",
     "jose": "^6.2.12",
+    "jpeg-js": "^0.4.4",
     "js-yaml": "^5.4.2",
     "jsdom": "^30.1.1",
     "jsonwebtoken": "^9.0.2",

@@ -223,6 +223,28 @@ export function normalizeChunk(raw) {
   return chunk;
 }
 
+/**
+ * EU AI Act Art. 50(2): mark generated images (C2PA + invisible watermark)
+ * before a chunk is accumulated or yielded, so the SSE delta, the stored
+ * artifact and every API response carry the marked bytes. Loaded lazily:
+ * only image-producing turns pay for it.
+ */
+async function markGeneratedImages(chunk, model, messages) {
+  if (!Array.isArray(chunk?.images) || chunk.images.length === 0) return;
+  try {
+    const { markChunkImages, sourceImagesFromMessages } = await import(
+      '../provenance/image/ImageMarker.js'
+    );
+    await markChunkImages(chunk, { model, sourceImages: sourceImagesFromMessages(messages) });
+  } catch (error) {
+    logger.error('Generated image could not be marked', {
+      component: COMPONENT,
+      modelId: model?.id,
+      error: error.message
+    });
+  }
+}
+
 // ── Result accumulation ─────────────────────────────────────────────────────
 
 /**
@@ -907,6 +929,7 @@ export class LLMClient {
                     }
                   );
                 }
+                await markGeneratedImages(chunk, model, currentMessages);
                 accumulator.push(chunk);
                 yield chunk;
                 if (chunk.complete) break;
@@ -930,6 +953,7 @@ export class LLMClient {
             const text = await currentResponse.text();
             const raw = await convertResponseToGeneric(text, model.provider, requestId);
             const chunk = normalizeChunk({ ...raw, complete: true });
+            await markGeneratedImages(chunk, model, currentMessages);
             if (chunk.error) {
               throw new LLMError(chunk.errorMessage || 'Error processing LLM response', {
                 code: LLM_ERROR_CODES.PROVIDER_ERROR,

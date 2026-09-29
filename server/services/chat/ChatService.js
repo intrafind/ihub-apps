@@ -50,6 +50,7 @@ import {
   chatPassthroughOptions
 } from './chatSeams.js';
 import { describeChatError } from './chatErrors.js';
+import { recordTurnProvenance } from '../provenance/turnProvenance.js';
 import * as defaultTelemetry from './chatTelemetry.js';
 import modelDiscoveryService from '../ModelDiscoveryService.js';
 
@@ -635,6 +636,8 @@ class ChatService {
         mcpAppViews,
         mcpAuthPrompts,
         takePendingCall: () => turnSeam.takePendingCall(),
+        app,
+        temperature,
         structured: outputSeam
           ? {
               validate: structuredOutput.validate,
@@ -741,6 +744,8 @@ class ChatService {
     mcpAppViews = [],
     mcpAuthPrompts = [],
     takePendingCall = () => null,
+    app = null,
+    temperature = null,
     structured = null
   }) {
     const loopSources = result.knowledgeSources || [];
@@ -776,10 +781,26 @@ class ChatService {
       }
     };
     const endRun = data =>
-      stream.emit(SSE_V2_EVENTS.RUN_ENDED, { ...(usage ? { usage } : {}), ...data });
+      stream.emit(SSE_V2_EVENTS.RUN_ENDED, {
+        ...(usage ? { usage } : {}),
+        ...(summary.provenance ? { provenance: summary.provenance } : {}),
+        ...data
+      });
+    // EU AI Act: a provenance record per answer (hash, model, marking — never
+    // the content), stored on the message and sent with `run/ended`.
+    const recordProvenance = async () => {
+      summary.provenance = await recordTurnProvenance({
+        content: summary.content,
+        model,
+        app,
+        temperature,
+        images: summary.images
+      });
+    };
 
     if (result.status === 'aborted') {
       // Stop button, client disconnect or a superseding turn: no error bubble.
+      if (content || summary.images.length) await recordProvenance();
       await this.telemetry.recordChatCallEnd({
         baseLog: buildLogData(streaming),
         model,
@@ -951,6 +972,7 @@ class ChatService {
         })
       );
       const knowledgeSources = this.resolveAnswerSources(chatId, loopSources);
+      await recordProvenance();
       endRun({
         status: 'completed',
         finishReason: 'tool_passthrough_complete',
@@ -1020,6 +1042,7 @@ class ChatService {
 
     const finishReason = result.finishReason || 'stop';
     const knowledgeSources = this.resolveAnswerSources(chatId, loopSources);
+    await recordProvenance();
     endRun({ status: result.status || 'completed', finishReason, knowledgeSources });
     await this.logInteraction(
       'chat_response',

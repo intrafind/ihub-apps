@@ -154,7 +154,8 @@ export async function storeGeneratedArtifacts({ chatId, runId, artifacts, store,
         mimeType,
         data: artifact.data,
         name: artifact.name,
-        runId
+        runId,
+        provenance: artifact.provenance
       });
       if (descriptor) stored += 1;
       descriptors.push(descriptor || { ...refused, unavailable: 'not-stored' });
@@ -459,7 +460,8 @@ export async function materializeAssistantTurn({
             ...(artifacts.length > 0 ? { artifacts } : {}),
             ...(mcpApps.length > 0 ? { mcpApps } : {}),
             ...(citations ? { citations } : {}),
-            ...(mcpAuthRequired.length > 0 ? { mcpAuthRequired } : {})
+            ...(mcpAuthRequired.length > 0 ? { mcpAuthRequired } : {}),
+            ...(summary?.provenance ? { provenance: summary.provenance } : {})
           },
           // The end of the transcript for an ordinary turn, and the position
           // right after this run's own question for a superseded one.
