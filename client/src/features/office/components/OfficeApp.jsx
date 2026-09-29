@@ -1,9 +1,10 @@
 import * as React from 'react';
-import { Routes, Route, Navigate, useNavigate } from 'react-router-dom';
+import { Routes, Route, Navigate, useLocation, useNavigate } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
 import OfficeLogin from './OfficeLogin';
 import OfficeChatPanel from './OfficeChatPanel';
 import OfficeStartPage from './OfficeStartPage';
+import OfficeChatHistoryPage from './chat-history';
 import ChatHeader from './chat/ChatHeader';
 import './OfficeChatPanel.css';
 import SettingsDialog from './settings-dialog';
@@ -11,13 +12,16 @@ import AppListPanel from '../../../shared/components/AppListPanel';
 import { officeLocale } from '../utilities/officeLocale';
 import { useOfficeFavoriteApps } from '../utilities/officeFavorites';
 import { useOfficeConfig } from '../contexts/OfficeConfigContext';
+import useOfficeChatPersistence from '../hooks/useOfficeChatPersistence';
 import {
   OFFICE_APPS_PAGE_PATH,
   OFFICE_CHAT_PATH,
+  OFFICE_HISTORY_PATH,
   OFFICE_START_PAGE_PATH,
   resolveOfficeHomePath
 } from '../utilities/officeStartPage';
 import { setPendingChatStart } from '../../chat/startChatHandoff';
+import { invalidateChatsCache } from '../../../shared/hooks/chatListStore';
 import {
   storeTokenResponse,
   clearTokens,
@@ -63,16 +67,46 @@ function storeSelectedApp(app) {
 }
 
 /**
+ * Holds a view back until the pane knows whether chats are stored server-side
+ * — a fraction of a second after sign-in.
+ */
+function PaneLoading() {
+  const { t } = useTranslation();
+  return (
+    <div
+      className="office-task-pane h-screen w-full flex items-center justify-center gap-2 bg-white text-sm text-slate-500 dark:bg-slate-900 dark:text-slate-400"
+      role="status"
+    >
+      <span
+        className="h-4 w-4 rounded-full border-2 border-slate-300 border-t-slate-700 animate-spin dark:border-slate-600 dark:border-t-slate-300"
+        aria-hidden
+      />
+      {t('pages.appsList.loading', 'Loading…')}
+    </div>
+  );
+}
+
+/**
  * The full apps list. `onBack` is set when the start page is the pane's home,
  * so the list — reached through the start page's "All apps" link — offers a
  * way back; when the list itself is home there is nowhere to go back to.
+ * `onOpenHistory` is set while chats are stored server-side.
  */
-function SelectPage({ user, onLogout, onSelect, onBack }) {
+function SelectPage({ user, onLogout, onSelect, onBack, onOpenHistory }) {
   const { t } = useTranslation();
   const [isSettingsOpen, setIsSettingsOpen] = React.useState(false);
   const { favorites, toggleFavorite } = useOfficeFavoriteApps();
 
   const menuItems = [
+    ...(onOpenHistory
+      ? [
+          {
+            key: 'history',
+            label: t('office.menu.history', 'Chat history'),
+            onClick: onOpenHistory
+          }
+        ]
+      : []),
     {
       key: 'settings',
       label: t('office.menu.settings', 'Settings'),
@@ -119,11 +153,17 @@ function SelectPage({ user, onLogout, onSelect, onBack }) {
 }
 
 const OfficeApp = () => {
+  const { t } = useTranslation();
   const config = useOfficeConfig();
   const navigate = useNavigate();
+  const location = useLocation();
   const [authData, setAuthData] = React.useState(getStoredAuth);
   const [selectedApp, setSelectedApp] = React.useState(getStoredSelectedApp);
   const [sessionError, setSessionError] = React.useState(null);
+  // Durable chats: with them on, the pane's chats are stored like the web
+  // app's, and the history lists both.
+  const chatPersistence = useOfficeChatPersistence(!!authData);
+  const historyEnabled = chatPersistence.persistence;
 
   // Where a signed-in user with no app open lands — the start page or the
   // apps list, per Admin → Office Integration → Start Page. Every view keeps
@@ -134,6 +174,7 @@ const OfficeApp = () => {
   const handleSessionExpired = React.useCallback(() => {
     clearTokens();
     localStorage.removeItem(OFFICE_USER_KEY);
+    invalidateChatsCache();
     storeSelectedApp(null);
     setAuthData(null);
     setSelectedApp(null);
@@ -168,6 +209,9 @@ const OfficeApp = () => {
   const handleLogout = React.useCallback(() => {
     clearTokens();
     localStorage.removeItem(OFFICE_USER_KEY);
+    // The next user must not see this one's chats for as long as the list
+    // would otherwise be reused.
+    invalidateChatsCache();
     storeSelectedApp(null);
     setAuthData(null);
     setSelectedApp(null);
@@ -204,19 +248,64 @@ const OfficeApp = () => {
     setSelectedApp(app);
   }, []);
 
+  // The history remembers which chat it was opened from, so its back button
+  // can return there instead of to the home page.
+  const handleOpenHistory = React.useCallback(
+    ({ returnChatId } = {}) => {
+      navigate(OFFICE_HISTORY_PATH, {
+        state: returnChatId !== undefined ? { returnChatId } : null
+      });
+    },
+    [navigate]
+  );
+
+  // History → a stored chat. The chat id travels as route state: the panel
+  // opens that chat instead of a new one and loads its transcript from the
+  // store. Its app becomes the selected app, as picking the app would.
+  const handleOpenChat = React.useCallback(
+    ({ chat, app }) => {
+      storeSelectedApp(app);
+      setSelectedApp(app);
+      navigate(OFFICE_CHAT_PATH, { replace: true, state: { chatId: chat.id } });
+    },
+    [navigate]
+  );
+
+  // Opened from a chat, back returns to it (or to a new chat of the same app
+  // when nothing was sent in it); opened from anywhere else, back goes home.
+  const historyState = location.state;
+  const historyFromChat = !!selectedApp && !!historyState && 'returnChatId' in historyState;
+  const handleHistoryBack = React.useCallback(() => {
+    if (historyFromChat) {
+      navigate(OFFICE_CHAT_PATH, {
+        replace: true,
+        state: historyState.returnChatId ? { chatId: historyState.returnChatId } : null
+      });
+    } else {
+      navigate(homePath, { replace: true });
+    }
+  }, [historyFromChat, historyState, navigate, homePath]);
+
   React.useEffect(() => {
     if (!sessionError) return undefined;
     const id = window.setTimeout(() => setSessionError(null), 5000);
     return () => window.clearTimeout(id);
   }, [sessionError]);
 
-  const chatPanel = (
+  // Mounted only once the chat mode is known: whether a chat is stored decides
+  // how its transcript is kept, and switching that mid-chat would drop it.
+  const chatPanel = chatPersistence.resolving ? (
+    <PaneLoading />
+  ) : (
     <OfficeChatPanel
       authData={authData}
       selectedApp={selectedApp}
       setSelectedApp={handleSetSelectedApp}
       onLogout={handleLogout}
       homePath={homePath}
+      chatPersistence={historyEnabled}
+      openChatId={location.state?.chatId ?? null}
+      onOpenHistory={historyEnabled ? handleOpenHistory : undefined}
     />
   );
 
@@ -227,6 +316,9 @@ const OfficeApp = () => {
       onSelectApp={handleAppSelect}
       onStartChat={handleStartChat}
       onBrowseApps={() => navigate(OFFICE_APPS_PAGE_PATH)}
+      chatHistoryEnabled={historyEnabled}
+      onOpenHistory={historyEnabled ? () => handleOpenHistory() : undefined}
+      onOpenChat={handleOpenChat}
     />
   );
 
@@ -238,7 +330,29 @@ const OfficeApp = () => {
       onBack={
         startPageIsHome ? () => navigate(OFFICE_START_PAGE_PATH, { replace: true }) : undefined
       }
+      onOpenHistory={historyEnabled ? () => handleOpenHistory() : undefined}
     />
+  );
+
+  const historyPage = chatPersistence.resolving ? (
+    <PaneLoading />
+  ) : historyEnabled ? (
+    <OfficeChatHistoryPage
+      user={authData?.user}
+      onLogout={handleLogout}
+      onOpenChat={handleOpenChat}
+      onBack={handleHistoryBack}
+      backLabel={
+        historyFromChat
+          ? t('office.history.backToChat', 'Back to chat')
+          : startPageIsHome
+            ? t('office.startPage.backToStart', 'Back to start page')
+            : t('office.startPage.backToApps', 'Back to app selection')
+      }
+    />
+  ) : (
+    // Durable chats are off (or were turned off): there is no history.
+    <Navigate to={homePath} replace />
   );
 
   return (
@@ -268,6 +382,10 @@ const OfficeApp = () => {
       <Route
         path={OFFICE_CHAT_PATH}
         element={authData && selectedApp ? chatPanel : <Navigate to="/" replace />}
+      />
+      <Route
+        path={OFFICE_HISTORY_PATH}
+        element={authData ? historyPage : <Navigate to="/" replace />}
       />
       <Route path="*" element={<Navigate to="/" replace />} />
     </Routes>

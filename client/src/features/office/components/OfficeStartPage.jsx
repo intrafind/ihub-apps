@@ -1,12 +1,15 @@
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useCallback, useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import ChatHeader from './chat/ChatHeader';
 import ChatInput from '../../chat/components/ChatInput';
 import OfficeContextStrip from './chat/OfficeContextStrip';
+import OfficeChatRow from './chat-history/OfficeChatRow';
 import SettingsDialog from './settings-dialog';
 import Icon from '../../../shared/components/Icon';
 import useOutlookMailContextSnapshot from '../hooks/useOutlookMailContextSnapshot';
 import usePinnedEmails from '../hooks/usePinnedEmails';
+import useOfficeApps from '../hooks/useOfficeApps';
+import useOfficeChats from '../hooks/useOfficeChats';
 import { useOfficeFavoriteApps } from '../utilities/officeFavorites';
 import { useOfficeConfig } from '../contexts/OfficeConfigContext';
 import { officeLocale } from '../utilities/officeLocale';
@@ -20,9 +23,9 @@ import {
   pickOfficeDefaultApp,
   rankOfficeAppShortcuts
 } from '../utilities/officeStartPage';
+import { OFFICE_START_PAGE_CHATS_COUNT } from '../utilities/officeChatHistory';
 import { getLocalizedContent } from '../../../utils/localizeContent';
 import { buildStartPageGreeting } from '../../../utils/startPageGreeting';
-import { fetchApps } from '../../../api';
 import './OfficeChatPanel.css';
 import './OfficeStartPage.css';
 
@@ -47,7 +50,8 @@ const SHORTCUT_CLASS =
  * right away, exactly as if it had been typed inside the app. Under the input
  * sit the app's starter prompts (or the admin's Outlook defaults), and below
  * those a handful of app shortcuts — favorites first, then the admin's
- * default apps — plus a link to the full apps list.
+ * default apps — plus a link to the full apps list. With durable chats on, the
+ * user's most recent chats follow, with a link to the full chat history.
  *
  * Deliberately lean: no model selector, tools menu, uploads or voice input.
  * Those belong to the app once it is open — the pane can be 280 px wide and a
@@ -62,34 +66,40 @@ const SHORTCUT_CLASS =
  * @param {(start: object) => void} props.onStartChat - Open the default app and send
  *   `{ app, text, pinnedEmails, hostContextOverride, starterPrompt?, autoSend }`.
  * @param {() => void} props.onBrowseApps - Go to the full apps list.
+ * @param {boolean} [props.chatHistoryEnabled=false] - Whether chats are stored
+ *   server-side, so there are recent chats to list.
+ * @param {() => void} [props.onOpenHistory] - Go to the full chat history.
+ * @param {(row: object) => void} [props.onOpenChat] - Open a stored chat.
  */
-function OfficeStartPage({ user, onLogout, onSelectApp, onStartChat, onBrowseApps }) {
+function OfficeStartPage({
+  user,
+  onLogout,
+  onSelectApp,
+  onStartChat,
+  onBrowseApps,
+  chatHistoryEnabled = false,
+  onOpenHistory,
+  onOpenChat
+}) {
   const { t } = useTranslation();
   const officeConfig = useOfficeConfig();
   const { favorites } = useOfficeFavoriteApps();
   const mailSnapshot = useOutlookMailContextSnapshot();
   const pinned = usePinnedEmails();
 
-  const [appsState, setAppsState] = useState({ apps: [], loading: true, error: false });
   const [draft, setDraft] = useState('');
   const [isSettingsOpen, setIsSettingsOpen] = useState(false);
 
-  useEffect(() => {
-    let mounted = true;
-    fetchApps()
-      .then(data => {
-        if (!mounted) return;
-        setAppsState({ apps: Array.isArray(data) ? data : [], loading: false, error: false });
-      })
-      .catch(() => {
-        if (mounted) setAppsState({ apps: [], loading: false, error: true });
-      });
-    return () => {
-      mounted = false;
-    };
-  }, []);
+  const { apps, loading, error } = useOfficeApps();
 
-  const { apps, loading, error } = appsState;
+  // The most recent chats — started here or in the browser — whose app the
+  // pane offers, so each one can be picked up next to the open email.
+  const { rows: chatRows } = useOfficeChats({
+    user,
+    enabled: chatHistoryEnabled && !!onOpenChat,
+    apps
+  });
+  const recentChats = chatRows.slice(0, OFFICE_START_PAGE_CHATS_COUNT);
 
   // Default app: admin-configured via officeIntegration.startPage.defaultAppId
   // when this user may use it, otherwise the top-ranked chat app.
@@ -186,6 +196,15 @@ function OfficeStartPage({ user, onLogout, onSelectApp, onStartChat, onBrowseApp
   const currentItemId = mailSnapshot.ctx?.itemId ?? null;
 
   const menuItems = [
+    ...(chatHistoryEnabled && onOpenHistory
+      ? [
+          {
+            key: 'history',
+            label: t('office.menu.history', 'Chat history'),
+            onClick: onOpenHistory
+          }
+        ]
+      : []),
     {
       key: 'settings',
       label: t('office.menu.settings', 'Settings'),
@@ -373,6 +392,33 @@ function OfficeStartPage({ user, onLogout, onSelectApp, onStartChat, onBrowseApp
                     })}
                   </ul>
                 )}
+              </section>
+            )}
+
+            {/* Pick up a recent chat — the web start page's "Pick up where you
+                left off", as rows that fit the pane. */}
+            {recentChats.length > 0 && (
+              <section className="office-start-apps" aria-labelledby="office-start-chats-heading">
+                <div className="flex items-center justify-between gap-2 mb-1.5">
+                  <h3
+                    id="office-start-chats-heading"
+                    className="office-start-heading text-slate-500 dark:text-slate-400"
+                  >
+                    {t('office.history.recent', 'Recent chats')}
+                  </h3>
+                  {onOpenHistory && (
+                    <button type="button" onClick={onOpenHistory} className={LINK_CLASS}>
+                      {t('office.history.allChats', 'All chats')} →
+                    </button>
+                  )}
+                </div>
+                <ul className="office-start-shortcuts">
+                  {recentChats.map(row => (
+                    <li key={row.id}>
+                      <OfficeChatRow row={row} onOpen={onOpenChat} />
+                    </li>
+                  ))}
+                </ul>
               </section>
             )}
           </div>

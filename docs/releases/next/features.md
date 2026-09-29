@@ -25,3 +25,18 @@ conversation held for that app. The previous chat stays in the chat history and 
   page keeps the conversation.
 - Without chat history (for example anonymous users), opening an app still restores the
   conversation from the current browser tab, as before.
+
+## Outlook Add-in: Chat History
+
+With chat history enabled (**Admin → Platform → Features → Durable Chats**), the Outlook add-in
+now lists your recent chats, so a discussion from earlier can inform the email you are answering
+or writing. Pick a chat and it opens in the task pane with its full conversation; the next message
+goes out with the email that is open now.
+
+- **Chat history** in the pane's menu lists your chats by date, with search and **Show older
+  chats**. The start page shows the three most recent under **Recent chats**.
+- The list holds chats started in the browser and in Outlook alike: chats in the add-in are now
+  saved like chats in the web app, and show up in the web app's history too.
+- Only chats whose app the add-in offers are listed, since a chat continues in its own app.
+- The browser extension's side panel gets the same history.
+- Without chat history enabled, the add-in keeps its chats in the pane as before.

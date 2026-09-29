@@ -307,6 +307,11 @@ On the **Browser Extension** admin page you can also configure:
 Click **Save**. The extension reads the new config the next time it is
 opened, and the next time it fetches `/api/integrations/browser-extension/config`.
 
+The side panel shares the Outlook add-in's pane, including its
+[chat history](outlook-add-in.md#chat-history): with
+[durable chats](chat-persistence.md) on, side-panel chats are stored like web app
+chats, and **Chat history** in the panel's menu lists and reopens them.
+
 ---
 
 ## How the extension uses page content

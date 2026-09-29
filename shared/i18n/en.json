@@ -179,7 +179,8 @@
     "menu": {
       "settings": "Settings",
       "logout": "Logout",
-      "variables": "Show variables"
+      "variables": "Show variables",
+      "history": "Chat history"
     },
     "startPage": {
       "openApp": "Open app",
@@ -189,6 +190,14 @@
     },
     "selectApp": {
       "title": "Select App"
+    },
+    "history": {
+      "title": "Chat history",
+      "recent": "Recent chats",
+      "allChats": "All chats",
+      "backToChat": "Back to chat",
+      "loadingChat": "Loading chat…",
+      "retry": "Try again"
     }
   },
   "pages": {

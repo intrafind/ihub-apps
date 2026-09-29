@@ -56,13 +56,23 @@ function buildParamsFromApp(app) {
  * @param {object} props
  * @param {string} [props.homePath] - Where the back button leads: the start page
  *   or the apps list, whichever the admin made the pane's home.
+ * @param {boolean} [props.chatPersistence=false] - Whether chats are stored
+ *   server-side (durable chats). Fixed for the panel's lifetime: the pane only
+ *   mounts it once that is known.
+ * @param {string|null} [props.openChatId] - A stored chat to open instead of a
+ *   new one — the history page hands it over.
+ * @param {(options: { returnChatId: string|null }) => void} [props.onOpenHistory] -
+ *   Go to the chat history; `returnChatId` is the chat to come back to.
  */
 function OfficeChatPanel({
   authData,
   selectedApp,
   setSelectedApp,
   onLogout,
-  homePath = OFFICE_APPS_PAGE_PATH
+  homePath = OFFICE_APPS_PAGE_PATH,
+  chatPersistence = false,
+  openChatId = null,
+  onOpenHistory
 }) {
   const { t } = useTranslation();
   const navigate = useNavigate();
@@ -73,14 +83,32 @@ function OfficeChatPanel({
   const greetingTitle = getLocalizedContent(selectedApp?.greeting?.title, officeLocale);
   const greetingSubtitle = getLocalizedContent(selectedApp?.greeting?.subtitle, officeLocale);
 
-  // Chat ID: use a stable ref, reset on item change or new chat
-  const chatIdRef = useRef(`office-${uuidv4()}`);
+  // Chats this panel minted and has not sent anything in yet. With durable
+  // chats on, such a chat is not in the store, so there is nothing to fetch
+  // when it comes on screen — asking would only buy a 404 and a spinner.
+  const freshChatIdsRef = useRef(new Set());
+  const mintChatId = useCallback(() => {
+    const id = `office-${uuidv4()}`;
+    freshChatIdsRef.current.add(id);
+    return id;
+  }, []);
+
+  // Chat ID: use a stable ref, reset on item change or new chat. A chat opened
+  // from the history starts out as that stored chat.
+  const [initialChatId] = useState(() => openChatId || mintChatId());
+  const chatIdRef = useRef(initialChatId);
   const selectedStarterPromptRef = useRef(null);
+  const isFreshChat = freshChatIdsRef.current.has(chatIdRef.current);
 
   const adapter = useOfficeChatAdapter({
     appId: selectedApp?.id,
-    chatId: chatIdRef.current
+    chatId: chatIdRef.current,
+    serverBacked: chatPersistence,
+    isFreshChat
   });
+  // A stored chat is being fetched. A fresh one has nothing to wait for, so it
+  // shows its greeting straight away.
+  const loadingStoredChat = chatPersistence && !isFreshChat && adapter.hydrating === true;
 
   const {
     models,
@@ -93,7 +121,10 @@ function OfficeChatPanel({
     hostContextFlags,
     setHostContextFlags,
     modelsLoading
-  } = useAppSettings(selectedApp?.id, selectedApp);
+  } = useAppSettings(selectedApp?.id, selectedApp, {
+    // What a reopened chat was last answered with (model, tools, websearch).
+    chatSettings: adapter.storedChatSettings ?? null
+  });
   const fileUploadHandler = useFileUploadHandler();
   const mailSnapshot = useOutlookMailContextSnapshot();
   const currentModel = models.find(m => m.id === selectedModel) || null;
@@ -248,7 +279,8 @@ function OfficeChatPanel({
 
   // The conversation set aside by the last automatic new chat, so the user
   // can bring it back. Its transcript stays in session storage under its own
-  // chatId; restoring the id reloads it.
+  // chatId — or in the chat store, with durable chats on — and restoring the
+  // id reloads it.
   const [previousChat, setPreviousChat] = useState(null);
 
   useEffect(() => {
@@ -281,13 +313,13 @@ function OfficeChatPanel({
         starterPrompt: selectedStarterPromptRef.current
       });
     }
-    chatIdRef.current = `office-${uuidv4()}`;
+    chatIdRef.current = mintChatId();
     selectedStarterPromptRef.current = null;
     adapterRef.current.clearMessages();
     setInputValue('');
     // The refs above are read, not tracked — the effect must run on a
-    // published item change and nothing else.
-  }, [currentItemId]);
+    // published item change and nothing else (`mintChatId` never changes).
+  }, [currentItemId, mintChatId]);
 
   const handleRestorePreviousChat = useCallback(() => {
     if (!previousChat) return;
@@ -363,6 +395,10 @@ function OfficeChatPanel({
         'selectedFile' in overrides ? overrides.selectedFile : fileUploadHandler.selectedFile;
       const imageData = sf?.type === 'image' ? sf : null;
       const fileData = sf?.type === 'file' ? sf : null;
+
+      // From here on the chat is in the store (with durable chats on), so
+      // coming back to it has to fetch it.
+      freshChatIdsRef.current.delete(chatIdRef.current);
 
       adapter.sendMessage({
         displayMessage: { content: text },
@@ -537,7 +573,7 @@ function OfficeChatPanel({
 
   const handleSelectApp = useCallback(
     newApp => {
-      chatIdRef.current = `office-${uuidv4()}`;
+      chatIdRef.current = mintChatId();
       selectedStarterPromptRef.current = null;
       adapter.clearMessages();
       setInputValue('');
@@ -546,17 +582,17 @@ function OfficeChatPanel({
       setSelectedApp(newApp);
       setIsSelectorOpen(false);
     },
-    [adapter, setSelectedApp, setPinnedEmails]
+    [adapter, setSelectedApp, setPinnedEmails, mintChatId]
   );
 
   const handleNewChat = useCallback(() => {
-    chatIdRef.current = `office-${uuidv4()}`;
+    chatIdRef.current = mintChatId();
     selectedStarterPromptRef.current = null;
     adapter.clearMessages();
     setInputValue('');
     setPinnedEmails([]);
     setPreviousChat(null);
-  }, [adapter, setPinnedEmails]);
+  }, [adapter, setPinnedEmails, mintChatId]);
 
   if (!authData) return null;
   if (!selectedApp) return <Navigate to={homePath} replace />;
@@ -577,6 +613,17 @@ function OfficeChatPanel({
             key: 'variables',
             label: t('office.menu.variables', 'Show variables'),
             onClick: () => setIsVariablesOpen(true)
+          }
+        ]
+      : []),
+    ...(chatPersistence && onOpenHistory
+      ? [
+          {
+            key: 'history',
+            label: t('office.menu.history', 'Chat history'),
+            // Back from the history returns to this chat — unless nothing was
+            // sent in it yet, in which case there is nothing to return to.
+            onClick: () => onOpenHistory({ returnChatId: isFreshChat ? null : chatIdRef.current })
           }
         ]
       : []),
@@ -609,8 +656,23 @@ function OfficeChatPanel({
           />
 
           <div className="flex-1 flex flex-col min-h-0">
+            {/* A stored chat on its way from the history: no greeting and no
+                starter prompts for a chat that is not empty. */}
+            {!hasMessages && loadingStoredChat && (
+              <div
+                role="status"
+                className="office-greeting flex items-center justify-center gap-2 border-b border-slate-100 bg-slate-50/60 text-sm text-slate-500 dark:border-slate-800 dark:bg-slate-800/40 dark:text-slate-400"
+              >
+                <span
+                  className="h-4 w-4 rounded-full border-2 border-slate-300 border-t-slate-700 animate-spin dark:border-slate-600 dark:border-t-slate-300"
+                  aria-hidden
+                />
+                {t('office.history.loadingChat', 'Loading chat…')}
+              </div>
+            )}
+
             {/* Empty state: greeting + starter prompts */}
-            {!hasMessages && (
+            {!hasMessages && !loadingStoredChat && (
               <div className="office-greeting border-b border-slate-100 bg-slate-50/60 dark:border-slate-800 dark:bg-slate-800/40">
                 <div className="flex flex-col items-center office-greeting-header text-center">
                   {greetingTitle || greetingSubtitle ? (
@@ -671,6 +733,9 @@ function OfficeChatPanel({
                 chatId={chatIdRef.current}
                 app={selectedApp}
                 showAvatars={false}
+                // A stored chat keeps its generated images; don't warn that
+                // they are lost on leaving.
+                imagesPersisted={chatPersistence}
               />
             </div>
 
@@ -768,7 +833,9 @@ function OfficeChatPanel({
                 // open, and `buildSnapshotOverride()` returns null — the
                 // adapter would then do its own `readMessageContext()` and
                 // could answer about a different email than the strip shows.
-                disabled={mailSnapshot.loading}
+                // A stored chat that is still loading has no history to
+                // continue yet.
+                disabled={mailSnapshot.loading || loadingStoredChat}
                 isProcessing={adapter.processing}
                 onCancel={adapter.cancelGeneration}
                 allowEmptySubmit={!!selectedApp?.allowEmptyContent}
