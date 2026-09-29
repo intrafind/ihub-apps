@@ -344,9 +344,9 @@ Create model configuration `contents/models/vllm-local.json`:
     "de": "Hochleistungs Mistral Small mit Tool-Calling über vLLM"
   },
   "url": "http://localhost:8000/v1/chat/completions",
-  "provider": "openai",
+  "provider": "local",
   "contextWindow": 32768,
-  "maxOutputTokens": 4096,
+  "maxOutputTokens": 16000,
   "supportsTools": true,
   "supportsImages": false,
   "enabled": true,
@@ -420,6 +420,13 @@ support reasoning — iHub reads `reasoning` (current vLLM) or `reasoning_conten
   "Show thinking process" toggle override it. Requires a vLLM version that supports
   `include_reasoning` and the dedicated `"provider": "local"` — the `openai` provider does
   not send it, because the OpenAI API rejects unknown fields.
+
+- **Reasoning uses the output limit.** vLLM counts reasoning tokens against `max_tokens`
+  (`maxOutputTokens`). If the model is still thinking when the limit is reached, the answer is
+  empty and the message shows a **Truncated** label. Raise `maxOutputTokens` (keep prompt +
+  `maxOutputTokens` within the server's `max_model_len`) or turn reasoning off for the app or
+  chat. `reasoning_effort` does not shorten the thinking on models that ignore it (Qwen3), and
+  `"thoughts": false` only hides the text.
 
 > Note: the `reasoning` field only appears when vLLM was started with a matching
 > `--reasoning-parser`. Without it, vLLM inlines the chain-of-thought into the normal

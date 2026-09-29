@@ -23,6 +23,7 @@ import { SubWorkflowMaterializer } from '../SubWorkflowMaterializer.js';
 import { dedupeCitations } from '../citationUtils.js';
 import configCache from '../../../configCache.js';
 import { actionTracker } from '../../../actionTracker.js';
+import { resolveMaxOutputTokens } from '../../../../shared/outputTokens.js';
 
 export class PlannerNodeExecutor extends BaseNodeExecutor {
   /**
@@ -1010,9 +1011,9 @@ Output rules:
     // entirely consumed by 30s+ of thinking and the answer JSON is truncated
     // mid-stream → "Failed to parse plan". Derive from the explicit node
     // config, then the resolved model's own maxOutputTokens (32k on
-    // gemini-flash-latest), with 8192 only as a last-resort floor. Mirrors
-    // PromptNodeExecutor's `config.maxTokens || model.maxOutputTokens || …`.
-    const maxTokens = config.maxTokens || model.maxOutputTokens || 8192;
+    // gemini-flash-latest), with the shared default only as a last resort.
+    // Mirrors PromptNodeExecutor.
+    const maxTokens = config.maxTokens || resolveMaxOutputTokens(model);
     const response = await this.llmClient.complete({
       model,
       messages,
