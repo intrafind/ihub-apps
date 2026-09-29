@@ -34,6 +34,8 @@ import {
   combineStarterPromptWithTypedText
 } from '../utilities/officeStarterPrompts';
 import { OFFICE_APPS_PAGE_PATH } from '../utilities/officeStartPage';
+import { buildWebChatUrl } from '../utilities/officeChatHistory';
+import { openExternalUrl } from '../../../utils/externalNavigation';
 import usePinnedEmails from '../hooks/usePinnedEmails';
 import { consumePendingChatStart } from '../../chat/startChatHandoff';
 import { getLocalizedContent } from '../../../utils/localizeContent';
@@ -398,10 +400,27 @@ function OfficeChatPanel({
   // button — the browser-extension side panel) and any surface that renders no
   // action list. Running the resolved default keeps the notice strip as the one
   // place the outcome is reported, including "there is no mail item here".
-  const { runAction: runMailAction, defaultActionId: defaultMailActionId } = mailActions;
+  const {
+    runAction: runMailAction,
+    defaultActionId: defaultMailActionId,
+    dismissNotice: dismissMailNotice
+  } = mailActions;
+
+  // Outcome of the last "Open in web app" that could not hand the chat to the
+  // browser: `{ chatId, url }`. It shares the notice strip with the answer
+  // actions, and whichever ran last owns it.
+  const [webNotice, setWebNotice] = useState(null);
+
+  const runAnswerAction = useCallback(
+    (actionId, content) => {
+      setWebNotice(null);
+      return runMailAction(actionId, content);
+    },
+    [runMailAction]
+  );
   const handleInsert = useCallback(
-    content => runMailAction(defaultMailActionId, content),
-    [runMailAction, defaultMailActionId]
+    content => runAnswerAction(defaultMailActionId, content),
+    [runAnswerAction, defaultMailActionId]
   );
 
   const submitMessage = useCallback(
@@ -729,6 +748,24 @@ function OfficeChatPanel({
     });
   };
 
+  // The chat is in the store once the server has its first turn. Before that —
+  // and never, for a chat that is not stored — there is nothing to open
+  // elsewhere or come back to.
+  const chatInStore = chatStored && !freshChatIdsRef.current.has(chatIdRef.current);
+
+  // Continue this chat in the web app (issue #2591). It is a stored chat, so
+  // the browser opens it at the web app's own chat route and carries on from
+  // the same transcript — nothing is copied. `window.open` is a silent no-op in
+  // the task pane, so this goes through the host's own API; when even that
+  // cannot report success, the notice gives the address to open by hand.
+  const handleOpenInWeb = () => {
+    const chatId = chatIdRef.current;
+    const url = buildWebChatUrl(officeConfig?.baseUrl, selectedApp?.id, chatId);
+    if (!url) return;
+    dismissMailNotice();
+    setWebNotice(openExternalUrl(url) ? null : { chatId, url });
+  };
+
   const menuItems = [
     ...(!startForm && getValidVariableDefinitions(selectedApp?.variables).length > 0
       ? [
@@ -747,13 +784,20 @@ function OfficeChatPanel({
             // Back from the history returns to this chat — unless it is not in
             // the store (nothing sent yet, or an ephemeral app), in which case
             // there is nothing to return to.
-            onClick: () =>
-              onOpenHistory({
-                returnChatId:
-                  chatStored && !freshChatIdsRef.current.has(chatIdRef.current)
-                    ? chatIdRef.current
-                    : null
-              })
+            onClick: () => onOpenHistory({ returnChatId: chatInStore ? chatIdRef.current : null })
+          }
+        ]
+      : []),
+    // Wherever this chat is stored. Disabled — not hidden — until the server
+    // has its first turn, so the entry does not appear out of nowhere once the
+    // first answer starts.
+    ...(chatStored && officeConfig?.baseUrl
+      ? [
+          {
+            key: 'openInWeb',
+            label: t('office.menu.openInWeb', 'Open in web app'),
+            disabled: !chatInStore,
+            onClick: handleOpenInWeb
           }
         ]
       : []),
@@ -766,6 +810,26 @@ function OfficeChatPanel({
   ];
 
   const hasMessages = adapter.messages.length > 0;
+
+  // One strip for the outcome of whichever ran last: an answer action or "Open
+  // in web app". The address belongs to one chat, so it goes once that chat is
+  // left. The host call cannot always tell a blocked window from an opened one,
+  // so the fallback does not claim that nothing opened.
+  const webNoticeUrl = webNotice?.chatId === chatIdRef.current ? webNotice.url : null;
+  const notice = webNoticeUrl
+    ? {
+        tone: 'info',
+        message: t(
+          'office.openInWeb.fallback',
+          'If the chat did not open in your browser, open this address:'
+        ),
+        url: webNoticeUrl
+      }
+    : mailActions.notice;
+  const dismissNotice = () => {
+    setWebNotice(null);
+    dismissMailNotice();
+  };
 
   return (
     <div className="office-task-pane h-screen w-full flex flex-col p-0 bg-slate-50 dark:bg-slate-900">
@@ -889,7 +953,7 @@ function OfficeChatPanel({
                   insertAction={embeddedHost?.insertAction}
                   insertActions={mailActions.actions}
                   defaultInsertActionId={defaultMailActionId}
-                  onInsertAction={runMailAction}
+                  onInsertAction={runAnswerAction}
                   appId={selectedApp?.id}
                   chatId={chatIdRef.current}
                   app={selectedApp}
@@ -962,20 +1026,30 @@ function OfficeChatPanel({
                 window.alert the reply/insert helpers used to raise: a failed
                 Office call names the error here (and the answer is on the
                 clipboard where one could be lost), an attached-original
-                forward explains itself. See issue #2446. */}
-            {mailActions.notice && (
+                forward explains itself. See issue #2446. "Open in web app"
+                reports here too. */}
+            {notice && (
               <div
-                role={mailActions.notice.tone === 'error' ? 'alert' : 'status'}
+                role={notice.tone === 'error' ? 'alert' : 'status'}
                 className={`shrink-0 flex items-start gap-2 border-t px-3 py-2 text-xs ${
-                  mailActions.notice.tone === 'error'
+                  notice.tone === 'error'
                     ? 'border-red-200 bg-red-50 text-red-800 dark:border-red-900 dark:bg-red-950/50 dark:text-red-200'
                     : 'border-slate-200 bg-slate-50 text-slate-700 dark:border-slate-700 dark:bg-slate-800/60 dark:text-slate-200'
                 }`}
               >
-                <span className="flex-1">{mailActions.notice.message}</span>
+                <span className="flex-1 min-w-0">
+                  {notice.message}
+                  {notice.url && (
+                    // One click selects the whole address for copying; it is
+                    // long and has no spaces, so it may break anywhere.
+                    <span className="mt-0.5 block select-all break-all font-mono">
+                      {notice.url}
+                    </span>
+                  )}
+                </span>
                 <button
                   type="button"
-                  onClick={mailActions.dismissNotice}
+                  onClick={dismissNotice}
                   aria-label={t('common.close', 'Close')}
                   className="shrink-0 rounded p-0.5 hover:bg-black/5 dark:hover:bg-white/10"
                 >

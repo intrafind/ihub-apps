@@ -178,6 +178,8 @@ goes out with the email that is open now.
   chats**. The start page shows the three most recent under **Recent chats**.
 - The list holds chats started in the browser and in Outlook alike: chats in the add-in are now
   saved like chats in the web app, and show up in the web app's history too.
+- **Open in web app** in the chat's menu opens the conversation in the browser, where it carries
+  on from the same chat. It is available as soon as the chat has its first message.
 - Only chats whose app the add-in offers are listed, since a chat continues in its own app.
 - The browser extension's side panel gets the same history.
 - Without chat history enabled, the add-in keeps its chats in the pane as before.
