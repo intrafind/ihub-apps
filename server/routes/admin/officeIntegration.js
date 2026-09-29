@@ -3,10 +3,21 @@ import configCache from '../../configCache.js';
 import { adminAuth } from '../../middleware/adminAuth.js';
 import { buildServerPath } from '../../utils/basePath.js';
 import { buildPublicBaseUrl } from '../../utils/publicBaseUrl.js';
-import { createOAuthClient } from '../../utils/oauthClientManager.js';
+import {
+  createOAuthClient,
+  findClientById,
+  loadOAuthClients,
+  updateOAuthClient
+} from '../../utils/oauthClientManager.js';
+import { logAudit } from '../../services/AuditLogService.js';
 import logger from '../../utils/logger.js';
 import { sendInternalError, sendBadRequest } from '../../utils/responseHelpers.js';
 import { sanitizeOfficeStartPage, validateOfficeStartPage } from '../../utils/officeStartPage.js';
+import {
+  ALL_APPS,
+  describeOfficeAppAccess,
+  validateOfficeAllowedApps
+} from '../../utils/officeAppAccess.js';
 import {
   sanitizeOfficeMailAction,
   validateOfficeMailAction
@@ -41,6 +52,40 @@ async function savePlatformConfig(updates) {
   return merged;
 }
 
+/**
+ * The add-in's OAuth client, or `null` when there is none to speak of: the
+ * integration was never enabled, or someone deleted the client by hand.
+ *
+ * @param {Object} platform - The platform configuration.
+ * @returns {{ clientId: string, client: Object, clientsFile: string } | null}
+ */
+function findOfficeOAuthClient(platform) {
+  const clientId = platform?.officeIntegration?.oauthClientId;
+  if (!clientId) return null;
+  const clientsFile = oauthClientsFile(platform?.oauth || {});
+  const client = findClientById(loadOAuthClients(clientsFile), clientId);
+  return client ? { clientId, client, clientsFile } : null;
+}
+
+/**
+ * Which apps the add-in offers, read from its OAuth client (where the server
+ * enforces it). `null` means there is no client to read; the admin page says so
+ * instead of showing a made-up "all apps".
+ */
+function readOfficeAppAccess(platform) {
+  try {
+    const found = findOfficeOAuthClient(platform);
+    return found ? describeOfficeAppAccess(found.client.allowedApps) : null;
+  } catch (error) {
+    // The status page has to load even if the clients file is unreadable.
+    logger.warn('Could not read the Office add-in OAuth client', {
+      component: 'AdminOfficeIntegration',
+      error
+    });
+    return null;
+  }
+}
+
 export default function registerAdminOfficeIntegrationRoutes(app) {
   /**
    * @swagger
@@ -73,6 +118,8 @@ export default function registerAdminOfficeIntegrationRoutes(app) {
       starterPrompts: Array.isArray(officeConfig.starterPrompts) ? officeConfig.starterPrompts : [],
       // Always complete, so the admin form has a value for every control.
       startPage: sanitizeOfficeStartPage(officeConfig.startPage),
+      // `{ mode: 'all' | 'limited', appIds }`, or null without an OAuth client.
+      appAccess: readOfficeAppAccess(platform),
       defaultMailAction: sanitizeOfficeMailAction(officeConfig.defaultMailAction),
       officeJsMode: OFFICE_JS_MODES.includes(officeConfig.officeJsMode)
         ? officeConfig.officeJsMode
@@ -302,6 +349,11 @@ export default function registerAdminOfficeIntegrationRoutes(app) {
    *                 type: string
    *                 enum: [auto, answer, answerAll, forward, new, insert]
    *                 description: What the answer button in the task pane does by default. `auto` follows the open item — reply all in the reading pane, insert while composing. Users may override it in the pane's Settings dialog.
+   *               allowedApps:
+   *                 type: array
+   *                 items:
+   *                   type: string
+   *                 description: Which apps the add-in offers, stored as `allowedApps` on the add-in's OAuth client. `["*"]` means no restriction — each user sees the apps their groups allow; a list of app ids narrows that to the listed apps. An empty list is rejected. Omit to leave the client untouched.
    *     responses:
    *       200:
    *         description: Config updated
@@ -318,7 +370,8 @@ export default function registerAdminOfficeIntegrationRoutes(app) {
         officeJsCdnUrl,
         officeJsCustomUrl,
         startPage,
-        defaultMailAction
+        defaultMailAction,
+        allowedApps
       } = req.body || {};
       const platform = configCache.getPlatform();
 
@@ -440,6 +493,45 @@ export default function registerAdminOfficeIntegrationRoutes(app) {
         allowed.defaultMailAction = result.value;
       }
 
+      // The app restriction is not part of `officeIntegration`: it is the
+      // add-in's OAuth client that the server enforces. Everything is checked
+      // before anything is written, so a bad field cannot leave the save half done.
+      let appAccessUpdate = null;
+      if (allowedApps !== undefined) {
+        const result = validateOfficeAllowedApps(allowedApps);
+        if (result.error) return sendBadRequest(res, result.error);
+        const officeClient = findOfficeOAuthClient(platform);
+        if (!officeClient) {
+          return sendBadRequest(
+            res,
+            'allowedApps: the add-in has no OAuth client — enable the Office integration first'
+          );
+        }
+        appAccessUpdate = { ...officeClient, allowedApps: result.value };
+      }
+
+      // The permission change goes first: if it fails, nothing else was saved.
+      if (appAccessUpdate) {
+        const { clientId, clientsFile } = appAccessUpdate;
+        await updateOAuthClient(
+          clientId,
+          { allowedApps: appAccessUpdate.allowedApps },
+          clientsFile,
+          req.user?.id || 'admin'
+        );
+        logAudit({
+          req,
+          action: 'update',
+          resource: 'oauthClient',
+          resourceId: clientId,
+          summary: `Set the apps of the Outlook add-in client to ${
+            appAccessUpdate.allowedApps.includes(ALL_APPS)
+              ? 'all apps'
+              : appAccessUpdate.allowedApps.join(', ')
+          }`
+        });
+      }
+
       await savePlatformConfig({
         officeIntegration: {
           ...(platform?.officeIntegration || {}),
@@ -449,7 +541,7 @@ export default function registerAdminOfficeIntegrationRoutes(app) {
 
       logger.info('Office integration config updated', {
         component: 'AdminOfficeIntegration',
-        fields: Object.keys(allowed)
+        fields: [...Object.keys(allowed), ...(appAccessUpdate ? ['allowedApps'] : [])]
       });
 
       res.json({

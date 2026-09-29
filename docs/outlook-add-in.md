@@ -76,6 +76,7 @@ Still on the **Office Integration** admin page:
 - **Display Name** — appears as the add-in name in Outlook's ribbon and the M365 Admin Center listing. Localize for each language your users see (`en`, `de`, …). Required, max 250 chars per locale.
 - **Description** — short blurb shown alongside the name. Max 250 chars per locale.
 - **Starter Prompts** — up to 20 quick-action prompts displayed when the user opens the add-in on an email. Each has a **Title** (button label) and **Message** (the prompt sent on click, max 4000 chars). Prompts can be reordered with the up/down arrows. They are the start page's **quick starters**: shown under the default chat app's input when that app does not declare its own starter prompts. Inside an opened app only the app's own starter prompts appear — an app without any shows none, and the Outlook defaults are not offered there. With the landing view set to **All apps** there is no start page, so the defaults are not shown at all.
+- **Available Apps** — which apps the add-in offers at all: every app the user's groups allow (the default), or only a selection. This is where you limit the add-in to one or two purpose-built apps. The limit is stored on the add-in's OAuth client; see [Step 5](#step-5--optional-restrict-what-the-add-in-can-access). The card appears once the integration is enabled.
 - **Start Page** — what the pane shows after sign-in and which app answers there. See [The start page](#the-start-page) below.
 - **Answer Actions** — what the button under each assistant answer does by default. See [Answer actions](#answer-actions) below.
 
@@ -92,6 +93,8 @@ Three settings in the **Start Page** section control it. They are stored as `off
 | **Landing view** | `defaultPage` | `start` (the start page, default) or `apps` (the app list — the pane's previous behaviour). Also decides where the back button in a chat leads. |
 | **Default chat app** | `defaultAppId` | The app whose chat input the start page shows. Only chat apps qualify. Unset (*First available app*) picks the top-ranked chat app the user can access: favorites first, then the default apps, then the app `order`. A configured app the user cannot access falls back the same way. |
 | **Default apps** | `featuredAppIds` | The shortcuts on the start page, in this order, right after each user's favorites. Apps the user cannot access are skipped, and the default chat app is not repeated as a shortcut. |
+
+"Cannot access" includes apps the add-in's [**Available Apps**](#step-5--optional-restrict-what-the-add-in-can-access) limit leaves out: with a limit in place, a default chat app or default app that is not on the list is skipped for every user. The admin page warns about this beneath the pickers, naming the apps.
 
 ```json
 "officeIntegration": {
@@ -310,15 +313,29 @@ The recommended way to roll the add-in out to all users is **Centralized Deploym
 
 ## Step 5 — (Optional) Restrict what the add-in can access
 
-By default, when a user signs into the add-in the resulting OAuth token grants access to the **same apps and models the user already has** through their iHub group memberships. If you want the add-in to expose only a subset (for example, only one or two purpose-built apps for triaging email), use the OAuth client's allow-lists.
+By default, when a user signs into the add-in the resulting OAuth token grants access to the **same apps and models the user already has** through their iHub group memberships. If you want the add-in to expose only a subset (for example, only one or two purpose-built apps for triaging email), limit it. The limit is the **Allowed Apps** list of the add-in's OAuth client — that is where iHub enforces it, so the add-in and the web app can show different apps to the same user.
 
-1. Open **Admin → OAuth Clients** and select the *Office Add-in* client (the **View OAuth Client** link on the Office Integration page jumps directly to it).
-2. Set **Allowed Apps** and/or **Allowed Models** to the specific resources the add-in should expose.
+### Limit the apps on the Office Integration page
 
-Semantics, in short:
+1. Open **Admin → Office Integration** and find the **Available Apps** card. Its badge shows what is live right now: **Currently: all apps** or **Currently: limited (N selected)**.
+2. Choose **Only selected apps**, pick the apps from the list, and click **Save** at the bottom of the page.
+3. To lift the limit again, choose **All apps the user can access** and save.
 
-- **Empty allow-list** → no client-level restriction. The user sees everything they normally can.
-- **Non-empty allow-list** → the user sees only the **intersection** of their group permissions and the allow-list. The client cannot grant access the user does not already have.
+A few details:
+
+- An empty selection cannot be saved. For this client an empty list would mean *no restriction*, the opposite of what **Only selected apps** says, so the page and the server both refuse it.
+- Apps that were deleted since they were added stay in the list, marked *(not found)*, so you can remove them.
+- If the default chat app or a default app of the [start page](#the-start-page) is not on the list, the Start Page card warns that the pane will not show it.
+- The change applies to signed-in users without a new sign-in, a manifest redeploy or an Outlook restart: iHub reads the client's list on every request, so an app you remove stops answering immediately. A task pane that is already open may keep listing it until it is reopened.
+
+### Or on the OAuth client
+
+The card edits the same list you find under **Admin → OAuth Clients → *Office Add-in* → Allowed Apps**; the **View OAuth Client** link on the card and on the Integration Status card jumps there. Both are the same setting, and the last save wins. The OAuth client is also where you limit **Allowed Models** and **Allowed Prompts**, which the Office Integration page does not show.
+
+### Semantics
+
+- **Empty allow-list**, or **All (`*`)** → no client-level restriction. The user sees everything they normally can. A client created by **Enable** starts this way.
+- **Non-empty allow-list** → the user sees only the **intersection** of their group permissions and the allow-list. The client cannot grant access the user does not already have: being on the list never gives a user an app their groups do not allow.
 - Authorization-code tokens **never** carry admin privileges, even if the signed-in user is an administrator.
 
 The full design is in [OAuth Client Permission Filter for Authorization Code Flow](../concepts/2026-04-21%20OAuth%20Client%20Permission%20Filter%20for%20Authorization%20Code%20Flow.md).
@@ -360,6 +377,7 @@ Users open the task-pane menu (**☰**) → **Settings** to adjust three persona
 |---|---|
 | Edit Display Name / Description in admin UI | None for users; Microsoft will refresh the manifest within ~24h. To force-refresh, re-link the manifest in M365 Admin Center. |
 | Edit starter prompts, start-page or answer-action settings | None — all are fetched live by the task pane on every open. |
+| Change which apps the add-in offers ([Available Apps](#step-5--optional-restrict-what-the-add-in-can-access)) | None — applied on the next request; an open task pane picks up the new list when it is reopened. |
 | Change iHub deployment URL (e.g., move to a new domain) | The manifest auto-regenerates with the new host. In M365 Admin Center, **remove the old deployed add-in and re-upload from the new manifest URL** — Microsoft caches the URLs from the manifest at deploy time. |
 | Rotate the OAuth client | Click **Disable** then **Enable** on the Office Integration page. Existing user sessions need to sign in again. The manifest URL is unchanged. |
 | Upgrade iHub | No add-in action needed unless the manifest schema changes — release notes will call this out. |
@@ -504,7 +522,7 @@ attempting an outbound request. An Outlook add-in needs about 600 KB —
 
 ### Sign-in succeeds but the user sees "no apps available"
 
-- The Office Add-in OAuth client has an **Allowed Apps** allow-list that intersects to nothing for this user. Either widen the allow-list or grant the user a group with access to those apps.
+- The add-in is limited to specific apps (**Admin → Office Integration → Available Apps** shows *Currently: limited*, which is the *Office Add-in* OAuth client's **Allowed Apps**) and that list intersects to nothing for this user. Either widen the list or grant the user a group with access to those apps.
 - Confirm with [OAuth Client Permission Filter](../concepts/2026-04-21%20OAuth%20Client%20Permission%20Filter%20for%20Authorization%20Code%20Flow.md) — anonymous users with no groups will see nothing here unless the apps have anonymous access.
 
 ### "Add-in could not be started" / blank task pane
@@ -551,6 +569,7 @@ Sideloading is per-user and ideal for QA, but does not survive mailbox moves and
   - [`server/utils/officeJsSource.js`](../server/utils/officeJsSource.js) — Office.js modes, URL validation and base-path derivation
   - [`server/services/OfficeJsProxyService.js`](../server/services/OfficeJsProxyService.js) — the Office.js pull-through cache
   - [`server/utils/officeStartPage.js`](../server/utils/officeStartPage.js) — start-page settings: sanitized for the pane, validated for the admin API
+  - [`server/utils/officeAppAccess.js`](../server/utils/officeAppAccess.js) — the add-in's app limit (`allowedApps` of its OAuth client): read for the admin page, validated for the admin API
 - **Task pane:** [`client/src/features/office/components/OfficeApp.jsx`](../client/src/features/office/components/OfficeApp.jsx) (routing — where "home" is), [`OfficeStartPage.jsx`](../client/src/features/office/components/OfficeStartPage.jsx) (the start page), [`OfficeChatPanel.jsx`](../client/src/features/office/components/OfficeChatPanel.jsx) (the chat, which sends a message handed over from the start page)
 - **Message assembly:** [`buildChatApiMessages.js`](../client/src/features/office/utilities/buildChatApiMessages.js) (the tagged blocks above), [`outlookMailContext.js`](../client/src/features/office/utilities/outlookMailContext.js) and [`outlookItemFields.js`](../client/src/features/office/utilities/outlookItemFields.js) (reading body, headers and the mailbox user from Office.js)
 - **Default config:** `officeIntegration` block in [`server/defaults/config/platform.json`](../server/defaults/config/platform.json)
