@@ -1,7 +1,8 @@
 /**
- * Unit tests for the sources behind a grounded chat answer: the reducer's merge
- * of piecemeal grounding frames and the message projection onto `webSearch`
- * (client/src/features/chat/webSearch.js over shared/webCitations.js).
+ * Unit tests for the sources behind a chat answer, live: the reducer's merge
+ * of piecemeal grounding frames, and of `sources/added` frames into the run's
+ * source set, and the message projection onto `sources` (runToMessage.js over
+ * shared/sources).
  */
 import { hostnameOf } from '../../../shared/run/groundingSources.js';
 import {
@@ -73,97 +74,102 @@ describe('runReducer — grounding frames', () => {
   });
 });
 
-describe('projectRunToMessage — web search from grounding', () => {
-  test('projects the searched and cited sources of a completed step', () => {
+const page = (url, fields = {}) => ({
+  id: `url:${url.replace(/^https?:\/\//, '').replace(/\/$/, '')}`,
+  provider: 'web',
+  kind: 'page',
+  url,
+  private: false,
+  ...fields
+});
+
+describe('projectRunToMessage — sources', () => {
+  test('folds every sources/added frame into one set, in the order found', () => {
     const run = runFrom([
       started,
-      env(2, 'tool/progress', {
+      env(2, 'tool/started', {
         step: 1,
-        phase: 'grounding',
-        data: { citations: [citationA] }
+        callId: 'c1',
+        toolId: 'braveSearch',
+        name: 'braveSearch',
+        args: { query: 'what is a' }
       }),
-      env(3, 'step/completed', {
+      env(3, 'tool/completed', {
         step: 1,
+        callId: 'c1',
+        toolId: 'braveSearch',
+        name: 'braveSearch',
+        resultPreview: '…'
+      }),
+      env(4, 'sources/added', {
+        step: 1,
+        callId: 'c1',
+        toolId: 'braveSearch',
+        items: [page('https://a.example/page', { title: 'A' }), page('https://b.example/')],
+        queries: ['what is a']
+      }),
+      // Provider search, streamed piece by piece: a citation of a page found above.
+      env(5, 'sources/added', {
+        step: 2,
+        items: [page('https://a.example/page', { passages: [{ text: 'quote a' }], cited: true })]
+      }),
+      env(6, 'step/completed', {
+        step: 2,
         content: 'Answer[1](https://a.example/page)',
         toolCalls: [],
-        finishReason: 'stop',
-        groundingMetadata: {
-          webSearchQueries: ['what is a'],
-          searchResults: [
-            { url: 'https://a.example/page', title: 'A' },
-            { url: 'https://b.example', title: 'B' }
-          ],
-          citations: [citationA]
-        }
+        finishReason: 'stop'
       }),
-      env(4, 'run/ended', {
-        status: 'completed',
-        finishReason: 'stop',
-        knowledgeSources: ['grounding']
-      })
+      env(7, 'run/ended', { status: 'completed', finishReason: 'stop' })
     ]);
     const { extras } = projectRunToMessage(run);
-    expect(extras.webSearch.queries).toEqual(['what is a']);
-    expect(extras.webSearch.sources).toEqual([
-      { url: 'https://a.example/page', title: 'A', citedText: 'quote a', cited: true },
-      { url: 'https://b.example/', title: 'B' }
+    expect(extras.sources.queries).toEqual(['what is a']);
+    expect(extras.sources.items).toEqual([
+      page('https://a.example/page', { title: 'A', passages: [{ text: 'quote a' }], cited: true }),
+      page('https://b.example/')
     ]);
-    expect(extras.groundingSources).toBeUndefined();
-    expect(extras.answerSource).toEqual({ sources: ['grounding'], type: 'mixed' });
+    // The call that found them lists its own.
+    expect(run.tools[0].sources.map(source => source.id)).toEqual([
+      'url:a.example/page',
+      'url:b.example'
+    ]);
   });
 
-  test('uses the streamed grounding frames while no step has completed', () => {
+  test('shows the sources while the answer still streams', () => {
     const run = runFrom([
       started,
       env(2, 'step/delta', { step: 1, kind: 'text', content: 'Looking…' }),
-      env(3, 'tool/progress', {
-        step: 1,
-        phase: 'grounding',
-        data: { searchResults: [{ url: 'https://a.example', title: 'A' }], citations: [] }
-      })
+      env(3, 'sources/added', { step: 1, items: [page('https://a.example/', { title: 'A' })] })
     ]);
     const { extras, loading } = projectRunToMessage(run);
     expect(loading).toBe(true);
-    expect(extras.webSearch.sources).toEqual([{ url: 'https://a.example/', title: 'A' }]);
+    expect(extras.sources.items).toEqual([page('https://a.example/', { title: 'A' })]);
   });
 
   test('places Google grounding markers after the supported passages', () => {
+    const redirect = 'https://vertexaisearch.cloud.google.com/grounding-api-redirect/abc';
     const run = runFrom([
       started,
       env(2, 'step/delta', { step: 1, kind: 'text', content: 'Claim one. Claim two.' }),
-      env(3, 'step/completed', {
+      env(3, 'sources/added', {
+        step: 1,
+        items: [page(redirect, { site: 'g.example', cited: true })],
+        queries: ['q'],
+        supports: [{ text: 'Claim two.', urls: [redirect] }]
+      }),
+      env(4, 'step/completed', {
         step: 1,
         content: 'Claim one. Claim two.',
         toolCalls: [],
-        finishReason: 'stop',
-        groundingMetadata: {
-          webSearchQueries: ['q'],
-          groundingChunks: [
-            {
-              web: {
-                uri: 'https://vertexaisearch.cloud.google.com/grounding-api-redirect/abc',
-                title: 'g.example'
-              }
-            }
-          ],
-          webSupports: [
-            {
-              text: 'Claim two.',
-              urls: ['https://vertexaisearch.cloud.google.com/grounding-api-redirect/abc']
-            }
-          ]
-        }
+        finishReason: 'stop'
       }),
-      env(4, 'run/ended', { status: 'completed', finishReason: 'stop' })
+      env(5, 'run/ended', { status: 'completed', finishReason: 'stop' })
     ]);
     const { content, extras } = projectRunToMessage(run);
-    expect(content).toBe(
-      'Claim one. Claim two.[1](https://vertexaisearch.cloud.google.com/grounding-api-redirect/abc)'
-    );
-    expect(extras.webSearch.sources[0].host).toBe('g.example');
+    expect(content).toBe(`Claim one. Claim two.[1](${redirect})`);
+    expect(extras.sources.items[0].site).toBe('g.example');
   });
 
-  test('omits the field when nothing was searched', () => {
+  test('omits the field when nothing was found', () => {
     const run = runFrom([
       started,
       env(2, 'step/completed', {
@@ -174,6 +180,6 @@ describe('projectRunToMessage — web search from grounding', () => {
       }),
       env(3, 'run/ended', { status: 'completed', finishReason: 'stop' })
     ]);
-    expect(projectRunToMessage(run).extras.webSearch).toBeUndefined();
+    expect(projectRunToMessage(run).extras.sources).toBeUndefined();
   });
 });

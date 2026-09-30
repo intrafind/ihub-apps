@@ -34,7 +34,7 @@ const CompareModeView = forwardRef(function CompareModeView(
     onConnectIntegration,
     onClarificationSubmit,
     onClarificationSkip,
-    onDocumentAction,
+    onOpenSourceInApp,
     linkPath,
     ephemeral,
     startForm = null
@@ -110,7 +110,7 @@ const CompareModeView = forwardRef(function CompareModeView(
           onConnectIntegration={onConnectIntegration}
           onClarificationSubmit={onClarificationSubmit}
           onClarificationSkip={onClarificationSkip}
-          onDocumentAction={onDocumentAction}
+          onOpenSourceInApp={onOpenSourceInApp}
           linkPath={linkPath}
           ephemeral={ephemeral}
           hideTranscript={Boolean(startForm)}

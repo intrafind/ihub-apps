@@ -570,24 +570,42 @@ describe('what a viewer sees', () => {
     }
   });
 
-  it('never carries the documents behind an answer, which were found with the owner’s iFinder permissions', async () => {
+  it('carries only the public sources behind an answer, never what the owner found with their own permissions', async () => {
     const chatId = await seedChat(ADA, { turns: 1 });
+    const web = {
+      id: 'url:example.org/wind',
+      provider: 'web',
+      kind: 'page',
+      url: 'https://example.org/wind',
+      title: 'Wind',
+      private: false
+    };
     await getChatRepository().appendMessage(chatId, {
       role: 'assistant',
       content: 'See the contract.',
-      citations: {
-        references: [],
-        resultItems: [{ document_id: 'sp-7f3a9c11', title: 'Supplier contract ACME' }]
+      sources: {
+        items: [
+          web,
+          {
+            id: 'ifinder:sp-7f3a9c11',
+            provider: 'ifinder',
+            kind: 'document',
+            title: 'Supplier contract ACME',
+            ref: { id: 'sp-7f3a9c11', scope: 'sales' },
+            private: true
+          }
+        ],
+        queries: ['wind']
       }
     });
     const { messages: stored } = await getChatRepository().getMessages(chatId);
-    assert.ok(stored.at(-1).citations, 'the owner’s own chat keeps them');
+    assert.equal(stored.at(-1).sources.items.length, 2, 'the owner’s own chat keeps them all');
 
     const { share } = (await createShare(ADA, chatId, { mode: 'public' })).body;
     const res = await drive(openHandlers, { params: { shareId: share.id }, user: ANONYMOUS });
     assert.equal(res.statusCode, 200);
     assert.equal(res.body.messages.at(-1).content, 'See the contract.');
-    for (const message of res.body.messages) assert.equal('citations' in message, false);
+    assert.deepEqual(res.body.messages.at(-1).sources, { items: [web], queries: ['wind'] });
   });
 
   it('hides the owner’s name on a public link unless they opted in', async () => {

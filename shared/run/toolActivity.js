@@ -7,13 +7,13 @@
  *
  * Sources of the list:
  *  - `run.tools` (`tool/started` / `tool/completed`): every server-executed
- *    tool call, with the pages a search or fetch tool reported on
- *    `webSources`. A search is scoped to the web or to the organisation's
+ *    tool call, with the sources it reported (`sources/added` with its
+ *    callId, see `shared/sources`). A search is scoped to the web or to the organisation's
  *    documents (iFinder, configured sources), see `searchScope`. Clarifications (`ask_user`), chat-launched workflows and
  *    skill activation are left out: each has its own UI.
  *  - provider-run web search (Google Search grounding, Anthropic web search):
  *    the queries the provider reports on the grounding metadata
- *    (`webSearchQueries`). Its sources are listed by `WebSearchSources`.
+ *    (`webSearchQueries`). Its sources are listed in the sources panel.
  *  - `fetch.*` progress frames: the page a search is reading right now.
  *
  * Each item also lists what the call asked for (`details`, see
@@ -62,11 +62,6 @@ function documentIdOf(args) {
   return typeof id === 'string' && id ? id : null;
 }
 
-/** Key of a source: its URL, or its iFinder document id when it has no link. */
-export function sourceKey(source) {
-  return source.documentId ? `doc:${source.documentId}` : source.url;
-}
-
 /**
  * iFinder documents across the turn: which document each `iFinder_getContent`
  * read (title and link, from its own result or from the search hit that found
@@ -76,8 +71,8 @@ function resolveDocuments(items) {
   const known = new Map();
   for (const item of items) {
     for (const source of item.sources) {
-      if (!source.documentId) continue;
-      known.set(source.documentId, { ...known.get(source.documentId), ...source });
+      const id = source.ref?.id;
+      if (id) known.set(id, { ...known.get(id), ...source });
     }
   }
   const read = new Set();
@@ -92,7 +87,7 @@ function resolveDocuments(items) {
   for (const item of items) {
     if (item.kind !== 'search') continue;
     item.sources = item.sources.map(source =>
-      source.documentId && read.has(source.documentId) ? { ...source, read: true } : source
+      source.ref && read.has(source.ref.id) ? { ...source, read: { ok: true } } : source
     );
   }
 }
@@ -236,7 +231,7 @@ export function buildToolActivity(run) {
       url,
       documentId,
       details: toolDetails(tool.args, shownArgs(tool.args, { query, url, documentId })),
-      sources: Array.isArray(tool.webSources) ? tool.webSources : [],
+      sources: Array.isArray(tool.sources) ? tool.sources : [],
       error: tool.error?.message || null,
       // A page read the per-turn cap (`websearch.maxPageReads`) refused.
       limitReached: kind === 'fetch' && tool.result?.limitReached === true,

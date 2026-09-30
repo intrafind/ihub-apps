@@ -48,6 +48,7 @@ const {
   TOOL_STARTED,
   TOOL_PROGRESS,
   TOOL_COMPLETED,
+  SOURCES_ADDED,
   INTERACTION_RAISED,
   STREAM_ERROR
 } = SSE_V2_EVENTS;
@@ -603,7 +604,7 @@ test('no tools: added emails and an open meeting each yield knowledgeSources ["e
 
 // ── 4. tool round ───────────────────────────────────────────────────────────
 
-test('tools path: step/completed{tool_calls} → tool/started → tool/completed → step/delta → step/completed → run/ended{websearch}; runTool gets the chat context; telemetry per model call', async t => {
+test('tools path: step/completed{tool_calls} → tool/started → tool/completed → sources/added → step/delta → step/completed → run/ended{websearch}; runTool gets the chat context; telemetry per model call', async t => {
   const chatId = newChatId('tools');
   const frames = captureFrames(t, chatId);
   const { service, requests, runTool, logInteraction, telemetry, runLog } = makeService(
@@ -620,10 +621,19 @@ test('tools path: step/completed{tool_calls} → tool/started → tool/completed
     STEP_COMPLETED,
     TOOL_STARTED,
     TOOL_COMPLETED,
+    SOURCES_ADDED,
     STEP_DELTA,
     STEP_COMPLETED,
     RUN_ENDED
   ]);
+  // A web search reports what it searched for, even when it found no pages.
+  assert.deepEqual(frame(frames, SOURCES_ADDED).data, {
+    step: 1,
+    callId: 'call_1',
+    toolId: 'webSearch',
+    items: [],
+    queries: ['berlin']
+  });
 
   const [round1, round2] = framesOf(frames, STEP_COMPLETED).map(f => f.data);
   assert.equal(round1.step, 1);
@@ -699,7 +709,7 @@ test('tools path: step/completed{tool_calls} → tool/started → tool/completed
   assert.deepEqual(endOutcomes(telemetry), ['completed', 'completed']);
 });
 
-test('search tool: tool/completed carries the pages found and read, even when the preview is truncated', async t => {
+test('search tool: sources/added carries the pages found and read, even when the preview is truncated', async t => {
   const chatId = newChatId('web-sources');
   const frames = captureFrames(t, chatId);
   const page = 'x'.repeat(5000);
@@ -729,14 +739,33 @@ test('search tool: tool/completed carries the pages found and read, even when th
 
   const done = frame(frames, TOOL_COMPLETED).data;
   assert.equal(typeof done.resultPreview, 'string', 'the preview itself is truncated text');
-  assert.deepEqual(done.webSources, [
-    { url: 'https://weather.example/berlin', title: 'Weather', read: true },
-    { url: 'https://news.example/', title: 'News', readFailed: true }
+  assert.equal(done.webSources, undefined, 'no second carrier for sources');
+  const found = frame(frames, SOURCES_ADDED).data;
+  assert.equal(found.callId, done.callId);
+  assert.deepEqual(found.items, [
+    {
+      id: 'url:weather.example/berlin',
+      provider: 'web',
+      kind: 'page',
+      title: 'Weather',
+      url: 'https://weather.example/berlin',
+      read: { ok: true },
+      private: false
+    },
+    {
+      id: 'url:news.example',
+      provider: 'web',
+      kind: 'page',
+      title: 'News',
+      url: 'https://news.example/',
+      read: { ok: false },
+      private: false
+    }
   ]);
 });
 
-test('iFinder tools: each call that finds documents sends the turn’s whole document list as tool/progress{citation}, with ACCESS links; a failed call sends none', async t => {
-  const chatId = newChatId('ifinder-citations');
+test('iFinder tools: each call that finds documents reports them as sources/added, with a ref for the provider’s actions; a failed search reports only its query', async t => {
+  const chatId = newChatId('ifinder-sources');
   const frames = captureFrames(t, chatId);
   const iFinderTool = name => ({
     id: name,
@@ -793,39 +822,48 @@ test('iFinder tools: each call that finds documents sends the turn’s whole doc
   });
 
   assertWellFormed(frames);
-  const citations = framesOf(frames, TOOL_PROGRESS).filter(f => f.data.phase === 'citation');
-  assert.equal(citations.length, 2, 'one frame per call that found documents');
+  const found = framesOf(frames, SOURCES_ADDED).map(f => f.data);
   assert.deepEqual(
-    citations.map(f => f.data.data.resultItems.map(item => item.document_id)),
-    [['sp-7f3a9c11'], ['sp-7f3a9c11', 'fs-0042aa99']]
+    found.map(f => [f.toolId, f.items.map(item => item.id), f.queries]),
+    [
+      ['iFinder_search', ['ifinder:sp-7f3a9c11'], ['acme']],
+      ['iFinder_getContent', ['ifinder:fs-0042aa99'], []],
+      ['iFinder_search', [], ['boom']]
+    ],
+    'one frame per call that found something; the facet lookup found no documents'
   );
-  const [contract, agreement] = citations[1].data.data.resultItems;
-  assert.deepEqual(contract.links, [
-    { type: 'ACCESS', documentId: 'sp-7f3a9c11', searchProfile: 'sales' }
-  ]);
-  assert.equal(
-    contract.additional_document_metadata['accessInfo.deepLink'],
-    'https://sp.example/acme.pdf'
-  );
-  assert.equal(agreement.title, 'Framework agreement');
+  assert.deepEqual(found[0].items[0], {
+    id: 'ifinder:sp-7f3a9c11',
+    provider: 'ifinder',
+    kind: 'document',
+    title: 'Supplier contract ACME',
+    url: 'https://sp.example/acme.pdf',
+    fileName: 'acme.pdf',
+    ref: { id: 'sp-7f3a9c11', scope: 'sales' },
+    private: true
+  });
+  assert.deepEqual(found[1].items[0].read, { ok: true });
+  assert.equal(found[1].items[0].title, 'Framework agreement');
   // Sent after the call it comes from has completed.
   const firstDone = frames.indexOf(frame(frames, TOOL_COMPLETED));
-  assert.ok(frames.indexOf(citations[0]) > firstDone);
-  // The summary the materializer stores carries the final list, so the
-  // reopened chat draws the same tiles.
+  assert.ok(frames.indexOf(framesOf(frames, SOURCES_ADDED)[0]) > firstDone);
+  // No second channel for documents any more.
+  assert.equal(framesOf(frames, TOOL_PROGRESS).filter(f => f.data.phase === 'citation').length, 0);
+  // The summary the materializer stores carries the whole set.
   assert.deepEqual(
-    summary.citations.resultItems.map(item => item.document_id),
-    ['sp-7f3a9c11', 'fs-0042aa99']
+    summary.sources.items.map(item => item.id),
+    ['ifinder:sp-7f3a9c11', 'ifinder:fs-0042aa99']
   );
-  assert.deepEqual(summary.citations.references, []);
+  assert.deepEqual(summary.sources.queries, ['acme', 'boom']);
 });
 
-test('a turn without iFinder documents has no citations on its summary', async t => {
-  const chatId = newChatId('no-citations');
-  captureFrames(t, chatId);
+test('a turn that found nothing has an empty source set on its summary', async t => {
+  const chatId = newChatId('no-sources');
+  const frames = captureFrames(t, chatId);
   const { service } = makeService([textTurn('Hello.')]);
   const summary = await runTurn(service, { chatId, prep: makePrep() });
-  assert.equal(summary.citations, null);
+  assert.deepEqual(summary.sources, { items: [], queries: [], supports: [] });
+  assert.equal(framesOf(frames, SOURCES_ADDED).length, 0);
 });
 
 // ── 5. tool failure ─────────────────────────────────────────────────────────
@@ -1754,7 +1792,7 @@ test('the page read cap defaults to 5 and counts only the page reader', async t 
   assert.equal(ids.filter(id => id === 'webSearch').length, 1);
 });
 
-test('the turn summary carries its web search: queries and sources for the stored answer', async t => {
+test('the turn summary carries its sources: queries and pages for the stored answer', async t => {
   const chatId = newChatId('web-search-record');
   captureFrames(t, chatId);
   const { service } = makeService(
@@ -1772,12 +1810,12 @@ test('the turn summary carries its web search: queries and sources for the store
     }
   );
   const summary = await runTurn(service, { chatId, prep: makePrep({ tools: [webSearchTool] }) });
-  assert.deepEqual(summary.webSearch.queries, ['langdock']);
+  assert.deepEqual(summary.sources.queries, ['langdock']);
   assert.deepEqual(
-    summary.webSearch.sources.map(s => [s.url, s.title, s.snippet]),
+    summary.sources.items.map(s => [s.url, s.title, s.snippet, s.private]),
     [
-      ['https://langdock.com/', 'Langdock', 'AI platform'],
-      ['https://other.example/', 'Other', undefined]
+      ['https://langdock.com/', 'Langdock', 'AI platform', false],
+      ['https://other.example/', 'Other', undefined, false]
     ]
   );
 });

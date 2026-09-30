@@ -75,6 +75,7 @@
     - [Microphone Feature](microphone-feature.md)
     - [Realtime Voice & Transcription](voice-transcription.md)
     - [Web Tools](web-tools.md)
+    - [Answer Sources](answer-sources.md)
     - [Magic Prompt](magic-prompt-feature.md)
     - [Image Upload Feature](image-upload-feature.md)
     - [OCR Feature](ocr-feature.md)

@@ -324,6 +324,32 @@ App usage:
 }
 ```
 
+### Reporting What a Tool Found
+
+A tool that finds things for the user — documents, pages, tickets, people —
+can have them listed in the answer's **Sources** panel, cited with numbered
+badges and offered with their actions. Either return a `sources` array next to
+the tool's data:
+
+```js
+return {
+  results,
+  sources: results.map(hit => ({ title: hit.title, url: hit.link, snippet: hit.summary }))
+};
+```
+
+or, without touching the tool, declare a mapping in its definition (per tool,
+or per function under `functions.<name>.sources`):
+
+```json
+"sources": { "provider": "crm", "kind": "item", "list": "results",
+             "fields": { "id": "id", "title": "title", "url": "link" }, "query": "query" }
+```
+
+Both are private (never in a shared chat) unless they say otherwise. See
+[Answer Sources](answer-sources.md) for the fields, the privacy rules and how
+an integration adds preview and download.
+
 ### External Service Integration
 
 Integrate with external APIs and services:

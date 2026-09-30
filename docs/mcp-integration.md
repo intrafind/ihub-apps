@@ -352,6 +352,14 @@ tool definition and forwards to `McpClientManager.callTool`, which:
   tools (`user`, `chatId`, `appConfig`, workflow plumbing) never leaves iHub;
   `language` is forwarded only when the tool's schema declares it.
 
+**What a tool found.** A tool that returns `resource_link` content blocks
+(`{ type: 'resource_link', uri, name, title?, description?, mimeType? }`),
+`structuredContent.sources`, or a text block holding `{ "sources": [...] }`
+has those listed in the answer's **Sources** panel, as sources of the provider
+`mcp:<serverId>` — an http(s) `uri` opens in the browser, any other one only
+identifies the source. They are private (never in a shared chat) unless a
+source says `"private": false`. See [Answer Sources](answer-sources.md).
+
 ### MCP Apps — interactive views
 
 iHub is an [MCP Apps](https://modelcontextprotocol.io/docs/extensions/apps)

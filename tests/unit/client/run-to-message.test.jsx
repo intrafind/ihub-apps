@@ -5,7 +5,6 @@
 import { createStreamState, reduceRunEvents, getRun } from '../../../shared/run/runReducer.js';
 import {
   projectRunToMessage,
-  mergeCitationEntries,
   projectMessageRuns
 } from '../../../client/src/features/chat/runToMessage';
 import { buildWorkflowSteps } from '../../../shared/run/runActivity.js';
@@ -371,7 +370,16 @@ describe('projectRunToMessage — chat-launched workflow', () => {
 });
 
 describe('projectRunToMessage — tool side channels', () => {
-  test('skills, search status and merged citations', () => {
+  test('skills, search status and the documents iAssistant found', () => {
+    const doc = {
+      id: 'ifinder:d1',
+      provider: 'ifinder',
+      kind: 'document',
+      title: 'Policy',
+      ref: { id: 'd1' },
+      markers: ['r:1'],
+      private: true
+    };
     const run = runFrom([
       started,
       env(2, 'tool/progress', {
@@ -380,30 +388,14 @@ describe('projectRunToMessage — tool side channels', () => {
         data: { skillName: 'Research', description: 'Deep research' }
       }),
       env(3, 'tool/progress', { phase: 'search.status', data: { phase: 'searching', query: 'x' } }),
-      env(4, 'tool/progress', { phase: 'citation', data: { references: [{ id: 'r1' }] } }),
-      env(5, 'step/completed', {
-        step: 0,
-        content: '',
-        toolCalls: [],
-        finishReason: null,
-        citations: { resultItems: [{ id: 'i1' }] }
-      })
+      env(4, 'sources/added', { step: 0, items: [doc] }),
+      env(5, 'step/completed', { step: 0, content: '', toolCalls: [], finishReason: null })
     ]);
     const { extras } = projectRunToMessage(run);
     expect(extras.activeSkills).toEqual([{ name: 'Research', description: 'Deep research' }]);
     expect(extras.searchStatus).toEqual({ phase: 'searching', query: 'x' });
-    expect(extras.citations).toEqual({ references: [{ id: 'r1' }], resultItems: [{ id: 'i1' }] });
-  });
-
-  test('mergeCitationEntries mirrors useChatMessages.mergeCitations', () => {
-    expect(mergeCitationEntries([])).toBeNull();
-    expect(
-      mergeCitationEntries([
-        { references: [1], resultItems: [1] },
-        { references: [2] },
-        { resultItems: [3] }
-      ])
-    ).toEqual({ references: [2], resultItems: [3] });
+    expect(extras.sources).toEqual({ items: [doc], queries: [], supports: [] });
+    expect(extras.citations).toBeUndefined();
   });
 });
 

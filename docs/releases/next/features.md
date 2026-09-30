@@ -137,21 +137,38 @@ on the user's text, can now be used with a form even when uploads are off.
   the chat input. In compare mode each panel keeps its own model picker.
 - Works in the web app, the Outlook add-in and the browser extension.
 
-## Web Search: Sources View and Numbered Citations
+## Sources Panel: Web Pages, Documents and Anything an Integration Found, With Numbered Citations
 
-Answers that used web search now show what was searched and which sources the answer relies on.
-A **Searched for “…”** entry under the answer, with the sites' icons, opens a side panel (a sheet
-on phones) listing the sources **Cited in this answer** and those **Also considered**. In the
-answer itself, each citation is a numbered badge next to the claim it supports.
+Answers now show what they were based on in one place, whoever found it. This covers web search,
+iFinder, iAssistant, and any other tool or integration. A **Searched for “…”** or **N sources**
+entry under the answer, with the sources' icons, opens a side panel (a sheet on phones). The panel
+lists the sources **Cited in this answer** and those **Also considered**. In the answer itself,
+each citation is a numbered badge next to the claim it supports.
 
-- Source cards show the site, title, snippet or cited passage, the published date when known, and
-  whether the page was read, with the words read.
-- Hovering or focusing a badge highlights its paragraph and its card; hovering a card
-  highlights every passage citing it. A click or tap opens the panel on that card. Works with
-  keyboard and touch.
+- Web pages and documents share one card: the site or system they come from, the title, the
+  snippet or cited passage, the published date when known, whether the page or document was read
+  (with the words read), and the file name of a document.
+- Every card offers the actions its source allows. A click on the title opens it, which also
+  works in the Outlook task pane. The menu offers **Preview (PDF)** with the cited passages
+  highlighted, **Download**, **Add to email** in the Outlook task pane, **Open in App**,
+  **Details** and **Copy link**. Web pages can now be copied, and documents found by any
+  integration get the same actions as iFinder documents.
+- iAssistant's citations and the links to iFinder documents are numbered badges too, in the order
+  the answer cites them. The old Documents list under the answer is replaced by the panel.
+  Clicking a badge now opens the right answer's sources when a chat has several answers with
+  documents.
+- Hovering or focusing a badge highlights its paragraph and its card; hovering a card highlights
+  every passage citing it. A click or tap opens the panel on that card. Works with keyboard and
+  touch, and the panel is available while the answer still streams.
 - The same on every search path: Brave, Staan and Qwant, and native search with Claude, Gemini
   and OpenAI. A link to a page the searches did not return is never shown as a citation.
-- The sources are stored with the answer, so reopened and shared chats show them too.
+- The sources are stored with the answer, so reopened chats show them too. Shared chats show the
+  public web pages only. They leave out documents and anything else found with the owner's
+  permissions, and pages only the page reader read, which may be intranet pages.
+- **Integrations report what they found without code:** a tool can return a `sources` list with
+  its result, or admins add a `sources` mapping to the tool definition (for example an OpenAPI tool
+  returning Jira issues). MCP tools that return `resource_link` results are listed automatically.
+  See the Answer Sources documentation.
 - While web search is on, a highlighted **Web search** chip next to **+** in the input bar says so
   and turns it off in one click.
 - In the model picker of a web search app, a globe marks the models web search works with.

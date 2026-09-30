@@ -642,71 +642,6 @@ describe('chatMaterializer: the order the two writes become visible', () => {
   });
 });
 
-describe('chatMaterializer: documents behind the answer', () => {
-  const document = {
-    document_id: 'sp-7f3a9c11',
-    title: 'Supplier contract ACME',
-    additional_document_metadata: {
-      id: 'sp-7f3a9c11',
-      'accessInfo.deepLink': 'https://sp.example/acme.pdf',
-      sourceType: ['SharePoint'],
-      unrelated: 'field the panel never reads'
-    },
-    links: [
-      { type: 'ACCESS', documentId: 'sp-7f3a9c11', searchProfile: 'sales' },
-      { type: 'OTHER', href: 'https://elsewhere.example' }
-    ],
-    score: 12.5
-  };
-
-  it('stores the citations with the answer, only the fields the panel reads', async () => {
-    await withRepository(async ({ repository }) => {
-      await userTurn(repository);
-      await assistantTurn(repository, {
-        citations: {
-          references: [
-            { document_id: 'sp-7f3a9c11', content: 'Notice period: three months.', index: 1 }
-          ],
-          resultItems: [document]
-        }
-      });
-      const { messages } = await repository.getMessages(CHAT_ID);
-      assert.deepEqual(messages.at(-1).citations, {
-        references: [
-          { document_id: 'sp-7f3a9c11', content: 'Notice period: three months.', index: 1 }
-        ],
-        resultItems: [
-          {
-            document_id: 'sp-7f3a9c11',
-            title: 'Supplier contract ACME',
-            additional_document_metadata: {
-              id: 'sp-7f3a9c11',
-              'accessInfo.deepLink': 'https://sp.example/acme.pdf',
-              sourceType: ['SharePoint']
-            },
-            links: [{ type: 'ACCESS', documentId: 'sp-7f3a9c11', searchProfile: 'sales' }]
-          }
-        ]
-      });
-    });
-  });
-
-  it('a turn whose citations list nothing stores no field', async () => {
-    await withRepository(async ({ repository }) => {
-      await userTurn(repository);
-      await assistantTurn(repository, { citations: null });
-      const { messages } = await repository.getMessages(CHAT_ID);
-      assert.equal('citations' in messages.at(-1), false);
-    });
-    await withRepository(async ({ repository }) => {
-      await userTurn(repository);
-      await assistantTurn(repository, { citations: { references: [], resultItems: [] } });
-      const { messages } = await repository.getMessages(CHAT_ID);
-      assert.equal('citations' in messages.at(-1), false);
-    });
-  });
-});
-
 describe('chatMaterializer: MCP App views', () => {
   const view = {
     callId: 'call_1',
@@ -751,31 +686,49 @@ describe('chatMaterializer: MCP App views', () => {
   });
 });
 
-describe('chatMaterializer: web sources behind the answer', () => {
-  it('stores queries and sources, so a reopened chat shows the same citations', async () => {
+describe('chatMaterializer: sources behind the answer', () => {
+  const langdock = {
+    id: 'url:langdock.com',
+    provider: 'web',
+    kind: 'page',
+    url: 'https://langdock.com/',
+    title: 'Langdock',
+    snippet: 'AI platform',
+    read: { ok: true },
+    private: false
+  };
+  const contract = {
+    id: 'ifinder:sp-7f3a9c11',
+    provider: 'ifinder',
+    kind: 'document',
+    title: 'Supplier contract ACME',
+    url: 'https://sp.example/acme.pdf',
+    ref: { id: 'sp-7f3a9c11', scope: 'sales' },
+    passages: [{ text: 'Notice period: three months.', marker: 's:1' }],
+    markers: ['r:1'],
+    private: true
+  };
+
+  it('stores sources and queries, so a reopened chat shows the same panel and citations', async () => {
     await withRepository(async ({ repository }) => {
       await userTurn(repository);
       await assistantTurn(repository, {
         content: 'Langdock is an AI platform [1](https://langdock.com/).',
-        webSearch: {
+        sources: {
+          items: [langdock, contract, { ...contract, injected: 'dropped' }],
           queries: ['what is langdock'],
-          sources: [
-            { url: 'https://langdock.com/', title: 'Langdock', snippet: 'AI platform', read: true },
-            { url: 'https://example.org/', title: 'Considered only' }
-          ],
           supports: []
         }
       });
       const { messages } = await repository.getMessages(CHAT_ID);
       const stored = messages.at(-1);
       assert.equal(stored.content, 'Langdock is an AI platform [1](https://langdock.com/).');
-      assert.deepEqual(stored.webSearch, {
-        queries: ['what is langdock'],
-        sources: [
-          { url: 'https://langdock.com/', title: 'Langdock', snippet: 'AI platform', read: true },
-          { url: 'https://example.org/', title: 'Considered only' }
-        ]
+      assert.deepEqual(stored.sources, {
+        items: [langdock, contract],
+        queries: ['what is langdock']
       });
+      assert.equal('citations' in stored, false);
+      assert.equal('webSearch' in stored, false);
     });
   });
 
@@ -784,9 +737,19 @@ describe('chatMaterializer: web sources behind the answer', () => {
       await userTurn(repository);
       await assistantTurn(repository, {
         content: 'Langdock is an AI platform. It was founded in 2023.',
-        webSearch: {
+        sources: {
+          items: [
+            {
+              id: 'url:vertexaisearch.cloud.google.com/r/1',
+              provider: 'web',
+              kind: 'page',
+              url: 'https://vertexaisearch.cloud.google.com/r/1',
+              site: 'langdock.com',
+              cited: true,
+              private: false
+            }
+          ],
           queries: ['langdock'],
-          sources: [{ url: 'https://vertexaisearch.cloud.google.com/r/1', host: 'langdock.com' }],
           supports: [
             {
               text: 'It was founded in 2023.',
@@ -800,16 +763,16 @@ describe('chatMaterializer: web sources behind the answer', () => {
         messages.at(-1).content,
         'Langdock is an AI platform. It was founded in 2023.[1](https://vertexaisearch.cloud.google.com/r/1)'
       );
-      assert.equal('supports' in messages.at(-1).webSearch, false);
+      assert.equal('supports' in messages.at(-1).sources, false);
     });
   });
 
-  it('a turn without web search stores no field', async () => {
+  it('a turn that found nothing stores no field', async () => {
     await withRepository(async ({ repository }) => {
       await userTurn(repository);
-      await assistantTurn(repository, { webSearch: null });
+      await assistantTurn(repository, { sources: { items: [], queries: [], supports: [] } });
       const { messages } = await repository.getMessages(CHAT_ID);
-      assert.equal('webSearch' in messages.at(-1), false);
+      assert.equal('sources' in messages.at(-1), false);
     });
   });
 });

@@ -7,8 +7,7 @@
  * `extras` carries exactly the message fields the chat UI reads today:
  * thoughts, images, clarification/awaitingInput/clarificationAnswered,
  * workflowCheckpoint, workflowSteps/workflowStep, workflowResult/outputFormat,
- * activeSkills, searchStatus, searchSummary, toolActivity, mcpApps, mcpAuthRequired, citations,
- * webSearch,
+ * activeSkills, searchStatus, searchSummary, toolActivity, mcpApps, mcpAuthRequired, sources,
  * answerSource, finishReason, ifinderMessageId. The hook (`useAppChat`) only decides WHEN to write the
  * projection and which message it belongs to — it never interprets events.
  *
@@ -22,8 +21,7 @@ import {
   settleWorkflowSteps,
   workflowResultOf
 } from '../../../../shared/run/runActivity.js';
-import { insertSupportMarkers } from '../../../../shared/webCitations.js';
-import { buildRunWebSearch } from './webSearch';
+import { insertSupportMarkers } from '../../../../shared/sources/index.js';
 import { buildMcpAppViews } from './mcpApps/mcpAppViewList';
 import { buildMcpAuthPrompts } from './mcpApps/mcpConnectPrompts';
 import {
@@ -34,27 +32,6 @@ import {
 
 /** Fallback when a stream/error frame carries no message (callers pass the translated string). */
 export const DEFAULT_STREAM_ERROR_MESSAGE = 'An error occurred during streaming';
-
-/**
- * Fold a list of citation payloads with the same semantics as
- * `useChatMessages.mergeCitations`: a later payload's `references` /
- * `resultItems` replace the earlier ones only when present.
- *
- * @param {Array<Object>} entries - `[{ references?, resultItems? }, …]`
- * @returns {{ references: Array, resultItems: Array }|null} merged citations or null when empty
- */
-export function mergeCitationEntries(entries) {
-  if (!Array.isArray(entries) || entries.length === 0) return null;
-  let merged = {};
-  for (const next of entries) {
-    if (!next || typeof next !== 'object') continue;
-    merged = {
-      references: next.references || merged.references || [],
-      resultItems: next.resultItems || merged.resultItems || []
-    };
-  }
-  return Object.keys(merged).length ? merged : null;
-}
 
 /**
  * Build the `clarification` message field from an `ask_user` interaction.
@@ -104,14 +81,14 @@ export function projectRunToMessage(run, options = {}) {
   if (run.runId) extras.runId = run.runId;
 
   // ── content ───────────────────────────────────────────────────────────
-  // The web sources behind the answer (script-backed search, page reads and
-  // provider-run search alike). Google's answer text carries no links: its
-  // grounding supports say which passage each source backs, and the markers
-  // go there — the stored answer gets the same (chatMaterializer.js).
-  const webSearch = buildRunWebSearch(run);
+  // Everything the run found (`sources/added`, folded by the reducer). Google's
+  // answer text carries no links: its grounding supports say which passage
+  // each source backs, and the markers go there — the stored answer gets the
+  // same (chatMaterializer.js).
+  const sources = run.sources;
   let content = run.text || '';
-  if (webSearch?.supports?.length) content = insertSupportMarkers(content, webSearch.supports);
-  if (webSearch) extras.webSearch = webSearch;
+  if (sources?.supports?.length) content = insertSupportMarkers(content, sources.supports);
+  if (sources?.items?.length || sources?.queries?.length) extras.sources = sources;
   if (run.error) {
     // Legacy 'error' path: the error text is appended to whatever streamed.
     content = `${content}\n\n${run.error.message || fallbackErrorMessage}`;
@@ -174,8 +151,6 @@ export function projectRunToMessage(run, options = {}) {
   // how much it found is part of the answer's provenance, not a progress
   // spinner, so the finished message keeps showing it.
   if (run.searchSummary) extras.searchSummary = run.searchSummary;
-  const citations = mergeCitationEntries(run.citations);
-  if (citations) extras.citations = citations;
   // The searches the turn ran, the pages they found and read, and the other
   // tools it called. Like the search summary, it stays with the finished
   // answer as provenance.

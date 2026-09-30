@@ -42,7 +42,7 @@ const ComparePanel = forwardRef(function ComparePanel(
     onConnectIntegration,
     onClarificationSubmit,
     onClarificationSkip,
-    onDocumentAction,
+    onOpenSourceInApp,
     linkPath,
     ephemeral,
     hideTranscript = false
@@ -182,7 +182,7 @@ const ComparePanel = forwardRef(function ComparePanel(
           models={models}
           onClarificationSubmit={onClarificationSubmit}
           onClarificationSkip={onClarificationSkip}
-          onDocumentAction={onDocumentAction}
+          onOpenSourceInApp={onOpenSourceInApp}
           linkPath={linkPath}
           compact={true}
         />

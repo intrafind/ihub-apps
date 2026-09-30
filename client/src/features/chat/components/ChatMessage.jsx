@@ -17,9 +17,8 @@ import {
 import CustomResponseRenderer from '../../../shared/components/CustomResponseRenderer';
 import ClarificationCard from './ClarificationCard';
 import GeneratedImage from './GeneratedImage';
-import CitationPanel from './CitationPanel';
-import WebSearchSources from './WebSearchSources';
-import { resolveCitations } from '../../../../../shared/webCitations.js';
+import AnswerSources from './AnswerSources';
+import { resolveCitations } from '../../../../../shared/sources/index.js';
 import SearchStatusIndicator from './SearchStatusIndicator';
 import SearchSummary from './SearchSummary';
 import ToolActivity from './ToolActivity';
@@ -99,7 +98,9 @@ function ChatMessage({
   models = [], // Available models for determining if model param should be included in link
   onClarificationSubmit = null, // Callback when a clarification response is submitted
   onClarificationSkip = null, // Callback when a clarification is skipped
-  onDocumentAction = null, // Callback for citation document actions (preview, download, openInApp)
+  // `(source, appId)`: open a source in a new chat of another app ("Open in
+  // App"). Only surfaces with a router pass it.
+  onOpenSourceInApp = null,
   // Page the copy-link action points at. Defaults to the current page; a host
   // page that isn't the app's own route (the admin app editor) passes the app's.
   linkPath = null,
@@ -132,25 +133,26 @@ function ChatMessage({
   const isUser = message.role === 'user';
   const isError = message.error === true;
 
-  // The web sources behind the answer and which of them it cites — shared by
-  // the inline citation badges and the sources view under the answer.
+  // Everything the answer found and which of it the answer cites — shared by
+  // the inline citation badges and the sources panel under the answer.
   const fallbackId = useId();
   const messageKey = message.id || fallbackId;
   const answerText = typeof message.content === 'string' ? message.content : '';
-  const webCitationView = useMemo(
-    () => (!isUser && message.webSearch ? resolveCitations(answerText, message.webSearch) : null),
-    [isUser, answerText, message.webSearch]
+  const citationView = useMemo(
+    () => (!isUser && message.sources ? resolveCitations(answerText, message.sources) : null),
+    [isUser, answerText, message.sources]
   );
-  const webCitations = useMemo(
+  const citations = useMemo(
     () =>
-      webCitationView?.numbers.size
+      citationView?.cited.length
         ? {
             messageKey,
-            numbers: webCitationView.numbers,
-            byNumber: new Map(webCitationView.cited.map(source => [source.n, source]))
+            numberOfUrl: citationView.numberOfUrl,
+            numberOfMarker: citationView.numberOfMarker,
+            byNumber: new Map(citationView.cited.map(source => [source.n, source]))
           }
         : null,
-    [webCitationView, messageKey]
+    [citationView, messageKey]
   );
   const hasVariables = message.variables && Object.keys(message.variables).length > 0;
   const [isEditing, setIsEditing] = useState(false);
@@ -652,8 +654,7 @@ function ChatMessage({
           <div className="flex flex-col">
             <StreamingMarkdown
               content={mdContent}
-              hasCitations={!!message.citations}
-              webCitations={effectiveOutputFormat === 'json' ? null : webCitations}
+              citations={effectiveOutputFormat === 'json' ? null : citations}
               streaming
             />
             {hasSearchStatus && <SearchStatusIndicator status={message.searchStatus} />}
@@ -770,8 +771,7 @@ function ChatMessage({
       return (
         <StreamingMarkdown
           content={mdContent}
-          hasCitations={!!message.citations}
-          webCitations={effectiveOutputFormat === 'json' ? null : webCitations}
+          citations={effectiveOutputFormat === 'json' ? null : citations}
         />
       );
     }
@@ -1045,23 +1045,16 @@ function ChatMessage({
             with the other provenance. */}
         {!isUser && !message.loading && <SearchSummary summary={message.searchSummary} />}
 
-        {/* Documents behind the answer: an iAssistant conversation's, or the
-            ones the turn's iFinder tool calls found */}
-        {!isUser && message.citations && !message.loading && (
-          <CitationPanel
-            citations={message.citations}
-            content={message.content}
-            onDocumentAction={onDocumentAction}
-          />
-        )}
-
-        {/* The web sources behind the answer: "Searched for …", opening the
-            sources view with what it cites and what it only considered. */}
-        {!isUser && !message.loading && webCitationView && (
-          <WebSearchSources
+        {/* Everything the answer found — web pages, documents, records —
+            behind "Searched for …" / "N sources", opening the sources panel
+            with what it cites and what it only considered. Shown while the
+            answer streams too: its badges open the panel. */}
+        {!isUser && citationView && (
+          <AnswerSources
             messageKey={messageKey}
-            webSearch={message.webSearch}
-            citations={webCitationView}
+            sources={message.sources}
+            citations={citationView}
+            onOpenInApp={onOpenSourceInApp}
           />
         )}
 

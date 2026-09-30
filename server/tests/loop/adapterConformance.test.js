@@ -748,14 +748,14 @@ test('[br] 10. non-streaming Converse body through the same client', async () =>
 
 const block = (event, data) => ({ __raw: `event: ${event}\ndata: ${JSON.stringify(data)}\n\n` });
 
-test('[ia] 1. answer deltas + done; extras (citations, message ids) are kept on the result', async () => {
+test('[ia] 1. answer deltas + done; extras (sources, message ids) are kept on the result', async () => {
   const result = await run(
     'ia',
     sseResponse([
       block('response_message_id', { id: 'm-42' }),
       block('answer', { delta: 'Hal' }),
       block('answer', { delta: 'lo' }),
-      block('references', [{ id: 'ref-1', title: 'Doc' }]),
+      block('references', [{ document_id: 'ref-1', title: 'Doc', content: 'A passage', index: 1 }]),
       block('done', {})
     ])
   );
@@ -763,7 +763,8 @@ test('[ia] 1. answer deltas + done; extras (citations, message ids) are kept on 
   assert.equal(result.finishReason, 'stop');
   assert.equal(result.complete, true);
   assert.equal(result.responseMessageId, 'm-42');
-  assert.ok(result.citations, 'citations passthrough');
+  assert.equal(result.sources?.items?.[0]?.ref?.id, 'ref-1', 'sources passthrough');
+  assert.equal(result.sources.items[0].provider, 'ifinder');
 });
 
 test('[ia] 8e. TECHNICAL error → PROVIDER_ERROR; REFUSAL → completes with content', async () => {

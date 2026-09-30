@@ -1111,3 +1111,99 @@ test('resolvePolicies applies contract defaults', () => {
   assert.equal(p.context.compactThresholdTokens, 16000);
   assert.equal(p.interactions.maxQuestions, 10);
 });
+
+// ── sources ─────────────────────────────────────────────────────────────────
+
+test('sources: every tool call, adapter chunk and provider search is collected, ledgered and handed to the channel', async () => {
+  const { runLog, events } = await captureRunLog();
+  const { runId } = await runLog.startRun({ kind: 'chat', user: { id: 'u1' } });
+  const grounding = {
+    webSearchQueries: ['berlin weather'],
+    searchResults: [{ url: 'https://weather.example/berlin', title: 'Weather' }]
+  };
+  // A provider that reports what it found on the stream: the iAssistant
+  // adapter's `chunk.sources` and provider search's `groundingMetadata`, the
+  // latter sent twice (Google repeats its grounding on every chunk).
+  const chunkClient = {
+    execute: async () => {
+      const chunks = [
+        {
+          content: ['Sunny'],
+          sources: { items: [{ provider: 'ifinder', ref: { id: 'd1' }, title: 'Memo' }] }
+        },
+        { content: ['.'], groundingMetadata: grounding },
+        { content: [], groundingMetadata: grounding }
+      ];
+      return {
+        async *[Symbol.asyncIterator]() {
+          yield* chunks;
+        },
+        result: () => ({ content: 'Sunny.', toolCalls: [], finishReason: 'stop' })
+      };
+    }
+  };
+  const { loop } = makeLoop(
+    [
+      toolTurn([
+        { id: 'c1', name: 'webSearch', args: { query: 'berlin' } },
+        { id: 'c2', name: 'webContentExtractor', args: { url: 'https://weather.example/berlin' } }
+      ])
+    ],
+    { runLog }
+  );
+  const frames = [];
+  const channel = { onSources: frame => frames.push(frame) };
+  const toolResults = {
+    webSearch: { results: [{ url: 'https://weather.example/berlin', title: 'Weather' }] },
+    webContentExtractor: { url: 'https://weather.example/berlin', content: 'Sunny', wordCount: 1 }
+  };
+  const first = await loop.run({
+    runId,
+    model,
+    messages: baseMessages,
+    tools: [searchTool, fetchTool],
+    channel,
+    policies: { budgets: { maxToolRounds: 1 } },
+    executeTool: async (call, { toolId }) => toolResults[toolId]
+  });
+  // The page the search found and the reader read is one source — public,
+  // because the search found it publicly — and each call lists its own.
+  assert.deepEqual(
+    frames.map(f => [f.callId, f.toolId, f.items.map(i => i.id)]),
+    [
+      ['c1', 'webSearch', ['url:weather.example/berlin']],
+      ['c2', 'webContentExtractor', ['url:weather.example/berlin']]
+    ]
+  );
+  assert.deepEqual(first.sources.items, [
+    {
+      id: 'url:weather.example/berlin',
+      provider: 'web',
+      kind: 'page',
+      title: 'Weather',
+      url: 'https://weather.example/berlin',
+      read: { ok: true, words: 1 },
+      private: false
+    }
+  ]);
+  assert.deepEqual(first.sources.queries, ['berlin']);
+
+  frames.length = 0;
+  const second = await new AgentLoop({
+    llmClient: chunkClient,
+    runLog,
+    logger: silentLogger()
+  }).run({ runId, model, messages: baseMessages, channel });
+  assert.deepEqual(
+    frames.map(f => f.items.map(i => i.id)),
+    [['ifinder:d1'], ['url:weather.example/berlin']],
+    'the repeated grounding is not reported twice'
+  );
+  assert.deepEqual(second.sources.queries, ['berlin weather']);
+  assert.equal(second.sources.items[0].private, true);
+
+  await runLog.flush?.(runId);
+  const ledgered = events.filter(e => e.type === RUN_LOG_EVENTS.SOURCES_ADDED);
+  assert.equal(ledgered.length, 4, 'every reported frame is on the ledger');
+  assert.equal(ledgered[0].data.callId, 'c1');
+});

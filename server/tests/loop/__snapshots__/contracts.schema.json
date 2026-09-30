@@ -998,47 +998,6 @@
               },
               "knowledgeSource": {
                 "type": "string"
-              },
-              "webSources": {
-                "type": "array",
-                "items": {
-                  "type": "object",
-                  "properties": {
-                    "url": {
-                      "type": "string"
-                    },
-                    "documentId": {
-                      "type": "string"
-                    },
-                    "title": {
-                      "type": "string"
-                    },
-                    "snippet": {
-                      "type": "string"
-                    },
-                    "publishedDate": {
-                      "type": "string"
-                    },
-                    "favicon": {
-                      "type": "string"
-                    },
-                    "read": {
-                      "type": "boolean"
-                    },
-                    "readFailed": {
-                      "type": "boolean"
-                    },
-                    "wordCount": {
-                      "type": "integer",
-                      "minimum": 0,
-                      "maximum": 9007199254740991
-                    },
-                    "truncated": {
-                      "type": "boolean"
-                    }
-                  },
-                  "additionalProperties": false
-                }
               }
             },
             "required": ["step", "callId", "toolId", "name", "resultPreview", "durationMs"],
@@ -1932,6 +1891,177 @@
               }
             },
             "required": ["kind", "by", "at"],
+            "additionalProperties": false
+          }
+        },
+        "required": ["seq", "ts", "runId", "type", "data"],
+        "additionalProperties": false
+      },
+      {
+        "type": "object",
+        "properties": {
+          "seq": {
+            "type": "integer",
+            "minimum": 0,
+            "maximum": 9007199254740991
+          },
+          "ts": {
+            "type": "string",
+            "format": "date-time",
+            "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d:[0-5]\\d(?:\\.\\d+)?(?:Z|([+-](?:[01]\\d|2[0-3]):[0-5]\\d)))$"
+          },
+          "runId": {
+            "type": "string",
+            "minLength": 1
+          },
+          "type": {
+            "type": "string",
+            "const": "sources/added"
+          },
+          "data": {
+            "type": "object",
+            "properties": {
+              "step": {
+                "type": "integer",
+                "minimum": 0,
+                "maximum": 9007199254740991
+              },
+              "callId": {
+                "type": "string"
+              },
+              "toolId": {
+                "type": "string"
+              },
+              "items": {
+                "type": "array",
+                "items": {
+                  "type": "object",
+                  "properties": {
+                    "id": {
+                      "type": "string"
+                    },
+                    "provider": {
+                      "type": "string"
+                    },
+                    "kind": {
+                      "type": "string",
+                      "enum": ["page", "document", "item"]
+                    },
+                    "title": {
+                      "type": "string"
+                    },
+                    "url": {
+                      "type": "string"
+                    },
+                    "site": {
+                      "type": "string"
+                    },
+                    "favicon": {
+                      "type": "string"
+                    },
+                    "snippet": {
+                      "type": "string"
+                    },
+                    "passages": {
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "properties": {
+                          "text": {
+                            "type": "string"
+                          },
+                          "marker": {
+                            "type": "string"
+                          }
+                        },
+                        "required": ["text"],
+                        "additionalProperties": false
+                      }
+                    },
+                    "publishedDate": {
+                      "type": "string"
+                    },
+                    "fileName": {
+                      "type": "string"
+                    },
+                    "type": {
+                      "type": "string"
+                    },
+                    "ref": {
+                      "type": "object",
+                      "properties": {
+                        "id": {
+                          "type": "string"
+                        },
+                        "scope": {
+                          "type": "string"
+                        }
+                      },
+                      "required": ["id"],
+                      "additionalProperties": false
+                    },
+                    "read": {
+                      "type": "object",
+                      "properties": {
+                        "ok": {
+                          "type": "boolean"
+                        },
+                        "words": {
+                          "type": "integer",
+                          "minimum": 0,
+                          "maximum": 9007199254740991
+                        },
+                        "truncated": {
+                          "type": "boolean"
+                        }
+                      },
+                      "required": ["ok"],
+                      "additionalProperties": false
+                    },
+                    "cited": {
+                      "type": "boolean"
+                    },
+                    "markers": {
+                      "type": "array",
+                      "items": {
+                        "type": "string"
+                      }
+                    },
+                    "private": {
+                      "type": "boolean"
+                    }
+                  },
+                  "required": ["id", "provider", "kind", "private"],
+                  "additionalProperties": false
+                }
+              },
+              "queries": {
+                "type": "array",
+                "items": {
+                  "type": "string"
+                }
+              },
+              "supports": {
+                "type": "array",
+                "items": {
+                  "type": "object",
+                  "properties": {
+                    "text": {
+                      "type": "string"
+                    },
+                    "urls": {
+                      "type": "array",
+                      "items": {
+                        "type": "string"
+                      }
+                    }
+                  },
+                  "required": ["text", "urls"],
+                  "additionalProperties": false
+                }
+              }
+            },
+            "required": ["items"],
             "additionalProperties": false
           }
         },
@@ -2883,29 +3013,140 @@
         "minimum": 0,
         "maximum": 9007199254740991
       },
-      "citations": {
-        "type": "array",
-        "items": {
-          "type": "object",
-          "properties": {
-            "url": {
-              "type": "string"
-            },
-            "title": {
-              "type": "string"
-            },
-            "source": {
-              "type": "string"
-            },
-            "toolId": {
-              "type": "string"
-            },
-            "taskId": {
-              "type": ["string", "null"]
+      "sources": {
+        "type": "object",
+        "properties": {
+          "items": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "properties": {
+                "id": {
+                  "type": "string"
+                },
+                "provider": {
+                  "type": "string"
+                },
+                "kind": {
+                  "type": "string",
+                  "enum": ["page", "document", "item"]
+                },
+                "title": {
+                  "type": "string"
+                },
+                "url": {
+                  "type": "string"
+                },
+                "site": {
+                  "type": "string"
+                },
+                "favicon": {
+                  "type": "string"
+                },
+                "snippet": {
+                  "type": "string"
+                },
+                "passages": {
+                  "type": "array",
+                  "items": {
+                    "type": "object",
+                    "properties": {
+                      "text": {
+                        "type": "string"
+                      },
+                      "marker": {
+                        "type": "string"
+                      }
+                    },
+                    "required": ["text"],
+                    "additionalProperties": false
+                  }
+                },
+                "publishedDate": {
+                  "type": "string"
+                },
+                "fileName": {
+                  "type": "string"
+                },
+                "type": {
+                  "type": "string"
+                },
+                "ref": {
+                  "type": "object",
+                  "properties": {
+                    "id": {
+                      "type": "string"
+                    },
+                    "scope": {
+                      "type": "string"
+                    }
+                  },
+                  "required": ["id"],
+                  "additionalProperties": false
+                },
+                "read": {
+                  "type": "object",
+                  "properties": {
+                    "ok": {
+                      "type": "boolean"
+                    },
+                    "words": {
+                      "type": "integer",
+                      "minimum": 0,
+                      "maximum": 9007199254740991
+                    },
+                    "truncated": {
+                      "type": "boolean"
+                    }
+                  },
+                  "required": ["ok"],
+                  "additionalProperties": false
+                },
+                "cited": {
+                  "type": "boolean"
+                },
+                "markers": {
+                  "type": "array",
+                  "items": {
+                    "type": "string"
+                  }
+                },
+                "private": {
+                  "type": "boolean"
+                }
+              },
+              "required": ["id", "provider", "kind", "private"],
+              "additionalProperties": false
             }
           },
-          "additionalProperties": {}
-        }
+          "queries": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "supports": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "properties": {
+                "text": {
+                  "type": "string"
+                },
+                "urls": {
+                  "type": "array",
+                  "items": {
+                    "type": "string"
+                  }
+                }
+              },
+              "required": ["text", "urls"],
+              "additionalProperties": false
+            }
+          }
+        },
+        "required": ["items", "queries", "supports"],
+        "additionalProperties": false
       },
       "toolCalls": {
         "type": "array",
@@ -3318,7 +3559,7 @@
       "finishReason",
       "usage",
       "iterations",
-      "citations",
+      "sources",
       "disabledTools",
       "budgetExhausted",
       "messages",
@@ -4054,7 +4295,6 @@
                 "required": ["promptTokens", "completionTokens", "totalTokens"],
                 "additionalProperties": false
               },
-              "citations": {},
               "sources": {
                 "type": "array",
                 "items": {
@@ -4258,47 +4498,6 @@
               "knowledgeSource": {
                 "type": "string"
               },
-              "webSources": {
-                "type": "array",
-                "items": {
-                  "type": "object",
-                  "properties": {
-                    "url": {
-                      "type": "string"
-                    },
-                    "documentId": {
-                      "type": "string"
-                    },
-                    "title": {
-                      "type": "string"
-                    },
-                    "snippet": {
-                      "type": "string"
-                    },
-                    "publishedDate": {
-                      "type": "string"
-                    },
-                    "favicon": {
-                      "type": "string"
-                    },
-                    "read": {
-                      "type": "boolean"
-                    },
-                    "readFailed": {
-                      "type": "boolean"
-                    },
-                    "wordCount": {
-                      "type": "integer",
-                      "minimum": 0,
-                      "maximum": 9007199254740991
-                    },
-                    "truncated": {
-                      "type": "boolean"
-                    }
-                  },
-                  "additionalProperties": false
-                }
-              },
               "mcpApp": {
                 "type": "object",
                 "properties": {
@@ -4393,6 +4592,181 @@
               }
             },
             "required": ["step", "callId", "toolId", "name", "resultPreview"],
+            "additionalProperties": false
+          }
+        },
+        "required": ["v", "seq", "runId", "ts", "type", "data"],
+        "additionalProperties": false
+      },
+      {
+        "type": "object",
+        "properties": {
+          "v": {
+            "type": "number",
+            "const": 2
+          },
+          "seq": {
+            "type": "integer",
+            "minimum": 0,
+            "maximum": 9007199254740991
+          },
+          "runId": {
+            "type": "string",
+            "minLength": 1
+          },
+          "ts": {
+            "type": "string",
+            "format": "date-time",
+            "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d:[0-5]\\d(?:\\.\\d+)?(?:Z|([+-](?:[01]\\d|2[0-3]):[0-5]\\d)))$"
+          },
+          "type": {
+            "type": "string",
+            "const": "sources/added"
+          },
+          "data": {
+            "type": "object",
+            "properties": {
+              "step": {
+                "type": "integer",
+                "minimum": 0,
+                "maximum": 9007199254740991
+              },
+              "callId": {
+                "type": "string"
+              },
+              "toolId": {
+                "type": "string"
+              },
+              "items": {
+                "type": "array",
+                "items": {
+                  "type": "object",
+                  "properties": {
+                    "id": {
+                      "type": "string"
+                    },
+                    "provider": {
+                      "type": "string"
+                    },
+                    "kind": {
+                      "type": "string",
+                      "enum": ["page", "document", "item"]
+                    },
+                    "title": {
+                      "type": "string"
+                    },
+                    "url": {
+                      "type": "string"
+                    },
+                    "site": {
+                      "type": "string"
+                    },
+                    "favicon": {
+                      "type": "string"
+                    },
+                    "snippet": {
+                      "type": "string"
+                    },
+                    "passages": {
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "properties": {
+                          "text": {
+                            "type": "string"
+                          },
+                          "marker": {
+                            "type": "string"
+                          }
+                        },
+                        "required": ["text"],
+                        "additionalProperties": false
+                      }
+                    },
+                    "publishedDate": {
+                      "type": "string"
+                    },
+                    "fileName": {
+                      "type": "string"
+                    },
+                    "type": {
+                      "type": "string"
+                    },
+                    "ref": {
+                      "type": "object",
+                      "properties": {
+                        "id": {
+                          "type": "string"
+                        },
+                        "scope": {
+                          "type": "string"
+                        }
+                      },
+                      "required": ["id"],
+                      "additionalProperties": false
+                    },
+                    "read": {
+                      "type": "object",
+                      "properties": {
+                        "ok": {
+                          "type": "boolean"
+                        },
+                        "words": {
+                          "type": "integer",
+                          "minimum": 0,
+                          "maximum": 9007199254740991
+                        },
+                        "truncated": {
+                          "type": "boolean"
+                        }
+                      },
+                      "required": ["ok"],
+                      "additionalProperties": false
+                    },
+                    "cited": {
+                      "type": "boolean"
+                    },
+                    "markers": {
+                      "type": "array",
+                      "items": {
+                        "type": "string"
+                      }
+                    },
+                    "private": {
+                      "type": "boolean"
+                    }
+                  },
+                  "required": ["id", "provider", "kind", "private"],
+                  "additionalProperties": false
+                }
+              },
+              "queries": {
+                "type": "array",
+                "items": {
+                  "type": "string"
+                }
+              },
+              "supports": {
+                "type": "array",
+                "items": {
+                  "type": "object",
+                  "properties": {
+                    "text": {
+                      "type": "string"
+                    },
+                    "urls": {
+                      "type": "array",
+                      "items": {
+                        "type": "string"
+                      }
+                    }
+                  },
+                  "required": ["text", "urls"],
+                  "additionalProperties": false
+                }
+              }
+            },
+            "required": ["items"],
             "additionalProperties": false
           }
         },
@@ -5092,6 +5466,7 @@
     "budget/checkpoint",
     "budget/exhausted",
     "context/compaction",
+    "sources/added",
     "error"
   ],
   "SSE_V2_EVENTS": [
@@ -5106,6 +5481,7 @@
     "tool/started",
     "tool/progress",
     "tool/completed",
+    "sources/added",
     "interaction/raised",
     "interaction/answered",
     "progress/node",

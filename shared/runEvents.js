@@ -49,6 +49,8 @@ export const RUN_LOG_EVENTS = Object.freeze({
   BUDGET_CHECKPOINT: 'budget/checkpoint',
   BUDGET_EXHAUSTED: 'budget/exhausted',
   CONTEXT_COMPACTION: 'context/compaction',
+  /** What a tool call, a model adapter or provider search found (`shared/sources`). */
+  SOURCES_ADDED: 'sources/added',
   ERROR: 'error'
 });
 
@@ -67,6 +69,7 @@ export const SSE_V2_EVENTS = Object.freeze({
   TOOL_STARTED: 'tool/started',
   TOOL_PROGRESS: 'tool/progress',
   TOOL_COMPLETED: 'tool/completed',
+  SOURCES_ADDED: 'sources/added',
   INTERACTION_RAISED: 'interaction/raised',
   INTERACTION_ANSWERED: 'interaction/answered',
   PROGRESS_NODE: 'progress/node',

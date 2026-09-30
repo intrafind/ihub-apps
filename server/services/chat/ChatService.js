@@ -28,6 +28,7 @@ import runLogSingleton, { newRunId, isValidRunId } from '../loop/RunLog.js';
 import interactionServiceSingleton from '../loop/InteractionService.js';
 import { RunStreamEmitter, bindStreamRun, unbindStreamRun } from '../loop/RunStream.js';
 import { RUN_LOG_EVENTS, SSE_V2_EVENTS } from '../../../shared/runEvents.js';
+import { storedSourceSet } from '../../../shared/sources/index.js';
 import {
   imageLiftSeam,
   knowledgeSourceSeam,
@@ -37,10 +38,8 @@ import {
   structuredOutputSeam
 } from '../loop/seams/index.js';
 import { createChatChannel } from './chatChannel.js';
-import { mergeCitations } from './chatCitations.js';
 import { recordRunActivity } from './runActivity.js';
 import { createPageReadGate, resolveMaxPageReads } from './pageReadLimit.js';
-import { buildWebSearch } from '../../../shared/webCitations.js';
 import {
   materializeAssistantTurn,
   materializeUserTurn,
@@ -556,16 +555,11 @@ class ChatService {
     // Scheduled-task proposals the scheduling tools made, stored with the
     // answer so the confirmation card is still there when the chat reopens.
     const scheduledTaskProposals = [];
-    // The turn's web search — tool calls with their sources, and the provider's
-    // grounding per step — stored with the answer so reopening the chat shows
-    // the same sources and citations (shared/webCitations.js).
-    const webSearchLog = { tools: [], grounding: [] };
     const turnSeam = chatTurnSeam({
       chatId,
       buildLogData: log,
       streaming,
-      telemetry: this.telemetry,
-      webSearchLog
+      telemetry: this.telemetry
     });
     const outputSeam =
       typeof structuredOutput?.validate === 'function'
@@ -587,8 +581,7 @@ class ChatService {
         logInteraction: this.logInteraction,
         mcpAppViews,
         mcpAuthPrompts,
-        scheduledTaskProposals,
-        webSearchLog
+        scheduledTaskProposals
       }),
       ...(Array.isArray(extraSeams) ? extraSeams.filter(Boolean) : []),
       questionSeam(
@@ -709,7 +702,6 @@ class ChatService {
         mcpAppViews,
         mcpAuthPrompts,
         scheduledTaskProposals,
-        webSearchLog,
         takePendingCall: () => turnSeam.takePendingCall(),
         structured: outputSeam
           ? {
@@ -817,7 +809,6 @@ class ChatService {
     mcpAppViews = [],
     mcpAuthPrompts = [],
     scheduledTaskProposals = [],
-    webSearchLog = null,
     takePendingCall = () => null,
     structured = null
   }) {
@@ -839,13 +830,11 @@ class ChatService {
       images: result.images || [],
       // Same reasoning for MCP App views: part of the answer, restored on reopen.
       mcpApps: mcpAppViews,
-      // And for the documents behind the answer (iAssistant citations, iFinder
-      // tool documents), which the Documents panel draws again on reopen.
-      citations: mergeCitations(result.citations),
       mcpAuthRequired: mcpAuthPrompts,
       scheduledTaskProposals,
-      // The web sources behind the answer and the passages they back.
-      webSearch: webSearchLog ? buildWebSearch(webSearchLog) : null,
+      // Everything the turn found — web pages, documents, records — and the
+      // passages they back, which the sources panel draws again on reopen.
+      sources: result.sources || null,
       knowledgeSources: this.getKnowledgeSources(chatId, loopSources)
     };
     const translate = async (key, params) => {
@@ -1139,7 +1128,7 @@ class ChatService {
    * @param {(text: string, info: {step: number}) => void} [opts.onTextDelta] - called with
    *   each streamed text fragment of the model's answer (every step; the final
    *   answer is `finalMessage.content`)
-   * @returns {Promise<Object>} `{ status: 'ok'|'error', runId, finalMessage, toolCalls, citations, usage, finishReason, error? }`
+   * @returns {Promise<Object>} `{ status: 'ok'|'error', runId, finalMessage, toolCalls, sources, usage, finishReason, error? }`
    */
   async invokeAppInternal({
     appId,
@@ -1165,7 +1154,7 @@ class ChatService {
       sessionId: chatId,
       ...extra
     });
-    const collected = { toolCalls: [], citations: [] };
+    const collected = { toolCalls: [] };
 
     try {
       const { data: knownApps = [] } = configCache.getApps();
@@ -1222,7 +1211,6 @@ class ChatService {
           });
         },
         onChunk(ctx, chunk) {
-          if (chunk.citations) collected.citations.push(chunk.citations);
           // A caller that streams (the A2A endpoint) gets the model's text as
           // it arrives; the assembled answer is still what `finalMessage` holds.
           if (typeof onTextDelta === 'function') {
@@ -1323,7 +1311,9 @@ class ChatService {
         runId,
         finalMessage: { role: 'assistant', content: result.content || '' },
         toolCalls: collected.toolCalls,
-        citations: collected.citations,
+        // What the app found, stored as its source set (no supports: those
+        // place markers in the app's own answer text).
+        sources: storedSourceSet(result.sources),
         usage: result.usage,
         finishReason: result.finishReason,
         model: model.id

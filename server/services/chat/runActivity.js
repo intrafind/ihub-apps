@@ -140,6 +140,10 @@ function slim(envelope) {
     }
     case SSE_V2_EVENTS.TOOL_PROGRESS:
       return RECORDED_PROGRESS_PHASES.has(data?.phase) ? envelope : null;
+    // A tool call's sources, which its activity row lists. The answer's whole
+    // set is stored as the message's `sources`, not here.
+    case SSE_V2_EVENTS.SOURCES_ADDED:
+      return data?.callId ? envelope : null;
     case SSE_V2_EVENTS.PROGRESS_NODE:
       // A reconnecting client is sent the steps again (`replayChatWorkflowProgress`);
       // folding the replay would list every running step twice.
@@ -274,17 +278,29 @@ function compact(object) {
   );
 }
 
+/** A tool call's source as its activity row shows it: what it is, and whether it was read. */
 function boundSource(source) {
-  if (!source || typeof source !== 'object') return null;
-  const out = compact({
+  if (!source || typeof source !== 'object' || typeof source.id !== 'string') return null;
+  return compact({
+    id: text(source.id, MAX_LABEL_CHARS),
+    provider: text(source.provider, 100),
+    kind: text(source.kind, 20),
     url: text(source.url),
-    documentId: text(source.documentId, MAX_LABEL_CHARS),
     title: text(source.title, MAX_LABEL_CHARS),
-    citedText: text(source.citedText),
-    read: source.read === true ? true : undefined,
-    readFailed: source.readFailed === true ? true : undefined
+    ref:
+      typeof source.ref?.id === 'string'
+        ? compact({ id: text(source.ref.id, MAX_LABEL_CHARS), scope: text(source.ref.scope, 256) })
+        : undefined,
+    read:
+      typeof source.read?.ok === 'boolean'
+        ? compact({
+            ok: source.read.ok,
+            words: Number.isInteger(source.read.words) ? source.read.words : undefined,
+            truncated: source.read.truncated === true ? true : undefined
+          })
+        : undefined,
+    private: source.private === true
   });
-  return out.url || out.documentId ? out : null;
 }
 
 function boundDetails(details) {

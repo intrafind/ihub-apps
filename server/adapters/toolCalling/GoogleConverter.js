@@ -229,7 +229,7 @@ export function convertGoogleFunctionResponseToGeneric(googleResponse) {
  * Resolve Google's grounding supports — "this passage of the answer is backed
  * by chunks 0 and 2" — into the passages and the URLs themselves
  * (`webSupports: [{ text, urls }]`), which the chat uses to place citation
- * markers (`shared/webCitations.insertSupportMarkers`).
+ * markers (`shared/sources/citations.insertSupportMarkers`).
  *
  * Resolved here, against the chunk list of the same payload, because the
  * indices mean nothing once the loop has merged several payloads' chunk lists

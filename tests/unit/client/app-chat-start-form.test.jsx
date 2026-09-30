@@ -48,10 +48,10 @@ jest.mock('../../../client/src/api/endpoints/apps', () => ({
   __esModule: true,
   getConversationMessages: jest.fn().mockResolvedValue({ messages: [] })
 }));
-jest.mock('../../../client/src/api/endpoints/documents', () => ({
+jest.mock('../../../client/src/api/endpoints/sources', () => ({
   __esModule: true,
-  fetchIFinderDocument: jest.fn(),
-  fetchIFinderDocumentMetadata: jest.fn()
+  fetchSourceContent: jest.fn(),
+  fetchSourceMetadata: jest.fn()
 }));
 
 // Capture the SSE handler so the test decides when the stream reports itself

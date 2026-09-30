@@ -8,7 +8,7 @@ import conversationApiService from '../../services/integrations/ConversationApiS
 import conversationStateManager from '../../services/integrations/ConversationStateManager.js';
 import iAssistantService from '../../services/integrations/iAssistantService.js';
 import iAssistantProfileResolver from '../../services/integrations/iAssistantProfileResolver.js';
-import { withConversationAccessLinks } from '../../services/integrations/iFinderCitations.js';
+import { withConversationSources } from '../../services/sources/producers/ifinder.js';
 import logger from '../../utils/logger.js';
 import { buildServerPath } from '../../utils/basePath.js';
 import { sendInternalError, sendNotFound, sendBadRequest } from '../../utils/responseHelpers.js';
@@ -197,16 +197,16 @@ export default function registerConversationRoutes(app) {
           nextCursor
         });
 
-        // The documents of a reopened conversation get the ACCESS links the
-        // live stream gives them, so their tiles can preview, download and
-        // attach again.
+        // The documents of a reopened conversation become sources, with the
+        // search profile the live stream gives them, so the sources panel can
+        // preview, download and attach them again.
         const searchProfile = await conversationSearchProfile(appConfig, {
           chatId,
           conversationId,
           user,
           baseUrl
         });
-        res.json(withConversationAccessLinks(result, searchProfile));
+        res.json(withConversationSources(result, searchProfile));
       } catch (error) {
         return sendInternalError(res, error, 'fetch conversation messages');
       }

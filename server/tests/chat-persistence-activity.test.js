@@ -92,8 +92,23 @@ function emitSearchingTurn(stream) {
     name: 'braveSearch',
     resultPreview: 'a very long preview',
     durationMs: 420,
-    knowledgeSource: 'websearch',
-    webSources: [{ url: 'https://example.org/wind', title: 'Wind' }]
+    knowledgeSource: 'websearch'
+  });
+  stream.emit(SSE_V2_EVENTS.SOURCES_ADDED, {
+    step: 0,
+    callId: 'call-web',
+    toolId: 'braveSearch',
+    items: [
+      {
+        id: 'url:example.org/wind',
+        provider: 'web',
+        kind: 'page',
+        url: 'https://example.org/wind',
+        title: 'Wind',
+        private: false
+      }
+    ],
+    queries: ['wind power 2026']
   });
   stream.emit(SSE_V2_EVENTS.TOOL_STARTED, {
     step: 0,
@@ -108,8 +123,23 @@ function emitSearchingTurn(stream) {
     toolId: 'iFinder_search',
     name: 'iFinder_search',
     resultPreview: null,
-    knowledgeSource: 'ifinder',
-    webSources: [{ documentId: 'doc-7', title: 'Internal memo', url: 'https://ifinder/doc-7' }]
+    knowledgeSource: 'ifinder'
+  });
+  stream.emit(SSE_V2_EVENTS.SOURCES_ADDED, {
+    step: 0,
+    callId: 'call-docs',
+    toolId: 'iFinder_search',
+    items: [
+      {
+        id: 'ifinder:doc-7',
+        provider: 'ifinder',
+        kind: 'document',
+        title: 'Internal memo',
+        url: 'https://ifinder/doc-7',
+        ref: { id: 'doc-7' },
+        private: true
+      }
+    ]
   });
   // iAssistant reports its own searches as status events.
   stream.emit(SSE_V2_EVENTS.TOOL_PROGRESS, {
@@ -144,7 +174,17 @@ describe('recording what a turn did', () => {
     assert.equal(web.query, 'wind power 2026');
     assert.equal(web.status, 'completed');
     assert.equal(web.durationMs, 420);
-    assert.deepEqual(web.sources, [{ url: 'https://example.org/wind', title: 'Wind' }]);
+    assert.deepEqual(web.sources, [
+      {
+        id: 'url:example.org/wind',
+        provider: 'web',
+        kind: 'page',
+        url: 'https://example.org/wind',
+        title: 'Wind',
+        private: false
+      }
+    ]);
+    assert.equal(docs.sources[0].ref.id, 'doc-7');
     // The arguments the row does not show are listed as details.
     assert.deepEqual(web.details, [{ name: 'count', values: [{ text: '5' }], more: 0 }]);
     assert.equal(docs.scope, 'documents');
@@ -316,7 +356,16 @@ describe('the stored form of the activity', () => {
       scope: 'web',
       query: long,
       details: [{ name: 'filter', values: [{ text: 'short', full: long }], more: 0 }],
-      sources: [{ url: 'https://a', title: 't', unexpected: 'dropped' }],
+      sources: [
+        {
+          id: 'url:a',
+          provider: 'web',
+          kind: 'page',
+          url: 'https://a',
+          title: 't',
+          unexpected: 'dropped'
+        }
+      ],
       error: null,
       durationMs: 3,
       injected: { anything: true }
@@ -329,7 +378,9 @@ describe('the stored form of the activity', () => {
     const [first] = stored.toolActivity.items;
     assert.equal(first.injected, undefined);
     assert.ok(first.query.length <= 2001);
-    assert.deepEqual(first.sources, [{ url: 'https://a', title: 't' }]);
+    assert.deepEqual(first.sources, [
+      { id: 'url:a', provider: 'web', kind: 'page', url: 'https://a', title: 't', private: false }
+    ]);
     // A hundred calls with long arguments are past the size bound: the full
     // text of the arguments goes first, the calls themselves stay.
     assert.equal(first.details[0].values[0].full, undefined);
@@ -655,8 +706,29 @@ const LEDGER = [
       toolId: 'iFinder_search',
       name: 'iFinder_search',
       resultPreview: '…',
-      durationMs: 10,
-      webSources: [{ documentId: 'd1', title: 'Doc' }]
+      durationMs: 10
+    }
+  },
+  {
+    seq: 4,
+    runId: RUN_ID,
+    ts: 't4',
+    type: RUN_LOG_EVENTS.SOURCES_ADDED,
+    data: {
+      step: 0,
+      callId: 'c1',
+      toolId: 'iFinder_search',
+      items: [
+        {
+          id: 'ifinder:d1',
+          provider: 'ifinder',
+          kind: 'document',
+          title: 'Doc',
+          ref: { id: 'd1' },
+          private: true
+        }
+      ],
+      queries: ['q']
     }
   }
 ];
@@ -667,7 +739,16 @@ describe('rebuilding the activity from the ledger', () => {
     const [item] = activity.toolActivity.items;
     assert.equal(item.query, 'q');
     assert.equal(item.status, 'completed');
-    assert.deepEqual(item.sources, [{ documentId: 'd1', title: 'Doc' }]);
+    assert.deepEqual(item.sources, [
+      {
+        id: 'ifinder:d1',
+        provider: 'ifinder',
+        kind: 'document',
+        title: 'Doc',
+        ref: { id: 'd1' },
+        private: true
+      }
+    ]);
   });
 
   it('is nothing for an empty ledger', async () => {

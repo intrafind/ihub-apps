@@ -8,7 +8,7 @@
  *
  *   StreamState { streamId, connected, lastSeq, gap, runs: { [runId]: RunState }, order, activeRunId, error }
  *   RunState    { runId, kind, status, refs, model, text, thinking, images, steps, tools, progress,
- *                 nodes, interactions, pendingInteractionId, meta, knowledgeSources, citations, … }
+ *                 nodes, interactions, pendingInteractionId, meta, knowledgeSources, sources, … }
  *
  * Surfaces project this state onto their own view (a chat message, a
  * workflow execution page) — they never interpret event names themselves.
@@ -18,6 +18,7 @@
  * @module shared/run/runReducer
  */
 import { SSE_V2_EVENTS } from '../runEvents.js';
+import { emptySourceSet, mergeSources } from '../sources/sourceSet.js';
 
 export const RUN_EVENTS = SSE_V2_EVENTS;
 
@@ -73,7 +74,8 @@ export function createRunState(runId, init = {}) {
     // surface metadata
     meta: { extra: {} },
     knowledgeSources: [],
-    citations: [],
+    // Everything the run's producers found (`sources/added`, shared/sources).
+    sources: emptySourceSet(),
     skills: [],
     searchStatus: null,
     // Accumulated across every retrieval round of the turn, because
@@ -363,7 +365,6 @@ export function reduceRunEvent(state, envelope) {
         toolCalls: data.toolCalls || [],
         finishReason: data.finishReason ?? null,
         usage: data.usage || null,
-        citations: data.citations,
         sources: data.sources,
         groundingMetadata: data.groundingMetadata
       };
@@ -373,7 +374,6 @@ export function reduceRunEvent(state, envelope) {
         currentStep: stepNo,
         steps: { ...run.steps, [stepNo]: step },
         knowledgeSources: union(run.knowledgeSources, data.sources),
-        citations: data.citations ? [...run.citations, data.citations] : run.citations,
         usage: data.usage || run.usage
       };
       return withRun(next, run);
@@ -394,7 +394,8 @@ export function reduceRunEvent(state, envelope) {
         error: null,
         durationMs: null,
         knowledgeSource: null,
-        webSources: [],
+        // What the call found (`sources/added` with its callId).
+        sources: [],
         // MCP App view the tool renders (server + `ui://` resource).
         mcpApp: data.mcpApp || null
       };
@@ -423,9 +424,7 @@ export function reduceRunEvent(state, envelope) {
         error: data.error || null,
         durationMs: data.durationMs ?? null,
         knowledgeSource: data.knowledgeSource || null,
-        // Pages a search / fetch tool found or read (server-extracted from the
-        // full result — the preview is too short to hold them).
-        webSources: Array.isArray(data.webSources) ? data.webSources : [],
+        sources: Array.isArray(base.sources) ? base.sources : [],
         // The finished MCP App view: tool input + the full result it draws.
         mcpApp: data.mcpApp || base.mcpApp || null,
         // A per-user OAuth MCP server the user must connect first.
@@ -447,6 +446,23 @@ export function reduceRunEvent(state, envelope) {
       return withRun(next, run);
     }
 
+    case SSE_V2_EVENTS.SOURCES_ADDED: {
+      // The run's set, and — for a tool call's frame — that call's own list,
+      // folded the same way (the server builds the stored set likewise).
+      run = { ...run, sources: mergeSources(run.sources, data) };
+      if (data.callId) {
+        run = {
+          ...run,
+          tools: run.tools.map(t =>
+            t.callId === data.callId
+              ? { ...t, sources: mergeSources({ items: t.sources }, { items: data.items }).items }
+              : t
+          )
+        };
+      }
+      return withRun(next, run);
+    }
+
     case SSE_V2_EVENTS.TOOL_PROGRESS: {
       const entry = { kind: 'tool/progress', at: ts, seq, runId, ...data };
       run = { ...run, progress: [...run.progress, entry] };
@@ -457,9 +473,6 @@ export function reduceRunEvent(state, envelope) {
             searchStatus: data.data ?? null,
             searchSummary: accumulateSearch(run.searchSummary, data.data)
           };
-          break;
-        case 'citation':
-          if (data.data) run = { ...run, citations: [...run.citations, data.data] };
           break;
         case 'skill.activation':
           run = {

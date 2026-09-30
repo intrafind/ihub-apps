@@ -10,9 +10,9 @@
  *  - Anthropic: a citation marker follows each cited text block.
  *  - Google: grounding supports are resolved to passages and URLs where the
  *    chunk indices still mean something.
- *  - `shared/webCitations.js`: one source list for every path, numbered in the
- *    order the answer cites them, and a citation never points at a URL the
- *    turn did not return.
+ *  - `shared/sources`: one source list for every path, numbered in the order
+ *    the answer cites them, and a citation never points at a URL the turn did
+ *    not return.
  *
  * Run: node --test server/tests/websearch-citations.test.js
  */
@@ -28,14 +28,21 @@ import {
 import { convertAnthropicResponseToGeneric } from '../adapters/toolCalling/AnthropicConverter.js';
 import { withWebSupports } from '../adapters/toolCalling/GoogleConverter.js';
 import {
-  buildWebSearch,
   citationMarkers,
+  emptySourceSet,
   insertSupportMarkers,
   linkTargets,
+  mergeSources,
   resolveCitations,
-  sourceKey,
-  storedWebSearch
-} from '../../shared/webCitations.js';
+  sourcesFromGrounding,
+  storedSourceSet,
+  urlKey
+} from '../../shared/sources/index.js';
+import { extractToolSources } from '../services/sources/index.js';
+
+/** An answer's set, folded from its frames the way the loop and the client fold them. */
+const setOf = (...frames) =>
+  frames.reduce((set, frame) => mergeSources(set, frame), emptySourceSet());
 
 const json = value => JSON.stringify(value);
 
@@ -316,17 +323,14 @@ describe('Google grounding supports', () => {
   });
 });
 
-describe('shared/webCitations', () => {
+describe('shared/sources', () => {
   it('compares URLs without scheme, www, trailing slash and tracking parameters', () => {
     assert.equal(
-      sourceKey('https://www.Example.com/a/?utm_source=openai#top'),
-      sourceKey('http://example.com/a')
+      urlKey('https://www.Example.com/a/?utm_source=openai#top'),
+      urlKey('http://example.com/a')
     );
-    assert.notEqual(
-      sourceKey('https://example.com/a?id=1'),
-      sourceKey('https://example.com/a?id=2')
-    );
-    assert.equal(sourceKey('javascript:alert(1)'), null);
+    assert.notEqual(urlKey('https://example.com/a?id=1'), urlKey('https://example.com/a?id=2'));
+    assert.equal(urlKey('javascript:alert(1)'), null);
   });
 
   it('finds link targets in order, skipping images and code', () => {
@@ -339,50 +343,55 @@ describe('shared/webCitations', () => {
   });
 
   describe('script-backed search', () => {
-    const webSearch = buildWebSearch({
-      tools: [
-        {
-          toolId: 'braveSearch',
-          args: { query: 'langdock' },
-          status: 'completed',
-          webSources: [
-            { url: 'https://langdock.com/', title: 'Langdock', snippet: 'AI platform' },
-            { url: 'https://docs.langdock.com/', title: 'Docs', read: true },
+    const sources = setOf(
+      extractToolSources({
+        toolId: 'braveSearch',
+        args: { query: 'langdock' },
+        result: {
+          results: [
+            { url: 'https://langdock.com/', title: 'Langdock', description: 'AI platform' },
+            { url: 'https://docs.langdock.com/', title: 'Docs' },
             { url: 'https://ycombinator.com/companies/langdock', title: 'YC' }
-          ]
-        },
-        {
-          toolId: 'webContentExtractor',
-          args: { url: 'https://docs.langdock.com/' },
-          status: 'completed',
-          webSources: [{ url: 'https://docs.langdock.com/', read: true, wordCount: 812 }]
-        },
-        {
-          toolId: 'webContentExtractor',
-          args: { url: 'https://blocked.example/' },
-          status: 'error'
-        },
-        {
-          toolId: 'iFinder_search',
-          args: { query: 'internal' },
-          webSources: [{ url: 'https://intranet/' }]
+          ],
+          extractedContent: [{ url: 'https://docs.langdock.com/', contentExtracted: true }]
         }
-      ]
-    });
+      }),
+      extractToolSources({
+        toolId: 'webContentExtractor',
+        args: { url: 'https://docs.langdock.com/' },
+        result: { url: 'https://docs.langdock.com/', content: 'text', wordCount: 812 }
+      }),
+      extractToolSources({
+        toolId: 'webContentExtractor',
+        args: { url: 'https://blocked.example/' },
+        result: { error: true },
+        failed: true
+      }),
+      extractToolSources({
+        toolId: 'iFinder_search',
+        args: { query: 'internal' },
+        result: { results: [{ id: 'intra-1', title: 'Internal', url: 'https://intranet/' }] }
+      })
+    );
 
-    it('lists queries and sources once, merged across calls, without document tools', () => {
-      assert.deepEqual(webSearch.queries, ['langdock']);
+    it('lists queries and sources once, merged across calls — web pages and documents alike', () => {
+      assert.deepEqual(sources.queries, ['langdock', 'internal']);
       assert.deepEqual(
-        webSearch.sources.map(s => s.url),
+        sources.items.map(s => [s.id, s.provider]),
         [
-          'https://langdock.com/',
-          'https://docs.langdock.com/',
-          'https://ycombinator.com/companies/langdock',
-          'https://blocked.example/'
+          ['url:langdock.com', 'web'],
+          ['url:docs.langdock.com', 'web'],
+          ['url:ycombinator.com/companies/langdock', 'web'],
+          ['url:blocked.example', 'web'],
+          ['ifinder:intra-1', 'ifinder']
         ]
       );
-      assert.equal(webSearch.sources[1].wordCount, 812);
-      assert.equal(webSearch.sources[3].readFailed, true);
+      const [, docs, , blocked] = sources.items;
+      assert.deepEqual(docs.read, { ok: true, words: 812 });
+      // The search returned it: public, although the reader read it too.
+      assert.equal(docs.private, false);
+      assert.deepEqual(blocked.read, { ok: false });
+      assert.equal(blocked.private, true);
     });
 
     it('numbers cited sources in citation order; the rest were considered', () => {
@@ -390,7 +399,7 @@ describe('shared/webCitations', () => {
         'Langdock is an AI platform [3](https://docs.langdock.com/). ' +
         'It is a YC company [1](https://www.ycombinator.com/companies/langdock/?utm_source=x). ' +
         'Again [3](https://docs.langdock.com/).';
-      const { cited, considered } = resolveCitations(answer, webSearch);
+      const { cited, considered, numberOfUrl } = resolveCitations(answer, sources);
       assert.deepEqual(
         cited.map(s => [s.n, s.url]),
         [
@@ -399,46 +408,90 @@ describe('shared/webCitations', () => {
         ]
       );
       assert.deepEqual(
-        considered.map(s => s.url),
-        ['https://langdock.com/', 'https://blocked.example/']
+        considered.map(s => s.id),
+        ['url:langdock.com', 'url:blocked.example', 'ifinder:intra-1']
       );
+      assert.equal(numberOfUrl('http://docs.langdock.com'), 1);
     });
 
     it('never turns a URL the turn did not return into a citation', () => {
-      const { cited, numbers } = resolveCitations(
+      const { cited, numberOfUrl } = resolveCitations(
         'Trust me [1](https://invented.example/) and [2](https://langdock.com/)',
-        webSearch
+        sources
       );
       assert.deepEqual(
         cited.map(s => s.url),
         ['https://langdock.com/']
       );
-      assert.equal(numbers.has(sourceKey('https://invented.example/')), false);
+      assert.equal(numberOfUrl('https://invented.example/'), null);
+    });
+
+    it('a document is cited by its link, or by its id in the text', () => {
+      const byId = resolveCitations('See the memo (intra-1).', sources);
+      assert.deepEqual(
+        byId.cited.map(s => s.id),
+        ['ifinder:intra-1']
+      );
+      assert.equal(resolveCitations('See intra-10.', sources).cited.length, 0);
     });
   });
 
-  it('Anthropic: cited results are cited, the other results considered', () => {
-    const webSearch = buildWebSearch({
-      grounding: [
+  it('iAssistant: <cite> markers number documents and passages the same way', () => {
+    const set = setOf({
+      items: [
+        { provider: 'ifinder', ref: { id: 'doc-a' }, title: 'A', markers: ['r:1'] },
         {
-          webSearchQueries: ['langdock'],
-          searchResults: [
-            {
-              type: 'web_search_result',
-              url: 'https://a.example/',
-              title: 'A',
-              page_age: 'June 1, 2025'
-            },
-            { type: 'web_search_result', url: 'https://b.example/', title: 'B' }
-          ],
-          citations: [{ url: 'https://a.example/', title: 'A', cited_text: 'Quoted.' }]
-        }
+          provider: 'ifinder',
+          ref: { id: 'doc-b' },
+          title: 'B',
+          markers: ['r:2'],
+          passages: [{ text: 'Passage four.', marker: 's:4' }]
+        },
+        { provider: 'ifinder', ref: { id: 'doc-c' }, title: 'C', markers: ['r:3'] }
       ]
     });
-    const { cited, considered } = resolveCitations('Claim.[1](https://a.example/)', webSearch);
+    const { cited, considered, numberOfMarker } = resolveCitations(
+      'First <cite type="s">4</cite>, then <cite type="r">1</cite> and again <cite type="r">2</cite>.',
+      set
+    );
     assert.deepEqual(
-      cited.map(s => [s.n, s.url, s.citedText]),
-      [[1, 'https://a.example/', 'Quoted.']]
+      cited.map(s => [s.n, s.title]),
+      [
+        [1, 'B'],
+        [2, 'A']
+      ]
+    );
+    assert.equal(numberOfMarker('r:2'), 1, 'the passage’s document keeps its number');
+    assert.equal(numberOfMarker('r:3'), null);
+    assert.deepEqual(
+      considered.map(s => s.title),
+      ['C']
+    );
+  });
+
+  it('Anthropic: cited results are cited, the other results considered', () => {
+    const set = setOf(
+      sourcesFromGrounding({
+        webSearchQueries: ['langdock'],
+        searchResults: [
+          {
+            type: 'web_search_result',
+            url: 'https://a.example/',
+            title: 'A',
+            page_age: 'June 1, 2025'
+          },
+          { type: 'web_search_result', url: 'https://b.example/', title: 'B' }
+        ]
+      }),
+      // Streamed piece by piece: the citation arrives later.
+      sourcesFromGrounding({
+        citations: [{ url: 'https://a.example/', title: 'A', cited_text: 'Quoted.' }]
+      })
+    );
+    const { cited, considered } = resolveCitations('Claim.[1](https://a.example/)', set);
+    assert.deepEqual(
+      cited.map(s => [s.n, s.url, s.passages]),
+      [[1, 'https://a.example/', [{ text: 'Quoted.' }]]]
     );
     assert.equal(cited[0].publishedDate, new Date('June 1, 2025').toISOString());
     assert.deepEqual(
@@ -448,71 +501,69 @@ describe('shared/webCitations', () => {
   });
 
   it('Google: markers go after the supported passages; chunk sites name the host', () => {
-    const webSearch = buildWebSearch({
-      grounding: withWebSupports({
-        webSearchQueries: ['langdock'],
-        groundingChunks: [
-          { web: { uri: 'https://vertexaisearch.cloud.google.com/r/1', title: 'langdock.com' } }
-        ],
-        groundingSupports: [
-          { segment: { text: 'Langdock is an AI platform.' }, groundingChunkIndices: [0] }
-        ]
-      })
-    });
-    assert.equal(webSearch.sources[0].host, 'langdock.com');
-    const answer = insertSupportMarkers(
-      'Langdock is an AI platform. More text.',
-      webSearch.supports
+    const set = setOf(
+      sourcesFromGrounding(
+        withWebSupports({
+          webSearchQueries: ['langdock'],
+          groundingChunks: [
+            { web: { uri: 'https://vertexaisearch.cloud.google.com/r/1', title: 'langdock.com' } }
+          ],
+          groundingSupports: [
+            { segment: { text: 'Langdock is an AI platform.' }, groundingChunkIndices: [0] }
+          ]
+        })
+      )
     );
+    assert.equal(set.items[0].site, 'langdock.com');
+    const answer = insertSupportMarkers('Langdock is an AI platform. More text.', set.supports);
     assert.equal(
       answer,
       'Langdock is an AI platform.[1](https://vertexaisearch.cloud.google.com/r/1) More text.'
     );
     // Idempotent: a stored answer that already carries the markers keeps them once.
-    assert.equal(insertSupportMarkers(answer, webSearch.supports), answer);
-    const { cited } = resolveCitations(answer, webSearch);
-    assert.equal(cited.length, 1);
+    assert.equal(insertSupportMarkers(answer, set.supports), answer);
+    assert.equal(resolveCitations(answer, set).cited.length, 1);
   });
 
   it('Google: a chunk no support rests on was only considered', () => {
-    const webSearch = buildWebSearch({
-      grounding: withWebSupports({
-        webSearchQueries: ['langdock'],
-        groundingChunks: [
-          { web: { uri: 'https://vertexaisearch.cloud.google.com/r/1', title: 'langdock.com' } },
-          { web: { uri: 'https://vertexaisearch.cloud.google.com/r/2', title: 'example.com' } }
-        ],
-        groundingSupports: [
-          { segment: { text: 'Langdock is an AI platform.' }, groundingChunkIndices: [0] }
-        ]
-      })
-    });
-    const answer = insertSupportMarkers('Langdock is an AI platform.', webSearch.supports);
-    const { cited, considered } = resolveCitations(answer, webSearch);
+    const set = setOf(
+      sourcesFromGrounding(
+        withWebSupports({
+          webSearchQueries: ['langdock'],
+          groundingChunks: [
+            { web: { uri: 'https://vertexaisearch.cloud.google.com/r/1', title: 'langdock.com' } },
+            { web: { uri: 'https://vertexaisearch.cloud.google.com/r/2', title: 'example.com' } }
+          ],
+          groundingSupports: [
+            { segment: { text: 'Langdock is an AI platform.' }, groundingChunkIndices: [0] }
+          ]
+        })
+      )
+    );
+    const answer = insertSupportMarkers('Langdock is an AI platform.', set.supports);
+    const { cited, considered } = resolveCitations(answer, set);
     assert.deepEqual(
-      cited.map(s => s.host),
+      cited.map(s => s.site),
       ['langdock.com']
     );
     assert.deepEqual(
-      considered.map(s => s.host),
+      considered.map(s => s.site),
       ['example.com']
     );
     // A supported chunk stays cited when its passage is not found in the text.
-    assert.equal(resolveCitations('Other wording.', webSearch).cited.length, 1);
+    assert.equal(resolveCitations('Other wording.', set).cited.length, 1);
   });
 
   it('OpenAI: the links the model wrote are the citations', () => {
-    const webSearch = buildWebSearch({
-      grounding: [
-        {
-          webSearchQueries: ['q'],
-          citations: [{ url: 'https://a.example/?utm_source=openai', title: 'A' }]
-        }
-      ]
-    });
+    const set = setOf(
+      sourcesFromGrounding({
+        webSearchQueries: ['q'],
+        citations: [{ url: 'https://a.example/?utm_source=openai', title: 'A' }]
+      })
+    );
     const { cited } = resolveCitations(
       'Claim ([a.example](https://a.example/?utm_source=openai)).',
-      webSearch
+      set
     );
     assert.deepEqual(
       cited.map(s => s.n),
@@ -520,38 +571,38 @@ describe('shared/webCitations', () => {
     );
   });
 
-  it('builds nothing for a turn without web search', () => {
-    // A tool that searches something else is not web search, URLs or not.
+  it('a tool that searches something else reports nothing unless it says what it found', () => {
     assert.equal(
-      buildWebSearch({
-        tools: [
-          { toolId: 'jira_searchIssues', webSources: [{ url: 'https://jira.example/X-1' }] },
-          { toolId: 'entraPeopleSearch', args: { query: 'Ada' } }
-        ]
+      extractToolSources({
+        toolId: 'jira_searchIssues',
+        result: { results: [{ url: 'https://jira.example/X-1' }] }
       }),
       null
     );
     assert.equal(
-      buildWebSearch({ tools: [{ toolId: 'mcp__brave__brave_web_search' }] }).queries.length,
-      0
+      extractToolSources({ toolId: 'entraPeopleSearch', args: { query: 'Ada' }, result: {} }),
+      null
     );
-    assert.equal(buildWebSearch({ tools: [{ toolId: 'ask_user' }] }), null);
-    assert.equal(buildWebSearch({}), null);
+    assert.equal(
+      extractToolSources({ toolId: 'mcp__brave__brave_web_search', result: 'text' }),
+      null
+    );
+    assert.equal(sourcesFromGrounding({}), null);
   });
 
   it('stores queries and bounded sources, without the supports', () => {
-    const stored = storedWebSearch({
+    const stored = storedSourceSet({
       queries: ['q', '  ', 'q2'],
-      sources: [
+      items: [
         { url: 'https://a.example/', title: 'x'.repeat(1000), snippet: 's', junk: { deep: true } },
         { url: 'javascript:alert(1)' }
       ],
       supports: [{ text: 'a', urls: ['https://a.example/'] }]
     });
     assert.deepEqual(stored.queries, ['q', 'q2']);
-    assert.equal(stored.sources.length, 1);
-    assert.equal(stored.sources[0].title.length, 300);
-    assert.equal(stored.sources[0].junk, undefined);
+    assert.equal(stored.items.length, 1);
+    assert.equal(stored.items[0].title.length, 300);
+    assert.equal(stored.items[0].junk, undefined);
     assert.equal(stored.supports, undefined);
   });
 
