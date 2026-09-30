@@ -100,3 +100,23 @@ configuration.
   server.
 - The vLLM Realtime **Test connection** now explains a redirect: an endpoint behind a proxy that
   only accepts TLS is reported as "use wss:// instead of ws://" rather than a bare HTTP 308.
+  
+## Admin: System Resources and Low-Disk Warnings
+
+A new **Admin → System Resources** page shows how much CPU, memory and disk space the server is
+using, so a small installation notices a filling disk before saving chats, uploads and
+configuration starts to fail.
+
+- **Disk space** for each filesystem holding the contents, data, uploads, log and temp
+  directories: free and total space, the directories on it, and a status. Status is **Running low**
+  from 80 % used and **Critical** from 90 %.
+- **Host** CPU and memory, including container limits when iHub runs in Docker or Kubernetes.
+- **Server processes**: CPU, memory, heap and event-loop delay for each process. With several
+  workers (`WORKERS`), the primary and every worker are listed, and a worker that does not answer
+  is flagged.
+- When a disk reaches 80 % used, **every admin page** shows a banner, and the server log gets a
+  `warn` line (`error` at 90 %). The log line repeats hourly while the disk stays full, and an `info`
+  line follows once it recovers, so installations where nobody opens the admin UI still see it in
+  their logs.
+- The Admin **Overview** shows the free space in a **Disk space** row under *Platform status*.
+- The page is hidden together with the other system pages when `admin.pages.system` is `false`.

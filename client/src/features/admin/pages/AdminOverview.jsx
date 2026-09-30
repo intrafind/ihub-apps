@@ -16,12 +16,15 @@ import {
   CircleStackIcon,
   WrenchIcon,
   KeyIcon,
-  ArrowUpCircleIcon
+  ArrowUpCircleIcon,
+  ServerStackIcon
 } from '@heroicons/react/24/outline';
 import { useOverviewData } from '../hooks/useOverviewData';
 import { useUpdateCheck } from '../hooks/useUpdateCheck';
 import { useUIConfig } from '../../../shared/contexts/UIConfigContext';
 import { useAuth } from '../../../shared/contexts/AuthContext';
+import { usePlatformConfig } from '../../../shared/contexts/PlatformConfigContext';
+import { STORAGE_STATUS_STYLES, formatBytes, formatPercent } from '../utils/systemResourcesFormat';
 
 function StatCard({
   label,
@@ -309,14 +312,19 @@ function CommonPages({ className = '', links: customLinks }) {
   );
 }
 
-function InfoRow({ icon: Icon, label, value, href }) {
+function InfoRow({ icon: Icon, label, value, href, valueClassName, valueTitle }) {
   const content = (
     <div className="flex items-center justify-between py-2">
       <div className="flex items-center gap-2 text-sm text-gray-600 dark:text-gray-400">
         <Icon className="w-4 h-4 shrink-0" aria-hidden="true" />
         <span>{label}</span>
       </div>
-      <span className="text-sm font-medium text-gray-900 dark:text-gray-100">{value}</span>
+      <span
+        className={`text-sm font-medium ${valueClassName || 'text-gray-900 dark:text-gray-100'}`}
+        title={valueTitle}
+      >
+        {value}
+      </span>
     </div>
   );
 
@@ -334,7 +342,7 @@ function InfoRow({ icon: Icon, label, value, href }) {
   return content;
 }
 
-function PlatformInfoSection({ info }) {
+function PlatformInfoSection({ info, systemPagesVisible }) {
   const { t } = useTranslation();
 
   if (!info) return null;
@@ -423,6 +431,25 @@ function PlatformInfoSection({ info }) {
           value={oauthLabel()}
           href="/admin/oauth"
         />
+        {info.storage && (
+          <InfoRow
+            icon={ServerStackIcon}
+            label={t('admin.overview.storage.label', 'Disk space')}
+            value={t('admin.overview.storage.value', '{{free}} free', {
+              free: formatBytes(info.storage.available)
+            })}
+            valueTitle={t('admin.overview.storage.valueTitle', '{{percent}} of {{total}} used', {
+              percent: formatPercent(info.storage.usedPercent),
+              total: formatBytes(info.storage.total)
+            })}
+            valueClassName={
+              info.storage.status === 'ok'
+                ? undefined
+                : STORAGE_STATUS_STYLES[info.storage.status]?.text
+            }
+            href={systemPagesVisible ? '/admin/system-resources' : undefined}
+          />
+        )}
       </div>
     </div>
   );
@@ -510,6 +537,8 @@ export default function AdminOverview() {
   const { t, i18n } = useTranslation();
   const { uiConfig } = useUIConfig();
   const { user } = useAuth();
+  const { platformConfig } = usePlatformConfig();
+  const systemPagesVisible = platformConfig?.admin?.pages?.system !== false;
 
   // Content-admin-only users (contentAdmin permission, no full adminAccess) get a
   // content-focused overview: only the apps/prompts/sources they can manage, and
@@ -693,7 +722,11 @@ export default function AdminOverview() {
 
         {/* Side column */}
         <div className="space-y-6">
-          {isFreshInstance ? <SetupChecklist /> : <PlatformInfoSection info={platformInfo} />}
+          {isFreshInstance ? (
+            <SetupChecklist />
+          ) : (
+            <PlatformInfoSection info={platformInfo} systemPagesVisible={systemPagesVisible} />
+          )}
         </div>
       </div>
     </div>
