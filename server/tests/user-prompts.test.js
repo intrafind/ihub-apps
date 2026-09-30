@@ -665,6 +665,20 @@ describe('ownership', () => {
     assert.deepEqual(mine.shares, [], 'the share to the new owner went');
     assert.ok(!ids(await list(ADA)).includes(prompt.id));
   });
+
+  it('keeps the per-user limit when handing a prompt over', async () => {
+    const prompt = await create(ADA);
+    await create(GRACE, { name: 'Grace already has one' });
+    setUserPromptSettings({ maxPromptsPerUser: (await list(GRACE, 'mine')).length });
+    const res = await drive(route.owner, {
+      user: ADA,
+      params: { promptId: prompt.id },
+      body: { ownerId: GRACE.id }
+    });
+    assert.equal(res.statusCode, 409, JSON.stringify(res.body));
+    assert.equal(res.body.details.code, 'PROMPT_LIMIT_REACHED');
+    assert.ok(ids(await list(ADA, 'mine')).includes(prompt.id), 'it stays with Ada');
+  });
 });
 
 describe('versions', () => {

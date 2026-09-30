@@ -257,7 +257,7 @@ The settings for user prompts are under **Admin → Prompts → User prompts →
 | Setting | Description |
 | ------- | ----------- |
 | `enabled` | Whether users can create their own prompts. Global prompts are not affected. While it is off, users do not see or change their prompts, and prompt admins can still review, unshare, hand over and delete the ones that exist. |
-| `maxPromptsPerUser` | Most prompts one user can own. `0` means no limit. |
+| `maxPromptsPerUser` | Most prompts one user can own, whether created, duplicated or handed over to them. `0` means no limit. |
 | `maxVersions` | Versions kept per prompt. Older ones are removed. |
 | `sharing.allowUsers` / `allowGroups` / `allowEveryone` | Which audiences users can share with. These are checked when a share is added, so existing shares keep working. |
 | `sharing.restrictToGroups` | When it lists groups, only their members can share with groups or with everyone. Sharing with specific users is not affected. |

@@ -327,14 +327,18 @@ function refuse(res, message, code = 'PROMPT_FORBIDDEN') {
   return sendErrorResponse(res, 403, message, { details: { code } });
 }
 
-/** Refuse creating a prompt past the per-user limit; true when refused. */
-async function refuseOverLimit(res, repo, settings, ownerId) {
+/**
+ * Refuse giving a user one more prompt past the per-user limit — by creating,
+ * duplicating or handing one over; true when refused.
+ */
+async function refuseOverLimit(res, repo, settings, ownerId, message) {
   if (settings.maxPromptsPerUser <= 0) return false;
   if ((await repo.countOwned(ownerId)) < settings.maxPromptsPerUser) return false;
   sendErrorResponse(
     res,
     409,
-    `You can keep at most ${settings.maxPromptsPerUser} prompts — delete one to make room`,
+    message ||
+      `You can keep at most ${settings.maxPromptsPerUser} prompts — delete one to make room`,
     { details: { code: 'PROMPT_LIMIT_REACHED', limit: settings.maxPromptsPerUser } }
   );
   return true;
@@ -1144,6 +1148,17 @@ export default function registerPromptRoutes(app) {
               ownerActive: loaded.ownerActive
             })
           );
+        }
+        if (
+          await refuseOverLimit(
+            res,
+            deps.repo,
+            deps.settings,
+            body.ownerId,
+            `The new owner already has ${deps.settings.maxPromptsPerUser} prompts, the most one user can keep`
+          )
+        ) {
+          return;
         }
         const transferred = await deps.repo.transfer(
           promptId,
