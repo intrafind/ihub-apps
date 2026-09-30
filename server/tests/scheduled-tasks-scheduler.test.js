@@ -357,6 +357,20 @@ describe('ScheduledTaskSource', () => {
     assert.equal((await repository.getTask(t.id)).activeRun, null);
   });
 
+  it('releases a task whose running run has no document at all', async () => {
+    const t = task({ type: 'daily', time: '09:00' }, { id: freshId() });
+    const run = newRunDocument(t, { trigger: 'manual', status: 'queued', now: T0 });
+    attachQueuedRun(t, run);
+    t.activeRun.status = 'running';
+    await repository.createTask(t);
+    // The run document was never written, or was deleted out of band.
+    const src = source(fakeRunner());
+    await src.rebuild({ now: T0 + 1000, reason: 'periodic' });
+    const stored = await repository.getTask(t.id);
+    assert.equal(stored.activeRun, null);
+    assert.equal(stored.lastRun.status, 'failed');
+  });
+
   it('catches up after a restart: one run for the latest missed slot', async () => {
     const t = task({ type: 'daily', time: '09:00' }, { id: freshId() });
     await repository.createTask(t);

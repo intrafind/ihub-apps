@@ -158,9 +158,12 @@ export class ScheduledTaskSource {
           reason: reasonOf('INTERRUPTED', 'The server stopped while the run was in progress', now)
         };
       });
+      // No run document at all (a partial write, a deletion): nothing can hold
+      // a lease on it, so the task is released below.
+      if (!run) interrupted = true;
       // Still held: leave it to its worker; a later rebuild looks again.
       // Settled meanwhile by that worker: only release the task from it.
-      if (!interrupted && !(run && isFinalRunStatus(run.status))) return task;
+      if (!interrupted && !isFinalRunStatus(run.status)) return task;
       const { task: updated } = await repository.mutateTask(task.id, stored => {
         if (stored.activeRun?.id !== active.id) return null;
         return applyRunOutcome(
