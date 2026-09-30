@@ -17,7 +17,10 @@ import {
   createPresenceMap,
   hasRemote,
   publish,
-  subscribe
+  subscribe,
+  gather,
+  respond,
+  respondInPrimary
 } from '../clusterBus.js';
 
 const WORKER_COUNT = 3;
@@ -37,6 +40,9 @@ if (cluster.isPrimary) {
 async function runPrimary() {
   const workers = [];
   initPrimaryBus({ getWorkers: () => workers });
+  // The primary answers gathers about itself, as it does for the System
+  // resources page's per-process snapshot.
+  respondInPrimary('test:whoami', () => ({ pid: process.pid, role: 'primary' }));
 
   for (let i = 0; i < WORKER_COUNT; i++) {
     workers.push(cluster.fork({ TEST_WORKER_INDEX: String(i) }));
@@ -193,6 +199,31 @@ async function runPrimary() {
       assert.strictEqual(shared[0].held, false);
     });
 
+    // ---- gather collects every other process's answer, primary included ----
+    // `request` keeps the first reply only; a question each process answers
+    // about itself (its memory, its CPU) needs all of them.
+    const workerPids = workers.map(w => w.process.pid);
+    const gathered = await ask(workers[0], {
+      step: 'gather',
+      expected: WORKER_COUNT,
+      timeoutMs: 3000
+    });
+    check('gather collects the other workers and the primary', () => {
+      const pids = gathered.replies.map(r => r.pid).sort();
+      assert.deepStrictEqual(pids, [process.pid, workerPids[1], workerPids[2]].sort());
+      assert.ok(
+        gathered.replies.some(r => r.role === 'primary'),
+        'the primary answered for itself'
+      );
+      assert.ok(
+        !gathered.replies.some(r => r.pid === workerPids[0]),
+        'the asker does not answer its own question'
+      );
+    });
+    check('gather resolves as soon as the expected replies are in', () =>
+      assert.ok(gathered.elapsedMs < 2000, `took ${gathered.elapsedMs}ms`)
+    );
+
     // ---- a dead worker's registrations are retracted ----
     // Otherwise the survivors keep relaying into a process that no longer
     // exists, and every event for that chat is silently dropped.
@@ -216,6 +247,20 @@ async function runPrimary() {
     check('a dead worker’s registrations are retracted', () => {
       assert.strictEqual(survivors[0].hasRemote, false);
       assert.strictEqual(survivors[1].hasRemote, false);
+    });
+
+    // ---- a silent process does not hang a gather ----
+    // The dead worker cannot answer; the gather waits out its timeout and
+    // returns what it has, so the caller can show the worker as missing.
+    const partial = await ask(workers[0], {
+      step: 'gather',
+      expected: WORKER_COUNT,
+      timeoutMs: 300
+    });
+    check('gather returns partial results when a process stays silent', () => {
+      const pids = partial.replies.map(r => r.pid).sort();
+      assert.deepStrictEqual(pids, [process.pid, workerPids[1]].sort());
+      assert.ok(partial.elapsedMs >= 250, `resolved early after ${partial.elapsedMs}ms`);
     });
   } catch (error) {
     failed = true;
@@ -251,6 +296,7 @@ function runWorker() {
   const sharedPresence = createPresenceMap('chat-durable', { shared: true });
   const inbox = [];
   subscribe('test:channel', payload => inbox.push(payload.text));
+  respond('test:whoami', () => ({ pid: process.pid, role: 'worker' }));
 
   process.on('message', msg => {
     if (!msg || typeof msg.step !== 'string') return;
@@ -298,6 +344,13 @@ function runWorker() {
       case 'inbox':
         reply({ inbox: [...inbox] });
         break;
+      case 'gather': {
+        const started = Date.now();
+        gather('test:whoami', null, { expected: msg.expected, timeoutMs: msg.timeoutMs }).then(
+          replies => reply({ replies, elapsedMs: Date.now() - started })
+        );
+        break;
+      }
       case 'clear-inbox':
         inbox.length = 0;
         reply({ ok: true });

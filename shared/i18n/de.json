@@ -2272,6 +2272,7 @@
       "mcpServers": "MCP-Server",
       "a2aAgents": "A2A-Agenten",
       "telemetry": "Telemetrie",
+      "systemResources": "Systemressourcen",
       "voiceInput": "Spracheingabe",
       "changelog": "Neuigkeiten",
       "feedback": "Feedback",
@@ -2596,6 +2597,74 @@
       "referenceTitle": "Referenz",
       "refEnvHint": "Standard-OTEL_*-Umgebungsvariablen (OTEL_EXPORTER_OTLP_ENDPOINT, OTEL_SERVICE_NAME, ...) werden beim Start berücksichtigt.",
       "refMetricsHint": "Eigene iHub-Metriken: ihub.app.usage, ihub.prompt.usage, ihub.errors, ihub.conversations, ihub.active.users, ihub.active.chats."
+    },
+    "systemResources": {
+      "title": "Systemressourcen",
+      "description": "CPU, Arbeitsspeicher und Speicherplatz, wie sie jeder Serverprozess auf diesem Host meldet.",
+      "updatedAt": "Aktualisiert {{time}}",
+      "refresh": "Aktualisieren",
+      "loadError": "Systemressourcen konnten nicht geladen werden",
+      "status": {
+        "ok": "OK",
+        "warning": "Wird knapp",
+        "critical": "Kritisch"
+      },
+      "paths": {
+        "contents": "Inhalte",
+        "data": "Daten",
+        "uploads": "Uploads",
+        "logs": "Logs",
+        "temp": "Temp"
+      },
+      "storage": {
+        "title": "Speicherplatz",
+        "description": "Dateisysteme mit den Verzeichnissen, in die iHub schreibt. Knapp ab {{warning}} % Belegung, kritisch ab {{critical}} %.",
+        "none": "Keine Informationen zum Speicherplatz verfügbar.",
+        "freeOfTotal": "{{free}} frei von {{total}} ({{percent}} belegt)",
+        "usedLabel": "Speicherbelegung {{name}}",
+        "criticalAlert": "Der Speicherplatz ist kritisch knapp. Geben Sie bald Platz frei oder vergrößern Sie das Volume, sonst schlägt das Speichern von Chats, Uploads und Konfiguration fehl.",
+        "warningAlert": "Der Speicherplatz wird knapp. Planen Sie, Platz freizugeben oder das Volume zu vergrößern."
+      },
+      "host": {
+        "title": "Host",
+        "description": "Gemeinsam genutzt von allen Serverprozessen auf diesem Rechner bzw. in diesem Container.",
+        "memory": "Arbeitsspeicher",
+        "memoryUsed": "{{used}} von {{total}} belegt",
+        "containerMemory": "Speicherlimit des Containers (Host hat {{total}}).",
+        "cpu": "CPU",
+        "cores": "CPU-Kerne",
+        "cpuLimit": "(Limit {{cores}})",
+        "load": "Durchschnittliche Last",
+        "uptime": "Host-Laufzeit",
+        "node": "Node.js",
+        "hostname": "Hostname",
+        "os": "Betriebssystem"
+      },
+      "processes": {
+        "title": "Serverprozesse",
+        "clusterDescription": "Cluster mit {{count}} Workern. CPU in Prozent eines Kerns, gemittelt über die letzten Sekunden.",
+        "standaloneDescription": "Einzelner Serverprozess. CPU in Prozent eines Kerns, gemittelt über die letzten Sekunden.",
+        "primary": "Primärprozess",
+        "standalone": "Server",
+        "worker": "Worker {{index}}",
+        "process": "Prozess",
+        "pid": "PID",
+        "cpu": "CPU",
+        "memory": "Arbeitsspeicher (RSS)",
+        "heap": "Heap belegt / Limit",
+        "eventLoop": "Event-Loop-Verzögerung",
+        "uptime": "Laufzeit",
+        "current": "hat diese Seite ausgeliefert",
+        "delay": "{{mean}} ms (max. {{max}})",
+        "missing": "Keine Antwort. Der Worker startet möglicherweise neu oder ist überlastet.",
+        "missingAlert": "{{count}} von {{total}} Workern haben nicht geantwortet."
+      }
+    },
+    "storageAlert": {
+      "warning": "Der Speicherplatz wird knapp: {{free}} frei ({{percent}} belegt).",
+      "critical": "Der Speicherplatz ist kritisch knapp: {{free}} frei ({{percent}} belegt).",
+      "viewDetails": "Systemressourcen anzeigen",
+      "dismiss": "Ausblenden"
     },
     "home": {
       "sections": {
@@ -3375,6 +3444,13 @@
         "maxRunChatsPerTask": "Behaltene Lauf-Chats pro Aufgabe",
         "maxInstructionLength": "Längste Anweisungen (Zeichen)",
         "maxRunMinutes": "Längster Lauf (Minuten)"
+      }
+    },
+    "overview": {
+      "storage": {
+        "label": "Speicherplatz",
+        "value": "{{free}} frei",
+        "valueTitle": "{{percent}} von {{total}} belegt"
       }
     }
   },

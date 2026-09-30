@@ -45,6 +45,7 @@ import registerAdminScheduledTaskRoutes from './admin/scheduledTasks.js';
 import registerAdminChangelogRoutes from './admin/changelog.js';
 import registerAdminChangesRoutes from './admin/changes.js';
 import registerAdminOverviewRoutes from './admin/overview.js';
+import registerAdminSystemRoutes from './admin/system.js';
 
 export default async function registerAdminRoutes(app) {
   registerAdminAuthRoutes(app);
@@ -94,4 +95,5 @@ export default async function registerAdminRoutes(app) {
   registerAdminChangelogRoutes(app);
   registerAdminChangesRoutes(app);
   registerAdminOverviewRoutes(app);
+  registerAdminSystemRoutes(app);
 }
