@@ -98,6 +98,12 @@ describe('POST /api/admin/configs/platform section persistence', () => {
             requireConsent: true,
             expose: { tools: true, apps: true, workflows: true, resources: false }
           },
+          proxyAuth: {
+            enabled: true,
+            jwtProviders: [
+              { name: 'sso', header: 'X-Token', jwkUrl: 'https://sso.example.com/jwks' }
+            ]
+          },
           globalPromptVariables: {
             context: 'The current date is {{date}}.',
             variables: {}
@@ -215,5 +221,27 @@ describe('POST /api/admin/configs/platform section persistence', () => {
       context: 'The current date is {{date}}.',
       variables: {}
     });
+  });
+
+  test('a save carrying only globalPromptVariables leaves every other section as stored', async () => {
+    const app = createTestApp();
+    const before = await readPlatform();
+    const globalPromptVariables = {
+      context: 'Company: {{company}}.',
+      variables: { company: 'ACME' }
+    };
+
+    const response = await request(app)
+      .post('/api/admin/configs/platform')
+      .send({ globalPromptVariables });
+
+    expect(response.status).toBe(200);
+    const saved = await readPlatform();
+    expect(saved.globalPromptVariables).toEqual(globalPromptVariables);
+    // The admin read leaves `jwkUrl` out, so it survives only when the save omits `proxyAuth`.
+    expect(saved.proxyAuth).toEqual(before.proxyAuth);
+    expect(saved.mcpServer).toEqual(before.mcpServer);
+    expect(saved.auth).toEqual(before.auth);
+    expect(saved.oauth).toEqual(before.oauth);
   });
 });
