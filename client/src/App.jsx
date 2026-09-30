@@ -125,6 +125,9 @@ const AdminVoiceInputPage = lazyWithRetry(
   () => import('./features/admin/pages/AdminVoiceInputPage')
 );
 const AdminTelemetryPage = lazyWithRetry(() => import('./features/admin/pages/AdminTelemetryPage'));
+const AdminSystemResourcesPage = lazyWithRetry(
+  () => import('./features/admin/pages/AdminSystemResourcesPage')
+);
 const AdminScheduledTasksPage = lazyWithRetry(
   () => import('./features/admin/pages/AdminScheduledTasksPage')
 );
@@ -784,6 +787,12 @@ function App() {
             )}
             {showAdminPage('telemetry') && (
               <Route path="telemetry" element={<LazyAdminRoute component={AdminTelemetryPage} />} />
+            )}
+            {showAdminPage('system') && (
+              <Route
+                path="system-resources"
+                element={<LazyAdminRoute component={AdminSystemResourcesPage} />}
+              />
             )}
             {showAdminPage('chatHistory') && (
               <Route

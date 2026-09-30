@@ -10,6 +10,7 @@ import { buildPath } from '../../../utils/runtimeBasePath';
 import AdminSidebar from './AdminSidebar';
 import AdminCommandPalette from './AdminCommandPalette';
 import AdminShortcutsModal from './AdminShortcutsModal';
+import AdminStorageAlert from './AdminStorageAlert';
 import { SidebarProvider, useSidebar } from '../contexts/SidebarContext';
 import { getAdminNavSections } from './AdminSidebarNavData';
 import { usePlatformConfig } from '../../../shared/contexts/PlatformConfigContext';
@@ -41,12 +42,19 @@ function AdminLayoutInner() {
   const { platformConfig } = usePlatformConfig();
   const featureFlags = useFeatureFlags();
   const location = useLocation();
+  const { user } = useAuth();
   const mainRef = useRef(null);
   const { showCheatsheet, setShowCheatsheet } = useAdminKeyboardShortcuts();
 
   const adminPages = platformConfig?.admin?.pages || {};
   const showAdminPage = key => adminPages[key] !== false;
   const sections = getAdminNavSections({ t, showAdminPage, featureFlags });
+
+  // Content admins may not call the full-admin endpoint behind the banner
+  // (same test as the sidebar's content-admin filtering).
+  const isContentAdminOnly = Boolean(
+    user?.permissions?.contentAdmin && !user?.permissions?.adminAccess && !user?.isAdmin
+  );
 
   // Note: content-admin filtering is handled in AdminSidebar;
   // we just need to provide all section IDs to SidebarProvider
@@ -80,6 +88,11 @@ function AdminLayoutInner() {
           className="flex-1 overflow-y-auto bg-gray-50 dark:bg-gray-950 focus:outline-hidden"
           tabIndex={-1}
         >
+          <AdminStorageAlert
+            enabled={!isContentAdminOnly}
+            linkVisible={showAdminPage('system')}
+            hidden={location.pathname.endsWith('/admin/system-resources')}
+          />
           <Outlet />
         </main>
       </div>

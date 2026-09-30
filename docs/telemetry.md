@@ -186,6 +186,10 @@ Process / runtime gauges (registered automatically when telemetry is enabled):
 - `process.runtime.nodejs.event_loop.delay` - mean event-loop delay in seconds
 - `ihub.workers.count` - number of cluster workers visible from this process
 
+No metrics backend? **Admin → System Resources** shows the same process numbers, plus disk space
+and host memory, without enabling telemetry. See the
+[Admin UI Guide](admin-ui.md#system-resources).
+
 Optional: enable `telemetry.autoInstrumentation: true` (admin UI / platform.json)
 to also load the Node auto-instrumentations: HTTP/Express/DNS/fs/net. That gives
 you `http.server.duration`, `http.server.active_requests`, request/response
