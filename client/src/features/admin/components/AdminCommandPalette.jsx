@@ -27,6 +27,7 @@ const ADMIN_PAGES = [
   { label: 'Usage Reports', href: '/admin/usage' },
   { label: 'Logging', href: '/admin/logging' },
   { label: 'Telemetry', href: '/admin/telemetry' },
+  { label: 'System Resources', href: '/admin/system-resources' },
   { label: 'Chat History', href: '/admin/chat-history' },
   { label: 'Scheduled Tasks', href: '/admin/scheduled-tasks' },
   { label: 'Voice Input', href: '/admin/voice-input' },

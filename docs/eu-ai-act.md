@@ -108,7 +108,7 @@ Every model declares how its output is marked in `contentMarking`:
 
 `imageWatermark` names an upstream image mark (Gemini images: `upstream:synthid`). iHub adds its own image layers on top in every case.
 
-Shipped models: cloud models are `"none"` (no vendor documents text marking today), Gemini image models carry `upstream:synthid`, transcription models are out of scope (transcription is standard editing). Migration V139 sets these defaults for existing installations without overwriting a block you set.
+Shipped models: cloud models are `"none"` (no vendor documents text marking today), Gemini image models carry `upstream:synthid`, transcription models are out of scope (transcription is standard editing). Migration V140 sets these defaults for existing installations without overwriting a block you set.
 
 **Enabling an unmarked model needs a justification.** The model list and the model editor flag "Not marked" models. Switching one on (toggle, bulk enable, save, create) asks for a justification; the acknowledgement is stored in `contentMarking.acknowledgement` with who, when and the installation, and audit-logged. It documents the gap — **the model stays non-conforming** in the list, on the EU AI Act page and in the report (CoP Sub-measure 1.1.2).
 

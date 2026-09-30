@@ -46,6 +46,7 @@ import registerAdminChangelogRoutes from './admin/changelog.js';
 import registerAdminChangesRoutes from './admin/changes.js';
 import registerAdminOverviewRoutes from './admin/overview.js';
 import registerAdminAiTransparencyRoutes from './admin/aiTransparency.js';
+import registerAdminSystemRoutes from './admin/system.js';
 
 export default async function registerAdminRoutes(app) {
   registerAdminAuthRoutes(app);
@@ -96,4 +97,5 @@ export default async function registerAdminRoutes(app) {
   registerAdminChangesRoutes(app);
   registerAdminOverviewRoutes(app);
   registerAdminAiTransparencyRoutes(app);
+  registerAdminSystemRoutes(app);
 }

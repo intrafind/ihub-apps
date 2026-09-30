@@ -64,6 +64,7 @@ import { recordAppUsage } from '../../../utils/recentApps';
 import { saveAppSettings, loadAppSettings } from '../../../utils/appSettings';
 import { processDocumentFile, decodeAudioFileToBuffer } from '../../upload/utils/fileProcessing';
 import { transcribeAudioBuffer } from '../../../utils/transcribeAudioBuffer';
+import { getTranscriptionErrorMessage } from '../../../utils/transcriptionErrors';
 import { AudioBufferRecorder } from '../../../utils/audioRecorder';
 import ScheduledRunBanner from '../../tasks/components/ScheduledRunBanner';
 
@@ -161,61 +162,6 @@ const renderStartupState = (
   return <NoMessagesView />;
 };
 
-/**
- * Map a transcription failure (from decodeAudioFileToBuffer / transcribeAudioBuffer)
- * to a clear, localized message shown in the assistant bubble.
- */
-const getTranscriptionErrorMessage = (err, t) => {
-  const code = err?.code || err?.message;
-  switch (code) {
-    case 'audio-decode-error':
-      return t(
-        'transcription.errors.decode',
-        'Could not decode this audio in your browser. The format or codec may be unsupported (e.g. OGG in Safari).'
-      );
-    case 'empty-audio':
-      return t('transcription.errors.empty', 'No audio could be read from this file.');
-    case 'not-ready':
-      return t(
-        'transcription.errors.notReady',
-        'The transcription service did not become ready. Please check the model configuration and try again.'
-      );
-    case 'connect':
-    case 'closed':
-      return t(
-        'transcription.errors.connection',
-        'Could not reach the transcription service. Please try again later.'
-      );
-    case 'timeout':
-      return t(
-        'transcription.errors.timeout',
-        'Transcription timed out. The file may be too long.'
-      );
-    case 'aborted':
-      return t('transcription.errors.aborted', 'Transcription was cancelled.');
-    // Batch transcription models buffer the whole recording server-side, so
-    // they can reject it for size (this recording) or capacity (all of them).
-    case 'audio-too-long':
-      return t(
-        'transcription.errors.serverTooLong',
-        'This recording is too long for the configured transcription model. Please split it into shorter parts.'
-      );
-    case 'server-busy':
-      return t(
-        'transcription.errors.serverBusy',
-        'The transcription service is busy right now. Please try again in a moment.'
-      );
-    case 'service':
-      return err?.message
-        ? t('transcription.errors.serviceDetail', 'Transcription failed: {{detail}}', {
-            detail: err.message
-          })
-        : t('transcription.errors.service', 'Transcription failed.');
-    default:
-      return t('transcription.errors.generic', 'Transcription failed. Please try again.');
-  }
-};
-
 // A transcript is built from the user's own audio, not from the model's
 // knowledge. Transcription turns never pass through the server's chat run (which
 // is what reports `answerSource` for other answers), so without this the badge
@@ -289,6 +235,9 @@ function AppChat({ preloadedApp = null, embedded = false, appId: embeddedAppId =
   const shareEnabled = featureFlags.isBothEnabled(app, 'shortLinks', true);
   const { platformConfig } = usePlatformConfig();
   const chatSharingEnabled = platformConfig?.chats?.sharing?.enabled === true;
+  // The app's transcription model, or the platform default (Admin → Voice Input).
+  const transcriptionModelId =
+    app?.transcription?.modelId || platformConfig?.speech?.transcription?.defaultModelId || '';
   // "Save as prompt" on a sent message: offered to a signed-in user when the
   // installation lets users keep prompts of their own (#2519).
   const auth = useOptionalAuth();
@@ -1909,7 +1858,7 @@ function AppChat({ preloadedApp = null, embedded = false, appId: embeddedAppId =
   const transcribeToChat = useCallback(
     async audioSources => {
       const transcription = app?.transcription || {};
-      const modelId = transcription.modelId;
+      const modelId = transcriptionModelId;
       if (!modelId) {
         addSystemMessage(
           t('transcription.errors.noModel', 'No transcription model is configured for this app.'),
@@ -2021,7 +1970,15 @@ function AppChat({ preloadedApp = null, embedded = false, appId: embeddedAppId =
       }
       return transcribed && !abortController.signal.aborted;
     },
-    [app, addUserMessage, addAssistantMessage, updateAssistantMessage, addSystemMessage, t]
+    [
+      app,
+      transcriptionModelId,
+      addUserMessage,
+      addAssistantMessage,
+      updateAssistantMessage,
+      addSystemMessage,
+      t
+    ]
   );
 
   // Cancel an in-flight upload/video transcription (wired to the Stop button).
@@ -2519,7 +2476,7 @@ function AppChat({ preloadedApp = null, embedded = false, appId: embeddedAppId =
         !compareModeActive &&
         app?.transcription?.enabled === true &&
         transcriptionEnabled &&
-        !!app?.transcription?.modelId &&
+        !!transcriptionModelId &&
         app?.transcription?.inputs?.record !== false,
       onRecordTranscription: isTranscribing ? undefined : handleRecordTranscription,
       isRecordingTranscription,

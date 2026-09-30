@@ -46,6 +46,13 @@
  *    worker, so the worker holding it is asked to consume it rather than being
  *    told to hand out a copy (`server/utils/authorizationCodeStore.js`).
  *
+ *  - **gather** — `gather(type, payload, {expected})` asks *every* other worker
+ *    and collects all answers, where `request` keeps only the first. For
+ *    questions each process answers about itself (its own memory, its own CPU),
+ *    so no single worker can speak for the others. The primary can join in with
+ *    `respondInPrimary`; it answers the asker directly instead of being asked
+ *    through a worker.
+ *
  * Presence is eventually consistent: an announcement takes one IPC hop to the
  * primary and one back out. The paths that read it (a chat POST asking whether
  * an SSE stream exists) are separated from the registration (the SSE GET
@@ -116,6 +123,12 @@ const presenceMaps = new Map();
  * durability exists to prevent, silently.
  */
 const sharedKinds = new Set();
+
+/**
+ * type → handler for questions the primary answers about itself. Consulted by
+ * the primary's repeater only; see `respondInPrimary`.
+ */
+const primaryResponders = new Map();
 
 const stats = { published: 0, received: 0, presenceAnnounced: 0 };
 
@@ -211,11 +224,47 @@ export function initPrimaryBus({ getWorkers }) {
     return entries;
   };
 
+  /**
+   * Answer a question on a channel the primary registered with
+   * `respondInPrimary`. The reply goes to the asker alone, shaped exactly like
+   * a worker's reply, so the asker cannot tell who answered. The question is
+   * still repeated to the workers afterwards: the primary answers *as well as*
+   * them, not instead.
+   */
+  const answerAsPrimary = (worker, message) => {
+    // Every relayed chat chunk passes through here, so bail on the map lookup
+    // before touching the payload.
+    const handler = primaryResponders.get(message.type);
+    if (!handler) return;
+    const requestId = message.payload?.requestId;
+    if (typeof requestId !== 'string') return;
+    Promise.resolve()
+      .then(() => handler(message.payload.payload))
+      .then(reply => {
+        if (reply === undefined || worker.isDead?.()) return;
+        worker.send({
+          [ENVELOPE]: true,
+          kind: MSG_PUBLISH,
+          type: message.type + REPLY_SUFFIX,
+          payload: { requestId, reply }
+        });
+      })
+      .catch(error => {
+        logger.warn({
+          component: 'ClusterBus',
+          message: 'Primary responder failed',
+          type: message.type,
+          error: error?.message || String(error)
+        });
+      });
+  };
+
   cluster.on('message', (worker, message) => {
     if (!message || message[ENVELOPE] !== true) return;
 
     switch (message.kind) {
       case MSG_PUBLISH: {
+        if (primaryResponders.size > 0) answerAsPrimary(worker, message);
         // A directed message names the presence entry that should receive it.
         // The primary is the only process that knows who owns what, so it can
         // deliver straight to that worker; chat token streams are the hot path
@@ -488,6 +537,9 @@ const REPLY_SUFFIX = ':reply';
 /** Correlation id → settle callback, for requests this worker is awaiting. */
 const pendingRequests = new Map();
 
+/** Correlation id → collect callback, for gathers this worker is awaiting. */
+const pendingGathers = new Map();
+
 /** Channels whose reply subscription has already been installed. */
 const replyChannels = new Set();
 
@@ -506,8 +558,14 @@ function ensureReplyChannel(type) {
   replyChannels.add(type);
   subscribe(type + REPLY_SUFFIX, message => {
     const id = message?.requestId;
-    const settle = typeof id === 'string' ? pendingRequests.get(id) : undefined;
+    if (typeof id !== 'string') return;
     // Replies fan out to every worker; only the originator holds the id.
+    const collect = pendingGathers.get(id);
+    if (collect) {
+      collect(message.reply);
+      return;
+    }
+    const settle = pendingRequests.get(id);
     if (!settle) return;
     pendingRequests.delete(id);
     settle(message.reply);
@@ -563,6 +621,70 @@ export function request(type, payload, { route, timeoutMs = 1500 } = {}) {
       resolve(null);
     }
   });
+}
+
+/**
+ * Ask every other process a question and collect all of their answers.
+ *
+ * Where `request` settles on the first reply, this keeps listening until
+ * `expected` replies have arrived or `timeoutMs` has passed, whichever comes
+ * first, and resolves with whatever it has. A process that stays silent is
+ * simply missing from the result; the caller decides whether that matters.
+ * Never rejects.
+ *
+ * @param {string} type - Channel; responders use `respond` / `respondInPrimary`.
+ * @param {*} payload - Structured-cloneable request payload.
+ * @param {object} [options]
+ * @param {number} [options.expected] - Replies to wait for before resolving
+ *   early. Without it the gather always runs for the full timeout.
+ * @param {number} [options.timeoutMs=1000] - Upper bound on the wait.
+ * @returns {Promise<Array<*>>} Replies in arrival order; empty outside cluster
+ *   mode, where there is nobody else to ask.
+ */
+export function gather(type, payload, { expected, timeoutMs = 1000 } = {}) {
+  if (!busActive) return Promise.resolve([]);
+
+  ensureReplyChannel(type);
+  const requestId = newRequestId();
+  const replies = [];
+
+  return new Promise(resolve => {
+    const finish = () => {
+      clearTimeout(timer);
+      pendingGathers.delete(requestId);
+      resolve(replies);
+    };
+    const timer = setTimeout(finish, timeoutMs);
+    timer.unref?.();
+
+    pendingGathers.set(requestId, reply => {
+      if (reply !== undefined) replies.push(reply);
+      if (Number.isFinite(expected) && replies.length >= expected) finish();
+    });
+
+    if (!publish(type, { requestId, payload })) finish();
+  });
+}
+
+/**
+ * Let the primary answer `gather()` / `request()` calls on a channel about
+ * itself. The primary never runs request handlers of its own otherwise, so
+ * without this it is invisible to questions like "how much memory does each
+ * process use", even though it is one of the processes.
+ *
+ * Register in the primary process; the repeater started by `initPrimaryBus`
+ * consults it. A handler returning `undefined` sends no reply, as with
+ * `respond`.
+ *
+ * @param {string} type - Channel; must match the asker's.
+ * @param {(payload: *) => *|Promise<*>} handler
+ * @returns {() => void} Unregister.
+ */
+export function respondInPrimary(type, handler) {
+  primaryResponders.set(type, handler);
+  return () => {
+    if (primaryResponders.get(type) === handler) primaryResponders.delete(type);
+  };
 }
 
 /**
@@ -676,6 +798,8 @@ export function resetClusterBusForTests() {
   remoteOwnership.clear();
   presenceMaps.clear();
   pendingRequests.clear();
+  pendingGathers.clear();
+  primaryResponders.clear();
   replyChannels.clear();
   stats.published = 0;
   stats.received = 0;

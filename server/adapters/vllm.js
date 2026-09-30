@@ -147,8 +147,11 @@ class VLLMAdapterClass extends BaseAdapter {
       // answer quality is unchanged) but leaves them out of the response. The
       // user/app setting wins over the model default; only sent when false so
       // servers that predate `include_reasoning` see an unchanged request.
+      // Skipped for structured output: vLLM 0.30 returns empty content when
+      // `include_reasoning: false` is combined with `response_format`.
       const includeThoughts = options.thinkingThoughts ?? model.thinking.thoughts ?? true;
-      if (thinkingEnabled && includeThoughts === false) {
+      const structured = responseSchema || responseFormat === 'json';
+      if (thinkingEnabled && includeThoughts === false && !structured) {
         body.include_reasoning = false;
       }
     }

@@ -29,7 +29,8 @@ import {
   MicrophoneIcon,
   StarIcon,
   ChatBubbleLeftRightIcon,
-  ScaleIcon
+  ScaleIcon,
+  ServerStackIcon
 } from '@heroicons/react/24/outline';
 
 /**
@@ -293,6 +294,13 @@ export function getAdminNavSections({ t, showAdminPage, featureFlags }) {
           href: '/admin/telemetry',
           icon: SignalIcon,
           visible: showAdminPage('telemetry')
+        },
+        {
+          key: 'system-resources',
+          label: t('admin.nav.systemResources', 'System Resources'),
+          href: '/admin/system-resources',
+          icon: ServerStackIcon,
+          visible: showAdminPage('system')
         },
         {
           key: 'chat-history',

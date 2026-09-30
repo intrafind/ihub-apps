@@ -18,3 +18,31 @@ For admins, a chat answered while they were away kept its "new" dot in **Recents
 list even after they opened it. The server treated an admin reading their own chat like an admin
 reading somebody else's, which deliberately leaves the badge alone. It now checks ownership first.
 Opening another user's chat as an admin still leaves that user's badge untouched.
+
+## vLLM Models Return Structured Answers Again When "Show Reasoning" Is Off
+
+On vLLM models with thinking enabled and **Show reasoning** turned off, every request that asks
+for a structured (JSON) answer came back empty. Workflows stopped extracting anything — each
+document failed with:
+
+> [NO_EXTRACTION_OUTPUT] Upstream prompt produced no output
+
+vLLM returns no content when hidden reasoning is combined with structured output. For structured
+requests iHub no longer asks vLLM to hide the reasoning, so apps with structured output can show
+the model's reasoning even when **Show reasoning** is off.
+
+## Azure Speech Dictation Works Again
+
+Dictation with Azure Speech put no text into the chat input. The subscription key set under
+**Admin → Voice Input** was also never used: an app without a host of its own failed with "Azure
+subscription key is not configured".
+
+- The recognized text is delivered to the input again, in both manual and automatic mode.
+- The subscription key stored on the server is used (as a short-lived token), and apps without
+  a host of their own fall back to the host set under **Admin → Voice Input**, as documented.
+- A "no speech detected" error no longer leaves the microphone in the listening state.
+
+## Admin → Voice Input Confirms a Save
+
+Saving on **Admin → Voice Input** showed no confirmation, and the page briefly went blank while
+reloading. It now stays in place and shows "Voice input settings saved."

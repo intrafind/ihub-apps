@@ -564,6 +564,17 @@ export const platformConfigSchema = z
     // settings.speechRecognition.service = 'vllm-realtime'.
     speech: z
       .object({
+        // Dictation service for every app whose settings.speechRecognition.service
+        // is "default" (or unset). Apps can still pin a service of their own.
+        defaultService: z.enum(['browser', 'azure', 'vllm-realtime']).prefault('browser'),
+        // Record/upload transcription: the model used when an app enables
+        // transcription but sets no transcription.modelId of its own.
+        transcription: z
+          .object({
+            defaultModelId: z.string().prefault('')
+          })
+          .passthrough()
+          .prefault({}),
         realtime: z
           .object({
             enabled: z.boolean().prefault(false),

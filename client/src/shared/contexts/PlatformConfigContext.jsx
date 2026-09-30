@@ -78,6 +78,11 @@ export function PlatformConfigProvider({ children }) {
         // the first-turn notice, the AI badge and the per-message chip.
         aiTransparency: platformCfg.aiTransparency,
 
+        // Voice input: backend switches, the Azure host / keyConfigured flag and
+        // the platform-wide defaults (dictation service, transcription model)
+        // that apps fall back to. Dropping it here silently broke all of them.
+        speech: platformCfg.speech,
+
         // Scheduled tasks: on only when the flag, durable chats and the
         // platform switch agree (resolved server-side), plus the limits the
         // task form respects. Whether this user may create tasks is their
