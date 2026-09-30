@@ -624,7 +624,7 @@ function VariablesTabContent() {
       setError(null);
       const updatedConfig = { ...platformConfig, globalPromptVariables };
       await makeAdminApiCall('/admin/configs/platform', {
-        method: 'PUT',
+        method: 'POST',
         body: updatedConfig
       });
       setPlatformConfig(updatedConfig);
