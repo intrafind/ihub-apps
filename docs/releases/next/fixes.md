@@ -6,11 +6,10 @@ A transcript of a recording or an uploaded audio or video file was labelled "Bas
 — although the text comes straight from the user's own audio. The badge under the answer now reads
 "Based on audio recording".
 
-- Applies to transcripts from the transcription model (upload, video and microphone recording),
-  including a partial transcript kept after a cancelled or interrupted run.
+- Applies to answers about an uploaded audio or video file that the transcription model turned
+  into text (see *Transcription: Audio Becomes the User's Message* under Breaking Changes).
 - Also applies when audio is sent directly to a chat model that accepts it, such as the
   **Audio Transcription** app.
-- A failed transcription still shows the error message without a badge.
 
 ## Admins' Own Chats Clear Their "New" Badge When Opened
 

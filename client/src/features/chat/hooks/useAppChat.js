@@ -115,6 +115,7 @@ function useAppChat({
     updateAssistantMessage,
     appendToAssistantMessage,
     deleteMessage,
+    removeMessage,
     editMessage,
     addSystemMessage,
     clearMessages,
@@ -595,7 +596,10 @@ function useAppChat({
           ...(serverBacked ? { clientMessageId: exchangeId } : {}),
           imageData: apiMessage.imageData,
           fileData: apiMessage.fileData,
-          audioData: apiMessage.audioData
+          audioData: apiMessage.audioData,
+          // The text holds the transcript of uploaded audio: kept on the
+          // message so the history keeps saying so on later turns.
+          ...(apiMessage.audioTranscript ? { audioTranscript: true } : {})
         });
         addAssistantMessage(exchangeId);
 
@@ -608,6 +612,7 @@ function useAppChat({
           imageData: apiMessage.imageData,
           fileData: apiMessage.fileData,
           audioData: apiMessage.audioData,
+          ...(apiMessage.audioTranscript ? { audioTranscript: true } : {}),
           // The host item (Outlook email/meeting, the extension's page); the
           // server renders it as tagged blocks around `content`.
           ...(apiMessage.hostContext ? { hostContext: apiMessage.hostContext } : {})
@@ -1016,12 +1021,13 @@ function useAppChat({
     loadServerMessages,
     reattachToRun,
     resetConversationState,
-    // Exposed so the transcription flow can render a transcript as a
-    // locally-built assistant turn (streaming deltas), without going through the
-    // chat LLM pipeline.
+    // Local turns built outside the chat pipeline. The transcription flow
+    // grows a user bubble (`isLiveTranscript`) with these until it is sent as
+    // the real message.
     addUserMessage,
     addAssistantMessage,
-    updateAssistantMessage
+    updateAssistantMessage,
+    removeMessage
   };
 }
 

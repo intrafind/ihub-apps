@@ -720,7 +720,7 @@
         },
         "recording": {
           "title": "Recording (record → transcribe)",
-          "description": "Record a short clip (up to {{seconds}} seconds) and transcribe it with a transcription model, exactly like the record button in a chat.",
+          "description": "Record a short clip (up to {{seconds}} seconds) and transcribe it with a transcription model over the same connection a chat uses, then see how long the transcript took.",
           "model": "Transcription model",
           "platformDefault": "platform default",
           "start": "Start recording",
@@ -2622,7 +2622,7 @@
         "iassistantSystemPromptPreamble": "System Prompt Preamble",
         "iassistantSystemPromptPreambleDesc": "The prompt preamble used in the response state system prompt. This is ideal for changing the identity of the iAssistant. Supports prompt variables like {{user_name}}, {{user_email}}, {{date}} and custom global variables. Use with care.",
         "transcription": "Transcription",
-        "transcriptionDesc": "Transcribe uploaded audio, uploaded video, or a browser recording with a self-hosted transcription model (e.g. Voxtral) and render the result as a chat answer.",
+        "transcriptionDesc": "Turn uploaded audio, uploaded video or a browser recording into text with a transcription model (e.g. Voxtral). The text becomes the user's message, and the chat model answers it.",
         "enableTranscription": "Enable transcription",
         "transcriptionModel": "Transcription model",
         "selectTranscriptionModel": "Select a model…",
@@ -4412,10 +4412,14 @@
     "scheduled": "Scheduled"
   },
   "transcription": {
-    "record": "Record audio to transcribe",
-    "stopRecording": "Stop recording & transcribe",
+    "record": "Record a spoken message",
+    "stopRecording": "Stop recording and send",
     "recording": "Recording",
-    "empty": "_(No speech detected)_",
+    "listening": "Listening…",
+    "transcribing": "Transcribing…",
+    "transcriptOf": "Transcript of {{name}}:",
+    "noSpeechInFile": "(no speech detected)",
+    "partialInInput": "What was transcribed so far is in the input field.",
     "errors": {
       "noModel": "No transcription model is configured for this app.",
       "decode": "Could not decode this audio in your browser. The format or codec may be unsupported (e.g. OGG in Safari).",
@@ -4423,6 +4427,7 @@
       "notReady": "The transcription service did not become ready. Please check the model configuration and try again.",
       "connection": "Could not reach the transcription service. Please try again later.",
       "timeout": "Transcription timed out. The file may be too long.",
+      "interrupted": "The transcription was interrupted before it finished.",
       "aborted": "Transcription was cancelled.",
       "serverTooLong": "This recording is too long for the configured transcription model. Please split it into shorter parts.",
       "serverBusy": "The transcription service is busy right now. Please try again in a moment.",
@@ -4432,11 +4437,11 @@
       "tooLong": "This audio is {{duration}}s long, which exceeds the {{max}}s limit for transcription.",
       "mic": "Could not access the microphone. Please grant permission and try again.",
       "busy": "A transcription is already running. Stop it first.",
-      "interrupted": "Transcription was interrupted — the transcript may be incomplete.",
+      "noSpeech": "No speech was detected. Nothing was sent.",
       "audioNeedsTranscription": "The selected chat model cannot process audio directly. Enable Transcription in the actions menu, or remove the audio attachment."
     },
     "toggleLabel": "Transcription",
-    "toggleDescription": "Transcribe uploaded audio/video with the transcription model instead of the chat model"
+    "toggleDescription": "Uploaded audio and video are transcribed into your message, and the chat model answers the text"
   },
   "documentPreview": {
     "title": "Document preview",
