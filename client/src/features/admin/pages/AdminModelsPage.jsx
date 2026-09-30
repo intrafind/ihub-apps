@@ -278,6 +278,8 @@ function AdminModelsPage() {
         const input = event.target;
         setPendingAcknowledgement({
           models: gate.models,
+          // Cleared on cancel too, so choosing the same file again fires onChange.
+          input,
           retry: async justification => {
             await makeAdminApiCall('/admin/models', {
               method: 'POST',
@@ -613,7 +615,10 @@ function AdminModelsPage() {
           )}
           confirmLabel={t('admin.models.marking.enableDialog.confirm', 'Enable anyway')}
           onConfirm={justification => pendingAcknowledgement.retry(justification)}
-          onCancel={() => setPendingAcknowledgement(null)}
+          onCancel={() => {
+            if (pendingAcknowledgement?.input) pendingAcknowledgement.input.value = '';
+            setPendingAcknowledgement(null);
+          }}
         />
       </div>
     </div>

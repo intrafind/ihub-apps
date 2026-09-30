@@ -286,16 +286,16 @@ describe('export renderers: Office formats', () => {
     assert.ok(slides.includes('edited after generation / not verified'));
   });
 
-  it('xlsx has a label row and guards against formula injection', async () => {
+  it('xlsx has a label row and writes formula-like text as plain strings', async () => {
     const { buffer } = await renderExport('xlsx', makeDoc());
     assert.equal(buffer.subarray(0, 2).toString('latin1'), 'PK');
     const strings = await zipParts(buffer, /^xl\/(sharedStrings|worksheets\/sheet\d+)\.xml$/);
     assert.ok(strings.includes(LABEL));
     assert.ok(strings.includes('Verification'));
     assert.ok(strings.includes('edited after generation'), 'verification column');
-    assert.ok(strings.includes("'-1 is the corrected answer"), 'leading - neutralised');
-    assert.ok(strings.includes("'=HYPERLINK("), 'formula neutralised');
-    assert.ok(!/<t[^>]*>=HYPERLINK/.test(strings), 'no raw formula text');
+    assert.ok(strings.includes('>-1 is the corrected answer'), 'text kept as written');
+    assert.ok(!strings.includes("'-1 is the corrected answer"), 'no guard apostrophe');
+    assert.ok(/<t[^>]*>=HYPERLINK\(/.test(strings), 'formula-like text stays a string');
     assert.ok(!strings.includes('<f>'), 'no formula cells');
   });
 

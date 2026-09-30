@@ -457,6 +457,19 @@ export async function parsePkcs12(buffer, password = '') {
   return { chainPem: `${chainPem}\n`, keyPem };
 }
 
+/** A CA certificate: basic constraints CA and the keyCertSign usage. */
+function isCaCertificate(cert) {
+  const basic = cert.getExtension(x509.BasicConstraintsExtension);
+  const usage = cert.getExtension(x509.KeyUsagesExtension);
+  return Boolean(basic?.ca && usage && usage.usages & x509.KeyUsageFlags.keyCertSign);
+}
+
+/** A leaf with one of the extended key usages C2PA accepts for signers. */
+function hasSigningEku(cert) {
+  const eku = cert.getExtension(x509.ExtendedKeyUsageExtension);
+  return Array.from(eku?.usages || [], String).some(oid => oid in C2PA_ACCEPTED_EKUS);
+}
+
 /**
  * Verify that `certs` (leaf first) chains up to one of `anchors`.
  * @param {x509.X509Certificate[]} certs
@@ -469,19 +482,31 @@ export async function parsePkcs12(buffer, password = '') {
  */
 export async function chainsToAnchor(certs, anchors) {
   if (!certs.length) return { trusted: false, anchor: null, reason: 'no certificate' };
+  // The profile checks of validateSigningBundle, repeated at verification:
+  // an anchor must not make a TLS certificate a content signer, nor let an
+  // end-entity certificate issue one.
+  if (!hasSigningEku(certs[0])) {
+    return { trusted: false, anchor: null, reason: 'signer has no C2PA signing EKU' };
+  }
   for (let i = 0; i < certs.length - 1; i++) {
-    if (!(await verifiesWith(certs[i], certs[i + 1]))) {
+    if (!isCaCertificate(certs[i + 1]) || !(await verifiesWith(certs[i], certs[i + 1]))) {
       return { trusted: false, anchor: null, reason: 'broken chain' };
     }
   }
   const byFingerprint = new Map(anchors.map(a => [describeCertificate(a).fingerprint, a]));
-  for (const cert of certs) {
+  for (const [index, cert] of certs.entries()) {
     const fp = describeCertificate(cert).fingerprint;
-    if (byFingerprint.has(fp)) return { trusted: true, anchor: describeCertificate(cert) };
+    if (byFingerprint.has(fp) && (index === 0 || isCaCertificate(cert))) {
+      return { trusted: true, anchor: describeCertificate(cert) };
+    }
   }
   const top = certs[certs.length - 1];
   for (const anchor of anchors) {
-    if (anchor.subject === top.issuer && (await verifiesWith(top, anchor))) {
+    if (
+      anchor.subject === top.issuer &&
+      isCaCertificate(anchor) &&
+      (await verifiesWith(top, anchor))
+    ) {
       return { trusted: true, anchor: describeCertificate(anchor) };
     }
   }

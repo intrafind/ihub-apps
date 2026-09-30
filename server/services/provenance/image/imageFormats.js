@@ -98,13 +98,14 @@ function xmlEscape(value) {
 
 /**
  * An XMP packet declaring the content AI-generated.
- * @param {{creatorTool: string, createdAt?: string, description?: string, contentId?: string}} fields
+ * @param {{creatorTool: string, createdAt?: string, description?: string, contentId?: string, digitalSourceType?: string}} fields
  */
 export function buildXmpPacket({
   creatorTool,
   createdAt = new Date().toISOString(),
   description = 'AI-generated image',
-  contentId
+  contentId,
+  digitalSourceType = DIGITAL_SOURCE_TYPES.trainedAlgorithmicMedia
 }) {
   return [
     '<?xpacket begin="﻿" id="W5M0MpCehiHzreSzNTczkc9d"?>',
@@ -115,7 +116,7 @@ export function buildXmpPacket({
     '    xmlns:xmp="http://ns.adobe.com/xap/1.0/"',
     '    xmlns:dc="http://purl.org/dc/elements/1.1/"',
     '    xmlns:ihub="https://ihub.intrafind.com/ns/provenance/1.0/">',
-    `   <Iptc4xmpExt:DigitalSourceType>${DIGITAL_SOURCE_TYPES.trainedAlgorithmicMedia}</Iptc4xmpExt:DigitalSourceType>`,
+    `   <Iptc4xmpExt:DigitalSourceType>${xmlEscape(digitalSourceType)}</Iptc4xmpExt:DigitalSourceType>`,
     `   <xmp:CreatorTool>${xmlEscape(creatorTool)}</xmp:CreatorTool>`,
     `   <xmp:CreateDate>${xmlEscape(createdAt)}</xmp:CreateDate>`,
     `   <dc:description><rdf:Alt><rdf:li xml:lang="x-default">${xmlEscape(description)}</rdf:li></rdf:Alt></dc:description>`,

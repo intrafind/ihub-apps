@@ -5,8 +5,8 @@
  * `client/src/utils/exportFormats.js`): title, app and date rows, a message
  * table and the settings at the bottom. The AI label is the first row (with
  * an "AI" badge cell when the EU icon is on), the table has the columns
- * Role, Content, Timestamp, Model and Verification, and every cell goes
- * through the formula-injection guard.
+ * Role, Content, Timestamp, Model and Verification. Every cell is a typed
+ * string, so formula-like text is never evaluated and stays as written.
  *
  * Excel cells hold at most 32,767 characters, so longer messages continue
  * in extra rows ("Assistant (continued)") instead of being cut off.
@@ -19,7 +19,6 @@ import {
   formatDateTime,
   prepareCommon,
   roleLabel,
-  sanitizeForSpreadsheet,
   stripXmlInvalidChars,
   verificationLabel
 } from './common.js';
@@ -31,7 +30,9 @@ const COLUMN_COUNT = 5;
 const HEADER_STYLE = Object.freeze({ fontWeight: 'bold', backgroundColor: '#E0E0E0' });
 
 /**
- * A string cell with the injection guard applied.
+ * A typed string cell. Excel never evaluates a stored string as a formula
+ * (that needs an `<f>` element), so no guard apostrophe: it would show as a
+ * literal character. The guard belongs to CSV, which the target re-parses.
  * @param {*} value
  * @param {Object} [style] - write-excel-file cell options
  * @returns {Object}
@@ -39,7 +40,7 @@ const HEADER_STYLE = Object.freeze({ fontWeight: 'bold', backgroundColor: '#E0E0
 function cell(value, style = {}) {
   return {
     type: String,
-    value: sanitizeForSpreadsheet(stripXmlInvalidChars(value ?? '')),
+    value: stripXmlInvalidChars(value ?? ''),
     ...style
   };
 }

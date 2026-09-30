@@ -213,6 +213,51 @@ describe('JWS', () => {
     assert.equal((await verifyJws(forged, { trustAnchors: [g.rootPem] })).valid, false);
   });
 
+  it('trusts only C2PA signers whose issuers are CA certificates', async () => {
+    const { x509 } = x;
+    const { ca, issue, alg } = await customerPki();
+    const pkcs8 = async key =>
+      `-----BEGIN PRIVATE KEY-----\n${Buffer.from(await webcrypto.subtle.exportKey('pkcs8', key)).toString('base64')}\n-----END PRIVATE KEY-----\n`;
+    const anchors = [ca.toString('pem')];
+    const signedBy = async (chain, key) =>
+      verifyJws(
+        signJws(
+          { a: 1 },
+          { keyPem: await pkcs8(key), chainPem: chain.map(c => c.toString('pem')).join('\n') }
+        ),
+        { trustAnchors: anchors }
+      );
+
+    const signer = await webcrypto.subtle.generateKey(alg, true, ['sign', 'verify']);
+    const good = await issue('CN=Signer, O=Customer', signer.publicKey);
+    assert.equal((await signedBy([good, ca], signer.privateKey)).trusted, true);
+
+    // A TLS server certificate from the same CA is not a content signer.
+    const tlsKeys = await webcrypto.subtle.generateKey(alg, true, ['sign', 'verify']);
+    const tls = await issue('CN=www, O=Customer', tlsKeys.publicKey, {
+      eku: ['1.3.6.1.5.5.7.3.1']
+    });
+    assert.equal((await signedBy([tls, ca], tlsKeys.privateKey)).trusted, false);
+
+    // An end-entity certificate cannot issue a trusted signer.
+    const leafKeys = await webcrypto.subtle.generateKey(alg, true, ['sign', 'verify']);
+    const forged = await x509.X509CertificateGenerator.create({
+      serialNumber: '0c',
+      subject: 'CN=Forged, O=Customer',
+      issuer: good.subject,
+      notBefore: new Date(Date.now() - 60000),
+      notAfter: new Date(Date.now() + 864e7),
+      signingKey: signer.privateKey,
+      publicKey: leafKeys.publicKey,
+      signingAlgorithm: alg,
+      extensions: [
+        new x509.KeyUsagesExtension(x509.KeyUsageFlags.digitalSignature, true),
+        new x509.ExtendedKeyUsageExtension(['1.3.6.1.5.5.7.3.4'])
+      ]
+    });
+    assert.equal((await signedBy([forged, good, ca], leafKeys.privateKey)).trusted, false);
+  });
+
   it('treats a header or payload that is not a JSON object as not a JWS', async () => {
     const nul = Buffer.from('null').toString('base64url');
     const arr = Buffer.from('[1]').toString('base64url');

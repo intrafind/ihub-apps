@@ -133,6 +133,9 @@ function ExportDialog({
       setExportError(null);
       setStatusMessage('');
       setCopied(false);
+      // Editorial responsibility (Art. 50(4)) is declared per export, never carried over.
+      setHumanReviewed(false);
+      setEuIconChecked(false);
     }
     wasOpenRef.current = isOpen;
   }, [isOpen]);

@@ -81,7 +81,8 @@ async function signPdf(buffer, payload, meta) {
     buildXmpPacket({
       creatorTool: meta.generator,
       description: meta.labelText || 'AI-generated document',
-      contentId: payload.manifestId
+      contentId: payload.manifestId,
+      digitalSourceType: payload.digitalSourceType
     })
   );
   const stream = doc.context.stream(xmp, { Type: 'Metadata', Subtype: 'XML', Length: xmp.length });
@@ -256,14 +257,18 @@ async function signHtml(buffer, payload, meta) {
     .filter(Boolean)
     .join('\n');
   html = html.includes('</head>')
-    ? html.replace('</head>', `${head}\n</head>`)
+    ? html.replace('</head>', () => `${head}\n</head>`) // `head` carries the title: no $-patterns
     : `${head}\n${html}`;
   const hash = sha256Hex(html);
   const jws = await signManifest({
     ...payload,
     binding: { alg: 'sha256', method: 'html-without-manifest', hash }
   });
-  return { buffer: Buffer.from(html.replace(HTML_SCRIPT_RE, `$1${jws}$3`), 'utf8'), jws };
+  const signedHtml = html.replace(
+    HTML_SCRIPT_RE,
+    (_, open, _old, close) => `${open}${jws}${close}`
+  );
+  return { buffer: Buffer.from(signedHtml, 'utf8'), jws };
 }
 
 function readHtmlManifest(buffer) {

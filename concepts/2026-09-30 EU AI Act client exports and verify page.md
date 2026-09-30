@@ -1,6 +1,6 @@
 # EU AI Act — client side of server exports and the `/verify` page
 
-Status: implemented (not committed yet), 2026-09-30. Epic intrafind/ihub-apps#2563, issues
+Status: implemented and committed, 2026-09-30. Epic intrafind/ihub-apps#2563, issues
 #2571, #2576 (exports), #2573 (detection page). Design: `concepts/2026-09-27 EU AI Act Content
 Marking.md` §5.3, §8.3, §8.4. Server contract: `server/routes/exports.js`,
 `server/routes/provenance.js`.
@@ -55,19 +55,14 @@ would no longer parse.
 ## i18n
 
 New keys are under `verify.*` and `pages.appChat.export.*` (plus the pre-existing but
-untranslated `canvas.export.downloadOptions`). They were delivered as separate en/de JSON files
-for the lead to merge into `shared/i18n/{en,de}.json`. Every `t()` call has an English fallback.
+untranslated `canvas.export.downloadOptions`). They are merged into `shared/i18n/{en,de}.json`. Every
+`t()` call has an English fallback.
 
 ## Open items / next steps
 
-1. Register the route (the lead does this): `App.jsx` outside `Layout` like `share/:shareId`,
-   and `'verify'` in both `KNOWN_ROUTES` (`client/src/utils/runtimeBasePath.js`) and the inline
-   `knownRoutes` of `client/index.html`, in the same position (right after `'share'`).
-2. `ChatMessage.jsx` should pass `app={app}` to its single-message `ExportDialog`, so the per-app
-   signpost override and the app name in the fallback title apply.
-3. The client packages `docx`, `pptxgenjs` and `write-excel-file` are no longer imported by the
-   client and can be removed from `client/package.json`. `file-saver` is still used
-   (`client/src/api/aiTransparencyAdminApi.js`).
-4. `fetchArtifactText()` in `client/src/features/admin/utils/artifactDownload.js` still fetches
+1. Register the route: `App.jsx` outside `Layout` like `share/:shareId`, and `'verify'` in both
+   `KNOWN_ROUTES` (`client/src/utils/runtimeBasePath.js`) and the inline `knownRoutes` of
+   `client/index.html`, in the same position (right after `'share'`).
+2. `fetchArtifactText()` in `client/src/features/admin/utils/artifactDownload.js` still fetches
    `/api/...` without the base path (unchanged behaviour). Consider `buildApiUrl()` for subpath
    deployments.
