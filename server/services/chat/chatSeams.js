@@ -37,24 +37,23 @@ export const EMAIL_CONTEXT_MARKERS = ['<content type="email"', '<content type="m
 
 /**
  * Knowledge sources implied by the prompt itself: Office email/meeting
- * context and uploaded files/images.
+ * context, uploaded files/images and audio recordings.
  * @param {Array} messages
- * @returns {Array<'email'|'file'>}
+ * @returns {Array<'email'|'file'|'audio'>}
  */
 export function detectContextSources(messages) {
   const list = Array.isArray(messages) ? messages : [];
   const sources = [];
+  const carries = value => Boolean(value) && (Array.isArray(value) ? value.length > 0 : true);
   const hasEmail = list.some(msg => {
     const content = typeof msg?.content === 'string' ? msg.content : '';
     return EMAIL_CONTEXT_MARKERS.some(marker => content.includes(marker));
   });
-  const hasFiles = list.some(
-    msg =>
-      (msg?.fileData && (Array.isArray(msg.fileData) ? msg.fileData.length > 0 : true)) ||
-      (msg?.imageData && (Array.isArray(msg.imageData) ? msg.imageData.length > 0 : true))
-  );
+  const hasFiles = list.some(msg => carries(msg?.fileData) || carries(msg?.imageData));
+  const hasAudio = list.some(msg => carries(msg?.audioData));
   if (hasEmail) sources.push('email');
   if (hasFiles) sources.push('file');
+  if (hasAudio) sources.push('audio');
   return sources;
 }
 

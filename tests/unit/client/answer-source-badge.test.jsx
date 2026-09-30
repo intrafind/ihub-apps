@@ -42,6 +42,18 @@ describe('AnswerSourceBadge', () => {
     expect(screen.getByText('chatMessage.answerSource.file')).toBeInTheDocument();
   });
 
+  it('labels an answer built from audio as an audio recording, not AI knowledge', () => {
+    renderBadge(['audio']);
+    expect(screen.getByText('chatMessage.answerSource.audio')).toBeInTheDocument();
+    expect(screen.getByTestId('icon')).toHaveAttribute('data-name', 'microphone');
+    expect(screen.queryByText('chatMessage.answerSource.llmOnly')).not.toBeInTheDocument();
+  });
+
+  it('still falls back to AI knowledge when a message carries no answer source', () => {
+    render(<AnswerSourceBadge answerSource={undefined} />);
+    expect(screen.getByText('chatMessage.answerSource.llmOnly')).toBeInTheDocument();
+  });
+
   it('labels iFinder answers as iFinder documents, not web search', () => {
     renderBadge(['ifinder']);
     expect(screen.getByText('chatMessage.answerSource.ifinder')).toBeInTheDocument();
