@@ -70,6 +70,13 @@ export class SchedulerService {
     this._owner = false;
     this._builtAt = new Map();
     this._rebuildRequested = new Set();
+    /**
+     * Sources still owed their `owner` rebuild — the one that recovers what a
+     * previous owner left behind. Kept until that rebuild succeeds, so a
+     * transient failure is retried as `owner`, not downgraded to `periodic`.
+     * @type {Set<string>}
+     */
+    this._ownerRebuildPending = new Set();
   }
 
   /**
@@ -80,6 +87,9 @@ export class SchedulerService {
   registerSource(source) {
     this.sources.set(source.id, source);
     this._builtAt.delete(source.id);
+    // A source added while this process already owns the scheduler has not
+    // seen the recovery its siblings got.
+    if (this._owner) this._ownerRebuildPending.add(source.id);
   }
 
   /** @param {string} id */
@@ -108,6 +118,7 @@ export class SchedulerService {
     this._pokeTimer = null;
     for (const source of this.sources.values()) source.clear?.();
     this._builtAt.clear();
+    this._ownerRebuildPending.clear();
     this._owner = false;
   }
 
@@ -161,16 +172,17 @@ export class SchedulerService {
         });
         for (const source of this.sources.values()) source.clear?.();
         this._builtAt.clear();
+        this._ownerRebuildPending.clear();
       }
       this._owner = false;
       return;
     }
-    const becameOwner = !this._owner;
+    if (!this._owner) for (const id of this.sources.keys()) this._ownerRebuildPending.add(id);
     this._owner = true;
     const now = this.now();
     for (const source of this.sources.values()) {
       const builtAt = this._builtAt.get(source.id);
-      const reason = becameOwner
+      const reason = this._ownerRebuildPending.has(source.id)
         ? 'owner'
         : this._rebuildRequested.has(source.id)
           ? 'requested'
@@ -182,6 +194,7 @@ export class SchedulerService {
         try {
           await source.rebuild({ now, reason });
           this._builtAt.set(source.id, now);
+          this._ownerRebuildPending.delete(source.id);
         } catch (error) {
           logger.error('Scheduler source rebuild failed', {
             component: COMPONENT,

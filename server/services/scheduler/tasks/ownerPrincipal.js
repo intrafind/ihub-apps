@@ -18,7 +18,7 @@
  * @module services/scheduler/tasks/ownerPrincipal
  */
 import configCache from '../../../configCache.js';
-import { enhanceUserWithPermissions } from '../../../utils/authorization.js';
+import { enhanceUserGroups, enhanceUserWithPermissions } from '../../../utils/authorization.js';
 import { localUsersFile } from '../../../utils/contentsPath.js';
 import { isUserActive, loadUsers } from '../../../utils/userManager.js';
 import logger from '../../../utils/logger.js';
@@ -47,10 +47,30 @@ export function ownerSnapshot(user, identityMode) {
   };
 }
 
-function findUserRecord(userId, platform) {
+/**
+ * The owner's record in `users.json`.
+ *
+ * `loadUsers` does not throw on a read or parse failure: it logs and answers
+ * an empty user map with `metadata.error`. That is reported as a lookup error
+ * here, so a local owner is retried rather than taken for deleted.
+ *
+ * @param {string} userId
+ * @param {Object} platform
+ * @param {Object} [options]
+ * @param {Function} [options.load] - `loadUsers`, injectable for tests.
+ * @returns {{found: boolean, record?: Object, error?: Error}}
+ */
+export function findUserRecord(userId, platform, { load = loadUsers } = {}) {
   if (!userId || DANGEROUS_KEYS.has(userId)) return { found: false };
   try {
-    const usersConfig = loadUsers(localUsersFile(platform.localAuth));
+    const usersConfig = load(localUsersFile(platform?.localAuth));
+    if (usersConfig?.metadata?.error) {
+      logger.warn('Could not read users.json while resolving a task owner', {
+        component: COMPONENT,
+        error: String(usersConfig.metadata.error)
+      });
+      return { found: false, error: new Error(String(usersConfig.metadata.error)) };
+    }
     const users = usersConfig?.users || {};
     if (Object.hasOwn(users, userId)) return { found: true, record: users[userId] };
     return { found: false };
@@ -61,6 +81,30 @@ function findUserRecord(userId, platform) {
     });
     return { found: false, error };
   }
+}
+
+/**
+ * The groups a run acts with.
+ *
+ * A local owner's memberships live in `users.json`, so they are read from
+ * there on every run exactly as a local login derives them — removing the
+ * owner from a group takes effect on the next run, not only after their next
+ * sign-in. An external identity's groups come from its identity provider,
+ * which cannot be asked without a sign-in; those keep the snapshot taken when
+ * the task was last saved.
+ *
+ * @param {Object} owner - The task's owner snapshot.
+ * @param {{found: boolean, record?: Object}} lookup
+ * @param {Object} platformConfig
+ * @returns {string[]}
+ */
+function currentGroups(owner, lookup, platformConfig) {
+  if (owner.authMode === 'local' && lookup.found) {
+    const internal = lookup.record?.internalGroups;
+    const groups = Array.isArray(internal) ? internal.map(String) : ['users'];
+    return enhanceUserGroups({ id: owner.userId, groups }, platformConfig.auth || {}).groups;
+  }
+  return Array.isArray(owner.groups) ? [...owner.groups] : [];
 }
 
 /**
@@ -117,7 +161,7 @@ export function resolveOwnerPrincipal(task, { platform, lookupUser = findUserRec
     username: owner.username || owner.userId,
     name: owner.name || owner.username || owner.userId,
     email: owner.email || '',
-    groups: Array.isArray(owner.groups) ? [...owner.groups] : [],
+    groups: currentGroups(owner, lookup, platformConfig),
     ...(owner.authMode ? { authMode: owner.authMode } : {}),
     ...(owner.provider ? { provider: owner.provider } : {}),
     timestamp: Date.now()

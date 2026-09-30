@@ -952,6 +952,19 @@ function AppChat({ preloadedApp = null, embedded = false, appId: embeddedAppId =
     return undefined;
   }, [serverBackedChat, app, chatId, messages.length, loadServerMessages, finishHydration]);
 
+  // A scheduled run that was waiting on this chat's approval finished on the
+  // server: its answer is in the store, not on screen, so read it back.
+  const reloadScheduledRunChat = useCallback(async () => {
+    if (!chatId) return;
+    try {
+      const result = await fetchChat(chatId);
+      loadServerMessages(Array.isArray(result?.messages) ? result.messages : []);
+      invalidateChatsCache();
+    } catch (err) {
+      console.warn('Could not re-read the chat after its scheduled run:', err.message);
+    }
+  }, [chatId, loadServerMessages]);
+
   // A finished turn is what changes the chat list: a brand-new chat appears in
   // it, an existing one moves to the top and may have gained a derived title,
   // and opening this chat cleared its unseen flag. The sidebar is mounted once
@@ -2673,7 +2686,9 @@ function AppChat({ preloadedApp = null, embedded = false, appId: embeddedAppId =
         onOpenCanvas={embedded ? () => openInNewTab(`/apps/${appId}/canvas`) : undefined}
       />
 
-      {chatOrigin?.createdVia === 'scheduled-task' && <ScheduledRunBanner origin={chatOrigin} />}
+      {chatOrigin?.createdVia === 'scheduled-task' && (
+        <ScheduledRunBanner origin={chatOrigin} onRunChanged={reloadScheduledRunChat} />
+      )}
 
       {showVariablesPanel && showParameters && (
         <div

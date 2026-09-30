@@ -19,6 +19,10 @@ import { enhanceUserWithPermissions } from '../utils/authorization.js';
 import interactionService from '../services/loop/InteractionService.js';
 import * as tasks from '../services/scheduler/tasks/taskService.js';
 import { executeTaskRun } from '../services/scheduler/tasks/taskExecution.js';
+import {
+  findUserRecord,
+  resolveOwnerPrincipal
+} from '../services/scheduler/tasks/ownerPrincipal.js';
 import { getScheduledTaskRepository } from '../services/scheduler/tasks/ScheduledTaskRepository.js';
 import { filterSchedulingTools } from '../services/scheduler/tasks/toolGate.js';
 import { chatToolSeam } from '../services/chat/chatSeams.js';
@@ -113,7 +117,16 @@ before(async () => {
   configCache.setCacheEntry('config/models.json', MODELS);
   configCache.setCacheEntry('config/groups.json', GROUPS);
   configCache.setCacheEntry('config/users.json', {
-    users: { 'user-lin': { id: 'user-lin', authMethods: ['local'], active: false } }
+    users: {
+      'user-lin': { id: 'user-lin', authMethods: ['local'], active: false },
+      // Saved the task while in `users`, since moved to a group without the app.
+      'user-kim': {
+        id: 'user-kim',
+        authMethods: ['local'],
+        active: true,
+        internalGroups: ['lostApp']
+      }
+    }
   });
   configCache.setCacheEntry('config/tools.json', [
     {
@@ -456,6 +469,54 @@ describe('a headless run', () => {
     const stored = await getScheduledTaskRepository().getTask(task.id);
     assert.equal(stored.status, 'disabled');
     await cleanup(lin);
+  });
+
+  it('runs a local owner with the groups users.json gives them now, not the saved ones', async () => {
+    const kim = principal({ id: 'user-kim', authMode: 'local', groups: ['users'] });
+    const task = await tasks.createTask(kim, taskInput());
+    const queued = await tasks.requestRun(kim, task.id);
+    const { service, requests } = scriptedChatService([]);
+    const run = await executeTaskRun(
+      { taskId: task.id, runId: queued.id },
+      { chatService: service }
+    );
+    assert.equal(run.status, 'skipped');
+    assert.equal(run.reason.code, 'APP_NOT_ACCESSIBLE');
+    assert.equal(requests.length, 0);
+    await cleanup(kim);
+  });
+
+  it('retries, rather than disables, when users.json cannot be read', () => {
+    const lookup = findUserRecord(
+      'user-kim',
+      {},
+      { load: () => ({ users: {}, metadata: { error: 'Unexpected end of JSON input' } }) }
+    );
+    assert.equal(lookup.found, false);
+    assert.ok(lookup.error);
+    const result = resolveOwnerPrincipal(
+      { owner: { userId: 'user-kim', authMode: 'local' } },
+      { platform: PLATFORM, lookupUser: () => lookup }
+    );
+    assert.equal(result.ok, false);
+    assert.equal(result.code, 'OWNER_LOOKUP_FAILED');
+    assert.equal(result.action, 'retry');
+  });
+
+  it('an admin disabling a task releases its queued run, so re-enabling it works', async () => {
+    const user = ada();
+    const task = await tasks.createTask(user, taskInput());
+    const queued = await tasks.requestRun(user, task.id);
+    const disabled = await tasks.adminSetTaskStatus({ username: 'root' }, task.id, 'disabled');
+    assert.equal(disabled.status, 'disabled');
+    assert.equal(disabled.activeRun, null);
+    const run = await getScheduledTaskRepository().getRun(task.id, queued.id);
+    assert.equal(run.status, 'cancelled');
+    assert.equal(run.reason.code, 'DISABLED_BY_ADMIN');
+    await tasks.adminSetTaskStatus({ username: 'root' }, task.id, 'active');
+    const again = await tasks.requestRun(user, task.id);
+    assert.equal(again.status, 'queued');
+    await cleanup(user);
   });
 });
 

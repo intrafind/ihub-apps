@@ -678,6 +678,18 @@ async function stopActiveRun(task, reasonCode, message) {
     stored.reason = reasonOf(reasonCode, message, now);
     return stored;
   });
+  // A queued or waiting run never reaches the runner again (it only executes
+  // `queued` runs), so nothing else would release the task from it: left in
+  // place, a task an admin re-activates refuses every Run now and skips every
+  // slot as PREVIOUS_RUN_ACTIVE.
+  await repository.mutateTask(task.id, stored => {
+    if (stored.activeRun?.id !== active.id) return null;
+    return applyRunOutcome(stored, run || { ...stored.activeRun, status: 'cancelled' }, {
+      now,
+      settings: currentPolicy().settings,
+      notify: false
+    });
+  });
   if (active.status === 'awaiting_approval' && run?.approval?.interactionId) {
     try {
       await interactionService.cancel(run.approval.interactionId, 'cancelled');
@@ -806,19 +818,7 @@ export async function cancelRun(user, taskId, runId) {
     throw new ScheduledTaskError(409, 'RUN_NOT_ACTIVE', 'This run is not in progress');
   }
   await stopActiveRun(task, 'CANCELLED_BY_OWNER', 'Cancelled by the owner');
-  if (task.activeRun.status !== 'running') {
-    const now = Date.now();
-    const run = await getScheduledTaskRepository().getRun(taskId, runId);
-    await getScheduledTaskRepository().mutateTask(taskId, stored => {
-      if (stored.activeRun?.id !== runId) return null;
-      return applyRunOutcome(stored, run || { ...stored.activeRun, status: 'cancelled' }, {
-        now,
-        settings: currentPolicy().settings,
-        notify: false
-      });
-    });
-    announceTaskChanged(taskId);
-  }
+  if (task.activeRun.status !== 'running') announceTaskChanged(taskId);
   return getScheduledTaskRepository().getRun(taskId, runId);
 }
 
@@ -1225,8 +1225,11 @@ export async function adminSetTaskStatus(admin, taskId, status, message) {
     return stored;
   });
   if (!task) throw notFound();
-  if (status === 'disabled')
+  if (status === 'disabled' && task.activeRun) {
     await stopActiveRun(task, 'DISABLED_BY_ADMIN', 'Disabled by an administrator');
+    announceTaskChanged(taskId);
+    return (await getScheduledTaskRepository().getTask(taskId)) || task;
+  }
   announceTaskChanged(taskId);
   return task;
 }

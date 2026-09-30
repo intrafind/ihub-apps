@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
 import Icon from '../../../shared/components/Icon';
@@ -8,6 +8,8 @@ import { formatDateTime, reasonText } from '../utils/taskFormat';
 import { RunStatusBadge } from './TaskBadges';
 import ApprovalControls from './ApprovalControls';
 
+const ACTIVE_STATUSES = ['queued', 'running'];
+
 /**
  * The header of a chat a scheduled run created: "Scheduled run of <task> ·
  * <time>", a link back to the task, the run's status, and — while the run
@@ -15,7 +17,8 @@ import ApprovalControls from './ApprovalControls';
  *
  * @param {Object} props
  * @param {{createdVia: string, taskId: string, runId: string, taskName?: string}} props.origin
- * @param {() => void} [props.onRunChanged] - After an approval, to re-read the chat.
+ * @param {() => void} [props.onRunChanged] - A run this banner followed finished (after
+ *   an approval, say): the chat has new messages to read.
  */
 export default function ScheduledRunBanner({ origin, onRunChanged }) {
   const { t, i18n } = useTranslation();
@@ -34,12 +37,26 @@ export default function ScheduledRunBanner({ origin, onRunChanged }) {
   }, [available, load]);
 
   // Follow a run that is still going (queued after an approval, or running).
-  const active = run && ['queued', 'running'].includes(run.status);
+  const active = run && ACTIVE_STATUSES.includes(run.status);
   useEffect(() => {
     if (!active) return undefined;
     const id = setInterval(load, 4000);
     return () => clearInterval(id);
   }, [active, load]);
+
+  // The answer lands in the chat when the run ends, not when it is approved:
+  // tell the chat once a run it watched going stops.
+  const onRunChangedRef = useRef(onRunChanged);
+  onRunChangedRef.current = onRunChanged;
+  const followedRef = useRef(false);
+  useEffect(() => {
+    if (active) {
+      followedRef.current = true;
+    } else if (run && followedRef.current) {
+      followedRef.current = false;
+      onRunChangedRef.current?.();
+    }
+  }, [active, run]);
 
   if (origin?.createdVia !== 'scheduled-task') return null;
   const when = run?.startedAt || run?.scheduledFor;
@@ -66,15 +83,7 @@ export default function ScheduledRunBanner({ origin, onRunChanged }) {
           {run && <RunStatusBadge status={run.status} />}
         </div>
         {run?.status === 'awaiting_approval' && (
-          <ApprovalControls
-            taskId={origin.taskId}
-            run={run}
-            compact
-            onAnswered={() => {
-              load();
-              onRunChanged?.();
-            }}
-          />
+          <ApprovalControls taskId={origin.taskId} run={run} compact onAnswered={load} />
         )}
         {run?.status === 'failed' && run.reason?.message && (
           <p className="text-red-700 dark:text-red-300">{reasonText(t, run.reason)}</p>

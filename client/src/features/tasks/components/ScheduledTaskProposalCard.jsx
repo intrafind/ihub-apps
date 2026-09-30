@@ -91,6 +91,8 @@ export function ScheduledTaskProposalCard({ proposal, chatId, readOnly = false }
           proposalId: proposal.proposalId,
           ...(chatId ? { sourceChatId: chatId } : {})
         });
+        // The shared listing predates this task; a card mounted later reads anew.
+        savedLookup = null;
         settle({ status: 'saved', taskId: task.id });
       } else if (action === 'update') {
         const { status, ...changes } = proposal.draft || {};

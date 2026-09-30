@@ -413,6 +413,26 @@ describe('SchedulerService', () => {
     await scheduler.tick();
     assert.deepEqual(calls.slice(-1), ['clear']);
   });
+
+  it('retries a failed ownership rebuild as `owner`, so recovery still runs', async () => {
+    const reasons = [];
+    let failures = 1;
+    const scheduler = new SchedulerService({ isOwner: () => true, now: () => T0 });
+    scheduler.registerSource({
+      id: 'flaky',
+      rebuild: async ({ reason }) => {
+        reasons.push(reason);
+        if (failures-- > 0) throw new Error('storage briefly unavailable');
+      },
+      runDue: async () => {}
+    });
+    await scheduler.tick();
+    await scheduler.tick();
+    await scheduler.tick();
+    // The recovery a new owner owes is not downgraded to a periodic rebuild,
+    // and once it succeeded it is not repeated.
+    assert.deepEqual(reasons, ['owner', 'owner']);
+  });
 });
 
 describe('WorkflowTriggerSource', () => {

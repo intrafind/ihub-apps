@@ -184,7 +184,12 @@ slot:
 ### Runs act as the owner
 
 A run is not a system job. Before every run the owner is looked up again and
-their permissions are resolved **fresh** from their current groups:
+their permissions are resolved **fresh** from their groups. For a local account
+those are the memberships in `users.json` right now, so removing the owner from
+a group takes effect on the next run. For an OIDC, LDAP, NTLM or proxy account
+they are the groups the owner had when they last saved the task, because the
+identity provider can only be asked at sign-in; the group permissions those
+groups carry are still read fresh.
 
 - The owner's account was deactivated or deleted → the task is **disabled**.
 - The owner lost the `scheduledTasks` permission, the app, the model or a tool
