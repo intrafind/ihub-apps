@@ -375,6 +375,9 @@ export async function materializeUserTurn({
  *   turn ended, sampled with `hasChatClient()`; the emit result cannot tell you
  * @param {Object} [params.message] - extra fields for the stored answer (`model`). A
  *   validated structured answer (`summary.structuredOutput`) is stored as `output` too.
+ * @param {boolean} [params.onlyIfUnanswered=false] - store nothing when the run is
+ *   already answered (checked under the chat lock); for a writer that is not the run
+ *   itself and may race another one (`chatRecovery.js`)
  * @returns {Promise<Object|null>} the stored message, or null when nothing was written
  */
 export async function materializeAssistantTurn({
@@ -383,7 +386,8 @@ export async function materializeAssistantTurn({
   runId,
   summary,
   clientConnected,
-  message = null
+  message = null,
+  onlyIfUnanswered = false
 }) {
   if (!repository) return null;
   const status = summary?.status;
@@ -486,8 +490,10 @@ export async function materializeAssistantTurn({
           },
           // The end of the transcript for an ordinary turn, and the position
           // right after this run's own question for a superseded one.
-          { insertAfterRunId: runId }
+          { insertAfterRunId: runId, unlessAnswered: onlyIfUnanswered }
         );
+        // Somebody else answered the run first; theirs is the answer.
+        if (appended?.skipped) appended = null;
       } catch (appendError) {
         logger.error('Chat answer not stored; releasing the run anyway', {
           component: COMPONENT,

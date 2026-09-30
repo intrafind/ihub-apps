@@ -1364,15 +1364,20 @@ export class ChatRepository {
    *   id to truncate from, inclusive.
    * @param {string|null} [options.insertAfterRunId=null] - Place the message
    *   after the last message of this run; appends when the run has none.
-   * @returns {Promise<{message: Object, messages: Object[]}|null>} Null when
-   *   the chat does not exist or cannot be stored.
+   * @param {boolean} [options.unlessAnswered=false] - Write nothing when the
+   *   transcript already holds an assistant message of the message's run. The
+   *   check is made under the chat lock, so of several writers settling the
+   *   same run — on any worker — exactly one stores its answer.
+   * @returns {Promise<{message: Object, messages: Object[], skipped?: true}|null>}
+   *   Null when the chat does not exist or cannot be stored; `skipped` when
+   *   `unlessAnswered` found the run answered (`message` is that answer).
    * @throws {StorageError} Code `UNKNOWN_MESSAGE` when `replaceFromMessageId`
    *   is not in the stored history.
    */
   async appendMessage(
     chatId,
     message,
-    { replaceFromMessageId = null, insertAfterRunId = null } = {}
+    { replaceFromMessageId = null, insertAfterRunId = null, unlessAnswered = false } = {}
   ) {
     if (!this._usable(chatId, 'appendMessage')) return null;
     return this._withChatLock(chatId, async () => {
@@ -1387,6 +1392,12 @@ export class ChatRepository {
 
       const { stored, etag: messagesEtag } = await this._loadMessages(chatId);
       let messages = stored.messages;
+      if (unlessAnswered && message?.runId) {
+        const answer = messages.find(
+          entry => entry.role === 'assistant' && entry.runId === message.runId
+        );
+        if (answer) return { message: answer, messages, skipped: true };
+      }
       // Messages this write removes from the transcript. Their artifact
       // payloads live in their own documents, which nothing else would ever
       // reach again: a descriptor is the only path to one.

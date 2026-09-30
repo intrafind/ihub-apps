@@ -106,7 +106,7 @@ async function settle(chat, { repository, runLog }) {
     const activity = (await rebuildRunActivity(runLog, runId)) || {};
     const workflowResult = await interruptedWorkflow(runId);
     if (workflowResult) activity.workflowResult = workflowResult;
-    await materializeAssistantTurn({
+    const stored = await materializeAssistantTurn({
       repository,
       chatId,
       runId,
@@ -118,8 +118,13 @@ async function settle(chat, { repository, runLog }) {
         activity: Object.keys(activity).length > 0 ? activity : null
       },
       // Nobody watched it end; the history marks it until it is opened.
-      clientConnected: false
+      clientConnected: false,
+      // Another worker may be settling the same chat: the check above is not
+      // atomic, this one is, and only the writer that stored the answer goes
+      // on to end the run on the ledger.
+      onlyIfUnanswered: true
     });
+    if (!stored) return repository.getChat(chatId);
   } else {
     await repository.releaseRun(chatId, runId, {
       activeRunId: null,

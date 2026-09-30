@@ -65,9 +65,21 @@ export function executionHandoff(state) {
 
   let outputText = '';
   const primaryOutputKey = workflow?.chatIntegration?.primaryOutput;
-  if (primaryOutputKey && data[primaryOutputKey]) {
-    const value = data[primaryOutputKey];
-    outputText = typeof value === 'string' ? value : JSON.stringify(value, null, 2);
+  // A dotted path (`_report.markdown`) names a nested field, as it does for
+  // the answer of an `@workflow` run (`tools/workflowRunner.js`).
+  const primaryValue =
+    typeof primaryOutputKey === 'string' && primaryOutputKey
+      ? primaryOutputKey.split('.').reduce((value, key) => value?.[key], data)
+      : undefined;
+  if (
+    primaryValue !== undefined &&
+    primaryValue !== null &&
+    (typeof primaryValue !== 'string' || primaryValue.length > 0)
+  ) {
+    outputText =
+      typeof primaryValue === 'object'
+        ? JSON.stringify(primaryValue, null, 2)
+        : String(primaryValue);
   } else {
     const output = displayableOutput(data);
     for (const value of Object.values(output)) {
@@ -151,7 +163,7 @@ export async function createExecutionChat({
   });
   if (!question) return { error: 'NOT_STORED' };
 
-  await materializeAssistantTurn({
+  const answer = await materializeAssistantTurn({
     repository,
     chatId,
     runId,
@@ -166,5 +178,11 @@ export async function createExecutionChat({
     },
     clientConnected: true
   });
+  if (!answer) {
+    // A chat holding the question without the results is not what was asked
+    // for; take it away again rather than open it.
+    await repository.deleteChat(chatId).catch(() => {});
+    return { error: 'NOT_STORED' };
+  }
   return { chatId };
 }

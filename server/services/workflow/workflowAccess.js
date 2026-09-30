@@ -63,12 +63,15 @@ export function filterByPermissions(workflows, user) {
  * @returns {{allowed: true}|{allowed: false, reason: 'not_in_app'|'not_permitted'}}
  */
 export function mentionAccess({ user, app, workflow }) {
-  const listed = Array.isArray(app?.workflows) ? new Set(app.workflows) : new Set();
-  if (!workflow?.id || !hasIdCaseInsensitive(listed, workflow.id)) {
-    return { allowed: false, reason: 'not_in_app' };
-  }
-  if (filterByPermissions([workflow], user).length === 0) {
+  // Permission first: the "not in this app" refusal names the workflow, so
+  // answering it for a workflow the caller may not run would confirm that the
+  // workflow exists.
+  if (!workflow?.id || filterByPermissions([workflow], user).length === 0) {
     return { allowed: false, reason: 'not_permitted' };
+  }
+  const listed = Array.isArray(app?.workflows) ? new Set(app.workflows) : new Set();
+  if (!hasIdCaseInsensitive(listed, workflow.id)) {
+    return { allowed: false, reason: 'not_in_app' };
   }
   return { allowed: true };
 }

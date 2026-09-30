@@ -601,6 +601,48 @@ describe('a chat whose run died with its process', () => {
     });
   });
 
+  it('is settled once when another worker settles it at the same time', async () => {
+    await withRepository(async repository => {
+      await materializeUserTurn({
+        repository,
+        chatId: CHAT_ID,
+        ownerId: 'user-1',
+        identityMode: 'default',
+        appId: 'chat',
+        runId: RUN_ID,
+        content: 'q'
+      });
+      await repository.updateChat(CHAT_ID, { lastMessageAt: longAgo });
+      const chat = await repository.getChat(CHAT_ID);
+      // The other worker's answer lands after this one read the transcript
+      // and found none — the check this one made is already stale.
+      let raced = false;
+      const racing = Object.create(repository);
+      racing.getMessages = async id => {
+        const read = await repository.getMessages(id);
+        if (!raced) {
+          raced = true;
+          await repository.appendMessage(CHAT_ID, {
+            role: 'assistant',
+            content: 'settled by the other worker',
+            runId: RUN_ID
+          });
+        }
+        return read;
+      };
+      const runLog = fakeRunLog({ events: LEDGER });
+
+      await settleInterruptedChat(chat, { repository: racing, runLog });
+
+      const { messages } = await repository.getMessages(CHAT_ID);
+      assert.deepEqual(
+        messages.map(m => m.content),
+        ['q', 'settled by the other worker']
+      );
+      assert.deepEqual(runLog.appended, [], 'the worker that lost does not end the run');
+    });
+  });
+
   it('leaves a live run alone', async () => {
     const chat = { id: CHAT_ID, activeRunId: RUN_ID, status: 'running', lastMessageAt: longAgo };
     const repository = {
@@ -634,6 +676,16 @@ describe('who may start a workflow by @mention', () => {
       }),
       { allowed: false, reason: 'not_permitted' }
     );
+  });
+
+  it('does not tell a caller about a workflow they may not run, listed or not', () => {
+    // "Not available in this app" names the workflow; for one the caller may
+    // not run at all, that would confirm it exists.
+    const restricted = { permissions: { workflows: new Set(['other']) } };
+    assert.deepEqual(mentionAccess({ user: restricted, app: { workflows: [] }, workflow }), {
+      allowed: false,
+      reason: 'not_permitted'
+    });
   });
 
   it('matches ids the way the rest of the platform does, ignoring case', () => {
@@ -731,6 +783,40 @@ describe('Chat with Results: a stored chat about an execution', () => {
         messages[0].content,
         'Here are the results from the workflow "Statement review":'
       );
+    });
+  });
+
+  it('reads a nested primary output, as an @workflow answer does', async () => {
+    const { executionHandoff } = await import('../services/workflow/executionChat.js');
+    const { outputText } = executionHandoff({
+      data: {
+        summary: 'not this one, although it is a long text result',
+        _report: { markdown: '# The report' },
+        _workflowDefinition: { chatIntegration: { primaryOutput: '_report.markdown' } }
+      }
+    });
+    assert.equal(outputText, '# The report');
+  });
+
+  it('opens no half chat when the results cannot be stored', async () => {
+    const { createExecutionChat } = await import('../services/workflow/executionChat.js');
+    await withRepository(async repository => {
+      const failing = Object.create(repository);
+      failing.appendMessage = (chatId, message, options) =>
+        message.role === 'assistant'
+          ? Promise.reject(new Error('disk full'))
+          : repository.appendMessage(chatId, message, options);
+      const result = await createExecutionChat({
+        repository: failing,
+        state: STATE,
+        executionId: 'wf-exec-1',
+        appId: 'chat',
+        ownerId: 'user-1',
+        identityMode: 'default'
+      });
+      assert.deepEqual(result, { error: 'NOT_STORED' });
+      const { items } = await repository.listChats('user-1');
+      assert.deepEqual(items, [], 'the question alone is not left behind');
     });
   });
 
