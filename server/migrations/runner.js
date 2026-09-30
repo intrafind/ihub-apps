@@ -220,24 +220,31 @@ const RENAMED_MIGRATIONS = [
     newVersion: '125',
     newFile: 'V125__ifinder_search_skill_pointer.js'
   },
-  // The web tool parameters migration was renumbered twice while its branch
-  // was open: the prompt placeholder migration took V136 (and user prompts
-  // V137) on main, then the scheduled tasks defaults took V138. Either old
-  // number reconciles to V139. Without these rules an install that ran the
-  // branch would count main's migration of that number as applied and never
-  // run it. Matching on the file keeps them off the history rows of the
-  // migrations that legitimately hold 136 and 138.
+  // The web tool parameters migration was renumbered three times while its
+  // branch was open: the prompt placeholder migration took V136 (and user
+  // prompts V137) on main, then the scheduled tasks defaults took V138, then
+  // the speech platform defaults took V139. Every old number reconciles to
+  // V140. Without these rules an install that ran the branch would count
+  // main's migration of that number as applied and never run it. Matching on
+  // the file keeps them off the history rows of the migrations that
+  // legitimately hold 136, 138 and 139.
   {
     oldVersion: '136',
     oldFile: 'V136__web_tools_filters_and_page_offset.js',
-    newVersion: '139',
-    newFile: 'V139__web_tools_filters_and_page_offset.js'
+    newVersion: '140',
+    newFile: 'V140__web_tools_filters_and_page_offset.js'
   },
   {
     oldVersion: '138',
     oldFile: 'V138__web_tools_filters_and_page_offset.js',
-    newVersion: '139',
-    newFile: 'V139__web_tools_filters_and_page_offset.js'
+    newVersion: '140',
+    newFile: 'V140__web_tools_filters_and_page_offset.js'
+  },
+  {
+    oldVersion: '139',
+    oldFile: 'V139__web_tools_filters_and_page_offset.js',
+    newVersion: '140',
+    newFile: 'V140__web_tools_filters_and_page_offset.js'
   }
 ];
 

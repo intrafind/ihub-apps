@@ -897,13 +897,13 @@
     },
     "voiceInput": {
       "title": "Spracheingabe (Speech-to-Text)",
-      "description": "Konfigurieren Sie die für Apps verfügbaren Speech-to-Text-Backends. Aktivieren Sie hier ein Backend und wählen Sie es dann pro App im App-Editor unter „Spracherkennungsdienst“ aus.",
+      "description": "Konfigurieren Sie die Speech-to-Text-Backends und die Standards, die Apps verwenden. Apps folgen den Standards, sofern sie im App-Editor keinen eigenen Dienst bzw. kein eigenes Modell auswählen.",
       "loadError": "Spracheingabe-Einstellungen konnten nicht geladen werden",
       "saveSuccess": "Spracheingabe-Einstellungen gespeichert.",
       "saveError": "Spracheingabe-Einstellungen konnten nicht gespeichert werden",
       "realtime": {
         "title": "vLLM Realtime (serverseitig)",
-        "description": "Streamt Mikrofon-Audio über den iHub-Server an einen vLLM-Realtime-Endpunkt (z. B. Voxtral). URL und API-Schlüssel verbleiben auf dem Server. Wählen Sie „vLLM Realtime“ als Spracherkennungsdienst einer App, um ihn zu nutzen.",
+        "description": "Überträgt Mikrofon-Audio über den iHub-Server an einen vLLM-Realtime-Endpunkt (z. B. Voxtral). URL und API-Schlüssel bleiben auf dem Server. Legen Sie ihn oben als Standard fest oder wählen Sie „vLLM Realtime“ als Spracherkennungsdienst einer App.",
         "enabled": "vLLM-Realtime-Transkription aktivieren",
         "url": "Realtime-WebSocket-URL",
         "model": "Modell",
@@ -922,7 +922,76 @@
         "region": "Region",
         "subscriptionKey": "Abonnementschlüssel",
         "subscriptionKeyPlaceholder": "Azure-Speech-Schlüssel",
-        "subscriptionKeyHint": "Verschlüsselt gespeichert und nie an den Browser gesendet. Ein angezeigter Wert ***REDACTED*** bedeutet, dass bereits ein Schlüssel gesetzt ist — belassen Sie ihn, um ihn beizubehalten. Für einen On-Premises-Azure-Speech-Container, der keinen Schlüssel benötigt, leer lassen und oben dessen Host eintragen."
+        "subscriptionKeyHint": "Verschlüsselt gespeichert und nie an den Browser gesendet. Ein angezeigter Wert ***REDACTED*** bedeutet, dass bereits ein Schlüssel gesetzt ist — belassen Sie ihn, um ihn beizubehalten. Für einen On-Premises-Azure-Speech-Container, der keinen Schlüssel benötigt, leer lassen und oben dessen Host eintragen.",
+        "testHint": "Prüft Schlüssel und Region vom iHub-Server aus, indem mit den obigen Werten ein Token angefordert wird. Die Spracherkennung selbst läuft im Browser: Nutzen Sie dafür den Live-Diktiertest unten.",
+        "test": {
+          "tokenIssued": "Schlüssel akzeptiert: Azure hat ein Token für die Region „{{region}}“ ausgestellt.",
+          "keyless": "Kein Abonnementschlüssel: schlüsselloser Modus. Browser verbinden sich direkt mit dem Host – prüfen Sie ihn mit dem Live-Diktiertest unten.",
+          "notConfigured": "Weder ein Abonnementschlüssel noch ein Host ist festgelegt. Die Azure-Cloud benötigt Schlüssel und Region, ein On-Premises-Container einen Host.",
+          "invalidKey": "Azure hat den Schlüssel abgelehnt (HTTP 401): Er ist ungültig oder gehört zu einer anderen Region.",
+          "tokenFailed": "Token-Anfrage fehlgeschlagen: {{detail}}"
+        }
+      },
+      "notEnabled": "nicht aktiviert",
+      "services": {
+        "browser": "Browser (Web Speech API)",
+        "azure": "Azure Speech",
+        "vllmRealtime": "vLLM Realtime (über den Server)"
+      },
+      "defaults": {
+        "title": "Standards",
+        "description": "Gilt für jede App ohne eigene Spracheinstellung (Spracherkennungsdienst „Plattform-Standard“, kein Transkriptionsmodell). Apps, die einen Dienst oder ein Modell auswählen, behalten ihre Auswahl.",
+        "service": "Diktierdienst (Mikrofon-Schaltfläche)",
+        "serviceNotEnabled": "{{service}} ist unten nicht aktiviert. Bis dahin verwenden Apps, die dem Plattform-Standard folgen, den Browser.",
+        "transcriptionModel": "Transkriptionsmodell (Aufnahme)",
+        "noModel": "Keines",
+        "modelUnavailable": "Dieses Modell ist deaktiviert oder existiert nicht mehr. Aufnahmen schlagen daher in Apps fehl, die sich auf den Standard verlassen.",
+        "transcriptionModelHint": "Transkribiert Aufnahmen sowie Audio-/Video-Uploads in Apps, die die Transkription aktivieren, ohne ein Modell auszuwählen."
+      },
+      "test": {
+        "title": "Spracheingabe testen",
+        "description": "Läuft in diesem Browser mit Ihrem Mikrofon, auf demselben Weg wie in einem Chat, mit der gespeicherten Konfiguration.",
+        "unsaved": "Sie haben ungespeicherte Änderungen. Die Tests verwenden die gespeicherte Konfiguration – speichern Sie zuerst, um Ihre Änderungen zu testen.",
+        "mic": {
+          "title": "Mikrofon-Check",
+          "description": "Zeigt den Eingangspegel Ihres Mikrofons an, ganz ohne Sprachdienst.",
+          "start": "Mikrofon prüfen",
+          "stop": "Stopp",
+          "level": "Eingangspegel",
+          "device": "Gerät: {{device}}",
+          "soundDetected": "Ton erkannt: Das Mikrofon funktioniert.",
+          "speak": "Sprechen Sie – der Balken sollte sich bewegen."
+        },
+        "dictation": {
+          "title": "Live-Diktat (Echtzeit)",
+          "description": "Sprechen Sie ins Mikrofon und verfolgen Sie, wie das Transkript eintrifft – genau wie bei der Mikrofon-Schaltfläche im Chat.",
+          "service": "Dienst",
+          "language": "Sprache",
+          "mode": "Modus",
+          "serviceDisabled": "Dieses Backend ist in der gespeicherten Konfiguration nicht aktiviert, der Test wird daher voraussichtlich fehlschlagen.",
+          "start": "Diktiertest starten",
+          "stop": "Stopp",
+          "starting": "Verbinde…",
+          "listening": "Hört zu: Sprechen Sie jetzt.",
+          "stopping": "Wird abgeschlossen…",
+          "done": "Abgeschlossen.",
+          "firstResult": "Erster Text nach {{ms}} ms",
+          "success": "Das Diktat funktioniert.",
+          "noText": "Es wurde kein Text erkannt. Prüfen Sie mit dem Mikrofon-Check, ob das Mikrofon Ton aufnimmt."
+        },
+        "recording": {
+          "title": "Aufnahme (aufnehmen → transkribieren)",
+          "description": "Nehmen Sie einen kurzen Clip auf (bis zu {{seconds}} Sekunden) und lassen Sie ihn von einem Transkriptionsmodell transkribieren – genau wie mit der Aufnahme-Schaltfläche im Chat.",
+          "model": "Transkriptionsmodell",
+          "platformDefault": "Plattform-Standard",
+          "start": "Aufnahme starten",
+          "stop": "Stoppen und transkribieren",
+          "recording": "Aufnahme… {{elapsed}} s",
+          "transcribing": "Transkribiere…",
+          "success": "{{duration}} s Audio in {{ms}} ms transkribiert.",
+          "noText": "Das Modell hat keinen Text geliefert. Prüfen Sie mit dem Mikrofon-Check, ob das Mikrofon Ton aufnimmt.",
+          "empty": "Es wurde nichts aufgenommen."
+        }
       }
     },
     "agents": {
@@ -2273,6 +2342,7 @@
       "mcpServers": "MCP-Server",
       "a2aAgents": "A2A-Agenten",
       "telemetry": "Telemetrie",
+      "systemResources": "Systemressourcen",
       "voiceInput": "Spracheingabe",
       "changelog": "Neuigkeiten",
       "feedback": "Feedback",
@@ -2598,6 +2668,74 @@
       "refEnvHint": "Standard-OTEL_*-Umgebungsvariablen (OTEL_EXPORTER_OTLP_ENDPOINT, OTEL_SERVICE_NAME, ...) werden beim Start berücksichtigt.",
       "refMetricsHint": "Eigene iHub-Metriken: ihub.app.usage, ihub.prompt.usage, ihub.errors, ihub.conversations, ihub.active.users, ihub.active.chats."
     },
+    "systemResources": {
+      "title": "Systemressourcen",
+      "description": "CPU, Arbeitsspeicher und Speicherplatz, wie sie jeder Serverprozess auf diesem Host meldet.",
+      "updatedAt": "Aktualisiert {{time}}",
+      "refresh": "Aktualisieren",
+      "loadError": "Systemressourcen konnten nicht geladen werden",
+      "status": {
+        "ok": "OK",
+        "warning": "Wird knapp",
+        "critical": "Kritisch"
+      },
+      "paths": {
+        "contents": "Inhalte",
+        "data": "Daten",
+        "uploads": "Uploads",
+        "logs": "Logs",
+        "temp": "Temp"
+      },
+      "storage": {
+        "title": "Speicherplatz",
+        "description": "Dateisysteme mit den Verzeichnissen, in die iHub schreibt. Knapp ab {{warning}} % Belegung, kritisch ab {{critical}} %.",
+        "none": "Keine Informationen zum Speicherplatz verfügbar.",
+        "freeOfTotal": "{{free}} frei von {{total}} ({{percent}} belegt)",
+        "usedLabel": "Speicherbelegung {{name}}",
+        "criticalAlert": "Der Speicherplatz ist kritisch knapp. Geben Sie bald Platz frei oder vergrößern Sie das Volume, sonst schlägt das Speichern von Chats, Uploads und Konfiguration fehl.",
+        "warningAlert": "Der Speicherplatz wird knapp. Planen Sie, Platz freizugeben oder das Volume zu vergrößern."
+      },
+      "host": {
+        "title": "Host",
+        "description": "Gemeinsam genutzt von allen Serverprozessen auf diesem Rechner bzw. in diesem Container.",
+        "memory": "Arbeitsspeicher",
+        "memoryUsed": "{{used}} von {{total}} belegt",
+        "containerMemory": "Speicherlimit des Containers (Host hat {{total}}).",
+        "cpu": "CPU",
+        "cores": "CPU-Kerne",
+        "cpuLimit": "(Limit {{cores}})",
+        "load": "Durchschnittliche Last",
+        "uptime": "Host-Laufzeit",
+        "node": "Node.js",
+        "hostname": "Hostname",
+        "os": "Betriebssystem"
+      },
+      "processes": {
+        "title": "Serverprozesse",
+        "clusterDescription": "Cluster mit {{count}} Workern. CPU in Prozent eines Kerns, gemittelt über die letzten Sekunden.",
+        "standaloneDescription": "Einzelner Serverprozess. CPU in Prozent eines Kerns, gemittelt über die letzten Sekunden.",
+        "primary": "Primärprozess",
+        "standalone": "Server",
+        "worker": "Worker {{index}}",
+        "process": "Prozess",
+        "pid": "PID",
+        "cpu": "CPU",
+        "memory": "Arbeitsspeicher (RSS)",
+        "heap": "Heap belegt / Limit",
+        "eventLoop": "Event-Loop-Verzögerung",
+        "uptime": "Laufzeit",
+        "current": "hat diese Seite ausgeliefert",
+        "delay": "{{mean}} ms (max. {{max}})",
+        "missing": "Keine Antwort. Der Worker startet möglicherweise neu oder ist überlastet.",
+        "missingAlert": "{{count}} von {{total}} Workern haben nicht geantwortet."
+      }
+    },
+    "storageAlert": {
+      "warning": "Der Speicherplatz wird knapp: {{free}} frei ({{percent}} belegt).",
+      "critical": "Der Speicherplatz ist kritisch knapp: {{free}} frei ({{percent}} belegt).",
+      "viewDetails": "Systemressourcen anzeigen",
+      "dismiss": "Ausblenden"
+    },
     "home": {
       "sections": {
         "loggingDesc": "Logging-Level, Komponenten, Metadaten und Debug-Einstellungen konfigurieren",
@@ -2799,6 +2937,11 @@
         "feedbackDesc": "Benutzer die Antworten dieser App mit Sternen und einem optionalen Kommentar bewerten lassen",
         "enableFeedback": "Antwort-Feedback aktivieren",
         "feedbackNote": "Wenn deaktiviert, ist die Sternebewertung unter den Antworten dieser App ausgeblendet und die Feedback-API lehnt Einsendungen dafür ab. Die plattformweite Feedback-Funktion muss zusätzlich aktiviert sein; alles davon lässt sich auch unter Admin → Feedback verwalten.",
+        "platformDefaultService": "Plattform-Standard ({{service}})",
+        "browserService": "Browser (Web Speech API)",
+        "platformDefaultServiceHint": "Folgt dem unter Admin → Spracheingabe festgelegten Standard, auch bei späteren Änderungen.",
+        "platformDefaultTranscriptionModel": "Plattform-Standard ({{model}})",
+        "transcriptionModelRequired": "Wählen Sie ein Modell aus oder legen Sie unter Admin → Spracheingabe ein Standard-Transkriptionsmodell fest.",
         "websearchMaxPageReads": "Max. Seitenaufrufe pro Antwort",
         "websearchMaxPageReadsDesc": "Begrenzt, wie viele Seiten das Modell mit dem Seitenleser für eine Antwort öffnen darf. Seiten, die die Suche selbst für ihre Auszüge abruft, zählen nicht. 1–50, Standard 5."
       },
@@ -3378,6 +3521,13 @@
         "maxRunChatsPerTask": "Behaltene Lauf-Chats pro Aufgabe",
         "maxInstructionLength": "Längste Anweisungen (Zeichen)",
         "maxRunMinutes": "Längster Lauf (Minuten)"
+      }
+    },
+    "overview": {
+      "storage": {
+        "label": "Speicherplatz",
+        "value": "{{free}} frei",
+        "valueTitle": "{{percent}} von {{total}} belegt"
       }
     }
   },
@@ -4089,7 +4239,9 @@
       "network": "Netzwerkfehler. Bitte überprüfen Sie Ihre Verbindung.",
       "service": "Transkriptionsdienst nicht verfügbar. Bitte versuchen Sie es erneut.",
       "general": "Fehler bei der Spracheingabe. Bitte versuchen Sie es erneut.",
-      "startError": "Fehler beim Starten der Spracheingabe. Bitte versuchen Sie es erneut."
+      "startError": "Fehler beim Starten der Spracheingabe. Bitte versuchen Sie es erneut.",
+      "insecureContext": "Der Mikrofonzugriff erfordert eine sichere Verbindung (HTTPS oder localhost).",
+      "microphoneBusy": "Das Mikrofon konnte nicht gestartet werden. Möglicherweise wird es von einer anderen Anwendung verwendet."
     }
   },
   "voiceCommands": {

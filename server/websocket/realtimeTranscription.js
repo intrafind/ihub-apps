@@ -410,10 +410,30 @@ export function diagnoseSocketError(err = {}) {
 
 /**
  * Client-facing message when the upstream rejected the WS upgrade with an HTTP
- * response (404 wrong path, 401/403 auth, 502 bad gateway…).
+ * response (404 wrong path, 401/403 auth, 502 bad gateway…). The common causes
+ * get a hint on how to fix them. A redirect on a ws:// URL almost always means
+ * the endpoint only accepts TLS (the HTTP→HTTPS redirect of a reverse proxy),
+ * which a WebSocket client cannot follow (issue #2612). The Location header is
+ * deliberately left out: it may name an internal host.
+ *
+ * @param {{statusCode?: number, statusMessage?: string}} res
+ * @param {{url?: string}} [opts] The dialled URL, to tailor the redirect hint.
  */
-export function diagnoseUnexpectedResponse(res = {}) {
-  return `Transcription service rejected the connection (HTTP ${res.statusCode} ${res.statusMessage || ''})`.trim();
+export function diagnoseUnexpectedResponse(res = {}, { url = '' } = {}) {
+  const base =
+    `Transcription service rejected the connection (HTTP ${res.statusCode} ${res.statusMessage || ''})`.trim();
+  const status = Number(res.statusCode);
+  let hint = '';
+  if (status >= 300 && status < 400) {
+    hint = /^ws:\/\//i.test(url)
+      ? 'the endpoint redirected, which usually means it requires a secure connection: use wss:// instead of ws://'
+      : 'the endpoint redirected: check the URL (host, path and trailing slash)';
+  } else if (status === 401 || status === 403) {
+    hint = 'check the API key';
+  } else if (status === 404) {
+    hint = 'check the URL path';
+  }
+  return hint ? `${base}: ${hint}` : base;
 }
 
 /**
@@ -773,7 +793,7 @@ export function bridgeConnection(clientWs, user, limiter, options = {}) {
     // The upstream rejected the WebSocket upgrade with an HTTP response
     // (e.g. 404 wrong path, 401/403 auth, 502 bad gateway) — very actionable.
     upstream.on('unexpected-response', (_req, res) => {
-      failBridge('upstream-rejected', diagnoseUnexpectedResponse(res), {
+      failBridge('upstream-rejected', diagnoseUnexpectedResponse(res, { url: cfg.url }), {
         reason: 'unexpected-response',
         statusCode: res.statusCode
       });
@@ -1313,6 +1333,14 @@ export function testRealtimeConnection(cfg = {}, timeoutMs = 8000) {
         // session.created / transcription.* / any control frame = healthy.
         finish({ ok: true, message: `Connected — received "${msg.type}"` });
       }
+    });
+
+    // The endpoint answered the upgrade with a plain HTTP response (redirect,
+    // auth failure, wrong path…). Handled here so the admin sees what it means
+    // instead of ws's bare "Unexpected server response: 308". finish() closes
+    // the still-CONNECTING socket, which aborts the request.
+    ws.on('unexpected-response', (_req, res) => {
+      finish({ ok: false, message: diagnoseUnexpectedResponse(res, { url }) });
     });
 
     ws.on('error', err => {

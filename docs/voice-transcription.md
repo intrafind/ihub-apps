@@ -211,13 +211,25 @@ Add a `transcription` block to the app config (Admin → Apps → Edit → Trans
 | Field                | Default | Meaning                                                                                     |
 | -------------------- | ------- | ------------------------------------------------------------------------------------------- |
 | `enabled`            | `false` | Master switch for the app.                                                                   |
-| `modelId`            | `""`    | Which `modelType: "transcription"` model to route to.                                        |
+| `modelId`            | `""`    | Which `modelType: "transcription"` model to route to. Empty uses the platform default (`speech.transcription.defaultModelId`, see below). |
 | `defaultEnabled`     | `true`  | Whether the per-chat **Transcription** toggle starts on. Users can flip it per conversation (like web search). When off, audio/video submissions fall through to the multimodal chat path instead. |
 | `streaming`          | `true`  | Stream partial deltas into the assistant bubble.                                             |
 | `maxDurationSeconds` | `900`   | Client-enforced cap on recording length / decoded audio duration (max `7200`).               |
 | `inputs.upload`      | `true`  | Allow transcribing uploaded audio files.                                                     |
 | `inputs.record`      | `true`  | Show the record→transcribe button.                                                          |
 | `inputs.video`       | `true`  | Allow transcribing uploaded videos (audio track extracted in the browser).                   |
+
+### Platform default transcription model
+
+Instead of picking the same model in every app, set it once under **Admin → Voice Input → Defaults → Transcription model** (`platform.json` → `speech.transcription.defaultModelId`). Apps that enable transcription but leave `modelId` empty use it; an app's own `modelId` always wins. The app editor then shows **Platform default (…)** as the model choice.
+
+```json
+{
+  "speech": {
+    "transcription": { "defaultModelId": "voxtral-mini-realtime" }
+  }
+}
+```
 
 `upload.videoUpload.maxFileSizeMB` accepts up to `2000`. Note that browsers decode the **entire** file in memory to extract PCM — for very large videos budget roughly 700 MB of tab memory per hour of 48 kHz stereo audio on top of the file itself. The `maxDurationSeconds` cap is the better lever for bounding work.
 
@@ -265,6 +277,16 @@ Dictation (microphone → input field) predates transcription models and is conf
 Both backends can point at the same vLLM deployment. The WebSocket endpoint is available when **either** the dictation backend is enabled **or** at least one enabled transcription model exists.
 
 > **Note:** the dictation backend (`platform.speech.realtime.url/model/apiKey`) and a transcription model's config are **independent copies** — the V073 migration seeds the model from the platform values once, but afterwards updating one does not update the other. When you move the vLLM endpoint, update both places.
+
+## Testing from the admin UI
+
+**Admin → Voice Input → Test voice input** runs the same code path as a chat, in the admin's own browser and with their microphone, against the **saved** configuration (save first to test changes):
+
+- **Microphone check**: input level meter and device name, with no speech service involved. It tells "the browser gets no audio" apart from "the backend returns no text".
+- **Live dictation (realtime)**: pick a service (browser, Azure or vLLM Realtime; the platform default is preselected), a language and a mode, then speak. It shows the interim and final transcript and the time to the first text.
+- **Recording (record → transcribe)**: pick an enabled transcription model (the platform default is preselected) and record up to 60 s. The clip goes over `/api/voice/realtime` exactly like the chat's record button. It shows the transcript, audio duration and processing time; on failure, the raw server code is shown too (e.g. `model-disabled`, `upstream-unreachable`).
+
+The **Test connection** buttons check the backends from the iHub server instead. For vLLM Realtime that is a WebSocket handshake; for Azure it exchanges the key for a token.
 
 ## Runtime limits and tuning
 
@@ -361,9 +383,10 @@ Notes:
 | Upgrade fails with **429**                                     | Connection caps reached (`maxConnections` / `maxConnectionsPerUser`).                             |
 | `Not permitted to use transcription model: …`                  | User's groups don't grant the model id — update `groups.json`.                                    |
 | `Transcription service unreachable: ECONNREFUSED / ENOTFOUND`  | vLLM down or wrong `url` (host/port). Test with the admin **Test connection** button.             |
+| `…rejected the connection (HTTP 301/302/307/308): … use wss://` | The endpoint only accepts TLS; its reverse proxy redirects HTTP to HTTPS, which a WebSocket cannot follow. Change `ws://` to `wss://`. |
 | `…rejected the connection (HTTP 404)`                          | Wrong upstream path — the URL must point at `/v1/realtime`.                                       |
 | `…rejected the connection (HTTP 401/403)`                      | Upstream auth — set/fix the model `apiKey`.                                                       |
-| Empty transcript / "no speech detected"                        | Clip silent or extremely short; check input device and vLLM logs.                                 |
+| Empty transcript / "no speech detected"                        | Clip silent or extremely short; check the input device with the admin **Microphone check** and the vLLM logs. |
 | Transcript stops mid-file behind a proxy                       | Proxy killing the WebSocket — verify Upgrade headers and raise `proxy_read_timeout` (see above).   |
 | `Transcription session exceeded the maximum duration`          | Session hit `maxSessionSeconds` — raise it for very long recordings.                              |
 | Chat stuck on "generating"                                     | The `{"type":"done"}` frame never arrived — usually a proxy dropping the socket after `stop`; check proxy timeouts, then server logs (`component: RealtimeSTT`). |

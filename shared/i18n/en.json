@@ -636,13 +636,13 @@
     },
     "voiceInput": {
       "title": "Voice Input (Speech-to-Text)",
-      "description": "Configure the speech-to-text backends available to apps. Enable a backend here, then select it per app under the app editor’s Speech Recognition Service.",
+      "description": "Configure the speech-to-text backends and the defaults apps use. Apps follow the defaults unless they select a service or model of their own in the app editor.",
       "loadError": "Failed to load voice input settings",
       "saveSuccess": "Voice input settings saved.",
       "saveError": "Failed to save voice input settings",
       "realtime": {
         "title": "vLLM Realtime (server-proxied)",
-        "description": "Streams microphone audio through the iHub server to a vLLM realtime endpoint (e.g. Voxtral). The URL and API key stay on the server. Select \"vLLM Realtime\" as an app’s Speech Recognition Service to use it.",
+        "description": "Streams microphone audio through the iHub server to a vLLM realtime endpoint (e.g. Voxtral). The URL and API key stay on the server. Make it the default above, or select \"vLLM Realtime\" as an app’s Speech Recognition Service.",
         "enabled": "Enable vLLM realtime transcription",
         "url": "Realtime WebSocket URL",
         "model": "Model",
@@ -661,7 +661,76 @@
         "region": "Region",
         "subscriptionKey": "Subscription Key",
         "subscriptionKeyPlaceholder": "Azure Speech key",
-        "subscriptionKeyHint": "Stored encrypted at rest and never sent to the browser. A shown value of ***REDACTED*** means a key is already set — leave it to keep it. Leave it empty for an on-prem Azure Speech container, which needs no key — set its host above."
+        "subscriptionKeyHint": "Stored encrypted at rest and never sent to the browser. A shown value of ***REDACTED*** means a key is already set — leave it to keep it. Leave it empty for an on-prem Azure Speech container, which needs no key — set its host above.",
+        "testHint": "Checks the key and region from the iHub server by requesting a token, using the values above. Speech recognition itself runs in the browser: use the live dictation test below.",
+        "test": {
+          "tokenIssued": "Key accepted: Azure issued a token for region \"{{region}}\".",
+          "keyless": "No subscription key: keyless mode. Browsers connect straight to the host, so verify it with the live dictation test below.",
+          "notConfigured": "Neither a subscription key nor a host is set. Azure cloud needs a key and region; an on-prem container needs a host.",
+          "invalidKey": "Azure rejected the key (HTTP 401): it is invalid or belongs to a different region.",
+          "tokenFailed": "Token request failed: {{detail}}"
+        }
+      },
+      "notEnabled": "not enabled",
+      "services": {
+        "browser": "Browser (Web Speech API)",
+        "azure": "Azure Speech",
+        "vllmRealtime": "vLLM Realtime (server-proxied)"
+      },
+      "defaults": {
+        "title": "Defaults",
+        "description": "Used by every app that has no voice setting of its own (Speech Recognition Service \"Platform default\", no transcription model). Apps that select a service or model keep their choice.",
+        "service": "Dictation service (microphone button)",
+        "serviceNotEnabled": "{{service}} is not enabled below. Until it is, apps that follow the platform default use the browser.",
+        "transcriptionModel": "Transcription model (recording)",
+        "noModel": "None",
+        "modelUnavailable": "This model is disabled or no longer exists, so recording fails in apps that rely on the default.",
+        "transcriptionModelHint": "Used to transcribe recordings and audio/video uploads in apps that enable transcription without choosing a model."
+      },
+      "test": {
+        "title": "Test voice input",
+        "description": "Runs in this browser with your microphone, on the same path users take in a chat, against the saved configuration.",
+        "unsaved": "You have unsaved changes. These tests use the saved configuration, so save first to test your changes.",
+        "mic": {
+          "title": "Microphone check",
+          "description": "Shows the input level of your microphone, without any speech service involved.",
+          "start": "Check microphone",
+          "stop": "Stop",
+          "level": "Input level",
+          "device": "Device: {{device}}",
+          "soundDetected": "Sound detected: the microphone works.",
+          "speak": "Speak; the bar should move."
+        },
+        "dictation": {
+          "title": "Live dictation (realtime)",
+          "description": "Speak into the microphone and watch the transcript arrive, exactly as the microphone button in a chat does.",
+          "service": "Service",
+          "language": "Language",
+          "mode": "Mode",
+          "serviceDisabled": "This backend is not enabled in the saved configuration, so the test is expected to fail.",
+          "start": "Start dictation test",
+          "stop": "Stop",
+          "starting": "Connecting…",
+          "listening": "Listening: speak now.",
+          "stopping": "Finishing…",
+          "done": "Finished.",
+          "firstResult": "First text after {{ms}} ms",
+          "success": "Dictation works.",
+          "noText": "No text was recognized. Use the microphone check to confirm the microphone picks up sound."
+        },
+        "recording": {
+          "title": "Recording (record → transcribe)",
+          "description": "Record a short clip (up to {{seconds}} seconds) and transcribe it with a transcription model, exactly like the record button in a chat.",
+          "model": "Transcription model",
+          "platformDefault": "platform default",
+          "start": "Start recording",
+          "stop": "Stop and transcribe",
+          "recording": "Recording… {{elapsed}} s",
+          "transcribing": "Transcribing…",
+          "success": "Transcribed {{duration}} s of audio in {{ms}} ms.",
+          "noText": "The model returned no text. Use the microphone check to confirm the microphone picks up sound.",
+          "empty": "Nothing was recorded."
+        }
       }
     },
     "agents": {
@@ -1986,6 +2055,7 @@
       "mcpServers": "MCP servers",
       "a2aAgents": "A2A agents",
       "telemetry": "Telemetry",
+      "systemResources": "System Resources",
       "voiceInput": "Voice Input",
       "changelog": "What's New",
       "feedback": "Feedback",
@@ -2311,6 +2381,74 @@
       "refEnvHint": "Standard OTEL_* environment variables (OTEL_EXPORTER_OTLP_ENDPOINT, OTEL_SERVICE_NAME, ...) are honored at startup.",
       "refMetricsHint": "Custom iHub metrics: ihub.app.usage, ihub.prompt.usage, ihub.errors, ihub.conversations, ihub.active.users, ihub.active.chats."
     },
+    "systemResources": {
+      "title": "System resources",
+      "description": "CPU, memory and disk space as reported by each server process on this host.",
+      "updatedAt": "Updated {{time}}",
+      "refresh": "Refresh",
+      "loadError": "Failed to load system resource information",
+      "status": {
+        "ok": "OK",
+        "warning": "Running low",
+        "critical": "Critical"
+      },
+      "paths": {
+        "contents": "Contents",
+        "data": "Data",
+        "uploads": "Uploads",
+        "logs": "Logs",
+        "temp": "Temp"
+      },
+      "storage": {
+        "title": "Disk space",
+        "description": "Filesystems holding the directories iHub writes to. Running low at {{warning}}% used, critical at {{critical}}%.",
+        "none": "No disk information available.",
+        "freeOfTotal": "{{free}} free of {{total}} ({{percent}} used)",
+        "usedLabel": "{{name}} disk usage",
+        "criticalAlert": "Disk space is critically low. Free up space or enlarge the volume soon, or saving chats, uploads and configuration will start to fail.",
+        "warningAlert": "Disk space is running low. Plan to free up space or enlarge the volume."
+      },
+      "host": {
+        "title": "Host",
+        "description": "Shared by all server processes on this machine or container.",
+        "memory": "Memory",
+        "memoryUsed": "{{used}} of {{total}} used",
+        "containerMemory": "Container memory limit (host has {{total}}).",
+        "cpu": "CPU",
+        "cores": "CPU cores",
+        "cpuLimit": "(limit {{cores}})",
+        "load": "Load average",
+        "uptime": "Host uptime",
+        "node": "Node.js",
+        "hostname": "Hostname",
+        "os": "Operating system"
+      },
+      "processes": {
+        "title": "Server processes",
+        "clusterDescription": "Cluster with {{count}} workers. CPU is a percentage of one core, averaged over the last few seconds.",
+        "standaloneDescription": "Single server process. CPU is a percentage of one core, averaged over the last few seconds.",
+        "primary": "Primary",
+        "standalone": "Server",
+        "worker": "Worker {{index}}",
+        "process": "Process",
+        "pid": "PID",
+        "cpu": "CPU",
+        "memory": "Memory (RSS)",
+        "heap": "Heap used / limit",
+        "eventLoop": "Event-loop delay",
+        "uptime": "Uptime",
+        "current": "served this page",
+        "delay": "{{mean}} ms (max {{max}})",
+        "missing": "Did not respond. The worker may be restarting or overloaded.",
+        "missingAlert": "{{count}} of {{total}} workers did not report back."
+      }
+    },
+    "storageAlert": {
+      "warning": "Disk space is running low: {{free}} free ({{percent}} used).",
+      "critical": "Disk space is critically low: {{free}} free ({{percent}} used).",
+      "viewDetails": "View system resources",
+      "dismiss": "Dismiss"
+    },
     "home": {
       "sections": {
         "loggingDesc": "Configure logging levels, components, metadata, and debug settings",
@@ -2512,6 +2650,11 @@
         "feedbackDesc": "Let users rate this app’s responses with stars and an optional comment",
         "enableFeedback": "Enable response feedback",
         "feedbackNote": "When disabled, the star rating is hidden under this app’s responses and the feedback API rejects submissions for it. The platform-level feedback feature must also be enabled for the rating to appear; all of it is also manageable under Admin → Feedback.",
+        "platformDefaultService": "Platform default ({{service}})",
+        "browserService": "Browser (Web Speech API)",
+        "platformDefaultServiceHint": "Follows the default set under Admin → Voice Input, including later changes.",
+        "platformDefaultTranscriptionModel": "Platform default ({{model}})",
+        "transcriptionModelRequired": "Select a model, or set a default transcription model under Admin → Voice Input.",
         "websearchMaxPageReads": "Max Page Reads per Answer",
         "websearchMaxPageReadsDesc": "Caps how many pages the model may open with the page reader for one answer. Pages the search itself fetches for its excerpts do not count. 1–50, default 5."
       },
@@ -3091,6 +3234,13 @@
         "maxRunChatsPerTask": "Run chats kept per task",
         "maxInstructionLength": "Longest instructions (characters)",
         "maxRunMinutes": "Longest run (minutes)"
+      }
+    },
+    "overview": {
+      "storage": {
+        "label": "Disk space",
+        "value": "{{free}} free",
+        "valueTitle": "{{percent}} of {{total}} used"
       }
     }
   },
@@ -4124,7 +4274,9 @@
       "network": "Network error. Please check your connection.",
       "service": "Transcription service unavailable. Please try again.",
       "general": "Voice input error. Please try again.",
-      "startError": "Error starting voice input. Please try again."
+      "startError": "Error starting voice input. Please try again.",
+      "insecureContext": "Microphone access requires a secure connection (HTTPS or localhost).",
+      "microphoneBusy": "The microphone could not be started. It may be in use by another application."
     }
   },
   "voiceCommands": {
