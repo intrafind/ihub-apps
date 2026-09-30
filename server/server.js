@@ -54,6 +54,10 @@ import registerScheduledTaskRoutes from './routes/scheduledTasks.js';
 import runLog from './services/loop/RunLog.js';
 import { startChatRetentionSweep, stopChatRetentionSweep } from './services/chat/chatRetention.js';
 import {
+  startGeneratedFileSweep,
+  stopGeneratedFileSweep
+} from './services/documents/generatedFiles.js';
+import {
   startWorkflowStateRetention,
   stopWorkflowStateRetention
 } from './services/workflow/workflowRetention.js';
@@ -759,6 +763,10 @@ if (cluster.isPrimary && workerCount > 1) {
     // independent of `runLog.cleanupEnabled`. Same ownership guard, though —
     // two workers sweeping in parallel would only race each other's deletes.
     startChatRetentionSweep();
+    // Files a tool generated for a user (a PDF from `create_pdf`) are not tied
+    // to a chat, so they age out on their own sweep, independent of whether
+    // durable chats are on. Same window as chats: `platform.chats.retentionDays`.
+    startGeneratedFileSweep();
     // Terminal workflow state accumulated forever before this: a completed
     // run kept its full state document, its run summary and — for a
     // sub-workflow — a state nothing ever deleted. Same daily cadence and the
@@ -1118,6 +1126,7 @@ if (cluster.isPrimary && workerCount > 1) {
     // Stop the retention sweeps before storage goes away, so a tick cannot
     // start against a provider that is being torn down.
     stopChatRetentionSweep();
+    stopGeneratedFileSweep();
     stopWorkflowStateRetention();
     // Conversation state coalesces its writes on a timer to keep document I/O
     // off the streaming path; drain what is still buffered, or a chat resumes

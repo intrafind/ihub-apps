@@ -26,8 +26,9 @@ export default function registerGeneratedFileRoutes(app) {
       res.setHeader('Content-Length', String(file.data.length));
       res.setHeader('Content-Disposition', buildContentDisposition(file.name || 'download'));
       res.setHeader('X-Content-Type-Options', 'nosniff');
-      // Owner-scoped and immutable (a fresh id per file).
-      res.setHeader('Cache-Control', 'private, max-age=86400, immutable');
+      // Never cached: the browser's HTTP cache is not partitioned by the
+      // signed-in user, so a cached file could outlive a switch of accounts.
+      res.setHeader('Cache-Control', 'no-store');
       return res.send(file.data);
     } catch (error) {
       return sendInternalError(res, error, 'download generated file');

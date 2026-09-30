@@ -30,7 +30,8 @@ import {
   getGeneratedFile,
   ownerKeyOf,
   safeFileName,
-  saveGeneratedFile
+  saveGeneratedFile,
+  sweepExpiredGeneratedFiles
 } from '../services/documents/generatedFiles.js';
 import { ArtifactRepository } from '../services/artifacts/ArtifactRepository.js';
 import { FilesystemStorageProvider } from '../storage/providers/filesystem/index.js';
@@ -261,6 +262,46 @@ describe('generated file store', () => {
       assert.equal(await getGeneratedFile(null, saved.id, { repository }), null);
       assert.equal(await getGeneratedFile(owner, '../x', { repository }), null);
     } finally {
+      await provider.shutdown();
+      await fs.rm(baseDir, { recursive: true, force: true });
+    }
+  });
+
+  it('drops files past the retention window, on download and in the daily sweep', async () => {
+    const baseDir = await fs.mkdtemp(path.join(os.tmpdir(), 'ihub-generated-'));
+    const provider = new FilesystemStorageProvider({ baseDir, flushIntervalMs: 25 });
+    await provider.initialize();
+    const repository = new ArtifactRepository({
+      documents: provider.documents,
+      blobs: provider.blobs,
+      policy: () => ({ enabled: true })
+    });
+    const platform = configCache.getPlatform;
+    const save = user =>
+      saveGeneratedFile({
+        user,
+        data: Buffer.from('%PDF-1.3'),
+        mimeType: 'application/pdf',
+        name: 'old',
+        repository
+      });
+    try {
+      const alice = { id: 'alice' };
+      const bob = { id: 'bob' };
+      const aliceFile = await save(alice);
+      const bobFile = await save(bob);
+      // A window of a few milliseconds: both files are past it after a pause.
+      configCache.getPlatform = () => ({ chats: { retentionDays: 0.00000005 } });
+      await new Promise(resolve => setTimeout(resolve, 30));
+      assert.equal(await getGeneratedFile(alice, aliceFile.id, { repository }), null);
+      assert.equal(await sweepExpiredGeneratedFiles({ repository }), 1, "bob's file is swept");
+      configCache.getPlatform = () => ({ chats: { retentionDays: 0 } });
+      assert.equal(await getGeneratedFile(bob, bobFile.id, { repository }), null);
+      const kept = await save(bob);
+      assert.equal(await sweepExpiredGeneratedFiles({ repository }), 0, 'zero keeps files');
+      assert.ok(await getGeneratedFile(bob, kept.id, { repository }));
+    } finally {
+      configCache.getPlatform = platform;
       await provider.shutdown();
       await fs.rm(baseDir, { recursive: true, force: true });
     }

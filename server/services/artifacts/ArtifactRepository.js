@@ -413,6 +413,34 @@ export class ArtifactRepository {
   }
 
   /**
+   * Remove every artifact of one scope type created before a cutoff, across
+   * all scopes of that type.
+   *
+   * The age sweep for artifacts no owner's lifecycle removes: a `user`
+   * scope's files are not tied to a chat, so nothing else deletes them.
+   *
+   * @param {string} scopeType - One of {@link ARTIFACT_SCOPES}.
+   * @param {number} cutoffMs - Epoch milliseconds; older artifacts go.
+   * @returns {Promise<number>} How many artifacts were removed.
+   */
+  async deleteCreatedBefore(scopeType, cutoffMs) {
+    if (!this.isAvailable() || !ARTIFACT_SCOPES.includes(scopeType)) return 0;
+    const docs = await this._scanPrefix(
+      `${scopeType}${KEY_SEPARATOR}`,
+      { type: scopeType },
+      { includeData: true }
+    );
+    let removed = 0;
+    for (const doc of docs) {
+      const created = Date.parse(doc.data?.createdAt || '');
+      if (doc.data?.scope?.type !== scopeType || !Number.isFinite(created)) continue;
+      if (created >= cutoffMs) continue;
+      if (await this._delete(doc.key, doc.data.scope)) removed += 1;
+    }
+    return removed;
+  }
+
+  /**
    * The payload keys of one scope, by key prefix.
    *
    * @param {{type: string, id: string}} scope - Validated scope.
@@ -496,6 +524,21 @@ export class ArtifactRepository {
    */
   async _scan(scope, { includeData = false } = {}) {
     const prefix = scopePrefix(scope);
+    const docs = await this._scanPrefix(prefix, scope, { includeData });
+    return docs.filter(doc => !doc.key.slice(prefix.length).includes(KEY_SEPARATOR));
+  }
+
+  /**
+   * The artifact documents under one key prefix.
+   *
+   * @param {string} prefix - Key prefix.
+   * @param {{type: string, id?: string}} scope - For the log line.
+   * @param {Object} [options]
+   * @param {boolean} [options.includeData=false]
+   * @returns {Promise<Array<Object>>} Documents, empty when the walk failed.
+   * @private
+   */
+  async _scanPrefix(prefix, scope, { includeData = false } = {}) {
     const docs = [];
     try {
       if (this.documents.supportsScan) {
@@ -523,7 +566,7 @@ export class ArtifactRepository {
       });
       return [];
     }
-    return docs.filter(doc => !doc.key.slice(prefix.length).includes(KEY_SEPARATOR));
+    return docs;
   }
 }
 

@@ -28,8 +28,7 @@ function GeneratedFileCard({ file, readOnly = false }) {
     setState('loading');
     try {
       const blob = await fetchGeneratedFile(file.id);
-      saveBlobAs(blob, file.name);
-      setState('idle');
+      setState(saveBlobAs(blob, file.name) ? 'idle' : 'error');
     } catch (error) {
       setState(error?.response?.status === 404 ? 'missing' : 'error');
     }

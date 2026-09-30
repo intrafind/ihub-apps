@@ -81,20 +81,32 @@ function retentionDays() {
 }
 
 /**
+ * Epoch milliseconds before which a generated file has expired, or null when
+ * files are kept indefinitely (`retentionDays` zero or less).
+ *
+ * @returns {number|null}
+ */
+function retentionCutoff() {
+  const days = retentionDays();
+  return days > 0 ? Date.now() - days * DAY_MS : null;
+}
+
+function isExpired(entry, cutoff = retentionCutoff()) {
+  if (cutoff === null) return false;
+  const created = Date.parse(entry?.createdAt || '');
+  return Number.isFinite(created) && created < cutoff;
+}
+
+/**
  * Remove an owner's files past the retention window and beyond the cap.
  * Best effort: a failed sweep never fails the save that triggered it.
  */
 async function sweep(repository, scope) {
   try {
     const entries = await repository.list(scope); // newest first
-    const days = retentionDays();
-    const cutoff = days > 0 ? Date.now() - days * DAY_MS : null;
+    const cutoff = retentionCutoff();
     const expired = entries
-      .filter((entry, index) => {
-        if (index >= MAX_FILES_PER_OWNER) return true;
-        const created = Date.parse(entry.createdAt || '');
-        return cutoff !== null && Number.isFinite(created) && created < cutoff;
-      })
+      .filter((entry, index) => index >= MAX_FILES_PER_OWNER || isExpired(entry, cutoff))
       .map(entry => entry.id);
     if (expired.length) await repository.deleteMany(scope, expired);
   } catch (error) {
@@ -178,7 +190,61 @@ export async function getGeneratedFile(
 ) {
   if (!isValidId(fileId) || !/^[a-f0-9]{32}$/.test(fileId)) return null;
   if (!repository.isAvailable()) return null;
-  return repository.get(scopeOf(user), fileId);
+  const scope = scopeOf(user);
+  const file = await repository.get(scope, fileId);
+  if (!file) return null;
+  // Past the retention window a file is gone, whether or not the daily sweep
+  // has reached it yet.
+  if (isExpired(file)) {
+    await repository.deleteMany(scope, [fileId]).catch(() => {});
+    return null;
+  }
+  return file;
+}
+
+/**
+ * Remove every generated file past the retention window, for all owners.
+ *
+ * @param {Object} [options]
+ * @param {import('../artifacts/ArtifactRepository.js').ArtifactRepository} [options.repository]
+ * @returns {Promise<number>} How many files were removed.
+ */
+export async function sweepExpiredGeneratedFiles({ repository = getArtifactRepository() } = {}) {
+  const cutoff = retentionCutoff();
+  if (cutoff === null || !repository.isAvailable()) return 0;
+  const removed = await repository.deleteCreatedBefore(SCOPE_TYPE, cutoff);
+  if (removed > 0) {
+    logger.info('Expired generated files removed', { component: COMPONENT, removed });
+  }
+  return removed;
+}
+
+let sweepTimer = null;
+
+/**
+ * Sweep expired generated files once now and then daily. Owners that never
+ * generate another file would otherwise keep theirs past the window.
+ *
+ * @param {Object} [options]
+ * @param {number} [options.intervalMs]
+ * @returns {() => void} Stops the sweep.
+ */
+export function startGeneratedFileSweep({ intervalMs = DAY_MS } = {}) {
+  if (sweepTimer) return stopGeneratedFileSweep;
+  const tick = () =>
+    sweepExpiredGeneratedFiles().catch(error =>
+      logger.warn('Generated file sweep failed', { component: COMPONENT, error: error.message })
+    );
+  sweepTimer = setInterval(tick, intervalMs);
+  if (typeof sweepTimer.unref === 'function') sweepTimer.unref();
+  tick();
+  return stopGeneratedFileSweep;
+}
+
+/** Stop the daily sweep. */
+export function stopGeneratedFileSweep() {
+  if (sweepTimer) clearInterval(sweepTimer);
+  sweepTimer = null;
 }
 
 /**
