@@ -12,6 +12,8 @@ export const auditActions = [
   'update',
   'delete',
   'toggle',
+  // Starting something by hand: a manual retention run, a scheduled task run.
+  'execute',
   'import',
   'export',
   'login',

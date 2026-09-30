@@ -11,6 +11,9 @@ import PromptsList from './features/prompts/pages/PromptsList';
 import AppRouterWrapper from './features/apps/components/AppRouterWrapper';
 const ChatHistoryPage = lazyWithRetry(() => import('./features/chat/pages/ChatHistoryPage'));
 const SharedChatPage = lazyWithRetry(() => import('./features/chat/pages/SharedChatPage'));
+const TasksPage = lazyWithRetry(() => import('./features/tasks/pages/TasksPage'));
+const TaskDetailPage = lazyWithRetry(() => import('./features/tasks/pages/TaskDetailPage'));
+const TaskEditorPage = lazyWithRetry(() => import('./features/tasks/pages/TaskEditorPage'));
 // Lazy load workflow components
 const WorkflowsPage = lazyWithRetry(() => import('./features/workflows/pages/WorkflowsPage'));
 const SetupWizard = lazyWithRetry(() => import('./features/setup/SetupWizard'));
@@ -123,6 +126,9 @@ const AdminVoiceInputPage = lazyWithRetry(
   () => import('./features/admin/pages/AdminVoiceInputPage')
 );
 const AdminTelemetryPage = lazyWithRetry(() => import('./features/admin/pages/AdminTelemetryPage'));
+const AdminScheduledTasksPage = lazyWithRetry(
+  () => import('./features/admin/pages/AdminScheduledTasksPage')
+);
 const AdminChatHistoryPage = lazyWithRetry(
   () => import('./features/admin/pages/AdminChatHistoryPage')
 );
@@ -184,6 +190,7 @@ import { AuthProvider } from './shared/contexts/AuthContext';
 import MarkdownRenderer from './shared/components/MarkdownRenderer';
 import useFeatureFlags from './shared/hooks/useFeatureFlags';
 import { useChatHistoryRouteState } from './shared/hooks/useChats';
+import { useScheduledTasksRouteState } from './features/tasks/hooks/useScheduledTasks';
 // Lazy load Teams features (only needed in Microsoft Teams environment)
 const TeamsWrapper = lazyWithRetry(() => import('./features/teams/TeamsWrapper'));
 const TeamsAuthStart = lazyWithRetry(() => import('./features/teams/TeamsAuthStart'));
@@ -219,6 +226,20 @@ function ChatHistoryRoute() {
   return (
     <Suspense fallback={<AdminLoading />}>
       <ChatHistoryPage />
+    </Suspense>
+  );
+}
+
+// Scheduled tasks. Gated inside the element for the same reason as
+// ChatHistoryRoute: the feature state comes from the platform config and the
+// auth status, both of which only resolve inside the providers.
+function ScheduledTasksRoute({ component: Component }) {
+  const state = useScheduledTasksRouteState();
+  if (state === 'loading') return <AdminLoading />;
+  if (state === 'unavailable') return <NotFound />;
+  return (
+    <Suspense fallback={<AdminLoading />}>
+      <Component />
     </Suspense>
   );
 }
@@ -423,6 +444,17 @@ function App() {
           {/* Chat history preview — the element gates on the feature flag (see
               ChatHistoryRoute); the route itself is always registered. */}
           <Route path="chats" element={<ChatHistoryRoute />} />
+          {/* Scheduled tasks — gated in the element (see ScheduledTasksRoute). */}
+          <Route path="tasks" element={<ScheduledTasksRoute component={TasksPage} />} />
+          <Route path="tasks/new" element={<ScheduledTasksRoute component={TaskEditorPage} />} />
+          <Route
+            path="tasks/:taskId"
+            element={<ScheduledTasksRoute component={TaskDetailPage} />}
+          />
+          <Route
+            path="tasks/:taskId/edit"
+            element={<ScheduledTasksRoute component={TaskEditorPage} />}
+          />
           {uiConfig?.promptsList?.enabled !== false &&
             featureFlags.isEnabled('promptsLibrary', true) && (
               <Route path="prompts" element={<SafePromptsList />} />
@@ -760,6 +792,10 @@ function App() {
                 element={<LazyAdminRoute component={AdminChatHistoryPage} />}
               />
             )}
+            <Route
+              path="scheduled-tasks"
+              element={<LazyAdminRoute component={AdminScheduledTasksPage} />}
+            />
             {showAdminPage('system') && (
               <Route
                 path="voice-input"

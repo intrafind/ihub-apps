@@ -9,7 +9,8 @@
         "prompts": ["*"],
         "models": ["*"],
         "skills": ["*"],
-        "adminAccess": true
+        "adminAccess": true,
+        "scheduledTasks": true
       },
       "mappings": ["IT-Admin", "IT-Admins", "Platform-Admin", "Platform-Admins"]
     },
@@ -22,7 +23,8 @@
         "prompts": ["*"],
         "models": ["*"],
         "skills": ["*"],
-        "adminAccess": false
+        "adminAccess": false,
+        "scheduledTasks": true
       },
       "mappings": ["Employees", "Staff"]
     },
@@ -35,7 +37,8 @@
         "prompts": ["*"],
         "models": ["gemini-flash-latest"],
         "skills": [],
-        "adminAccess": false
+        "adminAccess": false,
+        "scheduledTasks": false
       },
       "mappings": ["anonymous", "public"]
     },
@@ -49,7 +52,8 @@
         "prompts": ["*"],
         "models": ["*"],
         "skills": ["*"],
-        "adminAccess": false
+        "adminAccess": false,
+        "scheduledTasks": true
       },
       "mappings": []
     }

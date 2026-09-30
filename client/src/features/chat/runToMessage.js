@@ -226,6 +226,11 @@ export function projectRunToMessage(run, options = {}) {
   // MCP servers with per-user sign-in the user has to connect (one per server).
   const mcpAuthRequired = buildMcpAuthPrompts(run);
   if (mcpAuthRequired) extras.mcpAuthRequired = mcpAuthRequired;
+  // Scheduled tasks a scheduling tool proposed: confirmation cards.
+  const scheduledTaskProposals = (run.tools || [])
+    .map(tool => tool.scheduledTaskProposal)
+    .filter(proposal => proposal && typeof proposal.proposalId === 'string');
+  if (scheduledTaskProposals.length) extras.scheduledTaskProposals = scheduledTaskProposals;
 
   // ── completion metadata ──────────────────────────────────────────────
   if (finished) {

@@ -200,6 +200,18 @@ export const RUNTIME_NAMESPACES = Object.freeze({
   provenanceHashes: 'provenance-hashes',
   /** Detection log: metadata of each verification (never submitted content). */
   provenanceDetections: 'provenance-detections',
+  /**
+   * Scheduled tasks — one document per task, owned by the task owner's
+   * principal id (the id their chats are owned by), so "my tasks" is an owner
+   * index read.
+   */
+  scheduledTasks: 'scheduled-tasks',
+  /**
+   * Runs of scheduled tasks — one document per run, keyed
+   * `<taskId>__<runId>` (run ids sort newest first) and owned by the same
+   * principal, so a task's history is a prefix listing.
+   */
+  scheduledTaskRuns: 'scheduled-task-runs',
   /** One-time import markers, shared by every runtime store that has one. */
   runtimeImports: 'runtime-imports'
 });

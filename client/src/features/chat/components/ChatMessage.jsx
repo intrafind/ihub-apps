@@ -64,6 +64,8 @@ import { findImageProvenance, isMessageBadgeEnabled } from '../utils/aiTranspare
 import ExportDialog from './ExportDialog';
 import McpAppViews from '../mcpApps/McpAppViews';
 import McpConnectCards from '../mcpApps/McpConnectCard';
+import ScheduledTaskProposalCards from '../../tasks/components/ScheduledTaskProposalCard';
+import ScheduleThisAction from '../../tasks/components/ScheduleThisAction';
 import './ChatMessage.css';
 
 function ChatMessage({
@@ -106,6 +108,8 @@ function ChatMessage({
   // A shared, read-only transcript: no delete, no feedback, no edits. The
   // viewer is not the owner and none of those actions could reach the chat.
   readOnly = false,
+  // The tools enabled in the chat right now, for "Schedule this…".
+  scheduleEnabledTools = null,
   // What an MCP App view in this answer may do in the composer:
   // `{ sendMessage(text), isProcessing }`. Surfaces without a composer omit it.
   mcpAppHost = null,
@@ -868,6 +872,13 @@ function ChatMessage({
           />
         )}
         {/* MCP servers with per-user sign-in the answer's tools could not use yet. */}
+        {!isUser && message.scheduledTaskProposals?.length > 0 && (
+          <ScheduledTaskProposalCards
+            proposals={message.scheduledTaskProposals}
+            chatId={chatId}
+            readOnly={readOnly}
+          />
+        )}
         {!isUser && message.mcpAuthRequired?.length > 0 && (
           <McpConnectCards prompts={message.mcpAuthRequired} readOnly={readOnly} />
         )}
@@ -1272,6 +1283,14 @@ function ChatMessage({
               >
                 {linkCopied ? <Icon name="check" size="sm" /> : <Icon name="link" size="sm" />}
               </button>
+
+              <ScheduleThisAction
+                content={
+                  typeof message.rawContent === 'string' ? message.rawContent : message.content
+                }
+                appId={appId}
+                enabledTools={scheduleEnabledTools}
+              />
             </>
           )}
 

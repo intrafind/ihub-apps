@@ -50,6 +50,7 @@ import registerRunRoutes from './routes/runs.js';
 // the durable-chat surface at `/api/chats`.
 import registerStoredChatRoutes from './routes/chats.js';
 import registerChatShareRoutes from './routes/chatShares.js';
+import registerScheduledTaskRoutes from './routes/scheduledTasks.js';
 import runLog from './services/loop/RunLog.js';
 import { startChatRetentionSweep, stopChatRetentionSweep } from './services/chat/chatRetention.js';
 import {
@@ -718,6 +719,7 @@ if (cluster.isPrimary && workerCount > 1) {
   registerRunRoutes(app);
   registerStoredChatRoutes(app);
   registerChatShareRoutes(app);
+  registerScheduledTaskRoutes(app);
   // An answered workflow checkpoint resumes its execution (one answer endpoint);
   // overdue interactions expire on a sweep (an expired checkpoint fails its run).
   registerCheckpointResume();
@@ -1061,7 +1063,29 @@ if (cluster.isPrimary && workerCount > 1) {
     });
   }
 
+  // The scheduler: one ticker per worker, acting only on the scheduler-lock
+  // owner. It fires workflow schedule triggers (read from the workflow config
+  // on every tick, so edits apply without a restart) and users' scheduled
+  // tasks. After the workflow block above, so the engine is attached before
+  // the first schedule trigger can fire.
+  try {
+    const { initScheduler } = await import('./services/scheduler/index.js');
+    initScheduler();
+  } catch (error) {
+    logger.error({
+      component: 'Server',
+      message: `Scheduler failed to start: ${error.message}`
+    });
+  }
+
   const handleShutdownSignal = async () => {
+    // Stop the scheduler first, so no new run starts while the rest shuts down.
+    try {
+      const { stopScheduler } = await import('./services/scheduler/index.js');
+      stopScheduler();
+    } catch {
+      // The scheduler may not have started
+    }
     // Stop all workflow triggers before shutdown
     try {
       const { resetTriggerManager } =

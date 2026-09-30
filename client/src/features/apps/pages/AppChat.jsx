@@ -65,6 +65,7 @@ import { saveAppSettings, loadAppSettings } from '../../../utils/appSettings';
 import { processDocumentFile, decodeAudioFileToBuffer } from '../../upload/utils/fileProcessing';
 import { transcribeAudioBuffer } from '../../../utils/transcribeAudioBuffer';
 import { AudioBufferRecorder } from '../../../utils/audioRecorder';
+import ScheduledRunBanner from '../../tasks/components/ScheduledRunBanner';
 
 /**
  * Initialize variables with default values from app configuration
@@ -334,6 +335,9 @@ function AppChat({ preloadedApp = null, embedded = false, appId: embeddedAppId =
   // to null the moment the chat changes so one chat's setup never leaks into
   // the next.
   const [chatSettings, setChatSettings] = useState(null);
+  // How the open chat came about (`origin` on the stored chat). A scheduled
+  // run's chat shows the run header — task, time, status, approval.
+  const [chatOrigin, setChatOrigin] = useState(null);
 
   // Shared app settings hook
   const {
@@ -831,6 +835,7 @@ function AppChat({ preloadedApp = null, embedded = false, appId: embeddedAppId =
     // leaving the old ones in place would answer the new chat with the
     // previous one's tools.
     setChatSettings(null);
+    setChatOrigin(null);
   }, [chatId]);
 
   // The hydration attempt that owns the transcript, as `<chatId>|<mode>`. Keyed
@@ -899,6 +904,7 @@ function AppChat({ preloadedApp = null, embedded = false, appId: embeddedAppId =
         // The variables the chat was given, over the app's defaults: the
         // panel shows them again, and a start form's chat continues with them.
         if (result?.chat?.variables) setVariables(v => ({ ...v, ...result.chat.variables }));
+        setChatOrigin(result?.chat?.origin || null);
         // Opening a chat is what "seen" means: this same GET cleared the
         // chat's unseen flag server-side, so every list already on screen is
         // now showing a badge the server no longer reports.
@@ -964,6 +970,26 @@ function AppChat({ preloadedApp = null, embedded = false, appId: embeddedAppId =
 
     return undefined;
   }, [serverBackedChat, app, chatId, messages.length, loadServerMessages, finishHydration]);
+
+  // A scheduled run that was waiting on this chat's approval finished on the
+  // server: its answer is in the store, not on screen, so read it back — unless
+  // the user moved to another chat meanwhile, whose transcript this is not.
+  const currentChatIdRef = useRef(chatId);
+  useEffect(() => {
+    currentChatIdRef.current = chatId;
+  }, [chatId]);
+  const reloadScheduledRunChat = useCallback(async () => {
+    if (!chatId) return;
+    const requestedChatId = chatId;
+    try {
+      const result = await fetchChat(requestedChatId);
+      if (currentChatIdRef.current !== requestedChatId) return;
+      loadServerMessages(Array.isArray(result?.messages) ? result.messages : []);
+      invalidateChatsCache();
+    } catch (err) {
+      console.warn('Could not re-read the chat after its scheduled run:', err.message);
+    }
+  }, [chatId, loadServerMessages]);
 
   // A finished turn is what changes the chat list: a brand-new chat appears in
   // it, an existing one moves to the top and may have gained a derived title,
@@ -2701,6 +2727,10 @@ function AppChat({ preloadedApp = null, embedded = false, appId: embeddedAppId =
         onOpenCanvas={embedded ? () => openInNewTab(`/apps/${appId}/canvas`) : undefined}
       />
 
+      {chatOrigin?.createdVia === 'scheduled-task' && (
+        <ScheduledRunBanner origin={chatOrigin} onRunChanged={reloadScheduledRunChat} />
+      )}
+
       {showVariablesPanel && showParameters && (
         <div
           className="md:hidden fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4"
@@ -2801,6 +2831,7 @@ function AppChat({ preloadedApp = null, embedded = false, appId: embeddedAppId =
                   {messages.length > 0 ? (
                     <div className="w-full h-full overflow-y-auto bg-gray-50 dark:bg-gray-800/50 rounded-lg flex flex-col">
                       <ChatMessageList
+                        scheduleEnabledTools={effectiveEnabledTools}
                         messages={messages}
                         mcpAppHost={mcpAppHost}
                         outputFormat={selectedOutputFormat}
@@ -2856,6 +2887,7 @@ function AppChat({ preloadedApp = null, embedded = false, appId: embeddedAppId =
                   {messages.length > 0 ? (
                     <div className="mb-8">
                       <ChatMessageList
+                        scheduleEnabledTools={effectiveEnabledTools}
                         messages={messages}
                         mcpAppHost={mcpAppHost}
                         outputFormat={selectedOutputFormat}
@@ -2904,6 +2936,7 @@ function AppChat({ preloadedApp = null, embedded = false, appId: embeddedAppId =
               <div className="flex flex-col h-full md:hidden">
                 <div className="flex-1 overflow-hidden flex flex-col">
                   <ChatMessageList
+                    scheduleEnabledTools={effectiveEnabledTools}
                     messages={messages}
                     mcpAppHost={mcpAppHost}
                     outputFormat={selectedOutputFormat}
@@ -2938,6 +2971,7 @@ function AppChat({ preloadedApp = null, embedded = false, appId: embeddedAppId =
               {/* Desktop layout: normal flex column */}
               <div className="hidden md:flex md:flex-col md:h-full">
                 <ChatMessageList
+                  scheduleEnabledTools={effectiveEnabledTools}
                   messages={messages}
                   mcpAppHost={mcpAppHost}
                   outputFormat={selectedOutputFormat}

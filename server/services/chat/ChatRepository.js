@@ -169,7 +169,9 @@ const OPTIONAL_MESSAGE_FIELDS = [
   'mcpAuthRequired',
   // EU AI Act provenance of an assistant answer: content id, hash, model,
   // marking status — never content (see services/provenance/ProvenanceStore.js).
-  'provenance'
+  'provenance',
+  // Confirmation cards for proposed scheduled tasks (see scheduler/tasks/proposals.js).
+  'scheduledTaskProposals'
 ];
 
 /** Variables kept per message, and the longest value kept. */

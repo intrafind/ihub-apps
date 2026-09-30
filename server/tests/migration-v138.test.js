@@ -1,8 +1,12 @@
 #!/usr/bin/env node
 
 /**
- * Migration V138 specs — seeding `platform.aiTransparency` and the per-model
- * `contentMarking` block (EU AI Act Art. 50, issue #2563).
+ * Migration V138 specs — seeding `platform.scheduledTasks` and the
+ * `scheduledTasks` group permission.
+ *
+ * Defaults land where they are missing; every value an admin already set is
+ * left exactly as it is, custom groups are not granted anything, and
+ * `features.json` is never written.
  */
 import fs from 'node:fs/promises';
 import os from 'node:os';
@@ -15,10 +19,9 @@ import {
   precondition,
   version,
   description,
-  AI_TRANSPARENCY_DEFAULTS
-} from '../migrations/V138__add_ai_transparency.js';
+  SCHEDULED_TASK_DEFAULTS
+} from '../migrations/V138__scheduled_tasks_defaults.js';
 import { setDefault } from '../migrations/utils.js';
-import { DEFAULT_AI_TRANSPARENCY } from '../../shared/aiTransparency.js';
 
 let baseDir;
 
@@ -36,39 +39,25 @@ function makeCtx(dir) {
       await fs.mkdir(path.dirname(path.join(dir, rel)), { recursive: true });
       await fs.writeFile(path.join(dir, rel), JSON.stringify(data, null, 2), 'utf8');
     },
-    listFiles: async (rel, _glob) =>
-      (await fs.readdir(path.join(dir, rel))).filter(f => f.endsWith('.json')),
     setDefault,
     log: m => logs.push(['info', m]),
     warn: m => logs.push(['warn', m])
   };
 }
 
-async function seed({ platform = {}, models = {} } = {}) {
+async function seed({ platform = null, groups = null } = {}) {
   const dir = await fs.mkdtemp(path.join(baseDir, 'v138-'));
+  await fs.mkdir(path.join(dir, 'config'), { recursive: true });
   if (platform !== null) {
-    await fs.mkdir(path.join(dir, 'config'), { recursive: true });
     await fs.writeFile(path.join(dir, 'config/platform.json'), JSON.stringify(platform), 'utf8');
   }
-  if (models !== null) {
-    await fs.mkdir(path.join(dir, 'models'), { recursive: true });
-    for (const [id, model] of Object.entries(models)) {
-      await fs.writeFile(path.join(dir, `models/${id}.json`), JSON.stringify(model), 'utf8');
-    }
+  if (groups !== null) {
+    await fs.writeFile(path.join(dir, 'config/groups.json'), JSON.stringify(groups), 'utf8');
   }
   return { dir, ctx: makeCtx(dir) };
 }
 
-function flatten(obj, prefix = '') {
-  const out = {};
-  for (const [key, value] of Object.entries(obj)) {
-    const p = prefix ? `${prefix}.${key}` : key;
-    if (value && typeof value === 'object' && !Array.isArray(value))
-      Object.assign(out, flatten(value, p));
-    else out[p] = value;
-  }
-  return out;
-}
+const read = async (dir, rel) => JSON.parse(await fs.readFile(path.join(dir, rel), 'utf8'));
 
 before(async () => {
   baseDir = await fs.mkdtemp(path.join(os.tmpdir(), 'ihub-migration-v138-'));
@@ -81,85 +70,70 @@ after(async () => {
 describe('V138 identity', () => {
   it('is numbered and described as its file name says', () => {
     assert.equal(version, '138');
-    assert.equal(description, 'add_ai_transparency');
+    assert.equal(description, 'scheduled_tasks_defaults');
   });
 
-  it('runs when platform.json or the models directory exists', async () => {
-    const { ctx: none } = await seed({ platform: null, models: null });
-    assert.equal(await precondition(none), false);
-    const { ctx: both } = await seed();
-    assert.equal(await precondition(both), true);
-  });
-
-  it('seeds exactly the shared defaults', () => {
-    assert.deepEqual(AI_TRANSPARENCY_DEFAULTS, flatten(DEFAULT_AI_TRANSPARENCY));
+  it('runs when either file exists', async () => {
+    assert.equal(await precondition((await seed()).ctx), false);
+    assert.equal(await precondition((await seed({ platform: {} })).ctx), true);
+    assert.equal(await precondition((await seed({ groups: { groups: {} } })).ctx), true);
   });
 });
 
-describe('V138 platform defaults', () => {
-  it('adds the whole section to an installation that has none', async () => {
-    const { ctx } = await seed({ platform: { auth: { mode: 'local' } } });
+describe('V138 platform.scheduledTasks', () => {
+  it('seeds every default into an empty platform config', async () => {
+    const { dir, ctx } = await seed({ platform: {} });
     await up(ctx);
-    const platform = await ctx.readJson('config/platform.json');
-    assert.deepEqual(flatten(platform.aiTransparency), AI_TRANSPARENCY_DEFAULTS);
-    assert.deepEqual(platform.auth, { mode: 'local' });
+    const platform = await read(dir, 'config/platform.json');
+    assert.deepEqual(platform.scheduledTasks, { ...SCHEDULED_TASK_DEFAULTS });
   });
 
   it('keeps values an admin already set', async () => {
-    const { ctx } = await seed({
-      platform: {
-        aiTransparency: { detection: { access: 'public' }, images: { watermark: 'none' } }
-      }
+    const { dir, ctx } = await seed({
+      platform: { scheduledTasks: { maxTasksPerUser: 3, enabled: false } }
     });
     await up(ctx);
-    const { aiTransparency } = await ctx.readJson('config/platform.json');
-    assert.equal(aiTransparency.detection.access, 'public');
-    assert.equal(aiTransparency.images.watermark, 'none');
-    assert.equal(aiTransparency.images.c2pa, true);
-    assert.equal(aiTransparency.interactionDisclosure.enabled, true);
-  });
-
-  it('is idempotent', async () => {
-    const { ctx } = await seed();
-    await up(ctx);
-    const first = await ctx.readJson('config/platform.json');
-    await up(ctx);
-    assert.deepEqual(await ctx.readJson('config/platform.json'), first);
+    const { scheduledTasks } = await read(dir, 'config/platform.json');
+    assert.equal(scheduledTasks.maxTasksPerUser, 3);
+    assert.equal(scheduledTasks.enabled, false);
+    assert.equal(scheduledTasks.minIntervalMinutes, 15);
   });
 });
 
-describe('V138 model contentMarking', () => {
-  it('marks cloud text models as unmarked and Gemini images as SynthID', async () => {
-    const { ctx } = await seed({
-      models: {
-        'claude-x': { id: 'claude-x', provider: 'anthropic' },
-        'gemini-img': { id: 'gemini-img', provider: 'google', supportsImageGeneration: true },
-        'gemini-txt': { id: 'gemini-txt', provider: 'google' }
-      }
-    });
-    await up(ctx);
-    assert.deepEqual((await ctx.readJson('models/claude-x.json')).contentMarking, {
-      textWatermark: 'none'
-    });
-    assert.deepEqual((await ctx.readJson('models/gemini-img.json')).contentMarking, {
-      textWatermark: 'none',
-      imageWatermark: 'upstream:synthid'
-    });
-    assert.deepEqual((await ctx.readJson('models/gemini-txt.json')).contentMarking, {
-      textWatermark: 'none'
-    });
+describe('V138 group permission', () => {
+  const builtIn = () => ({
+    groups: {
+      admins: { id: 'admins', permissions: { adminAccess: true } },
+      users: { id: 'users', permissions: {} },
+      authenticated: { id: 'authenticated', permissions: {} },
+      anonymous: { id: 'anonymous', permissions: {} },
+      marketing: { id: 'marketing', permissions: { apps: ['*'] } }
+    }
   });
 
-  it('never overwrites an existing block and skips transcription models', async () => {
-    const own = { textWatermark: { scheme: 'vllm-gumbel', keyGroup: 'acme' } };
-    const { ctx } = await seed({
-      models: {
-        vllm: { id: 'vllm', provider: 'local', contentMarking: own },
-        stt: { id: 'stt', provider: 'google-transcribe', modelType: 'transcription' }
-      }
-    });
+  it('grants the built-in signed-in groups, denies anonymous, leaves custom groups alone', async () => {
+    const { dir, ctx } = await seed({ groups: builtIn() });
     await up(ctx);
-    assert.deepEqual((await ctx.readJson('models/vllm.json')).contentMarking, own);
-    assert.equal((await ctx.readJson('models/stt.json')).contentMarking, undefined);
+    const { groups } = await read(dir, 'config/groups.json');
+    assert.equal(groups.admins.permissions.scheduledTasks, true);
+    assert.equal(groups.users.permissions.scheduledTasks, true);
+    assert.equal(groups.authenticated.permissions.scheduledTasks, true);
+    assert.equal(groups.anonymous.permissions.scheduledTasks, false);
+    assert.equal(groups.marketing.permissions.scheduledTasks, undefined);
+  });
+
+  it('never overwrites a value an admin set', async () => {
+    const groups = builtIn();
+    groups.groups.authenticated.permissions.scheduledTasks = false;
+    const { dir, ctx } = await seed({ groups });
+    await up(ctx);
+    const stored = await read(dir, 'config/groups.json');
+    assert.equal(stored.groups.authenticated.permissions.scheduledTasks, false);
+  });
+
+  it('never writes features.json', async () => {
+    const { dir, ctx } = await seed({ platform: {}, groups: builtIn() });
+    await up(ctx);
+    await assert.rejects(fs.stat(path.join(dir, 'config/features.json')));
   });
 });

@@ -28,6 +28,7 @@ const ADMIN_PAGES = [
   { label: 'Logging', href: '/admin/logging' },
   { label: 'Telemetry', href: '/admin/telemetry' },
   { label: 'Chat History', href: '/admin/chat-history' },
+  { label: 'Scheduled Tasks', href: '/admin/scheduled-tasks' },
   { label: 'Voice Input', href: '/admin/voice-input' },
   { label: 'Features', href: '/admin/features' },
   { label: 'EU AI Act', href: '/admin/eu-ai-act' },

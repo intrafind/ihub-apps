@@ -61,6 +61,10 @@ export function transformStoredMessage(msg) {
   if (Array.isArray(msg.mcpAuthRequired) && msg.mcpAuthRequired.length > 0) {
     message.mcpAuthRequired = msg.mcpAuthRequired;
   }
+  // Confirmation cards for scheduled tasks a scheduling tool proposed.
+  if (Array.isArray(msg.scheduledTaskProposals) && msg.scheduledTaskProposals.length > 0) {
+    message.scheduledTaskProposals = msg.scheduledTaskProposals;
+  }
   if (Array.isArray(msg.artifacts) && msg.artifacts.length > 0) {
     message.artifacts = msg.artifacts;
     const images = msg.artifacts.filter(artifact => (artifact?.kind || 'image') === 'image');
@@ -731,6 +735,7 @@ function useChatMessages(chatId = 'default', { ephemeral = false, serverBacked =
           mcpApps: _mcpApps,
           mcpAuthRequired: _mcpAuthRequired,
           provenance: _provenance,
+          scheduledTaskProposals: _scheduledTaskProposals,
           ...apiMsg
         } = msg;
         const content = rawContent !== undefined ? rawContent : apiMsg.content;

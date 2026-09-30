@@ -41,6 +41,7 @@ import registerAdminAgentInboxesRoutes from './admin/agentInboxes.js';
 import registerAdminSearchRoutes from './admin/search.js';
 import registerAdminAuditLogRoutes from './admin/auditLog.js';
 import registerAdminChatHistoryRoutes from './admin/chatHistory.js';
+import registerAdminScheduledTaskRoutes from './admin/scheduledTasks.js';
 import registerAdminChangelogRoutes from './admin/changelog.js';
 import registerAdminChangesRoutes from './admin/changes.js';
 import registerAdminOverviewRoutes from './admin/overview.js';
@@ -90,6 +91,7 @@ export default async function registerAdminRoutes(app) {
   registerAdminSearchRoutes(app);
   registerAdminAuditLogRoutes(app);
   registerAdminChatHistoryRoutes(app);
+  registerAdminScheduledTaskRoutes(app);
   registerAdminChangelogRoutes(app);
   registerAdminChangesRoutes(app);
   registerAdminOverviewRoutes(app);

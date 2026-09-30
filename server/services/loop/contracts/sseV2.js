@@ -163,6 +163,19 @@ export const toolCompletedData = z.object({
    */
   authRequired: z
     .object({ serverId: z.string(), serverName: z.string(), connectUrl: z.string() })
+    .optional(),
+  /**
+   * A scheduled task a scheduling tool proposed: the chat shows a confirmation
+   * card for it, and nothing is saved until the user confirms there.
+   */
+  scheduledTaskProposal: z
+    .object({
+      proposalId: z.string(),
+      action: z.enum(['create', 'update', 'delete']),
+      taskId: z.string().optional(),
+      draft: z.record(z.any()).optional(),
+      summary: z.record(z.any()).optional()
+    })
     .optional()
 });
 

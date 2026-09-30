@@ -50,6 +50,8 @@ import { abortChatRequest } from '../sse.js';
 import { cancelChatWorkflow } from '../tools/workflowRunner.js';
 import { getWorkflowStateRepository } from '../services/workflow/WorkflowStateRepository.js';
 import { deleteChatWithCascade } from '../services/chat/chatDeletion.js';
+import { SCHEDULED_TASK_ORIGIN } from '../services/scheduler/tasks/taskPolicy.js';
+import { markRunChatSeen } from '../services/scheduler/tasks/taskService.js';
 
 const COMPONENT = 'ChatRoutes';
 
@@ -219,6 +221,11 @@ export default function registerChatRoutes(app) {
       // they have.
       const seen =
         chat.hasUnseenActivity && !viaAdmin ? await repository.clearUnseen(chatId) : null;
+      // A scheduled run's chat, opened by its owner, is also the end of that
+      // run's notification on the Tasks page.
+      if (!viaAdmin && chat.origin?.createdVia === SCHEDULED_TASK_ORIGIN) {
+        markRunChatSeen(chat);
+      }
       // `messages` is the array, not the stored envelope — a hydrating client
       // should not have to reach through `messages.messages`. The document's
       // schema version rides alongside it so a future migration is visible.

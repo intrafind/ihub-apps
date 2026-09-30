@@ -118,6 +118,9 @@ export const interactionSourceSchema = z.object({
   profileId: z.string().optional(),
   /** Legacy checkpoint id for the workflow `human` node bridge. */
   checkpointId: z.string().optional(),
+  /** The scheduled task and run an approval of an unattended run belongs to. */
+  scheduledTaskId: z.string().optional(),
+  scheduledRunId: z.string().optional(),
   /** Owner of the run (its ledger principal id) and the identity mode it was recorded in. */
   principalId: z.string().optional(),
   identityMode: z.enum(LEDGER_IDENTITY_MODES).optional(),

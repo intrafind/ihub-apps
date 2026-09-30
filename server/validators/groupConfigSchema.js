@@ -21,7 +21,9 @@ export const groupConfigSchema = z
         // rights — see `middleware/contentAdminAuth.js`. Every permission
         // `utils/authorization.js` reads belongs here, or the admin editor
         // rejects a group that merely uses it.
-        contentAdmin: z.boolean().prefault(false)
+        contentAdmin: z.boolean().prefault(false),
+        // May create and run scheduled tasks (feature `scheduledTasks`).
+        scheduledTasks: z.boolean().prefault(false)
       })
       .prefault({}),
     mappings: z.array(z.string()).prefault([]),
