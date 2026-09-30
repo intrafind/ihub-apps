@@ -55,6 +55,7 @@ test.describe('Prompt library: create → share → use with variables', () => {
     expect(created.ok()).toBeTruthy();
     const colleagueId = (await created.json()).user.id;
     let promptId = null;
+    let colleagueContext = null;
 
     try {
       // Write the prompt in the library.
@@ -82,7 +83,7 @@ test.describe('Prompt library: create → share → use with variables', () => {
       await expect(admin.getByText('Sharing updated')).toBeVisible();
 
       // The colleague finds it under "Shared with me" and uses it.
-      const colleagueContext = await newContext(browser);
+      colleagueContext = await newContext(browser);
       const page = await colleagueContext.newPage();
       await login(page.request, colleague);
       await page.goto('/prompts?filter=shared');
@@ -114,9 +115,8 @@ test.describe('Prompt library: create → share → use with variables', () => {
       const list = await page.request.get('/api/prompts?scope=shared');
       const ids = (await list.json()).map(prompt => prompt.id);
       expect(ids).not.toContain(promptId);
-
-      await colleagueContext.close();
     } finally {
+      await colleagueContext?.close();
       if (promptId) await admin.request.delete(`/api/prompts/${promptId}`);
       await admin.request.delete(`/api/admin/auth/users/${colleagueId}`);
       await adminContext.close();

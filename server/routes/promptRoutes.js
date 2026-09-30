@@ -18,7 +18,6 @@
  *
  * @module routes/promptRoutes
  */
-import crypto from 'crypto';
 import configCache from '../configCache.js';
 import { authRequired, authenticatedOnly } from '../middleware/authRequired.js';
 import { requireFeature } from '../featureRegistry.js';
@@ -437,10 +436,6 @@ function contentOfGlobalPrompt(prompt, language) {
   };
 }
 
-function listEtag(payload) {
-  return `"${crypto.createHash('md5').update(JSON.stringify(payload)).digest('hex')}"`;
-}
-
 export default function registerPromptRoutes(app) {
   const gate = [requireFeature(PROMPTS_LIBRARY_FEATURE)];
 
@@ -501,13 +496,11 @@ export default function registerPromptRoutes(app) {
         items = items.filter(item => favorites.has(item.id));
       }
 
-      // One ETag per response body: users with different permissions — and
-      // every user with prompts of their own — get different bodies, so a
-      // shared cache can never hand one user another's list.
-      const etag = listEtag(items);
-      res.setHeader('ETag', etag);
+      // Express derives the ETag from the response body and answers a
+      // matching If-None-Match with 304 itself. The body differs per caller —
+      // permissions, own prompts, shares — so the ETag does too, and `private`
+      // keeps shared caches from handing one user another's list.
       res.setHeader('Cache-Control', 'private, no-cache');
-      if (req.headers['if-none-match'] === etag) return res.status(304).end();
       res.json(items);
     } catch (error) {
       sendStorageError(res, error, 'fetch prompts');

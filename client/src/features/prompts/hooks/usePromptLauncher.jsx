@@ -1,4 +1,4 @@
-import { useCallback, useState } from 'react';
+import { useCallback, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { getLocalizedContent } from '../../../utils/localizeContent';
 import PromptVariablesDialog from '../components/PromptVariablesDialog';
@@ -19,6 +19,10 @@ import { buildVariableFields, fillPromptVariables } from '../../../../../shared/
 export default function usePromptLauncher() {
   const { i18n } = useTranslation();
   const [request, setRequest] = useState(null);
+  // The open dialog's resolver. A second launch while one is open replaces
+  // the dialog, and the first caller must still hear back (as cancelled)
+  // rather than wait forever.
+  const pendingRef = useRef(null);
 
   const launch = useCallback(
     async (prompt, { includeAppVariables = false, submitLabel } = {}) => {
@@ -31,16 +35,23 @@ export default function usePromptLauncher() {
       if (fields.length === 0) {
         return { ...fillPromptVariables(text, {}, { autoValues: auto.values }), appVariables: {} };
       }
+      pendingRef.current?.(null);
       return new Promise(resolve => {
+        pendingRef.current = resolve;
         setRequest({ prompt, text, fields, autoValues: auto.values, submitLabel, resolve });
       });
     },
     [i18n.language]
   );
 
-  const close = () => {
-    request?.resolve(null);
+  const settle = (resolve, result) => {
+    if (pendingRef.current === resolve) pendingRef.current = null;
+    resolve(result);
     setRequest(null);
+  };
+
+  const close = () => {
+    if (request) settle(request.resolve, null);
   };
 
   const submit = values => {
@@ -51,8 +62,7 @@ export default function usePromptLauncher() {
       else appVariables[field.name] = values[field.name];
     }
     const filled = fillPromptVariables(request.text, inText, { autoValues: request.autoValues });
-    request.resolve({ ...filled, appVariables });
-    setRequest(null);
+    settle(request.resolve, { ...filled, appVariables });
   };
 
   const dialog = request ? (

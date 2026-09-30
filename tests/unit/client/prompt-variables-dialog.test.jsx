@@ -9,11 +9,14 @@ import '@testing-library/jest-dom';
  * sending anything.
  */
 
+// The automatic variables are cached per language, so a test that must reach
+// the server again switches to a language nothing has loaded yet.
+let mockLanguage = 'en';
 jest.mock('react-i18next', () => ({
   useTranslation: () => ({
     t: (_key, fallback) =>
       typeof fallback === 'string' ? fallback : fallback?.defaultValue || _key,
-    i18n: { language: 'en' }
+    i18n: { language: mockLanguage }
   })
 }));
 
@@ -124,6 +127,17 @@ test('cancelling resolves to null', async () => {
   await expect(pending).resolves.toBeNull();
 });
 
+test('a second launch cancels the dialog it replaces', async () => {
+  render(<Harness />);
+  const { pending: first } = await launch({ id: 'p6', name: 'First', prompt: 'To {{recipient}}' });
+  const { pending: second } = await launch({ id: 'p7', name: 'Second', prompt: 'On {{topic}}' });
+  await expect(first).resolves.toBeNull();
+
+  fireEvent.change(screen.getByLabelText(/Topic/), { target: { value: 'tests' } });
+  fireEvent.click(screen.getByRole('button', { name: 'Insert' }));
+  await expect(second).resolves.toEqual({ text: 'On tests', caret: null, appVariables: {} });
+});
+
 test('declared variables the text does not use go to the app', async () => {
   render(<Harness />);
   const { pending } = await launch(
@@ -148,7 +162,20 @@ test('declared variables the text does not use go to the app', async () => {
 test('still works when the server cannot resolve the global variables', async () => {
   mockFetchPromptVariables.mockRejectedValue(new Error('offline'));
   // A different language skips the values cached by the tests above.
-  render(<Harness />);
-  const { pending } = await launch({ id: 'p5', name: 'Y', prompt: 'Today is {{date}}' });
-  expect(await pending).toBeTruthy();
+  mockLanguage = 'fr';
+  try {
+    render(<Harness />);
+    const { pending } = await launch({ id: 'p5', name: 'Y', prompt: 'Today is {{date}}' });
+    // `{{date}}` is still known as automatic, so nobody is asked for it; its
+    // value is left for the server to fill in when the message is sent.
+    await expect(pending).resolves.toEqual({
+      text: 'Today is {{date}}',
+      caret: null,
+      appVariables: {}
+    });
+    expect(mockFetchPromptVariables).toHaveBeenCalledWith('fr');
+    expect(screen.queryByRole('dialog')).not.toBeInTheDocument();
+  } finally {
+    mockLanguage = 'en';
+  }
 });
