@@ -237,7 +237,18 @@ class ChatService {
   }
 
   async prepareChatRequest(params) {
-    return await this.requestBuilder.prepareChatRequest({ ...params, processMessageTemplates });
+    const result = await this.requestBuilder.prepareChatRequest({
+      ...params,
+      processMessageTemplates
+    });
+    // `PromptService` notes the app sources it loaded under the chat id while
+    // the prompt is built. Take them with this request: a turn then reports
+    // its own sources, never those of a newer turn on the same chat that was
+    // prepared while it still ran (and superseded it).
+    const promptSources = PromptService.getPromptSources(params?.chatId);
+    PromptService.resetPromptSources(params?.chatId);
+    if (result?.success && result.data) result.data.promptSources = promptSources;
+    return result;
   }
 
   // ── clarification bookkeeping ──────────────────────────────────────────
@@ -262,29 +273,17 @@ class ChatService {
   // ── knowledge sources (answer-source badge) ────────────────────────────
 
   /**
-   * Sources of a turn: what the loop recorded (tools, grounding, uploads,
-   * email context) plus prompt-based sources PromptService tracked per chat.
-   */
-  getKnowledgeSources(chatId, loopSources = []) {
-    return Array.from(new Set([...loopSources, ...PromptService.getPromptSources(chatId)]));
-  }
-
-  resetKnowledgeSources(chatId) {
-    PromptService.resetPromptSources(chatId);
-  }
-
-  /**
-   * The knowledge sources to report on a terminal answer (`run/ended`), and
-   * clear the per-chat bookkeeping so nothing leaks into the next turn.
+   * The knowledge sources to report on a terminal answer (`run/ended`): what
+   * the loop recorded (tools, grounding, uploads, email context) plus the app
+   * sources this turn's prompt was built with (`prep.promptSources`).
    *
    * A model's answer that drew on nothing else is named as the model's own
    * knowledge, so the client never has to infer it from a missing list. A
    * passthrough answer is the tool's output, not the model's (`byModel: false`),
    * and is named by the sources it used alone.
    */
-  resolveAnswerSources(chatId, loopSources = [], { byModel = true } = {}) {
-    const sources = this.getKnowledgeSources(chatId, loopSources);
-    this.resetKnowledgeSources(chatId);
+  resolveAnswerSources(loopSources = [], promptSources = [], { byModel = true } = {}) {
+    const sources = Array.from(new Set([...(loopSources || []), ...(promptSources || [])]));
     return sources.length > 0 || !byModel ? sources : [MODEL_KNOWLEDGE_SOURCE];
   }
 
@@ -450,7 +449,8 @@ class ChatService {
       responseFormat,
       responseSchema,
       llmOptions = {},
-      userFileData
+      userFileData,
+      promptSources = []
     } = prep;
     const log = typeof buildLogData === 'function' ? buildLogData : () => ({});
     const loopTools = markInteractiveTools(tools);
@@ -722,6 +722,7 @@ class ChatService {
         mcpAuthPrompts,
         scheduledTaskProposals,
         webSearchLog,
+        promptSources,
         takePendingCall: () => turnSeam.takePendingCall(),
         structured: outputSeam
           ? {
@@ -801,8 +802,6 @@ class ChatService {
       }
       throw error;
     } finally {
-      // Never let a detected source leak into the next turn on this chatId.
-      this.resetKnowledgeSources(chatId);
       if (stream !== NO_STREAM) unbindStreamRun(chatId, runId);
       if (trackRequest && activeRequests.get(chatId) === controller) {
         activeRequests.delete(chatId);
@@ -831,6 +830,7 @@ class ChatService {
     mcpAuthPrompts = [],
     scheduledTaskProposals = [],
     webSearchLog = null,
+    promptSources = [],
     takePendingCall = () => null,
     structured = null
   }) {
@@ -891,7 +891,7 @@ class ChatService {
       // based on what the turn used until then. One that wrote nothing has no
       // answer to name a source for.
       const knowledgeSources = producedOutput
-        ? this.resolveAnswerSources(chatId, loopSources)
+        ? this.resolveAnswerSources(loopSources, promptSources)
         : undefined;
       endRun({
         status: 'aborted',
@@ -968,7 +968,7 @@ class ChatService {
 
     if (result.status === 'paused') {
       // The turn pauses for the user's answer: the question seam already sent
-      // `interaction/raised`; no badge, and the caller's finally resets sources.
+      // `interaction/raised`; no badge.
       const pendingInteraction = result.pendingInteraction;
       stream.emit(SSE_V2_EVENTS.RUN_PAUSED, {
         reason: 'interaction',
@@ -1065,7 +1065,9 @@ class ChatService {
           toolName
         })
       );
-      const knowledgeSources = this.resolveAnswerSources(chatId, loopSources, { byModel: false });
+      const knowledgeSources = this.resolveAnswerSources(loopSources, promptSources, {
+        byModel: false
+      });
       endRun({
         status: 'completed',
         finishReason: 'tool_passthrough_complete',
@@ -1131,7 +1133,7 @@ class ChatService {
     if (rejected) return rejected;
 
     const finishReason = result.finishReason || 'stop';
-    const knowledgeSources = this.resolveAnswerSources(chatId, loopSources);
+    const knowledgeSources = this.resolveAnswerSources(loopSources, promptSources);
     endRun({ status: result.status || 'completed', finishReason, knowledgeSources });
     await this.logInteraction(
       'chat_response',

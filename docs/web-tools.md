@@ -292,8 +292,10 @@ When multiple sources are used, a tooltip lists all contributing sources.
 The server decides the badge: it names the sources when the turn ends
 (`run/ended.knowledgeSources`, see [SSE v2](sse-v2.md#a-chat-turn-on-the-wire)), and a
 transcription session names its own. The browser only displays that list. An
-answer without one — a failed or interrupted turn, a notice, an answer stored
-before the server kept its sources — shows no badge.
+answer stopped after it started keeps the sources it had used; one without a
+list — a failed turn, one stopped before it wrote anything or cut off by a server
+restart, a notice, an answer stored before the server kept its sources — shows no
+badge.
 
 ## Search Provider Configuration
 

@@ -9,8 +9,9 @@ import { MODEL_KNOWLEDGE_SOURCE } from '../../../../../shared/runEvents.js';
  *
  * The sources are the ones the server named when the turn ended
  * (`run/ended.knowledgeSources`, or the transcription session's): nothing is
- * inferred here, so an answer without them — a failed or interrupted turn, a
- * notice, an answer stored before the server kept its sources — shows no badge.
+ * inferred here, so an answer without them — a failed turn, one stopped before
+ * it wrote anything or cut off by a server restart, a notice, an answer stored
+ * before the server kept its sources — shows no badge.
  *
  * @param {Object} props
  * @param {Object} [props.answerSource] - Server-reported answer source (`{ sources }`)

@@ -1504,67 +1504,69 @@ test('image lift: a tool result carrying imageData reaches the model as "Retriev
   assert.deepEqual(summary.knowledgeSources, ['llm']);
 });
 
-// ── 13. answer-source bookkeeping (resolveAnswerSources / getKnowledgeSources) ──
+// ── 13. answer-source bookkeeping (resolveAnswerSources / prep.promptSources) ──
 
-test('resolveAnswerSources merges loop and prompt sources, clears them and emits no frame of its own', t => {
+test('resolveAnswerSources merges loop and prompt sources, names the model itself without any, and emits no frame', t => {
   const chatId = newChatId('resolve');
   const frames = captureFrames(t, chatId);
   const service = new ChatService({ agentLoop: {}, logInteraction: async () => {} });
-  PromptService.trackPromptSources(chatId);
-  t.after(() => PromptService.resetPromptSources(chatId));
 
-  assert.deepEqual(service.getKnowledgeSources(chatId, ['file', 'sources']).sort(), [
-    'file',
-    'sources'
-  ]);
-
-  const resolved = service.resolveAnswerSources(chatId, ['file', 'grounding']);
+  const resolved = service.resolveAnswerSources(['file', 'grounding', 'file'], ['sources']);
   assert.deepEqual([...resolved].sort(), ['file', 'grounding', 'sources']);
-  assert.deepEqual(service.getKnowledgeSources(chatId), [], 'prompt sources cleared');
-  assert.deepEqual(PromptService.getPromptSources(chatId), []);
-
+  assert.deepEqual(service.resolveAnswerSources([], []), ['llm']);
+  assert.deepEqual(service.resolveAnswerSources(), ['llm']);
   assert.deepEqual(
-    service.resolveAnswerSources(chatId),
-    ['llm'],
-    'idempotent: nothing stale, only the model itself'
+    service.resolveAnswerSources([], [], { byModel: false }),
+    [],
+    "a passthrough answer is the tool's, not the model's knowledge"
   );
-  assert.deepEqual(frames, [], 'pure bookkeeping — the badge rides on run/ended');
+  assert.deepEqual(frames, [], 'pure — the badge rides on run/ended');
 });
 
-test('resolveAnswerSources names the model itself without sources and keeps conversations isolated', t => {
-  const chatA = newChatId('iso-a');
-  const chatB = newChatId('iso-b');
-  const framesA = captureFrames(t, chatA);
-  const framesB = captureFrames(t, chatB);
-  const service = new ChatService({ agentLoop: {}, logInteraction: async () => {} });
-  PromptService.trackPromptSources(chatA);
-  t.after(() => PromptService.resetPromptSources(chatA));
+test('prepareChatRequest takes the prompt sources noted for the chat with the request and leaves none behind', async t => {
+  const chatId = newChatId('prep-sources');
+  t.after(() => PromptService.resetPromptSources(chatId));
+  const builder = outcome => ({
+    prepareChatRequest: async params => {
+      // What PromptService does while it loads the app's sources into the prompt.
+      PromptService.trackPromptSources(params.chatId);
+      return outcome;
+    }
+  });
 
-  assert.deepEqual(service.getKnowledgeSources(chatB), []);
-  assert.deepEqual(service.resolveAnswerSources(chatB, []), ['llm']);
-  assert.deepEqual(service.resolveAnswerSources(chatA), ['sources']);
-  assert.deepEqual(PromptService.getPromptSources(chatA), []);
-  assert.deepEqual(framesA, []);
-  assert.deepEqual(framesB, []);
+  const service = new ChatService({
+    agentLoop: {},
+    logInteraction: async () => {},
+    requestBuilder: builder({ success: true, data: makePrep() })
+  });
+  const prep = await service.prepareChatRequest({ chatId });
+  assert.deepEqual(prep.data.promptSources, ['sources']);
+  assert.deepEqual(PromptService.getPromptSources(chatId), [], 'nothing left for another turn');
+
+  const failing = new ChatService({
+    agentLoop: {},
+    logInteraction: async () => {},
+    requestBuilder: builder({ success: false, error: new Error('no API key') })
+  });
+  const failed = await failing.prepareChatRequest({ chatId });
+  assert.equal(failed.success, false);
+  assert.deepEqual(PromptService.getPromptSources(chatId), [], 'nor after a failed request');
 });
 
-test('prompt sources tracked before a turn end up in run/ended.knowledgeSources and never leak into the next turn; seq keeps climbing across turns', async t => {
+test('prompt sources on the prep end up in run/ended.knowledgeSources and never leak into the next turn; seq keeps climbing across turns', async t => {
   const chatId = newChatId('prompt-sources');
   const frames = captureFrames(t, chatId);
   const { service } = makeService([textTurn('From the docs.'), textTurn('Plain.')]);
-  PromptService.trackPromptSources(chatId);
-  t.after(() => PromptService.resetPromptSources(chatId));
 
-  const first = await runTurn(service, { chatId, prep: makePrep() });
+  const first = await runTurn(service, { chatId, prep: makePrep({ promptSources: ['sources'] }) });
   assertWellFormed(frames, { runId: first.runId });
   assert.deepEqual(first.knowledgeSources, ['sources']);
   assert.deepEqual(frame(frames, RUN_ENDED).data.knowledgeSources, ['sources']);
   assert.deepEqual(
     frame(frames, STEP_COMPLETED).data.sources,
     [],
-    'prompt sources are chat bookkeeping, not loop sources'
+    'prompt sources are request bookkeeping, not loop sources'
   );
-  assert.deepEqual(PromptService.getPromptSources(chatId), [], 'reset after the turn');
   const lastSeq = frames.at(-1).seq;
 
   frames.length = 0;
@@ -1578,6 +1580,73 @@ test('prompt sources tracked before a turn end up in run/ended.knowledgeSources 
     ['llm'],
     'no stale badge on the follow-up turn'
   );
+});
+
+test('a turn superseded after it started answering keeps its own sources; the newer turn keeps the ones its request loaded', async t => {
+  const chatId = newChatId('supersede-sources');
+  const frames = captureFrames(t, chatId);
+  t.after(() => PromptService.resetPromptSources(chatId));
+  let reachedWait;
+  const waiting = new Promise(resolve => (reachedWait = resolve));
+  const { service } = makeService([
+    // The older turn writes a few words, then waits for the model until it is superseded.
+    (request, ctx) => {
+      const wire = `data: ${JSON.stringify({
+        choices: [
+          { index: 0, delta: { role: 'assistant', content: 'Half an' }, finish_reason: null }
+        ]
+      })}\n\n`;
+      let sent = false;
+      const body = new ReadableStream(
+        {
+          pull(controller) {
+            if (!sent) {
+              sent = true;
+              controller.enqueue(new TextEncoder().encode(wire));
+              return undefined;
+            }
+            return new Promise(resolve => {
+              const abort = () => {
+                controller.error(new DOMException('The operation was aborted.', 'AbortError'));
+                resolve();
+              };
+              if (ctx.signal.aborted) abort();
+              else ctx.signal.addEventListener('abort', abort, { once: true });
+              reachedWait();
+            });
+          }
+        },
+        { highWaterMark: 0 }
+      );
+      return fakeResponse({
+        status: 200,
+        headers: { 'content-type': 'text/event-stream' },
+        body,
+        text: wire
+      });
+    },
+    textTurn('From the docs.')
+  ]);
+
+  const older = runTurn(service, { chatId, prep: makePrep() });
+  await waiting;
+  // The newer request is prepared while the older turn still runs, with an app
+  // whose sources the prompt loads.
+  service.requestBuilder = {
+    prepareChatRequest: async params => {
+      PromptService.trackPromptSources(params.chatId);
+      return { success: true, data: makePrep() };
+    }
+  };
+  const prep = await service.prepareChatRequest({ chatId });
+  const newer = await runTurn(service, { chatId, prep: prep.data });
+  const stopped = await older;
+
+  const endedOf = runId => frames.find(f => f.type === RUN_ENDED && f.runId === runId).data;
+  assert.equal(stopped.status, 'aborted');
+  assert.deepEqual(endedOf(stopped.runId).knowledgeSources, ['llm'], 'not the newer request’s');
+  assert.equal(newer.status, 'completed');
+  assert.deepEqual(endedOf(newer.runId).knowledgeSources, ['sources']);
 });
 
 // ── MCP App views ───────────────────────────────────────────────────────────
