@@ -88,6 +88,19 @@ test('extractWebSources: a page read reports words read and truncation', () => {
   assert.deepEqual(sse.webSources, [source]);
 });
 
+test('extractWebSources: a page longer than the reader keeps is shown as truncated', () => {
+  const [source] = extractWebSources('webContentExtractor', {
+    url: 'https://example.com/huge',
+    title: 'Huge page',
+    content: 'The last window',
+    wordCount: 3,
+    truncated: false,
+    nextOffset: null,
+    incomplete: true
+  });
+  assert.equal(source.truncated, true);
+});
+
 test('extractWebSources: extracted pages are marked read or failed', () => {
   const sources = extractWebSources('qwantSearch', {
     query: 'q',

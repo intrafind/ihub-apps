@@ -415,6 +415,8 @@ export function extractHtmlPage(html, { url } = {}) {
     publishedDate: article?.publishedTime || metaPublished || '',
     language: language || article?.lang || '',
     markdown: markdown.slice(0, MAX_DOCUMENT_CHARS),
+    // The page is longer than the reader keeps: the rest cannot be read at any offset.
+    capped: markdown.length > MAX_DOCUMENT_CHARS,
     extractor,
     thin: textLength(markdown) < THIN_CONTENT_CHARS
   };
@@ -500,7 +502,9 @@ function fileNameOf(url) {
  * @param {Object} [options]
  * @param {string} [options.url] - Where the PDF came from (title fallback)
  * @returns {Promise<{title: string, author: string, publishedDate: string,
- *   text: string, pageCount: number, pagesRead: number}>}
+ *   text: string, capped: boolean, pageCount: number, pagesRead: number}>}
+ *   `capped` when the text of the pages read is longer than the cap; pages
+ *   past `pagesRead` are reported by `pagesRead < pageCount`.
  */
 export async function extractPdf(pdfjs, data, { url } = {}) {
   const pdf = await pdfjs.getDocument({
@@ -536,11 +540,13 @@ export async function extractPdf(pdfjs, data, { url } = {}) {
   }
 
   const title = typeof info.Title === 'string' && info.Title.trim() ? info.Title.trim() : '';
+  const text = pages.join('\n\n');
   return {
     title: title || fileNameOf(url),
     author: typeof info.Author === 'string' ? info.Author.trim() : '',
     publishedDate: pdfDate(info.CreationDate),
-    text: pages.join('\n\n').slice(0, MAX_DOCUMENT_CHARS),
+    text: text.slice(0, MAX_DOCUMENT_CHARS),
+    capped: text.length > MAX_DOCUMENT_CHARS,
     pageCount: pdf.numPages,
     pagesRead
   };
@@ -553,10 +559,16 @@ export async function extractPdf(pdfjs, data, { url } = {}) {
  */
 export function pdfDate(value) {
   if (typeof value !== 'string') return '';
-  const match = /^D:(\d{4})(\d{2})?(\d{2})?(\d{2})?(\d{2})?(\d{2})?/.exec(value.trim());
+  // D:YYYYMMDDHHmmSS, then Z or an offset from UTC as +HH'mm' (the
+  // apostrophes are often missing). No offset means unknown, read as UTC.
+  const match =
+    /^D:(\d{4})(\d{2})?(\d{2})?(\d{2})?(\d{2})?(\d{2})?(?:(Z)|([+-])(\d{2})'?(?:(\d{2})'?)?)?/.exec(
+      value.trim()
+    );
   if (!match) return '';
-  const [, y, mo = '01', d = '01', h = '00', mi = '00', s = '00'] = match;
-  const date = new Date(`${y}-${mo}-${d}T${h}:${mi}:${s}Z`);
+  const [, y, mo = '01', d = '01', h = '00', mi = '00', s = '00', , sign, oh, om = '00'] = match;
+  const zone = sign ? `${sign}${oh}:${om}` : 'Z';
+  const date = new Date(`${y}-${mo}-${d}T${h}:${mi}:${s}${zone}`);
   return Number.isNaN(date.getTime()) ? '' : date.toISOString();
 }
 

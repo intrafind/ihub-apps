@@ -20,8 +20,10 @@ import { describe, it } from 'node:test';
 import assert from 'node:assert/strict';
 
 import {
+  clearOpenaiResponsesStreamingState,
   convertOpenaiResponsesResponseToGeneric,
-  toGroundingMetadata
+  toGroundingMetadata,
+  withCitationMarkers
 } from '../adapters/toolCalling/OpenAIResponsesConverter.js';
 import { convertAnthropicResponseToGeneric } from '../adapters/toolCalling/AnthropicConverter.js';
 import { withWebSupports } from '../adapters/toolCalling/GoogleConverter.js';
@@ -111,6 +113,75 @@ describe('OpenAI Responses web search → groundingMetadata', () => {
     assert.deepEqual(chunk.groundingMetadata, {
       webSearchQueries: ['q'],
       citations: [{ url: 'https://a.example/', title: 'A' }]
+    });
+  });
+
+  describe('inline markers for citations the text does not link', () => {
+    const cite = (url, start, end) => ({
+      type: 'response.output_text.annotation.added',
+      output_index: 1,
+      content_index: 0,
+      annotation: { type: 'url_citation', url, title: 'T', start_index: start, end_index: end }
+    });
+    const delta = text => ({
+      type: 'response.output_text.delta',
+      output_index: 1,
+      content_index: 0,
+      delta: text
+    });
+    const stream = async (events, streamId) => {
+      let content = '';
+      for (const event of events) {
+        const chunk = await convertOpenaiResponsesResponseToGeneric(json(event), streamId);
+        content += chunk.content.join('');
+      }
+      clearOpenaiResponsesStreamingState(streamId);
+      return content;
+    };
+
+    it('streams a marker after a cited range that has no link', async () => {
+      const content = await stream(
+        [
+          delta('Langdock is an AI platform.'),
+          cite('https://langdock.com/?utm_source=openai', 0, 27),
+          delta(' It is based in Berlin.'),
+          cite('https://langdock.com/about?utm_source=openai', 28, 50),
+          cite('https://langdock.com/?utm_source=openai', 28, 50)
+        ],
+        'openai-markers'
+      );
+      assert.equal(
+        content,
+        'Langdock is an AI platform.[1](https://langdock.com/?utm_source=openai)' +
+          ' It is based in Berlin.[2](https://langdock.com/about?utm_source=openai)' +
+          '[1](https://langdock.com/?utm_source=openai)'
+      );
+    });
+
+    it('adds nothing where the model wrote the citation as a link', async () => {
+      const text = 'Claim ([a.example](https://a.example/?utm_source=openai)).';
+      const content = await stream(
+        [delta(text), cite('https://a.example/?utm_source=openai', 6, 57)],
+        'openai-linked'
+      );
+      assert.equal(content, text);
+    });
+
+    it('places markers at the annotated ranges of a non-streamed answer', () => {
+      const text = 'First claim. Second claim ([b.example](https://b.example/)).';
+      const out = withCitationMarkers(
+        text,
+        [
+          { type: 'url_citation', url: 'https://a.example/', start_index: 0, end_index: 12 },
+          { type: 'url_citation', url: 'https://b.example/', start_index: 26, end_index: 58 }
+        ],
+        new Map()
+      );
+      assert.equal(
+        out,
+        'First claim.[1](https://a.example/) Second claim ([b.example](https://b.example/)).'
+      );
+      assert.equal(withCitationMarkers(out, [], new Map()), out);
     });
   });
 
@@ -401,6 +472,33 @@ describe('shared/webCitations', () => {
     assert.equal(insertSupportMarkers(answer, webSearch.supports), answer);
     const { cited } = resolveCitations(answer, webSearch);
     assert.equal(cited.length, 1);
+  });
+
+  it('Google: a chunk no support rests on was only considered', () => {
+    const webSearch = buildWebSearch({
+      grounding: withWebSupports({
+        webSearchQueries: ['langdock'],
+        groundingChunks: [
+          { web: { uri: 'https://vertexaisearch.cloud.google.com/r/1', title: 'langdock.com' } },
+          { web: { uri: 'https://vertexaisearch.cloud.google.com/r/2', title: 'example.com' } }
+        ],
+        groundingSupports: [
+          { segment: { text: 'Langdock is an AI platform.' }, groundingChunkIndices: [0] }
+        ]
+      })
+    });
+    const answer = insertSupportMarkers('Langdock is an AI platform.', webSearch.supports);
+    const { cited, considered } = resolveCitations(answer, webSearch);
+    assert.deepEqual(
+      cited.map(s => s.host),
+      ['langdock.com']
+    );
+    assert.deepEqual(
+      considered.map(s => s.host),
+      ['example.com']
+    );
+    // A supported chunk stays cited when its passage is not found in the text.
+    assert.equal(resolveCitations('Other wording.', webSearch).cited.length, 1);
   });
 
   it('OpenAI: the links the model wrote are the citations', () => {

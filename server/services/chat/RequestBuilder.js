@@ -161,8 +161,10 @@ export function appendWebSearchResearchGuidance(llmMessages, app, websearchEnabl
  * turn's sources into numbered citation badges and lists the sources beside
  * the answer (`shared/webCitations.js`), so it needs every claim linked to the
  * page it came from — and only to pages the turn actually returned. Native
- * search needs no such instruction: Anthropic and Google report their
- * citations themselves, and OpenAI links its sources in the text on its own.
+ * search needs no such instruction for its own results: Anthropic and Google
+ * report their citations themselves, and OpenAI links its sources in the text
+ * on its own. Pages the page reader returns are another matter (see
+ * {@link WEB_SEARCH_READER_CITATION_GUIDANCE}).
  */
 export const WEB_SEARCH_CITATION_GUIDANCE =
   'Citing sources: right after each statement that relies on a web source, cite it as a ' +
@@ -171,6 +173,19 @@ export const WEB_SEARCH_CITATION_GUIDANCE =
   'the number when you cite the same source again. Cite only URLs your searches or page ' +
   'reads returned, never URLs from memory, and do not add a separate list of sources at the ' +
   'end — the chat shows them next to the answer.';
+
+/**
+ * How to cite pages read with the page reader next to native search. The
+ * provider cites its own search results, but a function tool's result is
+ * outside its citation system: without this, a claim from a page the user
+ * pasted gets no inline badge and the page is only "also considered".
+ */
+export const WEB_SEARCH_READER_CITATION_GUIDANCE =
+  'Citing pages you read: your web search cites its own results for you. When a statement ' +
+  'relies on a page you opened with the webContentExtractor page reader, cite it right after ' +
+  "the statement as a Markdown link to that page's URL whose text is a number, for example " +
+  '[1](https://example.com/page). Cite only pages the page reader returned, and do not add a ' +
+  'separate list of sources at the end — the chat shows them next to the answer.';
 
 /** When the user names a site, search that site. */
 export const WEB_SEARCH_NAMED_SITE_GUIDANCE =
@@ -196,6 +211,7 @@ export const WEB_SEARCH_PASTED_URL_GUIDANCE =
 export function buildWebSearchSourceGuidance({ native, pageReader }) {
   const parts = [WEB_SEARCH_NAMED_SITE_GUIDANCE];
   if (!native) parts.unshift(WEB_SEARCH_CITATION_GUIDANCE);
+  else if (pageReader) parts.unshift(WEB_SEARCH_READER_CITATION_GUIDANCE);
   if (pageReader) parts.push(WEB_SEARCH_PASTED_URL_GUIDANCE);
   return parts.join('\n');
 }

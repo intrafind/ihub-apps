@@ -39,6 +39,13 @@ export const FRESHNESS_WINDOWS_MS = Object.freeze({
   year: 366 * 24 * 60 * 60 * 1000
 });
 
+/**
+ * How far ahead of now a result's date may be and still count as current: a
+ * date without a time, from a time zone ahead of UTC, reads as up to 14 hours
+ * in the future. Later than that, the date is wrong or the page is not out yet.
+ */
+const FUTURE_DATE_TOLERANCE_MS = 24 * 60 * 60 * 1000;
+
 /** Most domains one search may be restricted to. */
 export const MAX_INCLUDE_DOMAINS = 10;
 
@@ -125,8 +132,9 @@ export function normalizeSearchResult(item) {
 }
 
 /**
- * Drop results whose date lies outside the freshness window; results without
- * a date are kept (nothing says they are old).
+ * Drop results whose date lies outside the freshness window (older than it,
+ * or more than a day in the future); results without a date are kept
+ * (nothing says they are old).
  * @param {Object[]} results - normalized
  * @param {'day'|'week'|'month'|'year'} freshness
  * @param {number} [now=Date.now()]
@@ -137,7 +145,9 @@ export function filterByFreshness(results, freshness, now = Date.now()) {
   if (!windowMs) return { results, dropped: 0 };
   const kept = results.filter(result => {
     const time = Date.parse(result.publishedDate || '');
-    return Number.isNaN(time) || now - time <= windowMs;
+    if (Number.isNaN(time)) return true;
+    const age = now - time;
+    return age >= -FUTURE_DATE_TOLERANCE_MS && age <= windowMs;
   });
   return { results: kept, dropped: results.length - kept.length };
 }

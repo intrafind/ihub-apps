@@ -185,6 +185,7 @@ async function loadDocument(validUrl, { sslConfig, shouldIgnoreSSL, acceptLangua
         publishedDate: pdf.publishedDate,
         language: '',
         text: pdf.text,
+        capped: pdf.capped,
         pageCount: pdf.pageCount,
         pagesRead: pdf.pagesRead,
         thin: !pdf.text.trim()
@@ -208,6 +209,7 @@ async function loadDocument(validUrl, { sslConfig, shouldIgnoreSSL, acceptLangua
     publishedDate: page.publishedDate,
     language: page.language,
     text: page.markdown,
+    capped: page.capped,
     thin: page.thin
   };
 }
@@ -235,6 +237,11 @@ function readerNote(doc, slice) {
         `To read on, call this tool again with the same url and offset ${slice.nextOffset}.`
     );
   }
+  if (doc.capped && !slice.truncated) {
+    notes.push(
+      `The document is longer than the ${slice.totalLength} characters the reader keeps; the rest cannot be read.`
+    );
+  }
   if (doc.contentType === 'pdf' && doc.pagesRead < doc.pageCount) {
     notes.push(`Only the first ${doc.pagesRead} of ${doc.pageCount} pages were read.`);
   }
@@ -253,6 +260,8 @@ function readerNote(doc, slice) {
  * and footers do not (see `lib/pageContent.js`). The document is cached for a
  * short time, and each call returns one window of it: `truncated` says there
  * is more, `nextOffset` where to continue, `totalLength` how long it is.
+ * `incomplete` says the document is longer than the reader keeps (the
+ * character cap or the PDF page cap), so no offset reaches the rest.
  *
  * @param {Object} params - The extraction parameters
  * @param {string} [params.url] - The URL to extract content from
@@ -324,6 +333,8 @@ export default async function webContentExtractor({
 
     const slice = sliceDocument(doc.text, { offset, maxLength });
     const note = readerNote(doc, slice);
+    const incomplete =
+      doc.capped === true || (doc.contentType === 'pdf' && doc.pagesRead < doc.pageCount);
     return {
       url: targetUrl,
       ...(doc.finalUrl && doc.finalUrl !== validUrl.toString() ? { finalUrl: doc.finalUrl } : {}),
@@ -339,6 +350,8 @@ export default async function webContentExtractor({
       nextOffset: slice.nextOffset,
       truncated: slice.truncated,
       totalLength: slice.totalLength,
+      // Past the reader's cap: no offset reaches the rest, so this is not `truncated`.
+      ...(incomplete ? { incomplete: true } : {}),
       wordCount: countWords(slice.content),
       ...(doc.contentType === 'pdf' ? { pageCount: doc.pageCount, pagesRead: doc.pagesRead } : {}),
       ...(note ? { note } : {}),

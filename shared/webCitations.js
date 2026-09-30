@@ -299,17 +299,20 @@ export function buildWebSearch({ tools = [], grounding = [] } = {}) {
       const web = chunk?.web;
       if (!web) continue;
       const redirect = isGroundingRedirect(web.uri);
+      // Cited only when a support names it (below): a chunk no passage rests
+      // on was retrieved, not cited.
       sources.add(web.uri, {
         title: web.title,
         // A redirect link says nothing about the site; Google names it in the title.
-        host: web.domain || (redirect ? web.title : null),
-        cited: true
+        host: web.domain || (redirect ? web.title : null)
       });
     }
     for (const support of Array.isArray(meta.webSupports) ? meta.webSupports : []) {
       const passage = typeof support?.text === 'string' ? support.text : '';
       const urls = (Array.isArray(support?.urls) ? support.urls : []).map(httpUrl).filter(Boolean);
-      if (passage.trim() && urls.length) supports.push({ text: passage, urls });
+      if (!passage.trim() || !urls.length) continue;
+      supports.push({ text: passage, urls });
+      for (const url of urls) sources.add(url, { cited: true });
     }
   }
 
@@ -354,8 +357,8 @@ export function linkTargets(markdown) {
  * answer first links them, and which it only considered.
  *
  * A source a provider reported as cited (`cited`: Anthropic `citations`,
- * Google grounding chunks, OpenAI `url_citation`s) counts as cited even when
- * the text links it nowhere, numbered after the linked ones.
+ * Google grounding chunks a support rests on, OpenAI `url_citation`s) counts
+ * as cited even when the text links it nowhere, numbered after the linked ones.
  *
  * @param {string} markdown - the answer
  * @param {{sources?: Object[]}|null} webSearch - from {@link buildWebSearch}

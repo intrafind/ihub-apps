@@ -231,6 +231,38 @@ describe('WebSearchSources', () => {
     expect(screen.queryByRole('dialog')).not.toBeInTheDocument();
   });
 
+  test('the phone sheet is modal and keeps Tab inside it', () => {
+    // No matchMedia in jsdom: the view renders as the phone sheet.
+    renderSources();
+    fireEvent.click(screen.getByRole('button', { name: /Searched for/ }));
+    const dialog = screen.getByRole('dialog', { name: 'Sources' });
+    expect(dialog).toHaveAttribute('aria-modal', 'true');
+    const close = within(dialog).getByRole('button', { name: 'Close' });
+    expect(close).toHaveFocus();
+    // The trap takes the Tab key (fireEvent returns false when it was prevented).
+    expect(fireEvent.keyDown(close, { key: 'Tab' })).toBe(false);
+  });
+
+  test('the desktop side panel is not modal: the answer stays usable next to it', () => {
+    const original = window.matchMedia;
+    window.matchMedia = jest.fn(() => ({
+      matches: true,
+      addEventListener: jest.fn(),
+      removeEventListener: jest.fn()
+    }));
+    try {
+      renderSources();
+      fireEvent.click(screen.getByRole('button', { name: /Searched for/ }));
+      const dialog = screen.getByRole('dialog', { name: 'Sources' });
+      expect(dialog).not.toHaveAttribute('aria-modal');
+      const close = within(dialog).getByRole('button', { name: 'Close' });
+      expect(close).toHaveFocus();
+      expect(fireEvent.keyDown(close, { key: 'Tab' })).toBe(true);
+    } finally {
+      window.matchMedia = original;
+    }
+  });
+
   test('labels several searches by their count', () => {
     const t = (key, options) => (options?.count !== undefined ? `${key}:${options.count}` : key);
     expect(webSearchLabel(t, { queries: ['a', 'b', 'c'] })).toBe('webSources.searches:3');

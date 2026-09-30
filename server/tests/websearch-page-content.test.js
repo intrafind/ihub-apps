@@ -22,9 +22,12 @@ import {
   countWords,
   extractHtmlPage,
   extractPdf,
+  MAX_DOCUMENT_CHARS,
   pdfDate,
   sliceDocument
 } from '../tools/lib/pageContent.js';
+import readPage from '../tools/webContentExtractor.js';
+import { resolveSearchLanguage } from '../services/search/searchLanguage.js';
 import {
   _clearPageCache,
   _pageCacheStats,
@@ -149,6 +152,14 @@ describe('extractHtmlPage', () => {
     assert.equal(page.extractor, 'selectors');
     assert.match(page.markdown, /- \[Product one\]\(https:\/\/shop\.example\/p1\)/);
     assert.doesNotMatch(page.markdown, /Main menu/);
+  });
+
+  it('keeps at most the document cap and says when the page was longer', () => {
+    const long = `<html><body><article><h1>Long</h1><p>${'word '.repeat(90_000)}</p></article></body></html>`;
+    const page = extractHtmlPage(long, { url: 'https://example.com/long' });
+    assert.equal(page.markdown.length, MAX_DOCUMENT_CHARS);
+    assert.equal(page.capped, true);
+    assert.equal(extractHtmlPage(ARTICLE, { url: 'https://example.com/' }).capped, false);
   });
 
   it('flags a page that renders nothing without JavaScript', () => {
@@ -297,10 +308,73 @@ describe('extractPdf', () => {
     assert.equal(doc.title, 'Quarterly Report.pdf');
   });
 
-  it('parses PDF dates', () => {
-    assert.equal(pdfDate("D:20240131120000+01'00'"), '2024-01-31T12:00:00.000Z');
+  it('parses PDF dates, applying the offset from UTC', () => {
+    assert.equal(pdfDate("D:20240131120000+01'00'"), '2024-01-31T11:00:00.000Z');
+    assert.equal(pdfDate("D:20240131120000-05'30'"), '2024-01-31T17:30:00.000Z');
+    assert.equal(pdfDate('D:20240131120000+0200'), '2024-01-31T10:00:00.000Z');
+    assert.equal(pdfDate("D:20240131120000+01'"), '2024-01-31T11:00:00.000Z');
+    assert.equal(pdfDate('D:20240131120000Z'), '2024-01-31T12:00:00.000Z');
+    assert.equal(pdfDate('D:20240131120000'), '2024-01-31T12:00:00.000Z');
     assert.equal(pdfDate('D:2024'), '2024-01-01T00:00:00.000Z');
     assert.equal(pdfDate('yesterday'), '');
+  });
+});
+
+describe('page reader result past the document cap', () => {
+  const url = 'https://example.com/long';
+  beforeEach(() => _clearPageCache());
+
+  /** Put an extracted document in the reader's cache, so no request is made. */
+  function cachePage(fields) {
+    const doc = {
+      finalUrl: url,
+      contentType: 'html',
+      format: 'markdown',
+      title: 'Long',
+      description: '',
+      author: '',
+      siteName: '',
+      publishedDate: '',
+      language: '',
+      text: 'word '.repeat(2000),
+      thin: false,
+      ...fields
+    };
+    const key = makePageCacheKey(url, acceptLanguageFor(resolveSearchLanguage('en')));
+    setCachedPage(key, doc, doc.text.length, 60_000);
+  }
+
+  it('reports a capped page as incomplete, and says so on its last window', async () => {
+    cachePage({ capped: true });
+    const first = await readPage({ url, language: 'en', maxLength: 6000 });
+    assert.equal(first.truncated, true);
+    assert.equal(first.incomplete, true);
+    assert.doesNotMatch(first.note, /the rest cannot be read/);
+
+    const last = await readPage({ url, language: 'en', maxLength: 6000, offset: first.nextOffset });
+    assert.equal(last.truncated, false);
+    assert.equal(last.nextOffset, null);
+    assert.equal(last.incomplete, true);
+    assert.match(
+      last.note,
+      /longer than the 10000 characters the reader keeps; the rest cannot be read/
+    );
+  });
+
+  it('reports a PDF with unread pages as incomplete', async () => {
+    cachePage({ contentType: 'pdf', format: 'text', pageCount: 600, pagesRead: 500 });
+    const result = await readPage({ url, language: 'en', maxLength: 50_000 });
+    assert.equal(result.truncated, false);
+    assert.equal(result.incomplete, true);
+    assert.match(result.note, /Only the first 500 of 600 pages were read/);
+  });
+
+  it('leaves out incomplete when the whole page was kept', async () => {
+    cachePage({ capped: false });
+    const result = await readPage({ url, language: 'en', maxLength: 50_000 });
+    assert.equal(result.truncated, false);
+    assert.equal('incomplete' in result, false);
+    assert.equal(result.note, undefined);
   });
 });
 
@@ -393,6 +467,24 @@ describe('search result shape and filters', () => {
     assert.deepEqual(
       results.map(r => r.url),
       ['https://a', 'https://c']
+    );
+    assert.equal(dropped, 1);
+  });
+
+  it('drops results dated more than a day in the future, not a time zone ahead', () => {
+    const now = Date.parse('2026-09-29T20:00:00Z');
+    const { results, dropped } = filterByFreshness(
+      [
+        // A date-only "today" from a time zone ahead of UTC.
+        { url: 'https://ahead', publishedDate: '2026-09-30' },
+        { url: 'https://future', publishedDate: '2026-12-24T00:00:00Z' }
+      ],
+      'day',
+      now
+    );
+    assert.deepEqual(
+      results.map(r => r.url),
+      ['https://ahead']
     );
     assert.equal(dropped, 1);
   });

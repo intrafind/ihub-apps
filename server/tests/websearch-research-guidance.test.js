@@ -19,7 +19,8 @@ import {
   DEFAULT_WEB_SEARCH_RESEARCH_GUIDANCE,
   WEB_SEARCH_CITATION_GUIDANCE,
   WEB_SEARCH_NAMED_SITE_GUIDANCE,
-  WEB_SEARCH_PASTED_URL_GUIDANCE
+  WEB_SEARCH_PASTED_URL_GUIDANCE,
+  WEB_SEARCH_READER_CITATION_GUIDANCE
 } from '../services/chat/RequestBuilder.js';
 
 const PROMPT = 'You are a helpful assistant.';
@@ -155,8 +156,19 @@ test('script-backed search is told to cite with numbered links to returned URLs'
 test('native search gets no citation format — the provider reports its citations', () => {
   const guidance = buildWebSearchSourceGuidance({ native: true, pageReader: false });
   assert.ok(!guidance.includes(WEB_SEARCH_CITATION_GUIDANCE));
+  assert.ok(!guidance.includes(WEB_SEARCH_READER_CITATION_GUIDANCE));
   assert.ok(!guidance.includes(WEB_SEARCH_PASTED_URL_GUIDANCE));
   assert.ok(guidance.includes(WEB_SEARCH_NAMED_SITE_GUIDANCE));
+});
+
+test('native search with the page reader is told to cite the pages it reads', () => {
+  const guidance = buildWebSearchSourceGuidance({ native: true, pageReader: true });
+  assert.ok(guidance.includes(WEB_SEARCH_READER_CITATION_GUIDANCE));
+  assert.match(guidance, /page you opened with the webContentExtractor page reader/);
+  assert.match(guidance, /\[1\]\(https:\/\/example\.com\/page\)/);
+  // Not the full format: the provider already cites its own search results.
+  assert.ok(!guidance.includes(WEB_SEARCH_CITATION_GUIDANCE));
+  assert.ok(guidance.includes(WEB_SEARCH_PASTED_URL_GUIDANCE));
 });
 
 test('source guidance follows the web search toggle and is not repeated', () => {

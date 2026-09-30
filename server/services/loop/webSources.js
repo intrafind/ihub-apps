@@ -196,7 +196,8 @@ export function extractWebSources(toolId, result) {
         if (Number.isInteger(parsed.wordCount) && parsed.wordCount >= 0) {
           entry.wordCount = parsed.wordCount;
         }
-        if (parsed.truncated === true) entry.truncated = true;
+        // Either more to read at `nextOffset`, or more than the reader keeps.
+        if (parsed.truncated === true || parsed.incomplete === true) entry.truncated = true;
       }
     }
   }

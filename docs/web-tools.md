@@ -222,8 +222,8 @@ ordinary link. How the links get into the answer depends on the search path:
 |------|---------------------|
 | Brave, Staan, Qwant | The model, which the source guidance (below) asks to cite with `[n](url)` links |
 | Anthropic | Claude's `citations`: a marker follows each cited text block. Uncited search results are listed under *Also considered*, the `cited_text` on the card |
-| Google | The grounding supports: markers go after the passage each one backs |
-| OpenAI Responses | The links OpenAI writes into the text; its streamed `url_citation` annotations and `web_search_call` items are read into the same grounding metadata as the other providers |
+| Google | The grounding supports: markers go after the passage each one backs. A grounding chunk no support rests on is listed under *Also considered* |
+| OpenAI Responses | The links OpenAI writes into the text. A `url_citation` annotation whose range does not link its source gets a marker after the range. Streamed annotations and `web_search_call` items are read into the same grounding metadata as the other providers |
 
 The queries and sources are stored with the saved answer (`webSearch` on the
 message), so a reopened or shared chat shows the same sources view and badges.
@@ -233,9 +233,11 @@ When web search is on for a turn, the server adds a short source instruction to
 the system prompt, next to the research guidance. It is not an admin setting —
 the display depends on it — and it covers:
 
-- **Citation format** (script-backed search only): cite each claim with a
+- **Citation format** (script-backed search): cite each claim with a
   Markdown link to the source URL, numbered, only URLs the turn returned, no
-  separate source list at the end.
+  separate source list at the end. With native search the provider cites its
+  own results, so only pages read with the page reader are to be cited this way
+  (when the reader is offered).
 - **Named sites**: when the user names a site or domain, limit the search to it
   (`includeDomains`, or `site:` in the query).
 - **Pasted URLs** (when the page reader is offered): open them with the page
@@ -544,6 +546,7 @@ None of these take any parameters — they're automatically enabled when `websea
 - `content`: one window of the page as Markdown — headings, lists, tables, links (absolute) and code are kept; images are reduced to their alt text. PDFs are returned as text
 - `title`, `description`, `author`, and `siteName` / `publishedDate` when the page declares them. A PDF's title and author come from its metadata (the file name when it has no title)
 - `truncated`, `totalLength`, `offset` and `nextOffset`: whether the page has more than this window, how long it is, and where the next window starts. A `note` repeats it in words, with the call to make to read on
+- `incomplete` (only when true): the document is longer than the reader keeps (400 000 characters, or 500 PDF pages), so the rest cannot be read at any offset. The `note` says so, and the chat shows the page as *truncated*
 - `wordCount` (words in this window), `contentType` (`html` or `pdf`), `format` (`markdown` or `text`), and `pageCount` / `pagesRead` for PDFs
 - a `note` when the page returned little readable text (it may need JavaScript to render, or block automated access)
 - If an error occurs, an exception is thrown with a `code` property for translation

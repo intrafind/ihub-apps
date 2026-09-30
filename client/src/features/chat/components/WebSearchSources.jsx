@@ -2,6 +2,8 @@ import { useEffect, useId, useMemo, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
 import { useTranslation } from 'react-i18next';
 import Icon from '../../../shared/components/Icon';
+import useFocusTrap from '../../../shared/hooks/useFocusTrap';
+import useMediaQuery from '../../../shared/hooks/useMediaQuery';
 import { hostOf } from '../../../../../shared/webCitations.js';
 import { webSearchLabel } from '../webSearch';
 import {
@@ -90,6 +92,10 @@ function WebSearchSources({ messageKey, webSearch, citations }) {
 /**
  * The sources view. Rendered into `document.body`: fixed to the right edge
  * from `md` up, a bottom sheet with a scrim below it.
+ *
+ * The side panel is not modal: the answer stays usable next to it, and its
+ * badges keep highlighting the cards. The sheet covers the chat, so it is
+ * modal and keeps keyboard focus inside until it is closed.
  */
 function WebSourcesPanel({
   messageKey,
@@ -104,6 +110,15 @@ function WebSourcesPanel({
   const titleId = useId();
   const panelRef = useRef(null);
   const closeRef = useRef(null);
+  // `md`, where the sheet becomes the side panel (as in AppSidebar).
+  const isSidePanel = useMediaQuery('(min-width: 768px)');
+  // Focus goes back to the entry below (not to where it was), so the trap
+  // does not restore it.
+  useFocusTrap(panelRef, {
+    isActive: !isSidePanel,
+    initialFocusRef: closeRef,
+    returnFocusOnDeactivate: false
+  });
 
   // Focus moves into the view on open and back to the entry on close; Escape closes.
   useEffect(() => {
@@ -138,6 +153,7 @@ function WebSourcesPanel({
       <aside
         ref={panelRef}
         role="dialog"
+        aria-modal={isSidePanel ? undefined : 'true'}
         aria-labelledby={titleId}
         className="fixed inset-x-0 bottom-0 z-50 flex max-h-[80vh] flex-col rounded-t-2xl border-t border-gray-200 bg-white shadow-xl dark:border-gray-700 dark:bg-gray-900 md:inset-y-0 md:left-auto md:right-0 md:max-h-none md:w-96 md:rounded-none md:border-t-0 md:border-s"
       >

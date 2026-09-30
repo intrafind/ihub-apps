@@ -51,7 +51,8 @@ answer itself, each citation is a numbered badge next to the claim it supports.
   and turns it off in one click.
 - In the model picker of a web search app, a globe marks the models web search works with.
 - Search tools can now restrict results by age (`freshness`) and to named sites
-  (`includeDomains`) on every provider, and results keep their dates and favicons.
+  (`includeDomains`) on every provider, and results keep their dates and favicons. On Staan the
+  age filter is best effort, because its results carry no dates.
 
 ## Web Page Reader: Markdown, Long Pages and a Read Limit
 
