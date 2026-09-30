@@ -10,7 +10,7 @@
  * Cited sources win; the raw search results only stand in when the provider
  * attached no citations at all. Entries are deduplicated by URL.
  *
- * @module features/chat/groundingSources
+ * @module shared/run/groundingSources
  */
 
 /**

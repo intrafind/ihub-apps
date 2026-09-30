@@ -189,6 +189,7 @@ export default function AppSidebar({ mobileOpen = false, onMobileClose = () => {
   const allChatsLabel = t('sidebar.allChats', 'All chats');
   const untitledChatLabel = t('chatHistory.untitled', 'Untitled chat');
   const unseenHint = t('chatHistory.unseenHint', 'This chat answered while you were away');
+  const runningHint = t('chatHistory.runningHint', 'This chat is still working on an answer');
 
   // A drawer left open while the viewport grows to desktop would keep the
   // page scroll locked with nothing visible — close it.
@@ -988,6 +989,14 @@ export default function AppSidebar({ mobileOpen = false, onMobileClose = () => {
                               <Icon name={chat.appIcon} size="sm" className="w-3 h-3" />
                             </span>
                             <span className="flex-1 truncate text-[13px]">{title}</span>
+                            {chat.status === 'running' && (
+                              <span
+                                role="img"
+                                aria-label={runningHint}
+                                title={runningHint}
+                                className="w-3 h-3 rounded-full border-2 border-gray-300 border-t-indigo-500 dark:border-gray-600 dark:border-t-indigo-400 animate-spin motion-reduce:animate-none flex-none"
+                              />
+                            )}
                             {chat.hasUnseenActivity && (
                               <span
                                 role="img"

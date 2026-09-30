@@ -3839,11 +3839,19 @@
     "unknownStep": "Step",
     "generated": "Generated",
     "failed": "Failed",
-    "cancelled": "Cancelled"
+    "cancelled": "Cancelled",
+    "viewExecution": "View execution details"
   },
   "workflows": {
     "title": "Workflows",
     "subtitle": "Manage and run automated workflows",
+    "openChat": "Open chat",
+    "chatWithResults": {
+      "button": "Chat with Results",
+      "title": "Continue chatting with the workflow output in an app",
+      "contextMessage": "Here are the results from the workflow \"{{name}}\":",
+      "failed": "The chat could not be started. Please try again."
+    },
     "newWorkflow": "New Workflow",
     "modelUsed": "Model",
     "workflowDefault": "workflow default",
@@ -3920,6 +3928,7 @@
     "showArchived": "Show archived",
     "executionCard": {
       "startedAt": "Started",
+      "openChat": "Started in a chat — open it",
       "current": "Current",
       "inputLabel": "Input",
       "moreInputs": "+{{count}} more",
@@ -4286,6 +4295,8 @@
     "messageCount_other": "{{count}} messages",
     "unseen": "New",
     "unseenHint": "This chat answered while you were away",
+    "running": "Running",
+    "runningHint": "This chat is still working on an answer",
     "rename": "Rename chat",
     "delete": "Delete chat",
     "deleteTitle": "Delete chat",

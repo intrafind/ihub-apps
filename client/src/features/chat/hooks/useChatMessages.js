@@ -2,11 +2,26 @@ import { useState, useCallback, useRef, useEffect } from 'react';
 import { debugLog } from '../../../utils/debugLog';
 
 /**
+ * The provenance fields a stored answer's `activity` restores onto the message
+ * (see `shared/run/runActivity.buildRunActivity`).
+ */
+const STORED_ACTIVITY_FIELDS = [
+  'toolActivity',
+  'searchSummary',
+  'groundingSources',
+  'activeSkills',
+  'answerSource',
+  'workflowSteps',
+  'workflowResult',
+  'outputFormat'
+];
+
+/**
  * One message of a stored chat transcript, as the chat UI renders it.
  *
  * Shape on the wire (`GET /api/chats/:chatId` → `messages[]`):
  * `{ id, role, content, ts, runId, clientMessageId?, usage?, finishReason?,
- * error?, attachments?, artifacts?, mcpApps?, citations? }`.
+ * error?, attachments?, artifacts?, mcpApps?, citations?, activity? }`.
  *
  * The stored id is adopted as the message id and kept a second time on
  * `serverId`: `replaceFromMessageId` addresses the server's history by that
@@ -61,6 +76,17 @@ export function transformStoredMessage(msg) {
   // Confirmation cards for scheduled tasks a scheduling tool proposed.
   if (Array.isArray(msg.scheduledTaskProposals) && msg.scheduledTaskProposals.length > 0) {
     message.scheduledTaskProposals = msg.scheduledTaskProposals;
+  }
+  // What the run did before it answered — searches, documents, tool calls,
+  // workflow steps and the answer's source — in the fields a live turn fills
+  // from its stream (`shared/run/runActivity.js` builds both), so the reopened
+  // answer shows how it came about the way it did while it streamed.
+  if (msg.activity && typeof msg.activity === 'object') {
+    for (const field of STORED_ACTIVITY_FIELDS) {
+      if (msg.activity[field] !== undefined && msg.activity[field] !== null) {
+        message[field] = msg.activity[field];
+      }
+    }
   }
   if (Array.isArray(msg.artifacts) && msg.artifacts.length > 0) {
     message.artifacts = msg.artifacts;

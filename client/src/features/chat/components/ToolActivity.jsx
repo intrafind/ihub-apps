@@ -1,8 +1,8 @@
 import { useId, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import Icon from '../../../shared/components/Icon';
-import { hostnameOf } from '../groundingSources';
-import { sourceKey } from '../toolActivity';
+import { hostnameOf } from '../../../../../shared/run/groundingSources.js';
+import { sourceKey } from '../../../../../shared/run/toolActivity.js';
 
 /**
  * What the turn did before it answered: the searches it ran (web or the

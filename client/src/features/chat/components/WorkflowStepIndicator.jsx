@@ -1,6 +1,8 @@
 import { useState } from 'react';
 import { useTranslation } from 'react-i18next';
+import { Link } from 'react-router-dom';
 import Icon from '../../../shared/components/Icon';
+import { getLocalizedContent } from '../../../utils/localizeContent';
 
 /**
  * Unified workflow progress component for chat messages.
@@ -20,7 +22,7 @@ import Icon from '../../../shared/components/Icon';
  * @param {boolean} props.loading    - Whether workflow is still in progress
  */
 function WorkflowStepIndicator({ steps = [], currentStep, result, loading }) {
-  const { t } = useTranslation();
+  const { t, i18n } = useTranslation();
   const [expanded, setExpanded] = useState(false);
 
   // Filter out start/end nodes and chatVisible === false steps
@@ -31,8 +33,12 @@ function WorkflowStepIndicator({ steps = [], currentStep, result, loading }) {
   // Nothing to show
   if (visibleSteps.length === 0 && !loading && !result) return null;
 
+  // A stored answer can carry the workflow's localized name ({ en, de }).
   const workflowName =
-    result?.workflowName || currentStep?.workflowName || visibleSteps[0]?.workflowName || '';
+    getLocalizedContent(
+      result?.workflowName || currentStep?.workflowName || visibleSteps[0]?.workflowName,
+      i18n.language
+    ) || '';
 
   // Determine the latest running step for the compact view
   const latestStep = visibleSteps.length > 0 ? visibleSteps[visibleSteps.length - 1] : null;
@@ -128,6 +134,17 @@ function WorkflowStepIndicator({ steps = [], currentStep, result, loading }) {
             />
           )}
         </button>
+        {/* The execution keeps every step and its results: the audit trail
+            behind this answer, one click away — also for a failed run. */}
+        {result.executionId && (
+          <Link
+            to={`/workflows/executions/${result.executionId}`}
+            className="mt-1 inline-flex items-center gap-1 text-indigo-600 dark:text-indigo-400 hover:underline"
+          >
+            {t('workflow.viewExecution', 'View execution details')}
+            <Icon name="external-link" size="xs" />
+          </Link>
+        )}
         {expanded && visibleSteps.length > 0 && (
           <div className="mt-1.5 space-y-0.5 border-t border-gray-100 dark:border-gray-700 pt-1.5">
             {visibleSteps.map((step, i) => (

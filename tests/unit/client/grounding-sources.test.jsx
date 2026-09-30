@@ -3,16 +3,13 @@
  * extractor (client/src/features/chat/groundingSources.js), the reducer's merge
  * of piecemeal grounding frames and the message projection.
  */
-import {
-  extractGroundingSources,
-  hostnameOf
-} from '../../../client/src/features/chat/groundingSources';
+import { extractGroundingSources, hostnameOf } from '../../../shared/run/groundingSources.js';
 import {
   createStreamState,
   reduceRunEvents,
   getRun,
   mergeGrounding
-} from '../../../client/src/shared/run/runReducer';
+} from '../../../shared/run/runReducer.js';
 import { projectRunToMessage } from '../../../client/src/features/chat/runToMessage';
 
 const ts = seq => `2026-09-07T10:00:${String(seq).padStart(2, '0')}.000Z`;

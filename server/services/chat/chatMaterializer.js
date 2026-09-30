@@ -17,6 +17,7 @@
 import { boundStoredViews } from '../mcp/mcpApps.js';
 import { boundStoredCitations } from './chatCitations.js';
 import { boundStoredProposals } from '../scheduler/tasks/proposals.js';
+import { boundStoredActivity, takeRunActivity } from './runActivity.js';
 
 /** Connect cards kept per stored answer. */
 const MAX_STORED_AUTH_PROMPTS = 10;
@@ -242,6 +243,8 @@ function messageError(summary) {
  * @param {Object} [params.chat] - extra fields patched onto the chat document with this turn
  * @param {Object} [params.origin] - how a chat created by this turn came about
  *   (`{ createdVia, clientId? }`); a chat the turn creates without one came from the UI
+ * @param {string} [params.titleText] - what a chat this turn names is named after,
+ *   when that is not the message itself (an `@workflow` turn: the text without the mention)
  * @returns {Promise<Object|null>} the stored message, or null when nothing was written
  */
 export async function materializeUserTurn({
@@ -260,11 +263,14 @@ export async function materializeUserTurn({
   replaceFromMessageId,
   message = null,
   chat: chatPatch = null,
-  origin = null
+  origin = null,
+  titleText = null
 }) {
   if (!repository) return null;
   const text = typeof content === 'string' ? content : '';
-  const title = deriveChatTitle(text);
+  const title = deriveChatTitle(
+    typeof titleText === 'string' && titleText.trim() ? titleText : text
+  );
   const descriptors = normalizeAttachments(attachments);
   try {
     const chat = await repository.ensureChat({
@@ -362,7 +368,8 @@ export async function materializeUserTurn({
  * @param {string} params.runId
  * @param {Object} params.summary - the turn outcome: `status`, `content`, `finishReason`,
  *   `usage`, `images` (generated pictures, stored beside the transcript as
- *   artifacts), `mcpApps`, `citations` (see `chatCitations.js`), and
+ *   artifacts), `mcpApps`, `citations` (see `chatCitations.js`), `activity`
+ *   (what the run did, when it was not recorded — see `runActivity.js`), and
  *   `error`/`errorInfo` on a failure
  * @param {boolean} params.clientConnected - whether an SSE client was attached when the
  *   turn ended, sampled with `hasChatClient()`; the emit result cannot tell you
@@ -383,6 +390,10 @@ export async function materializeAssistantTurn({
   const content = typeof summary?.content === 'string' ? summary.content : '';
   const error = messageError(summary);
   const usage = normalizeUsage(summary?.usage);
+  // Taken unconditionally, so the recording ends with the turn whatever is
+  // stored. A caller that rebuilt the activity itself (a run whose process
+  // died, see `chatRecovery.js`) hands it over on the summary.
+  const recorded = takeRunActivity(runId);
   try {
     // A turn that paused for a clarification produced no answer — the question
     // is an interaction, not a message. Everything else is recorded, an empty
@@ -442,6 +453,11 @@ export async function materializeAssistantTurn({
     const scheduledTaskProposals = pausedWithoutAnswer
       ? []
       : boundStoredProposals(summary?.scheduledTaskProposals);
+    // What the turn did before it answered — searches, documents, tool calls,
+    // workflow steps — so a user coming back can see how the answer came about.
+    const activity = pausedWithoutAnswer
+      ? null
+      : boundStoredActivity(summary?.activity ?? recorded);
 
     let appended = null;
     if (!pausedWithoutAnswer) {
@@ -465,7 +481,8 @@ export async function materializeAssistantTurn({
             ...(mcpApps.length > 0 ? { mcpApps } : {}),
             ...(citations ? { citations } : {}),
             ...(mcpAuthRequired.length > 0 ? { mcpAuthRequired } : {}),
-            ...(scheduledTaskProposals.length > 0 ? { scheduledTaskProposals } : {})
+            ...(scheduledTaskProposals.length > 0 ? { scheduledTaskProposals } : {}),
+            ...(activity ? { activity } : {})
           },
           // The end of the transcript for an ordinary turn, and the position
           // right after this run's own question for a superseded one.

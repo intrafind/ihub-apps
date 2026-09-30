@@ -37,6 +37,9 @@ import {
   materializeUserTurn
 } from '../../services/chat/chatMaterializer.js';
 import { authorizeChat } from '../../services/chat/chatAccess.js';
+import { recordRunActivity } from '../../services/chat/runActivity.js';
+import { mentionAccess } from '../../services/workflow/workflowAccess.js';
+import { getLocalizedString } from '../../utils/localize.js';
 import {
   getChatRepository,
   isPersistableChatId,
@@ -155,11 +158,21 @@ export function workflowSummary(result) {
  * @param {string} params.appId - App the chat belongs to.
  * @param {string} [params.modelId] - Model the chat last used.
  * @param {string} params.runId - The workflow's run id.
+ * @param {string} [params.titleText] - What a chat this turn opens is named
+ *   after: the message without the mention.
  * @returns {Promise<void>}
  */
-async function materializeWorkflowUserTurn({ persistence, chatId, appId, modelId, runId }) {
+async function materializeWorkflowUserTurn({
+  persistence,
+  chatId,
+  appId,
+  modelId,
+  runId,
+  titleText
+}) {
   if (!persistence) return;
   await materializeUserTurn({
+    titleText,
     settings: persistence.settings,
     variables: persistence.variables,
     repository: persistence.repository,
@@ -1080,7 +1093,19 @@ export default function registerSessionRoutes(app, { getLocalizedError, DEFAULT_
 
         if (mentionMatch) {
           const mentionedId = mentionMatch[1];
-          const mentionedWorkflow = configCache.getWorkflowById(mentionedId);
+          const candidate = configCache.getWorkflowById(mentionedId);
+          // The composer only offers the workflows the app lists and the
+          // viewer's groups grant; the mention is plain text, so the same rule
+          // is enforced here. A workflow the caller may not run is not one to
+          // them at all: the mention stays ordinary text, as for an id that
+          // names nothing, rather than confirming that the workflow exists.
+          const mentionApp = candidate
+            ? (configCache.getApps().data || []).find(a => a.id === appId)
+            : null;
+          const access = candidate
+            ? mentionAccess({ user: req.user, app: mentionApp, workflow: candidate })
+            : null;
+          const mentionedWorkflow = access?.reason === 'not_permitted' ? null : candidate;
 
           // If the user explicitly @-mentioned a workflow but it is not
           // chat-runnable, refuse the message instead of falling through to
@@ -1089,15 +1114,18 @@ export default function registerSessionRoutes(app, { getLocalizedError, DEFAULT_
           if (mentionedWorkflow) {
             const isDisabled = mentionedWorkflow.enabled === false;
             const noChatIntegration = !mentionedWorkflow.chatIntegration?.enabled;
+            const notInApp = access?.reason === 'not_in_app';
 
-            if (isDisabled || noChatIntegration) {
+            if (isDisabled || noChatIntegration || notInApp) {
               const wfName =
                 (typeof mentionedWorkflow.name === 'object'
                   ? mentionedWorkflow.name[clientLanguage] || mentionedWorkflow.name.en
                   : mentionedWorkflow.name) || mentionedId;
               const reason = isDisabled
                 ? `Workflow "${wfName}" is disabled.`
-                : `Workflow "${wfName}" is not configured for chat (chatIntegration.enabled is false).`;
+                : noChatIntegration
+                  ? `Workflow "${wfName}" is not configured for chat (chatIntegration.enabled is false).`
+                  : `Workflow "${wfName}" is not available in this app.`;
               if (!hasChatClient(chatId)) {
                 return res.status(400).json({ status: 'error', message: reason });
               }
@@ -1114,6 +1142,7 @@ export default function registerSessionRoutes(app, { getLocalizedError, DEFAULT_
 
           if (
             mentionedWorkflow &&
+            access?.allowed &&
             mentionedWorkflow.enabled !== false &&
             mentionedWorkflow.chatIntegration?.enabled
           ) {
@@ -1125,8 +1154,9 @@ export default function registerSessionRoutes(app, { getLocalizedError, DEFAULT_
 
             // Strip the @mention from the input; the host item (email, page,
             // meeting) goes along as tagged blocks, the files as inputFiles.
+            const withoutMention = lastUserContent.replace(/@[\w.-]+/, '').trim();
             const strippedInput = renderUserMessage({
-              content: lastUserContent.replace(/@[\w.-]+/, '').trim(),
+              content: withoutMention,
               hostContext: lastUserMsg.hostContext
             });
 
@@ -1145,11 +1175,9 @@ export default function registerSessionRoutes(app, { getLocalizedError, DEFAULT_
             // The @mention launch owns a run on the chat stream: the bridge in
             // workflowRunner streams progress and the answer under this runId.
             const workflowRunId = newRunId('workflow');
+            // The steps it goes through are stored with its answer.
+            if (persistence) recordRunActivity(workflowRunId);
             const launch = new RunStreamEmitter({ streamId: chatId, runId: workflowRunId });
-            launch.emit(SSE_V2_EVENTS.RUN_STARTED, {
-              kind: 'workflow',
-              refs: { chatId, appId, messageId, workflowId: mentionedId }
-            });
             const failLaunch = message => {
               launch.emit(SSE_V2_EVENTS.STREAM_ERROR, { code: 'WORKFLOW_FAILED', message });
               launch.emit(SSE_V2_EVENTS.RUN_ENDED, {
@@ -1169,7 +1197,18 @@ export default function registerSessionRoutes(app, { getLocalizedError, DEFAULT_
               chatId,
               appId,
               modelId,
-              runId: workflowRunId
+              runId: workflowRunId,
+              // Named after what was asked, not after the id that was typed;
+              // a bare `@workflow` is named after the workflow.
+              titleText:
+                withoutMention || getLocalizedString(mentionedWorkflow.name, clientLanguage)
+            });
+            // Announced once the question is stored, like an ordinary turn
+            // (`ChatService`): a client reloading its chat list on the first
+            // frame finds the chat there.
+            launch.emit(SSE_V2_EVENTS.RUN_STARTED, {
+              kind: 'workflow',
+              refs: { chatId, appId, messageId, workflowId: mentionedId }
             });
 
             try {
@@ -1183,23 +1222,30 @@ export default function registerSessionRoutes(app, { getLocalizedError, DEFAULT_
                   chatId,
                   runId: workflowRunId,
                   user: req.user,
+                  appId,
                   input: strippedInput,
                   modelId,
                   _chatHistory: chatHistory.length > 0 ? chatHistory : undefined,
                   _fileData: fileData || imageData || undefined,
                   language: clientLanguage
                 })
-                .then(result =>
+                .then(result => {
+                  // A workflow that could not start never announced an end of
+                  // the run it was given: end it here, or the chat's
+                  // placeholder spins until the page is reloaded.
+                  if (result?.status === 'error') {
+                    failLaunch(result.error || 'Workflow execution failed');
+                  }
                   // The assistant half comes off the resolved run rather than
                   // the SSE frames: the client may be long gone by now, and
                   // the store is the thing that has to outlive it.
-                  materializeWorkflowAssistantTurn({
+                  return materializeWorkflowAssistantTurn({
                     persistence,
                     chatId,
                     runId: workflowRunId,
                     summary: workflowSummary(result)
-                  })
-                )
+                  });
+                })
                 .catch(error => {
                   logger.error('Error running @mention workflow', {
                     component: 'sessionRoutes',

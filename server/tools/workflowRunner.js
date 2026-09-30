@@ -258,6 +258,7 @@ export default async function workflowRunner(params = {}) {
     modelId,
     passthrough,
     runId: chatRunId,
+    appId: launchAppId,
     appConfig: _appConfig,
     _chatHistory,
     _fileData,
@@ -296,6 +297,14 @@ export default async function workflowRunner(params = {}) {
   // Pass chat-selected model as override so agent nodes use it
   if (modelId) {
     initialData._modelOverride = modelId;
+  }
+
+  // The chat the run belongs to, so its ledger run, "My Executions" and the
+  // execution page can lead back to it.
+  const appId = launchAppId || _appConfig?.id;
+  if (chatId) {
+    initialData._chatId = chatId;
+    if (typeof appId === 'string' && appId) initialData._appId = appId;
   }
 
   // Map the chat-message `input` to the workflow's first non-file/image
@@ -400,7 +409,8 @@ export default async function workflowRunner(params = {}) {
       workflowName: workflow.name,
       status: 'running',
       startedAt: new Date().toISOString(),
-      source: 'chat'
+      source: 'chat',
+      ...(chatId ? { chatId, appId: initialData._appId || null } : {})
     });
   } catch (error) {
     logger.warn('Failed to register execution', {

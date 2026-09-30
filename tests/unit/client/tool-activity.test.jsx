@@ -5,18 +5,14 @@
  */
 import { render, screen, fireEvent } from '@testing-library/react';
 import '@testing-library/jest-dom';
-import {
-  createStreamState,
-  reduceRunEvents,
-  getRun
-} from '../../../client/src/shared/run/runReducer';
+import { createStreamState, reduceRunEvents, getRun } from '../../../shared/run/runReducer.js';
 import { projectRunToMessage } from '../../../client/src/features/chat/runToMessage';
 import {
   buildToolActivity,
   searchScope,
   toolDetails,
   toolKind
-} from '../../../client/src/features/chat/toolActivity';
+} from '../../../shared/run/toolActivity.js';
 import ToolActivity from '../../../client/src/features/chat/components/ToolActivity';
 
 jest.mock('react-i18next', () => ({

@@ -47,6 +47,7 @@ import { StorageError } from '../../storage/errors.js';
 import { getStorage, readFacet } from '../../storage/bootstrap.js';
 import { RUNTIME_NAMESPACES } from '../../storage/namespaces.js';
 import { SHARE_MODES, shareState } from './chatSharing.js';
+import { shareableActivity } from './runActivity.js';
 
 const COMPONENT = 'ChatShareRepository';
 
@@ -152,6 +153,13 @@ export function snapshotMessage(message) {
   for (const [key, value] of Object.entries(message || {})) {
     if (MESSAGE_FIELDS_DROPPED.has(key)) continue;
     copy[key] = value;
+  }
+  // The activity behind an answer is shared without the document hits the
+  // owner's searches found — the same reason `citations` is dropped above.
+  if (copy.activity) {
+    const activity = shareableActivity(copy.activity);
+    if (activity) copy.activity = activity;
+    else delete copy.activity;
   }
   return copy;
 }

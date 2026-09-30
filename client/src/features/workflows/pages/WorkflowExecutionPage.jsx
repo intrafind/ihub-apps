@@ -26,6 +26,7 @@ import ConfirmDialog from '../../../shared/components/ConfirmDialog';
 import MarkdownDownloadMenu from '../../../shared/components/MarkdownDownloadMenu';
 import MarkdownViewer from '../../../shared/components/MarkdownViewer';
 import { apiClient } from '../../../api/client';
+import { invalidateChatsCache, useChatPersistence } from '../../../shared/hooks/useChats';
 import { getDisplayableOutput } from '../utils/filterInternalFields';
 
 /**
@@ -252,6 +253,10 @@ function WorkflowExecutionPage() {
   const [showCancelConfirm, setShowCancelConfirm] = useState(false);
   const [restarting, setRestarting] = useState(false);
   const [restartError, setRestartError] = useState(null);
+  const [chatWithResultsError, setChatWithResultsError] = useState(null);
+  // With durable chats the results chat is created by the server, from the
+  // execution itself; without them it is seeded in this tab (below).
+  const chatPersistence = useChatPersistence();
   // { key, name, content } when a markdown field is opened in the viewer modal
   const [viewerField, setViewerField] = useState(null);
 
@@ -359,7 +364,39 @@ function WorkflowExecutionPage() {
     }
   };
 
-  const handleStartChatWithResults = app => {
+  const handleStartChatWithResults = async app => {
+    setChatWithResultsError(null);
+    const contextMessage = t(
+      'workflows.chatWithResults.contextMessage',
+      'Here are the results from the workflow "{{name}}":',
+      { name: workflowName }
+    );
+    if (chatPersistence) {
+      // A stored chat reads its transcript from the server, never from this
+      // tab — the seeded copy below would be lost on the way.
+      try {
+        const response = await apiClient.post(
+          `/workflows/executions/${executionId}/chat/${encodeURIComponent(app.id)}`,
+          { contextMessage }
+        );
+        setShowAppSelection(false);
+        invalidateChatsCache();
+        navigate(`/apps/${app.id}/c/${response.data.chatId}`);
+        return;
+      } catch (error) {
+        if (error?.response?.data?.code !== 'CHAT_PERSISTENCE_OFF') {
+          setShowAppSelection(false);
+          setChatWithResultsError(
+            t(
+              'workflows.chatWithResults.failed',
+              'The chat could not be started. Please try again.'
+            )
+          );
+          return;
+        }
+      }
+    }
+
     const workflowDef = state?.data?._workflowDefinition;
     const output = getDisplayableOutput(state?.data);
 
@@ -402,15 +439,7 @@ function WorkflowExecutionPage() {
       {
         id: `user-${now}-wf`,
         role: 'user',
-        content:
-          userInput ||
-          t(
-            'workflows.chatWithResults.contextMessage',
-            'Here are the results from the workflow "{{name}}":',
-            {
-              name: workflowName
-            }
-          )
+        content: userInput || contextMessage
       },
       {
         id: `msg-${now}-wf`,
@@ -735,6 +764,21 @@ function WorkflowExecutionPage() {
                 <Icon name="chat-bubble-left-right" className="w-4 h-4" aria-hidden="true" />
                 {t('workflows.chatWithResults.button', 'Chat with Results')}
               </button>
+            )}
+            {chatWithResultsError && (
+              <p role="alert" className="w-full text-sm text-red-600 dark:text-red-400">
+                {chatWithResultsError}
+              </p>
+            )}
+            {/* A run started by `@workflow` in a chat leads back to that chat. */}
+            {typeof state.data?._chatId === 'string' && typeof state.data?._appId === 'string' && (
+              <Link
+                to={`/apps/${state.data._appId}/c/${state.data._chatId}`}
+                className="px-4 py-2 text-gray-600 dark:text-gray-300 bg-white dark:bg-gray-700 border border-gray-300 dark:border-gray-600 rounded-lg hover:bg-gray-100 dark:hover:bg-gray-600 transition-colors flex items-center gap-2 focus:outline-hidden focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500"
+              >
+                <Icon name="chat-bubble-left-right" className="w-4 h-4" aria-hidden="true" />
+                {t('workflows.openChat', 'Open chat')}
+              </Link>
             )}
             {isAdmin && state.workflowId && (
               <Link

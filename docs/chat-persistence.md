@@ -214,6 +214,20 @@ so the list says so:
 Opening the chat is what clears it — reading it through `GET /api/chats/:chatId`
 is what "seen" means.
 
+### Still working
+
+A chat is in the list from the moment its turn starts, not from the moment its
+answer lands: the client reloads the list on the turn's `run/started` frame,
+which the server only sends once the question is stored. For an ordinary answer
+that is a few seconds; for a workflow started with `@workflow` it can be many
+minutes, and a user who left the chat meanwhile would otherwise never see it
+until a reload. While the chat's `status` is `running` the row says so — a
+spinner in the sidebar, a **Running** pill on `/chats`.
+
+A chat whose run died with its process — a restart in the middle of a long
+workflow — would stay `running` for ever. Listing it or opening it settles it
+instead; see [Operational notes](#operational-notes-and-limits).
+
 ### Renaming and deleting
 
 Hovering a chat, in the sidebar or on `/chats`, reveals a rename and a delete
@@ -440,9 +454,19 @@ Requests that are not persisted keep posting their whole array and take the same
 code path they always did.
 
 An `@workflow` mention is a turn like any other: the question is stored before
-the workflow launches and the answer — or the failure, or the cancellation — is
-stored when the run settles, under the workflow's run id. The launch does not go
-through the chat service, so both halves are written by the route.
+the workflow launches — and before its `run/started` frame, as for an ordinary
+turn — and the answer, or the failure, or the cancellation, is stored when the
+run settles, under the workflow's run id, with the steps the workflow went
+through (see [What a turn did](#what-a-turn-did)). The launch does not go
+through the chat service, so both halves are written by the route. The chat is
+named after the question without the mention, or after the workflow for a bare
+mention.
+
+The mention only starts a workflow the app lists (`app.workflows`) and the
+caller's groups grant — the same rule the composer's picker applies
+(`services/workflow/workflowAccess.mentionAccess`). A workflow the caller may
+not run leaves the mention as ordinary text; one the app does not list is
+refused with `WORKFLOW_UNAVAILABLE`.
 
 ## Ownership and identity
 
@@ -669,6 +693,59 @@ the compare panels, the canvas — nothing changes: a generated image is visible
 for the session, the note under it still tells the user to download it, and it
 is gone on the way back.
 
+## What a turn did
+
+A stored answer used to keep its text and nothing of how it came about, so a
+user coming back to a chat — or anyone reviewing it later — could not tell which
+searches ran, what they found, which tools were called or which steps a
+workflow went through; and the badge under a web-search or iFinder answer read
+"Based on AI knowledge". Live, all of that is on screen beside the answer. The
+stored answer now carries the same thing as `activity`:
+
+```js
+{
+  toolActivity: { items: [{ kind: 'search', scope: 'web', query, status, sources, details, durationMs, … }] },
+  searchSummary: { queries, totalHits, rounds, applications, sources },  // iAssistant
+  groundingSources: [{ url, title }],                                     // provider web search
+  activeSkills: [{ name, description }],
+  answerSource: { sources: ['websearch', 'ifinder'] },                    // the badge
+  workflowSteps: [{ nodeName, nodeType, status }],
+  workflowResult: { status, executionId, workflowName },
+  outputFormat: 'markdown'
+}
+```
+
+It is one projection for both moments. `shared/run/runActivity.js` builds it
+from a run's state, and `shared/run/runReducer.js` folds a run's SSE v2 frames
+into that state — the client for the live message, the server for the stored
+one (`services/chat/runActivity.js` taps `RunStreamEmitter.emit`, which every
+frame passes whether or not a browser is connected). The reopened answer
+therefore shows what the live one showed, in the same components.
+
+- **Recorded:** the turns of a persisted chat, and the workflow runs a tool
+  started inside them. The answer text, reasoning and pictures are not — the
+  transcript and the [artifact store](artifacts.md) hold those.
+- **Bounded** before it is stored (`boundStoredActivity`): 100 calls, 50 sources
+  per call, 200 workflow steps (the last ones), 2000 characters per value and
+  256 KiB in all, past which the full text of long arguments goes first.
+- **Shared chats** carry it without the documents the owner's searches found —
+  the reason a share drops `citations` — so a document search keeps its query
+  and loses its hits (`shareableActivity`).
+- **The workflow result links its execution.** A finished workflow in the chat
+  links to `/workflows/executions/:id`, which keeps every step and its output.
+  In the other direction, a chat-launched execution records its chat on its
+  ledger run (`refs.chatId`, `refs.appId`), so **My Executions** and the
+  execution page link back to the chat.
+
+Answers stored before this existed have no `activity` and show what they
+always showed.
+
+**Chat with Results** on a finished execution creates a stored chat the same
+way (`POST /api/workflows/executions/:executionId/chat/:appId`): the execution's
+input is the question, its output the answer, read from the execution rather
+than posted by the browser, with the workflow result attached. The chat has a
+turn of its own, so deleting it does not cascade to the execution.
+
 ## Retention
 
 A daily sweep applies two rules, both read fresh from `platform.chats` on every
@@ -702,11 +779,18 @@ that is what you want.
 
 ## Operational notes and limits
 
-- **A restart mid-turn strands the chat.** A durable run lives in the worker
-  that started it. If the process goes away before the turn finishes, no
-  assistant message is written and the chat document stays `status: 'running'`
-  with a live `activeRunId`. There is no resume; the next turn on that chat
-  moves it on.
+- **A restart mid-turn interrupts the turn.** A durable run lives in the worker
+  that started it. If the process goes away before the turn finishes, nothing
+  writes its answer, and the chat stays `status: 'running'` with an
+  `activeRunId` no process holds. There is no resume. Listing or opening such a
+  chat settles it (`services/chat/chatRecovery.js`): it stores an answer with
+  the error `RUN_INTERRUPTED` and whatever the run's ledger still knows of what
+  it did — the tool calls and what they found; the live-only frames such as
+  workflow steps are not in the ledger — appends the missing `run/end` to the
+  ledger, and releases the chat. A run counts as dead only when no worker holds
+  it: its ledger run is neither open nor recently ended on this worker nor owned
+  by another, no request, durable turn or bridged workflow is in flight for the
+  chat, and it claimed the chat more than two minutes ago.
 - **One in-flight turn per chat, still.** Starting a turn on a chat that is
   already producing aborts the first one. Two tabs on the same chat cannot
   corrupt the stored transcript, but they can cut each other off. The aborted
@@ -747,6 +831,10 @@ that is what you want.
 | `server/services/chat/ChatRepository.js`    | The two chat documents, their locks, listing and the cascade  |
 | `server/services/artifacts/ArtifactRepository.js` | What a turn produced — see [Artifacts](artifacts.md)    |
 | `server/services/chat/chatMaterializer.js`  | The only module that writes chat turns                        |
+| `server/services/chat/runActivity.js`       | Records what a turn did and bounds it for storage             |
+| `shared/run/runActivity.js`                 | The activity projection, shared with the live client view     |
+| `server/services/chat/chatRecovery.js`      | Settles chats whose run died with its process                 |
+| `server/services/workflow/executionChat.js` | Chat with Results: a stored chat about an execution           |
 | `server/services/chat/chatAccess.js`        | `authorizeChat()` — 404 for unknown and not-yours             |
 | `server/services/chat/chatRetention.js`     | The daily sweep                                               |
 | `server/routes/chats.js`                    | The `/api/chats` surface                                      |

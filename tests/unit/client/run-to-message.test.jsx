@@ -2,17 +2,13 @@
  * Unit tests for client/src/features/chat/runToMessage.js — the pure
  * projection of a RunState onto the assistant chat message.
  */
-import {
-  createStreamState,
-  reduceRunEvents,
-  getRun
-} from '../../../client/src/shared/run/runReducer';
+import { createStreamState, reduceRunEvents, getRun } from '../../../shared/run/runReducer.js';
 import {
   projectRunToMessage,
   mergeCitationEntries,
-  buildWorkflowSteps,
   projectMessageRuns
 } from '../../../client/src/features/chat/runToMessage';
+import { buildWorkflowSteps } from '../../../shared/run/runActivity.js';
 
 const ts = seq => `2026-09-02T10:00:${String(seq).padStart(2, '0')}.000Z`;
 const env = (seq, type, data = {}, runId = 'run-1') => ({

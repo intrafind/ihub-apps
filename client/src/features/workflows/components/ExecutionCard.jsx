@@ -1,4 +1,5 @@
 import { useTranslation } from 'react-i18next';
+import { Link } from 'react-router-dom';
 import { getLocalizedContent } from '../../../utils/localizeContent';
 import Icon from '../../../shared/components/Icon';
 import StatusBadge from './StatusBadge';
@@ -107,6 +108,18 @@ function ExecutionCard({ execution, onJoin, onDelete, onArchive, onDownload }) {
             <p className="text-sm text-gray-500 dark:text-gray-400">
               {t('workflows.executionCard.startedAt', 'Started')}: {startedAt}
             </p>
+
+            {/* A run started from a chat (`@workflow`) leads back to it: the
+                question it answered and the answer it gave are there. */}
+            {execution.chatId && execution.appId && (
+              <Link
+                to={`/apps/${execution.appId}/c/${execution.chatId}`}
+                className="mt-1 inline-flex items-center gap-1 text-sm text-indigo-600 dark:text-indigo-400 hover:underline"
+              >
+                <Icon name="chat-bubble-left-right" className="w-3.5 h-3.5" />
+                {t('workflows.executionCard.openChat', 'Started in a chat — open it')}
+              </Link>
+            )}
 
             <InputPreview inputPreview={execution.inputPreview} t={t} />
 

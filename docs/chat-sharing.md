@@ -63,7 +63,8 @@ the owner creates another link.
 | User and assistant messages, as they were stored                | Messages sent after the share, edits made after it   |
 | **Artifacts** the shared messages produced (generated images)   | Artifacts of later turns or edited-away exchanges    |
 | The name, type and size of an uploaded file                     | **The uploaded file itself** — it is never stored    |
-|                                                                 | **The Documents panel** under an answer (citations)  |
+| What an answer did: searches, tool calls, public web sources, workflow steps | **The Documents panel** under an answer (citations)  |
+|                                                                 | The documents the owner's searches found, in that activity |
 
 Uploads deserve the explicit note: a stored message carries an attachment
 only as `{ type, name, bytes }` (see
@@ -72,9 +73,13 @@ the request that carried it. The viewer therefore shows _Attachment not
 included: plan.pdf_ where the owner saw the file.
 
 A stored message holds what the transcript holds: the text, the failure that
-cut an answer short, the attachment descriptors and the artifact descriptors.
-The tool activity and sources a live turn shows are not stored, so neither a
-reopened chat nor a share carries them.
+cut an answer short, the attachment descriptors, the artifact descriptors, and
+what the answer did (see
+[What a turn did](chat-persistence.md#what-a-turn-did)). A share carries that
+activity without the document hits of the owner's searches, for the reason
+below: a document search keeps its query and loses what it found, and the
+iAssistant search summary keeps its queries and counts and loses the
+application and source names of its hits.
 
 The documents listed under an answer are stored, so the owner's reopened chat
 shows them again, but a share leaves them out. They are every document the

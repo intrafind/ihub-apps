@@ -1875,7 +1875,8 @@ export class WorkflowEngine {
           executionId,
           ...(workflowDefinition.id ? { workflowId: String(workflowDefinition.id) } : {}),
           ...(agent?.profileId ? { profileId: String(agent.profileId) } : {}),
-          ...(typeof initialData?._chatId === 'string' ? { chatId: initialData._chatId } : {})
+          ...(typeof initialData?._chatId === 'string' ? { chatId: initialData._chatId } : {}),
+          ...(typeof initialData?._appId === 'string' ? { appId: initialData._appId } : {})
         },
         ...(initialData?.language ? { language: String(initialData.language) } : {})
       });

@@ -87,3 +87,22 @@ configuration starts to fail.
   their logs.
 - The Admin **Overview** shows the free space in a **Disk space** row under *Platform status*.
 - The page is hidden together with the other system pages when `admin.pages.system` is `false`.
+
+## Chats: See What an Answer Was Based On When You Come Back
+
+A reopened chat now shows how each answer came about, the way it did while it streamed: the
+searches the turn ran, the documents and pages they found and read, the other tools it called and
+the steps of a workflow. Before, a stored answer kept only its text, so a user coming back could
+not tell what had happened — and the badge under a web-search or iFinder answer read "Based on AI
+knowledge".
+
+- Covers web search (tool and provider search), iFinder and configured sources, iAssistant
+  searches with their queries and hit counts, skills, other tool calls with their arguments,
+  errors and durations, and the steps and result of workflows started by `@workflow` or by a tool.
+- The badge under the answer names its source again ("Based on web search", "… iFinder").
+- A finished workflow in the chat links to its execution (**View execution details**), where every
+  step and result is kept. **My Executions** and the execution page link back to the chat a run
+  was started from.
+- Shared chats show the activity without the documents the owner's searches found, the same way
+  they leave out the owner's document list.
+- Applies to answers stored from this release on (requires **Durable Chats**).

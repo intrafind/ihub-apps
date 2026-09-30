@@ -50,6 +50,7 @@ import { abortChatRequest } from '../sse.js';
 import { cancelChatWorkflow } from '../tools/workflowRunner.js';
 import { getWorkflowStateRepository } from '../services/workflow/WorkflowStateRepository.js';
 import { deleteChatWithCascade } from '../services/chat/chatDeletion.js';
+import { settleInterruptedChat, settleInterruptedChats } from '../services/chat/chatRecovery.js';
 import { SCHEDULED_TASK_ORIGIN } from '../services/scheduler/tasks/taskPolicy.js';
 import { markRunChatSeen } from '../services/scheduler/tasks/taskService.js';
 
@@ -197,7 +198,9 @@ export default function registerChatRoutes(app) {
         limit: req.query.limit,
         cursor: typeof req.query.cursor === 'string' ? req.query.cursor : null
       });
-      res.json({ items, nextCursor });
+      // A chat still marked running whose run died with its process is
+      // closed out here, so the list does not show it running forever.
+      res.json({ items: await settleInterruptedChats(items, { repository, runLog }), nextCursor });
     } catch (error) {
       sendChatStorageError(res, error, 'list chats');
     }
@@ -211,7 +214,10 @@ export default function registerChatRoutes(app) {
       if (!repository) return;
       const access = await loadOwnedChat(chatId, req.user, repository, 'read');
       if (!access) return sendNotFound(res, 'Chat');
-      const { chat, viaAdmin } = access;
+      const { viaAdmin } = access;
+      // Before the transcript is read, so an interrupted turn's closing answer
+      // is part of it — and the client does not re-attach to a dead run.
+      const chat = await settleInterruptedChat(access.chat, { repository, runLog });
       const stored = await repository.getMessages(chatId);
       // Opening a chat is what "seen" means — for its owner. Only write when
       // the flag is actually set: the clear is a locked read-modify-write, and

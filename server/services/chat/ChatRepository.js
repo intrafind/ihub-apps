@@ -168,7 +168,10 @@ const OPTIONAL_MESSAGE_FIELDS = [
   // Connect cards for per-user OAuth MCP servers (see chatSeams.authRequiredOf).
   'mcpAuthRequired',
   // Confirmation cards for proposed scheduled tasks (see scheduler/tasks/proposals.js).
-  'scheduledTaskProposals'
+  'scheduledTaskProposals',
+  // What the run did before it answered — searches, tool calls, workflow steps
+  // (see services/chat/runActivity.js).
+  'activity'
 ];
 
 /** Variables kept per message, and the longest value kept. */

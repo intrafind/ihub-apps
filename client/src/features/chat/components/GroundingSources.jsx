@@ -1,6 +1,6 @@
 import { useTranslation } from 'react-i18next';
 import Icon from '../../../shared/components/Icon';
-import { hostnameOf } from '../groundingSources';
+import { hostnameOf } from '../../../../../shared/run/groundingSources.js';
 
 /**
  * Sources behind a grounded answer — the pages a provider-run web search

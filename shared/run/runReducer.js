@@ -17,7 +17,7 @@
  *
  * @module shared/run/runReducer
  */
-import { SSE_V2_EVENTS } from '../../../../shared/runEvents.js';
+import { SSE_V2_EVENTS } from '../runEvents.js';
 
 export const RUN_EVENTS = SSE_V2_EVENTS;
 

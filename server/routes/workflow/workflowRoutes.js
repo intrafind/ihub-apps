@@ -15,7 +15,11 @@ import {
   stampSeq
 } from '../../services/loop/RunStream.js';
 import { SSE_V2_EVENTS } from '../../../shared/runEvents.js';
-import { authRequired } from '../../middleware/authRequired.js';
+import {
+  appAccessRequired,
+  authenticatedOnly,
+  authRequired
+} from '../../middleware/authRequired.js';
 import { adminAuth } from '../../middleware/adminAuth.js';
 import { buildServerPath } from '../../utils/basePath.js';
 import { getWorkflowEngine } from '../../services/workflow/WorkflowEngine.js';
@@ -33,7 +37,12 @@ import {
   sendInsufficientPermissions,
   sendErrorResponse
 } from '../../utils/responseHelpers.js';
-import { filterResourcesByPermissions } from '../../utils/authorization.js';
+import { filterByPermissions, isAdmin } from '../../services/workflow/workflowAccess.js';
+import { createExecutionChat } from '../../services/workflow/executionChat.js';
+import { getChatRepository } from '../../services/chat/ChatRepository.js';
+import { isChatPersistenceActive } from '../../services/chat/chatPersistence.js';
+import runLog from '../../services/loop/RunLog.js';
+import { resolvePrincipal } from '../../services/loop/runIdentity.js';
 import logger from '../../utils/logger.js';
 import configCache from '../../configCache.js';
 import { findByIdCaseInsensitive } from '../../utils/resourceLookup.js';
@@ -77,45 +86,6 @@ function historyDirFor(workflowId) {
  */
 const workflowClients = new Map();
 startInactiveClientSweep(workflowClients, { component: 'WorkflowRoutes' });
-
-/**
- * Filters workflows based on user permissions from groups.json.
- * Uses the standard group-based permission system (permissions.workflows)
- * consistent with how apps, models, and prompts are handled.
- *
- * @param {Object[]} workflows - Array of workflow definitions
- * @param {Object} user - User object with groups and permissions
- * @returns {Object[]} Filtered array of accessible workflows
- */
-function filterByPermissions(workflows, user) {
-  if (!Array.isArray(workflows)) {
-    return [];
-  }
-
-  // Admin users can see all workflows
-  if (isAdmin(user)) {
-    return workflows;
-  }
-
-  // Use the standard permission system via user.permissions.workflows
-  const workflowPermissions = user?.permissions?.workflows;
-  if (!workflowPermissions) {
-    return [];
-  }
-
-  return filterResourcesByPermissions(workflows, workflowPermissions);
-}
-
-/**
- * Checks if a user has admin privileges.
- *
- * @param {Object} user - User object from request
- * @returns {boolean} True if user has admin access
- */
-function isAdmin(user) {
-  if (!user) return false;
-  return user.groups?.includes('admin') || user.permissions?.adminAccess === true;
-}
 
 /**
  * Authorizes the requesting user against a specific execution instance.
@@ -1043,6 +1013,118 @@ export default function registerWorkflowRoutes(app, deps = {}) {
         });
       } catch (error) {
         sendFailedOperationError(res, 'fetch execution state', error);
+      }
+    }
+  );
+
+  /**
+   * @swagger
+   * /api/workflows/executions/{executionId}/chat/{appId}:
+   *   post:
+   *     summary: Start a stored chat about an execution's results
+   *     description: |
+   *       Creates a chat in the app that opens with the execution's input as the
+   *       question and its output as the answer ("Chat with Results"). The answer
+   *       is read from the execution, never taken from the request, and names the
+   *       execution it came from. Requires durable chats.
+   *     tags:
+   *       - Workflows
+   *     parameters:
+   *       - in: path
+   *         name: executionId
+   *         required: true
+   *         schema:
+   *           type: string
+   *       - in: path
+   *         name: appId
+   *         required: true
+   *         schema:
+   *           type: string
+   *     requestBody:
+   *       content:
+   *         application/json:
+   *           schema:
+   *             type: object
+   *             properties:
+   *               contextMessage:
+   *                 type: string
+   *                 description: The opening question when the execution had no text input
+   *     responses:
+   *       201:
+   *         description: The chat was created — `{ chatId, appId }`
+   *       400:
+   *         description: The execution has no output
+   *       404:
+   *         description: Execution or app not found
+   *       409:
+   *         description: Durable chats are not available to the caller (`CHAT_PERSISTENCE_OFF`)
+   */
+  app.post(
+    buildServerPath('/api/workflows/executions/:executionId/chat/:appId'),
+    checkWorkflowsFeature,
+    authRequired,
+    authenticatedOnly,
+    appAccessRequired,
+    async (req, res) => {
+      try {
+        const { executionId, appId } = req.params;
+        if (!validateIdForPath(executionId, 'executionId')) {
+          return sendBadRequest(res, 'Invalid executionId');
+        }
+        if (!validateIdForPath(appId, 'app', res)) return;
+        if (!(await authorizeExecutionAccess(req, res, executionId))) return;
+
+        const chatApp = (configCache.getApps().data || []).find(
+          candidate => candidate.id === appId && candidate.enabled !== false
+        );
+        if (!chatApp) return sendNotFound(res, 'App');
+
+        if (
+          !isChatPersistenceActive({
+            features: configCache.getFeatures(),
+            platformConfig: configCache.getPlatform(),
+            user: req.user
+          })
+        ) {
+          return res.status(409).json({
+            error: 'Durable chats are not available',
+            code: 'CHAT_PERSISTENCE_OFF'
+          });
+        }
+
+        const state = await workflowEngine.getState(executionId);
+        if (!state) return sendNotFound(res, 'Execution');
+        const identityMode = runLog.identityMode();
+        const principal = await resolvePrincipal(req.user, { mode: identityMode });
+        const created = await createExecutionChat({
+          repository: getChatRepository(),
+          state,
+          executionId,
+          appId,
+          ownerId: principal.id,
+          identityMode: principal.mode || identityMode,
+          language: req.headers['accept-language']?.split(',')[0]?.split('-')[0] || 'en',
+          contextMessage: req.body?.contextMessage
+        });
+        if (created.error === 'NO_RESULTS') {
+          return sendBadRequest(res, 'The execution has no results to chat about');
+        }
+        if (created.error) {
+          return res
+            .status(503)
+            .json({ error: 'The chat could not be stored', code: 'STORAGE_UNAVAILABLE' });
+        }
+        const { chatId } = created;
+
+        logger.info('Chat started from workflow results', {
+          component: 'WorkflowRoutes',
+          executionId,
+          chatId,
+          appId
+        });
+        res.status(201).json({ chatId, appId });
+      } catch (error) {
+        sendFailedOperationError(res, 'start chat with execution results', error);
       }
     }
   );

@@ -38,6 +38,7 @@ import {
 } from '../loop/seams/index.js';
 import { createChatChannel } from './chatChannel.js';
 import { mergeCitations } from './chatCitations.js';
+import { recordRunActivity } from './runActivity.js';
 import {
   materializeAssistantTurn,
   materializeUserTurn,
@@ -492,6 +493,9 @@ class ChatService {
     // the chat document exists by the time anything can ask for it.
     const persist = persistence?.repository ? persistence : null;
     if (persist) {
+      // What the turn does — its searches, tool calls, workflow steps — is
+      // stored with the answer; folding starts before the first frame.
+      recordRunActivity(runId);
       const attachments = normalizeAttachments(persist.attachments);
       this._appendUserMessageEvent({ runId, messageId, content: persist.content, attachments });
       await materializeUserTurn({

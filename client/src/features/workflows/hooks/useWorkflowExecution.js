@@ -4,7 +4,7 @@ import { answerInteraction } from '../../../api';
 import { buildApiUrl } from '../../../utils/runtimeBasePath';
 import useFeatureFlags from '../../../shared/hooks/useFeatureFlags';
 import useRunStream from '../../../shared/hooks/useRunStream';
-import { RUN_EVENTS, getRuns } from '../../../shared/run/runReducer';
+import { RUN_EVENTS, getRuns } from '../../../../../shared/run/runReducer.js';
 import { projectWorkflowState, isActiveWorkflowStatus } from '../workflowRunProjection';
 
 /** Delay before reconnecting after the stream dropped while the execution is still active. */
