@@ -21,7 +21,9 @@ const GROUP_ORDER = ['favorites', 'recent', 'mine', 'shared', 'global', 'skill']
  * query typed the list is grouped, with a query it is ranked by match.
  *
  * `onSelect` receives the chosen prompt (localized) or skill; filling in the
- * prompt's variables is the caller's job.
+ * prompt's variables is the caller's job. It may return (a promise of)
+ * whether the prompt was used: only a prompt that was — not one whose
+ * variables dialog was cancelled — moves into "Recently used".
  */
 function PromptSearch({ isOpen, onClose, onSelect, appId, appSkills = [], promptsEnabled = true }) {
   const { t, i18n } = useTranslation();
@@ -105,9 +107,9 @@ function PromptSearch({ isOpen, onClose, onSelect, appId, appSkills = [], prompt
     skill: t('prompts.groups.skills', 'Skills')
   };
 
-  const handleSelect = item => {
-    if (item._type !== 'skill') recordUsage(item.id);
-    onSelect(item);
+  const handleSelect = async item => {
+    const used = await onSelect(item);
+    if (item._type !== 'skill' && used !== false) recordUsage(item.id);
   };
 
   if (!isOpen) return null;

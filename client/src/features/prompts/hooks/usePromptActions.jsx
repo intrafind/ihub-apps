@@ -49,13 +49,18 @@ export default function usePromptActions({ onChanged } = {}) {
 
   const use = useCallback(
     async prompt => {
-      const result = await launch(prompt, {
+      // The prompt's app only when this user can open it: a shared prompt can
+      // name an app its author may open and the recipient may not. Otherwise
+      // it opens in the default app, without the prompt app's variables.
+      const promptAppId =
+        prompt.appId && apps.some(app => app.id === prompt.appId) ? prompt.appId : null;
+      const result = await launch(promptAppId ? prompt : { ...prompt, appId: null }, {
         includeAppVariables: true,
         submitLabel: t('prompts.actions.openInChat', 'Open in chat')
       });
       if (!result) return;
       recordUsage(prompt.id);
-      const appId = prompt.appId || pickDefaultChatApp(apps, favoriteAppIds, uiConfig)?.id;
+      const appId = promptAppId || pickDefaultChatApp(apps, favoriteAppIds, uiConfig)?.id;
       if (!appId) {
         setNotice({
           type: 'error',

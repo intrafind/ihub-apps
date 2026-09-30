@@ -367,6 +367,27 @@ describe('creating and listing', () => {
     const items = await list(ADA);
     assert.ok(items.length > 0 && items.every(item => item.scope === 'global'));
   });
+
+  it('lets prompt admins look after existing prompts while user prompts are off', async () => {
+    const prompt = await create(ADA, { name: 'Left behind' });
+    await share(ADA, prompt.id, [{ type: 'group', id: 'engineers', permission: 'use' }]);
+    setUserPromptSettings({ enabled: false });
+    const params = { promptId: prompt.id };
+
+    const owner = await drive(route.get, { user: ADA, params });
+    assert.equal(owner.statusCode, 403, 'users do not reach their prompts while it is off');
+    assert.equal(owner.body.details.code, 'USER_PROMPTS_DISABLED');
+
+    assert.equal((await drive(route.get, { user: ROOT, params })).statusCode, 200);
+    assert.equal((await drive(route.versions, { user: ROOT, params })).statusCode, 200);
+    const unshared = await share(ROOT, prompt.id, []);
+    assert.equal(unshared.statusCode, 200, JSON.stringify(unshared.body));
+    const removed = await drive(route.remove, { user: ROOT, params });
+    assert.equal(removed.statusCode, 200, JSON.stringify(removed.body));
+
+    const created = await drive(route.create, { user: ROOT, body: { name: 'x', prompt: 'y' } });
+    assert.equal(created.statusCode, 403, 'nobody creates new ones, admins included');
+  });
 });
 
 describe('sharing', () => {
@@ -462,6 +483,43 @@ describe('sharing', () => {
       (await drive(route.get, { user: GRACE, params: { promptId: prompt.id } })).statusCode,
       404
     );
+  });
+
+  it('stops a write whose access was revoked while it waited for the lock', async () => {
+    const prompt = await create(ADA);
+    await share(ADA, prompt.id, [{ type: 'user', id: GRACE.id, permission: 'edit' }]);
+    const repo = getUserPromptRepository();
+
+    // Hold Grace's save at the lock, after the route has checked her access
+    // on the prompt it read, and revoke her share in that gap.
+    let reachedLock;
+    const reached = new Promise(resolve => (reachedLock = resolve));
+    let openGate;
+    const gate = new Promise(resolve => (openGate = resolve));
+    repo._withLock = (promptId, fn) => {
+      delete repo._withLock;
+      reachedLock();
+      return gate.then(() => repo._withLock(promptId, fn));
+    };
+    try {
+      const pending = drive(route.update, {
+        user: GRACE,
+        params: { promptId: prompt.id },
+        body: { name: 'Too late', prompt: 'Changed after the revoke' }
+      });
+      await reached;
+      assert.equal((await share(ADA, prompt.id, [])).statusCode, 200);
+      openGate();
+      const late = await pending;
+      assert.equal(late.statusCode, 403, JSON.stringify(late.body));
+      assert.equal(late.body.details.code, 'PROMPT_ACCESS_CHANGED');
+    } finally {
+      delete repo._withLock;
+      openGate();
+    }
+    const stored = await repo.get(prompt.id);
+    assert.equal(stored.revision, 1, 'the revoked editor wrote nothing');
+    assert.notEqual(stored.name, 'Too late');
   });
 
   it('never lets a marker the prompt does not back grant access', async () => {
@@ -773,6 +831,21 @@ describe('the admin view', () => {
     const entry = res.body.prompts.find(item => item.id === broad.id);
     assert.equal(entry.owner.id, ADA.id);
     assert.equal(entry.permissions.canDelete, true);
+  });
+
+  it('bounds the scan by documents read, not by prompts kept', async () => {
+    await create(ADA, { name: 'Scan one' });
+    await create(ADA, { name: 'Scan two' });
+    await create(ADA, { name: 'Scan three' });
+    const repo = getUserPromptRepository();
+    const none = await repo.scan({ filter: () => false, maxScanned: 2 });
+    assert.deepEqual(none, { prompts: [], truncated: true });
+    const capped = await repo.scan({ max: 1 });
+    assert.equal(capped.prompts.length, 1);
+    assert.equal(capped.truncated, true);
+    const all = await repo.scan();
+    assert.equal(all.truncated, false);
+    assert.equal((await repo.scan({ maxScanned: all.prompts.length })).truncated, false);
   });
 
   it('is closed to everyone else', async () => {

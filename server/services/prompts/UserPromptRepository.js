@@ -86,6 +86,31 @@ const MAX_SCANNED = 5000;
 const LOCK_OPTIONS = { ttlMs: 15000, waitMs: 5000 };
 
 /**
+ * Code of the error a write throws when its `authorize` check fails on the
+ * prompt loaded under the lock — the caller's access changed between the
+ * route's own check and the write.
+ */
+export const ACCESS_CHANGED = 'PROMPT_ACCESS_CHANGED';
+
+/**
+ * Run a write's `authorize` check on the prompt as loaded under the lock.
+ *
+ * The routes check permissions on a copy read before the lock is taken. A
+ * share revoked, or a prompt handed over, while a request waits for the lock
+ * must still stop that request's write, so every mutation takes the check
+ * along and runs it again here.
+ *
+ * @param {((prompt: Object) => boolean)|undefined} authorize - The check.
+ * @param {Object} prompt - The prompt as loaded under the lock.
+ * @throws {StorageError} Code `PROMPT_ACCESS_CHANGED` when the check fails.
+ */
+function assertAuthorized(authorize, prompt) {
+  if (typeof authorize === 'function' && !authorize(prompt)) {
+    throw new StorageError('Your access to this prompt changed', { code: ACCESS_CHANGED });
+  }
+}
+
+/**
  * Mint a user prompt id.
  *
  * @returns {string}
@@ -419,19 +444,21 @@ export class UserPromptRepository {
   }
 
   /**
-   * Walk every prompt — for the admin page only. Bounded, and the bound is
-   * reported so the page can say the list is cut.
+   * Walk every prompt — for the admin page only. Bounded twice: by the
+   * documents read, whatever the filter keeps, and by the prompts returned.
+   * Hitting either bound is reported so the page can say the list is cut.
    *
    * @param {Object} [options]
    * @param {(prompt: Object) => boolean} [options.filter] - Keep only matches.
    * @param {number} [options.max] - Most prompts to return.
+   * @param {number} [options.maxScanned] - Most documents to read.
    * @returns {Promise<{prompts: Object[], truncated: boolean}>}
    */
-  async scan({ filter = () => true, max = MAX_SCANNED } = {}) {
+  async scan({ filter = () => true, max = MAX_SCANNED, maxScanned = MAX_SCANNED } = {}) {
     if (!this.isAvailable()) return { prompts: [], truncated: false };
     const prompts = [];
+    let scanned = 0;
     let cursor = null;
-    let truncated = false;
     do {
       const page = await this.documents.list(USER_PROMPTS_NAMESPACE, {
         limit: PAGE_SIZE,
@@ -439,12 +466,15 @@ export class UserPromptRepository {
         ...(cursor ? { cursor } : {})
       });
       for (const doc of page.items) {
+        // Checked before each document rather than after the page, so a
+        // bound reached on the last document of the store is not a cut.
+        if (scanned >= maxScanned || prompts.length >= max) return { prompts, truncated: true };
+        scanned += 1;
         if (doc?.data && filter(doc.data)) prompts.push(doc.data);
       }
       cursor = page.nextCursor;
-      if (cursor && prompts.length >= max) truncated = true;
-    } while (cursor && !truncated);
-    return { prompts, truncated };
+    } while (cursor);
+    return { prompts, truncated: false };
   }
 
   /**
@@ -460,19 +490,23 @@ export class UserPromptRepository {
    *   other.
    * @param {number|null} [options.restoredFrom] - Revision this save restores.
    * @param {number} [options.maxVersions] - Revisions kept per prompt.
+   * @param {(prompt: Object) => boolean} [options.authorize] - Access check,
+   *   run on the prompt as loaded under the lock.
    * @param {string} [options.now] - ISO clock, for tests.
    * @returns {Promise<Object|null>} The prompt, or null when there is none.
-   * @throws {StorageError} Code `REVISION_CONFLICT` when `expectedRevision` is stale.
+   * @throws {StorageError} Code `REVISION_CONFLICT` when `expectedRevision` is stale,
+   *   `PROMPT_ACCESS_CHANGED` when `authorize` refuses.
    */
   async update(
     promptId,
     content,
-    { actor, expectedRevision, restoredFrom = null, maxVersions = 0, now } = {}
+    { actor, expectedRevision, restoredFrom = null, maxVersions = 0, authorize, now } = {}
   ) {
     if (!this.isAvailable() || !isUserPromptId(promptId)) return null;
     return this._withLock(promptId, async () => {
       const { prompt, etag } = await this._load(promptId);
       if (!prompt) return null;
+      assertAuthorized(authorize, prompt);
       if (Number.isInteger(expectedRevision) && expectedRevision !== prompt.revision) {
         throw new StorageError('The prompt was changed by someone else', {
           code: 'REVISION_CONFLICT'
@@ -506,14 +540,18 @@ export class UserPromptRepository {
    * @param {Array<Object>} shares - The complete new list, already validated.
    * @param {Object} options
    * @param {{id: string, name?: string}} options.actor - Who changed it.
+   * @param {(prompt: Object) => boolean} [options.authorize] - Access check,
+   *   run on the prompt as loaded under the lock.
    * @param {string} [options.now] - ISO clock, for tests.
    * @returns {Promise<{prompt: Object, added: string[], removed: string[]}|null>}
+   * @throws {StorageError} Code `PROMPT_ACCESS_CHANGED` when `authorize` refuses.
    */
-  async setShares(promptId, shares, { actor, now = new Date().toISOString() } = {}) {
+  async setShares(promptId, shares, { actor, authorize, now = new Date().toISOString() } = {}) {
     if (!this.isAvailable() || !isUserPromptId(promptId)) return null;
     return this._withLock(promptId, async () => {
       const { prompt, etag } = await this._load(promptId);
       if (!prompt) return null;
+      assertAuthorized(authorize, prompt);
       const before = new Set((prompt.shares || []).map(shareTargetKey));
       const after = new Set(shares.map(shareTargetKey));
       const stored = await this._write(
@@ -538,14 +576,18 @@ export class UserPromptRepository {
    * @param {{id: string, name?: string}} newOwner - The new owner.
    * @param {Object} options
    * @param {{id: string, name?: string}} options.actor - Who handed it over.
+   * @param {(prompt: Object) => boolean} [options.authorize] - Access check,
+   *   run on the prompt as loaded under the lock.
    * @param {string} [options.now] - ISO clock, for tests.
    * @returns {Promise<Object|null>}
+   * @throws {StorageError} Code `PROMPT_ACCESS_CHANGED` when `authorize` refuses.
    */
-  async transfer(promptId, newOwner, { actor, now = new Date().toISOString() } = {}) {
+  async transfer(promptId, newOwner, { actor, authorize, now = new Date().toISOString() } = {}) {
     if (!this.isAvailable() || !isUserPromptId(promptId) || !newOwner?.id) return null;
     return this._withLock(promptId, async () => {
       const { prompt, etag } = await this._load(promptId);
       if (!prompt) return null;
+      assertAuthorized(authorize, prompt);
       const owner = actorOf(newOwner);
       const ownerKey = shareTargetKey({ type: 'user', id: owner.id });
       const shares = (prompt.shares || []).filter(share => shareTargetKey(share) !== ownerKey);
@@ -621,13 +663,18 @@ export class UserPromptRepository {
    * prompt that is half gone.
    *
    * @param {string} promptId - Prompt id.
+   * @param {Object} [options]
+   * @param {(prompt: Object) => boolean} [options.authorize] - Access check,
+   *   run on the prompt as loaded under the lock.
    * @returns {Promise<Object|null>} The prompt that was removed, or null.
+   * @throws {StorageError} Code `PROMPT_ACCESS_CHANGED` when `authorize` refuses.
    */
-  async delete(promptId) {
+  async delete(promptId, { authorize } = {}) {
     if (!this.isAvailable() || !isUserPromptId(promptId)) return null;
     return this._withLock(promptId, async () => {
       const { prompt } = await this._load(promptId);
       if (!prompt) return null;
+      assertAuthorized(authorize, prompt);
       await this.documents.delete(USER_PROMPTS_NAMESPACE, promptId);
       try {
         await this._removeMarkers(promptId, (prompt.shares || []).map(shareTargetKey));

@@ -179,7 +179,9 @@ Placeholders fall into three groups:
 
 A variable listed in `variables` is always asked for, even if its name would otherwise fill in automatically. This is how an author makes `{{content}}` a text area in the dialog, for example. `{{tone}}` is asked for because the chat's style setting that fills it is usually unset.
 
-If a prompt has an `appId` and declares variables that its text does not use, the dialog asks for those too and passes them to the app as `var_*` parameters, as before.
+If a prompt has an `appId` and declares variables that its text does not use, the dialog asks for those too and passes them to the app as `var_*` parameters, as before. That needs an app the user can open: a shared prompt can name an app its author may open and the recipient may not, and then it opens in the default app and those variables are not asked for.
+
+What the user types into a field goes into the text as typed; one field's value is never filled in by another. The final text is an ordinary chat message, though, so when it is sent the server fills in the automatic variables in it, as it does in anything typed into the chat. A value that contains `{{date}}` is sent with the date.
 
 > **Upgrading:** Prompts used `[content]` before. Migration `V136` rewrites every `[content]` in `contents/prompts/*.json` (and in a legacy `config/prompts.json`) to `{{content}}`. `[content]` is no longer recognized.
 
@@ -254,7 +256,7 @@ The settings for user prompts are under **Admin → Prompts → User prompts →
 
 | Setting | Description |
 | ------- | ----------- |
-| `enabled` | Whether users can create their own prompts. Global prompts are not affected. |
+| `enabled` | Whether users can create their own prompts. Global prompts are not affected. While it is off, users do not see or change their prompts, and prompt admins can still review, unshare, hand over and delete the ones that exist. |
 | `maxPromptsPerUser` | Most prompts one user can own. `0` means no limit. |
 | `maxVersions` | Versions kept per prompt. Older ones are removed. |
 | `sharing.allowUsers` / `allowGroups` / `allowEveryone` | Which audiences users can share with. These are checked when a share is added, so existing shares keep working. |

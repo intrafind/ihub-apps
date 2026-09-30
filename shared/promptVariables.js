@@ -240,8 +240,10 @@ export function missingRequiredVariables(fields, values = {}) {
  * variable it can still resolve (`{{model_name}}` once a model is picked) is
  * resolved there.
  *
- * Values are inserted literally: a value that itself contains `{{x}}` is
- * never expanded again.
+ * Values are inserted as typed: a value that itself contains `{{x}}` is not
+ * filled in again here, by another field or an automatic value. The result
+ * is an ordinary chat message, though, so the send pipeline still fills in
+ * the automatic variables in all of it, as in anything typed into the chat.
  *
  * @param {string} text - Prompt text.
  * @param {Object} [values] - The user's values, by field name.

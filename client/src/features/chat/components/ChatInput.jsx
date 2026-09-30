@@ -293,14 +293,14 @@ function ChatInput({
 
   // A prompt picked from the `/` search: its variables are asked for first,
   // then the text goes into the input — never sent — with the caret where
-  // `{{content}}` was, or at the end.
+  // `{{content}}` was, or at the end. Resolves to whether it was inserted.
   const { launch: launchPrompt, dialog: promptVariablesDialog } = usePromptLauncher();
   const insertPrompt = useCallback(
     async prompt => {
       const result = await launchPrompt(prompt);
       if (!result) {
         setTimeout(() => focusInputAtEnd(), 0);
-        return;
+        return false;
       }
       onChange({ target: { value: result.text } });
       setTimeout(() => {
@@ -314,6 +314,7 @@ function ChatInput({
         const at = Math.min(result.caret, el.value.length);
         el.setSelectionRange(at, at);
       }, 0);
+      return true;
     },
     [launchPrompt, onChange, focusInputAtEnd, actualInputRef]
   );
@@ -921,9 +922,9 @@ function ChatInput({
               setTimeout(() => {
                 focusInputAtEnd();
               }, 0);
-            } else {
-              insertPrompt(p);
+              return true;
             }
+            return insertPrompt(p);
           }}
           appSkills={app?.skills}
           promptsEnabled={promptsListEnabled}

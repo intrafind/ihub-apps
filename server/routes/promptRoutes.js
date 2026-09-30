@@ -43,6 +43,7 @@ import { getLocalizedContent } from '../../shared/localize.js';
 import { autoVariableNames } from '../../shared/promptVariables.js';
 import { StorageError, storageHttpStatus } from '../storage/errors.js';
 import {
+  ACCESS_CHANGED,
   getUserPromptRepository,
   isUserPromptId
 } from '../services/prompts/UserPromptRepository.js';
@@ -164,12 +165,19 @@ function callerContext(user) {
  * Gate for every route that reads or writes user prompts. Sends the refusal
  * itself and returns null when the request cannot go on.
  *
+ * With user prompts switched off, users neither see nor change their prompts
+ * until they are switched back on. Prompt admins still look after the ones
+ * that exist — review, unshare, hand over, delete — so a route that manages
+ * an existing prompt passes `manage` and lets them through.
+ *
  * @param {Object} req - Express request.
  * @param {Object} res - Express response.
+ * @param {Object} [options]
+ * @param {boolean} [options.manage] - The route manages an existing prompt.
  * @returns {{repo: import('../services/prompts/UserPromptRepository.js').UserPromptRepository,
  *   settings: ReturnType<typeof userPromptSettings>}|null}
  */
-function requireUserPrompts(req, res) {
+function requireUserPrompts(req, res, { manage = false } = {}) {
   if (!canHoldUserPrompts(req.user)) {
     sendErrorResponse(res, 403, 'This sign-in cannot hold user prompts', {
       details: { code: 'USER_PROMPTS_NOT_ALLOWED' }
@@ -177,10 +185,13 @@ function requireUserPrompts(req, res) {
     return null;
   }
   if (!isUserPromptsConfigured(configCache.getFeatures(), configCache.getPlatform() || {})) {
-    sendErrorResponse(res, 403, 'User prompts are switched off', {
-      details: { code: 'USER_PROMPTS_DISABLED' }
-    });
-    return null;
+    ensurePrincipal(req);
+    if (!manage || !isPromptAdmin(req.user, groupsConfig())) {
+      sendErrorResponse(res, 403, 'User prompts are switched off', {
+        details: { code: 'USER_PROMPTS_DISABLED' }
+      });
+      return null;
+    }
   }
   const repo = getUserPromptRepository();
   if (!repo.isAvailable()) {
@@ -196,6 +207,9 @@ function sendStorageError(res, error, operation) {
   if (error instanceof StorageError) {
     if (error.code === 'REVISION_CONFLICT') {
       return sendErrorResponse(res, 409, error.message, { details: { code: error.code } });
+    }
+    if (error.code === ACCESS_CHANGED) {
+      return sendErrorResponse(res, 403, error.message, { details: { code: error.code } });
     }
     const status = storageHttpStatus(error);
     if (status) {
@@ -284,6 +298,28 @@ async function loadUserPrompt(req, res, repo) {
     return null;
   }
   return { prompt, permissions, context, ownerActive };
+}
+
+/**
+ * The same permission check again, for the repository to run on the prompt it
+ * loads under its lock. The route's own check reads the prompt before the lock
+ * is taken; a share revoked or a prompt handed over while this request waits
+ * for the lock must still stop its write.
+ *
+ * @param {Object} req - Express request.
+ * @param {{groups: string[], isAdmin: boolean}} context - The caller's context.
+ * @param {'canEdit'|'canShare'|'canTransfer'|'canDelete'} permission - What the write needs.
+ * @returns {(prompt: Object) => boolean}
+ */
+function stillAllowed(req, context, permission) {
+  return prompt =>
+    Boolean(
+      userPromptPermissions(prompt, req.user, {
+        groups: context.groups,
+        isAdmin: context.isAdmin,
+        ownerActive: isActiveUser(usersDb(), prompt.ownerId)
+      })[permission]
+    );
 }
 
 /** Refuse a write the caller's permissions do not cover. */
@@ -621,7 +657,7 @@ export default function registerPromptRoutes(app) {
    */
   app.get(buildServerPath('/api/prompts/share-targets'), ...gate, authenticatedOnly, (req, res) => {
     try {
-      const deps = requireUserPrompts(req, res);
+      const deps = requireUserPrompts(req, res, { manage: true });
       if (!deps) return;
       const context = callerContext(req.user);
       const allowed = allowedTargetsFor(deps.settings, context);
@@ -770,7 +806,7 @@ export default function registerPromptRoutes(app) {
         );
       }
       if (!canHoldUserPrompts(req.user)) return sendNotFound(res, 'Prompt');
-      const deps = requireUserPrompts(req, res);
+      const deps = requireUserPrompts(req, res, { manage: true });
       if (!deps) return;
       const loaded = await loadUserPrompt(req, res, deps.repo);
       if (!loaded) return;
@@ -799,7 +835,7 @@ export default function registerPromptRoutes(app) {
             'GLOBAL_PROMPT_READ_ONLY'
           );
         }
-        const deps = requireUserPrompts(req, res);
+        const deps = requireUserPrompts(req, res, { manage: true });
         if (!deps) return;
         ensurePrincipal(req);
         const loaded = await loadUserPrompt(req, res, deps.repo);
@@ -825,7 +861,8 @@ export default function registerPromptRoutes(app) {
         const updated = await deps.repo.update(promptId, content, {
           actor: actorOf(req.user),
           expectedRevision,
-          maxVersions: deps.settings.maxVersions
+          maxVersions: deps.settings.maxVersions,
+          authorize: stillAllowed(req, loaded.context, 'canEdit')
         });
         if (!updated) return sendNotFound(res, 'Prompt');
         if (updated.revision !== loaded.prompt.revision) {
@@ -869,7 +906,7 @@ export default function registerPromptRoutes(app) {
             'GLOBAL_PROMPT_READ_ONLY'
           );
         }
-        const deps = requireUserPrompts(req, res);
+        const deps = requireUserPrompts(req, res, { manage: true });
         if (!deps) return;
         ensurePrincipal(req);
         const loaded = await loadUserPrompt(req, res, deps.repo);
@@ -877,7 +914,9 @@ export default function registerPromptRoutes(app) {
         if (!loaded.permissions.canDelete) {
           return refuse(res, 'Only the owner can delete this prompt');
         }
-        const removed = await deps.repo.delete(promptId);
+        const removed = await deps.repo.delete(promptId, {
+          authorize: stillAllowed(req, loaded.context, 'canDelete')
+        });
         if (!removed) return sendNotFound(res, 'Prompt');
         logAudit({
           req,
@@ -1011,7 +1050,7 @@ export default function registerPromptRoutes(app) {
         if (!isUserPromptId(promptId)) {
           return refuse(res, 'Global prompts are shared through groups', 'GLOBAL_PROMPT_READ_ONLY');
         }
-        const deps = requireUserPrompts(req, res);
+        const deps = requireUserPrompts(req, res, { manage: true });
         if (!deps) return;
         ensurePrincipal(req);
         const loaded = await loadUserPrompt(req, res, deps.repo);
@@ -1033,7 +1072,8 @@ export default function registerPromptRoutes(app) {
           });
         }
         const result = await deps.repo.setShares(promptId, resolved.shares, {
-          actor: actorOf(req.user)
+          actor: actorOf(req.user),
+          authorize: stillAllowed(req, loaded.context, 'canShare')
         });
         if (!result) return sendNotFound(res, 'Prompt');
         if (result.added.length || result.removed.length) {
@@ -1083,7 +1123,7 @@ export default function registerPromptRoutes(app) {
         const { promptId } = req.params;
         if (!validateIdForPath(promptId, 'prompt', res)) return;
         if (!isUserPromptId(promptId)) return sendNotFound(res, 'Prompt');
-        const deps = requireUserPrompts(req, res);
+        const deps = requireUserPrompts(req, res, { manage: true });
         if (!deps) return;
         ensurePrincipal(req);
         const loaded = await loadUserPrompt(req, res, deps.repo);
@@ -1108,7 +1148,7 @@ export default function registerPromptRoutes(app) {
         const transferred = await deps.repo.transfer(
           promptId,
           { id: body.ownerId, name: displayName({ ...target, id: body.ownerId }) },
-          { actor: actorOf(req.user) }
+          { actor: actorOf(req.user), authorize: stillAllowed(req, loaded.context, 'canTransfer') }
         );
         if (!transferred) return sendNotFound(res, 'Prompt');
         logAudit({
@@ -1152,7 +1192,7 @@ export default function registerPromptRoutes(app) {
         const { promptId } = req.params;
         if (!validateIdForPath(promptId, 'prompt', res)) return;
         if (!isUserPromptId(promptId)) return sendNotFound(res, 'Prompt');
-        const deps = requireUserPrompts(req, res);
+        const deps = requireUserPrompts(req, res, { manage: true });
         if (!deps) return;
         ensurePrincipal(req);
         const loaded = await loadUserPrompt(req, res, deps.repo);
@@ -1202,7 +1242,7 @@ export default function registerPromptRoutes(app) {
         ) {
           return sendBadRequest(res, 'Invalid revision');
         }
-        const deps = requireUserPrompts(req, res);
+        const deps = requireUserPrompts(req, res, { manage: true });
         if (!deps) return;
         ensurePrincipal(req);
         const loaded = await loadUserPrompt(req, res, deps.repo);
@@ -1215,7 +1255,8 @@ export default function registerPromptRoutes(app) {
         const restored = await deps.repo.update(promptId, version, {
           actor: actorOf(req.user),
           restoredFrom: revision,
-          maxVersions: deps.settings.maxVersions
+          maxVersions: deps.settings.maxVersions,
+          authorize: stillAllowed(req, loaded.context, 'canEdit')
         });
         if (!restored) return sendNotFound(res, 'Prompt');
         logAudit({

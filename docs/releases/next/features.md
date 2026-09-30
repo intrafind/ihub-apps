@@ -26,8 +26,8 @@ the details it needs. Admin-curated global prompts work as before.
   devices. What this browser remembered is carried over the first time.
 - **Admins:** **Admin → Prompts → User prompts** lists the prompts shared with groups or with
   everyone. Admins can edit, re-share, delete or promote them to a global prompt, which keeps the
-  author's name. The same tab holds the settings: turn user prompts off, limit the prompts per
-  user and the versions kept, and choose whom users may share with — optionally only members of
+  author's name. The same tab holds the settings: turn user prompts off (admins can still look
+  after the existing ones), limit the prompts per user and the versions kept, and choose whom users may share with — optionally only members of
   certain groups may share with groups or everyone. Every change is written to the audit log.
 - If the account of a prompt's owner is deleted or deactivated, the prompt stays available to
   everyone it was shared with, read-only.
