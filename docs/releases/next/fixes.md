@@ -96,6 +96,12 @@ refused with "not available in this app".
 - If users started workflows by typing the mention in an app that does not list them, add the
   workflows to that app.
 
+## Admin → Prompts → Variables Saves Again
+
+Saving on the **Variables** tab of **Admin → Prompts** failed with "Request failed with status
+code 404", so changes to the global context and new, edited or deleted custom variables were
+lost. The tab now saves, and the saved context and variables are used in prompts right away.
+
 ## PDF Exports Download a Real PDF File
 
 Chat export as PDF often produced a blank page, most visibly in the Outlook add-in and the browser

@@ -7,8 +7,9 @@
  * answers 200 while the on-disk value stays as it was, so the admin UI
  * appears to save and then reverts on reload.
  *
- * `mcpServer` (Admin → MCP gateway) is edited through this generic endpoint
- * rather than a dedicated route, so it must round-trip.
+ * `mcpServer` (Admin → MCP gateway) and `globalPromptVariables`
+ * (Admin → Prompts → Variables) are edited through this generic endpoint
+ * rather than a dedicated route, so they must round-trip.
  *
  * Note: The repo's source is native ESM, so this file uses
  * `jest.unstable_mockModule` + dynamic imports. Run with
@@ -96,6 +97,16 @@ describe('POST /api/admin/configs/platform section persistence', () => {
             enabled: false,
             requireConsent: true,
             expose: { tools: true, apps: true, workflows: true, resources: false }
+          },
+          proxyAuth: {
+            enabled: true,
+            jwtProviders: [
+              { name: 'sso', header: 'X-Token', jwkUrl: 'https://sso.example.com/jwks' }
+            ]
+          },
+          globalPromptVariables: {
+            context: 'The current date is {{date}}.',
+            variables: {}
           }
         },
         null,
@@ -177,5 +188,60 @@ describe('POST /api/admin/configs/platform section persistence', () => {
     expect(saved.mcpServer.enabled).toBe(true);
     expect(saved.oauth.enabled.authz).toBe(true);
     expect(saved.oauth.dcr.enabled).toBe(true);
+  });
+
+  test('persists globalPromptVariables (edited context and a new custom variable)', async () => {
+    const app = createTestApp();
+    const existing = await readPlatform();
+
+    const response = await request(app)
+      .post('/api/admin/configs/platform')
+      .send({
+        ...existing,
+        globalPromptVariables: {
+          context: 'The current date is {{date}}. Company: {{company}}.',
+          variables: { company: 'ACME Corp' }
+        }
+      });
+
+    expect(response.status).toBe(200);
+    expect((await readPlatform()).globalPromptVariables).toEqual({
+      context: 'The current date is {{date}}. Company: {{company}}.',
+      variables: { company: 'ACME Corp' }
+    });
+  });
+
+  test('keeps the existing globalPromptVariables when the request omits them', async () => {
+    const app = createTestApp();
+    const { globalPromptVariables: _omitted, ...withoutVariables } = await readPlatform();
+
+    await request(app).post('/api/admin/configs/platform').send(withoutVariables);
+
+    expect((await readPlatform()).globalPromptVariables).toEqual({
+      context: 'The current date is {{date}}.',
+      variables: {}
+    });
+  });
+
+  test('a save carrying only globalPromptVariables leaves every other section as stored', async () => {
+    const app = createTestApp();
+    const before = await readPlatform();
+    const globalPromptVariables = {
+      context: 'Company: {{company}}.',
+      variables: { company: 'ACME' }
+    };
+
+    const response = await request(app)
+      .post('/api/admin/configs/platform')
+      .send({ globalPromptVariables });
+
+    expect(response.status).toBe(200);
+    const saved = await readPlatform();
+    expect(saved.globalPromptVariables).toEqual(globalPromptVariables);
+    // The admin read leaves `jwkUrl` out, so it survives only when the save omits `proxyAuth`.
+    expect(saved.proxyAuth).toEqual(before.proxyAuth);
+    expect(saved.mcpServer).toEqual(before.mcpServer);
+    expect(saved.auth).toEqual(before.auth);
+    expect(saved.oauth).toEqual(before.oauth);
   });
 });
