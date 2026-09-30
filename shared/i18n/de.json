@@ -2834,7 +2834,7 @@
         "autoStart": "Konversation automatisch starten",
         "autoStartHelp": "Wenn aktiviert, startet die App automatisch die Konversation, wenn der Chat geöffnet oder zurückgesetzt wird",
         "startForm": "Chats mit einem Formular starten",
-        "startFormHelp": "Ein neuer Chat öffnet diese Variablen als Formular statt der Chat-Eingabe, mit einer Ablagefläche für Dateien, wenn Uploads aktiviert sind. Beim Absenden wird die Prompt-Vorlage einmal ausgefüllt und als erste Nachricht gesendet; die Unterhaltung geht danach ohne die Vorlage weiter.",
+        "startFormHelp": "Ein neuer Chat öffnet diese Variablen als Formular statt der Chat-Eingabe, mit einem Nachrichtenfeld, einer Modellauswahl, wenn Nutzer das Modell wählen dürfen, und einer Ablagefläche für Dateien, wenn Uploads aktiviert sind. Beim Absenden wird die Prompt-Vorlage einmal ausgefüllt und als erste Nachricht gesendet; die Unterhaltung geht danach ohne die Vorlage weiter.",
         "startFormSubmitLabel": "Beschriftung der Senden-Schaltfläche",
         "ephemeral": "Flüchtiger Chat",
         "ephemeralHelp": "Wenn aktiviert, wird der Chat nie gespeichert. Nachrichten existieren nur, solange der Chat geöffnet ist, und werden verworfen, wenn Sie die App wechseln oder neu laden.",

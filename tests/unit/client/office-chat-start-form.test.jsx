@@ -58,12 +58,13 @@ jest.mock('../../../client/src/features/office/hooks/useOfficeChatAdapter', () =
   })
 }));
 
+const mockSettings = { models: [{ id: 'gpt' }], setSelectedModel: jest.fn() };
 jest.mock('../../../client/src/shared/hooks/useAppSettings', () => ({
   __esModule: true,
   default: () => ({
-    models: [{ id: 'gpt' }],
+    models: mockSettings.models,
     selectedModel: 'gpt',
-    setSelectedModel: jest.fn(),
+    setSelectedModel: mockSettings.setSelectedModel,
     enabledTools: [],
     setEnabledTools: jest.fn(),
     websearchEnabled: false,
@@ -166,6 +167,8 @@ const renderPanel = (selectedApp = APP) =>
   );
 
 beforeEach(() => {
+  mockSettings.models = [{ id: 'gpt' }];
+  mockSettings.setSelectedModel.mockReset();
   mockSendMessage.mockReset();
   mockAdapter.messages = [];
   mockUpload.selectedFile = null;
@@ -243,6 +246,41 @@ test('text handed over from the start page waits in the form as its message', as
   expect(mockSendMessage.mock.calls[0][0].apiMessage.content).toBe(
     'Reply in a firm tone.\n\nMention the deadline'
   );
+});
+
+test('text typed into the form is sent as {{content}}', () => {
+  renderPanel();
+  fireEvent.change(screen.getByPlaceholderText('Who signs'), { target: { value: 'Ada' } });
+  fireEvent.change(screen.getByLabelText('Message'), { target: { value: 'Keep it short' } });
+  fireEvent.submit(screen.getByTestId('start-form'));
+
+  expect(mockSendMessage.mock.calls[0][0].apiMessage.content).toBe(
+    'Reply in a  tone.\n\nKeep it short'
+  );
+});
+
+test('the form picks the model when the app lets users choose it', () => {
+  mockSettings.models = [
+    { id: 'gpt', name: { en: 'GPT' } },
+    { id: 'mistral', name: { en: 'Mistral' } }
+  ];
+  renderPanel();
+
+  fireEvent.click(screen.getByRole('button', { name: 'GPT' }));
+  fireEvent.click(screen.getByRole('menuitem', { name: 'Mistral' }));
+  expect(mockSettings.setSelectedModel).toHaveBeenCalledWith('mistral');
+  expect(mockSendMessage).not.toHaveBeenCalled();
+});
+
+test('an app that fixes the model shows no selector on the form', () => {
+  mockSettings.models = [
+    { id: 'gpt', name: { en: 'GPT' } },
+    { id: 'mistral', name: { en: 'Mistral' } }
+  ];
+  renderPanel({ ...APP, settings: { model: { enabled: false } } });
+
+  expect(screen.getByTestId('start-form')).toBeInTheDocument();
+  expect(screen.queryByRole('button', { name: 'GPT' })).toBeNull();
 });
 
 test('a document dropped on the form goes along, also as the only content', () => {

@@ -121,6 +121,22 @@ configuration starts to fail.
 - The Admin **Overview** shows the free space in a **Disk space** row under *Platform status*.
 - The page is hidden together with the other system pages when `admin.pages.system` is `false`.
 
+## Start Forms: Message Field and Model Selection
+
+The form an app can start its chats with now takes the user's own text and lets them choose the
+model, two things only the chat input offered before. Apps like the Translator, whose prompt works
+on the user's text, can now be used with a form even when uploads are off.
+
+- **Message field:** every start form has one: the chat input's text, on the form. It fills the
+  prompt's `{{content}}` (the text to translate, for example), or follows the filled-in prompt
+  when the template has no `{{content}}`. It is optional and shows the app's message placeholder.
+  Before, the field only appeared when the chat was opened with text.
+- **Model selection:** when the app lets users pick the model, the model selector sits next to the
+  send button, so the first message already goes to the chosen model. The selected model's hint
+  is shown on the form, and an **Important Notice** has to be acknowledged before sending, as in
+  the chat input. In compare mode each panel keeps its own model picker.
+- Works in the web app, the Outlook add-in and the browser extension.
+
 ## Web Search: Sources View and Numbered Citations
 
 Answers that used web search now show what was searched and which sources the answer relies on.
