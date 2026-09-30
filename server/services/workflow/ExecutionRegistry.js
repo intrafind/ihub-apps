@@ -255,6 +255,9 @@ function fromSummary(summary) {
     inputPreview: summary.inputPreview ?? null,
     models: Array.isArray(summary.models) ? [...summary.models] : [],
     triggeredBy: summary.triggeredBy ?? null,
+    // A chat-launched run's chat, from the refs its ledger run was started with.
+    chatId: typeof summary.refs?.chatId === 'string' ? summary.refs.chatId : null,
+    appId: typeof summary.refs?.appId === 'string' ? summary.refs.appId : null,
     archived: summary.archived === true
   };
 }
@@ -645,6 +648,8 @@ export class ExecutionRegistry {
    * @param {string} [metadata.inputPreview] - Sanitized preview of the input
    * @param {string[]} [metadata.models] - Models the workflow may use
    * @param {Object} [metadata.triggeredBy] - Human who initiated the run
+   * @param {string} [metadata.chatId] - Chat a chat-launched run belongs to
+   * @param {string} [metadata.appId] - App of that chat
    * @returns {Object} The registered execution metadata
    *
    * @example
@@ -666,7 +671,9 @@ export class ExecutionRegistry {
       source,
       inputPreview,
       models,
-      triggeredBy
+      triggeredBy,
+      chatId,
+      appId
     } = metadata;
 
     if (!executionId) {
@@ -699,6 +706,10 @@ export class ExecutionRegistry {
       // the list/detail/artifact endpoints. Separate from `userId` which
       // is the service-account principal for agent runs.
       triggeredBy: triggeredBy && typeof triggeredBy === 'object' ? triggeredBy : null,
+      // The chat a chat-launched run belongs to. Stored by the ledger, on the
+      // run's `refs` (see `fromSummary`).
+      chatId: typeof chatId === 'string' && chatId ? chatId : null,
+      appId: typeof appId === 'string' && appId ? appId : null,
       archived: false
     };
 

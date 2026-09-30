@@ -173,3 +173,23 @@ and links instead of one flattened line of text. Long pages and PDFs can be read
   no request.
 - The reader is now also offered next to Claude's and OpenAI's native web search, so pasted URLs
   can be opened there too. Gemini's native search still does not allow it.
+
+## Chats: See What an Answer Was Based On When You Come Back
+
+A reopened chat now shows how each answer came about, the way it did while it streamed: the
+searches the turn ran, the documents and pages they found and read, the other tools it called and
+the steps of a workflow. Before, a stored answer kept only its text, so a user coming back could
+not tell what had happened — and the badge under a web-search or iFinder answer read "Based on AI
+knowledge".
+
+- Covers web search (tool and provider search), iFinder and configured sources, iAssistant
+  searches with their queries and hit counts, skills, other tool calls with their arguments,
+  errors and durations, and the steps and result of workflows started by `@workflow` or by a tool.
+- The badge under the answer names its source again ("Based on web search", "… iFinder").
+- A finished workflow in the chat links to its execution (**View execution details**), where every
+  step and result is kept. **My Executions** and the execution page link back to the chat a run
+  was started from.
+- Shared chats show the activity without what the owner's own searches found — iFinder, sources,
+  MCP and intranet tools, and pages read by the page reader — the same way they leave out the
+  owner's document list. Public web searches keep their pages.
+- Applies to answers stored from this release on (requires **Durable Chats**).

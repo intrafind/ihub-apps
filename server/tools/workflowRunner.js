@@ -259,6 +259,7 @@ export default async function workflowRunner(params = {}) {
     passthrough,
     runId: chatRunId,
     appConfig: _appConfig,
+    _chatStored,
     _chatHistory,
     _fileData,
     language = 'en',
@@ -297,6 +298,14 @@ export default async function workflowRunner(params = {}) {
   if (modelId) {
     initialData._modelOverride = modelId;
   }
+
+  // The chat the run belongs to, so its ledger run, "My Executions" and the
+  // execution page can lead back to it — only a stored chat, which is the only
+  // kind there is to go back to. Both come from the server (`appConfig` and
+  // `_chatStored` are set after the model's arguments), never from arguments.
+  // The engine takes them from `options.chat` only (`WorkflowEngine.start`).
+  const appId = typeof _appConfig?.id === 'string' && _appConfig.id ? _appConfig.id : null;
+  const chatRefs = chatId && _chatStored === true ? { chatId, appId } : null;
 
   // Map the chat-message `input` to the workflow's first non-file/image
   // input variable. With the current input shape (files + one user text
@@ -374,7 +383,8 @@ export default async function workflowRunner(params = {}) {
     state = await engine.start(workflow, initialData, {
       user,
       checkpointOnNode: true,
-      ...(isValidRunId(chatRunId) ? { executionId: chatRunId } : {})
+      ...(isValidRunId(chatRunId) ? { executionId: chatRunId } : {}),
+      ...(chatRefs ? { chat: chatRefs } : {})
     });
   } catch (error) {
     logger.error('Failed to start workflow', {
@@ -400,7 +410,8 @@ export default async function workflowRunner(params = {}) {
       workflowName: workflow.name,
       status: 'running',
       startedAt: new Date().toISOString(),
-      source: 'chat'
+      source: 'chat',
+      ...(chatRefs ? { chatId: chatRefs.chatId, appId: chatRefs.appId } : {})
     });
   } catch (error) {
     logger.warn('Failed to register execution', {

@@ -98,6 +98,25 @@ let _singletonInstance = null;
  * @param {Object} [options] - Options passed to constructor on first creation
  * @returns {WorkflowEngine}
  */
+/**
+ * Start data with the chat refs set from `chat` alone: `_chatId`/`_appId` in
+ * the data itself are dropped.
+ *
+ * @param {Object} [initialData] - Start data.
+ * @param {{chatId?: string, appId?: string|null}} [chat] - The chat the
+ *   execution belongs to, from the server.
+ * @returns {Object}
+ */
+function withChatRefs(initialData, chat) {
+  const { _chatId: _claimedChat, _appId: _claimedApp, ...data } = initialData || {};
+  if (typeof chat?.chatId !== 'string' || !chat.chatId) return data;
+  return {
+    ...data,
+    _chatId: chat.chatId,
+    ...(typeof chat.appId === 'string' && chat.appId ? { _appId: chat.appId } : {})
+  };
+}
+
 export function getWorkflowEngine(options) {
   if (!_singletonInstance) {
     _singletonInstance = new WorkflowEngine(options);
@@ -284,6 +303,9 @@ export class WorkflowEngine {
    * @param {boolean} [options.checkpointOnNode=false] - Whether to checkpoint after each node
    * @param {number} [options.timeout] - Override default node timeout
    * @param {Object} [options.user] - User context for the execution
+   * @param {{chatId: string, appId?: string}} [options.chat] - The stored chat the
+   *   execution was started from; the only source of its chat refs
+   *   (`_chatId`/`_appId` in `initialData` are dropped)
    * @returns {Promise<Object>} The initial execution state
    *
    * @example
@@ -379,11 +401,18 @@ export class WorkflowEngine {
         : []
     };
 
+    // The chat an execution belongs to is the server's to say, never its start
+    // data's: the chat's workflow bridge passes it as `options.chat`
+    // (`tools/workflowRunner.js`). Start data also comes from API callers, and
+    // a `_chatId` of theirs would put a "started in this chat" link on the
+    // ledger run, in "My Executions" and on the execution page.
+    const startData = withChatRefs(initialData, options.chat);
+
     const state = await this.stateManager.create({
       executionId,
       workflowId,
       data: {
-        ...initialData,
+        ...startData,
         _workflow: {
           startedBy: options.user?.id || 'anonymous',
           startedAt: new Date().toISOString()
@@ -401,7 +430,7 @@ export class WorkflowEngine {
     // 5b. The execution is a run on the ledger (runId === executionId): its
     // interactions, pause/resume and end are recorded there and the run routes
     // (`/api/runs/:runId/…`) authorize against it.
-    await this._startLedgerRun(executionId, workflowDefinition, initialData, options);
+    await this._startLedgerRun(executionId, workflowDefinition, startData, options);
 
     // 6. Emit workflow start event
     this._emitEvent('workflow.start', {
@@ -1875,7 +1904,8 @@ export class WorkflowEngine {
           executionId,
           ...(workflowDefinition.id ? { workflowId: String(workflowDefinition.id) } : {}),
           ...(agent?.profileId ? { profileId: String(agent.profileId) } : {}),
-          ...(typeof initialData?._chatId === 'string' ? { chatId: initialData._chatId } : {})
+          ...(typeof initialData?._chatId === 'string' ? { chatId: initialData._chatId } : {}),
+          ...(typeof initialData?._appId === 'string' ? { appId: initialData._appId } : {})
         },
         ...(initialData?.language ? { language: String(initialData.language) } : {})
       });

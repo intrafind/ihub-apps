@@ -12,7 +12,7 @@ import {
   getPendingInteraction,
   getStreamProgress,
   isRunFinished
-} from '../../../client/src/shared/run/runReducer';
+} from '../../../shared/run/runReducer.js';
 
 const ts = seq => `2026-09-02T10:00:${String(seq).padStart(2, '0')}.000Z`;
 const env = (seq, runId, type, data = {}) => ({ v: 2, seq, runId, ts: ts(seq), type, data });

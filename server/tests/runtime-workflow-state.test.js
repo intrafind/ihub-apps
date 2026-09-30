@@ -39,6 +39,8 @@ import {
   resetStateManager
 } from '../services/workflow/StateManager.js';
 import { resetExecutionRegistry } from '../services/workflow/ExecutionRegistry.js';
+import { WorkflowEngine } from '../services/workflow/WorkflowEngine.js';
+import runLog from '../services/loop/RunLog.js';
 import { sweepOrphanedExecutions } from '../services/workflow/orphanSweeper.js';
 import {
   findResumableExecutions,
@@ -432,6 +434,53 @@ describe('orphan sweep through the repository', () => {
     });
   });
 
+  it('also sweeps a workflow a chat started, but not one paused for input', async () => {
+    // `@workflow` runs carry the chat's run id and are never resumed, so one
+    // left running died with the process. A paused one can still be answered.
+    await withRepository(async ({ repository }) => {
+      await repository.write('workflow-chat-1', state('workflow-chat-1'), { ownerId: OWNER });
+      await repository.write(
+        'workflow-chat-paused',
+        state('workflow-chat-paused', { status: WorkflowStatus.PAUSED }),
+        { ownerId: OWNER }
+      );
+
+      const result = await sweepOrphanedExecutions({ requireSchedulerOwner: false, repository });
+
+      assert.equal(result.marked, 1);
+      assert.equal((await repository.read('workflow-chat-1')).status, 'failed');
+      assert.equal((await repository.read('workflow-chat-paused')).status, WorkflowStatus.PAUSED);
+    });
+  });
+
+  it('leaves a chat’s workflow that another worker is running alone', async () => {
+    // The chat's request, and with it the workflow, landed on another worker:
+    // this process's `activeStates` never saw it.
+    await withRepository(async ({ repository }) => {
+      const live = state('workflow-chat-live');
+      live.data = { ...live.data, _chatId: 'chat-live' };
+      await repository.write('workflow-chat-live', live, { ownerId: OWNER });
+      await repository.write('workflow-chat-dead', state('workflow-chat-dead'), {
+        ownerId: OWNER
+      });
+      const asked = [];
+
+      const result = await sweepOrphanedExecutions({
+        requireSchedulerOwner: false,
+        repository,
+        heldByAnotherWorker: (executionId, stored) => {
+          asked.push(executionId);
+          return stored.data?._chatId === 'chat-live';
+        }
+      });
+
+      assert.equal(result.marked, 1);
+      assert.equal((await repository.read('workflow-chat-live')).status, WorkflowStatus.RUNNING);
+      assert.equal((await repository.read('workflow-chat-dead')).status, 'failed');
+      assert.deepEqual(asked.sort(), ['workflow-chat-dead', 'workflow-chat-live']);
+    });
+  });
+
   it('leaves a run that is live in this process alone', async () => {
     await withRepository(async ({ repository }) => {
       await repository.write('wf-exec-live', state('wf-exec-live'), { ownerId: OWNER });
@@ -627,5 +676,54 @@ describe('importLegacyWorkflowStates', () => {
     } finally {
       await fs.rm(stateDir, { recursive: true, force: true });
     }
+  });
+});
+
+describe('the chat an execution belongs to', () => {
+  const definition = {
+    id: 'wf-1',
+    nodes: [
+      { id: 'start', type: 'start' },
+      { id: 'end', type: 'end' }
+    ],
+    edges: [{ source: 'start', target: 'end' }]
+  };
+
+  it('is the server’s to say, never the start data’s', async () => {
+    await withRepository(async ({ repository }) => {
+      const engine = new WorkflowEngine({ stateManager: new StateManager({ repository }) });
+      engine._runExecutionLoop = async () => {};
+      const started = [];
+      const startRun = runLog.startRun;
+      runLog.startRun = async args => {
+        started.push(args);
+        return { runId: args.runId };
+      };
+      try {
+        // Start data an API caller posted, claiming somebody's chat.
+        const claimed = await engine.start(
+          definition,
+          { input: 'q', _chatId: 'chat-of-someone-else', _appId: 'chat' },
+          { executionId: 'wf-exec-claimed' }
+        );
+        // The chat's workflow bridge.
+        const bridged = await engine.start(
+          definition,
+          { input: 'q', _chatId: 'chat-of-someone-else' },
+          { executionId: 'workflow-bridged', chat: { chatId: 'chat-1', appId: 'app-1' } }
+        );
+
+        assert.equal(claimed.data._chatId, undefined);
+        assert.equal(claimed.data._appId, undefined);
+        assert.equal(started[0].refs.chatId, undefined);
+        assert.equal(started[0].refs.appId, undefined);
+        assert.equal(bridged.data._chatId, 'chat-1');
+        assert.equal(bridged.data._appId, 'app-1');
+        assert.equal(started[1].refs.chatId, 'chat-1');
+        assert.equal(started[1].refs.appId, 'app-1');
+      } finally {
+        runLog.startRun = startRun;
+      }
+    });
   });
 });

@@ -22,7 +22,7 @@ import {
   getStreamProgress,
   getStreamInteractions,
   isRunFinished
-} from '../../shared/run/runReducer';
+} from '../../../../shared/run/runReducer.js';
 import {
   interactionToCheckpoint,
   isCheckpointInteraction

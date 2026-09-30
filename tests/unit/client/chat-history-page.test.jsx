@@ -100,6 +100,25 @@ beforeEach(() => {
   mockApi.deleteChat.mockResolvedValue({ deleted: true });
 });
 
+describe('a chat that is still working', () => {
+  test('is marked running until its answer lands', async () => {
+    // A long workflow started by `@mention` is in the list from its first
+    // frame, well before it answers; the row says so.
+    mockApi.fetchChats.mockResolvedValue({
+      items: [
+        { ...chatDoc('chat-1', 'Review statements'), status: 'running' },
+        chatDoc('chat-2', 'Done')
+      ],
+      nextCursor: null
+    });
+    await renderPage();
+
+    await waitFor(() => expect(screen.getByText('Review statements')).toBeInTheDocument());
+    expect(screen.getAllByText('Running')).toHaveLength(1);
+    expect(screen.getByTitle('This chat is still working on an answer')).toBeInTheDocument();
+  });
+});
+
 describe('the header count', () => {
   test('says how many are loaded, not that the page size is the total', async () => {
     // A cursor-paged API has no cheap total. Printing the page size as one puts

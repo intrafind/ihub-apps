@@ -448,6 +448,7 @@
     "appNotFound": "Anwendung nicht gefunden",
     "missingRequiredFields": "Erforderliche Felder fehlen:",
     "streamingError": "Ein Fehler ist beim Streaming aufgetreten",
+    "runInterrupted": "Diese Antwort wurde unterbrochen: Der Server wurde angehalten, während sie erstellt wurde.",
     "failedToGenerateResponse": "Fehler beim Generieren der Antwort. Bitte versuchen Sie es erneut oder wählen Sie ein anderes Modell.",
     "sessionExpired": "Ihre Sitzung ist abgelaufen. Bitte melden Sie sich erneut an, um fortzufahren.",
     "sessionExpiredReconnecting": "Sitzung abgelaufen. Verbindung zum Authentifizierungsanbieter wird wiederhergestellt...",
@@ -3881,11 +3882,20 @@
     "unknownStep": "Schritt",
     "generated": "Generiert",
     "failed": "Fehlgeschlagen",
-    "cancelled": "Abgebrochen"
+    "cancelled": "Abgebrochen",
+    "viewExecution": "Ausführungsdetails anzeigen",
+    "waitingForInput": "Wartet auf Ihre Eingabe"
   },
   "workflows": {
     "title": "Workflows",
     "subtitle": "Automatisierte Workflows verwalten und ausführen",
+    "openChat": "Chat öffnen",
+    "chatWithResults": {
+      "button": "Mit Ergebnissen chatten",
+      "title": "Mit der Workflow-Ausgabe in einer App weiterchatten",
+      "contextMessage": "Hier sind die Ergebnisse des Workflows „{{name}}“:",
+      "failed": "Der Chat konnte nicht gestartet werden. Bitte versuchen Sie es erneut."
+    },
     "newWorkflow": "Neuer Workflow",
     "modelUsed": "Modell",
     "workflowDefault": "Workflow-Standard",
@@ -3962,6 +3972,7 @@
     "showArchived": "Archivierte anzeigen",
     "executionCard": {
       "startedAt": "Gestartet",
+      "openChat": "In einem Chat gestartet – Chat öffnen",
       "current": "Aktuell",
       "inputLabel": "Eingabe",
       "moreInputs": "+{{count}} weitere",
@@ -4330,6 +4341,8 @@
     "messageCount_other": "{{count}} Nachrichten",
     "unseen": "Neu",
     "unseenHint": "Dieser Chat hat geantwortet, während Sie weg waren",
+    "running": "Läuft",
+    "runningHint": "Dieser Chat arbeitet noch an einer Antwort",
     "rename": "Chat umbenennen",
     "delete": "Chat löschen",
     "deleteTitle": "Chat löschen",

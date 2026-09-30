@@ -14,10 +14,16 @@
  *
  * @module features/chat/runToMessage
  */
-import { isRunFinished, getInteractions } from '../../shared/run/runReducer';
+import { isRunFinished, getInteractions } from '../../../../shared/run/runReducer.js';
+import { buildToolActivity } from '../../../../shared/run/toolActivity.js';
+import {
+  answerSourceOf,
+  buildWorkflowSteps,
+  settleWorkflowSteps,
+  workflowResultOf
+} from '../../../../shared/run/runActivity.js';
 import { insertSupportMarkers } from '../../../../shared/webCitations.js';
 import { buildRunWebSearch } from './webSearch';
-import { buildToolActivity } from './toolActivity';
 import { buildMcpAppViews } from './mcpApps/mcpAppViewList';
 import { buildMcpAuthPrompts } from './mcpApps/mcpConnectPrompts';
 import {
@@ -28,9 +34,6 @@ import {
 
 /** Fallback when a stream/error frame carries no message (callers pass the translated string). */
 export const DEFAULT_STREAM_ERROR_MESSAGE = 'An error occurred during streaming';
-
-/** progress/node status → chat step status (WorkflowStepIndicator vocabulary). */
-const NODE_STATUS_TO_STEP_STATUS = Object.freeze({ failed: 'error' });
 
 /**
  * Fold a list of citation payloads with the same semantics as
@@ -51,37 +54,6 @@ export function mergeCitationEntries(entries) {
     };
   }
   return Object.keys(merged).length ? merged : null;
-}
-
-/**
- * Chat step list from the run's `progress/node` entries, replayed with the
- * exact semantics of `useChatMessages.appendWorkflowStep`:
- *   - status 'running'  → every other running step becomes 'completed', new step appended
- *   - any other status  → replaces the step with the same nodeName, else appended
- *
- * @param {Object} run - RunState
- * @returns {Array<{nodeName, nodeType, status, workflowName, chatVisible}>}
- */
-export function buildWorkflowSteps(run) {
-  let steps = [];
-  for (const entry of run?.progress || []) {
-    if (entry.kind !== 'progress/node') continue;
-    const step = {
-      nodeName: entry.nodeName,
-      nodeType: entry.nodeType,
-      status: NODE_STATUS_TO_STEP_STATUS[entry.status] || entry.status,
-      workflowName: entry.progress?.workflowName,
-      chatVisible: entry.progress?.chatVisible
-    };
-    if (step.status === 'running') {
-      steps = steps.map(s => (s.status === 'running' ? { ...s, status: 'completed' } : s));
-      steps = [...steps, step];
-    } else {
-      const exists = steps.some(s => s.nodeName === step.nodeName);
-      steps = exists ? steps.map(s => (s.nodeName === step.nodeName ? step : s)) : [...steps, step];
-    }
-  }
-  return steps;
 }
 
 /**
@@ -180,25 +152,16 @@ export function projectRunToMessage(run, options = {}) {
         : null;
   }
 
-  let steps = buildWorkflowSteps(run);
+  const steps = buildWorkflowSteps(run);
   if (steps.length) {
     extras.workflowSteps = steps;
     extras.workflowStep = last(steps, s => s.status === 'running');
   }
   if (workflow) {
-    steps = steps.map(s =>
-      s.status === 'running'
-        ? { ...s, status: workflow.status === 'failed' ? 'error' : 'completed' }
-        : s
-    );
-    extras.workflowSteps = steps;
+    extras.workflowSteps = settleWorkflowSteps(steps, workflow.status);
     extras.workflowStep = null;
     extras.workflowCheckpoint = null;
-    extras.workflowResult = {
-      status: workflow.status,
-      executionId: run.meta?.executionId,
-      workflowName: workflow.workflowName
-    };
+    extras.workflowResult = workflowResultOf(run);
     extras.outputFormat = workflow.outputFormat || 'markdown';
   }
 
@@ -232,9 +195,8 @@ export function projectRunToMessage(run, options = {}) {
 
   // ── completion metadata ──────────────────────────────────────────────
   if (finished) {
-    if (run.knowledgeSources?.length) {
-      extras.answerSource = { sources: run.knowledgeSources, type: 'mixed' };
-    }
+    const answerSource = answerSourceOf(run);
+    if (answerSource) extras.answerSource = answerSource;
     if (run.finishReason !== null && run.finishReason !== undefined) {
       extras.finishReason = run.finishReason;
     }

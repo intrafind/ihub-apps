@@ -6,7 +6,7 @@ import {
   syntheticStreamError,
   TRANSPORT_ERROR_CODES
 } from '../utils/openSseStream';
-import { RUN_EVENTS } from '../run/runReducer';
+import { RUN_EVENTS } from '../../../../shared/run/runReducer.js';
 
 /**
  * Chat stream transport (SSE v2) on top of the shared fetch-based

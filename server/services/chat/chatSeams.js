@@ -608,6 +608,7 @@ export function chatQuestionOptions({
  */
 export function chatPassthroughOptions({
   chatId,
+  chatStored = false,
   user,
   app,
   userFileData,
@@ -627,6 +628,9 @@ export function chatPassthroughOptions({
       // inject file content into agent node messages.
       if (String(info.toolId).startsWith('workflow_') && userFileData)
         params._fileData = userFileData;
+      // Whether the chat is stored, so the workflow's execution links back to
+      // it only when there is a chat to go back to.
+      if (String(info.toolId).startsWith('workflow_')) params._chatStored = chatStored;
       return params;
     },
     onChunk(text, info, ctx) {

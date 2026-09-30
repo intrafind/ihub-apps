@@ -711,6 +711,12 @@ function AppChat({ preloadedApp = null, embedded = false, appId: embeddedAppId =
     appId,
     chatId,
     onMessageComplete: handleMessageComplete,
+    // A turn that starts is already in the store: a new chat belongs in the
+    // history (running) now, not when its answer lands — which for a long
+    // workflow is minutes away, and never happens here if the user leaves.
+    onRunStarted: () => {
+      if (serverBackedChat) invalidateChatsCache();
+    },
     // Embedded, the app page's iAssistant conversation stays untouched.
     persistConversationId: !embedded,
     // Runtime-selectable: seeded from app.ephemeral but the user can toggle it in

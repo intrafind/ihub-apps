@@ -3,13 +3,13 @@
  * of piecemeal grounding frames and the message projection onto `webSearch`
  * (client/src/features/chat/webSearch.js over shared/webCitations.js).
  */
-import { hostnameOf } from '../../../client/src/features/chat/groundingSources';
+import { hostnameOf } from '../../../shared/run/groundingSources.js';
 import {
   createStreamState,
   reduceRunEvents,
   getRun,
   mergeGrounding
-} from '../../../client/src/shared/run/runReducer';
+} from '../../../shared/run/runReducer.js';
 import { projectRunToMessage } from '../../../client/src/features/chat/runToMessage';
 
 const ts = seq => `2026-09-07T10:00:${String(seq).padStart(2, '0')}.000Z`;

@@ -547,7 +547,12 @@ function ChatMessage({
       contentToRender = `${storedContent}${cancelledNote}`;
     } else if (message.fromServer && isError && !storedContent) {
       contentToRender =
-        message.errorMessage || t('error.streamingError', 'An error occurred during streaming');
+        message.errorCode === 'RUN_INTERRUPTED'
+          ? t(
+              'error.runInterrupted',
+              'This answer was interrupted: the server stopped while it was being produced.'
+            )
+          : message.errorMessage || t('error.streamingError', 'An error occurred during streaming');
     }
 
     // For HTML content, check if it contains image tags or file indicators and render them properly
@@ -817,8 +822,10 @@ function ChatMessage({
             : 'w-full'
         }
       >
-        {/* Unified workflow step progress indicator */}
-        {!isUser && message.workflowSteps?.length > 0 && (
+        {/* Unified workflow step progress indicator. A result alone is enough:
+            a workflow interrupted before it reported a step still names itself
+            and links its execution. */}
+        {!isUser && (message.workflowSteps?.length > 0 || message.workflowResult) && (
           <WorkflowStepIndicator
             steps={message.workflowSteps}
             currentStep={message.workflowStep}
