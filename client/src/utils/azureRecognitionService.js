@@ -12,6 +12,9 @@ class AzureSpeechRecognition {
   // Fetch a token from the iHub server; false means keyless (on-prem container).
   useServerToken = true;
   interimResults = false;
+  // Results are emitted as { text, isFinal }, not as browser SpeechRecognition
+  // events; useVoiceRecognition parses them accordingly.
+  usesTextEventShape = true;
 
   constructor() {}
 
@@ -28,30 +31,48 @@ class AzureSpeechRecognition {
   }
 
   stop() {
-    if (this.continuous && this.recognition) {
-      this.recognition.stopContinuousRecognitionAsync(
-        () => {
-          console.log('Continuous recognition stopped');
-          this.#triggerOnEnd();
-        },
-        err => {
-          console.error('Error stopping continuous recognition:', err);
-          this.#triggerOnError({ error: 'network' });
-        }
-      );
+    if (!this.recognition) return;
+    if (!this.continuous) {
+      // Single-shot recognition has no stop call: closing the recognizer
+      // aborts it and releases the microphone. Its pending callback is then
+      // ignored (see #startSingleShotRecognition), so end the session here.
+      this.close();
+      this.#triggerOnEnd();
+      return;
     }
+    this.recognition.stopContinuousRecognitionAsync(
+      () => {
+        console.log('Continuous recognition stopped');
+        this.#triggerOnEnd();
+      },
+      err => {
+        console.error('Error stopping continuous recognition:', err);
+        this.#triggerOnError({ error: 'network' });
+      }
+    );
+  }
+
+  // Release the SDK recognizer (and with it the microphone) without waiting
+  // for a recognition to finish, e.g. one that was built but never started.
+  close() {
+    this.recognition?.close();
+    this.recognition = undefined;
   }
 
   #startSingleShotRecognition() {
     this.recognition.recognizeOnceAsync(result => {
+      // stop() closed the recognizer and already ended the session.
+      if (!this.recognition) return;
       switch (result.reason) {
         case speechSdk.ResultReason.RecognizedSpeech:
-          this.#triggerOnResult(result);
+          this.#triggerOnResult({ text: result.text, isFinal: true });
           this.#triggerOnEnd();
           break;
         case speechSdk.ResultReason.NoMatch:
           this.#triggerOnError({ error: 'no-speech' });
-
+          // Like the browser API: an error ends the session, so listeners
+          // leave the listening state.
+          this.#triggerOnEnd();
           break;
         case speechSdk.ResultReason.Canceled:
           const cancellation = speechSdk.CancellationDetails.fromResult(result);
@@ -72,9 +93,10 @@ class AzureSpeechRecognition {
                 this.#triggerOnError({ error: '' });
             }
           }
+          this.#triggerOnEnd();
           break;
       }
-      this.recognition.close();
+      this.close();
     });
   }
 

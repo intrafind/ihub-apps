@@ -748,7 +748,7 @@ The `settings` property controls which configuration options users can adjust fo
 | `settings.outputFormat.enabled`       | Enable/disable output format selection                                   |
 | `settings.chatHistory.enabled`        | Enable/disable chat history toggle                                       |
 | `settings.imageGeneration.enabled`    | Show/hide the image generation settings panel                            |
-| `settings.speechRecognition.service`  | Speech recognition backend: `"default"` (browser Web Speech API) or `"azure"` |
+| `settings.speechRecognition.service`  | Speech recognition backend: `"default"` (the platform default from Admin → Voice Input; the browser unless changed), `"browser"`, `"azure"`, `"vllm-realtime"` or `"custom"`. See [Microphone Feature](microphone-feature.md#speech-recognition-services) |
 | `settings.speechRecognition.host`     | Host URL for the speech recognition service (required when `service` is `"azure"`) |
 | `inputMode.microphone.mode`           | Mode for recording (`manual` or `automatic`)                             |
 | `inputMode.microphone.showTranscript` | Show the live transcript while recording                                 |

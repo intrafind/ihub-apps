@@ -4,6 +4,7 @@ import { adminAuth } from '../../middleware/adminAuth.js';
 import { reconfigureOidcProviders } from '../../middleware/oidcAuth.js';
 import tokenStorageService from '../../services/TokenStorageService.js';
 import { testRealtimeConnection } from '../../websocket/realtimeTranscription.js';
+import { issueAzureSpeechToken } from '../../services/azureSpeechToken.js';
 import { buildServerPath } from '../../utils/basePath.js';
 import logger from '../../utils/logger.js';
 import { sendInternalError, sendBadRequest } from '../../utils/responseHelpers.js';
@@ -525,6 +526,69 @@ export default function registerAdminConfigRoutes(app) {
       return res.json(result);
     } catch (error) {
       return sendInternalError(res, error, 'test realtime speech connection');
+    }
+  });
+
+  /**
+   * Test the Azure Speech credentials by exchanging the subscription key for a
+   * token — the same exchange /api/voice/azure/token performs per session.
+   * Accepts optional { region, subscriptionKey, host } to test unsaved form
+   * values. A redacted or ${ENV} key means the saved (decrypted) key, so the
+   * secret never reaches the browser; an empty key means keyless mode, which is
+   * only verifiable from the browser (the live dictation test).
+   */
+  app.post(buildServerPath('/api/admin/voice/azure/test'), adminAuth, async (req, res) => {
+    try {
+      const body = req.body || {};
+      const saved = (configCache.getPlatform() || {}).speech?.azure || {};
+
+      const region = String(body.region ?? saved.region ?? '').trim();
+      const host = String(body.host ?? saved.host ?? '').trim();
+      let subscriptionKey = body.subscriptionKey ?? saved.subscriptionKey ?? '';
+      if (subscriptionKey === '***REDACTED***' || isEnvVarPlaceholder(subscriptionKey)) {
+        subscriptionKey = saved.subscriptionKey || ''; // already decrypted by configCache
+      }
+
+      // `code` is stable for the admin UI to translate; `message` is the
+      // English text for API callers and logs.
+      if (!subscriptionKey) {
+        return res.json(
+          host
+            ? {
+                ok: true,
+                code: 'keyless',
+                message:
+                  'No subscription key: keyless mode. Browsers connect straight to the host, so verify it with the live dictation test below.'
+              }
+            : {
+                ok: false,
+                code: 'not-configured',
+                message:
+                  'Neither a subscription key nor a host is set. Azure cloud needs a key and region; an on-prem container needs a host.'
+              }
+        );
+      }
+
+      const result = await issueAzureSpeechToken({ subscriptionKey, region });
+      if (!result.ok) {
+        return res.json(
+          /HTTP 401/.test(result.error)
+            ? {
+                ok: false,
+                code: 'invalid-key',
+                message: `${result.error}: the key is invalid or belongs to a different region`
+              }
+            : { ok: false, code: 'token-failed', message: result.error }
+        );
+      }
+      return res.json({
+        ok: true,
+        code: 'token-issued',
+        region: result.region,
+        message: `Key accepted: Azure issued a token for region "${result.region}".`
+      });
+    } catch (error) {
+      return sendInternalError(res, error, 'test Azure Speech credentials');
     }
   });
 }

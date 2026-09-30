@@ -19,10 +19,27 @@ Configure which backend to use with `settings.speechRecognition.service`:
 
 | Value | Behavior |
 | ----- | -------- |
-| `default` (or omitted) | Uses the browser's built-in `SpeechRecognition` / `webkitSpeechRecognition` API. No additional credentials are required. |
+| `default` (or omitted) | Uses the **platform default** set under **Admin → Voice Input → Defaults** (`platform.speech.defaultService`, see below). Out of the box that is the browser. |
+| `browser` | Always uses the browser's built-in `SpeechRecognition` / `webkitSpeechRecognition` API, whatever the platform default. No additional credentials are required. |
 | `azure` | Uses Azure Cognitive Services Speech SDK. Set `settings.speechRecognition.host` to your Azure Speech endpoint. |
 | `vllm-realtime` | Streams microphone audio to the iHub server over a WebSocket; iHub proxies it to a vLLM realtime endpoint (e.g. Voxtral on `/v1/realtime`) and streams transcription back. The endpoint is configured **server-side** in `platform.json` (see below) — no per-app `host` is needed and the vLLM URL/key never reach the browser. |
-| `custom` | Falls through to the browser default. Reserved for future custom providers. |
+| `custom` | Uses the browser. Reserved for future custom providers. |
+
+### Platform default
+
+Rather than configuring every app, set the dictation service once in `platform.json` (or **Admin → Voice Input → Defaults**):
+
+```json
+{
+  "speech": {
+    "defaultService": "vllm-realtime"
+  }
+}
+```
+
+`defaultService` is `browser` (the default), `azure` or `vllm-realtime`. Every app whose service is `default` or unset follows it, including later changes. Apps that select a service explicitly keep their choice. In the app editor the choice reads **Platform default (…)** and names the current default.
+
+If the default names a backend that is not enabled (for example `vllm-realtime` while `speech.realtime.enabled` is `false`), apps that follow the default use the browser instead of failing. The admin page shows a warning in that case.
 
 ### vLLM Realtime (server-proxied)
 
@@ -103,8 +120,23 @@ Admins can configure the platform-level speech backends under **Admin → Voice 
   > into the client bundle via this env var. It is no longer used — set the key under
   > **Admin → Voice Input** (`speech.azure.subscriptionKey`) instead.
 
-Per-app selection of which backend to use still happens in the app editor's
-**Speech Recognition Service** dropdown.
+- **Defaults**: the dictation service and the transcription model apps use when they set none
+  of their own (see [Platform default](#platform-default) and
+  [Realtime Voice & Transcription](voice-transcription.md#platform-default-transcription-model)).
+
+An app can still pick its own backend in the app editor's **Speech Recognition Service** dropdown.
+
+**Testing.** Both backends have a **Test connection** button that checks them from the iHub
+server. vLLM Realtime gets a WebSocket handshake; a redirect on a `ws://` URL is reported as
+"use `wss://`". Azure exchanges the key and region for a token. **Test voice input**, below the
+backends, checks everything from the admin's own browser, against the saved configuration:
+
+- a **microphone check** (input level meter);
+- a **live dictation** test for any service (browser, Azure, vLLM Realtime), showing interim
+  and final text;
+- a **recording** test that records a short clip and transcribes it with a transcription model.
+
+See [Testing from the admin UI](voice-transcription.md#testing-from-the-admin-ui).
 
 ## Supported Languages
 
@@ -177,6 +209,8 @@ Add the following sections to an app's JSON configuration to enable and customiz
 }
 ```
 
+`"service": "default"` follows the platform default. Use `"browser"` to pin the browser's Web Speech API.
+
 ### Using Azure Speech Services
 
 ```json
@@ -210,6 +244,8 @@ The microphone feature surfaces errors directly in the chat input placeholder fo
 | Browser not supported | "Speech recognition not supported in this browser" |
 | Permission denied | "Please allow microphone access and try again." |
 | No microphone found | "No microphone found. Please check your device settings." |
+| Microphone busy (admin test panel) | "The microphone could not be started. It may be in use by another application." |
+| Not a secure context (admin test panel) | "Microphone access requires a secure connection (HTTPS or localhost)." |
 | No speech detected | "No speech detected. Please try again." |
 | Network error | "Network error. Please check your connection." |
 | Generic error | "Voice input error. Please try again." |
