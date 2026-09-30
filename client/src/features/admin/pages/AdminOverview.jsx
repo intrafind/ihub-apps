@@ -17,8 +17,7 @@ import {
   WrenchIcon,
   KeyIcon,
   ArrowUpCircleIcon,
-  ServerStackIcon,
-  ExclamationTriangleIcon
+  ServerStackIcon
 } from '@heroicons/react/24/outline';
 import { useOverviewData } from '../hooks/useOverviewData';
 import { useUpdateCheck } from '../hooks/useUpdateCheck';
@@ -456,55 +455,6 @@ function PlatformInfoSection({ info, systemPagesVisible }) {
   );
 }
 
-/**
- * Shown above everything else when a volume iHub writes to is filling up:
- * a full disk breaks saving chats, uploads and configuration, and on a small
- * installation nobody may be watching `df`.
- */
-function StorageAlert({ storage, systemPagesVisible }) {
-  const { t } = useTranslation();
-  if (!storage || (storage.status !== 'warning' && storage.status !== 'critical')) return null;
-  const critical = storage.status === 'critical';
-  const params = {
-    free: formatBytes(storage.available),
-    percent: formatPercent(storage.usedPercent)
-  };
-  return (
-    <div
-      role="alert"
-      className={`mb-6 flex flex-wrap items-center gap-3 p-4 rounded-lg border ${
-        critical
-          ? 'bg-red-50 dark:bg-red-900/30 border-red-200 dark:border-red-800 text-red-800 dark:text-red-200'
-          : 'bg-amber-50 dark:bg-amber-900/30 border-amber-200 dark:border-amber-800 text-amber-800 dark:text-amber-200'
-      }`}
-    >
-      <ExclamationTriangleIcon className="w-5 h-5 shrink-0" aria-hidden="true" />
-      <p className="text-sm flex-1 min-w-0">
-        {critical
-          ? t(
-              'admin.overview.storage.critical',
-              'Disk space is critically low: {{free}} free ({{percent}} used).',
-              params
-            )
-          : t(
-              'admin.overview.storage.warning',
-              'Disk space is running low: {{free}} free ({{percent}} used).',
-              params
-            )}
-      </p>
-      {systemPagesVisible && (
-        <Link
-          to="/admin/system-resources"
-          className="text-sm font-medium underline hover:no-underline inline-flex items-center gap-1"
-        >
-          {t('admin.overview.storage.viewDetails', 'View system resources')}
-          <ArrowRightIcon className="w-3.5 h-3.5" aria-hidden="true" />
-        </Link>
-      )}
-    </div>
-  );
-}
-
 const ACTION_PILL_COLORS = {
   create: 'bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-400',
   update: 'bg-blue-100 text-blue-700 dark:bg-blue-900/30 dark:text-blue-400',
@@ -742,8 +692,6 @@ export default function AdminOverview() {
           {t('admin.overview.subtitle', 'Platform overview and quick actions')}
         </p>
       </div>
-
-      <StorageAlert storage={platformInfo?.storage} systemPagesVisible={systemPagesVisible} />
 
       {/* Stat cards */}
       {!isFreshInstance && (

@@ -68,7 +68,7 @@ Adding, changing or removing a workflow's schedule trigger now takes effect as s
 workflow is saved. Before, schedules were read once at server start and edits needed a restart.
 Schedule triggers now run on the same scheduler as scheduled tasks.
 
-## Admin: System Resources and Low-Disk Warning
+## Admin: System Resources and Low-Disk Warnings
 
 A new **Admin → System Resources** page shows how much CPU, memory and disk space the server is
 using, so a small installation notices a filling disk before saving chats, uploads and
@@ -81,6 +81,9 @@ configuration starts to fail.
 - **Server processes**: CPU, memory, heap and event-loop delay for each process. With several
   workers (`WORKERS`), the primary and every worker are listed, and a worker that does not answer
   is flagged.
-- The Admin **Overview** shows a banner when disk space runs low and a **Disk space** row under
-  *Platform status*.
+- When a disk reaches 80 % used, **every admin page** shows a banner, and the server log gets a
+  `warn` line (`error` at 90 %). The log line repeats hourly while the disk stays full, and an `info`
+  line follows once it recovers, so installations where nobody opens the admin UI still see it in
+  their logs.
+- The Admin **Overview** shows the free space in a **Disk space** row under *Platform status*.
 - The page is hidden together with the other system pages when `admin.pages.system` is `false`.

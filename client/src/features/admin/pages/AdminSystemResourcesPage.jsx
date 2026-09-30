@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import {
   ArrowPathIcon,
@@ -388,8 +388,13 @@ function AdminSystemResourcesPage() {
   const [error, setError] = useState(null);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
+  // The timer fires every 15 s whether or not the last load has answered; a
+  // slow answer overtaken by a newer one would otherwise overwrite it.
+  const inFlightRef = useRef(false);
 
   const load = useCallback(async () => {
+    if (inFlightRef.current) return;
+    inFlightRef.current = true;
     setRefreshing(true);
     try {
       const response = await makeAdminApiCall('/admin/system/resources');
@@ -401,6 +406,7 @@ function AdminSystemResourcesPage() {
           t('admin.systemResources.loadError', 'Failed to load system resource information')
       );
     } finally {
+      inFlightRef.current = false;
       setLoading(false);
       setRefreshing(false);
     }

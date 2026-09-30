@@ -88,7 +88,7 @@ The dashboard (`/admin`) gives a real-time snapshot of your platform.
 
 **Platform status panel:** Shows enabled/total counts for providers, models, sources, and tools, plus active authentication methods, OAuth server status, and the free space on the fullest disk iHub writes to.
 
-**Low-disk banner:** When that disk is 80 % full or more, a banner at the top of the dashboard says so and links to [System Resources](#system-resources).
+**Low-disk banner:** When that disk is 80 % full or more, a banner at the top of every admin page (not only the dashboard) says so and links to [System Resources](#system-resources). See [Low-disk warnings](#low-disk-warnings).
 
 **Quick actions:** One-click shortcuts to the most common admin tasks.
 
@@ -294,6 +294,20 @@ The percentage is computed like `df`: space reserved for the root user counts as
 For each process: CPU (percent of one core, averaged over the last five seconds), resident memory (RSS), V8 heap used and heap limit, event-loop delay (mean and maximum over the last five seconds) and uptime.
 
 The page is hidden, together with the other system pages, when `admin.pages.system` is `false` in `platform.json`. The data comes from `GET /api/admin/system/resources` (admin only).
+
+### Low-disk warnings
+
+Nobody may open the admin UI for weeks on a small installation, so a full disk is reported in two more places:
+
+- **Server log.** Every five minutes the server checks the same directories. When a disk crosses a threshold it logs one line from the `StorageMonitor` component: `warn` at 80 % used, `error` at 90 %. While the disk stays there, the line is repeated once an hour. When usage drops back below 80 %, an `info` line says so. Nothing is logged while disks are fine. In cluster mode only one process (worker 0) runs the check, so each event is logged once. Example:
+
+  ```text
+  [warn] [StorageMonitor] Disk space running low on the volume holding contents, data, uploads, temp: 3.1 GB free of 20.0 GB (84.5% used)
+  ```
+
+  JSON logs carry the numbers as fields (`status`, `usedPercent`, `availableBytes`, `totalBytes`, `paths`), so a log shipper can alert on `component = StorageMonitor` and `level >= warn`.
+
+- **Admin banner.** Every admin page shows an amber (running low) or red (critical) banner above its content, re-checked every five minutes. **Dismiss** hides it for the browser session. A dismissed *running low* banner comes back if the disk turns critical. Content admins don't see it, and the System Resources page shows its own, more detailed alert instead. The banner reads `GET /api/admin/system/storage` (admin only).
 
 ---
 

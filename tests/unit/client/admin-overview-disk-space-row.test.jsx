@@ -1,7 +1,8 @@
 /**
- * Admin Overview: warns when a volume iHub writes to is filling up, and shows
- * the fullest volume's free space in "Platform status". Links to the System
- * resources page only when that page is enabled (`admin.pages.system`).
+ * Admin Overview: "Platform status" shows the free space on the fullest volume
+ * iHub writes to, coloured by status, and links to the System Resources page
+ * only when that page is enabled (`admin.pages.system`). The low-disk banner
+ * itself lives in the admin layout (see admin-storage-alert.test.jsx).
  */
 import '@testing-library/jest-dom';
 import { render, screen } from '@testing-library/react';
@@ -87,39 +88,32 @@ beforeEach(() => {
   mockPlatformConfig = {};
 });
 
-test('warns when disk space is critically low and links to the details', () => {
+test('shows the free space with the percentage as a tooltip and links to the details', () => {
   renderOverview({ status: 'critical', usedPercent: 95, available: 1 * GiB, total: 20 * GiB });
 
-  expect(screen.getByRole('alert')).toHaveTextContent(
-    'Disk space is critically low: 1.0 GB free (95% used).'
-  );
-  expect(screen.getByRole('link', { name: /View system resources/ })).toHaveAttribute(
-    'href',
-    '/admin/system-resources'
-  );
-  const row = screen.getByText('1.0 GB free');
-  expect(row).toHaveAttribute('title', '95% of 20.0 GB used');
+  const value = screen.getByText('1.0 GB free');
+  expect(value).toHaveAttribute('title', '95% of 20.0 GB used');
+  expect(value.closest('a')).toHaveAttribute('href', '/admin/system-resources');
+  // The banner is the layout's job now; the Overview must not show a second one.
+  expect(screen.queryByRole('alert')).not.toBeInTheDocument();
 });
 
-test('no banner while disk space is fine, but the row is still shown', () => {
+test('shows the row while disk space is fine', () => {
   renderOverview({ status: 'ok', usedPercent: 20, available: 40 * GiB, total: 50 * GiB });
 
-  expect(screen.queryByRole('alert')).not.toBeInTheDocument();
   expect(screen.getByText('Disk space')).toBeInTheDocument();
   expect(screen.getByText('40.0 GB free')).toBeInTheDocument();
 });
 
-test('does not link to the System resources page when system pages are hidden', () => {
+test('does not link the row when system pages are hidden', () => {
   mockPlatformConfig = { admin: { pages: { system: false } } };
   renderOverview({ status: 'warning', usedPercent: 85, available: 3 * GiB, total: 20 * GiB });
 
-  expect(screen.getByRole('alert')).toHaveTextContent('Disk space is running low');
-  expect(screen.queryByRole('link', { name: /View system resources/ })).not.toBeInTheDocument();
+  expect(screen.getByText('3.0 GB free').closest('a')).toBeNull();
 });
 
 test('no disk row when the server could not read any volume', () => {
   renderOverview(null);
 
   expect(screen.queryByText('Disk space')).not.toBeInTheDocument();
-  expect(screen.queryByRole('alert')).not.toBeInTheDocument();
 });

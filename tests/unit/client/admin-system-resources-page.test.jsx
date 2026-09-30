@@ -6,7 +6,7 @@
  * Only the admin API and the translation hook are stubbed.
  */
 import '@testing-library/jest-dom';
-import { render, screen, within } from '@testing-library/react';
+import { act, render, screen, within } from '@testing-library/react';
 
 const mockMakeAdminApiCall = jest.fn();
 jest.mock('../../../client/src/api/adminApi', () => ({
@@ -190,4 +190,35 @@ test('reports a load failure', async () => {
   render(<AdminSystemResourcesPage />);
 
   expect(await screen.findByRole('alert')).toHaveTextContent('Access denied');
+});
+
+test('the auto-refresh never starts a second load while one is still running', async () => {
+  jest.useFakeTimers();
+  try {
+    let answer;
+    mockMakeAdminApiCall.mockImplementation(
+      () =>
+        new Promise(resolve => {
+          answer = resolve;
+        })
+    );
+    render(<AdminSystemResourcesPage />);
+    expect(mockMakeAdminApiCall).toHaveBeenCalledTimes(1);
+
+    // Two refresh ticks pass while the first request is still out.
+    await act(async () => {
+      jest.advanceTimersByTime(30000);
+    });
+    expect(mockMakeAdminApiCall).toHaveBeenCalledTimes(1);
+
+    await act(async () => {
+      answer({ data: snapshot() });
+    });
+    await act(async () => {
+      jest.advanceTimersByTime(15000);
+    });
+    expect(mockMakeAdminApiCall).toHaveBeenCalledTimes(2);
+  } finally {
+    jest.useRealTimers();
+  }
 });

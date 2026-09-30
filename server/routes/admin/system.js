@@ -2,7 +2,13 @@ import configCache from '../../configCache.js';
 import { adminAuth } from '../../middleware/adminAuth.js';
 import { buildServerPath } from '../../utils/basePath.js';
 import { sendInternalError } from '../../utils/responseHelpers.js';
-import { collectSystemResources, getLogFilePath } from '../../services/systemResources.js';
+import {
+  collectSystemResources,
+  getLogFilePath,
+  getMonitoredPaths,
+  getStorageSnapshot,
+  summarizeStorage
+} from '../../services/systemResources.js';
 
 export default function registerAdminSystemRoutes(app) {
   /**
@@ -22,6 +28,26 @@ export default function registerAdminSystemRoutes(app) {
       res.json(snapshot);
     } catch (error) {
       return sendInternalError(res, error, 'collect system resources');
+    }
+  });
+
+  /**
+   * GET /api/admin/system/storage
+   * Status of the fullest volume iHub writes to, for the low-disk banner shown
+   * on every admin page. Cheap (a few `statfs` calls, no cross-worker
+   * gather), so the admin layout can poll it. `null` when no volume could be
+   * read.
+   */
+  app.get(buildServerPath('/api/admin/system/storage'), adminAuth, async (req, res) => {
+    try {
+      const platform = configCache.getPlatform() || {};
+      const storage = await getStorageSnapshot(
+        getMonitoredPaths({ logFile: getLogFilePath(platform) })
+      );
+      res.set('Cache-Control', 'no-store');
+      res.json({ storage: summarizeStorage(storage) });
+    } catch (error) {
+      return sendInternalError(res, error, 'check disk space');
     }
   });
 }

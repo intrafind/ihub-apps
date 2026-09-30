@@ -2369,6 +2369,12 @@
         "missingAlert": "{{count}} of {{total}} workers did not report back."
       }
     },
+    "storageAlert": {
+      "warning": "Disk space is running low: {{free}} free ({{percent}} used).",
+      "critical": "Disk space is critically low: {{free}} free ({{percent}} used).",
+      "viewDetails": "View system resources",
+      "dismiss": "Dismiss"
+    },
     "home": {
       "sections": {
         "loggingDesc": "Configure logging levels, components, metadata, and debug settings",
@@ -3153,10 +3159,7 @@
       "storage": {
         "label": "Disk space",
         "value": "{{free}} free",
-        "valueTitle": "{{percent}} of {{total}} used",
-        "warning": "Disk space is running low: {{free}} free ({{percent}} used).",
-        "critical": "Disk space is critically low: {{free}} free ({{percent}} used).",
-        "viewDetails": "View system resources"
+        "valueTitle": "{{percent}} of {{total}} used"
       }
     }
   },

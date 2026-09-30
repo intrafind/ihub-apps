@@ -562,6 +562,24 @@ if (cluster.isPrimary && workerCount > 1) {
   // connections at startup.
   const ownsClusterSingletons = !cluster.isWorker || process.env.WORKER_INDEX === '0';
 
+  // Log when a disk iHub writes to runs low. Once per cluster, or every
+  // worker would log the same line.
+  if (ownsClusterSingletons) {
+    try {
+      const { startStorageMonitor } = await import('./services/storageMonitor.js');
+      const { getStorageSnapshot, getMonitoredPaths, getLogFilePath } =
+        await import('./services/systemResources.js');
+      startStorageMonitor({
+        getSnapshot: () =>
+          getStorageSnapshot(
+            getMonitoredPaths({ logFile: getLogFilePath(configCache.getPlatform?.() || {}) })
+          )
+      });
+    } catch (error) {
+      logger.warn('Failed to start disk space monitor', { component: 'Server', error });
+    }
+  }
+
   // Start usage rollup scheduler
   if (ownsClusterSingletons) {
     try {
