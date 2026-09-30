@@ -40,10 +40,40 @@ export function sendProviderContent(res, content) {
   if (content.contentLength && !content.body)
     res.set('Content-Length', String(content.contentLength));
   if (content.stream && typeof content.stream.pipe === 'function') {
-    content.stream.pipe(res);
+    pipeContent(res, content.stream);
     return;
   }
   res.send(content.body ?? '');
+}
+
+/**
+ * Stream a provider's content to the client. `pipe` alone neither handles an
+ * error of the source (an upstream reset would crash the process, or leave the
+ * request hanging) nor stops reading it when the client goes away.
+ *
+ * @param {import('express').Response} res
+ * @param {import('node:stream').Readable} stream
+ */
+function pipeContent(res, stream) {
+  let failed = false;
+  stream.on('error', error => {
+    if (failed) return;
+    failed = true;
+    logger.warn('Source content stream failed', { component: 'sources', error: error.message });
+    stream.unpipe(res);
+    if (res.headersSent) {
+      res.destroy(error);
+      return;
+    }
+    for (const header of ['Content-Type', 'Content-Disposition', 'Content-Length']) {
+      res.removeHeader(header);
+    }
+    sendErrorResponse(res, 502, 'Source content stream failed');
+  });
+  res.on('close', () => {
+    if (!stream.readableEnded && typeof stream.destroy === 'function') stream.destroy();
+  });
+  stream.pipe(res);
 }
 
 /**
@@ -69,6 +99,7 @@ async function resolve(req, res) {
   return { provider, ref: scope ? { id, scope } : { id } };
 }
 
+/** Answer a provider's failure with its status (a plain error is a logged 500). */
 function sendFailure(res, error, what) {
   const status = Number.isInteger(error?.status) ? error.status : 500;
   if (status >= 500) logger.error(`Source ${what} failed`, { component: 'sources', error });

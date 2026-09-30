@@ -371,6 +371,7 @@ function SourcesPanel({
   );
 }
 
+/** A dismissible notice or error at the top of the panel. */
 function Banner({ tone, onDismiss, children }) {
   const { t } = useTranslation();
   const error = tone === 'error';
@@ -396,6 +397,7 @@ function Banner({ tone, onDismiss, children }) {
   );
 }
 
+/** A titled list of source cards ("Cited in this answer", "Also considered"). */
 function SourceSection({ title, empty, sources, highlight, ...cardProps }) {
   return (
     <section className="mb-4 last:mb-0">
@@ -420,6 +422,7 @@ function SourceSection({ title, empty, sources, highlight, ...cardProps }) {
   );
 }
 
+/** A date in the user's language, or null when it does not parse. */
 function formatDate(value, language) {
   const date = new Date(value);
   if (Number.isNaN(date.getTime())) return null;
@@ -486,7 +489,7 @@ function SourceCard({ source, messageKey, active, host, attachEnabled, onAction 
               </>
             )}
           </div>
-          {source.url ? (
+          {actions.includes('open') ? (
             // A real link (middle click, copy link address), but a plain click
             // opens it through the host (`openSource`): in the Outlook task pane
             // and the extension side panel a new tab is a silent no-op.
@@ -571,6 +574,10 @@ function SourceCard({ source, messageKey, active, host, attachEnabled, onAction 
   );
 }
 
+/**
+ * One passage of a source, clamped until expanded, with "Show in document" when it can be
+ * previewed.
+ */
 function PassageItem({ passage, onShow }) {
   const { t } = useTranslation();
   const [expanded, setExpanded] = useState(false);
@@ -700,6 +707,7 @@ function ActionsMenu({ source, actions, attachEnabled, onAction }) {
   );
 }
 
+/** Whether the page or document was read, and how much of it. */
 function ReadStatus({ source }) {
   const { t } = useTranslation();
   const read = source.read;
@@ -756,6 +764,7 @@ const AVATAR_COLORS = [
   'bg-orange-500'
 ];
 
+/** A stable color for a letter avatar, picked by hashing `key`. */
 function avatarColor(key) {
   let hash = 0;
   for (const char of key) hash = (hash * 31 + char.charCodeAt(0)) >>> 0;

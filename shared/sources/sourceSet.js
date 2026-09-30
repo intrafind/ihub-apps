@@ -36,12 +36,14 @@ export function emptySourceSet() {
   return { items: [], queries: [], supports: [] };
 }
 
+/** A search query, whitespace collapsed and cut; null when empty. */
 function queryText(value) {
   if (typeof value !== 'string') return null;
   const trimmed = value.replace(/\s+/g, ' ').trim();
   return trimmed ? trimmed.slice(0, MAX_QUERY_CHARS) : null;
 }
 
+/** A grounding support `{ text, urls }` with http(s) URLs only, or null. */
 function supportOf(value) {
   const passage = typeof value?.text === 'string' ? value.text : '';
   if (!passage.trim() || passage.length > MAX_SUPPORT_CHARS) return null;
@@ -51,6 +53,7 @@ function supportOf(value) {
   return urls.length ? { text: passage, urls } : null;
 }
 
+/** Whether `set` already has the full set shape, so it can be returned unchanged. */
 function isSourceSet(set) {
   return (
     !!set && Array.isArray(set.items) && Array.isArray(set.queries) && Array.isArray(set.supports)

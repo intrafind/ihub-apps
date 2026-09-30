@@ -67,6 +67,7 @@ function firstString(value) {
   return typeof value === 'string' ? value : undefined;
 }
 
+/** The first string in `value`, whitespace collapsed and cut to `max`; null when empty. */
 function text(value, max) {
   const candidate = firstString(value);
   if (typeof candidate !== 'string') return null;
@@ -91,17 +92,20 @@ function stripTags(value) {
   return out;
 }
 
+/** Like {@link text}, with any markup dropped first. */
 function plain(value, max) {
   const candidate = firstString(value);
   return typeof candidate === 'string' ? text(stripTags(candidate), max) : null;
 }
 
+/** An id as a string (numbers too), or null when missing or longer than `max`. */
 function idOf(value, max = MAX_REF_ID_CHARS) {
   if (typeof value === 'number' && Number.isFinite(value)) return String(value);
   const candidate = firstString(value);
   return typeof candidate === 'string' && candidate && candidate.length <= max ? candidate : null;
 }
 
+/** A parseable date as an ISO string, else null. */
 function dateOf(value) {
   const candidate = firstString(value);
   if (typeof candidate !== 'string' || candidate.length > 64) return null;
@@ -109,6 +113,7 @@ function dateOf(value) {
   return Number.isNaN(time) ? null : new Date(time).toISOString();
 }
 
+/** A provider handle `{ id, scope? }`, or null without a usable id. */
 function refOf(value) {
   if (!value || typeof value !== 'object' || Array.isArray(value)) return null;
   const id = idOf(value.id);
@@ -117,6 +122,7 @@ function refOf(value) {
   return scope ? { id, scope } : { id };
 }
 
+/** A read status `{ ok, words?, truncated? }`, or null when `ok` is not a boolean. */
 function readOf(value) {
   if (!value || typeof value !== 'object') return null;
   if (value.ok !== true && value.ok !== false) return null;
@@ -126,6 +132,10 @@ function readOf(value) {
   return read;
 }
 
+/**
+ * Passages `{ text, marker? }`, de-duplicated and capped at MAX_PASSAGES; plain strings are
+ * accepted.
+ */
 function passagesOf(value) {
   if (!Array.isArray(value)) return [];
   const out = [];
@@ -141,6 +151,7 @@ function passagesOf(value) {
   return out;
 }
 
+/** Valid, unique inline markers (`r:3`, `s:7`), capped. */
 function markersOf(value) {
   if (!Array.isArray(value)) return [];
   return [
@@ -228,6 +239,7 @@ export function normalizeSource(input, defaults = {}) {
   return source;
 }
 
+/** Two read statuses as one: a successful read wins, and words and truncation add up. */
 function mergeRead(a, b) {
   if (!a) return b;
   if (!b) return a;

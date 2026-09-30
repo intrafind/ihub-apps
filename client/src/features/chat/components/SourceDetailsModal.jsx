@@ -4,6 +4,7 @@ import Icon from '../../../shared/components/Icon';
 import { fetchSourceMetadata } from '../../../api/endpoints/sources';
 import { siteOf } from '../sources/sourcesView';
 
+/** A date in the locale of the browser, or the value as it came when it does not parse. */
 function formatDate(value) {
   if (!value) return null;
   const date = new Date(value);

@@ -42,6 +42,7 @@ function textOf(value) {
   return typeof candidate === 'string' && candidate.trim() ? candidate.trim() : undefined;
 }
 
+/** A document id as a string (numbers too), else undefined. */
 function idOf(value) {
   if (typeof value === 'number' && Number.isFinite(value)) return String(value);
   return typeof value === 'string' && value ? value : undefined;
@@ -80,6 +81,7 @@ function documentSource(doc, searchProfile, fields = {}) {
   };
 }
 
+/** An iFinder tool result as an object: JSON text parsed, else null. */
 function parseResult(result) {
   if (typeof result !== 'string') return result;
   const text = result.trim();
@@ -91,6 +93,7 @@ function parseResult(result) {
   }
 }
 
+/** What the search looked for, unless it was the match-all `*`. */
 function queryOf(args) {
   const query = args && typeof args === 'object' ? args.query : null;
   return typeof query === 'string' && query.trim() && query.trim() !== '*' ? query : null;
@@ -152,6 +155,7 @@ function accessProfile(item) {
   return textOf(access?.searchProfile);
 }
 
+/** One iAssistant result item as an iFinder document source, or null without a document id. */
 function iAssistantDocument(item, searchProfile, fields) {
   if (!item || typeof item !== 'object') return null;
   const id = idOf(item.document_id) || idOf(textOf(metaOf(item, 'id')));

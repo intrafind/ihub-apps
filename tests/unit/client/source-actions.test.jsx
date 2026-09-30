@@ -3,6 +3,9 @@ import '@testing-library/jest-dom';
 import AnswerSources from '../../../client/src/features/chat/components/AnswerSources';
 import { _resetSourcesStore } from '../../../client/src/features/chat/sources/sourcesStore';
 import {
+  copySourceLink,
+  fetchSourceFile,
+  openSource,
   resolveSourceFilename,
   sourceActionsOf
 } from '../../../client/src/features/chat/sources/sourceActions';
@@ -202,6 +205,16 @@ describe('opening and downloading', () => {
     await waitFor(() => expect(screen.queryByRole('alert')).not.toBeInTheDocument());
   });
 
+  test('a link that is not http(s) is never opened, copied or rendered as a link', async () => {
+    const unsafe = { ...DOC, url: 'javascript:alert(1)' };
+    expect(openSource(unsafe)).toEqual({ ok: false, reason: 'unavailable' });
+    expect(await copySourceLink(unsafe)).toEqual({ ok: false, reason: 'unavailable' });
+    const dialog = renderSources({ items: [unsafe] });
+    expect(within(dialog).queryByTitle('Open in browser')).toBeNull();
+    expect(within(dialog).getByText(DOC.title).closest('a')).toBeNull();
+    expect(windowOpen).not.toHaveBeenCalled();
+  });
+
   test('a modified click on the title is left to the browser, like any link', () => {
     renderSources();
     const title = screen.getByTitle('Open in browser');
@@ -246,6 +259,42 @@ describe('"Open in App"', () => {
     fireEvent.click(screen.getByText('Open in App'));
     fireEvent.click(screen.getByText('Pick Research'));
     expect(onOpenInApp).toHaveBeenCalledWith(DOC, 'research');
+  });
+});
+
+describe('the file "Open in App" attaches', () => {
+  const httpError = status => Object.assign(new Error(`HTTP ${status}`), { response: { status } });
+
+  test('is the original, named as the server sent it', async () => {
+    const file = await fetchSourceFile(DOC, 'Quarterly report');
+    expect(file.name).toBe('Quarterly report.pdf');
+    expect(file.type).toBe('application/pdf');
+    expect(fetchSourceContent).toHaveBeenCalledTimes(1);
+  });
+
+  test('is the text when the provider answers that it has no binary', async () => {
+    fetchSourceContent.mockRejectedValueOnce(httpError(404)).mockResolvedValueOnce({
+      data: new Blob(['The report text'], { type: 'text/plain' }),
+      headers: { 'content-type': 'text/plain' }
+    });
+    const file = await fetchSourceFile(DOC, 'Quarterly report');
+    expect(fetchSourceContent).toHaveBeenLastCalledWith({ source: DOC, format: 'text' });
+    expect(file.name).toBe('Quarterly report.txt');
+    expect(file.type).toBe('text/plain');
+  });
+
+  test.each([
+    [
+      'a timeout',
+      Object.assign(new Error('timeout of 120000ms exceeded'), { code: 'ECONNABORTED' })
+    ],
+    ['an abort', Object.assign(new Error('canceled'), { name: 'CanceledError' })],
+    ['a sign-in failure', httpError(401)],
+    ['a permission failure', httpError(403)]
+  ])('fails on %s instead of quietly attaching the text', async (_, error) => {
+    fetchSourceContent.mockRejectedValueOnce(error);
+    await expect(fetchSourceFile(DOC, 'Quarterly report')).rejects.toBe(error);
+    expect(fetchSourceContent).toHaveBeenCalledTimes(1);
   });
 });
 

@@ -91,6 +91,10 @@ export function linkTargets(markdown) {
 /** Characters that continue an id or a URL, so a match inside a longer one is not a match. */
 const TOKEN_CHAR = /[A-Za-z0-9_\-.~%/]/;
 
+/**
+ * Whether a token ends at `index`: the next character cannot continue an id or URL (a trailing
+ * period ends a sentence).
+ */
 function endsTokenAt(value, index) {
   const next = value[index] || '';
   if (next === '.') return !TOKEN_CHAR.test(value[index + 1] || '');

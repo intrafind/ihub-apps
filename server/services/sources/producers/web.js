@@ -50,6 +50,7 @@ export function isWebSearchTool(toolId) {
   return !isOtherTool(toolId) && WEB_SEARCH_TOOL.test(String(toolId || ''));
 }
 
+/** Whether the tool is the page reader, which reads one page rather than searching. */
 function isPageReader(toolId) {
   return String(toolId || '').toLowerCase() === PAGE_READER_TOOL_ID;
 }
@@ -64,12 +65,14 @@ function linkOf(item) {
   );
 }
 
+/** What a web search looked for, whatever the provider calls the argument. */
 function queryOf(args) {
   if (!args || typeof args !== 'object') return null;
   const query = args.query ?? args.q ?? args.searchQuery ?? args.searchTerm;
   return typeof query === 'string' && query.trim() ? query : null;
 }
 
+/** One web search hit as a public page source. */
 function asSource(item, fields = {}) {
   return {
     provider: 'web',

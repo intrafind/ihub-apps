@@ -46,6 +46,7 @@ const MAX_FRAME_QUERIES = 10;
  */
 export const MAX_FRAME_BYTES = 256 * 1024;
 
+/** Bytes of `value` as JSON. */
 function frameSize(value) {
   return Buffer.byteLength(JSON.stringify(value), 'utf8');
 }
@@ -84,6 +85,7 @@ export function _resetSourceProducers() {
   registered.length = 0;
 }
 
+/** A tool result as data: JSON text parsed, anything else as it came. */
 function parseResult(result) {
   if (typeof result !== 'string') return result;
   const text = result.trim();

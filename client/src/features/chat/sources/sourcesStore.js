@@ -23,18 +23,22 @@ import { useSyncExternalStore } from 'react';
 let state = { open: null, pinned: null, hover: null };
 const listeners = new Set();
 
+/** Update the state and notify the subscribers. */
 function set(next) {
   state = { ...state, ...next };
   for (const listener of listeners) listener();
 }
 
+/** For `useSyncExternalStore`: add a listener, return its removal. */
 function subscribe(listener) {
   listeners.add(listener);
   return () => listeners.delete(listener);
 }
 
+/** For `useSyncExternalStore`: the current state. */
 const getSnapshot = () => state;
 
+/** Whether `a` refers to citation `n` of the answer `messageKey`. */
 const same = (a, messageKey, n) => a?.messageKey === messageKey && a?.n === n;
 
 /** Open the sources panel of an answer, optionally scrolled to citation `n`. */

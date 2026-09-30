@@ -51,6 +51,18 @@ export const SOURCE_ACTIONS = Object.freeze([
 ]);
 
 /**
+ * Whether the source has a link the panel may open, copy or render: http(s)
+ * only. The server normalizes `url` that way already; checked again here
+ * because a link reaches the browser (`openExternalUrl`, an anchor `href`).
+ *
+ * @param {Object} source
+ * @returns {boolean}
+ */
+export function hasHttpUrl(source) {
+  return typeof source?.url === 'string' && /^https?:\/\//i.test(source.url);
+}
+
+/**
  * The actions a source offers on this surface.
  *
  * @param {Object} source
@@ -60,7 +72,7 @@ export const SOURCE_ACTIONS = Object.freeze([
  * @returns {string[]}
  */
 export function sourceActionsOf(source, host = {}) {
-  const hasUrl = typeof source?.url === 'string' && /^https?:\/\//i.test(source.url);
+  const hasUrl = hasHttpUrl(source);
   const hasRef = typeof source?.ref?.id === 'string' && !!source.ref.id;
   const available = {
     open: hasUrl,
@@ -81,7 +93,7 @@ export function sourceActionsOf(source, host = {}) {
  * @returns {SourceActionResult}
  */
 export function openSource(source) {
-  if (!source?.url) return { ok: false, reason: 'unavailable' };
+  if (!hasHttpUrl(source)) return { ok: false, reason: 'unavailable' };
   return openExternalUrl(source.url) ? { ok: true } : { ok: false, reason: 'blocked' };
 }
 
@@ -92,7 +104,7 @@ export function openSource(source) {
  * @returns {Promise<SourceActionResult>}
  */
 export async function copySourceLink(source) {
-  if (!source?.url) return { ok: false, reason: 'unavailable' };
+  if (!hasHttpUrl(source)) return { ok: false, reason: 'unavailable' };
   try {
     await navigator.clipboard.writeText(source.url);
     return { ok: true };
@@ -186,6 +198,36 @@ function blobToBase64(blob) {
     };
     reader.readAsDataURL(blob);
   });
+}
+
+/**
+ * The source's file, for "Open in App" to attach to a new chat: the original,
+ * named as the server sent it, else — for providers with no binary of it —
+ * its text as a `.txt`.
+ *
+ * The text is fetched only when the server answered the binary request with
+ * an error: a timeout or abort must not quietly turn into a `.txt`, and a
+ * sign-in or permission failure applies to the text as well.
+ *
+ * @param {{provider: string, ref: {id: string, scope?: string}}} source
+ * @param {string} fallbackName - the name when the server sends none
+ * @returns {Promise<File>}
+ */
+export async function fetchSourceFile(source, fallbackName) {
+  let response;
+  try {
+    response = await fetchSourceContent({ source });
+  } catch (binaryError) {
+    const status = binaryError?.response?.status;
+    if (!status || status === 401 || status === 403) throw binaryError;
+    const text = await fetchSourceContent({ source, format: 'text' });
+    const txtName = fallbackName.endsWith('.txt') ? fallbackName : `${fallbackName}.txt`;
+    return new File([text.data], txtName, { type: 'text/plain' });
+  }
+  const fileName =
+    filenameFromContentDisposition(response.headers?.['content-disposition']) || fallbackName;
+  const contentType = response.headers?.['content-type'] || 'application/octet-stream';
+  return new File([response.data], fileName, { type: contentType });
 }
 
 /**

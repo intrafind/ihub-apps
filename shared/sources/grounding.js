@@ -24,6 +24,7 @@ function isGroundingRedirect(url) {
   return /(^|\.)vertexaisearch\.cloud\.google\.com$/i.test(hostOf(url));
 }
 
+/** The value when it is an array, else an empty one. */
 function list(value) {
   return Array.isArray(value) ? value : [];
 }

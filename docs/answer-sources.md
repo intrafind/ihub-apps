@@ -9,7 +9,7 @@ with the answer and leaves out of a share whatever was found with the user's own
 > Not to be confused with [knowledge sources](sources.md) (`sources.json`), the documents and
 > websites an app can *search*. Answer sources are what a turn *found*.
 
-Design and background: `concepts/unified-sources/README.md`, issue
+Design and background: `concepts/unified-sources/2026-09-30 Answer Sources.md`, issue
 [intrafind/ihub-apps#2637](https://github.com/intrafind/ihub-apps/issues/2637).
 
 ## What users see

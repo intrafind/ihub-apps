@@ -24,10 +24,12 @@ export const PASSAGE_SELECTOR = 'p, li, td, th, blockquote, h1, h2, h3, h4, h5, 
 
 const NUMBER_LABEL = /^\[?\s*\d{1,3}\s*\]?$/;
 
+/** Whether the node is a citation badge this transformer created. */
 function isBadge(node) {
   return node?.nodeType === 1 && node.classList?.contains('source-citation-ref');
 }
 
+/** Whether the node is a text node. */
 function isText(node) {
   return node?.nodeType === 3;
 }
@@ -60,6 +62,7 @@ function isMarkerLabel(label, href, source) {
   return Boolean(labelKey) && labelKey === urlKey(href);
 }
 
+/** The badge for citation `n`: a link when the source has one, else a keyboard-operable button. */
 function createBadge(doc, n, href, source) {
   const sup = doc.createElement('sup');
   sup.className = 'source-citation-ref';

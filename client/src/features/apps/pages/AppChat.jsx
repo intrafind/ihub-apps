@@ -20,9 +20,9 @@ import ShareDialog from '../../chat/components/ShareDialog';
 import { usePlatformConfig } from '../../../shared/contexts/PlatformConfigContext';
 import { useOptionalAuth } from '../../../shared/contexts/authContextValue';
 import lazyWithRetry from '../../../utils/lazyWithRetry';
-import { fetchSourceContent } from '../../../api/endpoints/sources';
 
 // Import our custom hooks and components
+import { fetchSourceFile } from '../../chat/sources/sourceActions';
 import useAppChat from '../../chat/hooks/useAppChat';
 import useVoiceCommands from '../../voice/hooks/useVoiceCommands';
 import useAppSettings from '../../../shared/hooks/useAppSettings';
@@ -1089,27 +1089,7 @@ function AppChat({ preloadedApp = null, embedded = false, appId: embeddedAppId =
       });
 
       try {
-        let file;
-        let fileName = prefillMessage || 'document';
-
-        try {
-          const response = await fetchSourceContent({ source });
-          const blob = response.data;
-          const contentType = response.headers?.['content-type'] || 'application/octet-stream';
-          // Extract filename from content-disposition or use prefill title
-          const disposition = response.headers?.['content-disposition'];
-          if (disposition) {
-            const match = disposition.match(/filename\*?=(?:UTF-8''|"?)([^";]+)/i);
-            if (match) fileName = decodeURIComponent(match[1].replace(/"/g, ''));
-          }
-          file = new File([blob], fileName, { type: contentType });
-        } catch {
-          // Fallback: the document's text, for providers with no binary of it
-          const response = await fetchSourceContent({ source, format: 'text' });
-          const text = await response.data.text();
-          const txtName = fileName.endsWith('.txt') ? fileName : `${fileName}.txt`;
-          file = new File([text], txtName, { type: 'text/plain' });
-        }
+        const file = await fetchSourceFile(source, prefillMessage || 'document');
 
         // Process through the same pipeline as uploaded files
         const { content, pageImages } = await processDocumentFile(file);

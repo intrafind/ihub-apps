@@ -22,6 +22,7 @@ function statusOf(error) {
   return 500;
 }
 
+/** Throw an iFinder service error as a provider error with the status it stands for. */
 function rethrow(error) {
   throw sourceProviderError(statusOf(error), error?.message || 'iFinder request failed');
 }

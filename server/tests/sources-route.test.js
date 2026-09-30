@@ -27,6 +27,17 @@ function appFor(user = { id: 'ada', groups: ['users'] }) {
 
 const calls = [];
 
+/** A stream that sends `chunks` and then fails, like an upstream reset. */
+function failingStream(chunks) {
+  const pending = [...chunks];
+  return new Readable({
+    read() {
+      if (pending.length) this.push(Buffer.from(pending.shift()));
+      else setImmediate(() => this.destroy(new Error('upstream reset')));
+    }
+  });
+}
+
 test.beforeEach(() => {
   calls.length = 0;
   _resetSourceProviders();
@@ -36,6 +47,13 @@ test.beforeEach(() => {
       calls.push({ ref, user: user.id, format });
       if (ref.id === 'missing') throw sourceProviderError(404, 'Document not found');
       if (ref.id === 'broken') throw new Error('upstream exploded');
+      if (ref.id === 'reset-early' || ref.id === 'reset-late') {
+        return {
+          contentType: 'application/pdf',
+          contentDisposition: 'attachment; filename="doc.pdf"',
+          stream: failingStream(ref.id === 'reset-late' ? ['%PDF-1.7'] : [])
+        };
+      }
       if (format === 'text')
         return { contentType: 'text/plain', fileName: 'a "b".txt', body: 'hi' };
       return {
@@ -85,6 +103,23 @@ test('content: a provider error keeps its status; anything else is a 500', async
     .get('/api/sources/testdocs/content')
     .query({ id: 'broken' });
   assert.equal(broken.status, 500);
+});
+
+test('content: a stream that fails before any byte is a 502, not a hang or a crash', async () => {
+  const res = await request(appFor())
+    .get('/api/sources/testdocs/content')
+    .query({ id: 'reset-early' });
+  assert.equal(res.status, 502);
+  assert.match(res.headers['content-type'], /application\/json/);
+  assert.equal(res.headers['content-disposition'], undefined);
+  assert.equal(res.body.error, 'Source content stream failed');
+});
+
+test('content: a stream that fails midway aborts the response', async () => {
+  await assert.rejects(
+    request(appFor()).get('/api/sources/testdocs/content').query({ id: 'reset-late' }),
+    error => /socket hang up|ECONNRESET|aborted/i.test(`${error.code} ${error.message}`)
+  );
 });
 
 test('the request shape is checked before any provider is asked', async () => {

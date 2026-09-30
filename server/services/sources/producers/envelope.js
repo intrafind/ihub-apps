@@ -29,6 +29,7 @@ function parseJson(value) {
   }
 }
 
+/** The `sources` a result reports itself, at its top level or in MCP's `structuredContent`. */
 function sourcesOf(value) {
   if (!value || typeof value !== 'object' || Array.isArray(value)) return [];
   if (Array.isArray(value.sources)) return value.sources;
