@@ -131,6 +131,17 @@ export const featureRegistry = [
     default: false
   },
   {
+    id: 'scheduledTasks',
+    name: { en: 'Scheduled Tasks', de: 'Geplante Aufgaben' },
+    description: {
+      en: 'Let users save a prompt as a task that runs by itself — once, on an interval, daily, weekly, monthly, by cron or on demand — as the user, with the app’s tools and integrations. Every run is its own chat. Requires Durable Chats. Who may create tasks is a group permission; limits are set under Admin → Scheduled Tasks',
+      de: 'Nutzer speichern einen Prompt als Aufgabe, die von selbst läuft — einmalig, im Intervall, täglich, wöchentlich, monatlich, per Cron oder auf Abruf — als der Nutzer, mit den Tools und Integrationen der App. Jeder Lauf ist ein eigener Chat. Erfordert Dauerhafte Chats. Wer Aufgaben anlegen darf, ist eine Gruppenberechtigung; Grenzen werden unter Admin → Geplante Aufgaben festgelegt'
+    },
+    category: 'preview',
+    default: false,
+    preview: true
+  },
+  {
     id: 'shortLinks',
     name: { en: 'Short Links', de: 'Kurzlinks' },
     description: {

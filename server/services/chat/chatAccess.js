@@ -63,16 +63,17 @@ export async function authorizeChat(
   const chat = await repository.getChat(chatId);
   if (!chat) return { ok: true, chat: null };
 
-  if (isAdminUser(user)) {
-    if (intent === 'read') return { ok: true, chat, viaAdmin: true };
-    // Falls through to the ownership test below: an admin who *is* the owner
-    // writes normally, and one who is not gets the same 404 as anyone else.
-  }
   // An anonymous caller never owns a stored chat: anonymous principals get a
   // fresh random id per resolution, so no comparison could ever match.
   if (isAnonymousUser(user)) return { ok: false, status: 404 };
 
+  // Ownership first: an admin reading their own chat is its owner reading it,
+  // with the owner's side effects (the unseen badge clears). The bypass only
+  // marks a read that rests on it.
   const me = await resolvePrincipal(user, { mode: chat.identityMode || 'default' });
   if (me.id === chat.ownerId) return { ok: true, chat };
+  // An admin who is not the owner may read, never write — a write gets the
+  // same 404 as anyone else.
+  if (isAdminUser(user) && intent === 'read') return { ok: true, chat, viaAdmin: true };
   return { ok: false, status: 404 };
 }

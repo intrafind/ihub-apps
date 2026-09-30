@@ -166,7 +166,9 @@ const OPTIONAL_MESSAGE_FIELDS = [
   // Documents behind an assistant answer (see services/chat/chatCitations.js).
   'citations',
   // Connect cards for per-user OAuth MCP servers (see chatSeams.authRequiredOf).
-  'mcpAuthRequired'
+  'mcpAuthRequired',
+  // Confirmation cards for proposed scheduled tasks (see scheduler/tasks/proposals.js).
+  'scheduledTaskProposals'
 ];
 
 /** Variables kept per message, and the longest value kept. */

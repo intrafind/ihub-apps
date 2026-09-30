@@ -2275,7 +2275,8 @@
       "voiceInput": "Spracheingabe",
       "changelog": "Neuigkeiten",
       "feedback": "Feedback",
-      "localization": "Lokalisierung"
+      "localization": "Lokalisierung",
+      "scheduledTasks": "Geplante Aufgaben"
     },
     "mcp": {
       "common": {
@@ -2984,7 +2985,9 @@
       "externalGroupNames": "Externe Gruppennamen",
       "externalMappingsPlaceholder": "Gruppennamen eingeben und Enter drücken…",
       "externalMappingsEmpty": "Noch keine externen Zuordnungen",
-      "externalMappingsHelp": "Geben Sie externe Gruppennamen ein, die dieser Gruppe zugeordnet werden sollen. Benutzer mit diesen externen Gruppen werden automatisch dieser internen Gruppe zugewiesen."
+      "externalMappingsHelp": "Geben Sie externe Gruppennamen ein, die dieser Gruppe zugeordnet werden sollen. Benutzer mit diesen externen Gruppen werden automatisch dieser internen Gruppe zugewiesen.",
+      "scheduledTasks": "Geplante Aufgaben",
+      "scheduledTasksHint": "Mitglieder dürfen geplante Aufgaben anlegen, die von selbst als das Mitglied laufen (erfordert die Funktion „Geplante Aufgaben“). Wird von Gruppen geerbt, die diese Gruppe erben."
     },
     "contentAccess": {
       "title": "Gruppenzugriff",
@@ -3326,6 +3329,52 @@
         "truncated": "Es werden nur die ersten Prompts angezeigt",
         "updated": "Zuletzt geändert",
         "userCount": "{{count}} Nutzer"
+      }
+    },
+    "scheduledTasks": {
+      "all": "Alle",
+      "allTasks": "Alle Aufgaben",
+      "columns": {
+        "failures": "Fehler",
+        "lastRun": "Letzter Lauf",
+        "owner": "Eigentümer",
+        "schedule": "Zeitplan",
+        "status": "Status",
+        "task": "Aufgabe"
+      },
+      "confirmDelete": "„{{name}}“ von {{owner}} löschen?",
+      "disable": "Deaktivieren",
+      "enabled": "Aktiviert",
+      "filter": "Nach Status filtern",
+      "gates": {
+        "chats": "Dauerhafte Chats sind verfügbar",
+        "feature": "Die Funktion „Geplante Aufgaben“ ist eingeschaltet",
+        "platform": "Geplante Aufgaben sind unten aktiviert"
+      },
+      "intro": "Aufgaben, die Nutzer gespeichert haben, damit sie von selbst laufen. Wer sie anlegen darf, legt die Berechtigung „Geplante Aufgaben“ einer Gruppe fest.",
+      "limits": "Grenzen",
+      "none": "Keine geplanten Aufgaben.",
+      "notRunning": "Geplante Aufgaben laufen nicht",
+      "openFeatures": "Unter Funktionen einschalten",
+      "running": "Geplante Aufgaben laufen",
+      "runs": "Läufe",
+      "runsOf": "Läufe von „{{name}}“",
+      "saved": "Einstellungen gespeichert",
+      "unchanged": "Nichts geändert",
+      "zeroHint": "0 schaltet die Aufgabengrenze pro Nutzer, das automatische Pausieren nach Fehlern, die Aufbewahrung der Laufprotokolle und die Grenze für Lauf-Chats ab.",
+      "settings": {
+        "maxTasksPerUser": "Aufgaben pro Nutzer",
+        "minIntervalMinutes": "Kürzestes Intervall (Minuten)",
+        "maxConcurrentRuns": "Gleichzeitige Läufe",
+        "maxConcurrentRunsPerUser": "Gleichzeitige Läufe pro Nutzer",
+        "staggerMinutes": "Startverteilung (Minuten)",
+        "catchUpWindowHours": "Nachholfenster (Stunden)",
+        "maxConsecutiveFailures": "Pausieren nach Fehlern in Folge",
+        "approvalTimeoutHours": "Frist für Freigaben (Stunden)",
+        "runRetentionDays": "Laufprotokolle aufbewahren (Tage)",
+        "maxRunChatsPerTask": "Behaltene Lauf-Chats pro Aufgabe",
+        "maxInstructionLength": "Längste Anweisungen (Zeichen)",
+        "maxRunMinutes": "Längster Lauf (Minuten)"
       }
     }
   },
@@ -3860,7 +3909,8 @@
     "workflows": "Workflows",
     "prompts": "Prompts",
     "apps": "Apps",
-    "chats": "Chats"
+    "chats": "Chats",
+    "tasks": "Geplante Aufgaben"
   },
   "darkMode": {
     "auto": "Auto (System)",
@@ -4104,7 +4154,8 @@
     "noChats": "Noch keine Chats",
     "noChatsMatch": "Keine passenden Chats",
     "chatsUnavailable": "Die Chats konnten nicht geladen werden",
-    "unseenBadge": "{{count}} neu"
+    "unseenBadge": "{{count}} neu",
+    "tasks": "Geplante Aufgaben"
   },
   "chatHistory": {
     "title": "Ihre Chats",
@@ -4154,7 +4205,8 @@
     "sharedBy": "Geteilt von {{name}}",
     "sharedWithYou": "Mit Ihnen geteilt",
     "sharedNew": "Neu",
-    "sharedNewHint": "Sie haben dies noch nicht geöffnet"
+    "sharedNewHint": "Sie haben dies noch nicht geöffnet",
+    "scheduled": "Geplant"
   },
   "transcription": {
     "record": "Audio zum Transkribieren aufnehmen",
@@ -4523,6 +4575,205 @@
       "preview": "Vorschau",
       "required": "Dieses Feld ist erforderlich",
       "subtitle": "Füllen Sie die Angaben für diesen Prompt aus"
+    }
+  },
+  "scheduledTasks": {
+    "allowedActions": "Ohne Rückfrage erlaubt",
+    "allowedActionsHint": "Tools, die eine Freigabe brauchen, pausieren einen Lauf, bis Sie antworten. Tools, für die Sie „Für diese Aufgabe immer erlauben“ gewählt haben, laufen ohne Rückfrage.",
+    "approval": {
+      "aTool": "ein Tool",
+      "alwaysAllow": "Für diese Aufgabe immer erlauben",
+      "approve": "Freigeben",
+      "expires": "Läuft ab {{time}}",
+      "question": "Darf dieser Lauf {{tool}} verwenden?",
+      "reject": "Ablehnen"
+    },
+    "backToTasks": "Geplante Aufgaben",
+    "banner": {
+      "task": "eine Aufgabe",
+      "title": "Geplanter Lauf von"
+    },
+    "cancelRun": "Abbrechen",
+    "chatRemoved": "Chat entfernt (ältere Läufe behalten nur ihr Protokoll)",
+    "create": "Aufgabe anlegen",
+    "deleteChats": "Auch die Chats ihrer Läufe löschen",
+    "deleteText": "Die Aufgabe und ihr Laufverlauf werden gelöscht. Ihre Lauf-Chats bleiben in Ihrem Chatverlauf, außer Sie löschen sie mit.",
+    "deleteTitle": "Diese Aufgabe löschen?",
+    "duplicate": "Duplizieren",
+    "editTitle": "Geplante Aufgabe bearbeiten",
+    "editorIntro": "Die Anweisungen werden bei jedem Lauf an die App gesendet – als Sie, mit den Tools und Integrationen, die Sie wählen. Jeder Lauf wird ein eigener Chat.",
+    "emptyText": "Speichern Sie einen Prompt, damit er jeden Morgen, einmal nächste Woche oder nur auf Klick auf „Jetzt ausführen“ läuft. Sie können auch eine App mit Planungstools bitten, eine Aufgabe für Sie anzulegen.",
+    "emptyTitle": "Noch keine geplanten Aufgaben",
+    "errors": {
+      "load": "Aufgaben konnten nicht geladen werden",
+      "save": "Die Aufgabe konnte nicht gespeichert werden"
+    },
+    "fields": {
+      "alwaysIncluded": "immer dabei",
+      "app": "App",
+      "appDefaultModel": "Standard der App",
+      "appDefaultTools": "Standards der App verwenden",
+      "description": "Beschreibung (optional)",
+      "instructions": "Anweisungen",
+      "model": "Modell",
+      "name": "Name",
+      "notify": "Benachrichtigen",
+      "schedule": "Zeitplan",
+      "tools": "Tools und Integrationen",
+      "variables": "App-Variablen"
+    },
+    "lastRun": "Letzter Lauf",
+    "limitReached": "Sie haben die Grenze von {{limit}} Aufgaben erreicht",
+    "loadMore": "Ältere Läufe anzeigen",
+    "needsApproval": "Fragt nach Freigabe",
+    "newTask": "Neue Aufgabe",
+    "newTitle": "Neue geplante Aufgabe",
+    "nextRun": "Nächster Lauf",
+    "noAllowedActions": "Noch nichts.",
+    "noRuns": "Noch keine Läufe.",
+    "noTools": "Keine",
+    "notFound": "Aufgabe nicht gefunden",
+    "notify": {
+      "always": "Nach jedem Lauf",
+      "failure": "Nur wenn ein Lauf fehlschlägt",
+      "never": "Nie"
+    },
+    "openChat": "Chat öffnen",
+    "openTask": "Aufgabe öffnen",
+    "pause": "Pausieren",
+    "proposal": {
+      "applied": "Änderungen übernommen.",
+      "apply": "Änderungen übernehmen",
+      "before": "Vorher",
+      "createTitle": "Diese Aufgabe planen?",
+      "deleteTitle": "Diese Aufgabe löschen?",
+      "deleted": "Gelöscht.",
+      "dismissed": "Nicht gespeichert.",
+      "edit": "Im Formular bearbeiten",
+      "saved": "Gespeichert.",
+      "unavailable": "Geplante Aufgaben sind gerade nicht verfügbar.",
+      "updateTitle": "Diese Aufgabe ändern?"
+    },
+    "reconnect": "Neu verbinden",
+    "resume": "Fortsetzen",
+    "revoke": "Widerrufen",
+    "runHistory": "Laufverlauf",
+    "runNow": "Jetzt ausführen",
+    "runQueued": "Lauf gestartet",
+    "runStatus": {
+      "awaiting_approval": "Freigabe nötig",
+      "cancelled": "Abgebrochen",
+      "failed": "Fehlgeschlagen",
+      "queued": "Wartend",
+      "running": "Läuft",
+      "skipped": "Übersprungen",
+      "succeeded": "Erfolgreich"
+    },
+    "runs": {
+      "duration": "Dauer",
+      "result": "Ergebnis",
+      "scheduled": "Geplant",
+      "started": "Gestartet",
+      "status": "Status",
+      "trigger": "Auslöser"
+    },
+    "schedule": {
+      "at": "Datum und Uhrzeit",
+      "atTime": "Um",
+      "checking": "Zeitplan wird geprüft…",
+      "cron": "Cron-Ausdruck",
+      "cronHint": "Minute, Stunde, Tag im Monat, Monat, Wochentag – z. B. ist „0 8 * * 1-5“ werktags um 08:00.",
+      "days": "Tage",
+      "endAt": "Ende",
+      "every": "Alle",
+      "hours": "Stunden",
+      "lastDay": "Letzter Tag des Monats",
+      "maxRuns": "Nach … Läufen aufhören",
+      "minutes": "Minuten",
+      "monthEndHint": "Der 29. bis 31. fallen in kürzeren Monaten auf den letzten Tag.",
+      "nextRuns": "Nächste Läufe",
+      "noFutureRuns": "Dieser Zeitplan hat keine künftigen Läufe.",
+      "onDays": "An",
+      "onDaysOfMonth": "Am Tag",
+      "repeat": "Läuft",
+      "staggerNote": "Um die Last zu verteilen, kann ein Lauf bis zu {{minutes}} Minuten später starten.",
+      "startAt": "Beginn",
+      "timezone": "Zeitzone",
+      "types": {
+        "cron": "Cron-Ausdruck (erweitert)",
+        "daily": "Jeden Tag",
+        "interval": "Alle … Minuten, Stunden oder Tage",
+        "manual": "Nur wenn ich sie starte",
+        "monthly": "Monatlich",
+        "once": "Einmalig",
+        "weekdays": "Jeden Werktag (Mo–Fr)",
+        "weekly": "An ausgewählten Wochentagen"
+      },
+      "unit": "Einheit",
+      "window": "Beginn, Ende und Anzahl der Läufe"
+    },
+    "scheduleThis": "Das planen…",
+    "status": {
+      "active": "Aktiv",
+      "completed": "Abgeschlossen",
+      "disabled": "Deaktiviert",
+      "paused": "Pausiert"
+    },
+    "subtitle": "Prompts, die von selbst laufen – als Sie. Jeder Lauf wird ein eigener Chat.",
+    "succeededHint": "„Erfolgreich“ heißt, dass der Lauf ohne Fehler endete – öffnen Sie seinen Chat, um zu sehen, ob er das Gewünschte getan hat.",
+    "title": "Geplante Aufgaben",
+    "toast": {
+      "awaitingApproval": "braucht Ihre Freigabe",
+      "failed": "ist fehlgeschlagen",
+      "finished": "ist fertig",
+      "title": "„{{name}}“ {{status}}"
+    },
+    "trigger": {
+      "catchUp": "Nachgeholt",
+      "manual": "Manuell",
+      "schedule": "Geplant"
+    },
+    "unseen": "{{count}} neu",
+    "variables": {
+      "run_time": "wann dieser Lauf gestartet ist",
+      "scheduled_time": "für wann dieser Lauf geplant war",
+      "last_run_at": "wann der vorige Lauf gestartet ist („never“ beim ersten)",
+      "last_successful_run_at": "wann der letzte erfolgreiche Lauf gestartet ist",
+      "run_number": "die Nummer dieses Laufs",
+      "task_name": "der Name der Aufgabe"
+    },
+    "variablesHelp": "Verfügbare Variablen",
+    "variablesHelpText": "Läufe sehen einander nicht. Um nach „was sich seit dem letzten Mal geändert hat“ zu fragen, verwenden Sie die Zeit des letzten Laufs in den Anweisungen:",
+    "reasons": {
+      "ABORTED": "Der Lauf wurde angehalten",
+      "APP_NOT_ACCESSIBLE": "Sie haben keinen Zugriff mehr auf die App dieser Aufgabe",
+      "APP_NOT_AVAILABLE": "Die App dieser Aufgabe existiert nicht mehr oder ist deaktiviert",
+      "APPROVAL_REJECTED": "Sie haben das Werkzeug abgelehnt, das dieser Lauf brauchte",
+      "APPROVAL_TIMED_OUT": "Die Freigabe wurde nicht rechtzeitig beantwortet",
+      "AUTHENTICATION_REQUIRED": "Geplante Aufgaben benötigen einen angemeldeten Benutzer",
+      "AWAITING_APPROVAL": "Wartet auf Ihre Freigabe",
+      "CANCELLED_BY_OWNER": "Von Ihnen abgebrochen",
+      "INTERRUPTED": "Der Server wurde während des Laufs beendet",
+      "MAX_RUNS": "Die maximale Anzahl an Läufen ist erreicht",
+      "MISSED": "Der letzte geplante Lauf wurde verpasst",
+      "MISSED_one": "Dieser Lauf wurde verpasst, während der Server nicht lief",
+      "MISSED_other": "{{count}} Läufe wurden verpasst, während der Server nicht lief",
+      "MODEL_NOT_ACCESSIBLE": "Sie haben keinen Zugriff mehr auf das Modell dieser Aufgabe",
+      "MODEL_NOT_AVAILABLE": "Das Modell dieser Aufgabe ist nicht mehr verfügbar",
+      "NO_FUTURE_RUNS": "Der Zeitplan hat keine weiteren Läufe",
+      "ONCE": "Der einmalige Lauf hat stattgefunden",
+      "OWNER_DEACTIVATED": "Das Konto des Eigentümers wurde deaktiviert",
+      "OWNER_DELETED": "Das Konto des Eigentümers existiert nicht mehr",
+      "OWNER_LOOKUP_FAILED": "Das Konto des Eigentümers konnte nicht geprüft werden",
+      "OWNER_MISSING": "Die Aufgabe hat keinen Eigentümer",
+      "PAUSED_BY_OWNER": "Von Ihnen pausiert",
+      "PERMISSION_REVOKED": "Sie dürfen keine geplanten Aufgaben mehr ausführen",
+      "PREVIOUS_RUN_ACTIVE": "Der vorherige Lauf lief noch",
+      "TASK_DELETED": "Die Aufgabe wurde gelöscht",
+      "TASK_NOT_ACTIVE": "Die Aufgabe war nicht mehr aktiv, als der Lauf fällig war",
+      "TOO_MANY_APPROVALS": "Der Lauf hat zu oft um Freigabe gebeten",
+      "TOO_MANY_FAILURES": "Nach zu vielen fehlgeschlagenen Läufen in Folge pausiert",
+      "TOOL_NOT_AVAILABLE": "Die App bietet ein Werkzeug dieser Aufgabe nicht mehr an"
     }
   }
 }

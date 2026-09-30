@@ -72,6 +72,12 @@ export function PlatformConfigProvider({ children }) {
         // history UI on it, so it has to survive this hand-assembled object.
         chats: platformCfg.chats,
 
+        // Scheduled tasks: on only when the flag, durable chats and the
+        // platform switch agree (resolved server-side), plus the limits the
+        // task form respects. Whether this user may create tasks is their
+        // `permissions.scheduledTasks`.
+        scheduledTasks: platformCfg.scheduledTasks,
+
         // Whether users may keep prompts of their own, and whom they may
         // share them with (#2519). Absent on an older server: no user prompts.
         userPrompts: platformCfg.userPrompts,

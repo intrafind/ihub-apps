@@ -435,6 +435,18 @@ describe('authorizeChat', () => {
     });
   });
 
+  it('treats an admin reading their own chat as its owner, not the bypass', async () => {
+    await withRepository(async ({ repository }) => {
+      const owner = await resolvePrincipal(ADMIN, { mode: 'default' });
+      await storeChat(repository, 'chat-1', owner.id, 'default');
+
+      // Their own unseen badge must clear when they open it.
+      const result = await authorizeChat('chat-1', ADMIN, { repository });
+      assert.equal(result.ok, true);
+      assert.equal(result.viaAdmin, undefined);
+    });
+  });
+
   it('refuses an admin a write on a chat they do not own', async () => {
     // The bypass is documented and tested as a *read* affordance, but the
     // decision used to be one verb-less boolean and every write path
