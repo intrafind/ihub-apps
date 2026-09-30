@@ -104,11 +104,12 @@
           return;
         }
 
-        // A shared chat link decides its own audience server-side: a public
-        // share opens with nobody signed in, and the page itself sends a
-        // viewer to the login when the link needs one. Gating it here would
-        // demand a sign-in before the server ever got to say "public".
-        if (isSharedChatPath()) {
+        // A shared chat link and the detector decide their own audience
+        // server-side: a public share or detector opens with nobody signed in,
+        // and the page itself sends a viewer to the login when it needs one.
+        // Gating it here would demand a sign-in before the server ever got to
+        // say "public".
+        if (isSelfGatedPath()) {
           loadApp();
           return;
         }
@@ -151,14 +152,19 @@
   // =========================================================================
 
   /**
-   * Whether the page being opened is a shared chat (`/share/<id>`), relative
-   * to the deployment base path.
+   * Whether the page being opened decides its own audience — a shared chat
+   * (`/share/<id>`) or the detector (`/verify`) — relative to the deployment
+   * base path. Copy of `isSelfGatedPath` in `utils/runtimeBasePath.js`.
    */
-  function isSharedChatPath() {
+  function isSelfGatedPath() {
     var base = window.__BASE_PATH__ || '';
     var pathname = window.location.pathname || '';
     var relative = base && pathname.indexOf(base) === 0 ? pathname.slice(base.length) : pathname;
-    return relative.indexOf('/share/') === 0;
+    return (
+      relative.indexOf('/share/') === 0 ||
+      relative === '/verify' ||
+      relative.indexOf('/verify/') === 0
+    );
   }
 
   function fetchAuthStatus() {
