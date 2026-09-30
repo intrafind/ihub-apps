@@ -583,6 +583,66 @@ describe('AppChat with a start form', () => {
     expect(screen.getAllByTestId('composer-input')[0]).toHaveValue('');
   });
 
+  test('text typed into the form is sent as {{content}}', async () => {
+    renderApp();
+    await screen.findByTestId('start-form');
+
+    // The chat input's field, on the form, also when nothing was prefilled.
+    expect(screen.getByLabelText('Message')).toHaveValue('');
+    fireEvent.change(screen.getByLabelText('Message'), {
+      target: { value: 'Mention the deadline' }
+    });
+
+    await fillAndSend();
+    await answerTurn('run-1');
+    expect(requestMessages(0)[0].content).toBe(
+      'Write to Ada about the Q3 report.\n\nMention the deadline'
+    );
+    expect(screen.getAllByTestId('composer-input')[0]).toHaveValue('');
+  });
+
+  describe('model selection', () => {
+    const TWO_MODELS = [
+      { id: 'model-x', name: { en: 'Model X' }, contextWindow: 8192 },
+      { id: 'model-y', name: { en: 'Model Y' }, contextWindow: 8192 }
+    ];
+    const original = { models: mockSettings.models, set: mockSettings.setSelectedModel };
+    beforeEach(() => {
+      mockSettings.models = TWO_MODELS;
+      mockSettings.setSelectedModel = jest.fn();
+    });
+    afterEach(() => {
+      mockSettings.models = original.models;
+      mockSettings.setSelectedModel = original.set;
+    });
+
+    test('the form picks the model of its message, as the composer would', async () => {
+      renderApp();
+      await screen.findByTestId('start-form');
+
+      fireEvent.click(screen.getByRole('button', { name: 'Model X' }));
+      fireEvent.click(screen.getByRole('menuitem', { name: 'Model Y' }));
+      expect(mockSettings.setSelectedModel).toHaveBeenCalledWith('model-y');
+      expect(screen.getByTestId('start-form')).toBeInTheDocument();
+    });
+
+    test('an app that fixes the model shows no selector on the form', async () => {
+      renderApp({ ...APP, disallowModelSelection: true });
+      await screen.findByTestId('start-form');
+
+      expect(screen.queryByRole('button', { name: 'Model X' })).toBeNull();
+    });
+
+    test('in compare mode the panels pick the models, not the form', async () => {
+      renderApp();
+      await screen.findByTestId('start-form');
+
+      act(() => mockHeader.props.onCompareModeChange(true));
+      expect(screen.getByTestId('compare-view')).toContainElement(screen.getByTestId('start-form'));
+      expect(screen.queryByRole('button', { name: 'Model X' })).toBeNull();
+    });
+  });
+
   test('in compare mode, one form is sent to every panel', async () => {
     renderApp();
     await screen.findByTestId('start-form');
