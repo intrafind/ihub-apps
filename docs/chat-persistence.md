@@ -729,9 +729,11 @@ therefore shows what the live one showed, in the same components.
   per call, 200 workflow steps (the last ones), 2000 characters per value and
   256 KiB in all, past which the full text of long arguments goes first.
 - **Shared chats** carry it without anything a call found or read with the
-  owner's permissions — the reason a share drops `citations`. Only public web
-  searches and page reads keep their hits; every other call keeps its name,
-  query and status (`shareableActivity`).
+  owner's permissions — the reason a share drops `citations`. Only the public
+  web searches (Brave, Qwant, Staan, a model's own web search) keep their hits;
+  every other call keeps its name, query and status (`shareableActivity`),
+  pages read by the page reader included, as it can reach intranet hosts on the
+  SSL whitelist.
 - **The workflow result links its execution.** A finished workflow in the chat
   links to `/workflows/executions/:id`, which keeps every step and its output.
   In the other direction, a chat-launched execution records its chat on its

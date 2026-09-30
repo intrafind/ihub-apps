@@ -251,6 +251,21 @@ async function endOnLedger(chatId, runId, endRun, runLog) {
   }
 }
 
+/**
+ * The `run/end` a stored answer implies, or null for a workflow waiting for
+ * input: that run stays open, to be continued on its execution page.
+ */
+function endRunOf(answer) {
+  if (isWaitingForInput(answer)) return null;
+  return answer.error
+    ? {
+        status: answer.error.code === 'ABORTED' ? 'aborted' : 'error',
+        finishReason: answer.finishReason ?? 'error',
+        error: { code: String(answer.error.code), message: String(answer.error.message || '') }
+      }
+    : { status: 'completed', finishReason: answer.finishReason ?? 'stop' };
+}
+
 async function settle(chat, { repository, runLog }) {
   const runId = chat.activeRunId;
   const chatId = chat.id;
@@ -273,11 +288,18 @@ async function settle(chat, { repository, runLog }) {
       clientConnected: false,
       // Another worker may be settling the same chat: the check above is not
       // atomic, this one is. The worker that released the chat goes on to end
-      // the run on the ledger — also when its answer could not be written,
-      // since a released chat is never settled again.
+      // the run on the ledger — also when its answer could not be written, or
+      // another worker's answer was, since a released chat is never settled
+      // again.
       onlyIfUnanswered: true
     });
-    if (settled.skipped || !settled.released) return repository.getChat(chatId);
+    if (!settled.released) return repository.getChat(chatId);
+    if (settled.skipped) {
+      // The run ends the way the answer that was stored says.
+      const { messages: current } = await repository.getMessages(chatId);
+      const stored = current.find(m => m.role === 'assistant' && m.runId === runId);
+      if (stored) endRun = endRunOf(stored);
+    }
   } else {
     // Conditional on the run still holding the chat, under the chat lock: of
     // several workers settling it, one releases it and ends the run.
@@ -288,13 +310,7 @@ async function settle(chat, { repository, runLog }) {
     });
     if (!released) return repository.getChat(chatId);
     // The run answered; only its end was not recorded.
-    endRun = answer.error
-      ? {
-          status: answer.error.code === 'ABORTED' ? 'aborted' : 'error',
-          finishReason: answer.finishReason ?? 'error',
-          error: { code: String(answer.error.code), message: String(answer.error.message || '') }
-        }
-      : { status: 'completed', finishReason: answer.finishReason ?? 'stop' };
+    endRun = endRunOf(answer);
   }
 
   // The ledger is the audit record of the run: it should end, and say how.

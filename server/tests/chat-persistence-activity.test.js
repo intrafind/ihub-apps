@@ -516,12 +516,25 @@ describe('what a share carries of the activity', () => {
             toolId: 'webSearch',
             queries: ['wind'],
             sources: []
+          },
+          {
+            // A host on the SSL whitelist passes the page reader's
+            // private-address guard: the page may be an intranet one.
+            id: 'p',
+            kind: 'fetch',
+            toolId: 'webContentExtractor',
+            name: 'webContentExtractor',
+            status: 'completed',
+            url: 'https://intranet.corp/hr/salaries',
+            title: 'Salary bands 2027',
+            details: [{ name: 'url', values: [{ text: 'https://intranet.corp/hr/salaries' }] }],
+            sources: [{ url: 'https://intranet.corp/hr/salaries', title: 'Salary bands 2027' }]
           }
         ]
       },
       workflowResult: { status: 'completed', executionId: 'wf-1', workflowName: 'Review' }
     });
-    const [meta, confluence, native] = shared.toolActivity.items;
+    const [meta, confluence, native, page] = shared.toolActivity.items;
     assert.deepEqual(meta.sources, []);
     assert.deepEqual(meta.details, []);
     assert.equal(meta.status, 'completed');
@@ -529,6 +542,11 @@ describe('what a share carries of the activity', () => {
     assert.equal(confluence.error, undefined);
     assert.equal(confluence.query, 'merger');
     assert.deepEqual(native.queries, ['wind']);
+    assert.equal(page.url, undefined);
+    assert.equal(page.title, undefined);
+    assert.deepEqual(page.details, []);
+    assert.deepEqual(page.sources, []);
+    assert.equal(page.status, 'completed');
     assert.deepEqual(shared.workflowResult, { status: 'completed', workflowName: 'Review' });
   });
 
@@ -787,7 +805,51 @@ describe('a chat whose run died with its process', () => {
         messages.map(m => m.content),
         ['q', 'settled by the other worker']
       );
-      assert.deepEqual(runLog.appended, [], 'the worker that lost does not end the run');
+      // Its answer was skipped, but its release took effect: nobody else will
+      // end the run, so this worker does — the way the stored answer says.
+      assert.deepEqual(
+        runLog.appended.map(e => [e.type, e.data.status]),
+        [[RUN_LOG_EVENTS.RUN_END, 'completed']]
+      );
+    });
+  });
+
+  it('leaves the ledger to the worker that released the chat', async () => {
+    await withRepository(async repository => {
+      await materializeUserTurn({
+        repository,
+        chatId: CHAT_ID,
+        ownerId: 'user-1',
+        identityMode: 'default',
+        appId: 'chat',
+        runId: RUN_ID,
+        content: 'q'
+      });
+      await repository.updateChat(CHAT_ID, { lastMessageAt: longAgo });
+      const chat = await repository.getChat(CHAT_ID);
+      // The other worker answers and releases the chat after this one read
+      // the transcript.
+      let raced = false;
+      const racing = Object.create(repository);
+      racing.getMessages = async id => {
+        const read = await repository.getMessages(id);
+        if (!raced) {
+          raced = true;
+          await repository.appendMessage(CHAT_ID, {
+            role: 'assistant',
+            content: 'settled by the other worker',
+            runId: RUN_ID
+          });
+          await repository.releaseRun(CHAT_ID, RUN_ID, { activeRunId: null, status: 'active' });
+        }
+        return read;
+      };
+      const runLog = fakeRunLog({ events: LEDGER });
+
+      await settleInterruptedChat(chat, { repository: racing, runLog });
+
+      assert.equal((await repository.getMessages(CHAT_ID)).messages.length, 2);
+      assert.deepEqual(runLog.appended, [], 'the worker that released it ends the run');
     });
   });
 
@@ -1245,6 +1307,22 @@ describe('Chat with Results: a stored chat about an execution', () => {
       identityMode: 'default'
     });
     assert.deepEqual(result, { error: 'NO_RESULTS' });
+  });
+
+  it('refuses an execution that has not finished', async () => {
+    const { createExecutionChat } = await import('../services/workflow/executionChat.js');
+    // What a running or paused execution holds is partial, not its answer.
+    for (const status of ['running', 'paused', 'pending', 'failed']) {
+      const result = await createExecutionChat({
+        repository: null,
+        state: { ...STATE, status },
+        executionId: 'e',
+        appId: 'chat',
+        ownerId: 'u',
+        identityMode: 'default'
+      });
+      assert.deepEqual(result, { error: 'NOT_FINISHED' }, status);
+    }
   });
 
   it('picks the longest text result when the workflow declares no primary output', async () => {

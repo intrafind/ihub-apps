@@ -31,6 +31,9 @@ const INTERNAL_FIELDS = new Set([
   '_modelOverride'
 ]);
 
+/** Execution statuses whose state holds the workflow's result. */
+const FINISHED_STATUSES = new Set(['completed', 'approved']);
+
 /** Longest question stored for the chat's opening turn. */
 const MAX_INPUT_CHARS = 20_000;
 
@@ -127,7 +130,7 @@ const MAX_CONTEXT_MESSAGE_CHARS = 2000;
  * @param {string} [params.language] - For the workflow's name.
  * @param {unknown} [params.contextMessage] - The opening question when the execution had
  *   no text input (the client's translated "Here are the results …").
- * @returns {Promise<{chatId: string}|{error: 'NO_RESULTS'|'NOT_STORED'}>}
+ * @returns {Promise<{chatId: string}|{error: 'NOT_FINISHED'|'NO_RESULTS'|'NOT_STORED'}>}
  */
 export async function createExecutionChat({
   repository,
@@ -139,6 +142,9 @@ export async function createExecutionChat({
   language = 'en',
   contextMessage
 }) {
+  // What a running or paused execution holds is not its result yet: a chat
+  // opened on it would present a partial answer as the final one.
+  if (!FINISHED_STATUSES.has(state?.status)) return { error: 'NOT_FINISHED' };
   const { userInput, outputText, workflow, outputFormat } = executionHandoff(state);
   if (!outputText) return { error: 'NO_RESULTS' };
 

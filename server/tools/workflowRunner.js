@@ -303,13 +303,9 @@ export default async function workflowRunner(params = {}) {
   // execution page can lead back to it — only a stored chat, which is the only
   // kind there is to go back to. Both come from the server (`appConfig` and
   // `_chatStored` are set after the model's arguments), never from arguments.
-  delete initialData._chatId;
-  delete initialData._appId;
+  // The engine takes them from `options.chat` only (`WorkflowEngine.start`).
   const appId = typeof _appConfig?.id === 'string' && _appConfig.id ? _appConfig.id : null;
-  if (chatId && _chatStored === true) {
-    initialData._chatId = chatId;
-    if (appId) initialData._appId = appId;
-  }
+  const chatRefs = chatId && _chatStored === true ? { chatId, appId } : null;
 
   // Map the chat-message `input` to the workflow's first non-file/image
   // input variable. With the current input shape (files + one user text
@@ -387,7 +383,8 @@ export default async function workflowRunner(params = {}) {
     state = await engine.start(workflow, initialData, {
       user,
       checkpointOnNode: true,
-      ...(isValidRunId(chatRunId) ? { executionId: chatRunId } : {})
+      ...(isValidRunId(chatRunId) ? { executionId: chatRunId } : {}),
+      ...(chatRefs ? { chat: chatRefs } : {})
     });
   } catch (error) {
     logger.error('Failed to start workflow', {
@@ -414,9 +411,7 @@ export default async function workflowRunner(params = {}) {
       status: 'running',
       startedAt: new Date().toISOString(),
       source: 'chat',
-      ...(initialData._chatId
-        ? { chatId: initialData._chatId, appId: initialData._appId || null }
-        : {})
+      ...(chatRefs ? { chatId: chatRefs.chatId, appId: chatRefs.appId } : {})
     });
   } catch (error) {
     logger.warn('Failed to register execution', {

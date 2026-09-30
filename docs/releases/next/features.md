@@ -153,6 +153,6 @@ knowledge".
   step and result is kept. **My Executions** and the execution page link back to the chat a run
   was started from.
 - Shared chats show the activity without what the owner's own searches found — iFinder, sources,
-  MCP and intranet tools — the same way they leave out the owner's document list. Public web
-  searches keep their pages.
+  MCP and intranet tools, and pages read by the page reader — the same way they leave out the
+  owner's document list. Public web searches keep their pages.
 - Applies to answers stored from this release on (requires **Durable Chats**).

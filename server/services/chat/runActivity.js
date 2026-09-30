@@ -460,14 +460,10 @@ export function boundStoredActivity(activity) {
 /**
  * Tools whose hits are public pages: what they found is on the open web, not
  * behind the owner's permissions. Provider-run web search (`native`) is too.
+ * The page reader (`webContentExtractor`) is not: hosts on the SSL whitelist
+ * bypass its private-address guard, so a page it read may be an intranet one.
  */
-const PUBLIC_WEB_TOOLS = new Set([
-  'bravesearch',
-  'qwantsearch',
-  'staansearch',
-  'websearch',
-  'webcontentextractor'
-]);
+const PUBLIC_WEB_TOOLS = new Set(['bravesearch', 'qwantsearch', 'staansearch']);
 
 function isPublicWebItem(item) {
   return item?.native === true || PUBLIC_WEB_TOOLS.has(String(item?.toolId || '').toLowerCase());
@@ -475,13 +471,13 @@ function isPublicWebItem(item) {
 
 /**
  * The activity as a share carries it. What the turn did stays — which tools
- * it called, what it searched for, whether each call succeeded, the public
- * pages it read, the workflow steps — but nothing a call found or read with
- * the owner's permissions: iFinder and configured sources, MCP and intranet
- * tools, metadata lookups. That is also why a share drops `citations` (see
- * `ChatShareRepository.MESSAGE_FIELDS_DROPPED`). Only the public web tools
- * keep their hits, arguments and errors; every other call keeps its name,
- * query and status. The iAssistant summary keeps its queries and counts and
+ * it called, what it searched for, whether each call succeeded, the workflow
+ * steps — but nothing a call found or read with the owner's permissions or
+ * from the owner's network: iFinder and configured sources, MCP and intranet
+ * tools, metadata lookups, pages read by the page reader. That is also why a
+ * share drops `citations` (see `ChatShareRepository.MESSAGE_FIELDS_DROPPED`).
+ * Only the public web search tools keep their hits, arguments and errors;
+ * every other call keeps its name, query and status. The iAssistant summary keeps its queries and counts and
  * loses the application and source names of its hits, and the workflow
  * result loses the link to an execution a viewer cannot open.
  *

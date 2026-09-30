@@ -39,6 +39,8 @@ import {
   resetStateManager
 } from '../services/workflow/StateManager.js';
 import { resetExecutionRegistry } from '../services/workflow/ExecutionRegistry.js';
+import { WorkflowEngine } from '../services/workflow/WorkflowEngine.js';
+import runLog from '../services/loop/RunLog.js';
 import { sweepOrphanedExecutions } from '../services/workflow/orphanSweeper.js';
 import {
   findResumableExecutions,
@@ -674,5 +676,54 @@ describe('importLegacyWorkflowStates', () => {
     } finally {
       await fs.rm(stateDir, { recursive: true, force: true });
     }
+  });
+});
+
+describe('the chat an execution belongs to', () => {
+  const definition = {
+    id: 'wf-1',
+    nodes: [
+      { id: 'start', type: 'start' },
+      { id: 'end', type: 'end' }
+    ],
+    edges: [{ source: 'start', target: 'end' }]
+  };
+
+  it('is the server’s to say, never the start data’s', async () => {
+    await withRepository(async ({ repository }) => {
+      const engine = new WorkflowEngine({ stateManager: new StateManager({ repository }) });
+      engine._runExecutionLoop = async () => {};
+      const started = [];
+      const startRun = runLog.startRun;
+      runLog.startRun = async args => {
+        started.push(args);
+        return { runId: args.runId };
+      };
+      try {
+        // Start data an API caller posted, claiming somebody's chat.
+        const claimed = await engine.start(
+          definition,
+          { input: 'q', _chatId: 'chat-of-someone-else', _appId: 'chat' },
+          { executionId: 'wf-exec-claimed' }
+        );
+        // The chat's workflow bridge.
+        const bridged = await engine.start(
+          definition,
+          { input: 'q', _chatId: 'chat-of-someone-else' },
+          { executionId: 'workflow-bridged', chat: { chatId: 'chat-1', appId: 'app-1' } }
+        );
+
+        assert.equal(claimed.data._chatId, undefined);
+        assert.equal(claimed.data._appId, undefined);
+        assert.equal(started[0].refs.chatId, undefined);
+        assert.equal(started[0].refs.appId, undefined);
+        assert.equal(bridged.data._chatId, 'chat-1');
+        assert.equal(bridged.data._appId, 'app-1');
+        assert.equal(started[1].refs.chatId, 'chat-1');
+        assert.equal(started[1].refs.appId, 'app-1');
+      } finally {
+        runLog.startRun = startRun;
+      }
+    });
   });
 });

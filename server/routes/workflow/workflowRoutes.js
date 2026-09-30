@@ -1057,7 +1057,7 @@ export default function registerWorkflowRoutes(app, deps = {}) {
    *       404:
    *         description: Execution or app not found
    *       409:
-   *         description: Durable chats are not available to the caller (`CHAT_PERSISTENCE_OFF`)
+   *         description: Durable chats are not available to the caller (`CHAT_PERSISTENCE_OFF`), or the execution has not finished (`EXECUTION_NOT_FINISHED`)
    */
   app.post(
     buildServerPath('/api/workflows/executions/:executionId/chat/:appId'),
@@ -1074,10 +1074,9 @@ export default function registerWorkflowRoutes(app, deps = {}) {
         if (!validateIdForPath(appId, 'app', res)) return;
         if (!(await authorizeExecutionAccess(req, res, executionId))) return;
 
-        const chatApp = (configCache.getApps().data || []).find(
-          candidate => candidate.id === appId && candidate.enabled !== false
-        );
-        if (!chatApp) return sendNotFound(res, 'App');
+        // Ids match regardless of case, as `appAccessRequired` matched it.
+        const chatApp = findByIdCaseInsensitive(configCache.getApps().data || [], appId);
+        if (!chatApp || chatApp.enabled === false) return sendNotFound(res, 'App');
 
         // An ephemeral app is one whose chats are never stored.
         if (
@@ -1102,12 +1101,18 @@ export default function registerWorkflowRoutes(app, deps = {}) {
           repository: getChatRepository(),
           state,
           executionId,
-          appId,
+          appId: chatApp.id,
           ownerId: principal.id,
           identityMode: principal.mode || identityMode,
           language: req.headers['accept-language']?.split(',')[0]?.split('-')[0] || 'en',
           contextMessage: req.body?.contextMessage
         });
+        if (created.error === 'NOT_FINISHED') {
+          return res.status(409).json({
+            error: 'The execution has not finished',
+            code: 'EXECUTION_NOT_FINISHED'
+          });
+        }
         if (created.error === 'NO_RESULTS') {
           return sendBadRequest(res, 'The execution has no results to chat about');
         }
@@ -1122,9 +1127,9 @@ export default function registerWorkflowRoutes(app, deps = {}) {
           component: 'WorkflowRoutes',
           executionId,
           chatId,
-          appId
+          appId: chatApp.id
         });
-        res.status(201).json({ chatId, appId });
+        res.status(201).json({ chatId, appId: chatApp.id });
       } catch (error) {
         sendFailedOperationError(res, 'start chat with execution results', error);
       }
