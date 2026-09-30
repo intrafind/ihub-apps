@@ -1,8 +1,14 @@
 import { useState, useEffect, useRef, useCallback } from 'react';
 import { useTranslation } from 'react-i18next';
-import AzureSpeechRecognition from '../../../utils/azureRecognitionService';
-import VllmRealtimeRecognition from '../../../utils/vllmRealtimeRecognitionService';
 import { usePlatformConfig } from '../../../shared/contexts/PlatformConfigContext';
+import {
+  createSpeechRecognizer,
+  getRecognitionErrorMessage,
+  isBrowserSpeechSupported,
+  parseRecognitionResult,
+  resolveSpeechService,
+  toRecognitionLang
+} from '../utils/speechService';
 
 const useVoiceRecognition = ({ app, inputRef, onSpeechResult, onCommand, disabled = false }) => {
   const { t, i18n } = useTranslation();
@@ -135,16 +141,13 @@ const useVoiceRecognition = ({ app, inputRef, onSpeechResult, onCommand, disable
     clearError();
 
     try {
-      const service = app?.settings?.speechRecognition?.service || 'default';
+      // The app's own service, or the platform default (Admin → Voice Input).
+      const service = resolveSpeechService(app, platformConfig);
 
-      // The browser Web Speech API is only required for the 'default' service.
+      // The browser Web Speech API is only required for the 'browser' service.
       // Azure and the iHub-proxied vLLM realtime service capture audio directly
       // and don't depend on window.SpeechRecognition.
-      if (
-        service === 'default' &&
-        !('webkitSpeechRecognition' in window) &&
-        !('SpeechRecognition' in window)
-      ) {
+      if (service === 'browser' && !isBrowserSpeechSupported()) {
         showError(
           t('voiceInput.error.notSupported', 'Speech recognition not supported in this browser')
         );
@@ -166,65 +169,24 @@ const useVoiceRecognition = ({ app, inputRef, onSpeechResult, onCommand, disable
         originalPlaceholder.current = inputRef.current.placeholder || '';
       }
 
-      const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
-      let recognition;
-
-      switch (service) {
-        case 'azure':
-          recognition = new AzureSpeechRecognition();
-          // Prefer the per-app host; fall back to the platform-level Azure host
-          // configured in Admin → Voice Input (platform.speech.azure.host).
-          recognition.host =
-            app?.settings?.speechRecognition?.host || platformConfig?.speech?.azure?.host || '';
-          // Only ask the server for a token when it holds a subscription key.
-          // Without one (on-prem container, air-gapped) the recognizer connects
-          // straight to the host and nothing contacts Microsoft.
-          recognition.useServerToken = !!(
-            platformConfig?.speech?.azure?.enabled && platformConfig?.speech?.azure?.keyConfigured
-          );
-          break;
-        case 'vllm-realtime':
-          // Streams mic audio to iHub, which proxies to a vLLM realtime endpoint.
-          // The endpoint is configured server-side, so no host is needed here.
-          recognition = new VllmRealtimeRecognition();
-          break;
-        case 'default':
-        default:
-          recognition = new SpeechRecognition();
-      }
+      // Azure prefers the per-app host and falls back to the platform-level host
+      // configured in Admin → Voice Input (platform.speech.azure.host).
+      const recognition = createSpeechRecognizer(service, {
+        host: app?.settings?.speechRecognition?.host,
+        speech: platformConfig?.speech
+      });
 
       recognition.continuous = microphoneMode === 'manual';
       recognition.interimResults = true;
-
-      let recognitionLang = i18n.language;
-      if (recognitionLang.length === 2) {
-        const langMap = {
-          en: 'en-US',
-          de: 'de-DE',
-          fr: 'fr-FR',
-          es: 'es-ES',
-          it: 'it-IT',
-          ja: 'ja-JP',
-          ko: 'ko-KR',
-          zh: 'zh-CN',
-          ru: 'ru-RU',
-          pt: 'pt-BR',
-          nl: 'nl-NL',
-          pl: 'pl-PL',
-          tr: 'tr-TR',
-          ar: 'ar-SA'
-        };
-        recognitionLang = langMap[recognitionLang.toLowerCase()] || 'en-US';
-      }
-      recognition.lang = recognitionLang;
-      // Both the Azure service and the vLLM realtime service emit results as
-      // { text, isFinal } objects rather than the browser SpeechRecognition
-      // event shape. They mark themselves with `usesTextEventShape`.
+      recognition.lang = toRecognitionLang(i18n.language);
+      // The Azure and vLLM realtime services emit results as { text, isFinal }
+      // objects rather than the browser SpeechRecognition event shape. They mark
+      // themselves with `usesTextEventShape`.
       const usesTextEventShape = recognition.usesTextEventShape === true;
 
-      if (recognition instanceof AzureSpeechRecognition) {
-        // Async: fetches a short-lived Azure token from the server (when a key
-        // is configured) before building the recognizer; the key stays server-side.
+      if (typeof recognition.initRecognizer === 'function') {
+        // Azure: fetches a short-lived token from the server (when a key is
+        // configured) before building the recognizer; the key stays server-side.
         // Its handlers aren't wired yet, so surface a failure here and bail
         // out instead of starting a recognizer that was never built.
         try {
@@ -256,33 +218,10 @@ const useVoiceRecognition = ({ app, inputRef, onSpeechResult, onCommand, disable
 
       recognition.onresult = event => {
         if (isStale()) return;
-        let interimTranscript = '';
-        let finalTranscript = '';
-
-        if (!usesTextEventShape) {
-          // Browser SpeechRecognition API
-          for (let i = event.resultIndex; i < event.results.length; i++) {
-            const transcript = event.results[i][0].transcript;
-            const isFinal = event.results[i].isFinal;
-            if (isFinal) {
-              finalTranscript += transcript;
-            } else {
-              interimTranscript += transcript;
-            }
-          }
-        } else {
-          // Azure / vLLM realtime services emit { text, isFinal }
-          if ('text' in event) {
-            // Check if this is a final or interim result
-            if (event.isFinal === false) {
-              // Interim result from continuous recognition
-              interimTranscript = event.text;
-            } else {
-              // Final result (from either recognizeOnceAsync or continuous recognition)
-              finalTranscript = event.text;
-            }
-          }
-        }
+        const { interim: interimTranscript, final: finalTranscript } = parseRecognitionResult(
+          event,
+          usesTextEventShape
+        );
 
         setTranscript(interimTranscript || finalTranscript);
 
@@ -330,40 +269,7 @@ const useVoiceRecognition = ({ app, inputRef, onSpeechResult, onCommand, disable
 
       recognition.onerror = event => {
         if (isStale()) return;
-        let errorMsg = '';
-        switch (event.error) {
-          case 'no-speech':
-            errorMsg = t('voiceInput.error.noSpeech', 'No speech detected. Please try again.');
-            break;
-          case 'audio-capture':
-            errorMsg = t(
-              'voiceInput.error.noMicrophone',
-              'No microphone found. Please check your device settings.'
-            );
-            break;
-          case 'not-allowed':
-            errorMsg = t(
-              'voiceInput.error.permissionDenied',
-              'Please allow microphone access and try again.'
-            );
-            break;
-          case 'network':
-            errorMsg = t(
-              'voiceInput.error.network',
-              'Network error. Please check your connection.'
-            );
-            break;
-          case 'service':
-            // Error surfaced by a proxied backend (e.g. the vLLM realtime
-            // endpoint). Prefer the server-supplied message when available.
-            errorMsg =
-              event.message ||
-              t('voiceInput.error.service', 'Transcription service unavailable. Please try again.');
-            break;
-          default:
-            errorMsg = t('voiceInput.error.general', 'Voice input error. Please try again.');
-        }
-        showError(errorMsg);
+        showError(getRecognitionErrorMessage(event, t));
       };
 
       recognition.onend = () => {

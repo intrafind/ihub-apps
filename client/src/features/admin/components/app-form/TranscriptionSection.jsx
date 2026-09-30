@@ -1,4 +1,5 @@
 import { getLocalizedContent } from '../../../../utils/localizeContent';
+import { usePlatformConfig } from '../../../../shared/contexts/PlatformConfigContext';
 
 function TranscriptionSection({
   app,
@@ -8,8 +9,12 @@ function TranscriptionSection({
   transcriptionModels,
   parseNumberOrUndefined
 }) {
+  const { platformConfig } = usePlatformConfig();
   const handleTranscriptionChange = updates =>
     onChange('transcription', { ...app.transcription, ...updates });
+  // Admin → Voice Input can set a model every app without its own one uses.
+  const platformDefaultModelId = platformConfig?.speech?.transcription?.defaultModelId || '';
+  const platformDefaultModel = transcriptionModels.find(m => m.id === platformDefaultModelId);
 
   return (
     <div className="bg-white dark:bg-gray-800 shadow-sm px-4 py-5 sm:rounded-lg sm:p-6">
@@ -65,7 +70,17 @@ function TranscriptionSection({
                     className="mt-1 block w-full rounded-md border-gray-300 shadow-xs focus:border-indigo-500 focus:ring-indigo-500 text-sm dark:bg-gray-700 dark:border-gray-600"
                   >
                     <option value="">
-                      {t('admin.apps.edit.selectTranscriptionModel', 'Select a model…')}
+                      {platformDefaultModelId
+                        ? t(
+                            'admin.apps.edit.platformDefaultTranscriptionModel',
+                            'Platform default ({{model}})',
+                            {
+                              model:
+                                getLocalizedContent(platformDefaultModel?.name, currentLanguage) ||
+                                platformDefaultModelId
+                            }
+                          )
+                        : t('admin.apps.edit.selectTranscriptionModel', 'Select a model…')}
                     </option>
                     {transcriptionModels.map(m => (
                       <option key={m.id} value={m.id}>
@@ -73,6 +88,14 @@ function TranscriptionSection({
                       </option>
                     ))}
                   </select>
+                  {!app.transcription?.modelId && !platformDefaultModelId && (
+                    <p className="mt-1 text-xs text-amber-600 dark:text-amber-400">
+                      {t(
+                        'admin.apps.edit.transcriptionModelRequired',
+                        'Select a model, or set a default transcription model under Admin → Voice Input.'
+                      )}
+                    </p>
+                  )}
                   {transcriptionModels.length === 0 && (
                     <p className="mt-1 text-xs text-amber-600 dark:text-amber-400">
                       {t(
