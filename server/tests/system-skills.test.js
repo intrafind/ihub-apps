@@ -33,9 +33,17 @@ import {
   saveGeneratedFile,
   sweepExpiredGeneratedFiles
 } from '../services/documents/generatedFiles.js';
-import { ArtifactRepository } from '../services/artifacts/ArtifactRepository.js';
+import {
+  ArtifactRepository,
+  ARTIFACTS_NAMESPACE
+} from '../services/artifacts/ArtifactRepository.js';
 import { FilesystemStorageProvider } from '../storage/providers/filesystem/index.js';
-import { buildChatExportSpec } from '../services/documents/ExportService.js';
+import {
+  buildChatExportSpec,
+  buildMarkdownExportSpec,
+  EXPORT_LIMITS
+} from '../services/documents/ExportService.js';
+import { LIMITS } from '../services/documents/pdf/validators.js';
 
 let contentsSkillsDir;
 let skills = [];
@@ -307,6 +315,54 @@ describe('generated file store', () => {
     }
   });
 
+  it('keeps a file whose payload could not be deleted, for the next sweep', async () => {
+    const baseDir = await fs.mkdtemp(path.join(os.tmpdir(), 'ihub-generated-'));
+    const provider = new FilesystemStorageProvider({ baseDir, flushIntervalMs: 25 });
+    await provider.initialize();
+    let deletesFail = true;
+    const blobs = {
+      put: (...args) => provider.blobs.put(...args),
+      get: (...args) => provider.blobs.get(...args),
+      list: (...args) => provider.blobs.list(...args),
+      async delete(...args) {
+        if (deletesFail) throw new Error('storage unavailable');
+        return provider.blobs.delete(...args);
+      }
+    };
+    const quiet = { error() {}, warn() {}, info() {}, debug() {} };
+    const repository = new ArtifactRepository({
+      documents: provider.documents,
+      blobs,
+      logger: quiet,
+      policy: () => ({ enabled: true })
+    });
+    const platform = configCache.getPlatform;
+    try {
+      const alice = { id: 'alice' };
+      await saveGeneratedFile({
+        user: alice,
+        data: Buffer.from('%PDF-1.3'),
+        mimeType: 'application/pdf',
+        name: 'old',
+        repository
+      });
+      configCache.getPlatform = () => ({ chats: { retentionDays: 0.00000005 } });
+      await new Promise(resolve => setTimeout(resolve, 30));
+      assert.equal(await sweepExpiredGeneratedFiles({ repository }), 0);
+      const owner = { type: 'user', id: ownerKeyOf(alice) };
+      assert.equal((await repository.list(owner)).length, 1, 'the document stays to be found');
+      deletesFail = false;
+      assert.equal(await sweepExpiredGeneratedFiles({ repository }), 1);
+      assert.equal((await repository.list(owner)).length, 0);
+      const left = await provider.blobs.list(ARTIFACTS_NAMESPACE, { prefix: 'user__' });
+      assert.equal(left.items.length, 0, 'and the payload is gone');
+    } finally {
+      configCache.getPlatform = platform;
+      await provider.shutdown();
+      await fs.rm(baseDir, { recursive: true, force: true });
+    }
+  });
+
   it('keys owners so that user ids never reach a storage key', () => {
     assert.equal(ownerKeyOf(null), 'anonymous');
     assert.equal(ownerKeyOf({ id: 'anonymous' }), 'anonymous');
@@ -347,5 +403,14 @@ describe('chat export spec', () => {
       () => buildChatExportSpec({ messages: [{ role: 'user', content: 'x'.repeat(1_000_001) }] }),
       /too long/
     );
+  });
+
+  it('refuses Markdown up front that the renderer would refuse', () => {
+    assert.equal(EXPORT_LIMITS.maxMarkdownChars, LIMITS.maxMarkdownChars);
+    assert.throws(
+      () => buildMarkdownExportSpec({ markdown: 'x'.repeat(LIMITS.maxMarkdownChars + 1) }),
+      error => error.status === 413
+    );
+    assert.equal(buildMarkdownExportSpec({ markdown: '# Report' }).markdown, '# Report');
   });
 });

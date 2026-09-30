@@ -1,5 +1,6 @@
 import { resolveTheme } from './pdf/themes.js';
 import { createPdf } from './pdf/PdfService.js';
+import { LIMITS } from './pdf/validators.js';
 
 /**
  * Server-side document exports.
@@ -14,7 +15,9 @@ export const EXPORT_LIMITS = Object.freeze({
   maxMessages: 2000,
   maxMessageChars: 1_000_000,
   maxTotalChars: 8_000_000,
-  maxMarkdownChars: 8_000_000
+  // What the renderer converts in one piece: a longer export is refused here,
+  // with a 413, rather than after it reached the worker.
+  maxMarkdownChars: LIMITS.maxMarkdownChars
 });
 
 const EXPORT_TIMEOUT_MS = 90_000;

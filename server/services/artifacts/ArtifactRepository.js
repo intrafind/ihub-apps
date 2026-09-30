@@ -81,6 +81,15 @@ export const ARTIFACT_VERSION = 1;
 export const ARTIFACT_SCOPES = Object.freeze(['chat', 'run', 'user']);
 
 /**
+ * Scope types whose artifacts are only ever found through their documents:
+ * nothing empties them with {@link ArtifactRepository#deleteScope}, whose
+ * payload walk is what collects a blob left without a document. Their deletes
+ * remove the payload first, so a failed delete keeps the document the next
+ * sweep finds it by.
+ */
+const DOCUMENT_SWEPT_SCOPES = new Set(['user']);
+
+/**
  * Separator between the scope, its id and the artifact id in a key.
  *
  * An artifact id never contains the separator, so a scope id that does
@@ -476,36 +485,58 @@ export class ArtifactRepository {
    * so a failure between the two leaves a blob the prefix sweep still
    * collects, rather than a descriptor pointing at bytes that are gone.
    *
+   * A scope no prefix sweep empties ({@link DOCUMENT_SWEPT_SCOPES}) has
+   * nothing that would collect that blob, so there the payload goes first and
+   * a payload that could not be removed keeps its document for the next try.
+   * A document left behind the other way round reads as missing (`get`
+   * refuses metadata without a payload) and is removed by the same retry.
+   *
    * @param {string} key - Artifact key.
    * @param {{type: string, id: string}} scope - Scope, for the log line.
    * @returns {Promise<boolean>} Whether anything went.
    * @private
    */
   async _delete(key, scope) {
-    let removed = false;
-    try {
-      removed = await this.documents.delete(ARTIFACTS_NAMESPACE, key);
-    } catch (error) {
-      this.logger.error('Failed to delete an artifact', {
-        component: COMPONENT,
-        scopeType: scope.type,
-        scopeId: scope.id,
-        key,
-        error: error.message
-      });
+    if (DOCUMENT_SWEPT_SCOPES.has(scope.type)) {
+      const payload = await this._deleteHalf('payload', key, scope);
+      if (payload === null) return false;
+      const document = await this._deleteHalf('document', key, scope);
+      return Boolean(payload || document);
     }
+    const document = await this._deleteHalf('document', key, scope);
+    const payload = await this._deleteHalf('payload', key, scope);
+    return Boolean(document || payload);
+  }
+
+  /**
+   * Delete the document or the payload of one artifact.
+   *
+   * @param {'document'|'payload'} half
+   * @param {string} key - Artifact key.
+   * @param {{type: string, id: string}} scope - Scope, for the log line.
+   * @returns {Promise<boolean|null>} Whether it went, or null when the store
+   *   failed (logged).
+   * @private
+   */
+  async _deleteHalf(half, key, scope) {
+    const store = half === 'payload' ? this.blobs : this.documents;
     try {
-      if (await this.blobs.delete(ARTIFACTS_NAMESPACE, key)) removed = true;
+      return Boolean(await store.delete(ARTIFACTS_NAMESPACE, key));
     } catch (error) {
-      this.logger.error('Failed to delete an artifact payload', {
-        component: COMPONENT,
-        scopeType: scope.type,
-        scopeId: scope.id,
-        key,
-        error: error.message
-      });
+      this.logger.error(
+        half === 'payload'
+          ? 'Failed to delete an artifact payload'
+          : 'Failed to delete an artifact',
+        {
+          component: COMPONENT,
+          scopeType: scope.type,
+          scopeId: scope.id,
+          key,
+          error: error.message
+        }
+      );
+      return null;
     }
-    return removed;
   }
 
   /**

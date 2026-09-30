@@ -23,6 +23,8 @@ export const LIMITS = Object.freeze({
   maxDepth: 40,
   /** Characters in one text string. */
   maxTextChars: 200_000,
+  /** Characters of Markdown converted in one piece. */
+  maxMarkdownChars: 2_000_000,
   /** Rows in one table. */
   maxTableRows: 5_000
 });

@@ -484,7 +484,7 @@ export function blockNodes(tokens, ctx, depth = 0, options = {}) {
  */
 export function markdownToContent(markdown, ctx) {
   const text = String(markdown ?? '');
-  if (text.length > LIMITS.maxTextChars * 10) {
+  if (text.length > LIMITS.maxMarkdownChars) {
     throw new Error('Markdown content is too long to render as one document.');
   }
   const tokens = new Lexer({ gfm: true, breaks: Boolean(ctx.breaks) }).lex(text);
