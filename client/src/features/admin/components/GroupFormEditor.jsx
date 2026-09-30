@@ -250,6 +250,30 @@ function GroupFormEditor({
                 <div className="col-span-6">
                   <div className="flex items-center">
                     <input
+                      id="group-permission-scheduled-tasks"
+                      type="checkbox"
+                      checked={group.permissions?.scheduledTasks || false}
+                      onChange={e => handlePermissionChange('scheduledTasks', e.target.checked)}
+                      className="h-4 w-4 text-indigo-600 focus:ring-indigo-500 border-gray-300 dark:border-gray-600 rounded-sm"
+                    />
+                    <label
+                      htmlFor="group-permission-scheduled-tasks"
+                      className="ml-2 block text-sm text-gray-900 dark:text-gray-100"
+                    >
+                      {t('admin.groups.scheduledTasks', 'Scheduled Tasks')}
+                    </label>
+                  </div>
+                  <p className="mt-1 text-xs text-gray-500 dark:text-gray-400">
+                    {t(
+                      'admin.groups.scheduledTasksHint',
+                      'Allow members to create scheduled tasks that run by themselves as the member (needs the Scheduled Tasks feature). Inherited by groups that inherit this one.'
+                    )}
+                  </p>
+                </div>
+
+                <div className="col-span-6">
+                  <div className="flex items-center">
+                    <input
                       type="checkbox"
                       checked={group.enabled !== false}
                       onChange={e => handleInputChange('enabled', e.target.checked)}

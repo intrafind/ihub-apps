@@ -67,6 +67,8 @@ function ChatMessageList({
   readOnly = false,
   // What MCP App views may do in the composer — see ChatMessage.
   mcpAppHost = null,
+  // The chat's enabled tools, for a message's "Schedule this…" — see ChatMessage.
+  scheduleEnabledTools = null,
   // "Save as prompt" on the user's messages — see ChatMessage.
   onSaveAsPrompt = null
 }) {
@@ -229,6 +231,7 @@ function ChatMessageList({
                 onDocumentAction={onDocumentAction}
                 linkPath={linkPath}
                 mcpAppHost={mcpAppHost}
+                scheduleEnabledTools={scheduleEnabledTools}
                 onSaveAsPrompt={onSaveAsPrompt}
               />
             </div>

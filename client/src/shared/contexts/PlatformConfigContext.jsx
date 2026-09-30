@@ -77,6 +77,12 @@ export function PlatformConfigProvider({ children }) {
         // that apps fall back to. Dropping it here silently broke all of them.
         speech: platformCfg.speech,
 
+        // Scheduled tasks: on only when the flag, durable chats and the
+        // platform switch agree (resolved server-side), plus the limits the
+        // task form respects. Whether this user may create tasks is their
+        // `permissions.scheduledTasks`.
+        scheduledTasks: platformCfg.scheduledTasks,
+
         // Whether users may keep prompts of their own, and whom they may
         // share them with (#2519). Absent on an older server: no user prompts.
         userPrompts: platformCfg.userPrompts,

@@ -6,6 +6,7 @@ import { isValidLanguageCode } from '../../utils/pathSecurity.js';
 import { resolveFeatures } from '../../featureRegistry.js';
 import { isChatPersistenceConfigured } from '../../services/chat/chatPersistence.js';
 import { chatSharingClientConfig } from '../../services/chat/chatSharing.js';
+import { scheduledTasksClientConfig } from '../../services/scheduler/tasks/taskPolicy.js';
 import { userPromptsClientConfig } from '../../services/prompts/userPromptSettings.js';
 import { getUserPromptRepository } from '../../services/prompts/UserPromptRepository.js';
 import registerPromptRoutes from '../promptRoutes.js';
@@ -795,6 +796,10 @@ export default function registerDataRoutes(app) {
           // respect. The server enforces the same caps on create.
           sharing: chatSharingClientConfig(configCache.getFeatures(), platform)
         },
+        // Scheduled tasks: on only when the flag, durable chats and the
+        // platform switch agree. Whether this user may create tasks is their
+        // `permissions.scheduledTasks` on /api/auth/status.
+        scheduledTasks: scheduledTasksClientConfig(configCache.getFeatures(), platform),
         // User prompts in the prompt library: whether users may keep their
         // own (which needs the storage provider as well as the switches) and
         // the audiences they may share with. The server enforces the same.

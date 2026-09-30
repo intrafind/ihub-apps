@@ -612,6 +612,7 @@ export function setupMiddleware(app, platformConfig = {}) {
   // Public API rate limiter for general endpoints
   app.use(buildApiPath('/apps'), rateLimiters.publicApiLimiter);
   app.use(buildApiPath('/chats'), rateLimiters.publicApiLimiter);
+  app.use(buildApiPath('/scheduled-tasks'), rateLimiters.publicApiLimiter);
   // Share links open without a sign-in in `public` mode, so they get the
   // general limiter like every other unauthenticated read; the recipient
   // lookup sits under /users.

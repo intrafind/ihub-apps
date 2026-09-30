@@ -430,6 +430,8 @@ export function reduceRunEvent(state, envelope) {
         mcpApp: data.mcpApp || base.mcpApp || null,
         // A per-user OAuth MCP server the user must connect first.
         authRequired: data.authRequired || null,
+        // A scheduled task a scheduling tool proposed (confirmation card).
+        scheduledTaskProposal: data.scheduledTaskProposal || null,
         completedAt: ts
       };
       const tools =

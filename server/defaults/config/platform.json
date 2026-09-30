@@ -442,6 +442,21 @@
     "retentionDays": 30,
     "cleanupEnabled": true
   },
+  "scheduledTasks": {
+    "enabled": true,
+    "maxTasksPerUser": 10,
+    "minIntervalMinutes": 15,
+    "maxConcurrentRuns": 4,
+    "maxConcurrentRunsPerUser": 1,
+    "staggerMinutes": 5,
+    "catchUpWindowHours": 24,
+    "maxConsecutiveFailures": 3,
+    "approvalTimeoutHours": 24,
+    "runRetentionDays": 90,
+    "maxRunChatsPerTask": 20,
+    "maxInstructionLength": 8000,
+    "maxRunMinutes": 30
+  },
   "storage": {
     "provider": "filesystem",
     "filesystem": {

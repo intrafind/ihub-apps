@@ -131,6 +131,14 @@ function ChatRow({ chat, editing, timeLabel, onStartRename, onRename, onCancelRe
         >
           {chat.appName}
         </span>
+        {chat.origin?.createdVia === 'scheduled-task' && (
+          <span
+            className="flex-none text-[11px] font-semibold rounded-full px-2 py-0.5 bg-indigo-100 text-indigo-800 dark:bg-indigo-900/40 dark:text-indigo-200"
+            title={chat.origin.taskName || undefined}
+          >
+            {t('chatHistory.scheduled', 'Scheduled')}
+          </span>
+        )}
         {chat.hasUnseenActivity && (
           <span
             className="flex-none text-[11px] font-semibold rounded-full px-2 py-0.5 bg-amber-100 text-amber-800 dark:bg-amber-900/40 dark:text-amber-200"
