@@ -114,6 +114,17 @@ With [durable chats](chat-persistence.md) on, the pane's chats are stored like t
 
 Only chats whose app the pane offers are listed — a chat is continued through its own app, so a chat of an app outside the add-in's [Available Apps](#step-5--optional-restrict-what-the-add-in-can-access) stays in the web app's history only. The history needs no add-in setting of its own: it follows **Admin → Platform → Features → Durable Chats**, and with that off the pane keeps its chats in the browser as before. What a stored turn keeps is described in [Chat Persistence → In the Outlook add-in](chat-persistence.md#in-the-outlook-add-in).
 
+#### Open in web app
+
+**Open in web app** in the chat's menu (☰) opens the chat on screen in the browser, at the web app's own chat address (`{baseUrl}/apps/{appId}/c/{chatId}`), so a conversation begun next to an email can be continued at full width. Nothing is copied: it is the same stored chat, and a message sent in either place lands in the one transcript. An answer that is still being written in the pane is followed live in the browser.
+
+- The entry is there wherever the chat is stored — durable chats on, and an app that is not [`ephemeral`](apps.md). It is greyed out in a new chat until its first message has reached the server, since until then there is nothing to open.
+- The browser opens the page with the user's **web** session, not the pane's token. Signed out there, the web app signs in first and then opens the chat. Signed in as a different user, it does not open for them: a stored chat belongs to the user who started it (admins aside, who can read any stored chat).
+- The browser gets the transcript and the chat's settings, not the email: the open email goes to the model per turn and is not stored (see [what a stored turn keeps](chat-persistence.md#in-the-outlook-add-in)). A follow-up in the browser that needs the email needs it pasted or attached there.
+- The pane does not re-read a chat that moved on elsewhere. After continuing in the browser, reopen the chat from **Chat history** to see the new messages in the pane.
+
+Outlook opens the browser through `Office.context.ui.openBrowserWindow`, and the browser extension through a new tab. When the client cannot confirm the browser opened (a client without that API, where only a popup is left and a blocked one looks the same as an opened one), the notice strip below the chat shows the address to open by hand; one click selects it for copying.
+
 ### Answer actions
 
 Under every assistant answer the pane shows one button plus a menu. Each entry is a distinct Outlook operation:
