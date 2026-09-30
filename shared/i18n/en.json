@@ -3177,6 +3177,53 @@
       "loadError": "Failed to load the platform configuration",
       "noTranslations": "no translations"
     },
+    "prompts": {
+      "tabs": {
+        "userPrompts": "User prompts"
+      },
+      "edit": {
+        "detectedVariables": "Detected in the text",
+        "describeVariable": "Describe",
+        "variableDescribed": "described",
+        "variablesDescPlaceholders": "Placeholders written as {{name}} in the prompt text are asked for when the prompt is used. Describe them here to set a label, type, default value or options. {{content}} marks where the user’s own text goes; global variables such as {{user_name}} fill in by themselves."
+      },
+      "userPrompts": {
+        "allowEveryone": "Everyone signed in",
+        "allowGroups": "Groups",
+        "allowUsers": "Specific users",
+        "deleteMessage": "“{{name}}” by {{owner}} will be deleted for its owner and everyone it is shared with.",
+        "deleted": "Prompt deleted",
+        "empty": "No shared user prompts",
+        "emptyDesc": "When users share prompts with a group or with everyone, they show up here.",
+        "enabled": "Users may create their own prompts",
+        "everyone": "Everyone",
+        "inactive": "inactive",
+        "intro": "Prompts users have shared with a group or with everyone. You can edit, re-share, delete or promote them to a global prompt; private prompts and prompts shared with named users only are not listed.",
+        "maxPerUser": "Prompts per user (0 = no limit)",
+        "maxVersions": "Versions kept per prompt",
+        "ownedBy": "Owned by {{name}}",
+        "owner": "Owner",
+        "promote": "Promote",
+        "promoteEnabled": "Enable it right away",
+        "promoteHelp": "A copy becomes a global prompt, kept in contents/prompts and credited to its author. Who sees it is decided by the prompts permission of each group, like every other global prompt. The user prompt itself stays as it is.",
+        "promoteId": "Global prompt ID",
+        "promoteTitle": "Promote to global prompt",
+        "promoted": "Promoted to global prompt {{id}}",
+        "promotedTo": "Promoted to {{id}}",
+        "restrictHelp": "Leave all unchecked to let everyone share widely. Sharing with specific users is not affected.",
+        "restrictTitle": "Only members of these groups may share with groups or everyone",
+        "saved": "Saved",
+        "settingsTitle": "Settings for user prompts",
+        "sharedWith": "Shared with",
+        "sharingTitle": "Users may share prompts with",
+        "storageDown": "The storage provider is not available, so users cannot keep prompts right now.",
+        "subtitle": "Prompts your users wrote and shared with groups or everyone",
+        "title": "User Prompts",
+        "truncated": "Showing the first prompts only",
+        "updated": "Last changed",
+        "userCount": "{{count}} user(s)"
+      }
+    },
     "euAiAct": {
       "apps": {
         "clearOptOut": "Switch disclosure back on",
@@ -4409,7 +4456,8 @@
     "imageTooManyToStore": "This turn produced more images than this installation stores, so this one was not kept.",
     "imageLoadFailed": "The stored image could not be loaded.",
     "imageNotStored": "This image could not be stored and is no longer available.",
-    "loadingImage": "Loading image…"
+    "loadingImage": "Loading image…",
+    "saveAsPrompt": "Save as prompt"
   },
   "serverErrors": {
     "appNotFound": "Application not found",
@@ -5487,6 +5535,148 @@
     "connect": "Connect",
     "connected": "{{name}} is connected. Send your request again to use it.",
     "failed": "Connecting {{name}} did not succeed. Try again."
+  },
+  "prompts": {
+    "actions": {
+      "details": "Details",
+      "duplicate": "Duplicate",
+      "history": "History",
+      "new": "New prompt",
+      "openInChat": "Open in chat",
+      "share": "Share",
+      "use": "Use in chat",
+      "useNamed": "Use prompt {{name}}",
+      "copyLink": "Copy link"
+    },
+    "delete": {
+      "message": "“{{name}}” and its history will be deleted for you and everyone it is shared with.",
+      "title": "Delete prompt?"
+    },
+    "editor": {
+      "addOption": "Add option",
+      "app": "Open in app",
+      "automatic": "Filled in automatically:",
+      "category": "Category",
+      "configure": "Configure",
+      "createTitle": "New prompt",
+      "defaultApp": "Default app",
+      "description": "Description",
+      "descriptionPlaceholder": "What is this prompt for?",
+      "done": "Done",
+      "editTitle": "Edit prompt",
+      "icon": "Icon",
+      "insert": "Insert",
+      "insertVariable": "Insert variable",
+      "invalidVariable": "A variable name starts with a letter and uses only letters, digits, _ and -",
+      "name": "Name",
+      "namePlaceholder": "e.g. Weekly status email",
+      "noCategory": "No category",
+      "optionLabel": "Label",
+      "optionValue": "Value",
+      "optional": "optional",
+      "options": "Options",
+      "requiredFields": "Name and prompt text are required",
+      "saving": "Saving…",
+      "text": "Prompt",
+      "textHelp": "Use {{name}} for anything to ask for when the prompt is used. {{content}} marks where your own text goes; {{user_name}}, {{date}} and the other global variables fill in by themselves.",
+      "textPlaceholder": "Write a {{tone}} email to {{recipient}} about {{topic}}.",
+      "types": {
+        "string": "Text",
+        "textarea": "Long text",
+        "number": "Number",
+        "boolean": "Yes/no",
+        "select": "Choice"
+      },
+      "variableDefault": "Default value",
+      "variableDescription": "Help text",
+      "variableLabel": "Label",
+      "variableName": "Variable name",
+      "variableNamePlaceholder": "Variable name, e.g. recipient",
+      "variableRequired": "Required",
+      "variableType": "Type",
+      "variables": "Variables"
+    },
+    "empty": {
+      "mine": "You have no prompts yet. Create one, or save a chat message as a prompt.",
+      "shared": "Nobody has shared a prompt with you yet."
+    },
+    "errors": {
+      "conflict": "Someone else changed this prompt in the meantime. Close the editor and open it again to see the latest version.",
+      "disabled": "Personal prompts are switched off.",
+      "generic": "Something went wrong. Please try again.",
+      "limit": "You have reached the maximum number of prompts. Delete one to make room.",
+      "noApp": "There is no chat app to open this prompt in.",
+      "shareNotAllowed": "You are not allowed to share prompts with this audience.",
+      "unavailable": "Your prompts are unavailable right now. Please try again later."
+    },
+    "filters": {
+      "all": "All",
+      "favorites": "Favorites",
+      "global": "Global",
+      "label": "Show",
+      "mine": "My prompts",
+      "shared": "Shared with me"
+    },
+    "groups": {
+      "favorites": "Favorites",
+      "global": "Global prompts",
+      "mine": "My prompts",
+      "recent": "Recently used",
+      "shared": "Shared with me",
+      "skills": "Skills"
+    },
+    "history": {
+      "current": "current",
+      "restore": "Restore this version",
+      "restoredFrom": "Restored from version {{revision}}",
+      "revision": "Version {{revision}}",
+      "title": "Version history",
+      "versions": "Versions"
+    },
+    "meta": {
+      "created": "Created by {{name}} on {{date}}",
+      "readOnly": "read-only: its owner is no longer active",
+      "unknown": "unknown",
+      "updated": "last changed by {{name}} on {{date}}"
+    },
+    "notices": {
+      "deleted": "Prompt deleted",
+      "restored": "Version restored",
+      "saved": "Prompt saved",
+      "savedToLibrary": "Saved to your prompts",
+      "shared": "Sharing updated"
+    },
+    "scope": {
+      "global": "Global",
+      "mine": "Mine",
+      "mineShared": "Mine · shared",
+      "shared": "Shared",
+      "sharedBy": "Shared by {{name}}"
+    },
+    "share": {
+      "addEveryone": "Share with everyone",
+      "addGroup": "Add a group",
+      "canEdit": "Can edit",
+      "canUse": "Can use",
+      "everyone": "Everyone signed in",
+      "group": "Group",
+      "help": "“Can use” lets people insert, copy and duplicate the prompt. “Can edit” also lets them change it and share it further.",
+      "permission": "Permission",
+      "private": "Only you — this prompt is private",
+      "remove": "Remove",
+      "results": "Matching people and groups",
+      "search": "Add people or groups",
+      "sharedWith": "Shared with",
+      "title": "Share prompt"
+    },
+    "variables": {
+      "appVariable": "Passed to the app",
+      "choose": "Choose…",
+      "insert": "Insert",
+      "preview": "Preview",
+      "required": "This field is required",
+      "subtitle": "Fill in the details for this prompt"
+    }
   },
   "aiTransparency": {
     "badge": {

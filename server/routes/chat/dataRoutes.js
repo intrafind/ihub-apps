@@ -1,16 +1,14 @@
 import configCache from '../../configCache.js';
-import {
-  filterResourcesByPermissions,
-  isAnonymousAccessAllowed,
-  enhanceUserWithPermissions
-} from '../../utils/authorization.js';
 import { authRequired } from '../../middleware/authRequired.js';
 import { getAppVersion } from '../../utils/versionHelper.js';
 import { buildServerPath } from '../../utils/basePath.js';
 import { isValidLanguageCode } from '../../utils/pathSecurity.js';
-import { resolveFeatures, requireFeature } from '../../featureRegistry.js';
+import { resolveFeatures } from '../../featureRegistry.js';
 import { isChatPersistenceConfigured } from '../../services/chat/chatPersistence.js';
 import { chatSharingClientConfig } from '../../services/chat/chatSharing.js';
+import { userPromptsClientConfig } from '../../services/prompts/userPromptSettings.js';
+import { getUserPromptRepository } from '../../services/prompts/UserPromptRepository.js';
+import registerPromptRoutes from '../promptRoutes.js';
 import crypto from 'crypto';
 import logger from '../../utils/logger.js';
 import { sendInternalError, sendFailedOperationError } from '../../utils/responseHelpers.js';
@@ -259,192 +257,9 @@ export default function registerDataRoutes(app) {
     }
   });
 
-  /**
-   * @swagger
-   * /api/prompts:
-   *   get:
-   *     summary: Get available prompts with permission filtering
-   *     description: |
-   *       Retrieves prompt templates that the authenticated user has permission to access.
-   *
-   *       **Permission Filtering Logic:**
-   *       - Authenticated users see prompts based on their group permissions
-   *       - Anonymous users (if enabled) see no prompts by default
-   *       - Prompts are filtered by the `prompts` permission in user groups
-   *       - Supports wildcard (*) permission for full access
-   *
-   *       **ETag Behavior:**
-   *       - User-specific ETag prevents cache poisoning between users with different permissions
-   *       - If prompts are filtered, a content-based ETag is generated using filtered prompt IDs
-   *       - If user sees all prompts, original ETag is used for optimal caching
-   *       - Supports conditional requests with If-None-Match header
-   *     tags:
-   *       - Configuration
-   *       - Prompts
-   *     security:
-   *       - bearerAuth: []
-   *       - cookieAuth: []
-   *       - anonymousAuth: []
-   *     parameters:
-   *       - in: header
-   *         name: If-None-Match
-   *         required: false
-   *         description: Client ETag for conditional requests (304 response if unchanged)
-   *         schema:
-   *           type: string
-   *           example: '"abc123-def456"'
-   *     responses:
-   *       200:
-   *         description: Prompts successfully retrieved (filtered by permissions)
-   *         headers:
-   *           ETag:
-   *             description: User-specific cache validation header
-   *             schema:
-   *               type: string
-   *         content:
-   *           application/json:
-   *             schema:
-   *               type: array
-   *               items:
-   *                 $ref: '#/components/schemas/Prompt'
-   *             examples:
-   *               adminUser:
-   *                 summary: Admin user sees all prompts
-   *                 value:
-   *                   - id: "analysis"
-   *                     name:
-   *                       en: "Analysis Helper"
-   *                       de: "Analyse-Helfer"
-   *                     description:
-   *                       en: "Helps analyze data and documents"
-   *                     template: "Analyze the following: {input}"
-   *                     variables:
-   *                       - name: "input"
-   *                         type: "string"
-   *                         required: true
-   *                     category: "productivity"
-   *                     enabled: true
-   *                   - id: "creative-writing"
-   *                     name:
-   *                       en: "Creative Writing"
-   *                     template: "Write creatively about: {topic}"
-   *                     category: "creative"
-   *                     enabled: true
-   *               regularUser:
-   *                 summary: Regular user sees filtered prompts
-   *                 value:
-   *                   - id: "analysis"
-   *                     name:
-   *                       en: "Analysis Helper"
-   *                     template: "Analyze the following: {input}"
-   *                     category: "productivity"
-   *                     enabled: true
-   *               anonymousUser:
-   *                 summary: Anonymous user sees no prompts
-   *                 value: []
-   *       304:
-   *         description: Not modified (client has current version)
-   *       401:
-   *         description: Authentication required
-   *         content:
-   *           application/json:
-   *             schema:
-   *               $ref: '#/components/schemas/DataError'
-   *             example:
-   *               error: "Authentication required"
-   *       500:
-   *         description: Internal server error
-   *         content:
-   *           application/json:
-   *             schema:
-   *               $ref: '#/components/schemas/DataError'
-   *             examples:
-   *               configError:
-   *                 summary: Configuration loading error
-   *                 value:
-   *                   error: "Failed to load prompts configuration"
-   *               serverError:
-   *                 summary: General server error
-   *                 value:
-   *                   error: "Internal server error"
-   */
-  app.get(
-    buildServerPath('/api/prompts'),
-    requireFeature('promptsLibrary'),
-    authRequired,
-    async (req, res) => {
-      try {
-        const platformConfig = configCache.getPlatform() || {};
-
-        // Get prompts with ETag from cache
-        let { data: prompts, etag } = configCache.getPrompts();
-
-        if (!prompts) {
-          return sendFailedOperationError(
-            res,
-            'load prompts configuration',
-            new Error('prompts is null')
-          );
-        }
-
-        // Force permission enhancement if not already done
-        if (req.user && !req.user.permissions) {
-          const authConfig = platformConfig.auth || {};
-          req.user = enhanceUserWithPermissions(req.user, authConfig, platformConfig);
-        }
-
-        // Create anonymous user if none exists and anonymous access is allowed
-        if (!req.user && isAnonymousAccessAllowed(platformConfig)) {
-          const authConfig = platformConfig.auth || {};
-          req.user = enhanceUserWithPermissions(null, authConfig, platformConfig);
-        }
-
-        // Apply group-based filtering if user is authenticated
-        if (req.user && req.user.permissions) {
-          const allowedPrompts = req.user.permissions.prompts || new Set();
-          prompts = filterResourcesByPermissions(prompts, allowedPrompts, 'prompts');
-        } else if (isAnonymousAccessAllowed(platformConfig)) {
-          // For anonymous users, filter to only anonymous-allowed prompts
-          const allowedPrompts = new Set(); // No default prompts for anonymous
-          prompts = filterResourcesByPermissions(prompts, allowedPrompts, 'prompts');
-        }
-
-        // Generate user-specific ETag to prevent cache poisoning between users with different permissions
-        let userSpecificEtag = etag;
-
-        // Create ETag based on the actual filtered prompts content
-        // This ensures users with the same permissions share cache, but different permissions get different ETags
-        const originalPromptsCount = configCache.getPrompts().data?.length || 0;
-        if (prompts.length < originalPromptsCount) {
-          // Prompts were filtered - create content-based ETag from filtered prompt IDs
-          const promptIds = prompts.map(prompt => prompt.id).sort();
-          const contentHash = crypto
-            .createHash('md5')
-            .update(JSON.stringify(promptIds))
-            .digest('hex')
-            .substring(0, 8);
-
-          userSpecificEtag = `${etag}-${contentHash}`;
-        }
-        // If prompts.length === originalPromptsCount, user sees all prompts, use original ETag
-
-        // Set ETag header
-        if (userSpecificEtag) {
-          res.setHeader('ETag', userSpecificEtag);
-
-          // Check if client has the same ETag
-          const clientETag = req.headers['if-none-match'];
-          if (clientETag && clientETag === userSpecificEtag) {
-            return res.status(304).end();
-          }
-        }
-
-        res.json(prompts);
-      } catch (error) {
-        return sendInternalError(res, error, 'fetch prompts');
-      }
-    }
-  );
+  // The prompt library — global and user prompts behind one /api/prompts
+  // (#2519). Registered here, where GET /api/prompts always lived.
+  registerPromptRoutes(app);
 
   /**
    * @swagger
@@ -983,6 +798,12 @@ export default function registerDataRoutes(app) {
           // respect. The server enforces the same caps on create.
           sharing: chatSharingClientConfig(configCache.getFeatures(), platform)
         },
+        // User prompts in the prompt library: whether users may keep their
+        // own (which needs the storage provider as well as the switches) and
+        // the audiences they may share with. The server enforces the same.
+        userPrompts: userPromptsClientConfig(configCache.getFeatures(), platform, {
+          storageAvailable: getUserPromptRepository().isAvailable()
+        }),
         rateLimit: platform.rateLimit,
         swagger: platform.swagger
           ? {

@@ -1,6 +1,8 @@
 import configStore from '../../services/config/ConfigStore.js';
 import configCache from '../../configCache.js';
+import { z } from 'zod';
 import { contentAdminAuth } from '../../middleware/contentAdminAuth.js';
+import { adminAuth } from '../../middleware/adminAuth.js';
 import { buildServerPath } from '../../utils/basePath.js';
 import { logAudit } from '../../services/AuditLogService.js';
 import { saveSnapshot } from '../../services/ChangeHistoryService.js';
@@ -9,6 +11,17 @@ import { sendLLMError } from '../../services/loop/llmHttpErrors.js';
 import { validateIdForPath, validateIdsForPath } from '../../utils/pathSecurity.js';
 import logger from '../../utils/logger.js';
 import { removeMarketplaceInstallation } from '../../utils/installationCleanup.js';
+import { promptConfigSchema } from '../../validators/promptConfigSchema.js';
+import { promoteSchema, describeIssues } from '../../validators/userPromptSchema.js';
+import {
+  getUserPromptRepository,
+  isUserPromptId
+} from '../../services/prompts/UserPromptRepository.js';
+import { userPromptPermissions } from '../../services/prompts/userPromptAccess.js';
+import { userPromptSettings } from '../../services/prompts/userPromptSettings.js';
+import { serializeUserPrompt } from '../../services/prompts/userPromptView.js';
+import { loadUsers } from '../../utils/userManager.js';
+import { localUsersFile } from '../../utils/contentsPath.js';
 import {
   sendInternalError,
   sendNotFound,
@@ -31,6 +44,131 @@ import {
  */
 function promptPath(promptId) {
   return configStore.resolveIdToPath('prompts', promptId);
+}
+
+/**
+ * `PUT /api/admin/prompts/user-settings` — the `platform.userPrompts` block.
+ * Only the fields present are written; unknown ones are refused.
+ */
+const userPromptSettingsBodySchema = z
+  .object({
+    enabled: z.boolean(),
+    maxPromptsPerUser: z.number().int().min(0).max(100000),
+    maxVersions: z.number().int().min(1).max(1000),
+    sharing: z
+      .object({
+        allowUsers: z.boolean(),
+        allowGroups: z.boolean(),
+        allowEveryone: z.boolean(),
+        restrictToGroups: z.array(z.string().min(1).max(100)).max(100)
+      })
+      .partial()
+      .strict()
+  })
+  .partial()
+  .strict();
+
+/** Display name the admin API stamps on what an admin saves. */
+function adminName(req) {
+  return String(req.user?.name ?? req.user?.username ?? req.user?.id ?? 'unknown');
+}
+
+/**
+ * The user prompts an admin looks after: those shared with a group or with
+ * everyone — the ones that reach people beyond a named few. A prompt kept
+ * private, or shared with named users only, stays between those people.
+ *
+ * @param {Object} req - Express request.
+ * @returns {Promise<{prompts: Object[], truncated: boolean}>}
+ */
+async function listSharedUserPrompts(req) {
+  const repo = getUserPromptRepository();
+  if (!repo.isAvailable()) return { prompts: [], truncated: false, available: false };
+  const { prompts, truncated } = await repo.scan({
+    filter: prompt =>
+      (prompt.shares || []).some(share => share.type === 'group' || share.type === 'everyone')
+  });
+  const platform = configCache.getPlatform() || {};
+  const users = loadUsers(localUsersFile(platform.localAuth)).users || {};
+  const items = prompts.map(prompt => {
+    const owner = Object.hasOwn(users, prompt.ownerId) ? users[prompt.ownerId] : null;
+    const ownerActive = Boolean(owner) && owner.active !== false;
+    return serializeUserPrompt(
+      prompt,
+      userPromptPermissions(prompt, req.user, { isAdmin: true, ownerActive }),
+      { ownerActive, adminView: true }
+    );
+  });
+  items.sort((a, b) => String(b.updatedAt || '').localeCompare(String(a.updatedAt || '')));
+  return { prompts: items, truncated, available: true };
+}
+
+/** A string, or a localized object, as a localized object in `language`. */
+function localized(value, language) {
+  if (value && typeof value === 'object') return value;
+  return { [language]: String(value ?? '') };
+}
+
+/**
+ * The global prompt a user prompt becomes when an admin promotes it: its text
+ * in the platform's default language, its author kept as `createdBy`.
+ *
+ * @param {Object} userPrompt - Stored user prompt.
+ * @param {Object} options
+ * @param {string} options.id - Id of the new global prompt.
+ * @param {string} options.language - Language the texts are filed under.
+ * @param {boolean} options.enabled - Whether it is visible right away.
+ * @param {string} options.promotedBy - Admin display name.
+ * @param {string} options.now - ISO clock.
+ * @returns {Object}
+ */
+export function globalPromptFromUserPrompt(userPrompt, { id, language, enabled, promotedBy, now }) {
+  const variables = (userPrompt.variables || []).map(variable => ({
+    name: variable.name,
+    ...(variable.label ? { label: localized(variable.label, language) } : {}),
+    ...(variable.description ? { description: localized(variable.description, language) } : {}),
+    type: variable.type || 'string',
+    required: variable.required === true,
+    ...(variable.defaultValue !== undefined ? { defaultValue: variable.defaultValue } : {}),
+    ...(Array.isArray(variable.predefinedValues)
+      ? {
+          predefinedValues: variable.predefinedValues.map(option => ({
+            label: localized(option.label, language),
+            value: option.value
+          }))
+        }
+      : {})
+  }));
+  return {
+    id,
+    name: { [language]: userPrompt.name },
+    // The schema wants a description; a prompt saved without one gets its name.
+    description: { [language]: userPrompt.description || userPrompt.name },
+    prompt: { [language]: userPrompt.prompt },
+    ...(userPrompt.icon ? { icon: userPrompt.icon } : {}),
+    ...(userPrompt.category ? { category: userPrompt.category } : {}),
+    ...(userPrompt.appId ? { appId: userPrompt.appId } : {}),
+    ...(variables.length ? { variables } : {}),
+    enabled,
+    createdBy: userPrompt.createdBy?.name || userPrompt.ownerName || userPrompt.ownerId,
+    createdAt: userPrompt.createdAt,
+    updatedBy: promotedBy,
+    updatedAt: now,
+    sourcePromptId: userPrompt.id
+  };
+}
+
+/** A global prompt id derived from a name: lowercase, dashes, at most 60 chars. */
+export function slugifyPromptId(name) {
+  const slug = String(name || '')
+    .normalize('NFKD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, '-')
+    .replace(/^-+|-+$/g, '')
+    .slice(0, 60)
+    .replace(/-+$/g, '');
+  return slug || 'prompt';
 }
 
 /**
@@ -74,7 +212,7 @@ function promptPath(promptId) {
  *           description: Localized prompt templates with variable placeholders
  *           additionalProperties:
  *             type: string
- *           example: { "en": "Summarize the following text: [content]", "de": "Fasse den folgenden Text zusammen: [content]" }
+ *           example: { "en": "Summarize the following text: {{content}}", "de": "Fasse den folgenden Text zusammen: {{content}}" }
  *         enabled:
  *           type: boolean
  *           description: Whether the prompt template is currently enabled
@@ -263,8 +401,8 @@ export default function registerAdminPromptsRoutes(app) {
    *                   de: "Einen Textabschnitt schnell zusammenfassen"
    *                 icon: "sparkles"
    *                 prompt:
-   *                   en: "Summarize the following text: [content]"
-   *                   de: "Fasse den folgenden Text zusammen: [content]"
+   *                   en: "Summarize the following text: {{content}}"
+   *                   de: "Fasse den folgenden Text zusammen: {{content}}"
    *                 enabled: true
    *               - id: "app-generator"
    *                 category: "system"
@@ -311,6 +449,13 @@ export default function registerAdminPromptsRoutes(app) {
    */
   app.get(buildServerPath('/api/admin/prompts'), contentAdminAuth, async (req, res) => {
     try {
+      // `?scope=user`: the user prompts shared with groups or everyone,
+      // which admins may edit, delete and promote (#2519).
+      if (req.query.scope === 'user') {
+        const result = await listSharedUserPrompts(req);
+        res.setHeader('Cache-Control', 'private, no-store');
+        return res.json(result);
+      }
       const { data: prompts, etag } = configCache.getPrompts(true);
       if (!prompts) {
         return sendFailedOperationError(
@@ -443,6 +588,74 @@ export default function registerAdminPromptsRoutes(app) {
 
   /**
    * @swagger
+   * /api/admin/prompts/user-settings:
+   *   get:
+   *     summary: Settings for user prompts
+   *     description: |
+   *       The effective `platform.userPrompts` block — whether users may keep
+   *       their own prompts, the per-user limit, the revisions kept per prompt,
+   *       and the audiences they may share with — plus whether the storage
+   *       provider that holds user prompts is up.
+   *     tags:
+   *       - Admin - Prompts
+   *     security:
+   *       - bearerAuth: []
+   *   put:
+   *     summary: Update the settings for user prompts
+   *     tags:
+   *       - Admin - Prompts
+   *     security:
+   *       - bearerAuth: []
+   */
+  app.get(buildServerPath('/api/admin/prompts/user-settings'), adminAuth, async (req, res) => {
+    try {
+      res.json({
+        settings: userPromptSettings(configCache.getPlatform() || {}),
+        storageAvailable: getUserPromptRepository().isAvailable()
+      });
+    } catch (error) {
+      return sendInternalError(res, error, 'read user prompt settings');
+    }
+  });
+
+  app.put(buildServerPath('/api/admin/prompts/user-settings'), adminAuth, async (req, res) => {
+    const parsed = userPromptSettingsBodySchema.safeParse(req.body || {});
+    if (!parsed.success) {
+      return sendBadRequest(res, `Invalid user prompt settings: ${describeIssues(parsed.error)}`);
+    }
+    try {
+      const platformConfig = await configStore.readJson('config/platform.json');
+      if (!platformConfig) throw new Error('Unable to read config/platform.json');
+      const { sharing, ...rest } = parsed.data;
+      const stored = platformConfig.userPrompts || {};
+      platformConfig.userPrompts = {
+        ...stored,
+        ...rest,
+        sharing: { ...(stored.sharing || {}), ...(sharing || {}) }
+      };
+      await configStore.writeJson('config/platform.json', platformConfig);
+      await configCache.refreshCacheEntry('config/platform.json');
+      await logAudit({
+        req,
+        action: 'update',
+        resource: 'platform',
+        resourceId: 'user-prompts',
+        summary: `Updated user prompt settings (${[
+          ...Object.keys(rest),
+          ...Object.keys(sharing || {}).map(key => `sharing.${key}`)
+        ].join(', ')})`
+      });
+      res.json({
+        settings: userPromptSettings(configCache.getPlatform() || platformConfig),
+        storageAvailable: getUserPromptRepository().isAvailable()
+      });
+    } catch (error) {
+      return sendInternalError(res, error, 'update user prompt settings');
+    }
+  });
+
+  /**
+   * @swagger
    * /api/admin/prompts/{promptId}:
    *   get:
    *     summary: Get a specific prompt template by ID
@@ -482,8 +695,8 @@ export default function registerAdminPromptsRoutes(app) {
    *                 de: "Einen Textabschnitt schnell zusammenfassen"
    *               icon: "sparkles"
    *               prompt:
-   *                 en: "Summarize the following text: [content]"
-   *                 de: "Fasse den folgenden Text zusammen: [content]"
+   *                 en: "Summarize the following text: {{content}}"
+   *                 de: "Fasse den folgenden Text zusammen: {{content}}"
    *               enabled: true
    *       401:
    *         description: Authentication required
@@ -583,8 +796,8 @@ export default function registerAdminPromptsRoutes(app) {
    *               de: "Einen Textabschnitt schnell mit erweiterten Funktionen zusammenfassen"
    *             icon: "sparkles"
    *             prompt:
-   *               en: "Provide a comprehensive summary of the following text: [content]"
-   *               de: "Erstelle eine umfassende Zusammenfassung des folgenden Textes: [content]"
+   *               en: "Provide a comprehensive summary of the following text: {{content}}"
+   *               de: "Erstelle eine umfassende Zusammenfassung des folgenden Textes: {{content}}"
    *             enabled: true
    *     responses:
    *       200:
@@ -660,6 +873,12 @@ export default function registerAdminPromptsRoutes(app) {
       }
       const { data: currentPrompts } = configCache.getPrompts(true);
       const oldPrompt = currentPrompts.find(p => p.id === promptId);
+      // Attribution: who first wrote it stays, who changed it last is this admin.
+      for (const key of ['createdBy', 'createdAt', 'sourcePromptId']) {
+        if (oldPrompt?.[key] && !updatedPrompt[key]) updatedPrompt[key] = oldPrompt[key];
+      }
+      updatedPrompt.updatedBy = adminName(req);
+      updatedPrompt.updatedAt = new Date().toISOString();
       await configStore.writeJson(await promptPath(promptId), updatedPrompt);
       await configCache.refreshPromptsCache();
       if (oldPrompt) {
@@ -721,8 +940,8 @@ export default function registerAdminPromptsRoutes(app) {
    *               de: "Text zwischen verschiedenen Sprachen übersetzen"
    *             icon: "globe"
    *             prompt:
-   *               en: "Translate the following text from {{source_lang}} to {{target_lang}}: [content]"
-   *               de: "Übersetze den folgenden Text von {{source_lang}} zu {{target_lang}}: [content]"
+   *               en: "Translate the following text from {{source_lang}} to {{target_lang}}: {{content}}"
+   *               de: "Übersetze den folgenden Text von {{source_lang}} zu {{target_lang}}: {{content}}"
    *             enabled: true
    *     responses:
    *       200:
@@ -792,6 +1011,12 @@ export default function registerAdminPromptsRoutes(app) {
       if (!validateIdForPath(newPrompt.id, 'prompt', res)) {
         return;
       }
+
+      const now = new Date().toISOString();
+      newPrompt.createdBy = newPrompt.createdBy || adminName(req);
+      newPrompt.createdAt = newPrompt.createdAt || now;
+      newPrompt.updatedBy = adminName(req);
+      newPrompt.updatedAt = now;
 
       try {
         // Create-only: the file-exists check and the write are one step, so two
@@ -1079,6 +1304,124 @@ export default function registerAdminPromptsRoutes(app) {
         });
       } catch (error) {
         return sendInternalError(res, error, 'toggle prompts');
+      }
+    }
+  );
+
+  /**
+   * @swagger
+   * /api/admin/prompts/{promptId}/promote:
+   *   post:
+   *     summary: Promote a user prompt to a global prompt
+   *     description: |
+   *       Copies a user prompt into `contents/prompts/` as a global prompt. The
+   *       texts are filed under the platform's default language, the original
+   *       author is kept as `createdBy`, and the user prompt stays as it is,
+   *       recording where it was promoted to. Who sees the new global prompt
+   *       is decided by the `prompts` group permission, as for every other.
+   *     tags:
+   *       - Admin - Prompts
+   *     security:
+   *       - bearerAuth: []
+   *     parameters:
+   *       - in: path
+   *         name: promptId
+   *         required: true
+   *         schema:
+   *           type: string
+   *         description: The user prompt id (`upr_…`)
+   *     requestBody:
+   *       content:
+   *         application/json:
+   *           schema:
+   *             type: object
+   *             properties:
+   *               id:
+   *                 type: string
+   *                 description: Id for the global prompt; derived from the name when omitted
+   *               enabled:
+   *                 type: boolean
+   *                 description: Whether the global prompt is visible right away (default true)
+   *     responses:
+   *       201:
+   *         description: The new global prompt
+   *       404:
+   *         description: No such user prompt
+   *       409:
+   *         description: A global prompt with this id already exists
+   */
+  app.post(
+    buildServerPath('/api/admin/prompts/:promptId/promote'),
+    contentAdminAuth,
+    async (req, res) => {
+      try {
+        const { promptId } = req.params;
+        if (!validateIdForPath(promptId, 'prompt', res)) return;
+        if (!isUserPromptId(promptId)) return sendNotFound(res, 'User prompt');
+        const repo = getUserPromptRepository();
+        if (!repo.isAvailable()) {
+          return sendErrorResponse(res, 503, 'User prompts are unavailable', {
+            details: { code: 'USER_PROMPTS_UNAVAILABLE' }
+          });
+        }
+        const parsed = promoteSchema.safeParse(req.body || {});
+        if (!parsed.success) {
+          return sendBadRequest(res, `Invalid request: ${describeIssues(parsed.error)}`);
+        }
+        const userPrompt = await repo.get(promptId);
+        if (!userPrompt) return sendNotFound(res, 'User prompt');
+
+        const { data: existing = [] } = configCache.getPrompts(true);
+        const taken = new Set(existing.map(p => p.id));
+        let id = parsed.data.id;
+        if (!id) {
+          const base = slugifyPromptId(userPrompt.name);
+          id = base;
+          for (let n = 2; taken.has(id); n += 1) id = `${base}-${n}`;
+        } else if (taken.has(id)) {
+          return sendErrorResponse(res, 409, 'Prompt with this ID already exists');
+        }
+        if (!validateIdForPath(id, 'prompt', res)) return;
+
+        const now = new Date().toISOString();
+        const globalPrompt = globalPromptFromUserPrompt(userPrompt, {
+          id,
+          language: configCache.getPlatform()?.defaultLanguage || 'en',
+          enabled: parsed.data.enabled !== false,
+          promotedBy: adminName(req),
+          now
+        });
+        const valid = promptConfigSchema.safeParse(globalPrompt);
+        if (!valid.success) {
+          return sendBadRequest(
+            res,
+            `This prompt cannot become a global prompt: ${describeIssues(valid.error)}`
+          );
+        }
+        try {
+          await configStore.createJson(`prompts/${id}.json`, globalPrompt);
+        } catch (error) {
+          if (error.code !== 'EEXIST') throw error;
+          return sendErrorResponse(res, 409, 'Prompt with this ID already exists');
+        }
+        await configCache.refreshPromptsCache();
+        await repo.markPromoted(promptId, {
+          promptId: id,
+          at: now,
+          by: { id: String(req.user?.id ?? ''), name: adminName(req) }
+        });
+        await logAudit({
+          req,
+          action: 'create',
+          resource: 'prompt',
+          resourceId: id,
+          summary: `Promoted user prompt "${userPrompt.name}" by ${
+            userPrompt.ownerName || userPrompt.ownerId
+          } to global prompt ${id}`
+        });
+        res.status(201).json({ message: 'Prompt promoted successfully', prompt: globalPrompt });
+      } catch (error) {
+        return sendInternalError(res, error, 'promote prompt');
       }
     }
   );
