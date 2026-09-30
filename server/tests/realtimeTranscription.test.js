@@ -8,7 +8,8 @@
  */
 import { jest } from '@jest/globals';
 import { EventEmitter } from 'events';
-import { WebSocket } from 'ws';
+import http from 'http';
+import { WebSocket, WebSocketServer } from 'ws';
 import {
   normalizeOrigin,
   isAllowedOrigin,
@@ -18,7 +19,8 @@ import {
   bridgeConnection,
   diagnoseSocketError,
   diagnoseUnexpectedResponse,
-  diagnoseUpstreamClose
+  diagnoseUpstreamClose,
+  testRealtimeConnection
 } from '../websocket/realtimeTranscription.js';
 import { generateJwt } from '../utils/tokenService.js';
 import { getTranscriptionProvider } from '../transcription/index.js';
@@ -201,9 +203,37 @@ describe('upstream error diagnostics', () => {
   });
 
   test('diagnoseUnexpectedResponse reports the HTTP status', () => {
-    expect(diagnoseUnexpectedResponse({ statusCode: 404, statusMessage: 'Not Found' })).toBe(
-      'Transcription service rejected the connection (HTTP 404 Not Found)'
+    expect(diagnoseUnexpectedResponse({ statusCode: 502, statusMessage: 'Bad Gateway' })).toBe(
+      'Transcription service rejected the connection (HTTP 502 Bad Gateway)'
     );
+  });
+
+  test('diagnoseUnexpectedResponse hints at the fix for common statuses', () => {
+    expect(diagnoseUnexpectedResponse({ statusCode: 404, statusMessage: 'Not Found' })).toBe(
+      'Transcription service rejected the connection (HTTP 404 Not Found): check the URL path'
+    );
+    expect(diagnoseUnexpectedResponse({ statusCode: 401, statusMessage: 'Unauthorized' })).toMatch(
+      /check the API key$/
+    );
+  });
+
+  // Issue #2612: a reverse proxy answering ws:// with its HTTP→HTTPS redirect.
+  test('diagnoseUnexpectedResponse explains a redirect on ws:// as "use wss://"', () => {
+    const msg = diagnoseUnexpectedResponse(
+      { statusCode: 308, statusMessage: 'Permanent Redirect' },
+      { url: 'ws://speech.example.com/v1/realtime' }
+    );
+    expect(msg).toMatch(/HTTP 308 Permanent Redirect/);
+    expect(msg).toMatch(/use wss:\/\/ instead of ws:\/\//);
+  });
+
+  test('diagnoseUnexpectedResponse does not suggest wss:// when already on wss://', () => {
+    const msg = diagnoseUnexpectedResponse(
+      { statusCode: 301, statusMessage: 'Moved Permanently' },
+      { url: 'wss://speech.example.com/v1/realtime' }
+    );
+    expect(msg).not.toMatch(/instead of ws:/);
+    expect(msg).toMatch(/check the URL/);
   });
 
   test('diagnoseUpstreamClose reports an abnormal close before the handshake', () => {
@@ -763,5 +793,56 @@ describe('bridgeConnection — batch providers', () => {
     } finally {
       spy.mockRestore();
     }
+  });
+});
+
+// The admin "Test connection" button, against a real local socket server.
+describe('testRealtimeConnection', () => {
+  let server;
+  let url;
+
+  const listen = handler =>
+    new Promise(resolve => {
+      server = http.createServer();
+      handler(server);
+      server.listen(0, '127.0.0.1', () => {
+        url = `ws://127.0.0.1:${server.address().port}/v1/realtime`;
+        resolve();
+      });
+    });
+
+  afterEach(async () => {
+    await new Promise(resolve => (server ? server.close(() => resolve()) : resolve()));
+    server = null;
+  });
+
+  // Issue #2612: previously surfaced as "Connection failed: Unexpected server response: 308".
+  test('explains a redirect instead of reporting a bare status code', async () => {
+    await listen(srv =>
+      srv.on('upgrade', (_req, socket) => {
+        socket.end(
+          'HTTP/1.1 308 Permanent Redirect\r\nLocation: https://internal.example/v1/realtime\r\nContent-Length: 0\r\n\r\n'
+        );
+      })
+    );
+
+    const result = await testRealtimeConnection({ url, model: 'm' }, 3000);
+    expect(result.ok).toBe(false);
+    expect(result.message).toMatch(/HTTP 308/);
+    expect(result.message).toMatch(/use wss:\/\//);
+    // The redirect target may name an internal host; it is not echoed.
+    expect(result.message).not.toMatch(/internal\.example/);
+  });
+
+  test('reports ok when the endpoint answers the handshake', async () => {
+    await listen(srv => {
+      const wss = new WebSocketServer({ server: srv });
+      wss.on('connection', ws => {
+        ws.on('message', () => ws.send(JSON.stringify({ type: 'session.created' })));
+      });
+    });
+
+    const result = await testRealtimeConnection({ url, model: 'm' }, 3000);
+    expect(result).toEqual({ ok: true, message: 'Connected — received "session.created"' });
   });
 });

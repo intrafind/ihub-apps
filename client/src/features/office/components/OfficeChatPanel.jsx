@@ -730,6 +730,9 @@ function OfficeChatPanel({
   // as a form — the email goes along with it — and the composer takes over
   // once it is sent. The variables are asked for nowhere else.
   const startForm = isStartFormEnabled(selectedApp);
+  // Whether the user may pick the model: in the composer, or on the start form.
+  const modelSelectionAllowed =
+    selectedApp?.disallowModelSelection !== true && selectedApp?.settings?.model?.enabled !== false;
   // Not while a stored chat is loading: it has been started already, its
   // messages just have not arrived.
   const showStartForm =
@@ -892,6 +895,10 @@ function OfficeChatPanel({
                       ? { title: greetingTitle, subtitle: greetingSubtitle }
                       : null
                   }
+                  models={models}
+                  selectedModel={selectedModel}
+                  onModelChange={setSelectedModel}
+                  showModelSelector={modelSelectionAllowed}
                   currentLanguage={officeLocale}
                 />
               </div>
@@ -1079,10 +1086,7 @@ function OfficeChatPanel({
                   onCancel={adapter.cancelGeneration}
                   allowEmptySubmit={!!selectedApp?.allowEmptyContent}
                   currentLanguage={officeLocale}
-                  showModelSelector={
-                    selectedApp?.disallowModelSelection !== true &&
-                    selectedApp?.settings?.model?.enabled !== false
-                  }
+                  showModelSelector={modelSelectionAllowed}
                   models={models}
                   selectedModel={selectedModel}
                   onModelChange={setSelectedModel}
