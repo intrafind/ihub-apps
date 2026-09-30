@@ -1981,6 +1981,7 @@
       "mcpServers": "MCP servers",
       "a2aAgents": "A2A agents",
       "telemetry": "Telemetry",
+      "systemResources": "System Resources",
       "voiceInput": "Voice Input",
       "changelog": "What's New",
       "feedback": "Feedback",
@@ -2305,6 +2306,68 @@
       "referenceTitle": "Reference",
       "refEnvHint": "Standard OTEL_* environment variables (OTEL_EXPORTER_OTLP_ENDPOINT, OTEL_SERVICE_NAME, ...) are honored at startup.",
       "refMetricsHint": "Custom iHub metrics: ihub.app.usage, ihub.prompt.usage, ihub.errors, ihub.conversations, ihub.active.users, ihub.active.chats."
+    },
+    "systemResources": {
+      "title": "System resources",
+      "description": "CPU, memory and disk space as reported by each server process on this host.",
+      "updatedAt": "Updated {{time}}",
+      "refresh": "Refresh",
+      "loadError": "Failed to load system resource information",
+      "status": {
+        "ok": "OK",
+        "warning": "Running low",
+        "critical": "Critical"
+      },
+      "paths": {
+        "contents": "Contents",
+        "data": "Data",
+        "uploads": "Uploads",
+        "logs": "Logs",
+        "temp": "Temp"
+      },
+      "storage": {
+        "title": "Disk space",
+        "description": "Filesystems holding the directories iHub writes to. Running low at {{warning}}% used, critical at {{critical}}%.",
+        "none": "No disk information available.",
+        "freeOfTotal": "{{free}} free of {{total}} ({{percent}} used)",
+        "usedLabel": "{{name}} disk usage",
+        "criticalAlert": "Disk space is critically low. Free up space or enlarge the volume soon, or saving chats, uploads and configuration will start to fail.",
+        "warningAlert": "Disk space is running low. Plan to free up space or enlarge the volume."
+      },
+      "host": {
+        "title": "Host",
+        "description": "Shared by all server processes on this machine or container.",
+        "memory": "Memory",
+        "memoryUsed": "{{used}} of {{total}} used",
+        "containerMemory": "Container memory limit (host has {{total}}).",
+        "cpu": "CPU",
+        "cores": "CPU cores",
+        "cpuLimit": "(limit {{cores}})",
+        "load": "Load average",
+        "uptime": "Host uptime",
+        "node": "Node.js",
+        "hostname": "Hostname",
+        "os": "Operating system"
+      },
+      "processes": {
+        "title": "Server processes",
+        "clusterDescription": "Cluster with {{count}} workers. CPU is a percentage of one core, averaged over the last few seconds.",
+        "standaloneDescription": "Single server process. CPU is a percentage of one core, averaged over the last few seconds.",
+        "primary": "Primary",
+        "standalone": "Server",
+        "worker": "Worker {{index}}",
+        "process": "Process",
+        "pid": "PID",
+        "cpu": "CPU",
+        "memory": "Memory (RSS)",
+        "heap": "Heap used / limit",
+        "eventLoop": "Event-loop delay",
+        "uptime": "Uptime",
+        "current": "served this page",
+        "delay": "{{mean}} ms (max {{max}})",
+        "missing": "Did not respond. The worker may be restarting or overloaded.",
+        "missingAlert": "{{count}} of {{total}} workers did not report back."
+      }
     },
     "home": {
       "sections": {
@@ -3084,6 +3147,16 @@
         "maxRunChatsPerTask": "Run chats kept per task",
         "maxInstructionLength": "Longest instructions (characters)",
         "maxRunMinutes": "Longest run (minutes)"
+      }
+    },
+    "overview": {
+      "storage": {
+        "label": "Disk space",
+        "value": "{{free}} free",
+        "valueTitle": "{{percent}} of {{total}} used",
+        "warning": "Disk space is running low: {{free}} free ({{percent}} used).",
+        "critical": "Disk space is critically low: {{free}} free ({{percent}} used).",
+        "viewDetails": "View system resources"
       }
     }
   },

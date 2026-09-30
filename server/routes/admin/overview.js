@@ -2,13 +2,19 @@ import configCache from '../../configCache.js';
 import { adminAuth } from '../../middleware/adminAuth.js';
 import { buildServerPath } from '../../utils/basePath.js';
 import { sendInternalError } from '../../utils/responseHelpers.js';
+import {
+  getLogFilePath,
+  getMonitoredPaths,
+  getStorageSnapshot,
+  summarizeStorage
+} from '../../services/systemResources.js';
 
 export default function registerAdminOverviewRoutes(app) {
   /**
    * GET /api/admin/overview/stats
    * Aggregated overview stats from configCache (in-memory, fast).
    * Returns counts for apps, models, providers, sources, tools, users, groups,
-   * plus auth mode and integration status.
+   * plus auth mode, integration status and a disk-space summary.
    */
   app.get(buildServerPath('/api/admin/overview/stats'), adminAuth, async (req, res) => {
     try {
@@ -70,6 +76,18 @@ export default function registerAdminOverviewRoutes(app) {
       const oauthAuthzEnabled = platform.oauth?.enabled?.authz ?? false;
       const oauthClientsEnabled = platform.oauth?.enabled?.clients ?? false;
 
+      // Fullest volume iHub writes to, so the Overview can warn about low disk
+      // space without a second request. A failed probe must not take the rest
+      // of the dashboard down with it.
+      let storage = null;
+      try {
+        storage = summarizeStorage(
+          await getStorageSnapshot(getMonitoredPaths({ logFile: getLogFilePath(platform) }))
+        );
+      } catch {
+        // leave null
+      }
+
       res.json({
         apps: { total: apps.length, enabled: enabledApps.length },
         models: { total: allModels.length, enabled: enabledModels.length },
@@ -78,6 +96,7 @@ export default function registerAdminOverviewRoutes(app) {
         tools: { total: allTools.length, enabled: enabledTools.length },
         groups: groupCount,
         users: userCount,
+        storage,
         auth: {
           mode: authMode,
           anonymous: anonymousEnabled,

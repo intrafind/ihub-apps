@@ -16,12 +16,16 @@ import {
   CircleStackIcon,
   WrenchIcon,
   KeyIcon,
-  ArrowUpCircleIcon
+  ArrowUpCircleIcon,
+  ServerStackIcon,
+  ExclamationTriangleIcon
 } from '@heroicons/react/24/outline';
 import { useOverviewData } from '../hooks/useOverviewData';
 import { useUpdateCheck } from '../hooks/useUpdateCheck';
 import { useUIConfig } from '../../../shared/contexts/UIConfigContext';
 import { useAuth } from '../../../shared/contexts/AuthContext';
+import { usePlatformConfig } from '../../../shared/contexts/PlatformConfigContext';
+import { STORAGE_STATUS_STYLES, formatBytes, formatPercent } from '../utils/systemResourcesFormat';
 
 function StatCard({
   label,
@@ -309,14 +313,19 @@ function CommonPages({ className = '', links: customLinks }) {
   );
 }
 
-function InfoRow({ icon: Icon, label, value, href }) {
+function InfoRow({ icon: Icon, label, value, href, valueClassName, valueTitle }) {
   const content = (
     <div className="flex items-center justify-between py-2">
       <div className="flex items-center gap-2 text-sm text-gray-600 dark:text-gray-400">
         <Icon className="w-4 h-4 shrink-0" aria-hidden="true" />
         <span>{label}</span>
       </div>
-      <span className="text-sm font-medium text-gray-900 dark:text-gray-100">{value}</span>
+      <span
+        className={`text-sm font-medium ${valueClassName || 'text-gray-900 dark:text-gray-100'}`}
+        title={valueTitle}
+      >
+        {value}
+      </span>
     </div>
   );
 
@@ -334,7 +343,7 @@ function InfoRow({ icon: Icon, label, value, href }) {
   return content;
 }
 
-function PlatformInfoSection({ info }) {
+function PlatformInfoSection({ info, systemPagesVisible }) {
   const { t } = useTranslation();
 
   if (!info) return null;
@@ -423,7 +432,75 @@ function PlatformInfoSection({ info }) {
           value={oauthLabel()}
           href="/admin/oauth"
         />
+        {info.storage && (
+          <InfoRow
+            icon={ServerStackIcon}
+            label={t('admin.overview.storage.label', 'Disk space')}
+            value={t('admin.overview.storage.value', '{{free}} free', {
+              free: formatBytes(info.storage.available)
+            })}
+            valueTitle={t('admin.overview.storage.valueTitle', '{{percent}} of {{total}} used', {
+              percent: formatPercent(info.storage.usedPercent),
+              total: formatBytes(info.storage.total)
+            })}
+            valueClassName={
+              info.storage.status === 'ok'
+                ? undefined
+                : STORAGE_STATUS_STYLES[info.storage.status]?.text
+            }
+            href={systemPagesVisible ? '/admin/system-resources' : undefined}
+          />
+        )}
       </div>
+    </div>
+  );
+}
+
+/**
+ * Shown above everything else when a volume iHub writes to is filling up:
+ * a full disk breaks saving chats, uploads and configuration, and on a small
+ * installation nobody may be watching `df`.
+ */
+function StorageAlert({ storage, systemPagesVisible }) {
+  const { t } = useTranslation();
+  if (!storage || (storage.status !== 'warning' && storage.status !== 'critical')) return null;
+  const critical = storage.status === 'critical';
+  const params = {
+    free: formatBytes(storage.available),
+    percent: formatPercent(storage.usedPercent)
+  };
+  return (
+    <div
+      role="alert"
+      className={`mb-6 flex flex-wrap items-center gap-3 p-4 rounded-lg border ${
+        critical
+          ? 'bg-red-50 dark:bg-red-900/30 border-red-200 dark:border-red-800 text-red-800 dark:text-red-200'
+          : 'bg-amber-50 dark:bg-amber-900/30 border-amber-200 dark:border-amber-800 text-amber-800 dark:text-amber-200'
+      }`}
+    >
+      <ExclamationTriangleIcon className="w-5 h-5 shrink-0" aria-hidden="true" />
+      <p className="text-sm flex-1 min-w-0">
+        {critical
+          ? t(
+              'admin.overview.storage.critical',
+              'Disk space is critically low: {{free}} free ({{percent}} used).',
+              params
+            )
+          : t(
+              'admin.overview.storage.warning',
+              'Disk space is running low: {{free}} free ({{percent}} used).',
+              params
+            )}
+      </p>
+      {systemPagesVisible && (
+        <Link
+          to="/admin/system-resources"
+          className="text-sm font-medium underline hover:no-underline inline-flex items-center gap-1"
+        >
+          {t('admin.overview.storage.viewDetails', 'View system resources')}
+          <ArrowRightIcon className="w-3.5 h-3.5" aria-hidden="true" />
+        </Link>
+      )}
     </div>
   );
 }
@@ -510,6 +587,8 @@ export default function AdminOverview() {
   const { t, i18n } = useTranslation();
   const { uiConfig } = useUIConfig();
   const { user } = useAuth();
+  const { platformConfig } = usePlatformConfig();
+  const systemPagesVisible = platformConfig?.admin?.pages?.system !== false;
 
   // Content-admin-only users (contentAdmin permission, no full adminAccess) get a
   // content-focused overview: only the apps/prompts/sources they can manage, and
@@ -664,6 +743,8 @@ export default function AdminOverview() {
         </p>
       </div>
 
+      <StorageAlert storage={platformInfo?.storage} systemPagesVisible={systemPagesVisible} />
+
       {/* Stat cards */}
       {!isFreshInstance && (
         <div className="grid grid-cols-2 lg:grid-cols-4 gap-4 mb-6">
@@ -693,7 +774,11 @@ export default function AdminOverview() {
 
         {/* Side column */}
         <div className="space-y-6">
-          {isFreshInstance ? <SetupChecklist /> : <PlatformInfoSection info={platformInfo} />}
+          {isFreshInstance ? (
+            <SetupChecklist />
+          ) : (
+            <PlatformInfoSection info={platformInfo} systemPagesVisible={systemPagesVisible} />
+          )}
         </div>
       </div>
     </div>

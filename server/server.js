@@ -14,6 +14,7 @@ import logger from './utils/logger.js';
 import { findByIdCaseInsensitive } from './utils/resourceLookup.js';
 import { startStickyPrimary, attachStickyWorker, logStickyRoutingCaveat } from './clusterSticky.js';
 import { initPrimaryBus, initWorkerBus } from './clusterBus.js';
+import { initSystemResources } from './services/systemResources.js';
 import { registerConfigReloadHooks } from './configReloadHooks.js';
 
 // Import adapters and utilities
@@ -237,6 +238,9 @@ if (cluster.isPrimary && workerCount > 1) {
   // Start the repeater before forking so a worker's first presence
   // announcement — sent as soon as its module graph loads — is never dropped.
   initPrimaryBus({ getWorkers: () => workers });
+  // The primary is a process with its own memory footprint; let it report
+  // itself to the admin System resources page alongside the workers.
+  initSystemResources();
 
   for (let workerIndex = 0; workerIndex < workerCount; workerIndex++) {
     workers[workerIndex] = cluster.fork({ WORKER_INDEX: String(workerIndex) });
@@ -357,6 +361,9 @@ if (cluster.isPrimary && workerCount > 1) {
   // no SSE stream is ever invisible to the rest of the cluster. No-op when this
   // process is not a cluster worker.
   initWorkerBus();
+  // Sample this process's CPU and answer the System resources page's
+  // cross-worker snapshot requests (a plain sampler when not clustered).
+  initSystemResources();
 
   // Determine if we're running from a packaged binary
   // Either via process.pkg (when using pkg directly) or APP_ROOT_DIR env var (our shell script approach)

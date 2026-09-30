@@ -67,3 +67,20 @@ morning digests and weekly reports are waiting when they come in.
 Adding, changing or removing a workflow's schedule trigger now takes effect as soon as the
 workflow is saved. Before, schedules were read once at server start and edits needed a restart.
 Schedule triggers now run on the same scheduler as scheduled tasks.
+
+## Admin: System Resources and Low-Disk Warning
+
+A new **Admin → System Resources** page shows how much CPU, memory and disk space the server is
+using, so a small installation notices a filling disk before saving chats, uploads and
+configuration starts to fail.
+
+- **Disk space** for each filesystem holding the contents, data, uploads, log and temp
+  directories: free and total space, the directories on it, and a status. Status is **Running low**
+  from 80 % used and **Critical** from 90 %.
+- **Host** CPU and memory, including container limits when iHub runs in Docker or Kubernetes.
+- **Server processes**: CPU, memory, heap and event-loop delay for each process. With several
+  workers (`WORKERS`), the primary and every worker are listed, and a worker that does not answer
+  is flagged.
+- The Admin **Overview** shows a banner when disk space runs low and a **Disk space** row under
+  *Platform status*.
+- The page is hidden together with the other system pages when `admin.pages.system` is `false`.

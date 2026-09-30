@@ -21,7 +21,7 @@ The admin UI uses a **collapsible left-rail sidebar** with seven sections. Click
 | **Access & Identity** | Users, Groups, Authentication, OAuth |
 | **Integrations** | All third-party integrations (Office 365, Google Drive, Jira, etc.) |
 | **Customization** | Pages, UI configuration, Short Links, Marketplace |
-| **Observability** | Audit Log, Workflow Executions, Agent Runs, Changelog |
+| **Observability** | Usage Reports, Logging, Telemetry, System Resources, Audit Log, Workflow Executions, Agent Runs, Changelog |
 | **Platform** | Security, Backup & Restore, Updates, Advanced |
 
 **Collapsing the sidebar:** Click the chevron at the bottom of the sidebar to collapse it to icon-only mode. Hover over any icon to see its label. The collapse state is remembered across sessions.
@@ -86,7 +86,9 @@ The dashboard (`/admin`) gives a real-time snapshot of your platform.
 - **Conversations** — total chat sessions recorded
 - **Version** — current iHub Apps version; shows an update badge if a newer version is available
 
-**Platform status panel:** Shows enabled/total counts for providers, models, sources, and tools, plus active authentication methods and OAuth server status.
+**Platform status panel:** Shows enabled/total counts for providers, models, sources, and tools, plus active authentication methods, OAuth server status, and the free space on the fullest disk iHub writes to.
+
+**Low-disk banner:** When that disk is 80 % full or more, a banner at the top of the dashboard says so and links to [System Resources](#system-resources).
 
 **Quick actions:** One-click shortcuts to the most common admin tasks.
 
@@ -263,6 +265,35 @@ them; older data counts as uncached.
 export (`GET /api/admin/usage/export?range=90d&format=csv`) has the columns `provider`,
 `cacheReadTokens`, `cacheWriteTokens`, `reasoningTokens` and `webSearchRequests` after the existing
 ones; a counter the provider did not report is left empty.
+
+---
+
+## System Resources
+
+**Observability → System Resources** (`/admin/system-resources`) shows how much CPU, memory and disk space this installation uses. It is meant for single-host installations — one server or one container, with or without several workers. Deployments with several replicas should use [Telemetry & Observability](telemetry.md) instead, since each replica has its own disk.
+
+The page refreshes every 15 seconds while it is open.
+
+**Disk space.** One entry per filesystem that holds a directory iHub writes to: the contents directory, its `data` and `uploads` directories, the log directory (when file logging is on) and the operating system's temp directory. Directories on the same disk share one entry, which lists them. Each entry shows free and total space and a status:
+
+| Status | When |
+|--------|------|
+| **OK** | less than 80 % used |
+| **Running low** | 80 % used or more |
+| **Critical** | 90 % used or more |
+
+The percentage is computed like `df`: space reserved for the root user counts as neither used nor free.
+
+**Host.** Memory used and total, CPU utilisation, core count, load average, uptime, operating system and Node.js version. Inside a container, memory is measured against the container's memory limit, and a container CPU limit (cgroup `cpu.max`) is shown next to the core count.
+
+**Server processes.** One row per process:
+
+- **Server** — the single process when `WORKERS=1`.
+- **Primary** and **Worker 0 … N-1** — in cluster mode. The worker that answered the request is marked *served this page*; it asks the others over the cluster's internal message bus. A worker that does not answer within 1.5 seconds is shown as *did not respond* (restarting, stuck or overloaded).
+
+For each process: CPU (percent of one core, averaged over the last five seconds), resident memory (RSS), V8 heap used and heap limit, event-loop delay (mean and maximum over the last five seconds) and uptime.
+
+The page is hidden, together with the other system pages, when `admin.pages.system` is `false` in `platform.json`. The data comes from `GET /api/admin/system/resources` (admin only).
 
 ---
 
