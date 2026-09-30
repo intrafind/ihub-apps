@@ -39,6 +39,9 @@ function DictationTest({ speech, t, language }) {
   const [error, setError] = useState('');
   const [firstResultMs, setFirstResultMs] = useState(null);
   const recognitionRef = useRef(null);
+  // Set on unmount, so an Azure token fetch that finishes after leaving the
+  // page does not start a recognizer (and the microphone) nobody can stop.
+  const disposedRef = useRef(false);
 
   const release = useCallback(() => {
     const recognition = recognitionRef.current;
@@ -53,7 +56,13 @@ function DictationTest({ speech, t, language }) {
   }, []);
 
   // Stop the recognizer (and free the mic / socket) when the page is left.
-  useEffect(() => release, [release]);
+  useEffect(() => {
+    disposedRef.current = false;
+    return () => {
+      disposedRef.current = true;
+      release();
+    };
+  }, [release]);
 
   const fail = message => {
     setError(message);
@@ -92,6 +101,10 @@ function DictationTest({ speech, t, language }) {
           err.message ||
             t('voiceInput.error.service', 'Transcription service unavailable. Please try again.')
         );
+        return;
+      }
+      if (disposedRef.current) {
+        recognition.close?.();
         return;
       }
     }

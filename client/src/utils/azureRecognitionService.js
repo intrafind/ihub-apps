@@ -45,6 +45,13 @@ class AzureSpeechRecognition {
     }
   }
 
+  // Release the SDK recognizer (and with it the microphone) without waiting
+  // for a recognition to finish, e.g. one that was built but never started.
+  close() {
+    this.recognition?.close();
+    this.recognition = undefined;
+  }
+
   #startSingleShotRecognition() {
     this.recognition.recognizeOnceAsync(result => {
       switch (result.reason) {

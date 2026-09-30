@@ -67,11 +67,22 @@ class VllmRealtimeRecognition {
       this.#emitError('not-allowed');
       return;
     }
+    // stop() may have been called while the permission prompt was open (the
+    // user cancelled, or the page was left). Its teardown already ran, so
+    // release what arrived since instead of starting to capture.
+    if (this._stopped) {
+      this.#cleanup();
+      return;
+    }
 
     try {
       await this.#openSocket();
     } catch {
       this.#emitError('network');
+      this.#cleanup();
+      return;
+    }
+    if (this._stopped) {
       this.#cleanup();
       return;
     }
@@ -83,6 +94,10 @@ class VllmRealtimeRecognition {
     } catch (err) {
       console.error('Realtime STT capture error:', err);
       this.#emitError('audio-capture');
+      this.#cleanup();
+      return;
+    }
+    if (this._stopped) {
       this.#cleanup();
       return;
     }

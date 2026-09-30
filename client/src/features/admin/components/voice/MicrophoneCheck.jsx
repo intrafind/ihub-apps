@@ -18,6 +18,9 @@ function MicrophoneCheck({ t }) {
   const [deviceLabel, setDeviceLabel] = useState('');
   const [error, setError] = useState('');
   const resourcesRef = useRef(null);
+  // Set on unmount, so a permission prompt answered after leaving the page
+  // releases the microphone instead of metering on.
+  const disposedRef = useRef(false);
 
   const stop = useCallback(() => {
     const resources = resourcesRef.current;
@@ -32,7 +35,13 @@ function MicrophoneCheck({ t }) {
   }, []);
 
   // Release the microphone when the page is left mid-check.
-  useEffect(() => stop, [stop]);
+  useEffect(() => {
+    disposedRef.current = false;
+    return () => {
+      disposedRef.current = true;
+      stop();
+    };
+  }, [stop]);
 
   const start = async () => {
     setError('');
@@ -42,6 +51,10 @@ function MicrophoneCheck({ t }) {
       stream = await navigator.mediaDevices.getUserMedia({ audio: true });
     } catch (err) {
       setError(getMicrophoneErrorMessage(err, t));
+      return;
+    }
+    if (disposedRef.current) {
+      stream.getTracks().forEach(track => track.stop());
       return;
     }
 
