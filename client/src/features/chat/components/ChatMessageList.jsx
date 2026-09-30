@@ -66,7 +66,9 @@ function ChatMessageList({
   // A shared, read-only transcript — see ChatMessage.
   readOnly = false,
   // What MCP App views may do in the composer — see ChatMessage.
-  mcpAppHost = null
+  mcpAppHost = null,
+  // "Save as prompt" on the user's messages — see ChatMessage.
+  onSaveAsPrompt = null
 }) {
   const { t } = useTranslation();
   const chatContainerRef = useRef(null);
@@ -227,6 +229,7 @@ function ChatMessageList({
                 onDocumentAction={onDocumentAction}
                 linkPath={linkPath}
                 mcpAppHost={mcpAppHost}
+                onSaveAsPrompt={onSaveAsPrompt}
               />
             </div>
           </div>

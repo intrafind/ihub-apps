@@ -33,6 +33,9 @@ startup. Durable chats were the first consumer; the runtime stores followed.
 | `a2a-client-contexts`       | conversations with remote A2A agents: the agent's `contextId` and a waiting `taskId` per user, chat and agent, kept 30 days after the last call | the user | [A2A agents](a2a-agents.md) |
 | `mcp-oauth-clients`         | how iHub is registered at each per-user OAuth MCP server's authorization server | – | [MCP Integration](mcp-integration.md) |
 | `mcp-tool-catalog`          | the last tool list of each per-user OAuth MCP server, readable without a token | – | [MCP Integration](mcp-integration.md) |
+| `user-prompts`, `user-prompt-versions` | prompts users write in the prompt library, and each saved version | the owner (versions: the prompt) | [Prompts Library](prompts.md) |
+| `user-prompt-shares`        | one marker per share target of a user prompt, so "shared with me" is an index read | `user:<id>`, `group:<name>` or `everyone` | [Prompts Library](prompts.md) |
+| `prompt-preferences`        | a user's prompt favorites and recents                        | the user                    | [Prompts Library](prompts.md)            |
 | `config`, `apps`, `models`, `prompts`, `tools`, `workflows`, `agents`, `locales` | an installation's configuration, read and written where it already lives | – | [Configuration Storage](configuration.md) |
 
 `integration-conversations` is the smallest of them and the least visible: two
