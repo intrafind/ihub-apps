@@ -884,9 +884,13 @@ export default function registerWorkflowRoutes(app, deps = {}) {
           _workflowDefinition: workflow
         };
 
-        // Start workflow execution
+        // Start workflow execution. `chat` is the server's option for the
+        // chat's workflow bridge (`WorkflowEngine.start`): an API caller does
+        // not get to say which chat its execution belongs to.
+        const { chat: _chat, ...requestOptions } =
+          options && typeof options === 'object' ? options : {};
         const state = await workflowEngine.start(workflow, enrichedInitialData, {
-          ...options,
+          ...requestOptions,
           user: req.user
         });
 
