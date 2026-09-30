@@ -643,6 +643,35 @@ describe('a chat whose run died with its process', () => {
     });
   });
 
+  it('ends the run once when two workers release an answered chat', async () => {
+    await withRepository(async repository => {
+      await materializeUserTurn({
+        repository,
+        chatId: CHAT_ID,
+        ownerId: 'user-1',
+        identityMode: 'default',
+        appId: 'chat',
+        runId: RUN_ID,
+        content: 'q'
+      });
+      await repository.appendMessage(CHAT_ID, {
+        role: 'assistant',
+        content: 'the answer',
+        runId: RUN_ID
+      });
+      await repository.updateChat(CHAT_ID, { lastMessageAt: longAgo });
+      // Both workers read the chat while it was still running.
+      const stale = await repository.getChat(CHAT_ID);
+      const runLog = fakeRunLog({ ended: false });
+
+      await settleInterruptedChat(stale, { repository, runLog });
+      await settleInterruptedChat(stale, { repository, runLog });
+
+      assert.equal(runLog.appended.length, 1, 'one run/end, from the worker that released it');
+      assert.equal((await repository.getMessages(CHAT_ID)).messages.length, 2);
+    });
+  });
+
   it('leaves a live run alone', async () => {
     const chat = { id: CHAT_ID, activeRunId: RUN_ID, status: 'running', lastMessageAt: longAgo };
     const repository = {

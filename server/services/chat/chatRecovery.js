@@ -126,11 +126,14 @@ async function settle(chat, { repository, runLog }) {
     });
     if (!stored) return repository.getChat(chatId);
   } else {
-    await repository.releaseRun(chatId, runId, {
+    // Conditional on the run still holding the chat, under the chat lock: of
+    // several workers settling it, one releases it and ends the run.
+    const { released } = await repository.releaseRun(chatId, runId, {
       activeRunId: null,
       status: 'active',
       hasUnseenActivity: true
     });
+    if (!released) return repository.getChat(chatId);
   }
 
   // The ledger is the audit record of the run: it should end, and say why.
