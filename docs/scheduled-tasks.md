@@ -179,7 +179,12 @@ slot:
   the count (`MISSED`). A task whose schedule fired forty times while the
   server was down produces one catch-up run, not forty.
 - **A run in progress when the server stopped** is marked `failed`
-  (`INTERRUPTED`) when the scheduler comes back.
+  (`INTERRUPTED`) when the scheduler comes back. The worker executing a run
+  holds a lease on it and renews it while the run goes on; a run is only taken
+  for interrupted once that lease ran out (about three minutes after its worker
+  stopped). A worker that lost the scheduler lock but is still executing keeps
+  its run, and a worker that finds its run settled elsewhere stops it and
+  stores nothing more.
 
 ### Runs act as the owner
 
@@ -192,6 +197,9 @@ identity provider can only be asked at sign-in; the group permissions those
 groups carry are still read fresh.
 
 - The owner's account was deactivated or deleted → the task is **disabled**.
+  An external account counts as deleted when `users.json` held a record of it
+  when the task was last saved and no longer does; one that never had a record
+  (it signs in without one) is not checked this way.
 - The owner lost the `scheduledTasks` permission, the app, the model or a tool
   the task uses → the run is `skipped` and the task **paused**, with the reason
   on the task page (`PERMISSION_REVOKED`, `APP_NOT_ACCESSIBLE`,

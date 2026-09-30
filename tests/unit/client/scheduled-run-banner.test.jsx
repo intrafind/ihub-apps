@@ -117,6 +117,27 @@ describe('ScheduledRunBanner', () => {
     expect(onRunChanged).toHaveBeenCalledTimes(1);
   });
 
+  it('notices an approval answered elsewhere and re-reads the chat when that run ends', async () => {
+    fetchScheduledTaskRun
+      .mockResolvedValueOnce({
+        ...run('awaiting_approval'),
+        approval: { toolId: 'dangerous', interactionId: 'i1' }
+      })
+      .mockResolvedValue(run('succeeded'));
+    const onRunChanged = jest.fn();
+    renderBanner(onRunChanged);
+    await flush();
+    expect(screen.getByRole('button', { name: 'Approve' })).toBeInTheDocument();
+
+    // Approved on the task page; the waiting run is re-read on a slower poll.
+    await act(async () => {
+      jest.advanceTimersByTime(15000);
+    });
+    await flush();
+    expect(onRunChanged).toHaveBeenCalledTimes(1);
+    expect(screen.queryByRole('button', { name: 'Approve' })).not.toBeInTheDocument();
+  });
+
   it('leaves the chat alone for a run that had already finished when it opened', async () => {
     fetchScheduledTaskRun.mockResolvedValue(run('succeeded'));
     const onRunChanged = jest.fn();

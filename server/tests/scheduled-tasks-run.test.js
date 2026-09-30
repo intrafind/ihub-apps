@@ -188,8 +188,11 @@ function toolCall(name, args = {}, id = 'call_1') {
   ];
 }
 
-/** A ChatService over a scripted provider; records what was sent and which tools ran. */
-function scriptedChatService(script) {
+/**
+ * A ChatService over a scripted provider; records what was sent and which tools ran.
+ * `onRequest` runs before each model call is answered.
+ */
+function scriptedChatService(script, { onRequest } = {}) {
   const queue = [...script];
   const requests = [];
   const ran = [];
@@ -198,6 +201,7 @@ function scriptedChatService(script) {
     runLog: ledger.runLog,
     transport: async req => {
       requests.push(req);
+      await onRequest?.(req);
       const next = queue.shift();
       if (!next) throw new Error(`script exhausted after ${requests.length} calls`);
       return sseResponse(next);
@@ -471,6 +475,35 @@ describe('a headless run', () => {
     await cleanup(lin);
   });
 
+  it('holds a lease while it runs, and does not overwrite a run another owner recovered', async () => {
+    const user = ada();
+    const task = await tasks.createTask(user, taskInput());
+    const queued = await tasks.requestRun(user, task.id);
+    const repository = getScheduledTaskRepository();
+    let lease = null;
+    const { service } = scriptedChatService([openaiText(['Too ', 'late.'])], {
+      // While the model answers, this worker stalls and a new scheduler owner
+      // takes the run over as interrupted.
+      onRequest: async () => {
+        const running = await repository.getRun(task.id, queued.id);
+        lease = running.execution;
+        await repository.mutateRun(task.id, queued.id, stored => ({
+          ...stored,
+          status: 'failed',
+          reason: { code: 'INTERRUPTED', message: 'The server stopped' }
+        }));
+      }
+    });
+    await executeTaskRun({ taskId: task.id, runId: queued.id }, { chatService: service });
+
+    assert.ok(lease?.token);
+    assert.ok(Date.parse(lease.leaseUntil) > Date.now());
+    const stored = await repository.getRun(task.id, queued.id);
+    assert.equal(stored.status, 'failed');
+    assert.equal(stored.reason.code, 'INTERRUPTED');
+    await cleanup(user);
+  });
+
   it('runs a local owner with the groups users.json gives them now, not the saved ones', async () => {
     const kim = principal({ id: 'user-kim', authMode: 'local', groups: ['users'] });
     const task = await tasks.createTask(kim, taskInput());
@@ -501,6 +534,63 @@ describe('a headless run', () => {
     assert.equal(result.ok, false);
     assert.equal(result.code, 'OWNER_LOOKUP_FAILED');
     assert.equal(result.action, 'retry');
+  });
+
+  it('lets an owner whose permission was withdrawn pause a task, but not resume it', async () => {
+    const user = ada();
+    const task = await tasks.createTask(user, taskInput());
+    const withdrawn = principal({ id: 'user-ada', name: 'Ada', groups: ['noTasks'] });
+    const paused = await tasks.setTaskStatus(withdrawn, task.id, 'paused');
+    assert.equal(paused.status, 'paused');
+    await assert.rejects(tasks.setTaskStatus(withdrawn, task.id, 'active'), {
+      code: 'PERMISSION_DENIED'
+    });
+    await cleanup(user);
+  });
+
+  it('saves a proposal once and keeps to the limit when saves race', async () => {
+    const user = ada();
+    const results = await Promise.allSettled(
+      Array.from({ length: 3 }, () =>
+        tasks.createTask(user, taskInput(), { proposalId: 'proposal-race-1' })
+      )
+    );
+    assert.equal(results.filter(r => r.status === 'fulfilled').length, 1);
+    assert.ok(
+      results
+        .filter(r => r.status === 'rejected')
+        .every(r => r.reason.code === 'PROPOSAL_ALREADY_SAVED')
+    );
+    const limited = await Promise.allSettled(
+      Array.from({ length: 6 }, () => tasks.createTask(user, taskInput()))
+    );
+    assert.equal((await tasks.listTasks(user)).length, PLATFORM.scheduledTasks.maxTasksPerUser);
+    assert.ok(limited.some(r => r.status === 'rejected' && r.reason.code === 'TASK_LIMIT_REACHED'));
+    await cleanup(user);
+  });
+
+  it('disables the task of an external owner whose account record was deleted', async () => {
+    const eve = principal({ id: 'user-eve', authMode: 'oidc', groups: ['users'] });
+    const users = configCache.get('config/users.json');
+    configCache.setCacheEntry('config/users.json', {
+      ...users.data,
+      users: {
+        ...users.data.users,
+        'user-eve': { id: 'user-eve', authMethods: ['oidc'], active: true }
+      }
+    });
+    const task = await tasks.createTask(eve, taskInput());
+    assert.equal(task.owner.recorded, true);
+    // An administrator removes the account.
+    configCache.setCacheEntry('config/users.json', users.data);
+    const queued = await tasks.requestRun(eve, task.id);
+    const run = await executeTaskRun(
+      { taskId: task.id, runId: queued.id },
+      { chatService: scriptedChatService([]).service }
+    );
+    assert.equal(run.reason.code, 'OWNER_DELETED');
+    assert.equal((await getScheduledTaskRepository().getTask(task.id)).status, 'disabled');
+    await cleanup(eve);
   });
 
   it('an admin disabling a task releases its queued run, so re-enabling it works', async () => {

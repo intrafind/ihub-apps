@@ -156,6 +156,22 @@ export class ScheduledTaskRepository {
   }
 
   /**
+   * Run `fn` holding the owner's lock: for the checks that span all of an
+   * owner's tasks — the per-user limit, a proposal saved only once — which two
+   * concurrent creates must not both pass. Not reentrant; `fn` must not take
+   * it again.
+   *
+   * @param {string} ownerId
+   * @param {() => Promise<T>} fn
+   * @returns {Promise<T>}
+   * @template T
+   */
+  async withOwnerLock(ownerId, fn) {
+    this._require();
+    return this.locks.withLock(`scheduled-task-owner:${ownerId}`, fn, LOCK_OPTIONS);
+  }
+
+  /**
    * Change a task under its lock.
    *
    * `fn` gets a copy of the stored task and returns the task to store, or

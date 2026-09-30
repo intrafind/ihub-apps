@@ -81,7 +81,7 @@ test.describe('Scheduled tasks', () => {
     await expect(page.getByText('Succeeded').first()).toBeVisible();
 
     await openChat.click();
-    await expect(page).toHaveURL(/\/apps\/chat\/[0-9a-f-]+/);
+    await expect(page).toHaveURL(/\/apps\/chat\/c\/[0-9a-f-]{36}$/);
     await expect(page.getByText('Scheduled run of')).toBeVisible();
     await expect(page.getByRole('link', { name })).toBeVisible();
 

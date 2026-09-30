@@ -30,20 +30,32 @@ const DANGEROUS_KEYS = new Set(['__proto__', 'constructor', 'prototype']);
 /**
  * The owner snapshot stored on a task.
  *
+ * `recorded` says whether `users.json` held the owner when the task was saved.
+ * An external identity may sign in without a record (one is written on first
+ * sign-in only when the provider is set up to), so a missing record says
+ * nothing about such an owner — unless there was one before: then it was
+ * deleted, and the task stops with it.
+ *
  * @param {Object} user - `req.user` of the owner.
  * @param {string} identityMode - Ledger identity mode the task's chats are owned in.
+ * @param {Object} [options]
+ * @param {Object} [options.platform] - Platform config (defaults to the cached one).
+ * @param {Function} [options.lookupUser] - {@link findUserRecord}, injectable for tests.
  * @returns {Object}
  */
-export function ownerSnapshot(user, identityMode) {
+export function ownerSnapshot(user, identityMode, { platform, lookupUser = findUserRecord } = {}) {
+  const userId = String(user.id);
+  const lookup = lookupUser(userId, platform || configCache.getPlatform() || {});
   return {
-    userId: String(user.id),
+    userId,
     username: String(user.username || user.id),
     name: String(user.name || user.username || user.id),
     email: user.email ? String(user.email) : null,
     groups: Array.isArray(user.groups) ? user.groups.map(String) : [],
     authMode: user.authMode ? String(user.authMode) : null,
     provider: user.provider ? String(user.provider) : null,
-    identityMode: identityMode || 'default'
+    identityMode: identityMode || 'default',
+    recorded: lookup.found === true
   };
 }
 
@@ -130,7 +142,10 @@ export function resolveOwnerPrincipal(task, { platform, lookupUser = findUserRec
   }
   const platformConfig = platform || configCache.getPlatform() || {};
   const lookup = lookupUser(owner.userId, platformConfig);
-  if (lookup.error && owner.authMode === 'local') {
+  // A local account always has a record; an external one only if it had one
+  // when the task was saved (see ownerSnapshot).
+  const expectsRecord = owner.authMode === 'local' || owner.recorded === true;
+  if (lookup.error && expectsRecord) {
     // Cannot tell whether the account still exists: try again next run
     // rather than acting on a guess in either direction.
     return {
@@ -148,7 +163,7 @@ export function resolveOwnerPrincipal(task, { platform, lookupUser = findUserRec
       action: 'disable'
     };
   }
-  if (!lookup.found && owner.authMode === 'local') {
+  if (!lookup.found && expectsRecord) {
     return {
       ok: false,
       code: 'OWNER_DELETED',

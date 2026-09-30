@@ -331,6 +331,32 @@ describe('ScheduledTaskSource', () => {
     assert.equal(storedRun.reason.code, 'INTERRUPTED');
   });
 
+  it('leaves a run alone while its worker still renews the lease, and recovers it once lapsed', async () => {
+    const t = task({ type: 'daily', time: '09:00' }, { id: freshId() });
+    const run = newRunDocument(t, { trigger: 'manual', status: 'queued', now: T0 });
+    attachQueuedRun(t, run);
+    t.activeRun.status = 'running';
+    await repository.createTask(t);
+    // The previous owner lost the scheduler lock but is still executing.
+    await repository.putRun({
+      ...run,
+      status: 'running',
+      startedAt: new Date(T0).toISOString(),
+      execution: { token: 'old-worker', leaseUntil: new Date(T0 + 60_000).toISOString() }
+    });
+    const src = source(fakeRunner());
+    await src.rebuild({ now: T0 + 1000, reason: 'owner' });
+    assert.equal((await repository.getRun(t.id, run.id)).status, 'running');
+    assert.equal((await repository.getTask(t.id)).activeRun.id, run.id);
+
+    // Its lease ran out without a renewal: the process is gone after all.
+    await src.rebuild({ now: T0 + 120_000, reason: 'periodic' });
+    const recovered = await repository.getRun(t.id, run.id);
+    assert.equal(recovered.status, 'failed');
+    assert.equal(recovered.reason.code, 'INTERRUPTED');
+    assert.equal((await repository.getTask(t.id)).activeRun, null);
+  });
+
   it('catches up after a restart: one run for the latest missed slot', async () => {
     const t = task({ type: 'daily', time: '09:00' }, { id: freshId() });
     await repository.createTask(t);

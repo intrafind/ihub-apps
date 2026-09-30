@@ -41,6 +41,26 @@ export const NOTIFY_MODES = Object.freeze(['always', 'failure', 'never']);
 export const LATE_GRACE_MS = 10 * 60_000;
 /** Unseen run notifications kept per task. */
 export const MAX_UNSEEN_RUNS = 20;
+/**
+ * How long an executing run's lease lasts without renewal. The worker running
+ * it renews it well within that; one that stopped renewing is taken for dead.
+ */
+export const RUN_LEASE_MS = 3 * 60_000;
+/** How often the executing worker renews its lease. */
+export const RUN_LEASE_RENEW_MS = 45_000;
+
+/**
+ * Whether a `running` run is still held by a live worker — its execution lease
+ * has not run out. A run without one (never started under a lease) is not.
+ *
+ * @param {Object|null} run
+ * @param {number} now - ms
+ * @returns {boolean}
+ */
+export function runLeaseHeld(run, now) {
+  const until = Date.parse(run?.execution?.leaseUntil || '');
+  return Number.isFinite(until) && until > now;
+}
 
 /**
  * Whether a run status is final.

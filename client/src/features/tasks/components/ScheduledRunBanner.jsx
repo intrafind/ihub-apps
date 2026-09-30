@@ -9,6 +9,9 @@ import { RunStatusBadge } from './TaskBadges';
 import ApprovalControls from './ApprovalControls';
 
 const ACTIVE_STATUSES = ['queued', 'running'];
+/** How often a run that is going, and one that waits for an answer, is re-read. */
+const ACTIVE_POLL_MS = 4000;
+const WAITING_POLL_MS = 15000;
 
 /**
  * The header of a chat a scheduled run created: "Scheduled run of <task> ·
@@ -36,13 +39,16 @@ export default function ScheduledRunBanner({ origin, onRunChanged }) {
     if (available) load();
   }, [available, load]);
 
-  // Follow a run that is still going (queued after an approval, or running).
+  // Follow a run that is still going (queued after an approval, or running),
+  // and — more slowly — one waiting for an approval: it may be answered on the
+  // task page or in another tab, or time out.
   const active = run && ACTIVE_STATUSES.includes(run.status);
+  const waiting = run?.status === 'awaiting_approval';
   useEffect(() => {
-    if (!active) return undefined;
-    const id = setInterval(load, 4000);
+    if (!active && !waiting) return undefined;
+    const id = setInterval(load, active ? ACTIVE_POLL_MS : WAITING_POLL_MS);
     return () => clearInterval(id);
-  }, [active, load]);
+  }, [active, waiting, load]);
 
   // The answer lands in the chat when the run ends, not when it is approved:
   // tell the chat once a run it watched going stops.
@@ -50,13 +56,13 @@ export default function ScheduledRunBanner({ origin, onRunChanged }) {
   onRunChangedRef.current = onRunChanged;
   const followedRef = useRef(false);
   useEffect(() => {
-    if (active) {
+    if (active || waiting) {
       followedRef.current = true;
     } else if (run && followedRef.current) {
       followedRef.current = false;
       onRunChangedRef.current?.();
     }
-  }, [active, run]);
+  }, [active, waiting, run]);
 
   if (origin?.createdVia !== 'scheduled-task') return null;
   const when = run?.startedAt || run?.scheduledFor;
@@ -83,18 +89,7 @@ export default function ScheduledRunBanner({ origin, onRunChanged }) {
           {run && <RunStatusBadge status={run.status} />}
         </div>
         {run?.status === 'awaiting_approval' && (
-          <ApprovalControls
-            taskId={origin.taskId}
-            run={run}
-            compact
-            onAnswered={decision => {
-              // An approval continues the run, and a short one may already be
-              // over by the time `load` reads it: follow it from here, so its
-              // end reaches the chat even if queued/running is never seen.
-              if (decision === 'approve') followedRef.current = true;
-              load();
-            }}
-          />
+          <ApprovalControls taskId={origin.taskId} run={run} compact onAnswered={load} />
         )}
         {run?.status === 'failed' && run.reason?.message && (
           <p className="text-red-700 dark:text-red-300">{reasonText(t, run.reason)}</p>

@@ -34,6 +34,7 @@ import {
 } from '../services/scheduler/schedule.js';
 import { getScheduledTaskRepository } from '../services/scheduler/tasks/ScheduledTaskRepository.js';
 import * as tasks from '../services/scheduler/tasks/taskService.js';
+import { logAudit } from '../services/AuditLogService.js';
 
 /** Fields `update_scheduled_task` may change from inside a scheduled run. */
 const SELF_UPDATE_FIELDS = ['schedule'];
@@ -52,6 +53,15 @@ function failure(error) {
     code: 'SCHEDULING_FAILED',
     message: error?.message || 'The request failed'
   };
+}
+
+/**
+ * The audit entry a tool's change gets. The routes write theirs per request;
+ * a change a tool applies directly has no request, so the user it acts for is
+ * named as the actor.
+ */
+function audit(user, action, taskId, summary) {
+  logAudit({ actor: user, action, resource: 'scheduledTask', resourceId: taskId, summary });
 }
 
 function refuse(code, message) {
@@ -254,12 +264,14 @@ export async function updateScheduledTask(params = {}) {
           }),
           { language, settings }
         );
+        audit(user, 'update', taskId, 'Changed the schedule of a scheduled task from its own run');
       }
       if (status === 'paused') {
         task = tasks.toPublicTask(await tasks.setTaskStatus(user, taskId, 'paused'), {
           language,
           settings
         });
+        audit(user, 'toggle', taskId, 'Paused a scheduled task from its own run');
       }
       return {
         status: 'updated',
@@ -274,6 +286,12 @@ export async function updateScheduledTask(params = {}) {
       if (!status) return refuse('NOTHING_TO_CHANGE', 'Name a change or a status');
       tasks.assertPrincipal(user);
       const task = await tasks.setTaskStatus(user, taskId, status);
+      audit(
+        user,
+        'toggle',
+        taskId,
+        `${status === 'paused' ? 'Paused' : 'Resumed'} scheduled task from a chat`
+      );
       return {
         status: 'updated',
         taskId,
@@ -377,6 +395,7 @@ export async function runScheduledTaskNow(params = {}) {
   }
   try {
     const run = await tasks.requestRun(user, String(params.taskId || ''));
+    audit(user, 'execute', run.taskId, 'Started a scheduled task run from a chat');
     return {
       status: 'queued',
       taskId: run.taskId,

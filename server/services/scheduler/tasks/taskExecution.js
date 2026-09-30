@@ -28,7 +28,12 @@ import { canUserAccessResource } from '../../../utils/authorization.js';
 import { findByIdCaseInsensitive } from '../../../utils/resourceLookup.js';
 import { getLocalizedError } from '../../../serverHelpers.js';
 import logger from '../../../utils/logger.js';
-import { markChatDurable, clearChatDurable, hasChatClient } from '../../../sse.js';
+import {
+  abortChatRequest,
+  markChatDurable,
+  clearChatDurable,
+  hasChatClient
+} from '../../../sse.js';
 import config from '../../../config.js';
 import ChatService, { withAppPrompt } from '../../chat/ChatService.js';
 import { getChatRepository, normalizeChatSettings } from '../../chat/ChatRepository.js';
@@ -36,13 +41,15 @@ import { isChatPersistenceConfigured } from '../../chat/chatPersistence.js';
 import interactionService from '../../loop/InteractionService.js';
 import { newRunId as newLedgerRunId } from '../../loop/RunLog.js';
 import { formatInstant, formatZonedIso } from '../schedule.js';
-import { getScheduledTaskRepository } from './ScheduledTaskRepository.js';
+import { getScheduledTaskRepository, MAX_RUN_PAGE } from './ScheduledTaskRepository.js';
 import {
   applyRunOutcome,
   holdTask,
   isFinalRunStatus,
   reasonOf,
   resolveRunContext,
+  RUN_LEASE_MS,
+  RUN_LEASE_RENEW_MS,
   runContextVariables
 } from './taskModel.js';
 import { resolveOwnerPrincipal } from './ownerPrincipal.js';
@@ -56,6 +63,9 @@ const COMPONENT = 'ScheduledTaskExecution';
 
 /** Continuation turns one run may take (one per approval). */
 const MAX_CONTINUATIONS = 5;
+
+/** How many chats past the kept ones a trim looks at, for stragglers. */
+const TRIM_LOOK_PAST = 20;
 
 const UNATTENDED_NOTE =
   'Unattended run: this conversation was started by a scheduled task, and no user is ' +
@@ -236,16 +246,46 @@ export async function executeTaskRun({ taskId, runId }, deps = {}) {
 
   const continuation = run.continuation || null;
   const startedAtMs = now();
+  // This execution's fencing token. The run document carries it with a lease
+  // this worker renews; a new scheduler owner recovers the run only once the
+  // lease ran out, and a worker that finds its token gone writes nothing more.
+  const token = crypto.randomUUID();
+  let renewal = null;
+  const stopRenewal = () => {
+    if (renewal) clearInterval(renewal);
+    renewal = null;
+  };
+  const leaseUntil = () => new Date(now() + RUN_LEASE_MS).toISOString();
   const finish = async (status, reason, extra = {}) => {
+    stopRenewal();
     const endedAt = now();
-    const ended = await repository.mutateRun(taskId, runId, stored => ({
-      ...stored,
-      ...extra,
-      status,
-      reason,
-      finishedAt: status === 'awaiting_approval' ? null : new Date(endedAt).toISOString(),
-      durationMs: stored.startedAt ? endedAt - Date.parse(stored.startedAt) : null
-    }));
+    let written = false;
+    const ended = await repository.mutateRun(taskId, runId, stored => {
+      // Queued (it never started) or still ours: anything else means another
+      // process settled this run — a recovery after this lease lapsed.
+      const ours =
+        stored.status === 'queued' ||
+        (stored.status === 'running' && (!stored.execution || stored.execution.token === token));
+      if (!ours) return null;
+      written = true;
+      return {
+        ...stored,
+        ...extra,
+        status,
+        reason,
+        finishedAt: status === 'awaiting_approval' ? null : new Date(endedAt).toISOString(),
+        durationMs: stored.startedAt ? endedAt - Date.parse(stored.startedAt) : null
+      };
+    });
+    if (!written) {
+      logger.warn('Scheduled run was settled elsewhere; its result is not stored', {
+        component: COMPONENT,
+        taskId,
+        runId,
+        status: ended?.status
+      });
+      return ended;
+    }
     await repository.mutateTask(taskId, stored => {
       if (stored.activeRun?.id !== runId && status !== 'awaiting_approval') {
         // The task moved on (deleted and re-created, or an admin intervened);
@@ -273,11 +313,46 @@ export async function executeTaskRun({ taskId, runId }, deps = {}) {
     );
   }
 
-  run = await repository.mutateRun(taskId, runId, stored => ({
-    ...stored,
-    status: 'running',
-    startedAt: stored.startedAt || new Date(startedAtMs).toISOString()
-  }));
+  run = await repository.mutateRun(taskId, runId, stored => {
+    if (stored.status !== 'queued') return null;
+    return {
+      ...stored,
+      status: 'running',
+      startedAt: stored.startedAt || new Date(startedAtMs).toISOString(),
+      execution: { token, leaseUntil: leaseUntil() }
+    };
+  });
+  // Another execution of the same claim got there first.
+  if (run?.execution?.token !== token) return run || null;
+  renewal = setInterval(() => {
+    repository
+      .mutateRun(taskId, runId, stored =>
+        stored.status === 'running' && stored.execution?.token === token
+          ? { ...stored, execution: { token, leaseUntil: leaseUntil() } }
+          : null
+      )
+      .then(current => {
+        if (current?.status === 'running' && current.execution?.token === token) return;
+        // Recovered by a new scheduler owner while this worker was stalled:
+        // stop the turn rather than keep acting on a run that is settled.
+        stopRenewal();
+        logger.warn('Scheduled run lost its lease; stopping it', {
+          component: COMPONENT,
+          taskId,
+          runId
+        });
+        if (run.chatId) abortChatRequest(run.chatId);
+      })
+      .catch(error =>
+        logger.warn('Could not renew a scheduled run lease', {
+          component: COMPONENT,
+          taskId,
+          runId,
+          error: error.message
+        })
+      );
+  }, RUN_LEASE_RENEW_MS);
+  renewal.unref?.();
   await repository.mutateTask(taskId, stored => {
     if (stored.activeRun?.id !== runId) return null;
     stored.activeRun = { ...stored.activeRun, status: 'running', startedAt: run.startedAt };
@@ -598,6 +673,7 @@ export async function executeTaskRun({ taskId, runId }, deps = {}) {
     }
     return ended;
   } finally {
+    stopRenewal();
     await trimRunChats(taskId, settings.maxRunChatsPerTask, repository).catch(error =>
       logger.warn('Could not trim the run chats of a scheduled task', {
         component: COMPONENT,
@@ -622,22 +698,28 @@ export async function executeTaskRun({ taskId, runId }, deps = {}) {
 export async function trimRunChats(taskId, keep, repository = getScheduledTaskRepository()) {
   if (!keep || keep <= 0) return 0;
   // Older chats were trimmed by earlier runs, so a bounded look past the
-  // limit is enough.
-  const { items } = await repository.listRuns(taskId, { limit: Math.min(100, keep + 20) });
+  // limit is enough — but the limit itself may be larger than one page, and
+  // runs without a chat (skipped slots) sit in between, so page until that
+  // many chats were seen or the history ends.
+  const lookAt = keep + TRIM_LOOK_PAST;
   let withChat = 0;
   let deleted = 0;
-  for (const run of items) {
-    if (!run.chatId || run.chatDeleted || !run.startedAt) continue;
-    if (!isFinalRunStatus(run.status)) {
+  let cursor = null;
+  do {
+    const page = await repository.listRuns(taskId, {
+      limit: MAX_RUN_PAGE,
+      ...(cursor ? { cursor } : {})
+    });
+    for (const run of page.items) {
+      if (!run.chatId || run.chatDeleted || !run.startedAt) continue;
       withChat += 1;
-      continue;
+      if (!isFinalRunStatus(run.status) || withChat <= keep) continue;
+      await deleteRunChat(run.chatId);
+      await repository.mutateRun(taskId, run.id, stored => ({ ...stored, chatDeleted: true }));
+      deleted += 1;
     }
-    withChat += 1;
-    if (withChat <= keep) continue;
-    await deleteRunChat(run.chatId);
-    await repository.mutateRun(taskId, run.id, stored => ({ ...stored, chatDeleted: true }));
-    deleted += 1;
-  }
+    cursor = page.nextCursor;
+  } while (cursor && withChat < lookAt);
   return deleted;
 }
 

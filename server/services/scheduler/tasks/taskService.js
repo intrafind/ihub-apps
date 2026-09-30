@@ -474,37 +474,42 @@ export async function createTask(
   const fields = await validateTaskFields(input, { user, settings, language, timezone, now });
   const identity = await ownerIdentity(user);
   const repository = getScheduledTaskRepository();
-  const existing = await repository.listTasksByOwner(identity.id);
-  if (settings.maxTasksPerUser > 0 && existing.length >= settings.maxTasksPerUser) {
-    throw new ScheduledTaskError(
-      409,
-      'TASK_LIMIT_REACHED',
-      `You can have at most ${settings.maxTasksPerUser} scheduled tasks`
-    );
-  }
   const cleanProposalId =
     typeof proposalId === 'string' && /^[A-Za-z0-9-]{8,64}$/.test(proposalId) ? proposalId : null;
-  if (cleanProposalId) {
-    const saved = existing.find(task => task.proposalId === cleanProposalId);
-    if (saved) {
-      throw new ScheduledTaskError(409, 'PROPOSAL_ALREADY_SAVED', 'This task was already saved', {
-        taskId: saved.id
-      });
+  // The limit and the proposal check read all of the owner's tasks: under the
+  // owner's lock, so two saves at once (a double click, two tabs) cannot both
+  // pass them.
+  const stored = await repository.withOwnerLock(identity.id, async () => {
+    const existing = await repository.listTasksByOwner(identity.id);
+    if (settings.maxTasksPerUser > 0 && existing.length >= settings.maxTasksPerUser) {
+      throw new ScheduledTaskError(
+        409,
+        'TASK_LIMIT_REACHED',
+        `You can have at most ${settings.maxTasksPerUser} scheduled tasks`
+      );
     }
-  }
-  const task = newTaskDocument(fields, {
-    id: newTaskId(),
-    ownerId: identity.id,
-    owner: ownerSnapshot(user, identity.mode),
-    now,
-    staggerMinutes: settings.staggerMinutes,
-    createdVia,
-    extra: {
-      ...(cleanProposalId ? { proposalId: cleanProposalId } : {}),
-      ...(typeof sourceChatId === 'string' && sourceChatId.length <= 100 ? { sourceChatId } : {})
+    if (cleanProposalId) {
+      const saved = existing.find(task => task.proposalId === cleanProposalId);
+      if (saved) {
+        throw new ScheduledTaskError(409, 'PROPOSAL_ALREADY_SAVED', 'This task was already saved', {
+          taskId: saved.id
+        });
+      }
     }
+    const task = newTaskDocument(fields, {
+      id: newTaskId(),
+      ownerId: identity.id,
+      owner: ownerSnapshot(user, identity.mode),
+      now,
+      staggerMinutes: settings.staggerMinutes,
+      createdVia,
+      extra: {
+        ...(cleanProposalId ? { proposalId: cleanProposalId } : {}),
+        ...(typeof sourceChatId === 'string' && sourceChatId.length <= 100 ? { sourceChatId } : {})
+      }
+    });
+    return repository.createTask(task);
   });
-  const stored = await repository.createTask(task);
   announceTaskChanged(stored.id);
   logger.info('Scheduled task created', {
     component: COMPONENT,
@@ -596,7 +601,9 @@ export async function updateTask(
  */
 export async function setTaskStatus(user, taskId, status) {
   const { settings } = assertAvailable();
-  assertPrincipal(user);
+  // Pausing stops work the owner already has, like deleting it: allowed
+  // after the permission was withdrawn. Resuming starts it again, so it is not.
+  if (status !== 'paused') assertPrincipal(user);
   const { ownerId } = await loadOwnedTask(user, taskId);
   const now = Date.now();
   const { task } = await getScheduledTaskRepository().mutateTask(taskId, stored => {

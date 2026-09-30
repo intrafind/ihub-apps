@@ -24,7 +24,14 @@
  */
 import logger from '../../../utils/logger.js';
 import { getScheduledTaskRepository } from './ScheduledTaskRepository.js';
-import { applyRunOutcome, isOlderThanDays, planDueSlot, reasonOf } from './taskModel.js';
+import {
+  applyRunOutcome,
+  isFinalRunStatus,
+  isOlderThanDays,
+  planDueSlot,
+  reasonOf,
+  runLeaseHeld
+} from './taskModel.js';
 import { onTaskChanged, announceTaskChanged } from './taskEvents.js';
 import { currentPolicy, failAwaitingRun } from './taskService.js';
 import { ScheduledTaskRunner } from './taskRunner.js';
@@ -112,10 +119,9 @@ export class ScheduledTaskSource {
     const next = new Map();
     this.index = next;
     for await (const task of repository.scanTasks()) {
-      let current = task;
-      if (reason === 'owner' || reason === 'enabled') {
-        current = (await this._recover(task, now)) || task;
-      }
+      // On every rebuild, not only on taking over: a run whose lease was still
+      // held when this process became the owner is recovered once it lapses.
+      const current = task.activeRun ? (await this._recover(task, now)) || task : task;
       this._indexTask(current);
     }
     logger.info('Scheduled task index built', {
@@ -136,8 +142,14 @@ export class ScheduledTaskSource {
     const repository = this.repository();
     if (active.status === 'running' && !this.runner.isRunning(active.id)) {
       const settings = this.policy().settings;
+      let interrupted = false;
       const run = await repository.mutateRun(task.id, active.id, stored => {
         if (stored.status !== 'running') return null;
+        // Not running here is not the same as dead: a worker that lost the
+        // scheduler lock (a stalled heartbeat) may still be executing it. Only
+        // a lease nobody renewed says the process is gone.
+        if (runLeaseHeld(stored, now)) return null;
+        interrupted = true;
         return {
           ...stored,
           status: 'failed',
@@ -146,6 +158,9 @@ export class ScheduledTaskSource {
           reason: reasonOf('INTERRUPTED', 'The server stopped while the run was in progress', now)
         };
       });
+      // Still held: leave it to its worker; a later rebuild looks again.
+      // Settled meanwhile by that worker: only release the task from it.
+      if (!interrupted && !(run && isFinalRunStatus(run.status))) return task;
       const { task: updated } = await repository.mutateTask(task.id, stored => {
         if (stored.activeRun?.id !== active.id) return null;
         return applyRunOutcome(
@@ -154,11 +169,13 @@ export class ScheduledTaskSource {
           { now, settings }
         );
       });
-      logger.warn('Scheduled run interrupted by a restart marked as failed', {
-        component: COMPONENT,
-        taskId: task.id,
-        runId: active.id
-      });
+      if (interrupted) {
+        logger.warn('Scheduled run interrupted by a restart marked as failed', {
+          component: COMPONENT,
+          taskId: task.id,
+          runId: active.id
+        });
+      }
       return updated || task;
     }
     if (active.status === 'awaiting_approval') {

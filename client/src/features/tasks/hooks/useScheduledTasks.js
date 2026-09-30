@@ -56,7 +56,9 @@ export function useScheduledTasksRouteState() {
 // ── notifications: one shared store for the sidebar badge and the toast ──────
 
 const POLL_MS = 60_000;
-let state = { items: [], loaded: false };
+// `ownerId` is whose runs these are: the store outlives a sign-out in the same
+// page, and the next account must never be shown the previous one's tasks.
+let state = { items: [], loaded: false, ownerId: null };
 let inflight = null;
 let consumers = 0;
 let timer = null;
@@ -69,20 +71,36 @@ const subscribe = listener => {
 };
 const snapshot = () => state;
 
+/**
+ * Start the store over for another viewer (or none), dropping what it held.
+ *
+ * @param {string|null} ownerId
+ */
+function switchOwner(ownerId) {
+  if (state.ownerId === ownerId) return;
+  state = { items: [], loaded: false, ownerId };
+  inflight = null;
+  emit();
+}
+
 /** Load the unseen runs now (shared by every consumer). */
 export function refreshScheduledTaskNotifications() {
   if (inflight) return inflight;
-  inflight = fetchScheduledTaskNotifications()
+  const ownerId = state.ownerId;
+  const request = fetchScheduledTaskNotifications()
     .then(data => {
-      state = { items: Array.isArray(data?.items) ? data.items : [], loaded: true };
+      // A sign-out while this was in flight: the answer is not the new viewer's.
+      if (state.ownerId !== ownerId) return [];
+      state = { items: Array.isArray(data?.items) ? data.items : [], loaded: true, ownerId };
       emit();
       return state.items;
     })
-    .catch(() => state.items)
+    .catch(() => (state.ownerId === ownerId ? state.items : []))
     .finally(() => {
-      inflight = null;
+      if (inflight === request) inflight = null;
     });
-  return inflight;
+  inflight = request;
+  return request;
 }
 
 /** Drop runs from the shared list once they are seen, locally and on the server. */
@@ -105,7 +123,12 @@ export async function dismissScheduledTaskNotifications(runIds) {
  */
 export function useScheduledTaskNotifications() {
   const available = useScheduledTasksAvailable();
+  const viewerId = useViewerAuth().user?.id ?? null;
   const current = useSyncExternalStore(subscribe, snapshot, snapshot);
+
+  useEffect(() => {
+    switchOwner(available ? viewerId : null);
+  }, [available, viewerId]);
 
   useEffect(() => {
     if (!available) return undefined;
@@ -125,10 +148,10 @@ export function useScheduledTaskNotifications() {
         timer = null;
       }
     };
-  }, [available]);
+  }, [available, viewerId]);
 
   const refresh = useCallback(() => refreshScheduledTaskNotifications(), []);
-  const items = available ? current.items : [];
+  const items = available && current.ownerId === viewerId ? current.items : [];
   return { items, count: items.length, loaded: current.loaded, refresh };
 }
 
