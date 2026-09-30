@@ -22,7 +22,6 @@
     "ajv": "^8.20.0",
     "ajv-formats": "^3.0.1",
     "axios": "^1.20.0",
-    "docx": "^9.7.2",
     "dompurify": "^3.4.0",
     "file-saver": "^2.0.5",
     "fuse.js": "^7.4.2",
@@ -35,7 +34,6 @@
     "mermaid": "^12.0.0",
     "microsoft-cognitiveservices-speech-sdk": "^1.51.0",
     "pdfjs-dist": "^6.3.289",
-    "pptxgenjs": "^4.0.1",
     "react": "^19.3.0",
     "react-dom": "^19.3.0",
     "react-error-boundary": "^6.1.6",
@@ -48,7 +46,6 @@
     "turndown": "^7.2.4",
     "utif2": "^4.1.0",
     "uuid": "^14.0.2",
-    "write-excel-file": "^4.1.1",
     "xlsx": "^0.18.5"
   },
   "overrides": {

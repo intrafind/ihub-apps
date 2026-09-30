@@ -10,6 +10,8 @@ export * from './endpoints/runs';
 export * from './endpoints/chats';
 export * from './endpoints/shares';
 export * from './endpoints/documents';
+export * from './endpoints/exports';
+export * from './endpoints/provenance';
 
 // Re-export utility functions
 export { clearApiCache, invalidateCacheByPattern } from './utils/cache';

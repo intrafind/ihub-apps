@@ -59,7 +59,14 @@ function DetectionTestPanel() {
       const data = await verifyContent(mode === 'file' ? { file } : { text });
       setResponse(data);
     } catch (err) {
-      setError(extractApiError(err));
+      // ProvenanceRequestError carries `status`; the axios error (with the
+      // server's `details`) is its `cause`.
+      const base = extractApiError(err?.cause || err);
+      setError({
+        status: err?.status ?? base.status,
+        message: err?.message || base.message,
+        details: base.details
+      });
     } finally {
       setChecking(false);
     }
@@ -317,9 +324,9 @@ function DetectionTestPanel() {
 
           <div className="grid gap-5 lg:grid-cols-2">
             <div className="rounded-md border border-gray-200 dark:border-gray-700 p-4">
-              <h4 className="text-sm font-semibold text-gray-900 dark:text-gray-100 mb-3">
+              <h3 className="text-sm font-semibold text-gray-900 dark:text-gray-100 mb-3">
                 {t('admin.euAiAct.detection.test.contentTitle', 'Checked content')}
-              </h4>
+              </h3>
               <DefinitionList
                 items={[
                   {
@@ -356,9 +363,9 @@ function DetectionTestPanel() {
             </div>
 
             <div className="rounded-md border border-gray-200 dark:border-gray-700 p-4">
-              <h4 className="text-sm font-semibold text-gray-900 dark:text-gray-100 mb-3">
+              <h3 className="text-sm font-semibold text-gray-900 dark:text-gray-100 mb-3">
                 {t('admin.euAiAct.detection.test.provenanceTitle', 'Provenance')}
-              </h4>
+              </h3>
               {provenance ? (
                 <DefinitionList
                   items={[

@@ -238,11 +238,42 @@ export const createPage = async pageData => {
   return response.data;
 };
 
-export const toggleModels = async (ids, enabled) => {
+/**
+ * Enable or disable models in bulk.
+ *
+ * EU AI Act: enabling a model that does not watermark its text answers 409
+ * `{ code: 'UNMARKED_MODEL_ACKNOWLEDGEMENT_REQUIRED', models }` until a
+ * justification is given; retry the same call with `justification` and the
+ * server stores it as the models' acknowledgement.
+ *
+ * @param {string|string[]} ids - Model ids, or `'*'` for all
+ * @param {boolean} enabled - Target state
+ * @param {string} [justification] - Why unmarked models are enabled (>= 10 characters)
+ * @returns {Promise<Object>} Server response body
+ */
+export const toggleModels = async (ids, enabled, justification) => {
   const idParam = Array.isArray(ids) ? ids.join(',') : ids;
   const response = await makeAdminApiCall(`/admin/models/${idParam}/_toggle`, {
     method: 'POST',
-    body: { enabled }
+    body: { enabled, ...(justification ? { aiTransparencyJustification: justification } : {}) }
+  });
+  return response.data;
+};
+
+/**
+ * Toggle one model's enabled state.
+ *
+ * EU AI Act: switching on a model that does not watermark its text answers
+ * 409 (see {@link toggleModels}); retry with `justification`.
+ *
+ * @param {string} modelId - Model id
+ * @param {string} [justification] - Why the unmarked model is enabled (>= 10 characters)
+ * @returns {Promise<Object>} Server response body (`{ enabled, … }`)
+ */
+export const toggleModel = async (modelId, justification) => {
+  const response = await makeAdminApiCall(`/admin/models/${encodeURIComponent(modelId)}/toggle`, {
+    method: 'POST',
+    body: justification ? { aiTransparencyJustification: justification } : {}
   });
   return response.data;
 };
@@ -1020,6 +1051,7 @@ export const adminApi = {
   fetchAdminPage,
   createPage,
   toggleModels,
+  toggleModel,
   updatePage,
   togglePrompts,
   deletePage,

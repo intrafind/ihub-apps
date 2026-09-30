@@ -559,7 +559,7 @@ function WorkflowExecutionPage() {
               <Icon name="eye" className="w-3 h-3" />
               {t('workflows.output.view', 'View')}
             </button>
-            <MarkdownDownloadMenu content={value} name={fileBase} />
+            <MarkdownDownloadMenu content={value} name={fileBase} source="workflow" />
           </>
         )}
       </div>
@@ -1186,6 +1186,7 @@ function WorkflowExecutionPage() {
         <MarkdownViewer
           content={viewerField.content}
           name={viewerField.name}
+          source="workflow"
           onClose={() => setViewerField(null)}
         />
       )}

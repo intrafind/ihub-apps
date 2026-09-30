@@ -22,6 +22,8 @@ import {
   useEstimatedTokensForFragments
 } from '../../../shared/hooks/useEstimatedTokenCount.js';
 import { getLocalizedContent } from '../../../utils/localizeContent';
+import AIInteractionBadge from './AIInteractionBadge';
+import { getInteractionDisclosure } from '../utils/aiTransparency';
 
 /**
  * Stable empty default for the `messages` prop: a fresh `[]` per render would
@@ -148,6 +150,11 @@ function ChatInput({
   const [showPromptSearch, setShowPromptSearch] = useState(false);
   const [showWorkflowSearch, setShowWorkflowSearch] = useState(false);
   const [modelAlertAcknowledged, setModelAlertAcknowledged] = useState(false);
+
+  // EU AI Act Art. 50(1): the persistent "AI" pill below the input. Read from
+  // the platform config and the app's effective view, so every surface that
+  // renders ChatInput with its `app` (chat page, start page) gets it.
+  const showAiBadge = getInteractionDisclosure(platformConfig?.aiTransparency, app).persistentBadge;
 
   const promptsListEnabled =
     uiConfig?.promptsList?.enabled !== false && app?.features?.promptsList !== false;
@@ -830,12 +837,19 @@ function ChatInput({
           </div>
         </form>
 
-        {/* Single tight line below the input: disclaimer centered, ephemeral
-            (incognito) toggle right-aligned under the send button. The active
-            "not saved" notice lives in the status line above the input. */}
-        {(ephemeralToggleAvailable || disclaimer) && (
+        {/* Single tight line below the input: the "AI" badge left, the
+            disclaimer centered, ephemeral (incognito) toggle right-aligned
+            under the send button. The active "not saved" notice lives in the
+            status line above the input. */}
+        {(ephemeralToggleAvailable || disclaimer || showAiBadge) && (
           <div className="flex items-center justify-between gap-2 sm:grid sm:grid-cols-[1fr_auto_1fr]">
-            <span className="hidden sm:block" />
+            {showAiBadge ? (
+              <div className="shrink-0 justify-self-start">
+                <AIInteractionBadge />
+              </div>
+            ) : (
+              <span className="hidden sm:block" />
+            )}
             <div className="min-w-0 flex-1 text-center sm:flex-none">{disclaimer}</div>
             <div className="shrink-0 justify-self-end">
               {ephemeralToggleAvailable && (

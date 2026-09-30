@@ -181,7 +181,7 @@ function SettingsTab({ status, reload }) {
   const scrollToSection = key => {
     const el = document.getElementById(sectionDomId(key));
     if (!el) return;
-    el.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    el.scrollIntoView?.({ behavior: 'smooth', block: 'start' });
     el.focus({ preventScroll: true });
   };
 

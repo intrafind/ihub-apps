@@ -364,3 +364,33 @@ describe('runReducer — streamed reasoning', () => {
     ]);
   });
 });
+
+describe('runReducer — EU AI Act provenance', () => {
+  const PROVENANCE = {
+    contentId: 'prv_abc',
+    aiGenerated: true,
+    generatedAt: '2026-09-29T10:00:00.000Z',
+    model: { id: 'gpt-x', provider: 'openai' },
+    marking: { status: 'unmarked', technique: null, required: true, tokens: 420 }
+  };
+  const turn = extra => [
+    env(1, 'run-p', 'run/started', { kind: 'chat', refs: { chatId: 'c', messageId: 'm' } }),
+    env(2, 'run-p', 'step/delta', { step: 0, kind: 'text', content: 'Hi' }),
+    env(3, 'run-p', 'run/ended', { status: 'completed', finishReason: 'stop', ...extra })
+  ];
+
+  test('a new run has no provenance', () => {
+    const run = getRun(fold(turn({}).slice(0, 2)), 'run-p');
+    expect(run.provenance).toBeNull();
+  });
+
+  test('run/ended carries the answer provenance onto the run', () => {
+    const run = getRun(fold(turn({ provenance: PROVENANCE })), 'run-p');
+    expect(run.provenance).toEqual(PROVENANCE);
+  });
+
+  test('a run/ended without provenance leaves it null; a non-object is ignored', () => {
+    expect(getRun(fold(turn({})), 'run-p').provenance).toBeNull();
+    expect(getRun(fold(turn({ provenance: 'nope' })), 'run-p').provenance).toBeNull();
+  });
+});

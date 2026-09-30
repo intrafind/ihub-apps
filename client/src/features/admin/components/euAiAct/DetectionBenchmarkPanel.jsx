@@ -290,7 +290,10 @@ function DetectionBenchmarkPanel({ onChanged }) {
                   </tr>
                 )}
                 {results.map(row => (
-                  <tr key={`${row.technique}-${row.transform}`} className={TABLE.tr}>
+                  <tr
+                    key={`${row.technique}|${row.transform}|${row.note || ''}`}
+                    className={TABLE.tr}
+                  >
                     <td className={TABLE.td}>{techniqueLabel(t, row.technique)}</td>
                     <td className={`${TABLE.td} font-mono text-xs`}>{row.transform || '—'}</td>
                     <td className={`${TABLE.td} text-right tabular-nums`}>{row.samples ?? '—'}</td>

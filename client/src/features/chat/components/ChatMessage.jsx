@@ -58,6 +58,9 @@ function ChatCheckpoint({ executionId, checkpoint }) {
   );
 }
 import AnswerSourceBadge from './AnswerSourceBadge';
+import AIProvenanceChip from './AIProvenanceChip';
+import { usePlatformConfig } from '../../../shared/contexts/PlatformConfigContext';
+import { findImageProvenance, isMessageBadgeEnabled } from '../utils/aiTransparency';
 import ExportDialog from './ExportDialog';
 import McpAppViews from '../mcpApps/McpAppViews';
 import McpConnectCards from '../mcpApps/McpConnectCard';
@@ -109,6 +112,9 @@ function ChatMessage({
 }) {
   const { t } = useTranslation();
   const featureFlags = useFeatureFlags();
+  const { platformConfig } = usePlatformConfig();
+  // EU AI Act: the "AI generated" chip on every assistant answer.
+  const aiChipEnabled = isMessageBadgeEnabled(platformConfig?.aiTransparency);
   // Response feedback is off when either the platform flag or this app's
   // `features.feedback` says so. One check for every surface: ChatMessage is
   // what main chat, compare mode, canvas and the Office add-in all render.
@@ -930,6 +936,7 @@ function ChatMessage({
                 chatId={chatId}
                 index={idx}
                 persisted={imagesPersisted}
+                provenance={findImageProvenance(image, message.provenance, idx)}
               />
             ))}
           </div>
@@ -1008,9 +1015,18 @@ function ChatMessage({
 
         {/* Workflow result attribution — handled by unified WorkflowStepIndicator above */}
 
-        {/* Answer source indicator - show for completed assistant messages inside bubble */}
+        {/* Answer source indicator - show for completed assistant messages inside bubble.
+            The EU AI Act "AI generated" chip sits in the same row; its details
+            panel wraps onto its own line below. */}
         {!isUser && !isError && !message.loading && (
-          <div className="flex justify-end">
+          <div className="flex flex-wrap items-center justify-end gap-2">
+            {aiChipEnabled && (
+              <AIProvenanceChip
+                provenance={message.provenance || null}
+                fallbackModelId={modelId || null}
+                models={models}
+              />
+            )}
             <AnswerSourceBadge
               answerSource={message.answerSource}
               workflowResult={message.workflowResult}
@@ -1358,6 +1374,7 @@ function ChatMessage({
           messages={[message]}
           settings={{}}
           appId={appId}
+          app={app}
           chatId={chatId}
           isSingleMessage={true}
         />

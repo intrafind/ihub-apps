@@ -40,6 +40,9 @@ export function transformStoredMessage(msg) {
   if (msg.runId) message.runId = msg.runId;
   if (msg.usage) message.usage = msg.usage;
   if (msg.finishReason) message.finishReason = msg.finishReason;
+  // EU AI Act: the answer's public provenance record (content id, model,
+  // marking status), shown by the "AI generated" chip's second layer.
+  if (msg.provenance && typeof msg.provenance === 'object') message.provenance = msg.provenance;
   if (Array.isArray(msg.attachments) && msg.attachments.length > 0) {
     message.attachments = msg.attachments;
   }
@@ -719,9 +722,17 @@ function useChatMessages(chatId = 'default', { ephemeral = false, serverBacked =
       }
 
       // Strip UI-specific properties that the API doesn't need. MCP App views
-      // carry their full tool payload and must not ride along with history.
+      // carry their full tool payload and must not ride along with history;
+      // provenance is the server's own record and is never taken back from
+      // the client.
       return messagesForApi.map(msg => {
-        const { rawContent, mcpApps: _mcpApps, mcpAuthRequired: _mcpAuthRequired, ...apiMsg } = msg;
+        const {
+          rawContent,
+          mcpApps: _mcpApps,
+          mcpAuthRequired: _mcpAuthRequired,
+          provenance: _provenance,
+          ...apiMsg
+        } = msg;
         const content = rawContent !== undefined ? rawContent : apiMsg.content;
         return { ...apiMsg, content };
       });

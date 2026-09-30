@@ -1,24 +1,88 @@
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useId, useMemo, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import Icon from '../../../shared/components/Icon';
 import useFocusTrap from '../../../shared/hooks/useFocusTrap';
-import { exportChatToFormat } from '../../../api/endpoints/apps';
-import {
-  exportToXLSX,
-  exportToCSV,
-  exportToDOCX,
-  exportToTXT,
-  exportToPPTX
-} from '../../../utils/exportFormats';
 import { useUIConfig } from '../../../shared/contexts/UIConfigContext';
+import { usePlatformConfig } from '../../../shared/contexts/PlatformConfigContext';
+import { useChatPersistence } from '../../../shared/hooks/useChats';
 import { getLocalizedContent } from '../../../utils/localizeContent';
-import useFeatureFlags from '../../../shared/hooks/useFeatureFlags';
+import {
+  requestExport,
+  requestExportText,
+  signClipboardText
+} from '../../../api/endpoints/exports';
+import { writeTextToClipboard } from '../../../shared/utils/clipboardText';
+import {
+  COPYABLE_EXPORT_FORMATS,
+  EXPORT_FORMATS,
+  PDF_TEMPLATES,
+  buildChatExportRequest,
+  buildExportTitle,
+  describeExportError,
+  getEuIconMode,
+  getExportableMessages,
+  getMessageKey,
+  getMessagePreview,
+  isHumanReviewOptionAvailable,
+  shouldSignClipboardCopy,
+  toIsoTimestamp,
+  toggleMessageSelection
+} from '../utils/exportRequest';
 
-// Formats whose content can be copied to the clipboard as plain text. Binary
-// formats (pdf, docx, xlsx, pptx) and the styled HTML document can only be
-// downloaded, so the Copy button is disabled when one of those is selected.
-const COPYABLE_FORMATS = ['txt', 'markdown', 'json', 'jsonl'];
+/** Icon per export format in the format grid. */
+const FORMAT_ICONS = {
+  pdf: 'file-text',
+  docx: 'document-text',
+  pptx: 'presentation-chart-bar',
+  xlsx: 'table-cells',
+  csv: 'document-text',
+  txt: 'document-text',
+  markdown: 'code',
+  html: 'code',
+  json: 'code',
+  jsonl: 'code'
+};
 
+/** English fallbacks of the format names/descriptions (`pages.appChat.export.formats.*`). */
+const FORMAT_FALLBACKS = {
+  pdf: { name: 'PDF Document', description: 'Formatted PDF with styling options' },
+  docx: { name: 'Word Document', description: 'Microsoft Word document' },
+  pptx: { name: 'PowerPoint', description: 'PowerPoint presentation with slides' },
+  xlsx: { name: 'Excel Spreadsheet', description: 'Excel workbook with structured data' },
+  csv: { name: 'CSV File', description: 'Comma-separated values' },
+  txt: { name: 'Text File', description: 'Plain text format' },
+  markdown: { name: 'Markdown', description: 'Markdown formatted text' },
+  html: { name: 'HTML', description: 'HTML document' },
+  json: { name: 'JSON', description: 'JSON format with metadata' },
+  jsonl: { name: 'JSON Lines', description: 'JSON Lines format' }
+};
+
+/**
+ * Export a conversation (or one message) through the server.
+ *
+ * Every file is rendered, AI-labelled and signed by `POST /api/exports`
+ * (EU AI Act Art. 50(2), issues #2571/#2576). The dialog only collects the
+ * choices — which messages, format, PDF template, EU AI icon, editorial
+ * responsibility — and saves the file the server returns. "Copy" requests the
+ * same export in a text format and puts it on the clipboard.
+ *
+ * The request shape (stored chat → message ids, otherwise the message
+ * content) is decided in `features/chat/utils/exportRequest.js`.
+ *
+ * @param {Object} props
+ * @param {boolean} props.isOpen - Render the dialog
+ * @param {Function} props.onClose - Close handler
+ * @param {Object[]} [props.messages=[]] - The conversation as the chat renders it
+ * @param {Object} [props.settings={}] - `{ model, style, outputFormat, temperature, variables }`
+ * @param {string} [props.appId] - App the conversation belongs to
+ * @param {string} [props.chatId] - Chat id (used to export a stored chat by message ids)
+ * @param {boolean} [props.isSingleMessage=false] - Export exactly `messages[0]`, no selection list
+ * @param {Object} [props.app] - App config (localized name, per-app signpost override)
+ * @param {string} [props.conversationTitle] - Title of the conversation, used as document title
+ * @param {boolean} [props.serverBacked] - Whether the chat is stored server-side; defaults to
+ *   the viewer's chat persistence (ids are only sent when every selected message has a `serverId`)
+ * @returns {JSX.Element|null}
+ */
 function ExportDialog({
   isOpen,
   onClose,
@@ -26,122 +90,134 @@ function ExportDialog({
   settings = {},
   appId,
   chatId,
-  isSingleMessage = false
+  isSingleMessage = false,
+  app = null,
+  conversationTitle = null,
+  serverBacked
 }) {
   const { t, i18n } = useTranslation();
   const { uiConfig } = useUIConfig();
-  const featureFlags = useFeatureFlags();
+  const { platformConfig } = usePlatformConfig() || {};
+  const chatPersistence = useChatPersistence();
   const currentLanguage = i18n.language || 'en';
+  const aiConfig = platformConfig?.aiTransparency || null;
+  const baseId = useId();
 
   const [selectedFormat, setSelectedFormat] = useState('pdf');
-  const [isExporting, setIsExporting] = useState(false);
+  const [template, setTemplate] = useState('default');
+  const [euIconChecked, setEuIconChecked] = useState(false);
+  const [humanReviewed, setHumanReviewed] = useState(false);
+  // Messages the user unticked; everything else is selected, so a message that
+  // arrives while the dialog is open is included by default.
+  const [excludedKeys, setExcludedKeys] = useState(() => new Set());
+  const [anchorKey, setAnchorKey] = useState(null);
+  const [phase, setPhase] = useState('idle'); // 'idle' | 'exporting' | 'copying'
+  const [statusMessage, setStatusMessage] = useState('');
   const [exportError, setExportError] = useState(null);
   const [copied, setCopied] = useState(false);
 
   const dialogRef = useRef(null);
+  const wasOpenRef = useRef(false);
+  const busy = phase !== 'idle';
 
   useFocusTrap(dialogRef, {
     isActive: isOpen,
     returnFocusOnDeactivate: true
   });
 
+  // Every opening starts from "all messages selected" and a clean status.
+  useEffect(() => {
+    if (isOpen && !wasOpenRef.current) {
+      setExcludedKeys(new Set());
+      setAnchorKey(null);
+      setExportError(null);
+      setStatusMessage('');
+      setCopied(false);
+    }
+    wasOpenRef.current = isOpen;
+  }, [isOpen]);
+
   useEffect(() => {
     if (!isOpen) return undefined;
     const onKeyDown = event => {
-      if (event.key === 'Escape' && !isExporting) {
+      if (event.key === 'Escape' && !busy) {
         event.preventDefault();
         onClose?.();
       }
     };
     window.addEventListener('keydown', onKeyDown);
     return () => window.removeEventListener('keydown', onKeyDown);
-  }, [isOpen, isExporting, onClose]);
+  }, [isOpen, busy, onClose]);
 
-  // PDF-specific configuration
-  const [pdfConfig, setPdfConfig] = useState({
-    template: 'default',
-    watermark: {
-      text: 'iHub Apps',
-      position: 'bottom-right',
-      opacity: 0.5
-    }
-  });
+  const exportableMessages = useMemo(() => getExportableMessages(messages), [messages]);
+  const messageKeys = useMemo(
+    () => exportableMessages.map((message, index) => getMessageKey(message, index)),
+    [exportableMessages]
+  );
+  const selectedKeys = useMemo(
+    () => new Set(messageKeys.filter(key => !excludedKeys.has(key))),
+    [messageKeys, excludedKeys]
+  );
+  const selectedMessages = useMemo(
+    () =>
+      isSingleMessage
+        ? exportableMessages
+        : exportableMessages.filter((_, index) => selectedKeys.has(messageKeys[index])),
+    [isSingleMessage, exportableMessages, selectedKeys, messageKeys]
+  );
 
   if (!isOpen) return null;
 
-  const canCopySelectedFormat = COPYABLE_FORMATS.includes(selectedFormat);
+  const euIconMode = getEuIconMode(aiConfig);
+  const humanReviewAvailable = isHumanReviewOptionAvailable(aiConfig);
+  const serverLabelled = aiConfig?.enabled === true && aiConfig?.labels?.exportLabel !== false;
+  const canCopySelectedFormat = COPYABLE_EXPORT_FORMATS.includes(selectedFormat);
+  const nothingSelected = selectedMessages.length === 0;
+  const isServerBacked = typeof serverBacked === 'boolean' ? serverBacked : chatPersistence;
 
-  const buildMeta = () => ({
-    model: settings.model,
-    style: settings.style,
-    outputFormat: settings.outputFormat,
-    temperature: settings.temperature,
-    variables: settings.variables
-  });
+  const appName = app?.name
+    ? getLocalizedContent(app.name, currentLanguage)
+    : uiConfig?.title
+      ? getLocalizedContent(uiConfig.title, currentLanguage)
+      : 'iHub Apps';
 
-  const getAppName = () => {
-    return uiConfig?.title ? getLocalizedContent(uiConfig.title, currentLanguage) : 'iHub Apps';
-  };
-
-  // Helper functions to generate content for copying
-  const generateTextContent = messages => {
-    return messages
-      .filter(m => !m.isGreeting)
-      .map(m => {
-        const role = m.role === 'user' ? 'User' : 'Assistant';
-        const timestamp = m.timestamp ? new Date(m.timestamp).toLocaleString() : '';
-        let text = `[${role}]`;
-        if (timestamp) {
-          text += ` - ${timestamp}`;
+  /**
+   * The request body for the chosen format and options.
+   * @param {string} format
+   * @returns {Object}
+   */
+  const buildRequest = format =>
+    buildChatExportRequest({
+      format,
+      messages: selectedMessages,
+      serverBacked: isServerBacked,
+      chatId,
+      appId,
+      title: conversationTitle,
+      fallbackTitle: buildExportTitle({
+        appName,
+        messages: selectedMessages,
+        single: isSingleMessage,
+        labels: {
+          message: t('pages.appChat.export.document.message', 'Message'),
+          chat: t('pages.appChat.export.document.chat', 'Chat')
         }
-        text += '\n' + '-'.repeat(50) + '\n';
-        text += (m.content || '') + '\n';
-        return text;
-      })
-      .join('\n');
-  };
-
-  const generateMarkdownContent = messages => {
-    return messages
-      .filter(m => !m.isGreeting)
-      .map(m => `**${m.role}**: ${m.content || ''}`)
-      .join('\n\n');
-  };
-
-  const generateJSONContent = (messages, settings) => {
-    const buildMetadata = () => ({
-      model: settings?.model,
-      style: settings?.style,
-      outputFormat: settings?.outputFormat,
-      temperature: settings?.temperature,
-      variables: settings?.variables
+      }),
+      settings,
+      template,
+      euIcon: euIconMode === 'always' || (euIconMode === 'optional' && euIconChecked),
+      humanReviewed: humanReviewAvailable && humanReviewed,
+      single: isSingleMessage
     });
-    return JSON.stringify(
-      { ...buildMetadata(), messages: messages.filter(m => !m.isGreeting) },
-      null,
-      2
-    );
-  };
 
-  const generateJSONLContent = (messages, settings) => {
-    const buildMetadata = () => ({
-      model: settings?.model,
-      style: settings?.style,
-      outputFormat: settings?.outputFormat,
-      temperature: settings?.temperature,
-      variables: settings?.variables
-    });
-    const lines = [JSON.stringify({ meta: buildMetadata() })];
-    messages.filter(m => !m.isGreeting).forEach(m => lines.push(JSON.stringify(m)));
-    return lines.join('\n');
+  const showError = error => {
+    const { key, fallback, params } = describeExportError(error);
+    setExportError(t(key, { defaultValue: fallback, ...(params || {}) }));
   };
 
   const handleCopy = async () => {
     setCopied(false);
     setExportError(null);
-
-    // The Copy button is disabled for non-copyable formats; this guard keeps
-    // the handler safe if it is ever invoked programmatically.
     if (!canCopySelectedFormat) {
       setExportError(
         t(
@@ -152,214 +228,133 @@ function ExportDialog({
       return;
     }
 
+    const format = selectedFormat;
+    setPhase('copying');
+    setStatusMessage(
+      t('pages.appChat.export.status.copying', 'Preparing the text for the clipboard…')
+    );
     try {
-      const filteredMessages = messages.filter(m => !m.isGreeting);
-      const exportSettings = buildMeta();
-      let content = '';
-
-      // Generate content based on selected format
-      switch (selectedFormat) {
-        case 'txt':
-          content = generateTextContent(filteredMessages);
-          break;
-        case 'markdown':
-          content = generateMarkdownContent(filteredMessages);
-          break;
-        case 'json':
-          content = generateJSONContent(filteredMessages, exportSettings);
-          break;
-        case 'jsonl':
-          content = generateJSONLContent(filteredMessages, exportSettings);
-          break;
-        default:
-          throw new Error(`Unsupported format: ${selectedFormat}`);
-      }
-
-      // Copy to clipboard
-      await navigator.clipboard.writeText(content);
+      const body = buildRequest(format);
+      await writeTextToClipboard(async () => {
+        const text = await requestExportText(body);
+        if (!shouldSignClipboardCopy({ format, text, aiConfig, app })) return text;
+        try {
+          return await signClipboardText(text, appId);
+        } catch (signError) {
+          // The signpost is an extra layer, never the only one: copy the
+          // labelled export text rather than nothing.
+          console.warn('Clipboard signpost unavailable:', signError);
+          return text;
+        }
+      });
       setCopied(true);
+      setStatusMessage(t('pages.appChat.export.status.copied', 'Copied to the clipboard.'));
       setTimeout(() => setCopied(false), 2000);
     } catch (error) {
-      console.error(`Copy to clipboard failed:`, error);
-      setExportError(error.message || 'Copy failed');
+      console.error('Copy to clipboard failed:', error);
+      setStatusMessage('');
+      showError(error);
+    } finally {
+      setPhase('idle');
     }
   };
 
   const handleExport = async () => {
-    setIsExporting(true);
     setExportError(null);
-
+    setPhase('exporting');
+    setStatusMessage(t('pages.appChat.export.status.preparing', 'Preparing the export…'));
     try {
-      const filteredMessages = messages.filter(m => !m.isGreeting);
-      const exportSettings = buildMeta();
-      const appName = getAppName();
-
-      const options = {
-        appId,
-        chatId,
-        appName,
-        isSingleMessage
-      };
-
-      // Handle different export formats
-      switch (selectedFormat) {
-        case 'pdf':
-          options.template = pdfConfig.template;
-          options.watermark = pdfConfig.watermark;
-          await exportChatToFormat(filteredMessages, exportSettings, 'pdf', options);
-          break;
-        case 'json':
-          await exportChatToFormat(filteredMessages, exportSettings, 'json', options);
-          break;
-        case 'jsonl':
-          await exportChatToFormat(filteredMessages, exportSettings, 'jsonl', options);
-          break;
-        case 'markdown':
-          await exportChatToFormat(filteredMessages, exportSettings, 'markdown', options);
-          break;
-        case 'html':
-          await exportChatToFormat(filteredMessages, exportSettings, 'html', options);
-          break;
-        case 'xlsx':
-          await exportToXLSX(
-            filteredMessages,
-            exportSettings,
-            appName,
-            appId,
-            chatId,
-            isSingleMessage
-          );
-          break;
-        case 'csv':
-          await exportToCSV(
-            filteredMessages,
-            exportSettings,
-            appName,
-            appId,
-            chatId,
-            isSingleMessage
-          );
-          break;
-        case 'docx':
-          await exportToDOCX(
-            filteredMessages,
-            exportSettings,
-            appName,
-            appId,
-            chatId,
-            isSingleMessage
-          );
-          break;
-        case 'txt':
-          await exportToTXT(
-            filteredMessages,
-            exportSettings,
-            appName,
-            appId,
-            chatId,
-            isSingleMessage
-          );
-          break;
-        case 'pptx':
-          await exportToPPTX(
-            filteredMessages,
-            exportSettings,
-            appName,
-            appId,
-            chatId,
-            isSingleMessage
-          );
-          break;
-        default:
-          throw new Error(`Unsupported format: ${selectedFormat}`);
-      }
-
-      // Close dialog after successful export
+      const { filename } = await requestExport(buildRequest(selectedFormat));
+      setStatusMessage(
+        t('pages.appChat.export.status.downloaded', {
+          filename,
+          defaultValue: 'Export downloaded: {{filename}}'
+        })
+      );
       setTimeout(() => {
         onClose?.();
       }, 500);
     } catch (error) {
       console.error(`Export to ${selectedFormat} failed:`, error);
-      setExportError(error.message || 'Export failed');
+      setStatusMessage('');
+      showError(error);
     } finally {
-      setIsExporting(false);
+      setPhase('idle');
     }
   };
 
-  const exportFormats = [
-    {
-      id: 'pdf',
-      name: t('pages.appChat.export.formats.pdf', 'PDF Document'),
-      icon: 'file-text',
-      description: t('pages.appChat.export.descriptions.pdf', 'Formatted PDF with styling options')
-    },
-    {
-      id: 'docx',
-      name: t('pages.appChat.export.formats.docx', 'Word Document'),
-      icon: 'document-text',
-      description: t('pages.appChat.export.descriptions.docx', 'Microsoft Word document')
-    },
-    {
-      id: 'pptx',
-      name: t('pages.appChat.export.formats.pptx', 'PowerPoint'),
-      icon: 'presentation-chart-bar',
-      description: t(
-        'pages.appChat.export.descriptions.pptx',
-        'PowerPoint presentation with slides'
-      )
-    },
-    {
-      id: 'xlsx',
-      name: t('pages.appChat.export.formats.xlsx', 'Excel Spreadsheet'),
-      icon: 'table-cells',
-      description: t(
-        'pages.appChat.export.descriptions.xlsx',
-        'Excel workbook with structured data'
-      )
-    },
-    {
-      id: 'csv',
-      name: t('pages.appChat.export.formats.csv', 'CSV File'),
-      icon: 'document-text',
-      description: t('pages.appChat.export.descriptions.csv', 'Comma-separated values')
-    },
-    {
-      id: 'txt',
-      name: t('pages.appChat.export.formats.txt', 'Text File'),
-      icon: 'document-text',
-      description: t('pages.appChat.export.descriptions.txt', 'Plain text format')
-    },
-    {
-      id: 'markdown',
-      name: t('pages.appChat.export.formats.markdown', 'Markdown'),
-      icon: 'code',
-      description: t('pages.appChat.export.descriptions.markdown', 'Markdown formatted text')
-    },
-    {
-      id: 'html',
-      name: t('pages.appChat.export.formats.html', 'HTML'),
-      icon: 'code',
-      description: t('pages.appChat.export.descriptions.html', 'HTML document')
-    },
-    {
-      id: 'json',
-      name: t('pages.appChat.export.formats.json', 'JSON'),
-      icon: 'code',
-      description: t('pages.appChat.export.descriptions.json', 'JSON format with metadata')
-    },
-    {
-      id: 'jsonl',
-      name: t('pages.appChat.export.formats.jsonl', 'JSON Lines'),
-      icon: 'code',
-      description: t('pages.appChat.export.descriptions.jsonl', 'JSON Lines format')
+  const handleToggleMessage = (key, event) => {
+    const range = event?.nativeEvent?.shiftKey === true;
+    const next = toggleMessageSelection({
+      keys: messageKeys,
+      selected: selectedKeys,
+      key,
+      anchorKey,
+      range
+    });
+    setExcludedKeys(new Set(messageKeys.filter(k => !next.has(k))));
+    setAnchorKey(key);
+  };
+
+  const selectAll = () => {
+    setExcludedKeys(new Set());
+    setAnchorKey(null);
+  };
+
+  const selectNone = () => {
+    setExcludedKeys(new Set(messageKeys));
+    setAnchorKey(null);
+  };
+
+  const roleLabel = role => {
+    if (role === 'user') return t('pages.appChat.export.messages.roleUser', 'You');
+    if (role === 'system') return t('pages.appChat.export.messages.roleSystem', 'System');
+    return t('pages.appChat.export.messages.roleAssistant', 'Assistant');
+  };
+
+  const formatTimestamp = message => {
+    const iso = toIsoTimestamp(message.ts ?? message.timestamp ?? message.createdAt);
+    if (!iso) return '';
+    try {
+      return new Date(iso).toLocaleString(currentLanguage, {
+        dateStyle: 'short',
+        timeStyle: 'short'
+      });
+    } catch {
+      return '';
     }
-  ];
+  };
+
+  const exportFormats = EXPORT_FORMATS.map(id => ({
+    id,
+    icon: FORMAT_ICONS[id] || 'document-text',
+    name: t(`pages.appChat.export.formats.${id}`, FORMAT_FALLBACKS[id]?.name || id),
+    description: t(
+      `pages.appChat.export.descriptions.${id}`,
+      FORMAT_FALLBACKS[id]?.description || id
+    )
+  }));
+
+  const templateLabels = {
+    default: t('pages.appChat.export.templateDefault', 'Default'),
+    professional: t('pages.appChat.export.templateProfessional', 'Professional'),
+    minimal: t('pages.appChat.export.templateMinimal', 'Minimal')
+  };
+
+  const formatGroupId = `${baseId}-formats`;
+  const messagesHeadingId = `${baseId}-messages`;
+  const selectionCountId = `${baseId}-selection-count`;
+  const optionsHeadingId = `${baseId}-options`;
+  const templateId = `${baseId}-template`;
+  const euIconId = `${baseId}-eu-icon`;
+  const humanReviewedId = `${baseId}-human-reviewed`;
+  const humanReviewedHintId = `${baseId}-human-reviewed-hint`;
 
   return (
     <div
       className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-2 sm:p-4"
       onClick={e => {
-        if (e.target === e.currentTarget) onClose?.();
+        if (e.target === e.currentTarget && !busy) onClose?.();
       }}
     >
       <div
@@ -367,6 +362,7 @@ function ExportDialog({
         role="dialog"
         aria-modal="true"
         aria-labelledby="export-dialog-title"
+        aria-busy={busy}
         className="bg-white dark:bg-gray-800 rounded-lg shadow-xl w-full max-w-2xl max-h-[95vh] sm:max-h-[90vh] overflow-hidden flex flex-col"
       >
         {/* Header */}
@@ -380,9 +376,10 @@ function ExportDialog({
               : t('pages.appChat.export.dialogTitle', 'Export Conversation')}
           </h2>
           <button
+            type="button"
             onClick={onClose}
             className="text-gray-400 hover:text-gray-600 dark:hover:text-gray-300"
-            disabled={isExporting}
+            disabled={busy}
             aria-label={t('common.close', 'Close')}
           >
             <Icon name="x-mark" size="md" />
@@ -391,22 +388,128 @@ function ExportDialog({
 
         {/* Content */}
         <div className="flex-1 overflow-y-auto p-4 sm:p-6">
+          {/* Message selection */}
+          {!isSingleMessage && (
+            <section className="mb-6" aria-labelledby={messagesHeadingId}>
+              <div className="flex flex-wrap items-center justify-between gap-2 mb-2">
+                <h3
+                  id={messagesHeadingId}
+                  className="text-sm font-medium text-gray-700 dark:text-gray-300"
+                >
+                  {t('pages.appChat.export.messages.heading', 'Messages to export')}
+                </h3>
+                {exportableMessages.length > 0 && (
+                  <div className="flex items-center gap-3 text-xs">
+                    <span id={selectionCountId} className="text-gray-600 dark:text-gray-400">
+                      {t('pages.appChat.export.messages.selectedCount', {
+                        count: selectedMessages.length,
+                        total: exportableMessages.length,
+                        defaultValue: '{{count}} of {{total}} selected'
+                      })}
+                    </span>
+                    <button
+                      type="button"
+                      onClick={selectAll}
+                      disabled={busy || excludedKeys.size === 0}
+                      className="font-medium text-blue-700 dark:text-blue-300 hover:underline disabled:opacity-50 disabled:no-underline disabled:cursor-not-allowed"
+                    >
+                      {t('pages.appChat.export.messages.selectAll', 'Select all')}
+                    </button>
+                    <button
+                      type="button"
+                      onClick={selectNone}
+                      disabled={busy || nothingSelected}
+                      className="font-medium text-blue-700 dark:text-blue-300 hover:underline disabled:opacity-50 disabled:no-underline disabled:cursor-not-allowed"
+                    >
+                      {t('pages.appChat.export.messages.selectNone', 'Select none')}
+                    </button>
+                  </div>
+                )}
+              </div>
+
+              {exportableMessages.length === 0 ? (
+                <p className="text-sm text-gray-600 dark:text-gray-400">
+                  {t('pages.appChat.export.messages.empty', 'There are no messages to export yet.')}
+                </p>
+              ) : (
+                <>
+                  <p className="text-xs text-gray-500 dark:text-gray-400 mb-2">
+                    {t(
+                      'pages.appChat.export.messages.rangeHint',
+                      'Tip: hold Shift while clicking to select or clear a range.'
+                    )}
+                  </p>
+                  <ul
+                    className="max-h-56 overflow-y-auto rounded-lg border border-gray-200 dark:border-gray-700 divide-y divide-gray-200 dark:divide-gray-700"
+                    aria-describedby={selectionCountId}
+                  >
+                    {exportableMessages.map((message, index) => {
+                      const key = messageKeys[index];
+                      const inputId = `${baseId}-message-${index}`;
+                      const timestamp = formatTimestamp(message);
+                      return (
+                        <li key={key}>
+                          <label
+                            htmlFor={inputId}
+                            className="flex items-start gap-3 px-3 py-2 cursor-pointer hover:bg-gray-50 dark:hover:bg-gray-700/50"
+                          >
+                            <input
+                              id={inputId}
+                              type="checkbox"
+                              checked={selectedKeys.has(key)}
+                              onChange={event => handleToggleMessage(key, event)}
+                              disabled={busy}
+                              className="mt-1 h-4 w-4 rounded-sm border-gray-300 dark:border-gray-600 text-blue-600 focus:ring-blue-500"
+                            />
+                            <span className="flex-1 min-w-0">
+                              <span className="block text-xs font-medium text-gray-700 dark:text-gray-300">
+                                {roleLabel(message.role)}
+                                {timestamp && (
+                                  <span className="font-normal text-gray-500 dark:text-gray-400">
+                                    {' · '}
+                                    {timestamp}
+                                  </span>
+                                )}
+                              </span>
+                              <span className="block text-sm text-gray-900 dark:text-gray-100 truncate">
+                                {getMessagePreview(message)}
+                              </span>
+                            </span>
+                          </label>
+                        </li>
+                      );
+                    })}
+                  </ul>
+                </>
+              )}
+            </section>
+          )}
+
           {/* Format Selection */}
           <div className="mb-6">
-            <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-3">
+            <h3
+              id={formatGroupId}
+              className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-3"
+            >
               {t('pages.appChat.export.selectFormat', 'Select export format')}
-            </label>
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+            </h3>
+            <div
+              role="group"
+              aria-labelledby={formatGroupId}
+              className="grid grid-cols-1 sm:grid-cols-2 gap-3"
+            >
               {exportFormats.map(format => (
                 <button
+                  type="button"
                   key={format.id}
                   onClick={() => setSelectedFormat(format.id)}
-                  disabled={isExporting}
+                  disabled={busy}
+                  aria-pressed={selectedFormat === format.id}
                   className={`p-3 sm:p-4 rounded-lg border-2 text-left transition-all ${
                     selectedFormat === format.id
                       ? 'border-blue-500 bg-blue-50 dark:bg-blue-900/20'
                       : 'border-gray-200 dark:border-gray-700 hover:border-gray-300 dark:hover:border-gray-600'
-                  } ${isExporting ? 'opacity-50 cursor-not-allowed' : 'cursor-pointer'}`}
+                  } ${busy ? 'opacity-50 cursor-not-allowed' : 'cursor-pointer'}`}
                 >
                   <div className="flex items-start gap-3">
                     <Icon
@@ -428,9 +531,11 @@ function ExportDialog({
                       >
                         {format.name}
                       </div>
-                      <div className="text-xs text-gray-500 dark:text-gray-400">
-                        {format.description}
-                      </div>
+                      {format.description && (
+                        <div className="text-xs text-gray-600 dark:text-gray-400">
+                          {format.description}
+                        </div>
+                      )}
                     </div>
                   </div>
                 </button>
@@ -440,109 +545,129 @@ function ExportDialog({
 
           {/* PDF Options */}
           {selectedFormat === 'pdf' && (
-            <div className="space-y-4 p-4 bg-gray-50 dark:bg-gray-900/50 rounded-lg">
+            <div className="mb-4 space-y-4 p-4 bg-gray-50 dark:bg-gray-900/50 rounded-lg">
               <h3 className="text-sm font-medium text-gray-900 dark:text-gray-100">
                 {t('pages.appChat.export.pdfOptions', 'PDF Options')}
               </h3>
-
               <div>
-                <label className="block text-xs font-medium text-gray-700 dark:text-gray-300 mb-1">
+                <label
+                  htmlFor={templateId}
+                  className="block text-xs font-medium text-gray-700 dark:text-gray-300 mb-1"
+                >
                   {t('pages.appChat.export.template', 'Template')}
                 </label>
                 <select
-                  value={pdfConfig.template}
-                  onChange={e => setPdfConfig(prev => ({ ...prev, template: e.target.value }))}
+                  id={templateId}
+                  value={template}
+                  onChange={e => setTemplate(e.target.value)}
                   className="w-full text-sm border border-gray-300 dark:border-gray-600 rounded-sm px-3 py-2 bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100"
-                  disabled={isExporting}
+                  disabled={busy}
                 >
-                  <option value="default">
-                    {t('pages.appChat.export.templateDefault', 'Default')}
-                  </option>
-                  <option value="professional">
-                    {t('pages.appChat.export.templateProfessional', 'Professional')}
-                  </option>
-                  <option value="minimal">
-                    {t('pages.appChat.export.templateMinimal', 'Minimal')}
-                  </option>
+                  {PDF_TEMPLATES.map(id => (
+                    <option key={id} value={id}>
+                      {templateLabels[id]}
+                    </option>
+                  ))}
                 </select>
-              </div>
-
-              <div>
-                <label className="block text-xs font-medium text-gray-700 dark:text-gray-300 mb-1">
-                  {t('pages.appChat.export.watermarkText', 'Watermark Text')}
-                </label>
-                <input
-                  type="text"
-                  value={pdfConfig.watermark.text}
-                  onChange={e =>
-                    setPdfConfig(prev => ({
-                      ...prev,
-                      watermark: { ...prev.watermark, text: e.target.value }
-                    }))
-                  }
-                  className="w-full text-sm border border-gray-300 dark:border-gray-600 rounded-sm px-3 py-2 bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100"
-                  placeholder={t(
-                    'pages.appChat.export.watermarkPlaceholder',
-                    'Enter watermark text'
-                  )}
-                  disabled={isExporting}
-                />
-              </div>
-
-              <div>
-                <label className="block text-xs font-medium text-gray-700 dark:text-gray-300 mb-1">
-                  {t('pages.appChat.export.watermarkPosition', 'Position')}
-                </label>
-                <select
-                  value={pdfConfig.watermark.position}
-                  onChange={e =>
-                    setPdfConfig(prev => ({
-                      ...prev,
-                      watermark: { ...prev.watermark, position: e.target.value }
-                    }))
-                  }
-                  className="w-full text-sm border border-gray-300 dark:border-gray-600 rounded-sm px-3 py-2 bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100"
-                  disabled={isExporting}
-                >
-                  <option value="bottom-right">
-                    {t('pages.appChat.export.bottomRight', 'Bottom Right')}
-                  </option>
-                  <option value="bottom-left">
-                    {t('pages.appChat.export.bottomLeft', 'Bottom Left')}
-                  </option>
-                  <option value="bottom-center">
-                    {t('pages.appChat.export.bottomCenter', 'Bottom Center')}
-                  </option>
-                </select>
-              </div>
-
-              <div>
-                <label className="block text-xs font-medium text-gray-700 dark:text-gray-300 mb-1">
-                  {t('pages.appChat.export.watermarkOpacity', 'Opacity')} (
-                  {Math.round(pdfConfig.watermark.opacity * 100)}%)
-                </label>
-                <input
-                  type="range"
-                  min="0.1"
-                  max="1.0"
-                  step="0.1"
-                  value={pdfConfig.watermark.opacity}
-                  onChange={e =>
-                    setPdfConfig(prev => ({
-                      ...prev,
-                      watermark: { ...prev.watermark, opacity: parseFloat(e.target.value) }
-                    }))
-                  }
-                  className="w-full"
-                  disabled={isExporting}
-                />
               </div>
             </div>
           )}
 
-          {/* Error Message */}
+          {/* AI label options (EU AI Act Art. 50) */}
+          {(euIconMode !== 'off' || humanReviewAvailable) && (
+            <div
+              role="group"
+              aria-labelledby={optionsHeadingId}
+              className="mb-4 space-y-3 p-4 bg-gray-50 dark:bg-gray-900/50 rounded-lg"
+            >
+              <h3
+                id={optionsHeadingId}
+                className="text-sm font-medium text-gray-900 dark:text-gray-100"
+              >
+                {t('pages.appChat.export.options.heading', 'AI label')}
+              </h3>
+              {euIconMode !== 'off' && (
+                <div className="flex items-start gap-3">
+                  <input
+                    id={euIconId}
+                    type="checkbox"
+                    checked={euIconMode === 'always' || euIconChecked}
+                    disabled={busy || euIconMode === 'always'}
+                    onChange={e => setEuIconChecked(e.target.checked)}
+                    className="mt-0.5 h-4 w-4 rounded-sm border-gray-300 dark:border-gray-600 text-blue-600 focus:ring-blue-500"
+                  />
+                  <label htmlFor={euIconId} className="text-sm text-gray-800 dark:text-gray-200">
+                    {t('pages.appChat.export.options.euIcon', 'Add the EU AI icon')}
+                    {euIconMode === 'always' && (
+                      <span className="block text-xs text-gray-600 dark:text-gray-400">
+                        {t(
+                          'pages.appChat.export.options.euIconAlways',
+                          'This installation always adds the EU AI icon.'
+                        )}
+                      </span>
+                    )}
+                  </label>
+                </div>
+              )}
+              {humanReviewAvailable && (
+                <div className="flex items-start gap-3">
+                  <input
+                    id={humanReviewedId}
+                    type="checkbox"
+                    checked={humanReviewed}
+                    disabled={busy}
+                    onChange={e => setHumanReviewed(e.target.checked)}
+                    aria-describedby={humanReviewedHintId}
+                    className="mt-0.5 h-4 w-4 rounded-sm border-gray-300 dark:border-gray-600 text-blue-600 focus:ring-blue-500"
+                  />
+                  <label
+                    htmlFor={humanReviewedId}
+                    className="text-sm text-gray-800 dark:text-gray-200"
+                  >
+                    {t(
+                      'pages.appChat.export.options.humanReviewed',
+                      'Reviewed by a human (editorial responsibility)'
+                    )}
+                    <span
+                      id={humanReviewedHintId}
+                      className="block text-xs text-gray-600 dark:text-gray-400"
+                    >
+                      {t(
+                        'pages.appChat.export.options.humanReviewedHint',
+                        'Declares that a person reviewed the content and takes editorial responsibility for it.'
+                      )}
+                    </span>
+                  </label>
+                </div>
+              )}
+            </div>
+          )}
+
+          {serverLabelled && (
+            <p className="flex items-start gap-2 text-xs text-gray-600 dark:text-gray-400">
+              <Icon name="information-circle" size="sm" className="mt-0.5 flex-none" />
+              <span>
+                {t(
+                  'pages.appChat.export.serverNote',
+                  'The file is created on the server and labelled as AI-generated content.'
+                )}
+              </span>
+            </p>
+          )}
+
+          {/* Progress (polite) and errors (assertive) */}
+          <p
+            role="status"
+            aria-live="polite"
+            className={statusMessage ? 'mt-4 text-sm text-gray-700 dark:text-gray-300' : 'sr-only'}
+          >
+            {statusMessage}
+          </p>
           {exportError && (
-            <div className="mt-4 p-3 bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 rounded-lg">
+            <div
+              role="alert"
+              className="mt-4 p-3 bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 rounded-lg"
+            >
               <div className="flex items-start gap-2">
                 <Icon
                   name="exclamation-circle"
@@ -558,15 +683,17 @@ function ExportDialog({
         {/* Footer */}
         <div className="px-4 sm:px-6 py-4 border-t border-gray-200 dark:border-gray-700 flex flex-col-reverse sm:flex-row sm:items-center sm:justify-end gap-3">
           <button
+            type="button"
             onClick={onClose}
-            disabled={isExporting}
+            disabled={busy}
             className="w-full sm:w-auto px-4 py-2 text-sm font-medium text-gray-700 dark:text-gray-300 hover:text-gray-900 dark:hover:text-gray-100 disabled:opacity-50 disabled:cursor-not-allowed"
           >
             {t('common.cancel', 'Cancel')}
           </button>
           <button
+            type="button"
             onClick={handleCopy}
-            disabled={isExporting || !selectedFormat || !canCopySelectedFormat}
+            disabled={busy || nothingSelected || !canCopySelectedFormat}
             title={
               !canCopySelectedFormat
                 ? t(
@@ -577,7 +704,15 @@ function ExportDialog({
             }
             className="w-full sm:w-auto px-4 py-2 text-sm font-medium text-gray-700 dark:text-gray-300 bg-white dark:bg-gray-700 border border-gray-300 dark:border-gray-600 hover:bg-gray-50 dark:hover:bg-gray-600 rounded-lg disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2"
           >
-            {copied ? (
+            {phase === 'copying' ? (
+              <>
+                <div
+                  className="animate-spin rounded-full h-4 w-4 border-2 border-gray-500 border-t-transparent"
+                  aria-hidden="true"
+                ></div>
+                {t('pages.appChat.export.copying', 'Copying…')}
+              </>
+            ) : copied ? (
               <>
                 <Icon name="check" size="sm" />
                 {t('pages.appChat.export.copied', 'Copied!')}
@@ -590,13 +725,17 @@ function ExportDialog({
             )}
           </button>
           <button
+            type="button"
             onClick={handleExport}
-            disabled={isExporting || !selectedFormat}
+            disabled={busy || nothingSelected}
             className="w-full sm:w-auto px-4 py-2 text-sm font-medium text-white bg-blue-600 hover:bg-blue-700 rounded-lg disabled:bg-gray-400 disabled:cursor-not-allowed flex items-center justify-center gap-2"
           >
-            {isExporting ? (
+            {phase === 'exporting' ? (
               <>
-                <div className="animate-spin rounded-full h-4 w-4 border-2 border-white border-t-transparent"></div>
+                <div
+                  className="animate-spin rounded-full h-4 w-4 border-2 border-white border-t-transparent"
+                  aria-hidden="true"
+                ></div>
                 {t('pages.appChat.export.exporting', 'Exporting...')}
               </>
             ) : (

@@ -444,3 +444,66 @@ test('an unknown host is refused with an explanation, not an exception', async (
   expect(result.ok).toBe(false);
   expect(result.message).toMatch(/Outlook/);
 });
+
+describe('AI label on outbound answers (EU AI Act Art. 50(1))', () => {
+  const LABEL = 'AI-generated with iHub Apps — please review before sending.';
+
+  test('the label goes on top of the reply body', async () => {
+    const m = loadModule();
+    const item = readModeItem();
+    installOffice({ item });
+
+    const result = await m.runOutlookMailAction('answer', 'Sounds good.', { aiLabel: LABEL });
+
+    expect(result.ok).toBe(true);
+    const html = item.displayReplyFormAsync.mock.calls[0][0].htmlBody;
+    expect(html.startsWith('<p style="font-size:11px;color:#555;margin:0 0 8px 0">')).toBe(true);
+    expect(html).toContain(LABEL);
+    expect(html.indexOf(LABEL)).toBeLessThan(html.indexOf('Sounds good.'));
+  });
+
+  test('inserting into a draft carries the label too', async () => {
+    const m = loadModule();
+    const item = composeModeItem();
+    installOffice({ item });
+
+    await m.runOutlookMailAction('insert', 'Draft text', { aiLabel: LABEL });
+
+    expect(item.body.setSelectedDataAsync.mock.calls[0][0]).toContain(LABEL);
+  });
+
+  test('without a label the body is unchanged', async () => {
+    const m = loadModule();
+    const item = readModeItem();
+    installOffice({ item });
+
+    await m.runOutlookMailAction('answer', 'Sounds good.', { aiLabel: null });
+
+    expect(item.displayReplyFormAsync.mock.calls[0][0].htmlBody).not.toContain('font-size:11px');
+  });
+
+  test('the label is escaped and counts against the form limit', () => {
+    const m = loadModule();
+    expect(m.buildAiLabelHtml('<b>AI</b> & co')).toContain('&lt;b&gt;AI&lt;/b&gt; &amp; co');
+    expect(m.buildAiLabelHtml('   ')).toBe('');
+
+    const { html, plainText } = m.withAiLabel('<p>x</p>', 'x', LABEL);
+    expect(html).toBe(`${m.buildAiLabelHtml(LABEL)}<p>x</p>`);
+    expect(plainText).toBe(`${LABEL}\n\nx`);
+    expect(m.withAiLabel('<p>x</p>', 'x', '')).toEqual({ html: '<p>x</p>', plainText: 'x' });
+  });
+
+  test('an answer that only fits without the label takes the too-long path', async () => {
+    const m = loadModule();
+    const item = readModeItem();
+    installOffice({ item });
+    global.navigator.clipboard = { writeText: jest.fn(() => Promise.resolve()) };
+    // marked wraps a single line in <p>…</p>\n (8 characters)
+    const answer = 'a'.repeat(m.MAX_FORM_BODY_CHARS - 20);
+
+    const result = await m.runOutlookMailAction('answer', answer, { aiLabel: LABEL });
+
+    expect(result.ok).toBe(false);
+    expect(global.navigator.clipboard.writeText).toHaveBeenCalledWith(`${LABEL}\n\n${answer}`);
+  });
+});

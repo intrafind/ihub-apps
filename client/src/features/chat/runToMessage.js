@@ -9,7 +9,7 @@
  * workflowCheckpoint, workflowSteps/workflowStep, workflowResult/outputFormat,
  * activeSkills, searchStatus, searchSummary, toolActivity, mcpApps, mcpAuthRequired, citations,
  * groundingSources,
- * answerSource, finishReason, ifinderMessageId. The hook (`useAppChat`) only decides WHEN to write the
+ * answerSource, finishReason, provenance, ifinderMessageId. The hook (`useAppChat`) only decides WHEN to write the
  * projection and which message it belongs to — it never interprets events.
  *
  * @module features/chat/runToMessage
@@ -234,6 +234,12 @@ export function projectRunToMessage(run, options = {}) {
     }
     if (run.finishReason !== null && run.finishReason !== undefined) {
       extras.finishReason = run.finishReason;
+    }
+    // EU AI Act: the answer's public provenance record (content id, model,
+    // marking status) from `run/ended` — the second layer of the "AI
+    // generated" chip reads it (AIProvenanceChip).
+    if (run.provenance && typeof run.provenance === 'object') {
+      extras.provenance = run.provenance;
     }
   }
   if (run.meta?.responseMessageId) extras.ifinderMessageId = run.meta.responseMessageId;

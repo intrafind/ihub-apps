@@ -118,7 +118,7 @@ function CertificatesTab({ status, reload }) {
     const el = document.getElementById(`eu-cert-pending-${focusPendingIdRef.current}`);
     if (el) {
       focusPendingIdRef.current = null;
-      el.scrollIntoView({ behavior: 'smooth', block: 'start' });
+      el.scrollIntoView?.({ behavior: 'smooth', block: 'start' });
       el.focus({ preventScroll: true });
     }
   }, [data]);
@@ -449,9 +449,9 @@ function CertificatesTab({ status, reload }) {
     if (!Array.isArray(chain) || chain.length === 0) return null;
     return (
       <div>
-        <h4 className="text-sm font-medium text-gray-900 dark:text-gray-100 mb-2">
+        <h3 className="text-sm font-medium text-gray-900 dark:text-gray-100 mb-2">
           {t('admin.euAiAct.certificates.active.chain', 'Certificate chain')}
-        </h4>
+        </h3>
         <ol className="space-y-2">
           {chain.map((entry, index) => (
             <li

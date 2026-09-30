@@ -99,10 +99,10 @@ const TONES = {
  * @param {string} props.title - Visible heading
  * @param {React.ReactNode} [props.description] - Intro text under the heading
  * @param {React.ReactNode} [props.actions] - Buttons shown next to the heading
- * @param {2|3|4} [props.headingLevel=3] - Heading level to keep the outline correct
+ * @param {2|3|4} [props.headingLevel=2] - Heading level; 2 fits under the page h1
  * @param {React.ReactNode} props.children
  */
-export function SectionCard({ id, title, description, actions, headingLevel = 3, children }) {
+export function SectionCard({ id, title, description, actions, headingLevel = 2, children }) {
   const autoId = useId();
   const headingId = `${id || autoId}-heading`;
   const Heading = `h${headingLevel}`;

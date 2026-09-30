@@ -3,6 +3,66 @@ import { useTranslation } from 'react-i18next';
 import Icon from '../../../shared/components/Icon';
 import { fetchChatArtifact } from '../../../api';
 import { useArtifactFetcher } from '../contexts/ArtifactFetchContext';
+import { describeImageMarkings } from '../utils/aiTransparency';
+
+/**
+ * English fallbacks for the image markings a provenance record lists, keyed
+ * by marking id (i18n key `aiTransparency.image.markings.<key>`). Vendor
+ * markings (`upstream:<vendor>`) share one entry with the vendor interpolated.
+ */
+const IMAGE_MARKING_FALLBACKS = Object.freeze({
+  c2pa: 'Content Credentials (C2PA, signed)',
+  trustmark: 'Invisible TrustMark watermark',
+  xmp: 'IPTC/XMP metadata "AI generated"',
+  upstream: 'Watermark of the model vendor ({{vendor}})'
+});
+
+/**
+ * The visible "AI generated" label under a generated image (EU AI Act
+ * Art. 50): text plus icon, and the machine-readable markings the image
+ * carries in a tooltip and as screen-reader text.
+ *
+ * @param {Object} props
+ * @param {Object} props.provenance - `{ markings: string[], … }` of the image
+ * @returns {JSX.Element}
+ */
+function ImageAiLabel({ provenance }) {
+  const { t } = useTranslation();
+  const { markings, contentCredentials } = describeImageMarkings(provenance);
+  const names = markings.map(marking => {
+    if (marking.startsWith('upstream:')) {
+      return t('aiTransparency.image.markings.upstream', IMAGE_MARKING_FALLBACKS.upstream, {
+        vendor: marking.slice('upstream:'.length)
+      });
+    }
+    return IMAGE_MARKING_FALLBACKS[marking]
+      ? t(`aiTransparency.image.markings.${marking}`, IMAGE_MARKING_FALLBACKS[marking])
+      : marking;
+  });
+  const detail =
+    names.length > 0
+      ? t('aiTransparency.image.markedWith', 'Machine-readable markings: {{markings}}', {
+          markings: names.join(', ')
+        })
+      : t(
+          'aiTransparency.image.notMarked',
+          'No machine-readable marking could be applied to this image.'
+        );
+  return (
+    <p
+      className="inline-flex items-center gap-1.5 text-xs text-gray-600 dark:text-gray-300"
+      title={detail}
+    >
+      <Icon name="sparkles" size="xs" aria-hidden="true" />
+      <span>
+        {contentCredentials
+          ? t('aiTransparency.image.labelWithCredentials', 'AI generated · Content Credentials')
+          : t('aiTransparency.image.label', 'AI generated')}
+      </span>
+      <span className="sr-only">{detail}</span>
+    </p>
+  );
+}
 
 /**
  * One image an assistant turn produced.
@@ -34,9 +94,13 @@ import { useArtifactFetcher } from '../contexts/ArtifactFetchContext';
  * @param {number} props.index - Position in the message, for the alt text.
  * @param {boolean} [props.persisted] - Whether this chat stores its images. Drives the
  *   "download it or lose it" note, which is true only where nothing else keeps them.
+ * @param {Object|null} [props.provenance] - EU AI Act marking of the image
+ *   (`{ contentId, markings, conforming }`); defaults to `image.provenance`. When
+ *   present, a visible "AI generated" label lists the markings. The download
+ *   keeps the served bytes untouched, so the marks travel with the file.
  * @returns {JSX.Element|null}
  */
-function GeneratedImage({ image, chatId, index, persisted = false }) {
+function GeneratedImage({ image, chatId, index, persisted = false, provenance = null }) {
   // A shared chat serves its images through the share rather than the
   // owner's chat route; the page providing that route says so via context.
   const customFetch = useArtifactFetcher();
@@ -109,6 +173,9 @@ function GeneratedImage({ image, chatId, index, persisted = false }) {
   const src = image?.data
     ? `data:${image.mimeType || 'image/png'};base64,${image.data}`
     : objectUrl;
+  const imageProvenance =
+    provenance ||
+    (image?.provenance && typeof image.provenance === 'object' ? image.provenance : null);
 
   // Waiting to scroll into view, or the fetch is in flight: either way a
   // picture is coming, so a placeholder takes its place instead of the gap
@@ -200,6 +267,11 @@ function GeneratedImage({ image, chatId, index, persisted = false }) {
           <Icon name="download" size="sm" aria-hidden="true" />
         </button>
       </div>
+      {imageProvenance && (
+        <div>
+          <ImageAiLabel provenance={imageProvenance} />
+        </div>
+      )}
       {/* Only where it is true: a durable chat stores its images server-side,
           and telling that user to download the picture or lose it is advice
           about a problem they do not have. */}

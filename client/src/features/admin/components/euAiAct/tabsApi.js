@@ -3,11 +3,14 @@
  * Detection). Admin endpoints go through `makeAdminApiCall` (which prefixes
  * `/api` and adds the admin auth header); the detector itself
  * (`POST /api/provenance/verify`) is a regular user endpoint and goes through
- * the shared `apiClient`.
+ * `verifyProvenanceContent` from `api/endpoints/provenance.js` (shared with the
+ * `/verify` page).
  *
  * Every function resolves to the response body (`response.data`) and rejects
  * with the axios error, so callers can use `extractApiError` from
- * `fileHelpers.js` to show `error` and `details`.
+ * `fileHelpers.js` to show `error` and `details`. The exception is
+ * `verifyContent`, which rejects with a `ProvenanceRequestError` (`status`,
+ * `message`, and the axios error as `cause`).
  *
  * Contract: `concepts/2026-09-27 EU AI Act Content Marking.md` §8.4–§8.6 and
  * `server/routes/admin/aiTransparency.js`.
@@ -15,7 +18,7 @@
  * @module features/admin/components/euAiAct/tabsApi
  */
 import { makeAdminApiCall } from '../../../../api/adminApi';
-import { apiClient } from '../../../../api/client';
+import { verifyProvenanceContent } from '../../../../api/endpoints/provenance';
 
 const BASE = '/admin/ai-transparency';
 
@@ -304,25 +307,14 @@ export async function runBenchmark(quick) {
 // ── Detector (user endpoint, not under /admin) ──────────────────────────────
 
 /**
- * Check a file or a pasted text for AI markings.
+ * Check a file or a pasted text for AI markings, through the same client
+ * function the `/verify` page uses (`api/endpoints/provenance.js`).
  *
  * @param {{ file?: File, text?: string }} input - Exactly one of `file` or `text`
  * @returns {Promise<{ result: Object, report: string|null, reportPayload: Object|null }>}
+ * @throws {import('../../../../api/endpoints/provenance').ProvenanceRequestError}
+ *   with `status` (403 access, 429 rate limit, …) and the axios error as `cause`
  */
-export async function verifyContent({ file, text }) {
-  if (file) {
-    const formData = new FormData();
-    formData.append('file', file);
-    const response = await apiClient.post('/provenance/verify', formData, {
-      headers: { 'Content-Type': 'multipart/form-data' },
-      timeout: UPLOAD_TIMEOUT_MS
-    });
-    return response.data;
-  }
-  const response = await apiClient.post(
-    '/provenance/verify',
-    { text: text ?? '' },
-    { timeout: UPLOAD_TIMEOUT_MS }
-  );
-  return response.data;
+export function verifyContent({ file, text }) {
+  return verifyProvenanceContent(file ? { file } : { text: text ?? '' });
 }
