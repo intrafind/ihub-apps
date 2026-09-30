@@ -8,8 +8,8 @@
   },
   "icon": "question-mark-circle",
   "prompt": {
-    "en": "Answer using our FAQ: [content]",
-    "de": "Beantworte mithilfe unserer FAQ: [content]"
+    "en": "Answer using our FAQ: {{content}}",
+    "de": "Beantworte mithilfe unserer FAQ: {{content}}"
   },
   "appId": "faq-bot"
 }

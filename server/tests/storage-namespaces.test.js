@@ -33,6 +33,12 @@ import { IMPORT_STATE_NAMESPACE as RUN_IMPORT_NAMESPACE } from '../services/runt
 import { INTEGRATION_CONVERSATIONS_NAMESPACE } from '../services/integrations/ConversationStateManager.js';
 import { A2A_TASKS_NAMESPACE, A2A_CONTEXTS_NAMESPACE } from '../services/mcp/a2aTaskStore.js';
 import { MCP_OAUTH_CLIENTS_NAMESPACE } from '../services/mcp/mcpOAuthClientStore.js';
+import {
+  USER_PROMPTS_NAMESPACE,
+  USER_PROMPT_VERSIONS_NAMESPACE,
+  USER_PROMPT_SHARES_NAMESPACE,
+  PROMPT_PREFERENCES_NAMESPACE
+} from '../services/prompts/UserPromptRepository.js';
 import { MCP_TOOL_CATALOG_NAMESPACE } from '../services/mcp/mcpToolCatalogStore.js';
 
 describe('storage namespaces', () => {
@@ -73,7 +79,11 @@ describe('storage namespaces', () => {
       ['A2aTaskStore.A2A_TASKS_NAMESPACE', A2A_TASKS_NAMESPACE],
       ['A2aTaskStore.A2A_CONTEXTS_NAMESPACE', A2A_CONTEXTS_NAMESPACE],
       ['McpOAuthClientStore.MCP_OAUTH_CLIENTS_NAMESPACE', MCP_OAUTH_CLIENTS_NAMESPACE],
-      ['McpToolCatalogStore.MCP_TOOL_CATALOG_NAMESPACE', MCP_TOOL_CATALOG_NAMESPACE]
+      ['McpToolCatalogStore.MCP_TOOL_CATALOG_NAMESPACE', MCP_TOOL_CATALOG_NAMESPACE],
+      ['UserPromptRepository.USER_PROMPTS_NAMESPACE', USER_PROMPTS_NAMESPACE],
+      ['UserPromptRepository.USER_PROMPT_VERSIONS_NAMESPACE', USER_PROMPT_VERSIONS_NAMESPACE],
+      ['UserPromptRepository.USER_PROMPT_SHARES_NAMESPACE', USER_PROMPT_SHARES_NAMESPACE],
+      ['UserPromptRepository.PROMPT_PREFERENCES_NAMESPACE', PROMPT_PREFERENCES_NAMESPACE]
     ]) {
       assert.ok(declared.has(ns), `${label} is '${ns}', which RUNTIME_NAMESPACES does not declare`);
     }

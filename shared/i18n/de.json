@@ -587,7 +587,8 @@
     "imageTooManyToStore": "Diese Antwort hat mehr Bilder erzeugt, als diese Installation speichert; dieses wurde daher nicht aufbewahrt.",
     "imageLoadFailed": "Das gespeicherte Bild konnte nicht geladen werden.",
     "imageNotStored": "Dieses Bild konnte nicht gespeichert werden und ist nicht mehr verfügbar.",
-    "loadingImage": "Bild wird geladen…"
+    "loadingImage": "Bild wird geladen…",
+    "saveAsPrompt": "Als Prompt speichern"
   },
   "errors": {
     "componentError": "Komponenten-Fehler",
@@ -3346,6 +3347,53 @@
       "saveError": "Standardsprache konnte nicht gespeichert werden",
       "loadError": "Plattformkonfiguration konnte nicht geladen werden",
       "noTranslations": "keine Übersetzungen"
+    },
+    "prompts": {
+      "tabs": {
+        "userPrompts": "Nutzer-Prompts"
+      },
+      "edit": {
+        "detectedVariables": "Im Text erkannt",
+        "describeVariable": "Beschreiben",
+        "variableDescribed": "beschrieben",
+        "variablesDescPlaceholders": "Platzhalter wie {{name}} im Prompt-Text werden beim Verwenden des Prompts abgefragt. Beschreiben Sie sie hier, um Bezeichnung, Typ, Standardwert oder Optionen festzulegen. {{content}} markiert, wo der eigene Text des Nutzers hingehört; globale Variablen wie {{user_name}} werden automatisch ausgefüllt."
+      },
+      "userPrompts": {
+        "allowEveryone": "Alle angemeldeten Nutzer",
+        "allowGroups": "Gruppen",
+        "allowUsers": "Bestimmte Nutzer",
+        "deleteMessage": "„{{name}}“ von {{owner}} wird für den Besitzer und alle, mit denen der Prompt geteilt ist, gelöscht.",
+        "deleted": "Prompt gelöscht",
+        "empty": "Keine geteilten Nutzer-Prompts",
+        "emptyDesc": "Sobald Nutzer Prompts mit einer Gruppe oder mit allen teilen, erscheinen sie hier.",
+        "enabled": "Nutzer dürfen eigene Prompts erstellen",
+        "everyone": "Alle",
+        "inactive": "inaktiv",
+        "intro": "Prompts, die Nutzer mit einer Gruppe oder mit allen geteilt haben. Sie können sie bearbeiten, neu freigeben, löschen oder zu einem globalen Prompt machen; private Prompts und Prompts, die nur mit einzelnen Nutzern geteilt sind, werden nicht aufgeführt.",
+        "maxPerUser": "Prompts pro Nutzer (0 = unbegrenzt)",
+        "maxVersions": "Aufbewahrte Versionen pro Prompt",
+        "ownedBy": "Besitzer: {{name}}",
+        "owner": "Besitzer",
+        "promote": "Übernehmen",
+        "promoteEnabled": "Sofort aktivieren",
+        "promoteHelp": "Eine Kopie wird zu einem globalen Prompt, abgelegt in contents/prompts und dem Autor zugeschrieben. Wer ihn sieht, bestimmt wie bei jedem globalen Prompt die Prompt-Berechtigung der Gruppen. Der Nutzer-Prompt selbst bleibt unverändert.",
+        "promoteId": "ID des globalen Prompts",
+        "promoteTitle": "Als globalen Prompt übernehmen",
+        "promoted": "Als globaler Prompt {{id}} übernommen",
+        "promotedTo": "Übernommen als {{id}}",
+        "restrictHelp": "Lassen Sie alles leer, damit alle breit teilen dürfen. Das Teilen mit bestimmten Nutzern ist davon nicht betroffen.",
+        "restrictTitle": "Nur Mitglieder dieser Gruppen dürfen mit Gruppen oder allen teilen",
+        "saved": "Gespeichert",
+        "settingsTitle": "Einstellungen für Nutzer-Prompts",
+        "sharedWith": "Geteilt mit",
+        "sharingTitle": "Nutzer dürfen Prompts teilen mit",
+        "storageDown": "Der Speicher-Provider ist nicht verfügbar, daher können Nutzer derzeit keine Prompts speichern.",
+        "subtitle": "Prompts, die Ihre Nutzer geschrieben und mit Gruppen oder allen geteilt haben",
+        "title": "Nutzer-Prompts",
+        "truncated": "Es werden nur die ersten Prompts angezeigt",
+        "updated": "Zuletzt geändert",
+        "userCount": "{{count}} Nutzer"
+      }
     }
   },
   "cloudStorage": {
@@ -4403,5 +4451,147 @@
     "connect": "Verbinden",
     "connected": "{{name}} ist verbunden. Senden Sie Ihre Anfrage erneut, um es zu nutzen.",
     "failed": "Das Verbinden von {{name}} hat nicht geklappt. Bitte erneut versuchen."
+  },
+  "prompts": {
+    "actions": {
+      "details": "Details",
+      "duplicate": "Duplizieren",
+      "history": "Verlauf",
+      "new": "Neuer Prompt",
+      "openInChat": "Im Chat öffnen",
+      "share": "Teilen",
+      "use": "Im Chat verwenden",
+      "useNamed": "Prompt {{name}} verwenden",
+      "copyLink": "Link kopieren"
+    },
+    "delete": {
+      "message": "„{{name}}“ und sein Verlauf werden für Sie und alle, mit denen der Prompt geteilt ist, gelöscht.",
+      "title": "Prompt löschen?"
+    },
+    "editor": {
+      "addOption": "Option hinzufügen",
+      "app": "In App öffnen",
+      "automatic": "Wird automatisch ausgefüllt:",
+      "category": "Kategorie",
+      "configure": "Konfigurieren",
+      "createTitle": "Neuer Prompt",
+      "defaultApp": "Standard-App",
+      "description": "Beschreibung",
+      "descriptionPlaceholder": "Wofür ist dieser Prompt gedacht?",
+      "done": "Fertig",
+      "editTitle": "Prompt bearbeiten",
+      "icon": "Symbol",
+      "insert": "Einfügen",
+      "insertVariable": "Variable einfügen",
+      "invalidVariable": "Ein Variablenname beginnt mit einem Buchstaben und enthält nur Buchstaben, Ziffern, _ und -",
+      "name": "Name",
+      "namePlaceholder": "z. B. Wöchentliche Status-E-Mail",
+      "noCategory": "Keine Kategorie",
+      "optionLabel": "Bezeichnung",
+      "optionValue": "Wert",
+      "optional": "optional",
+      "options": "Optionen",
+      "requiredFields": "Name und Prompt-Text sind erforderlich",
+      "saving": "Wird gespeichert…",
+      "text": "Prompt",
+      "textHelp": "Verwenden Sie {{name}} für alles, was beim Verwenden des Prompts abgefragt werden soll. {{content}} markiert, wo Ihr eigener Text hingehört; {{user_name}}, {{date}} und die anderen globalen Variablen werden automatisch ausgefüllt.",
+      "textPlaceholder": "Schreibe eine {{tone}} E-Mail an {{recipient}} über {{topic}}.",
+      "types": {
+        "string": "Text",
+        "textarea": "Langer Text",
+        "number": "Zahl",
+        "boolean": "Ja/Nein",
+        "select": "Auswahl"
+      },
+      "variableDefault": "Standardwert",
+      "variableDescription": "Hilfetext",
+      "variableLabel": "Bezeichnung",
+      "variableName": "Variablenname",
+      "variableNamePlaceholder": "Variablenname, z. B. empfaenger",
+      "variableRequired": "Erforderlich",
+      "variableType": "Typ",
+      "variables": "Variablen"
+    },
+    "empty": {
+      "mine": "Sie haben noch keine Prompts. Erstellen Sie einen oder speichern Sie eine Chat-Nachricht als Prompt.",
+      "shared": "Bisher hat niemand einen Prompt mit Ihnen geteilt."
+    },
+    "errors": {
+      "conflict": "Jemand anderes hat diesen Prompt inzwischen geändert. Schließen Sie den Editor und öffnen Sie ihn erneut, um die neueste Version zu sehen.",
+      "disabled": "Persönliche Prompts sind deaktiviert.",
+      "generic": "Etwas ist schiefgelaufen. Bitte versuchen Sie es erneut.",
+      "limit": "Sie haben die maximale Anzahl an Prompts erreicht. Löschen Sie einen, um Platz zu schaffen.",
+      "noApp": "Es gibt keine Chat-App, in der dieser Prompt geöffnet werden kann.",
+      "shareNotAllowed": "Sie dürfen Prompts nicht mit diesem Personenkreis teilen.",
+      "unavailable": "Ihre Prompts sind gerade nicht verfügbar. Bitte versuchen Sie es später erneut."
+    },
+    "filters": {
+      "all": "Alle",
+      "favorites": "Favoriten",
+      "global": "Global",
+      "label": "Anzeigen",
+      "mine": "Meine Prompts",
+      "shared": "Mit mir geteilt"
+    },
+    "groups": {
+      "favorites": "Favoriten",
+      "global": "Globale Prompts",
+      "mine": "Meine Prompts",
+      "recent": "Zuletzt verwendet",
+      "shared": "Mit mir geteilt",
+      "skills": "Skills"
+    },
+    "history": {
+      "current": "aktuell",
+      "restore": "Diese Version wiederherstellen",
+      "restoredFrom": "Wiederhergestellt aus Version {{revision}}",
+      "revision": "Version {{revision}}",
+      "title": "Versionsverlauf",
+      "versions": "Versionen"
+    },
+    "meta": {
+      "created": "Erstellt von {{name}} am {{date}}",
+      "readOnly": "schreibgeschützt: der Besitzer ist nicht mehr aktiv",
+      "unknown": "unbekannt",
+      "updated": "zuletzt geändert von {{name}} am {{date}}"
+    },
+    "notices": {
+      "deleted": "Prompt gelöscht",
+      "restored": "Version wiederhergestellt",
+      "saved": "Prompt gespeichert",
+      "savedToLibrary": "In Ihren Prompts gespeichert",
+      "shared": "Freigabe aktualisiert"
+    },
+    "scope": {
+      "global": "Global",
+      "mine": "Meiner",
+      "mineShared": "Meiner · geteilt",
+      "shared": "Geteilt",
+      "sharedBy": "Geteilt von {{name}}"
+    },
+    "share": {
+      "addEveryone": "Mit allen teilen",
+      "addGroup": "Gruppe hinzufügen",
+      "canEdit": "Darf bearbeiten",
+      "canUse": "Darf verwenden",
+      "everyone": "Alle angemeldeten Nutzer",
+      "group": "Gruppe",
+      "help": "„Darf verwenden“ erlaubt, den Prompt einzufügen, zu kopieren und zu duplizieren. „Darf bearbeiten“ erlaubt zusätzlich, ihn zu ändern und weiter zu teilen.",
+      "permission": "Berechtigung",
+      "private": "Nur Sie – dieser Prompt ist privat",
+      "remove": "Entfernen",
+      "results": "Passende Personen und Gruppen",
+      "search": "Personen oder Gruppen hinzufügen",
+      "sharedWith": "Geteilt mit",
+      "title": "Prompt teilen"
+    },
+    "variables": {
+      "appVariable": "Wird an die App übergeben",
+      "choose": "Auswählen…",
+      "insert": "Einfügen",
+      "preview": "Vorschau",
+      "required": "Dieses Feld ist erforderlich",
+      "subtitle": "Füllen Sie die Angaben für diesen Prompt aus"
+    }
   }
 }

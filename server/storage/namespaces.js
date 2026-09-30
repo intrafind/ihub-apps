@@ -122,6 +122,22 @@ export const RUNTIME_NAMESPACES = Object.freeze({
    */
   chatShareRecipients: 'chat-share-recipients',
   /**
+   * Prompts users write themselves, one document per prompt, filed under the
+   * owner so "my prompts" is an index read. Global prompts stay configuration
+   * in the raw `prompts` namespace; these are user data.
+   */
+  userPrompts: 'user-prompts',
+  /** Saved revisions of a user prompt, filed under the prompt id. */
+  userPromptVersions: 'user-prompt-versions',
+  /**
+   * Share markers of user prompts, one per target, filed under the principal
+   * they reach (`user:<id>`, `group:<name>`, `everyone`) so "shared with me"
+   * is an index read rather than a scan of every prompt.
+   */
+  userPromptShares: 'user-prompt-shares',
+  /** A user's prompt favorites and recents, one document per user. */
+  promptPreferences: 'prompt-preferences',
+  /**
    * Artifacts — content a run produced that is worth keeping in its own
    * right. One document per artifact, keyed `<scopeType>__<scopeId>__<id>`.
    *

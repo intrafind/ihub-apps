@@ -449,6 +449,28 @@ export const platformConfigSchema = z
       })
       .passthrough()
       .prefault({}),
+    // User prompts: prompts signed-in users keep in the prompt library and
+    // share with users, groups or everyone. Stored through the storage
+    // abstraction; `maxPromptsPerUser` of zero or less means no limit. When
+    // `sharing.restrictToGroups` names groups, only their members may share
+    // with groups or with everyone.
+    userPrompts: z
+      .object({
+        enabled: z.boolean().prefault(true),
+        maxPromptsPerUser: z.number().prefault(0),
+        maxVersions: z.number().prefault(50),
+        sharing: z
+          .object({
+            allowUsers: z.boolean().prefault(true),
+            allowGroups: z.boolean().prefault(true),
+            allowEveryone: z.boolean().prefault(true),
+            restrictToGroups: z.array(z.string()).prefault([])
+          })
+          .passthrough()
+          .prefault({})
+      })
+      .passthrough()
+      .prefault({}),
     // Artifacts: what a run produced that is worth keeping in its own right —
     // a chat turn's generated image today, a workflow's report or an agent's
     // output next. One store for every producer, so this block is not under

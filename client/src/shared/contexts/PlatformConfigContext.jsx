@@ -77,6 +77,10 @@ export function PlatformConfigProvider({ children }) {
         // that apps fall back to. Dropping it here silently broke all of them.
         speech: platformCfg.speech,
 
+        // Whether users may keep prompts of their own, and whom they may
+        // share them with (#2519). Absent on an older server: no user prompts.
+        userPrompts: platformCfg.userPrompts,
+
         // Platform features and settings
         features: platformCfg.features,
         // Build a boolean lookup map from the resolved features array
