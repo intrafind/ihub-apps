@@ -120,7 +120,7 @@ test('dropping back below the warning threshold is logged as a recovery', () => 
 });
 
 test('volumes are tracked independently and a vanished one is forgotten', () => {
-  let state = evaluateStorageAlerts(
+  const state = evaluateStorageAlerts(
     new Map(),
     snapshot(volume('warning', 85, '/app/contents'), volume('ok', 10, '/app/logs')),
     { now: 0 }
@@ -135,7 +135,6 @@ test('volumes are tracked independently and a vanished one is forgotten', () => 
     [['/app/logs', 'critical']]
   );
   assert.equal(result.next.has('/app/contents'), false);
-  state = result.next;
 });
 
 test('log levels and messages: warn for low, error for critical, info on recovery', () => {
