@@ -126,7 +126,7 @@ Every generated image is marked in the LLM client, **before** it is streamed, st
 
 Upstream marks are kept: Google SynthID lives in the pixels; a C2PA manifest the image arrived with, and those of uploaded images in an edit, become ingredients.
 
-Settings: `images.c2pa` (on), `images.watermark` (`trustmark` | `none`), `images.watermarkStrength` (0.95), `images.xmp` (on), `images.trustmarkModelPath`. TrustMark needs two ONNX models (~65 MB). They are downloaded on first use into `contents/data/trustmark-models` (network access once); for offline installations copy `encoder_P.onnx` and `decoder_P.onnx` there or point `trustmarkModelPath` at them.
+Settings: `images.c2pa` (on), `images.watermark` (`trustmark` | `none`), `images.watermarkStrength` (0.95), `images.xmp` (on), `images.trustmarkModelPath`. TrustMark needs two ONNX models (~65 MB). iHub downloads them in the background after startup into `contents/data/trustmark-models` (network access once, through the configured proxy) and checks each file against a pinned SHA-256; the server stays available while it does. A download that gets no data for 30 seconds is abandoned and retried after 15 minutes; until it succeeds, images carry the C2PA manifest and XMP but no watermark. For offline installations copy `encoder_P.onnx` and `decoder_P.onnx` from `https://cai-watermark.adobe.net/watermarking/trustmark-models/` there or point `trustmarkModelPath` at them.
 
 ## Signing certificates
 

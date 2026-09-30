@@ -3,8 +3,8 @@
  * EU AI Act marking robustness harness (issue #2574) outside the server, for
  * CI and nightly runs. Uses (and on a fresh checkout creates) the local
  * installation's signing certificate; TrustMark models are downloaded on
- * first use (~65 MB) unless `aiTransparency.images.trustmarkModelPath` points
- * at a local copy.
+ * first use (~65 MB, see services/provenance/image/trustmarkModels.js) unless
+ * `aiTransparency.images.trustmarkModelPath` points at a local copy.
  *
  * Exit code 1 when a check fails.
  *

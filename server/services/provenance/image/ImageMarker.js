@@ -23,7 +23,6 @@
  * @module services/provenance/image/ImageMarker
  */
 import crypto from 'node:crypto';
-import { existsSync } from 'node:fs';
 import path from 'node:path';
 import config from '../../../config.js';
 import { getRootDir } from '../../../pathUtils.js';
@@ -38,6 +37,11 @@ import { getInstallationUrl } from '../installation.js';
 import signingService from '../signing/SigningService.js';
 import { isC2paAvailable, loadC2pa, readAsset, signAsset } from '../signing/c2pa.js';
 import provenanceStore, { hashBytes } from '../ProvenanceStore.js';
+import {
+  ensureTrustmarkModels,
+  trustmarkModelDownloadState,
+  trustmarkModelsPresent
+} from './trustmarkModels.js';
 import {
   buildXmpPacket,
   decodeRgb,
@@ -69,17 +73,10 @@ export function trustmarkModelPath(cfg = getAiTransparencyConfig()) {
   );
 }
 
-function modelsPresent(modelPath) {
-  return (
-    existsSync(path.join(modelPath, `encoder_${TRUSTMARK_VARIANT}.onnx`)) &&
-    existsSync(path.join(modelPath, `decoder_${TRUSTMARK_VARIANT}.onnx`))
-  );
-}
-
 /**
- * The TrustMark instance. The first call loads the ONNX models; when they
- * are missing, c2pa-node downloads them (~65 MB) into the model path, which
- * needs network access once. Offline installations copy the two files there.
+ * The TrustMark instance. The first call loads the ONNX models; missing ones
+ * are downloaded first (~65 MB, network access once, see trustmarkModels.js).
+ * Offline installations copy the two files into the model path.
  * @returns {Promise<Object|null>}
  */
 export async function getTrustmark() {
@@ -87,10 +84,13 @@ export async function getTrustmark() {
     trustmarkPromise = (async () => {
       const c2pa = await loadC2pa();
       if (!c2pa?.Trustmark) throw new Error('TrustMark is not available (c2pa-node missing)');
+      const modelPath = trustmarkModelPath();
+      // Never let c2pa-node fetch them: its download blocks the event loop.
+      await ensureTrustmarkModels(modelPath);
       return c2pa.Trustmark.newTrustmark({
         variant: TRUSTMARK_VARIANT,
         version: TRUSTMARK_VERSION,
-        modelPath: trustmarkModelPath()
+        modelPath
       });
     })().catch(error => {
       trustmarkError = error.message;
@@ -129,7 +129,11 @@ export async function imageMarkerStatus() {
   const cfg = getAiTransparencyConfig();
   const modelPath = trustmarkModelPath(cfg);
   const c2paAvailable = await isC2paAvailable();
-  const present = modelsPresent(modelPath);
+  const present = trustmarkModelsPresent(modelPath);
+  const download = trustmarkModelDownloadState(modelPath);
+  const missingModels = download.downloading
+    ? 'TrustMark models are downloading'
+    : download.error || 'TrustMark models not downloaded yet';
   return {
     c2pa: cfg.images.c2pa,
     c2paAvailable,
@@ -140,7 +144,7 @@ export async function imageMarkerStatus() {
       (present || trustmarkPromise !== null) &&
       !trustmarkError,
     watermarkModelsPresent: present,
-    watermarkError: trustmarkError || (present ? null : 'TrustMark models not downloaded yet'),
+    watermarkError: trustmarkError || (present ? null : missingModels),
     modelPath,
     variant: `${TRUSTMARK_VARIANT}/${TRUSTMARK_VERSION}`,
     xmp: cfg.images.xmp
