@@ -55,6 +55,38 @@ export function setEnvelopeDelivery(fn) {
   deliver = typeof fn === 'function' ? fn : null;
 }
 
+/** Observers of every envelope an emitter produces, delivered or not. */
+const emitObservers = new Set();
+
+/**
+ * Watch every envelope `RunStreamEmitter.emit` produces, on any stream, before
+ * delivery — so a frame nobody is connected to receive is seen as well. Used
+ * to record what a chat turn did (`services/chat/runActivity.js`). An observer
+ * must be cheap and must not throw into the producer.
+ *
+ * @param {(envelope: Object) => void} fn
+ * @returns {() => void} unsubscribe
+ */
+export function observeEmittedEnvelopes(fn) {
+  if (typeof fn !== 'function') return () => {};
+  emitObservers.add(fn);
+  return () => emitObservers.delete(fn);
+}
+
+function notifyEmitObservers(envelope) {
+  for (const fn of emitObservers) {
+    try {
+      fn(envelope);
+    } catch (err) {
+      logger.warn('SSE v2 emit observer failed', {
+        component: COMPONENT,
+        type: envelope?.type,
+        error: err.message
+      });
+    }
+  }
+}
+
 export function nextSeq(streamId) {
   const next = (seqByStream.get(streamId) || 0) + 1;
   touch(seqByStream, streamId, next);
@@ -156,6 +188,7 @@ export class RunStreamEmitter {
       });
       return null;
     }
+    if (emitObservers.size > 0) notifyEmitObservers(envelope);
     const fn = this._deliver || deliver;
     if (fn) {
       try {

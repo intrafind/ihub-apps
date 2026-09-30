@@ -3,7 +3,7 @@
  * — web search results, page reads and provider grounding — are collected by
  * `shared/webCitations.js` (see `features/chat/webSearch.js`).
  *
- * @module features/chat/groundingSources
+ * @module shared/run/groundingSources
  */
 
 /**

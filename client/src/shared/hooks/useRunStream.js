@@ -4,7 +4,7 @@ import {
   reduceRunEvent,
   rebuildRunFromLedger,
   RUN_EVENTS
-} from '../run/runReducer';
+} from '../../../../shared/run/runReducer.js';
 import {
   openSseStream,
   toRunEnvelope,

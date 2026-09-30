@@ -13,7 +13,7 @@ import {
   getRun,
   RUN_EVENTS,
   getRuns
-} from '../../../shared/run/runReducer';
+} from '../../../../../shared/run/runReducer.js';
 import { projectMessageRuns } from '../runToMessage';
 import { fetchAllLedgerEvents } from '../../../shared/run/ledgerPages';
 import { fetchWithAuthRetry } from '../../../shared/utils/openSseStream';
@@ -35,6 +35,10 @@ import { takeMcpAppModelContext } from '../mcpApps/modelContextStore';
  * @param {Function} options.onMessageComplete - Callback fired when a message is completed (optional)
  * @param {Function} [options.onMessageAccepted] - Called with the chat id once the server has
  *   accepted a turn's request — for a server-backed chat, the moment the chat is in the store
+ * @param {Function} [options.onRunStarted] - Called with the chat id when a turn's run starts
+ *   on the stream. The server announces a run only once its question is stored, so for a
+ *   server-backed chat this is the earliest moment the chat is in the store; a turn's request
+ *   itself is only answered when the turn ends.
  * @param {boolean} options.persistConversationId - Whether to persist iAssistant conversationId
  *   to localStorage (keyed by appId). Disable for ephemeral chats (e.g. compare mode panels)
  *   that share an appId so they don't race/overwrite each other. Defaults to true.
@@ -51,6 +55,7 @@ function useAppChat({
   chatId: initialChatId,
   onMessageComplete,
   onMessageAccepted,
+  onRunStarted,
   persistConversationId = true,
   ephemeral = false,
   serverBacked = false
@@ -76,8 +81,10 @@ function useAppChat({
   // Latest `onMessageAccepted`, read when a send resolves rather than bound
   // into the send callbacks.
   const onMessageAcceptedRef = useRef(onMessageAccepted);
+  const onRunStartedRef = useRef(onRunStarted);
   useEffect(() => {
     onMessageAcceptedRef.current = onMessageAccepted;
+    onRunStartedRef.current = onRunStarted;
   });
   const pendingMessageDataRef = useRef(null);
   const lastUserMessageRef = useRef(null);
@@ -378,6 +385,12 @@ function useAppChat({
       const messageId = bindRunToMessage(envelope);
       const run = getRun(streamState, runId);
 
+      // A turn's own run (not a workflow a tool started inside it) is under way,
+      // and its question is stored.
+      if (type === RUN_EVENTS.RUN_STARTED && !data?.parentRunId) {
+        onRunStartedRef.current?.(chatId);
+      }
+
       if (type === RUN_EVENTS.META) {
         if (data?.title) setConversationTitle(data.title);
         if (data?.conversationId && appId && shouldPersistConversationId) {
@@ -507,6 +520,7 @@ function useAppChat({
     },
     [
       appId,
+      chatId,
       bindRunToMessage,
       sendPendingMessage,
       settleReattachedRun,

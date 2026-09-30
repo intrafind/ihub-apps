@@ -139,6 +139,18 @@ function ChatRow({ chat, editing, timeLabel, onStartRename, onRename, onCancelRe
             {t('chatHistory.scheduled', 'Scheduled')}
           </span>
         )}
+        {chat.status === 'running' && (
+          <span
+            className="flex-none inline-flex items-center gap-1.5 text-[11px] font-semibold rounded-full px-2 py-0.5 bg-indigo-100 text-indigo-800 dark:bg-indigo-900/40 dark:text-indigo-200"
+            title={t('chatHistory.runningHint', 'This chat is still working on an answer')}
+          >
+            <span
+              aria-hidden="true"
+              className="w-2.5 h-2.5 rounded-full border-2 border-indigo-300 border-t-indigo-700 dark:border-indigo-700 dark:border-t-indigo-200 animate-spin motion-reduce:animate-none"
+            />
+            {t('chatHistory.running', 'Running')}
+          </span>
+        )}
         {chat.hasUnseenActivity && (
           <span
             className="flex-none text-[11px] font-semibold rounded-full px-2 py-0.5 bg-amber-100 text-amber-800 dark:bg-amber-900/40 dark:text-amber-200"

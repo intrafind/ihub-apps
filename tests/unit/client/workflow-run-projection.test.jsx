@@ -3,7 +3,7 @@
  * pure projection of a StreamState (root run + child runs) onto the execution
  * page state.
  */
-import { createStreamState, reduceRunEvents } from '../../../client/src/shared/run/runReducer';
+import { createStreamState, reduceRunEvents } from '../../../shared/run/runReducer.js';
 import {
   projectWorkflowState,
   deriveWorkflowStatus,

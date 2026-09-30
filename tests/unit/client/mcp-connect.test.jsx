@@ -6,11 +6,7 @@
  */
 import { render, screen, fireEvent } from '@testing-library/react';
 import '@testing-library/jest-dom';
-import {
-  createStreamState,
-  reduceRunEvents,
-  getRun
-} from '../../../client/src/shared/run/runReducer';
+import { createStreamState, reduceRunEvents, getRun } from '../../../shared/run/runReducer.js';
 import { projectRunToMessage } from '../../../client/src/features/chat/runToMessage';
 import { transformStoredMessage } from '../../../client/src/features/chat/hooks/useChatMessages';
 import {

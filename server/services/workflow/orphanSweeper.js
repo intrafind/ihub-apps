@@ -21,6 +21,8 @@
  */
 
 import logger from '../../utils/logger.js';
+import { hasRemote } from '../../clusterBus.js';
+import { RUN_PRESENCE_KIND } from '../loop/RunLog.js';
 import { getExecutionRegistry } from './ExecutionRegistry.js';
 import { getStateManager } from './StateManager.js';
 import {
@@ -38,7 +40,30 @@ const ORPHAN_STATUSES = new Set(['running', 'pending']);
  * are excluded, as they always have been: they are not listed in the UI and
  * marking one failed on its own would contradict its parent.
  */
-const ORPHAN_ID_PREFIX = 'wf-exec-';
+const ORPHAN_ID_PREFIXES = Object.freeze([
+  'wf-exec-',
+  // Workflows started by `@workflow` in a chat run under the chat's run id.
+  // Nothing resumes them — the chat bridge that delivered their answer died
+  // with the process — so one left running is as orphaned as any other, and
+  // its chat is closed out when it is next read (`chat/chatRecovery.js`).
+  'workflow-'
+]);
+
+/**
+ * Whether another worker still runs a chat-launched execution: the chat's
+ * workflow bridge or the execution's ledger run is present there.
+ *
+ * @param {string} executionId
+ * @param {Object} state - Stored workflow state.
+ * @returns {boolean}
+ */
+function isHeldByAnotherWorker(executionId, state) {
+  const chatId = state?.data?._chatId;
+  return (
+    hasRemote(RUN_PRESENCE_KIND, executionId) ||
+    (typeof chatId === 'string' && chatId !== '' && hasRemote('workflow', chatId))
+  );
+}
 
 /**
  * Scan the stored workflow states and mark stuck `running`/`pending`
@@ -62,12 +87,16 @@ const ORPHAN_ID_PREFIX = 'wf-exec-';
  *   repository.
  * @param {import('./WorkflowStateRepository.js').WorkflowStateRepository} [opts.repository]
  *   Store to sweep. Resolved from `stateDir` when omitted.
+ * @param {(executionId: string, state: Object) => boolean} [opts.heldByAnotherWorker]
+ *   Whether another worker runs a chat-launched execution; the cluster's
+ *   presence when omitted.
  * @returns {Promise<{ scanned: number, marked: number }>}
  */
 export async function sweepOrphanedExecutions({
   requireSchedulerOwner = true,
   stateDir = DEFAULT_STATE_DIR,
-  repository = null
+  repository = null,
+  heldByAnotherWorker = isHeldByAnotherWorker
 } = {}) {
   if (requireSchedulerOwner && !isSchedulerOwner()) {
     logger.debug('Not the scheduler-lock owner — skipping orphan sweep', {
@@ -79,12 +108,17 @@ export async function sweepOrphanedExecutions({
   const store = repository || resolveWorkflowStateRepository(stateDir);
   // Metadata only: the guard below rejects most candidates without ever
   // needing the state, and a state can carry a whole workflow definition.
-  const { items, truncated } = await store.listSummaries({ prefix: ORPHAN_ID_PREFIX });
-  if (truncated) {
-    logger.warn('Orphan sweep stopped scanning at the cap', {
-      component: 'OrphanSweeper',
-      scanned: items.length
-    });
+  const items = [];
+  for (const prefix of ORPHAN_ID_PREFIXES) {
+    const page = await store.listSummaries({ prefix });
+    if (page.truncated) {
+      logger.warn('Orphan sweep stopped scanning at the cap', {
+        component: 'OrphanSweeper',
+        prefix,
+        scanned: page.items.length
+      });
+    }
+    items.push(...page.items);
   }
 
   let scanned = 0;
@@ -103,6 +137,13 @@ export async function sweepOrphanedExecutions({
     if (!state) continue;
 
     if (!ORPHAN_STATUSES.has(state.status)) continue;
+
+    // A chat's workflow runs on the worker that took the chat's request, not
+    // on this one: `activeStates` above cannot see it. Its bridge announces
+    // itself by chat id, and its ledger run by execution id.
+    if (executionId.startsWith('workflow-') && heldByAnotherWorker(executionId, state)) {
+      continue;
+    }
 
     const now = new Date().toISOString();
     state.status = 'failed';

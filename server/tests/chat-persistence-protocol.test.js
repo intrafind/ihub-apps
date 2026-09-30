@@ -755,14 +755,38 @@ describe('POST /api/apps/:appId/chat/:chatId: the server owns the history', () =
   });
 });
 
+/** A caller whose groups grant the broken workflow. */
+const WORKFLOW_USER = { ...USER, permissions: { workflows: new Set([BROKEN_WORKFLOW.id]) } };
+
+/**
+ * Serve an app that lists the broken workflow for the duration of `fn`, the
+ * way an app has to for its chat to start the workflow by `@mention`.
+ *
+ * @param {() => Promise<void>} fn - Test body.
+ * @param {string[]} [workflows] - The app's `workflows`.
+ * @returns {Promise<void>}
+ */
+async function withWorkflowApp(fn, workflows = [BROKEN_WORKFLOW.id]) {
+  configCache.setCacheEntry('config/apps.json', [{ id: APP_ID, workflows }]);
+  try {
+    await fn();
+  } finally {
+    configCache.setCacheEntry('config/apps.json', []);
+  }
+}
+
 describe('POST: an @mention workflow turn is a turn', () => {
   it('stores both halves of a workflow exchange', async () => {
     const chatId = 'chat-workflow';
     const repository = getChatRepository();
 
-    const res = await postChat({
-      chatId,
-      body: { messages: [{ role: 'user', content: '@summarize-report Q3 numbers' }] }
+    let res;
+    await withWorkflowApp(async () => {
+      res = await postChat({
+        chatId,
+        user: WORKFLOW_USER,
+        body: { messages: [{ role: 'user', content: '@summarize-report Q3 numbers' }] }
+      });
     });
     // The launch is fire-and-forget, so the POST answers before the workflow
     // has failed to start; the store is what has to catch up.
@@ -789,8 +813,60 @@ describe('POST: an @mention workflow turn is a turn', () => {
       return current && current.activeRunId === null ? current : null;
     }, 'the chat to be released');
     assert.equal(chat.status, 'error');
-    assert.equal(chat.title, '@summarize-report Q3 numbers');
+    // Named after what was asked; the stored question keeps the mention.
+    assert.equal(chat.title, 'Q3 numbers');
     assert.equal(chat.messageCount, 2);
+  });
+
+  it('names a chat opened by a bare mention after the workflow', async () => {
+    const chatId = 'chat-workflow-bare';
+    await withWorkflowApp(async () => {
+      await postChat({
+        chatId,
+        user: WORKFLOW_USER,
+        body: { messages: [{ role: 'user', content: '@summarize-report' }] }
+      });
+    });
+    const chat = await waitFor(
+      () => getChatRepository().getChat(chatId),
+      'the workflow chat to be created'
+    );
+    assert.equal(chat.title, 'Summarize report');
+  });
+
+  it('refuses a workflow the app does not list', async () => {
+    const chatId = 'chat-workflow-not-in-app';
+    let res;
+    await withWorkflowApp(async () => {
+      res = await postChat({
+        chatId,
+        user: WORKFLOW_USER,
+        body: { messages: [{ role: 'user', content: '@summarize-report Q3 numbers' }] }
+      });
+    }, []);
+    // No stream is open, so the refusal comes back on the POST.
+    assert.equal(res.statusCode, 400);
+    assert.match(res.body.message, /not available in this app/);
+    assert.equal(await getChatRepository().getChat(chatId), null, 'nothing is stored');
+  });
+
+  it('treats a workflow the caller may not run as ordinary text', async () => {
+    await withWorkflowApp(async () => {
+      await withPreparedRequests(async calls => {
+        await postChat({
+          chatId: 'chat-workflow-not-permitted',
+          user: USER,
+          body: { messages: [{ role: 'user', content: '@summarize-report Q3 numbers' }] }
+        });
+        // The turn went to the model like any other message: the mention
+        // neither ran the workflow nor confirmed that it exists.
+        assert.equal(calls.length, 1);
+        assert.equal(
+          calls[0].messages[calls[0].messages.length - 1].content,
+          '@summarize-report Q3 numbers'
+        );
+      });
+    });
   });
 
   it('maps what a workflow resolved with onto a turn outcome', () => {

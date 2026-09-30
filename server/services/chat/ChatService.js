@@ -38,6 +38,7 @@ import {
 } from '../loop/seams/index.js';
 import { createChatChannel } from './chatChannel.js';
 import { mergeCitations } from './chatCitations.js';
+import { recordRunActivity } from './runActivity.js';
 import { createPageReadGate, resolveMaxPageReads } from './pageReadLimit.js';
 import { buildWebSearch } from '../../../shared/webCitations.js';
 import {
@@ -466,10 +467,21 @@ class ChatService {
     // A caller with its own consumer (the inference API turning frames into
     // OpenAI-shaped events) injects one; the chat UI gets the default one,
     // delivered through the SSE layer.
+    //
+    // A stored turn without a stream (an integration posting with no SSE
+    // client) still emits its frames into an emitter that delivers nowhere:
+    // they are what records what the turn did for the stored answer
+    // (`runActivity.js`). It is not bound to the chat's stream, so nothing
+    // that looks for the turn producing on that stream mistakes it for one.
+    const recordOnly = !emitter && !streaming && !!chatId && !!persistence?.repository;
     const stream =
       emitter ||
-      (streaming && chatId ? new RunStreamEmitter({ streamId: chatId, runId }) : NO_STREAM);
-    if (stream !== NO_STREAM) bindStreamRun(chatId, runId, stream);
+      (streaming && chatId
+        ? new RunStreamEmitter({ streamId: chatId, runId })
+        : recordOnly
+          ? new RunStreamEmitter({ streamId: chatId, runId, deliver: () => false })
+          : NO_STREAM);
+    if (stream !== NO_STREAM && !recordOnly) bindStreamRun(chatId, runId, stream);
 
     logger.info('Chat turn started', {
       component: COMPONENT,
@@ -495,6 +507,9 @@ class ChatService {
     // the chat document exists by the time anything can ask for it.
     const persist = persistence?.repository ? persistence : null;
     if (persist) {
+      // What the turn does — its searches, tool calls, workflow steps — is
+      // stored with the answer; folding starts before the first frame.
+      recordRunActivity(runId);
       const attachments = normalizeAttachments(persist.attachments);
       this._appendUserMessageEvent({ runId, messageId, content: persist.content, attachments });
       await materializeUserTurn({
@@ -592,6 +607,7 @@ class ChatService {
       passthroughSeam(
         chatPassthroughOptions({
           chatId,
+          chatStored: Boolean(persist),
           user,
           app,
           userFileData,
@@ -666,7 +682,10 @@ class ChatService {
               // The user's timezone, for the scheduling tools' defaults. Only
               // when known: a value the model put in `args` could only pick a
               // default timezone, which the schedule itself can name anyway.
-              ...(clientTimezone ? { clientTimezone } : {})
+              ...(clientTimezone ? { clientTimezone } : {}),
+              // A workflow links its execution back to the chat only when the
+              // chat is stored (see `tools/workflowRunner.js`).
+              ...(String(toolId).startsWith('workflow_') ? { _chatStored: Boolean(persist) } : {})
             },
             {
               signal,

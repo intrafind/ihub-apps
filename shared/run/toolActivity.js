@@ -19,7 +19,7 @@
  * Each item also lists what the call asked for (`details`, see
  * `toolDetails`) and, when it failed, why (`error`).
  *
- * @module features/chat/toolActivity
+ * @module shared/run/toolActivity
  */
 
 /** Tool ids with their own chat UI. */

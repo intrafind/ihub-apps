@@ -64,7 +64,8 @@ the owner creates another link.
 | **Artifacts** the shared messages produced (generated images)   | Artifacts of later turns or edited-away exchanges    |
 | The **web sources** of an answer and its inline citations       |                                                      |
 | The name, type and size of an uploaded file                     | **The uploaded file itself** — it is never stored    |
-|                                                                 | **The Documents panel** under an answer (citations)  |
+| What an answer did: searches, tool calls, public web sources, workflow steps | **The Documents panel** under an answer (citations)  |
+|                                                                 | The documents the owner's searches found, in that activity |
 
 Uploads deserve the explicit note: a stored message carries an attachment
 only as `{ type, name, bytes }` (see
@@ -73,12 +74,21 @@ the request that carried it. The viewer therefore shows _Attachment not
 included: plan.pdf_ where the owner saw the file.
 
 A stored message holds what the transcript holds: the text, the failure that
-cut an answer short, the attachment descriptors and the artifact descriptors.
-The tool activity a live turn shows is not stored, so neither a reopened chat
-nor a share carries it. The web searches and web sources behind an answer are
-stored (`webSearch`, see [Web Tools → Sources and Citations](web-tools.md#sources-and-citations)),
-and a share keeps them: they are public web pages, and the viewer sees the same
-sources view and citation badges as the owner.
+cut an answer short, the attachment descriptors, the artifact descriptors, the
+web searches and web sources behind the answer (`webSearch`, see
+[Web Tools → Sources and Citations](web-tools.md#sources-and-citations)), and
+what the answer did (see
+[What a turn did](chat-persistence.md#what-a-turn-did)). A share keeps
+`webSearch`: the viewer sees the same sources view and citation badges as the
+owner. It carries the activity without anything a call found or read with the
+owner's permissions, for the reason below. In the activity, only the public
+web searches (Brave, Qwant, Staan and a model's own web search) keep their
+hits, arguments and errors; every other call — iFinder and configured sources,
+MCP and intranet tools, metadata lookups, and pages read by the page reader,
+which can reach intranet hosts on the SSL whitelist — keeps its name, query and
+status. The iAssistant search summary keeps its queries and counts and loses
+the application and source names of its hits, and a workflow result loses the
+link to an execution a viewer cannot open.
 
 The documents listed under an answer are stored, so the owner's reopened chat
 shows them again, but a share leaves them out. They are every document the

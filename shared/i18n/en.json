@@ -4518,6 +4518,7 @@
     "appNotFound": "Application not found",
     "missingRequiredFields": "Missing required fields:",
     "streamingError": "An error occurred during streaming",
+    "runInterrupted": "This answer was interrupted: the server stopped while it was being produced.",
     "failedToGenerateResponse": "Failed to generate response. Please try again or select a different model.",
     "sessionExpired": "Your session has expired. Please log in again to continue.",
     "sessionExpiredReconnecting": "Session expired. Reconnecting to authentication provider...",
@@ -5034,11 +5035,20 @@
     "unknownStep": "Step",
     "generated": "Generated",
     "failed": "Failed",
-    "cancelled": "Cancelled"
+    "cancelled": "Cancelled",
+    "viewExecution": "View execution details",
+    "waitingForInput": "Waiting for your input"
   },
   "workflows": {
     "title": "Workflows",
     "subtitle": "Manage and run automated workflows",
+    "openChat": "Open chat",
+    "chatWithResults": {
+      "button": "Chat with Results",
+      "title": "Continue chatting with the workflow output in an app",
+      "contextMessage": "Here are the results from the workflow \"{{name}}\":",
+      "failed": "The chat could not be started. Please try again."
+    },
     "newWorkflow": "New Workflow",
     "modelUsed": "Model",
     "workflowDefault": "workflow default",
@@ -5115,6 +5125,7 @@
     "showArchived": "Show archived",
     "executionCard": {
       "startedAt": "Started",
+      "openChat": "Started in a chat — open it",
       "current": "Current",
       "inputLabel": "Input",
       "moreInputs": "+{{count}} more",
@@ -5483,6 +5494,8 @@
     "messageCount_other": "{{count}} messages",
     "unseen": "New",
     "unseenHint": "This chat answered while you were away",
+    "running": "Running",
+    "runningHint": "This chat is still working on an answer",
     "rename": "Rename chat",
     "delete": "Delete chat",
     "deleteTitle": "Delete chat",

@@ -2,11 +2,25 @@ import { useState, useCallback, useRef, useEffect } from 'react';
 import { debugLog } from '../../../utils/debugLog';
 
 /**
+ * The provenance fields a stored answer's `activity` restores onto the message
+ * (see `shared/run/runActivity.buildRunActivity`).
+ */
+const STORED_ACTIVITY_FIELDS = [
+  'toolActivity',
+  'searchSummary',
+  'activeSkills',
+  'answerSource',
+  'workflowSteps',
+  'workflowResult',
+  'outputFormat'
+];
+
+/**
  * One message of a stored chat transcript, as the chat UI renders it.
  *
  * Shape on the wire (`GET /api/chats/:chatId` → `messages[]`):
  * `{ id, role, content, ts, runId, clientMessageId?, usage?, finishReason?,
- * error?, attachments?, artifacts?, mcpApps?, citations?, webSearch? }`.
+ * error?, attachments?, artifacts?, mcpApps?, citations?, webSearch?, activity? }`.
  *
  * The stored id is adopted as the message id and kept a second time on
  * `serverId`: `replaceFromMessageId` addresses the server's history by that
@@ -72,9 +86,20 @@ export function transformStoredMessage(msg) {
     const sources = Array.isArray(msg.webSearch.sources) ? msg.webSearch.sources : [];
     if (queries.length > 0 || sources.length > 0) {
       message.webSearch = { queries, sources };
-      // The answer-source badge is not stored; a web answer is not "based on
-      // AI knowledge" when it is reopened.
+      // A web answer is not "based on AI knowledge" when it is reopened. The
+      // stored activity below names every source the answer drew on.
       message.answerSource = { sources: ['websearch'], type: 'mixed' };
+    }
+  }
+  // What the run did before it answered — searches, documents, tool calls,
+  // workflow steps and the answer's source — in the fields a live turn fills
+  // from its stream (`shared/run/runActivity.js` builds both), so the reopened
+  // answer shows how it came about the way it did while it streamed.
+  if (msg.activity && typeof msg.activity === 'object') {
+    for (const field of STORED_ACTIVITY_FIELDS) {
+      if (msg.activity[field] !== undefined && msg.activity[field] !== null) {
+        message[field] = msg.activity[field];
+      }
     }
   }
   if (Array.isArray(msg.artifacts) && msg.artifacts.length > 0) {
@@ -95,6 +120,8 @@ export function transformStoredMessage(msg) {
     if (typeof msg.error.message === 'string' && msg.error.message) {
       message.errorMessage = msg.error.message;
     }
+    // Stored reasons are English; a known code lets the bubble translate it.
+    if (typeof msg.error.code === 'string') message.errorCode = msg.error.code;
   }
 
   return message;
