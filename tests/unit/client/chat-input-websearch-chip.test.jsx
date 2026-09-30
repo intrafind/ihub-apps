@@ -37,6 +37,10 @@ jest.mock('../../../client/src/features/upload/components', () => ({
   AttachedFilesList: () => null
 }));
 jest.mock('../../../client/src/features/prompts/components/PromptSearch', () => () => null);
+jest.mock('../../../client/src/features/prompts/hooks/usePromptLauncher', () => () => ({
+  launch: async () => null,
+  dialog: null
+}));
 jest.mock('../../../client/src/features/chat/components/WorkflowMentionSearch', () => () => null);
 jest.mock('../../../client/src/features/chat/components/ChatInputActionsMenu', () => () => (
   <button type="button">+</button>
