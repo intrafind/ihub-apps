@@ -219,6 +219,16 @@ const RENAMED_MIGRATIONS = [
     oldFile: 'V109__ifinder_search_skill_pointer.js',
     newVersion: '125',
     newFile: 'V125__ifinder_search_skill_pointer.js'
+  },
+  // The web tool parameters migration was written as V136 while the prompt
+  // placeholder migration took V136 (and user prompts V137) on main. Without
+  // this rule an install that ran the branch would count the placeholder
+  // rewrite as applied and never run it.
+  {
+    oldVersion: '136',
+    oldFile: 'V136__web_tools_filters_and_page_offset.js',
+    newVersion: '138',
+    newFile: 'V138__web_tools_filters_and_page_offset.js'
   }
 ];
 

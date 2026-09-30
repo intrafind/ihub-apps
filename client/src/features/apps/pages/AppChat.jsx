@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef, useCallback, useMemo } from 'react';
+import { useState, useEffect, useRef, useCallback, useMemo, Suspense } from 'react';
 import {
   getOrCreateChatId,
   mintChatId,
@@ -18,6 +18,8 @@ import { debugLog } from '../../../utils/debugLog';
 import Icon from '../../../shared/components/Icon';
 import ShareDialog from '../../chat/components/ShareDialog';
 import { usePlatformConfig } from '../../../shared/contexts/PlatformConfigContext';
+import { useOptionalAuth } from '../../../shared/contexts/authContextValue';
+import lazyWithRetry from '../../../utils/lazyWithRetry';
 import {
   downloadCitationDocument,
   getCitationDocumentAccess,
@@ -222,6 +224,10 @@ const TRANSCRIPT_ANSWER_SOURCE = { sources: ['audio'], type: 'mixed' };
 // is stable across renders like the router's own.
 const NO_SEARCH_PARAMS = new URLSearchParams();
 
+// Loaded on first use: "Save as prompt" is one click among many, and the
+// editor brings the apps list and the icon picker with it.
+const PromptEditorModal = lazyWithRetry(() => import('../../prompts/components/PromptEditorModal'));
+
 /**
  * The chat page of an app.
  *
@@ -281,6 +287,18 @@ function AppChat({ preloadedApp = null, embedded = false, appId: embeddedAppId =
   const shareEnabled = featureFlags.isBothEnabled(app, 'shortLinks', true);
   const { platformConfig } = usePlatformConfig();
   const chatSharingEnabled = platformConfig?.chats?.sharing?.enabled === true;
+  // "Save as prompt" on a sent message: offered to a signed-in user when the
+  // installation lets users keep prompts of their own (#2519).
+  const auth = useOptionalAuth();
+  const userPromptsEnabled =
+    platformConfig?.userPrompts?.enabled === true && auth?.isAuthenticated === true;
+  const [promptDraft, setPromptDraft] = useState(null);
+  const [promptSavedNotice, setPromptSavedNotice] = useState(false);
+  const handleSaveAsPrompt = useMemo(
+    () =>
+      userPromptsEnabled ? text => setPromptDraft({ prompt: text, appId: app?.id || null }) : null,
+    [userPromptsEnabled, app?.id]
+  );
 
   // Compare mode state
   // Check both platform-wide feature flag AND app-level setting
@@ -2779,6 +2797,7 @@ function AppChat({ preloadedApp = null, embedded = false, appId: embeddedAppId =
                         modelId={selectedModel}
                         imagesPersisted={serverBackedChat}
                         onOpenInCanvas={handleOpenInCanvas}
+                        onSaveAsPrompt={handleSaveAsPrompt}
                         canvasEnabled={app?.features?.canvas === true}
                         requiredIntegrations={requiredIntegrations}
                         onConnectIntegration={connectIntegration}
@@ -2830,6 +2849,7 @@ function AppChat({ preloadedApp = null, embedded = false, appId: embeddedAppId =
                         modelId={selectedModel}
                         imagesPersisted={serverBackedChat}
                         onOpenInCanvas={handleOpenInCanvas}
+                        onSaveAsPrompt={handleSaveAsPrompt}
                         canvasEnabled={app?.features?.canvas === true}
                         requiredIntegrations={requiredIntegrations}
                         onConnectIntegration={connectIntegration}
@@ -2880,6 +2900,7 @@ function AppChat({ preloadedApp = null, embedded = false, appId: embeddedAppId =
                     welcomeMessage={welcomeMessage}
                     showCenteredInput={shouldCenterInput}
                     onOpenInCanvas={handleOpenInCanvas}
+                    onSaveAsPrompt={handleSaveAsPrompt}
                     canvasEnabled={app?.features?.canvas === true}
                     requiredIntegrations={requiredIntegrations}
                     onConnectIntegration={connectIntegration}
@@ -2913,6 +2934,7 @@ function AppChat({ preloadedApp = null, embedded = false, appId: embeddedAppId =
                   welcomeMessage={welcomeMessage}
                   showCenteredInput={shouldCenterInput}
                   onOpenInCanvas={handleOpenInCanvas}
+                  onSaveAsPrompt={handleSaveAsPrompt}
                   canvasEnabled={app?.features?.canvas === true}
                   requiredIntegrations={requiredIntegrations}
                   onConnectIntegration={connectIntegration}
@@ -2945,6 +2967,27 @@ function AppChat({ preloadedApp = null, embedded = false, appId: embeddedAppId =
           </div>
         )}
       </div>
+      {promptDraft && (
+        <Suspense fallback={null}>
+          <PromptEditorModal
+            initial={promptDraft}
+            onClose={() => setPromptDraft(null)}
+            onSaved={() => {
+              setPromptDraft(null);
+              setPromptSavedNotice(true);
+              setTimeout(() => setPromptSavedNotice(false), 3000);
+            }}
+          />
+        </Suspense>
+      )}
+      {promptSavedNotice && (
+        <div
+          role="status"
+          className="fixed bottom-6 left-1/2 -translate-x-1/2 z-50 rounded-md bg-gray-900 text-white text-sm px-4 py-2 shadow-lg"
+        >
+          {t('prompts.notices.savedToLibrary', 'Saved to your prompts')}
+        </div>
+      )}
       {showShare && (
         <ShareDialog
           isOpen={showShare}

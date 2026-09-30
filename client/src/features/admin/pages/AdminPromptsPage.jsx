@@ -5,6 +5,7 @@ import { getLocalizedContent } from '../../../utils/localizeContent';
 import Icon from '../../../shared/components/Icon';
 import PromptDetailsPopup from '../../prompts/components/PromptDetailsPopup';
 import GlobalPromptVariablesEditor from '../components/GlobalPromptVariablesEditor';
+import AdminUserPromptsTab from '../components/AdminUserPromptsTab';
 import {
   fetchAdminPrompts,
   getAdminApiErrorMessage,
@@ -369,7 +370,9 @@ function AdminPromptsPage() {
             <h1 className="text-2xl font-semibold text-gray-900 dark:text-gray-100">
               {activeTab === 'variables'
                 ? t('admin.promptVariables.title', 'Global Prompt Variables')
-                : t('admin.prompts.title', 'Prompt Management')}
+                : activeTab === 'user'
+                  ? t('admin.prompts.userPrompts.title', 'User Prompts')
+                  : t('admin.prompts.title', 'Prompt Management')}
             </h1>
             <p className="mt-2 text-sm text-gray-700 dark:text-gray-300">
               {activeTab === 'variables'
@@ -377,10 +380,15 @@ function AdminPromptsPage() {
                     'admin.promptVariables.subtitle',
                     'Manage custom variables for use across all apps and prompts'
                   )
-                : t(
-                    'admin.prompts.subtitle',
-                    'Create, edit, and manage prompts for your iHub Apps'
-                  )}
+                : activeTab === 'user'
+                  ? t(
+                      'admin.prompts.userPrompts.subtitle',
+                      'Prompts your users wrote and shared with groups or everyone'
+                    )
+                  : t(
+                      'admin.prompts.subtitle',
+                      'Create, edit, and manage prompts for your iHub Apps'
+                    )}
             </p>
           </div>
           {activeTab === 'prompts' && (
@@ -448,6 +456,19 @@ function AdminPromptsPage() {
               >
                 <Icon name="clipboard" className="inline-block h-5 w-5 mr-2" />
                 {t('admin.prompts.tabs.prompts', 'Prompts')}
+              </button>
+            )}
+            {promptsLibraryEnabled && (
+              <button
+                onClick={() => setActiveTab('user')}
+                className={`whitespace-nowrap pb-4 px-1 border-b-2 font-medium text-sm ${
+                  activeTab === 'user'
+                    ? 'border-indigo-500 text-indigo-600 dark:text-indigo-400'
+                    : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300 dark:text-gray-400 dark:hover:text-gray-300'
+                }`}
+              >
+                <Icon name="users" className="inline-block h-5 w-5 mr-2" />
+                {t('admin.prompts.tabs.userPrompts', 'User prompts')}
               </button>
             )}
             <button
@@ -552,6 +573,8 @@ function AdminPromptsPage() {
               onClose={() => setShowPromptDetails(false)}
             />
           </>
+        ) : activeTab === 'user' && promptsLibraryEnabled ? (
+          <AdminUserPromptsTab />
         ) : (
           <VariablesTabContent />
         )}

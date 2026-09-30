@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
 import { getLocalizedContent } from '../../../utils/localizeContent';
 import DynamicLanguageEditor from '../../../shared/components/DynamicLanguageEditor';
@@ -11,6 +11,14 @@ import {
   errorsToFieldErrors,
   isFieldRequired
 } from '../../../utils/schemaValidation';
+import { usePlatformConfig } from '../../../shared/contexts/PlatformConfigContext';
+import {
+  CONTENT_VARIABLE,
+  autoVariableNames,
+  extractVariableNames,
+  humanizeVariableName,
+  isAutoVariable
+} from '../../../../../shared/promptVariables.js';
 
 /**
  * Form-based editor for prompt configuration
@@ -105,13 +113,38 @@ function PromptFormEditor({
       ...(data.variables || []),
       {
         name: '',
-        label: { en: '' },
         type: 'string',
         required: false,
         defaultValue: ''
       }
     ];
     handleChange('variables', newVariables);
+  };
+
+  // `{{name}}` placeholders in any language of the prompt text. Every one that
+  // does not fill itself in is asked for when the prompt is used, described
+  // here or not; describing it sets its label, type, default or options.
+  const { platformConfig } = usePlatformConfig() || {};
+  const detectedVariables = useMemo(() => {
+    const autoNames = autoVariableNames(platformConfig?.globalPromptVariables?.variables || {});
+    const names = new Set();
+    for (const text of Object.values(data.prompt || {})) {
+      for (const name of extractVariableNames(text)) names.add(name);
+    }
+    const declared = new Set((data.variables || []).map(variable => variable.name));
+    return [...names]
+      .filter(
+        name =>
+          declared.has(name) || (name !== CONTENT_VARIABLE && !isAutoVariable(name, autoNames))
+      )
+      .map(name => ({ name, declared: declared.has(name) }));
+  }, [data.prompt, data.variables, platformConfig]);
+
+  const describeVariable = name => {
+    handleChange('variables', [
+      ...(data.variables || []),
+      { name, label: { en: humanizeVariableName(name) }, type: 'string', required: true }
+    ]);
   };
 
   const removeVariable = index => {
@@ -405,11 +438,39 @@ function PromptFormEditor({
                 {t('admin.prompts.edit.variables', 'Variables')}
               </h3>
               <p className="mt-1 text-sm text-gray-500 dark:text-gray-400">
-                {t(
-                  'admin.prompts.edit.variablesDesc',
-                  'Define variables that can be prefilled when using this prompt'
-                )}
+                {t('admin.prompts.edit.variablesDescPlaceholders', {
+                  defaultValue:
+                    'Placeholders written as {{name}} in the prompt text are asked for when the prompt is used. Describe them here to set a label, type, default value or options. {{content}} marks where the user’s own text goes; global variables such as {{user_name}} fill in by themselves.',
+                  skipInterpolation: true
+                })}
               </p>
+              {detectedVariables.length > 0 && (
+                <div className="mt-3">
+                  <div className="text-xs font-semibold uppercase tracking-wide text-gray-500 dark:text-gray-400 mb-1">
+                    {t('admin.prompts.edit.detectedVariables', 'Detected in the text')}
+                  </div>
+                  <ul className="space-y-1">
+                    {detectedVariables.map(variable => (
+                      <li key={variable.name} className="flex items-center justify-between gap-2">
+                        <code className="text-sm text-indigo-600 dark:text-indigo-400">{`{{${variable.name}}}`}</code>
+                        {variable.declared ? (
+                          <span className="text-xs text-gray-500 dark:text-gray-400">
+                            {t('admin.prompts.edit.variableDescribed', 'described')}
+                          </span>
+                        ) : (
+                          <button
+                            type="button"
+                            onClick={() => describeVariable(variable.name)}
+                            className="text-xs text-indigo-600 dark:text-indigo-400 hover:underline"
+                          >
+                            {t('admin.prompts.edit.describeVariable', 'Describe')}
+                          </button>
+                        )}
+                      </li>
+                    ))}
+                  </ul>
+                </div>
+              )}
             </div>
             <div className="mt-5 md:col-span-2 md:mt-0">
               <div className="space-y-4">

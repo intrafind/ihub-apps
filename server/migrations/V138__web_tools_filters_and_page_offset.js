@@ -1,5 +1,5 @@
 /**
- * Migration V136 — new parameters on the web search tools and the page reader
+ * Migration V138 — new parameters on the web search tools and the page reader
  *
  * - `webContentExtractor` gained `offset`: the page reader now reports
  *   `truncated` / `nextOffset`, and the model reads on in a long page by calling
@@ -20,10 +20,10 @@
  * per tool (`tools/<id>.json`) and the legacy `config/tools.json` array.
  */
 
-export const version = '136';
+export const version = '138';
 export const description = 'web_tools_filters_and_page_offset';
 
-/** `offset` as `server/defaults/tools/webContentExtractor.json` declares it in V136. */
+/** `offset` as `server/defaults/tools/webContentExtractor.json` declares it in V138. */
 const OFFSET_PARAMETER = {
   type: 'integer',
   description: {
@@ -34,7 +34,7 @@ const OFFSET_PARAMETER = {
   minimum: 0
 };
 
-/** `freshness` as the search tool defaults declare it in V136. */
+/** `freshness` as the search tool defaults declare it in V138. */
 const FRESHNESS_PARAMETER = {
   type: 'string',
   enum: ['day', 'week', 'month', 'year'],
@@ -44,7 +44,7 @@ const FRESHNESS_PARAMETER = {
   }
 };
 
-/** `includeDomains` as the Brave and Qwant tool defaults declare it in V136. */
+/** `includeDomains` as the Brave and Qwant tool defaults declare it in V138. */
 const INCLUDE_DOMAINS_PARAMETER = {
   type: 'array',
   items: { type: 'string' },

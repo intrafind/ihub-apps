@@ -11,7 +11,12 @@ const SearchModal = ({
   items = [],
   fuseKeys = [],
   placeholder = '',
-  renderResult
+  renderResult,
+  // Optional: a label per item. With no query typed, a header is shown above
+  // the first item of each run of equal labels — the list is expected to be
+  // sorted by group already. Search results are ranked, so they show none.
+  getGroupLabel,
+  maxResults = 10
 }) => {
   const [query, setQuery] = useState('');
   const [results, setResults] = useState([]);
@@ -53,7 +58,7 @@ const SearchModal = ({
     }
     if (!query.trim()) {
       // Show all items when no search query (capped at reasonable limit)
-      setResults(items.slice(0, 10));
+      setResults(items.slice(0, maxResults));
       setSelectedIndex(0);
       return;
     }
@@ -62,9 +67,9 @@ const SearchModal = ({
       return;
     }
     const searchResults = fuseRef.current.search(query).map(r => r.item || r);
-    setResults(searchResults.slice(0, 10));
+    setResults(searchResults.slice(0, maxResults));
     setSelectedIndex(0);
-  }, [query, isOpen, items]);
+  }, [query, isOpen, items, maxResults]);
 
   useEffect(() => {
     if (!listRef.current || results.length === 0) return;
@@ -137,17 +142,28 @@ const SearchModal = ({
           aria-label={t('search.resultsList', 'Search results')}
           className="max-h-64 overflow-y-auto"
         >
-          {results.map((item, idx) => (
-            <li
-              key={idx}
-              role="option"
-              aria-selected={idx === selectedIndex}
-              className={`p-3 cursor-pointer border-b border-gray-100 dark:border-gray-700 last:border-b-0 hover:bg-gray-50 dark:hover:bg-gray-700 ${idx === selectedIndex ? 'bg-indigo-50 dark:bg-indigo-900/50 border-indigo-200 dark:border-indigo-700' : ''}`}
-              onMouseDown={() => onSelect(item)}
-            >
-              {renderResult ? renderResult(item) : JSON.stringify(item)}
-            </li>
-          ))}
+          {results.map((item, idx) => {
+            const group = getGroupLabel && !query.trim() ? getGroupLabel(item) : null;
+            const showHeader = group && (idx === 0 || getGroupLabel(results[idx - 1]) !== group);
+            return (
+              <li
+                key={idx}
+                role="option"
+                aria-selected={idx === selectedIndex}
+                className={`cursor-pointer border-b border-gray-100 dark:border-gray-700 last:border-b-0 hover:bg-gray-50 dark:hover:bg-gray-700 ${idx === selectedIndex ? 'bg-indigo-50 dark:bg-indigo-900/50 border-indigo-200 dark:border-indigo-700' : ''}`}
+                onMouseDown={() => onSelect(item)}
+              >
+                {showHeader && (
+                  <div className="px-3 pt-2 text-[11px] font-semibold uppercase tracking-wide text-gray-500 dark:text-gray-400">
+                    {group}
+                  </div>
+                )}
+                <div className="p-3">
+                  {renderResult ? renderResult(item) : JSON.stringify(item)}
+                </div>
+              </li>
+            );
+          })}
         </ul>
       </div>
     </div>

@@ -1,17 +1,11 @@
 #!/usr/bin/env node
 
 /**
- * Migration V136 specs — new web tool parameters reach upgrades.
+ * Migration V136 specs — `[content]` becomes `{{content}}` in prompt texts.
  *
- * `webContentExtractor` gained `offset`, `braveSearch` and `qwantSearch` gained
- * `freshness` and `includeDomains`, `staanSearch` gained `freshness`.
- * `copyDefaultConfiguration()` only backfills whole files, so an install that
- * already has these tool files needs this migration, or the model never learns
- * the options exist.
- *
- * What has to be right: a property is added only when absent, everything an
- * admin changed is kept, a definition pointed at another script is left alone,
- * and both layouts (one file per tool, legacy `config/tools.json`) are handled.
+ * The prompt library has one placeholder syntax now (#2519). Every language of
+ * a prompt's `prompt` text is rewritten; nothing else in the file changes, and
+ * a file without the old placeholder is not written at all.
  */
 import fs from 'node:fs/promises';
 import os from 'node:os';
@@ -24,27 +18,29 @@ import {
   precondition,
   version,
   description,
-  NEW_PARAMETERS
-} from '../migrations/V136__web_tools_filters_and_page_offset.js';
+  migratePromptText
+} from '../migrations/V136__prompt_content_placeholder.js';
 
 let baseDir;
 
-/** A migration context over a scratch contents directory. */
 function makeCtx(dir) {
   const logs = [];
+  const writes = [];
   return {
     logs,
+    writes,
     fileExists: async rel =>
       fs
         .stat(path.join(dir, rel))
         .then(() => true)
         .catch(() => false),
-    readJson: async rel =>
-      fs
-        .readFile(path.join(dir, rel), 'utf8')
-        .then(JSON.parse)
-        .catch(() => null),
+    listFiles: async (rel, pattern) => {
+      const entries = await fs.readdir(path.join(dir, rel)).catch(() => []);
+      return pattern === '*.json' ? entries.filter(entry => entry.endsWith('.json')) : entries;
+    },
+    readJson: async rel => JSON.parse(await fs.readFile(path.join(dir, rel), 'utf8')),
     writeJson: async (rel, data) => {
+      writes.push(rel);
       await fs.mkdir(path.dirname(path.join(dir, rel)), { recursive: true });
       await fs.writeFile(path.join(dir, rel), JSON.stringify(data, null, 2), 'utf8');
     },
@@ -53,152 +49,90 @@ function makeCtx(dir) {
   };
 }
 
-function legacyTool(id, extraProperties = {}) {
-  return {
-    id,
-    name: { en: `${id} (admin wording)` },
-    script: `${id}.js`,
-    parameters: {
-      type: 'object',
-      properties: {
-        query: { type: 'string', description: { en: 'The search query' } },
-        ...extraProperties
-      },
-      required: ['query']
-    }
-  };
+async function seed(files) {
+  const dir = await fs.mkdtemp(path.join(baseDir, 'v136-'));
+  for (const [rel, content] of Object.entries(files)) {
+    await fs.mkdir(path.dirname(path.join(dir, rel)), { recursive: true });
+    await fs.writeFile(
+      path.join(dir, rel),
+      typeof content === 'string' ? content : JSON.stringify(content, null, 2),
+      'utf8'
+    );
+  }
+  return { dir, ctx: makeCtx(dir) };
 }
 
-async function seed(dir, rel, data) {
-  await fs.mkdir(path.dirname(path.join(dir, rel)), { recursive: true });
-  await fs.writeFile(path.join(dir, rel), JSON.stringify(data, null, 2), 'utf8');
-}
+before(async () => {
+  baseDir = await fs.mkdtemp(path.join(os.tmpdir(), 'ihub-migration-v136-'));
+});
 
-async function scratch(name) {
-  return fs.mkdtemp(path.join(baseDir, `${name}-`));
-}
+after(async () => {
+  await fs.rm(baseDir, { recursive: true, force: true });
+});
 
-async function readDefault(id) {
-  return JSON.parse(
-    await fs.readFile(new URL(`../defaults/tools/${id}.json`, import.meta.url), 'utf8')
-  );
-}
-
-describe('V136 — web tool filters and page reader offset', () => {
-  before(async () => {
-    baseDir = await fs.mkdtemp(path.join(os.tmpdir(), 'ihub-v136-'));
-  });
-  after(async () => {
-    await fs.rm(baseDir, { recursive: true, force: true });
-  });
-
-  it('declares its version and description', () => {
+describe('V136 identity', () => {
+  it('is numbered and described as its file name says', () => {
     assert.equal(version, '136');
-    assert.equal(description, 'web_tools_filters_and_page_offset');
+    assert.equal(description, 'prompt_content_placeholder');
   });
 
-  it('skips an install that has none of the tool files', async () => {
-    assert.equal(await precondition(makeCtx(await scratch('none'))), false);
-  });
-
-  it('adds the new parameters to each tool file, leaving the rest alone', async () => {
-    const dir = await scratch('files');
-    await seed(dir, 'tools/braveSearch.json', legacyTool('braveSearch'));
-    await seed(dir, 'tools/qwantSearch.json', legacyTool('qwantSearch'));
-    await seed(
-      dir,
-      'tools/staanSearch.json',
-      legacyTool('staanSearch', { includeDomains: { type: 'array', items: { type: 'string' } } })
-    );
-    await seed(dir, 'tools/webContentExtractor.json', {
-      ...legacyTool('webContentExtractor'),
-      method: 'extractForTool'
-    });
-    const ctx = makeCtx(dir);
+  it('only runs when there are prompts', async () => {
+    const { ctx: none } = await seed({ 'config/platform.json': {} });
+    assert.equal(await precondition(none), false);
+    const { ctx } = await seed({ 'prompts/a.json': { id: 'a' } });
     assert.equal(await precondition(ctx), true);
-    await up(ctx);
-
-    const brave = await ctx.readJson('tools/braveSearch.json');
-    assert.deepEqual(brave.parameters.properties.freshness.enum, ['day', 'week', 'month', 'year']);
-    assert.equal(brave.parameters.properties.includeDomains.type, 'array');
-    assert.equal(brave.name.en, 'braveSearch (admin wording)');
-    assert.deepEqual(brave.parameters.required, ['query']);
-
-    const qwant = await ctx.readJson('tools/qwantSearch.json');
-    assert.ok(qwant.parameters.properties.freshness);
-    assert.ok(qwant.parameters.properties.includeDomains);
-
-    const staan = await ctx.readJson('tools/staanSearch.json');
-    assert.ok(staan.parameters.properties.freshness);
-    // Staan's own includeDomains is kept as it was.
-    assert.deepEqual(staan.parameters.properties.includeDomains, {
-      type: 'array',
-      items: { type: 'string' }
-    });
-
-    const reader = await ctx.readJson('tools/webContentExtractor.json');
-    assert.equal(reader.parameters.properties.offset.type, 'integer');
-    assert.equal(reader.parameters.properties.offset.minimum, 0);
-    assert.equal(reader.method, 'extractForTool');
   });
+});
 
-  it('never overwrites a parameter an admin already customised', async () => {
-    const dir = await scratch('custom');
-    await seed(
-      dir,
-      'tools/braveSearch.json',
-      legacyTool('braveSearch', { freshness: { type: 'string', description: { en: 'Ours' } } })
+describe('V136 rewrites the placeholder', () => {
+  it('replaces every occurrence in every language', () => {
+    assert.deepEqual(
+      migratePromptText({ en: 'A [content] B [content]', de: 'C [content]', fr: 'none' }),
+      { en: 'A {{content}} B {{content}}', de: 'C {{content}}', fr: 'none' }
     );
-    const ctx = makeCtx(dir);
-    await up(ctx);
-    const tool = await ctx.readJson('tools/braveSearch.json');
-    assert.deepEqual(tool.parameters.properties.freshness, {
-      type: 'string',
-      description: { en: 'Ours' }
+    assert.equal(migratePromptText('x [content]'), 'x {{content}}');
+    assert.equal(migratePromptText({ en: 'nothing' }), null);
+    assert.equal(migratePromptText(null), null);
+  });
+
+  it('writes only the files that used it, and nothing else in them', async () => {
+    const { ctx } = await seed({
+      'prompts/summarize.json': {
+        id: 'summarize',
+        name: { en: 'Summarize [content]' },
+        prompt: { en: 'Summarize: [content]', de: 'Fasse zusammen: [content]' },
+        variables: [{ name: 'content', label: { en: '[content]' } }]
+      },
+      'prompts/plain.json': { id: 'plain', prompt: { en: 'Already {{content}}' } },
+      'prompts/broken.json': '{ not json'
     });
-    assert.ok(tool.parameters.properties.includeDomains);
+    await up(ctx);
+    const summarize = await ctx.readJson('prompts/summarize.json');
+    assert.deepEqual(summarize.prompt, {
+      en: 'Summarize: {{content}}',
+      de: 'Fasse zusammen: {{content}}'
+    });
+    assert.equal(summarize.name.en, 'Summarize [content]', 'only the prompt text changes');
+    assert.equal(summarize.variables[0].label.en, '[content]');
+    assert.deepEqual(ctx.writes, ['prompts/summarize.json']);
+    assert.ok(ctx.logs.some(([level, m]) => level === 'warn' && m.includes('broken.json')));
   });
 
-  it('leaves a definition pointed at another script alone', async () => {
-    const dir = await scratch('other-script');
-    const custom = { ...legacyTool('braveSearch'), script: 'myBrave.js' };
-    await seed(dir, 'tools/braveSearch.json', custom);
-    const ctx = makeCtx(dir);
+  it('rewrites the legacy prompts.json too', async () => {
+    const { ctx } = await seed({
+      'config/prompts.json': [{ id: 'a', prompt: { en: 'Go [content]' } }, { id: 'b' }]
+    });
     await up(ctx);
-    assert.deepEqual(await ctx.readJson('tools/braveSearch.json'), custom);
-  });
-
-  it('updates the legacy config/tools.json array', async () => {
-    const dir = await scratch('legacy');
-    await seed(dir, 'config/tools.json', [
-      legacyTool('qwantSearch'),
-      { ...legacyTool('webContentExtractor') },
-      { id: 'unrelated', parameters: { properties: {} } }
-    ]);
-    const ctx = makeCtx(dir);
-    await up(ctx);
-    const tools = await ctx.readJson('config/tools.json');
-    assert.ok(tools[0].parameters.properties.freshness);
-    assert.ok(tools[1].parameters.properties.offset);
-    assert.deepEqual(tools[2], { id: 'unrelated', parameters: { properties: {} } });
+    const legacy = await ctx.readJson('config/prompts.json');
+    assert.equal(legacy[0].prompt.en, 'Go {{content}}');
+    assert.deepEqual(legacy[1], { id: 'b' });
   });
 
   it('is idempotent', async () => {
-    const dir = await scratch('idempotent');
-    await seed(dir, 'tools/qwantSearch.json', legacyTool('qwantSearch'));
-    const ctx = makeCtx(dir);
+    const { ctx } = await seed({ 'prompts/a.json': { id: 'a', prompt: { en: 'x [content]' } } });
     await up(ctx);
-    const once = await ctx.readJson('tools/qwantSearch.json');
+    ctx.writes.length = 0;
     await up(ctx);
-    assert.deepEqual(await ctx.readJson('tools/qwantSearch.json'), once);
-  });
-
-  it('writes the parameters exactly as the shipped defaults declare them', async () => {
-    for (const [id, additions] of Object.entries(NEW_PARAMETERS)) {
-      const shipped = await readDefault(id);
-      for (const [name, schema] of Object.entries(additions)) {
-        assert.deepEqual(shipped.parameters.properties[name], schema, `${id}.${name}`);
-      }
-    }
+    assert.deepEqual(ctx.writes, []);
   });
 });
