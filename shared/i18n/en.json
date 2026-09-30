@@ -2648,7 +2648,7 @@
         "autoStart": "Auto-start conversation",
         "autoStartHelp": "When enabled, the app will automatically start the conversation when the chat is opened or reset",
         "startForm": "Start chats with a form",
-        "startFormHelp": "A new chat opens with these variables as a form instead of the chat input, with a drop zone for files when uploads are enabled. Sending the form fills the prompt template once and sends it as the first message; the conversation then continues without the template.",
+        "startFormHelp": "A new chat opens with these variables as a form instead of the chat input, with a message field, a model selector when users may pick the model, and a drop zone for files when uploads are enabled. Sending the form fills the prompt template once and sends it as the first message; the conversation then continues without the template.",
         "startFormSubmitLabel": "Send button label",
         "ephemeral": "Ephemeral chat",
         "ephemeralHelp": "When enabled, the chat is never stored. Messages exist only while the chat is open and are discarded when you switch apps or reload.",
