@@ -214,14 +214,16 @@ export class HttpNodeExecutor extends BaseNodeExecutor {
       // the node sets `aiLabel: false`), and `{{aiLabel}}` for a visible label
       // in the body text.
       const aiLabelOn = config.aiLabel !== false && outboundLabelEnabled();
+      // Server-owned values come last, so workflow data cannot blank the
+      // label or override the AI headers.
       const templateData = {
-        aiLabel: aiLabelOn ? outboundLabel() : '',
-        ...(state.data || {})
+        ...(state.data || {}),
+        aiLabel: aiLabelOn ? outboundLabel() : ''
       };
 
       // Build headers with interpolation
       const resolvedHeaders = interpolateObject(headers, templateData);
-      const fetchHeaders = { ...(aiLabelOn ? outboundHeaders() : {}), ...resolvedHeaders };
+      const fetchHeaders = { ...resolvedHeaders, ...(aiLabelOn ? outboundHeaders() : {}) };
 
       // Apply authentication
       if (auth) {

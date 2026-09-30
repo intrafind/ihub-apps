@@ -19,6 +19,7 @@ import llmClient, { isLLMError, LLM_ERROR_CODES } from '../../services/loop/LLMC
 import { llmErrorToHttpStatus, isMissingApiKeyError } from '../../services/loop/llmHttpErrors.js';
 import {
   applyUnmarkedModelGate,
+  auditNewAcknowledgements,
   JUSTIFICATION_FIELD,
   preserveStoredRecords,
   UnmarkedModelError
@@ -297,9 +298,10 @@ export default function registerAdminModelsRoutes(app) {
       delete updatedModel[JUSTIFICATION_FIELD];
       const storedForRecords = await configStore.readJson(await modelPath(modelId));
       preserveStoredRecords('model', updatedModel, storedForRecords);
+      let acknowledged = [];
       if (updatedModel.enabled !== false && storedForRecords?.enabled === false) {
         try {
-          applyUnmarkedModelGate([updatedModel], req, justification);
+          acknowledged = applyUnmarkedModelGate([updatedModel], req, justification);
         } catch (error) {
           if (error instanceof UnmarkedModelError) return sendUnmarkedModelError(res, error);
           throw error;
@@ -368,6 +370,7 @@ export default function registerAdminModelsRoutes(app) {
         resourceId: modelId,
         summary: `Updated model ${modelId}`
       });
+      auditNewAcknowledgements(req, [updatedModel], acknowledged);
       res.json({ message: 'Model updated successfully', model: updatedModel });
     } catch (error) {
       return sendInternalError(res, error, 'update model');
@@ -397,9 +400,10 @@ export default function registerAdminModelsRoutes(app) {
       const justification = newModel[JUSTIFICATION_FIELD];
       delete newModel[JUSTIFICATION_FIELD];
       if (newModel.contentMarking) delete newModel.contentMarking.acknowledgement;
+      let acknowledged = [];
       if (newModel.enabled !== false) {
         try {
-          applyUnmarkedModelGate([newModel], req, justification);
+          acknowledged = applyUnmarkedModelGate([newModel], req, justification);
         } catch (error) {
           if (error instanceof UnmarkedModelError) return sendUnmarkedModelError(res, error);
           throw error;
@@ -448,6 +452,7 @@ export default function registerAdminModelsRoutes(app) {
         resourceId: newModel.id,
         summary: `Created model ${newModel.id}`
       });
+      auditNewAcknowledgements(req, [newModel], acknowledged);
       res.json({ message: 'Model created successfully', model: newModel });
     } catch (error) {
       return sendInternalError(res, error, 'create model');
@@ -469,9 +474,10 @@ export default function registerAdminModelsRoutes(app) {
         return sendNotFound(res, 'Model');
       }
       const newEnabledState = !model.enabled;
+      let acknowledged = [];
       if (newEnabledState) {
         try {
-          applyUnmarkedModelGate([model], req, req.body?.[JUSTIFICATION_FIELD]);
+          acknowledged = applyUnmarkedModelGate([model], req, req.body?.[JUSTIFICATION_FIELD]);
         } catch (error) {
           if (error instanceof UnmarkedModelError) return sendUnmarkedModelError(res, error);
           throw error;
@@ -495,6 +501,7 @@ export default function registerAdminModelsRoutes(app) {
         resourceId: modelId,
         summary: `${newEnabledState ? 'Enabled' : 'Disabled'} model ${modelId}`
       });
+      auditNewAcknowledgements(req, [model], acknowledged);
       res.json({
         message: `Model ${newEnabledState ? 'enabled' : 'disabled'} successfully`,
         model: model,
@@ -522,10 +529,11 @@ export default function registerAdminModelsRoutes(app) {
       const { data: models } = configCache.getModels(true);
       const resolvedIds = ids.includes('*') ? models.map(m => m.id) : ids;
 
+      let acknowledged = [];
       if (enabled) {
         const turningOn = models.filter(m => resolvedIds.includes(m.id) && m.enabled === false);
         try {
-          applyUnmarkedModelGate(turningOn, req, req.body?.[JUSTIFICATION_FIELD]);
+          acknowledged = applyUnmarkedModelGate(turningOn, req, req.body?.[JUSTIFICATION_FIELD]);
         } catch (error) {
           if (error instanceof UnmarkedModelError) return sendUnmarkedModelError(res, error);
           throw error;
@@ -557,6 +565,7 @@ export default function registerAdminModelsRoutes(app) {
         resourceId: resolvedIds.join(','),
         summary: `Batch ${enabled ? 'enabled' : 'disabled'} ${resolvedIds.length} models`
       });
+      auditNewAcknowledgements(req, models, acknowledged);
       res.json({
         message: `Models ${enabled ? 'enabled' : 'disabled'} successfully`,
         enabled,

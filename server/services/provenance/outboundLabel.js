@@ -7,6 +7,7 @@
  *
  * @module services/provenance/outboundLabel
  */
+import configCache from '../../configCache.js';
 import { getAiTransparencyConfig, isAiTransparencyActive } from './config.js';
 import { getInstallationUrl } from './installation.js';
 
@@ -21,11 +22,15 @@ export function outboundLabelEnabled() {
 }
 
 /**
- * The label line.
- * @param {string} [language]
+ * The label line, in `language` or else the platform's default language
+ * (outbound content has no viewer whose language we know).
+ * @param {string} [language] - e.g. `de` or `de-DE`
  */
-export function outboundLabel(language = 'en') {
-  return OUTBOUND_LABEL_TEXT[language] || OUTBOUND_LABEL_TEXT.en;
+export function outboundLabel(language) {
+  const lang = String(language || configCache.getPlatform()?.defaultLanguage || 'en')
+    .toLowerCase()
+    .split('-')[0];
+  return OUTBOUND_LABEL_TEXT[lang] || OUTBOUND_LABEL_TEXT.en;
 }
 
 /**
@@ -33,7 +38,7 @@ export function outboundLabel(language = 'en') {
  * @param {string} text
  * @param {{language?: string}} [opts]
  */
-export function labelPlainText(text, { language = 'en' } = {}) {
+export function labelPlainText(text, { language } = {}) {
   if (!outboundLabelEnabled() || typeof text !== 'string') return text;
   const label = `[${outboundLabel(language)}]`;
   if (text.startsWith(label)) return text;

@@ -14,6 +14,9 @@ const { evaluateTextMarking, validDisclosureOptOut } =
 const records = await import('../services/provenance/records.js');
 const { publicAppView, aiTransparencyClientConfig } =
   await import('../services/provenance/clientConfig.js');
+const { recordTurnProvenance, recordWorkflowProvenance } =
+  await import('../services/provenance/turnProvenance.js');
+const { outboundLabel } = await import('../services/provenance/outboundLabel.js');
 
 after(cleanup);
 
@@ -246,5 +249,45 @@ describe('client config', () => {
     assert.equal(cfg.interactionDisclosure.enabled, false);
     setConfig({ features: {} });
     assert.equal(aiTransparencyClientConfig().interactionDisclosure.enabled, true);
+  });
+});
+
+describe('turn and workflow provenance', () => {
+  const vllm = {
+    id: 'vllm-m',
+    provider: 'openai',
+    contentMarking: { textWatermark: { scheme: 'vllm-gumbel', keyGroup: 'k' } }
+  };
+
+  it('keeps a configured temperature of 0, which the watermark cannot survive', async () => {
+    setConfig({ platform: {}, features: {} });
+    for (const temperature of [0, '0']) {
+      const p = await recordTurnProvenance({ content: LONG, model: vllm, temperature });
+      assert.equal(p.marking.status, 'unmarked', `temperature ${JSON.stringify(temperature)}`);
+    }
+    const warm = await recordTurnProvenance({ content: LONG, model: vllm, temperature: 0.7 });
+    assert.equal(warm.marking.status, 'marked');
+  });
+
+  it('records workflow output only when a model wrote it', async () => {
+    const httpOnly = { id: 'w1', nodes: [{ type: 'start' }, { type: 'http' }, { type: 'end' }] };
+    assert.equal(await recordWorkflowProvenance({ workflow: httpOnly, output: LONG }), null);
+    const withPrompt = {
+      id: 'w2',
+      nodes: [{ type: 'start' }, { type: 'prompt', config: {} }, { type: 'end' }]
+    };
+    const p = await recordWorkflowProvenance({ workflow: withPrompt, output: { answer: LONG } });
+    assert.equal(p.kind, 'workflow');
+    assert.equal(p.aiGenerated, true);
+  });
+});
+
+describe('outbound label', () => {
+  it('uses the platform default language unless one is given', () => {
+    setConfig({ platform: { defaultLanguage: 'de' } });
+    assert.equal(outboundLabel(), 'KI-generiert mit iHub Apps');
+    assert.equal(outboundLabel('en-GB'), 'AI-generated with iHub Apps');
+    setConfig({ platform: {} });
+    assert.equal(outboundLabel(), 'AI-generated with iHub Apps');
   });
 });

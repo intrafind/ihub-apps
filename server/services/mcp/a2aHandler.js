@@ -387,6 +387,25 @@ function normalizeIncomingMessage(params) {
 }
 
 /**
+ * EU AI Act Art. 50(2) provenance of a workflow skill's answer, when a model
+ * wrote it. Loaded on first use; never fails the task.
+ */
+async function workflowProvenance(workflowId, output) {
+  try {
+    const workflow = (configCache.getWorkflows(true)?.data || []).find(w => w.id === workflowId);
+    const { recordWorkflowProvenance } = await import('../provenance/turnProvenance.js');
+    return await recordWorkflowProvenance({ workflow, output });
+  } catch (error) {
+    logger.warn('Workflow provenance failed', {
+      component: 'A2A',
+      workflowId,
+      error: error.message
+    });
+    return null;
+  }
+}
+
+/**
  * Decide which skill a message runs (see the module doc for the order) and
  * check that the caller may use it.
  *
@@ -535,6 +554,7 @@ async function runTask({ task, skill, text, data, userMessage, user, platform, s
         )
       );
       answer = typeof output === 'string' ? output : JSON.stringify(output);
+      provenance = await workflowProvenance(skill._id, answer);
     }
     if (controller.signal.aborted) throw new A2aError(A2A_ERRORS.INTERNAL, 'Task cancelled');
 

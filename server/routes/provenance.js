@@ -160,6 +160,8 @@ export default function registerProvenanceRoutes(app) {
       const cfg = getAiTransparencyConfig();
       const base = getInstallationUrl(req);
       const anchor = await signingService.getPublishedAnchor();
+      // Reports are signed only when there is a usable signer right now.
+      const signer = await signingService.getActiveSigner().catch(() => null);
       res.setHeader('Cache-Control', 'public, max-age=3600');
       res.json({
         version: 1,
@@ -179,7 +181,7 @@ export default function registerProvenanceRoutes(app) {
             'POST application/json {"text": "..."}'
           ],
           reportVerification: `${base}/api/provenance/report/verify`,
-          signedReports: true,
+          signedReports: Boolean(signer),
           retention: 'none'
         },
         techniques: techniquesInfo(),

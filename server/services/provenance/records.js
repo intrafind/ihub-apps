@@ -10,6 +10,7 @@ import { getAppVersion } from '../../utils/versionHelper.js';
 import { isAiTransparencyActive } from './config.js';
 import { actorOf, getInstallationInfo } from './installation.js';
 import { validAcknowledgement } from './markingPolicy.js';
+import { logAudit } from '../AuditLogService.js';
 
 /** Minimum length of a justification. */
 export const MIN_REASON_LENGTH = 10;
@@ -92,6 +93,28 @@ export function applyUnmarkedModelGate(models, req, justification) {
     };
   }
   return needing.map(m => m.id);
+}
+
+/**
+ * Audit the acknowledgements `applyUnmarkedModelGate` created, with their
+ * justification, once the models are saved (the generic model audit entry
+ * does not carry the reason).
+ * @param {import('express').Request} req
+ * @param {Object[]} models - the models passed to the gate
+ * @param {string[]} ids - what the gate returned
+ */
+export function auditNewAcknowledgements(req, models, ids) {
+  for (const id of ids || []) {
+    const acknowledgement = models.find(m => m?.id === id)?.contentMarking?.acknowledgement;
+    if (!acknowledgement) continue;
+    logAudit({
+      req,
+      action: 'update',
+      resource: 'model',
+      resourceId: id,
+      summary: `Acknowledged unmarked model output: ${acknowledgement.justification}`
+    });
+  }
 }
 
 /**

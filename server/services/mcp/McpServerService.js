@@ -406,7 +406,9 @@ export async function buildMcpServer({ user, platform }) {
               `workflow_${wf.id}`,
               withTrustedToolContext(args, { user, chatId: `mcp-${Date.now()}` })
             );
-            return toolSuccessResult(result);
+            // EU AI Act Art. 50(2): as for apps, when a model wrote the output.
+            const provenance = await workflowProvenance(wf, result);
+            return withProvenanceMeta(toolSuccessResult(result), provenance);
           } catch (err) {
             logger.warn('MCP gateway workflow run failed', {
               component: 'McpServerService',
@@ -498,6 +500,24 @@ function toolSuccessResult(payload) {
     return { content: [{ type: 'text', text: payload }] };
   }
   return { content: [{ type: 'text', text: JSON.stringify(payload) }] };
+}
+
+/**
+ * Provenance of a workflow result; loaded on first use and never allowed to
+ * fail the tool call.
+ */
+async function workflowProvenance(workflow, output) {
+  try {
+    const { recordWorkflowProvenance } = await import('../provenance/turnProvenance.js');
+    return await recordWorkflowProvenance({ workflow, output });
+  } catch (error) {
+    logger.warn('Workflow provenance failed', {
+      component: 'McpServerService',
+      workflowId: workflow?.id,
+      error: error.message
+    });
+    return null;
+  }
 }
 
 function withProvenanceMeta(toolResult, provenance) {
