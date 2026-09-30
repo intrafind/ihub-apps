@@ -1,5 +1,6 @@
 import { useState, useCallback, useRef, useEffect } from 'react';
 import { debugLog } from '../../../utils/debugLog';
+import { generatedFilesOf } from '../../../../../shared/generatedFiles.js';
 
 /**
  * The provenance fields a stored answer's `activity` restores onto the message
@@ -76,6 +77,9 @@ export function transformStoredMessage(msg) {
   if (Array.isArray(msg.scheduledTaskProposals) && msg.scheduledTaskProposals.length > 0) {
     message.scheduledTaskProposals = msg.scheduledTaskProposals;
   }
+  // Download cards for files the turn's tools generated.
+  const generatedFiles = generatedFilesOf(msg.generatedFiles);
+  if (generatedFiles.length > 0) message.generatedFiles = generatedFiles;
   // The web searches and sources behind the answer, so the sources view and
   // the inline citations come back (the citation markers are in the content).
   if (msg.webSearch && typeof msg.webSearch === 'object') {
@@ -769,6 +773,7 @@ function useChatMessages(chatId = 'default', { ephemeral = false, serverBacked =
           mcpApps: _mcpApps,
           mcpAuthRequired: _mcpAuthRequired,
           scheduledTaskProposals: _scheduledTaskProposals,
+          generatedFiles: _generatedFiles,
           ...apiMsg
         } = msg;
         const content = rawContent !== undefined ? rawContent : apiMsg.content;

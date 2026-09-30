@@ -14,6 +14,11 @@ import { isStaanSearchConfigured } from './services/search/staanApiKey.js';
 import logger from './utils/logger.js';
 import { getLocalizedString } from './utils/localize.js';
 import { filterSchedulingTools } from './services/scheduler/tasks/toolGate.js';
+import {
+  isSystemSkillTool,
+  runSystemSkillTool,
+  systemSkillToolsFor
+} from './services/systemSkillTools.js';
 
 /**
  * Build JSON Schema parameters from a workflow's start node inputVariables
@@ -691,12 +696,16 @@ export async function getToolsForApp(app, language = null, context = {}) {
     }
   }
 
-  // Add skill activation tools if the skills feature is enabled and the app has skills configured
-  if (
+  // Skills: the activation tools, plus the built-in tools a system skill
+  // brings (e.g. `create_pdf` for `pdf`). Only skills the app enables and the
+  // user may use count — the same set the prompt lists as <available_skills>.
+  const appSkills =
     isFeatureEnabled('skills', configCache.getFeatures()) &&
     Array.isArray(app.skills) &&
     app.skills.length > 0
-  ) {
+      ? await configCache.getSkillsForApp(app, context.user, configCache.getPlatform() || {})
+      : [];
+  if (appSkills.length > 0) {
     const lang = language || 'en';
     const activateDesc = {
       en: 'Load the full instructions for a skill when it is relevant to the current task. Call this when you identify a task that matches an available skill from the <available_skills> list.',
@@ -745,6 +754,9 @@ export async function getToolsForApp(app, language = null, context = {}) {
         required: ['skill_name', 'file_path']
       }
     });
+
+    const skillTools = systemSkillToolsFor(appSkills, { language: lang, model: context.model });
+    appTools = appTools.concat(skillTools.filter(t => !appTools.some(a => a.id === t.id)));
   }
 
   // The scheduling tools are listed by the apps that offer them, but only
@@ -760,6 +772,30 @@ export async function getToolsForApp(app, language = null, context = {}) {
  * @returns {Array} - Localized tools
  */
 export { localizeTools };
+
+/**
+ * Whether a skill may be activated or read in this call.
+ *
+ * A chat call carries the app: the skill must be one the app enables and the
+ * user may use. A direct call (`POST /api/tools/:id`) carries no app: the
+ * user's skill permissions decide. Workflow and agent runs select their
+ * skills on the node or profile and are checked there.
+ *
+ * @param {string} skillName
+ * @param {Object} params - Tool params with the trusted context.
+ * @returns {Promise<boolean>}
+ */
+async function maySkillBeUsed(skillName, params) {
+  const appConfig = params.appConfig;
+  if (appConfig?._workflowState || appConfig?._agentProfile) return true;
+  if (!isFeatureEnabled('skills', configCache.getFeatures())) return false;
+  const platform = configCache.getPlatform() || {};
+  const skills =
+    appConfig && typeof appConfig === 'object'
+      ? await configCache.getSkillsForApp(appConfig, params.user, platform)
+      : (await configCache.getSkillsForUser(params.user, platform)).data;
+  return skills.some(skill => skill.name === skillName);
+}
 
 /**
  * Dynamically import and run a tool implementation securely.
@@ -786,6 +822,9 @@ export async function runTool(toolId, params = {}, options = {}) {
     const skillName = params.skill_name;
     if (!skillName) {
       throw new Error('skill_name parameter is required');
+    }
+    if (!(await maySkillBeUsed(skillName, params))) {
+      return `Skill '${skillName}' not found or could not be loaded.`;
     }
     logger.info('Activating skill', { component: 'ToolLoader', skillName });
     const content = await getSkillContent(skillName);
@@ -844,12 +883,32 @@ export async function runTool(toolId, params = {}, options = {}) {
     if (!skillName || !filePath) {
       throw new Error('skill_name and file_path parameters are required');
     }
+    if (!(await maySkillBeUsed(skillName, params))) {
+      return `Resource '${filePath}' not found in skill '${skillName}' or access denied.`;
+    }
     logger.info('Reading skill resource', { component: 'ToolLoader', skillName, filePath });
     const content = await getSkillResource(skillName, filePath);
     if (content === null) {
       return `Resource '${filePath}' not found in skill '${skillName}' or access denied.`;
     }
     return content;
+  }
+
+  // Built-in tools of system skills (`create_pdf`, …). They are offered only
+  // through a skill the app enables (see getToolsForApp); here a direct call
+  // is checked against the user's skill permissions as well.
+  if (isSystemSkillTool(toolId)) {
+    const { data: userSkills } = await configCache.getSkillsForUser(
+      params.user,
+      configCache.getPlatform() || {}
+    );
+    const provided = userSkills.some(
+      skill => skill.isSystem && skill.providedTools?.includes(toolId)
+    );
+    if (!isFeatureEnabled('skills', configCache.getFeatures()) || !provided) {
+      throw new Error(`Tool ${toolId} is not available`);
+    }
+    return await runSystemSkillTool(toolId, params);
   }
 
   // App-as-tool (`app__<appId>`): invoke another iHub app through the shared

@@ -619,10 +619,17 @@ contents/skills/
     └── assets/           # Optional: supporting assets
 ```
 
+### System skills
+
+Skills shipped with iHub live in `server/systemSkills/<name>/`. They are read-only: never copied into `contents/`, and not editable or deletable in the admin UI. Their names are reserved; a same-named `contents/skills/<name>` is ignored. A system skill's `allowed-tools` names built-in tools from `server/services/systemSkillTools.js`, and those tools come with the skill when an app enables it. Installed skills cannot enable tools this way.
+
+The first system skill is `pdf` (`create_pdf`, `preview_pdf`). See [PDF Generation & System Skills](pdf-generation.md).
+
 ### Key Components
 
-- **`server/services/skillLoader.js`**: Loads, validates, and serves skill content. Enforces the Agent Skills specification (name pattern, description length, path traversal prevention).
-- **Authorization integration**: Skills are permission-controlled via group configuration using the `skills` permission key.
+- **`server/services/skillLoader.js`**: Loads, validates, and serves skill content: system skills first, then `contents/skills/`. Enforces the Agent Skills specification (name pattern, description length, path traversal prevention).
+- **`server/services/systemSkillTools.js`**: Registry of the built-in tools system skills provide.
+- **Authorization integration**: Skills are permission-controlled via group configuration using the `skills` permission key. `activate_skill` and `read_skill_resource` only load skills the app enables and the user may use.
 
 ### Skill Metadata (SKILL.md frontmatter)
 

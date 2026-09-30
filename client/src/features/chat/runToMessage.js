@@ -23,6 +23,7 @@ import {
   workflowResultOf
 } from '../../../../shared/run/runActivity.js';
 import { insertSupportMarkers } from '../../../../shared/webCitations.js';
+import { generatedFilesOf } from '../../../../shared/generatedFiles.js';
 import { buildRunWebSearch } from './webSearch';
 import { buildMcpAppViews } from './mcpApps/mcpAppViewList';
 import { buildMcpAuthPrompts } from './mcpApps/mcpConnectPrompts';
@@ -192,6 +193,9 @@ export function projectRunToMessage(run, options = {}) {
     .map(tool => tool.scheduledTaskProposal)
     .filter(proposal => proposal && typeof proposal.proposalId === 'string');
   if (scheduledTaskProposals.length) extras.scheduledTaskProposals = scheduledTaskProposals;
+  // Files the turn's tools generated (a PDF from `create_pdf`): download cards.
+  const generatedFiles = generatedFilesOf((run.tools || []).flatMap(tool => tool.files || []));
+  if (generatedFiles.length) extras.generatedFiles = generatedFiles;
 
   // ── completion metadata ──────────────────────────────────────────────
   if (finished) {

@@ -3,6 +3,8 @@ import DOMPurify from 'dompurify';
 import { apiClient, streamingApiClient } from '../client';
 import { handleApiResponse } from '../utils/requestHandler';
 import { buildChatExportFilename, buildChatExportTitle } from '../../utils/exportFormats';
+import { saveBlobAs } from '../../utils/externalNavigation';
+import { exportPdfOnServer } from './documents';
 
 // Isolated marked instance for static exports (PDF/HTML). It intentionally does
 // NOT use the shared interactive markdown renderer, which injects toolbar
@@ -128,74 +130,9 @@ export const checkAppChatStatus = async (appId, chatId) => {
   );
 };
 
-// Print an HTML document via a hidden, same-origin iframe.
-//
-// We deliberately avoid `window.open()` here: inside sandboxed/embedded hosts
-// such as the Outlook taskpane and the browser-extension side panel, popups
-// are blocked and `window.open()` returns `null`. An offscreen iframe prints
-// the document in-place and works across those hosts.
-//
-// The document is written synchronously with document.write() rather than via
-// `srcdoc`: an iframe attached before `srcdoc` is set first fires `load` for
-// its initial empty `about:blank` document, which made us print a blank page.
-const printHtmlDocument = htmlContent =>
-  new Promise((resolve, reject) => {
-    const iframe = document.createElement('iframe');
-    iframe.setAttribute('aria-hidden', 'true');
-    iframe.setAttribute('tabindex', '-1');
-    // Keep a real layout box: some engines print a zero-sized frame as blank.
-    iframe.style.position = 'fixed';
-    iframe.style.left = '-10000px';
-    iframe.style.top = '0';
-    iframe.style.width = '800px';
-    iframe.style.height = '600px';
-    iframe.style.border = '0';
-
-    document.body.appendChild(iframe);
-
-    const frameWindow = iframe.contentWindow;
-    const doc = frameWindow?.document;
-    if (!frameWindow || !doc) {
-      iframe.remove();
-      reject(new Error('Unable to initialise print frame'));
-      return;
-    }
-
-    try {
-      doc.open();
-      doc.write(htmlContent);
-      doc.close();
-    } catch (err) {
-      iframe.remove();
-      reject(err);
-      return;
-    }
-
-    // print() is non-blocking in some browsers, so keep the frame alive until
-    // the dialog closes; the timeout is a safety net if `afterprint` never fires.
-    let removed = false;
-    const removeFrame = () => {
-      if (removed) return;
-      removed = true;
-      iframe.remove();
-    };
-
-    // Give the freshly written document a tick to lay out before printing.
-    setTimeout(() => {
-      try {
-        frameWindow.addEventListener('afterprint', () => setTimeout(removeFrame, 0));
-        frameWindow.focus();
-        frameWindow.print();
-        setTimeout(removeFrame, 60000);
-        resolve();
-      } catch (err) {
-        removeFrame();
-        reject(err);
-      }
-    }, 250);
-  });
-
-// Client-side PDF generation using browser print functionality
+// A real PDF, rendered on the server (`POST /api/exports/pdf`). The browser
+// print dialog this replaces printed blank pages in several hosts — the
+// Outlook task pane, the extension side panel, some Chromium builds.
 export const exportChatToPDF = async (
   messages,
   settings,
@@ -204,21 +141,12 @@ export const exportChatToPDF = async (
   appName = 'iHub Apps',
   appId = null,
   _chatId = null,
-  isSingleMessage = false
+  isSingleMessage = false,
+  language = undefined
 ) => {
   if (!messages) {
     throw new Error('Missing required parameters');
   }
-
-  // Generate HTML content for PDF
-  const htmlContent = generatePDFHTML(
-    messages,
-    settings,
-    template,
-    watermark,
-    appName,
-    isSingleMessage
-  );
 
   const filename = buildChatExportFilename({
     format: 'pdf',
@@ -228,28 +156,44 @@ export const exportChatToPDF = async (
     isSingleMessage
   });
 
+  let timeZone;
   try {
-    await printHtmlDocument(htmlContent);
-    return { success: true, filename };
-  } catch (err) {
-    // Printing is unavailable in this host (e.g. a locked-down embedded
-    // sandbox). Fall back to downloading the rendered HTML so the user can
-    // still open and print it themselves, instead of hitting a hard crash.
-    console.warn('PDF print unavailable, falling back to HTML download:', err);
-    const htmlFilename = buildChatExportFilename({
-      format: 'html',
-      appName,
-      appId,
-      messages,
-      isSingleMessage
-    });
-    downloadFile(htmlContent, htmlFilename, 'text/html');
-    return { success: true, filename: htmlFilename, fallback: 'html' };
+    timeZone = Intl.DateTimeFormat().resolvedOptions().timeZone;
+  } catch {
+    timeZone = undefined;
   }
+
+  const blob = await exportPdfOnServer({
+    kind: 'chat',
+    appId,
+    appName,
+    title: buildChatExportTitle({ appName, messages, isSingleMessage }),
+    filename,
+    template,
+    // Always sent, so a cleared text means "no watermark" rather than the
+    // platform default.
+    watermark: {
+      text: watermark?.text || '',
+      position: watermark?.position,
+      opacity: watermark?.opacity
+    },
+    settings,
+    language,
+    timeZone,
+    messages: messages
+      .filter(msg => !msg.isGreeting)
+      .map(msg => ({
+        role: msg.role,
+        content: typeof msg.content === 'string' ? msg.content : '',
+        timestamp: msg.timestamp
+      }))
+  });
+  saveBlobAs(blob, filename);
+  return { success: true, filename };
 };
 
-// Generate HTML content for PDF
-const generatePDFHTML = (
+// HTML document for the chat's HTML export
+const generateExportHTML = (
   messages,
   settings,
   template,
@@ -750,7 +694,7 @@ const generateMarkdown = messages => {
 const generateHTML = (messages, settings, appName, isSingleMessage = false) => {
   // Use the same high-quality HTML generation as PDF export
   // This ensures consistent styling and proper markdown rendering
-  const htmlContent = generatePDFHTML(
+  const htmlContent = generateExportHTML(
     messages,
     settings,
     'default',
@@ -858,7 +802,8 @@ export const exportChatToFormat = async (messages, settings, format, options = {
     appName = 'iHub Apps',
     template = 'default',
     watermark = {},
-    isSingleMessage = false
+    isSingleMessage = false,
+    language
   } = options;
 
   switch (format) {
@@ -871,7 +816,8 @@ export const exportChatToFormat = async (messages, settings, format, options = {
         appName,
         appId,
         chatId,
-        isSingleMessage
+        isSingleMessage,
+        language
       );
     case 'json':
       return exportChatToJSON(messages, settings, appId, chatId, appName, isSingleMessage);

@@ -3,7 +3,7 @@ import {
   downloadAsMarkdown,
   downloadAsHTML,
   downloadAsDOCX,
-  printAsPDF
+  downloadAsPDF
 } from '../utils/artifactDownload';
 
 /**
@@ -76,10 +76,10 @@ function ArtifactDownloadMenu({ runId, name, size = 'sm', onError }) {
           </button>
           <button
             type="button"
-            onClick={() => run(() => printAsPDF(runId, name))}
+            onClick={() => run(() => downloadAsPDF(runId, name))}
             className="block w-full text-left px-3 py-1.5 text-sm hover:bg-gray-100"
           >
-            PDF (via print dialog)
+            PDF (.pdf)
           </button>
           <button
             type="button"

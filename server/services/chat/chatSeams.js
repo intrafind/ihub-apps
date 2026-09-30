@@ -18,6 +18,7 @@ import defaultRunLog from '../loop/RunLog.js';
 import { buildQuestionPrompt } from '../loop/questionPrompt.js';
 import { buildViewDescriptor, findEmbeddedView, toViewToolResult } from '../mcp/mcpApps.js';
 import { isSchedulingToolDef, proposalOf } from '../scheduler/tasks/proposals.js';
+import { generatedFilesOf } from '../../../shared/generatedFiles.js';
 
 /**
  * A clarification nobody answers expires after a day, so abandoned chats do
@@ -288,6 +289,7 @@ export function chatToolSeam({
   mcpAppViews = null,
   mcpAuthPrompts = null,
   scheduledTaskProposals = null,
+  generatedFiles = null,
   webSearchLog = null
 }) {
   const recordView = view => {
@@ -412,6 +414,12 @@ export function chatToolSeam({
       if (scheduledTaskProposal && Array.isArray(scheduledTaskProposals)) {
         scheduledTaskProposals.push(scheduledTaskProposal);
       }
+      // Only the built-in tools of system skills hand the user a file (a
+      // download card); the same field on any other tool's result is ignored.
+      const files = info.toolDef?.isSystemSkillTool
+        ? generatedFilesOf(outcome.rawResult?.files)
+        : [];
+      if (files.length && Array.isArray(generatedFiles)) generatedFiles.push(...files);
       emit(ctx, SSE_V2_EVENTS.TOOL_COMPLETED, {
         step: ctx.iteration,
         callId: callIdOf(info),
@@ -423,7 +431,8 @@ export function chatToolSeam({
         ...(outcome.webSources?.length ? { webSources: outcome.webSources } : {}),
         ...(mcpApp ? { mcpApp } : {}),
         ...(authRequired ? { authRequired } : {}),
-        ...(scheduledTaskProposal ? { scheduledTaskProposal } : {})
+        ...(scheduledTaskProposal ? { scheduledTaskProposal } : {}),
+        ...(files.length ? { files } : {})
       });
       await logInteraction(
         'tool_usage',

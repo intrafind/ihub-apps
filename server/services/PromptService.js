@@ -503,7 +503,15 @@ class PromptService {
       if (requestedSkill && isFeatureEnabled('skills', configCache.getFeatures())) {
         try {
           const { getSkillContent } = await import('./skillLoader.js');
-          const content = await getSkillContent(requestedSkill);
+          // Only a skill the app offers this user can be pre-activated.
+          const offered = await configCache.getSkillsForApp(
+            app,
+            user,
+            configCache.getPlatform() || {}
+          );
+          const content = offered.some(skill => skill.name === requestedSkill)
+            ? await getSkillContent(requestedSkill)
+            : null;
           if (content) {
             const skillBlock = `\n\n<active_skill name="${requestedSkill}">\n${content.body}\n</active_skill>`;
             systemPrompt += skillBlock;

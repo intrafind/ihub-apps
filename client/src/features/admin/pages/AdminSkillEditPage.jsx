@@ -8,6 +8,7 @@ import AdminBreadcrumb from '../components/AdminBreadcrumb';
 import { useUnsavedChanges } from '../hooks/useUnsavedChanges';
 import ConfirmDialog from '../../../shared/components/ConfirmDialog';
 import ContentAccessSection from '../components/ContentAccessSection';
+import SystemSkillBadge from '../components/SystemSkillBadge';
 import {
   deleteSkill,
   exportSkill,
@@ -226,6 +227,8 @@ function AdminSkillEditPage() {
   const files = skill.files || [];
   const compatibility = skill.compatibility || {};
   const isEnabled = skill.enabled !== false;
+  // Delivered with iHub: read-only here (no toggle, overrides or delete).
+  const isSystem = skill.isSystem === true;
 
   // ---------------------------------------------------------------------------
   // Render: main page
@@ -249,8 +252,9 @@ function AdminSkillEditPage() {
                 <Icon name="sparkles" className="h-5 w-5 text-indigo-600 dark:text-indigo-400" />
               </div>
               <div>
-                <h1 className="text-2xl font-semibold text-gray-900 dark:text-gray-100">
+                <h1 className="text-2xl font-semibold text-gray-900 dark:text-gray-100 flex items-center gap-2">
                   {skill.displayName || skill.name}
+                  {isSystem && <SystemSkillBadge />}
                 </h1>
                 <p className="mt-1 text-sm text-gray-500 dark:text-gray-400">{skill.name}</p>
               </div>
@@ -267,19 +271,21 @@ function AdminSkillEditPage() {
             </button>
 
             {/* Toggle enabled/disabled */}
-            <button
-              onClick={handleToggle}
-              className={`inline-flex items-center px-4 py-2 border rounded-md shadow-xs text-sm font-medium focus:outline-hidden focus:ring-2 focus:ring-offset-2 ${
-                isEnabled
-                  ? 'border-red-300 text-red-700 bg-white hover:bg-red-50 dark:border-red-600 dark:text-red-400 dark:bg-gray-800 dark:hover:bg-red-900/30 focus:ring-red-500'
-                  : 'border-green-300 text-green-700 bg-white hover:bg-green-50 dark:border-green-600 dark:text-green-400 dark:bg-gray-800 dark:hover:bg-green-900/30 focus:ring-green-500'
-              }`}
-            >
-              <Icon name={isEnabled ? 'eye-slash' : 'eye'} className="h-4 w-4 mr-2" />
-              {isEnabled
-                ? t('admin.skills.disable', 'Disable')
-                : t('admin.skills.enable', 'Enable')}
-            </button>
+            {!isSystem && (
+              <button
+                onClick={handleToggle}
+                className={`inline-flex items-center px-4 py-2 border rounded-md shadow-xs text-sm font-medium focus:outline-hidden focus:ring-2 focus:ring-offset-2 ${
+                  isEnabled
+                    ? 'border-red-300 text-red-700 bg-white hover:bg-red-50 dark:border-red-600 dark:text-red-400 dark:bg-gray-800 dark:hover:bg-red-900/30 focus:ring-red-500'
+                    : 'border-green-300 text-green-700 bg-white hover:bg-green-50 dark:border-green-600 dark:text-green-400 dark:bg-gray-800 dark:hover:bg-green-900/30 focus:ring-green-500'
+                }`}
+              >
+                <Icon name={isEnabled ? 'eye-slash' : 'eye'} className="h-4 w-4 mr-2" />
+                {isEnabled
+                  ? t('admin.skills.disable', 'Disable')
+                  : t('admin.skills.enable', 'Enable')}
+              </button>
+            )}
 
             {/* Export */}
             <button
@@ -291,15 +297,41 @@ function AdminSkillEditPage() {
             </button>
 
             {/* Delete */}
-            <button
-              onClick={handleDelete}
-              className="inline-flex items-center px-4 py-2 border border-red-300 dark:border-red-600 rounded-md shadow-xs text-sm font-medium text-red-700 dark:text-red-400 bg-white dark:bg-gray-800 hover:bg-red-50 dark:hover:bg-red-900/30 focus:outline-hidden focus:ring-2 focus:ring-offset-2 focus:ring-red-500"
-            >
-              <Icon name="trash" className="h-4 w-4 mr-2" />
-              {t('admin.skills.delete', 'Delete')}
-            </button>
+            {!isSystem && (
+              <button
+                onClick={handleDelete}
+                className="inline-flex items-center px-4 py-2 border border-red-300 dark:border-red-600 rounded-md shadow-xs text-sm font-medium text-red-700 dark:text-red-400 bg-white dark:bg-gray-800 hover:bg-red-50 dark:hover:bg-red-900/30 focus:outline-hidden focus:ring-2 focus:ring-offset-2 focus:ring-red-500"
+              >
+                <Icon name="trash" className="h-4 w-4 mr-2" />
+                {t('admin.skills.delete', 'Delete')}
+              </button>
+            )}
           </div>
         </div>
+
+        {isSystem && (
+          <div className="mb-6 rounded-md border border-indigo-200 dark:border-indigo-800 bg-indigo-50 dark:bg-indigo-900/20 p-4 text-sm text-indigo-900 dark:text-indigo-200">
+            <p>
+              {t(
+                'admin.skills.systemNotice',
+                'This is a system skill delivered with iHub. It is updated with iHub and cannot be changed or deleted here. Enable it for an app in the app’s Skills settings.'
+              )}
+            </p>
+            {Array.isArray(skill.providedTools) && skill.providedTools.length > 0 && (
+              <p className="mt-2">
+                {t('admin.skills.providedTools', 'Tools this skill provides:')}{' '}
+                {skill.providedTools.map(tool => (
+                  <code
+                    key={tool}
+                    className="mr-1 text-xs bg-white/70 dark:bg-gray-800 px-1.5 py-0.5 rounded-sm"
+                  >
+                    {tool}
+                  </code>
+                ))}
+              </p>
+            )}
+          </div>
+        )}
 
         {/* Error banner */}
         {error && (
@@ -386,17 +418,19 @@ function AdminSkillEditPage() {
                 </span>
               )}
             </button>
-            <button
-              onClick={() => setActiveTab('config')}
-              className={`${
-                activeTab === 'config'
-                  ? 'border-indigo-500 text-indigo-600 dark:text-indigo-400'
-                  : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300 dark:text-gray-400 dark:hover:text-gray-300'
-              } whitespace-nowrap py-4 px-1 border-b-2 font-medium text-sm`}
-            >
-              <Icon name="cog" className="h-4 w-4 inline mr-2" />
-              {t('admin.skills.tabs.configuration', 'Configuration')}
-            </button>
+            {!isSystem && (
+              <button
+                onClick={() => setActiveTab('config')}
+                className={`${
+                  activeTab === 'config'
+                    ? 'border-indigo-500 text-indigo-600 dark:text-indigo-400'
+                    : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300 dark:text-gray-400 dark:hover:text-gray-300'
+                } whitespace-nowrap py-4 px-1 border-b-2 font-medium text-sm`}
+              >
+                <Icon name="cog" className="h-4 w-4 inline mr-2" />
+                {t('admin.skills.tabs.configuration', 'Configuration')}
+              </button>
+            )}
           </nav>
         </div>
 

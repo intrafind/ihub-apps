@@ -10,6 +10,7 @@
 
 import { saveAs } from 'file-saver';
 import { renderMarkdown } from '../../../config/marked.config';
+import { exportPdfOnServer } from '../../../api/endpoints/documents';
 
 /**
  * Fetch the artifact's raw text via authenticated request.
@@ -92,59 +93,19 @@ ${body}
 }
 
 /**
- * Open the rendered markdown in a hidden iframe and trigger the browser's
- * print dialog. The user can choose "Save as PDF" from there. We
- * deliberately don't bundle a PDF library — print-to-PDF is built into
- * every browser and avoids 500KB+ of client weight.
+ * Render the artifact as a real PDF on the server and save it. The print
+ * dialog this replaces printed blank pages in several hosts.
  */
-export async function printAsPDF(runId, artifactName) {
+export async function downloadAsPDF(runId, artifactName) {
   const text = await fetchArtifactText(runId, artifactName);
-  const body = renderMarkdown(text || '');
   const title = baseNameWithoutMd(artifactName);
-  const iframe = document.createElement('iframe');
-  iframe.style.position = 'fixed';
-  iframe.style.right = '0';
-  iframe.style.bottom = '0';
-  iframe.style.width = '0';
-  iframe.style.height = '0';
-  iframe.style.border = '0';
-  iframe.setAttribute('aria-hidden', 'true');
-  document.body.appendChild(iframe);
-  const doc = iframe.contentDocument || iframe.contentWindow.document;
-  doc.open();
-  doc.write(`<!DOCTYPE html>
-<html lang="en">
-<head>
-<meta charset="UTF-8">
-<title>${escapeHtml(title)}</title>
-<style>
-  @page { margin: 18mm; }
-  body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif; line-height: 1.6; color: #1f2937; }
-  h1 { font-size: 22pt; }
-  h2 { font-size: 16pt; }
-  h3 { font-size: 13pt; }
-  pre { background: #f3f4f6; padding: 0.5rem; border-radius: 3px; white-space: pre-wrap; word-break: break-word; }
-  code { background: #f3f4f6; padding: 0.1em 0.3em; border-radius: 2px; font-size: 0.95em; }
-  blockquote { border-left: 3px solid #6366f1; padding: 0 0.75rem; color: #4b5563; }
-  table { border-collapse: collapse; width: 100%; }
-  th, td { border: 1px solid #d1d5db; padding: 4px 8px; }
-  a { color: #4f46e5; }
-</style>
-</head>
-<body>
-${body}
-</body>
-</html>`);
-  doc.close();
-  await new Promise(resolve => setTimeout(resolve, 250));
-  try {
-    iframe.contentWindow.focus();
-    iframe.contentWindow.print();
-  } finally {
-    setTimeout(() => {
-      if (iframe.parentNode) iframe.parentNode.removeChild(iframe);
-    }, 1000);
-  }
+  const blob = await exportPdfOnServer({
+    kind: 'markdown',
+    markdown: text || '',
+    title,
+    filename: title
+  });
+  saveAs(blob, `${title}.pdf`);
 }
 
 /**

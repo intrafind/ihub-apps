@@ -65,3 +65,58 @@ export const fetchIFinderDocumentMetadata = async ({ documentId, searchProfile, 
   });
   return response.data;
 };
+
+/**
+ * Download a file a tool generated for the current user (e.g. a PDF from the
+ * `pdf` skill). Through `apiClient` for the same reason as the iFinder proxy
+ * above: the embedded hosts authenticate with a header, not a cookie.
+ *
+ * @param {string} fileId - Id from the file descriptor.
+ * @returns {Promise<Blob>}
+ */
+export const fetchGeneratedFile = async fileId => {
+  if (!fileId) throw new Error('Missing required parameters');
+  const response = await apiClient.get(`/generated-files/${encodeURIComponent(fileId)}`, {
+    responseType: 'blob',
+    timeout: DOCUMENT_REQUEST_TIMEOUT
+  });
+  return response.data;
+};
+
+/**
+ * With `responseType: 'blob'` a JSON error body arrives as a Blob; read its
+ * `error` message so the user sees the reason rather than a status code.
+ *
+ * @param {unknown} data
+ * @returns {Promise<string|null>}
+ */
+const blobErrorMessage = async data => {
+  if (!(data instanceof Blob)) return null;
+  try {
+    const body = JSON.parse(await data.text());
+    return typeof body?.error === 'string' ? body.error : null;
+  } catch {
+    return null;
+  }
+};
+
+/**
+ * Render a PDF on the server (`POST /api/exports/pdf`).
+ *
+ * @param {Object} payload - `{ kind: 'chat', messages, settings, … }` or
+ *   `{ kind: 'markdown', markdown, title, … }`.
+ * @returns {Promise<Blob>} The PDF.
+ */
+export const exportPdfOnServer = async payload => {
+  try {
+    const response = await apiClient.post('/exports/pdf', payload, {
+      responseType: 'blob',
+      timeout: DOCUMENT_REQUEST_TIMEOUT
+    });
+    return response.data;
+  } catch (error) {
+    const message = await blobErrorMessage(error?.response?.data);
+    if (message) throw new Error(message);
+    throw error;
+  }
+};

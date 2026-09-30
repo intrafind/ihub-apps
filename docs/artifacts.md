@@ -113,6 +113,7 @@ would otherwise create a scope nothing else can find or sweep.
 | ------ | -------------- | ---------------------------------------------------- |
 | `chat` | chat id        | a durable chat's turns; swept when the chat is deleted |
 | `run`  | run/execution id | a workflow execution or an agent run                |
+| `user` | hashed owner id | files a tool generated for a user (a PDF from the [`pdf` skill](pdf-generation.md#generated-files)); swept by age |
 
 Every artifact of one scope shares a key prefix, which is what makes
 "everything this chat produced" and "everything this run produced" the same

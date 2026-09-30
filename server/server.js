@@ -27,6 +27,8 @@ import registerToolRoutes from './routes/toolRoutes.js';
 import registerMcpAppRoutes from './routes/mcpAppRoutes.js';
 import registerMcpOAuthRoutes from './routes/mcpOAuth.js';
 import registerSkillRoutes from './routes/skillRoutes.js';
+import registerGeneratedFileRoutes from './routes/generatedFiles.js';
+import registerExportRoutes from './routes/exports.js';
 import registerPageRoutes from './routes/pageRoutes.js';
 import registerRendererRoutes from './routes/rendererRoutes.js';
 import registerAppSessionStartRoute from './routes/appSessionRoutes.js';
@@ -719,6 +721,8 @@ if (cluster.isPrimary && workerCount > 1) {
   registerMcpAppRoutes(app);
   registerMcpOAuthRoutes(app);
   registerSkillRoutes(app);
+  registerGeneratedFileRoutes(app);
+  registerExportRoutes(app);
   registerPageRoutes(app);
   registerRendererRoutes(app);
   registerAppSessionStartRoute(app);

@@ -13,6 +13,7 @@ import {
 import { useUIConfig } from '../../../shared/contexts/UIConfigContext';
 import { getLocalizedContent } from '../../../utils/localizeContent';
 import useFeatureFlags from '../../../shared/hooks/useFeatureFlags';
+import { usePlatformConfig } from '../../../shared/contexts/PlatformConfigContext';
 
 // Formats whose content can be copied to the clipboard as plain text. Binary
 // formats (pdf, docx, xlsx, pptx) and the styled HTML document can only be
@@ -57,15 +58,27 @@ function ExportDialog({
     return () => window.removeEventListener('keydown', onKeyDown);
   }, [isOpen, isExporting, onClose]);
 
-  // PDF-specific configuration
-  const [pdfConfig, setPdfConfig] = useState({
-    template: 'default',
+  // PDF-specific configuration, starting from the platform's defaults
+  // (`platform.pdfExport`).
+  const { platformConfig } = usePlatformConfig();
+  const pdfDefaults = platformConfig?.pdfExport || {};
+  const [pdfConfig, setPdfConfig] = useState(() => ({
+    template: ['default', 'professional', 'minimal'].includes(pdfDefaults.defaultTemplate)
+      ? pdfDefaults.defaultTemplate
+      : 'default',
     watermark: {
-      text: 'iHub Apps',
-      position: 'bottom-right',
-      opacity: 0.5
+      text:
+        pdfDefaults.watermark?.enabled === false
+          ? ''
+          : (pdfDefaults.watermark?.text ?? 'iHub Apps'),
+      position: ['bottom-right', 'bottom-left', 'bottom-center'].includes(
+        pdfDefaults.watermark?.position
+      )
+        ? pdfDefaults.watermark.position
+        : 'bottom-right',
+      opacity: Number(pdfDefaults.watermark?.opacity) || 0.5
     }
-  });
+  }));
 
   if (!isOpen) return null;
 
@@ -198,7 +211,8 @@ function ExportDialog({
         appId,
         chatId,
         appName,
-        isSingleMessage
+        isSingleMessage,
+        language: currentLanguage
       };
 
       // Handle different export formats

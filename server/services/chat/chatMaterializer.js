@@ -17,6 +17,7 @@
 import { boundStoredViews } from '../mcp/mcpApps.js';
 import { boundStoredCitations } from './chatCitations.js';
 import { boundStoredProposals } from '../scheduler/tasks/proposals.js';
+import { generatedFilesOf } from '../../../shared/generatedFiles.js';
 import { boundStoredActivity, takeRunActivity } from './runActivity.js';
 import { insertSupportMarkers, storedWebSearch } from '../../../shared/webCitations.js';
 
@@ -477,6 +478,9 @@ export async function settleAssistantTurn({
     const scheduledTaskProposals = pausedWithoutAnswer
       ? []
       : boundStoredProposals(summary?.scheduledTaskProposals);
+    // Download cards for files the turn's tools generated (the bytes live in
+    // the owner's generated files, see services/documents/generatedFiles.js).
+    const generatedFiles = pausedWithoutAnswer ? [] : generatedFilesOf(summary?.generatedFiles);
     // What the turn did before it answered — searches, documents, tool calls,
     // workflow steps — so a user coming back can see how the answer came about.
     const activity = pausedWithoutAnswer
@@ -515,6 +519,7 @@ export async function settleAssistantTurn({
             ...(citations ? { citations } : {}),
             ...(mcpAuthRequired.length > 0 ? { mcpAuthRequired } : {}),
             ...(scheduledTaskProposals.length > 0 ? { scheduledTaskProposals } : {}),
+            ...(generatedFiles.length > 0 ? { generatedFiles } : {}),
             ...(activity ? { activity } : {}),
             ...(webSearch ? { webSearch } : {})
           },

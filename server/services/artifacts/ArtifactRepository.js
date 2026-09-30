@@ -74,8 +74,11 @@ export const ARTIFACT_VERSION = 1;
  * - `chat` — a durable chat; its turns' pictures, swept with the chat.
  * - `run`  — one run of the ledger: a workflow execution, an agent run, or a
  *   chat turn that wants its output kept per run rather than per chat.
+ * - `user` — files a tool generated for one user (a PDF the model created),
+ *   independent of whether the chat is stored; keyed by an owner key from
+ *   `services/documents/generatedFiles.js` and swept by age there.
  */
-export const ARTIFACT_SCOPES = Object.freeze(['chat', 'run']);
+export const ARTIFACT_SCOPES = Object.freeze(['chat', 'run', 'user']);
 
 /**
  * Separator between the scope, its id and the artifact id in a key.

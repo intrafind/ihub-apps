@@ -169,6 +169,8 @@ const OPTIONAL_MESSAGE_FIELDS = [
   'mcpAuthRequired',
   // Confirmation cards for proposed scheduled tasks (see scheduler/tasks/proposals.js).
   'scheduledTaskProposals',
+  // Download cards for files a tool generated (see shared/generatedFiles.js).
+  'generatedFiles',
   // What the run did before it answered — searches, tool calls, workflow steps
   // (see services/chat/runActivity.js).
   'activity',

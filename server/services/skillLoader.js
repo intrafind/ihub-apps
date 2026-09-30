@@ -1,4 +1,4 @@
-import { promises as fs } from 'fs';
+import { promises as fs, existsSync } from 'fs';
 import path from 'path';
 import matter from 'gray-matter';
 import { getRootDir } from '../pathUtils.js';
@@ -11,6 +11,50 @@ const SKILL_NAME_PATTERN = /^[a-z0-9]([a-z0-9-]*[a-z0-9])?$/;
 const MAX_SKILL_NAME_LENGTH = 64;
 const MAX_DESCRIPTION_LENGTH = 1024;
 const SKILL_FILE = 'SKILL.md';
+
+/**
+ * System skills: skills iHub ships as part of the server (e.g. `pdf`).
+ *
+ * They live next to the code, not in `contents/`, so they are never copied
+ * into an installation and cannot be edited, replaced or deleted there. A
+ * skill is a system skill because of *where it lives* — an `isSystem` field
+ * in a SKILL.md frontmatter means nothing. Their names are reserved: a
+ * `contents/skills/<name>` directory with the same name is ignored.
+ */
+/**
+ * @returns {string} Absolute path of the directory holding the system skills
+ *   (`server/systemSkills`, in a checkout and in every packaged build).
+ */
+export function getSystemSkillsDirectory() {
+  return path.join(getRootDir(), 'server', 'systemSkills');
+}
+
+/**
+ * Whether a name belongs to a system skill.
+ *
+ * @param {string} skillName
+ * @returns {boolean}
+ */
+export function isSystemSkill(skillName) {
+  if (!validateSkillName(skillName).valid) return false;
+  return existsSync(path.join(getSystemSkillsDirectory(), skillName, SKILL_FILE));
+}
+
+/**
+ * Tool ids named by a skill's `allowed-tools` frontmatter (a space- or
+ * comma-separated string, or a YAML list).
+ *
+ * @param {unknown} value
+ * @returns {string[]}
+ */
+export function parseAllowedTools(value) {
+  const list = Array.isArray(value)
+    ? value
+    : typeof value === 'string'
+      ? value.split(/[\s,]+/)
+      : [];
+  return [...new Set(list.map(v => String(v).trim()).filter(v => /^[A-Za-z0-9_-]{1,64}$/.test(v)))];
+}
 
 /**
  * Validate a skill name against the Agent Skills spec
@@ -45,6 +89,19 @@ function getSkillsDirectory(customDir) {
   return customDir
     ? path.resolve(rootDir, customDir)
     : path.resolve(rootDir, contentsDir, 'skills');
+}
+
+/**
+ * The directory a skill's files are read from: the system skills directory
+ * for a system skill (they win over a same-named contents skill), otherwise
+ * the contents skills directory.
+ *
+ * @param {string} skillName - A validated skill name.
+ * @param {string} [customDir]
+ * @returns {string}
+ */
+function resolveSkillRoot(skillName, customDir) {
+  return isSystemSkill(skillName) ? getSystemSkillsDirectory() : getSkillsDirectory(customDir);
 }
 
 /**
@@ -110,13 +167,14 @@ function validateSkillData(frontmatter, dirName) {
  * @param {string} dirPath - Path to scan
  * @returns {Promise<string[]>} Array of subdirectory names
  */
-async function scanForSkillDirs(dirPath) {
+async function scanForSkillDirs(dirPath, { create = true } = {}) {
   try {
     const entries = await fs.readdir(dirPath, { withFileTypes: true });
     // Exclude symlinks — only real directories are valid skill containers
     return entries.filter(e => e.isDirectory() && !e.isSymbolicLink()).map(e => e.name);
   } catch (error) {
     if (error.code === 'ENOENT') {
+      if (!create) return [];
       // Directory doesn't exist yet — create it
       try {
         await fs.mkdir(dirPath, { recursive: true });
@@ -171,9 +229,22 @@ async function listSkillFiles(skillDir) {
  * @returns {Promise<Map<string, object>>} Map of skill name to metadata
  */
 export async function loadSkillsMetadata(customDir) {
-  const skillsDir = getSkillsDirectory(customDir);
-  const skillDirs = await scanForSkillDirs(skillsDir);
   const skills = new Map();
+  // System skills first: their names are reserved.
+  await collectSkills(getSystemSkillsDirectory(), skills, { isSystem: true, create: false });
+  await collectSkills(getSkillsDirectory(customDir), skills, { isSystem: false, create: true });
+  return skills;
+}
+
+/**
+ * Read every skill in one directory into `skills`.
+ *
+ * @param {string} skillsDir
+ * @param {Map<string, object>} skills - Filled in place; existing names win.
+ * @param {{ isSystem: boolean, create: boolean }} options
+ */
+async function collectSkills(skillsDir, skills, { isSystem, create }) {
+  const skillDirs = await scanForSkillDirs(skillsDir, { create });
 
   for (const dirName of skillDirs) {
     const skillPath = path.join(skillsDir, dirName);
@@ -183,6 +254,15 @@ export async function loadSkillsMetadata(customDir) {
       await fs.access(skillFilePath);
     } catch {
       // No SKILL.md in this directory — skip
+      continue;
+    }
+
+    if (skills.has(dirName)) {
+      logger.warn('Ignoring skill that uses the name of a system skill', {
+        component: 'SkillLoader',
+        dirName,
+        skillPath
+      });
       continue;
     }
 
@@ -209,19 +289,22 @@ export async function loadSkillsMetadata(customDir) {
       compatibility: fm.compatibility || null,
       metadata: fm.metadata || {},
       allowedTools: fm['allowed-tools'] || null,
+      // Only a system skill can bring tools with it: its `allowed-tools` name
+      // built-in tools that come with the skill when an app enables it. An
+      // installed skill's list stays informational.
+      providedTools: isSystem ? parseAllowedTools(fm['allowed-tools']) : [],
+      isSystem,
       path: skillPath,
       enabled: true // Default, can be overridden by skills.json
     });
   }
-
-  return skills;
 }
 
 /**
  * Get the full content (body) of a skill's SKILL.md
  * @param {string} skillName - Skill name/directory
  * @param {string} [customDir] - Optional custom skills directory
- * @returns {Promise<{ body: string, references: string[], scripts: string[], assets: string[] } | null>}
+ * @returns {Promise<{ body: string, description: string, frontmatter: object, isSystem: boolean, references: string[], scripts: string[], assets: string[] } | null>}
  */
 export async function getSkillContent(skillName, customDir) {
   // Validate skill name to prevent path traversal and enforce spec
@@ -235,7 +318,7 @@ export async function getSkillContent(skillName, customDir) {
     return null;
   }
 
-  const skillsDir = getSkillsDirectory(customDir);
+  const skillsDir = resolveSkillRoot(skillName, customDir);
   const resolvedSkillPath = await resolveAndValidatePath(skillName, skillsDir);
   if (!resolvedSkillPath) {
     logger.warn('Rejected skill path traversal attempt', { component: 'SkillLoader', skillName });
@@ -268,7 +351,10 @@ export async function getSkillContent(skillName, customDir) {
 
   return {
     body: parsed.body,
+    description:
+      typeof parsed.frontmatter?.description === 'string' ? parsed.frontmatter.description : '',
     frontmatter: parsed.frontmatter,
+    isSystem: skillsDir === getSystemSkillsDirectory(),
     references,
     scripts,
     assets
@@ -304,7 +390,7 @@ export async function getSkillResource(skillName, filePath, customDir) {
     return null;
   }
 
-  const skillsDir = getSkillsDirectory(customDir);
+  const skillsDir = resolveSkillRoot(skillName, customDir);
   const resolvedSkillPath = await resolveAndValidatePath(skillName, skillsDir);
   if (!resolvedSkillPath) {
     logger.warn('Rejected skill path traversal attempt', { component: 'SkillLoader', skillName });
@@ -385,13 +471,14 @@ export async function validateSkillDirectory(dirPath) {
 }
 
 /**
- * Get the absolute path for a skill directory
+ * Get the absolute path for a skill directory (the system skills directory
+ * for a system skill)
  * @param {string} skillName - Skill name
  * @param {string} [customDir] - Optional custom skills directory
  * @returns {string}
  */
 export function getSkillPath(skillName, customDir) {
-  return path.join(getSkillsDirectory(customDir), skillName);
+  return path.join(resolveSkillRoot(skillName, customDir), skillName);
 }
 
 export { getSkillsDirectory, listSkillFiles, validateSkillName };

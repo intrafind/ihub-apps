@@ -18,6 +18,7 @@
  * @module shared/run/runReducer
  */
 import { SSE_V2_EVENTS } from '../runEvents.js';
+import { generatedFilesOf } from '../generatedFiles.js';
 
 export const RUN_EVENTS = SSE_V2_EVENTS;
 
@@ -432,6 +433,8 @@ export function reduceRunEvent(state, envelope) {
         authRequired: data.authRequired || null,
         // A scheduled task a scheduling tool proposed (confirmation card).
         scheduledTaskProposal: data.scheduledTaskProposal || null,
+        // Files the tool generated for the user (download cards).
+        files: generatedFilesOf(data.files),
         completedAt: ts
       };
       const tools =

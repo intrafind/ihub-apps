@@ -556,6 +556,9 @@ class ChatService {
     // Scheduled-task proposals the scheduling tools made, stored with the
     // answer so the confirmation card is still there when the chat reopens.
     const scheduledTaskProposals = [];
+    // Files the turn's tools generated (a PDF from `create_pdf`), stored with
+    // the answer so the download card is still there when the chat reopens.
+    const generatedFiles = [];
     // The turn's web search — tool calls with their sources, and the provider's
     // grounding per step — stored with the answer so reopening the chat shows
     // the same sources and citations (shared/webCitations.js).
@@ -588,6 +591,7 @@ class ChatService {
         mcpAppViews,
         mcpAuthPrompts,
         scheduledTaskProposals,
+        generatedFiles,
         webSearchLog
       }),
       ...(Array.isArray(extraSeams) ? extraSeams.filter(Boolean) : []),
@@ -709,6 +713,7 @@ class ChatService {
         mcpAppViews,
         mcpAuthPrompts,
         scheduledTaskProposals,
+        generatedFiles,
         webSearchLog,
         takePendingCall: () => turnSeam.takePendingCall(),
         structured: outputSeam
@@ -817,6 +822,7 @@ class ChatService {
     mcpAppViews = [],
     mcpAuthPrompts = [],
     scheduledTaskProposals = [],
+    generatedFiles = [],
     webSearchLog = null,
     takePendingCall = () => null,
     structured = null
@@ -844,6 +850,7 @@ class ChatService {
       citations: mergeCitations(result.citations),
       mcpAuthRequired: mcpAuthPrompts,
       scheduledTaskProposals,
+      generatedFiles,
       // The web sources behind the answer and the passages they back.
       webSearch: webSearchLog ? buildWebSearch(webSearchLog) : null,
       knowledgeSources: this.getKnowledgeSources(chatId, loopSources)

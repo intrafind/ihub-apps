@@ -166,7 +166,14 @@ function SkillsSelector({ selectedSkills = [], onSkillsChange }) {
                   onClick={() => handleAddSkill(skill)}
                   className="w-full text-left px-3 py-3 text-sm text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700 focus:bg-gray-100 dark:focus:bg-gray-700 focus:outline-hidden border-b border-gray-100 dark:border-gray-700 last:border-b-0"
                 >
-                  <div className="font-medium text-gray-900 dark:text-gray-100">{skill.name}</div>
+                  <div className="font-medium text-gray-900 dark:text-gray-100 flex items-center gap-2">
+                    {skill.name}
+                    {skill.isSystem && (
+                      <span className="px-1.5 py-0.5 rounded-sm text-[10px] font-semibold uppercase tracking-wide bg-indigo-100 text-indigo-700 dark:bg-indigo-900/60 dark:text-indigo-200">
+                        {t('admin.skills.system', 'System')}
+                      </span>
+                    )}
+                  </div>
                   {skill.description && (
                     <div className="text-xs text-gray-500 dark:text-gray-400 mt-1 line-clamp-2">
                       {skill.description}

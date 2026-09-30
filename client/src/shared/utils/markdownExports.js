@@ -1,7 +1,7 @@
 /**
  * Markdown export helpers — take an in-memory markdown string and save it
- * to disk in the user's chosen format. The PDF path routes through the
- * browser's print dialog (no PDF library bundled). The DOCX path lazy-
+ * to disk in the user's chosen format. The PDF is rendered on the server
+ * (`POST /api/exports/pdf`). The DOCX path lazy-
  * loads the `docx` package and converts a focused subset of markdown
  * (headings, paragraphs, bullet/numbered lists, inline bold/italic/code/
  * links, fenced code blocks) — enough for the audit reports we produce
@@ -16,6 +16,7 @@
 
 import { saveAs } from 'file-saver';
 import { renderMarkdown } from '../../config/marked.config';
+import { exportPdfOnServer } from '../../api/endpoints/documents';
 
 function baseNameWithoutMd(name) {
   if (typeof name !== 'string') return 'document';
@@ -75,62 +76,18 @@ ${body}
 }
 
 /**
- * Render markdown in a hidden iframe and trigger the browser's print
- * dialog. The user picks "Save as PDF" from there. We deliberately don't
- * bundle a PDF library — print-to-PDF is built into every browser and
- * avoids 500KB+ of client weight.
+ * Render the markdown as a real PDF on the server and save it. The print
+ * dialog this replaces printed blank pages in several hosts.
  */
-export function printAsPDF(text, name) {
-  const body = renderMarkdown(text || '');
+export async function exportAsPDF(text, name) {
   const title = baseNameWithoutMd(name);
-  const iframe = document.createElement('iframe');
-  iframe.style.position = 'fixed';
-  iframe.style.right = '0';
-  iframe.style.bottom = '0';
-  iframe.style.width = '0';
-  iframe.style.height = '0';
-  iframe.style.border = '0';
-  iframe.setAttribute('aria-hidden', 'true');
-  document.body.appendChild(iframe);
-  const doc = iframe.contentDocument || iframe.contentWindow.document;
-  doc.open();
-  doc.write(`<!DOCTYPE html>
-<html lang="en">
-<head>
-<meta charset="UTF-8">
-<title>${escapeHtml(title)}</title>
-<style>
-  @page { margin: 18mm; }
-  body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif; line-height: 1.6; color: #1f2937; }
-  h1 { font-size: 22pt; }
-  h2 { font-size: 16pt; }
-  h3 { font-size: 13pt; }
-  pre { background: #f3f4f6; padding: 0.5rem; border-radius: 3px; white-space: pre-wrap; word-break: break-word; }
-  code { background: #f3f4f6; padding: 0.1em 0.3em; border-radius: 2px; font-size: 0.95em; }
-  blockquote { border-left: 3px solid #6366f1; padding: 0 0.75rem; color: #4b5563; }
-  table { border-collapse: collapse; width: 100%; }
-  th, td { border: 1px solid #d1d5db; padding: 4px 8px; }
-  a { color: #4f46e5; }
-</style>
-</head>
-<body>
-${body}
-</body>
-</html>`);
-  doc.close();
-  return new Promise(resolve => {
-    setTimeout(() => {
-      try {
-        iframe.contentWindow.focus();
-        iframe.contentWindow.print();
-      } finally {
-        setTimeout(() => {
-          if (iframe.parentNode) iframe.parentNode.removeChild(iframe);
-          resolve();
-        }, 1000);
-      }
-    }, 250);
+  const blob = await exportPdfOnServer({
+    kind: 'markdown',
+    markdown: text || '',
+    title,
+    filename: title
   });
+  saveAs(blob, `${title}.pdf`);
 }
 
 /**
