@@ -38,10 +38,16 @@ class FakeWebSocket {
   send(data) {
     this.sent.push(data);
   }
+  // The server closing a session: a clean close without a status code.
   close() {
     if (this.readyState === FakeWebSocket.CLOSED) return;
     this.readyState = FakeWebSocket.CLOSED;
-    this.onclose?.();
+    this.onclose?.({ wasClean: true, code: 1005 });
+  }
+  // A proxy timeout or a network drop: no close handshake.
+  drop() {
+    this.readyState = FakeWebSocket.CLOSED;
+    this.onclose?.({ wasClean: false, code: 1006 });
   }
   // Test controls
   open() {
@@ -168,6 +174,19 @@ test('a socket that closes before stop is an interruption, after stop the end', 
   second.ws.close();
   await expect(stopped).resolves.toBe('All of it.');
   expect(onError).toHaveBeenCalledTimes(1);
+});
+
+test('a connection dropped after stop is interrupted, not a finished transcript', async () => {
+  const { session, ws } = await start();
+  ws.receive({ type: 'ready' });
+  ws.receive({ type: 'final', text: 'The first half' });
+  const stopped = session.stop();
+  // A proxy timing out while the tail is transcribed: no `done`, no clean close.
+  ws.drop();
+  await expect(stopped).rejects.toMatchObject({
+    code: 'interrupted',
+    partialText: 'The first half'
+  });
 });
 
 test('a refusal while the microphone is set up rejects the start, not onError', async () => {

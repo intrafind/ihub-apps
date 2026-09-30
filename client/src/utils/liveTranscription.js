@@ -221,15 +221,18 @@ export async function startLiveTranscription({
       ws.onerror = () => {
         if (!opened) reject(new Error('Transcription connection failed'));
       };
-      ws.onclose = () => {
+      ws.onclose = evt => {
         if (!opened) {
           reject(new Error('Transcription connection closed before opening'));
           return;
         }
         if (settled) return;
-        // Completion is only trusted after `stop` was sent — a close before it
-        // means the transcript is truncated.
-        if (stopSent) finish();
+        // Completion is only trusted after `stop` was sent, and only on a clean
+        // close: the server ends a finished session with `done`, or by closing
+        // itself when the upstream closed normally. A dropped connection (a
+        // proxy timeout, the network) closes uncleanly and truncates the
+        // transcript — which must not be sent as if it were complete.
+        if (stopSent && evt?.wasClean) finish();
         else fail('interrupted', 'Transcription connection closed before completion');
       };
       ws.onmessage = evt => {
