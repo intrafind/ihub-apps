@@ -18,3 +18,15 @@ For admins, a chat answered while they were away kept its "new" dot in **Recents
 list even after they opened it. The server treated an admin reading their own chat like an admin
 reading somebody else's, which deliberately leaves the badge alone. It now checks ownership first.
 Opening another user's chat as an admin still leaves that user's badge untouched.
+
+## vLLM Models Return Structured Answers Again When "Show Reasoning" Is Off
+
+On vLLM models with thinking enabled and **Show reasoning** turned off, every request that asks
+for a structured (JSON) answer came back empty. Workflows stopped extracting anything — each
+document failed with:
+
+> [NO_EXTRACTION_OUTPUT] Upstream prompt produced no output
+
+vLLM returns no content when hidden reasoning is combined with structured output. For structured
+requests iHub no longer asks vLLM to hide the reasoning, so apps with structured output can show
+the model's reasoning even when **Show reasoning** is off.

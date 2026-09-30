@@ -115,6 +115,18 @@ describe('vLLM reasoning — request side', () => {
     expect(req.body.include_reasoning).toBe(false);
   });
 
+  test('include_reasoning not sent with structured output (vLLM returns empty content)', async () => {
+    const model = { ...baseModel, thinking: { enabled: true, thoughts: false } };
+    const withSchema = await VLLMAdapter.createCompletionRequest(model, messages, 'key', {
+      responseSchema: { type: 'object', properties: {} }
+    });
+    expect(withSchema.body.include_reasoning).toBeUndefined();
+    const withJson = await VLLMAdapter.createCompletionRequest(model, messages, 'key', {
+      responseFormat: 'json'
+    });
+    expect(withJson.body.include_reasoning).toBeUndefined();
+  });
+
   test('include_reasoning not sent when thinking is turned off', async () => {
     const model = { ...baseModel, thinking: { enabled: true, thoughts: false } };
     const req = await VLLMAdapter.createCompletionRequest(model, messages, 'key', {
