@@ -1,8 +1,17 @@
 #!/usr/bin/env node
 
 /**
- * Migration V140 specs — seeding `platform.aiTransparency` and the per-model
- * `contentMarking` block (EU AI Act Art. 50, issue #2563).
+ * Migration V140 specs — new web tool parameters reach upgrades.
+ *
+ * `webContentExtractor` gained `offset`, `braveSearch` and `qwantSearch` gained
+ * `freshness` and `includeDomains`, `staanSearch` gained `freshness`.
+ * `copyDefaultConfiguration()` only backfills whole files, so an install that
+ * already has these tool files needs this migration, or the model never learns
+ * the options exist.
+ *
+ * What has to be right: a property is added only when absent, everything an
+ * admin changed is kept, a definition pointed at another script is left alone,
+ * and both layouts (one file per tool, legacy `config/tools.json`) are handled.
  */
 import fs from 'node:fs/promises';
 import os from 'node:os';
@@ -15,13 +24,12 @@ import {
   precondition,
   version,
   description,
-  AI_TRANSPARENCY_DEFAULTS
-} from '../migrations/V140__add_ai_transparency.js';
-import { setDefault } from '../migrations/utils.js';
-import { DEFAULT_AI_TRANSPARENCY } from '../../shared/aiTransparency.js';
+  NEW_PARAMETERS
+} from '../migrations/V140__web_tools_filters_and_page_offset.js';
 
 let baseDir;
 
+/** A migration context over a scratch contents directory. */
 function makeCtx(dir) {
   const logs = [];
   return {
@@ -31,135 +39,166 @@ function makeCtx(dir) {
         .stat(path.join(dir, rel))
         .then(() => true)
         .catch(() => false),
-    readJson: async rel => JSON.parse(await fs.readFile(path.join(dir, rel), 'utf8')),
+    readJson: async rel =>
+      fs
+        .readFile(path.join(dir, rel), 'utf8')
+        .then(JSON.parse)
+        .catch(() => null),
     writeJson: async (rel, data) => {
       await fs.mkdir(path.dirname(path.join(dir, rel)), { recursive: true });
       await fs.writeFile(path.join(dir, rel), JSON.stringify(data, null, 2), 'utf8');
     },
-    listFiles: async (rel, _glob) =>
-      (await fs.readdir(path.join(dir, rel))).filter(f => f.endsWith('.json')),
-    setDefault,
     log: m => logs.push(['info', m]),
     warn: m => logs.push(['warn', m])
   };
 }
 
-async function seed({ platform = {}, models = {} } = {}) {
-  const dir = await fs.mkdtemp(path.join(baseDir, 'v140-'));
-  if (platform !== null) {
-    await fs.mkdir(path.join(dir, 'config'), { recursive: true });
-    await fs.writeFile(path.join(dir, 'config/platform.json'), JSON.stringify(platform), 'utf8');
-  }
-  if (models !== null) {
-    await fs.mkdir(path.join(dir, 'models'), { recursive: true });
-    for (const [id, model] of Object.entries(models)) {
-      await fs.writeFile(path.join(dir, `models/${id}.json`), JSON.stringify(model), 'utf8');
+function legacyTool(id, extraProperties = {}) {
+  return {
+    id,
+    name: { en: `${id} (admin wording)` },
+    script: `${id}.js`,
+    parameters: {
+      type: 'object',
+      properties: {
+        query: { type: 'string', description: { en: 'The search query' } },
+        ...extraProperties
+      },
+      required: ['query']
     }
-  }
-  return { dir, ctx: makeCtx(dir) };
+  };
 }
 
-function flatten(obj, prefix = '') {
-  const out = {};
-  for (const [key, value] of Object.entries(obj)) {
-    const p = prefix ? `${prefix}.${key}` : key;
-    if (value && typeof value === 'object' && !Array.isArray(value))
-      Object.assign(out, flatten(value, p));
-    else out[p] = value;
-  }
-  return out;
+async function seed(dir, rel, data) {
+  await fs.mkdir(path.dirname(path.join(dir, rel)), { recursive: true });
+  await fs.writeFile(path.join(dir, rel), JSON.stringify(data, null, 2), 'utf8');
 }
 
-before(async () => {
-  baseDir = await fs.mkdtemp(path.join(os.tmpdir(), 'ihub-migration-v140-'));
-});
+async function scratch(name) {
+  return fs.mkdtemp(path.join(baseDir, `${name}-`));
+}
 
-after(async () => {
-  await fs.rm(baseDir, { recursive: true, force: true });
-});
+async function readDefault(id) {
+  return JSON.parse(
+    await fs.readFile(new URL(`../defaults/tools/${id}.json`, import.meta.url), 'utf8')
+  );
+}
 
-describe('V140 identity', () => {
-  it('is numbered and described as its file name says', () => {
+describe('V140 — web tool filters and page reader offset', () => {
+  before(async () => {
+    baseDir = await fs.mkdtemp(path.join(os.tmpdir(), 'ihub-v140-'));
+  });
+  after(async () => {
+    await fs.rm(baseDir, { recursive: true, force: true });
+  });
+
+  it('declares its version and description', () => {
     assert.equal(version, '140');
-    assert.equal(description, 'add_ai_transparency');
+    assert.equal(description, 'web_tools_filters_and_page_offset');
   });
 
-  it('runs when platform.json or the models directory exists', async () => {
-    const { ctx: none } = await seed({ platform: null, models: null });
-    assert.equal(await precondition(none), false);
-    const { ctx: both } = await seed();
-    assert.equal(await precondition(both), true);
+  it('skips an install that has none of the tool files', async () => {
+    assert.equal(await precondition(makeCtx(await scratch('none'))), false);
   });
 
-  it('seeds exactly the shared defaults', () => {
-    assert.deepEqual(AI_TRANSPARENCY_DEFAULTS, flatten(DEFAULT_AI_TRANSPARENCY));
-  });
-});
-
-describe('V140 platform defaults', () => {
-  it('adds the whole section to an installation that has none', async () => {
-    const { ctx } = await seed({ platform: { auth: { mode: 'local' } } });
-    await up(ctx);
-    const platform = await ctx.readJson('config/platform.json');
-    assert.deepEqual(flatten(platform.aiTransparency), AI_TRANSPARENCY_DEFAULTS);
-    assert.deepEqual(platform.auth, { mode: 'local' });
-  });
-
-  it('keeps values an admin already set', async () => {
-    const { ctx } = await seed({
-      platform: {
-        aiTransparency: { detection: { access: 'public' }, images: { watermark: 'none' } }
-      }
+  it('adds the new parameters to each tool file, leaving the rest alone', async () => {
+    const dir = await scratch('files');
+    await seed(dir, 'tools/braveSearch.json', legacyTool('braveSearch'));
+    await seed(dir, 'tools/qwantSearch.json', legacyTool('qwantSearch'));
+    await seed(
+      dir,
+      'tools/staanSearch.json',
+      legacyTool('staanSearch', { includeDomains: { type: 'array', items: { type: 'string' } } })
+    );
+    await seed(dir, 'tools/webContentExtractor.json', {
+      ...legacyTool('webContentExtractor'),
+      method: 'extractForTool'
     });
+    const ctx = makeCtx(dir);
+    assert.equal(await precondition(ctx), true);
     await up(ctx);
-    const { aiTransparency } = await ctx.readJson('config/platform.json');
-    assert.equal(aiTransparency.detection.access, 'public');
-    assert.equal(aiTransparency.images.watermark, 'none');
-    assert.equal(aiTransparency.images.c2pa, true);
-    assert.equal(aiTransparency.interactionDisclosure.enabled, true);
+
+    const brave = await ctx.readJson('tools/braveSearch.json');
+    assert.deepEqual(brave.parameters.properties.freshness.enum, ['day', 'week', 'month', 'year']);
+    assert.equal(brave.parameters.properties.includeDomains.type, 'array');
+    assert.equal(brave.name.en, 'braveSearch (admin wording)');
+    assert.deepEqual(brave.parameters.required, ['query']);
+
+    const qwant = await ctx.readJson('tools/qwantSearch.json');
+    assert.ok(qwant.parameters.properties.freshness);
+    assert.ok(qwant.parameters.properties.includeDomains);
+
+    const staan = await ctx.readJson('tools/staanSearch.json');
+    assert.ok(staan.parameters.properties.freshness);
+    // Staan's own includeDomains is kept as it was.
+    assert.deepEqual(staan.parameters.properties.includeDomains, {
+      type: 'array',
+      items: { type: 'string' }
+    });
+
+    const reader = await ctx.readJson('tools/webContentExtractor.json');
+    assert.equal(reader.parameters.properties.offset.type, 'integer');
+    assert.equal(reader.parameters.properties.offset.minimum, 0);
+    assert.equal(reader.method, 'extractForTool');
+  });
+
+  it('never overwrites a parameter an admin already customised', async () => {
+    const dir = await scratch('custom');
+    await seed(
+      dir,
+      'tools/braveSearch.json',
+      legacyTool('braveSearch', { freshness: { type: 'string', description: { en: 'Ours' } } })
+    );
+    const ctx = makeCtx(dir);
+    await up(ctx);
+    const tool = await ctx.readJson('tools/braveSearch.json');
+    assert.deepEqual(tool.parameters.properties.freshness, {
+      type: 'string',
+      description: { en: 'Ours' }
+    });
+    assert.ok(tool.parameters.properties.includeDomains);
+  });
+
+  it('leaves a definition pointed at another script alone', async () => {
+    const dir = await scratch('other-script');
+    const custom = { ...legacyTool('braveSearch'), script: 'myBrave.js' };
+    await seed(dir, 'tools/braveSearch.json', custom);
+    const ctx = makeCtx(dir);
+    await up(ctx);
+    assert.deepEqual(await ctx.readJson('tools/braveSearch.json'), custom);
+  });
+
+  it('updates the legacy config/tools.json array', async () => {
+    const dir = await scratch('legacy');
+    await seed(dir, 'config/tools.json', [
+      legacyTool('qwantSearch'),
+      { ...legacyTool('webContentExtractor') },
+      { id: 'unrelated', parameters: { properties: {} } }
+    ]);
+    const ctx = makeCtx(dir);
+    await up(ctx);
+    const tools = await ctx.readJson('config/tools.json');
+    assert.ok(tools[0].parameters.properties.freshness);
+    assert.ok(tools[1].parameters.properties.offset);
+    assert.deepEqual(tools[2], { id: 'unrelated', parameters: { properties: {} } });
   });
 
   it('is idempotent', async () => {
-    const { ctx } = await seed();
+    const dir = await scratch('idempotent');
+    await seed(dir, 'tools/qwantSearch.json', legacyTool('qwantSearch'));
+    const ctx = makeCtx(dir);
     await up(ctx);
-    const first = await ctx.readJson('config/platform.json');
+    const once = await ctx.readJson('tools/qwantSearch.json');
     await up(ctx);
-    assert.deepEqual(await ctx.readJson('config/platform.json'), first);
-  });
-});
-
-describe('V140 model contentMarking', () => {
-  it('marks cloud text models as unmarked and Gemini images as SynthID', async () => {
-    const { ctx } = await seed({
-      models: {
-        'claude-x': { id: 'claude-x', provider: 'anthropic' },
-        'gemini-img': { id: 'gemini-img', provider: 'google', supportsImageGeneration: true },
-        'gemini-txt': { id: 'gemini-txt', provider: 'google' }
-      }
-    });
-    await up(ctx);
-    assert.deepEqual((await ctx.readJson('models/claude-x.json')).contentMarking, {
-      textWatermark: 'none'
-    });
-    assert.deepEqual((await ctx.readJson('models/gemini-img.json')).contentMarking, {
-      textWatermark: 'none',
-      imageWatermark: 'upstream:synthid'
-    });
-    assert.deepEqual((await ctx.readJson('models/gemini-txt.json')).contentMarking, {
-      textWatermark: 'none'
-    });
+    assert.deepEqual(await ctx.readJson('tools/qwantSearch.json'), once);
   });
 
-  it('never overwrites an existing block and skips transcription models', async () => {
-    const own = { textWatermark: { scheme: 'vllm-gumbel', keyGroup: 'acme' } };
-    const { ctx } = await seed({
-      models: {
-        vllm: { id: 'vllm', provider: 'local', contentMarking: own },
-        stt: { id: 'stt', provider: 'google-transcribe', modelType: 'transcription' }
+  it('writes the parameters exactly as the shipped defaults declare them', async () => {
+    for (const [id, additions] of Object.entries(NEW_PARAMETERS)) {
+      const shipped = await readDefault(id);
+      for (const [name, schema] of Object.entries(additions)) {
+        assert.deepEqual(shipped.parameters.properties[name], schema, `${id}.${name}`);
       }
-    });
-    await up(ctx);
-    assert.deepEqual((await ctx.readJson('models/vllm.json')).contentMarking, own);
-    assert.equal((await ctx.readJson('models/stt.json')).contentMarking, undefined);
+    }
   });
 });

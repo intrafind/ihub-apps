@@ -46,3 +46,9 @@ subscription key is not configured".
 
 Saving on **Admin → Voice Input** showed no confirmation, and the page briefly went blank while
 reloading. It now stays in place and shows "Voice input settings saved."
+
+## OpenAI Web Search Answers Show Their Sources
+
+Streamed answers from OpenAI models with native web search showed no sources, and their badge
+said **Based on AI knowledge**. The citations of a streamed answer are now read, so the answer
+lists its sources and carries the web search badge.

@@ -62,6 +62,7 @@ the owner creates another link.
 | --------------------------------------------------------------- | ---------------------------------------------------- |
 | User and assistant messages, as they were stored                | Messages sent after the share, edits made after it   |
 | **Artifacts** the shared messages produced (generated images)   | Artifacts of later turns or edited-away exchanges    |
+| The **web sources** of an answer and its inline citations       |                                                      |
 | The name, type and size of an uploaded file                     | **The uploaded file itself** — it is never stored    |
 |                                                                 | **The Documents panel** under an answer (citations)  |
 
@@ -73,8 +74,11 @@ included: plan.pdf_ where the owner saw the file.
 
 A stored message holds what the transcript holds: the text, the failure that
 cut an answer short, the attachment descriptors and the artifact descriptors.
-The tool activity and sources a live turn shows are not stored, so neither a
-reopened chat nor a share carries them.
+The tool activity a live turn shows is not stored, so neither a reopened chat
+nor a share carries it. The web searches and web sources behind an answer are
+stored (`webSearch`, see [Web Tools → Sources and Citations](web-tools.md#sources-and-citations)),
+and a share keeps them: they are public web pages, and the viewer sees the same
+sources view and citation badges as the owner.
 
 The documents listed under an answer are stored, so the owner's reopened chat
 shows them again, but a share leaves them out. They are every document the

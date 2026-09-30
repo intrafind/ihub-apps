@@ -354,12 +354,14 @@ describe('parseStaanWebResults', () => {
       ])
     );
     // `snippet` is Staan's name for what the other providers call description;
-    // renaming it here is what lets an app switch provider transparently.
+    // renaming it here is what lets an app switch provider transparently. The
+    // favicon is kept for the chat's source cards.
     assert.deepEqual(result, {
       title: 'IntraFind',
       url: 'https://intrafind.com/de',
       description: 'Enterprise search',
-      hostname: 'intrafind.com'
+      hostname: 'intrafind.com',
+      favicon: 'https://example.com/f.png'
     });
   });
 

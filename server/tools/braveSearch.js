@@ -10,6 +10,8 @@ import logger from '../utils/logger.js';
  * @param {number} [params.maxResults=10] - Maximum number of results to return / pages to extract
  * @param {number} [params.contentMaxLength=3000] - Maximum characters of extracted content per page
  * @param {string} [params.language] - Language/locale for the results (e.g. "de", "en-GB")
+ * @param {string} [params.freshness] - Only results from the last `day` | `week` | `month` | `year`
+ * @param {string[]|string} [params.includeDomains] - Restrict results to these domains (max 10)
  * @param {string} [params.chatId] - The chat ID for context tracking
  * @returns {Promise<Object>} Search results, optionally with extracted page content
  * @throws {Error} If no query is provided
@@ -21,6 +23,8 @@ export default async function braveSearch({
   maxResults = 10,
   contentMaxLength = 3000,
   language,
+  freshness,
+  includeDomains,
   chatId
 }) {
   const searchQuery = query || q;
@@ -36,6 +40,8 @@ export default async function braveSearch({
     extractContent,
     maxResults,
     contentMaxLength,
+    freshness,
+    includeDomains,
     chatId,
     searchOptions: { language }
   });

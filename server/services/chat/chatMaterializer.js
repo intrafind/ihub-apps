@@ -17,6 +17,7 @@
 import { boundStoredViews } from '../mcp/mcpApps.js';
 import { boundStoredCitations } from './chatCitations.js';
 import { boundStoredProposals } from '../scheduler/tasks/proposals.js';
+import { insertSupportMarkers, storedWebSearch } from '../../../shared/webCitations.js';
 
 /** Connect cards kept per stored answer. */
 const MAX_STORED_AUTH_PROMPTS = 10;
@@ -443,6 +444,15 @@ export async function materializeAssistantTurn({
     const scheduledTaskProposals = pausedWithoutAnswer
       ? []
       : boundStoredProposals(summary?.scheduledTaskProposals);
+    // The web sources behind the answer, so the reopened chat shows the same
+    // sources view and inline citations. Google's grounding supports are
+    // turned into citation markers in the stored text (the live chat places
+    // them the same way); what is stored beside it is queries and sources.
+    const webSearch = pausedWithoutAnswer ? null : storedWebSearch(summary?.webSearch);
+    const storedContent =
+      webSearch && Array.isArray(summary?.webSearch?.supports)
+        ? insertSupportMarkers(content, summary.webSearch.supports)
+        : content;
 
     let appended = null;
     if (!pausedWithoutAnswer) {
@@ -456,7 +466,7 @@ export async function materializeAssistantTurn({
               ? { output: structured.value }
               : {}),
             role: 'assistant',
-            content,
+            content: storedContent,
             ts: new Date().toISOString(),
             runId,
             finishReason: summary?.finishReason ?? null,
@@ -467,7 +477,8 @@ export async function materializeAssistantTurn({
             ...(citations ? { citations } : {}),
             ...(mcpAuthRequired.length > 0 ? { mcpAuthRequired } : {}),
             ...(summary?.provenance ? { provenance: summary.provenance } : {}),
-            ...(scheduledTaskProposals.length > 0 ? { scheduledTaskProposals } : {})
+            ...(scheduledTaskProposals.length > 0 ? { scheduledTaskProposals } : {}),
+            ...(webSearch ? { webSearch } : {})
           },
           // The end of the transcript for an ordinary turn, and the position
           // right after this run's own question for a superseded one.

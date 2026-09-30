@@ -50,7 +50,8 @@ jest.unstable_mockModule('../adapters/index.js', () => ({
 
 jest.unstable_mockModule('../toolLoader.js', () => ({
   getToolsForApp: async () => [],
-  resolveAppNativeWebSearch: () => false
+  resolveAppNativeWebSearch: () => false,
+  WEB_CONTENT_EXTRACTOR_TOOL_ID: 'webContentExtractor'
 }));
 
 const { default: RequestBuilder } = await import('../services/chat/RequestBuilder.js');

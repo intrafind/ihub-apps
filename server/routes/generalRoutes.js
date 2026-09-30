@@ -4,6 +4,7 @@ import { authRequired, appAccessRequired } from '../middleware/authRequired.js';
 import { buildServerPath, getRelativeRequestPath } from '../utils/basePath.js';
 import { findByIdCaseInsensitive } from '../utils/resourceLookup.js';
 import { getStorage, isStorageReady } from '../storage/bootstrap.js';
+import { describeWebSearchAvailability } from '../toolLoader.js';
 import {
   sendInternalError,
   sendFailedOperationError,
@@ -370,7 +371,11 @@ export default function registerGeneralRoutes(app, { getLocalizedError }) {
           }
         }
 
-        res.json(publicAppView(appData));
+        // Whether web search can work for this app, per model (the model
+        // picker marks the models it works with).
+        const websearchAvailability = await describeWebSearchAvailability(appData);
+        const view = publicAppView(appData);
+        res.json(websearchAvailability ? { ...view, websearchAvailability } : view);
       } catch (error) {
         return sendInternalError(res, error, 'fetch app details');
       }

@@ -1013,10 +1013,27 @@
                     "title": {
                       "type": "string"
                     },
+                    "snippet": {
+                      "type": "string"
+                    },
+                    "publishedDate": {
+                      "type": "string"
+                    },
+                    "favicon": {
+                      "type": "string"
+                    },
                     "read": {
                       "type": "boolean"
                     },
                     "readFailed": {
+                      "type": "boolean"
+                    },
+                    "wordCount": {
+                      "type": "integer",
+                      "minimum": 0,
+                      "maximum": 9007199254740991
+                    },
+                    "truncated": {
                       "type": "boolean"
                     }
                   },
@@ -4269,10 +4286,27 @@
                     "title": {
                       "type": "string"
                     },
+                    "snippet": {
+                      "type": "string"
+                    },
+                    "publishedDate": {
+                      "type": "string"
+                    },
+                    "favicon": {
+                      "type": "string"
+                    },
                     "read": {
                       "type": "boolean"
                     },
                     "readFailed": {
+                      "type": "boolean"
+                    },
+                    "wordCount": {
+                      "type": "integer",
+                      "minimum": 0,
+                      "maximum": 9007199254740991
+                    },
+                    "truncated": {
                       "type": "boolean"
                     }
                   },

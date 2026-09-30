@@ -147,7 +147,12 @@
   "websearch": {
     "title": "Websuche",
     "toggleLabel": "Websuche",
-    "toggleDescription": "Das Web nach aktuellen Informationen durchsuchen"
+    "toggleDescription": "Das Web nach aktuellen Informationen durchsuchen",
+    "chip": "Websuche",
+    "chipLabel": "Websuche ist aktiv – ausschalten",
+    "chipTitle": "Websuche ist aktiv. Klicken, um sie auszuschalten.",
+    "modelSupported": "Websuche funktioniert mit diesem Modell",
+    "modelUnsupported": "Websuche funktioniert mit diesem Modell in dieser App nicht"
   },
   "office": {
     "showTaskPane": "Aufgabenbereich anzeigen",
@@ -632,10 +637,6 @@
       "workflow": "Erzeugt durch Workflow",
       "workflowTooltip": "Workflow-Ausführung öffnen",
       "tooltip": "Diese Antwort wurde generiert unter Verwendung von:"
-    },
-    "groundingSources": {
-      "title": "Quellen",
-      "citedText": "Zitierte Passage"
     },
     "imageTooLargeToStore": "Dieses Bild war größer als von dieser Installation gespeichert wird und wurde daher nicht aufbewahrt.",
     "imageTooManyToStore": "Diese Antwort hat mehr Bilder erzeugt, als diese Installation speichert; dieses wurde daher nicht aufbewahrt.",
@@ -3047,7 +3048,9 @@
         "browserService": "Browser (Web Speech API)",
         "platformDefaultServiceHint": "Folgt dem unter Admin → Spracheingabe festgelegten Standard, auch bei späteren Änderungen.",
         "platformDefaultTranscriptionModel": "Plattform-Standard ({{model}})",
-        "transcriptionModelRequired": "Wählen Sie ein Modell aus oder legen Sie unter Admin → Spracheingabe ein Standard-Transkriptionsmodell fest."
+        "transcriptionModelRequired": "Wählen Sie ein Modell aus oder legen Sie unter Admin → Spracheingabe ein Standard-Transkriptionsmodell fest.",
+        "websearchMaxPageReads": "Max. Seitenaufrufe pro Antwort",
+        "websearchMaxPageReadsDesc": "Begrenzt, wie viele Seiten das Modell mit dem Seitenleser für eine Antwort öffnen darf. Seiten, die die Suche selbst für ihre Auszüge abruft, zählen nicht. 1–50, Standard 5."
       },
       "reorder": "Reihenfolge",
       "reorderHelp": "Ziehen Sie eine Zeile oder nutzen Sie die Pfeile, um die Reihenfolge festzulegen, in der Apps für Benutzer erscheinen – in der App-Übersicht, auf der Startseite und in der Seitenleiste. Es werden immer alle Apps aufgelistet, Suche und Filter gelten hier nicht. Gespeichert wird erst mit „Reihenfolge speichern“.",
@@ -5558,7 +5561,13 @@
     "failed": "Fehlgeschlagen",
     "stopped": "Abgebrochen",
     "moreValues_one": "+{{count}} weiterer",
-    "moreValues_other": "+{{count}} weitere"
+    "moreValues_other": "+{{count}} weitere",
+    "wordsRead_one": "{{count}} Wort gelesen",
+    "wordsRead_other": "{{count}} Wörter gelesen",
+    "truncated": "gekürzt",
+    "truncatedTitle": "Die Seite ist länger als das Gelesene",
+    "notRead": "Nicht gelesen",
+    "pageReadLimit": "Das Limit für Seitenaufrufe dieser Antwort ist erreicht – bitten Sie in der nächsten Nachricht darum, weiterzulesen."
   },
   "mcpApps": {
     "caption": "Interaktive Ansicht · {{name}}",
@@ -5704,6 +5713,19 @@
     "connect": "Verbinden",
     "connected": "{{name}} ist verbunden. Senden Sie Ihre Anfrage erneut, um es zu nutzen.",
     "failed": "Das Verbinden von {{name}} hat nicht geklappt. Bitte erneut versuchen."
+  },
+  "webSources": {
+    "title": "Quellen",
+    "searchedFor": "Gesucht nach „{{query}}“",
+    "searches_one": "{{count}} Suche",
+    "searches_other": "{{count}} Suchen",
+    "sourcesCount_one": "{{count}} Quelle",
+    "sourcesCount_other": "{{count}} Quellen",
+    "queries": "Suchen",
+    "cited": "In dieser Antwort zitiert",
+    "noneCited": "Die Antwort zitiert keine der Quellen direkt.",
+    "considered": "Ebenfalls berücksichtigt",
+    "opensInNewTab": "(öffnet in einem neuen Tab)"
   },
   "prompts": {
     "actions": {
