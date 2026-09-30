@@ -50,7 +50,11 @@ import { abortChatRequest } from '../sse.js';
 import { cancelChatWorkflow } from '../tools/workflowRunner.js';
 import { getWorkflowStateRepository } from '../services/workflow/WorkflowStateRepository.js';
 import { deleteChatWithCascade } from '../services/chat/chatDeletion.js';
-import { settleInterruptedChat, settleInterruptedChats } from '../services/chat/chatRecovery.js';
+import {
+  deliverResumedWorkflows,
+  settleInterruptedChat,
+  settleInterruptedChats
+} from '../services/chat/chatRecovery.js';
 import { SCHEDULED_TASK_ORIGIN } from '../services/scheduler/tasks/taskPolicy.js';
 import { markRunChatSeen } from '../services/scheduler/tasks/taskService.js';
 
@@ -218,7 +222,11 @@ export default function registerChatRoutes(app) {
       // Before the transcript is read, so an interrupted turn's closing answer
       // is part of it — and the client does not re-attach to a dead run.
       const chat = await settleInterruptedChat(access.chat, { repository, runLog });
-      const stored = await repository.getMessages(chatId);
+      let stored = await repository.getMessages(chatId);
+      // A workflow its chat was left waiting on may have been continued since.
+      if (await deliverResumedWorkflows(chat, stored.messages, { repository, runLog })) {
+        stored = await repository.getMessages(chatId);
+      }
       // Opening a chat is what "seen" means — for its owner. Only write when
       // the flag is actually set: the clear is a locked read-modify-write, and
       // a plain read should not contend with a turn that is producing into

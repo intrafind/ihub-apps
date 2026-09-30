@@ -1368,16 +1368,26 @@ export class ChatRepository {
    *   transcript already holds an assistant message of the message's run. The
    *   check is made under the chat lock, so of several writers settling the
    *   same run — on any worker — exactly one stores its answer.
+   * @param {string|null} [options.supersedeMessageId=null] - Put the message in
+   *   place of this stored one, at its position, instead of appending it. Write
+   *   nothing when that message is no longer stored — another writer replaced
+   *   it first, under the same lock.
    * @returns {Promise<{message: Object, messages: Object[], skipped?: true}|null>}
    *   Null when the chat does not exist or cannot be stored; `skipped` when
-   *   `unlessAnswered` found the run answered (`message` is that answer).
+   *   `unlessAnswered` found the run answered (`message` is that answer), or
+   *   `supersedeMessageId` is gone (`message` is the run's answer, if any).
    * @throws {StorageError} Code `UNKNOWN_MESSAGE` when `replaceFromMessageId`
    *   is not in the stored history.
    */
   async appendMessage(
     chatId,
     message,
-    { replaceFromMessageId = null, insertAfterRunId = null, unlessAnswered = false } = {}
+    {
+      replaceFromMessageId = null,
+      insertAfterRunId = null,
+      unlessAnswered = false,
+      supersedeMessageId = null
+    } = {}
   ) {
     if (!this._usable(chatId, 'appendMessage')) return null;
     return this._withChatLock(chatId, async () => {
@@ -1414,11 +1424,23 @@ export class ChatRepository {
       }
 
       const entry = buildMessage(message);
-      const at = insertAfterRunId ? lastIndexOfRun(messages, insertAfterRunId) : -1;
-      messages =
-        at === -1
-          ? [...messages, entry]
-          : [...messages.slice(0, at + 1), entry, ...messages.slice(at + 1)];
+      if (supersedeMessageId) {
+        const index = messages.findIndex(stored => stored.id === supersedeMessageId);
+        if (index === -1) {
+          const answer = message?.runId
+            ? messages.find(stored => stored.role === 'assistant' && stored.runId === message.runId)
+            : null;
+          return { message: answer || null, messages, skipped: true };
+        }
+        discarded.push(messages[index]);
+        messages = [...messages.slice(0, index), entry, ...messages.slice(index + 1)];
+      } else {
+        const at = insertAfterRunId ? lastIndexOfRun(messages, insertAfterRunId) : -1;
+        messages =
+          at === -1
+            ? [...messages, entry]
+            : [...messages.slice(0, at + 1), entry, ...messages.slice(at + 1)];
+      }
 
       // Oldest first, after the insert rather than before it, so the message
       // being written is never the one dropped.

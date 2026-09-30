@@ -792,8 +792,12 @@ that is what you want.
   execution says: one paused at a human checkpoint is still continued from its
   execution page, so the chat says it is waiting for input and its run stays
   open; a completed one's answer is delivered from the execution; a cancelled
-  one is stored as stopped. Chat-launched executions left running are marked
-  failed by the boot-time orphan sweep, as they are never resumed. A run counts
+  one is stored as stopped. Once a waiting workflow is continued and ends, the
+  next open of the chat puts its answer — or its failure or stop — in place of
+  "waiting for input" (`deliverResumedWorkflows`), ahead of anything asked
+  after it. Chat-launched executions left running are marked failed by the
+  boot-time orphan sweep, as they are never resumed — unless another worker
+  still runs them (its chat bridge or ledger run is present there). A run counts
   as dead only when no worker holds it: its ledger run is neither open nor
   recently ended on this worker nor owned by another, no request, durable turn
   or bridged workflow is in flight for the chat, and it claimed the chat more
@@ -842,7 +846,7 @@ that is what you want.
 | `server/services/chat/chatMaterializer.js`  | The only module that writes chat turns                        |
 | `server/services/chat/runActivity.js`       | Records what a turn did and bounds it for storage             |
 | `shared/run/runActivity.js`                 | The activity projection, shared with the live client view     |
-| `server/services/chat/chatRecovery.js`      | Settles chats whose run died with its process                 |
+| `server/services/chat/chatRecovery.js`      | Settles chats whose run died; delivers continued workflows    |
 | `server/services/workflow/executionChat.js` | Chat with Results: a stored chat about an execution           |
 | `server/services/chat/chatAccess.js`        | `authorizeChat()` — 404 for unknown and not-yours             |
 | `server/services/chat/chatRetention.js`     | The daily sweep                                               |

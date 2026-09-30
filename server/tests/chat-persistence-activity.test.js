@@ -32,12 +32,14 @@ import {
 import {
   INTERRUPTED_RUN_GRACE_MS,
   RUN_INTERRUPTED,
+  deliverResumedWorkflows,
   isChatRunAlive,
   settleInterruptedChat
 } from '../services/chat/chatRecovery.js';
 import { snapshotMessage } from '../services/chat/ChatShareRepository.js';
 import { mentionAccess } from '../services/workflow/workflowAccess.js';
 import { getExecutionRegistry } from '../services/workflow/ExecutionRegistry.js';
+import { getWorkflowEngine } from '../services/workflow/WorkflowEngine.js';
 import { RunStreamEmitter } from '../services/loop/RunStream.js';
 import { RUN_LOG_EVENTS, SSE_V2_EVENTS } from '../../shared/runEvents.js';
 
@@ -365,6 +367,64 @@ describe('the stored form of the activity', () => {
     const stored = boundStoredActivity({ workflowSteps: steps });
     assert.equal(stored.workflowSteps.length, 200);
     assert.equal(stored.workflowSteps.at(-1).nodeName, 'Step 249');
+  });
+
+  it('stays under its size when what is left is long queries and cited passages', () => {
+    const long = 'z'.repeat(5000);
+    const items = Array.from({ length: MAX_STORED_TOOL_ITEMS }, (_, i) => ({
+      id: `c${i}`,
+      kind: 'search',
+      toolId: 'braveSearch',
+      name: 'braveSearch',
+      status: 'completed',
+      query: long,
+      queries: [long, long, long],
+      error: long,
+      details: [],
+      sources: []
+    }));
+    const groundingSources = Array.from({ length: 50 }, (_, i) => ({
+      url: `https://example.org/${i}`,
+      title: 'Page',
+      citedText: long
+    }));
+    const stored = boundStoredActivity({
+      toolActivity: { items },
+      groundingSources,
+      workflowResult: { status: 'completed', executionId: 'wf-1', workflowName: 'Review' }
+    });
+
+    assert.ok(Buffer.byteLength(JSON.stringify(stored)) <= 256 * 1024);
+    // Every call is still there, and every page, only with less text.
+    assert.equal(stored.toolActivity.items.length, MAX_STORED_TOOL_ITEMS);
+    assert.ok(stored.toolActivity.items[0].query.length <= 201);
+    assert.equal(stored.groundingSources.length, 50);
+    assert.equal(stored.groundingSources[0].citedText, undefined);
+    assert.equal(stored.workflowResult.executionId, 'wf-1');
+  });
+
+  it('keeps only the answer source and the workflow result when nothing else fits', () => {
+    const label = 'l'.repeat(500);
+    const items = Array.from({ length: MAX_STORED_TOOL_ITEMS }, (_, i) => ({
+      id: `${i}${label}`,
+      kind: 'tool',
+      toolId: label,
+      name: label,
+      status: 'completed',
+      url: 'u'.repeat(2000),
+      documentId: label,
+      title: label,
+      details: [],
+      sources: []
+    }));
+    const stored = boundStoredActivity({
+      toolActivity: { items },
+      workflowResult: { status: 'failed', executionId: 'wf-2', workflowName: 'Review' }
+    });
+
+    assert.deepEqual(stored, {
+      workflowResult: { status: 'failed', executionId: 'wf-2', workflowName: 'Review' }
+    });
   });
 
   it('is nothing when there is nothing', () => {
@@ -850,6 +910,127 @@ describe('a chat whose run died with its process', () => {
           runLog.appended.map(e => [e.type, e.data.error.code]),
           [[RUN_LOG_EVENTS.RUN_END, RUN_INTERRUPTED]]
         );
+      });
+    });
+
+    describe('a paused workflow that is continued from its execution page', () => {
+      /** Answers `getState` from `states` while `fn` runs. */
+      async function withExecutionStates(states, fn) {
+        const engine = getWorkflowEngine();
+        const original = engine.getState;
+        engine.getState = async executionId => states[executionId] ?? null;
+        try {
+          await fn();
+        } finally {
+          engine.getState = original;
+        }
+      }
+
+      /**
+       * A chat closed as "waiting for your input" at a restart, with an
+       * exchange the user had after it, and the execution then ended as `status`.
+       */
+      async function waitingChat(repository, runId, status) {
+        const chat = await workflowChat(repository, runId, 'paused');
+        await settleInterruptedChat(chat, { repository, runLog: fakeRunLog() });
+        await repository.appendMessage(CHAT_ID, {
+          role: 'user',
+          content: 'and meanwhile?',
+          runId: 'chat-run-later'
+        });
+        await repository.appendMessage(CHAT_ID, {
+          role: 'assistant',
+          content: 'meanwhile, this',
+          runId: 'chat-run-later'
+        });
+        getExecutionRegistry().updateStatus(runId, status);
+        return repository.getChat(CHAT_ID);
+      }
+
+      it('delivers its answer where the chat was waiting, before what came after', async () => {
+        await withRepository(async repository => {
+          const runId = 'workflow-continued-1';
+          const chat = await waitingChat(repository, runId, 'completed');
+          const states = {
+            [runId]: {
+              status: 'completed',
+              data: {
+                _workflowDefinition: { chatIntegration: { primaryOutput: 'report' }, nodes: [] },
+                report: 'The review.'
+              }
+            }
+          };
+          // The engine that ran the resumed workflow ended its run.
+          const runLog = fakeRunLog({ ended: true });
+
+          await withExecutionStates(states, async () => {
+            const stale = (await repository.getMessages(CHAT_ID)).messages;
+            assert.equal(await deliverResumedWorkflows(chat, stale, { repository, runLog }), true);
+
+            const { messages } = await repository.getMessages(CHAT_ID);
+            assert.deepEqual(
+              messages.map(m => m.content),
+              ['@review q', 'The review.', 'and meanwhile?', 'meanwhile, this']
+            );
+            assert.equal(messages[1].runId, runId);
+            assert.equal(messages[1].finishReason, 'stop');
+            assert.equal(messages[1].activity.workflowResult.status, 'completed');
+            assert.deepEqual(runLog.appended, []);
+
+            // Another worker that read the same transcript finds the waiting
+            // answer gone, and leaves the delivered one alone.
+            assert.equal(await deliverResumedWorkflows(chat, stale, { repository, runLog }), false);
+            assert.equal((await repository.getMessages(CHAT_ID)).messages.length, 4);
+          });
+        });
+      });
+
+      it('keeps waiting while the workflow is still paused', async () => {
+        await withRepository(async repository => {
+          const runId = 'workflow-continued-2';
+          const chat = await waitingChat(repository, runId, 'paused');
+          const { messages } = await repository.getMessages(CHAT_ID);
+
+          const changed = await deliverResumedWorkflows(chat, messages, {
+            repository,
+            runLog: fakeRunLog()
+          });
+
+          assert.equal(changed, false);
+          const stored = (await repository.getMessages(CHAT_ID)).messages;
+          assert.equal(stored[1].activity.workflowResult.status, 'paused');
+        });
+      });
+
+      it('says why it failed, and ends its run when its engine could not', async () => {
+        await withRepository(async repository => {
+          const runId = 'workflow-continued-3';
+          const chat = await waitingChat(repository, runId, 'failed');
+          const states = {
+            [runId]: {
+              status: 'failed',
+              errors: [{ message: 'Workflow was interrupted by a server restart.' }]
+            }
+          };
+          const runLog = fakeRunLog({ ended: false });
+
+          await withExecutionStates(states, async () => {
+            const { messages } = await repository.getMessages(CHAT_ID);
+            await deliverResumedWorkflows(chat, messages, { repository, runLog });
+          });
+
+          const answer = (await repository.getMessages(CHAT_ID)).messages[1];
+          assert.equal(answer.error.code, 'WORKFLOW_FAILED');
+          assert.equal(
+            answer.content,
+            'Workflow failed: Workflow was interrupted by a server restart.'
+          );
+          assert.equal(answer.activity.workflowResult.status, 'failed');
+          assert.deepEqual(
+            runLog.appended.map(e => [e.type, e.data.error.code]),
+            [[RUN_LOG_EVENTS.RUN_END, 'WORKFLOW_FAILED']]
+          );
+        });
       });
     });
 

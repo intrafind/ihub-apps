@@ -451,6 +451,34 @@ describe('orphan sweep through the repository', () => {
     });
   });
 
+  it('leaves a chat’s workflow that another worker is running alone', async () => {
+    // The chat's request, and with it the workflow, landed on another worker:
+    // this process's `activeStates` never saw it.
+    await withRepository(async ({ repository }) => {
+      const live = state('workflow-chat-live');
+      live.data = { ...live.data, _chatId: 'chat-live' };
+      await repository.write('workflow-chat-live', live, { ownerId: OWNER });
+      await repository.write('workflow-chat-dead', state('workflow-chat-dead'), {
+        ownerId: OWNER
+      });
+      const asked = [];
+
+      const result = await sweepOrphanedExecutions({
+        requireSchedulerOwner: false,
+        repository,
+        heldByAnotherWorker: (executionId, stored) => {
+          asked.push(executionId);
+          return stored.data?._chatId === 'chat-live';
+        }
+      });
+
+      assert.equal(result.marked, 1);
+      assert.equal((await repository.read('workflow-chat-live')).status, WorkflowStatus.RUNNING);
+      assert.equal((await repository.read('workflow-chat-dead')).status, 'failed');
+      assert.deepEqual(asked.sort(), ['workflow-chat-dead', 'workflow-chat-live']);
+    });
+  });
+
   it('leaves a run that is live in this process alone', async () => {
     await withRepository(async ({ repository }) => {
       await repository.write('wf-exec-live', state('wf-exec-live'), { ownerId: OWNER });

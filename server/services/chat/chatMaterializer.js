@@ -378,6 +378,9 @@ export async function materializeUserTurn({
  * @param {boolean} [params.onlyIfUnanswered=false] - store nothing when the run is
  *   already answered (checked under the chat lock); for a writer that is not the run
  *   itself and may race another one (`chatRecovery.js`)
+ * @param {string} [params.supersedeMessageId] - store the answer in place of this
+ *   stored message of the run rather than after the run's question; nothing is
+ *   stored when it is gone (`chatRecovery.js`, a resumed workflow's result)
  * @returns {Promise<Object|null>} the stored message, or null when nothing was written
  */
 export async function materializeAssistantTurn(params) {
@@ -391,8 +394,8 @@ export async function materializeAssistantTurn(params) {
  *
  * @param {Object} params - see {@link materializeAssistantTurn}
  * @returns {Promise<{message: Object|null, skipped: boolean, released: boolean}>}
- *   `skipped` when `onlyIfUnanswered` found the run answered; `released` when
- *   this call released the chat from the run
+ *   `skipped` when `onlyIfUnanswered` found the run answered or the message to
+ *   supersede is gone; `released` when this call released the chat from the run
  */
 export async function settleAssistantTurn({
   repository,
@@ -401,7 +404,8 @@ export async function settleAssistantTurn({
   summary,
   clientConnected,
   message = null,
-  onlyIfUnanswered = false
+  onlyIfUnanswered = false,
+  supersedeMessageId = null
 }) {
   const outcome = { message: null, skipped: false, released: false };
   if (!repository) return outcome;
@@ -505,7 +509,9 @@ export async function settleAssistantTurn({
           },
           // The end of the transcript for an ordinary turn, and the position
           // right after this run's own question for a superseded one.
-          { insertAfterRunId: runId, unlessAnswered: onlyIfUnanswered }
+          supersedeMessageId
+            ? { supersedeMessageId }
+            : { insertAfterRunId: runId, unlessAnswered: onlyIfUnanswered }
         );
         // Somebody else answered the run first; theirs is the answer.
         if (appended?.skipped) {

@@ -68,7 +68,8 @@ interruption too.
 
 - A workflow started with `@workflow` is closed by what its execution says: one waiting at a human
   checkpoint shows **Waiting for your input** with a link to continue it on its execution page; a
-  finished one delivers its answer to the chat.
+  finished one delivers its answer to the chat. Once a waiting workflow is continued and finishes,
+  its answer replaces **Waiting for your input** the next time the chat is opened.
 - Workflows started from a chat that were running at the restart are marked failed in
   **My Executions** instead of staying "running".
 
