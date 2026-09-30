@@ -34,13 +34,25 @@ const OFFSET_PARAMETER = {
   minimum: 0
 };
 
-/** `freshness` as the search tool defaults declare it in V138. */
+/** `freshness` as the Brave and Qwant tool defaults declare it in V138. */
 const FRESHNESS_PARAMETER = {
   type: 'string',
   enum: ['day', 'week', 'month', 'year'],
   description: {
     en: 'Only return results from the last day, week, month or year. Use it when the question is about recent events or the user asks for current information.',
     de: 'Nur Ergebnisse aus dem letzten Tag, der letzten Woche, dem letzten Monat oder Jahr zurückgeben. Verwenden, wenn es um aktuelle Ereignisse geht oder der Benutzer nach aktuellen Informationen fragt.'
+  }
+};
+
+/**
+ * `freshness` as the Staan tool default declares it in V138. Staan results carry
+ * no date, so the filter cannot drop anything and the description says so.
+ */
+const STAAN_FRESHNESS_PARAMETER = {
+  ...FRESHNESS_PARAMETER,
+  description: {
+    en: 'Prefer results from the last day, week, month or year. Best effort: Staan results are not dated, so older pages can still be returned; check the date of what you cite. Use it when the question is about recent events or the user asks for current information.',
+    de: 'Ergebnisse aus dem letzten Tag, der letzten Woche, dem letzten Monat oder Jahr bevorzugen. Ohne Gewähr: Staan-Ergebnisse haben kein Datum, ältere Seiten können also trotzdem zurückkommen; das Datum der zitierten Seiten prüfen. Verwenden, wenn es um aktuelle Ereignisse geht oder der Benutzer nach aktuellen Informationen fragt.'
   }
 };
 
@@ -59,7 +71,7 @@ export const NEW_PARAMETERS = {
   webContentExtractor: { offset: OFFSET_PARAMETER },
   braveSearch: { freshness: FRESHNESS_PARAMETER, includeDomains: INCLUDE_DOMAINS_PARAMETER },
   qwantSearch: { freshness: FRESHNESS_PARAMETER, includeDomains: INCLUDE_DOMAINS_PARAMETER },
-  staanSearch: { freshness: FRESHNESS_PARAMETER }
+  staanSearch: { freshness: STAAN_FRESHNESS_PARAMETER }
 };
 
 const TOOL_IDS = Object.keys(NEW_PARAMETERS);

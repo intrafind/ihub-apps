@@ -251,8 +251,9 @@ one chat answer. Past the cap, the read is not made and the model is told:
 user they can continue in the next message*. The chat shows the refused read as
 **Not read** with the same explanation. The pages the search tool fetches for
 its own excerpts (`extractContent`) do not count; they stay capped by
-`maxResults`. The cap applies to chats (and apps invoked as tools from a chat);
-agents and workflows keep their own budgets.
+`maxResults`. The cap applies to chats. An app invoked as a tool from a chat
+runs its own turn and counts against its own `maxPageReads`, not the caller's.
+Agents and workflows keep their own budgets.
 
 ### Migration from Legacy Tool Configuration
 
@@ -483,7 +484,7 @@ injected from the app's `websearch` config rather than listed in the app's
 - `language` (string, optional): Language or locale for the results, e.g. `en`, `de`, `en-GB` (default: `en-us`)
 - `includeDomains` (string[], optional): Only return results from these domains (max 10)
 - `excludeDomains` (string[], optional): Drop results from these domains (max 10)
-- `freshness` (string, optional): Only results from the last `day`, `week`, `month` or `year`. Staan has no such parameter and returns no dates, so the filter cannot drop anything; the result says so
+- `freshness` (string, optional): Prefer results from the last `day`, `week`, `month` or `year` (best effort). Staan has no such parameter and returns no dates, so the filter cannot drop anything; the tool description and the result say so
 
 `includeDomains` and `excludeDomains` are mutually exclusive — the API rejects a
 request carrying both, so `includeDomains` wins when both are given.

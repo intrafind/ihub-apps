@@ -58,9 +58,11 @@ passage (live on the client, written into the stored text on the server).
 ### `maxPageReads` default: 5, chat only
 
 Five reads per answer is enough for "open the two or three best results and a pasted URL" and
-bounds the context growth (each read is up to 50 000 characters). The cap applies to chat turns
-and to apps invoked as tools from a chat; agents and workflows keep their own budgets
-(`maxToolRounds`, token budget) and are not affected. Past the cap the gate answers the call
+bounds the context growth (each read is up to 50 000 characters). The cap applies to chat turns.
+An app invoked as a tool from a chat runs its own turn under its own `maxPageReads` (sharing the
+caller's gate would override the callee's setting; the caller's `maxToolRounds` bounds how often it
+is invoked). Agents and workflows keep their own budgets (`maxToolRounds`, token budget) and are
+not affected. Past the cap the gate answers the call
 itself with a plain result (not an error, so the loop's circuit breaker is not tripped).
 
 ### Misplaced markers: no server-side attribution

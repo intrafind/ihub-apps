@@ -80,8 +80,8 @@
         "type": "string",
         "enum": ["day", "week", "month", "year"],
         "description": {
-          "en": "Only return results from the last day, week, month or year. Use it when the question is about recent events or the user asks for current information.",
-          "de": "Nur Ergebnisse aus dem letzten Tag, der letzten Woche, dem letzten Monat oder Jahr zurückgeben. Verwenden, wenn es um aktuelle Ereignisse geht oder der Benutzer nach aktuellen Informationen fragt."
+          "en": "Prefer results from the last day, week, month or year. Best effort: Staan results are not dated, so older pages can still be returned; check the date of what you cite. Use it when the question is about recent events or the user asks for current information.",
+          "de": "Ergebnisse aus dem letzten Tag, der letzten Woche, dem letzten Monat oder Jahr bevorzugen. Ohne Gewähr: Staan-Ergebnisse haben kein Datum, ältere Seiten können also trotzdem zurückkommen; das Datum der zitierten Seiten prüfen. Verwenden, wenn es um aktuelle Ereignisse geht oder der Benutzer nach aktuellen Informationen fragt."
         }
       }
     },
