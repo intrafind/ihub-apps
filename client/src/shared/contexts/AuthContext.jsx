@@ -714,16 +714,6 @@ export function AuthProvider({ children }) {
 }
 
 // Hook to use auth context
-/**
- * The auth state, or `null` outside an AuthProvider — for components that
- * also render in hosts without one (a chat message in an embed or a test).
- *
- * @returns {Object|null}
- */
-export function useOptionalAuth() {
-  return useContext(AuthContext) || null;
-}
-
 export function useAuth() {
   const context = useContext(AuthContext);
   if (!context) {
