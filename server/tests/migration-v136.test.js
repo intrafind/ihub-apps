@@ -1,12 +1,11 @@
 #!/usr/bin/env node
 
 /**
- * Migration V136 specs — seeding `platform.scheduledTasks` and the
- * `scheduledTasks` group permission.
+ * Migration V136 specs — `[content]` becomes `{{content}}` in prompt texts.
  *
- * Defaults land where they are missing; every value an admin already set is
- * left exactly as it is, custom groups are not granted anything, and
- * `features.json` is never written.
+ * The prompt library has one placeholder syntax now (#2519). Every language of
+ * a prompt's `prompt` text is rewritten; nothing else in the file changes, and
+ * a file without the old placeholder is not written at all.
  */
 import fs from 'node:fs/promises';
 import os from 'node:os';
@@ -19,45 +18,49 @@ import {
   precondition,
   version,
   description,
-  SCHEDULED_TASK_DEFAULTS
-} from '../migrations/V136__scheduled_tasks_defaults.js';
-import { setDefault } from '../migrations/utils.js';
+  migratePromptText
+} from '../migrations/V136__prompt_content_placeholder.js';
 
 let baseDir;
 
 function makeCtx(dir) {
   const logs = [];
+  const writes = [];
   return {
     logs,
+    writes,
     fileExists: async rel =>
       fs
         .stat(path.join(dir, rel))
         .then(() => true)
         .catch(() => false),
+    listFiles: async (rel, pattern) => {
+      const entries = await fs.readdir(path.join(dir, rel)).catch(() => []);
+      return pattern === '*.json' ? entries.filter(entry => entry.endsWith('.json')) : entries;
+    },
     readJson: async rel => JSON.parse(await fs.readFile(path.join(dir, rel), 'utf8')),
     writeJson: async (rel, data) => {
+      writes.push(rel);
       await fs.mkdir(path.dirname(path.join(dir, rel)), { recursive: true });
       await fs.writeFile(path.join(dir, rel), JSON.stringify(data, null, 2), 'utf8');
     },
-    setDefault,
     log: m => logs.push(['info', m]),
     warn: m => logs.push(['warn', m])
   };
 }
 
-async function seed({ platform = null, groups = null } = {}) {
+async function seed(files) {
   const dir = await fs.mkdtemp(path.join(baseDir, 'v136-'));
-  await fs.mkdir(path.join(dir, 'config'), { recursive: true });
-  if (platform !== null) {
-    await fs.writeFile(path.join(dir, 'config/platform.json'), JSON.stringify(platform), 'utf8');
-  }
-  if (groups !== null) {
-    await fs.writeFile(path.join(dir, 'config/groups.json'), JSON.stringify(groups), 'utf8');
+  for (const [rel, content] of Object.entries(files)) {
+    await fs.mkdir(path.dirname(path.join(dir, rel)), { recursive: true });
+    await fs.writeFile(
+      path.join(dir, rel),
+      typeof content === 'string' ? content : JSON.stringify(content, null, 2),
+      'utf8'
+    );
   }
   return { dir, ctx: makeCtx(dir) };
 }
-
-const read = async (dir, rel) => JSON.parse(await fs.readFile(path.join(dir, rel), 'utf8'));
 
 before(async () => {
   baseDir = await fs.mkdtemp(path.join(os.tmpdir(), 'ihub-migration-v136-'));
@@ -70,70 +73,66 @@ after(async () => {
 describe('V136 identity', () => {
   it('is numbered and described as its file name says', () => {
     assert.equal(version, '136');
-    assert.equal(description, 'scheduled_tasks_defaults');
+    assert.equal(description, 'prompt_content_placeholder');
   });
 
-  it('runs when either file exists', async () => {
-    assert.equal(await precondition((await seed()).ctx), false);
-    assert.equal(await precondition((await seed({ platform: {} })).ctx), true);
-    assert.equal(await precondition((await seed({ groups: { groups: {} } })).ctx), true);
+  it('only runs when there are prompts', async () => {
+    const { ctx: none } = await seed({ 'config/platform.json': {} });
+    assert.equal(await precondition(none), false);
+    const { ctx } = await seed({ 'prompts/a.json': { id: 'a' } });
+    assert.equal(await precondition(ctx), true);
   });
 });
 
-describe('V136 platform.scheduledTasks', () => {
-  it('seeds every default into an empty platform config', async () => {
-    const { dir, ctx } = await seed({ platform: {} });
-    await up(ctx);
-    const platform = await read(dir, 'config/platform.json');
-    assert.deepEqual(platform.scheduledTasks, { ...SCHEDULED_TASK_DEFAULTS });
+describe('V136 rewrites the placeholder', () => {
+  it('replaces every occurrence in every language', () => {
+    assert.deepEqual(
+      migratePromptText({ en: 'A [content] B [content]', de: 'C [content]', fr: 'none' }),
+      { en: 'A {{content}} B {{content}}', de: 'C {{content}}', fr: 'none' }
+    );
+    assert.equal(migratePromptText('x [content]'), 'x {{content}}');
+    assert.equal(migratePromptText({ en: 'nothing' }), null);
+    assert.equal(migratePromptText(null), null);
   });
 
-  it('keeps values an admin already set', async () => {
-    const { dir, ctx } = await seed({
-      platform: { scheduledTasks: { maxTasksPerUser: 3, enabled: false } }
+  it('writes only the files that used it, and nothing else in them', async () => {
+    const { ctx } = await seed({
+      'prompts/summarize.json': {
+        id: 'summarize',
+        name: { en: 'Summarize [content]' },
+        prompt: { en: 'Summarize: [content]', de: 'Fasse zusammen: [content]' },
+        variables: [{ name: 'content', label: { en: '[content]' } }]
+      },
+      'prompts/plain.json': { id: 'plain', prompt: { en: 'Already {{content}}' } },
+      'prompts/broken.json': '{ not json'
     });
     await up(ctx);
-    const { scheduledTasks } = await read(dir, 'config/platform.json');
-    assert.equal(scheduledTasks.maxTasksPerUser, 3);
-    assert.equal(scheduledTasks.enabled, false);
-    assert.equal(scheduledTasks.minIntervalMinutes, 15);
-  });
-});
-
-describe('V136 group permission', () => {
-  const builtIn = () => ({
-    groups: {
-      admins: { id: 'admins', permissions: { adminAccess: true } },
-      users: { id: 'users', permissions: {} },
-      authenticated: { id: 'authenticated', permissions: {} },
-      anonymous: { id: 'anonymous', permissions: {} },
-      marketing: { id: 'marketing', permissions: { apps: ['*'] } }
-    }
+    const summarize = await ctx.readJson('prompts/summarize.json');
+    assert.deepEqual(summarize.prompt, {
+      en: 'Summarize: {{content}}',
+      de: 'Fasse zusammen: {{content}}'
+    });
+    assert.equal(summarize.name.en, 'Summarize [content]', 'only the prompt text changes');
+    assert.equal(summarize.variables[0].label.en, '[content]');
+    assert.deepEqual(ctx.writes, ['prompts/summarize.json']);
+    assert.ok(ctx.logs.some(([level, m]) => level === 'warn' && m.includes('broken.json')));
   });
 
-  it('grants the built-in signed-in groups, denies anonymous, leaves custom groups alone', async () => {
-    const { dir, ctx } = await seed({ groups: builtIn() });
+  it('rewrites the legacy prompts.json too', async () => {
+    const { ctx } = await seed({
+      'config/prompts.json': [{ id: 'a', prompt: { en: 'Go [content]' } }, { id: 'b' }]
+    });
     await up(ctx);
-    const { groups } = await read(dir, 'config/groups.json');
-    assert.equal(groups.admins.permissions.scheduledTasks, true);
-    assert.equal(groups.users.permissions.scheduledTasks, true);
-    assert.equal(groups.authenticated.permissions.scheduledTasks, true);
-    assert.equal(groups.anonymous.permissions.scheduledTasks, false);
-    assert.equal(groups.marketing.permissions.scheduledTasks, undefined);
+    const legacy = await ctx.readJson('config/prompts.json');
+    assert.equal(legacy[0].prompt.en, 'Go {{content}}');
+    assert.deepEqual(legacy[1], { id: 'b' });
   });
 
-  it('never overwrites a value an admin set', async () => {
-    const groups = builtIn();
-    groups.groups.authenticated.permissions.scheduledTasks = false;
-    const { dir, ctx } = await seed({ groups });
+  it('is idempotent', async () => {
+    const { ctx } = await seed({ 'prompts/a.json': { id: 'a', prompt: { en: 'x [content]' } } });
     await up(ctx);
-    const stored = await read(dir, 'config/groups.json');
-    assert.equal(stored.groups.authenticated.permissions.scheduledTasks, false);
-  });
-
-  it('never writes features.json', async () => {
-    const { dir, ctx } = await seed({ platform: {}, groups: builtIn() });
+    ctx.writes.length = 0;
     await up(ctx);
-    await assert.rejects(fs.stat(path.join(dir, 'config/features.json')));
+    assert.deepEqual(ctx.writes, []);
   });
 });

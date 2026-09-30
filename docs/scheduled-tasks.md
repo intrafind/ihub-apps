@@ -26,7 +26,7 @@ The client learns the combined answer from `GET /api/configs/platform`
 **Scheduled tasks** entry, the `/tasks` pages and the admin page are not there
 at all.
 
-**Who may create tasks.** Migration V136 grants the permission to `admins`,
+**Who may create tasks.** Migration V138 grants the permission to `admins`,
 `users` and `authenticated`, and sets it to `false` for `anonymous`; custom
 groups are left alone, and a value an admin already set is never overwritten.
 The permission inherits like every other group permission. Independent of the
@@ -40,7 +40,7 @@ active tasks pause on their next run (`PERMISSION_REVOKED`).
 
 ### Platform limits
 
-`platform.json → scheduledTasks`, written with its defaults by migration V136
+`platform.json → scheduledTasks`, written with its defaults by migration V138
 and editable in Admin → Scheduled Tasks → Settings. Changes apply without a
 restart.
 

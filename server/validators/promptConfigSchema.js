@@ -25,7 +25,10 @@ const variableSchema = z
         /^[a-zA-Z_][a-zA-Z0-9_-]*$/,
         'Variable name must start with letter/underscore and contain only alphanumeric characters, underscores, and hyphens'
       ),
-    label: localizedStringSchema,
+    // Optional: a `{{name}}` placeholder without a label is asked for under a
+    // label derived from its name.
+    label: localizedStringSchema.optional(),
+    description: localizedStringSchema.optional(),
     type: z.enum(['string', 'number', 'boolean', 'select', 'textarea']).prefault('string'),
     required: z.boolean().optional().prefault(false),
     defaultValue: z.union([z.string(), z.number(), z.boolean()]).optional(),
@@ -73,7 +76,16 @@ export const promptConfigSchema = z
     appId: z.string().optional(),
     variables: z.array(variableSchema).optional(),
     actions: z.array(actionSchema).optional(),
-    outputSchema: outputSchemaConfig.optional()
+    outputSchema: outputSchemaConfig.optional(),
+
+    // Attribution. Stamped by the admin API on save, and on a prompt promoted
+    // from a user prompt `createdBy` keeps the author it came from.
+    createdBy: z.string().optional(),
+    createdAt: z.string().optional(),
+    updatedBy: z.string().optional(),
+    updatedAt: z.string().optional(),
+    /** The user prompt this global prompt was promoted from. */
+    sourcePromptId: z.string().optional()
   })
   .strict();
 

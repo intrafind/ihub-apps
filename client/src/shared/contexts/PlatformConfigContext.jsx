@@ -78,6 +78,10 @@ export function PlatformConfigProvider({ children }) {
         // `permissions.scheduledTasks`.
         scheduledTasks: platformCfg.scheduledTasks,
 
+        // Whether users may keep prompts of their own, and whom they may
+        // share them with (#2519). Absent on an older server: no user prompts.
+        userPrompts: platformCfg.userPrompts,
+
         // Platform features and settings
         features: platformCfg.features,
         // Build a boolean lookup map from the resolved features array

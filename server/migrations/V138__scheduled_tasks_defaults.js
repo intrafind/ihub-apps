@@ -1,5 +1,5 @@
 /**
- * Migration V136 — Seed scheduled task settings and the group permission
+ * Migration V138 — Seed scheduled task settings and the group permission
  *
  * Scheduled tasks let users save a prompt that runs by itself. The feature
  * ships dark behind `features.scheduledTasks` (it also needs durable chats);
@@ -21,7 +21,7 @@
  * the admin's call.
  */
 
-export const version = '136';
+export const version = '138';
 export const description = 'scheduled_tasks_defaults';
 
 export const SCHEDULED_TASK_DEFAULTS = Object.freeze({

@@ -109,7 +109,10 @@ function ChatMessage({
   scheduleEnabledTools = null,
   // What an MCP App view in this answer may do in the composer:
   // `{ sendMessage(text), isProcessing }`. Surfaces without a composer omit it.
-  mcpAppHost = null
+  mcpAppHost = null,
+  // `(text) => void`: offer "Save as prompt" on the user's own messages. The
+  // page passes it when the user may keep prompts of their own.
+  onSaveAsPrompt = null
 }) {
   const { t } = useTranslation();
   const featureFlags = useFeatureFlags();
@@ -1268,6 +1271,17 @@ function ChatMessage({
                 enabledTools={scheduleEnabledTools}
               />
             </>
+          )}
+
+          {isUser && !readOnly && onSaveAsPrompt && (
+            <button
+              onClick={() => onSaveAsPrompt(getEditableContent())}
+              className="flex items-center gap-1 hover:text-indigo-600 transition-colors duration-150"
+              title={t('chatMessage.saveAsPrompt', 'Save as prompt')}
+              aria-label={t('chatMessage.saveAsPrompt', 'Save as prompt')}
+            >
+              <Icon name="document-plus" size="sm" />
+            </button>
           )}
 
           {!readOnly && (
