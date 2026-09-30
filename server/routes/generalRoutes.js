@@ -9,7 +9,7 @@ import {
   sendFailedOperationError,
   sendErrorResponse
 } from '../utils/responseHelpers.js';
-import { publicAppView } from '../services/provenance/clientConfig.js';
+import { publicAppView, publicAppViewTag } from '../services/provenance/clientConfig.js';
 
 /**
  * @swagger
@@ -188,7 +188,7 @@ export default function registerGeneralRoutes(app, { getLocalizedError }) {
         return sendFailedOperationError(res, 'load apps configuration', new Error('apps is null'));
       }
 
-      res.setHeader('ETag', userSpecificEtag);
+      res.setHeader('ETag', `${userSpecificEtag}-${publicAppViewTag()}`);
       res.json(apps.map(publicAppView));
     } catch (error) {
       return sendInternalError(res, error, 'fetch apps');

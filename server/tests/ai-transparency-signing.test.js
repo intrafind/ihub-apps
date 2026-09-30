@@ -12,11 +12,14 @@ import { webcrypto } from 'node:crypto';
 import { cleanup, setConfig, tempContents } from './helpers/aiTransparencyEnv.js';
 
 const x = await import('../services/provenance/signing/x509.js');
-const { default: signingService } = await import('../services/provenance/signing/SigningService.js');
+const { default: signingService } =
+  await import('../services/provenance/signing/SigningService.js');
 const { signJws, verifyJws } = await import('../services/provenance/signing/jws.js');
-const { default: keyGroupService } = await import('../services/provenance/watermark/KeyGroupService.js');
+const { default: keyGroupService } =
+  await import('../services/provenance/watermark/KeyGroupService.js');
 const signpost = await import('../services/provenance/text/signpost.js');
-const { watermarkRequestFields } = await import('../services/provenance/watermark/requestParams.js');
+const { watermarkRequestFields } =
+  await import('../services/provenance/watermark/requestParams.js');
 const { removeWatermarkOverrides } = await import('../services/provenance/httpProvenance.js');
 const { isC2paAvailable } = await import('../services/provenance/signing/c2pa.js');
 
@@ -72,7 +75,10 @@ async function customerPki() {
 
 describe('installation CA', () => {
   it('generates a C2PA-profile chain that validates', async () => {
-    const g = await x.generateInstallationCertificate({ organization: 'ACME GmbH', commonName: 'ACME iHub' });
+    const g = await x.generateInstallationCertificate({
+      organization: 'ACME GmbH',
+      commonName: 'ACME iHub'
+    });
     assert.match(g.leaf.subject, /O=ACME GmbH/);
     assert.deepEqual(g.leaf.ekus, ['1.3.6.1.5.5.7.3.4']);
     assert.equal(g.root.selfSigned, true);
@@ -102,8 +108,18 @@ describe('installation CA', () => {
     fs.writeFileSync(path.join(dir, 'root.pem'), g.rootPem);
     fs.writeFileSync(path.join(dir, 'key.pem'), g.keyPem);
     execFileSync('openssl', [
-      'pkcs12', '-export', '-inkey', path.join(dir, 'key.pem'), '-in', path.join(dir, 'leaf.pem'),
-      '-certfile', path.join(dir, 'root.pem'), '-out', path.join(dir, 'b.p12'), '-passout', 'pass:secret'
+      'pkcs12',
+      '-export',
+      '-inkey',
+      path.join(dir, 'key.pem'),
+      '-in',
+      path.join(dir, 'leaf.pem'),
+      '-certfile',
+      path.join(dir, 'root.pem'),
+      '-out',
+      path.join(dir, 'b.p12'),
+      '-passout',
+      'pass:secret'
     ]);
     const parsed = await x.parsePkcs12(fs.readFileSync(path.join(dir, 'b.p12')), 'secret');
     const v = await x.validateSigningBundle(parsed);
@@ -122,7 +138,11 @@ describe('signing service', () => {
     assert.equal(rotated.certificate.status, 'active');
     const statuses = (await signingService.status()).certificates.map(c => c.status);
     assert.ok(statuses.includes('detect-only'));
-    assert.equal((await signingService.verifyPayload(token)).trusted, true, 'detect-only root is still an anchor');
+    assert.equal(
+      (await signingService.verifyPayload(token)).trusted,
+      true,
+      'detect-only root is still an anchor'
+    );
     // Rollback
     const old = (await signingService.status()).certificates.find(c => c.status === 'detect-only');
     const back = await signingService.activate(old.id);
@@ -140,7 +160,10 @@ describe('signing service', () => {
 
   it('completes a CSR with a certificate from the customer PKI', async () => {
     const pki = await customerPki();
-    const pending = await signingService.createCsr({ commonName: 'Customer Signer', organization: 'Customer' });
+    const pending = await signingService.createCsr({
+      commonName: 'Customer Signer',
+      organization: 'Customer'
+    });
     assert.equal(pending.status, 'pending');
     const req = new x.x509.Pkcs10CertificateRequest(pending.csrPem);
     const cert = await pki.issue(req.subject, await req.publicKey.export());
@@ -156,13 +179,19 @@ describe('signing service', () => {
   it('refuses a custom certificate without a C2PA EKU', async () => {
     const pki = await customerPki();
     const keys = await webcrypto.subtle.generateKey(pki.alg, true, ['sign', 'verify']);
-    const cert = await pki.issue('CN=Server, O=Customer', keys.publicKey, { eku: ['1.3.6.1.5.5.7.3.1'] });
+    const cert = await pki.issue('CN=Server, O=Customer', keys.publicKey, {
+      eku: ['1.3.6.1.5.5.7.3.1']
+    });
     const keyPem = x.x509.PemConverter.encode(
       Buffer.from(await webcrypto.subtle.exportKey('pkcs8', keys.privateKey)),
       'PRIVATE KEY'
     );
     await assert.rejects(
-      () => signingService.installCustom({ chainPem: `${cert.toString('pem')}\n${pki.ca.toString('pem')}`, keyPem }),
+      () =>
+        signingService.installCustom({
+          chainPem: `${cert.toString('pem')}\n${pki.ca.toString('pem')}`,
+          keyPem
+        }),
       error => error.details?.some(d => /extended key usage/.test(d))
     );
   });
@@ -183,11 +212,26 @@ describe('JWS', () => {
     const forged = `${h}.${Buffer.from('{"a":2}').toString('base64url')}.${s}`;
     assert.equal((await verifyJws(forged, { trustAnchors: [g.rootPem] })).valid, false);
   });
+
+  it('treats a header or payload that is not a JSON object as not a JWS', async () => {
+    const nul = Buffer.from('null').toString('base64url');
+    const arr = Buffer.from('[1]').toString('base64url');
+    const obj = Buffer.from('{"a":1}').toString('base64url');
+    for (const token of [`${nul}.${obj}.x`, `${obj}.${arr}.x`]) {
+      const result = await verifyJws(token);
+      assert.equal(result.valid, false);
+      assert.deepEqual(result.errors, ['Not a JWS']);
+    }
+  });
 });
 
 describe('watermark key groups', () => {
   it('creates, rotates, exports and imports an encrypted bundle', async () => {
-    const group = await keyGroupService.create({ id: 'acme', name: 'ACME', detectorUrl: 'http://detector' });
+    const group = await keyGroupService.create({
+      id: 'acme',
+      name: 'ACME',
+      detectorUrl: 'http://detector'
+    });
     assert.equal(group.activeVersion, 1);
     const rotated = await keyGroupService.rotate('acme');
     assert.equal(rotated.activeVersion, 2);
@@ -195,7 +239,10 @@ describe('watermark key groups', () => {
     const config = await keyGroupService.vllmConfig('acme');
     assert.match(config.watermarkConfig, /^\{"algorithm":"gumbel","key":\d+,"context_width":4\}$/);
     const bundle = await keyGroupService.exportBundle(['acme'], 'correct horse battery');
-    assert.equal(JSON.stringify(bundle).includes(JSON.parse(config.watermarkConfig).key.toString()), false);
+    assert.equal(
+      JSON.stringify(bundle).includes(JSON.parse(config.watermarkConfig).key.toString()),
+      false
+    );
     await assert.rejects(() => keyGroupService.importBundle(bundle, 'wrong passphrase!'));
     await keyGroupService.remove('acme');
     const imported = await keyGroupService.importBundle(bundle, 'correct horse battery');
@@ -204,15 +251,58 @@ describe('watermark key groups', () => {
     assert.equal(keys.keys.length, 2);
     assert.ok(!JSON.stringify(await keyGroupService.list()).includes('keyEnc'));
   });
+
+  it('refuses bundle KDF parameters it did not write', async () => {
+    await keyGroupService.create({ id: 'kdf-check', name: 'KDF' });
+    const bundle = await keyGroupService.exportBundle(['kdf-check'], 'correct horse battery');
+    for (const kdf of [
+      { ...bundle.kdf, p: 1000 },
+      { ...bundle.kdf, N: 2 ** 20 },
+      { ...bundle.kdf, name: 'pbkdf2' }
+    ]) {
+      await assert.rejects(
+        () => keyGroupService.importBundle({ ...bundle, kdf }, 'correct horse battery'),
+        /Unsupported key derivation/
+      );
+    }
+    await keyGroupService.remove('kdf-check');
+  });
+
+  it('refuses a bundle whose version collides with a different local key', async () => {
+    await keyGroupService.create({ id: 'shared', name: 'Shared' });
+    const theirs = await keyGroupService.exportBundle(['shared'], 'correct horse battery');
+    await keyGroupService.remove('shared');
+    // Same id and version 1, created independently here: a different key.
+    await keyGroupService.create({ id: 'shared', name: 'Shared' });
+    await assert.rejects(
+      () => keyGroupService.importBundle(theirs, 'correct horse battery'),
+      err => err.status === 409 && /different key/.test(err.message)
+    );
+    // Re-importing our own bundle is a no-op, not a conflict.
+    const ours = await keyGroupService.exportBundle(['shared'], 'correct horse battery');
+    await keyGroupService.importBundle(ours, 'correct horse battery');
+    await keyGroupService.remove('shared');
+  });
 });
 
 describe('server-owned watermarking', () => {
   it('derives the per-request flag from the model only and strips client overrides', () => {
-    const model = { contentMarking: { textWatermark: { scheme: 'vllm-gumbel', keyGroup: 'k', perRequest: true } } };
+    const model = {
+      contentMarking: { textWatermark: { scheme: 'vllm-gumbel', keyGroup: 'k', perRequest: true } }
+    };
     assert.deepEqual(watermarkRequestFields(model), { watermarking: true });
     assert.deepEqual(watermarkRequestFields({ contentMarking: { textWatermark: 'none' } }), {});
-    const body = { model: 'x', watermarking: false, extra_body: { watermarking: false }, vllm_xargs: {} };
-    assert.deepEqual(removeWatermarkOverrides(body).sort(), ['extra_body', 'vllm_xargs', 'watermarking']);
+    const body = {
+      model: 'x',
+      watermarking: false,
+      extra_body: { watermarking: false },
+      vllm_xargs: {}
+    };
+    assert.deepEqual(removeWatermarkOverrides(body).sort(), [
+      'extra_body',
+      'vllm_xargs',
+      'watermarking'
+    ]);
     assert.deepEqual(body, { model: 'x' });
   });
 
@@ -225,10 +315,15 @@ describe('server-owned watermarking', () => {
       provider: 'local',
       contentMarking: { textWatermark: { scheme: 'vllm-gumbel', keyGroup: 'k', perRequest: true } }
     };
-    const request = await vllm.createCompletionRequest(model, [{ role: 'user', content: 'hi' }], null, {
-      watermarking: false,
-      extra_body: { watermarking: false }
-    });
+    const request = await vllm.createCompletionRequest(
+      model,
+      [{ role: 'user', content: 'hi' }],
+      null,
+      {
+        watermarking: false,
+        extra_body: { watermarking: false }
+      }
+    );
     assert.equal(request.body.watermarking, true);
     assert.equal(request.body.extra_body, undefined);
   });
@@ -264,6 +359,11 @@ describe('text signpost', () => {
     const cfg = { text: { signpost: { exports: true, clipboard: false } } };
     assert.equal(signpost.signpostEnabled('exports', cfg, null), true);
     assert.equal(signpost.signpostEnabled('clipboard', cfg, null), false);
-    assert.equal(signpost.signpostEnabled('exports', cfg, { aiTransparency: { signpost: { exports: false } } }), false);
+    assert.equal(
+      signpost.signpostEnabled('exports', cfg, {
+        aiTransparency: { signpost: { exports: false } }
+      }),
+      false
+    );
   });
 });

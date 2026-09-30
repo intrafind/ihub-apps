@@ -50,7 +50,9 @@ export async function ensureInstallationId() {
     cachedId = existing;
     return existing;
   }
-  const fresh = randomUUID();
+  // An id already handed out in memory (see getInstallationId) is the one to
+  // persist, so records stamped with it stay this installation's.
+  const fresh = cachedId || randomUUID();
   const file = idFilePath();
   try {
     await fs.mkdir(path.dirname(file), { recursive: true });

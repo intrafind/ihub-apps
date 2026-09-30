@@ -12,6 +12,7 @@
  */
 import { promises as fs } from 'node:fs';
 import path from 'node:path';
+import { pathToFileURL } from 'node:url';
 
 export async function runMarkingBenchmarkCLI(argv = []) {
   const full = argv.includes('--full');
@@ -46,7 +47,7 @@ export async function runMarkingBenchmarkCLI(argv = []) {
   return report.summary.failed > 0 ? 1 : 0;
 }
 
-if (import.meta.url === `file://${process.argv[1]}`) {
+if (process.argv[1] && import.meta.url === pathToFileURL(path.resolve(process.argv[1])).href) {
   runMarkingBenchmarkCLI(process.argv.slice(2)).then(
     code => process.exit(code),
     error => {

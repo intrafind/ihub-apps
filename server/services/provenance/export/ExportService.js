@@ -20,12 +20,13 @@
  */
 import crypto from 'node:crypto';
 import configCache from '../../../configCache.js';
+import logger from '../../../utils/logger.js';
 import { getAppVersion } from '../../../utils/versionHelper.js';
 import { getLocalizedContent } from '../../../../shared/localize.js';
 import { DIGITAL_SOURCE_TYPES } from '../../../../shared/aiTransparency.js';
 import { getAiTransparencyConfig, isAiTransparencyActive } from '../config.js';
 import { getInstallationId, getInstallationUrl } from '../installation.js';
-import provenanceStore, { hashContent } from '../ProvenanceStore.js';
+import provenanceStore, { hashBytes, hashContent } from '../ProvenanceStore.js';
 import { signExport } from './ExportSigner.js';
 import { signpostEnabled } from '../text/signpost.js';
 import { EXPORT_FORMATS, renderExport } from './renderers/index.js';
@@ -268,13 +269,27 @@ export async function createExport(request, { user, language = 'en' }) {
     }))
   };
 
-  const signed = await signExport({
-    format,
-    buffer: rendered.buffer,
-    payload,
-    meta: { generator, provider, labelText },
-    signpost: signpostEnabled('exports', cfg, app)
-  });
+  let signed;
+  let signingFailed = false;
+  try {
+    signed = await signExport({
+      format,
+      buffer: rendered.buffer,
+      payload,
+      meta: { generator, provider, labelText },
+      signpost: signpostEnabled('exports', cfg, app)
+    });
+  } catch (error) {
+    // No signer (unreadable keystore, changed encryption key, …): the user
+    // still gets the labelled file; the EU AI Act page reports the gap.
+    logger.error('Export signing failed; returning the file unsigned', {
+      component: 'ExportService',
+      format,
+      error: error.message
+    });
+    signingFailed = true;
+    signed = { buffer: rendered.buffer, jws: null, fileHash: hashBytes(rendered.buffer) };
+  }
 
   await provenanceStore.recordExport({
     manifestId,
@@ -282,7 +297,8 @@ export async function createExport(request, { user, language = 'en' }) {
     format,
     jws: signed.jws,
     messages: payload.messages,
-    verification: payload.verification
+    verification: payload.verification,
+    conforming: !signingFailed
   });
 
   return {

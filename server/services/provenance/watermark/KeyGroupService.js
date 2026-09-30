@@ -18,6 +18,7 @@
  * @module services/provenance/watermark/KeyGroupService
  */
 import crypto from 'node:crypto';
+import { promisify } from 'node:util';
 import keyStore, { openSecret, sealSecret } from '../keyStore.js';
 import { getInstallationId } from '../installation.js';
 
@@ -38,6 +39,11 @@ function newWatermarkKey() {
   const n = crypto.randomBytes(8).readBigUInt64BE() & 0x7fffffffffffffffn;
   return (n === 0n ? 1n : n).toString();
 }
+
+const scryptAsync = promisify(crypto.scrypt);
+/** The only KDF parameters a bundle may carry: the ones exportBundle writes. */
+const BUNDLE_KDF = Object.freeze({ name: 'scrypt', N: 2 ** 15, r: 8, p: 1 });
+const SCRYPT_MAXMEM = 64 * 1024 * 1024;
 
 function keyFingerprint(key) {
   return crypto.createHash('sha256').update(`ihub-wm:${key}`).digest('hex').slice(0, 16);
@@ -221,18 +227,18 @@ class KeyGroupService {
     });
     const salt = crypto.randomBytes(16);
     const iv = crypto.randomBytes(12);
-    const key = crypto.scryptSync(passphrase, salt, 32, {
-      N: 2 ** 15,
-      r: 8,
-      p: 1,
-      maxmem: 64 * 1024 * 1024
+    const key = await scryptAsync(passphrase, salt, 32, {
+      N: BUNDLE_KDF.N,
+      r: BUNDLE_KDF.r,
+      p: BUNDLE_KDF.p,
+      maxmem: SCRYPT_MAXMEM
     });
     const cipher = crypto.createCipheriv('aes-256-gcm', key, iv);
     const ciphertext = Buffer.concat([cipher.update(plaintext, 'utf8'), cipher.final()]);
     return {
       format: BUNDLE_FORMAT,
       version: 1,
-      kdf: { name: 'scrypt', N: 2 ** 15, r: 8, p: 1, salt: salt.toString('base64') },
+      kdf: { ...BUNDLE_KDF, salt: salt.toString('base64') },
       cipher: 'aes-256-gcm',
       iv: iv.toString('base64'),
       tag: cipher.getAuthTag().toString('base64'),
@@ -254,14 +260,24 @@ class KeyGroupService {
     if (bundle?.format !== BUNDLE_FORMAT || bundle.version !== 1) {
       throw new KeyGroupError('Not an iHub watermark key bundle');
     }
+    const kdf = bundle.kdf || {};
+    // Parameters come from the upload: anything but ours could stall the worker.
+    if (
+      kdf.name !== BUNDLE_KDF.name ||
+      kdf.N !== BUNDLE_KDF.N ||
+      kdf.r !== BUNDLE_KDF.r ||
+      kdf.p !== BUNDLE_KDF.p ||
+      typeof kdf.salt !== 'string'
+    ) {
+      throw new KeyGroupError('Unsupported key derivation in the bundle');
+    }
     let payload;
     try {
-      const kdf = bundle.kdf || {};
-      const key = crypto.scryptSync(String(passphrase || ''), Buffer.from(kdf.salt, 'base64'), 32, {
-        N: kdf.N,
-        r: kdf.r,
-        p: kdf.p,
-        maxmem: 64 * 1024 * 1024
+      const key = await scryptAsync(String(passphrase || ''), Buffer.from(kdf.salt, 'base64'), 32, {
+        N: BUNDLE_KDF.N,
+        r: BUNDLE_KDF.r,
+        p: BUNDLE_KDF.p,
+        maxmem: SCRYPT_MAXMEM
       });
       const decipher = crypto.createDecipheriv(
         'aes-256-gcm',
@@ -295,7 +311,19 @@ class KeyGroupService {
           store.keyGroups.push(group);
         }
         for (const v of incoming.versions || []) {
-          if (!v.key || group.versions.some(x => x.version === v.version)) continue;
+          if (!v.key) continue;
+          const existing = group.versions.find(x => x.version === v.version);
+          if (existing) {
+            // Same id and version, different key: two installations created
+            // the group independently. Skipping would silently lose the key.
+            if (existing.fingerprint !== keyFingerprint(v.key)) {
+              throw new KeyGroupError(
+                `Key group "${group.id}" version ${v.version} exists here with a different key`,
+                409
+              );
+            }
+            continue;
+          }
           group.versions.push({
             version: v.version,
             status: 'detect-only',

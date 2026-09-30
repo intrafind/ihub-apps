@@ -278,7 +278,18 @@ test('non-streaming — chat.completion with real usage, regenerated id, iHub mo
     { index: 0, message: { role: 'assistant', content: 'Hi' }, finish_reason: 'stop' }
   ]);
   assert.deepEqual(res.body.usage, { prompt_tokens: 9, completion_tokens: 1, total_tokens: 10 });
-  assert.deepEqual(Object.keys(res.body), ['id', 'object', 'created', 'model', 'choices', 'usage']);
+  assert.deepEqual(Object.keys(res.body), [
+    'id',
+    'object',
+    'created',
+    'model',
+    'choices',
+    'usage',
+    'ihub_provenance'
+  ]);
+  // EU AI Act Art. 50(2): the machine-readable marking of the answer.
+  assert.equal(res.body.ihub_provenance.aiGenerated, true);
+  assert.match(res.body.ihub_provenance.contentId, /^prv_/);
 });
 
 test('non-streaming — a generation slower than the connect ceiling still answers', async () => {
@@ -443,6 +454,8 @@ test('streaming — stream_options.include_usage appends a usage chunk before [D
   const usageChunk = events[events.length - 2];
   assert.deepEqual(usageChunk.choices, []);
   assert.deepEqual(usageChunk.usage, { prompt_tokens: 4, completion_tokens: 1, total_tokens: 5 });
+  // The usage chunk is the one opted-in empty-choices chunk, so it carries provenance.
+  assert.equal(usageChunk.ihub_provenance.aiGenerated, true);
   assert.equal(events[events.length - 1], '[DONE]');
 });
 

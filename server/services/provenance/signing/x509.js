@@ -152,14 +152,28 @@ export async function generateInstallationCertificate({
   };
 }
 
+const PEM_BEGIN = '-----BEGIN CERTIFICATE-----';
+const PEM_END = '-----END CERTIFICATE-----';
+/** Certificate bundles larger than this are not parsed (a chain is a few KB). */
+const MAX_PEM_LENGTH = 1024 * 1024;
+
 /**
  * Split a PEM bundle into certificates.
  * @param {string} pem
  * @returns {x509.X509Certificate[]}
  */
 export function parsePemCertificates(pem) {
-  if (typeof pem !== 'string' || !pem.includes('-----BEGIN CERTIFICATE-----')) return [];
-  const blocks = pem.match(/-----BEGIN CERTIFICATE-----[\s\S]+?-----END CERTIFICATE-----/g) || [];
+  if (typeof pem !== 'string' || pem.length > MAX_PEM_LENGTH) return [];
+  const blocks = [];
+  let from = 0;
+  for (;;) {
+    const begin = pem.indexOf(PEM_BEGIN, from);
+    if (begin === -1) break;
+    const end = pem.indexOf(PEM_END, begin + PEM_BEGIN.length);
+    if (end === -1) break;
+    blocks.push(pem.slice(begin, end + PEM_END.length));
+    from = end + PEM_END.length;
+  }
   return blocks.map(block => new x509.X509Certificate(block));
 }
 

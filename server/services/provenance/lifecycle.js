@@ -19,6 +19,17 @@ let sweepTimer = null;
  */
 export async function initAiTransparency({ ownsSingletons = true } = {}) {
   await ensureInstallationId();
+  // Retention sweeps run even while the feature is off: it can be switched on
+  // at runtime, and each sweep reads the current retention settings.
+  if (ownsSingletons && !sweepTimer) {
+    const sweep = () => {
+      provenanceStore.sweep().catch(() => {});
+      detectionLog.sweep().catch(() => {});
+    };
+    setTimeout(sweep, 60 * 1000).unref?.();
+    sweepTimer = setInterval(sweep, DAY_MS);
+    sweepTimer.unref?.();
+  }
   if (!isAiTransparencyActive()) return;
   const cfg = getAiTransparencyConfig();
   if (cfg.signing.enabled) {
@@ -32,13 +43,4 @@ export async function initAiTransparency({ ownsSingletons = true } = {}) {
     }
   }
   warmUpTrustmark();
-  if (ownsSingletons && !sweepTimer) {
-    const sweep = () => {
-      provenanceStore.sweep().catch(() => {});
-      detectionLog.sweep().catch(() => {});
-    };
-    setTimeout(sweep, 60 * 1000).unref?.();
-    sweepTimer = setInterval(sweep, DAY_MS);
-    sweepTimer.unref?.();
-  }
 }

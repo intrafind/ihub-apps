@@ -81,10 +81,11 @@ export function decodeJws(token) {
   const parts = token.trim().split('.');
   if (parts.length !== 3) return null;
   try {
-    return {
-      header: JSON.parse(Buffer.from(parts[0], 'base64url').toString('utf8')),
-      payload: JSON.parse(Buffer.from(parts[1], 'base64url').toString('utf8'))
-    };
+    const header = JSON.parse(Buffer.from(parts[0], 'base64url').toString('utf8'));
+    const payload = JSON.parse(Buffer.from(parts[1], 'base64url').toString('utf8'));
+    // Both are JSON objects in a JWS; `null` or an array would break callers.
+    const isObject = v => v !== null && typeof v === 'object' && !Array.isArray(v);
+    return isObject(header) && isObject(payload) ? { header, payload } : null;
   } catch {
     return null;
   }

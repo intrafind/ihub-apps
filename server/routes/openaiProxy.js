@@ -687,16 +687,6 @@ export default function registerOpenAIProxyRoutes(
           return finish();
         }
       }
-      if (streamOptions?.include_usage === true && !clientDisconnected) {
-        write({
-          id: completionId,
-          object: 'chat.completion.chunk',
-          created: Math.floor(Date.now() / 1000),
-          model: modelId,
-          choices: [],
-          usage: usageToOpenAI(result.usage)
-        });
-      }
       const provenance = await recordTurnProvenance({
         content: result.content || '',
         model,
@@ -704,14 +694,17 @@ export default function registerOpenAIProxyRoutes(
         images: result.images,
         kind: 'inference'
       });
-      if (provenance && !clientDisconnected) {
+      // Provenance rides on the usage chunk: a chunk with empty `choices` is
+      // only safe for clients that asked for one (include_usage).
+      if (streamOptions?.include_usage === true && !clientDisconnected) {
         write({
           id: completionId,
           object: 'chat.completion.chunk',
           created: Math.floor(Date.now() / 1000),
           model: modelId,
           choices: [],
-          ihub_provenance: provenance
+          usage: usageToOpenAI(result.usage),
+          ...(provenance ? { ihub_provenance: provenance } : {})
         });
       }
       finish();
@@ -926,17 +919,9 @@ export default function registerOpenAIProxyRoutes(
           created,
           model: label,
           choices: [],
-          usage
-        });
-      }
-      if (outcome.provenance) {
-        write({
-          id: completionId,
-          object: 'chat.completion.chunk',
-          created,
-          model: label,
-          choices: [],
-          ihub_provenance: outcome.provenance
+          usage,
+          // As in the direct path: only the opted-in usage chunk carries it.
+          ...(outcome.provenance ? { ihub_provenance: outcome.provenance } : {})
         });
       }
       res.write('data: [DONE]\n\n');

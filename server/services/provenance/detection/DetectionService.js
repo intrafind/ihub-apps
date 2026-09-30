@@ -20,6 +20,7 @@
  * @module services/provenance/detection/DetectionService
  */
 import JSZip from 'jszip';
+import { inflateBudget, readZipEntry, zipEntries } from '../zipLimits.js';
 import { getAppVersion } from '../../../utils/versionHelper.js';
 import { DIGITAL_SOURCE_TYPES, estimateTokens } from '../../../../shared/aiTransparency.js';
 import { getInstallationId, getInstallationUrl } from '../installation.js';
@@ -195,6 +196,15 @@ async function recordTechnique(contentHash, { byId } = {}) {
 
 function manifestTechnique(result) {
   if (!result.found) return technique('ihub-manifest', { detail: 'No iHub manifest' });
+  if (!result.payload && result.errors?.length) {
+    // Found but not checkable (e.g. the archive exceeds the inflation limits).
+    return technique('ihub-manifest', {
+      found: true,
+      valid: false,
+      trusted: false,
+      detail: result.errors.join('; ')
+    });
+  }
   return technique('ihub-manifest', {
     found: true,
     valid: result.valid && result.intact,
@@ -306,18 +316,45 @@ async function extractDocumentText(buffer, kind) {
     }
     if (kind === 'docx') {
       const zip = await JSZip.loadAsync(buffer);
-      const xml = await zip.file('word/document.xml').async('string');
-      return xml
-        .replace(/<\/w:p>/g, '\n')
-        .replace(/<[^>]+>/g, '')
-        .replace(/&lt;/g, '<')
-        .replace(/&gt;/g, '>')
-        .replace(/&amp;/g, '&');
+      zipEntries(zip);
+      const xml = await readZipEntry(zip.file('word/document.xml'), inflateBudget(), 'utf8');
+      return docxText(xml);
     }
   } catch {
     return '';
   }
   return '';
+}
+
+const XML_ENTITIES = { lt: '<', gt: '>', amp: '&', quot: '"', apos: "'" };
+
+/** Decode the entities of an XML text node in one pass. */
+function decodeXmlText(text) {
+  return text.replace(/&(#x[0-9a-f]+|#[0-9]+|[a-z]+);/gi, (entity, name) => {
+    if (name[0] !== '#') return XML_ENTITIES[name] ?? entity;
+    const code =
+      name[1] === 'x' || name[1] === 'X' ? parseInt(name.slice(2), 16) : Number(name.slice(1));
+    return Number.isInteger(code) && code >= 0 && code <= 0x10ffff
+      ? String.fromCodePoint(code)
+      : entity;
+  });
+}
+
+/**
+ * The text of a DOCX body: the `<w:t>` runs of each paragraph, one paragraph
+ * per line. Reads the text nodes instead of stripping markup.
+ * @param {string} xml - word/document.xml
+ * @returns {string}
+ */
+export function docxText(xml) {
+  return xml
+    .split('</w:p>')
+    .map(paragraph =>
+      Array.from(paragraph.matchAll(/<w:t(?:\s[^>]*)?>([^<]*)<\/w:t>/g), m =>
+        decodeXmlText(m[1])
+      ).join('')
+    )
+    .join('\n');
 }
 
 function verdictOf(techniques) {

@@ -3724,6 +3724,13 @@
                 }
               },
               "output": {},
+              "provenance": {
+                "type": "object",
+                "propertyNames": {
+                  "type": "string"
+                },
+                "additionalProperties": {}
+              },
               "error": {
                 "type": "object",
                 "properties": {
@@ -3877,6 +3884,13 @@
                   },
                   "thoughtSignature": {
                     "type": "string"
+                  },
+                  "provenance": {
+                    "type": "object",
+                    "propertyNames": {
+                      "type": "string"
+                    },
+                    "additionalProperties": {}
                   }
                 },
                 "required": ["mimeType", "data"],

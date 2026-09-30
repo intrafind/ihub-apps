@@ -42,6 +42,17 @@ export function aiTransparencyClientConfig() {
  * @param {Object} app
  * @returns {Object}
  */
+/**
+ * Suffix for an ETag over `publicAppView` output. The views depend on the
+ * platform-wide disclosure switch as well as on the apps, so a cached app list
+ * must not survive that switch (per-app records are part of the app content).
+ * @returns {string}
+ */
+export function publicAppViewTag() {
+  const cfg = getAiTransparencyConfig();
+  return isAiTransparencyActive() && cfg.interactionDisclosure.enabled ? 'd1' : 'd0';
+}
+
 export function publicAppView(app) {
   if (!app || typeof app !== 'object') return app;
   const block = app.aiTransparency || {};

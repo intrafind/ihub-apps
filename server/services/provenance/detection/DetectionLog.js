@@ -13,6 +13,7 @@ import { getStorage, readFacet } from '../../../storage/bootstrap.js';
 import { RUNTIME_NAMESPACES } from '../../../storage/namespaces.js';
 import logger from '../../../utils/logger.js';
 import { getAiTransparencyConfig } from '../config.js';
+import { walkNamespace } from '../storageWalk.js';
 
 export const DETECTION_LOG_NAMESPACE = RUNTIME_NAMESPACES.provenanceDetections;
 const MEMORY_LIMIT = 1000;
@@ -87,10 +88,10 @@ class DetectionLog {
    */
   async list({ limit = 100 } = {}) {
     const documents = this._docs();
-    if (documents?.scan) {
+    if (documents) {
       try {
         const all = [];
-        for await (const doc of documents.scan(DETECTION_LOG_NAMESPACE)) {
+        for await (const doc of walkNamespace(documents, DETECTION_LOG_NAMESPACE)) {
           if (doc.data) all.push(doc.data);
           if (all.length > limit) all.shift();
         }
@@ -112,14 +113,16 @@ class DetectionLog {
     const cutoff = Date.now() - days * DAY_MS;
     this.memory = this.memory.filter(e => Date.parse(e.at) >= cutoff);
     const documents = this._docs();
-    if (!documents?.scan) return 0;
+    if (!documents) return 0;
     let deleted = 0;
     try {
-      for await (const doc of documents.scan(DETECTION_LOG_NAMESPACE)) {
-        if (doc.data?.at && Date.parse(doc.data.at) < cutoff) {
-          await documents.delete(DETECTION_LOG_NAMESPACE, doc.key);
-          deleted++;
-        }
+      const expired = [];
+      for await (const doc of walkNamespace(documents, DETECTION_LOG_NAMESPACE)) {
+        if (doc.data?.at && Date.parse(doc.data.at) < cutoff) expired.push(doc.key);
+      }
+      for (const key of expired) {
+        await documents.delete(DETECTION_LOG_NAMESPACE, key);
+        deleted++;
       }
     } catch (error) {
       logger.warn('Detection log sweep failed', {

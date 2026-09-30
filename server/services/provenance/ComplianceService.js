@@ -28,8 +28,9 @@ import { imageMarkerStatus } from './image/ImageMarker.js';
 
 const CERT_WARN_DAYS = 30;
 
+// Fingerprint of a warning's state (a dismissal holds only for that state), not a password.
 function stateHash(value) {
-  return crypto.createHash('sha256').update(JSON.stringify(value)).digest('hex').slice(0, 16);
+  return crypto.createHash('sha256').update(JSON.stringify(value)).digest('hex').slice(0, 16); // lgtm[js/insufficient-password-hash]
 }
 
 export function isDismissibleWarning(id) {

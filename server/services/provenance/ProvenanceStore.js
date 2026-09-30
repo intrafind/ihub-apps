@@ -24,6 +24,7 @@ import logger from '../../utils/logger.js';
 import { getAiTransparencyConfig, isAiTransparencyActive } from './config.js';
 import { getInstallationId } from './installation.js';
 import { evaluateTextMarking } from './markingPolicy.js';
+import { walkNamespace } from './storageWalk.js';
 
 const COMPONENT = 'ProvenanceStore';
 export const PROVENANCE_RECORDS_NAMESPACE = RUNTIME_NAMESPACES.provenanceRecords;
@@ -55,12 +56,12 @@ export function normalizeForHash(text) {
  * @param {string} text
  */
 export function hashContent(text) {
-  return `sha256:${crypto.createHash('sha256').update(normalizeForHash(text), 'utf8').digest('hex')}`;
+  return `sha256:${crypto.createHash('sha256').update(normalizeForHash(text), 'utf8').digest('hex')}`; // lgtm[js/insufficient-password-hash]
 }
 
-/** `sha256:<hex>` of raw bytes. */
+/** `sha256:<hex>` of raw bytes (content hash of a generated file, not a password). */
 export function hashBytes(buffer) {
-  return `sha256:${crypto.createHash('sha256').update(buffer).digest('hex')}`;
+  return `sha256:${crypto.createHash('sha256').update(buffer).digest('hex')}`; // lgtm[js/insufficient-password-hash]
 }
 
 /** A random, non-identifying content id (no user data, concept §6 item 7). */
@@ -125,8 +126,14 @@ class ProvenanceStore {
     while (this.memory.size > MEMORY_LIMIT) {
       const [oldestId, oldest] = this.memory.entries().next().value;
       this.memory.delete(oldestId);
-      this.memoryHashes.delete(hashKey(oldest.contentHash));
+      this._forgetHash(oldest);
     }
+  }
+
+  /** Drop the in-memory hash index entry, unless it now names a newer record. */
+  _forgetHash(record) {
+    const key = hashKey(record.contentHash);
+    if (this.memoryHashes.get(key) === record.contentId) this.memoryHashes.delete(key);
   }
 
   async _put(record) {
@@ -229,7 +236,15 @@ class ProvenanceStore {
    * signed manifest serves as the sidecar.
    * @param {Object} params
    */
-  async recordExport({ manifestId, fileHash, format, jws, messages, verification }) {
+  async recordExport({
+    manifestId,
+    fileHash,
+    format,
+    jws,
+    messages,
+    verification,
+    conforming = true
+  }) {
     const cfg = getAiTransparencyConfig();
     if (!isAiTransparencyActive() || !cfg.provenance.enabled) return null;
     const record = {
@@ -253,7 +268,7 @@ class ProvenanceStore {
         verification: m.verification
       })),
       verification,
-      conforming: true
+      conforming
     };
     await this._put(record);
     return record;
@@ -326,20 +341,30 @@ class ProvenanceStore {
     for (const [id, record] of this.memory) {
       if (Date.parse(record.generatedAt) < cutoff) {
         this.memory.delete(id);
-        this.memoryHashes.delete(hashKey(record.contentHash));
+        this._forgetHash(record);
       }
     }
     const documents = this._docs();
-    if (!documents?.scan) return deleted;
+    if (!documents) return deleted;
     try {
-      for await (const doc of documents.scan(PROVENANCE_RECORDS_NAMESPACE)) {
+      // Collect first: deleting while a paged listing runs could skip keys.
+      const expired = [];
+      for await (const doc of walkNamespace(documents, PROVENANCE_RECORDS_NAMESPACE)) {
         const record = doc.data;
         if (!record?.generatedAt || Date.parse(record.generatedAt) >= cutoff) continue;
-        await documents.delete(PROVENANCE_RECORDS_NAMESPACE, doc.key);
+        expired.push({ key: doc.key, record });
+      }
+      for (const { key, record } of expired) {
+        await documents.delete(PROVENANCE_RECORDS_NAMESPACE, key);
         if (record.contentHash) {
-          await documents
-            .delete(PROVENANCE_HASHES_NAMESPACE, hashKey(record.contentHash))
-            .catch(() => {});
+          // Identical content maps to its newest record; keep that index entry.
+          const indexKey = hashKey(record.contentHash);
+          const index = await documents
+            .get(PROVENANCE_HASHES_NAMESPACE, indexKey)
+            .catch(() => null);
+          if (index?.data?.contentId === record.contentId) {
+            await documents.delete(PROVENANCE_HASHES_NAMESPACE, indexKey).catch(() => {});
+          }
         }
         deleted++;
       }

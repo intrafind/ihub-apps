@@ -24,6 +24,7 @@
  */
 import crypto from 'node:crypto';
 import JSZip from 'jszip';
+import { inflateBudget, readZipEntry, ZipLimitError, zipEntries } from '../zipLimits.js';
 import { PDFDocument, PDFName, PDFString } from 'pdf-lib';
 import signingService from '../signing/SigningService.js';
 import { canonicalJson, decodeJws } from '../signing/jws.js';
@@ -42,7 +43,22 @@ const HTML_SCRIPT_RE =
   /(<script type="application\/ihub-provenance\+jws" id="ihub-provenance">)([^<]*)(<\/script>)/;
 const OOXML_FORMATS = new Set(['docx', 'pptx', 'xlsx']);
 
-const sha256Hex = data => crypto.createHash('sha256').update(data).digest('hex');
+// Content hash of a document part (hard binding), not a password.
+const sha256Hex = data => crypto.createHash('sha256').update(data).digest('hex'); // lgtm[js/insufficient-password-hash]
+
+/**
+ * Whether a relationships part declares a relationship of this type
+ * (exact match on the Type attribute, not a substring of the part).
+ * @param {string} rels - `_rels/.rels` XML
+ * @param {string} type
+ * @returns {boolean}
+ */
+function hasRelationshipType(rels, type) {
+  for (const match of rels.matchAll(/\bType="([^"]*)"/g)) {
+    if (match[1] === type) return true;
+  }
+  return false;
+}
 
 function xmlEscape(value) {
   return String(value ?? '').replace(
@@ -112,14 +128,20 @@ function readPdfManifest(buffer) {
 
 // ── OOXML ───────────────────────────────────────────────────────────────
 
+/**
+ * Hash of every part except the manifest. Inflation is bounded (the archive
+ * may be an upload to the detector).
+ * @throws {ZipLimitError}
+ */
 async function partsHash(zip) {
-  const names = Object.keys(zip.files)
-    .filter(n => !zip.files[n].dir && n !== OOXML_MANIFEST_PART)
-    .sort();
+  const entries = zipEntries(zip)
+    .filter(entry => entry.name !== OOXML_MANIFEST_PART)
+    .sort((a, b) => (a.name < b.name ? -1 : a.name > b.name ? 1 : 0));
+  const budget = inflateBudget();
   const h = crypto.createHash('sha256');
-  for (const name of names) {
-    const content = await zip.file(name).async('nodebuffer');
-    h.update(`${name}\0${sha256Hex(content)}\n`);
+  for (const entry of entries) {
+    const content = await readZipEntry(entry, budget);
+    h.update(`${entry.name}\0${sha256Hex(content)}\n`);
   }
   return h.digest('hex');
 }
@@ -166,13 +188,13 @@ async function signOoxml(buffer, payload, meta) {
   }
   zip.file('[Content_Types].xml', types);
   let rels = await zip.file('_rels/.rels').async('string');
-  if (!rels.includes(CUSTOM_PROPS_REL_TYPE)) {
+  if (!hasRelationshipType(rels, CUSTOM_PROPS_REL_TYPE)) {
     rels = rels.replace(
       '</Relationships>',
       `<Relationship Id="rIdIhubCustomProps" Type="${CUSTOM_PROPS_REL_TYPE}" Target="docProps/custom.xml"/></Relationships>`
     );
   }
-  if (!rels.includes(OOXML_REL_TYPE)) {
+  if (!hasRelationshipType(rels, OOXML_REL_TYPE)) {
     rels = rels.replace(
       '</Relationships>',
       `<Relationship Id="rIdIhubProvenance" Type="${OOXML_REL_TYPE}" Target="${OOXML_MANIFEST_PART}"/></Relationships>`
@@ -198,8 +220,13 @@ async function readOoxmlManifest(buffer) {
   }
   const part = zip.file(OOXML_MANIFEST_PART);
   if (!part) return null;
-  const jws = (await part.async('string')).trim();
-  return { jws, computedHash: await partsHash(zip) };
+  try {
+    const jws = String(await readZipEntry(part, inflateBudget(), 'utf8')).trim();
+    return { jws, computedHash: await partsHash(zip) };
+  } catch (error) {
+    if (!(error instanceof ZipLimitError)) throw error;
+    return { jws: null, error: error.message };
+  }
 }
 
 // ── HTML ────────────────────────────────────────────────────────────────
@@ -393,6 +420,10 @@ export async function verifyExportManifest(buffer, { kind, trustAnchors = [] }) 
     const text = buffer.toString('utf8');
     const result = await verifyTextSignpost(text, { trustAnchors });
     return result.found ? { found: true, method: 'text-signpost', ...result } : { found: false };
+  }
+  if (read?.error) {
+    // A manifest part is there, but the archive is too large to check.
+    return { found: true, valid: false, trusted: false, intact: false, errors: [read.error] };
   }
   if (!read?.jws) return { found: false };
   const decoded = decodeJws(read.jws);

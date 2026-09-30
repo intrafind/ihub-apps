@@ -553,7 +553,12 @@ async function runTask({ task, skill, text, data, userMessage, user, platform, s
         kind: 'artifact-update',
         taskId: task.id,
         contextId,
-        artifact: { artifactId, name: 'response', parts: [] },
+        artifact: {
+          artifactId,
+          name: 'response',
+          parts: [],
+          ...(provenance ? { metadata: { provenance } } : {})
+        },
         append: true,
         lastChunk: true
       });

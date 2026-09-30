@@ -215,7 +215,7 @@ Access (`detection.access`): `internal` (admins and approved experts), `authenti
 
 ## API and MCP responses
 
-- OpenAI-compatible API (`/api/inference/v1/chat/completions`, Responses, Conversations): responses carry `ihub_provenance` (streaming: a final chunk with it) and the headers `X-AI-Generated: true`, `X-AI-Provenance`, `X-AI-Content-Id`.
+- OpenAI-compatible API (`/api/inference/v1/chat/completions`, Responses, Conversations): responses carry `ihub_provenance` (streaming: on the usage chunk when the request sets `stream_options.include_usage`, since clients without it do not expect a chunk with empty `choices`) and the headers `X-AI-Generated: true`, `X-AI-Provenance`, `X-AI-Content-Id`.
 - MCP tool results of apps carry `_meta.provenance`; A2A task artifacts carry `metadata.provenance`.
 - Chat: the `run/ended` event and stored assistant messages carry `provenance`.
 

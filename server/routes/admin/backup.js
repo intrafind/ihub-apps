@@ -37,7 +37,7 @@ export function recordKindOf(relPath) {
 /**
  * The file's content without installation records, or null when it has none
  * (or is not JSON), in which case it is copied as it is.
- * @param {string} filePath
+ * @param {string} filePath - resolved path inside the extracted backup
  * @param {'app'|'model'|'platform'} kind
  * @returns {Promise<string|null>}
  */
@@ -54,23 +54,29 @@ async function strippedJson(filePath, kind) {
 /**
  * Remove installation records from an extracted backup before it is swapped
  * in, so a restored or foreign backup never switches a disclosure off.
+ * Every path is resolved and checked to stay inside `dir`.
  * @param {string} dir - extracted contents directory
  * @returns {Promise<number>} files changed
  */
 export async function stripRecordsFromDirectory(dir) {
+  const root = path.resolve(dir);
+  const rootWithSep = root.endsWith(path.sep) ? root : root + path.sep;
   let changed = 0;
   for (const [sub, kind] of [
     ['apps', 'app'],
     ['models', 'model']
   ]) {
+    const subDir = path.resolve(root, sub);
+    if (!subDir.startsWith(rootWithSep)) continue;
     let entries = [];
     try {
-      entries = await fs.readdir(path.join(dir, sub));
+      entries = await fs.readdir(subDir);
     } catch {
       continue;
     }
     for (const name of entries.filter(n => n.endsWith('.json'))) {
-      const file = path.join(dir, sub, name);
+      const file = path.resolve(subDir, name);
+      if (!file.startsWith(rootWithSep)) continue;
       const next = await strippedJson(file, kind);
       if (next !== null) {
         await fs.writeFile(file, next, 'utf8');
@@ -78,11 +84,13 @@ export async function stripRecordsFromDirectory(dir) {
       }
     }
   }
-  const platformFile = path.join(dir, 'config', 'platform.json');
-  const next = await strippedJson(platformFile, 'platform');
-  if (next !== null) {
-    await fs.writeFile(platformFile, next, 'utf8');
-    changed++;
+  const platformFile = path.resolve(root, 'config', 'platform.json');
+  if (platformFile.startsWith(rootWithSep)) {
+    const next = await strippedJson(platformFile, 'platform');
+    if (next !== null) {
+      await fs.writeFile(platformFile, next, 'utf8');
+      changed++;
+    }
   }
   return changed;
 }
@@ -460,6 +468,11 @@ export async function importConfig(req, res) {
 
     // EU AI Act: records of another (or an earlier) installation are dropped,
     // and this installation keeps its own id.
+    const resolvedExtractRoot = path.resolve(tempExtractPath);
+    const importedIdFile = path.resolve(extractedContentsPath, INSTALLATION_ID_FILE);
+    if (!importedIdFile.startsWith(resolvedExtractRoot + path.sep)) {
+      return sendBadRequest(res, 'Invalid backup file');
+    }
     const strippedCount = await stripRecordsFromDirectory(extractedContentsPath);
     if (strippedCount > 0) {
       logger.info('Dropped installation records from imported configuration', {
@@ -467,12 +480,9 @@ export async function importConfig(req, res) {
         files: strippedCount
       });
     }
-    await fs.rm(path.join(extractedContentsPath, INSTALLATION_ID_FILE), { force: true });
+    await fs.rm(importedIdFile, { force: true });
     try {
-      await fs.copyFile(
-        path.join(contentsPath, INSTALLATION_ID_FILE),
-        path.join(extractedContentsPath, INSTALLATION_ID_FILE)
-      );
+      await fs.copyFile(path.join(contentsPath, INSTALLATION_ID_FILE), importedIdFile);
     } catch {
       /* no id yet: one is created on next use */
     }
