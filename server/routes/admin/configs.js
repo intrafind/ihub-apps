@@ -549,16 +549,20 @@ export default function registerAdminConfigRoutes(app) {
         subscriptionKey = saved.subscriptionKey || ''; // already decrypted by configCache
       }
 
+      // `code` is stable for the admin UI to translate; `message` is the
+      // English text for API callers and logs.
       if (!subscriptionKey) {
         return res.json(
           host
             ? {
                 ok: true,
+                code: 'keyless',
                 message:
                   'No subscription key: keyless mode. Browsers connect straight to the host, so verify it with the live dictation test below.'
               }
             : {
                 ok: false,
+                code: 'not-configured',
                 message:
                   'Neither a subscription key nor a host is set. Azure cloud needs a key and region; an on-prem container needs a host.'
               }
@@ -567,13 +571,20 @@ export default function registerAdminConfigRoutes(app) {
 
       const result = await issueAzureSpeechToken({ subscriptionKey, region });
       if (!result.ok) {
-        const hint = /HTTP 401/.test(result.error)
-          ? ': the key is invalid or belongs to a different region'
-          : '';
-        return res.json({ ok: false, message: `${result.error}${hint}` });
+        return res.json(
+          /HTTP 401/.test(result.error)
+            ? {
+                ok: false,
+                code: 'invalid-key',
+                message: `${result.error}: the key is invalid or belongs to a different region`
+              }
+            : { ok: false, code: 'token-failed', message: result.error }
+        );
       }
       return res.json({
         ok: true,
+        code: 'token-issued',
+        region: result.region,
         message: `Key accepted: Azure issued a token for region "${result.region}".`
       });
     } catch (error) {

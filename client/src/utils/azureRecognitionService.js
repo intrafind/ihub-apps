@@ -31,18 +31,25 @@ class AzureSpeechRecognition {
   }
 
   stop() {
-    if (this.continuous && this.recognition) {
-      this.recognition.stopContinuousRecognitionAsync(
-        () => {
-          console.log('Continuous recognition stopped');
-          this.#triggerOnEnd();
-        },
-        err => {
-          console.error('Error stopping continuous recognition:', err);
-          this.#triggerOnError({ error: 'network' });
-        }
-      );
+    if (!this.recognition) return;
+    if (!this.continuous) {
+      // Single-shot recognition has no stop call: closing the recognizer
+      // aborts it and releases the microphone. Its pending callback is then
+      // ignored (see #startSingleShotRecognition), so end the session here.
+      this.close();
+      this.#triggerOnEnd();
+      return;
     }
+    this.recognition.stopContinuousRecognitionAsync(
+      () => {
+        console.log('Continuous recognition stopped');
+        this.#triggerOnEnd();
+      },
+      err => {
+        console.error('Error stopping continuous recognition:', err);
+        this.#triggerOnError({ error: 'network' });
+      }
+    );
   }
 
   // Release the SDK recognizer (and with it the microphone) without waiting
@@ -54,6 +61,8 @@ class AzureSpeechRecognition {
 
   #startSingleShotRecognition() {
     this.recognition.recognizeOnceAsync(result => {
+      // stop() closed the recognizer and already ended the session.
+      if (!this.recognition) return;
       switch (result.reason) {
         case speechSdk.ResultReason.RecognizedSpeech:
           this.#triggerOnResult({ text: result.text, isFinal: true });
@@ -87,7 +96,7 @@ class AzureSpeechRecognition {
           this.#triggerOnEnd();
           break;
       }
-      this.recognition.close();
+      this.close();
     });
   }
 

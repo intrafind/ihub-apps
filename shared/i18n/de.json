@@ -922,7 +922,14 @@
         "subscriptionKey": "Abonnementschlüssel",
         "subscriptionKeyPlaceholder": "Azure-Speech-Schlüssel",
         "subscriptionKeyHint": "Verschlüsselt gespeichert und nie an den Browser gesendet. Ein angezeigter Wert ***REDACTED*** bedeutet, dass bereits ein Schlüssel gesetzt ist — belassen Sie ihn, um ihn beizubehalten. Für einen On-Premises-Azure-Speech-Container, der keinen Schlüssel benötigt, leer lassen und oben dessen Host eintragen.",
-        "testHint": "Prüft Schlüssel und Region vom iHub-Server aus, indem mit den obigen Werten ein Token angefordert wird. Die Spracherkennung selbst läuft im Browser: Nutzen Sie dafür den Live-Diktiertest unten."
+        "testHint": "Prüft Schlüssel und Region vom iHub-Server aus, indem mit den obigen Werten ein Token angefordert wird. Die Spracherkennung selbst läuft im Browser: Nutzen Sie dafür den Live-Diktiertest unten.",
+        "test": {
+          "tokenIssued": "Schlüssel akzeptiert: Azure hat ein Token für die Region „{{region}}“ ausgestellt.",
+          "keyless": "Kein Abonnementschlüssel: schlüsselloser Modus. Browser verbinden sich direkt mit dem Host – prüfen Sie ihn mit dem Live-Diktiertest unten.",
+          "notConfigured": "Weder ein Abonnementschlüssel noch ein Host ist festgelegt. Die Azure-Cloud benötigt Schlüssel und Region, ein On-Premises-Container einen Host.",
+          "invalidKey": "Azure hat den Schlüssel abgelehnt (HTTP 401): Er ist ungültig oder gehört zu einer anderen Region.",
+          "tokenFailed": "Token-Anfrage fehlgeschlagen: {{detail}}"
+        }
       },
       "notEnabled": "nicht aktiviert",
       "services": {

@@ -657,7 +657,14 @@
         "subscriptionKey": "Subscription Key",
         "subscriptionKeyPlaceholder": "Azure Speech key",
         "subscriptionKeyHint": "Stored encrypted at rest and never sent to the browser. A shown value of ***REDACTED*** means a key is already set — leave it to keep it. Leave it empty for an on-prem Azure Speech container, which needs no key — set its host above.",
-        "testHint": "Checks the key and region from the iHub server by requesting a token, using the values above. Speech recognition itself runs in the browser: use the live dictation test below."
+        "testHint": "Checks the key and region from the iHub server by requesting a token, using the values above. Speech recognition itself runs in the browser: use the live dictation test below.",
+        "test": {
+          "tokenIssued": "Key accepted: Azure issued a token for region \"{{region}}\".",
+          "keyless": "No subscription key: keyless mode. Browsers connect straight to the host, so verify it with the live dictation test below.",
+          "notConfigured": "Neither a subscription key nor a host is set. Azure cloud needs a key and region; an on-prem container needs a host.",
+          "invalidKey": "Azure rejected the key (HTTP 401): it is invalid or belongs to a different region.",
+          "tokenFailed": "Token request failed: {{detail}}"
+        }
       },
       "notEnabled": "not enabled",
       "services": {

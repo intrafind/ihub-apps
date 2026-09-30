@@ -13,6 +13,10 @@ const SOUND_DETECTED_LEVEL = 0.1;
  */
 function MicrophoneCheck({ t }) {
   const [active, setActive] = useState(false);
+  // True while the permission prompt is open: a second click then must not
+  // request a second stream (only the last one could be stopped).
+  const [starting, setStarting] = useState(false);
+  const startingRef = useRef(false);
   const [level, setLevel] = useState(0);
   const [peak, setPeak] = useState(0);
   const [deviceLabel, setDeviceLabel] = useState('');
@@ -44,6 +48,9 @@ function MicrophoneCheck({ t }) {
   }, [stop]);
 
   const start = async () => {
+    if (startingRef.current || resourcesRef.current) return;
+    startingRef.current = true;
+    setStarting(true);
     setError('');
     setPeak(0);
     let stream;
@@ -52,6 +59,9 @@ function MicrophoneCheck({ t }) {
     } catch (err) {
       setError(getMicrophoneErrorMessage(err, t));
       return;
+    } finally {
+      startingRef.current = false;
+      setStarting(false);
     }
     if (disposedRef.current) {
       stream.getTracks().forEach(track => track.stop());
@@ -102,7 +112,8 @@ function MicrophoneCheck({ t }) {
         <button
           type="button"
           onClick={active ? stop : start}
-          className="inline-flex items-center gap-1 px-3 py-2 rounded-md border border-indigo-600 text-indigo-600 dark:text-indigo-400 dark:border-indigo-400 text-sm font-medium hover:bg-indigo-50 dark:hover:bg-indigo-900/20"
+          disabled={starting}
+          className="inline-flex items-center gap-1 px-3 py-2 rounded-md border border-indigo-600 text-indigo-600 dark:text-indigo-400 dark:border-indigo-400 text-sm font-medium hover:bg-indigo-50 dark:hover:bg-indigo-900/20 disabled:opacity-50"
         >
           <Icon name="microphone" className="w-4 h-4" />
           {active

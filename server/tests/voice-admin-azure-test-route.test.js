@@ -61,7 +61,7 @@ describe('POST /api/admin/voice/azure/test', () => {
   test('tests unsaved form values', async () => {
     const res = await post({ region: 'westeurope', subscriptionKey: 'new-key' });
     expect(res.status).toBe(200);
-    expect(res.body.ok).toBe(true);
+    expect(res.body).toMatchObject({ ok: true, code: 'token-issued', region: 'westeurope' });
     expect(res.body.message).toMatch(/westeurope/);
     expect(state.tokenCalls).toEqual([{ subscriptionKey: 'new-key', region: 'westeurope' }]);
   });
@@ -87,27 +87,31 @@ describe('POST /api/admin/voice/azure/test', () => {
   test('keyless with a host: ok, points at the browser test, contacts nobody', async () => {
     state.azure = { subscriptionKey: 'saved-key' };
     const res = await post({ host: 'ws://speech.internal:5000', subscriptionKey: '' });
-    expect(res.body.ok).toBe(true);
+    expect(res.body).toMatchObject({ ok: true, code: 'keyless' });
     expect(res.body.message).toMatch(/keyless/i);
     expect(state.tokenCalls).toHaveLength(0);
   });
 
   test('neither key nor host: not ok', async () => {
     const res = await post({ host: '', subscriptionKey: '' });
-    expect(res.body.ok).toBe(false);
+    expect(res.body).toMatchObject({ ok: false, code: 'not-configured' });
     expect(state.tokenCalls).toHaveLength(0);
   });
 
   test('a rejected key explains HTTP 401', async () => {
     state.tokenResult = { ok: false, error: 'Azure token request failed (HTTP 401)' };
     const res = await post({ region: 'westeurope', subscriptionKey: 'bad' });
-    expect(res.body.ok).toBe(false);
+    expect(res.body).toMatchObject({ ok: false, code: 'invalid-key' });
     expect(res.body.message).toMatch(/HTTP 401.*invalid or belongs to a different region/);
   });
 
   test('passes other token errors through', async () => {
     state.tokenResult = { ok: false, error: 'Invalid Azure region "not a region"' };
     const res = await post({ region: 'not a region', subscriptionKey: 'k' });
-    expect(res.body).toEqual({ ok: false, message: 'Invalid Azure region "not a region"' });
+    expect(res.body).toEqual({
+      ok: false,
+      code: 'token-failed',
+      message: 'Invalid Azure region "not a region"'
+    });
   });
 });

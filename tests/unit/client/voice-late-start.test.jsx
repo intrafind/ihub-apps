@@ -110,3 +110,18 @@ test('dictation test: an Azure recognizer initialised after leaving is closed, n
   expect(azure.close).toHaveBeenCalled();
   expect(azure.start).not.toHaveBeenCalled();
 });
+
+test('microphone check: a second click during the permission prompt starts nothing', async () => {
+  const mic = pendingMicrophone();
+  const { unmount } = render(<MicrophoneCheck t={t} />);
+  const button = screen.getByRole('button', { name: 'Check microphone' });
+
+  fireEvent.click(button);
+  expect(button).toBeDisabled();
+  fireEvent.click(button);
+  expect(navigator.mediaDevices.getUserMedia).toHaveBeenCalledTimes(1);
+
+  unmount();
+  await act(async () => mic.grant());
+  expect(mic.track.stop).toHaveBeenCalled();
+});

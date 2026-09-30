@@ -25,12 +25,6 @@ jest.mock('../../../client/src/api/adminApi', () => ({
   makeAdminApiCall: (...args) => mockMakeAdminApiCall(...args)
 }));
 
-const mockFetchTranscriptionModels = jest.fn();
-jest.mock('../../../client/src/api/endpoints/models', () => ({
-  __esModule: true,
-  fetchTranscriptionModels: (...args) => mockFetchTranscriptionModels(...args)
-}));
-
 const mockRefreshConfig = jest.fn();
 jest.mock('../../../client/src/shared/contexts/PlatformConfigContext', () => ({
   __esModule: true,
@@ -100,9 +94,14 @@ const SAVED_SPEECH = {
   azure: { enabled: false, host: '', region: 'westeurope', subscriptionKey: '***REDACTED***' }
 };
 
+// GET /api/admin/models: every model, whatever the admin's own model
+// permissions. Only enabled transcription models are offered.
 const MODELS = [
-  { id: 'gemini-transcribe', name: { en: 'Gemini Transcribe' } },
-  { id: 'voxtral', name: { en: 'Voxtral' } }
+  { id: 'gemini-transcribe', name: { en: 'Gemini Transcribe' }, modelType: 'transcription' },
+  { id: 'voxtral', name: { en: 'Voxtral' }, modelType: 'transcription', enabled: true },
+  { id: 'old-whisper', name: { en: 'Old Whisper' }, modelType: 'transcription', enabled: false },
+  { id: 'gpt', name: { en: 'GPT' }, modelType: 'chat', enabled: true },
+  { id: 'untyped-chat', name: { en: 'Untyped' }, enabled: true }
 ];
 
 let platformOnDisk;
@@ -111,7 +110,6 @@ beforeEach(() => {
   jest.clearAllMocks();
   mockRecognizers.length = 0;
   platformOnDisk = { defaultLanguage: 'en', speech: structuredClone(SAVED_SPEECH) };
-  mockFetchTranscriptionModels.mockResolvedValue(MODELS);
   mockRecorder.stopResult = { audioBuffer: { length: 24000 }, durationSeconds: 1.5 };
   mockMakeAdminApiCall.mockImplementation(async (url, { method, body } = {}) => {
     if (url === '/admin/configs/platform' && method === 'GET') {
@@ -121,8 +119,13 @@ beforeEach(() => {
       platformOnDisk = structuredClone(body);
       return { data: {} };
     }
+    if (url === '/admin/models' && method === 'GET') {
+      return { data: MODELS };
+    }
     if (url === '/admin/voice/azure/test') {
-      return { data: { ok: true, message: 'Key accepted: Azure issued a token.' } };
+      return {
+        data: { ok: true, code: 'token-issued', region: 'northeurope', message: 'server text' }
+      };
     }
     throw new Error(`unexpected call ${method} ${url}`);
   });
@@ -131,7 +134,8 @@ beforeEach(() => {
 async function renderPage() {
   render(<AdminVoiceInputPage />);
   await screen.findByLabelText('Dictation service (microphone button)');
-  await waitFor(() => expect(mockFetchTranscriptionModels).toHaveBeenCalled());
+  // The admin model list has loaded once its models are offered.
+  await screen.findAllByRole('option', { name: 'Gemini Transcribe' });
 }
 
 describe('defaults', () => {
@@ -156,6 +160,15 @@ describe('defaults', () => {
     expect(platformOnDisk.speech.realtime.url).toBe('ws://vllm:8080/v1/realtime');
     // Chats and the app editor see the new defaults without a reload.
     expect(mockRefreshConfig).toHaveBeenCalled();
+  });
+
+  test('offers every enabled transcription model, from the admin model list', async () => {
+    await renderPage();
+    const options = [
+      ...screen.getByLabelText('Transcription model (recording)').querySelectorAll('option')
+    ].map(o => o.value);
+    expect(options).toEqual(['', 'gemini-transcribe', 'voxtral']);
+    expect(mockMakeAdminApiCall).toHaveBeenCalledWith('/admin/models', { method: 'GET' });
   });
 
   test('warns when the default backend is not enabled', async () => {
@@ -185,7 +198,11 @@ test('Azure: tests the unsaved form values on the server', async () => {
     fireEvent.click(within(azureCard).getByRole('button', { name: 'Test connection' }));
   });
 
-  expect(await screen.findByText('Key accepted: Azure issued a token.')).toBeInTheDocument();
+  // Translated from the result code, not the server's English text.
+  expect(
+    await screen.findByText('Key accepted: Azure issued a token for region "northeurope".')
+  ).toBeInTheDocument();
+  expect(screen.queryByText('server text')).not.toBeInTheDocument();
   expect(mockMakeAdminApiCall).toHaveBeenCalledWith('/admin/voice/azure/test', {
     method: 'POST',
     body: { region: 'northeurope', host: '', subscriptionKey: '***REDACTED***' }

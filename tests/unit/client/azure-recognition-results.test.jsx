@@ -16,7 +16,11 @@ jest.mock('microsoft-cognitiveservices-speech-sdk', () => ({
   SpeechConfig: { fromHost: jest.fn(() => ({})), fromAuthorizationToken: jest.fn(() => ({})) },
   AudioConfig: { fromDefaultMicrophoneInput: jest.fn(() => ({})) },
   SpeechRecognizer: jest.fn(function () {
-    this.recognizeOnceAsync = callback => callback(mockRecognizeOnce.result);
+    // With `result` null the recognition stays pending until `finish` is called.
+    this.recognizeOnceAsync = callback => {
+      if (mockRecognizeOnce.result) callback(mockRecognizeOnce.result);
+      else mockRecognizeOnce.finish = result => callback(result);
+    };
     this.close = jest.fn();
   })
 }));
@@ -54,4 +58,20 @@ test('single-shot: a recognized phrase is one final { text, isFinal } result, th
 test('single-shot: no speech ends the session after the error', async () => {
   const { events } = await singleShot({ reason: 'nomatch' });
   expect(events).toEqual([['start'], ['error', 'no-speech'], ['end']]);
+});
+
+// Automatic mode used to ignore stop(): the microphone stayed on until Azure
+// finished on its own, in the chat and in the admin dictation test.
+test('single-shot: stop() closes the recognizer and ends the session once', async () => {
+  const { recognition, events } = await singleShot(null);
+  const sdkRecognizer = recognition.recognition;
+
+  recognition.stop();
+  expect(sdkRecognizer.close).toHaveBeenCalledTimes(1);
+  expect(events).toEqual([['start'], ['end']]);
+
+  // Azure's late answer for the aborted recognition is ignored.
+  mockRecognizeOnce.finish({ reason: 'recognized', text: 'too late' });
+  expect(events).toEqual([['start'], ['end']]);
+  expect(sdkRecognizer.close).toHaveBeenCalledTimes(1);
 });

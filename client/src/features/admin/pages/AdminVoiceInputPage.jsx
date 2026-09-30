@@ -2,7 +2,6 @@ import { useState, useEffect } from 'react';
 import { useTranslation } from 'react-i18next';
 import Icon from '../../../shared/components/Icon';
 import { makeAdminApiCall } from '../../../api/adminApi';
-import { fetchTranscriptionModels } from '../../../api/endpoints/models';
 import { usePlatformConfig } from '../../../shared/contexts/PlatformConfigContext';
 import { getLocalizedContent } from '../../../utils/localizeContent';
 import {
@@ -72,10 +71,18 @@ function AdminVoiceInputPage() {
     // eslint-disable-next-line @eslint-react/exhaustive-deps
   }, []);
 
+  // The admin model list, not the public /api/models: that one is filtered by
+  // the admin's own model permissions, and admin access does not imply them.
   useEffect(() => {
     let active = true;
-    fetchTranscriptionModels()
-      .then(list => active && setTranscriptionModels(Array.isArray(list) ? list : []))
+    makeAdminApiCall('/admin/models', { method: 'GET' })
+      .then(response => {
+        if (!active) return;
+        const models = Array.isArray(response.data) ? response.data : [];
+        setTranscriptionModels(
+          models.filter(m => m.modelType === 'transcription' && m.enabled !== false)
+        );
+      })
       .catch(() => active && setTranscriptionModels([]));
     return () => {
       active = false;
@@ -173,11 +180,46 @@ function AdminVoiceInputPage() {
           subscriptionKey: config.azure.subscriptionKey
         }
       });
-      setAzureTestResult(response.data || { ok: false, message: 'No response' });
+      const result = response.data || { ok: false, message: 'No response' };
+      setAzureTestResult({ ok: result.ok, message: describeAzureTest(result) });
     } catch (error) {
       setAzureTestResult({ ok: false, message: error.message || 'Test request failed' });
     } finally {
       setAzureTesting(false);
+    }
+  };
+
+  // The Azure test answers with a stable code; unknown codes (an older
+  // server) fall back to its English message.
+  const describeAzureTest = result => {
+    switch (result.code) {
+      case 'token-issued':
+        return t(
+          'admin.voiceInput.azure.test.tokenIssued',
+          'Key accepted: Azure issued a token for region "{{region}}".',
+          { region: result.region }
+        );
+      case 'keyless':
+        return t(
+          'admin.voiceInput.azure.test.keyless',
+          'No subscription key: keyless mode. Browsers connect straight to the host, so verify it with the live dictation test below.'
+        );
+      case 'not-configured':
+        return t(
+          'admin.voiceInput.azure.test.notConfigured',
+          'Neither a subscription key nor a host is set. Azure cloud needs a key and region; an on-prem container needs a host.'
+        );
+      case 'invalid-key':
+        return t(
+          'admin.voiceInput.azure.test.invalidKey',
+          'Azure rejected the key (HTTP 401): it is invalid or belongs to a different region.'
+        );
+      case 'token-failed':
+        return t('admin.voiceInput.azure.test.tokenFailed', 'Token request failed: {{detail}}', {
+          detail: result.message
+        });
+      default:
+        return result.message;
     }
   };
 
