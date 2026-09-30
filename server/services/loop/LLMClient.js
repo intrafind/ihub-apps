@@ -232,9 +232,8 @@ export function normalizeChunk(raw) {
 async function markGeneratedImages(chunk, model, messages) {
   if (!Array.isArray(chunk?.images) || chunk.images.length === 0) return;
   try {
-    const { markChunkImages, sourceImagesFromMessages } = await import(
-      '../provenance/image/ImageMarker.js'
-    );
+    const { markChunkImages, sourceImagesFromMessages } =
+      await import('../provenance/image/ImageMarker.js');
     await markChunkImages(chunk, { model, sourceImages: sourceImagesFromMessages(messages) });
   } catch (error) {
     logger.error('Generated image could not be marked', {

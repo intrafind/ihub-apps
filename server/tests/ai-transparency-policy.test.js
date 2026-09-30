@@ -9,13 +9,11 @@ import { cleanup, setConfig } from './helpers/aiTransparencyEnv.js';
 
 const shared = await import('../../shared/aiTransparency.js');
 const { getInstallationId } = await import('../services/provenance/installation.js');
-const { evaluateTextMarking, validDisclosureOptOut } = await import(
-  '../services/provenance/markingPolicy.js'
-);
+const { evaluateTextMarking, validDisclosureOptOut } =
+  await import('../services/provenance/markingPolicy.js');
 const records = await import('../services/provenance/records.js');
-const { publicAppView, aiTransparencyClientConfig } = await import(
-  '../services/provenance/clientConfig.js'
-);
+const { publicAppView, aiTransparencyClientConfig } =
+  await import('../services/provenance/clientConfig.js');
 
 after(cleanup);
 
@@ -34,24 +32,44 @@ describe('shared/aiTransparency', () => {
 
   it('normalises model marking', () => {
     assert.equal(shared.normalizeContentMarking({}).text.kind, 'none');
-    assert.equal(shared.normalizeContentMarking({ contentMarking: { textWatermark: 'upstream:google' } }).text.vendor, 'google');
+    assert.equal(
+      shared.normalizeContentMarking({ contentMarking: { textWatermark: 'upstream:google' } }).text
+        .vendor,
+      'google'
+    );
     const vllm = shared.normalizeContentMarking({
       contentMarking: { textWatermark: { scheme: 'vllm-gumbel', keyGroup: 'acme' } }
     });
-    assert.deepEqual(vllm.text, { kind: 'scheme', scheme: 'vllm-gumbel', keyGroup: 'acme', perRequest: false });
-    assert.equal(shared.normalizeContentMarking({ modelType: 'transcription' }).text.kind, 'not-applicable');
+    assert.deepEqual(vllm.text, {
+      kind: 'scheme',
+      scheme: 'vllm-gumbel',
+      keyGroup: 'acme',
+      perRequest: false
+    });
+    assert.equal(
+      shared.normalizeContentMarking({ modelType: 'transcription' }).text.kind,
+      'not-applicable'
+    );
     assert.equal(shared.isTextMarked({ contentMarking: { textWatermark: 'none' } }), false);
   });
 
   it('strips installation records from apps, models and platform', () => {
     const app = {
       id: 'a',
-      aiTransparency: { sensitive: 'legal', disclosureOptOut: { reason: 'x' }, exemption: { type: 'b2bTechnical' } }
+      aiTransparency: {
+        sensitive: 'legal',
+        disclosureOptOut: { reason: 'x' },
+        exemption: { type: 'b2bTechnical' }
+      }
     };
     const stripped = shared.stripInstallationRecords('app', app);
     assert.deepEqual(stripped.aiTransparency, { sensitive: 'legal' });
     assert.ok(app.aiTransparency.disclosureOptOut, 'input is not modified');
-    assert.equal(shared.stripInstallationRecords('app', { id: 'b', aiTransparency: { disclosureOptOut: {} } }).aiTransparency, undefined);
+    assert.equal(
+      shared.stripInstallationRecords('app', { id: 'b', aiTransparency: { disclosureOptOut: {} } })
+        .aiTransparency,
+      undefined
+    );
     const model = shared.stripInstallationRecords('model', {
       id: 'm',
       contentMarking: { textWatermark: 'none', acknowledgement: { justification: 'x' } }
@@ -82,7 +100,12 @@ describe('marking policy', () => {
       id: 'claude',
       contentMarking: {
         textWatermark: 'none',
-        acknowledgement: { installationId: getInstallationId(), justification: 'known gap', acknowledgedAt: 'x', acknowledgedBy: 'a' }
+        acknowledgement: {
+          installationId: getInstallationId(),
+          justification: 'known gap',
+          acknowledgedAt: 'x',
+          acknowledgedBy: 'a'
+        }
       }
     };
     const r = evaluateTextMarking({ content: LONG, model, cfg });
@@ -99,20 +122,40 @@ describe('marking policy', () => {
 
   it('counts vLLM and upstream marking, but not at temperature 0', () => {
     const vllm = { contentMarking: { textWatermark: { scheme: 'vllm-gumbel', keyGroup: 'k' } } };
-    assert.equal(evaluateTextMarking({ content: LONG, model: vllm, temperature: 0.8, cfg }).status, 'marked');
+    assert.equal(
+      evaluateTextMarking({ content: LONG, model: vllm, temperature: 0.8, cfg }).status,
+      'marked'
+    );
     const cold = evaluateTextMarking({ content: LONG, model: vllm, temperature: 0, cfg });
     assert.equal(cold.status, 'unmarked');
     assert.equal(cold.reason, 'temperature-zero');
     const upstream = { contentMarking: { textWatermark: 'upstream:google' } };
-    assert.equal(evaluateTextMarking({ content: LONG, model: upstream, cfg }).technique, 'upstream:google');
+    assert.equal(
+      evaluateTextMarking({ content: LONG, model: upstream, cfg }).technique,
+      'upstream:google'
+    );
   });
 
   it('honours an exemption made on this installation only', () => {
-    const exemption = { type: 'standardEditing', justification: 'translation app', installationId: getInstallationId() };
-    const r = evaluateTextMarking({ content: LONG, model: {}, app: { aiTransparency: { exemption } }, cfg });
+    const exemption = {
+      type: 'standardEditing',
+      justification: 'translation app',
+      installationId: getInstallationId()
+    };
+    const r = evaluateTextMarking({
+      content: LONG,
+      model: {},
+      app: { aiTransparency: { exemption } },
+      cfg
+    });
     assert.equal(r.status, 'exempt');
     const foreign = { ...exemption, installationId: '00000000-0000-0000-0000-000000000000' };
-    const r2 = evaluateTextMarking({ content: LONG, model: {}, app: { aiTransparency: { exemption: foreign } }, cfg });
+    const r2 = evaluateTextMarking({
+      content: LONG,
+      model: {},
+      app: { aiTransparency: { exemption: foreign } },
+      cfg
+    });
     assert.equal(r2.status, 'unmarked');
   });
 });
@@ -120,35 +163,61 @@ describe('marking policy', () => {
 describe('installation records', () => {
   it('ignores an opt-out that was made on another installation', () => {
     setConfig({ platform: {}, features: {} });
-    const own = { aiTransparency: { disclosureOptOut: { installationId: getInstallationId(), reason: 'trained staff' } } };
-    const foreign = { aiTransparency: { disclosureOptOut: { installationId: 'elsewhere', reason: 'copied' } } };
+    const own = {
+      aiTransparency: {
+        disclosureOptOut: { installationId: getInstallationId(), reason: 'trained staff' }
+      }
+    };
+    const foreign = {
+      aiTransparency: { disclosureOptOut: { installationId: 'elsewhere', reason: 'copied' } }
+    };
     assert.ok(validDisclosureOptOut(own));
     assert.equal(validDisclosureOptOut(foreign), null);
     assert.equal(publicAppView({ id: 'x', ...own }).aiTransparency.disclosure, false);
     assert.equal(publicAppView({ id: 'x', ...foreign }).aiTransparency.disclosure, true);
     const view = publicAppView({ id: 'x', ...own });
-    assert.equal(view.aiTransparency.disclosureOptOut, undefined, 'records never reach the chat client');
+    assert.equal(
+      view.aiTransparency.disclosureOptOut,
+      undefined,
+      'records never reach the chat client'
+    );
   });
 
   it('keeps stored records on save and drops client-sent ones', () => {
     const stored = { aiTransparency: { disclosureOptOut: { reason: 'stored' } } };
-    const incoming = { id: 'a', aiTransparency: { sensitive: 'health', disclosureOptOut: { reason: 'forged' } } };
+    const incoming = {
+      id: 'a',
+      aiTransparency: { sensitive: 'health', disclosureOptOut: { reason: 'forged' } }
+    };
     records.preserveStoredRecords('app', incoming, stored);
     assert.equal(incoming.aiTransparency.disclosureOptOut.reason, 'stored');
     assert.equal(incoming.aiTransparency.sensitive, 'health');
     const created = { id: 'b', aiTransparency: { exemption: { type: 'b2bTechnical' } } };
     records.preserveStoredRecords('app', created, null);
     assert.equal(created.aiTransparency, undefined, 'an imported app never brings records');
-    const model = { id: 'm', contentMarking: { textWatermark: 'none', acknowledgement: { justification: 'forged' } } };
+    const model = {
+      id: 'm',
+      contentMarking: { textWatermark: 'none', acknowledgement: { justification: 'forged' } }
+    };
     records.preserveStoredRecords('model', model, null);
     assert.equal(model.contentMarking.acknowledgement, undefined);
   });
 
   it('requires a justification to enable an unmarked model', () => {
     const model = { id: 'claude', contentMarking: { textWatermark: 'none' } };
-    assert.throws(() => records.applyUnmarkedModelGate([model], req, ''), records.UnmarkedModelError);
-    assert.throws(() => records.applyUnmarkedModelGate([model], req, 'short'), records.UnmarkedModelError);
-    const acked = records.applyUnmarkedModelGate([model], req, 'Needed for the pilot, gap documented');
+    assert.throws(
+      () => records.applyUnmarkedModelGate([model], req, ''),
+      records.UnmarkedModelError
+    );
+    assert.throws(
+      () => records.applyUnmarkedModelGate([model], req, 'short'),
+      records.UnmarkedModelError
+    );
+    const acked = records.applyUnmarkedModelGate(
+      [model],
+      req,
+      'Needed for the pilot, gap documented'
+    );
     assert.deepEqual(acked, ['claude']);
     const ack = model.contentMarking.acknowledgement;
     assert.equal(ack.acknowledgedBy, 'admin1');
@@ -159,7 +228,11 @@ describe('installation records', () => {
     assert.deepEqual(records.applyUnmarkedModelGate([model], req, ''), []);
     // Marked models pass without one.
     assert.deepEqual(
-      records.applyUnmarkedModelGate([{ id: 'v', contentMarking: { textWatermark: 'upstream:google' } }], req, ''),
+      records.applyUnmarkedModelGate(
+        [{ id: 'v', contentMarking: { textWatermark: 'upstream:google' } }],
+        req,
+        ''
+      ),
       []
     );
   });

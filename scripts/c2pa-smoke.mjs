@@ -42,7 +42,8 @@ const signed = await c2pa.signAsset(
           actions: [
             {
               action: 'c2pa.created',
-              digitalSourceType: 'http://cv.iptc.org/newscodes/digitalsourcetype/trainedAlgorithmicMedia'
+              digitalSourceType:
+                'http://cv.iptc.org/newscodes/digitalsourcetype/trainedAlgorithmicMedia'
             }
           ]
         }
@@ -59,7 +60,8 @@ console.log(`OK c2pa sign + verify on ${process.platform}-${process.arch}`);
 
 if (!process.argv.includes('--no-trustmark')) {
   const c2paModule = await c2pa.loadC2pa();
-  const modelPath = process.env.TRUSTMARK_MODEL_PATH || path.join(root, '.cache', 'trustmark-models');
+  const modelPath =
+    process.env.TRUSTMARK_MODEL_PATH || path.join(root, '.cache', 'trustmark-models');
   const tm = await c2paModule.Trustmark.newTrustmark({ variant: 'P', version: 'BCH_5', modelPath });
   const bits = '1'.repeat(30) + '0'.repeat(31);
   const out = await tm.encode(png, 0.95, bits);

@@ -150,7 +150,9 @@ function toPayload(data) {
 function sanitizeProvenance(p) {
   return {
     ...(typeof p.contentId === 'string' ? { contentId: p.contentId } : {}),
-    ...(Array.isArray(p.markings) ? { markings: p.markings.filter(m => typeof m === 'string') } : {}),
+    ...(Array.isArray(p.markings)
+      ? { markings: p.markings.filter(m => typeof m === 'string') }
+      : {}),
     ...(typeof p.conforming === 'boolean' ? { conforming: p.conforming } : {})
   };
 }
@@ -178,7 +180,9 @@ function toDescriptor(id, data) {
     ...(typeof data.name === 'string' && data.name ? { name: data.name } : {}),
     ...(typeof data.runId === 'string' && data.runId ? { runId: data.runId } : {}),
     ...(typeof data.createdAt === 'string' ? { createdAt: data.createdAt } : {}),
-    ...(data.provenance && typeof data.provenance === 'object' ? { provenance: data.provenance } : {})
+    ...(data.provenance && typeof data.provenance === 'object'
+      ? { provenance: data.provenance }
+      : {})
   };
 }
 
@@ -296,7 +300,9 @@ export class ArtifactRepository {
       ...(typeof runId === 'string' && runId ? { runId } : {}),
       // EU AI Act marking of a generated image (content id, markings); the
       // bytes were marked before they reached the store.
-      ...(provenance && typeof provenance === 'object' ? { provenance: sanitizeProvenance(provenance) } : {}),
+      ...(provenance && typeof provenance === 'object'
+        ? { provenance: sanitizeProvenance(provenance) }
+        : {}),
       createdAt: new Date().toISOString()
     };
     try {
