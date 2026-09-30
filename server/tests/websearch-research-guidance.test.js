@@ -13,8 +13,14 @@ import assert from 'node:assert/strict';
 import {
   appendWebSearchResearchGuidance,
   appendWebSearchDisabledNotice,
+  appendWebSearchSourceGuidance,
+  buildWebSearchSourceGuidance,
   resolveWebSearchResearchGuidance,
-  DEFAULT_WEB_SEARCH_RESEARCH_GUIDANCE
+  DEFAULT_WEB_SEARCH_RESEARCH_GUIDANCE,
+  WEB_SEARCH_CITATION_GUIDANCE,
+  WEB_SEARCH_NAMED_SITE_GUIDANCE,
+  WEB_SEARCH_PASTED_URL_GUIDANCE,
+  WEB_SEARCH_READER_CITATION_GUIDANCE
 } from '../services/chat/RequestBuilder.js';
 
 const PROMPT = 'You are a helpful assistant.';
@@ -134,4 +140,52 @@ test('guidance and the disabled notice never both apply', () => {
       assert.notEqual(guidance, notice, `toggle=${toggle} enabledByDefault=${enabledByDefault}`);
     }
   }
+});
+
+// ── source handling (issue #2520) ───────────────────────────────────────────
+
+test('script-backed search is told to cite with numbered links to returned URLs', () => {
+  const guidance = buildWebSearchSourceGuidance({ native: false, pageReader: true });
+  assert.ok(guidance.includes(WEB_SEARCH_CITATION_GUIDANCE));
+  assert.match(guidance, /\[1\]\(https:\/\/example\.com\/page\)/);
+  assert.match(guidance, /Cite only URLs your searches or page reads returned/);
+  assert.ok(guidance.includes(WEB_SEARCH_NAMED_SITE_GUIDANCE));
+  assert.ok(guidance.includes(WEB_SEARCH_PASTED_URL_GUIDANCE));
+});
+
+test('native search gets no citation format — the provider reports its citations', () => {
+  const guidance = buildWebSearchSourceGuidance({ native: true, pageReader: false });
+  assert.ok(!guidance.includes(WEB_SEARCH_CITATION_GUIDANCE));
+  assert.ok(!guidance.includes(WEB_SEARCH_READER_CITATION_GUIDANCE));
+  assert.ok(!guidance.includes(WEB_SEARCH_PASTED_URL_GUIDANCE));
+  assert.ok(guidance.includes(WEB_SEARCH_NAMED_SITE_GUIDANCE));
+});
+
+test('native search with the page reader is told to cite the pages it reads', () => {
+  const guidance = buildWebSearchSourceGuidance({ native: true, pageReader: true });
+  assert.ok(guidance.includes(WEB_SEARCH_READER_CITATION_GUIDANCE));
+  assert.match(guidance, /page you opened with the webContentExtractor page reader/);
+  assert.match(guidance, /\[1\]\(https:\/\/example\.com\/page\)/);
+  // Not the full format: the provider already cites its own search results.
+  assert.ok(!guidance.includes(WEB_SEARCH_CITATION_GUIDANCE));
+  assert.ok(guidance.includes(WEB_SEARCH_PASTED_URL_GUIDANCE));
+});
+
+test('source guidance follows the web search toggle and is not repeated', () => {
+  const setup = { native: false, pageReader: true };
+  const on = messages();
+  assert.equal(appendWebSearchSourceGuidance(on, appWith(), true, setup), true);
+  assert.equal(appendWebSearchSourceGuidance(on, appWith(), true, setup), false);
+  assert.equal(on[0].content, `${PROMPT}\n\n${buildWebSearchSourceGuidance(setup)}`);
+
+  const off = messages();
+  assert.equal(appendWebSearchSourceGuidance(off, appWith(), false, setup), false);
+  assert.equal(off[0].content, PROMPT);
+
+  // Not an admin setting: it stays when the research guidance is turned off.
+  const noResearch = messages();
+  assert.equal(
+    appendWebSearchSourceGuidance(noResearch, appWith({ researchGuidance: false }), true, setup),
+    true
+  );
 });

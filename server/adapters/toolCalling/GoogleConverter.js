@@ -226,6 +226,35 @@ export function convertGoogleFunctionResponseToGeneric(googleResponse) {
 }
 
 /**
+ * Resolve Google's grounding supports — "this passage of the answer is backed
+ * by chunks 0 and 2" — into the passages and the URLs themselves
+ * (`webSupports: [{ text, urls }]`), which the chat uses to place citation
+ * markers (`shared/webCitations.insertSupportMarkers`).
+ *
+ * Resolved here, against the chunk list of the same payload, because the
+ * indices mean nothing once the loop has merged several payloads' chunk lists
+ * into one.
+ *
+ * @param {Object} metadata - a payload's `groundingMetadata`
+ * @returns {Object} the metadata, with `webSupports` when it has supports
+ */
+export function withWebSupports(metadata) {
+  const chunks = Array.isArray(metadata?.groundingChunks) ? metadata.groundingChunks : [];
+  const supports = Array.isArray(metadata?.groundingSupports) ? metadata.groundingSupports : [];
+  if (!chunks.length || !supports.length) return metadata;
+  const webSupports = [];
+  for (const support of supports) {
+    const passage = support?.segment?.text;
+    if (typeof passage !== 'string' || !passage.trim()) continue;
+    const urls = (Array.isArray(support.groundingChunkIndices) ? support.groundingChunkIndices : [])
+      .map(index => chunks[index]?.web?.uri)
+      .filter(uri => typeof uri === 'string' && uri);
+    if (urls.length) webSupports.push({ text: passage, urls });
+  }
+  return webSupports.length ? { ...metadata, webSupports } : metadata;
+}
+
+/**
  * Convert Google streaming response to generic format
  * @param {string} data - Raw Google response data
  * @param {string} streamId - Stream identifier for stateful processing
@@ -428,9 +457,9 @@ export async function convertGoogleResponseToGeneric(data, streamId = 'default')
     // compatibility.
     const candidateGrounding = parsed.candidates?.[0]?.groundingMetadata;
     if (candidateGrounding) {
-      result.groundingMetadata = candidateGrounding;
+      result.groundingMetadata = withWebSupports(candidateGrounding);
     } else if (parsed.groundingMetadata) {
-      result.groundingMetadata = parsed.groundingMetadata;
+      result.groundingMetadata = withWebSupports(parsed.groundingMetadata);
     }
 
     if (parsed.candidates && parsed.candidates[0]?.finishReason) {

@@ -252,8 +252,15 @@ export const webSourceSchema = z.object({
   // iFinder document id, so a document read later matches the hit that found it.
   documentId: z.string().optional(),
   title: z.string().optional(),
+  // What a web source card shows: the result's excerpt, date and favicon.
+  snippet: z.string().optional(),
+  publishedDate: z.string().optional(),
+  favicon: z.string().optional(),
   read: z.boolean().optional(),
-  readFailed: z.boolean().optional()
+  readFailed: z.boolean().optional(),
+  // A page read: words read, and whether the page had more than was read.
+  wordCount: z.number().int().nonnegative().optional(),
+  truncated: z.boolean().optional()
 });
 
 export const toolResultData = z.object({

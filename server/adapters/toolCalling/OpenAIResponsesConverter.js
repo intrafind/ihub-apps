@@ -16,6 +16,7 @@ import {
 } from './GenericToolCalling.js';
 import logger from '../../utils/logger.js';
 import { parseJsonAsync } from '../../utils/asyncJson.js';
+import { citationMarkers, linkTargets, sourceKey } from '../../../shared/webCitations.js';
 
 /**
  * Sanitize a JSON Schema for the OpenAI Responses API's tool `parameters`.
@@ -216,6 +217,152 @@ function processAnnotations(contentItem, annotations) {
 }
 
 /**
+ * How far around an annotation's range the link it annotates is looked for:
+ * the range is counted on OpenAI's side and can be off by a few characters.
+ */
+const CITATION_SPAN_SLACK = 16;
+
+/**
+ * Whether `text` already links the URL a `url_citation` annotates, at the
+ * annotated range (anywhere, when the annotation has none). OpenAI writes its
+ * inline citations as Markdown links (`([site](url))`) by default; the
+ * annotation then only locates them.
+ */
+function citationIsLinked(text, annotation) {
+  const key = sourceKey(annotation?.url);
+  if (!key) return true;
+  const { start_index: start, end_index: end } = annotation;
+  const span =
+    Number.isInteger(start) && Number.isInteger(end)
+      ? text.slice(Math.max(0, start - CITATION_SPAN_SLACK), end + CITATION_SPAN_SLACK)
+      : text;
+  return linkTargets(span).some(url => sourceKey(url) === key);
+}
+
+/**
+ * Put a citation marker (`[n](url)`, see `shared/webCitations.js`) after
+ * every annotated range that does not link its source yet, so the chat shows
+ * an inline badge there too, not only a source card.
+ *
+ * @param {string} text - one output_text part
+ * @param {Object[]} annotations - its annotations
+ * @param {Map<string, number>} numbers - marker numbers, across the answer
+ * @returns {string}
+ */
+export function withCitationMarkers(text, annotations, numbers) {
+  const unlinked = (Array.isArray(annotations) ? annotations : []).filter(
+    annotation =>
+      annotation?.type === 'url_citation' &&
+      typeof annotation.url === 'string' &&
+      !citationIsLinked(text, annotation)
+  );
+  if (!unlinked.length) return text;
+  const placed = unlinked
+    .filter(a => Number.isInteger(a.end_index) && a.end_index >= 0 && a.end_index <= text.length)
+    .sort((a, b) => a.end_index - b.end_index);
+  let out = '';
+  let cursor = 0;
+  for (const annotation of placed) {
+    out += text.slice(cursor, annotation.end_index) + citationMarkers([annotation.url], numbers);
+    cursor = annotation.end_index;
+  }
+  const unplaced = unlinked.filter(annotation => !placed.includes(annotation));
+  return (
+    out +
+    text.slice(cursor) +
+    citationMarkers(
+      unplaced.map(a => a.url),
+      numbers
+    )
+  );
+}
+
+// Per stream: the text of each output_text part so far (annotation ranges
+// count in it) and the citation marker numbers.
+const streamingState = new Map();
+
+function streamStateFor(streamId) {
+  if (!streamingState.has(streamId)) {
+    streamingState.set(streamId, { texts: new Map(), citationNumbers: new Map() });
+  }
+  return streamingState.get(streamId);
+}
+
+/** The output_text part an event belongs to. */
+function textPartKey(event) {
+  return `${event.output_index ?? 0}:${event.content_index ?? 0}`;
+}
+
+/**
+ * Discard a stream's citation state when it errored or was aborted.
+ * @param {string} streamId - Stream identifier to clear
+ */
+export function clearOpenaiResponsesStreamingState(streamId = 'default') {
+  streamingState.delete(streamId);
+}
+
+/**
+ * Native web search activity in the `groundingMetadata` shape the other
+ * providers use (see `features/chat/webSearch` on the client and
+ * `shared/webCitations.js`):
+ *
+ *  - `webSearchQueries` — what a `web_search_call` searched for
+ *    (`action.query`, or `action.queries` on newer models);
+ *  - `searchResults` — the pages it looked at (`action.sources`, present when
+ *    the request asks for them), as `{ url, title? }`;
+ *  - `citations` — the `url_citation` annotations on the answer text, as
+ *    `{ url, title, start_index, end_index }`.
+ *
+ * Without this, a streamed OpenAI web search answer carried its citations
+ * nowhere the chat reads: they were parsed only on the non-streaming path,
+ * into `metadata.annotations`, which nothing used.
+ *
+ * @param {Object[]} webSearchCalls - `web_search_call` items
+ * @param {Object[]} annotations - output_text annotations
+ * @returns {Object|null} grounding metadata, or null when there is none
+ */
+export function toGroundingMetadata(webSearchCalls = [], annotations = []) {
+  const queries = [];
+  const searchResults = [];
+  for (const call of webSearchCalls) {
+    const action = call?.action;
+    if (!action || typeof action !== 'object') continue;
+    const asked = [action.query, ...(Array.isArray(action.queries) ? action.queries : [])];
+    for (const query of asked) {
+      if (typeof query === 'string' && query.trim() && !queries.includes(query.trim())) {
+        queries.push(query.trim());
+      }
+    }
+    for (const source of Array.isArray(action.sources) ? action.sources : []) {
+      if (typeof source?.url === 'string' && source.url) {
+        searchResults.push({
+          url: source.url,
+          ...(typeof source.title === 'string' && source.title ? { title: source.title } : {})
+        });
+      }
+    }
+  }
+  const citations = [];
+  for (const annotation of annotations) {
+    if (annotation?.type !== 'url_citation' || typeof annotation.url !== 'string') continue;
+    citations.push({
+      url: annotation.url,
+      ...(typeof annotation.title === 'string' && annotation.title
+        ? { title: annotation.title }
+        : {}),
+      ...(Number.isInteger(annotation.start_index) ? { start_index: annotation.start_index } : {}),
+      ...(Number.isInteger(annotation.end_index) ? { end_index: annotation.end_index } : {})
+    });
+  }
+  if (!queries.length && !searchResults.length && !citations.length) return null;
+  return {
+    ...(queries.length ? { webSearchQueries: queries } : {}),
+    ...(searchResults.length ? { searchResults } : {}),
+    ...(citations.length ? { citations } : {})
+  };
+}
+
+/**
  * Convert OpenAI Responses API tool calls to generic format
  * @param {Object[]} responsesToolCalls - OpenAI Responses API formatted tool calls
  * @returns {import('./GenericToolCalling.js').GenericToolCall[]} Generic tool calls
@@ -298,7 +445,7 @@ function responsesUsageToGeneric(usage) {
  * @param {string} streamId - Stream identifier
  * @returns {import('./GenericToolCalling.js').GenericStreamingResponse} Generic streaming response
  */
-export async function convertOpenaiResponsesResponseToGeneric(data, _streamId = 'default') {
+export async function convertOpenaiResponsesResponseToGeneric(data, streamId = 'default') {
   if (!data || data === '[DONE]') {
     return createGenericStreamingResponse([], [], [], true, false, null, 'stop');
   }
@@ -325,6 +472,7 @@ export async function convertOpenaiResponsesResponseToGeneric(data, _streamId = 
       // Handle completion events
       if (parsed.type === 'response.completed' || parsed.type === 'response.done') {
         complete = true;
+        streamingState.delete(streamId);
 
         // Check if the completion event contains output with function calls
         // The Responses API doesn't have finish_reason, so we need to check the output
@@ -390,6 +538,12 @@ export async function convertOpenaiResponsesResponseToGeneric(data, _streamId = 
               }
             });
           }
+        }
+        // Keep the part's text, which citation annotation ranges refer to.
+        if (parsed.type === 'response.output_text.delta' && content.length) {
+          const state = streamStateFor(streamId);
+          const key = textPartKey(parsed);
+          state.texts.set(key, (state.texts.get(key) || '') + content.join(''));
         }
       }
 
@@ -469,15 +623,35 @@ export async function convertOpenaiResponsesResponseToGeneric(data, _streamId = 
         // Store web search metadata for tracking
         addWebSearchMetadata(webSearchMetadata, parsed.item);
       }
+
+      // Event: response.output_text.annotation.added - a citation on the
+      // answer text (`url_citation` for web search), streamed as it is made.
+      // When the text does not link the source there, a marker follows the
+      // text streamed so far, which the cited range just ended.
+      if (parsed.type === 'response.output_text.annotation.added' && parsed.annotation) {
+        annotations.push(parsed.annotation);
+        const state = streamStateFor(streamId);
+        const partText = state.texts.get(textPartKey(parsed)) || '';
+        if (
+          parsed.annotation.type === 'url_citation' &&
+          !citationIsLinked(partText, parsed.annotation)
+        ) {
+          const marker = citationMarkers([parsed.annotation.url], state.citationNumbers);
+          if (marker) content.push(marker);
+        }
+      }
     }
     // Handle full response object (non-streaming)
     else if (parsed.output && Array.isArray(parsed.output)) {
+      const citationNumbers = new Map();
       for (const item of parsed.output) {
         // Handle regular message content
         if (item.type === 'message' && item.content) {
           for (const contentItem of item.content) {
             if (contentItem.type === 'output_text' && contentItem.text) {
-              content.push(contentItem.text);
+              content.push(
+                withCitationMarkers(contentItem.text, contentItem.annotations, citationNumbers)
+              );
 
               // Handle annotations (citations) from web search results
               processAnnotations(contentItem, annotations);
@@ -564,7 +738,7 @@ export async function convertOpenaiResponsesResponseToGeneric(data, _streamId = 
       metadata.usage = nonStreamingUsage;
     }
 
-    return createGenericStreamingResponse(
+    const response = createGenericStreamingResponse(
       content,
       thinking,
       genericToolCalls,
@@ -574,6 +748,12 @@ export async function convertOpenaiResponsesResponseToGeneric(data, _streamId = 
       normalizeFinishReason(finishReason),
       metadata
     );
+    const groundingMetadata = toGroundingMetadata(
+      webSearchMetadata.map(item => ({ action: item.action })),
+      annotations
+    );
+    if (groundingMetadata) response.groundingMetadata = groundingMetadata;
+    return response;
   } catch (error) {
     logger.error('Error parsing OpenAI Responses API response', {
       component: 'OpenAIResponsesConverter',

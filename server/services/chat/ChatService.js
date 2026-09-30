@@ -38,6 +38,8 @@ import {
 } from '../loop/seams/index.js';
 import { createChatChannel } from './chatChannel.js';
 import { mergeCitations } from './chatCitations.js';
+import { createPageReadGate, resolveMaxPageReads } from './pageReadLimit.js';
+import { buildWebSearch } from '../../../shared/webCitations.js';
 import {
   materializeAssistantTurn,
   materializeUserTurn,
@@ -539,11 +541,16 @@ class ChatService {
     // Scheduled-task proposals the scheduling tools made, stored with the
     // answer so the confirmation card is still there when the chat reopens.
     const scheduledTaskProposals = [];
+    // The turn's web search — tool calls with their sources, and the provider's
+    // grounding per step — stored with the answer so reopening the chat shows
+    // the same sources and citations (shared/webCitations.js).
+    const webSearchLog = { tools: [], grounding: [] };
     const turnSeam = chatTurnSeam({
       chatId,
       buildLogData: log,
       streaming,
-      telemetry: this.telemetry
+      telemetry: this.telemetry,
+      webSearchLog
     });
     const outputSeam =
       typeof structuredOutput?.validate === 'function'
@@ -565,7 +572,8 @@ class ChatService {
         logInteraction: this.logInteraction,
         mcpAppViews,
         mcpAuthPrompts,
-        scheduledTaskProposals
+        scheduledTaskProposals,
+        webSearchLog
       }),
       ...(Array.isArray(extraSeams) ? extraSeams.filter(Boolean) : []),
       questionSeam(
@@ -596,6 +604,8 @@ class ChatService {
       ...(outputSeam ? [outputSeam] : []),
       turnSeam
     ];
+
+    const pageReads = createPageReadGate(resolveMaxPageReads(app));
 
     let outcome;
     try {
@@ -639,7 +649,11 @@ class ChatService {
         // An MCP tool of a server with MCP Apps enabled hands back its raw
         // result on the shared `info` object, where `chatToolSeam` builds the
         // view from it (declared, or embedded in the result).
+        //
+        // Page reads are capped per turn (`websearch.maxPageReads`): past the
+        // cap the gate answers the call itself instead of fetching the page.
         executeTool: (call, { toolId, args, info, signal }) =>
+          pageReads.admit(toolId) ||
           this.runTool(
             toolId,
             {
@@ -676,6 +690,7 @@ class ChatService {
         mcpAppViews,
         mcpAuthPrompts,
         scheduledTaskProposals,
+        webSearchLog,
         takePendingCall: () => turnSeam.takePendingCall(),
         structured: outputSeam
           ? {
@@ -783,6 +798,7 @@ class ChatService {
     mcpAppViews = [],
     mcpAuthPrompts = [],
     scheduledTaskProposals = [],
+    webSearchLog = null,
     takePendingCall = () => null,
     structured = null
   }) {
@@ -809,6 +825,8 @@ class ChatService {
       citations: mergeCitations(result.citations),
       mcpAuthRequired: mcpAuthPrompts,
       scheduledTaskProposals,
+      // The web sources behind the answer and the passages they back.
+      webSearch: webSearchLog ? buildWebSearch(webSearchLog) : null,
       knowledgeSources: this.getKnowledgeSources(chatId, loopSources)
     };
     const translate = async (key, params) => {
@@ -1206,6 +1224,7 @@ class ChatService {
         parentRunId: parentRunId && isValidRunId(parentRunId) ? parentRunId : undefined
       });
 
+      const pageReads = createPageReadGate(resolveMaxPageReads(app));
       const result = await this.agentLoop.run({
         runId,
         kind: 'subagent',
@@ -1251,6 +1270,7 @@ class ChatService {
           collector
         ],
         executeTool: (call, { toolId, args, signal }) =>
+          pageReads.admit(toolId) ||
           this.runTool(toolId, { language, ...args, chatId, user, appConfig: app }, { signal })
       });
 

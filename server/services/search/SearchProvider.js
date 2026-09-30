@@ -42,6 +42,27 @@ class SearchProvider {
   isConfigured() {
     return true;
   }
+
+  /**
+   * Whether the provider filters results by age itself (`options.freshness`:
+   * `day` | `week` | `month` | `year`). When it does not, the shared search
+   * body (`tools/lib/searchWithExtraction.js`) drops dated results that are
+   * too old instead.
+   * @returns {boolean}
+   */
+  supportsFreshness() {
+    return false;
+  }
+
+  /**
+   * Whether the provider restricts results to domains itself
+   * (`options.includeDomains`). When it does not, the shared search body adds
+   * `site:` operators to the query instead.
+   * @returns {boolean}
+   */
+  supportsDomainFilter() {
+    return false;
+  }
 }
 
 export { SearchProvider };

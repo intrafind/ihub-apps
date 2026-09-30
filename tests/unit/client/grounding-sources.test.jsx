@@ -1,12 +1,9 @@
 /**
- * Unit tests for the sources shown under a grounded chat answer: the
- * extractor (client/src/features/chat/groundingSources.js), the reducer's merge
- * of piecemeal grounding frames and the message projection.
+ * Unit tests for the sources behind a grounded chat answer: the reducer's merge
+ * of piecemeal grounding frames and the message projection onto `webSearch`
+ * (client/src/features/chat/webSearch.js over shared/webCitations.js).
  */
-import {
-  extractGroundingSources,
-  hostnameOf
-} from '../../../client/src/features/chat/groundingSources';
+import { hostnameOf } from '../../../client/src/features/chat/groundingSources';
 import {
   createStreamState,
   reduceRunEvents,
@@ -39,56 +36,6 @@ const citationA = {
   title: 'A',
   cited_text: 'quote a'
 };
-
-describe('extractGroundingSources', () => {
-  test('prefers Anthropic citations over raw search results and deduplicates by URL', () => {
-    const sources = extractGroundingSources({
-      searchResults: [
-        { type: 'web_search_result', url: 'https://a.example/page', title: 'A' },
-        { type: 'web_search_result', url: 'https://b.example', title: 'B' }
-      ],
-      citations: [citationA, { ...citationA, cited_text: 'second quote from a' }]
-    });
-    expect(sources).toEqual([{ url: 'https://a.example/page', title: 'A', citedText: 'quote a' }]);
-  });
-
-  test('falls back to the search results when nothing was cited', () => {
-    const sources = extractGroundingSources({
-      searchResults: [
-        { url: 'https://a.example', title: 'A' },
-        { url: 'https://a.example', title: 'A again' },
-        { url: 'https://b.example' }
-      ],
-      citations: []
-    });
-    expect(sources).toEqual([
-      { url: 'https://a.example', title: 'A' },
-      { url: 'https://b.example' }
-    ]);
-  });
-
-  test('reads Google grounding chunks', () => {
-    const sources = extractGroundingSources({
-      groundingChunks: [{ web: { uri: 'https://g.example/x', title: 'g.example' } }, { web: {} }],
-      webSearchQueries: ['query']
-    });
-    expect(sources).toEqual([{ url: 'https://g.example/x', title: 'g.example' }]);
-  });
-
-  test('merges several metadata objects and ignores junk', () => {
-    expect(extractGroundingSources(null)).toEqual([]);
-    expect(extractGroundingSources([{ citations: [{}] }, undefined, 'nope'])).toEqual([]);
-    expect(
-      extractGroundingSources([
-        { citations: [citationA] },
-        { citations: [{ url: 'https://b.example' }] }
-      ])
-    ).toEqual([
-      { url: 'https://a.example/page', title: 'A', citedText: 'quote a' },
-      { url: 'https://b.example' }
-    ]);
-  });
-});
 
 describe('hostnameOf', () => {
   test('strips the scheme, path and a leading www', () => {
@@ -126,8 +73,8 @@ describe('runReducer — grounding frames', () => {
   });
 });
 
-describe('projectRunToMessage — grounding sources', () => {
-  test('projects the cited sources of a completed step', () => {
+describe('projectRunToMessage — web search from grounding', () => {
+  test('projects the searched and cited sources of a completed step', () => {
     const run = runFrom([
       started,
       env(2, 'tool/progress', {
@@ -137,10 +84,11 @@ describe('projectRunToMessage — grounding sources', () => {
       }),
       env(3, 'step/completed', {
         step: 1,
-        content: 'Answer',
+        content: 'Answer[1](https://a.example/page)',
         toolCalls: [],
         finishReason: 'stop',
         groundingMetadata: {
+          webSearchQueries: ['what is a'],
           searchResults: [
             { url: 'https://a.example/page', title: 'A' },
             { url: 'https://b.example', title: 'B' }
@@ -155,9 +103,12 @@ describe('projectRunToMessage — grounding sources', () => {
       })
     ]);
     const { extras } = projectRunToMessage(run);
-    expect(extras.groundingSources).toEqual([
-      { url: 'https://a.example/page', title: 'A', citedText: 'quote a' }
+    expect(extras.webSearch.queries).toEqual(['what is a']);
+    expect(extras.webSearch.sources).toEqual([
+      { url: 'https://a.example/page', title: 'A', citedText: 'quote a', cited: true },
+      { url: 'https://b.example/', title: 'B' }
     ]);
+    expect(extras.groundingSources).toBeUndefined();
     expect(extras.answerSource).toEqual({ sources: ['grounding'], type: 'mixed' });
   });
 
@@ -173,10 +124,46 @@ describe('projectRunToMessage — grounding sources', () => {
     ]);
     const { extras, loading } = projectRunToMessage(run);
     expect(loading).toBe(true);
-    expect(extras.groundingSources).toEqual([{ url: 'https://a.example', title: 'A' }]);
+    expect(extras.webSearch.sources).toEqual([{ url: 'https://a.example/', title: 'A' }]);
   });
 
-  test('omits the field when nothing was grounded', () => {
+  test('places Google grounding markers after the supported passages', () => {
+    const run = runFrom([
+      started,
+      env(2, 'step/delta', { step: 1, kind: 'text', content: 'Claim one. Claim two.' }),
+      env(3, 'step/completed', {
+        step: 1,
+        content: 'Claim one. Claim two.',
+        toolCalls: [],
+        finishReason: 'stop',
+        groundingMetadata: {
+          webSearchQueries: ['q'],
+          groundingChunks: [
+            {
+              web: {
+                uri: 'https://vertexaisearch.cloud.google.com/grounding-api-redirect/abc',
+                title: 'g.example'
+              }
+            }
+          ],
+          webSupports: [
+            {
+              text: 'Claim two.',
+              urls: ['https://vertexaisearch.cloud.google.com/grounding-api-redirect/abc']
+            }
+          ]
+        }
+      }),
+      env(4, 'run/ended', { status: 'completed', finishReason: 'stop' })
+    ]);
+    const { content, extras } = projectRunToMessage(run);
+    expect(content).toBe(
+      'Claim one. Claim two.[1](https://vertexaisearch.cloud.google.com/grounding-api-redirect/abc)'
+    );
+    expect(extras.webSearch.sources[0].host).toBe('g.example');
+  });
+
+  test('omits the field when nothing was searched', () => {
     const run = runFrom([
       started,
       env(2, 'step/completed', {
@@ -187,6 +174,6 @@ describe('projectRunToMessage — grounding sources', () => {
       }),
       env(3, 'run/ended', { status: 'completed', finishReason: 'stop' })
     ]);
-    expect(projectRunToMessage(run).extras.groundingSources).toBeUndefined();
+    expect(projectRunToMessage(run).extras.webSearch).toBeUndefined();
   });
 });

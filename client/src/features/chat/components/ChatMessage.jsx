@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef } from 'react';
+import { useState, useEffect, useRef, useMemo, useId } from 'react';
 import { useTranslation } from 'react-i18next';
 import DOMPurify from 'dompurify';
 import { sendMessageFeedback, answerInteraction } from '../../../api';
@@ -18,7 +18,8 @@ import CustomResponseRenderer from '../../../shared/components/CustomResponseRen
 import ClarificationCard from './ClarificationCard';
 import GeneratedImage from './GeneratedImage';
 import CitationPanel from './CitationPanel';
-import GroundingSources from './GroundingSources';
+import WebSearchSources from './WebSearchSources';
+import { resolveCitations } from '../../../../../shared/webCitations.js';
 import SearchStatusIndicator from './SearchStatusIndicator';
 import SearchSummary from './SearchSummary';
 import ToolActivity from './ToolActivity';
@@ -130,6 +131,27 @@ function ChatMessage({
 
   const isUser = message.role === 'user';
   const isError = message.error === true;
+
+  // The web sources behind the answer and which of them it cites — shared by
+  // the inline citation badges and the sources view under the answer.
+  const fallbackId = useId();
+  const messageKey = message.id || fallbackId;
+  const answerText = typeof message.content === 'string' ? message.content : '';
+  const webCitationView = useMemo(
+    () => (!isUser && message.webSearch ? resolveCitations(answerText, message.webSearch) : null),
+    [isUser, answerText, message.webSearch]
+  );
+  const webCitations = useMemo(
+    () =>
+      webCitationView?.numbers.size
+        ? {
+            messageKey,
+            numbers: webCitationView.numbers,
+            byNumber: new Map(webCitationView.cited.map(source => [source.n, source]))
+          }
+        : null,
+    [webCitationView, messageKey]
+  );
   const hasVariables = message.variables && Object.keys(message.variables).length > 0;
   const [isEditing, setIsEditing] = useState(false);
 
@@ -623,7 +645,12 @@ function ChatMessage({
             : contentToRender;
         return (
           <div className="flex flex-col">
-            <StreamingMarkdown content={mdContent} hasCitations={!!message.citations} streaming />
+            <StreamingMarkdown
+              content={mdContent}
+              hasCitations={!!message.citations}
+              webCitations={effectiveOutputFormat === 'json' ? null : webCitations}
+              streaming
+            />
             {hasSearchStatus && <SearchStatusIndicator status={message.searchStatus} />}
             <SearchSummary summary={message.searchSummary} />
             {/* The generic three-dot pulse is the fallback indicator only.
@@ -735,7 +762,13 @@ function ChatMessage({
         }
         mdContent = `\u0060\u0060\u0060json\n${jsonString}\n\u0060\u0060\u0060`;
       }
-      return <StreamingMarkdown content={mdContent} hasCitations={!!message.citations} />;
+      return (
+        <StreamingMarkdown
+          content={mdContent}
+          hasCitations={!!message.citations}
+          webCitations={effectiveOutputFormat === 'json' ? null : webCitations}
+        />
+      );
     }
 
     return (
@@ -1015,9 +1048,14 @@ function ChatMessage({
           />
         )}
 
-        {/* Sources behind a grounded answer (provider-run web search) */}
-        {!isUser && !message.loading && message.groundingSources && (
-          <GroundingSources sources={message.groundingSources} />
+        {/* The web sources behind the answer: "Searched for …", opening the
+            sources view with what it cites and what it only considered. */}
+        {!isUser && !message.loading && webCitationView && (
+          <WebSearchSources
+            messageKey={messageKey}
+            webSearch={message.webSearch}
+            citations={webCitationView}
+          />
         )}
 
         {/* Workflow result attribution — handled by unified WorkflowStepIndicator above */}

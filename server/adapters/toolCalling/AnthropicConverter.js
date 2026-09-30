@@ -16,6 +16,7 @@ import {
 import { validateProviderToolName } from './toolNameValidator.js';
 import logger from '../../utils/logger.js';
 import { parseJsonAsync } from '../../utils/asyncJson.js';
+import { citationMarkers } from '../../../shared/webCitations.js';
 
 /**
  * Sanitize a JSON Schema for Anthropic's tool `input_schema`. Anthropic's
@@ -210,6 +211,23 @@ function addWebSearchCitations(result, citations) {
 }
 
 /**
+ * Citation markers for a text block Claude attached web search citations to,
+ * appended right after the block so the chat can show a numbered badge where
+ * the claim is made (see `shared/webCitations.js`). The API reports which
+ * block each citation supports but puts nothing into the text itself.
+ * @param {Object} block - a text content block with `citations`
+ * @param {Map<string, number>} numbers - URL → marker number, for the message
+ * @returns {string} '' when the block cites no web page
+ */
+function webCitationMarkers(block, numbers) {
+  if (block?.type !== 'text' || !Array.isArray(block.citations)) return '';
+  const urls = block.citations
+    .filter(citation => citation?.type === 'web_search_result_location' || citation?.url)
+    .map(citation => citation.url);
+  return citationMarkers(urls, numbers);
+}
+
+/**
  * Record the query of a native `web_search` server_tool_use block, in the
  * `webSearchQueries` field Google Search grounding uses, so the chat can say
  * what the provider searched for.
@@ -326,7 +344,9 @@ export async function convertAnthropicResponseToGeneric(data, streamId = 'defaul
       toolCallIndex: 0,
       // Verbatim copy of the message's content blocks, for pause_turn replay.
       rawBlocks: [],
-      rawJson: {}
+      rawJson: {},
+      // Web citation marker numbers, by URL, across the message's text blocks.
+      citationNumbers: new Map()
     });
   }
   const state = streamingState.get(streamId);
@@ -341,6 +361,9 @@ export async function convertAnthropicResponseToGeneric(data, streamId = 'defaul
       // The query of a server-side search is only complete once its block is.
       if (parsed.type === 'content_block_stop') {
         addWebSearchQuery(result, state.rawBlocks[parsed.index]);
+        // So are the citations of a text block: mark the claim they support.
+        const markers = webCitationMarkers(state.rawBlocks[parsed.index], state.citationNumbers);
+        if (markers) result.content.push(markers);
       }
     }
 
@@ -362,11 +385,14 @@ export async function convertAnthropicResponseToGeneric(data, streamId = 'defaul
 
     // Handle full response object (non-streaming)
     if (parsed.content && Array.isArray(parsed.content)) {
+      const citationNumbers = new Map();
       for (const contentBlock of parsed.content) {
         if (contentBlock.type === 'text' && contentBlock.text) {
           result.content.push(contentBlock.text);
           if (Array.isArray(contentBlock.citations) && contentBlock.citations.length > 0) {
             addWebSearchCitations(result, contentBlock.citations);
+            const markers = webCitationMarkers(contentBlock, citationNumbers);
+            if (markers) result.content.push(markers);
           }
         } else if (contentBlock.type === 'tool_use') {
           if (

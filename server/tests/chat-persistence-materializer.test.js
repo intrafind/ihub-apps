@@ -750,3 +750,66 @@ describe('chatMaterializer: MCP App views', () => {
     });
   });
 });
+
+describe('chatMaterializer: web sources behind the answer', () => {
+  it('stores queries and sources, so a reopened chat shows the same citations', async () => {
+    await withRepository(async ({ repository }) => {
+      await userTurn(repository);
+      await assistantTurn(repository, {
+        content: 'Langdock is an AI platform [1](https://langdock.com/).',
+        webSearch: {
+          queries: ['what is langdock'],
+          sources: [
+            { url: 'https://langdock.com/', title: 'Langdock', snippet: 'AI platform', read: true },
+            { url: 'https://example.org/', title: 'Considered only' }
+          ],
+          supports: []
+        }
+      });
+      const { messages } = await repository.getMessages(CHAT_ID);
+      const stored = messages.at(-1);
+      assert.equal(stored.content, 'Langdock is an AI platform [1](https://langdock.com/).');
+      assert.deepEqual(stored.webSearch, {
+        queries: ['what is langdock'],
+        sources: [
+          { url: 'https://langdock.com/', title: 'Langdock', snippet: 'AI platform', read: true },
+          { url: 'https://example.org/', title: 'Considered only' }
+        ]
+      });
+    });
+  });
+
+  it('writes Google grounding supports into the stored text as citation markers', async () => {
+    await withRepository(async ({ repository }) => {
+      await userTurn(repository);
+      await assistantTurn(repository, {
+        content: 'Langdock is an AI platform. It was founded in 2023.',
+        webSearch: {
+          queries: ['langdock'],
+          sources: [{ url: 'https://vertexaisearch.cloud.google.com/r/1', host: 'langdock.com' }],
+          supports: [
+            {
+              text: 'It was founded in 2023.',
+              urls: ['https://vertexaisearch.cloud.google.com/r/1']
+            }
+          ]
+        }
+      });
+      const { messages } = await repository.getMessages(CHAT_ID);
+      assert.equal(
+        messages.at(-1).content,
+        'Langdock is an AI platform. It was founded in 2023.[1](https://vertexaisearch.cloud.google.com/r/1)'
+      );
+      assert.equal('supports' in messages.at(-1).webSearch, false);
+    });
+  });
+
+  it('a turn without web search stores no field', async () => {
+    await withRepository(async ({ repository }) => {
+      await userTurn(repository);
+      await assistantTurn(repository, { webSearch: null });
+      const { messages } = await repository.getMessages(CHAT_ID);
+      assert.equal('webSearch' in messages.at(-1), false);
+    });
+  });
+});

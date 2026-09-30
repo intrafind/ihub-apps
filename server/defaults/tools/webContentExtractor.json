@@ -5,8 +5,8 @@
     "de": "Webseiten-Leser"
   },
   "description": {
-    "en": "Open a web page (or PDF) by its URL and return its main readable text, without navigation, ads, headers or footers. Use it to read a search result in full, or any URL the user gives you. Use the 'url' parameter with the full http(s) address.",
-    "de": "Öffnet eine Webseite (oder ein PDF) über ihre URL und gibt den lesbaren Hauptinhalt ohne Navigation, Werbung, Kopf- und Fußzeilen zurück. Verwenden Sie es, um ein Suchergebnis vollständig zu lesen oder eine vom Benutzer genannte URL zu öffnen. Verwenden Sie den 'url' Parameter mit der vollständigen http(s)-Adresse."
+    "en": "Open a web page (or PDF) by its URL and return its main content as Markdown (headings, lists, tables, links), without navigation, ads, headers or footers. Use it to read a search result in full, or any URL the user gives you. Use the 'url' parameter with the full http(s) address. When the result says 'truncated': true, call it again with the same url and 'offset' set to 'nextOffset' to read on.",
+    "de": "Öffnet eine Webseite (oder ein PDF) über ihre URL und gibt den Hauptinhalt als Markdown (Überschriften, Listen, Tabellen, Links) ohne Navigation, Werbung, Kopf- und Fußzeilen zurück. Verwenden Sie es, um ein Suchergebnis vollständig zu lesen oder eine vom Benutzer genannte URL zu öffnen. Verwenden Sie den 'url' Parameter mit der vollständigen http(s)-Adresse. Meldet das Ergebnis 'truncated': true, rufen Sie es mit derselben url und 'offset' gleich 'nextOffset' erneut auf, um weiterzulesen."
   },
   "script": "webContentExtractor.js",
   "method": "extractForTool",
@@ -29,6 +29,15 @@
         "default": 10000,
         "minimum": 500,
         "maximum": 50000
+      },
+      "offset": {
+        "type": "integer",
+        "description": {
+          "en": "Character offset to start reading at, for reading on in a long page: pass the 'nextOffset' of the previous result (default: 0)",
+          "de": "Zeichenposition, ab der gelesen wird, um eine lange Seite weiterzulesen: den 'nextOffset' des vorigen Ergebnisses übergeben (Standard: 0)"
+        },
+        "default": 0,
+        "minimum": 0
       }
     },
     "required": ["url"]

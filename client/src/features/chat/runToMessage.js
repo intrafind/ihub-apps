@@ -8,14 +8,15 @@
  * thoughts, images, clarification/awaitingInput/clarificationAnswered,
  * workflowCheckpoint, workflowSteps/workflowStep, workflowResult/outputFormat,
  * activeSkills, searchStatus, searchSummary, toolActivity, mcpApps, mcpAuthRequired, citations,
- * groundingSources,
+ * webSearch,
  * answerSource, finishReason, ifinderMessageId. The hook (`useAppChat`) only decides WHEN to write the
  * projection and which message it belongs to — it never interprets events.
  *
  * @module features/chat/runToMessage
  */
 import { isRunFinished, getInteractions } from '../../shared/run/runReducer';
-import { extractGroundingSources } from './groundingSources';
+import { insertSupportMarkers } from '../../../../shared/webCitations.js';
+import { buildRunWebSearch } from './webSearch';
 import { buildToolActivity } from './toolActivity';
 import { buildMcpAppViews } from './mcpApps/mcpAppViewList';
 import { buildMcpAuthPrompts } from './mcpApps/mcpConnectPrompts';
@@ -131,7 +132,14 @@ export function projectRunToMessage(run, options = {}) {
   if (run.runId) extras.runId = run.runId;
 
   // ── content ───────────────────────────────────────────────────────────
+  // The web sources behind the answer (script-backed search, page reads and
+  // provider-run search alike). Google's answer text carries no links: its
+  // grounding supports say which passage each source backs, and the markers
+  // go there — the stored answer gets the same (chatMaterializer.js).
+  const webSearch = buildRunWebSearch(run);
   let content = run.text || '';
+  if (webSearch?.supports?.length) content = insertSupportMarkers(content, webSearch.supports);
+  if (webSearch) extras.webSearch = webSearch;
   if (run.error) {
     // Legacy 'error' path: the error text is appended to whatever streamed.
     content = `${content}\n\n${run.error.message || fallbackErrorMessage}`;
@@ -205,16 +213,6 @@ export function projectRunToMessage(run, options = {}) {
   if (run.searchSummary) extras.searchSummary = run.searchSummary;
   const citations = mergeCitationEntries(run.citations);
   if (citations) extras.citations = citations;
-  // Sources behind a grounded answer (provider-run web search). A completed
-  // step carries the server-merged metadata of that step; while streaming,
-  // the progress frames merged by the reducer stand in.
-  const stepGrounding = Object.values(run.steps || {})
-    .map(step => step.groundingMetadata)
-    .filter(Boolean);
-  const groundingSources = extractGroundingSources(
-    stepGrounding.length ? stepGrounding : run.grounding
-  );
-  if (groundingSources.length) extras.groundingSources = groundingSources;
   // The searches the turn ran, the pages they found and read, and the other
   // tools it called. Like the search summary, it stays with the finished
   // answer as provenance.

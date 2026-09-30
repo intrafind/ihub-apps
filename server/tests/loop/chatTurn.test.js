@@ -1697,3 +1697,87 @@ test('ordinary tools carry no MCP App view', async t => {
   assert.equal(frame(frames, TOOL_COMPLETED).data.mcpApp, undefined);
   assert.deepEqual(summary.mcpApps, []);
 });
+
+// ── page read cap (websearch.maxPageReads) ────────────────────────────────
+
+test('page reads past websearch.maxPageReads are answered by the gate, not fetched', async t => {
+  const chatId = newChatId('page-reads');
+  const frames = captureFrames(t, chatId);
+  const read = url => ({ name: 'webContentExtractor', args: { url } });
+  const { service, runTool } = makeService(
+    [
+      toolTurn([read('https://a.example/'), read('https://b.example/')]),
+      toolTurn([read('https://c.example/')], { content: '' }),
+      textTurn('Answer from two pages.')
+    ],
+    { runTool: async (_id, params) => ({ url: params.url, content: 'page text' }) }
+  );
+  const prep = makePrep({
+    app: { id: 'app1', websearch: { enabled: true, maxPageReads: 2 } },
+    tools: [fetchTool]
+  });
+
+  const summary = await runTurn(service, { chatId, prep });
+
+  assert.equal(summary.status, 'completed');
+  assert.equal(runTool.calls.length, 2, 'only two pages were fetched');
+  const completed = framesOf(frames, TOOL_COMPLETED).map(f => f.data);
+  assert.equal(completed.length, 3);
+  const refused = completed[2];
+  // A plain result, not an error: the model is told, the circuit breaker is not.
+  assert.equal(refused.error, undefined);
+  assert.equal(refused.resultPreview.limitReached, true);
+  assert.equal(refused.resultPreview.code, 'PAGE_READ_LIMIT_REACHED');
+  assert.match(refused.resultPreview.message, /Page read limit reached for this turn/);
+  assert.equal(refused.webSources, undefined);
+});
+
+test('the page read cap defaults to 5 and counts only the page reader', async t => {
+  const chatId = newChatId('page-reads-default');
+  captureFrames(t, chatId);
+  const calls = [
+    ...Array.from({ length: 6 }, (_, i) => ({
+      name: 'webContentExtractor',
+      args: { url: `https://p${i}.example/` }
+    })),
+    { name: 'webSearch', args: { query: 'still allowed' } }
+  ];
+  const { service, runTool } = makeService([toolTurn(calls), textTurn('Done.')], {
+    runTool: async () => ({ ok: true })
+  });
+  await runTurn(service, {
+    chatId,
+    prep: makePrep({ app: { id: 'app1' }, tools: [fetchTool, webSearchTool] })
+  });
+  const ids = runTool.calls.map(([id]) => id);
+  assert.equal(ids.filter(id => id === 'webContentExtractor').length, 5);
+  assert.equal(ids.filter(id => id === 'webSearch').length, 1);
+});
+
+test('the turn summary carries its web search: queries and sources for the stored answer', async t => {
+  const chatId = newChatId('web-search-record');
+  captureFrames(t, chatId);
+  const { service } = makeService(
+    [
+      toolTurn([{ name: 'webSearch', args: { query: 'langdock' } }]),
+      textTurn('An AI platform [1](https://langdock.com/).')
+    ],
+    {
+      runTool: async () => ({
+        results: [
+          { title: 'Langdock', url: 'https://langdock.com/', description: 'AI platform' },
+          { title: 'Other', url: 'https://other.example/' }
+        ]
+      })
+    }
+  );
+  const summary = await runTurn(service, { chatId, prep: makePrep({ tools: [webSearchTool] }) });
+  assert.deepEqual(summary.webSearch.queries, ['langdock']);
+  assert.deepEqual(
+    summary.webSearch.sources.map(s => [s.url, s.title, s.snippet]),
+    [
+      ['https://langdock.com/', 'Langdock', 'AI platform'],
+      ['https://other.example/', 'Other', undefined]
+    ]
+  );
+});
